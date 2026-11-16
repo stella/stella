@@ -3,6 +3,7 @@
 // parser-output-unchanged: [cz-ns] the legacy identity fields decide which row a document writes to; the parsed output is unchanged.
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
+// parser-output-unchanged: Reconciliation exposes the existing matched or shown listing count for the census; decision parsing and listed identities are unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
@@ -1349,11 +1350,17 @@ type ReadCzNsSearchListingOptions = {
  * docket are asked for through the same page, so the same rules decide
  * whether a body is an answer.
  */
+/** One search's rows and the count the publisher printed for them, if any. */
+type CzNsSearchListing = {
+  rows: CzNsListingRow[];
+  publisherCount: number | undefined;
+};
+
 const readCzNsSearchListing = async ({
   query,
   label,
   signal,
-}: ReadCzNsSearchListingOptions): Promise<CzNsListingRow[]> => {
+}: ReadCzNsSearchListingOptions): Promise<CzNsSearchListing> => {
   const url =
     `${SEARCH_URL}?SearchView&Query=${encodeURIComponent(query)}` +
     `&SearchMax=${SEARCH_MAX}` +
@@ -1382,7 +1389,7 @@ const readCzNsSearchListing = async ({
 
   if (rows.length === 0) {
     if (html.includes(LISTING_EMPTY_MARKER)) {
-      return [];
+      return { rows: [], publisherCount: undefined };
     }
     throw new AdapterFetchError({
       message: `CZ Supreme Court listing for ${label} stated neither results nor emptiness`,
@@ -1429,17 +1436,19 @@ const readCzNsSearchListing = async ({
     });
   }
 
-  return rows;
+  return { rows, publisherCount: matched ?? shown };
 };
 
-const listingPage = (
-  rows: readonly CzNsListingRow[],
-): ReconciliationSlicePage => ({
+const listingPage = ({
+  rows,
+  publisherCount,
+}: CzNsSearchListing): ReconciliationSlicePage => ({
   items: rows.map((row) => ({
     identity: czNsListingIdentity(row),
     payload: row,
   })),
   totalPages: rows.length === 0 ? 0 : 1,
+  publisherCount,
 });
 
 const listCzNsSlicePage = async ({

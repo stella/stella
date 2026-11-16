@@ -998,7 +998,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Case-law availability by jurisdiction/source: held decision-year ranges, last sync, awaiting-text counts, recorded gaps, courts. Check before concluding a decision is missing. Listed countries not yet admitted and without coverage return status unavailable with reason.",
+      "Check held case-law years, sync, pending text, courts and reconciled knownGaps before claiming missing data. publisherCensus: unknown/none-recorded/known; publisher/stored/text counts (slice memberships may overlap). Unmeasured cannot prove completeness. Unadmitted countries return unavailable.",
     inputSchema: caseLawCoverageArgsSchema,
     inputNormalization: {
       country: countryNormalization({
@@ -4718,6 +4718,7 @@ const handleCaseLawCoverageTool: TypedMcpToolHandler<
           return {
             country: entry.country,
             availability: entry.availability,
+            censusVerdict: entry.censusVerdict,
             decisions: entry.stored.decisions,
             decisionYearFrom: null,
             decisionYearTo: null,
@@ -4729,6 +4730,7 @@ const handleCaseLawCoverageTool: TypedMcpToolHandler<
               decisionYearFrom: source.decisionYearFrom,
               decisionYearTo: source.decisionYearTo,
               pendingTextCount: source.pendingTextCount,
+              publisherCensus: source.publisherCensus,
               knownGaps:
                 source.knownGaps.type === "reconciled"
                   ? { ...source.knownGaps, years: [...source.knownGaps.years] }
@@ -4740,6 +4742,7 @@ const handleCaseLawCoverageTool: TypedMcpToolHandler<
           return {
             country: entry.country,
             availability: entry.availability,
+            censusVerdict: entry.censusVerdict,
             decisions: entry.searchable,
             decisionYearFrom: entry.decisionYearFrom,
             decisionYearTo: entry.decisionYearTo,
@@ -4751,6 +4754,7 @@ const handleCaseLawCoverageTool: TypedMcpToolHandler<
               decisionYearFrom: source.decisionYearFrom,
               decisionYearTo: source.decisionYearTo,
               pendingTextCount: source.pendingTextCount,
+              publisherCensus: source.publisherCensus,
               knownGaps:
                 source.knownGaps.type === "reconciled"
                   ? { ...source.knownGaps, years: [...source.knownGaps.years] }

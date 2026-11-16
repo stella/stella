@@ -465,32 +465,75 @@ describe("a run folder's checkpoint", () => {
   });
 
   describe("which checkpoint may be restored", () => {
-    test("only the newest not undone yet, then the one before it", async () => {
+    test("any kept one, undoing every later turn with it", async () => {
       const { workspaceDir } = place();
+      const read = () =>
+        readFileSync(path.join(workspaceDir, "a.txt"), "utf-8");
       write(workspaceDir, "a.txt", "before the first turn");
       const { runId: first } = await capture(workspaceDir);
       write(workspaceDir, "a.txt", "before the second turn");
       const { runId: second } = await capture(workspaceDir);
-      write(workspaceDir, "a.txt", "after the second turn");
+      write(workspaceDir, "a.txt", "before the third turn");
+      const { runId: third } = await capture(workspaceDir);
+      write(workspaceDir, "a.txt", "after the third turn");
 
-      expect((await restore(workspaceDir, first)).outcome).toBe("not_newest");
-      expect(readFileSync(path.join(workspaceDir, "a.txt"), "utf-8")).toBe(
-        "after the second turn",
-      );
       expect((await restore(workspaceDir, crypto.randomUUID())).outcome).toBe(
         "no_checkpoint",
       );
+      expect(read()).toBe("after the third turn");
       expect((await restore(workspaceDir, second)).outcome).toBe("restored");
-      // Asked again (an answer that was lost): the same answer, nothing moves.
+      expect(read()).toBe("before the second turn");
+      // The third turn was undone with the second: restoring its checkpoint
+      // would bring back what the second turn wrote. Answered as done,
+      // nothing moves; so is a repeat of the second (a lost answer).
       write(workspaceDir, "a.txt", "changed since the undo");
+      expect((await restore(workspaceDir, third)).outcome).toBe("restored");
       expect((await restore(workspaceDir, second)).outcome).toBe("restored");
-      expect(readFileSync(path.join(workspaceDir, "a.txt"), "utf-8")).toBe(
-        "changed since the undo",
-      );
+      expect(read()).toBe("changed since the undo");
+      // An earlier one still restores.
       expect((await restore(workspaceDir, first)).outcome).toBe("restored");
-      expect(readFileSync(path.join(workspaceDir, "a.txt"), "utf-8")).toBe(
-        "before the first turn",
-      );
+      expect(read()).toBe("before the first turn");
+    });
+
+    test("a turn after an undo of earlier turns can be undone, the undone ones stay undone", async () => {
+      const { workspaceDir } = place();
+      const read = () =>
+        readFileSync(path.join(workspaceDir, "a.txt"), "utf-8");
+      write(workspaceDir, "a.txt", "one");
+      const { runId: first } = await capture(workspaceDir);
+      write(workspaceDir, "a.txt", "two");
+      const { runId: second } = await capture(workspaceDir);
+      write(workspaceDir, "a.txt", "three");
+      expect((await restore(workspaceDir, first)).outcome).toBe("restored");
+      const { runId: next } = await capture(workspaceDir);
+      write(workspaceDir, "a.txt", "four");
+      expect((await restore(workspaceDir, second)).outcome).toBe("restored");
+      expect(read()).toBe("four");
+      expect((await restore(workspaceDir, next)).outcome).toBe("restored");
+      expect(read()).toBe("one");
+    });
+
+    test("a checkpoint undone with an earlier one stays undone after that one is pruned", async () => {
+      const { workspaceDir } = place();
+      const limits = { maxManifests: 3 };
+      const read = () =>
+        readFileSync(path.join(workspaceDir, "a.txt"), "utf-8");
+      write(workspaceDir, "a.txt", "one");
+      const { runId: first } = await capture(workspaceDir, { limits });
+      write(workspaceDir, "a.txt", "two");
+      await capture(workspaceDir, { limits });
+      write(workspaceDir, "a.txt", "three");
+      const { runId: third } = await capture(workspaceDir, { limits });
+      write(workspaceDir, "a.txt", "four");
+      expect((await restore(workspaceDir, first)).outcome).toBe("restored");
+      // Two more turns push the first two checkpoints out.
+      await capture(workspaceDir, { limits });
+      await capture(workspaceDir, { limits });
+      expect(manifestIds(workspaceDir)).toContain(third);
+      expect(manifestIds(workspaceDir)).not.toContain(first);
+      write(workspaceDir, "a.txt", "five");
+      expect((await restore(workspaceDir, third)).outcome).toBe("restored");
+      expect(read()).toBe("five");
     });
 
     test("a turn after an undo is the newest again", async () => {
@@ -542,6 +585,28 @@ describe("a run folder's checkpoint", () => {
       "attachments/019a0000-0000-7000-8000-000000000001/lease.pdf";
     const later = "attachments/019a0000-0000-7000-8000-000000000002/annex.pdf";
 
+    /** The folder after the first turn's undo: its draft, the later annex. */
+    const withLaterAnnex = [
+      { path: "attachments", kind: "dir", mode: expect.any(Number) },
+      {
+        path: "attachments/019a0000-0000-7000-8000-000000000002",
+        kind: "dir",
+        mode: expect.any(Number),
+      },
+      {
+        path: later,
+        kind: "file",
+        content: "the member's annex",
+        mode: expect.any(Number),
+      },
+      {
+        path: "draft.txt",
+        kind: "file",
+        content: "before the first turn",
+        mode: expect.any(Number),
+      },
+    ] satisfies TreeEntry[];
+
     test("an agent's edit to the run's attachment is undone; the attachment stays", async () => {
       const { workspaceDir } = place();
       write(workspaceDir, attachment, "as the member attached it");
@@ -568,26 +633,20 @@ describe("a run folder's checkpoint", () => {
       write(workspaceDir, later, "edited by the agent");
       expect((await restore(workspaceDir, second)).outcome).toBe("restored");
       expect((await restore(workspaceDir, first)).outcome).toBe("restored");
-      expect(treeOf(workspaceDir)).toEqual([
-        { path: "attachments", kind: "dir", mode: expect.any(Number) },
-        {
-          path: "attachments/019a0000-0000-7000-8000-000000000002",
-          kind: "dir",
-          mode: expect.any(Number),
-        },
-        {
-          path: later,
-          kind: "file",
-          content: "the member's annex",
-          mode: expect.any(Number),
-        },
-        {
-          path: "draft.txt",
-          kind: "file",
-          content: "before the first turn",
-          mode: expect.any(Number),
-        },
-      ]);
+      expect(treeOf(workspaceDir)).toEqual(withLaterAnnex);
+    });
+
+    test("undoing an earlier turn and every later one at once keeps the attachments of the later ones", async () => {
+      const { workspaceDir } = place();
+      write(workspaceDir, "draft.txt", "before the first turn");
+      const { runId: first } = await capture(workspaceDir);
+      write(workspaceDir, "draft.txt", "after the first turn");
+      write(workspaceDir, later, "the member's annex");
+      await capture(workspaceDir, { memberFiles: [later] });
+      write(workspaceDir, later, "edited by the agent");
+      write(workspaceDir, "draft.txt", "after the second turn");
+      expect((await restore(workspaceDir, first)).outcome).toBe("restored");
+      expect(treeOf(workspaceDir)).toEqual(withLaterAnnex);
     });
   });
 
