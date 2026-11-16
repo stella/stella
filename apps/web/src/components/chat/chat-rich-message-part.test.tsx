@@ -31,12 +31,9 @@ const { ChatRenderErrorBoundary } =
 
 const renderMediaPart = (part: RichChatPart) =>
   renderToStaticMarkup(
-    createElement(IntlProvider, {
-      children: createElement(ChatRichMessagePart, { part }),
-      locale: "en",
-      messages,
-      timeZone: "UTC",
-    }),
+    <IntlProvider locale="en" messages={messages} timeZone="UTC">
+      <ChatRichMessagePart part={part} />
+    </IntlProvider>,
   );
 
 describe("rich chat message parts", () => {

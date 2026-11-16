@@ -322,25 +322,28 @@ const insertFileChatThread = async (
   });
 };
 
+type CreateFileChatThreadOptions = {
+  tx: Transaction;
+  input: FileThreadLookupInput;
+  recordAuditEvent: AuditRecorder;
+  orgAIConfig: OrgAIConfig | null;
+  webSearchAvailable: boolean;
+  requestedThreadId: SafeId<"chatThread"> | undefined;
+};
+
 /**
  * Materialize the thread + file mapping for a first send. Lives here (not in
  * the endpoint module) so the placeholder-adoption and legacy branches stay
  * integration-testable against a real transaction.
  */
-export const createFileChatThread = async (
-  tx: Transaction,
-  {
-    entityId,
-    fieldId,
-    organizationId,
-    userId,
-    workspaceId,
-  }: FileThreadLookupInput,
-  recordAuditEvent: AuditRecorder,
-  orgAIConfig: OrgAIConfig | null,
-  webSearchAvailable: boolean,
-  requestedThreadId: SafeId<"chatThread"> | undefined,
-): Promise<FileThreadCreateResult> => {
+export const createFileChatThread = async ({
+  tx,
+  input: { entityId, fieldId, organizationId, userId, workspaceId },
+  recordAuditEvent,
+  orgAIConfig,
+  webSearchAvailable,
+  requestedThreadId,
+}: CreateFileChatThreadOptions): Promise<FileThreadCreateResult> => {
   const entity = await tx.query.entities.findFirst({
     where: {
       id: { eq: entityId },

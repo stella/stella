@@ -615,12 +615,26 @@ export const findForbiddenGuidance = ({
   for (const rule of rules) {
     if (
       rule.guidance &&
-      findForbiddenTerms(source, target, locale, [rule], key).length > 0
+      findForbiddenTerms({
+        source,
+        target,
+        locale,
+        rules: [rule],
+        key,
+      }).length > 0
     ) {
       guidance.add(rule.guidance);
     }
   }
   return [...guidance];
+};
+
+type FindForbiddenTermsOptions = {
+  source: string;
+  target: string;
+  locale: string;
+  rules: ForbiddenRule[];
+  key?: string | undefined;
 };
 
 /**
@@ -631,13 +645,13 @@ export const findForbiddenGuidance = ({
  * key-path triggering; omit it for source-only checks. `forbiddenAlways` forms
  * are checked regardless of either trigger.
  */
-export const findForbiddenTerms = (
-  source: string,
-  target: string,
-  locale: string,
-  rules: ForbiddenRule[],
-  key?: string,
-): string[] => {
+export const findForbiddenTerms = ({
+  source,
+  target,
+  locale,
+  rules,
+  key,
+}: FindForbiddenTermsOptions): string[] => {
   const hits: string[] = [];
   for (const rule of rules) {
     // An exempt key opts out of every ban this concept carries, including the
@@ -834,8 +848,13 @@ const findViolations = (
     if (targetValue === sourceValue) {
       if (
         locale === "en" &&
-        (findForbiddenTerms(sourceValue, targetValue, "en", rules, key).length >
-          0 ||
+        (findForbiddenTerms({
+          source: sourceValue,
+          target: targetValue,
+          locale: "en",
+          rules,
+          key,
+        }).length > 0 ||
           hasInvalidCapitalizedStella(targetValue) ||
           hasEmDash(targetValue))
       ) {
@@ -858,8 +877,13 @@ const findViolations = (
       result.plural.push(key);
     }
     if (
-      findForbiddenTerms(sourceValue, targetValue, locale, rules, key).length >
-        0 ||
+      findForbiddenTerms({
+        source: sourceValue,
+        target: targetValue,
+        locale,
+        rules,
+        key,
+      }).length > 0 ||
       hasInvalidCapitalizedStella(targetValue) ||
       hasEmDash(targetValue)
     ) {
@@ -870,14 +894,22 @@ const findViolations = (
   return result;
 };
 
+type IsSuppressedOptions = {
+  baseline: LintBaseline;
+  category: LintCategory;
+  key: string;
+  locale: string;
+  entry: BaselineEntry;
+};
+
 /** A violation is suppressed only if the baselined (source, target) still matches. */
-export const isSuppressed = (
-  baseline: LintBaseline,
-  category: LintCategory,
-  key: string,
-  locale: string,
-  entry: BaselineEntry,
-): boolean => {
+export const isSuppressed = ({
+  baseline,
+  category,
+  key,
+  locale,
+  entry,
+}: IsSuppressedOptions): boolean => {
   const stored = baseline[category][key]?.[locale];
   if (stored === undefined) {
     return false;
@@ -960,7 +992,15 @@ if (import.meta.main) {
           };
           if (writeBaseline) {
             (next[category][key] ??= {})[locale] = entry;
-          } else if (!isSuppressed(baseline, category, key, locale, entry)) {
+          } else if (
+            !isSuppressed({
+              baseline,
+              category,
+              key,
+              locale,
+              entry,
+            })
+          ) {
             const guidance =
               category === "terminology"
                 ? [
