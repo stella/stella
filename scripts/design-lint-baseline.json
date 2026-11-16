@@ -92,7 +92,7 @@
     "apps/web/src/components/workspaces/field-value.tsx": 3,
     "apps/web/src/components/workspaces/justification.tsx": 8,
     "apps/web/src/components/workspaces/kanban/kanban-card.tsx": 1,
-    "apps/web/src/components/workspaces/matter-metadata-sheet.tsx": 8,
+    "apps/web/src/components/workspaces/matter-metadata-sheet.tsx": 4,
     "apps/web/src/components/workspaces/members-section.tsx": 1,
     "apps/web/src/components/workspaces/properties/composer-primitives.tsx": 6,
     "apps/web/src/components/workspaces/properties/delete-property.tsx": 2,
