@@ -1,0 +1,6 @@
+{
+  "metric": "audit-skip-directives",
+  "file": "apps/api/src/lib/legal-search/corpus-index-route-proof-store.ts",
+  "delta": 1,
+  "reason": "One writer owns every write to corpus_index_route_proofs: bookkeeping derived from the public corpus projection and the search engine, rewritten on every census page, with no tenant data and no actor. The drift repairs that revoke a proof are the events that matter, and they keep their own record; an audit row per census page would add millions of rows a pass and record nothing a person did."
+}

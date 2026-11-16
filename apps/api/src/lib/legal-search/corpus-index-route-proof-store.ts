@@ -75,8 +75,8 @@ const nullableText = (row: unknown, key: string): string | null => {
 };
 
 const requiredCount = (row: unknown, key: string): number => {
-  const value = Number(requiredText(row, key));
-  return Number.isSafeInteger(value) && value >= 0
+  const value = isRecord(row) ? row[key] : undefined;
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0
     ? value
     : panic(`Malformed route proof row: ${key}`);
 };
@@ -121,11 +121,11 @@ export const ensureCorpusIndexRouteCensusPassTx = async (
   );
   const row = executedRows(
     await tx.execute(sql`
-      SELECT ${proofs.passNumber}::text AS pass_number,
+      SELECT ${proofs.passNumber}::int AS pass_number,
         ${epochMicros(sql`${proofs.passStartedAt}`)}::text AS started_at_us,
         ${proofs.passExpectation} AS expectation,
         ${proofs.passCursor}::text AS cursor,
-        ${proofs.passInspected}::text AS inspected
+        ${proofs.passInspected}::int AS inspected
       FROM ${proofs}
       WHERE ${isRoute(route)}
     `),
@@ -317,12 +317,12 @@ export const readCorpusIndexRouteProofsTx = async (
         ${proofs.revokeReason} AS revoke_reason,
         ${epochMicros(sql`${proofs.provenAt}`)}::text AS proven_at_us,
         ${epochMicros(sql`${proofs.provenPassStartedAt}`)}::text AS proven_pass_started_at_us,
-        ${proofs.provenInspected}::text AS proven_inspected,
-        ${proofs.passNumber}::text AS pass_number,
+        ${proofs.provenInspected}::int AS proven_inspected,
+        ${proofs.passNumber}::int AS pass_number,
         ${epochMicros(sql`${proofs.passStartedAt}`)}::text AS started_at_us,
         ${proofs.passExpectation} AS expectation,
         ${proofs.passCursor}::text AS cursor,
-        ${proofs.passInspected}::text AS inspected
+        ${proofs.passInspected}::int AS inspected
       FROM ${proofs}
       WHERE ${proofs.family} = ${family}
         AND ${proofs.generation} = ${generation}
