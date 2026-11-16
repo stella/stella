@@ -131,6 +131,12 @@ export const createComputer = () => {
       chatReadSeq = seq;
       return Result.ok(undefined);
     },
+    readHandedOverChatRun: async () =>
+      Result.ok({
+        runId: RUNNER_RUN_ID,
+        harness: DESTINATION.harness,
+        chatReadSeq,
+      }),
     readChatRunForRequest: async () =>
       Result.ok(
         approvalRequest === undefined
@@ -194,6 +200,10 @@ export const createComputer = () => {
         release: () => gate.resolve(undefined),
       };
     },
+    /** Where a released reader stopped, as its release records it. */
+    releaseAt: (seq: number) => {
+      chatReadSeq = seq;
+    },
     events: (chunks: readonly StreamChunk[]) => {
       for (const chunk of chunks) {
         store((seq) => ({
@@ -255,5 +265,20 @@ export const localSource =
       messages: [],
       instructions: "You are stella.",
       resume,
+      abortSignal,
+    });
+
+/** The turn's run as a task that adopted the turn reads it on. */
+export const adoptedSource =
+  (computer: ReturnType<typeof createComputer>) => (abortSignal: AbortSignal) =>
+    createLocalChatRun(computer.context, {
+      type: "adopt",
+      harness: DESTINATION.harness,
+    }).stream({
+      chatRunId: "chat-run-bound",
+      chatTurnId: TURN_ID,
+      messages: [],
+      instructions: "You are stella.",
+      resume: undefined,
       abortSignal,
     });

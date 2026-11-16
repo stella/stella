@@ -1,14 +1,14 @@
 import type { OwnershipEntry } from "../ownership-types.ts";
 
 export default {
-  id: "queued-turn-member",
+  id: "server-started-member",
   capability: "Building a member's request context without a request",
   owner: [
     "apps/api/src/lib/auth.ts",
-    "apps/api/src/lib/chat/queued-turn-member.ts",
+    "apps/api/src/lib/chat/server-started-member.ts",
   ],
   summary:
-    "A member context is built from a proved identity in one place, `resolveValidateAuth`. Besides the request resolvers in auth.ts, only the chat queue's sender proves a member, from a fresh membership lookup with no stored credential, so no other module can hand a handler a member nobody proved.",
+    "A member context is built from a proved identity in one place, `resolveValidateAuth`. Besides the request resolvers in auth.ts, only chat work the server starts for a member (sending a queued message, continuing a handed-over turn) proves one, from a fresh membership lookup with no stored credential, so no other module can hand a handler a member nobody proved.",
   enforcement: {
     kind: "import",
     specifiers: ["@/api/lib/auth"],

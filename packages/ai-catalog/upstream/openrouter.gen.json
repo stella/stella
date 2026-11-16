@@ -1051,6 +1051,12 @@
       }
     },
     {
+      "id": "qwen/qwen4-max",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
       "id": "reflection/beam-1.0-501b-a23b",
       "reasoning": {
         "default_effort": "max"

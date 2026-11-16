@@ -1,8 +1,11 @@
 import { queryOptions } from "@tanstack/react-query";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
+
 import { api } from "@/lib/api";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import type { ConditionNode } from "@/lib/types";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 import { normalizeVisibleFieldIds } from "@/lib/workspaces/queries/entities.logic";
 import type { ViewSort } from "@/lib/workspaces/queries/entities.logic";
 
@@ -67,7 +70,18 @@ export type CalendarTask = Awaited<
 >[number];
 
 export const calendarTasksOptions = (key: CalendarTasksKey) =>
-  queryOptions({
-    queryKey: calendarTasksKeys.range(key),
-    queryFn: async ({ signal }) => await fetchCalendarTasks({ ...key, signal }),
-  });
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: calendarTasksKeys.range(key),
+      queryFn: async ({ signal }) =>
+        await fetchCalendarTasks({ ...key, signal }),
+    }),
+    {
+      resources: [
+        RESOURCE_TYPE.ENTITY,
+        RESOURCE_TYPE.FIELD,
+        RESOURCE_TYPE.PROPERTY,
+      ],
+      scope: { type: "workspace", workspaceId: key.workspaceId },
+    },
+  );

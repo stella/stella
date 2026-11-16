@@ -14,6 +14,7 @@ import { computeCaseLawCoverageAnswer } from "@/api/handlers/case-law/decisions/
 import { reapOwnerlessChatTurnOnTx } from "@/api/handlers/chat/chat-turn-persistence";
 import { relinquishChatTurnRuns } from "@/api/handlers/chat/chat-turn-run";
 import { startChatQueueSender } from "@/api/handlers/chat/queue/chat-queue-sender";
+import { startChatTurnAdopter } from "@/api/handlers/chat/turns/adopt";
 import { initBuiltinReportTemplates } from "@/api/handlers/reports/builtin-templates";
 import { clearLookupPreviewCache } from "@/api/handlers/templates/lookup-preview-cache";
 import { createHttpApp } from "@/api/http/app";
@@ -263,6 +264,7 @@ const startServer = async (): Promise<void> => {
   // Before the listener opens, so no runner upgrade finds the gateway absent.
   await startDesktopRunnerGateway();
   const stopChatQueueSender = startChatQueueSender();
+  const stopChatTurnAdopter = startChatTurnAdopter();
 
   const server = Bun.serve({
     port: getApiPort(),
@@ -318,6 +320,7 @@ const startServer = async (): Promise<void> => {
       },
       relinquishChatTurnRuns,
       stopChatQueueSender,
+      stopChatTurnAdopter,
       stopHttp: async () => {
         // Runner sockets are asked to reconnect elsewhere before the
         // listener stops waiting on open connections.

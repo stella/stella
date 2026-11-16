@@ -25,7 +25,7 @@ import {
   createChatRuntime,
   resetChatRequestStateForTests,
 } from "./chat-runtime";
-import type { ChatRuntime, ChatSendMessageOptions } from "./chat-runtime";
+import type { ChatRouteHandoff, ChatRuntime } from "./chat-runtime";
 import {
   chatContextCapabilityFingerprint,
   chatThreadCacheKey,
@@ -155,59 +155,11 @@ const storedMemberWaitKeys = (
   });
 };
 
-/**
- * The message the page sent that the server never stored: the latest user
- * message of a runtime whose turn failed, absent from the stored thread.
- * The server refused that send before it accepted the turn (no computer
- * connected, no capacity, a request it rejected), so the page holds the only
- * copy of what the member wrote. A failed turn the server did accept stores
- * its message, and is not this.
- */
-const unsentMessageIdOf = (
-  runtime: ChatRuntime,
-  storedMessages: readonly PersistedChatMessage[],
-): string | null => {
-  const { error, messages } = runtime.getSnapshot();
-  if (error === undefined) {
-    return null;
-  }
-  const latest = messages.findLast((message) => message.role === "user");
-  if (
-    latest === undefined ||
-    storedMessages.some((message) => message.id === latest.id)
-  ) {
-    return null;
-  }
-  return latest.id;
-};
-
-/**
- * Put the stored thread on a runtime that holds an unsent message, with that
- * message after it. The runtime is kept for the message, not for the history
- * it was built on: what another tab or device stored meanwhile shows above
- * it, and a resend continues the thread the server holds. The turn's error
- * stays, since it describes the unsent message.
- */
-const showStoredThreadWithUnsentMessage = (
-  runtime: ChatRuntime,
-  storedMessages: readonly PersistedChatMessage[],
-): void => {
-  const unsentId = unsentMessageIdOf(runtime, storedMessages);
-  const unsent = runtime
-    .getSnapshot()
-    .messages.find((message) => message.id === unsentId);
-  if (unsent === undefined) {
-    return;
-  }
-  runtime.setMessages([...storedMessages, unsent]);
-};
-
 const CHAT_RUNTIME_RECONCILE_DISPOSITION = {
   idle: "idle",
   replaceStaleMemberWait: "replace-stale-member-wait",
   retainInFlight: "retain-in-flight",
   retainMemberWait: "retain-member-wait",
-  retainUnsentMessage: "retain-unsent-message",
 } as const;
 
 type ChatRuntimeReconcileDisposition =
@@ -223,7 +175,6 @@ const acknowledgesRefresh = (
 ): boolean => {
   switch (disposition) {
     case CHAT_RUNTIME_RECONCILE_DISPOSITION.retainMemberWait:
-    case CHAT_RUNTIME_RECONCILE_DISPOSITION.retainUnsentMessage:
       return true;
     case CHAT_RUNTIME_RECONCILE_DISPOSITION.idle:
     case CHAT_RUNTIME_RECONCILE_DISPOSITION.replaceStaleMemberWait:
@@ -262,26 +213,13 @@ const hasInFlightChatRuntimeWork = (runtime: ChatRuntime): boolean => {
 };
 
 /**
- * What a thread read does to a runtime that has no work in flight. Two
- * things on the page exist nowhere else and are kept for:
- *
- * - An unsent message (`unsentMessageIdOf`): rebuilding would drop what the
- *   member wrote and why it was refused.
- * - Something open for the member (`openMemberWaitKeys`): rebuilding would
- *   drop what they entered into the open card and read the paused turn from
- *   the server again. It is kept while the stored thread still holds
- *   everything it waits on, or has not been read since the wait began; a
- *   refreshed thread that no longer holds it (answered on another device,
- *   stopped) replaces the stale wait.
- *
- * A runtime holds at most one of the two. A new message supersedes what the
- * answer before it had open: the awaited answer is the latest message only
- * while no user message follows it, and the send drops the turn's pending
- * interrupts (`supersedePendingInterrupts`). So a runtime whose latest
- * message is unsent has no open keys, and one with open keys has no unsent
- * message. The unsent message is still checked first: the wait rule can
- * replace, and what the member wrote must not depend on that exclusion
- * holding.
+ * What a thread read does to a runtime that has no work in flight. One thing
+ * on the page exists nowhere else and is kept for: something open for the
+ * member (`openMemberWaitKeys`). Rebuilding would drop what they entered into
+ * the open card and read the paused turn from the server again. It is kept
+ * while the stored thread still holds everything it waits on, or has not
+ * been read since the wait began; a refreshed thread that no longer holds it
+ * (answered on another device, stopped) replaces the stale wait.
  */
 const getChatRuntimeReconcileDisposition = ({
   data,
@@ -294,10 +232,6 @@ const getChatRuntimeReconcileDisposition = ({
 }): ChatRuntimeReconcileDisposition => {
   if (hasInFlightChatRuntimeWork(runtime)) {
     return CHAT_RUNTIME_RECONCILE_DISPOSITION.retainInFlight;
-  }
-
-  if (unsentMessageIdOf(runtime, data.messages) !== null) {
-    return CHAT_RUNTIME_RECONCILE_DISPOSITION.retainUnsentMessage;
   }
 
   const { localRunQuestion, messages } = runtime.getSnapshot();
@@ -396,44 +330,24 @@ export const showStoredChatThread = async (
 };
 
 /**
- * Send the page's latest message again after its turn failed. A message the
- * stored thread holds is answered again in place: a regeneration, which
- * replaces the failed answer. One it does not hold was refused before the
- * server stored anything, so there is nothing to regenerate (the server
- * refuses a regeneration of a message it does not store): it goes out as the
- * new message it still is.
- *
- * The thread query is read again to tell the two apart, since only the
- * server knows whether it accepted the turn before the request failed. When
- * that read fails, or the runtime was built with no thread query to read,
- * the resend stays a regeneration: the server refuses it for a message it
- * does not hold, where a new send of one it does hold would answer it twice.
+ * What became of a new chat's first message, which the page sent before it
+ * moved to the chat (`startRouteHandoffMessage`): `sent` once the server took
+ * its turn, or stored the message before the request failed; `refused` when
+ * the server refused it before storing anything. The chat then shows as the
+ * server stores it, without the message, which goes back to the composer.
  */
-export const resendLatestChatMessage = async (
+export const settleRouteHandoff = async (
   runtime: ChatRuntime,
-  options?: ChatSendMessageOptions,
-): Promise<void> => {
-  const latestUserMessageId = () =>
-    runtime.getSnapshot().messages.findLast(({ role }) => role === "user")?.id;
-  const resent = latestUserMessageId();
-  const read = storedThreadReaders.get(runtime);
-  const stored = read === undefined ? undefined : await Result.tryPromise(read);
-  // The resend is of the message that was latest when it was asked for. A
-  // message sent while the thread was read owns the turn now: resending
-  // would regenerate it, or post it twice.
-  if (latestUserMessageId() !== resent || hasInFlightChatRuntimeWork(runtime)) {
-    return;
+  { accepted, message }: ChatRouteHandoff,
+): Promise<{ type: "sent" } | { type: "refused"; error: Error }> => {
+  const acceptance = await accepted;
+  if (acceptance.status === "accepted") {
+    return { type: "sent" };
   }
-  if (
-    stored !== undefined &&
-    Result.isOk(stored) &&
-    unsentMessageIdOf(runtime, stored.value.messages) !== null
-  ) {
-    showStoredThreadWithUnsentMessage(runtime, stored.value.messages);
-    await runtime.sendLatestMessageAgain(options);
-    return;
-  }
-  await runtime.reload(options);
+  await showStoredChatThread(runtime, []);
+  return runtime.getSnapshot().messages.some((shown) => shown.id === message.id)
+    ? { type: "sent" }
+    : { type: "refused", error: acceptance.error };
 };
 
 const advanceAcknowledgedSeed = ({
@@ -450,37 +364,6 @@ const advanceAcknowledgedSeed = ({
       entry.seed = seed;
     }
   }
-};
-
-/**
- * Keep `runtime` across a thread read that differs from the one it was built
- * on: its seed moves to that read. A runtime kept for an unsent message also
- * takes the read's history. Acquire runs while a page renders, so the
- * runtime's subscribers hear of the new messages after the render, and only
- * if the message is still unsent by then.
- */
-const acknowledgeRefresh = ({
-  data,
-  disposition,
-  runtime,
-  seed,
-  threadIdentity,
-}: {
-  data: ChatThreadFetched;
-  disposition: ChatRuntimeReconcileDisposition;
-  runtime: ChatRuntime;
-  seed: ChatRuntimeSeedSignal;
-  threadIdentity: string;
-}): void => {
-  advanceAcknowledgedSeed({ runtime, seed, threadIdentity });
-  if (disposition !== CHAT_RUNTIME_RECONCILE_DISPOSITION.retainUnsentMessage) {
-    return;
-  }
-  queueMicrotask(() => {
-    if (!hasInFlightChatRuntimeWork(runtime)) {
-      showStoredThreadWithUnsentMessage(runtime, data.messages);
-    }
-  });
 };
 
 /**
@@ -547,13 +430,7 @@ const findBusyChatRuntimeEntryForThread = ({
       continue;
     }
     if (acknowledgesRefresh(disposition) && hasAuthoritativeRefresh) {
-      acknowledgeRefresh({
-        data,
-        disposition,
-        runtime: entry.runtime,
-        seed,
-        threadIdentity,
-      });
+      advanceAcknowledgedSeed({ runtime: entry.runtime, seed, threadIdentity });
     }
     return entry;
   }
@@ -670,10 +547,7 @@ export type AcquireChatRuntimeArgs = {
  *      carries its pre-send seed, or when a refreshed transcript still holds
  *      everything it waits on. A refreshed mismatch replaces stale local
  *      state.
- *      A runtime holding a message the server never stored (its send was
- *      refused) is retained while the thread read does not hold that message:
- *      see `unsentMessageIdOf`.
- *   2. Runtime with in-flight work under ANY other registry key for the
+ * *   2. Runtime with in-flight work under ANY other registry key for the
  *      same THREAD
  *      (any fingerprint, any query key — the inspector's active-skill
  *      surface and the main page's plain surface use different query
@@ -750,9 +624,7 @@ export const acquireChatRuntime = ({
     acknowledgesRefresh(existingDisposition)
   ) {
     if (!seedSignalsEqual(existing.seed, seed)) {
-      acknowledgeRefresh({
-        data,
-        disposition: existingDisposition,
+      advanceAcknowledgedSeed({
         runtime: existing.runtime,
         seed,
         threadIdentity,

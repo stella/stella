@@ -9,7 +9,10 @@ import { PROFESSIONAL_USE_ACCEPTANCE_SOURCE } from "@/api/db/schema";
 import { recordAccountProfessionalUse } from "@/api/lib/auth/professional-use";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { resolveQueuedTurnMember } from "@/api/lib/chat/queued-turn-member";
+import {
+  resolveServerStartedMember,
+  type ServerStartedChatWork,
+} from "@/api/lib/chat/server-started-member";
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import {
   mintAuthProviderId,
@@ -67,23 +70,31 @@ const seedMember = async ({ accepted }: { accepted: boolean }) => {
   };
 };
 
-const resolve = async (owner: {
-  organizationId: SafeId<"organization">;
-  userId: SafeId<"user">;
-}) =>
-  await resolveQueuedTurnMember({
+const QUEUED_SEND = {
+  type: "queued-send",
+  threadId: createSafeId<"chatThread">(),
+  queuedMessageId: createSafeId<"chatMessage">(),
+} satisfies ServerStartedChatWork;
+
+const resolve = async (
+  owner: {
+    organizationId: SafeId<"organization">;
+    userId: SafeId<"user">;
+  },
+  work: ServerStartedChatWork = QUEUED_SEND,
+) =>
+  await resolveServerStartedMember({
     ...owner,
-    threadId: createSafeId<"chatThread">(),
-    queuedMessageId: createSafeId<"chatMessage">(),
+    work,
     signal: new AbortController().signal,
   });
 
 if (!databaseUrl || !enabled) {
-  describe.skip("queued turn member (postgres)", () => {
+  describe.skip("server-started member (postgres)", () => {
     test("requires STELLA_RUN_POSTGRES_TESTS=true and DATABASE_URL", () => {});
   });
 } else {
-  describe("queued turn member (postgres)", () => {
+  describe("server-started member (postgres)", () => {
     test("a current member is proved again from their membership", async () => {
       const owner = await seedMember({ accepted: true });
       try {
@@ -99,6 +110,26 @@ if (!databaseUrl || !enabled) {
           // No browser session stands behind the turn.
           expect(value.caller.session.id.startsWith("chat-queue:")).toBe(true);
           expect(value.caller.session.originConsentId).toBeNull();
+        }
+      } finally {
+        await owner.cleanUp();
+      }
+    });
+
+    test("a turn continued after its task stopped is the member's, from that turn", async () => {
+      const owner = await seedMember({ accepted: true });
+      const turnId = createSafeId<"chatTurn">();
+      try {
+        const resolved = await resolve(owner, {
+          type: "turn-handover",
+          threadId: createSafeId<"chatThread">(),
+          turnId,
+        });
+        const value = resolved.isOk() ? resolved.value : null;
+        expect(value?.type).toBe("member");
+        if (value?.type === "member") {
+          expect(value.caller.user.id).toBe(owner.userId);
+          expect(value.caller.session.id).toBe(`chat-turn-handover:${turnId}`);
         }
       } finally {
         await owner.cleanUp();

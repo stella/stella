@@ -2099,7 +2099,6 @@
     "queue": {
       "actions": "Akcie správy vo fronte",
       "editNeedsComposer": "Správu vo fronte upravíte, keď otvoríte tento chat.",
-      "filesNotQueued": "Správa so súbormi nemôže čakať vo fronte. Odošlite ju, keď aktuálna odpoveď skončí.",
       "heldByMember": "Front je pozastavený.",
       "heldComputerAway": "Čaká sa na váš počítač: správy vo fronte sa odošlú, keď sa pripojí.",
       "heldSendRefused": "Front je pozastavený: prvú správu sa nepodarilo odoslať. Upravte ju alebo ju odstráňte a potom pokračujte.",

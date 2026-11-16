@@ -3,6 +3,7 @@ import { expect, test } from "bun:test";
 import { READ_BUDGETS, readBudgetPages } from "@/api/lib/db/read-budgets";
 import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
 
+import { projectionStateRowsVisited } from "./legislation-candidate-plan";
 import {
   budgetProblem,
   budgetViolations,
@@ -16,9 +17,12 @@ import {
   sumMetrics,
   writeScaleViolations,
 } from "./measurement";
-import { analyzePlan } from "./plan-analyzer";
+import { analyzePlan, relationRowsVisited } from "./plan-analyzer";
 import { PLAN_EXCEPTIONS } from "./plan-exceptions";
-import { classifyMeasuredStatement } from "./scheduled-run";
+import {
+  classifyMeasuredStatement,
+  queuedExportReadWork,
+} from "./scheduled-run";
 
 const plan = (Plan: Record<string, unknown>, executionTime = 1) => ({
   Plan,
@@ -37,6 +41,95 @@ const insertPlan = (rows: number) => ({
       "Actual Loops": 1,
     },
   ],
+});
+
+test("visited relation rows include repeated and rejected work without counting catalog lookups", () => {
+  const tree = {
+    "Node Type": "Nested Loop",
+    Plans: [
+      {
+        "Relation Name": "pg_class",
+        "Actual Rows": 100,
+        "Actual Loops": 4,
+      },
+      {
+        "Relation Name": "organization_data_exports",
+        "Actual Rows": 2,
+        "Rows Removed by Filter": 3,
+        "Rows Removed by Index Recheck": 1,
+        "Actual Loops": 2,
+      },
+      {
+        "Node Type": "Recursive Union",
+        Plans: [
+          {
+            "Relation Name": "organization_data_exports",
+            "Actual Rows": 1,
+            "Actual Loops": 3,
+          },
+        ],
+      },
+      {
+        "Relation Name": "corpus_index_projection_states",
+        "Actual Rows": 4,
+        "Rows Removed by Filter": 1,
+        "Rows Removed by Index Recheck": 2,
+        "Actual Loops": 3,
+      },
+    ],
+  };
+  expect(relationRowsVisited(tree, "organization_data_exports")).toBe(15);
+  expect(projectionStateRowsVisited(tree)).toBe(21);
+  expect(() => relationRowsVisited({ Plans: [null] }, "exports")).toThrow(
+    "Plan children are malformed",
+  );
+  expect(() =>
+    relationRowsVisited(
+      {
+        "Relation Name": "exports",
+        "Actual Rows": "3",
+        "Actual Loops": 1,
+      },
+      "exports",
+    ),
+  ).toThrow("Actual Rows is not a number");
+});
+
+test("queued export work derives its lookahead bound from the captured parameter", () => {
+  const text = 'select "queued_export_keys"."id" from candidates limit $2';
+  const scan = {
+    "Relation Name": "organization_data_exports",
+    "Actual Rows": 3,
+    "Actual Loops": 1,
+  };
+  expect(queuedExportReadWork({ text, params: [99, 3], plan: scan })).toEqual({
+    lookaheadLimit: 3,
+    rowsVisited: 3,
+  });
+  expect(
+    queuedExportReadWork({ text: "select 1", params: [], plan: {} }),
+  ).toBeUndefined();
+  for (const params of [[], [99, 0], [99, -1], [99, 1.5], [99, "3"]]) {
+    expect(() => queuedExportReadWork({ text, params, plan: scan })).toThrow(
+      "Queued export read has no positive bound parameter",
+    );
+  }
+  expect(() =>
+    queuedExportReadWork({
+      text: 'select "queued_export_keys"."id" from candidates',
+      params: [3],
+      plan: scan,
+    }),
+  ).toThrow("Queued export read has no positive bound parameter");
+  const broad = queuedExportReadWork({
+    text,
+    params: [99, 3],
+    plan: { ...scan, "Actual Rows": 2000 },
+  });
+  expect(broad).toBeDefined();
+  if (broad !== undefined) {
+    expect(broad.rowsVisited).toBeGreaterThan(2 * broad.lookaheadLimit);
+  }
 });
 
 test("measured statements use one read/write classifier", () => {

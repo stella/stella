@@ -1,18 +1,3 @@
 {
-  "entries": [
-    {
-      "id": "apps/api/src/tests/query-perf/scheduled-run.postgres.test.ts::scheduled export measurement (postgres) > export measurement executes auto / transitions once without replaying writes",
-      "owner": "stella",
-      "reason": "Failed on two pull requests that change no export code (runs 43587536394, 43591313231) while merge groups on the same main pass: the queued-export key reads go from 19 and 13 pages at 6,000 rows to 320 each at 12,000, so the doubling budget fails (455 vs 1065, at most 564). The plan depends on planner state; the read needs a plan that stays bounded.",
-      "created": "2026-11-14",
-      "expires": "2026-11-28"
-    },
-    {
-      "id": "apps/api/src/tests/query-perf/scheduled-run.postgres.test.ts::scheduled export measurement (postgres) > export measurement executes force_generic_plan / transitions once without replaying writes",
-      "owner": "stella",
-      "reason": "The same doubling-budget failure as the quarantined auto / transitions case (455 vs 1065 pages, at most 564) on a pull request that changes no export code (job 132566648596), while main passes. The queued-export key read needs a plan that stays bounded under a generic plan too.",
-      "created": "2026-11-14",
-      "expires": "2026-11-28"
-    }
-  ]
+  "entries": []
 }
