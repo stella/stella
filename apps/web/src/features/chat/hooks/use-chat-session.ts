@@ -825,6 +825,20 @@ export const useChatSession = ({
   /** Queued messages this page removed (or handed to a turn): their leaving
    *  the queue is no turn the server started. */
   const removedHereRef = useRef(new Set<string>());
+  /**
+   * After a steer the turn took: the server removed the message at the
+   * revision the turn was handed. One edited since stays queued, and when the
+   * server later sends it, that is a turn this page did not start.
+   */
+  const settleSteeredHandOff = useCallback(
+    async (id: string) => {
+      await refreshQueue();
+      if (readQueue().items.some((queued) => queued.id === id)) {
+        removedHereRef.current.delete(id);
+      }
+    },
+    [readQueue, refreshQueue],
+  );
   /** Remove queued message `id` at the `revision` this page read: one
    *  edited since stays queued (the server refuses the removal). */
   const removeFromQueue = useCallback(
@@ -1276,13 +1290,15 @@ export const useChatSession = ({
                     },
                   })
                 ).type === "steered";
-              if (!steered) {
-                removedHereRef.current.delete(id);
-                await writeQueue(
-                  async () =>
-                    await sendQueuedChatMessageNow(threadRef.threadId, id),
-                );
+              if (steered) {
+                await settleSteeredHandOff(id);
+                return;
               }
+              removedHereRef.current.delete(id);
+              await writeQueue(
+                async () =>
+                  await sendQueuedChatMessageNow(threadRef.threadId, id),
+              );
             })(),
             "use-chat-session.steer-queued-message",
           );
@@ -1303,7 +1319,14 @@ export const useChatSession = ({
           return panic("Unhandled send-now route");
       }
     },
-    [chat, readQueue, threadRef.threadId, threadSendState, writeQueue],
+    [
+      chat,
+      readQueue,
+      settleSteeredHandOff,
+      threadRef.threadId,
+      threadSendState,
+      writeQueue,
+    ],
   );
 
   /** The confirmed Send now over a turn waiting on the member: it ends what
@@ -2454,6 +2477,7 @@ export const useChatSession = ({
         }
         switch (outcome.type) {
           case "steered":
+            await settleSteeredHandOff(steered.id);
             return;
           case "refused":
             notifySteerRefused(outcome.reason);
@@ -2467,7 +2491,7 @@ export const useChatSession = ({
       })(),
       "use-chat-session.steer-on-resume",
     );
-  }, [chat, notifySteerRefused, turnRunning]);
+  }, [chat, notifySteerRefused, settleSteeredHandOff, turnRunning]);
 
   // The server sends the first queued message as a turn of its own, which
   // this page did not start: once that message has left the queue (not

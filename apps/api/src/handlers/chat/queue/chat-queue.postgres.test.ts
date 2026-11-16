@@ -919,6 +919,22 @@ const suite = (
           tx,
         });
       });
+      // The run holds the first revision's steer under this id: the edited
+      // revision cannot be steered under it too, or the first one's report
+      // would remove the revision the run never had.
+      expect(
+        await withLock(
+          threadId,
+          owner,
+          async (tx) =>
+            await markSteeredQueuedMessageOnTx({
+              id: editedSince,
+              revision: 1,
+              threadId,
+              tx,
+            }),
+        ),
+      ).toBe("changed");
       const steeredQueue = createSteeredQueue({
         organizationId: owner.organizationId,
         recordAuditEvent: async () => {},
