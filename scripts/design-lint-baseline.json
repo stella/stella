@@ -931,13 +931,10 @@
   "no-native-ui/no-native-button": {
     "apps/web/src/components/catalogue/catalogue-row.tsx": 1,
     "apps/web/src/components/file-tree/file-tree.tsx": 1,
-    "apps/web/src/components/workspaces/table/select-row-content.tsx": 1,
     "packages/decision-reader/src/annotation-anchors.tsx": 1,
     "packages/decision-reader/src/cited-provision.tsx": 1
   },
-  "no-native-ui/no-native-checkbox": {
-    "apps/web/src/components/workspaces/table/select-row-content.tsx": 1
-  },
+  "no-native-ui/no-native-checkbox": {},
   "no-native-ui/no-native-details-grid": {
     "apps/landing/src/components/react/previews/RegistryLookupPreview.tsx": 3
   },

@@ -1975,6 +1975,8 @@
     ],
     "ButtonTextRun.layout": ["wrap"],
     "ButtonTextRun.variant": ["link", "plain"],
+    "Checkbox.appearance": ["cell", "default"],
+    "Checkbox.firstLine": ["control", "text"],
     "ColorPicker.align": ["center", "end", "start"],
     "ColorPicker.side": ["bottom", "left", "right", "top"],
     "ColorPickerContent.presentation": ["inline", "popover"],

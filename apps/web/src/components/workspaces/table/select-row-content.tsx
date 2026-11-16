@@ -127,44 +127,31 @@ export const SelectRowContent = <TRow extends TableRowData = TableTreeNode>({
   };
 
   return (
-    <button
-      aria-checked={someSelected ? "mixed" : selected}
+    <Checkbox
+      appearance="cell"
       aria-label={ariaLabel ?? label}
-      className="group/selection ring-ring hover:bg-muted/50 absolute inset-0 min-w-12 shrink-0 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-inset"
+      checked={selected}
+      indeterminate={someSelected}
+      firstLine={firstLine}
+      rowLabel={label}
       data-slot="table-selection-cell"
+      onCheckedChange={(_checked, details) => {
+        toggleSelection(
+          "shiftKey" in details.event && details.event.shiftKey === true,
+        );
+      }}
       onClick={(event) => {
         event.stopPropagation();
-        toggleSelection(event.shiftKey);
       }}
       onKeyDown={(event) => {
         if (event.key === " " || event.key === "Enter") {
           event.stopPropagation();
         }
+        if (event.key === "Enter") {
+          event.preventDefault();
+          toggleSelection(event.shiftKey);
+        }
       }}
-      role="checkbox"
-      type="button"
-    >
-      <RowNumberLabel
-        className="transition-opacity group-hover/row:opacity-0 group-focus-visible/selection:opacity-0 group-data-[state=selected]/row:opacity-0"
-        firstLine={firstLine}
-        label={label}
-      />
-      <span
-        className={cn(
-          firstLineSlot(firstLine),
-          "pointer-events-none opacity-0 transition-opacity group-hover/row:opacity-100 group-focus-visible/selection:opacity-100 group-data-[state=selected]/row:opacity-100",
-        )}
-      >
-        <Checkbox
-          aria-hidden="true"
-          checked={selected}
-          className="shrink-0"
-          indeterminate={someSelected}
-          readOnly
-          render={<span />}
-          tabIndex={-1}
-        />
-      </span>
-    </button>
+    />
   );
 };
