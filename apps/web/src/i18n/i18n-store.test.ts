@@ -11,6 +11,7 @@ import {
   getFormatter,
   getFormattingLocale,
   getMessageLocale,
+  loadLocaleMessages,
   messageLoaders,
   supportedLanguages,
   useI18nStore,
@@ -379,5 +380,36 @@ test("reports a folio catalog that fails to load and keeps the previous language
     await expectFailedCsSwitchIsReported(bundleError);
   } finally {
     loaderSpy.mockRestore();
+  }
+});
+
+test("folio defaults preserve frozen app catalogs and app-owned messages", async () => {
+  const appMessages = {
+    ...en,
+    folio: {
+      ...en.folio,
+      editor: Object.freeze({
+        outlineDepthAll: "App outline depths",
+        outlineDepthLabel: en.folio.editor.outlineDepthLabel,
+        outlineDepthThree: en.folio.editor.outlineDepthThree,
+        outlineDepthTwo: en.folio.editor.outlineDepthTwo,
+      }),
+    },
+  };
+  const before = structuredClone(appMessages);
+  const folioCatalog = await folioMessageLoaders.cs();
+  const catalogBefore = structuredClone(folioCatalog);
+  const loader = spyOn(messageLoaders, "cs").mockResolvedValue(appMessages);
+  try {
+    const merged = await loadLocaleMessages("cs");
+    expect(merged.folio.editor).not.toBe(appMessages.folio.editor);
+    expect(merged.folio.editor.outlineDepthAll).toBe("App outline depths");
+    expect(merged.folio.editor).toMatchObject({
+      accessibleName: folioCatalog.folio.editor.accessibleName,
+    });
+    expect(appMessages).toEqual(before);
+    expect(folioCatalog).toEqual(catalogBefore);
+  } finally {
+    loader.mockRestore();
   }
 });
