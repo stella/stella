@@ -111,7 +111,7 @@ chrono = { version = "0.4", features = ["serde"] }
 clipboard-rs = { version = "0.3.5", default-features = false, features = [
   "image",
 ] }
-csscolorparser = "=0.9.0"
+csscolorparser = "=0.9.1"
 dirs = "7"
 flate2 = "1"
 futures-util = "0.3"
