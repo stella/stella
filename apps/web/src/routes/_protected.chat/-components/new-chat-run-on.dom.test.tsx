@@ -605,9 +605,9 @@ test("a new chat left on stella cloud sends its first turn without a computer", 
     testing.fireEvent.click(send);
   });
   await testing.waitFor(() => expect(server.sends).toHaveLength(1));
-  expect(server.sends.at(0)).toMatchObject({ forwardedProps: {} });
-  expect(server.sends.at(0)).not.toMatchObject({
-    forwardedProps: { runTarget: expect.anything() },
+  // Named, so the server never runs it on a computer the thread once used.
+  expect(server.sends.at(0)).toMatchObject({
+    forwardedProps: { runTarget: { kind: "cloud" } },
   });
   expect(server.patches).toEqual([]);
   expect(server.unexpected).toEqual([]);
