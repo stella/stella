@@ -44,7 +44,7 @@
  * writes, so a trigger on the registry's status deletes its pass when it
  * leaves the active set or re-enters it, in the statement that changes the
  * status, under any release (migration
- * `20261116123000_corpus_index_route_seedings`); the route rows cascade.
+ * `20261116160000_corpus_index_route_seedings`); the route rows cascade.
  *
  * Each page seeds and records its cursor and counts in one transaction, so
  * the pass row never claims more than was seeded.
