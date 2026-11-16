@@ -80,10 +80,11 @@ type WriteDecisionReviewsOptions = {
   decisionId: SafeId<"caseLawDecision">;
   country: string;
   /** The identity locked before an update, or null for an insert/preserved identity. */
-  previousIdentity: Pick<
-    typeof caseLawDecisions.$inferSelect,
-    "country" | "court" | "docketFamilyKey"
-  > | null;
+  previousIdentity: {
+    country: string;
+    court: string;
+    docketFamilyKey: string | null;
+  } | null;
   reviews: ReturnType<typeof planDecisionReviews>;
 };
 
