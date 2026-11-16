@@ -7,6 +7,7 @@ import {
   canTransitionCorpusIndexIntent,
   CORPUS_INDEX_INTENT_STATUSES,
 } from "@/api/lib/legal-search/corpus-index-projection-contract";
+import { optOutOfCorpusProjectionSeedingGuard } from "@/api/tests/helpers/corpus-projection-seeding-guard";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 const MIGRATION_URLS = [
@@ -70,6 +71,10 @@ const rejectionMessage = async (run: Promise<unknown>): Promise<string> =>
 beforeAll(
   async () => {
     client = await createTestPglite();
+    await optOutOfCorpusProjectionSeedingGuard(client, {
+      reason:
+        "Exercises the projection store, executor and serving pipeline on canonical rows and desired states this suite stands up as fixtures; no desired writer runs here, and the writer suites keep the guard.",
+    });
     db = drizzle({ client });
 
     await db.execute(sql`
