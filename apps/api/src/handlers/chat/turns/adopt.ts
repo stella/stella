@@ -1,10 +1,17 @@
 import { panic, Result } from "better-result";
+import { eq } from "drizzle-orm";
 
+import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { CHAT_RUN_TARGET_KIND } from "@stll/api-contract/chat-run-target";
 import { mapWithConcurrency } from "@stll/concurrency";
 
 import { sweepHandedOverChatTurns } from "@/api/db/root";
-import { NO_ANSWER_QUOTE_CHECKER } from "@/api/handlers/chat/answer-quote-checks";
+import { CHAT_TITLE_SOURCE, chatThreads } from "@/api/db/schema";
+import {
+  type AnswerQuoteChecker,
+  createTurnAnswerQuoteChecker,
+} from "@/api/handlers/chat/answer-quote-checks";
+import { extractTitle } from "@/api/handlers/chat/chat-prompt";
 import { createChatTurnBudget } from "@/api/handlers/chat/chat-turn-budget";
 import { adoptHandedOverChatTurn } from "@/api/handlers/chat/chat-turn-persistence";
 import {
@@ -19,7 +26,9 @@ import {
   knownDecisionPassageStamper,
   NO_DECISION_PASSAGE_NUMBERS,
 } from "@/api/handlers/chat/decision-passage-numbers";
+import { generateThreadTitle } from "@/api/handlers/chat/generate-thread-title";
 import { adoptChatLocalRun } from "@/api/handlers/chat/local-run-plan";
+import { markChatCompactionDue } from "@/api/handlers/chat/send-message-compaction";
 import {
   produceChatTurn,
   type StreamChatFinishEvent,
@@ -27,12 +36,16 @@ import {
 import { resolveRegistryToolInputRefs } from "@/api/handlers/chat/tools/registry-adapter/input-ref-hydration";
 import { resolveRegistryToolOutputRefs } from "@/api/handlers/chat/tools/registry-adapter/output-ref-resolution";
 import {
+  type CompletedTurnFollowUps,
   loadStoredTurnSettlement,
   persistStreamedTurn,
   type StreamedTurnSettlementContext,
 } from "@/api/handlers/chat/turns/settle";
 import { createVisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { detached } from "@/api/lib/analytics/capture";
+import type { SessionMemberCaller } from "@/api/lib/auth/member-caller";
+import { resolveEffectiveChatModelSelection } from "@/api/lib/chat-model-selection";
 import { answerChatTurnAdopterDoorbell } from "@/api/lib/chat/chat-turn-handover-doorbell";
 import { createContextNoticeStamp } from "@/api/lib/chat/context-notice";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
@@ -66,6 +79,11 @@ const ADOPTED_TURN_NOT_STORED = failureSink({
   event: "chat.turn.adopted_persist_failed",
   expected: [],
 });
+/** A completed adopted turn's follow-ups failed; the turn stays settled. */
+const ADOPTED_TURN_FOLLOW_UPS_FAILED = failureSink({
+  event: "chat.turn.adopted_follow_ups_failed",
+  expected: [],
+});
 
 type ChatTurnAdoptionDependencies = {
   /** Ends adoption when this process stops: a stopping task adopts nothing. */
@@ -78,6 +96,130 @@ type ChatTurnAdoptionDependencies = {
     | { control: DesktopRunnerControl; runBell: DesktopRunnerRunBell }
     | undefined;
   startAdmission?: typeof startExecutionAdmission | undefined;
+  /** The case-law reads the answer's quote check makes; the shared ones by default. */
+  caseLawDb?: Parameters<typeof createTurnAnswerQuoteChecker>[0]["caseLawDb"];
+  /** What a completed turn runs after it settled; the send path's own by default. */
+  followUps?: AdoptedTurnFollowUpSteps | undefined;
+  /** The answer's quote check; built from `caseLawDb` by default. */
+  answerQuoteChecker?: AnswerQuoteChecker | undefined;
+};
+
+/** The steps a completed turn's follow-ups take, as the send path takes them. */
+type AdoptedTurnFollowUpSteps = {
+  markCompactionDue: typeof markChatCompactionDue;
+  generateTitle: typeof generateThreadTitle;
+};
+
+const ADOPTED_TURN_FOLLOW_UP_STEPS = {
+  markCompactionDue: markChatCompactionDue,
+  generateTitle: generateThreadTitle,
+} as const satisfies AdoptedTurnFollowUpSteps;
+
+/**
+ * What a completed turn runs once settled, for a turn a task adopted, as the
+ * send that started it would have (`runCompletedTurnFollowUps`), from the
+ * turn's rows instead of that send's request: compaction marked due when the
+ * thread's window crosses its trigger, and a title for a thread this turn
+ * opened. Neither touches the settled turn; an anonymized turn runs neither.
+ */
+const runAdoptedTurnFollowUps = async ({
+  caller,
+  context,
+  followUps: { messagesAfterAssistantPersist, resolvedResponseMessage },
+  indexThread,
+  modelTier,
+  run,
+  steps,
+}: {
+  caller: SessionMemberCaller;
+  context: StreamedTurnSettlementContext;
+  followUps: CompletedTurnFollowUps;
+  indexThread: ChatTurnAdoptionDependencies["indexThread"];
+  modelTier: Parameters<typeof markChatCompactionDue>[0]["modelTier"];
+  run: ChatTurnRun;
+  steps: AdoptedTurnFollowUpSteps;
+}): Promise<void> => {
+  const { threadId, userId, workspaceId } = context.turn;
+  // A send refuses outright while the organization's AI settings cannot be
+  // read; the follow-ups' model choices depend on them the same way.
+  if (
+    context.turn.sendMode === CHAT_SEND_MODE.anonymized ||
+    caller.orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable
+  ) {
+    return;
+  }
+  const read = await caller.safeDb(async (tx) =>
+    (
+      await tx
+        .select({
+          chatModel: chatThreads.chatModel,
+          chatReasoningEffort: chatThreads.chatReasoningEffort,
+          titleSource: chatThreads.titleSource,
+        })
+        .from(chatThreads)
+        .where(eq(chatThreads.id, threadId))
+        .limit(1)
+    ).at(0),
+  );
+  if (Result.isError(read)) {
+    observeFailure(read.error, {
+      sink: ADOPTED_TURN_FOLLOW_UPS_FAILED,
+      ctx: { threadId },
+    });
+    return;
+  }
+  const thread = read.value;
+  // A thread deleted since the turn settled needs neither.
+  if (thread === undefined) {
+    return;
+  }
+  if (messagesAfterAssistantPersist !== null) {
+    await steps.markCompactionDue({
+      chatModelOverride: resolveEffectiveChatModelSelection({
+        devModelId: undefined,
+        threadChatModel: thread.chatModel,
+        threadReasoningEffort: thread.chatReasoningEffort,
+        orgAIConfig: caller.orgAIConfig,
+      }).modelId,
+      messages: messagesAfterAssistantPersist,
+      modelTier,
+      organizationId: caller.session.activeOrganizationId,
+      orgAIConfig: caller.orgAIConfig,
+      safeDb: caller.safeDb,
+      threadId,
+    });
+  }
+  // The send that opened the thread titles it once its first turn
+  // completes; the first turn is the only member's message so far.
+  const asked = context.history.messages.filter(({ role }) => role === "user");
+  const [opening] = asked;
+  if (
+    asked.length !== 1 ||
+    opening === undefined ||
+    thread.titleSource !== CHAT_TITLE_SOURCE.DEFAULT
+  ) {
+    return;
+  }
+  const title = async () =>
+    await steps.generateTitle({
+      indexThread,
+      initialTitle: extractTitle(opening.parts),
+      messages: [opening, resolvedResponseMessage],
+      organizationId: caller.session.activeOrganizationId,
+      orgAIConfig: caller.orgAIConfig,
+      managedAIResidency: caller.managedAIResidency,
+      promptCachingEnabled: caller.promptCachingEnabled,
+      recordAuditEvent: caller.recordAuditEvent,
+      safeDb: caller.safeDb,
+      organizationStateDb: caller.scopedDb,
+      threadId,
+      threadWorkspaceId: workspaceId,
+      userId,
+    });
+  detached(
+    async () => run.followUpAfterSettlement(title),
+    "chat-turn-adopter.generate-thread-title",
+  );
 };
 
 /** What one attempt to adopt a handed-over turn did. */
@@ -108,18 +250,21 @@ const failInstead = async ({
 };
 
 /**
- * Store an adopted turn's finished answer, as the member's turn. No response
- * waits on it, so nothing is thrown: a turn whose answer cannot be stored is
+ * Store an adopted turn's finished answer, as the member's turn, and run a
+ * completed turn's follow-ups (`runAdoptedTurnFollowUps`). No response waits
+ * on it, so nothing is thrown: a turn whose answer cannot be stored is
  * stored as failed by its run, and the run is told so.
  */
 const settleAdoptedTurn = async ({
   context,
   event,
   run,
+  runFollowUps,
 }: {
   context: StreamedTurnSettlementContext;
   event: StreamChatFinishEvent;
   run: ChatTurnRun;
+  runFollowUps: (followUps: CompletedTurnFollowUps) => Promise<void>;
 }): Promise<ChatTurnStoredSettlement> => {
   const persisted = await Result.tryPromise(
     async () => await persistStreamedTurn({ context, event }),
@@ -135,7 +280,19 @@ const settleAdoptedTurn = async ({
   if (Result.isError(stored)) {
     return await failInstead({ context, failure: stored.error, run });
   }
-  return stored.value.settlement;
+  const { followUps, settlement } = stored.value;
+  if (followUps !== null) {
+    const followedUp = await Result.tryPromise(
+      async () => await runFollowUps(followUps),
+    );
+    if (Result.isError(followedUp)) {
+      observeFailure(followedUp.error, {
+        sink: ADOPTED_TURN_FOLLOW_UPS_FAILED,
+        ctx: { threadId: context.turn.threadId },
+      });
+    }
+  }
+  return settlement;
 };
 
 /**
@@ -216,6 +373,7 @@ const adoptChatTurn = async ({
     return { type: "not-adopted" } satisfies ChatTurnAdoptionOutcome;
   };
   const loaded = await loadStoredTurnSettlement({
+    caseLawDb: dependencies.caseLawDb,
     checkpointMessageId: adopted.checkpointMessageId,
     createRefRegistry: createChatRefRegistry,
     execution: adopted.execution,
@@ -311,7 +469,9 @@ const adoptChatTurn = async ({
     decisionPassageStamper: knownDecisionPassageStamper(
       NO_DECISION_PASSAGE_NUMBERS,
     ),
-    answerQuoteChecker: NO_ANSWER_QUOTE_CHECKER,
+    answerQuoteChecker:
+      dependencies.answerQuoteChecker ??
+      createTurnAnswerQuoteChecker({ caseLawDb: dependencies.caseLawDb }),
     resolveAssistantTextRefs: registry.resolveAssistantTextRefs,
     resolveAssistantToolInputRefs: ({ input, toolName }) =>
       resolveRegistryToolInputRefs({ input, refRegistry: registry, toolName }),
@@ -322,7 +482,22 @@ const adoptChatTurn = async ({
         toolName,
       }),
     resolveAssistantValueRefs: registry.resolveAssistantValueRefs,
-    onFinish: async (event) => await settleAdoptedTurn({ context, event, run }),
+    onFinish: async (event) =>
+      await settleAdoptedTurn({
+        context,
+        event,
+        run,
+        runFollowUps: async (followUps) =>
+          await runAdoptedTurnFollowUps({
+            caller,
+            context,
+            followUps,
+            indexThread: dependencies.indexThread,
+            modelTier: admission.value.modelAdmission.modelTier,
+            run,
+            steps: dependencies.followUps ?? ADOPTED_TURN_FOLLOW_UP_STEPS,
+          }),
+      }),
   });
   await run.pump(production.output, production.durability);
   return { type: "adopted" };

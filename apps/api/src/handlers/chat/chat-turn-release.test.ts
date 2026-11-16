@@ -26,10 +26,6 @@ import type { ChatMessage } from "./types";
 // far, the adopter continues it, and the turn ends with the answer one task
 // would have stored.
 
-const ANSWER_ID = toSafeId<"chatMessage">(
-  "22222222-2222-4222-8222-222222222222",
-);
-
 const toolCall = {
   id: "item_7",
   name: "command_execution",
@@ -61,6 +57,8 @@ const turnChunks = async () =>
   ]);
 
 type Processed = {
+  /** What the turn's log and viewers receive. */
+  emitted: PublicStreamChunk[];
   finished: StreamChatFinishEvent | undefined;
   released: ChatMessage | undefined;
 };
@@ -78,15 +76,22 @@ const processTurn = async ({
     initialMessages,
     capture: toChatMessage,
   });
-  const processed: Processed = { finished: undefined, released: undefined };
+  const processed: Processed = {
+    emitted: [],
+    finished: undefined,
+    released: undefined,
+  };
   const never = new AbortController().signal;
-  for await (const _chunk of processServerChatStream({
+  for await (const chunk of processServerChatStream({
     abortSignal: never,
     deadlineSignal: never,
     getResponseMessage: message,
     initialMessages,
+    // An adopted read continues the released answer under its id.
     mapMessageId: createTurnMessageIdMapper(
-      initialMessages.length === 0 ? undefined : ANSWER_ID,
+      initialMessages.length === 0
+        ? undefined
+        : toSafeId<"chatMessage">(initialMessages[0]?.id ?? ""),
     ),
     processor,
     source,
@@ -98,21 +103,37 @@ const processTurn = async ({
       processed.released = answer;
     },
   })) {
-    // Drained for its side effects: the stored answer.
+    processed.emitted.push(chunk);
   }
   return processed;
 };
 
-/** The answer one uninterrupted read stores. */
+/** The answer a page builds from what a turn's viewers received. */
+const pageAnswer = (emitted: readonly PublicStreamChunk[]) => {
+  const { processor, message } = createStreamMessageCapture({
+    initialMessages: [],
+    capture: (answer) => answer,
+  });
+  for (const chunk of emitted) {
+    processor.processChunk(chunk);
+  }
+  processor.finalizeStream();
+  return message() ?? panic("The page built no answer");
+};
+
+/** The answer one uninterrupted read stores, and what its page shows. */
 const uninterruptedAnswer = async (chunks: readonly StreamChunk[]) => {
   const computer = createComputer();
   computer.events(chunks);
   computer.finish();
-  const { finished } = await processTurn({
+  const { emitted, finished } = await processTurn({
     initialMessages: [],
     source: localSource(computer)(new AbortController().signal),
   });
-  return finished ?? panic("The uninterrupted turn did not finish");
+  return {
+    page: pageAnswer(emitted),
+    stored: finished ?? panic("The uninterrupted turn did not finish"),
+  };
 };
 
 /**
@@ -136,7 +157,7 @@ const releasedAnswer = async (chunks: readonly StreamChunk[], cut: number) => {
       return await control.readRun(options);
     },
   };
-  const { finished, released } = await processTurn({
+  const { emitted, finished, released } = await processTurn({
     initialMessages: [],
     source: localSource(computer)(
       new AbortController().signal,
@@ -146,6 +167,7 @@ const releasedAnswer = async (chunks: readonly StreamChunk[], cut: number) => {
   expect(finished).toBeUndefined();
   return {
     answer: released ?? panic("The turn was not released"),
+    emitted,
     readSeq: computer.chatReadSeq(),
   };
 };
@@ -164,19 +186,22 @@ const adoptedAnswer = async ({
   computer.events(chunks);
   computer.finish();
   computer.releaseAt(readSeq);
-  const checkpoint = toPersistableChatMessage({ ...released, id: ANSWER_ID });
-  const { finished } = await processTurn({
+  const checkpoint = toPersistableChatMessage(released);
+  const { emitted, finished } = await processTurn({
     initialMessages: [checkpoint],
     source: adoptedSource(computer)(new AbortController().signal),
   });
-  return finished ?? panic("The adopted turn did not finish");
+  return {
+    emitted,
+    stored: finished ?? panic("The adopted turn did not finish"),
+  };
 };
 
 describe("a local turn released mid-answer and adopted", () => {
   test("stores the answer one task would have stored, from every cut", async () => {
     const chunks = await turnChunks();
     const whole = await uninterruptedAnswer(chunks);
-    expect(whole.outcome).toEqual({ type: "completed" });
+    expect(whole.stored.outcome).toEqual({ type: "completed" });
     // Every event boundary a released reader can stop at, before the
     // harness's finish (after it, the read runs on to the run's end).
     const finish = chunks.findIndex(
@@ -184,21 +209,28 @@ describe("a local turn released mid-answer and adopted", () => {
     );
     expect(finish).toBeGreaterThan(0);
     for (let cut = 0; cut < finish; cut += 1) {
-      const { answer, readSeq } = await releasedAnswer(chunks, cut);
-      expect(answer.metadata?.turnOutcome).toBeUndefined();
+      const released = await releasedAnswer(chunks, cut);
+      expect(released.answer.metadata?.turnOutcome).toBeUndefined();
       const adopted = await adoptedAnswer({
         chunks,
-        readSeq,
-        released: answer,
+        readSeq: released.readSeq,
+        released: released.answer,
       });
 
-      expect({ cut, outcome: adopted.outcome }).toEqual({
+      expect({ cut, outcome: adopted.stored.outcome }).toEqual({
         cut,
-        outcome: whole.outcome,
+        outcome: whole.stored.outcome,
       });
-      expect({ cut, parts: adopted.responseMessage.parts }).toEqual({
+      expect({ cut, parts: adopted.stored.responseMessage.parts }).toEqual({
         cut,
-        parts: whole.responseMessage.parts,
+        parts: whole.stored.responseMessage.parts,
+      });
+      // A page that read the released task's chunks, then the adopter's,
+      // shows the same answer as a page that read one task's.
+      const page = pageAnswer([...released.emitted, ...adopted.emitted]);
+      expect({ cut, parts: page.parts }).toEqual({
+        cut,
+        parts: whole.page.parts,
       });
     }
   });
