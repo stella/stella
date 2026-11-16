@@ -89,10 +89,8 @@ describe("resolveWorkObligationTransition", () => {
             : "invalid_status",
         );
         if (resolution.type === "allowed") {
-          expect(resolution.move).toEqual({
-            from: resolution.from,
-            to: resolution.nextStatus,
-          });
+          expect(resolution.move.from).toEqual(resolution.from);
+          expect(resolution.move.to).toBe(resolution.nextStatus);
         }
       }
     }
