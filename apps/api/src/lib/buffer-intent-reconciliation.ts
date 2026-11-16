@@ -50,9 +50,9 @@ type DeleteObject = (
   | undefined
 >;
 
-export const BUFFER_INTENT_TTL_MS = 5 * 60 * 1000;
+const BUFFER_INTENT_TTL_MS = 5 * 60 * 1000;
 export const BUFFER_INTENT_STALE_MS = 60 * 1000;
-export const BUFFER_INTENT_HEARTBEAT_MS = 15 * 1000;
+const BUFFER_INTENT_HEARTBEAT_MS = 15 * 1000;
 const BUFFER_INTENT_RECONCILE_LIMIT = 25;
 export const BUFFER_INTENT_DELETE_TIMEOUT_MS = 30 * 1000;
 export const BUFFER_INTENT_WRITE_TIMEOUT_MS = 2 * 60 * 1000;
@@ -800,7 +800,7 @@ export const startBufferIntentHeartbeat = ({
   };
 };
 
-export const isRecoverableBufferIntent = (
+const isRecoverableBufferIntent = (
   value: PendingUploadPurposeData,
   purpose: BufferIntentPurpose,
 ): value is RecoverableBufferIntent =>
@@ -814,7 +814,7 @@ const rejectionReason = (purpose: BufferIntentPurpose): string =>
     ? "Reconciled abandoned server-generated entity bytes"
     : "Reconciled abandoned server-generated version bytes";
 
-export const isBufferIntentPurpose = (
+const isBufferIntentPurpose = (
   purpose: string,
 ): purpose is BufferIntentPurpose =>
   purpose === "entity_create" || purpose === "entity_version";

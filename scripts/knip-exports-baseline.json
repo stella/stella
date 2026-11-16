@@ -1,58 +1,24 @@
 {
   "apps/api": {
-    "count": 94,
+    "count": 20,
     "files": {
-      "apps/api/scripts/lib/capability-catalog.ts": 7,
-      "apps/api/src/handlers/case-law/citation-kind.ts": 1,
-      "apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts": 2,
       "apps/api/src/handlers/chat/tanstack-chat-lifecycle.ts": 6,
       "apps/api/src/handlers/chat/tools/registry-adapter/run-registry-tool.ts": 2,
       "apps/api/src/handlers/chat/tools/registry-adapter/run-registry-write-tool.ts": 1,
-      "apps/api/src/handlers/entities/copy-utils.ts": 3,
       "apps/api/src/handlers/entities/pdf-signing-redeem-handoff.ts": 1,
-      "apps/api/src/handlers/files/routes.ts": 7,
-      "apps/api/src/handlers/playbooks/create-shared.ts": 2,
-      "apps/api/src/handlers/workspaces/read-navigation.ts": 1,
-      "apps/api/src/lib/account-deletion-steps.ts": 13,
-      "apps/api/src/lib/ai-config.ts": 6,
-      "apps/api/src/lib/ai-provider-probe.ts": 2,
-      "apps/api/src/lib/auth/feature-access/view-eligibility.ts": 1,
-      "apps/api/src/lib/buffer-intent-reconciliation.ts": 5,
-      "apps/api/src/lib/chat/thread-compaction.ts": 1,
-      "apps/api/src/lib/entities/query-entities.ts": 3,
-      "apps/api/src/lib/errors/tagged-errors.ts": 3,
-      "apps/api/src/lib/legal-search/case-law-source-ingestion-lease.ts": 1,
-      "apps/api/src/lib/legal-search/deferred-document-source-ownership.ts": 1,
+      "apps/api/src/lib/buffer-intent-reconciliation.ts": 1,
+      "apps/api/src/lib/errors/tagged-errors.ts": 2,
       "apps/api/src/lib/legal-search/morphology/snowball/base-stemmer.ts": 1,
-      "apps/api/src/lib/legal-search/sk-document-backfill.ts": 2,
-      "apps/api/src/lib/lists/verification/run-persistence.ts": 1,
-      "apps/api/src/lib/mcp-upstream/connections.ts": 1,
       "apps/api/src/lib/mcp-upstream/oauth.ts": 1,
       "apps/api/src/lib/public-law-relations.ts": 1,
-      "apps/api/src/lib/s3.ts": 1,
       "apps/api/src/lib/safe-id-boundaries.ts": 2,
       "apps/api/src/lib/scheduler/tasks/list-verification-run-reconcile.ts": 1,
-      "apps/api/src/lib/usage/organization-access.ts": 1,
-      "apps/api/src/lib/workflow-queue.ts": 1,
-      "apps/api/src/mcp/billing-tools.ts": 1,
-      "apps/api/src/mcp/constants.ts": 1,
-      "apps/api/src/mcp/context.ts": 1,
-      "apps/api/src/mcp/file-comparison-picker-tool.ts": 1,
-      "apps/api/src/mcp/matter-tools.ts": 1,
-      "apps/api/src/mcp/tool-types.ts": 7
-    }
-  },
-  "apps/desktop": {
-    "count": 10,
-    "files": {
-      "apps/desktop/src/shared/rpc.ts": 10
+      "apps/api/src/mcp/constants.ts": 1
     }
   },
   "apps/web": {
-    "count": 5,
+    "count": 3,
     "files": {
-      "apps/web/src/components/workspaces/property-helpers.tsx": 1,
-      "apps/web/src/lib/api.ts": 1,
       "apps/web/src/lib/workspaces/mutations/time-entries.ts": 3
     }
   },

@@ -35,7 +35,7 @@ type OperationUsesAvtLayoutArgs = {
 };
 
 /** Resolves conditional access for execution and validation-only transports. */
-export const isAvtViewLayout = (layout: unknown): boolean =>
+const isAvtViewLayout = (layout: unknown): boolean =>
   isRecord(layout) && layout["type"] === "avt";
 
 export const operationUsesAvtLayout = async ({

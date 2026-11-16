@@ -701,7 +701,12 @@ const registerIterationContext = (
   index: number,
 ): void => {
   const visit = (value: unknown, field: string): void => {
-    context[eachKey(arrayPath, index, field)] = value;
+    Object.defineProperty(context, eachKey(arrayPath, index, field), {
+      value,
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
     if (Array.isArray(value) || value === null || typeof value !== "object") {
       return;
     }
@@ -710,7 +715,12 @@ const registerIterationContext = (
     }
   };
   if (item === null || typeof item !== "object" || Array.isArray(item)) {
-    context[eachKey(arrayPath, index, "value")] = item;
+    Object.defineProperty(context, eachKey(arrayPath, index, "value"), {
+      value: item,
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
     return;
   }
   for (const [key, value] of Object.entries(item)) {

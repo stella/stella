@@ -404,7 +404,7 @@ export const CITATION_KIND_EVIDENCE = {
   REGISTRY: "registry",
 } as const;
 
-export type CitationKindEvidence =
+type CitationKindEvidence =
   (typeof CITATION_KIND_EVIDENCE)[keyof typeof CITATION_KIND_EVIDENCE];
 
 export type CitationKindVerdict = {

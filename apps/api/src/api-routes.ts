@@ -60,7 +60,7 @@ import {
   feedbackRoute,
 } from "@/api/handlers/feedback/routes";
 import { fieldsRoute } from "@/api/handlers/fields/routes";
-import { filesRoute } from "@/api/handlers/files/routes";
+import { filesRoute } from "@/api/handlers/files/route-table";
 import { flowsRoute } from "@/api/handlers/flows/routes";
 import { flowRunsRoute } from "@/api/handlers/flows/run-route";
 import { folioCollabRoute } from "@/api/handlers/folio-collab/routes";
