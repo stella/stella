@@ -499,7 +499,13 @@ export const readCorpusSearchFacets = async ({
     ),
   );
 
-  const facets = new Map<CorpusSearchFacetName, SearchFacetBucket[]>();
+  const facets = new Map<CorpusSearchFacetName, SearchFacetBucket[]>([
+    ["court", []],
+    ["decisionType", []],
+    ["source", []],
+    ["language", []],
+    ["year", []],
+  ]);
   let total: number | null = null;
   let courtYear: CorpusCourtYear | null = null;
   for (const [index, answer] of answers.entries()) {
@@ -545,11 +551,17 @@ export const readCorpusSearchFacets = async ({
     }
   }
 
-  const court = facets.get("court") ?? [];
-  const decisionType = facets.get("decisionType") ?? [];
-  const source = facets.get("source") ?? [];
-  const language = facets.get("language") ?? [];
-  const year = facets.get("year") ?? [];
+  const court =
+    facets.get("court") ?? panic("Missing declared corpus facet: court");
+  const decisionType =
+    facets.get("decisionType") ??
+    panic("Missing declared corpus facet: decisionType");
+  const source =
+    facets.get("source") ?? panic("Missing declared corpus facet: source");
+  const language =
+    facets.get("language") ?? panic("Missing declared corpus facet: language");
+  const year =
+    facets.get("year") ?? panic("Missing declared corpus facet: year");
   if (total === null) {
     return Result.err(
       new CorpusSearchFacetsError({
