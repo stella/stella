@@ -2459,11 +2459,6 @@
     "owner": "api-contract",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "packages/cli/src/auth/ensure-fresh-credential.test.ts": {
-    "count": 5,
-    "owner": "cli",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "packages/cli/src/auth/login.test.ts": {
     "count": 1,
     "owner": "cli",
@@ -2481,11 +2476,6 @@
   },
   "packages/cli/src/auth/manage.test.ts": {
     "count": 4,
-    "owner": "cli",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "packages/cli/src/auth/resolve-access-token.test.ts": {
-    "count": 17,
     "owner": "cli",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
