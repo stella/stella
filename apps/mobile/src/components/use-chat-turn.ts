@@ -10,6 +10,7 @@ import {
   type ChatLocalRunSteerRefusal,
 } from "@stll/api-contract/chat-run-target";
 
+import { useChanged } from "@/components/changes";
 import { epochMilliseconds } from "@/connection/clock";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
@@ -20,6 +21,7 @@ import { sentEntry } from "@/state/chat-messages";
 import type { ChatEntry, ChatRetry } from "@/state/chat-messages";
 import { continuationOf } from "@/state/chat-pending-input";
 import type { PendingAnswer, PendingInput } from "@/state/chat-pending-input";
+import { enqueueChatMessage, queuesInstead } from "@/state/chat-queue";
 import {
   applyChatEvent,
   cancelChatTurn,
@@ -27,6 +29,7 @@ import {
   EMPTY_ANSWER,
   joinChatTurn,
   probeChatTurn,
+  queuedChatSend,
   regenerateChatTurn,
   sendChatMessage,
   steerChatTurn,
@@ -140,6 +143,13 @@ export const useChatTurn = ({
    * Sends the draft, unless a turn is still answering. `onRefused` hands the
    * draft back when the server never took it, so it can be sent again.
    */
+  const { enqueue, queue } = useTurnQueue({
+    anonymized,
+    setSendError,
+    signedOut,
+    thread,
+  });
+
   const send = (draft: ChatDraft, onRefused: () => void): boolean => {
     if (connection.current !== null) {
       return false;
@@ -166,6 +176,12 @@ export const useChatTurn = ({
           signal: opened.controller.signal,
         }),
       (error) => {
+        // A turn runs or waits, or messages wait ahead: the server starts
+        // nothing and the message waits in the queue, under its own id.
+        if (queuesInstead(error)) {
+          void enqueue(draft, messageId, onRefused);
+          return;
+        }
         setSendError(sendRefusal(error, draft.files.length > 0));
         onRefused();
       },
@@ -274,23 +290,8 @@ export const useChatTurn = ({
     void rejoin(turn.follow(turnId, continues));
   };
 
-  /** Asks the server to stop the turn; its stream then ends with the answer stopped. */
   const stop = () => {
-    const { turnId } = turn;
-    if (turnId === undefined) {
-      return;
-    }
-    void (async () => {
-      const stopped = await cancelChatTurn({
-        ...thread,
-        fetch,
-        turnId,
-      });
-      // Any other failure leaves the answer streaming, so Stop stays offered.
-      if (Result.isError(stopped)) {
-        signedOut(stopped.error);
-      }
-    })();
+    stopTurn({ signedOut, thread, turn });
   };
 
   const joinActiveTurn = useEffectEvent(() => {
@@ -330,6 +331,7 @@ export const useChatTurn = ({
     canStop: turn.turnId !== undefined,
     follow,
     live: turn.live,
+    queue,
     regenerate,
     send,
     sendError,
@@ -337,6 +339,91 @@ export const useChatTurn = ({
     stop,
   };
 };
+
+/** Asks the server to stop the turn; its stream then ends with the answer stopped. */
+function stopTurn({
+  signedOut,
+  thread,
+  turn,
+}: {
+  signedOut: (error: ApiError) => boolean;
+  thread: { source: AccessTokenSource; threadId: string };
+  turn: { readonly turnId: string | undefined };
+}) {
+  const { turnId } = turn;
+  if (turnId === undefined) {
+    return;
+  }
+  void (async () => {
+    const stopped = await cancelChatTurn({ ...thread, fetch, turnId });
+    // Any other failure leaves the answer streaming, so Stop stays offered.
+    if (Result.isError(stopped)) {
+      signedOut(stopped.error);
+    }
+  })();
+}
+
+/**
+ * Queues drafts on the server for the thread: what a send the server
+ * refused for a turn or messages ahead becomes, and the composer's queue
+ * button while a turn answers.
+ */
+function useTurnQueue({
+  anonymized,
+  setSendError,
+  signedOut,
+  thread: { matterId, source, threadId },
+}: {
+  anonymized: boolean;
+  setSendError: (refusal: SendRefusal | undefined) => void;
+  signedOut: (error: ApiError) => boolean;
+  thread: {
+    matterId: string | undefined;
+    source: AccessTokenSource;
+    threadId: string;
+  };
+}) {
+  const changed = useChanged();
+  /**
+   * Queues the draft on the server under `messageId`: it is sent once the
+   * thread is free, after what is queued ahead of it. `onRefused` hands the
+   * draft back when the server did not queue it either.
+   */
+  const enqueue = async (
+    draft: ChatDraft,
+    messageId: string,
+    onRefused: () => void,
+  ) => {
+    const queued = await enqueueChatMessage({
+      fetch,
+      send: queuedChatSend({
+        anonymized,
+        files: draft.files,
+        matterId,
+        messageId,
+        text: draft.text,
+      }),
+      source,
+      threadId,
+    });
+    if (Result.isError(queued)) {
+      if (!signedOut(queued.error)) {
+        setSendError(sendRefusal(queued.error, draft.files.length > 0));
+        onRefused();
+      }
+      return;
+    }
+    changed("chatQueues");
+  };
+
+  /** Queues the draft behind the turn answering now and what waits already. */
+  const queue = (draft: ChatDraft, onRefused: () => void): boolean => {
+    setSendError(undefined);
+    void enqueue(draft, randomUUID(), onRefused);
+    return true;
+  };
+  return { enqueue, queue };
+}
 
 /**
  * Hands a draft to the turn answering now, which goes on with it at the
@@ -399,7 +486,42 @@ function useTurnSteer({
     })();
     return true;
   };
-  return { steer, steerRefusal };
+
+  /**
+   * Hands queued message `id`, read whole at `revision`, to the turn
+   * answering now. Taken, the server removes it from the queue; `false`
+   * when the turn did not take it, so the caller sends it next instead.
+   */
+  const steerQueued = async ({
+    id,
+    revision,
+    text,
+  }: {
+    readonly id: string;
+    readonly revision: number;
+    readonly text: string;
+  }): Promise<boolean> => {
+    const { turnId } = turn;
+    if (turnId === undefined) {
+      return false;
+    }
+    const settled = turn.awaitSteer(id);
+    const asked = await steerChatTurn({
+      ...thread,
+      fetch,
+      inputId: id,
+      messageSource: { type: CHAT_LOCAL_RUN_STEER_SOURCE.queued, revision },
+      text,
+      turnId,
+    });
+    if (Result.isError(asked)) {
+      signedOut(asked.error);
+    } else if (asked.value.type === "refused") {
+      turn.settleSteer(id, asked.value);
+    }
+    return (await settled).type === "steered";
+  };
+  return { steer, steerQueued, steerRefusal };
 }
 
 /**

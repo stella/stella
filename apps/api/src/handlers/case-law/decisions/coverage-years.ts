@@ -98,6 +98,7 @@ const COVERAGE_SLICE_GRAMMAR = {
   [ADAPTER_KEYS.PL_KIS]: YEAR_PREFIX_SLICE,
   [ADAPTER_KEYS.PL_UODO]: YEAR_PREFIX_SLICE,
   [ADAPTER_KEYS.PL_UOKIK]: YEAR_PREFIX_SLICE,
+  [ADAPTER_KEYS.BR_TJDFT]: YEAR_PREFIX_SLICE,
 } as const satisfies Record<AdapterKey, CoverageSliceGrammar>;
 
 const COVERAGE_SLICE_GRAMMAR_BY_KEY: ReadonlyMap<string, CoverageSliceGrammar> =

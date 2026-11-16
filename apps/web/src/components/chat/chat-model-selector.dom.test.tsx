@@ -1,5 +1,5 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, expect, test } from "bun:test";
+import { afterAll, afterEach, expect, mock, spyOn, test } from "bun:test";
 
 import type {
   ChatLocalRunReadiness,
@@ -29,9 +29,11 @@ const benchmarks = await import("@stll/ai-catalog/benchmarks");
 const { useState } = await import("react");
 const { ChatComposerChips } =
   await import("@/components/chat/chat-model-selector");
+const desktopBridge = await import("@/lib/desktop-bridge");
 
 afterEach(async () => {
   await act(async () => cleanup());
+  mock.restore();
 });
 afterAll(async () => {
   globalThis.fetch = originalFetch;
@@ -251,13 +253,20 @@ test("the computer's agents say whether they can take a turn, and what to do whe
   const claude = within(places)
     .getAllByRole("menuitem")
     .find((item) => item.textContent.startsWith("Claude Code"));
-  expect(claude?.getAttribute("aria-disabled")).toBe("true");
+  // Not a place to run: choosing it opens its sign-in in stella desktop.
+  expect(claude?.getAttribute("role")).toBe("menuitem");
   expect(claude?.textContent).toContain(messages.chat.runOn.hintSignIn);
+  const open = spyOn(desktopBridge, "openDesktopUrl").mockImplementation(
+    () => undefined,
+  );
   await act(async () => {
     if (claude !== undefined) {
       fireEvent.click(claude);
     }
   });
+  expect(open).toHaveBeenCalledWith(
+    "stella://settings/agents?harness=claude-code",
+  );
   expect(chosen).toEqual([]);
 });
 

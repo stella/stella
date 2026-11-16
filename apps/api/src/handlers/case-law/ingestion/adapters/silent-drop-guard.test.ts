@@ -13,6 +13,7 @@ import {
 } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 import {
+  brTjdftFixture,
   brTstFixture,
   czNsFixture,
   czNssFixture,
@@ -162,6 +163,11 @@ rozhodnutí a dospěl k závěru, že řízení bylo vedeno v souladu se zákone
     driver: "unsupported",
     reason:
       "Decision text is read from stored PDF and office document objects, which require an object-level driver.",
+  },
+  "br-tjdft": {
+    driver: "html",
+    fixture: brTjdftFixture,
+    part: "detail",
   },
   // The listing row is JSON whose one parsed markup is the full text. The
   // record's highlight renderings repeat that text and are deliberately not
