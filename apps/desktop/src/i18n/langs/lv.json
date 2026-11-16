@@ -835,9 +835,11 @@
       "storage": "Savienojumu šajā datorā neizdevās nolasīt vai saglabāt."
     },
     "callbackConnectedTitle": "ChatGPT ir savienots",
-    "callbackConnectedBody": "Atgriezieties stellā. MI pieprasījumi tagad izmanto jūsu ChatGPT plānu.",
+    "callbackConnectedBody": "MI pieprasījumi stellā tagad izmanto jūsu ChatGPT plānu.",
     "callbackNotConnectedTitle": "ChatGPT netika savienots",
-    "callbackNotConnectedBody": "Atgriezieties stellā, lai redzētu, kas notika, un mēģiniet vēlreiz.",
+    "callbackNotConnectedBody": "stella parāda, kas nogāja greizi. Lai mēģinātu vēlreiz, stellā atveriet {section} › {group} un noklikšķiniet uz „{button}”.",
+    "callbackAccount": "Konts",
+    "callbackPlan": "Plāns",
     "callbackCloseTab": "Šo cilni varat aizvērt.",
     "claudeCode": {
       "title": "Claude Code",

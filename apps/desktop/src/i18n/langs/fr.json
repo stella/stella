@@ -835,9 +835,11 @@
       "storage": "La connexion n’a pas pu être lue ni enregistrée sur cet ordinateur."
     },
     "callbackConnectedTitle": "ChatGPT est connecté",
-    "callbackConnectedBody": "Revenez à stella. Les requêtes d’IA utilisent désormais votre forfait ChatGPT.",
+    "callbackConnectedBody": "Les requêtes d’IA dans stella utilisent désormais votre forfait ChatGPT.",
     "callbackNotConnectedTitle": "ChatGPT n’a pas été connecté",
-    "callbackNotConnectedBody": "Revenez à stella pour voir ce qui s’est passé et réessayez.",
+    "callbackNotConnectedBody": "stella indique ce qui s’est mal passé. Pour réessayer, ouvrez {section} › {group} dans stella et cliquez sur « {button} ».",
+    "callbackAccount": "Compte",
+    "callbackPlan": "Forfait",
     "callbackCloseTab": "Vous pouvez fermer cet onglet.",
     "claudeCode": {
       "title": "Claude Code",

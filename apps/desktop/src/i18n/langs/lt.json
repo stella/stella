@@ -835,9 +835,11 @@
       "storage": "Šiame kompiuteryje nepavyko nuskaityti ar išsaugoti ryšio."
     },
     "callbackConnectedTitle": "ChatGPT prijungtas",
-    "callbackConnectedBody": "Grįžkite į stellą. DI užklausos dabar naudoja jūsų ChatGPT planą.",
+    "callbackConnectedBody": "DI užklausos stelloje dabar naudoja jūsų ChatGPT planą.",
     "callbackNotConnectedTitle": "ChatGPT neprijungtas",
-    "callbackNotConnectedBody": "Grįžkite į stellą, pažiūrėkite, kas nutiko, ir bandykite dar kartą.",
+    "callbackNotConnectedBody": "stella parodo, kas nepavyko. Norėdami bandyti dar kartą, stelloje atidarykite {section} › {group} ir spustelėkite „{button}“.",
+    "callbackAccount": "Paskyra",
+    "callbackPlan": "Planas",
     "callbackCloseTab": "Šį skirtuką galite uždaryti.",
     "claudeCode": {
       "title": "Claude Code",

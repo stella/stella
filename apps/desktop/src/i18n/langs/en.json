@@ -835,9 +835,11 @@
       "storage": "The connection could not be read or saved on this computer."
     },
     "callbackConnectedTitle": "ChatGPT is connected",
-    "callbackConnectedBody": "Return to stella. AI requests now use your ChatGPT plan.",
+    "callbackConnectedBody": "AI requests in stella now use your ChatGPT plan.",
     "callbackNotConnectedTitle": "ChatGPT was not connected",
-    "callbackNotConnectedBody": "Go back to stella to see what happened and try again.",
+    "callbackNotConnectedBody": "stella shows what went wrong. To try again, open {section} › {group} in stella and click “{button}”.",
+    "callbackAccount": "Account",
+    "callbackPlan": "Plan",
     "callbackCloseTab": "You can close this tab.",
     "claudeCode": {
       "title": "Claude Code",

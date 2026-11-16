@@ -1392,6 +1392,8 @@ const GENERATOR_DECLARATIONS = [
       "packages/ui/src/icons.ts",
       "packages/ui/src/lib/utils.ts",
       "packages/ui/src/styles/theme.css",
+      // The tab icon the loopback pages inline.
+      "apps/web/public/favicon.svg",
       // The lucide, React and Tailwind versions the lockfile pins.
       "packages/ui/package.json",
       "bun.lock",

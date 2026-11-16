@@ -835,9 +835,11 @@
       "storage": "Nie udało się odczytać ani zapisać połączenia na tym komputerze."
     },
     "callbackConnectedTitle": "ChatGPT jest połączony",
-    "callbackConnectedBody": "Wróć do stelli. Zapytania do AI korzystają teraz z Twojego planu ChatGPT.",
+    "callbackConnectedBody": "Zapytania do AI w stelli korzystają teraz z Twojego planu ChatGPT.",
     "callbackNotConnectedTitle": "Nie połączono z ChatGPT",
-    "callbackNotConnectedBody": "Wróć do stelli, aby zobaczyć, co się stało, i spróbuj ponownie.",
+    "callbackNotConnectedBody": "stella pokazuje, co poszło nie tak. Aby spróbować ponownie, otwórz w stelli {section} › {group} i kliknij „{button}”.",
+    "callbackAccount": "Konto",
+    "callbackPlan": "Plan",
     "callbackCloseTab": "Możesz zamknąć tę kartę.",
     "claudeCode": {
       "title": "Claude Code",

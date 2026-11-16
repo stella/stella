@@ -835,9 +835,11 @@
       "storage": "Pripojenie sa v tomto počítači nepodarilo načítať ani uložiť."
     },
     "callbackConnectedTitle": "ChatGPT je pripojený",
-    "callbackConnectedBody": "Vráťte sa do stelly. Požiadavky na AI teraz využívajú váš plán ChatGPT.",
+    "callbackConnectedBody": "Požiadavky na AI v stelle teraz využívajú váš plán ChatGPT.",
     "callbackNotConnectedTitle": "ChatGPT sa nepripojil",
-    "callbackNotConnectedBody": "Vráťte sa do stelly, zistite, čo sa stalo, a skúste to znova.",
+    "callbackNotConnectedBody": "stella ukazuje, čo sa pokazilo. Ak to chcete skúsiť znova, otvorte v stelle {section} › {group} a kliknite na „{button}“.",
+    "callbackAccount": "Účet",
+    "callbackPlan": "Plán",
     "callbackCloseTab": "Túto kartu môžete zavrieť.",
     "claudeCode": {
       "title": "Claude Code",
