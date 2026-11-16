@@ -483,9 +483,7 @@
   "no-unbounded-response-body/no-unbounded-response-body": {
     "apps/api/src/handlers/case-law/ingestion/adapters/cz-us.ts": 6,
     "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts": 3,
-    "apps/api/src/handlers/case-law/ingestion/adapters/hu-bhgy.ts": 1,
     "apps/api/src/handlers/case-law/ingestion/adapters/pl-courts.ts": 3,
-    "apps/api/src/handlers/case-law/ingestion/adapters/pl-sn.ts": 1,
     "apps/api/src/handlers/entities/zip/download.ts": 1,
     "apps/api/src/handlers/files/update-document-properties.ts": 1,
     "apps/api/src/handlers/sharepoint/graph-client.ts": 1,
