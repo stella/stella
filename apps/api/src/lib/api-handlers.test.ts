@@ -49,6 +49,12 @@ import { runWithContentDeliveryScope } from "@/api/lib/files/content-delivery";
 import { createPublicSearchCoalescer } from "@/api/lib/legal-search/public-search-coalescer";
 import { WorkRefusal } from "@/api/lib/load/work-admission";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import {
+  enrichRequestContext,
+  getRequestContext,
+  openRequestContext,
+  runWithRequestIdScope,
+} from "@/api/lib/observability/request-context";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
@@ -902,6 +908,64 @@ describe("request.failed severity", () => {
       analytics.restore();
     }
   };
+
+  test.each(["outside", "absent", "empty", "present"] as const)(
+    "keeps ordered request identity fields for %s context IDs",
+    async (mode) => {
+      const error = new HandlerError({ status: 400, message: "Invalid input" });
+      const result =
+        mode === "outside"
+          ? await runFailingHandler(error)
+          : await runWithRequestIdScope(async () => {
+              openRequestContext();
+              if (mode !== "absent") {
+                enrichRequestContext({
+                  posthogDistinctId:
+                    mode === "present" ? "fixture-distinct" : "",
+                  sessionId: mode === "present" ? "fixture-session" : "",
+                  organizationId:
+                    mode === "present" ? "fixture-organization" : "",
+                });
+              }
+              const contextBefore = { ...getRequestContext() };
+              const outcome = await runFailingHandler(error);
+              expect(getRequestContext()).toMatchObject(contextBefore);
+              return outcome;
+            });
+      expect(result.failures).toHaveLength(1);
+      const attributes = result.failures.at(0)?.attributes;
+      expect(attributes).toMatchObject({
+        "http.status_code": 400,
+        "error.type": "HandlerError",
+      });
+      const keys = Object.keys(attributes ?? {});
+      const contextKeys = [
+        "request.id",
+        "posthogDistinctId",
+        "sessionId",
+        "enduser.organization_id",
+      ];
+      const expectedContextKeys =
+        mode === "present" ? contextKeys : ["request.id"];
+      expect(keys.filter((key) => contextKeys.includes(key))).toEqual(
+        mode === "outside" ? [] : expectedContextKeys,
+      );
+      if (mode !== "outside") {
+        expect(attributes?.["request.id"]).toMatch(/^req_[a-f0-9]+$/u);
+        expect(keys.indexOf("request.id")).toBeGreaterThan(
+          keys.indexOf("error.type"),
+        );
+      }
+      if (mode === "present") {
+        expect(attributes).toMatchObject({
+          posthogDistinctId: "fixture-distinct",
+          sessionId: "fixture-session",
+          "enduser.organization_id": "fixture-organization",
+        });
+      }
+      expect(result.exceptions).toEqual([]);
+    },
+  );
 
   test("grades a row-level security denial as a client outcome", async () => {
     const { response, failures, exceptions } = await runFailingHandler(
