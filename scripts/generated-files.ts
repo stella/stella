@@ -2050,6 +2050,7 @@ const GENERATOR_DECLARATIONS = [
       "packages/scripts/src/generated-artifact-format.ts",
       "bunfig.toml",
       "scripts/package-api-compatibility.ts",
+      "scripts/package-api-signature-comparison.ts",
       "scripts/package-api-export-space.ts",
       "scripts/publish-packages.ts",
     ],
