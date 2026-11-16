@@ -52,6 +52,10 @@ import {
   revokeCorpusIndexRouteProofTx,
   startCorpusIndexRouteCensusPageTx,
 } from "@/api/lib/legal-search/corpus-index-route-proof-store";
+import {
+  resetLogSinkForTesting,
+  setLogSinkForTesting,
+} from "@/api/lib/observability/logger";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -1005,5 +1009,62 @@ describe("route readiness proof", () => {
     // Six applied revisions in pages of two, the last page ending on the
     // phase's last key; an empty absent phase reads no census.
     expect(reads).toEqual({ census: 3, count: 0, incarnation: 5 });
+  });
+
+  test("every page logs the pass's progress, its restarts since the last clean pass, and an estimate once one completed", async () => {
+    for (const index of [0, 1, 2]) {
+      // db-await-in-loop: a three-decision fixture
+      await seedApplied(index);
+    }
+    const pages: Record<string, unknown>[] = [];
+    setLogSinkForTesting(({ message, attributes }) => {
+      if (message === "corpus_index.route_proof_page") {
+        pages.push({ ...attributes });
+      }
+    });
+    try {
+      await advanceUntilProven();
+      expect(pages.map(({ outcome, passRows }) => [outcome, passRows])).toEqual(
+        [
+          ["advanced", 2],
+          ["phase_completed", 3],
+          ["proven", 3],
+        ],
+      );
+      expect(pages[0]).toMatchObject({
+        index: ROUTE.indexId,
+        passNumber: 1,
+        phase: "present",
+        pageLimit: PAGE,
+        pageRows: 2,
+        passPages: 1,
+        restartsSinceProof: 0,
+      });
+      // Before any clean pass there is nothing to estimate from.
+      expect(pages[0]).not.toHaveProperty("lastProofRows");
+      expect(pages[0]).not.toHaveProperty("estimatedRemainingSeconds");
+
+      // Drift restarts the pass: the next pass counts one restart and
+      // estimates its remainder from the last clean pass's count.
+      engine.delete(revisionId(1));
+      await advance();
+      expect(pages.at(-1)).toMatchObject({
+        outcome: "drift",
+        passNumber: 2,
+        restartsSinceProof: 0,
+      });
+      await advance();
+      // The repaired decision left the applied set: one page of the two left.
+      expect(pages.at(-1)).toMatchObject({
+        outcome: "phase_completed",
+        passRows: 2,
+        passNumber: 3,
+        restartsSinceProof: 1,
+        lastProofRows: 3,
+      });
+      expect(typeof pages.at(-1)?.["estimatedRemainingSeconds"]).toBe("number");
+    } finally {
+      resetLogSinkForTesting();
+    }
   });
 });

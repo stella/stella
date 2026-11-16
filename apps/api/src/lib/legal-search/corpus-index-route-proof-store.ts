@@ -80,6 +80,10 @@ export type CorpusIndexRoute = {
  * is in epoch microseconds, PostgreSQL's precision. `through` is the last key
  * the current phase walks, null when the phase has nothing to walk.
  * `incarnation` is the engine index the pass read first, null before that.
+ * `readAtUs` is the database clock when the row was read, so a pass's age is
+ * measured on the one clock its start was. `lastProof` is the route's last
+ * clean pass, null before one completes: its number tells how many passes
+ * have restarted since, its count how far the pass under way has to go.
  */
 export type CorpusIndexRouteCensusPass = {
   number: number;
@@ -90,6 +94,8 @@ export type CorpusIndexRouteCensusPass = {
   cursor: string | null;
   inspected: number;
   incarnation: string | null;
+  readAtUs: string;
+  lastProof: { number: number; inspected: number } | null;
 };
 
 const proofs = corpusIndexRouteProofs;
@@ -191,18 +197,32 @@ const passColumns = sql`${proofs.passNumber}::int AS pass_number,
   ${proofs.passExpectation} AS expectation,
   ${proofs.passCursor}::text AS cursor,
   ${proofs.passInspected}::int AS inspected,
-  ${proofs.passIndexIncarnation} AS incarnation`;
+  ${proofs.passIndexIncarnation} AS incarnation,
+  ${epochMicros(sql`clock_timestamp()`)}::text AS read_at_us,
+  ${proofs.provenPassNumber}::int AS last_proof_number,
+  ${proofs.provenInspected}::int AS last_proof_inspected`;
 
-const passOf = (row: unknown): CorpusIndexRouteCensusPass => ({
-  number: requiredCount(row, "pass_number"),
-  id: requiredText(row, "pass_id"),
-  through: nullableText(row, "pass_through"),
-  startedAtUs: requiredText(row, "started_at_us"),
-  expectation: censusExpectation(requiredText(row, "expectation")),
-  cursor: nullableText(row, "cursor"),
-  inspected: requiredCount(row, "inspected"),
-  incarnation: nullableText(row, "incarnation"),
-});
+const passOf = (row: unknown): CorpusIndexRouteCensusPass => {
+  const lastProofNumber = isRecord(row) ? row["last_proof_number"] : undefined;
+  return {
+    number: requiredCount(row, "pass_number"),
+    id: requiredText(row, "pass_id"),
+    through: nullableText(row, "pass_through"),
+    startedAtUs: requiredText(row, "started_at_us"),
+    expectation: censusExpectation(requiredText(row, "expectation")),
+    cursor: nullableText(row, "cursor"),
+    inspected: requiredCount(row, "inspected"),
+    incarnation: nullableText(row, "incarnation"),
+    readAtUs: requiredText(row, "read_at_us"),
+    lastProof:
+      lastProofNumber === null
+        ? null
+        : {
+            number: requiredCount(row, "last_proof_number"),
+            inspected: requiredCount(row, "last_proof_inspected"),
+          },
+  };
+};
 
 /**
  * The one writer of route proofs. A proof is bookkeeping derived from the
@@ -900,7 +920,6 @@ export const checkCorpusIndexRouteProofIncarnations = async ({
 > => {
   const replaced: string[] = [];
   for (const { indexId, incarnation } of routes) {
-    // db-await-in-loop: one metadata read per route, a handful per flip
     const observed = await client.readIndexIncarnation(indexId, "unobserved");
     if (observed.isErr()) {
       return Result.err(observed.error);

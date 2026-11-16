@@ -39,7 +39,14 @@
  *   one while its content is current, never lead it, and no generation numbers
  *   epochs of its own. So a converged candidate holds current content, and
  *   comparing two generations' applied epochs compares two readings of one
- *   counter (`corpus-index-projection-desired-state.db.test.ts` pins it);
+ *   counter (`corpus-index-projection-desired-state.db.test.ts` pins it).
+ *   No database trigger enforces this in production, on purpose: it would
+ *   read the canonical row of another table on every desired-state write,
+ *   the projection's hottest path, and under concurrent writers it would
+ *   fail a correct write whenever a canonical update commits between the
+ *   writer's read and the trigger's snapshot. Every writer suite installs
+ *   the test guard instead (`tests/helpers/corpus-projection-canonical-epoch-guard.ts`);
+ *   a new desired-state writer must run under it;
  * - whether a decision is erased does not depend on the generation, except
  *   through a jurisdiction-serving pointer (`vacatedFrom`) or a partial
  *   generation's scope. The read refuses both.

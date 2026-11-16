@@ -3,6 +3,8 @@
  *
  * The runner calls this once per page, and every page goes through the
  * runner's load governor (`admit`), so a pass yields at each page boundary.
+ * `admit` is required and has no default: the runner passes the governor it
+ * shares with the projection's other background work, never a pass-through.
  * Each call reads which engine incarnation holds the route's index, reads the
  * route's pass, censuses one page of it against the engine outside any
  * transaction, and records the page. A pass walks the applied revisions the
@@ -18,6 +20,11 @@
  * revision the engine lost or kept is evidence about the index, not about
  * one key (a lost split holds documents of every key range), so the keys
  * already walked are suspect too.
+ *
+ * What a pass costs on the largest route is not measured yet; every page logs
+ * `corpus_index.route_proof_page` (pages, revisions, elapsed on the database
+ * clock, estimated remaining, restarts since the last clean pass), so the
+ * first production pass measures it.
  */
 import { panic, Result } from "better-result";
 
@@ -36,11 +43,13 @@ import { CORPUS_PROJECTION_DELETE_MAX_REVISIONS } from "@/api/lib/legal-search/c
 import type { CorpusIndexRouteCensusExpectation } from "@/api/lib/legal-search/corpus-index-route-proof-contract";
 import {
   type CorpusIndexRoute,
+  type CorpusIndexRouteCensusPass,
   type CorpusIndexRouteCensusStep,
   type CorpusIndexRouteRefusal,
   recordCorpusIndexRouteCensusPageTx,
   startCorpusIndexRouteCensusPageTx,
 } from "@/api/lib/legal-search/corpus-index-route-proof-store";
+import { logger } from "@/api/lib/observability/logger";
 import type { IngestionTransactionRunner } from "@/api/lib/replay-safe-ingestion";
 import { brandValidatedCorpusIndexProjectionIntentId } from "@/api/lib/safe-id-boundaries";
 
@@ -149,31 +158,88 @@ type AdvanceOptions = {
   limit?: number;
 };
 
-const censusPage = async ({
-  runInTransaction,
-  client,
+/**
+ * One progress line per census page, so a production pass measures what a
+ * pass costs (pages, revisions, elapsed, estimated remaining, restarts)
+ * instead of the plan assuming it. Elapsed is on the database clock the pass
+ * started on; the estimate scales the last clean pass's count by this pass's
+ * rate, and is left out until one pass has completed.
+ */
+const logCensusPage = ({
   route,
+  pass,
   limit,
-}: Omit<AdvanceOptions, "admit" | "limit"> & { limit: number }): Promise<
-  Result<CensusPage, CorpusIndexError>
-> => {
+  pageMs,
+  walked,
+}: {
+  route: CorpusIndexRoute;
+  pass: CorpusIndexRouteCensusPass;
+  limit: number;
+  pageMs: number;
+  walked: Result<CensusPage, CorpusIndexError>;
+}): void => {
+  const outcome = (() => {
+    if (walked.isErr()) {
+      return "engine_error";
+    }
+    return walked.value.type === "drift" ? "drift" : walked.value.advance.type;
+  })();
+  const pageRows =
+    walked.isOk() &&
+    walked.value.type === "done" &&
+    "inspected" in walked.value.advance
+      ? walked.value.advance.inspected
+      : 0;
+  const passRows = pass.inspected + pageRows;
+  const elapsedSeconds =
+    Number(BigInt(pass.readAtUs) - BigInt(pass.startedAtUs)) / 1_000_000 +
+    pageMs / 1000;
+  const rowsPerSecond = elapsedSeconds > 0 ? passRows / elapsedSeconds : null;
+  const estimatedRemainingSeconds =
+    pass.lastProof === null || rowsPerSecond === null || rowsPerSecond === 0
+      ? null
+      : Math.round(
+          Math.max(pass.lastProof.inspected - passRows, 0) / rowsPerSecond,
+        );
+  logger.info("corpus_index.route_proof_page", {
+    family: route.family,
+    generation: route.generation,
+    index: route.indexId,
+    passNumber: pass.number,
+    phase: pass.expectation,
+    outcome,
+    pageLimit: limit,
+    pageRows,
+    pageMs,
+    // Full pages' worth walked; a phase's last page may be short.
+    passPages: Math.ceil(passRows / limit),
+    passRows,
+    passElapsedSeconds: Math.round(elapsedSeconds),
+    // Unknown values are left out rather than logged as a placeholder.
+    ...(rowsPerSecond === null
+      ? {}
+      : { rowsPerSecond: Math.round(rowsPerSecond * 10) / 10 }),
+    ...(pass.lastProof === null
+      ? {}
+      : { lastProofRows: pass.lastProof.inspected }),
+    ...(estimatedRemainingSeconds === null
+      ? {}
+      : { estimatedRemainingSeconds }),
+    restartsSinceProof: pass.number - (pass.lastProof?.number ?? 0) - 1,
+  });
+};
+
+const walkPage = async (
+  {
+    runInTransaction,
+    client,
+    route,
+    limit,
+  }: Omit<AdvanceOptions, "admit" | "limit"> & { limit: number },
+  pass: CorpusIndexRouteCensusPass,
+): Promise<Result<CensusPage, CorpusIndexError>> => {
   const done = (advance: CorpusIndexRouteProofAdvance) =>
     Result.ok({ type: "done", advance } as const);
-  const observed = await client.readIndexIncarnation(
-    route.indexId,
-    "unobserved",
-  );
-  if (observed.isErr()) {
-    return Result.err(observed.error);
-  }
-  const started = await runInTransaction(
-    async (tx) =>
-      await startCorpusIndexRouteCensusPageTx(tx, route, observed.value),
-  );
-  if (started.type !== "pass") {
-    return done(started);
-  }
-  const { pass } = started;
   const incarnation =
     pass.incarnation ?? panic("A started route census pass has no incarnation");
   // A phase that began with nothing to walk still reads the engine: an empty
@@ -261,6 +327,46 @@ const censusPage = async ({
       ? step
       : { ...step, expectation: pass.expectation, inspected },
   );
+};
+
+const censusPage = async ({
+  runInTransaction,
+  client,
+  route,
+  limit,
+}: Omit<AdvanceOptions, "admit" | "limit"> & { limit: number }): Promise<
+  Result<CensusPage, CorpusIndexError>
+> => {
+  const done = (advance: CorpusIndexRouteProofAdvance) =>
+    Result.ok({ type: "done", advance } as const);
+  const observed = await client.readIndexIncarnation(
+    route.indexId,
+    "unobserved",
+  );
+  if (observed.isErr()) {
+    return Result.err(observed.error);
+  }
+  const started = await runInTransaction(
+    async (tx) =>
+      await startCorpusIndexRouteCensusPageTx(tx, route, observed.value),
+  );
+  if (started.type !== "pass") {
+    return done(started);
+  }
+  const { pass } = started;
+  const pageStartedAt = performance.now();
+  const walked = await walkPage(
+    { runInTransaction, client, route, limit },
+    pass,
+  );
+  logCensusPage({
+    route,
+    pass,
+    limit,
+    pageMs: Math.round(performance.now() - pageStartedAt),
+    walked,
+  });
+  return walked;
 };
 
 export const advanceCorpusIndexRouteProof = async ({
