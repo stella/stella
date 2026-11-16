@@ -489,6 +489,7 @@ const EditNoticeText = ({ notice }: { notice: EditNotice }) => {
     failed: t("sendFailed"),
     "file-refused": t("sendFileRefused"),
     "file-not-anonymizable": t("sendFileNotAnonymizable"),
+    "local-run-not-anonymizable": t("sendLocalRunNotAnonymizable"),
   } as const satisfies Record<EditNotice, string>;
   return <Text variant="error">{text[notice]}</Text>;
 };

@@ -308,8 +308,6 @@ export const useChatTurn = ({
     return true;
   };
 
-  const edit = turnEdit({ anonymized, setSendError, start, thread, turn });
-
   /**
    * Follows a turn the server is running that this phone did not start,
    * such as the one an answer given elsewhere resumed, which continues the
@@ -361,7 +359,7 @@ export const useChatTurn = ({
     answer,
     busy: turn.busy,
     canStop: turn.turnId !== undefined,
-    edit,
+    edit: turnEdit({ anonymized, setSendError, start, thread, turn }),
     follow,
     live: turn.live,
     queue,
