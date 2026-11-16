@@ -127,6 +127,7 @@ const draftThread = ({
 }): ThreadResponse => ({
   activeSkill: null,
   activeTurnId: null,
+  activeTurnSteering: "not_steerable",
   newestLocalTurn: null,
   attachedFiles: { fileCount: 0, files: [] },
   context: {

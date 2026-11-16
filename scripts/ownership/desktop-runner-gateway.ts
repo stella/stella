@@ -27,6 +27,11 @@ export default {
           "Checks a queued message bound for the member's computer finds one connected before sending it.",
       },
       {
+        path: "apps/api/src/handlers/chat/messages/list.ts",
+        reason:
+          "Reads whether the thread's active turn on the member's computer takes a message mid-turn, for the page.",
+      },
+      {
         path: "apps/api/src/handlers/chat/local-run-plan.ts",
         reason:
           "Routes a chat turn bound for the member's computer through the control and reads its run back.",
