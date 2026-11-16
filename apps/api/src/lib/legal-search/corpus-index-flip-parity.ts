@@ -841,7 +841,8 @@ const walkCoverage = async (
   ).filter(
     (indexId) => resumeFrom === null || indexId >= resumeFrom.servingIndexId,
   );
-  const tally = { walked: 0, missing: 0, sample: [] as string[], pages: 0 };
+  const sample: string[] = [];
+  const tally = { walked: 0, missing: 0, sample, pages: 0 };
   for (const servingIndexId of indexIds) {
     let after =
       resumeFrom?.servingIndexId === servingIndexId ? resumeFrom.after : null;
