@@ -6,12 +6,13 @@ import { useNavigate } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   type EntityAction,
   EntityActions,
   EntityActionsButton,
 } from "@stll/ui/entity-actions";
-import { DownloadIcon, GitBranchIcon, PanelRightIcon } from "@stll/ui/icons";
+import { DownloadIcon, GitBranchIcon, MoveToSideIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
@@ -78,10 +79,12 @@ const FORK_DESTINATION_LABELS = {
   main: "chat.forkFromHere",
 } as const satisfies Record<ForkDestination, TranslationKey>;
 
+// The side-panel fork sends the new chat to the side, so it draws the same
+// glyph as "Move to side panel", mirrored under RTL with the panel.
 const FORK_DESTINATION_ICONS = {
-  inspector: PanelRightIcon,
-  main: GitBranchIcon,
-} as const satisfies Record<ForkDestination, unknown>;
+  inspector: () => <DirectionalIcon icon={MoveToSideIcon} />,
+  main: () => <GitBranchIcon aria-hidden="true" />,
+} as const satisfies Record<ForkDestination, () => ReactNode>;
 
 /** No matters beyond the thread's own: the fork keeps just that scope. */
 const NO_EXTRA_CONTEXT_MATTERS: readonly string[] = [];
@@ -195,7 +198,7 @@ const ChatMessageActions = ({
           icon: forking ? (
             <Loader label={t("chat.forkingThread")} size="sm" />
           ) : (
-            <Icon aria-hidden="true" />
+            <Icon />
           ),
           label: forking
             ? t("chat.forkingThread")

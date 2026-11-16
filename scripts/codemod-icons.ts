@@ -451,7 +451,17 @@ const semanticEntries = Array.from(
     name: match.groups?.["name"] ?? "",
   }),
 );
-const semantic = new Set(semanticEntries.map((entry) => entry.name));
+// Glyphs the module draws itself (`export const MoveToSideIcon = …`), for a
+// meaning no lucide glyph shows. They are not lucide names, so they stay out
+// of the generated re-export list like the semantic entries.
+const drawnEntries = Array.from(
+  moduleSource.matchAll(/^export const (?<name>\w+Icon)\b/gmu),
+  (match) => match.groups?.["name"] ?? "",
+);
+const semantic = new Set([
+  ...semanticEntries.map((entry) => entry.name),
+  ...drawnEntries,
+]);
 
 // Every name a file imports from the icon module, semantic entries aside.
 const ICON_IMPORT =
