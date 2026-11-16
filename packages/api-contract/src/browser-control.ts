@@ -978,6 +978,21 @@ export const parseBrowserExtensionPeerVersion = (
   return result.success ? result.output.protocolVersion : null;
 };
 
+const browserWebPeerSchema = v.object({
+  protocolVersion: v.pipe(v.number(), v.integer(), v.minValue(1)),
+  source: v.literal(BROWSER_EXTENSION_MESSAGE_SOURCE.web),
+});
+
+/**
+ * The protocol version a stella web message names, whatever its shape: the
+ * extension answers a tab on another version with its own, so the tab can
+ * tell an outdated side from a missing extension.
+ */
+export const parseBrowserWebPeerVersion = (input: unknown): number | null => {
+  const result = v.safeParse(browserWebPeerSchema, input);
+  return result.success ? result.output.protocolVersion : null;
+};
+
 export const parseBrowserExtensionResponse = (input: unknown) => {
   const result = v.safeParse(browserExtensionResponseSchema, input);
   if (!result.success) {

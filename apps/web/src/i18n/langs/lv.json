@@ -1727,7 +1727,7 @@
       "connected": "Paplašinājums savienots",
       "description": "Pēc jūsu lūguma stella var atvērt un lasīt vietnes atsevišķā cilnē.",
       "install": "Instalēt paplašinājumu",
-      "installDescription": "Ar stella paplašinājumu stella pēc jūsu lūguma var atvērt un lasīt vietnes atsevišķā cilnē. Instalējiet to no Chrome interneta veikala.",
+      "installDescription": "Ar stella paplašinājumu stella pēc jūsu lūguma var atvērt un lasīt vietnes atsevišķā cilnē. Instalējiet to no Chrome interneta veikala. Jau instalējāt? Pārlādējiet šo cilni.",
       "reload": "Pārlādēt cilni",
       "reloadDescription": "Jūsu stella paplašinājums ir jaunāks par šo cilni. Pārlādējiet cilni, lai to turpinātu izmantot.",
       "updating": "Gaida paplašinājuma atjauninājumu",

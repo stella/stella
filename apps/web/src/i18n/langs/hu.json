@@ -1727,7 +1727,7 @@
       "connected": "Bővítmény csatlakoztatva",
       "description": "A stella kérésére külön lapon nyithat meg és olvashat el weboldalakat.",
       "install": "Bővítmény telepítése",
-      "installDescription": "A stella bővítménnyel a stella kérésére külön lapon nyithat meg és olvashat el weboldalakat. A Chrome Webáruházból telepítheti.",
+      "installDescription": "A stella bővítménnyel a stella kérésére külön lapon nyithat meg és olvashat el weboldalakat. A Chrome Webáruházból telepítheti. Már telepítette? Töltse újra ezt a lapot.",
       "reload": "Lap újratöltése",
       "reloadDescription": "A stella bővítménye újabb, mint ez a lap. Töltse újra a lapot, hogy továbbra is használhassa.",
       "updating": "A bővítmény frissítésre vár",

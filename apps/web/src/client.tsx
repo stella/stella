@@ -1,7 +1,10 @@
+import { listenForBrowserExtensionAnnouncement } from "@/features/chat/browser-control/browser-extension-announcement";
 import { bootClientRuntime } from "@/lib/analytics/web-hang/client-bootstrap";
 import { installPreloadErrorRecovery } from "@/lib/preload-error-recovery";
 import { runZodWithoutEval } from "@/security/zod-jitless";
 
+// The extension announces itself once, usually before the runtime loads.
+listenForBrowserExtensionAnnouncement();
 // Before any lazily loaded module builds a zod schema.
 runZodWithoutEval();
 // The runtime chunk can fail before any of its modules evaluate.

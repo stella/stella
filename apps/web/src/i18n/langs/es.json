@@ -1727,7 +1727,7 @@
       "connected": "Extensión conectada",
       "description": "stella puede abrir y leer sitios web en otra pestaña cuando se lo pidas.",
       "install": "Instalar extensión",
-      "installDescription": "La extensión de stella permite abrir y leer sitios web en otra pestaña cuando se lo pidas. Se instala desde Chrome Web Store.",
+      "installDescription": "La extensión de stella permite abrir y leer sitios web en otra pestaña cuando se lo pidas. Se instala desde Chrome Web Store. ¿Ya la tienes? Recarga esta pestaña.",
       "reload": "Recargar esta pestaña",
       "reloadDescription": "Tu extensión de stella es más reciente que esta pestaña. Recarga la pestaña para seguir usándola.",
       "updating": "Actualización de la extensión pendiente",

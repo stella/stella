@@ -1727,7 +1727,7 @@
       "connected": "Laiendus on ühendatud",
       "description": "stella saab sinu palvel veebilehti eraldi vahekaardil avada ja lugeda.",
       "install": "Paigalda laiendus",
-      "installDescription": "stella laiendus võimaldab stellal sinu palvel veebilehti eraldi vahekaardil avada ja lugeda. Paigalda see Chrome’i veebipoest.",
+      "installDescription": "stella laiendus võimaldab stellal sinu palvel veebilehti eraldi vahekaardil avada ja lugeda. Paigalda see Chrome’i veebipoest. Juba paigaldatud? Laadi see vahekaart uuesti.",
       "reload": "Laadi vahekaart uuesti",
       "reloadDescription": "Sinu stella laiendus on uuem kui see vahekaart. Laadi vahekaart uuesti, et laiendust edasi kasutada.",
       "updating": "Laienduse uuendus ootel",

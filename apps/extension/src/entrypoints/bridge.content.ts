@@ -6,6 +6,7 @@ import {
   type BrowserExtensionResponse,
   parseBrowserExtensionRequest,
   parseBrowserExtensionResponse,
+  parseBrowserWebPeerVersion,
 } from "@stll/api-contract/browser-control";
 
 import {
@@ -19,6 +20,21 @@ export default defineContentScript({
     if (trustedStellaOriginFromUrl(window.location.href) === null) {
       return;
     }
+    const announce = () => {
+      window.postMessage(
+        {
+          allSitesGranted: false,
+          controlledTabId: null,
+          controllerId: null,
+          protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+          requestId: "extension-ready",
+          source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
+          type: "pong",
+        } satisfies BrowserExtensionResponse,
+        window.location.origin,
+      );
+    };
+
     window.addEventListener("message", ({ data, origin, source }) => {
       if (source !== window || origin !== window.location.origin) {
         return;
@@ -26,6 +42,16 @@ export default defineContentScript({
 
       const request = parseBrowserExtensionRequest(data);
       if (!request) {
+        // A tab on another protocol version hears this one, so it shows an
+        // update or a reload rather than an install. Same-version requests
+        // never get here, so the answer cannot loop.
+        const webVersion = parseBrowserWebPeerVersion(data);
+        if (
+          webVersion !== null &&
+          webVersion !== BROWSER_CONTROL_PROTOCOL_VERSION
+        ) {
+          announce();
+        }
         return;
       }
 
@@ -40,17 +66,6 @@ export default defineContentScript({
       window.postMessage(response, window.location.origin);
     });
 
-    window.postMessage(
-      {
-        allSitesGranted: false,
-        controlledTabId: null,
-        controllerId: null,
-        protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
-        requestId: "extension-ready",
-        source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
-        type: "pong",
-      } satisfies BrowserExtensionResponse,
-      window.location.origin,
-    );
+    announce();
   },
 });

@@ -1727,7 +1727,7 @@
       "connected": "Rozszerzenie połączone",
       "description": "Na Twoją prośbę stella może otwierać i czytać strony internetowe w osobnej karcie.",
       "install": "Zainstaluj rozszerzenie",
-      "installDescription": "Rozszerzenie stella pozwala na Twoją prośbę otwierać i czytać strony w osobnej karcie. Zainstaluj je z Chrome Web Store.",
+      "installDescription": "Rozszerzenie stella pozwala na Twoją prośbę otwierać i czytać strony w osobnej karcie. Zainstaluj je z Chrome Web Store. Masz je już? Odśwież tę kartę.",
       "reload": "Odśwież tę kartę",
       "reloadDescription": "Twoje rozszerzenie stella jest nowsze niż ta karta. Odśwież kartę, aby dalej z niego korzystać.",
       "updating": "Oczekiwanie na aktualizację rozszerzenia",

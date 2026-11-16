@@ -23,6 +23,7 @@ import {
   parseBrowserExtensionPeerVersion,
   parseBrowserExtensionRequest,
   parseBrowserExtensionResponse,
+  parseBrowserWebPeerVersion,
   parseElementReference,
   supersedeBrowserControlResult,
   SUPERSEDED_BROWSER_FIND_NOTE,
@@ -637,6 +638,33 @@ describe("extension peer version", () => {
     ["not an object", "stella-browser-extension"],
   ])("ignores %s", (_name, input) => {
     expect(parseBrowserExtensionPeerVersion(input)).toBeNull();
+  });
+});
+
+describe("stella web peer version", () => {
+  test("reads the version of a stella page message from another protocol", () => {
+    const olderPing = {
+      protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION - 1,
+      requestId: "request-1",
+      source: "stella-web",
+      type: "ping",
+    };
+    expect(parseBrowserExtensionRequest(olderPing)).toBeNull();
+    expect(parseBrowserWebPeerVersion(olderPing)).toBe(
+      BROWSER_CONTROL_PROTOCOL_VERSION - 1,
+    );
+  });
+
+  test.each([
+    [
+      "an extension message",
+      { protocolVersion: 3, source: "stella-browser-extension" },
+    ],
+    ["no version", { source: "stella-web" }],
+    ["a fractional version", { protocolVersion: 1.5, source: "stella-web" }],
+    ["not an object", "stella-web"],
+  ])("ignores %s", (_name, input) => {
+    expect(parseBrowserWebPeerVersion(input)).toBeNull();
   });
 });
 

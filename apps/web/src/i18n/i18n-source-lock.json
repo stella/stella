@@ -1355,7 +1355,7 @@
   "chat.browserExtension.connected": "Extension connected",
   "chat.browserExtension.description": "stella can open and read websites for you in a separate tab when you ask.",
   "chat.browserExtension.install": "Install extension",
-  "chat.browserExtension.installDescription": "The stella extension lets stella open and read websites for you in a separate tab when you ask. Install it from the Chrome Web Store.",
+  "chat.browserExtension.installDescription": "The stella extension lets stella open and read websites for you in a separate tab when you ask. Install it from the Chrome Web Store. Already installed? Reload this tab.",
   "chat.browserExtension.reload": "Reload this tab",
   "chat.browserExtension.reloadDescription": "Your stella extension is newer than this tab. Reload this tab to keep using it.",
   "chat.browserExtension.updating": "Extension update pending",
