@@ -446,7 +446,7 @@ const installDisplacedLayout = () => {
   };
   Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
     configurable: true,
-    get() {
+    get(this: HTMLElement) {
       return this.closest('[data-margin-note="card"]') ? 250 : 100;
     },
   });
