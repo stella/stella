@@ -63,7 +63,7 @@ export const getNextSelectAllRowSelection = ({
     ? new Set(preservableRowIds)
     : selectable;
 
-  const next = new Map<string, boolean>();
+  const next = new Map<string, RowSelectionState[string]>();
   for (const rowId of Object.keys(rowSelection)) {
     if (
       rowSelection[rowId] &&
