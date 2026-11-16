@@ -6,6 +6,7 @@ import {
   TRANSCRIPTION_MODELS,
 } from "@stll/ai-catalog/transcription";
 import type {
+  TranscriptionEndpoint,
   TranscriptionModelId,
   TranscriptionVocabularyMechanism,
 } from "@stll/ai-catalog/transcription";
@@ -27,9 +28,9 @@ import {
   createUnreadableAudioError,
   readAdmissibleAudioDuration,
 } from "@/api/handlers/dictation/audio-duration";
-import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import {
   fetchManagedOpenRouterTranscription,
+  MANAGED_TRANSCRIPTION_URLS,
   PROVIDER_DATA_POLICY,
 } from "@/api/lib/chat/provider-data-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -311,7 +312,9 @@ type TranscribeAudioOptions = {
   language?: string | undefined;
   vocabulary?: readonly string[] | undefined;
   apiKey: string;
-  residency: ManagedAIResidency;
+  /** The endpoint chosen for this model: the organization's region, or the
+   *  global endpoint for a model the member chose outside it. */
+  residency: TranscriptionEndpoint;
   scope: ModelDispatchScope;
   signal?: AbortSignal | undefined;
   fetch?: typeof fetchManagedOpenRouterTranscription | undefined;
@@ -380,14 +383,12 @@ export const transcribeAudio = async ({
   if (Buffer.byteLength(body) > MAX_TRANSCRIPTION_PROVIDER_BODY_BYTES) {
     return Result.err(oversize());
   }
-  const serverURL =
-    PROVIDER_DATA_POLICY.customer.openrouter.serverURLs[residency];
   const fetched = await Result.tryPromise({
     try: async () =>
       await withTimeout(
         async (requestSignal) => {
           const response = await fetchProvider(
-            `${serverURL}/audio/transcriptions`,
+            MANAGED_TRANSCRIPTION_URLS[residency],
             {
               method: "POST",
               headers: {

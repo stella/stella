@@ -164,6 +164,7 @@
       "default": "./src/components/loader.tsx"
     },
     "./middle-truncate": "./src/components/middle-truncate.tsx",
+    "./outcome-screen": "./src/components/outcome-screen.tsx",
     "./skeleton": "./src/components/skeleton.tsx",
     "./status-mark": "./src/components/status-mark.tsx",
     "./swap-text": "./src/components/swap-text.tsx",

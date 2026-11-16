@@ -30,3 +30,25 @@ describe("Textarea sizing", () => {
     expect(textareaClass(markup)).not.toContain("min-h-");
   });
 });
+
+test("a composer editor keeps its input contract without field chrome", () => {
+  const markup = renderToStaticMarkup(
+    <Textarea
+      appearance="composer"
+      aria-label="Search"
+      dir="rtl"
+      fieldSizing="fixed"
+      rows={1}
+      maxLength={32}
+      value="قانون"
+      onChange={() => undefined}
+    />,
+  );
+  expect(markup).toContain('data-appearance="composer"');
+  expect(markup).toContain('aria-label="Search"');
+  expect(markup).toContain('maxLength="32"');
+  expect(markup).toContain('dir="rtl"');
+  expect(markup).not.toContain("border-input");
+  expect(textareaClass(markup)).toContain("min-h-15");
+  expect(textareaClass(markup)).not.toContain("px-[calc");
+});
