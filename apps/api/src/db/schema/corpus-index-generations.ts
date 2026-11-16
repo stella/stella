@@ -383,10 +383,10 @@ export const corpusIndexRouteProofs = p.pgTable(
       .default(1)
       .notNull(),
     /**
-     * A fresh random token per pass: a page read for one pass never matches
+     * A fresh random id per pass: a page read for one pass never matches
      * another, even one a re-registered generation numbers the same.
      */
-    passToken: p.uuid("pass_token").defaultRandom().notNull(),
+    passId: p.uuid("pass_id").defaultRandom().notNull(),
     /** When the pass under way started, on the database clock. */
     passStartedAt: timestamptz("pass_started_at").notNull(),
     /**

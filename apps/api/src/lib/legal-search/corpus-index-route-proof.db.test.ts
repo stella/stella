@@ -494,13 +494,13 @@ describe("route readiness proof", () => {
     const fresh = await runInTransaction(
       async (tx) => await ensureCorpusIndexRouteCensusPassTx(tx, ROUTE),
     );
-    // Same number, same phase, same cursor: only the pass token tells them apart.
+    // Same number, same phase, same cursor: only the pass id tells them apart.
     expect(fresh).toMatchObject({
       number: stale.number,
       expectation: stale.expectation,
       cursor: stale.cursor,
     });
-    expect(fresh.token).not.toBe(stale.token);
+    expect(fresh.id).not.toBe(stale.id);
     expect(
       await runInTransaction(
         async (tx) =>

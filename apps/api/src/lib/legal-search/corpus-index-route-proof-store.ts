@@ -39,14 +39,14 @@ export type CorpusIndexRoute = {
 };
 
 /**
- * Where a route's census pass stands. `number` orders passes and `token`
+ * Where a route's census pass stands. `number` orders passes and `id`
  * identifies one, so a page read for a pass never matches another; the start
  * is in epoch microseconds, PostgreSQL's precision. `through` is the last key
  * the current phase walks, null when the phase has nothing to walk.
  */
 export type CorpusIndexRouteCensusPass = {
   number: number;
-  token: string;
+  id: string;
   through: string | null;
   startedAtUs: string;
   expectation: CorpusIndexRouteCensusExpectation;
@@ -177,7 +177,7 @@ export const ensureCorpusIndexRouteCensusPassTx = async (
   const row = executedRows(
     await tx.execute(sql`
       SELECT ${proofs.passNumber}::int AS pass_number,
-        ${proofs.passToken}::text AS pass_token,
+        ${proofs.passId}::text AS pass_id,
         ${proofs.passThrough}::text AS pass_through,
         ${epochMicros(sql`${proofs.passStartedAt}`)}::text AS started_at_us,
         ${proofs.passExpectation} AS expectation,
@@ -189,7 +189,7 @@ export const ensureCorpusIndexRouteCensusPassTx = async (
   ).at(0);
   return {
     number: requiredCount(row, "pass_number"),
-    token: requiredText(row, "pass_token"),
+    id: requiredText(row, "pass_id"),
     through: nullableText(row, "pass_through"),
     startedAtUs: requiredText(row, "started_at_us"),
     expectation: censusExpectation(requiredText(row, "expectation")),
@@ -212,7 +212,7 @@ const passIs = (
 ): SQL =>
   sql`${isRoute(route)}
     AND ${proofs.passNumber} = ${pass.number}
-    AND ${proofs.passToken} = ${pass.token}::uuid
+    AND ${proofs.passId} = ${pass.id}::uuid
     AND ${proofs.passExpectation} = ${pass.expectation}
     AND ${proofs.passCursor} IS NOT DISTINCT FROM ${pass.cursor}::uuid`;
 
@@ -269,7 +269,7 @@ export const recordCorpusIndexRouteCensusPageTx = async (
           proven_at = clock_reading.at,
           proven_inspected = ${proofs.passInspected} + ${inspected},
           pass_number = ${proofs.passNumber} + 1,
-          pass_token = gen_random_uuid(),
+          pass_id = gen_random_uuid(),
           pass_started_at = clock_reading.at,
           pass_through = ${presentThrough(route)},
           pass_expectation = 'present',
@@ -314,7 +314,7 @@ export const revokeCorpusIndexRouteProofTx = async (
       revoke_reason = ${reason},
       revoked_pass_number = ${proofs.passNumber} + 1,
       pass_number = ${proofs.passNumber} + 1,
-      pass_token = gen_random_uuid(),
+      pass_id = gen_random_uuid(),
       pass_started_at = clock_reading.at,
       pass_through = ${presentThrough(route)},
       pass_expectation = 'present',
@@ -384,7 +384,7 @@ export const readCorpusIndexRouteProofsTx = async (
         ${epochMicros(sql`${proofs.provenPassStartedAt}`)}::text AS proven_pass_started_at_us,
         ${proofs.provenInspected}::int AS proven_inspected,
         ${proofs.passNumber}::int AS pass_number,
-        ${proofs.passToken}::text AS pass_token,
+        ${proofs.passId}::text AS pass_id,
         ${proofs.passThrough}::text AS pass_through,
         ${epochMicros(sql`${proofs.passStartedAt}`)}::text AS started_at_us,
         ${proofs.passExpectation} AS expectation,
@@ -405,7 +405,7 @@ export const readCorpusIndexRouteProofsTx = async (
   return rows.map((row) => {
     const pass = {
       number: requiredCount(row, "pass_number"),
-      token: requiredText(row, "pass_token"),
+      id: requiredText(row, "pass_id"),
       through: nullableText(row, "pass_through"),
       startedAtUs: requiredText(row, "started_at_us"),
       expectation: censusExpectation(requiredText(row, "expectation")),

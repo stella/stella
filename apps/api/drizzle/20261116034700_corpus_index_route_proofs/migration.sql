@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS "corpus_index_route_proofs" (
   "generation" varchar(32) NOT NULL,
   "index_id" varchar(64) NOT NULL,
   "pass_number" bigint DEFAULT 1 NOT NULL,
-  "pass_token" uuid DEFAULT gen_random_uuid() NOT NULL,
+  "pass_id" uuid DEFAULT gen_random_uuid() NOT NULL,
   "pass_started_at" timestamptz NOT NULL,
   "pass_through" uuid,
   "pass_expectation" text NOT NULL,

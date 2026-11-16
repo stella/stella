@@ -83,7 +83,7 @@ corpus_index_route_proofs.family                  text         fk,not null      
 corpus_index_route_proofs.generation              varchar      fk,not null       corpus-index-generations.ts:369
 corpus_index_route_proofs.index_id                varchar      not null          corpus-index-generations.ts:372
 corpus_index_route_proofs.pass_number             bigint       default,not null  corpus-index-generations.ts:381  The pass under way, counted from the route's first: every new pass and every revocation takes the next number, so a page recorded against a pass that has since…
-corpus_index_route_proofs.pass_token              uuid         default,not null  corpus-index-generations.ts:389  A fresh random token per pass: a page read for one pass never matches another, even one a re-registered generation numbers the same.
+corpus_index_route_proofs.pass_id                 uuid         default,not null  corpus-index-generations.ts:389  A fresh random id per pass: a page read for one pass never matches another, even one a re-registered generation numbers the same.
 corpus_index_route_proofs.pass_started_at         timestamptz  not null          corpus-index-generations.ts:391  When the pass under way started, on the database clock.
 corpus_index_route_proofs.pass_through            uuid         null              corpus-index-generations.ts:397  The last key the current phase walks, taken when the phase began; null when the phase has nothing to walk.
 corpus_index_route_proofs.pass_expectation        text         not null          corpus-index-generations.ts:399  What the pass under way walks (`CORPUS_INDEX_ROUTE_CENSUS_EXPECTATIONS`).
