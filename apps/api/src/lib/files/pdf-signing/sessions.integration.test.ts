@@ -587,7 +587,10 @@ describe("pdf signing finalization attempts", () => {
               closeReason: "user_cancelled",
               recordAuditEvent: audit,
               safeDb: async (run, retry) =>
-                await safeDb((tx) => run(asTestRaw<Transaction>(tx)), retry),
+                await safeDb(
+                  async (tx) => await run(asTestRaw<Transaction>(tx)),
+                  retry,
+                ),
               sessionId: targetId,
             })
           : await cancelPdfSigningSession.handler(
