@@ -307,6 +307,7 @@ export const ENUM_COLUMNS = {
   case_law_citation_resolution_census: ["kind"],
   case_law_citation_reviews: ["origin"],
   case_law_citations: ["cited_part", "doctrinal_treatment", "polarity_source"],
+  case_law_completeness_census: ["outcome", "scope_status"],
   case_law_corpus_pack_refs: ["kind"],
   case_law_corpus_tombstones: ["reason"],
   case_law_decision_citation_stats: ["direction", "polarity"],
@@ -363,6 +364,7 @@ export const ENUM_COLUMNS = {
     "time_billing_format",
     "type",
   ],
+  corpus_index_generation_seeding_passes: ["family"],
   corpus_index_generations: ["family"],
   corpus_index_group_enrollments: ["contract_version", "family"],
   corpus_index_group_withdrawals: ["family"],
@@ -380,6 +382,7 @@ export const ENUM_COLUMNS = {
     "family",
     "last_failure_kind",
   ],
+  corpus_index_route_seedings: ["family"],
   correspondence: [
     "channel",
     "direction",

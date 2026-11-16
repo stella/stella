@@ -62,6 +62,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { CORPUS_BM25_RATIO_POWER } from "@/api/lib/legal-search/corpus-ranking-policy";
 import { RELEVANCE_ORDER } from "@/api/lib/legal-search/corpus-search-order";
+import { optOutOfCorpusProjectionSeedingGuard } from "@/api/tests/helpers/corpus-projection-seeding-guard";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
@@ -123,6 +124,10 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   client = await createTestPglite(seededSnapshot);
+  await optOutOfCorpusProjectionSeedingGuard(client, {
+    reason:
+      "Exercises the projection store, executor and serving pipeline on canonical rows and desired states this suite stands up as fixtures; no desired writer runs here, and the writer suites keep the guard.",
+  });
   db = drizzle({ client });
   await db.insert(caseLawSources).values({
     id: SOURCE_ID,

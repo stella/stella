@@ -224,12 +224,12 @@ export const REPLAY_WRITER_REGISTRY = [
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row.ts",
-    line: 433,
+    line: 441,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row.ts",
-    line: 451,
+    line: 459,
     kind: "pending",
   },
   {

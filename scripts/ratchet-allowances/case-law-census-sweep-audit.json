@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 1,
+  "reason": "Completeness observations are public-corpus sweep aggregates fenced by the source ingestion lease, with observation time and evidence persisted in the owning census row; they are not tenant activity and contain no user actor to audit."
+}
