@@ -2633,7 +2633,7 @@ export const readChatRunForRequest = async (
       .limit(1)
   ).at(0) ?? null;
 
-type ChatTurnRunOptions = { owner: RunOwner; chat: ChatRunBinding };
+export type ChatTurnRunOptions = { owner: RunOwner; chat: ChatRunBinding };
 
 /** The run a handed-over chat turn reads on, and where its last reader stopped. */
 export type HandedOverChatRun = {
