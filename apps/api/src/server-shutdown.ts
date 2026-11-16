@@ -33,6 +33,11 @@ type ShutdownApiServicesOptions = {
    * another task, or this one's next boot, sends them.
    */
   stopChatQueueSender: () => void;
+  /**
+   * Stops adopting handed-over chat turns before this process's turns are
+   * relinquished: a stopping task takes none it would give up again.
+   */
+  stopChatTurnAdopter: () => void;
   stopScheduler: () => void;
   stopSse: () => void;
   timeout: Promise<void>;
@@ -46,6 +51,7 @@ export const shutdownApiServices = async ({
   onHttpStopError,
   relinquishChatTurnRuns,
   stopChatQueueSender,
+  stopChatTurnAdopter,
   stopHttp,
   stopScheduler,
   stopSse,
@@ -59,6 +65,7 @@ export const shutdownApiServices = async ({
   stopSse();
   stopScheduler();
   stopChatQueueSender();
+  stopChatTurnAdopter();
   // A run that could not store its outcome leaves its turn to the reaper:
   // the drain did not end it.
   const chatTurnRunsRelinquished = relinquishChatTurnRuns().then(async (end) =>

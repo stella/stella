@@ -77,6 +77,7 @@ const THREAD_ID = "00000000-0000-7000-8000-0000000000d1";
 /** The member `openChatThreadDomPage` signs in as. */
 const USER_ID = "00000000-0000-7000-8000-00000000fffe";
 const QUEUE_PATH = `/v1/chat/threads/${THREAD_ID}/queue`;
+const STORED_FILE_URL = "stella://file::00000000-0000-7000-8000-0000000000f1";
 const FIRST = "00000000-0000-7000-8000-0000000000e1";
 const SECOND = "00000000-0000-7000-8000-0000000000e2";
 const THIRD = "00000000-0000-7000-8000-0000000000e3";
@@ -172,6 +173,8 @@ type Server = {
   unexpected: string[];
   /** The revision each removal named. */
   removedRevisions: (string | null)[];
+  /** What each removal asked for the files the message's queueing stored. */
+  filesOnRemove: (string | null)[];
 };
 
 /** The `beforeId` a move request names. */
@@ -195,6 +198,7 @@ const serve = ({ waiting }: { waiting: boolean }) => {
     requests: [],
     unexpected: [],
     removedRevisions: [],
+    filesOnRemove: [],
   };
   routeRequest = async (input, init) => {
     await Promise.resolve();
@@ -260,27 +264,37 @@ const serve = ({ waiting }: { waiting: boolean }) => {
       return Response.json({ message: "Not queued" }, { status: 404 });
     }
     const without = state.order.filter((queued) => queued !== id);
+    // The message as it was queued: its text, and the file its queueing
+    // stored, named by reference.
+    const message = {
+      id,
+      role: "user",
+      parts: [
+        { type: "text", content: textOf(id) },
+        ...(id === FIRST
+          ? [
+              {
+                type: "document",
+                source: {
+                  type: "url",
+                  value: STORED_FILE_URL,
+                  mimeType: "application/pdf",
+                },
+                metadata: { filename: "lease.pdf" },
+              },
+            ]
+          : []),
+      ],
+    };
     // The message whole, as Edit reads it before removing it.
     if (method === "GET") {
-      return Response.json({
-        message: {
-          id,
-          role: "user",
-          parts: [{ type: "text", content: textOf(id) }],
-        },
-        revision: 0,
-      });
+      return Response.json({ message, revision: 0 });
     }
     if (method === "DELETE") {
       state.removedRevisions.push(url.searchParams.get("revision"));
+      state.filesOnRemove.push(url.searchParams.get("files"));
       state.order = without;
-      return Response.json({
-        message: {
-          id,
-          role: "user",
-          parts: [{ type: "text", content: textOf(id) }],
-        },
-      });
+      return Response.json({ message });
     }
     if (action === "move") {
       const beforeId = beforeIdOf(body);
@@ -344,6 +358,12 @@ const openPage = async ({
     }
   });
   return {
+    composerFiles: () =>
+      (composer ?? panic("No composer")).attachments.map((attachment) =>
+        attachment.type === "stored_file"
+          ? { filename: attachment.filename, url: attachment.url }
+          : attachment.type,
+      ),
     composerText: () =>
       (composer?.editor ?? panic("The composer has no editor")).getText(),
     page,
@@ -460,7 +480,7 @@ test("Send now on a chat whose turn has ended sends the message next without ask
 
 test("Move, Remove and Edit change the server's queue, and Edit hands the message to the composer", async () => {
   const server = serve({ waiting: true });
-  const { composerText, page, view } = await openPage();
+  const { composerFiles, composerText, page, view } = await openPage();
 
   // The first message cannot move up, the last one cannot move down.
   await chooseAction(view, textOf(SECOND), messages.common.moveUp);
@@ -514,6 +534,14 @@ test("Move, Remove and Edit change the server's queue, and Edit hands the messag
     `DELETE ${QUEUE_PATH}/${FIRST}`,
   ]);
   expect(server.order).toEqual([SECOND]);
+  // Remove deletes the files a message's queueing stored; Edit keeps them,
+  // and the composer holds them by reference, to be sent again.
+  expect(server.filesOnRemove).toEqual(["delete", "keep"]);
+  await waitFor(() => {
+    expect(composerFiles()).toEqual([
+      { filename: "lease.pdf", url: STORED_FILE_URL },
+    ]);
+  });
   // Each removal names the revision the page read, so one edited since stays.
   expect(server.removedRevisions).toEqual(["0", "0"]);
   expect(server.unexpected).toEqual([]);

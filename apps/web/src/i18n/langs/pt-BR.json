@@ -2099,7 +2099,6 @@
     "queue": {
       "actions": "Ações da mensagem na fila",
       "editNeedsComposer": "Abra este chat para editar uma mensagem na fila.",
-      "filesNotQueued": "Uma mensagem com arquivos não pode aguardar na fila. Envie-a quando a resposta atual terminar.",
       "heldByMember": "Fila pausada.",
       "heldComputerAway": "Aguardando seu computador: as mensagens na fila são enviadas assim que ele se conectar.",
       "heldSendRefused": "Fila pausada: não foi possível enviar a primeira mensagem. Edite ou remova-a e depois retome.",

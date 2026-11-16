@@ -20,7 +20,11 @@ import type {
   ConnectConnectorOutput,
 } from "@stll/api-contract/chat-connector";
 import { buildCreateDocumentDownloadFileName } from "@stll/api-contract/chat-create-document";
-import { CHAT_QUEUE_ERROR_CODE } from "@stll/api-contract/chat-queue";
+import {
+  CHAT_QUEUE_ERROR_CODE,
+  QUEUED_MESSAGE_FILES_ON_REMOVE,
+  type QueuedMessageFilesOnRemove,
+} from "@stll/api-contract/chat-queue";
 import { CHAT_LOCAL_RUN_STEER_SOURCE } from "@stll/api-contract/chat-run-target";
 import { requiresPerCallChatApproval } from "@stll/api-contract/chat-secret";
 import type { RequestSecretOutput } from "@stll/api-contract/chat-secret";
@@ -130,7 +134,6 @@ import {
   updateCachedChatQueue,
 } from "@/features/chat/chat-queue";
 import {
-  canQueueMessage,
   CHAT_STEER_REFUSAL_MESSAGES,
   type ChatSteerRefusal,
   composerDraftOfParts,
@@ -154,7 +157,7 @@ import {
   sendThreadChatMessageUntilAccepted,
 } from "@/features/chat/chat-runtime";
 import {
-  resendLatestChatMessage,
+  settleRouteHandoff,
   showStoredChatThread,
 } from "@/features/chat/chat-runtime-registry";
 import {
@@ -825,11 +828,18 @@ export const useChatSession = ({
   /** Remove queued message `id` at the `revision` this page read: one
    *  edited since stays queued (the server refuses the removal). */
   const removeFromQueue = useCallback(
-    async (id: string, revision: number) => {
+    async (
+      id: string,
+      {
+        files,
+        revision,
+      }: { files: QueuedMessageFilesOnRemove; revision: number },
+    ) => {
       removedHereRef.current.add(id);
       const removed = await Result.tryPromise(
         async () =>
           await removeQueuedChatMessage({
+            files,
             messageId: id,
             revision,
             threadId: threadRef.threadId,
@@ -920,6 +930,51 @@ export const useChatSession = ({
   );
 
   /**
+   * Say why a message the server refused before storing it was not sent,
+   * while the composer holds it again: in the words the thread used for a
+   * failed request.
+   */
+  const notifySendRefused = useCallback(
+    (refused: Error) => {
+      // The server's refusal is found beneath the transport's wrapping: its
+      // message, as the thread showed it, unless a notice of its own (an
+      // expired session, an admission refusal) says more.
+      const refusal = chatRefusal(refused);
+      const copy = chatErrorTranslationKey(refused);
+      if (refusal !== null) {
+        notifyUserError(refusal, refusal.message);
+      } else if (copy === "chat.sendError") {
+        notifyUserError(refused, t(copy));
+      } else {
+        notifyUserProblem(t(copy));
+      }
+    },
+    [t],
+  );
+
+  // A new chat's first message was sent before the page existed (the landing
+  // page, `/new`, Ask AI); this page takes it from the runtime. Refused before
+  // the server stored it, it goes back into this chat's composer, like any
+  // send the server refused.
+  useExternalSyncEffect(() => {
+    const handoff = chat.takeRouteHandoff();
+    if (handoff === null) {
+      return;
+    }
+    detached(
+      (async () => {
+        const settled = await settleRouteHandoff(chat, handoff);
+        if (settled.type === "sent") {
+          return;
+        }
+        notifySendRefused(settled.error);
+        restoreIntoComposer(handoff.message);
+      })(),
+      "use-chat-session.settle-route-handoff",
+    );
+  }, [chat, notifySendRefused, restoreIntoComposer]);
+
+  /**
    * Queue `message` at the end of the chat's queue, as it would be sent now
    * (its mode and document preferences snapshotted). `kept` when the server
    * did not take it: the composer gets it back.
@@ -929,10 +984,6 @@ export const useChatSession = ({
       message: ChatUserMessageInput,
       options?: ChatSendMessageOptions,
     ): Promise<ChatSendOutcome> => {
-      if (!canQueueMessage(message)) {
-        stellaToast.warning(t("chat.queue.filesNotQueued"));
-        return CHAT_SEND_KEPT;
-      }
       const send = queuedChatSendOf(
         chat,
         message,
@@ -1142,25 +1193,13 @@ export const useChatSession = ({
       if (isQueueInsteadRefusal(acceptance.error)) {
         return await enqueueMessage(message, options);
       }
-      // The composer holds the message again; the notice says why it was
-      // not sent in the words the thread used for a failed request.
-      // The server's refusal is found beneath the transport's wrapping.
-      const refusal = chatRefusal(acceptance.error);
-      const copy = chatErrorTranslationKey(acceptance.error);
-      if (refusal !== null) {
-        // Its message, as the thread showed it, unless a notice of its own
-        // (an expired session, an admission refusal) says more.
-        notifyUserError(refusal, refusal.message);
-      } else if (copy === "chat.sendError") {
-        notifyUserError(acceptance.error, t(copy));
-      } else {
-        notifyUserProblem(t(copy));
-      }
+      notifySendRefused(acceptance.error);
       return CHAT_SEND_KEPT;
     },
     [
       chat,
       enqueueMessage,
+      notifySendRefused,
       notifySteerRefused,
       readQueue,
       resolveToolApproval,
@@ -1293,7 +1332,13 @@ export const useChatSession = ({
         update: (current) => withQueuedMessageRemoved({ id, queue: current }),
       });
       detached(
-        writeQueue(async () => await removeFromQueue(id, item.revision)),
+        writeQueue(
+          async () =>
+            await removeFromQueue(id, {
+              files: QUEUED_MESSAGE_FILES_ON_REMOVE.delete,
+              revision: item.revision,
+            }),
+        ),
         "use-chat-session.remove-queued-message",
       );
     },
@@ -1332,8 +1377,13 @@ export const useChatSession = ({
             composerDraftOfParts(whole.value.message.parts),
           );
           // At the revision put into the composer: one edited since stays.
+          // Its stored files stay too: the composer sends them again.
           await writeQueue(
-            async () => await removeFromQueue(id, whole.value.revision),
+            async () =>
+              await removeFromQueue(id, {
+                files: QUEUED_MESSAGE_FILES_ON_REMOVE.keep,
+                revision: whole.value.revision,
+              }),
           );
         })(),
         "use-chat-session.edit-queued-message",
@@ -1439,8 +1489,7 @@ export const useChatSession = ({
         return;
       }
 
-      await resendLatestChatMessage(
-        chat,
+      await chat.reload(
         sendMode === undefined ? undefined : { body: { sendMode } },
       );
     },
