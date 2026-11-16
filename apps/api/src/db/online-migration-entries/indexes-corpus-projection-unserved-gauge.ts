@@ -11,6 +11,7 @@ const ABSENT_SQL =
 export default {
   id: "indexes-corpus-projection-unserved-gauge",
   revision: 1463,
+  lifecycle: "pending",
   type: "indexes",
   values: [
     {

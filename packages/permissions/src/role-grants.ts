@@ -36,6 +36,9 @@ export const statements = {
   signal: ["create", "resolve", "triage"],
   billingCode: ["create", "update", "delete"],
   rate: ["read", "create", "update", "delete"],
+  // Seeing money: rates, amounts and invoice totals. Separate from matter
+  // access so a member can work a matter without seeing what it bills.
+  billing: ["read"],
   // todo: add better permissions for chat
   chat: ["create", "update", "delete"],
   organizationSettings: ["update"],
@@ -74,7 +77,7 @@ export const statements = {
   conflictCheck: ["run", "review"],
 } as const;
 
-type PermissionMap = {
+export type PermissionMap = {
   [K in keyof typeof statements]: (typeof statements)[K][number][];
 };
 
@@ -108,6 +111,7 @@ const externalStellaGrants = {
   signal: ["create"],
   billingCode: [],
   rate: [],
+  billing: [],
   chat: [],
   organizationSettings: [],
   auditLog: [],
@@ -155,6 +159,7 @@ const memberStellaGrants = {
   signal: ["create", "resolve", "triage"],
   billingCode: ["create", "update", "delete"],
   rate: [],
+  billing: [],
   chat: ["create", "update", "delete"],
   organizationSettings: [],
   auditLog: [],
@@ -179,6 +184,7 @@ const managementStellaGrants = {
   timeEntry: ["read", "create", "update", "delete", "approve"],
   playbook: ["create", "update", "delete", "apply", "approve"],
   rate: ["read", "create", "update", "delete"],
+  billing: ["read"],
   organizationSettings: ["update"],
   auditLog: ["read"],
   dataExport: ["create", "read"],

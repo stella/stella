@@ -81,6 +81,7 @@ const givenMemberRole = (role: string | null): void => {
     role === null
       ? null
       : {
+          billingAccess: false,
           memberId: "member_one",
           email: "standard@example.test",
           role,

@@ -226,13 +226,21 @@ const sortLeasesByReadiness = <Row extends MaterialRow>(
   return { ready, rejected };
 };
 
-const readCaseLawMaterials = async (
-  tx: Transaction,
-  leases: readonly CorpusProjectionIntentLease[],
-  manifest: Extract<CorpusIndexManifest, { family: "case_law" }>,
-  intents: ReadonlyMap<string, IntentSnapshot>,
-  states: ReadonlyMap<string, StateSnapshot>,
-): Promise<CorpusProjectionMaterialsResult> => {
+type ReadCaseLawMaterialsOptions = {
+  tx: Transaction;
+  leases: readonly CorpusProjectionIntentLease[];
+  manifest: Extract<CorpusIndexManifest, { family: "case_law" }>;
+  intents: ReadonlyMap<string, IntentSnapshot>;
+  states: ReadonlyMap<string, StateSnapshot>;
+};
+
+const readCaseLawMaterials = async ({
+  tx,
+  leases,
+  manifest,
+  intents,
+  states,
+}: ReadCaseLawMaterialsOptions): Promise<CorpusProjectionMaterialsResult> => {
   const entityIds = leases.map(({ entityId }) =>
     brandPersistedCaseLawDecisionId(entityId),
   );
@@ -350,13 +358,21 @@ const readCaseLawMaterials = async (
   );
 };
 
-const readLegislationMaterials = async (
-  tx: Transaction,
-  leases: readonly CorpusProjectionIntentLease[],
-  manifest: Extract<CorpusIndexManifest, { family: "legislation" }>,
-  intents: ReadonlyMap<string, IntentSnapshot>,
-  states: ReadonlyMap<string, StateSnapshot>,
-): Promise<CorpusProjectionMaterialsResult> => {
+type ReadLegislationMaterialsOptions = {
+  tx: Transaction;
+  leases: readonly CorpusProjectionIntentLease[];
+  manifest: Extract<CorpusIndexManifest, { family: "legislation" }>;
+  intents: ReadonlyMap<string, IntentSnapshot>;
+  states: ReadonlyMap<string, StateSnapshot>;
+};
+
+const readLegislationMaterials = async ({
+  tx,
+  leases,
+  manifest,
+  intents,
+  states,
+}: ReadLegislationMaterialsOptions): Promise<CorpusProjectionMaterialsResult> => {
   const entityIds = leases.map(({ entityId }) =>
     brandPersistedLegislationDocumentId(entityId),
   );
@@ -445,19 +461,25 @@ export const readReservedCorpusProjectionMaterialsTx = async (
       if (manifest.family !== "case_law") {
         return panic("Case-law material manifest has another family");
       }
-      return await readCaseLawMaterials(tx, leases, manifest, intents, states);
-    }
-    case "legislation": {
-      if (manifest.family !== "legislation") {
-        return panic("Legislation material manifest has another family");
-      }
-      return await readLegislationMaterials(
+      return await readCaseLawMaterials({
         tx,
         leases,
         manifest,
         intents,
         states,
-      );
+      });
+    }
+    case "legislation": {
+      if (manifest.family !== "legislation") {
+        return panic("Legislation material manifest has another family");
+      }
+      return await readLegislationMaterials({
+        tx,
+        leases,
+        manifest,
+        intents,
+        states,
+      });
     }
     default:
       family satisfies never;

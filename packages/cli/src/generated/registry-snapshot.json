@@ -12248,7 +12248,7 @@
                 "type": "number"
               },
               "rateAtEntry": {
-                "type": "number"
+                "type": ["number", "null"]
               },
               "currency": {
                 "type": "string"
@@ -12330,7 +12330,7 @@
               "type": "number"
             },
             "rateAtEntry": {
-              "type": "number"
+              "type": ["number", "null"]
             },
             "currency": {
               "type": "string"

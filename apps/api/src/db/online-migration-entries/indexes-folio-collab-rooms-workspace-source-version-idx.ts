@@ -3,6 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "indexes-folio-collab-rooms-workspace-source-version-idx",
   revision: 660,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     {

@@ -687,3 +687,184 @@ test("declaration-based ids and facts survive line shifts deterministically", ()
     "apps/web/src/save.ts:useSave:useMutation",
   );
 });
+
+test("route census preserves parameter segments through stable receiver aliases", () => {
+  const inspect = (declarations: string, receiver: string) =>
+    inspectMutationQuerySources([
+      {
+        file: "apps/web/src/receiver.ts",
+        text: `import { api } from "@/lib/api";
+          import { queryOptions, useMutation } from "@tanstack/react-query";
+          ${declarations}
+          export const options = queryOptions({ queryKey: ["items"], queryFn: () => ${receiver}["long-route"].get() });
+          export const useSave = () => useMutation({ mutationFn: () => ${receiver}["long-route"].post({}) });`,
+      },
+    ]);
+  const direct = inspect(
+    "",
+    "api.workspaces({ workspaceId }).entities({ entityId })",
+  );
+  const aliased = inspect(
+    "const workspace = api.workspaces({ workspaceId }); const entity = workspace.entities({ entityId }); const alias = entity;",
+    "alias",
+  );
+  const routes = (census: ReturnType<typeof inspect>) =>
+    [
+      ...census.readers.flatMap((reader) => reader.routes),
+      ...census.mutations.flatMap((mutation) => mutation.writes),
+    ].map(({ route, method }) => ({ route, method }));
+  expect(routes(direct)).toEqual([
+    {
+      route: "/workspaces/:workspaceId/entities/:entityId/long-route",
+      method: "get",
+    },
+    {
+      route: "/workspaces/:workspaceId/entities/:entityId/long-route",
+      method: "post",
+    },
+  ]);
+  expect(routes(aliased)).toEqual(routes(direct));
+  for (const declaration of [
+    "const alias = api.workspaces({ workspaceId }).options();",
+    'const method = "get"; const alias = api.workspaces({ workspaceId })[method]();',
+    "const request = api.workspaces({ workspaceId }).get; const alias = request();",
+    "const alias = await api.workspaces({ workspaceId }).get();",
+    "const alias = api.workspaces({ workspaceId }).post({});",
+    "let alias = api.workspaces({ workspaceId }); alias = localClient;",
+    "const alias = localClient.workspaces({ workspaceId });",
+    "const alias = other; const other = alias;",
+  ]) {
+    expect({
+      declaration,
+      routes: routes(inspect(declaration, "alias")),
+    }).toEqual({ declaration, routes: [] });
+  }
+});
+
+test("route census respects receiver shadows", () => {
+  const census = inspectMutationQuerySources([
+    {
+      file: "apps/web/src/receiver.ts",
+      text: `import { api } from "@/lib/api";
+        import { queryOptions } from "@tanstack/react-query";
+        const route = api.workspaces({ workspaceId });
+        export const local = (route) => queryOptions({ queryKey: ["local"], queryFn: () => route.get() });
+        export const remote = queryOptions({ queryKey: ["remote"], queryFn: () => route.get() });`,
+    },
+  ]);
+  expect(
+    census.readers.map(({ key, routes }) => ({
+      prefix: key?.staticPrefix,
+      routes: routes.map(({ route }) => route),
+    })),
+  ).toEqual([
+    { prefix: ["local"], routes: [] },
+    { prefix: ["remote"], routes: ["/workspaces/:workspaceId"] },
+  ]);
+});
+
+test("route census retains canonical API roots inside their owner without accepting shadows", () => {
+  const census = inspectMutationQuerySources([
+    {
+      file: "apps/web/src/lib/api.ts",
+      text: `import { createApiClient } from "@stll/api-client";
+        import { queryOptions } from "@tanstack/react-query";
+        export const apiClient = createApiClient(origin, options);
+        export const api = apiClient.v1;
+        export const connect = (slug) => api.mcp.connectors({ slug }).connect.post({});
+        export const own = queryOptions({ queryKey: ["owned"], queryFn: () => api.entities.get() });
+        export const local = (api) => queryOptions({ queryKey: ["parameter"], queryFn: () => api.entities.get() });
+        export const shadow = () => {
+          const api = localClient;
+          return queryOptions({ queryKey: ["shadow"], queryFn: () => api.entities.get() });
+        };`,
+    },
+    {
+      file: "apps/web/src/consumer.ts",
+      text: `import { useMutation } from "@tanstack/react-query";
+        import { connect } from "@/lib/api";
+        export const useConnect = () => useMutation({ mutationFn: () => connect(slug) });`,
+    },
+  ]);
+  expect(census.mutations[0]?.writes).toMatchObject([
+    { route: "/mcp/connectors/:slug/connect", method: "post" },
+  ]);
+  expect(census.mutations[0]?.unresolved).toEqual([]);
+  expect(
+    census.readers.map(({ key, routes }) => ({
+      prefix: key?.staticPrefix,
+      routes: routes.map(({ route }) => route),
+    })),
+  ).toEqual([
+    { prefix: ["parameter"], routes: [] },
+    { prefix: ["owned"], routes: ["/entities"] },
+    { prefix: ["shadow"], routes: [] },
+  ]);
+});
+
+test("transparent options spreads retain reads and eager writes without blessing opaque factories", () => {
+  type FactoryCall = { factory: string; argument?: string };
+  const inspect = ({ factory, argument = "id" }: FactoryCall) =>
+    inspectMutationQuerySources([
+      {
+        file: "apps/web/src/lib/workspace-realtime.ts",
+        text: "export const resourceMutation = (options) => options.mutationFn;",
+      },
+      {
+        file: "apps/web/src/options.ts",
+        text: `import { queryOptions } from "@tanstack/react-query";
+      import { api } from "@/lib/api";
+      import { resourceMutation } from "@/lib/workspace-realtime";
+      export const options = ${factory};`,
+      },
+      {
+        file: "apps/web/src/consumer.ts",
+        text: `import { useMutation } from "@tanstack/react-query";
+      import { api } from "@/lib/api";
+      import { options } from "./options";
+      export const useWrite = () => useMutation({ mutationFn: async () => {
+        const value = await queryClient.query({ ...options(${argument}), staleTime: 0 });
+        return api.items.post(value);
+      } });`,
+      },
+    ]).mutations.find(({ kind }) => kind === "useMutation");
+  const transparent =
+    "(id) => queryOptions({ queryKey: ['item', id], queryFn: () => api.items({ id }).get() })";
+  expect(inspect({ factory: transparent })?.unresolved).toEqual([]);
+  expect(
+    inspect({ factory: transparent })?.writes.map(({ route }) => route),
+  ).toEqual(["/items"]);
+  expect(
+    inspect({
+      factory: transparent,
+      argument: "api.side.post({})",
+    })?.writes.map(({ route }) => route),
+  ).toContain("/side");
+  const eager = inspect({
+    factory:
+      "(id) => { api.side.post({}); return queryOptions({ queryKey: ['item', id], queryFn: () => api.items.get() }); }",
+  });
+  expect(eager?.writes.map(({ route }) => route)).toContain("/side");
+  for (const factory of [
+    "(id) => unknownOptions(id)",
+    "(id) => mutable(id); const original = (id) => queryOptions({ queryKey: ['item', id] }); let mutable = original",
+    "(id) => alias(id); const original = (id) => queryOptions({ queryKey: ['item', id] }); let mutable = original; const alias = mutable",
+    "(id) => alias(id); const original = (id) => queryOptions({ queryKey: ['item', id] }); let alias = original",
+
+    "async (id) => queryOptions({ queryKey: ['item', id], queryFn: () => api.items.get() })",
+    "function*(id) { return queryOptions({ queryKey: ['item', id], queryFn: () => api.items.get() }); }",
+    "(id = api.side.post({})) => queryOptions({ queryKey: ['item', id], queryFn: () => api.items.get() })",
+    "(id) => { if (id) return unknownOptions(id); return queryOptions({ queryKey: ['item'], queryFn: () => api.items.get() }); }",
+    "(id) => api.items({ id }).get()",
+    "(id) => resourceMutation({ mutationFn: () => api.items.post(id) })",
+    "(id) => options(id)",
+    "(queryOptions) => queryOptions({ queryKey: ['item'], queryFn: () => api.items.get() })",
+  ]) {
+    expect({
+      factory,
+      unresolved: inspect({ factory })?.unresolved.some(
+        ({ reason }) => reason === "dynamic-options-spread",
+      ),
+    }).toEqual({ factory, unresolved: true });
+  }
+});

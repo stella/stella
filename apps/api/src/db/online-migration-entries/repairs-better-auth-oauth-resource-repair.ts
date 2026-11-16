@@ -4,6 +4,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "repairs-better-auth-oauth-resource-repair",
   revision: 1190,
+  lifecycle: "finalized",
   type: "repairs",
   values: [BETTER_AUTH_OAUTH_RESOURCE_REPAIR],
 } satisfies OnlineMigrationEntry;

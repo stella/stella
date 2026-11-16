@@ -94,7 +94,7 @@ export const PARSER_VERSIONS = {
 
   [ADAPTER_KEYS.CZ_NS]: 32,
 
-  [ADAPTER_KEYS.CZ_NSS]: 38,
+  [ADAPTER_KEYS.CZ_NSS]: 39,
 
   [ADAPTER_KEYS.CZ_REGIONAL]: 27,
 
@@ -110,9 +110,9 @@ export const PARSER_VERSIONS = {
 
   [ADAPTER_KEYS.PL_KIO]: 32,
 
-  [ADAPTER_KEYS.PL_KIS]: 34,
+  [ADAPTER_KEYS.PL_KIS]: 35,
 
-  [ADAPTER_KEYS.PL_NCOURT]: 38,
+  [ADAPTER_KEYS.PL_NCOURT]: 39,
 
   [ADAPTER_KEYS.PL_NSA]: 12,
 
@@ -120,9 +120,9 @@ export const PARSER_VERSIONS = {
 
   [ADAPTER_KEYS.PL_TK]: 14,
 
-  [ADAPTER_KEYS.PL_UODO]: 20,
+  [ADAPTER_KEYS.PL_UODO]: 21,
 
-  [ADAPTER_KEYS.PL_UOKIK]: 36,
+  [ADAPTER_KEYS.PL_UOKIK]: 37,
 
   [ADAPTER_KEYS.SK_COURTS]: 33,
 
@@ -222,7 +222,7 @@ export const PARSER_VERSION_SCOPES = {
 
   [ADAPTER_KEYS.CZ_NS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NS], scope: {"type":"all","reason":"Dependency patch tracking only: @tanstack/ai is reached through the desktop runner wire schema in transaction infrastructure, not parser execution. No parser-owned value changes; the matching no-stored-row-effect declaration requires no replay."} },
 
-  [ADAPTER_KEYS.CZ_NSS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NSS], scope: {"type":"all","reason":"Dependency patch tracking only: @tanstack/ai is reached through the desktop runner wire schema in transaction infrastructure, not parser execution. No parser-owned value changes; the matching no-stored-row-effect declaration requires no replay."} },
+  [ADAPTER_KEYS.CZ_NSS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NSS], scope: {"type":"all","reason":"Recompute publisher field occurrences, table tuples and references from every held detail page; document-only legacy raw retains its existing metadata."} },
 
   [ADAPTER_KEYS.CZ_REGIONAL]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_REGIONAL], scope: {"type":"all","reason":"Dependency patch tracking only: @tanstack/ai is reached through the desktop runner wire schema in transaction infrastructure, not parser execution. No parser-owned value changes; the matching no-stored-row-effect declaration requires no replay."} },
 
@@ -238,9 +238,9 @@ export const PARSER_VERSION_SCOPES = {
 
   [ADAPTER_KEYS.PL_KIO]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_KIO], scope: {"type":"all","reason":"Dependency patch tracking only: @tanstack/ai is reached through the desktop runner wire schema in transaction infrastructure, not parser execution. No parser-owned value changes; the matching no-stored-row-effect declaration requires no replay."} },
 
-  [ADAPTER_KEYS.PL_KIS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_KIS], scope: {"type":"all","reason":"Dependency patch tracking only: @tanstack/ai is reached through the desktop runner wire schema in transaction infrastructure, not parser execution. No parser-owned value changes; the matching no-stored-row-effect declaration requires no replay."} },
+  [ADAPTER_KEYS.PL_KIS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_KIS], scope: {"type":"all","reason":"Retain the publisher's excluded fields in the stored record instead of naming them as exclusions. Read a parliamentary answer's question (TRESC_INTERP_ZAPYT) before its text, and a newsletter's own text (TRESC_NEWS), into the document. Drop lines that only link back within the document, and join a footnote's line its sentence runs across."} },
 
-  [ADAPTER_KEYS.PL_NCOURT]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_NCOURT], scope: {"type":"all","reason":"Dependency patch tracking only: @tanstack/ai is reached through the desktop runner wire schema in transaction infrastructure, not parser execution. No parser-owned value changes; the matching no-stored-row-effect declaration requires no replay."} },
+  [ADAPTER_KEYS.PL_NCOURT]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_NCOURT], scope: {"type":"all","reason":"Retain the publisher's excluded fields in the stored record instead of naming them as exclusions."} },
 
   [ADAPTER_KEYS.PL_NSA]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_NSA], scope: {"type":"all","reason":"Dependency patch tracking only: @tanstack/ai is reached through the desktop runner wire schema in transaction infrastructure, not parser execution. No parser-owned value changes; the matching no-stored-row-effect declaration requires no replay."} },
 
@@ -248,9 +248,9 @@ export const PARSER_VERSION_SCOPES = {
 
   [ADAPTER_KEYS.PL_TK]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_TK], scope: {"type":"all","reason":"Dependency patch tracking only: @tanstack/ai is reached through the desktop runner wire schema in transaction infrastructure, not parser execution. No parser-owned value changes; the matching no-stored-row-effect declaration requires no replay."} },
 
-  [ADAPTER_KEYS.PL_UODO]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_UODO], scope: {"type":"all","reason":"Dependency patch tracking only: @tanstack/ai is reached through the desktop runner wire schema in transaction infrastructure, not parser execution. No parser-owned value changes; the matching no-stored-row-effect declaration requires no replay."} },
+  [ADAPTER_KEYS.PL_UODO]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_UODO], scope: {"type":"all","reason":"Retain the publisher's excluded fields in the stored record instead of naming them as exclusions."} },
 
-  [ADAPTER_KEYS.PL_UOKIK]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_UOKIK], scope: {"type":"all","reason":"Dependency patch tracking only: @tanstack/ai is reached through the desktop runner wire schema in transaction infrastructure, not parser execution. No parser-owned value changes; the matching no-stored-row-effect declaration requires no replay."} },
+  [ADAPTER_KEYS.PL_UOKIK]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_UOKIK], scope: {"type":"all","reason":"Retain the publisher's excluded fields in the stored record instead of naming them as exclusions."} },
 
   [ADAPTER_KEYS.SK_COURTS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS], scope: {"type":"all","reason":"Dependency patch tracking only: @tanstack/ai is reached through the desktop runner wire schema in transaction infrastructure, not parser execution. No parser-owned value changes; the matching no-stored-row-effect declaration requires no replay."} },
 

@@ -175,7 +175,7 @@ type RunChatThreadCompactionOptions = {
   analytics?: ChatCompactionAnalytics | undefined;
 };
 
-export type ChatCompactionSummarize = (
+type ChatCompactionSummarize = (
   prompt: IncrementalSummaryPrompt,
   authority: ChatCompactionDispatchAuthority,
 ) => Promise<string>;

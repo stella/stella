@@ -3,6 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "indexes-invoices-org-client-created-idx",
   revision: 380,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     {

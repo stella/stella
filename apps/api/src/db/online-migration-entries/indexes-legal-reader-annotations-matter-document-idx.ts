@@ -3,6 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "indexes-legal-reader-annotations-matter-document-idx",
   revision: 100,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     {
