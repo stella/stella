@@ -42,7 +42,6 @@ import {
   or,
   sql,
 } from "drizzle-orm";
-import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 
 import { sanitizeErrorForOutput } from "@stll/errors";
 import type { Block } from "@stll/legal-ast/document-ast";
@@ -1143,27 +1142,29 @@ const lockOwnedDecision = async ({ tx, id, where }: OwnedDecisionOptions) => {
     .where(and(eq(caseLawDecisions.id, id), where));
 };
 
-type OwnedDecisionWriteOptions = OwnedDecisionOptions & {
-  values: PgUpdateSetSource<typeof caseLawDecisions>;
-};
-
-/** A fenced replay write; true while the fence holds, changed or not. */
-const writeOwnedDecision = async ({
-  tx,
-  id,
-  where,
-  values,
-}: OwnedDecisionWriteOptions): Promise<boolean> => {
-  const matched = await lockOwnedDecision({ tx, id, where });
-  const write = replayWrite(caseLawDecisions, values);
-  // audit: skip — queue backfill of public case-law text; no user action
-  const written = await tx
-    .update(caseLawDecisions)
-    .set(write.set)
-    .where(and(eq(caseLawDecisions.id, id), where, write.setWhere))
-    .returning({ id: caseLawDecisions.id });
-  return replayWriteOutcome(written, matched).status !== "ownership-lost";
-};
+/** The fence a stored payload is written under: the claimed, still empty row. */
+const storedPayloadOwner = ({
+  decision,
+  capturedRaw,
+  fence,
+}: Pick<StoreBackfilledDocumentOptions, "decision" | "capturedRaw"> & {
+  fence: DeferredDocumentSourceFence;
+}) =>
+  and(
+    eq(caseLawDecisions.id, decision.id),
+    eq(caseLawDecisions.sourceId, fence.sourceId),
+    isNull(caseLawDecisions.redactedAt),
+    sql`coalesce(${caseLawDecisions.fulltext}, '') = ''`,
+    // The text column stops being the whole answer once a canonical store
+    // nulls it: without this, a store whose parse outlived its claim would
+    // read a decision another attempt already filled as still empty and
+    // overwrite it.
+    storesNoCorpusDocument,
+    holdsClaimedSource(decision.sourceHash),
+    capturedRaw === undefined
+      ? undefined
+      : sql`${caseLawDecisions.sourceRawS3Key} IS NOT DISTINCT FROM ${decision.sourceRawS3Key}`,
+  );
 
 const storeBackfilledDocumentOwned = async ({
   decision,
@@ -1190,21 +1191,7 @@ const storeBackfilledDocumentOwned = async ({
     documentAst: prepared.value.ast,
   };
   const sections = document.sections.length > 0 ? document.sections : null;
-  const ownerPredicate = and(
-    eq(caseLawDecisions.id, decision.id),
-    eq(caseLawDecisions.sourceId, fence.sourceId),
-    isNull(caseLawDecisions.redactedAt),
-    sql`coalesce(${caseLawDecisions.fulltext}, '') = ''`,
-    // The text column stops being the whole answer once a canonical store
-    // nulls it: without this, a store whose parse outlived its claim would
-    // read a decision another attempt already filled as still empty and
-    // overwrite it.
-    storesNoCorpusDocument,
-    holdsClaimedSource(decision.sourceHash),
-    capturedRaw === undefined
-      ? undefined
-      : sql`${caseLawDecisions.sourceRawS3Key} IS NOT DISTINCT FROM ${decision.sourceRawS3Key}`,
-  );
+  const ownerPredicate = storedPayloadOwner({ decision, capturedRaw, fence });
 
   const storedPayloadColumns = {
     fulltext: document.fulltext,
@@ -1228,21 +1215,35 @@ const storeBackfilledDocumentOwned = async ({
         ? TRIMMED_CORPUS_PAYLOAD_COLUMNS
         : storedPayloadColumns;
     // A row that already holds this payload is still stored under the fence.
-    const applied = await writeOwnedDecision({
+    const matched = await lockOwnedDecision({
       tx,
       id: decision.id,
       where: ownerPredicate,
-      values: {
-        ...payloadColumns,
-        ...capturedRaw,
-        parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
-        documentFetchAttempts: sql`greatest(${caseLawDecisions.documentFetchAttempts}, ${decision.attempts}::int)`,
-        ...corpusMirrorColumns({
-          status: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
-          written,
-        }),
-      },
     });
+    const write = replayWrite(caseLawDecisions, {
+      ...payloadColumns,
+      ...capturedRaw,
+      parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
+      documentFetchAttempts: sql`greatest(${caseLawDecisions.documentFetchAttempts}, ${decision.attempts}::int)`,
+      ...corpusMirrorColumns({
+        status: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+        written,
+      }),
+    });
+    // audit: skip — queue backfill of public case-law text; no user action
+    const updated = await tx
+      .update(caseLawDecisions)
+      .set(write.set)
+      .where(
+        and(
+          eq(caseLawDecisions.id, decision.id),
+          ownerPredicate,
+          write.setWhere,
+        ),
+      )
+      .returning({ id: caseLawDecisions.id });
+    const applied =
+      replayWriteOutcome(updated, matched).status !== "ownership-lost";
     if (applied && projectionLock !== null) {
       await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
         lock: projectionLock,
