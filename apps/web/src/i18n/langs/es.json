@@ -71,6 +71,7 @@
     "chooseRewriteInstruction": "Opciones de reescritura",
     "editWithAI": "Editar con IA",
     "keyRequired": {
+      "accountFeaturesUnavailable": "Las funciones de IA no están disponibles para esta cuenta.",
       "accountRestricted": "La configuración del proveedor de IA no está disponible para esta cuenta.",
       "configUnreadable": "No se puede leer la configuración del proveedor de IA. Pide a un administrador de la organización que vuelva a conectarlo.",
       "cta": "Abrir ajustes de IA",
@@ -159,6 +160,7 @@
     "handoffAccount": "¿Continuar como <account>{email}</account> en <organization>{organizationName}</organization>?",
     "handoffTitle": "Continuar a stella",
     "headline": "Claridad en cada caso.",
+    "invalidEmailOrPassword": "Correo o contraseña incorrectos.",
     "invitation": {
       "declined": "Invitación rechazada",
       "declinedDescription": "Ha rechazado esta invitación. Puede cerrar esta página.",
@@ -207,6 +209,7 @@
       "useBackupCode": "Usar un código de copia de seguridad en su lugar"
     },
     "useDifferentEmail": "Usar otro correo",
+    "useEmailCode": "Usar un código por correo",
     "usePassword": "Usar una contraseña",
     "weSentCodeTo": "Hemos enviado un código a <email>{emailAddress}</email>"
   },
@@ -2200,6 +2203,15 @@
     "sourcePlaceholder": "Chat sobre {title}",
     "sourcePlaceholderAction": "Chat sobre",
     "sources": "Fuentes:",
+    "steerRefused": {
+      "cannotSteer": "Este agente no acepta mensajes mientras trabaja.",
+      "noRun": "El agente no se está ejecutando en tu ordenador ahora mismo.",
+      "notPlain": "Mientras el agente trabaja, solo puedes enviarle un mensaje de texto sin archivos y que no se envíe en modo anonimizado.",
+      "notTaken": "El agente no pudo aceptar tu mensaje en este momento.",
+      "runFull": "El agente no puede aceptar más mensajes ahora.",
+      "title": "Tu mensaje queda en cola hasta que el agente termine",
+      "turnNotRunning": "El agente no está trabajando ahora."
+    },
     "stopFailed": "No se pudo detener la respuesta. Inténtalo de nuevo.",
     "stopResponse": "Detener",
     "stopped": "Detenido",
@@ -5374,6 +5386,7 @@
       "tokenHelp": "Tokens disponibles: '{'SEQ'}' (secuencia), '{'YYYY'}' (año), '{'YY'}' (año de 2 dígitos), '{'MM'}' (mes)"
     },
     "members": {
+      "billingAccess": "Acceso a datos de facturación",
       "changeRole": "Cambiar rol",
       "changeRoleDescription": "Actualizar el rol de {email}",
       "confirmRoleChangeDescription": "El rol de {email} cambiará de {oldRole} a {newRole}.",

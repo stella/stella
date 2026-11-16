@@ -3,6 +3,8 @@ import { and, eq } from "drizzle-orm";
 import { PassThrough } from "node:stream";
 import * as v from "valibot";
 
+import { createTestState } from "@stll/test-state";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
   auditLogs,
@@ -42,6 +44,8 @@ import { deriveCapabilityLeaf } from "../../../../../../packages/cli/src/generat
 import { runCapabilityCommand } from "../../../../../../packages/cli/src/run-capability-command";
 import { respondToMcpLifecycle } from "../../../../../../packages/cli/tests/mcp-test-lifecycle";
 import get from "./get";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const CANARY = "verification content sentinel Žluťoučký";
@@ -440,14 +444,16 @@ const withFixture = async (
     const db = openClient({ max: 4 }).db;
     const fixture = await seed(db);
     const previous = env.API_FEATURE_ACCESS_GRANTS;
-    env.API_FEATURE_ACCESS_GRANTS = organizationFeatureGrants(
-      fixture.organizationId,
-      [LIST_VERIFICATION_FEATURE_ID],
+    testState.setConfig(
+      "API_FEATURE_ACCESS_GRANTS",
+      organizationFeatureGrants(fixture.organizationId, [
+        LIST_VERIFICATION_FEATURE_ID,
+      ]),
     );
     try {
       await exercise(fixture);
     } finally {
-      env.API_FEATURE_ACCESS_GRANTS = previous;
+      testState.setConfig("API_FEATURE_ACCESS_GRANTS", previous);
       await deleteOrganizationsForTest(db, [fixture.organizationId]);
       await db.delete(user).where(eq(user.id, fixture.actor));
       await db.delete(user).where(eq(user.id, fixture.otherActor));
@@ -516,11 +522,13 @@ describe.skipIf(!enabled)("verification point-read audit", () => {
 
   test("denied grants and another matter produce no access event", async () =>
     await withFixture(async (f) => {
-      env.API_FEATURE_ACCESS_GRANTS = {};
+      testState.setConfig("API_FEATURE_ACCESS_GRANTS", {});
       expect(await f.invoke()).toMatchObject({ code: 404 });
-      env.API_FEATURE_ACCESS_GRANTS = organizationFeatureGrants(
-        f.organizationId,
-        [LIST_VERIFICATION_FEATURE_ID],
+      testState.setConfig(
+        "API_FEATURE_ACCESS_GRANTS",
+        organizationFeatureGrants(f.organizationId, [
+          LIST_VERIFICATION_FEATURE_ID,
+        ]),
       );
       expect(await f.invoke({ matterId: f.otherWorkspaceId })).toMatchObject({
         code: 404,

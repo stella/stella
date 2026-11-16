@@ -97,6 +97,10 @@ export type ChatInputRefusalCode =
  *  stopped, superseded or already settled. */
 export const CHAT_TURN_NOT_OWNED_ERROR_CODE = "chat_turn_not_owned" as const;
 
+/** Another turn changed the chat thread while a message was being sent; send
+ *  it again. */
+export const CHAT_HISTORY_CHANGED_ERROR_CODE = "chat_history_changed" as const;
+
 /** No chat thread of the caller under that id in the requested scope: another
  *  person's, deleted, or a matter thread asked for without its matter. */
 export const CHAT_THREAD_NOT_FOUND_ERROR_CODE =

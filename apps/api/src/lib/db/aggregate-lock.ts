@@ -3213,7 +3213,7 @@ export const lockMemberAccessRow = async ({
 }: MemberAccessRowLockOptions) =>
   (
     await tx
-      .select({ role: member.role })
+      .select({ role: member.role, billingAccess: member.billingAccess })
       .from(member)
       .where(
         and(
@@ -3479,6 +3479,49 @@ export const lockCaseLawRemovalSource = async ({
   await tx.execute(
     sql`SELECT id FROM case_law_sources WHERE id = ${sourceId} FOR UPDATE`,
   );
+};
+
+/** Lock the actor and target together so simultaneous membership changes use one row order. */
+export const lockMemberBillingAccessRows = async ({
+  tx,
+  organizationId,
+  actorUserId,
+  targetMemberId,
+}: {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  actorUserId: SafeId<"user">;
+  targetMemberId: string;
+}) => {
+  const result = await readBounded(
+    {
+      limit: (cap) =>
+        tx
+          .select({
+            id: member.id,
+            userId: member.userId,
+            role: member.role,
+            billingAccess: member.billingAccess,
+          })
+          .from(member)
+          .where(
+            and(
+              eq(member.organizationId, organizationId),
+              or(eq(member.userId, actorUserId), eq(member.id, targetMemberId)),
+            ),
+          )
+          .orderBy(member.id)
+          .limit(cap)
+          .for("update"),
+    },
+    2,
+  );
+  if (result.type === "overflow") {
+    return panic(
+      "A membership access change can lock at most its actor and target",
+    );
+  }
+  return result.rows;
 };
 
 /** Lock the accepted source predicate before distinguishing a replay no-op from a lost fence. */
@@ -3991,6 +4034,24 @@ type CorpusProjectionReservationQueueOptions = {
   scopedIndexId: string | null;
   /** Physical indexes no append may reach yet (`unattestedCorpusIndexIdsTx`). */
   excludedIndexIds: readonly string[];
+  /**
+   * Start the walk after this queue key, exclusively. The key is the queue's
+   * own order, `coalesce(retry_not_before, updated_at)` as PostgreSQL text
+   * (exact to the microsecond) and the entity id, so a walker resumes where
+   * it stopped instead of reading its own unproven backlog again.
+   */
+  after?: CorpusProjectionReservationQueueKey | null;
+  /**
+   * Only entities that may travel with others. One a failed shared append
+   * isolated keeps to single requests, which only the per-row path sends.
+   */
+  batchableOnly?: boolean;
+};
+
+/** One position in the reservation queue's order. */
+export type CorpusProjectionReservationQueueKey = {
+  runnableAt: string;
+  entityId: string;
 };
 
 /**
@@ -4007,6 +4068,8 @@ export const corpusProjectionReservationQueue = (
     scopedEntityIds,
     scopedIndexId,
     excludedIndexIds,
+    after = null,
+    batchableOnly = false,
   }: CorpusProjectionReservationQueueOptions,
 ) => {
   const runnableAt = sql<Date>`coalesce(
@@ -4015,6 +4078,7 @@ export const corpusProjectionReservationQueue = (
   )`;
   return tx
     .select({
+      runnableAt: sql<string>`(${runnableAt})::text`,
       entityId: corpusIndexProjectionStates.entityId,
       epoch: corpusIndexProjectionStates.desiredEpoch,
       fingerprint: corpusIndexProjectionStates.desiredFingerprint,
@@ -4057,6 +4121,12 @@ export const corpusProjectionReservationQueue = (
           "retry_scheduled",
           "repair_scheduled",
         ]),
+        batchableOnly
+          ? eq(corpusIndexProjectionStates.appendMode, "batchable")
+          : undefined,
+        after === null
+          ? undefined
+          : sql`(${runnableAt}, ${corpusIndexProjectionStates.entityId}) > (${after.runnableAt}::timestamptz, ${after.entityId})`,
         lte(runnableAt, eligibilityAt),
         inArray(corpusIndexGenerations.status, ["building", "serving"]),
         pendingDesiredState,
@@ -4255,6 +4325,22 @@ export const lockCorpusProjectionAcceptedRows = async (
     .for("update");
   return { states, intents };
 };
+
+/**
+ * Lock projection intents a reservation cancel will move, in id order, after
+ * the generation's mutation lock: the order every intent writer takes.
+ */
+export const lockCorpusProjectionIntentsById = async (
+  tx: Transaction,
+  intentIds: readonly SafeId<"corpusIndexProjectionIntent">[],
+) =>
+  await tx
+    .select({ id: corpusIndexProjectionIntents.id })
+    .from(corpusIndexProjectionIntents)
+    .where(inArray(corpusIndexProjectionIntents.id, [...intentIds]))
+    .orderBy(asc(corpusIndexProjectionIntents.id))
+    .limit(intentIds.length)
+    .for("update");
 
 /** Canonical rows precede desired-state rows in the projection lock order. */
 export const lockCaseLawProjectionRepairStates = async (

@@ -247,18 +247,24 @@ const pgDialect = new PgDialect();
 const LEGAL_HOLD_ORGANIZATION_FENCE =
   /pg_advisory_xact_lock(?:_shared)?\(\$\d+, hashtext\(ordered\.id\)\)/u;
 
+// A member's new message is admitted in one statement (`admitMemberMessageOnTx`)
+// that reads the thread's waiting turn and queue. The double stores neither,
+// so it answers that the message is admitted.
+const MEMBER_MESSAGE_ADMISSION = /^\s*WITH awaiting AS \(/u;
+
 const executeWithLegalHoldFence = async (
   tx: unknown,
   statement: SQLWrapper | string,
 ): Promise<unknown> => {
-  if (
-    LEGAL_HOLD_ORGANIZATION_FENCE.test(
-      typeof statement === "string"
-        ? statement
-        : pgDialect.sqlToQuery(statement.getSQL()).sql,
-    )
-  ) {
+  const text =
+    typeof statement === "string"
+      ? statement
+      : pgDialect.sqlToQuery(statement.getSQL()).sql;
+  if (LEGAL_HOLD_ORGANIZATION_FENCE.test(text)) {
     return [];
+  }
+  if (MEMBER_MESSAGE_ADMISSION.test(text)) {
+    return [{ awaiting: false, queued: false, released: false }];
   }
   if (
     typeof tx !== "object" ||

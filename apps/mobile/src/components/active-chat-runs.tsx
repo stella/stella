@@ -174,6 +174,9 @@ const useRunsStream = (
     [USER_EVENT_READ.NOTIFICATIONS]: () => undefined,
     // Read by an open chat's own background count, not by this list.
     [USER_EVENT_READ.CHAT_BACKGROUND_TASKS]: () => undefined,
+    // The app keeps no chat queue yet: a message sent while a turn runs or
+    // waits is refused and goes back to the composer.
+    [USER_EVENT_READ.CHAT_QUEUES]: () => undefined,
   } satisfies Record<UserEventRead, () => void>;
   const onEvent = useEffectEvent(({ type }: UserRealtimeEvent) => {
     for (const stale of USER_EVENT_READS[type]) {

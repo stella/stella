@@ -71,6 +71,7 @@
     "chooseRewriteInstruction": "Opções de reescrita",
     "editWithAI": "Editar com IA",
     "keyRequired": {
+      "accountFeaturesUnavailable": "Os recursos de IA não estão disponíveis para esta conta.",
       "accountRestricted": "As configurações do provedor de IA não estão disponíveis para esta conta.",
       "configUnreadable": "Não foi possível ler a configuração do provedor de IA. Peça a um administrador da organização para reconectá-lo.",
       "cta": "Abrir configurações de IA",
@@ -159,6 +160,7 @@
     "handoffAccount": "Continuar como <account>{email}</account> em <organization>{organizationName}</organization>?",
     "handoffTitle": "Continuar para a stella",
     "headline": "Clareza para cada caso.",
+    "invalidEmailOrPassword": "E-mail ou senha incorretos.",
     "invitation": {
       "declined": "Convite recusado",
       "declinedDescription": "Você recusou este convite. Você pode fechar esta página com segurança.",
@@ -207,6 +209,7 @@
       "useBackupCode": "Usar um código de backup em vez disso"
     },
     "useDifferentEmail": "Use um e-mail diferente",
+    "useEmailCode": "Usar um código por e-mail",
     "usePassword": "Usar uma senha",
     "weSentCodeTo": "Enviamos um código para <email>{emailAddress}</email>"
   },
@@ -2200,6 +2203,15 @@
     "sourcePlaceholder": "Conversar sobre {title}",
     "sourcePlaceholderAction": "Conversar sobre",
     "sources": "Fontes:",
+    "steerRefused": {
+      "cannotSteer": "Este agente não aceita mensagens enquanto trabalha.",
+      "noRun": "O agente não está em execução no seu computador agora.",
+      "notPlain": "Enquanto o agente trabalha, você só pode enviar a ele uma mensagem de texto sem arquivos e fora do modo anonimizado.",
+      "notTaken": "O agente não conseguiu receber sua mensagem agora.",
+      "runFull": "O agente não pode aceitar mais mensagens agora.",
+      "title": "Sua mensagem fica na fila até o agente terminar",
+      "turnNotRunning": "O agente não está trabalhando agora."
+    },
     "stopFailed": "Não foi possível interromper a resposta. Tente novamente.",
     "stopResponse": "Parar",
     "stopped": "Interrompido",
@@ -5374,6 +5386,7 @@
       "tokenHelp": "Tokens disponíveis: '{'SEQ'}' (sequência), '{'YYYY'}' (ano), '{'YY'}' (ano de 2 dígitos), '{'MM'}' (mês)"
     },
     "members": {
+      "billingAccess": "Acesso aos dados de faturamento",
       "changeRole": "Mudar função",
       "changeRoleDescription": "Atualizar a função para {email}",
       "confirmRoleChangeDescription": "A função de {email} mudará de {oldRole} para {newRole}.",

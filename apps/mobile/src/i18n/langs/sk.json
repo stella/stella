@@ -246,7 +246,8 @@
         "loadFailed": "Nepodarilo sa načítať.",
         "showMore": "Zobraziť viac"
       },
-      "sessionNotResumed": "Programovací agent vo vašom počítači nemohol nadviazať tam, kde skončil, preto pokračoval podľa správ v tomto chate."
+      "sessionNotResumed": "Programovací agent vo vašom počítači nemohol nadviazať tam, kde skončil, preto pokračoval podľa správ v tomto chate.",
+      "steered": "Odoslané počas práce agenta"
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# preverený zdroj} few {# preverené zdroje} other {# preverených zdrojov} many {# prevereného zdroja}}",
@@ -285,6 +286,14 @@
       "sendErrorQuotaExhausted": "Kvóta poskytovateľa AI je vyčerpaná. Skúste to o minútu znova alebo sa obráťte na správcu pracovného priestoru.",
       "sendErrorStreamIncomplete": "Odpoveď AI sa prerušila skôr, ako bola dokončená. Skúste to znova.",
       "sendErrorTurnTooLarge": "Táto odpoveď je príliš veľká na to, aby sa dala doručiť celá. Pokračujte novou správou."
+    },
+    "steerPrompt": "Poslať agentovi počas práce",
+    "steerRefused": {
+      "turnNotRunning": "Agent práve nepracuje.",
+      "noRun": "Agent teraz na vašom počítači nebeží.",
+      "cannotSteer": "Tento agent počas práce neprijíma správy.",
+      "runFull": "Agent teraz ďalšie správy neprijme.",
+      "notTaken": "Agent teraz vašu správu nemohol prijať."
     }
   },
   "tasks": {

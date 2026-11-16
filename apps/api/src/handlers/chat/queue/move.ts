@@ -13,6 +13,7 @@ import {
 } from "@/api/handlers/chat/queue/shared";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { announceChatQueueChange } from "@/api/lib/chat/chat-queue-announcement";
 import { ringChatQueue } from "@/api/lib/chat/chat-queue-doorbell";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
@@ -62,6 +63,10 @@ const moveQueuedChatMessage = createSafeRootHandler(
     if (moved === "not-found") {
       return Result.err(queuedMessageNotFound());
     }
+    announceChatQueueChange({
+      organizationId: session.activeOrganizationId,
+      userId: user.id,
+    });
     ringChatQueue(threadId);
     return Result.ok({});
   },

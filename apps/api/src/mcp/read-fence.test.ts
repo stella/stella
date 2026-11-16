@@ -2,6 +2,8 @@ import type { CallToolResult } from "@modelcontextprotocol/server";
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { createTestState } from "@stll/test-state";
+
 import { env } from "@/api/env";
 import { toSafeId } from "@/api/lib/branded-types";
 import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
@@ -12,6 +14,8 @@ import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions"
 import { handoffLinkResult } from "@/api/mcp/web-handoff-links-core";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { asTestRaw, readTestJson } from "@/api/tests/helpers/test-tool-set";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const organizationId = toSafeId<"organization">("read_org");
 const userId = toSafeId<"user">("read_user");
@@ -99,11 +103,11 @@ const call = async (
 
 const withFence = async (run: () => Promise<void>) => {
   const previous = env.FEATURE_MCP_READ_FENCE;
-  env.FEATURE_MCP_READ_FENCE = true;
+  testState.setConfig("FEATURE_MCP_READ_FENCE", true);
   try {
     await run();
   } finally {
-    env.FEATURE_MCP_READ_FENCE = previous;
+    testState.setConfig("FEATURE_MCP_READ_FENCE", previous);
   }
 };
 
@@ -257,7 +261,7 @@ describe("MCP emitted read bytes", () => {
 
   test("flag off preserves output and never consults the fence", async () => {
     const previous = env.FEATURE_MCP_READ_FENCE;
-    env.FEATURE_MCP_READ_FENCE = false;
+    testState.setConfig("FEATURE_MCP_READ_FENCE", false);
     let charges = 0;
     try {
       const result = await call(
@@ -272,7 +276,7 @@ describe("MCP emitted read bytes", () => {
       expect(result.result).toEqual(output);
       expect(charges).toBe(0);
     } finally {
-      env.FEATURE_MCP_READ_FENCE = previous;
+      testState.setConfig("FEATURE_MCP_READ_FENCE", previous);
     }
   });
 

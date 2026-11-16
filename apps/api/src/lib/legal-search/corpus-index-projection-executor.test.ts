@@ -12,11 +12,11 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import {
   advanceCorpusProjectionAppendTails,
-  classifyCorpusProjectionPayloadReadFailure,
   corpusProjectionAppendLeaseMs,
   corpusProjectionAppendStartMarginMs,
   ingestCorpusProjectionRequest,
 } from "@/api/lib/legal-search/corpus-index-projection-executor";
+import { classifyCorpusProjectionPayloadReadFailure } from "@/api/lib/legal-search/corpus-index-projection-revision-block";
 import {
   CORPUS_PROJECTION_LEASE_MAX_MS,
   CORPUS_PROJECTION_LEASE_MIN_MS,

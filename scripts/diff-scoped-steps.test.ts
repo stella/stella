@@ -54,9 +54,15 @@ test("a base reaches the census through the script, env, inputs or a script it r
   expect(
     readsBaseRevision({ uses: "./action", with: { "base-sha": "x" } }),
   ).toBe(true);
-  // check-bridge-version.sh reads GITHUB_BASE_REF itself.
+  // check-bridge-version.sh reads GITHUB_BASE_REF itself, also when a step
+  // runs it from a tooling checkout.
   expect(
     readsBaseRevision({ run: "bash scripts/check-bridge-version.sh" }),
+  ).toBe(true);
+  expect(
+    readsBaseRevision({
+      run: 'bash "$GITHUB_WORKSPACE/.tooling/scripts/check-bridge-version.sh"',
+    }),
   ).toBe(true);
   // A literal revision passed as the base.
   expect(readsBaseRevision({ run: "bun check.ts --base HEAD^1" })).toBe(true);

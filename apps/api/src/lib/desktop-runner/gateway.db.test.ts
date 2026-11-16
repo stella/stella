@@ -5895,11 +5895,15 @@ describe("chat turns on a computer", () => {
           owner: { ...owner, userId: ids.userA2 },
         })
       ).unwrap(),
-    ).toBe("unavailable");
+    ).toEqual({ type: "refused", reason: "no_run" });
     expect(await commandsOf(start.runId, "run.input")).toEqual([]);
-    expect((await control.steerChatTurn(steer)).unwrap()).toBe("queued");
+    expect((await control.steerChatTurn(steer)).unwrap()).toEqual({
+      type: "queued",
+    });
     // A repeat of the same input is the same steer.
-    expect((await control.steerChatTurn(steer)).unwrap()).toBe("queued");
+    expect((await control.steerChatTurn(steer)).unwrap()).toEqual({
+      type: "queued",
+    });
     expect(
       await desktop.receive("run.input", ofRun(start.runId)),
     ).toMatchObject({
@@ -6001,7 +6005,7 @@ describe("chat turns on a computer", () => {
           text: STEER_TEXT,
         })
       ).unwrap(),
-    ).toBe("queued");
+    ).toEqual({ type: "queued" });
     await desktop.receive("run.input", ofRun(start.runId));
     const sent = await harnessChunks(start.runId, [
       {
@@ -6042,7 +6046,10 @@ describe("chat turns on a computer", () => {
       inputId: Bun.randomUUIDv7(),
       text: STEER_TEXT,
     };
-    expect((await control.steerChatTurn(steer)).unwrap()).toBe("unavailable");
+    expect((await control.steerChatTurn(steer)).unwrap()).toEqual({
+      type: "refused",
+      reason: "harness_cannot_steer",
+    });
     expect(await commandsOf(start.runId, "run.input")).toEqual([]);
     const run = desktopRun(desktop, start.runId);
     await run.events(
@@ -6058,7 +6065,10 @@ describe("chat turns on a computer", () => {
     await run.finish("completed", "codex-session-s3");
     await served;
     // The run ended: nothing is left to steer.
-    expect((await control.steerChatTurn(steer)).unwrap()).toBe("unavailable");
+    expect((await control.steerChatTurn(steer)).unwrap()).toEqual({
+      type: "refused",
+      reason: "no_run",
+    });
   });
 
   test("a native step keeps only its command, file names or search and how it ended, whatever else a desktop sends, and reloads as streamed", async () => {

@@ -1,8 +1,9 @@
 import { Result } from "better-result";
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
+import { createTestState } from "@stll/test-state";
 
 import {
   fields,
@@ -31,28 +32,28 @@ import type { TestIds } from "@/api/tests/security/rls-helpers";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
+const testState = createTestState({ file: import.meta.path, config: env });
+const workerState = testState.forConfig(envDocumentProcessingWorker);
+
 let testDb: TestDatabase;
 let ids: TestIds;
 let fake: FakeS3;
-const priorFlag = env.FEATURE_FILE_USAGE_LIMITS;
-const priorWorkerFlag = envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS;
+
 const db = () =>
   asTestRaw<
     Parameters<typeof reconcileAbandonedOrganizationFileReservations>[0]["db"]
   >(testDb);
 
-beforeAll(async () => {
+testState.beforeAll(async () => {
   testDb = await getTestDb();
   ids = createTestIds();
   await setupRlsTestData(testDb, ids);
   fake = startFakeS3();
-  env.FEATURE_FILE_USAGE_LIMITS = true;
-  envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = true;
+  testState.setConfig("FEATURE_FILE_USAGE_LIMITS", true);
+  workerState.setConfig("FEATURE_FILE_USAGE_LIMITS", true);
 });
 
 afterAll(async () => {
-  env.FEATURE_FILE_USAGE_LIMITS = priorFlag;
-  envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = priorWorkerFlag;
   fake.stop();
   await testDb
     .delete(organizationFileObjects)
@@ -391,13 +392,13 @@ describe("abandoned organization file reservations", () => {
       },
       signal: new AbortController().signal,
     });
-    env.FEATURE_FILE_USAGE_LIMITS = false;
-    envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = false;
+    testState.setConfig("FEATURE_FILE_USAGE_LIMITS", false);
+    workerState.setConfig("FEATURE_FILE_USAGE_LIMITS", false);
     await task(context);
     expect(calls).toBe(0);
     expect(mismatchWarnings).toBe(0);
-    env.FEATURE_FILE_USAGE_LIMITS = true;
-    envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = true;
+    testState.setConfig("FEATURE_FILE_USAGE_LIMITS", true);
+    workerState.setConfig("FEATURE_FILE_USAGE_LIMITS", true);
     await task(context);
     expect(calls).toBe(1);
     expect(mismatchWarnings).toBe(1);
