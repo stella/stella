@@ -413,7 +413,7 @@ jobs:
       # merge group validates the queued tree, so it needs no patch identity.
       - name: Checkout patch-id inputs
         if: (github.event_name == 'pull_request' && github.event.action != 'enqueued') || github.event_name == 'merge_group'
-        uses: stella/.github/actions/partial-clone-checkout@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/partial-clone-checkout@41fbea3b521bfc57b791003918de97f153d790a7
         with:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
           fetch-depth: 0
@@ -921,7 +921,7 @@ jobs:
         # are enough to list changed paths, and git fetches any other blob a
         # step reads (a `git show <base>:<file>`, say) on first access. Jobs
         # that never look past HEAD keep the default shallow checkout.
-        uses: stella/.github/actions/partial-clone-checkout@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/partial-clone-checkout@41fbea3b521bfc57b791003918de97f153d790a7
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -1774,7 +1774,7 @@ jobs:
       &quick-checks-steps # parser-version-guard reads Git history, so the checkout is full.
       - name: Checkout
         id: checkout
-        uses: stella/.github/actions/partial-clone-checkout@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/partial-clone-checkout@41fbea3b521bfc57b791003918de97f153d790a7
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -2186,7 +2186,7 @@ jobs:
     steps:
       - name: Checkout
         id: checkout
-        uses: stella/.github/actions/partial-clone-checkout@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/partial-clone-checkout@41fbea3b521bfc57b791003918de97f153d790a7
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -2488,7 +2488,7 @@ jobs:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
         id: checkout
-        uses: stella/.github/actions/partial-clone-checkout@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/partial-clone-checkout@41fbea3b521bfc57b791003918de97f153d790a7
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -2679,7 +2679,7 @@ jobs:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
         id: checkout
-        uses: stella/.github/actions/partial-clone-checkout@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/partial-clone-checkout@41fbea3b521bfc57b791003918de97f153d790a7
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -2784,7 +2784,7 @@ jobs:
           CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (github.event_name == 'pull_request') && steps.policy.outcome == 'success' }}
         # The repository owner publishes this versioned shared contract.
-        uses: stella/.github/.github/actions/changeset-policy@0cc2def60afb3e0fac0df9f541baf926f77889fa # v1.8.0
+        uses: stella/.github/.github/actions/changeset-policy@41fbea3b521bfc57b791003918de97f153d790a7 # v1.8.0
         with:
           release-paths: ${{ steps.policy.outputs.release_paths }}
           generated-paths: ${{ steps.policy.outputs.generated_paths }}
@@ -3431,7 +3431,7 @@ jobs:
       - &full_checkout_input_sha
         id: checkout
         name: Checkout
-        uses: stella/.github/actions/partial-clone-checkout@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/partial-clone-checkout@41fbea3b521bfc57b791003918de97f153d790a7
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -3701,7 +3701,7 @@ jobs:
       CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
     steps:
       - name: Checkout
-        uses: stella/.github/actions/partial-clone-checkout@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/partial-clone-checkout@41fbea3b521bfc57b791003918de97f153d790a7
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -3881,7 +3881,7 @@ jobs:
       CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
     steps:
       - name: Checkout
-        uses: stella/.github/actions/partial-clone-checkout@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/partial-clone-checkout@41fbea3b521bfc57b791003918de97f153d790a7
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -4428,7 +4428,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/setup-bun-cached@41fbea3b521bfc57b791003918de97f153d790a7
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -4513,7 +4513,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/setup-bun-cached@41fbea3b521bfc57b791003918de97f153d790a7
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -5063,7 +5063,7 @@ jobs:
       - *ci_image_mirror_login
       - &setup_bun_cached
         name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/setup-bun-cached@41fbea3b521bfc57b791003918de97f153d790a7
         with:
           bun-version-file: package.json
           save: ${{ github.ref == 'refs/heads/main' }}
@@ -6963,7 +6963,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/setup-bun-cached@41fbea3b521bfc57b791003918de97f153d790a7
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
@@ -8243,7 +8243,7 @@ jobs:
       # Reporting only: the verdict above is unchanged.
       - name: Setup Bun for the failure digest
         if: failure() && steps.outcome.outcome == 'failure'
-        uses: stella/.github/actions/setup-bun-cached@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/setup-bun-cached@41fbea3b521bfc57b791003918de97f153d790a7
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: .workflow-tooling/package.json
