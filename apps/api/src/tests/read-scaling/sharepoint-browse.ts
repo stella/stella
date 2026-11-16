@@ -9,6 +9,7 @@ import listSharepointDriveItems from "@/api/handlers/sharepoint/drives/items/lis
 import listSharepointDrives from "@/api/handlers/sharepoint/drives/list";
 import listSharepointSites from "@/api/handlers/sharepoint/sites/list";
 import { HttpStatusResponse } from "@/api/http/status";
+import { delegatedReadScopes } from "@/api/lib/auth/microsoft365/capabilities";
 import { encryptSharepointSecret } from "@/api/lib/auth/microsoft365/crypto";
 import { createSafeId } from "@/api/lib/branded-types";
 import { runWithMeasuredQueryCounter } from "@/api/lib/db-query-counter";
@@ -82,6 +83,8 @@ export const seedSharepointBrowseScaling = async (
       accessTokenIv: encrypted.iv,
       expiresAt,
       status: "connected" as const,
+      // The provider's grant for file reads; a row without one must reconnect.
+      scope: delegatedReadScopes(["files.read"]),
     })),
   );
   const safeDb: SafeDb = async (work) =>
@@ -126,6 +129,7 @@ const measureBrowse = async (
           },
           memberRole: sessionMemberRole("member"),
           safeDb: fixture.safeDb,
+          recordAuditEvent: async () => undefined,
           params: { driveId: "b!drive", itemId: "root" },
           query: {},
           request: new Request("https://example.test/v1/sharepoint"),

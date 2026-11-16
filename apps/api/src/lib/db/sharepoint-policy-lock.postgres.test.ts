@@ -11,6 +11,7 @@ import { lockSharepointPolicy } from "@/api/lib/db/sharepoint-policy-lock";
 import { purgeSharepointForOrg } from "@/api/lib/sharepoint-disable-purge";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { withInterleaving } from "@/api/tests/helpers/transaction-interleaving";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -124,9 +125,7 @@ if (!databaseUrl || !enabled) {
         await db
           .delete(organizationSettings)
           .where(eq(organizationSettings.organizationId, organizationId));
-        await db
-          .delete(organization)
-          .where(eq(organization.id, organizationId));
+        await deleteOrganizationsForTest(db, [organizationId]);
       }
     });
   }, 20_000);

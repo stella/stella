@@ -75,15 +75,19 @@ export const fetchAccountLabel = async ({
   permit: ThirdPartyOutboundPermit;
   signal?: AbortSignal | undefined;
 }) => {
+  // The request never produced a Graph answer: Microsoft was unreachable.
   const mapError = (cause: unknown): HandlerError<502> =>
-    new HandlerError({
-      status: 502,
-      code: "internal_error",
-      message: HandlerError.is(cause)
-        ? cause.message
-        : "Microsoft account lookup failed",
-      cause,
-    });
+    classifyFailure(
+      new HandlerError({
+        status: 502,
+        code: "internal_error",
+        message: HandlerError.is(cause)
+          ? cause.message
+          : "Microsoft account lookup failed",
+        cause,
+      }),
+      "upstream_unavailable",
+    );
   const url = new URL(`${GRAPH_API_BASE_URL}/me`);
   url.searchParams.set("$select", "userPrincipalName,displayName,mail");
   const result = (
