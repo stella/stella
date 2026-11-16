@@ -264,6 +264,7 @@ const TABLE_CLASSIFICATIONS = {
   corpusIndexProjectionIntents: RESEARCH_CORPUS_EXCLUSION,
   corpusIndexProjectionRevisions: RESEARCH_CORPUS_EXCLUSION,
   corpusIndexProjectionStates: RESEARCH_CORPUS_EXCLUSION,
+  corpusIndexRouteProofs: RESEARCH_CORPUS_EXCLUSION,
   corpusIndexRouteSeedings: RESEARCH_CORPUS_EXCLUSION,
   correspondence: FORMAT_SCOPE_EXCLUSION,
   correspondenceAllowedSenderMatters: FORMAT_SCOPE_EXCLUSION,

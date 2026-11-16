@@ -312,7 +312,7 @@ When a screen needs a look the components lack, add it once here and in
 | Borderless field in a line of text                                 | `Input inline`, `Textarea inline` (one class: `INLINE_FIELD_CLASS_NAME`)               |
 | Fixed-height text area in a row or cell                            | `Textarea fieldSizing="fixed"`                                                         |
 | Number with a unit; stepping number                                | `NumberInput suffix`; it reads as a spin button with its bounds                        |
-| Screen a finished flow ends on (connected, signed in, declined)    | `OutcomeScreen` (`tone`, `counterpart`, `closeTab`); never a hand-built page           |
+| Screen a finished flow ends on (connected, signed in, declined)    | `OutcomeScreen` (`tone`, `counterpart`, `details`); never a hand-built page            |
 | A small control renders small type itself; do not add `text-xs` to |
 | a `sm` button, select, or input.                                   |
 
@@ -346,6 +346,8 @@ it, and add it here in the same change that adds it to `packages/ui`.
 - `Button`, `Toggle`, `ToggleGroup`, `ToggleGroupItem` `size`: `chip`, `default`, `icon`, `icon-2xs`, `icon-lg`, `icon-round`, `icon-sm`, `icon-xl`, `icon-xs`, `inline`, `inspector-row`, `lg`, `row`, `sm`, `touch`, `xl`, `xs`
 - `Button` `variant`: `composer`, `default`, `destructive`, `destructive-ghost`, `destructive-outline`, `ghost`, `link`, `muted`, `muted-destructive`, `outline`, `plain`, `secondary`
 - `ButtonTextRun` `variant`: `link`, `plain`
+- `Checkbox` `appearance`: `cell`, `default`
+- `Checkbox` `firstLine`: `control`, `text`
 - `ColorPicker`, `EntityActionsButton`, `SortableHead`, `TableCell`, `TableHead` `align`: `center`, `end`, `start`
 - `ColorPicker`, `EntityActionsButton` `side`: `bottom`, `left`, `right`, `top`
 - `ColorPickerContent` `presentation`: `inline`, `popover`
@@ -437,6 +439,15 @@ it, and add it here in the same change that adds it to `packages/ui`.
 - `ToastProvider` `position`: `bottom-center`, `bottom-left`, `bottom-right`, `top-center`, `top-left`, `top-right`
 - `Toggle`, `ToggleGroupItem` `variant`: `ghost`, `muted`, `outline`
 - `ToolbarIconAction` `density`: `header`, `toolbar`
+
+### Table First Lines
+
+`TABLE_FIRST_LINE` from `@stll/ui/table` owns the first-line boxes shared by
+row content, readonly row labels, struts, and Checkbox's cell appearance.
+`TableFirstLine` derives its keys from that definition: `text` uses a 20px
+slot and content minimum; `control` uses 28px for a line inside an editable
+field. Consumers use the same entry's `slot` and `content` values rather
+than maintaining parallel geometry maps.
 
 ### Menu Rows & Sections
 

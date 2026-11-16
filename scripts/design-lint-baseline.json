@@ -706,7 +706,6 @@
     "apps/api/src/lib/review-organization/reset-scope.ts": 1,
     "apps/api/src/lib/search/detect-language.ts": 1,
     "apps/api/src/lib/search/extraction-worker.ts": 1,
-    "apps/api/src/lib/search/query.ts": 3,
     "apps/api/src/lib/synthetic-principal/credential-policy.ts": 1,
     "apps/api/src/lib/system-audit/modules.ts": 1,
     "apps/api/src/lib/tanstack-ai-generate.ts": 1,
@@ -732,7 +731,6 @@
     "apps/web/src/components/inspector/anonymization-facet.tsx": 1,
     "apps/web/src/components/inspector/pdf-signing-stamp.logic.ts": 1,
     "apps/web/src/components/templates/registry-autofill.ts": 1,
-    "apps/web/src/components/workspaces/table/select-row-content.tsx": 1,
     "apps/web/src/features/case-law/components/case-viewer/analysis/types.ts": 1,
     "apps/web/src/features/knowledge/views/templates/template-preview-view.tsx": 1,
     "apps/web/src/features/time-timers/timer.logic.ts": 1,
@@ -815,7 +813,7 @@
     "apps/api/src/handlers/style-sets/storage.ts": 1,
     "apps/api/src/handlers/templates/update.ts": 1,
     "apps/api/src/handlers/time-entries/batch/delete.ts": 1,
-    "apps/api/src/handlers/time-entries/batch/update.ts": 2,
+    "apps/api/src/handlers/time-entries/batch/update.ts": 1,
     "apps/api/src/handlers/time-entries/delete.ts": 1,
     "apps/api/src/handlers/time-entries/update.ts": 1,
     "apps/api/src/handlers/uploads/agent-skill.ts": 1,
@@ -930,13 +928,10 @@
   "no-native-ui/no-native-button": {
     "apps/web/src/components/catalogue/catalogue-row.tsx": 1,
     "apps/web/src/components/file-tree/file-tree.tsx": 1,
-    "apps/web/src/components/workspaces/table/select-row-content.tsx": 1,
     "packages/decision-reader/src/annotation-anchors.tsx": 1,
     "packages/decision-reader/src/cited-provision.tsx": 1
   },
-  "no-native-ui/no-native-checkbox": {
-    "apps/web/src/components/workspaces/table/select-row-content.tsx": 1
-  },
+  "no-native-ui/no-native-checkbox": {},
   "no-native-ui/no-native-details-grid": {
     "apps/landing/src/components/react/previews/RegistryLookupPreview.tsx": 3
   },

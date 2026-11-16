@@ -477,6 +477,38 @@ export type ChatLocalRunContext = v.InferOutput<
 >;
 
 /**
+ * The run-finished metadata key under which a turn that ran on the member's
+ * computer reports the model it asked for and the one the harness ran it on,
+ * which differ when the provider rerouted the turn (Codex `model/rerouted`,
+ * Claude Code's refusal fallback). The answer keeps both, so it can say it ran
+ * on another model than the one asked for.
+ */
+export const CHAT_LOCAL_RUN_MODEL_METADATA_KEY = "localRunModel";
+
+export const chatLocalRunModelSchema = v.strictObject({
+  requested: localModelSchema,
+  ran: localModelSchema,
+});
+export type ChatLocalRunModel = v.InferOutput<typeof chatLocalRunModelSchema>;
+
+/**
+ * The model an answer ran on when the harness rerouted it away from the one
+ * asked for; `null` when it ran on that one or the answer says nothing valid.
+ */
+export const chatLocalRunReroutedModel = (metadata: unknown): string | null => {
+  if (typeof metadata !== "object" || metadata === null) {
+    return null;
+  }
+  const reported = v.safeParse(
+    chatLocalRunModelSchema,
+    Reflect.get(metadata, CHAT_LOCAL_RUN_MODEL_METADATA_KEY),
+  );
+  return reported.success && reported.output.ran !== reported.output.requested
+    ? reported.output.ran
+    : null;
+};
+
+/**
  * What a turn on a computer tells the chat about the files it handed back, as
  * metadata on the answer: every stream processor merges it and a rejoin's
  * snapshot keeps it, so a live answer and a rejoined one read the same. The

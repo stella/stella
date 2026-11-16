@@ -42,6 +42,7 @@ import {
   CHAT_LOCAL_RUN_FILES_METADATA_KEY,
   CHAT_LOCAL_RUN_FILES_NOT_SHARED_METADATA_KEY,
   CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
+  CHAT_LOCAL_RUN_MODEL_METADATA_KEY,
   CHAT_LOCAL_RUN_QUESTION_TOOL,
   CHAT_LOCAL_RUN_STEER_EVENT,
   CHAT_LOCAL_RUN_STEER_TOOL,
@@ -51,6 +52,7 @@ import {
   type ChatLocalRunHarness,
   type ChatLocalRunLimit,
   chatLocalRunLimitSchema,
+  chatLocalRunModelSchema,
   chatLocalRunSteerCallId,
   type ChatLocalRunSteerEvent,
   type ChatLocalRunSteerInput,
@@ -476,25 +478,35 @@ const MESSAGE_METADATA_EVENTS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * A finished run's context report as the chat reads it: under its one key
- * only when it is a valid report. A desktop is not trusted, so anything else
- * under the key is dropped.
+ * A finished run's reports (its context, the models it asked for and ran on)
+ * as the chat reads them: each under its key only when it is valid. A desktop
+ * is not trusted, so anything else under those keys is dropped.
  */
-const withCheckedContext = (
+const withCheckedReports = (
   chunk: Extract<PublicStreamChunk, { type: EventType.RUN_FINISHED }>,
 ) => {
-  if (chunk.metadata?.[CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY] !== undefined) {
-    const { [CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY]: reported, ...metadata } =
-      chunk.metadata;
-    const parsed = v.safeParse(chatLocalRunContextSchema, reported);
-    return {
-      ...chunk,
-      metadata: parsed.success
-        ? { ...metadata, [CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY]: parsed.output }
-        : metadata,
-    };
+  if (chunk.metadata === undefined) {
+    return chunk;
   }
-  return chunk;
+  const {
+    [CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY]: reportedContext,
+    [CHAT_LOCAL_RUN_MODEL_METADATA_KEY]: reportedModel,
+    ...metadata
+  } = chunk.metadata;
+  const context = v.safeParse(chatLocalRunContextSchema, reportedContext);
+  const model = v.safeParse(chatLocalRunModelSchema, reportedModel);
+  return {
+    ...chunk,
+    metadata: {
+      ...metadata,
+      ...(context.success
+        ? { [CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY]: context.output }
+        : {}),
+      ...(model.success
+        ? { [CHAT_LOCAL_RUN_MODEL_METADATA_KEY]: model.output }
+        : {}),
+    },
+  };
 };
 
 /**
@@ -819,7 +831,7 @@ const asChatChunk = (
   }
   if (chunk.type === EventType.RUN_FINISHED) {
     return {
-      ...withCheckedContext(chunk),
+      ...withCheckedReports(chunk),
       runId: chatRunId,
       threadId,
       ...(chunk.outcome?.type === "interrupt"

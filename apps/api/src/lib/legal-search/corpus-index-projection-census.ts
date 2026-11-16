@@ -23,6 +23,8 @@ type CorpusProjectionCensusOptions = {
   generation: string;
   indexId: string;
   after: string | null;
+  /** The last key the walk reads (`readAppliedCorpusProjectionCensusPageTx`). */
+  through?: string;
   limit: number;
 };
 
@@ -46,6 +48,7 @@ export const censusAppliedCorpusProjections = async ({
   generation,
   indexId,
   after,
+  through,
   limit,
 }: CorpusProjectionCensusOptions): Promise<
   Result<CorpusProjectionCensusResult, CorpusIndexError>
@@ -57,6 +60,7 @@ export const censusAppliedCorpusProjections = async ({
         generation,
         indexId,
         after,
+        ...(through === undefined ? {} : { through }),
         limit,
       }),
   );
@@ -115,6 +119,7 @@ export const censusSettledCorpusProjections = async ({
   generation,
   indexId,
   after,
+  through,
   limit,
 }: CorpusProjectionCensusOptions): Promise<
   Result<CorpusProjectionCensusResult, CorpusIndexError>
@@ -126,6 +131,7 @@ export const censusSettledCorpusProjections = async ({
         generation,
         indexId,
         after,
+        ...(through === undefined ? {} : { through }),
         limit,
       }),
   );

@@ -36,6 +36,7 @@ import {
   CHAT_LOCAL_RUN_FILES_METADATA_KEY,
   CHAT_LOCAL_RUN_FILES_NOT_SHARED_METADATA_KEY,
   CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
+  CHAT_LOCAL_RUN_MODEL_METADATA_KEY,
   CHAT_LOCAL_RUN_STEER_EVENT,
   CHAT_LOCAL_RUN_STEER_TOOL,
   chatLocalRunComputerEventSchema,
@@ -3422,6 +3423,65 @@ describe("chat turns on a computer", () => {
       { usedTokens: 15 },
     ]) {
       expect(await finishedTurn(withReport(forged))).toBeUndefined();
+    }
+  });
+
+  test("a rerouted run's models reach the turn, and ones the desktop made up do not", async () => {
+    const finishedTurn = async (
+      events: HarnessEvent[],
+      rewrite: (chunk: unknown) => unknown = (chunk) => chunk,
+    ): Promise<unknown> => {
+      const chatThreadId = await newThread();
+      const { desktop } = shared();
+      const turn = collect(
+        createLocalChatRun(contextFor(chatThreadId), START_PLAN).stream({
+          chatRunId: Bun.randomUUIDv7(),
+          chatTurnId: turnOf(chatThreadId),
+          messages: [{ role: "user", content: "What does the matter hold?" }],
+          instructions: "You are stella.",
+          resume: undefined,
+          abortSignal: new AbortController().signal,
+        }),
+      );
+      const start = await desktop.receive("run.start");
+      desktop.send({ type: "run.accepted", runId: start.runId });
+      const run = desktopRun(desktop, start.runId);
+      await run.events((await harnessChunks(start.runId, events)).map(rewrite));
+      await run.finish("completed", "codex-session-1");
+      const finish = (await turn.done).findLast(
+        ({ type }) => type === EventType.RUN_FINISHED,
+      );
+      return finish?.metadata?.[CHAT_LOCAL_RUN_MODEL_METADATA_KEY];
+    };
+
+    expect(await finishedTurn(completedTurn)).toEqual({
+      requested: CHAT_MODEL,
+      ran: CHAT_MODEL,
+    });
+    expect(
+      await finishedTurn([
+        { type: "model.rerouted", model: "gpt-rerouted" },
+        ...completedTurn,
+      ]),
+    ).toEqual({ requested: CHAT_MODEL, ran: "gpt-rerouted" });
+    for (const forged of [
+      { requested: CHAT_MODEL, ran: "<b>gpt</b>".repeat(20) },
+      { requested: CHAT_MODEL },
+      { requested: CHAT_MODEL, ran: CHAT_MODEL, note: "extra" },
+    ]) {
+      expect(
+        await finishedTurn(completedTurn, (chunk) =>
+          isRecord(chunk) && chunk["type"] === EventType.RUN_FINISHED
+            ? {
+                ...chunk,
+                metadata: {
+                  ...(isRecord(chunk["metadata"]) ? chunk["metadata"] : {}),
+                  [CHAT_LOCAL_RUN_MODEL_METADATA_KEY]: forged,
+                },
+              }
+            : chunk,
+        ),
+      ).toBeUndefined();
     }
   });
 

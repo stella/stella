@@ -9,6 +9,7 @@ import {
 import type { ChatContextNotice } from "@stll/api-contract/chat-context-notice";
 import {
   CHAT_RUN_TARGET_KIND,
+  chatLocalRunReroutedModel,
   type ChatRunTarget,
   chatRunTargetSchema,
 } from "@stll/api-contract/chat-run-target";
@@ -96,6 +97,11 @@ export type ChatEntry = {
   readonly failure?: AIErrorKind;
   /** What the answer's context left out, as the web says it too. */
   readonly contextNotice: ChatContextNotice | null;
+  /**
+   * The model a coding agent's answer ran on when the harness rerouted it
+   * away from the one asked for; absent when it ran on that one.
+   */
+  readonly ranOnModel?: string;
 };
 
 const contextNoticeMetadataSchema = v.object({
@@ -180,6 +186,10 @@ export const toChatEntry = (message: StoredMessage): ChatEntry | undefined => {
     message.role === "assistant"
       ? storedTurnFailure(message.metadata)
       : undefined;
+  const ranOnModel =
+    message.role === "assistant"
+      ? chatLocalRunReroutedModel(message.metadata)
+      : null;
   if (
     text === "" &&
     blocks.length === 0 &&
@@ -202,6 +212,7 @@ export const toChatEntry = (message: StoredMessage): ChatEntry | undefined => {
         ? (contextNoticeIn(message.metadata) ?? null)
         : null,
     ...(failure === undefined ? {} : { failure }),
+    ...(ranOnModel === null ? {} : { ranOnModel }),
   };
 };
 
