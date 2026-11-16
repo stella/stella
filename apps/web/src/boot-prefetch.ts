@@ -55,10 +55,7 @@ const BOOT_PREFETCH_TTL_MS = 30_000;
 const BOOT_PREFETCH_TIMEOUT_MS = 8000;
 
 // One slot per boot path: the key set is closed, so the store cannot grow.
-const slots: Record<BootPrefetchPath, PrefetchSlot | undefined> = {
-  "/get-session": undefined,
-  "/organization/get-active-member-role": undefined,
-};
+const slots = new Map<BootPrefetchPath, PrefetchSlot>();
 let prefetchGeneration = 0;
 
 /**
@@ -76,11 +73,11 @@ export const takeBootPrefetch = async (
   if (path === undefined) {
     return null;
   }
-  const slot = slots[path];
+  const slot = slots.get(path);
   if (slot === undefined) {
     return null;
   }
-  slots[path] = undefined;
+  slots.delete(path);
   if (
     Temporal.Now.instant().epochMilliseconds - slot.startedAt >
     BOOT_PREFETCH_TTL_MS
@@ -102,8 +99,8 @@ export const takeBootPrefetch = async (
 export const discardBootPrefetch = (): void => {
   prefetchGeneration += 1;
   for (const path of BOOT_PREFETCH_PATHS) {
-    slots[path]?.controller.abort();
-    slots[path] = undefined;
+    slots.get(path)?.controller.abort();
+    slots.delete(path);
   }
 };
 
@@ -200,18 +197,18 @@ export const startBootPrefetch = ({
       signal: requestSignal(),
     },
   ).catch(async (error: unknown) => await reportAndDrop(error, "/get-session"));
-  slots["/get-session"] = {
+  slots.set("/get-session", {
     controller,
     generation,
     startedAt: now(),
     response: sessionResponse,
-  };
+  });
   // The member-role request is chained, not parallel: anonymous visitors get
   // a 401 and org-less sessions a 400, both of which the browser reports as
   // console errors on every public-page boot. Reading the session response
   // first costs one round trip of latency only for signed-in users, and both
   // requests still finish while the route graph is downloading.
-  slots["/organization/get-active-member-role"] = {
+  slots.set("/organization/get-active-member-role", {
     startedAt: now(),
     controller,
     generation,
@@ -247,5 +244,5 @@ export const startBootPrefetch = ({
         async (error: unknown) =>
           await reportAndDrop(error, "/organization/get-active-member-role"),
       ),
-  };
+  });
 };

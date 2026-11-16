@@ -575,7 +575,6 @@
     "apps/landing/src/components/react/previews/CliMcpPreview.tsx": 1,
     "apps/landing/src/i18n/config.ts": 1,
     "apps/legal-atlas-runner/src/runners/ingestion-health.ts": 1,
-    "apps/web/src/boot-prefetch.ts": 2,
     "apps/web/src/components/ai-suggestions/document-review-run.logic.ts": 1,
     "apps/web/src/components/catalogue/catalogue-entry-icon.tsx": 1,
     "apps/web/src/components/chat/tool-call-card.tsx": 1,
