@@ -345,6 +345,8 @@ const RETAINED_MEMBER_COLUMNS = {
     "User-owned matter content or preferences; current organization/matter membership gates access.",
   "chat_queued_messages.user_id":
     "User-owned matter content or preferences; current organization/matter membership gates access, and the queue's sender proves the member again before it sends one.",
+  "chat_command_receipts.user_id":
+    "A retry key of the person's own send or answer; it holds no content, current membership gates the send it answers, and it expires within a day.",
   "chat_queue_holds.user_id":
     "Why the person's own queue waits; it holds no content, and the queue's sender proves the member again before it sends anything.",
   "clauses.created_by":
