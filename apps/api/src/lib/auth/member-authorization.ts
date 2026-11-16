@@ -18,6 +18,7 @@ export type MemberAuthorization = {
   email: string;
   /** Raw DB value; callers validate it with isMemberRole. */
   role: string;
+  billingAccess: boolean;
   workspace: AccessibleWorkspace | null;
   /**
    * Feature-access facts read in the same statement, so gated routes decide

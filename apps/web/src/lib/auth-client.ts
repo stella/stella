@@ -12,6 +12,7 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import { mcpHandoffSessionsSchema } from "@stll/api-contract/mcp-web-handoff";
+import { BILLING_ACCESS_MEMBER_FIELDS } from "@stll/auth-model";
 import { fetchWithTimeout } from "@stll/fetch";
 import { ac, roles } from "@stll/permissions";
 
@@ -114,7 +115,11 @@ const withOauthQueryFromHash = (ctx: {
 const authClientPlugins = [
   emailOTPClient(),
   lastLoginMethodClient(),
-  organizationClient({ ac, roles }),
+  organizationClient({
+    ac,
+    roles,
+    schema: { member: { additionalFields: BILLING_ACCESS_MEMBER_FIELDS } },
+  }),
   inferAdditionalFields({
     session: {
       originConsentId: { type: "string", required: false },

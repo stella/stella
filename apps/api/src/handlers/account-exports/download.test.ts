@@ -87,6 +87,7 @@ const createDownloadRoute = (membership: { currentId: string | null }) =>
             memberId: membership.currentId,
             email: `${userId}@example.test`,
             role: "member",
+            billingAccess: false,
             workspace: null,
             emailVerified: true,
             userDeleted: false,

@@ -288,7 +288,7 @@ export const AppSidebar = ({ surface }: AppSidebarProps) => {
   const timeBillingPreviewEnabled = useTimeBillingChromeEnabled();
   const timeChromeVisible = useTimeChromeVisible();
   const canReadTimeEntries = usePermissions({ timeEntry: ["read"] });
-  const canReadInvoices = usePermissions({ workspace: ["read"] });
+  const canReadInvoices = usePermissions({ billing: ["read"] });
   const matterBillingLinks = getMatterBillingLinks({
     canReadInvoices,
     canReadTimeEntries,

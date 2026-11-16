@@ -1,14 +1,8 @@
-import {
-  afterAll,
-  beforeAll,
-  describe,
-  expect,
-  setDefaultTimeout,
-  test,
-} from "bun:test";
+import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
 import { user } from "@/api/db/auth-schema";
 import { workspaceViews, workspaceViewTemplates } from "@/api/db/schema";
@@ -42,6 +36,8 @@ import listViews from "./list";
 import reorderViews from "./reorder";
 import exportTableView from "./table/export";
 import updateView from "./update";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 setDefaultTimeout(120_000);
 let testDb: TestDatabase;
@@ -99,7 +95,7 @@ const withAccess = async <T>(
   });
   const previous = env.API_FEATURE_ACCESS_GRANTS;
   const previousDeployment = env.FEATURE_LEGAL_LISTS;
-  env.FEATURE_LEGAL_LISTS = true;
+  testState.setConfig("FEATURE_LEGAL_LISTS", true);
   const grantsByStatus = {
     available: {
       "legal-lists": [{ type: "organization", organizationId: ids.orgA }],
@@ -116,7 +112,7 @@ const withAccess = async <T>(
       ],
     },
   } satisfies Record<typeof status, FeatureAccessGrants>;
-  env.API_FEATURE_ACCESS_GRANTS = grantsByStatus[status];
+  testState.setConfig("API_FEATURE_ACCESS_GRANTS", grantsByStatus[status]);
   try {
     const resolved = await context().safeDb(
       async (tx) =>
@@ -139,8 +135,8 @@ const withAccess = async <T>(
     return await run();
   } finally {
     restoreRuntime();
-    env.API_FEATURE_ACCESS_GRANTS = previous;
-    env.FEATURE_LEGAL_LISTS = previousDeployment;
+    testState.setConfig("API_FEATURE_ACCESS_GRANTS", previous);
+    testState.setConfig("FEATURE_LEGAL_LISTS", previousDeployment);
   }
 };
 
@@ -152,7 +148,7 @@ const expectNotFound = (result: unknown) => {
   }
 };
 
-beforeAll(async () => {
+testState.beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
@@ -674,7 +670,7 @@ test("deployment availability remains a ceiling for granted AVT controls", async
     layout: layout("avt"),
   });
   await withAccess("available", async () => {
-    env.FEATURE_LEGAL_LISTS = false;
+    testState.setConfig("FEATURE_LEGAL_LISTS", false);
     expectNotFound(
       await deleteView.handler(
         createTestHandlerContext<Parameters<typeof deleteView.handler>[0]>({

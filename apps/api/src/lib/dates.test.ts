@@ -1,13 +1,7 @@
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  setSystemTime,
-  test,
-} from "bun:test";
+import { describe, expect, setSystemTime, test } from "bun:test";
 
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
+import { createTestState } from "@stll/test-state";
 import { parseIsoDateLocal } from "@stll/time";
 
 import {
@@ -18,24 +12,11 @@ import {
   toUtcDateString,
 } from "./dates";
 
+const testState = createTestState({ file: import.meta.path, config: {} });
+
 // Date's local-time methods read `process.env.TZ` on every call in Bun (and
 // Node), so flipping it around a test reproduces the exact footgun in a
 // deterministic CI environment instead of depending on the runner's host TZ.
-//
-// Always REASSIGN, never `delete process.env["TZ"]`: deleting the key mid
-// process poisons Bun's cached local-time resolver for the rest of the
-// process (every later Date falls back to UTC, even after a fresh
-// assignment) — reassigning to `""` restores the same "no override"
-// behavior without tripping that cache bug.
-let originalTz: string | undefined;
-
-beforeEach(() => {
-  originalTz = process.env.TZ;
-});
-
-afterEach(() => {
-  process.env.TZ = originalTz ?? "";
-});
 
 /** The guard as a Czech decision meets it, under the default floor. */
 const czechDecisionDate = (raw: string) => canonicalDecisionDate(raw, "CZE");
@@ -144,7 +125,7 @@ describe("canonicalDecisionDate", () => {
     // happened there in local time. A decision dated that day is still a
     // real record, and ingestion must not accept or reject it based on
     // where the code runs.
-    process.env.TZ = "Pacific/Apia";
+    testState.setEnv("TZ", "Pacific/Apia");
     expect(parseIsoDateLocal("2011-12-30")).toBeNull();
 
     expect(czechDecisionDate("2011-12-30")).toBe("2011-12-30");
@@ -157,7 +138,7 @@ describe("isoCalendarDay", () => {
   });
 
   test("applies Gregorian leap-year rules independent of the host timezone", () => {
-    process.env.TZ = "Pacific/Apia";
+    testState.setEnv("TZ", "Pacific/Apia");
 
     expect(isoCalendarDay("1900-02-29")).toBeNull();
     expect(isoCalendarDay("2000-02-29T23:59:59Z")).toBe("2000-02-29");

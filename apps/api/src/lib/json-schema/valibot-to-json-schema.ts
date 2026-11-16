@@ -6,6 +6,7 @@ import {
 import { type GenericSchema, safeParse } from "valibot";
 
 import { API_DATE_RUNTIME_ONLY_CHECKS } from "@stll/api-contract/api-date";
+import { MONEY_SCHEMA_BRAND } from "@stll/api-contract/billing-money";
 import { DECISION_PARAGRAPH_RANGE_RUNTIME_ONLY_CHECKS } from "@stll/api-contract/decision-paragraph-range";
 import { DISPLAY_NAME_RUNTIME_ONLY_ACTIONS } from "@stll/api-contract/display-name";
 import { wireValueOf } from "@stll/api-contract/http-input";
@@ -119,6 +120,17 @@ const uniqueItemsAction: NonNullable<ConversionConfig["overrideAction"]> = ({
     ? { ...jsonSchema, uniqueItems: true }
     : undefined;
 
+/** Money classification belongs to the typed response boundary, not the public wire schema. */
+const moneyBrandAction: NonNullable<ConversionConfig["overrideAction"]> = ({
+  valibotAction,
+  jsonSchema,
+}) =>
+  valibotAction.type === "brand" &&
+  "name" in valibotAction &&
+  valibotAction.name === MONEY_SCHEMA_BRAND
+    ? jsonSchema
+    : undefined;
+
 const utf8ByteBoundsAction: NonNullable<ConversionConfig["overrideAction"]> = ({
   valibotAction,
   jsonSchema,
@@ -168,6 +180,7 @@ export const toJsonSchema = (
   convertToJsonSchema(schema, {
     ...config,
     overrideAction: (context) =>
+      moneyBrandAction(context) ??
       stripInternalMetadata(context) ??
       keepUnicodePatternSource(context) ??
       uniqueItemsAction(context) ??
@@ -318,6 +331,7 @@ export const toRouteJsonSchema = (schema: GenericSchema): ApiJsonSchema =>
         return carried;
       }
       return (
+        moneyBrandAction(context) ??
         stripRouteInternalMetadata(context) ??
         keepUnicodePatternSource(context) ??
         uniqueItemsAction(context) ??

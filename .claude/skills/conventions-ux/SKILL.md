@@ -17,7 +17,12 @@ Default palette: clean neutral grays on white. Accent palettes
 monochrome with the Stella symbol (`StellaMark` from
 `@stll/ui/stella-mark`). Never substitute a letter or a section-sign glyph
 for the symbol; static markup uses the official
-`apps/landing/public/brand/stella-symbol.svg` asset.
+`apps/landing/public/brand/stella-symbol.svg` asset. An app's own
+packaged icon (the app icon stella desktop and the browser extension
+ship) is shown unchanged where that app names itself in its own shell,
+such as the extension popup's header, so it matches the icon the
+operating system or browser shows; everywhere inside the product the
+brand stays monochrome with the symbol.
 
 Brand colours (reference, not for hard-coding):
 
