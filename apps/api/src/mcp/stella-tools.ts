@@ -2587,33 +2587,6 @@ const caseLawSearchResults = (
   return [...served.values()];
 };
 
-/** The page's results, each with the procedural reviews linked to it. */
-const reviewedCaseLawSearchResults = async (
-  merged: ReturnType<typeof mergeCaseLawSearchHits>,
-  args: Parameters<typeof caseLawSearchResults>[1],
-  context: AuthorizedMcpRequestContext,
-) => {
-  const results = caseLawSearchResults(merged, args);
-  if (results.length === 0) {
-    return [];
-  }
-  const reviews = await (
-    context.testDependencies?.readDecisionReviews ?? readDecisionReviews
-  )({
-    decisionIds: results.map(({ decisionId }) =>
-      brandPersistedCaseLawDecisionId(decisionId),
-    ),
-    caseLawDb: caseLawPublicReadDb,
-  });
-  return results.map((result) => ({
-    ...result,
-    appealReviews: requireDecisionReviews(
-      reviews,
-      brandPersistedCaseLawDecisionId(result.decisionId),
-    ),
-  }));
-};
-
 /**
  * The merged page's continuation: null when every query is exhausted, which
  * makes the merged page the last one; otherwise each query's own cursor.
@@ -2833,7 +2806,7 @@ const listSearchCaseLawProvision = async ({
     ),
     nextCursor: page.nextCursor,
     paginationOutcome: page.paginationOutcome,
-    results: await reviewedCaseLawSearchResults(merged, args, context),
+    results: caseLawSearchResults(merged, args),
     total: page.total,
   });
   return toolDataResult(projectionPayload(SEARCH_CASE_LAW_PROJECTION, payload));
@@ -3508,7 +3481,7 @@ const searchCaseLawWork = async ({
     searches: searchNotesForCall(searches, requests),
     nextCursor: single === undefined ? mergedCursor : single.nextCursor,
     paginationOutcome: mergedCaseLawPaginationOutcome(pages),
-    results: await reviewedCaseLawSearchResults(merged, searchArgs, context),
+    results: caseLawSearchResults(merged, searchArgs),
     total: caseLawAgentSearchTotal(single?.total ?? SEARCH_TOTAL_NOT_COUNTED),
   });
   return toolDataResult(projectionPayload(SEARCH_CASE_LAW_PROJECTION, payload));

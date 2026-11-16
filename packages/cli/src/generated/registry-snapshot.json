@@ -825,10 +825,6 @@
               "citationCount": {
                 "type": "number"
               },
-              "appealReviews": {
-                "type": "object",
-                "additionalProperties": true
-              },
               "citationAuthority": {
                 "type": "number"
               },
@@ -948,7 +944,6 @@
               "url",
               "caseNumber",
               "citationCount",
-              "appealReviews",
               "citationAuthority",
               "country",
               "court",

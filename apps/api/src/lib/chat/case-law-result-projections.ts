@@ -22,7 +22,6 @@ import { DECISION_PRIMARY_REFERENCE_TYPES } from "@stll/legal-ast/decision-ident
 import { AGENT_CASE_LAW_SEARCH_WARNING_CODES } from "../case-law/search-warnings";
 import { SEARCH_PAGINATION_OUTCOME_SCHEMA } from "../search/pagination-outcome-projection";
 import { CASE_LAW_COURT_PROJECTION } from "./case-law-court-projection";
-import { DECISION_REVIEWS_PROJECTION } from "./decision-review-projection";
 import {
   passthroughId,
   projectionBranch,
@@ -105,7 +104,6 @@ const caseLawSearchIdentityFields = {
   source_url: v.optional(publicUrl()),
   caseNumber: v.string(),
   citationCount: v.number(),
-  appealReviews: DECISION_REVIEWS_PROJECTION,
   // `ln(1 + weighted citations)`, the score the ranking blends in.
   citationAuthority: v.number(),
   country: v.string(),
