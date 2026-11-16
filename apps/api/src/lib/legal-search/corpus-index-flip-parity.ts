@@ -60,7 +60,31 @@
  * state applied after its page was read is still one the walk counted, all of
  * which only overstates. In the other order a decision seeded between the two
  * reads would be reported by neither.
- * `readCorpusIndexFlipParity` owns that order; it is the only way to a verdict.
+ * `walkCorpusIndexFlipCoverage` and `decideCorpusIndexFlipParityTx` own that
+ * order: a verdict is decided only from a walk, in the transaction that reads
+ * the regressions (`readCorpusIndexFlipParity` runs both).
+ *
+ * What the decision re-reads, and why that is enough. The walk is long (one
+ * page per serving state, about 10,000 pages at 10 M states), so it runs in
+ * short transactions and no fence can be held across it. The decision runs
+ * in one transaction, which a flip holds under the exclusive projection
+ * fence, and re-reads everything that could have moved since:
+ *
+ * - the pair, by its registry rows' identity (status and update time): a
+ *   rebuild, the only thing that deletes projection states, changes them, so
+ *   every candidate state the walk counted is still there;
+ * - the tail: every serving state after the last one the walk read, exactly.
+ *   Decision ids are time ordered, so this is where new decisions land;
+ * - a serving state created behind the cursor after its page was read is the
+ *   only thing neither read sees. Its writer gave the candidate a state in the
+ *   same transaction (every desired writer projects into every active
+ *   generation; the seeding contract, `corpus-index-route-seeding.ts`), and a
+ *   single-generation seeder finds nothing to seed in a generation whose every
+ *   route is seeded, which the flip checks under the same fence. So that set
+ *   is empty unless a writer breaks the contract the test databases enforce.
+ *
+ * The other order, holding writers back for an exact walk, would pause every
+ * projection writer for the whole walk (tens of minutes at 10 M states).
  */
 import { panic, Result, TaggedError } from "better-result";
 import { and, eq, or, type SQL, sql } from "drizzle-orm";
@@ -105,6 +129,16 @@ type CorpusIndexFlipPair = {
   candidate: string;
 };
 
+/**
+ * The pair as the registry held it: each row's status and last update, in
+ * epoch microseconds. Every lifecycle transition rewrites both, so an equal
+ * identity means neither generation moved in between.
+ */
+type CorpusIndexFlipPairIdentity = CorpusIndexFlipPair & {
+  servingUpdatedAtUs: string;
+  candidateUpdatedAtUs: string;
+};
+
 const CORPUS_INDEX_FLIP_REGRESSION_KINDS = ["not_shown", "stale"] as const;
 type CorpusIndexFlipRegressionKind =
   (typeof CORPUS_INDEX_FLIP_REGRESSION_KINDS)[number];
@@ -123,6 +157,13 @@ const CORPUS_INDEX_FLIP_SAMPLE_MAX = 50;
 /** Serving copies one coverage page reads at most. */
 const CORPUS_INDEX_FLIP_COVERAGE_PAGE_MAX = 5000;
 
+/**
+ * Serving states the decision re-reads after the walk's last one, at most.
+ * The tail holds what arrived since the walk ended (minutes of inflow); a
+ * longer tail leaves the verdict undecided, and walking again shortens it.
+ */
+const CORPUS_INDEX_FLIP_TAIL_MAX = 5000;
+
 export class CorpusIndexFlipPairRefusedError extends TaggedError(
   "CorpusIndexFlipPairRefusedError",
 )<{
@@ -133,6 +174,7 @@ export class CorpusIndexFlipPairRefusedError extends TaggedError(
     | "generation_not_active"
     | "partial_generation"
     | "serving_changed"
+    | "generation_changed"
     | "jurisdiction_serving_pointer";
 }> {
   static {
@@ -501,7 +543,7 @@ const refused = (
 const readComparablePairTx = async (
   tx: Transaction,
   { family, candidate }: { family: CorpusFamily; candidate: string },
-): Promise<Result<CorpusIndexFlipPair, CorpusIndexFlipParityError>> => {
+): Promise<Result<CorpusIndexFlipPairIdentity, CorpusIndexFlipParityError>> => {
   const failed = (cause: unknown) =>
     readError({ family, serving: "(serving)", candidate }, cause);
   if (
@@ -519,6 +561,7 @@ const readComparablePairTx = async (
           .select({
             generation: corpusIndexGenerations.generation,
             status: corpusIndexGenerations.status,
+            updatedAtUs: sql<string>`${epochMicros(sql`${corpusIndexGenerations.updatedAt}`)}::text`,
           })
           .from(corpusIndexGenerations)
           .where(
@@ -578,7 +621,13 @@ const readComparablePairTx = async (
       "jurisdiction_serving_pointer",
     );
   }
-  return Result.ok({ family, serving: serving.generation, candidate });
+  return Result.ok({
+    family,
+    serving: serving.generation,
+    candidate,
+    servingUpdatedAtUs: serving.updatedAtUs,
+    candidateUpdatedAtUs: candidateRow.updatedAtUs,
+  });
 };
 
 const readRegressionsTx = async (
@@ -722,15 +771,17 @@ type CorpusIndexFlipVerdict =
   | { type: "regressions"; missing: number; regressions: number }
   | {
       type: "undecided";
-      reason: "walk_capped" | "coverage_incomplete";
+      reason: "walk_capped" | "coverage_incomplete" | "coverage_tail_long";
       knownMissing: number;
       knownRegressions: number;
     };
 
 export type CorpusIndexFlipParity = {
-  pair: CorpusIndexFlipPair;
+  pair: CorpusIndexFlipPairIdentity;
   watermark: Temporal.Instant;
+  /** The walk's coverage, with the tail the decision read added to it. */
   coverage: CorpusIndexFlipCoverage;
+  tail: CorpusIndexFlipTail;
   regressions: CorpusIndexFlipRegressionReading;
   verdict: CorpusIndexFlipVerdict;
 };
@@ -788,6 +839,8 @@ type CoveragePage = {
   walked: number;
   missing: number;
   sample: readonly string[];
+  /** The last serving state the page read; null when it read none. */
+  last: string | null;
   next: string | null;
 };
 
@@ -817,6 +870,7 @@ const readCoveragePage = async (
         ? entry
         : panic("Malformed flip parity row: coverage sample"),
     ),
+    last: nullableText(row, "last_entity_id"),
     next: walked < limit ? null : nullableText(row, "last_entity_id"),
   });
 };
@@ -829,18 +883,27 @@ const walkCoverage = async (
   runInTransaction: ProjectionTransactionRunner,
   pair: CorpusIndexFlipPair,
   { pageSize, pageBudget, resumeFrom }: CoverageWalkOptions,
-): Promise<Result<CorpusIndexFlipCoverage, CorpusIndexFlipParityReadError>> => {
+): Promise<
+  Result<
+    { coverage: CorpusIndexFlipCoverage; last: string | null },
+    CorpusIndexFlipParityReadError
+  >
+> => {
   const sample: string[] = [];
   const tally = { walked: 0, missing: 0, sample, pages: 0 };
   let after = resumeFrom?.after ?? null;
+  let last = after;
   for (;;) {
     if (tally.pages >= pageBudget) {
       return Result.ok({
-        type: "incomplete",
-        walked: tally.walked,
-        missing: tally.missing,
-        sample: tally.sample,
-        next: { after },
+        coverage: {
+          type: "incomplete",
+          walked: tally.walked,
+          missing: tally.missing,
+          sample: tally.sample,
+          next: { after },
+        },
+        last,
       });
     }
     // db-await-in-loop: a keyset walk; each page's cursor comes from the one before it
@@ -852,6 +915,7 @@ const walkCoverage = async (
       return page;
     }
     tally.pages += 1;
+    last = page.value.last ?? last;
     tally.walked += page.value.walked;
     tally.missing += page.value.missing;
     tally.sample.push(
@@ -865,22 +929,24 @@ const walkCoverage = async (
     }
     after = page.value.next;
   }
-  return Result.ok(
-    resumeFrom === null
-      ? {
-          type: "complete",
-          walked: tally.walked,
-          missing: tally.missing,
-          sample: tally.sample,
-        }
-      : {
-          type: "incomplete",
-          walked: tally.walked,
-          missing: tally.missing,
-          sample: tally.sample,
-          next: null,
-        },
-  );
+  return Result.ok({
+    coverage:
+      resumeFrom === null
+        ? {
+            type: "complete",
+            walked: tally.walked,
+            missing: tally.missing,
+            sample: tally.sample,
+          }
+        : {
+            type: "incomplete",
+            walked: tally.walked,
+            missing: tally.missing,
+            sample: tally.sample,
+            next: null,
+          },
+    last,
+  });
 };
 
 /** The watermark `exemptMinutes` before the database clock. */
@@ -898,17 +964,191 @@ const readWatermarkTx = async (
   });
 };
 
+const COVERAGE_WALK = Symbol("corpus-index-flip-coverage-walk");
+
+/**
+ * A finished coverage walk. Only `walkCorpusIndexFlipCoverage` makes one, so a
+ * verdict is never decided from a walk that did not happen first.
+ */
+export type CorpusIndexFlipCoverageWalk = {
+  readonly [COVERAGE_WALK]: true;
+  pair: CorpusIndexFlipPairIdentity;
+  coverage: CorpusIndexFlipCoverage;
+  /** The last serving state the walk read; the decision's tail starts after it. */
+  last: string | null;
+};
+
+const requireValidOptions = (
+  exemptMinutes: number,
+  coverage: CoverageWalkOptions | null,
+): void => {
+  if (!Number.isSafeInteger(exemptMinutes) || exemptMinutes < 0) {
+    panic(`Invalid flip watermark: ${exemptMinutes} minutes`);
+  }
+  if (
+    coverage !== null &&
+    (!Number.isSafeInteger(coverage.pageSize) ||
+      coverage.pageSize < 1 ||
+      coverage.pageSize > CORPUS_INDEX_FLIP_COVERAGE_PAGE_MAX ||
+      !Number.isSafeInteger(coverage.pageBudget) ||
+      coverage.pageBudget < 0)
+  ) {
+    panic("Invalid flip coverage walk options");
+  }
+};
+
+/**
+ * The first half of a parity read: the pair, then the coverage walk over the
+ * serving generation's states, one short transaction per page (read-only
+ * ones will do). No fence is held; `decideCorpusIndexFlipParityTx` makes the
+ * result valid in the transaction that decides.
+ */
+export const walkCorpusIndexFlipCoverage = async ({
+  runInTransaction,
+  family,
+  candidate,
+  coverage,
+}: {
+  runInTransaction: ProjectionTransactionRunner;
+  family: CorpusFamily;
+  candidate: string;
+  coverage: CoverageWalkOptions;
+}): Promise<
+  Result<CorpusIndexFlipCoverageWalk, CorpusIndexFlipParityError>
+> => {
+  requireValidOptions(0, coverage);
+  const pair = await runInTransaction(
+    async (tx) => await readComparablePairTx(tx, { family, candidate }),
+  );
+  if (Result.isError(pair)) {
+    return pair;
+  }
+  const walked = await walkCoverage(runInTransaction, pair.value, coverage);
+  if (Result.isError(walked)) {
+    return walked;
+  }
+  return Result.ok({
+    [COVERAGE_WALK]: true,
+    pair: pair.value,
+    coverage: walked.value.coverage,
+    last: walked.value.last,
+  });
+};
+
+/** What the decision read after the walk's last serving state. */
+type CorpusIndexFlipTail =
+  | { type: "read"; walked: number; missing: number }
+  | { type: "too_long" }
+  /** The walk did not reach the end, so there is no tail to read. */
+  | { type: "not_read" };
+
+const readTailTx = async (
+  tx: Transaction,
+  walk: CorpusIndexFlipCoverageWalk,
+): Promise<Result<CorpusIndexFlipTail, CorpusIndexFlipParityReadError>> => {
+  if (walk.coverage.type !== "complete") {
+    return Result.ok({ type: "not_read" });
+  }
+  const rows = await readRows(
+    tx,
+    corpusIndexFlipCoveragePageQuery(walk.pair, {
+      after: walk.last,
+      limit: CORPUS_INDEX_FLIP_TAIL_MAX + 1,
+    }),
+    walk.pair,
+  );
+  if (Result.isError(rows)) {
+    return rows;
+  }
+  const row = rows.value.at(0);
+  const walked = requiredCount(row, "walked");
+  return Result.ok(
+    walked > CORPUS_INDEX_FLIP_TAIL_MAX
+      ? { type: "too_long" }
+      : { type: "read", walked, missing: requiredCount(row, "missing") },
+  );
+};
+
+/** The walk's coverage with the tail the decision read added to it. */
+const coverageWithTail = (
+  coverage: CorpusIndexFlipCoverage,
+  tail: CorpusIndexFlipTail,
+): CorpusIndexFlipCoverage =>
+  coverage.type === "complete" && tail.type === "read"
+    ? {
+        ...coverage,
+        walked: coverage.walked + tail.walked,
+        missing: coverage.missing + tail.missing,
+      }
+    : coverage;
+
+/**
+ * The second half: decide the verdict from a walk, in `tx`. A flip calls it
+ * under the exclusive projection fence, so nothing it reads can change before
+ * the flip commits; the module comment says why the walk's result holds there
+ * too. It re-reads the pair and refuses one that moved (`serving_changed`,
+ * `generation_changed`), reads every serving state after the walk's last one
+ * (the tail), then the regression statement.
+ */
+export const decideCorpusIndexFlipParityTx = async (
+  tx: Transaction,
+  walk: CorpusIndexFlipCoverageWalk,
+  { exemptMinutes }: { exemptMinutes: number },
+): Promise<Result<CorpusIndexFlipParity, CorpusIndexFlipParityError>> => {
+  requireValidOptions(exemptMinutes, null);
+  const { family, candidate } = walk.pair;
+  const again = await readComparablePairTx(tx, { family, candidate });
+  if (Result.isError(again)) {
+    return Result.err(again.error);
+  }
+  if (again.value.serving !== walk.pair.serving) {
+    return refused(
+      `${family} changed its serving generation during the read`,
+      "serving_changed",
+    );
+  }
+  if (
+    again.value.servingUpdatedAtUs !== walk.pair.servingUpdatedAtUs ||
+    again.value.candidateUpdatedAtUs !== walk.pair.candidateUpdatedAtUs
+  ) {
+    return refused(
+      `${family}/${walk.pair.serving} or ${family}/${candidate} changed its registration during the read`,
+      "generation_changed",
+    );
+  }
+  const tail = await readTailTx(tx, walk);
+  if (Result.isError(tail)) {
+    return tail;
+  }
+  const watermark = await readWatermarkTx(tx, exemptMinutes);
+  const regressions = await readRegressionsTx(tx, again.value, watermark);
+  if (Result.isError(regressions)) {
+    return regressions;
+  }
+  const coverage = coverageWithTail(walk.coverage, tail.value);
+  const verdict = verdictOf(coverage, regressions.value);
+  return Result.ok({
+    pair: walk.pair,
+    watermark,
+    coverage,
+    tail: tail.value,
+    regressions: regressions.value,
+    verdict:
+      tail.value.type === "too_long" && verdict.type === "no_regression"
+        ? {
+            type: "undecided",
+            reason: "coverage_tail_long",
+            knownMissing: 0,
+            knownRegressions: 0,
+          }
+        : verdict,
+  });
+};
+
 /**
  * What a flip of `candidate` would lose against the family's serving
- * generation: the coverage walk first, then the regression statement, in that
- * order (see the module comment), and the verdict decided from both.
- *
- * `runInTransaction` should open read-only transactions. Each coverage page
- * and the regression statement are separate snapshots, which the order above
- * makes sound. The pair checks and the regression statement share the last
- * transaction; a flip that acts on the verdict must hold the exclusive
- * projection fence (or run REPEATABLE READ) across that transaction and its
- * own write, so nothing the checks read changes before it flips.
+ * generation, read without a fence: the walk, then the decision in one more
+ * transaction. `runInTransaction` should open read-only transactions.
  */
 export const readCorpusIndexFlipParity = async ({
   runInTransaction,
@@ -923,55 +1163,18 @@ export const readCorpusIndexFlipParity = async ({
   exemptMinutes: number;
   coverage: CoverageWalkOptions;
 }): Promise<Result<CorpusIndexFlipParity, CorpusIndexFlipParityError>> => {
-  if (!Number.isSafeInteger(exemptMinutes) || exemptMinutes < 0) {
-    return panic(`Invalid flip watermark: ${exemptMinutes} minutes`);
+  requireValidOptions(exemptMinutes, coverage);
+  const walk = await walkCorpusIndexFlipCoverage({
+    runInTransaction,
+    family,
+    candidate,
+    coverage,
+  });
+  if (Result.isError(walk)) {
+    return walk;
   }
-  if (
-    !Number.isSafeInteger(coverage.pageSize) ||
-    coverage.pageSize < 1 ||
-    coverage.pageSize > CORPUS_INDEX_FLIP_COVERAGE_PAGE_MAX ||
-    !Number.isSafeInteger(coverage.pageBudget) ||
-    coverage.pageBudget < 0
-  ) {
-    return panic("Invalid flip coverage walk options");
-  }
-  const pair = await runInTransaction(
-    async (tx) => await readComparablePairTx(tx, { family, candidate }),
+  return await runInTransaction(
+    async (tx) =>
+      await decideCorpusIndexFlipParityTx(tx, walk.value, { exemptMinutes }),
   );
-  if (Result.isError(pair)) {
-    return pair;
-  }
-  const walked = await walkCoverage(runInTransaction, pair.value, coverage);
-  if (Result.isError(walked)) {
-    return walked;
-  }
-  const read = await runInTransaction(async (tx) => {
-    // The pair is checked again where the regression statement reads, so a
-    // registry or pointer change during the walk is not compared past.
-    const again = await readComparablePairTx(tx, { family, candidate });
-    if (Result.isError(again)) {
-      return Result.err(again.error);
-    }
-    if (again.value.serving !== pair.value.serving) {
-      return refused(
-        `${family} changed its serving generation during the read`,
-        "serving_changed",
-      );
-    }
-    const watermark = await readWatermarkTx(tx, exemptMinutes);
-    const regressions = await readRegressionsTx(tx, again.value, watermark);
-    return Result.isError(regressions)
-      ? regressions
-      : Result.ok({ watermark, regressions: regressions.value });
-  });
-  if (Result.isError(read)) {
-    return read;
-  }
-  return Result.ok({
-    pair: pair.value,
-    watermark: read.value.watermark,
-    coverage: walked.value,
-    regressions: read.value.regressions,
-    verdict: verdictOf(walked.value, read.value.regressions),
-  });
 };

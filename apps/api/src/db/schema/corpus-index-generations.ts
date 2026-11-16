@@ -517,3 +517,64 @@ export const corpusIndexRouteProofs = p.pgTable(
     ...globalCaseLawPolicies(),
   ],
 );
+
+const generationFlipsOwnerAccess = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.corpus_index_generation_flips'::regclass)`;
+
+/**
+ * One row per whole-family serving flip: who made it, when, which pair, and
+ * the evidence the guarded flip read (parity verdict under the fence, route
+ * proofs, seeding passes, engine counts), with the evidence's SHA-256 digest.
+ * Written in the flip's transaction, so a flip and its receipt commit
+ * together; a flip back writes its own row. Append-only. No foreign key: a
+ * receipt outlives a generation's rebuild, as the withdrawal trail does.
+ */
+export const corpusIndexGenerationFlips = p.pgTable(
+  "corpus_index_generation_flips",
+  {
+    id: p.uuid().primaryKey(),
+    family: p.text({ enum: CORPUS_FAMILIES }).notNull(),
+    /** The generation that served before; null on a family's first flip. */
+    fromGeneration: p.varchar("from_generation", {
+      length: CORPUS_INDEX_GENERATION_MAX_LENGTH,
+    }),
+    toGeneration: p
+      .varchar("to_generation", { length: CORPUS_INDEX_GENERATION_MAX_LENGTH })
+      .notNull(),
+    actor: p.varchar({ length: 128 }).notNull(),
+    reason: p.varchar({ length: 2048 }).notNull(),
+    evidence: p.jsonb().notNull(),
+    evidenceDigest: p.varchar("evidence_digest", { length: 64 }).notNull(),
+    flippedAt: timestamptz("flipped_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p.check(
+      "corpus_index_generation_flips_family_values",
+      sql`${t.family} IN (${sqlValues(CORPUS_FAMILIES)})`,
+    ),
+    p.check(
+      "corpus_index_generation_flips_actor_shape",
+      sql`${t.actor} ~ '^[a-z0-9][a-z0-9:._@/-]*$'`,
+    ),
+    p.check(
+      "corpus_index_generation_flips_reason_present",
+      sql`length(btrim(${t.reason})) > 0`,
+    ),
+    p.check(
+      "corpus_index_generation_flips_digest_shape",
+      sql`${t.evidenceDigest} ~ '^[0-9a-f]{64}$'`,
+    ),
+    p.check(
+      "corpus_index_generation_flips_pair_distinct",
+      sql`${t.fromGeneration} IS DISTINCT FROM ${t.toGeneration}`,
+    ),
+    // Row security is forced, so the owner-run operator transaction needs a
+    // policy too; grants still decide what each other role may do.
+    p.pgPolicy("corpus_index_generation_flips_owner_access", {
+      for: "all",
+      to: "public",
+      using: generationFlipsOwnerAccess,
+      withCheck: generationFlipsOwnerAccess,
+    }),
+    ...globalCaseLawPolicies(),
+  ],
+);

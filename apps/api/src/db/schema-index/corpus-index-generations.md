@@ -101,3 +101,19 @@ corpus_index_route_proofs.revoke_reason             text         null           
 corpus_index_route_proofs.created_at                timestamptz  default,not null  corpus-index-generations.ts:456
 corpus_index_route_proofs.updated_at                timestamptz  default,not null  corpus-index-generations.ts:457
 ```
+
+## corpus_index_generation_flips · `corpusIndexGenerationFlips` · corpus-index-generations.ts:531 · rls
+
+One row per whole-family serving flip: who made it, when, which pair, and the evidence the guarded flip read (parity verdict under the fence, route proofs, see…
+
+```text
+corpus_index_generation_flips.id               uuid         pk,not null       corpus-index-generations.ts:534
+corpus_index_generation_flips.family           text         not null          corpus-index-generations.ts:535
+corpus_index_generation_flips.from_generation  varchar      null              corpus-index-generations.ts:537  The generation that served before; null on a family's first flip.
+corpus_index_generation_flips.to_generation    varchar      not null          corpus-index-generations.ts:540
+corpus_index_generation_flips.actor            varchar      not null          corpus-index-generations.ts:543
+corpus_index_generation_flips.reason           varchar      not null          corpus-index-generations.ts:544
+corpus_index_generation_flips.evidence         jsonb        not null          corpus-index-generations.ts:545
+corpus_index_generation_flips.evidence_digest  varchar      not null          corpus-index-generations.ts:546
+corpus_index_generation_flips.flipped_at       timestamptz  default,not null  corpus-index-generations.ts:547
+```

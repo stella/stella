@@ -255,6 +255,7 @@ const TABLE_CLASSIFICATIONS = {
   contactSearchDocumentPreviewPassages: FORMAT_SCOPE_EXCLUSION,
   contactSearchDocuments: FORMAT_SCOPE_EXCLUSION,
   contacts: "included",
+  corpusIndexGenerationFlips: RESEARCH_CORPUS_EXCLUSION,
   corpusIndexGenerationSeedingPasses: RESEARCH_CORPUS_EXCLUSION,
   corpusIndexGenerations: RESEARCH_CORPUS_EXCLUSION,
   corpusIndexGroupEnrollments: RESEARCH_CORPUS_EXCLUSION,

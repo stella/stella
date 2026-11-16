@@ -363,6 +363,7 @@ export const ENUM_COLUMNS = {
     "time_billing_format",
     "type",
   ],
+  corpus_index_generation_flips: ["family"],
   corpus_index_generation_seeding_passes: ["family"],
   corpus_index_generations: ["family"],
   corpus_index_group_enrollments: ["contract_version", "family"],

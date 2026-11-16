@@ -656,6 +656,11 @@ export const ROLE_GRANT_STATEMENTS = [
     GRANT SELECT, INSERT ON TABLE "corpus_index_group_withdrawals"
     TO stella_ingestion
   `,
+  // Flip receipts are append-only: the guarded flip records, the app reads.
+  `
+    GRANT SELECT, INSERT ON TABLE "corpus_index_generation_flips"
+    TO stella_ingestion
+  `,
   // Route proofs: the projection runner advances and revokes them; only the
   // generation's cascade deletes one.
   `

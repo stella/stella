@@ -200,6 +200,20 @@ export const lockCorpusIndexProjectionRevisionTx = async (
 ): Promise<number> => await lockCorpusIndexProjectionExclusiveTx(tx, target);
 
 /**
+ * Hold the exclusive side of the mutation fence for a generation flip: every
+ * in-flight projection writer has committed, and none can commit until this
+ * transaction ends. Unlike the proof fences it reads and prunes nothing, so a
+ * dry run of the flip takes it without writing.
+ */
+export const lockCorpusIndexProjectionFlipTx = async (
+  tx: Transaction,
+): Promise<void> => {
+  await tx.execute(
+    sql`SELECT public.lock_corpus_projection_mutations_exclusive()`,
+  );
+};
+
+/**
  * Serialize explicit promotion before its final proof and serving flip.
  */
 export const lockCorpusIndexProjectionPromotionTx = async (
