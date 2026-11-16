@@ -131,7 +131,7 @@ describe("reads capped per group", () => {
       expect(result.rows).toEqual(
         sourceRows.filter(({ index }) => index < cap),
       );
-      expect([...result.overflowed]).toEqual(overflowed);
+      expect([...result.overflowed]).toEqual([...overflowed]);
     },
   );
 });

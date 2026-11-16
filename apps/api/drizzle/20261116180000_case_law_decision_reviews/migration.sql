@@ -35,9 +35,8 @@ ALTER TABLE "case_law_decision_reviews" ENABLE ROW LEVEL SECURITY;--> statement-
 ALTER TABLE "case_law_decision_reviews" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE POLICY "case_law_global_access" ON "case_law_decision_reviews" FOR SELECT TO stella USING (true);--> statement-breakpoint
 CREATE POLICY "case_law_ingestion_access" ON "case_law_decision_reviews" FOR ALL TO stella_ingestion USING (true) WITH CHECK (true);--> statement-breakpoint
-CREATE POLICY "case_law_reader_access" ON "case_law_decision_reviews" FOR SELECT TO stella_caselaw_reader USING (true);--> statement-breakpoint
 CREATE POLICY "public_law_reader_access" ON "case_law_decision_reviews" FOR SELECT TO stella_public_law_reader USING (true);--> statement-breakpoint
-GRANT SELECT ON TABLE "case_law_decision_reviews" TO stella, stella_caselaw_reader;--> statement-breakpoint
+GRANT SELECT ON TABLE "case_law_decision_reviews" TO stella;--> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "case_law_decision_reviews" TO stella_ingestion;--> statement-breakpoint
 GRANT SELECT (reviewing_decision_id, reviewed_decision_id, reviewed_case_number,
   reviewed_citation_key, reviewed_docket_family_key, reviewed_court,

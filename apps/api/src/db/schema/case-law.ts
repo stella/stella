@@ -2447,7 +2447,7 @@ export const caseLawDecisionReviews = p.pgTable(
       )})`,
     ),
     ...globalCaseLawPolicies(),
-    ...publicCaseLawReaderPolicies(),
+    ...publicLawReaderPolicies(),
   ],
 );
 

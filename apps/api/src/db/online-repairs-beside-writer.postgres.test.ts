@@ -13,7 +13,9 @@ import {
   judgeWriterGap,
   writerGapReport,
 } from "../../../../scripts/migration-rehearsal-writer-gap";
+import { CASE_LAW_FILING_YEAR_FUNCTION_SIGNATURE } from "../lib/case-law/coverage-index";
 import { withGatedTestClients } from "../tests/gated-test-database";
+import { FUNCTION_DEPENDENT_INDEX_REINDEXES } from "./function-dependent-index-reindex";
 import { createUngatedTableGateForTests } from "./online-ddl";
 import type {
   OnlineMigrationConnection,
@@ -363,7 +365,34 @@ const skillBindingNoRowSeed = (constraint: string): NoRowSeed => ({
   },
 });
 
+/**
+ * A filing-year index rebuild changes no row: one decision gives every
+ * dependent index an entry to rebuild beside the snapshot.
+ */
+const filingYearReindexSeed: NoRowSeed = {
+  kind: "no-row-work",
+  tables: ["case_law_decisions"],
+  snapshot: async (client) =>
+    await snapshotRows(client, ["case_law_decisions"]),
+  seed: async (client) => {
+    await client.unsafe(
+      `INSERT INTO case_law_sources (id, adapter_key, name) VALUES ('${ID}', 'cz-regional', 'Source')`,
+    );
+    await client.unsafe(
+      `INSERT INTO case_law_decisions (id, source_id, case_number, court, country, language) VALUES ('${ID_2}', '${ID}', '21 Cdo 1234/2019', 'Court', 'CZE', 'cs')`,
+    );
+  },
+};
+
+const FILING_YEAR_REINDEX_SEEDS = Object.fromEntries(
+  FUNCTION_DEPENDENT_INDEX_REINDEXES.filter(
+    ({ functionSignature }) =>
+      functionSignature === CASE_LAW_FILING_YEAR_FUNCTION_SIGNATURE,
+  ).map(({ name }) => [name, filingYearReindexSeed]),
+);
+
 const SEEDS = {
+  ...FILING_YEAR_REINDEX_SEEDS,
   "chat-content-v3": {
     kind: "row-work",
     assertPending: async (client, id) => {

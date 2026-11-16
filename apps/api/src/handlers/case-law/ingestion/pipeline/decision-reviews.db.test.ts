@@ -19,7 +19,7 @@ import { lockCaseLawDecisionSnapshot } from "@/api/lib/db/aggregate-lock";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const MIGRATION =
-  "../../../../../drizzle/20261116140300_case_law_decision_reviews/migration.sql";
+  "../../../../../drizzle/20261116180000_case_law_decision_reviews/migration.sql";
 const REVIEWING = toSafeId<"caseLawDecision">(
   "019dd78d-2e0c-7000-955a-63d713b246ba",
 );
