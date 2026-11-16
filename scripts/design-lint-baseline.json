@@ -608,7 +608,7 @@
     "apps/api/src/mcp/compat-corpus.ts": 2,
     "apps/api/src/mcp/document-compare-tool.ts": 1,
     "apps/api/src/mcp/static-tool-definitions.ts": 2,
-    "apps/api/src/mcp/valibot-tool-definition.ts": 13,
+    "apps/api/src/mcp/valibot-tool-definition.ts": 1,
     "apps/api/src/scripts/better-auth-microsoft-identity-map.logic.ts": 1,
     "apps/api/src/scripts/better-auth-migration-audit.logic.ts": 1,
     "apps/api/src/scripts/complete-sk-us-raw-plan.ts": 1,
