@@ -7,6 +7,7 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { CogIcon, PanelRightIcon, PinIcon, PinOffIcon } from "@stll/ui/icons";
 import {
   InspectorDock,
@@ -136,7 +137,7 @@ const InspectorRailFallback = () => {
               SIDE_RAIL_ICON_BUTTON_SIZE,
             )}
           >
-            <PanelRightIcon className="size-4" />
+            <DirectionalIcon className="size-4" icon={PanelRightIcon} />
           </span>
         }
       />

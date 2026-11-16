@@ -3,6 +3,7 @@ import { useRef } from "react";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   ListXIcon,
   Maximize2Icon,
@@ -60,7 +61,7 @@ export const useTabContextMenu = ({
     children: (
       <>
         <MenuItem onClick={() => setMinimized(true)}>
-          <PanelRightIcon />
+          <DirectionalIcon icon={PanelRightIcon} />
           {t("inspector.hidePane")}
         </MenuItem>
         {onMaximize && (

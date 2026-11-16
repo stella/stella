@@ -69,9 +69,10 @@ export { MicIcon as DictateIcon } from "lucide-react";
 // of pages with no pen, so it never reads as signing the document.
 export { FileStackIcon as EditPagesIcon } from "lucide-react";
 
-// Moving the main view into the side panel: the panel with a chevron pointing
-// into it, so it never reads as the inspector rail's plain panel toggle.
-// ownedBy: MoveToSideButton (apps/web/src/components/inspector/move-to-side-button.tsx)
+// Sending a view into the side panel (move the main view to the side, open a
+// reference or fork a chat there): the panel with a chevron pointing into it,
+// so it never reads as the plain panel that shows or hides the side panel.
+// Draw it through DirectionalIcon so it mirrors with the panel under RTL.
 export { PanelRightCloseIcon as MoveToSideIcon } from "lucide-react";
 
 // Published glyphs remain available to package consumers even when no
