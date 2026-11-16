@@ -276,6 +276,12 @@ describe("work obligation assignment updates", () => {
         }
         const actor = ownership === "self" ? ids.userA1 : ids.userA2;
         const audits: AuditEvent[] = [];
+        const recordAuditEvent: UpdateContext["recordAuditEvent"] = async (
+          _tx,
+          event,
+        ) => {
+          audits.push(...(Array.isArray(event) ? event : [event]));
+        };
         expect(
           await updateWorkObligation.handler(
             asTestRaw<UpdateContext>({
@@ -284,9 +290,7 @@ describe("work obligation assignment updates", () => {
               params: { workspaceId: ids.wsA1, entityId },
               route:
                 "/v1/work-obligations/:workspaceId/:entityId" satisfies ApiRoutePath,
-              recordAuditEvent: async (_tx, event) => {
-                audits.push(...(Array.isArray(event) ? event : [event]));
-              },
+              recordAuditEvent,
             }),
           ),
         ).toEqual({ success: true });
@@ -306,7 +310,7 @@ describe("work obligation assignment updates", () => {
         expect(after.acknowledgedAt).toEqual(
           ownership === "self" ? after.updatedAt : null,
         );
-        expect(history.map((event) => event.type)).toEqual(events);
+        expect(history.map((event) => event.type)).toEqual([...events]);
         expect(
           history.every(
             (event) => event.occurredAt.getTime() === after.updatedAt.getTime(),
@@ -340,6 +344,12 @@ describe("work obligation assignment updates", () => {
         where: { entityId: { eq: entityId } },
       })) ?? panic("Seeded obligation must exist");
     const audits: AuditEvent[] = [];
+    const recordAuditEvent: UpdateContext["recordAuditEvent"] = async (
+      _tx,
+      event,
+    ) => {
+      audits.push(...(Array.isArray(event) ? event : [event]));
+    };
     expect(
       await updateWorkObligation.handler(
         asTestRaw<UpdateContext>({
@@ -348,9 +358,7 @@ describe("work obligation assignment updates", () => {
           params: { workspaceId: ids.wsA1, entityId },
           route:
             "/v1/work-obligations/:workspaceId/:entityId" satisfies ApiRoutePath,
-          recordAuditEvent: async (_tx, event) => {
-            audits.push(...(Array.isArray(event) ? event : [event]));
-          },
+          recordAuditEvent,
         }),
       ),
     ).toEqual({ success: true });
