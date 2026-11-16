@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, asc, eq, gt, inArray, isNull } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNull, not } from "drizzle-orm";
 
 import { DECISION_IDENTIFIER_MAX_COUNT } from "@stll/legal-ast/decision-identifier";
 
@@ -221,8 +221,52 @@ type CorpusBootstrapCandidate<TEntityId extends string> = {
   documentId: TEntityId;
   sourceId: string;
   sourceDescriptor: Parameters<typeof isRedistributable>[0];
-  /** `CORPUS_ROW_PROJECTABLE`: whether the row's text has settled. */
-  projectable: boolean;
+};
+
+/**
+ * Which of these ids are not projectable (`CORPUS_ROW_PROJECTABLE`): an
+ * unlocked primary-key read, bounded by the ids.
+ */
+const selectUnprojectable = async (
+  tx: Transaction,
+  family: CorpusIndexProjectionSubject["family"],
+  entityIds: string[],
+): Promise<ReadonlySet<string>> => {
+  switch (family) {
+    case "case_law":
+      return new Set(
+        (
+          await tx
+            .select({ id: caseLawDecisions.id })
+            .from(caseLawDecisions)
+            .where(
+              and(
+                inArray(caseLawDecisions.id, entityIds),
+                not(CORPUS_ROW_PROJECTABLE.case_law),
+              ),
+            )
+            .limit(entityIds.length)
+        ).map(({ id }) => id),
+      );
+    case "legislation":
+      return new Set(
+        (
+          await tx
+            .select({ id: legislationDocuments.id })
+            .from(legislationDocuments)
+            .where(
+              and(
+                inArray(legislationDocuments.id, entityIds),
+                not(CORPUS_ROW_PROJECTABLE.legislation),
+              ),
+            )
+            .limit(entityIds.length)
+        ).map(({ id }) => id),
+      );
+    default:
+      family satisfies never;
+      return panic(`Unhandled family: ${String(family)}`);
+  }
 };
 
 /**
@@ -339,11 +383,6 @@ const runCorpusBootstrapPage = async <
     generation,
     entityIds: candidateIds,
   });
-  const projectable = new Set(
-    candidates.flatMap(({ documentId, projectable: settled }) =>
-      settled ? [documentId] : [],
-    ),
-  );
   const missingIds = candidateIds.filter(
     (candidateId) => !seededEntityIds.has(candidateId),
   );
@@ -351,15 +390,19 @@ const runCorpusBootstrapPage = async <
   // page's to seed: no generation shows it, and the transaction that settles
   // it seeds every active generation. One that some generation holds is owed
   // a state here as well, so every generation shows it or none does.
+  const unprojectable =
+    missingIds.length === 0
+      ? new Set<string>()
+      : await selectUnprojectable(tx, family, missingIds);
   const projectedAnywhere = await selectProjectedAnywhere(
     tx,
     family,
-    missingIds.filter((candidateId) => !projectable.has(candidateId)),
+    missingIds.filter((candidateId) => unprojectable.has(candidateId)),
   );
   const deferredIds = new Set(
     missingIds.filter(
       (candidateId) =>
-        !projectable.has(candidateId) && !projectedAnywhere.has(candidateId),
+        unprojectable.has(candidateId) && !projectedAnywhere.has(candidateId),
     ),
   );
   const unseededIds = missingIds.filter(
@@ -501,7 +544,6 @@ const bootstrapCaseLaw = async ({
           documentId: caseLawDecisions.id,
           sourceId: caseLawDecisions.sourceId,
           sourceDescriptor: caseLawSources.descriptor,
-          projectable: CORPUS_ROW_PROJECTABLE.case_law,
         })
         .from(caseLawDecisions)
         .innerJoin(
@@ -694,7 +736,6 @@ const bootstrapLegislation = async ({
           documentId: legislationDocuments.id,
           sourceId: legislationDocuments.sourceId,
           sourceDescriptor: legislationSources.descriptor,
-          projectable: CORPUS_ROW_PROJECTABLE.legislation,
         })
         .from(legislationDocuments)
         .innerJoin(

@@ -2802,16 +2802,16 @@
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-projection-bootstrap.ts",
-    "fingerprint": "fa69170793ccb0f6dbc1630a77c63fec742d133bd3c5a527852e788359f2c3e0",
+    "fingerprint": "8e1a540ef8067fc290af7147295d63cce2d7e8d13bc54e3b8f77c0da715a8c33",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-bootstrap.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner. The page now also selects whether each row is projectable, which changes its source fingerprint without changing the acquisition, its order or the count.",
+    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-bootstrap.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
     "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-projection-bootstrap.ts",
-    "fingerprint": "2bb2f8b3224b399e60dc2d82034d213e36463f368b7207e49f725ec7da72e093",
+    "fingerprint": "a8fdcbb49ebf048380f683cbc48c7f10d964f34bea0853cfbd6ee5b1e732860e",
     "count": 1,
-    "reason": "Existing case-law bootstrap page transaction; the page now also reads vacated jurisdictions, provision keys and whether each row is projectable inside it, which changes its source fingerprint without changing the acquisition, its order or the count.",
+    "reason": "Existing case-law bootstrap page transaction; the page now also reads vacated jurisdictions and provision keys inside it, which changes its source fingerprint without changing the acquisition, its order or the count.",
     "holder": "stella_ingestion"
   },
   {
