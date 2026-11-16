@@ -30,6 +30,7 @@ export const PARSER_FIXTURE_OWNERS = {
   "eu-ecj": ["parseEcjDecisionHtml"],
   "hu-bhgy": ["parseHuBhgyDecision"],
   "uk-fcl": ["parseUkFclDecision"],
+  "br-tst": ["parseBrTstHtml", "parseBrTstDespacho", "parseBrTstPrecedent"],
   "pl-kis": [
     "parsePlKisDocumentHtml",
     "parsePlKisDocumentPdf",

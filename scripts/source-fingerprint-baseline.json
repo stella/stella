@@ -68,6 +68,11 @@
       "storedInputIdentity": "bf8b995b45fcfa1444c8669973fcdf4cb4dfa6883b33e7b88c17abe69f799f41",
       "version": 0
     },
+    "br-tst::decision": {
+      "fingerprint": "e6d12e3568d89e2d2b8c58d639d9b512d374802b758d8a5bbd23db49195d51d4",
+      "storedInputIdentity": "392ad34bd08ea2894d5c353d607a66956dd36c58e058681dfda78607c943c730",
+      "version": 0
+    },
     "cz-ns::decision": {
       "fingerprint": "b676541c6ed1a6836eb338f41fb10fb2efcfe5ba298f7b4bf2c88a558b8478ca",
       "storedInputIdentity": "f4f1998c94b30c6a2986f9d002092eb61a347aa128f858c536704c2bdab0e715",

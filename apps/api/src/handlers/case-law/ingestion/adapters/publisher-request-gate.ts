@@ -1,3 +1,4 @@
+// parser-output-unchanged: the TST gate reservation is new; existing gates and parsed output are unchanged.
 // parser-output-unchanged: gate reservation timeouts carry a static label per gate; parsed response output is unchanged.
 // parser-output-unchanged: typed pacing availability and reply validation affect request scheduling only; parsed response values and persisted records are unchanged.
 // parser-output-unchanged: request scheduling and scoped fixture dependencies only; parsed response output is unchanged.
@@ -51,6 +52,7 @@ const PUBLISHER_GATE_TIMEOUT_LABEL = {
   "cellar-eu": "cellar-eu publisher gate reservation",
   "bfdi-de": "bfdi-de publisher gate reservation",
   "fcl-uk": "fcl-uk publisher gate reservation",
+  "tst-jus-br": "tst-jus-br publisher gate reservation",
   "suip-cz": "suip-cz publisher gate reservation",
   "uoou-sk": "uoou-sk publisher gate reservation",
 } as const satisfies Record<PublisherGateId, string>;

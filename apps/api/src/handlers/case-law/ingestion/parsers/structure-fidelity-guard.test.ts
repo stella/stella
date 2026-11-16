@@ -45,6 +45,7 @@ const FIXTURE_COVERAGE: Readonly<
   "at-verg": RECORDED,
   "at-vfgh": RECORDED,
   "at-vwgh": RECORDED,
+  "br-tst": RECORDED,
   "cz-ns": RECORDED,
   "cz-nss": RECORDED,
   "cz-regional": RECORDED,
