@@ -7712,7 +7712,7 @@ describe("undoing the file changes made since a message", () => {
       restoreId: undo.restoreId,
       outcome: "restored",
     });
-    expect((await settled(threadId, turnId))?.state).toBe("restored");
+    expect((await settled(threadId, turnId)).state).toBe("restored");
 
     // The edit removes the answers after the edited message, and with them
     // the turn the undo was asked from.
