@@ -25,7 +25,7 @@ import { createResponseSet } from "@/api/http/context";
 import { status, unwrapStatus } from "@/api/http/status";
 import type { SafeId } from "@/api/lib/branded-types";
 import { announceChatQueueChange } from "@/api/lib/chat/chat-queue-announcement";
-import { resolveQueuedTurnMember } from "@/api/lib/chat/queued-turn-member";
+import { resolveServerStartedMember } from "@/api/lib/chat/server-started-member";
 import { lockChatThreadForTurnOnTx } from "@/api/lib/db/aggregate-lock";
 import {
   type ChatQueueHoldWrite,
@@ -123,7 +123,7 @@ const sendNextQueuedChatMessage = async ({
   if (due === null) {
     return { type: "not-due" };
   }
-  const member = await resolveQueuedTurnMember({
+  const member = await resolveServerStartedMember({
     organizationId: due.organizationId,
     userId: due.userId,
     threadId,

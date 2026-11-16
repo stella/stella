@@ -38,6 +38,7 @@ import { deleteChatFilesOnTx } from "@/api/handlers/chat/upload-files";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
+import { ACTIVE_CHAT_TURN_STATUSES } from "@/api/lib/chat/turn-status";
 import {
   admitMemberMessageOnTx,
   holdChatQueueOnTx,
@@ -75,6 +76,7 @@ type TurnStatus =
   | "accepted"
   | "running"
   | "awaiting-user"
+  | "handed-over"
   | "completed"
   | "failed"
   | "cancelled"
@@ -84,6 +86,7 @@ const ACTIVE: ReadonlySet<TurnStatus> = new Set([
   "accepted",
   "running",
   "awaiting-user",
+  "handed-over",
 ]);
 
 /** A plain model of one thread's queue and its newest turn. */
@@ -129,6 +132,8 @@ type Operation =
   | { type: "run" }
   | { type: "wait" }
   | { type: "answer" }
+  | { type: "hand-over" }
+  | { type: "adopt" }
   | { type: "end"; outcome: TerminalOutcome }
   | { type: "take"; stale: boolean };
 
@@ -152,6 +157,8 @@ const operation: fc.Arbitrary<Operation> = fc.oneof(
   fc.record({ type: fc.constant("run") }),
   fc.record({ type: fc.constant("wait") }),
   fc.record({ type: fc.constant("answer") }),
+  fc.record({ type: fc.constant("hand-over") }),
+  fc.record({ type: fc.constant("adopt") }),
   fc.record({
     type: fc.constant("end"),
     outcome: fc.constantFrom<TerminalOutcome>(
@@ -274,7 +281,7 @@ const suite = (
         .where(
           and(
             eq(chatTurns.threadId, threadId),
-            inArray(chatTurns.status, ["accepted", "running", "awaiting-user"]),
+            inArray(chatTurns.status, [...ACTIVE_CHAT_TURN_STATUSES]),
           ),
         )
     ).at(0)?.id ?? panic("The model has an active turn the store lacks");
@@ -294,6 +301,7 @@ const suite = (
       const assistantMessageId = createSafeId<"chatMessage">();
       const needsAnswer =
         status === "awaiting-user" ||
+        status === "handed-over" ||
         status === "completed" ||
         status === "failed";
       if (needsAnswer) {
@@ -331,6 +339,12 @@ const suite = (
               assistantMessageId,
               interactionToolCallId: "call-1",
               interactionType: "approval" as const,
+            };
+          case "handed-over":
+            return {
+              ...cleared,
+              assistantMessageId,
+              leaseExpiresAt: sql<Date>`now() + interval '90 seconds'`,
             };
           case "completed":
             return {
@@ -468,7 +482,7 @@ const suite = (
       .where(
         and(
           eq(chatTurns.threadId, threadId),
-          inArray(chatTurns.status, ["accepted", "running", "awaiting-user"]),
+          inArray(chatTurns.status, [...ACTIVE_CHAT_TURN_STATUSES]),
         ),
       );
     expect(active.length).toBe(ACTIVE.has(model.turn) ? 1 : 0);
@@ -666,6 +680,36 @@ const suite = (
         return;
       case "answer":
         if (model.turn !== "awaiting-user") {
+          return;
+        }
+        await setTurnStatus({ owner, status: "running", threadId });
+        model.turn = "running";
+        return;
+      case "hand-over": {
+        if (model.turn !== "running") {
+          return;
+        }
+        // Its owner released it for another task: not an end of the turn,
+        // so the queue keeps waiting behind it.
+        const turnId = await setTurnStatus({
+          owner,
+          status: "handed-over",
+          threadId,
+        });
+        await withLock(threadId, owner, async (tx) => {
+          await holdChatQueueAfterTurnOnTx({
+            outcome: "handed-over",
+            threadId,
+            turnId,
+            tx,
+          });
+        });
+        expect(CHAT_QUEUE_AFTER_TURN["handed-over"].type).toBe("wait");
+        model.turn = "handed-over";
+        return;
+      }
+      case "adopt":
+        if (model.turn !== "handed-over") {
           return;
         }
         await setTurnStatus({ owner, status: "running", threadId });

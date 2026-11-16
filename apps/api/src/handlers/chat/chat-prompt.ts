@@ -69,7 +69,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import type { PracticeJurisdiction } from "@/api/db/schema";
-import { corpusStorageMode } from "@/api/env-base";
+import { corpusStorageMode, envBase } from "@/api/env-base";
 import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
 import { selectStatuteProvisions } from "@/api/handlers/chat/active-statute-selection.logic";
 import type { StatuteProvisionSelection } from "@/api/handlers/chat/active-statute-selection.logic";
@@ -179,7 +179,7 @@ import {
   sanitizePromptLine,
   untrustedText,
 } from "@/api/lib/prompt-safety";
-import { readS3ArrayBuffer } from "@/api/lib/s3";
+import { OBJECT_READ_TIMEOUT_MS, readS3ObjectBounded } from "@/api/lib/s3";
 import type { McpFeatureAccessContext } from "@/api/mcp/feature-access";
 
 export type {
@@ -959,14 +959,17 @@ const resolveActiveFilePromptContext = async ({
 
   const readResult = await Result.tryPromise({
     try: async () =>
-      await readS3ArrayBuffer(
-        createFileKey({
+      await readS3ObjectBounded({
+        bucket: envBase.S3_BUCKET,
+        key: createFileKey({
           organizationId,
           workspaceId,
           fileId: content.id,
           mimeType: content.mimeType,
         }),
-      ),
+        maxBytes: FILE_SIZE_LIMIT_BYTES.document,
+        signal: AbortSignal.timeout(OBJECT_READ_TIMEOUT_MS),
+      }),
     catch: (cause) => cause,
   });
   if (Result.isError(readResult)) {
@@ -982,7 +985,14 @@ const resolveActiveFilePromptContext = async ({
     );
     return Result.ok(promptBase);
   }
-  const previewResult = await emailToPreview(readResult.value, emailMimeType);
+  const bytes = readResult.value;
+  const buffer =
+    bytes.buffer instanceof ArrayBuffer &&
+    bytes.byteOffset === 0 &&
+    bytes.byteLength === bytes.buffer.byteLength
+      ? bytes.buffer
+      : bytes.slice().buffer;
+  const previewResult = await emailToPreview(buffer, emailMimeType);
   if (Result.isError(previewResult)) {
     captureError(
       previewResult.error,

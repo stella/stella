@@ -92,6 +92,118 @@ const CHAT_TURN_TIMING_ACTIVE_SQL_VALUES = CHAT_TURN_STATUSES.filter(
   (status) => CHAT_TURN_TIMING_DISPOSITION[status] !== "finished",
 ).map((status) => sql`${status}`);
 
+type ChatTurnStateColumns = Record<
+  | "assistantMessageId"
+  | "cancellationReason"
+  | "executionId"
+  | "failureCode"
+  | "failureRetryable"
+  | "interactionToolCallId"
+  | "interactionType"
+  | "interruptionReason"
+  | "leaseExpiresAt"
+  | "settledAt"
+  | "status",
+  AnyPgColumn
+>;
+
+/**
+ * The columns each chat turn status carries (`chat_turns_state_payload_check`):
+ * a status not listed is refused.
+ */
+const chatTurnStatePayload = (table: ChatTurnStateColumns) =>
+  sql`CASE ${table.status}
+      WHEN 'accepted' THEN
+        ${table.leaseExpiresAt} IS NOT NULL AND
+        ${table.executionId} IS NULL AND
+        ${table.assistantMessageId} IS NULL AND
+        ${table.interactionType} IS NULL AND
+        ${table.interactionToolCallId} IS NULL AND
+        ${table.failureCode} IS NULL AND
+        ${table.failureRetryable} IS NULL AND
+        ${table.cancellationReason} IS NULL AND
+        ${table.interruptionReason} IS NULL AND
+        ${table.settledAt} IS NULL
+      WHEN 'running' THEN
+        ${table.leaseExpiresAt} IS NOT NULL AND
+        ${table.executionId} IS NOT NULL AND
+        ${table.assistantMessageId} IS NULL AND
+        ${table.interactionType} IS NULL AND
+        ${table.interactionToolCallId} IS NULL AND
+        ${table.failureCode} IS NULL AND
+        ${table.failureRetryable} IS NULL AND
+        ${table.cancellationReason} IS NULL AND
+        ${table.interruptionReason} IS NULL AND
+        ${table.settledAt} IS NULL
+      WHEN 'awaiting-user' THEN
+        ${table.leaseExpiresAt} IS NULL AND
+        ${table.executionId} IS NULL AND
+        ${table.assistantMessageId} IS NOT NULL AND
+        ${table.interactionType} IS NOT NULL AND
+        ${table.interactionToolCallId} IS NOT NULL AND
+        ${table.failureCode} IS NULL AND
+        ${table.failureRetryable} IS NULL AND
+        ${table.cancellationReason} IS NULL AND
+        ${table.interruptionReason} IS NULL AND
+        ${table.settledAt} IS NULL
+      WHEN 'handed-over' THEN
+        ${table.leaseExpiresAt} IS NOT NULL AND
+        ${table.executionId} IS NULL AND
+        ${table.assistantMessageId} IS NOT NULL AND
+        ${table.interactionType} IS NULL AND
+        ${table.interactionToolCallId} IS NULL AND
+        ${table.failureCode} IS NULL AND
+        ${table.failureRetryable} IS NULL AND
+        ${table.cancellationReason} IS NULL AND
+        ${table.interruptionReason} IS NULL AND
+        ${table.settledAt} IS NULL
+      WHEN 'completed' THEN
+        ${table.leaseExpiresAt} IS NULL AND
+        ${table.executionId} IS NULL AND
+        ${table.assistantMessageId} IS NOT NULL AND
+        ${table.interactionType} IS NULL AND
+        ${table.interactionToolCallId} IS NULL AND
+        ${table.failureCode} IS NULL AND
+        ${table.failureRetryable} IS NULL AND
+        ${table.cancellationReason} IS NULL AND
+        ${table.interruptionReason} IS NULL AND
+        ${table.settledAt} IS NOT NULL
+      WHEN 'failed' THEN
+        ${table.leaseExpiresAt} IS NULL AND
+        ${table.executionId} IS NULL AND
+        ${table.assistantMessageId} IS NOT NULL AND
+        ${table.interactionType} IS NULL AND
+        ${table.interactionToolCallId} IS NULL AND
+        ${table.failureCode} IS NOT NULL AND
+        ${table.failureRetryable} IS NOT NULL AND
+        ${table.cancellationReason} IS NULL AND
+        ${table.interruptionReason} IS NULL AND
+        ${table.settledAt} IS NOT NULL
+      WHEN 'cancelled' THEN
+        ${table.leaseExpiresAt} IS NULL AND
+        ${table.executionId} IS NULL AND
+        ${table.assistantMessageId} IS NULL AND
+        ${table.interactionType} IS NULL AND
+        ${table.interactionToolCallId} IS NULL AND
+        ${table.failureCode} IS NULL AND
+        ${table.failureRetryable} IS NULL AND
+        ${table.cancellationReason} IS NOT NULL AND
+        ${table.interruptionReason} IS NULL AND
+        ${table.settledAt} IS NOT NULL
+      WHEN 'interrupted' THEN
+        ${table.leaseExpiresAt} IS NULL AND
+        ${table.executionId} IS NULL AND
+        ${table.assistantMessageId} IS NULL AND
+        ${table.interactionType} IS NULL AND
+        ${table.interactionToolCallId} IS NULL AND
+        ${table.failureCode} IS NULL AND
+        ${table.failureRetryable} IS NULL AND
+        ${table.cancellationReason} IS NULL AND
+        ${table.interruptionReason} IS NOT NULL AND
+        ${table.settledAt} IS NOT NULL
+      ELSE false
+    END`;
+
 const CHAT_THREAD_NAME_KIND_SQL_VALUES = CHAT_THREAD_NAME_KINDS.map((kind) =>
   sql.raw(`'${kind}'`),
 );
@@ -690,89 +802,7 @@ export const chatTurns = p.pgTable(
       "chat_turns_interruption_reason_values_check",
       sql`${table.interruptionReason} IS NULL OR ${table.interruptionReason} IN (${sql.join(CHAT_TURN_INTERRUPTION_REASON_SQL_VALUES, sql`, `)})`,
     ),
-    p.check(
-      "chat_turns_state_payload_check",
-      sql`CASE ${table.status}
-        WHEN 'accepted' THEN
-          ${table.leaseExpiresAt} IS NOT NULL AND
-          ${table.executionId} IS NULL AND
-          ${table.assistantMessageId} IS NULL AND
-          ${table.interactionType} IS NULL AND
-          ${table.interactionToolCallId} IS NULL AND
-          ${table.failureCode} IS NULL AND
-          ${table.failureRetryable} IS NULL AND
-          ${table.cancellationReason} IS NULL AND
-          ${table.interruptionReason} IS NULL AND
-          ${table.settledAt} IS NULL
-        WHEN 'running' THEN
-          ${table.leaseExpiresAt} IS NOT NULL AND
-          ${table.executionId} IS NOT NULL AND
-          ${table.assistantMessageId} IS NULL AND
-          ${table.interactionType} IS NULL AND
-          ${table.interactionToolCallId} IS NULL AND
-          ${table.failureCode} IS NULL AND
-          ${table.failureRetryable} IS NULL AND
-          ${table.cancellationReason} IS NULL AND
-          ${table.interruptionReason} IS NULL AND
-          ${table.settledAt} IS NULL
-        WHEN 'awaiting-user' THEN
-          ${table.leaseExpiresAt} IS NULL AND
-          ${table.executionId} IS NULL AND
-          ${table.assistantMessageId} IS NOT NULL AND
-          ${table.interactionType} IS NOT NULL AND
-          ${table.interactionToolCallId} IS NOT NULL AND
-          ${table.failureCode} IS NULL AND
-          ${table.failureRetryable} IS NULL AND
-          ${table.cancellationReason} IS NULL AND
-          ${table.interruptionReason} IS NULL AND
-          ${table.settledAt} IS NULL
-        WHEN 'completed' THEN
-          ${table.leaseExpiresAt} IS NULL AND
-          ${table.executionId} IS NULL AND
-          ${table.assistantMessageId} IS NOT NULL AND
-          ${table.interactionType} IS NULL AND
-          ${table.interactionToolCallId} IS NULL AND
-          ${table.failureCode} IS NULL AND
-          ${table.failureRetryable} IS NULL AND
-          ${table.cancellationReason} IS NULL AND
-          ${table.interruptionReason} IS NULL AND
-          ${table.settledAt} IS NOT NULL
-        WHEN 'failed' THEN
-          ${table.leaseExpiresAt} IS NULL AND
-          ${table.executionId} IS NULL AND
-          ${table.assistantMessageId} IS NOT NULL AND
-          ${table.interactionType} IS NULL AND
-          ${table.interactionToolCallId} IS NULL AND
-          ${table.failureCode} IS NOT NULL AND
-          ${table.failureRetryable} IS NOT NULL AND
-          ${table.cancellationReason} IS NULL AND
-          ${table.interruptionReason} IS NULL AND
-          ${table.settledAt} IS NOT NULL
-        WHEN 'cancelled' THEN
-          ${table.leaseExpiresAt} IS NULL AND
-          ${table.executionId} IS NULL AND
-          ${table.assistantMessageId} IS NULL AND
-          ${table.interactionType} IS NULL AND
-          ${table.interactionToolCallId} IS NULL AND
-          ${table.failureCode} IS NULL AND
-          ${table.failureRetryable} IS NULL AND
-          ${table.cancellationReason} IS NOT NULL AND
-          ${table.interruptionReason} IS NULL AND
-          ${table.settledAt} IS NOT NULL
-        WHEN 'interrupted' THEN
-          ${table.leaseExpiresAt} IS NULL AND
-          ${table.executionId} IS NULL AND
-          ${table.assistantMessageId} IS NULL AND
-          ${table.interactionType} IS NULL AND
-          ${table.interactionToolCallId} IS NULL AND
-          ${table.failureCode} IS NULL AND
-          ${table.failureRetryable} IS NULL AND
-          ${table.cancellationReason} IS NULL AND
-          ${table.interruptionReason} IS NOT NULL AND
-          ${table.settledAt} IS NOT NULL
-        ELSE false
-      END`,
-    ),
+    p.check("chat_turns_state_payload_check", chatTurnStatePayload(table)),
     p.check(
       "chat_turns_lease_after_created_check",
       sql`${table.leaseExpiresAt} IS NULL OR ${table.leaseExpiresAt} > ${table.createdAt}`,
@@ -787,10 +817,20 @@ export const chatTurns = p.pgTable(
     p
       .uniqueIndex("chat_turns_thread_ordinal_uidx")
       .on(table.threadId, table.ordinal.asc().nullsFirst()),
+    // Superseded by chat_turns_active_thread_v2_uidx, which also covers
+    // `handed-over`; dropped once that one is valid everywhere.
     p
       .uniqueIndex("chat_turns_active_thread_uidx")
       .on(table.threadId)
       .where(sql`${table.status} IN ('accepted', 'running', 'awaiting-user')`),
+    // A thread holds at most one unsettled turn. Built online
+    // (indexes-chat-turns-handed-over-indexes).
+    p
+      .uniqueIndex("chat_turns_active_thread_v2_uidx")
+      .on(table.threadId)
+      .where(
+        sql`${table.status} IN ('accepted', 'running', 'awaiting-user', 'handed-over')`,
+      ),
     p
       .index("chat_turns_org_user_thread_created_idx")
       .on(
@@ -800,12 +840,20 @@ export const chatTurns = p.pgTable(
         table.createdAt,
         table.id,
       ),
-    // A member's unfinished runs, without walking their settled history.
-    // Built online (indexes-chat-turns-org-user-active-idx).
+    // Superseded by chat_turns_org_user_active_v2_idx; dropped once that one
+    // is valid everywhere. Built online (indexes-chat-turns-org-user-active-idx).
     p
       .index("chat_turns_org_user_active_idx")
       .on(table.organizationId, table.userId)
       .where(sql`${table.status} IN ('accepted', 'running', 'awaiting-user')`),
+    // A member's unfinished runs, without walking their settled history.
+    // Built online (indexes-chat-turns-handed-over-indexes).
+    p
+      .index("chat_turns_org_user_active_v2_idx")
+      .on(table.organizationId, table.userId)
+      .where(
+        sql`${table.status} IN ('accepted', 'running', 'awaiting-user', 'handed-over')`,
+      ),
     p
       .index("chat_turns_org_user_message_created_idx")
       .on(table.organizationId, table.userMessageId, table.createdAt, table.id),
@@ -813,8 +861,15 @@ export const chatTurns = p.pgTable(
       .uniqueIndex("chat_turns_org_run_id_uidx")
       .on(table.organizationId, table.runId)
       .where(sql`${table.runId} IS NOT NULL`),
+    // Superseded by chat_turns_org_active_lease_v2_idx; dropped once that one
+    // is valid everywhere.
     p
       .index("chat_turns_org_active_lease_idx")
+      .on(table.organizationId, table.status, table.leaseExpiresAt, table.id)
+      .where(sql`${table.status} IN ('accepted', 'running')`),
+    // Built online (indexes-chat-turns-handed-over-indexes).
+    p
+      .index("chat_turns_org_active_lease_v2_idx")
       .on(table.organizationId, table.status, table.leaseExpiresAt, table.id)
       .where(
         sql`${table.status} IN (${sql.join(CHAT_TURN_TIMING_ACTIVE_SQL_VALUES, sql`, `)})`,

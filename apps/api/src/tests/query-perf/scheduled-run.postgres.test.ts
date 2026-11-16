@@ -25,7 +25,7 @@ import { flowReviewGateFixture } from "@/api/tests/helpers/flow-review-gate";
 
 import { seedDataExportScenario } from "./data-export-seed";
 import { withQueryPerfFixture } from "./fixture";
-import { scaleViolations } from "./measurement";
+import { scaleViolations, scheduledJobBudgetProblems } from "./measurement";
 import { measureScheduledJobRun } from "./scheduled-run";
 import { QUERY_PERF_CONNECTION_SETTINGS } from "./settings";
 
@@ -106,31 +106,73 @@ const EXPORT_CASES = [
     "export measurement executes auto / quiet once without replaying writes",
     "auto",
     "quiet",
+    "vacuumed",
   ],
   [
     "export measurement executes auto / transitions once without replaying writes",
     "auto",
     "transitions",
+    "vacuumed",
   ],
   [
     "export measurement executes auto / queued once without replaying writes",
     "auto",
     "queued",
+    "vacuumed",
   ],
   [
     "export measurement executes force_generic_plan / quiet once without replaying writes",
     "force_generic_plan",
     "quiet",
+    "vacuumed",
   ],
   [
     "export measurement executes force_generic_plan / transitions once without replaying writes",
     "force_generic_plan",
     "transitions",
+    "vacuumed",
   ],
   [
     "export measurement executes force_generic_plan / queued once without replaying writes",
     "force_generic_plan",
     "queued",
+    "vacuumed",
+  ],
+  [
+    "export measurement executes auto / quiet after heap updates without replaying writes",
+    "auto",
+    "quiet",
+    "updated",
+  ],
+  [
+    "export measurement executes auto / transitions after heap updates without replaying writes",
+    "auto",
+    "transitions",
+    "updated",
+  ],
+  [
+    "export measurement executes auto / queued after heap updates without replaying writes",
+    "auto",
+    "queued",
+    "updated",
+  ],
+  [
+    "export measurement executes force_generic_plan / quiet after heap updates without replaying writes",
+    "force_generic_plan",
+    "quiet",
+    "updated",
+  ],
+  [
+    "export measurement executes force_generic_plan / transitions after heap updates without replaying writes",
+    "force_generic_plan",
+    "transitions",
+    "updated",
+  ],
+  [
+    "export measurement executes force_generic_plan / queued after heap updates without replaying writes",
+    "force_generic_plan",
+    "queued",
+    "updated",
   ],
 ] as const;
 
@@ -138,6 +180,7 @@ describe.skipIf(!enabled)("scheduled export measurement (postgres)", () => {
   const measureExport = async (
     planCacheMode: (typeof EXPORT_CASES)[number][1],
     cohort: (typeof EXPORT_CASES)[number][2],
+    heapState: (typeof EXPORT_CASES)[number][3],
   ): Promise<void> => {
     await withQueryPerfFixture({
       databaseUrl:
@@ -153,6 +196,10 @@ describe.skipIf(!enabled)("scheduled export measurement (postgres)", () => {
             plan_cache_mode: planCacheMode,
           },
         });
+        // The disposable clone owns both visibility states; background vacuum must not change either scale.
+        await db.execute(
+          sql`ALTER TABLE public.organization_data_exports SET (autovacuum_enabled = false)`,
+        );
         expect(
           executedRows(
             await db.execute(
@@ -182,6 +229,12 @@ describe.skipIf(!enabled)("scheduled export measurement (postgres)", () => {
             cohort,
           } as const;
           await seedDataExportScenario(db, scenario);
+          if (heapState === "updated") {
+            await db.execute(
+              sql`UPDATE organization_data_exports SET failures = failures`,
+            );
+            await db.execute(sql`ANALYZE organization_data_exports`);
+          }
           const original = await exportRows();
           const originalById = new Map(original.map((row) => [row.id, row]));
           let enqueued = 0;
@@ -198,12 +251,39 @@ describe.skipIf(!enabled)("scheduled export measurement (postgres)", () => {
               },
             },
           });
+          if (heapState === "vacuumed") {
+            expect(
+              scheduledJobBudgetProblems(
+                "scheduled.dataExports.maintain",
+                measured,
+              ),
+            ).toEqual([]);
+          }
           expect(
             measured.planViolations.filter(
               ({ kind }) =>
                 kind === "large-scan" || kind === "deadline-missing",
             ),
           ).toEqual([]);
+          let queuedReads = 0;
+          for (const { statement, queuedExportRead } of measured.statements) {
+            if (queuedExportRead === undefined) {
+              continue;
+            }
+            queuedReads += 1;
+            // One key scan and one primary-key detail read per lookahead row.
+            expect(
+              queuedExportRead.rowsVisited,
+              JSON.stringify({
+                planCacheMode,
+                cohort,
+                rows,
+                statement,
+                queuedExportRead,
+              }),
+            ).toBeLessThanOrEqual(2 * queuedExportRead.lookaheadLimit);
+          }
+          expect(queuedReads).toBeGreaterThan(0);
           expect(await db.$count(systemAuditRuns)).toBe(1);
           const changed = await exportRows();
           const audits = await db.$count(auditLogs);
@@ -275,9 +355,9 @@ describe.skipIf(!enabled)("scheduled export measurement (postgres)", () => {
     });
   };
 
-  for (const [title, planCacheMode, cohort] of EXPORT_CASES) {
+  for (const [title, planCacheMode, cohort, heapState] of EXPORT_CASES) {
     test(title, async () => {
-      await measureExport(planCacheMode, cohort);
+      await measureExport(planCacheMode, cohort, heapState);
     });
   }
 });

@@ -104,7 +104,11 @@ const sendQueuedChatMessageNow = createSafeRootHandler(
                 .where(
                   and(
                     eq(chatTurns.threadId, threadId),
-                    inArray(chatTurns.status, ["running", "awaiting-user"]),
+                    inArray(chatTurns.status, [
+                      "running",
+                      "awaiting-user",
+                      "handed-over",
+                    ]),
                   ),
                 )
                 .limit(1)
