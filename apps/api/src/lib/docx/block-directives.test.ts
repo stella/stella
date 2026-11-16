@@ -278,7 +278,7 @@ describe("resolvePath", () => {
 // ── flattenTemplateData ──────────────────────────────────
 
 describe("flattenTemplateData", () => {
-  test("flat string data preserves every own key and its iteration order", () => {
+  test("flat template data preserves own string entries", () => {
     assertProperty(
       "flat template data preserves own string entries",
       fc.property(
