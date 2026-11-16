@@ -4,72 +4,96 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## corpus_index_generations · `corpusIndexGenerations` · corpus-index-generations.ts:30 · rls
+## corpus_index_generations · `corpusIndexGenerations` · corpus-index-generations.ts:34 · rls
 
 Immutable binding of one corpus generation to the trusted Quickwit cluster that owns it, plus the generation's small serving lifecycle.
 
 ```text
-corpus_index_generations.family           text         not null          corpus-index-generations.ts:33
-corpus_index_generations.generation       varchar      not null          corpus-index-generations.ts:34
-corpus_index_generations.cluster          text         not null          corpus-index-generations.ts:37
-corpus_index_generations.manifest_digest  varchar      not null          corpus-index-generations.ts:38
-corpus_index_generations.status           text         not null          corpus-index-generations.ts:39
-corpus_index_generations.created_at       timestamptz  default,not null  corpus-index-generations.ts:40
-corpus_index_generations.updated_at       timestamptz  default,not null  corpus-index-generations.ts:41
+corpus_index_generations.family           text         not null          corpus-index-generations.ts:37
+corpus_index_generations.generation       varchar      not null          corpus-index-generations.ts:38
+corpus_index_generations.cluster          text         not null          corpus-index-generations.ts:41
+corpus_index_generations.manifest_digest  varchar      not null          corpus-index-generations.ts:42
+corpus_index_generations.status           text         not null          corpus-index-generations.ts:43
+corpus_index_generations.created_at       timestamptz  default,not null  corpus-index-generations.ts:44
+corpus_index_generations.updated_at       timestamptz  default,not null  corpus-index-generations.ts:45
 ```
 
-## corpus_index_projection_revisions · `corpusIndexProjectionRevisions` · corpus-index-generations.ts:89 · rls
+## corpus_index_projection_revisions · `corpusIndexProjectionRevisions` · corpus-index-generations.ts:93 · rls
 
 Sequence-ordered revisions for projection mutations.
 
 ```text
-corpus_index_projection_revisions.family          text         fk,not null         corpus-index-generations.ts:92
-corpus_index_projection_revisions.generation      varchar      fk,not null         corpus-index-generations.ts:93
-corpus_index_projection_revisions.revision        bigint       generated,not null  corpus-index-generations.ts:96
-corpus_index_projection_revisions.transaction_id  bigint       not null            corpus-index-generations.ts:100
-corpus_index_projection_revisions.created_at      timestamptz  default,not null    corpus-index-generations.ts:101
+corpus_index_projection_revisions.family          text         fk,not null         corpus-index-generations.ts:96
+corpus_index_projection_revisions.generation      varchar      fk,not null         corpus-index-generations.ts:97
+corpus_index_projection_revisions.revision        bigint       generated,not null  corpus-index-generations.ts:100
+corpus_index_projection_revisions.transaction_id  bigint       not null            corpus-index-generations.ts:104
+corpus_index_projection_revisions.created_at      timestamptz  default,not null    corpus-index-generations.ts:105
 ```
 
-## corpus_index_group_enrollments · `corpusIndexGroupEnrollments` · corpus-index-generations.ts:157 · rls
+## corpus_index_group_enrollments · `corpusIndexGroupEnrollments` · corpus-index-generations.ts:161 · rls
 
 One index group of a generation bound to the contract its physical index is created under, for a group whose index the manifest cannot vouch for: one under a g…
 
 ```text
-corpus_index_group_enrollments.family               text         fk,not null       corpus-index-generations.ts:160
-corpus_index_group_enrollments.generation           varchar      fk,not null       corpus-index-generations.ts:161
-corpus_index_group_enrollments.index_group          varchar      not null          corpus-index-generations.ts:164
-corpus_index_group_enrollments.physical_index_id    varchar      not null          corpus-index-generations.ts:165
-corpus_index_group_enrollments.contract_version     text         not null          corpus-index-generations.ts:168
-corpus_index_group_enrollments.effective_digest     varchar      not null          corpus-index-generations.ts:171
-corpus_index_group_enrollments.provisioning_status  text         not null          corpus-index-generations.ts:172
-corpus_index_group_enrollments.attested_at          timestamptz  null              corpus-index-generations.ts:177
-corpus_index_group_enrollments.created_at           timestamptz  default,not null  corpus-index-generations.ts:178
-corpus_index_group_enrollments.updated_at           timestamptz  default,not null  corpus-index-generations.ts:179
+corpus_index_group_enrollments.family               text         fk,not null       corpus-index-generations.ts:164
+corpus_index_group_enrollments.generation           varchar      fk,not null       corpus-index-generations.ts:165
+corpus_index_group_enrollments.index_group          varchar      not null          corpus-index-generations.ts:168
+corpus_index_group_enrollments.physical_index_id    varchar      not null          corpus-index-generations.ts:169
+corpus_index_group_enrollments.contract_version     text         not null          corpus-index-generations.ts:172
+corpus_index_group_enrollments.effective_digest     varchar      not null          corpus-index-generations.ts:175
+corpus_index_group_enrollments.provisioning_status  text         not null          corpus-index-generations.ts:176
+corpus_index_group_enrollments.attested_at          timestamptz  null              corpus-index-generations.ts:181
+corpus_index_group_enrollments.created_at           timestamptz  default,not null  corpus-index-generations.ts:182
+corpus_index_group_enrollments.updated_at           timestamptz  default,not null  corpus-index-generations.ts:183
 ```
 
-## corpus_index_group_withdrawals · `corpusIndexGroupWithdrawals` · corpus-index-generations.ts:235 · rls
+## corpus_index_group_withdrawals · `corpusIndexGroupWithdrawals` · corpus-index-generations.ts:239 · rls
 
 Append-only trail of index-group attestation withdrawals: which group, the digest it was attested against, who withdrew it and why, written in the withdrawing…
 
 ```text
-corpus_index_group_withdrawals.id                bigint       generated,not null  corpus-index-generations.ts:238
-corpus_index_group_withdrawals.family            text         not null            corpus-index-generations.ts:241
-corpus_index_group_withdrawals.generation        varchar      not null            corpus-index-generations.ts:242
-corpus_index_group_withdrawals.index_group       varchar      not null            corpus-index-generations.ts:245
-corpus_index_group_withdrawals.effective_digest  varchar      not null            corpus-index-generations.ts:246
-corpus_index_group_withdrawals.actor             varchar      not null            corpus-index-generations.ts:247
-corpus_index_group_withdrawals.reason            varchar      not null            corpus-index-generations.ts:248
-corpus_index_group_withdrawals.withdrawn_at      timestamptz  default,not null    corpus-index-generations.ts:249
+corpus_index_group_withdrawals.id                bigint       generated,not null  corpus-index-generations.ts:242
+corpus_index_group_withdrawals.family            text         not null            corpus-index-generations.ts:245
+corpus_index_group_withdrawals.generation        varchar      not null            corpus-index-generations.ts:246
+corpus_index_group_withdrawals.index_group       varchar      not null            corpus-index-generations.ts:249
+corpus_index_group_withdrawals.effective_digest  varchar      not null            corpus-index-generations.ts:250
+corpus_index_group_withdrawals.actor             varchar      not null            corpus-index-generations.ts:251
+corpus_index_group_withdrawals.reason            varchar      not null            corpus-index-generations.ts:252
+corpus_index_group_withdrawals.withdrawn_at      timestamptz  default,not null    corpus-index-generations.ts:253
 ```
 
-## corpus_index_jurisdiction_serving · `corpusIndexJurisdictionServing` · corpus-index-generations.ts:297 · rls
+## corpus_index_jurisdiction_serving · `corpusIndexJurisdictionServing` · corpus-index-generations.ts:301 · rls
 
 The generation that serves one jurisdiction when it is not the family's serving generation.
 
 ```text
-corpus_index_jurisdiction_serving.family           text         fk,not null       corpus-index-generations.ts:300
-corpus_index_jurisdiction_serving.jurisdiction     varchar      not null          corpus-index-generations.ts:301
-corpus_index_jurisdiction_serving.generation       varchar      fk,not null       corpus-index-generations.ts:302
-corpus_index_jurisdiction_serving.from_generation  varchar      not null          corpus-index-generations.ts:309  The generation the jurisdiction was served by until the flip: the one whose copies are erased, and the only one.
-corpus_index_jurisdiction_serving.flipped_at       timestamptz  default,not null  corpus-index-generations.ts:314
+corpus_index_jurisdiction_serving.family           text         fk,not null       corpus-index-generations.ts:304
+corpus_index_jurisdiction_serving.jurisdiction     varchar      not null          corpus-index-generations.ts:305
+corpus_index_jurisdiction_serving.generation       varchar      fk,not null       corpus-index-generations.ts:306
+corpus_index_jurisdiction_serving.from_generation  varchar      not null          corpus-index-generations.ts:313  The generation the jurisdiction was served by until the flip: the one whose copies are erased, and the only one.
+corpus_index_jurisdiction_serving.flipped_at       timestamptz  default,not null  corpus-index-generations.ts:318
+```
+
+## corpus_index_route_proofs · `corpusIndexRouteProofs` · corpus-index-generations.ts:365 · rls
+
+The readiness proof of one physical index (route) of a generation: the census pass walking it, and the last pass that found it exactly as PostgreSQL records it.
+
+```text
+corpus_index_route_proofs.family                  text         fk,not null       corpus-index-generations.ts:368
+corpus_index_route_proofs.generation              varchar      fk,not null       corpus-index-generations.ts:369
+corpus_index_route_proofs.index_id                varchar      not null          corpus-index-generations.ts:372
+corpus_index_route_proofs.pass_number             bigint       default,not null  corpus-index-generations.ts:381  The pass under way, counted from the route's first: every new pass and every revocation takes the next number, so a page recorded against a pass that has since…
+corpus_index_route_proofs.pass_started_at         timestamptz  not null          corpus-index-generations.ts:386  When the pass under way started, on the database clock.
+corpus_index_route_proofs.pass_expectation        text         not null          corpus-index-generations.ts:388  What the pass under way walks (`CORPUS_INDEX_ROUTE_CENSUS_EXPECTATIONS`).
+corpus_index_route_proofs.pass_cursor             uuid         null              corpus-index-generations.ts:394  Where the pass resumes within its phase; null at the phase's start.
+corpus_index_route_proofs.pass_inspected          bigint       default,not null  corpus-index-generations.ts:396  Revisions the pass under way has found exactly as recorded.
+corpus_index_route_proofs.proven_pass_number      bigint       null              corpus-index-generations.ts:401  The number of the last clean pass; null until one completes.
+corpus_index_route_proofs.proven_pass_started_at  timestamptz  null              corpus-index-generations.ts:403  When the last clean pass started.
+corpus_index_route_proofs.proven_at               timestamptz  null              corpus-index-generations.ts:405  When the last clean pass completed.
+corpus_index_route_proofs.proven_inspected        bigint       null              corpus-index-generations.ts:407  Revisions the last clean pass inspected.
+corpus_index_route_proofs.revoked_at              timestamptz  null              corpus-index-generations.ts:409  When a drift repair on the route last revoked the proof.
+corpus_index_route_proofs.revoked_pass_number     bigint       null              corpus-index-generations.ts:414  The pass the last revocation started: only a pass numbered this or later proves the route again.
+corpus_index_route_proofs.revoke_reason           text         null              corpus-index-generations.ts:416  Which drift it was (`CORPUS_INDEX_ROUTE_PROOF_REVOKE_REASONS`).
+corpus_index_route_proofs.created_at              timestamptz  default,not null  corpus-index-generations.ts:419
+corpus_index_route_proofs.updated_at              timestamptz  default,not null  corpus-index-generations.ts:420
 ```

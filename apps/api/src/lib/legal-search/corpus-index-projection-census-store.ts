@@ -21,6 +21,7 @@ import {
   corpusProjectionAppendIsPublished,
   corpusProjectionRetiredRevisionRunnableAt,
 } from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
+import { revokeCorpusIndexRouteProofTx } from "@/api/lib/legal-search/corpus-index-route-proof-store";
 import { logger } from "@/api/lib/observability/logger";
 import { brandValidatedCorpusIndexProjectionIntentId } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
@@ -338,6 +339,17 @@ export const repairAppliedCorpusProjectionDriftTx = async (
   ) {
     return panic("Corpus projection census repair lost its state fence");
   }
+  // The route held a copy other than PostgreSQL's record, so whatever proved
+  // it no longer does; only a pass started after this repair proves it again.
+  await revokeCorpusIndexRouteProofTx(
+    tx,
+    {
+      family: options.family,
+      generation: options.generation,
+      indexId: options.indexId,
+    },
+    "present_drift",
+  );
   logger.info("corpus_projection.repair_pending_reappend", {
     family: options.family,
     generation: options.generation,

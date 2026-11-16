@@ -650,6 +650,12 @@ export const ROLE_GRANT_STATEMENTS = [
     GRANT SELECT, INSERT ON TABLE "corpus_index_group_withdrawals"
     TO stella_ingestion
   `,
+  // Route proofs: the projection runner advances and revokes them; only the
+  // generation's cascade deletes one.
+  `
+    GRANT SELECT, INSERT, UPDATE ON TABLE "corpus_index_route_proofs"
+    TO stella_ingestion
+  `,
   `
     GRANT INSERT, UPDATE ON TABLE
       ${CORPUS_PROJECTION_HISTORY_TABLES_SQL}

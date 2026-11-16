@@ -152,6 +152,9 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   // mutates the state machine.
   "corpus_index_projection_states",
   "corpus_index_projection_intents",
+  // Route readiness proofs: request code may read whether a route is proven;
+  // only the projection runner advances or revokes one.
+  "corpus_index_route_proofs",
   // Global reference editions are read by request code and written by ingestion.
   "sanctions_edition_fanouts",
   "sanctions_sources",

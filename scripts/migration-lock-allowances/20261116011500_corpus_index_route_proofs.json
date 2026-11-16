@@ -1,0 +1,5 @@
+{
+  "create-table-references": "The foreign key to corpus_index_generations takes SHARE ROW EXCLUSIVE on the registry, which holds a handful of rows and is written only by generation registration and promotion. Projection writers' foreign-key checks take row share locks, which this mode does not block; the wait is bounded by the 1s lock_timeout and the new table is empty.",
+  "row-level-security": "Enabling RLS changes only metadata on the new empty corpus_index_route_proofs table, bounded by the 1s lock_timeout and 5s statement_timeout.",
+  "create-policy": "Both policies are catalog-only metadata on the new empty corpus_index_route_proofs table, bounded by the 1s lock_timeout and 5s statement_timeout."
+}

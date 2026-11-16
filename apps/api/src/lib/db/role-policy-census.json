@@ -4261,6 +4261,26 @@
   },
   {
     "schema": "public",
+    "table": "corpus_index_route_proofs",
+    "policy": "case_law_global_access",
+    "command": "SELECT",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "true",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "corpus_index_route_proofs",
+    "policy": "case_law_ingestion_access",
+    "command": "ALL",
+    "roles": ["stella_ingestion"],
+    "permissive": "PERMISSIVE",
+    "using": "true",
+    "withCheck": "true"
+  },
+  {
+    "schema": "public",
     "table": "correspondence",
     "policy": "correspondence_owner_offboarding_select",
     "command": "SELECT",

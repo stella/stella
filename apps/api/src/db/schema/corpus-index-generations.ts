@@ -5,6 +5,10 @@ import {
   CORPUS_INDEX_GENERATION_STATUSES,
   QUICKWIT_CLUSTERS,
 } from "@/api/lib/legal-search/corpus-generation-contract";
+import {
+  CORPUS_INDEX_ROUTE_CENSUS_EXPECTATIONS,
+  CORPUS_INDEX_ROUTE_PROOF_REVOKE_REASONS,
+} from "@/api/lib/legal-search/corpus-index-route-proof-contract";
 import { CORPUS_INDEX_ID_MAX_LENGTH } from "@/api/lib/legal-search/index-naming";
 
 import {
@@ -344,5 +348,126 @@ export const corpusIndexJurisdictionServing = p.pgTable(
     }),
     ...globalCaseLawPolicies(),
     ...publicLawReaderPolicies(),
+  ],
+);
+
+/**
+ * The readiness proof of one physical index (route) of a generation: the
+ * census pass walking it, and the last pass that found it exactly as
+ * PostgreSQL records it. A pass never restarts when the projection writes:
+ * a revision applied during it was proven present at its apply, and one
+ * settled or withdrawn during it was proven gone when it got that status, so
+ * ordinary writes leave the row alone. Only a repair of drift the census
+ * found on the route revokes it, in the repair's own transaction, and starts
+ * a fresh pass. A rebuild deletes the generation's registration, and the
+ * cascade deletes its proofs with it.
+ */
+export const corpusIndexRouteProofs = p.pgTable(
+  "corpus_index_route_proofs",
+  {
+    family: p.text({ enum: CORPUS_FAMILIES }).notNull(),
+    generation: p
+      .varchar({ length: CORPUS_INDEX_GENERATION_MAX_LENGTH })
+      .notNull(),
+    indexId: p
+      .varchar("index_id", { length: CORPUS_INDEX_ID_MAX_LENGTH })
+      .notNull(),
+    /**
+     * The pass under way, counted from the route's first: every new pass and
+     * every revocation takes the next number, so a page recorded against a
+     * pass that has since ended matches nothing, however close the clock
+     * readings are.
+     */
+    passNumber: p
+      .bigint("pass_number", { mode: "number" })
+      .default(1)
+      .notNull(),
+    /** When the pass under way started, on the database clock. */
+    passStartedAt: timestamptz("pass_started_at").notNull(),
+    /** What the pass under way walks (`CORPUS_INDEX_ROUTE_CENSUS_EXPECTATIONS`). */
+    passExpectation: p
+      .text("pass_expectation", {
+        enum: CORPUS_INDEX_ROUTE_CENSUS_EXPECTATIONS,
+      })
+      .notNull(),
+    /** Where the pass resumes within its phase; null at the phase's start. */
+    passCursor: p.uuid("pass_cursor"),
+    /** Revisions the pass under way has found exactly as recorded. */
+    passInspected: p
+      .bigint("pass_inspected", { mode: "number" })
+      .default(0)
+      .notNull(),
+    /** The number of the last clean pass; null until one completes. */
+    provenPassNumber: p.bigint("proven_pass_number", { mode: "number" }),
+    /** When the last clean pass started. */
+    provenPassStartedAt: timestamptz("proven_pass_started_at"),
+    /** When the last clean pass completed. */
+    provenAt: timestamptz("proven_at"),
+    /** Revisions the last clean pass inspected. */
+    provenInspected: p.bigint("proven_inspected", { mode: "number" }),
+    /** When a drift repair on the route last revoked the proof. */
+    revokedAt: timestamptz("revoked_at"),
+    /**
+     * The pass the last revocation started: only a pass numbered this or
+     * later proves the route again.
+     */
+    revokedPassNumber: p.bigint("revoked_pass_number", { mode: "number" }),
+    /** Which drift it was (`CORPUS_INDEX_ROUTE_PROOF_REVOKE_REASONS`). */
+    revokeReason: p.text("revoke_reason", {
+      enum: CORPUS_INDEX_ROUTE_PROOF_REVOKE_REASONS,
+    }),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+    updatedAt: timestamptz("updated_at")
+      .defaultNow()
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    p.primaryKey({
+      name: "corpus_index_route_proofs_pkey",
+      columns: [t.family, t.generation, t.indexId],
+    }),
+    p
+      .foreignKey({
+        name: "corpus_index_route_proofs_generation_fk",
+        columns: [t.family, t.generation],
+        foreignColumns: [
+          corpusIndexGenerations.family,
+          corpusIndexGenerations.generation,
+        ],
+      })
+      .onDelete("cascade"),
+    p.check(
+      "corpus_index_route_proofs_family_values",
+      sql`${t.family} IN (${sqlValues(CORPUS_FAMILIES)})`,
+    ),
+    p.check(
+      "corpus_index_route_proofs_index_shape",
+      sql`${t.indexId} ~ '^[a-z0-9_]+$'`,
+    ),
+    p.check(
+      "corpus_index_route_proofs_expectation_values",
+      sql`${t.passExpectation} IN (${sqlValues(CORPUS_INDEX_ROUTE_CENSUS_EXPECTATIONS)})`,
+    ),
+    p.check(
+      "corpus_index_route_proofs_inspected_nonnegative",
+      sql`${t.passNumber} > 0 AND ${t.passInspected} >= 0 AND (${t.provenInspected} IS NULL OR ${t.provenInspected} >= 0)`,
+    ),
+    p.check(
+      "corpus_index_route_proofs_proven_shape",
+      sql`(${t.provenAt} IS NULL) = (${t.provenPassStartedAt} IS NULL)
+        AND (${t.provenAt} IS NULL) = (${t.provenInspected} IS NULL)
+        AND (${t.provenAt} IS NULL) = (${t.provenPassNumber} IS NULL)
+        AND (${t.provenPassNumber} IS NULL OR ${t.provenPassNumber} < ${t.passNumber})
+        AND (${t.provenAt} IS NULL OR ${t.provenAt} >= ${t.provenPassStartedAt})`,
+    ),
+    p.check(
+      "corpus_index_route_proofs_revoke_shape",
+      sql`(${t.revokedAt} IS NULL) = (${t.revokeReason} IS NULL)
+        AND (${t.revokedAt} IS NULL) = (${t.revokedPassNumber} IS NULL)
+        AND (${t.revokedPassNumber} IS NULL OR ${t.revokedPassNumber} <= ${t.passNumber})
+        AND (${t.revokeReason} IS NULL OR ${t.revokeReason} IN (${sqlValues(CORPUS_INDEX_ROUTE_PROOF_REVOKE_REASONS)}))`,
+    ),
+    ...globalCaseLawPolicies(),
   ],
 );
