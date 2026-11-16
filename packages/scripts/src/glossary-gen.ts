@@ -200,7 +200,7 @@ const parseTerm = (value: unknown, where: string): Term => {
     return panic(`${where} (${id}): missing \`translations\``);
   }
 
-  const translations = Object.fromEntries(
+  const translations: Record<string, string> = Object.fromEntries(
     LOCALES.map((locale) => {
       const translated = rawTranslations[locale];
       if (typeof translated !== "string") {
