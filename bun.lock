@@ -1027,6 +1027,7 @@
         "valibot": "catalog:",
       },
       "devDependencies": {
+        "@stll/test-kit": "0.4.2",
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
       },

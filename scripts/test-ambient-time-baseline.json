@@ -2489,11 +2489,6 @@
     "owner": "cli",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "packages/cli/src/auth/resolve-access-token.test.ts": {
-    "count": 17,
-    "owner": "cli",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "packages/cli/src/cli-commands.test.ts": {
     "count": 3,
     "owner": "cli",
