@@ -15,7 +15,10 @@ export const useInvalidateSession = () => {
       await router.invalidate();
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useInvalidateSession:failure",
+        scope: { type: "handler", handlerId: "useInvalidateSession:failure" },
+      });
     },
   });
 };

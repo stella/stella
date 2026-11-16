@@ -1,8 +1,8 @@
 import { Result } from "better-result";
-import * as cheerio from "cheerio";
+
+import { load } from "@stll/html";
 
 import {
-  excludedSourceField,
   excludedSourceSurface,
   storedSourceSurface,
 } from "@/api/lib/legal-search/ingestion-types";
@@ -25,6 +25,8 @@ import type {
   SoftLawSourceAdapter,
   SoftLawStage,
 } from "@/api/lib/legal-search/soft-law-types";
+
+import { listingOnlyCoverage } from "./listing-only";
 
 const ORIGIN = "https://ec.europa.eu";
 const ARCHIVE = `${ORIGIN}/justice/article-29/documentation/opinion-recommendation/index_en.htm`;
@@ -137,7 +139,7 @@ const metadata = ({
 
 /** The archive carries years and partial dates; none are promoted to adoption dates. */
 export const parseWp29Archive = (html: string) => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   const sections = $(".contentsection.block").filter((_, node) =>
     /^\d{4}$/u.test(normalize($(node).children("h2").text())),
   );
@@ -247,7 +249,7 @@ export const parseWp29Archive = (html: string) => {
 };
 
 export const parseWp29NewsroomIndex = (html: string, url: string) => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   if (!$("#main-content").length || !$("#leftentityselect").length) {
     return Result.err(invalid("WP29 newsroom category structure is missing"));
   }
@@ -313,7 +315,7 @@ export const parseWp29NewsroomDocument = ({
   url,
   indexUrl,
 }: ParseWp29NewsroomOptions) => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   const title = normalize($("#main-content h1.ecl-page-header__title").text());
   const reference = sourceReference(title);
   if (!title) {
@@ -417,7 +419,8 @@ const FIELDS = [
   "asset-title",
   "asset-language",
   "asset-format",
-  "asset-size",
+  "newsroom-asset-size",
+  "archive-asset-size",
   "archive-year",
   "archive-date",
 ] as const;
@@ -427,28 +430,80 @@ const fields = {
     disposition: "stored",
     target: { type: "metadata", key: "statedReference" },
   },
-  "publisher-date": excludedSourceField(
-    "Publisher Date is retained in sourceDates and raw HTML; it is not an adoption date.",
-  ),
+  "publisher-date": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "source-page-1",
+      path: [],
+      reason:
+        "The original newsroom publisher date remains in this HTML and sourceDates.publisherDate; it is not treated as an adoption date.",
+    },
+  },
   "asset-language": {
     disposition: "stored",
     target: { type: "metadata", key: "expression" },
   },
-  "asset-title": excludedSourceField(
-    "Download display names are retained in raw HTML; the instrument title identifies the document.",
-  ),
-  "asset-format": excludedSourceField(
-    "Asset format is retained in raw HTML and verified by the bounded PDF or Word content-type boundary.",
-  ),
-  "asset-size": excludedSourceField(
-    "Publisher display size is presentation metadata; actual bytes and raw HTML are retained.",
-  ),
-  "archive-year": excludedSourceField(
-    "Year grouping is retained in sourceDates and raw HTML, without invented day precision.",
-  ),
-  "archive-date": excludedSourceField(
-    "Archive date text is retained in sourceDates and raw HTML without inferring adoption.",
-  ),
+  "asset-title": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "source-page-1",
+      path: [],
+      reason:
+        "The publisher download title is retained verbatim in the newsroom detail HTML.",
+    },
+  },
+  "asset-format": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "source-page-1",
+      path: [],
+      reason:
+        "The publisher format label is retained in the newsroom detail HTML alongside the verified document bytes.",
+    },
+  },
+  "newsroom-asset-size": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "source-page-1",
+      path: [],
+      reason:
+        "The publisher newsroom size label is retained in the original detail HTML.",
+    },
+  },
+  "archive-asset-size": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "source-page-0",
+      path: [],
+      reason:
+        "The publisher archive download size label is retained verbatim in the original index HTML.",
+    },
+  },
+  "archive-year": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "source-page-0",
+      path: [],
+      reason:
+        "Archive year grouping is retained verbatim in the original index and sourceDates without invented day precision.",
+    },
+  },
+  "archive-date": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "source-page-0",
+      path: [],
+      reason:
+        "Archive date text is retained verbatim in the original index and sourceDates without inferring adoption.",
+    },
+  },
 } as const satisfies Record<(typeof FIELDS)[number], SourceFieldDisposition>;
 const SURFACES = [
   "index",
@@ -532,7 +587,7 @@ const listWp29Assets = (entry: SoftLawEntry) => {
     if (!listing) {
       return Result.err(invalid("WP29 archive raw is missing"));
     }
-    const $ = cheerio.load(
+    const $ = load(
       Buffer.from(listing.contentBase64, "base64").toString("utf-8"),
     );
     const row = $(".contentsection.block > ul > li").filter((_, node) =>
@@ -587,20 +642,16 @@ export const wp29Adapter = {
     userAgent: "Stella/1.0 (+https://github.com/stella/stella)",
     window: { type: "any_time" },
   },
-  getTotalCount: async () =>
-    await Promise.resolve({ type: "no-count-endpoint" as const }),
-  sliceWalk: {
-    type: "unsupported",
-    reason:
-      "WP29 has overlapping archive and newsroom indexes without a stable date slice endpoint.",
-  },
+  ...listingOnlyCoverage(
+    "WP29 has overlapping archive and newsroom indexes without a stable date slice endpoint.",
+  ),
   sourceFields: {
     status: "declared",
     fields,
     listSourceFields: (parts) => {
       const discovered = new Set<string>();
       for (const html of Object.values(parts)) {
-        const $ = cheerio.load(html);
+        const $ = load(html);
         if ($("h1.ecl-page-header__title, .contentsection a.link-ico").length) {
           discovered.add("title");
         }
@@ -619,8 +670,11 @@ export const wp29Adapter = {
         if ($(".ecl-file__meta").length) {
           discovered.add("asset-format");
         }
-        if ($(".ecl-file__meta, .link-size").length) {
-          discovered.add("asset-size");
+        if ($(".ecl-file__meta").length) {
+          discovered.add("newsroom-asset-size");
+        }
+        if ($(".link-size").length) {
+          discovered.add("archive-asset-size");
         }
         if ($(".contentsection h2").length) {
           discovered.add("archive-year");
@@ -664,7 +718,7 @@ export const wp29Adapter = {
           sourceRaw: [
             {
               role: "source-page-0",
-              contentBase64: Buffer.from(response.bytes).toString("base64"),
+              contentBase64: Buffer.from(response.bytes).toBase64(),
               contentType: response.contentType,
             },
           ],
@@ -732,12 +786,12 @@ export const wp29Adapter = {
     const sourceRaw = [
       {
         role: "source-page-0",
-        contentBase64: Buffer.from(index.bytes).toString("base64"),
+        contentBase64: Buffer.from(index.bytes).toBase64(),
         contentType: index.contentType,
       },
       {
         role: "source-page-1",
-        contentBase64: Buffer.from(detail.bytes).toString("base64"),
+        contentBase64: Buffer.from(detail.bytes).toBase64(),
         contentType: detail.contentType,
       },
     ];

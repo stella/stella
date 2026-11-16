@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { PROPERTY_SORT_KINDS } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
 import {
   CheckCircle2Icon,
@@ -18,11 +19,13 @@ import { Popover, PopoverPopup } from "@stll/ui/popover";
 import { Separator } from "@stll/ui/separator";
 import { stellaToast } from "@stll/ui/toast";
 import { useLatest } from "@stll/ui/use-latest";
+import { cn } from "@stll/ui/utils";
 
 import { propertyAiCellState } from "@/components/workspaces/ai-cell-state.logic";
 import { AiColumnRunButton } from "@/components/workspaces/ai-column-run-controls";
 import {
   aiColumnRunMenu,
+  aiColumnRunReveal,
   aiColumnRunScope,
 } from "@/components/workspaces/ai-column-run.logic";
 import { CreateProperty } from "@/components/workspaces/create-property";
@@ -32,14 +35,14 @@ import { PinProperty } from "@/components/workspaces/properties/pin-property";
 import { PropertyConditions } from "@/components/workspaces/properties/property-conditions";
 import { PropertyPopoverTrigger } from "@/components/workspaces/properties/shared";
 import { SortProperty } from "@/components/workspaces/properties/sort-property";
-import { toSortHint } from "@/components/workspaces/property-utils";
+import { ALL_SORT_DIRECTIONS_AVAILABLE } from "@/components/workspaces/properties/sort-property.logic";
 import type { TableHeader } from "@/components/workspaces/table/types";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 import { type SafeId, toSafeId } from "@/lib/safe-id";
 import type {
@@ -49,6 +52,7 @@ import type {
 } from "@/lib/types";
 import { useUpdateProperty } from "@/lib/workspaces/mutations/properties";
 import { isPlaybookVerdictProperty } from "@/lib/workspaces/playbook-verdicts";
+import { usePropertyDisplayName } from "@/lib/workspaces/property-display-name";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import { useGroupScope } from "@/routes/_protected.workspaces/$workspaceId/-components/table/group-scope";
 
@@ -87,6 +91,8 @@ export const PropertyPopover = ({
 }: PropertyPopoverProps) => {
   const t = useTranslations();
   const { workspaceId, id, name } = property;
+  const sortKind = PROPERTY_SORT_KINDS[property.content.type];
+  const displayName = usePropertyDisplayName();
   const groupScope = useGroupScope();
   const [isOpen, setIsOpen] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -109,7 +115,7 @@ export const PropertyPopover = ({
     availablePageRowIdSet.has(row.original.entityId),
   );
   const pageStates = pageRows.map((row) =>
-    propertyAiCellState(row.original.fields[id]?.content),
+    propertyAiCellState(row.original.fields[id]),
   );
   const runMenuItems = aiColumnRunMenu(pageStates);
   const selectedRowIds = Object.keys(rowSelection);
@@ -122,14 +128,9 @@ export const PropertyPopover = ({
       rows: tableRows,
     }),
   );
-  const hasNotRunScopeRows = tableRows.some(
-    (row) =>
-      availableScopeRowIds.has(row.original.entityId) &&
-      propertyAiCellState(row.original.fields[id]?.content).type === "not_run",
-  );
   const scopedStates = tableRows
     .filter((row) => availableScopeRowIds.has(row.original.entityId))
-    .map((row) => propertyAiCellState(row.original.fields[id]?.content));
+    .map((row) => propertyAiCellState(row.original.fields[id]));
   const headerRunAction = aiColumnRunMenu(scopedStates).at(0);
   const headerRunTargetIds =
     headerRunAction === undefined
@@ -186,7 +187,7 @@ export const PropertyPopover = ({
           ...groupParams,
         });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: (data, { action, scoped, set }) => {
       detached(
@@ -265,10 +266,10 @@ export const PropertyPopover = ({
   // dependencies (not the server snapshot) so two edits fired before
   // the query refetches don't drop one another's in-flight changes.
   const replaceDependency = (index: number, next: PropertyDependency) => {
-    if (property.tool.type !== "ai-model") {
+    const { content, tool } = property;
+    if (tool.type !== "ai-model" || content.type === "record") {
       return;
     }
-    const tool = property.tool;
     const nextDependencies = latestDependenciesRef.current.map(
       (dependency, i) => (i === index ? next : dependency),
     );
@@ -283,12 +284,18 @@ export const PropertyPopover = ({
           workspaceId,
           propertyId: id,
           name,
-          content: property.content,
+          content,
           tool: { ...tool, dependencies: nextDependencies },
         });
         detached(startWorkflow(), "property-popover.start-workflow");
       } catch (error) {
-        getAnalytics().captureError(error);
+        getAnalytics().captureError(error, {
+          fingerprintKey: "PropertyPopover.replaceDependency:failure",
+          scope: {
+            type: "handler",
+            handlerId: "PropertyPopover.replaceDependency:failure",
+          },
+        });
         notifyUserError(error, t("errors.actionFailed"));
       } finally {
         if (dependencyGenerationRef.current === generation) {
@@ -333,7 +340,7 @@ export const PropertyPopover = ({
       case "ai-unavailable":
         // Running a column is an explicit request, so say why nothing
         // happened; the side-effect call sites stay quiet on this one.
-        notifyUserError(undefined, t("errors.failedToStartWorkflow"));
+        notifyUserProblem(t("errors.failedToStartWorkflow"));
         return;
       case "failed":
         // Already reported by `useStartWorkflow`, error included.
@@ -348,18 +355,28 @@ export const PropertyPopover = ({
   return (
     <>
       <Popover modal onOpenChange={setIsOpen} open={isOpen}>
-        <div className="flex min-w-0 items-center">
+        {/* The end padding keeps the Play clear of the column resize handle,
+            which straddles the header's end border. */}
+        <div
+          className={cn(
+            "flex min-w-0 items-center",
+            property.tool.type === "ai-model" && "gap-1 pe-2",
+          )}
+        >
           <span className="min-w-0 flex-1">
             <PropertyPopoverTrigger
               disabled={updateProperty.isPending}
-              name={name}
+              name={displayName(property)}
               property={property}
             />
           </span>
           {property.tool.type === "ai-model" && (
             <AiColumnRunButton
               scope={runScope}
-              hasNotRun={hasNotRunScopeRows}
+              reveal={aiColumnRunReveal({
+                states: scopedStates,
+                menuOpen: isOpen,
+              })}
               disabled={headerRunTargetIds.length === 0}
               onRun={() => {
                 detached(
@@ -395,11 +412,16 @@ export const PropertyPopover = ({
                 <Separator />
               </>
             )}
-            <SortProperty
-              column={header.column}
-              sortHint={toSortHint(property.content.type)}
-            />
-            <Separator />
+            {sortKind !== null && (
+              <>
+                <SortProperty
+                  column={header.column}
+                  directions={ALL_SORT_DIRECTIONS_AVAILABLE}
+                  kind={sortKind}
+                />
+                <Separator />
+              </>
+            )}
             <div className="flex flex-col p-1">
               <PropertyConditions
                 dependencies={displayedDependencies}

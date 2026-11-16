@@ -18,7 +18,6 @@
  * the fill boundary injects the adapter (see `buildAiOccurrenceAdapter`).
  */
 
-import { writeZipEntry } from "@stll/docx-utils";
 import { placeholderPattern, resolvePath } from "@stll/template-conditions";
 
 import { arrayOrEmpty } from "@/api/lib/array";
@@ -107,18 +106,18 @@ export const adaptAiFields = async ({
   const zip = await loadDocx(file.bytes);
   // Sorted for a deterministic occurrence order; the patch pass below walks
   // the same list, so occurrence indices always line up with extraction.
-  const partNames = templateContentPartPaths(Object.keys(zip.files));
+  const partNames = templateContentPartPaths(zip.paths());
   // Each part is read independently; `Promise.all(map(...))` preserves the
   // sorted `partNames` order in the result regardless of completion order, so
   // the patch pass below still sees `parts` in the same order extraction used.
   const parts = (
     await Promise.all(
       partNames.map(async (name) => {
-        const entry = zip.file(name);
+        const entry = zip.entry(name);
         if (!entry) {
           return undefined;
         }
-        return { name, xml: await entry.async("string") };
+        return { name, xml: await entry.text() };
       }),
     )
   ).filter((part): part is { name: string; xml: string } => part !== undefined);
@@ -168,7 +167,7 @@ export const adaptAiFields = async ({
       counters,
     );
     if (patched.changed) {
-      writeZipEntry(zip, part.name, patched.xml);
+      zip.set(part.name, patched.xml);
       anyChanged = true;
     }
   }
@@ -179,7 +178,7 @@ export const adaptAiFields = async ({
   return {
     file: derivedScannedFile(
       file,
-      await zip.generateAsync({ type: "uint8array" }),
+      await zip.generate({ compression: "store" }),
     ),
     adaptedPaths: [...renderingsByPath.keys()],
     failures,

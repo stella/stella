@@ -7,13 +7,20 @@ import {
   CURRENCY_CODE_LENGTH,
   currencyCodeSchema,
 } from "@stll/api-contract/currency-code";
-import { tryToMinorUnits } from "@stll/money";
+import {
+  currencyMinorUnitDigits,
+  EMPTY_LOCALE_INPUT_TEXT,
+  formatLocaleMinorUnitsInput,
+  localeInputText,
+  parseLocaleMinorUnits,
+} from "@stll/money";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { Field, FieldError, FieldLabel } from "@stll/ui/field";
 import { Form } from "@stll/ui/form";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
+import { NumberInput } from "@stll/ui/number-input";
 import {
   Select,
   SelectItem,
@@ -23,10 +30,10 @@ import {
 } from "@stll/ui/select";
 import { Textarea } from "@stll/ui/textarea";
 
-import { majorUnitInput } from "@/components/billing/amount-input.logic";
 import { DEFAULT_CURRENCY } from "@/components/billing/format-currency";
 import { MatterCombobox } from "@/components/billing/matter-combobox";
 import { DatePickerPopover } from "@/components/date-picker-popover";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 import { localISODate } from "@/lib/local-iso-date";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
@@ -60,6 +67,7 @@ export const ExpenseForm = ({
   contextState = "available",
 }: ExpenseFormProps) => {
   const t = useTranslations();
+  const locale = useFormattingLocale();
   const initialCurrency = defaultValues?.currency ?? DEFAULT_CURRENCY;
 
   const today = localISODate();
@@ -92,11 +100,32 @@ export const ExpenseForm = ({
     // decimal precision is preserved for minor-unit conversion.
     v.rawTransform(({ addIssue, dataset, NEVER }) => {
       const { amountInputValue, currency, ...rest } = dataset.value;
-      const amount = tryToMinorUnits({
+      const amountResult = parseLocaleMinorUnits({
         amount: amountInputValue,
         currency,
+        locale,
       });
-      if (amount === null || amount <= 0) {
+      if (amountResult.isErr()) {
+        addIssue({
+          message: t(
+            amountResult.error.reason === "empty"
+              ? "common.required"
+              : "billing.invalidNumberFormat",
+          ),
+          path: [
+            {
+              type: "object",
+              origin: "value",
+              input: dataset.value,
+              key: "amountInputValue",
+              value: amountInputValue,
+            },
+          ],
+        });
+        return NEVER;
+      }
+      const amount = amountResult.value;
+      if (amount <= 0) {
         addIssue({
           message: t("billing.amountMustBePositive"),
           path: [
@@ -129,8 +158,12 @@ export const ExpenseForm = ({
         markup: defaultValues?.markup ?? 0,
         amountInputValue:
           (defaultValues?.amount ?? 0) > 0
-            ? majorUnitInput(defaultValues?.amount ?? 0, initialCurrency)
-            : "",
+            ? formatLocaleMinorUnitsInput({
+                amountCents: defaultValues?.amount ?? 0,
+                currency: initialCurrency,
+                locale,
+              })
+            : EMPTY_LOCALE_INPUT_TEXT,
       },
       onSubmit: async ({ value }) => {
         await onSubmit(value);
@@ -225,21 +258,32 @@ export const ExpenseForm = ({
                 inputMode="decimal"
                 onBlur={() => {
                   field.handleBlur();
-                  const amount = tryToMinorUnits({
+                  const amount = parseLocaleMinorUnits({
                     amount: field.state.value,
                     currency: currentCurrency,
+                    locale,
                   });
-                  if (amount === null || amount <= 0) {
+                  if (amount.isErr() || amount.value <= 0) {
                     return;
                   }
-                  const normalized = majorUnitInput(amount, currentCurrency);
+                  const normalized = formatLocaleMinorUnitsInput({
+                    amountCents: amount.value,
+                    currency: currentCurrency,
+                    locale,
+                  });
                   field.handleChange(normalized);
                 }}
                 onChange={(e) => {
-                  const nextValue = e.currentTarget.value;
+                  const nextValue = localeInputText(e.currentTarget);
                   field.handleChange(nextValue);
                 }}
-                placeholder="350.00"
+                placeholder={new Intl.NumberFormat(locale, {
+                  minimumFractionDigits:
+                    currencyMinorUnitDigits(currentCurrency),
+                  maximumFractionDigits:
+                    currencyMinorUnitDigits(currentCurrency),
+                  useGrouping: false,
+                }).format(350)}
                 value={field.state.value}
               />
               <FieldError />
@@ -295,15 +339,15 @@ export const ExpenseForm = ({
           <Label>{t("billing.expenses.markup")}</Label>
           <form.Field name="markup">
             {(field) => (
-              <Input
+              <NumberInput
                 className="w-16"
+                // A whole percentage, as the old integer parse kept it.
+                format={{ maximumFractionDigits: 0 }}
                 max={100}
                 min={0}
-                onChange={(e) => {
-                  const val = Number.parseInt(e.currentTarget.value, 10);
-                  field.handleChange(Number.isNaN(val) ? 0 : val);
+                onValueChange={(value) => {
+                  field.handleChange(value === null ? 0 : Math.trunc(value));
                 }}
-                type="number"
                 value={field.state.value}
               />
             )}

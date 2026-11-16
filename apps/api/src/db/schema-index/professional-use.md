@@ -21,8 +21,8 @@ user_professional_use_acceptances.source             text         default,not nu
 The professional-use acceptance an organization carries, with the account whose acceptance it is: its creator's at creation, or, for an organization created be…
 
 ```text
-organization_professional_use_acceptances.organization_id      safeOrganizationId  pk,not null       professional-use.ts:86
-organization_professional_use_acceptances.accepted_by_user_id  text                null              professional-use.ts:87
+organization_professional_use_acceptances.organization_id      safeOrganizationId  pk,fk,not null    professional-use.ts:86
+organization_professional_use_acceptances.accepted_by_user_id  text                fk,null           professional-use.ts:87
 organization_professional_use_acceptances.statement_version    text                not null          professional-use.ts:88
 organization_professional_use_acceptances.terms_version        text                not null          professional-use.ts:89
 organization_professional_use_acceptances.accepted_at          timestamptz         default,not null  professional-use.ts:90

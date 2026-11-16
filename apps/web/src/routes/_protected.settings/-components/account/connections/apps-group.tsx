@@ -45,7 +45,7 @@ import { matchesConnectionQuery } from "@/lib/account/connections.logic";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   toOAuthScopeDisplayEntries,
@@ -211,7 +211,7 @@ const DisconnectButton = ({ clientName, consentId }: DisconnectButtonProps) => {
         consentId,
       }).delete();
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: async () => {
       stellaToast.add({
@@ -227,7 +227,10 @@ const DisconnectButton = ({ clientName, consentId }: DisconnectButtonProps) => {
     // context and can retry.
     onError: (error) => {
       notifyUserError(error, t("errors.actionFailed"));
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "DisconnectButton:failure",
+        scope: { type: "handler", handlerId: "DisconnectButton:failure" },
+      });
     },
   });
 

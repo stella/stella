@@ -3,9 +3,10 @@
 import { panic } from "better-result";
 
 import {
+  LEGAL_HOLD_ACTIVE,
   MCP_ERROR_CODES,
   type McpErrorCode,
-  VERIFICATION_RUN_CAP_CODES,
+  MODEL_RUN_CAP_CODES,
 } from "./generated/mcp-contract.js";
 
 export { MCP_HTTP_PATH } from "./generated/mcp-contract.js";
@@ -96,7 +97,10 @@ const MCP_ERROR_CODE_EXIT_MAP = {
   action_period_exhausted: EXIT_CODES.usageLimited,
   action_concurrency_busy: EXIT_CODES.server,
   action_not_enabled: EXIT_CODES.featureDisabled,
-  action_admission_unavailable: EXIT_CODES.server,
+  limiter_store_unavailable: EXIT_CODES.server,
+  action_admission_configuration_incomplete: EXIT_CODES.server,
+  action_admission_org_state_unreadable: EXIT_CODES.server,
+  action_admission_lease_lost: EXIT_CODES.server,
   action_feature_disabled: EXIT_CODES.featureDisabled,
   validation_error: EXIT_CODES.validation,
   result_too_large: EXIT_CODES.validation,
@@ -107,11 +111,15 @@ const MCP_ERROR_CODE_EXIT_MAP = {
   permission_denied: EXIT_CODES.permissionDenied,
   usage_limited: EXIT_CODES.usageLimited,
   conflict: EXIT_CODES.conflict,
+  [LEGAL_HOLD_ACTIVE]: EXIT_CODES.conflict,
   rate_limited: EXIT_CODES.server,
-  [VERIFICATION_RUN_CAP_CODES.active]: EXIT_CODES.server,
-  [VERIFICATION_RUN_CAP_CODES.daily]: EXIT_CODES.usageLimited,
+  [MODEL_RUN_CAP_CODES.active]: EXIT_CODES.server,
+  [MODEL_RUN_CAP_CODES.daily]: EXIT_CODES.usageLimited,
   upstream_unavailable: EXIT_CODES.server,
+  public_read_timeout: EXIT_CODES.server,
   search_index_unavailable: EXIT_CODES.server,
+  continuation_expired: EXIT_CODES.server,
+  public_read_unfinished: EXIT_CODES.server,
   unknown_tool: EXIT_CODES.server,
   internal_error: EXIT_CODES.server,
 } as const satisfies Record<McpErrorCode, ExitCode>;

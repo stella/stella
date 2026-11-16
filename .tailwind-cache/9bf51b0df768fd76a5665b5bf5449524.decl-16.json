@@ -1,1 +1,0 @@
-{"text-foreground/65":{"valid":true,"declarations":[["","color","color-mix(in oklab, var(--foreground) 65%, transparent)"]],"values":{"color-mix(in oklab, var(--foreground) 65%, transparent)":{"p":["--foreground"],"f":[],"u":false}}}}

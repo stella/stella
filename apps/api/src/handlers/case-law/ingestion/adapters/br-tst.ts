@@ -64,7 +64,7 @@ import { panic, Result, TaggedError } from "better-result";
  */
 import * as v from "valibot";
 
-import { vApiDate } from "@stll/api-contract/api-date";
+import { apiDateSchema } from "@stll/api-contract/api-date";
 import {
   DECISION_DOCKET_GRAMMARS,
   formatDecisionDocket,
@@ -72,36 +72,6 @@ import {
 import { sha256Hex } from "@stll/sha256/bun";
 import { parsePlainDate, Temporal, todayFor } from "@stll/time";
 
-import {
-  defineSourceAdapter,
-  EMPTY_AST,
-  encodeSourceRawEnvelope,
-  excludedSourceField,
-  excludedSourceSurface,
-  isPersistableSourceDocumentId,
-  readStoredRawListing,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  SOURCE_TOTAL_PROBE_FAILURE,
-  sourceTotalProbeFailed,
-  sourceTotalRead,
-  STORED_RAW_REPARSE_REJECTION,
-  storedSourceSurface,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  IngestionResult,
-  ListingIdentity,
-  ReconciliationBuildOutcome,
-  ReconciliationSlicePage,
-  ReconciliationSlicePageOptions,
-  SourceFieldDisposition,
-  SourceRawParts,
-  SourceSurfaceCensus,
-  SourceSurfaceDisposition,
-  SourceTotalCount,
-  StoredRawReparseInput,
-  StoredRawReparseOutcome,
-  SyncPage,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import { logDocumentParseFailure } from "@/api/handlers/case-law/ingestion/adapters/document-parse-failure";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
@@ -139,6 +109,38 @@ import {
   BR_TST_PRECEDENTS_SLICE,
   PARSER_VERSIONS,
 } from "@/api/lib/legal-search/ingestion-constants";
+import {
+  defineSourceAdapter,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  excludedSourceField,
+  excludedSourceSurface,
+  isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
+  readStoredRawListing,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  SOURCE_TOTAL_PROBE_FAILURE,
+  sourceTotalProbeFailed,
+  sourceTotalRead,
+  STORED_RAW_REPARSE_REJECTION,
+  storedSourceSurface,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  IngestionResult,
+  ListingIdentity,
+  PublisherRequest,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
+  SourceFieldDisposition,
+  SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
+  SourceTotalCount,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
+  SyncPage,
+} from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
@@ -956,7 +958,7 @@ export const buildBrTstDecision = (
       decisionType,
       ...(decisionDate === undefined ? {} : { decisionDate }),
       ...(parsed === undefined ? {} : { fulltext: parsed.fulltext }),
-      ...(parsed?.sections === undefined ? {} : { sections: parsed.sections }),
+      ...(parsed?.sections !== undefined ? { sections: parsed.sections } : {}),
       ...(documentUrl === undefined ? {} : { documentUrl }),
       ...(rapporteur === undefined
         ? {}
@@ -1073,23 +1075,58 @@ const SOURCE_FIELDS = [
   "tituloHighlight",
 ] as const;
 
-type BrTstSourceField = (typeof SOURCE_FIELDS)[number];
+type BrTstPublisherRecord = Readonly<
+  Record<(typeof SOURCE_FIELDS)[number], unknown>
+>;
 
 const storedAs = (key: string) =>
   ({ disposition: "stored", target: { type: "metadata", key } }) as const;
 
 const PLACEHOLDER_REASON =
-  "served as the literal 'removido no backend' on every record: the backend strips the field, and the text it named is stored from ementa, dispositivo, inteiroTeorHtml or txtConteudoDecisao";
+  "Served as the literal 'removido no backend' on every record: the backend strips the field, and the text it named is stored from ementa, dispositivo, inteiroTeorHtml or txtConteudoDecisao.";
+
+/** A field the backend strips; the pointer names where its text is stored. */
+const placeholderField = (
+  pointer:
+    | "metadata.dispositivo"
+    | "textFields.headnote"
+    | "inteiroTeorHtml"
+    | "txtConteudoDecisao",
+) =>
+  excludedSourceField({
+    reason: "publisher_noise",
+    justification: PLACEHOLDER_REASON,
+    pointer,
+  });
 
 const HIGHLIGHT_REASON =
-  "the search's highlight rendering of a stored text, re-serialized with the query's hits marked; the crawl sends no terms, and the verbatim rendering stays in the stored listing";
+  "The search's highlight rendering of a stored text, re-serialized with the query's hits marked; the crawl sends no terms, and the verbatim rendering stays in the stored listing.";
+
+/** A highlight rendering of the stored field the pointer names. */
+const highlightOf = (
+  pointer:
+    | "inteiroTeorHtml"
+    | "ementa"
+    | "txtConteudoDecisao"
+    | "observacao"
+    | "tese"
+    | "titulo",
+) =>
+  excludedSourceField({
+    reason: "duplicate_of",
+    justification: HIGHLIGHT_REASON,
+    pointer,
+  });
 
 const BR_TST_SOURCE_FIELDS = {
   anoProc: storedAs("anoProc"),
   anoProcInt: storedAs("anoProcInt"),
-  codCPFSignatario: excludedSourceField(
-    "the signatory's personal tax identifier (CPF), which is not part of the decision; nulled before the record is stored or read, for data minimization",
-  ),
+  codCPFSignatario: excludedSourceField({
+    reason: "personal_data_minimisation",
+    justification:
+      "The signatory's personal tax identifier (CPF), which is not part of the decision; nulled before the record is stored or read.",
+    pointer: "WITHHELD_FIELDS",
+  }),
   codFase: storedAs("codFase"),
   codMinRelator: storedAs("codMinRelator"),
   dtaAtualizacao: storedAs("dtaAtualizacao"),
@@ -1122,7 +1159,7 @@ const BR_TST_SOURCE_FIELDS = {
   txtTemaProc: storedAs("txtTemaProc"),
 
   dispositivo: storedAs("dispositivo"),
-  dispositivoNaoAnalisado: excludedSourceField(PLACEHOLDER_REASON),
+  dispositivoNaoAnalisado: placeholderField("metadata.dispositivo"),
   dtaJulgamento: {
     disposition: "stored",
     target: { type: "result", key: "decisionDate" },
@@ -1131,24 +1168,24 @@ const BR_TST_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "textField", key: "headnote" },
   },
-  ementaHtml: excludedSourceField(PLACEHOLDER_REASON),
-  ementaNaoAnalisada: excludedSourceField(PLACEHOLDER_REASON),
+  ementaHtml: placeholderField("textFields.headnote"),
+  ementaNaoAnalisada: placeholderField("textFields.headnote"),
   indTipAcordao: storedAs("indTipAcordao"),
-  inteiroTeorHTMLHighlight: excludedSourceField(HIGHLIGHT_REASON),
+  inteiroTeorHTMLHighlight: highlightOf("inteiroTeorHtml"),
   inteiroTeorHtml: { disposition: "stored", target: { type: "document" } },
-  inteiroTeorRtf: excludedSourceField(PLACEHOLDER_REASON),
+  inteiroTeorRtf: placeholderField("inteiroTeorHtml"),
   numFormatadoAnt: storedAs("numFormatadoAnt"),
   numInterno: storedAs("numInterno"),
   numProc: storedAs("numProc"),
   numeracaoAnterior: storedAs("numeracaoAnterior"),
   tipoDecisoes: storedAs("tipoDecisoes"),
-  txtEmentaHighlight: excludedSourceField(HIGHLIGHT_REASON),
-  txtInteiroTeor: excludedSourceField(PLACEHOLDER_REASON),
-  txtInteiroTeorNaoAnalisado: excludedSourceField(PLACEHOLDER_REASON),
+  txtEmentaHighlight: highlightOf("ementa"),
+  txtInteiroTeor: placeholderField("inteiroTeorHtml"),
+  txtInteiroTeorNaoAnalisado: placeholderField("inteiroTeorHtml"),
 
   codAndCgjt: storedAs("codAndCgjt"),
-  conteudoDecisao: excludedSourceField(PLACEHOLDER_REASON),
-  conteudoDecisaoNaoAnalisado: excludedSourceField(PLACEHOLDER_REASON),
+  conteudoDecisao: placeholderField("txtConteudoDecisao"),
+  conteudoDecisaoNaoAnalisado: placeholderField("txtConteudoDecisao"),
   indIndexacao: storedAs("indIndexacao"),
   numDigAnt: storedAs("numDigAnt"),
   numMinuta: storedAs("numMinuta"),
@@ -1158,7 +1195,7 @@ const BR_TST_SOURCE_FIELDS = {
   numVersaoMinuta: storedAs("numVersaoMinuta"),
   subTipo: storedAs("subTipo"),
   txtConteudoDecisao: { disposition: "stored", target: { type: "document" } },
-  txtConteudoDecisaoHighlight: excludedSourceField(HIGHLIGHT_REASON),
+  txtConteudoDecisaoHighlight: highlightOf("txtConteudoDecisao"),
 
   dataPrimeiraPublicacao: storedAs("dataPrimeiraPublicacao"),
   dataSegundaPublicacao: storedAs("dataSegundaPublicacao"),
@@ -1167,21 +1204,27 @@ const BR_TST_SOURCE_FIELDS = {
   indiceNumero: storedAs("indiceNumero"),
   indiceTipo: storedAs("indiceTipo"),
   observacao: { disposition: "stored", target: { type: "document" } },
-  observacaoHighlight: excludedSourceField(HIGHLIGHT_REASON),
+  observacaoHighlight: highlightOf("observacao"),
   precedentes: storedAs("precedentes"),
   precedentesExternos: storedAs("precedentesExternos"),
   situacao: storedAs("situacao"),
   tese: { disposition: "stored", target: { type: "document" } },
-  teseHighlight: excludedSourceField(HIGHLIGHT_REASON),
-  textoPesquisavel: excludedSourceField(
-    "the search's index text: number, title, thesis and note run together, each of which is stored on its own",
-  ),
-  textoPesquisavelNaoAnalisado: excludedSourceField(
-    "the unanalysed copy of textoPesquisavel, character for character the same text",
-  ),
+  teseHighlight: highlightOf("tese"),
+  textoPesquisavel: excludedSourceField({
+    reason: "duplicate_of",
+    justification:
+      "The search's index text: number, title, thesis and note run together, each of which is stored on its own.",
+    pointer: "indiceNumero, titulo, tese, observacao",
+  }),
+  textoPesquisavelNaoAnalisado: excludedSourceField({
+    reason: "duplicate_of",
+    justification:
+      "The unanalysed copy of textoPesquisavel, character for character the same text.",
+    pointer: "textoPesquisavel",
+  }),
   titulo: { disposition: "stored", target: { type: "document" } },
-  tituloHighlight: excludedSourceField(HIGHLIGHT_REASON),
-} as const satisfies Record<BrTstSourceField, SourceFieldDisposition>;
+  tituloHighlight: highlightOf("titulo"),
+} as const satisfies Record<keyof BrTstPublisherRecord, SourceFieldDisposition>;
 
 /** The stored record's own keys: what the publisher stated for it. */
 const listBrTstSourceFields = (parts: SourceRawParts): readonly string[] => {
@@ -1641,7 +1684,7 @@ const windowSchema = v.variant("type", [
   v.strictObject({ type: v.literal("precedents") }),
   v.strictObject({
     type: v.literal("day"),
-    day: vApiDate,
+    day: apiDateSchema,
     part: v.picklist(["all", ...DAY_PARTS]),
   }),
 ]);
@@ -1661,7 +1704,7 @@ const cursorSchema = v.variant("phase", [
     phase: v.literal("walk"),
     regime: v.picklist(REGIMES),
     window: windowSchema,
-    offset: v.pipe(v.number(), v.safeInteger(), v.minValue(0)),
+    rowsRead: v.pipe(v.number(), v.safeInteger(), v.minValue(0)),
     /** The count the window's first page stated; a change restarts it. */
     reported: v.optional(v.pipe(v.number(), v.safeInteger(), v.minValue(0))),
     /** A split day's own count, and what its finished parts counted. */
@@ -1675,7 +1718,7 @@ const cursorSchema = v.variant("phase", [
   v.strictObject({
     phase: v.literal("parked"),
     /** The last closed day walked. */
-    through: vApiDate,
+    through: apiDateSchema,
   }),
 ]);
 
@@ -1689,7 +1732,7 @@ const START: BrTstCursor = {
   phase: "walk",
   regime: "sweep",
   window: { type: "precedents" },
-  offset: 0,
+  rowsRead: 0,
 };
 
 /**
@@ -1719,7 +1762,7 @@ const afterDay = (
         phase: "walk",
         regime,
         window: { type: "day", day: next, part: "all" },
-        offset: 0,
+        rowsRead: 0,
       };
 };
 
@@ -1737,7 +1780,7 @@ const afterWindow = (
           phase: "walk",
           regime: cursor.regime,
           window: { type: "day", day: FIRST_DAY, part: "all" },
-          offset: 0,
+          rowsRead: 0,
         };
   }
   if (window.part === "all" || cursor.split === undefined) {
@@ -1750,7 +1793,7 @@ const afterWindow = (
       phase: "walk",
       regime: cursor.regime,
       window: { type: "day", day: window.day, part: nextPart },
-      offset: 0,
+      rowsRead: 0,
       split: { dayTotal: cursor.split.dayTotal, partsTotal },
     };
   }
@@ -1833,16 +1876,21 @@ export const brTstFetchPage = async (
       return Result.ok({
         decisions: [],
         nextCursor: encodeBrTstCursor(position),
+        publisherRequest: PUBLISHER_REQUEST.NONE,
       });
     }
     position = resumed;
   }
 
+  // Whether a read reached the publisher on this page: only an answered
+  // page moves the source's last sync.
+  let publisherRequest: PublisherRequest = PUBLISHER_REQUEST.NONE;
   for (let step = 0; step <= MAX_EMPTY_WINDOW_SKIPS; step += 1) {
     if (position.phase === "parked") {
       return Result.ok({
         decisions: [],
         nextCursor: encodeBrTstCursor(position),
+        publisherRequest,
       });
     }
     // Annotated: the loop reassigns `position`, which inference cannot follow.
@@ -1850,14 +1898,15 @@ export const brTstFetchPage = async (
     const encoded = encodeBrTstCursor(walk);
     const read = await search({
       window: walk.window,
-      offset: walk.offset,
-      size: Math.min(CRAWL_PAGE_SIZE, BR_TST_OFFSET_CEILING - walk.offset),
+      offset: walk.rowsRead,
+      size: Math.min(CRAWL_PAGE_SIZE, BR_TST_OFFSET_CEILING - walk.rowsRead),
       cursor: encoded,
       signal,
     });
     if (Result.isError(read)) {
       return read;
     }
+    publisherRequest = PUBLISHER_REQUEST.ANSWERED;
     const { records, reported, url } = read.value;
     const moved = walk.reported !== undefined && reported !== walk.reported;
     // A day the court is still indexing is never a fixed set, even on the
@@ -1875,9 +1924,10 @@ export const brTstFetchPage = async (
           phase: "walk",
           regime: walk.regime,
           window: walk.window,
-          offset: 0,
+          rowsRead: 0,
           ...(walk.split === undefined ? {} : { split: walk.split }),
         }),
+        publisherRequest,
       });
     }
     if (moved) {
@@ -1886,7 +1936,7 @@ export const brTstFetchPage = async (
       logger.warn("case_law.ingestion.br_tst_frontier_window_moved", {
         adapterKey: ADAPTER_KEY,
         window: JSON.stringify(walk.window),
-        offset: walk.offset,
+        offset: walk.rowsRead,
         reportedBefore: walk.reported,
         reportedNow: reported,
       });
@@ -1897,7 +1947,7 @@ export const brTstFetchPage = async (
           phase: "walk",
           regime: walk.regime,
           window: { type: "day", day: walk.window.day, part: DAY_PARTS[0] },
-          offset: 0,
+          rowsRead: 0,
           split: { dayTotal: reported, partsTotal: 0 },
         };
         continue;
@@ -1909,16 +1959,16 @@ export const brTstFetchPage = async (
         ),
       );
     }
-    const end = walk.offset + records.length;
+    const end = walk.rowsRead + records.length;
     if (
       end < reported &&
-      records.length < Math.min(CRAWL_PAGE_SIZE, reported - walk.offset)
+      records.length < Math.min(CRAWL_PAGE_SIZE, reported - walk.rowsRead)
     ) {
       // A short page before the stated end is not the end (rule 14).
       return Result.err(
         searchError(
           encoded,
-          `page at ${walk.offset} returned ${records.length} rows of a window that counts ${reported}`,
+          `page at ${walk.rowsRead} returned ${records.length} rows of a window that counts ${reported}`,
         ),
       );
     }
@@ -1930,15 +1980,20 @@ export const brTstFetchPage = async (
     const nextCursor =
       end >= reported
         ? afterWindow(walk, reported, now)
-        : { ...walk, offset: end, reported };
+        : { ...walk, rowsRead: end, reported };
     return Result.ok({
       ...collected,
       sourceUrl: url,
       nextCursor: encodeBrTstCursor(nextCursor),
+      publisherRequest,
     });
   }
   // Out of steps rather than out of windows: bank where the walk got to.
-  return Result.ok({ decisions: [], nextCursor: encodeBrTstCursor(position) });
+  return Result.ok({
+    decisions: [],
+    nextCursor: encodeBrTstCursor(position),
+    publisherRequest,
+  });
 };
 
 // ── Total count ──────────────────────────────────────────

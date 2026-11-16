@@ -6,12 +6,14 @@ import { repoRelativePath } from "@stll/portable-path";
 
 import { rootDb } from "@/api/db/root";
 import { documentProcessingEnvInvariantViolation } from "@/api/env-document-processing-worker-schema";
-import { createBullMqWorkerHost } from "@/api/lib/bullmq-queue";
+import { BullMqWorker, createBullMqWorkerHost } from "@/api/lib/bullmq-queue";
+import { getExceptionScope } from "@/api/lib/observability/exception-scope";
 
 const SRC_DIR = path.resolve(import.meta.dir, "..");
 const HOST_ENTRYPOINTS = [
   "api-background-workers.ts",
   "scripts/document-processing-worker.ts",
+  "scripts/file-derivative-worker.ts",
 ];
 
 const sourceFiles = (dir: string): string[] =>
@@ -86,9 +88,16 @@ describe("background queue workers", () => {
         ].map(([, specifier]) => `${specifier ?? ""}.ts`),
       ),
     );
+    // A document run queue's Worker is built by its owner for the module
+    // that calls `createDocumentRunQueue`, so that module is the one hosted.
     const unhosted = sourceFiles(SRC_DIR)
-      .filter((file) => /new BullMqWorker\b/u.test(readFileSync(file, "utf-8")))
+      .filter((file) =>
+        /new BullMqWorker\b|\bcreateDocumentRunQueue\(/u.test(
+          readFileSync(file, "utf-8"),
+        ),
+      )
       .map((file) => repoRelativePath(SRC_DIR, file))
+      .filter((file) => file !== "lib/queue/document-run-queue.ts")
       .filter((file) => !hosted.has(file));
 
     expect(unhosted).toEqual([]);
@@ -117,4 +126,31 @@ describe("document-processing worker mode", () => {
       }),
     ).toContain("only supported in local development");
   });
+});
+
+test("worker event ownership scopes asynchronous failure handlers by stable queue definition", async () => {
+  const scopes: unknown[] = [];
+  for (const name of ["workflow", "document-processing"]) {
+    // Exercise the event boundary without opening queue connections.
+    let handled = Promise.resolve();
+    const observeFailure = async () => {
+      await Promise.resolve();
+      scopes.push(getExceptionScope());
+    };
+    const worker = {
+      name,
+      _events: {
+        error: () => {
+          handled = observeFailure();
+        },
+      },
+    };
+    BullMqWorker.prototype.emit.call(worker, "error", new Error("private"));
+    await handled;
+  }
+  expect(scopes).toEqual([
+    { type: "job", jobId: "workflow", task: "workflow" },
+    { type: "job", jobId: "document-processing", task: "document-processing" },
+  ]);
+  expect(getExceptionScope()).toBeUndefined();
 });

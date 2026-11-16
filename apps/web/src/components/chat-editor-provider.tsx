@@ -10,10 +10,6 @@ import {
 import type React from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
-import Bold from "@tiptap/extension-bold";
-import HardBreak from "@tiptap/extension-hard-break";
-import Paragraph from "@tiptap/extension-paragraph";
-import Text from "@tiptap/extension-text";
 import { Placeholder, UndoRedo } from "@tiptap/extensions";
 import { closeHistory } from "@tiptap/pm/history";
 import type {
@@ -33,11 +29,22 @@ import {
   CHAT_FILE_INPUT_ACCEPT,
   isChatFileMimeType,
 } from "@stll/api-contract/chat-file-types";
+import {
+  CHAT_MEMBER_SEND_ACTION,
+  type ChatMemberSendAction,
+} from "@stll/api-contract/chat-send-intent";
 import { CHAT_CONTEXT_FILE_MAX_BYTES } from "@stll/chat-limits";
 import { ChatComposerLinks } from "@stll/chat/link-editor";
 import { openFilePicker as openBrowserFilePicker } from "@stll/ui/file-picker";
-import { stellaToast } from "@stll/ui/toast";
 
+import {
+  useCredentialPasteNotice,
+  useCredentialSendNotice,
+} from "@/components/chat-composer-paste";
+import {
+  chatComposerHtml,
+  createChatComposerSchemaExtensions,
+} from "@/components/chat-composer-schema";
 import {
   decisionPassageContent,
   readDecisionPassage,
@@ -47,20 +54,17 @@ import {
   CHAT_DRAFT_ECHO_META,
   updateCarriesDraftEcho,
 } from "@/components/chat-editor-echo";
-import { createChatComposerDocument } from "@/components/chat-editor-markdown.logic";
 import {
-  insertCredentialPasteRequest,
-  readChatPaste,
-} from "@/components/chat-editor-paste.logic";
+  createChatComposerDocument,
+  userMessageComposerContent,
+} from "@/components/chat-editor-markdown.logic";
 import type { ComposerSource } from "@/components/chat-editor-source";
-import { ChatMention } from "@/components/chat-mention-extension";
 import type { ChatMentionOption } from "@/components/chat-mention-extension";
 import { insertChatMention } from "@/components/chat-mention-helpers";
 import {
   ChatPastedTextAttachments,
   insertPastedTextChip,
   PASTED_TEXT_ATTACHMENTS_ATTR,
-  PastedText,
   pastedTextChipContent,
   readPastedTextAttachments,
 } from "@/components/chat-pasted-text-extension";
@@ -75,9 +79,9 @@ import {
   mountEditor,
 } from "@/components/mounted-editors.logic";
 import type { MountedEditors } from "@/components/mounted-editors.logic";
-import { createPromptEditorDocument } from "@/components/prompt-editor.logic";
 import { seedReferenceHints } from "@/components/references/reference-hints";
 import { useRequiredRouteProvider } from "@/components/route-provider-scope/route-provider-scope";
+import { chatDraftHasModelContent } from "@/features/chat/lib/chat-message-model-content";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useUnsavedWork } from "@/hooks/use-unsaved-work";
@@ -132,8 +136,24 @@ type ChatDraftFileAttachment = {
   mimeType: string;
 };
 
+/**
+ * A chat file the server already stores (a queued message's, taken back into
+ * the composer to be written again): shown like any file and sent again by
+ * reference, never uploaded twice.
+ */
+export type ChatDraftStoredFileAttachment = {
+  type: "stored_file";
+  filename: string;
+  id: string;
+  mimeType: string;
+  /** The stored file's URL, as the message part named it. */
+  url: string;
+};
+
 export type ChatDraftAttachment =
-  ChatDraftFileAttachment | PastedTextAttachment;
+  | ChatDraftFileAttachment
+  | ChatDraftStoredFileAttachment
+  | PastedTextAttachment;
 
 export type ChatInputDraft = {
   files: ChatDraftAttachment[];
@@ -234,7 +254,13 @@ const readMentionSources = async (
         cause: result.error,
         retryable: true,
       });
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "readMentionSources:failure",
+        scope: {
+          type: "handler",
+          handlerId: `chat-mention.${labelKey}.${read.operation}`,
+        },
+      });
       failures.push(error);
       continue;
     }
@@ -260,10 +286,23 @@ type RegisteredExtension = {
   token: symbol;
 };
 
+/**
+ * A message the user wrote that has no other place on the page any more,
+ * such as an edit of a message the server dropped: its composer markup, and
+ * the texts it carried as pasted-text attachments.
+ */
+export type ChatMessageDraftHandoff = {
+  html: string;
+  pastedTexts: readonly string[];
+  storedFiles: readonly ChatDraftStoredFileAttachment[];
+};
+
 type ActiveChatEditorHandle = {
+  appendParagraph: (text: string) => void;
   focus: () => void;
   insertMention: (mention: ChatMentionOption) => void;
   insertPastedText: (attrs: PastedTextAttrs) => void;
+  restoreMessageDraft: (draft: ChatMessageDraftHandoff) => void;
   threadKey: string;
 };
 
@@ -303,9 +342,23 @@ export type ChatEditorController = {
    */
   setContent: (content: ComposerSource) => void;
   setEditable: (editable: boolean) => void;
-  setSubmitHandler: (handler: (() => Promise<void>) | null) => void;
-  submit: (send: ChatSend) => Promise<void>;
+  setSubmitHandler: (handler: ChatComposerSubmitHandler | null) => void;
+  /**
+   * Send the draft through `send`. `action` names the member's action when
+   * it went through the surface's submit handler, so a send confirmed after
+   * a warning repeats that action.
+   */
+  submit: (send: ChatSend, action?: ChatMemberSendAction) => Promise<void>;
 };
+
+/**
+ * A surface's submit: Enter and the send button are the plain `send`,
+ * Cmd/Ctrl+Enter is `queue`. A surface that offers no queue sends both
+ * alike.
+ */
+export type ChatComposerSubmitHandler = (
+  action: ChatMemberSendAction,
+) => Promise<void>;
 
 // The stable manager API: every field is a `useCallback`, so the whole value
 // keeps one identity for the provider's lifetime. `extensionVersion` — the one
@@ -319,6 +372,9 @@ type ChatEditorManagerContextValue = {
   focusThread: (threadRef: ChatThreadRef) => void;
   getMentionItems: () => Promise<ChatMentionSourceResult>;
   getPluginRegistrations: () => ChatInputPluginRegistration[];
+  /** Whether a composer for the thread is on screen to take what is handed
+   *  to it, rather than only its stored draft. */
+  hasLiveComposer: (threadRef: ChatThreadRef) => boolean;
   searchMentionItems: (query: string) => Promise<ChatMentionSourceResult>;
   insertMentionIntoThread: (
     threadRef: ChatThreadRef,
@@ -330,7 +386,18 @@ type ChatEditorManagerContextValue = {
     threadRef: ChatThreadRef,
     attrs: PastedTextAttrs,
   ) => void;
+  /** `text` after whatever the thread's live composer holds, or at the end
+   *  of its stored draft when none is live. The live composer's latest
+   *  keystrokes reach its stored draft only after a debounce, so appending
+   *  to the stored draft while it is live would lose them. */
+  appendParagraphToThread: (threadRef: ChatThreadRef, text: string) => void;
   registerActiveEditor: (handle: ActiveChatEditorHandle) => () => void;
+  /** Put `draft` into the thread's live composer, ahead of whatever the
+   *  composer already holds. False when the thread has no live composer. */
+  restoreMessageDraftIntoThread: (
+    threadRef: ChatThreadRef,
+    draft: ChatMessageDraftHandoff,
+  ) => boolean;
   registerExtension: (
     id: string,
     registration: ChatInputExtensionRegistration,
@@ -359,9 +426,6 @@ const isSuggestionPluginActive = (state: EditorState): boolean =>
     const pluginState: unknown = plugin.getState(state);
     return isSuggestionPluginState(pluginState) && pluginState.active;
   });
-
-const getEditorHtml = (editor: Editor) =>
-  editor.isEmpty ? "" : editor.getHTML().trim();
 
 const isUsableEditor = (editor: Editor | null | undefined): editor is Editor =>
   editor !== null && editor !== undefined && !editor.isDestroyed;
@@ -506,6 +570,39 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
     [],
   );
 
+  const appendParagraphToThread = useCallback(
+    (threadRef: ChatThreadRef, text: string) => {
+      const threadKey = getChatThreadKey(threadRef);
+      const activeEditor = mountedEditorFor(
+        mountedEditorsRef.current,
+        threadKey,
+      );
+
+      if (activeEditor !== null) {
+        activeEditor.appendParagraph(text);
+        return;
+      }
+
+      useChatDraftStore.getState().appendParagraph(threadKey, text);
+    },
+    [],
+  );
+
+  const restoreMessageDraftIntoThread = useCallback(
+    (threadRef: ChatThreadRef, draft: ChatMessageDraftHandoff): boolean => {
+      const activeEditor = mountedEditorFor(
+        mountedEditorsRef.current,
+        getChatThreadKey(threadRef),
+      );
+      if (activeEditor === null) {
+        return false;
+      }
+      activeEditor.restoreMessageDraft(draft);
+      return true;
+    },
+    [],
+  );
+
   const focusThread = useCallback((threadRef: ChatThreadRef) => {
     mountedEditorFor(
       mountedEditorsRef.current,
@@ -513,25 +610,40 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
     )?.focus();
   }, []);
 
+  const hasLiveComposer = useCallback(
+    (threadRef: ChatThreadRef) =>
+      mountedEditorFor(
+        mountedEditorsRef.current,
+        getChatThreadKey(threadRef),
+      ) !== null,
+    [],
+  );
+
   const contextValue = useMemo<ChatEditorManagerContextValue>(
     () => ({
+      appendParagraphToThread,
       focusThread,
       getMentionItems,
+      hasLiveComposer,
       getPluginRegistrations,
       insertMentionIntoThread,
       insertPastedTextIntoThread,
       registerActiveEditor,
       registerExtension,
+      restoreMessageDraftIntoThread,
       searchMentionItems,
     }),
     [
+      appendParagraphToThread,
       focusThread,
       getMentionItems,
       getPluginRegistrations,
+      hasLiveComposer,
       insertMentionIntoThread,
       insertPastedTextIntoThread,
       registerActiveEditor,
       registerExtension,
+      restoreMessageDraftIntoThread,
       searchMentionItems,
     ],
   );
@@ -545,6 +657,31 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
     </ChatEditorManagerContext>
   );
 };
+
+/**
+ * The chat editor manager for a composer that may mount where no route put
+ * one above it, such as the overlay of a public law reader. Under an existing
+ * provider it passes that provider's manager through, so the composer shares
+ * its registrations and drafts guard instead of starting a rival one.
+ */
+export const ChatEditorScope = ({ children }: React.PropsWithChildren) => {
+  const manager = use(ChatEditorManagerContext);
+  return manager === null ? (
+    <ChatEditorProvider>{children}</ChatEditorProvider>
+  ) : (
+    <ChatEditorManagerContext value={manager}>
+      {children}
+    </ChatEditorManagerContext>
+  );
+};
+
+/**
+ * The manager when a provider is above, or null: for a surface that hands
+ * content to a composer when one is there and does without otherwise, such as
+ * a reader's selection toolbar on a page a visitor reads.
+ */
+export const useOptionalChatEditorManager =
+  (): ChatEditorManagerContextValue | null => use(ChatEditorManagerContext);
 
 // Drafts live in memory for every thread, including threads whose composer is
 // not mounted, so the provider that owns their lifecycle reports them; a
@@ -578,6 +715,11 @@ type UseChatComposerWiringOptions = {
   controller: ChatEditorController;
   inputDisabled: boolean;
   onSubmit: ChatSend;
+  /**
+   * The member's queue action (Cmd/Ctrl+Enter, a queue button); omitted, it
+   * sends as `onSubmit` does.
+   */
+  onQueue?: ChatSend | undefined;
   onSubmitError?: ((error: unknown) => void) | undefined;
   /**
    * Pre-submit gate. Return `false` to abort the submit (e.g. when a
@@ -602,25 +744,33 @@ export const useChatComposerWiring = ({
   controller,
   inputDisabled,
   onSubmit,
+  onQueue,
   onSubmitError,
   onSubmitGuard,
   submitDisabled,
 }: UseChatComposerWiringOptions) => {
   const { blur, setEditable, setSubmitHandler, submit } = controller;
 
-  const submitDraft = useCallback(async () => {
-    if (submitDisabled) {
-      return;
-    }
-    if (onSubmitGuard?.() === false) {
-      return;
-    }
-    try {
-      await submit(onSubmit);
-    } catch (error) {
-      onSubmitError?.(error);
-    }
-  }, [onSubmit, onSubmitError, onSubmitGuard, submit, submitDisabled]);
+  const submitDraft = useCallback(
+    async (action: ChatMemberSendAction) => {
+      if (submitDisabled) {
+        return;
+      }
+      if (onSubmitGuard?.() === false) {
+        return;
+      }
+      const send =
+        action === CHAT_MEMBER_SEND_ACTION.queue && onQueue !== undefined
+          ? onQueue
+          : onSubmit;
+      try {
+        await submit(send, action);
+      } catch (error) {
+        onSubmitError?.(error);
+      }
+    },
+    [onQueue, onSubmit, onSubmitError, onSubmitGuard, submit, submitDisabled],
+  );
 
   useExternalSyncEffect(() => {
     setSubmitHandler(submitDraft);
@@ -643,14 +793,14 @@ export const useChatEditor = ({
   followupAnalytics,
   onDraftStart,
   placeholder,
-  sentMessageHistoryHtml,
+  sentMessageHistory,
   threadRef,
   suggestedFollowupPrompt,
 }: {
   followupAnalytics?: { surface: FollowupSurface } | undefined;
   onDraftStart?: (() => void) | undefined;
   placeholder?: string | undefined;
-  sentMessageHistoryHtml?: readonly string[] | undefined;
+  sentMessageHistory?: readonly string[] | undefined;
   threadRef: ChatThreadRef;
   suggestedFollowupPrompt?: string | undefined;
 }): ChatEditorController => {
@@ -681,7 +831,7 @@ export const useChatEditor = ({
       via: "ghost-tab",
     });
   });
-  const submitHandlerRef = useRef<(() => Promise<void>) | null>(null);
+  const submitHandlerRef = useRef<ChatComposerSubmitHandler | null>(null);
   const confirmedCredentialSendRef = useRef(false);
   const fileIdCounterRef = useRef(0);
   const activePluginKeysRef = useRef<(string | PluginKey)[]>([]);
@@ -706,7 +856,7 @@ export const useChatEditor = ({
   const markDraftStartedRef = useRef<(() => void) | null>(null);
   // oxlint-disable-next-line react/refs -- latest-ref mirror: the message-history key handler reads this out-of-render, must reflect this render's prop
   sentMessageHistoryHtmlRef.current =
-    sentMessageHistoryHtml ?? EMPTY_SENT_MESSAGE_HISTORY;
+    sentMessageHistory ?? EMPTY_SENT_MESSAGE_HISTORY;
   const threadKey = getChatThreadKey(threadRef);
   const { getPluginRegistrations, registerActiveEditor } =
     useChatEditorManager();
@@ -748,22 +898,8 @@ export const useChatEditor = ({
     isEmptyRef.current = nextIsEmpty;
     setIsEmpty(nextIsEmpty);
   });
-  const showCredentialPasteNotice = useLatestCallback(
-    (targetEditor: Editor) => {
-      stellaToast.warning(t("chat.credentialPasteTitle"), {
-        description: t("chat.credentialPasteDescription"),
-        action: {
-          label: t("chat.credentialPasteAction"),
-          onClick: () => {
-            insertCredentialPasteRequest(
-              targetEditor,
-              t("chat.credentialPasteRequest"),
-            );
-          },
-        },
-      });
-    },
-  );
+  const showCredentialPasteNotice = useCredentialPasteNotice();
+  const warnCredentialSend = useCredentialSendNotice();
   const pastedTextAttachmentsRef = useRef<unknown>(null);
   const attachmentsRef = useRef(attachments);
   // oxlint-disable-next-line react/refs -- latest-ref mirror: read at submit time out-of-render, must hold this render's attachments
@@ -790,7 +926,7 @@ export const useChatEditor = ({
       editorAuthoredDocsRef.current = new WeakSet();
       committedThreadKeyRef.current = threadKey;
     }
-  }, [sentMessageHistoryHtml, threadKey]);
+  }, [sentMessageHistory, threadKey]);
 
   // Flush-time persist of the editor's live doc into the draft store. The
   // debounce is load-bearing, not cosmetic: the draft store is a mirror of
@@ -892,7 +1028,7 @@ export const useChatEditor = ({
         pastedTextAttachmentsRef.current = pastedAttachments;
         const nextAttachments = [
           ...attachmentsRef.current.filter(
-            (attachment) => attachment.type === "file",
+            (attachment) => attachment.type !== "pasted_text",
           ),
           ...readPastedTextAttachments(pastedAttachments),
         ];
@@ -949,7 +1085,7 @@ export const useChatEditor = ({
         return false;
       }
 
-      const currentHtml = getEditorHtml(targetEditor);
+      const currentHtml = chatComposerHtml(targetEditor);
       if (currentIndex === null && currentHtml !== "") {
         return false;
       }
@@ -970,72 +1106,29 @@ export const useChatEditor = ({
       } else if (currentIndex !== null && currentIndex > 0) {
         nextIndex = currentIndex - 1;
       }
-      const nextHtml = nextIndex === null ? "" : (history.at(nextIndex) ?? "");
+      const nextMessage =
+        nextIndex === null ? "" : (history.at(nextIndex) ?? "");
 
       event.preventDefault();
       isNavigatingHistoryRef.current = true;
       try {
-        targetEditor.commands.setContent(nextHtml);
+        // A sent message is stored Markdown once the server has it; read it
+        // the way an edit does, so a typed `1.` stays its text.
+        targetEditor.commands.setContent(
+          nextMessage === "" ? "" : userMessageComposerContent(nextMessage),
+        );
         targetEditor.commands.focus("end");
       } finally {
         isNavigatingHistoryRef.current = false;
       }
       messageHistoryIndexRef.current = nextIndex;
-      if (nextHtml !== "") {
+      if (nextMessage !== "") {
         markDraftStartedRef.current?.();
       }
       return true;
     },
     [],
   );
-
-  // Everything passed to `useEditor` below (except event handlers) must keep
-  // a stable identity across renders: the react binding shallow-compares the
-  // options on every render and re-applies them to the live editor
-  // (`setOptions` -> `view.setProps` + `view.updateState`) whenever any value
-  // differs. Re-applying view props while ProseMirror's DOMObserver holds
-  // pending input mutations makes the observer flush re-parse the redrawn DOM
-  // as a fresh doc-changing transaction; with the draft store re-rendering
-  // this hook per keystroke, that feedback loop sustains itself until React
-  // throws "Maximum update depth exceeded" and drops in-flight keystrokes.
-  // Event handlers (`onCreate`, `onUpdate`, ...) are exempt: the binding
-  // excludes them from the comparison and always calls the latest one.
-  // oxlint-disable-next-line react/refs -- ref read deferred into the plugin's placeholder callback (invoked out-of-render), not read during render
-  const [extensions] = useState(() => [
-    createPromptEditorDocument(),
-    Paragraph,
-    Text,
-    Bold,
-    ChatComposerLinks,
-    // Shift+Enter inserts a hard break (newline) instead of
-    // splitting the paragraph; matches expected chat-input
-    // behaviour everywhere — Slack, Discord, ChatGPT, etc.
-    // Chained with `scrollIntoView()` so adding a new line at
-    // the bottom of an overflowed input keeps the cursor in
-    // view (ProseMirror's auto-scroll only fires on selection
-    // changes that already include the flag — `setHardBreak`
-    // alone doesn't).
-    HardBreak.extend({
-      addKeyboardShortcuts() {
-        return {
-          "Shift-Enter": () =>
-            this.editor.chain().setHardBreak().scrollIntoView().run(),
-        };
-      },
-    }),
-    Placeholder.configure({
-      placeholder: () => placeholderRef.current,
-    }),
-    UndoRedo,
-    ChatMention.configure({ deleteTriggerWithBackspace: true }),
-    PastedText,
-    ChatPastedTextAttachments,
-    // Decorates nothing until a chat surface's anonymization layer
-    // stores pairs via `setChatAnonDecorationPairs`. Installed here
-    // unconditionally so every surface sharing this editor gets
-    // consistent in-editor highlights without a per-mount install.
-    ChatAnonDecorations,
-  ]);
 
   const addPastedTextAttachment = useLatestCallback((text: string) => {
     const targetEditor = editorRef.current;
@@ -1057,6 +1150,77 @@ export const useChatEditor = ({
     markDraftStarted();
   });
 
+  // A message the user wrote comes back into the composer the way a sent
+  // message is recalled (`userMessageComposerContent`), so its chips and
+  // line breaks survive. What the composer already holds is kept, after it
+  // and a paragraph between them.
+  const restoreMessageDraft = useLatestCallback(
+    ({ html, pastedTexts, storedFiles }: ChatMessageDraftHandoff) => {
+      const targetEditor = editorRef.current;
+      if (!isUsableEditor(targetEditor)) {
+        return;
+      }
+      const content = userMessageComposerContent(html);
+      if (targetEditor.isEmpty) {
+        targetEditor.commands.setContent(content);
+      } else {
+        const sizeBefore = targetEditor.state.doc.content.size;
+        targetEditor.commands.insertContentAt(0, content);
+        const inserted = targetEditor.state.doc.content.size - sizeBefore;
+        targetEditor.commands.insertContentAt(inserted, {
+          type: "paragraph",
+        });
+      }
+      for (const text of pastedTexts) {
+        addPastedTextAttachment(text);
+      }
+      if (storedFiles.length > 0) {
+        const withStoredFiles = [...attachmentsRef.current, ...storedFiles];
+        attachmentsRef.current = withStoredFiles;
+        const doc = targetEditor.getJSON();
+        getOrCreateWeakSet(editorAuthoredDocsRef).add(doc);
+        setDraft(
+          threadKey,
+          createChatDraftState({ attachments: withStoredFiles, doc }),
+        );
+      }
+      markDraftStarted();
+      targetEditor.commands.focus("end");
+    },
+  );
+
+  // Everything passed to `useEditor` below (except event handlers) must keep
+  // a stable identity across renders: the react binding shallow-compares the
+  // options on every render and re-applies them to the live editor
+  // (`setOptions` -> `view.setProps` + `view.updateState`) whenever any value
+  // differs. Re-applying view props while ProseMirror's DOMObserver holds
+  // pending input mutations makes the observer flush re-parse the redrawn DOM
+  // as a fresh doc-changing transaction; with the draft store re-rendering
+  // this hook per keystroke, that feedback loop sustains itself until React
+  // throws "Maximum update depth exceeded" and drops in-flight keystrokes.
+  // Event handlers (`onCreate`, `onUpdate`, ...) are exempt: the binding
+  // excludes them from the comparison and always calls the latest one.
+  // oxlint-disable-next-line react/refs -- ref read deferred into the plugin's placeholder callback (invoked out-of-render), not read during render
+  const [extensions] = useState(() => [
+    // The composer's content; a sent message reopened for an edit uses the
+    // same schema (`createChatComposerSchemaExtensions`).
+    ...createChatComposerSchemaExtensions({
+      onChip: addPastedTextAttachment,
+      onCredential: showCredentialPasteNotice,
+    }),
+    ChatComposerLinks,
+    Placeholder.configure({
+      placeholder: () => placeholderRef.current,
+    }),
+    UndoRedo,
+    ChatPastedTextAttachments,
+    // Decorates nothing until a chat surface's anonymization layer
+    // stores pairs via `setChatAnonDecorationPairs`. Installed here
+    // unconditionally so every surface sharing this editor gets
+    // consistent in-editor highlights without a per-mount install.
+    ChatAnonDecorations,
+  ]);
+
   const [editorProps] = useState<EditorProps>(() => ({
     attributes: (state) => ({
       // A contenteditable div has no implicit ARIA role, so without
@@ -1072,44 +1236,11 @@ export const useChatEditor = ({
       // would fall back to LTR on the empty doc and strand the caret left.
       ...(state.doc.textContent.length > 0 ? { dir: "auto" } : {}),
       class:
-        "field-sizing-content max-h-48 min-h-10 overflow-y-auto text-sm focus-visible:outline-none",
+        // `overflow-y-auto` makes the x axis scrollable too, so nothing may
+        // be wider than the editor: long tokens break anywhere, and a
+        // reference chip clamps itself to the line (`InlinePill`).
+        "field-sizing-content max-h-48 min-h-10 overflow-y-auto text-sm wrap-anywhere focus-visible:outline-none",
     }),
-    handlePaste: (_view, event) => {
-      // Consume every paste before ProseMirror can parse clipboard HTML.
-      // File uploads still bubble to the React handler on the input surface.
-      event.preventDefault();
-      const paste = readChatPaste(event.clipboardData);
-      const targetEditor = editorRef.current;
-      if (targetEditor === null) {
-        return true;
-      }
-      switch (paste.type) {
-        case "ignore":
-        case "files":
-          return true;
-        case "decision":
-          targetEditor.commands.insertContent(
-            decisionPassageContent(paste.passage),
-          );
-          return true;
-        case "chip":
-          addPastedTextAttachment(paste.text);
-          return true;
-        case "credential":
-          showCredentialPasteNotice(targetEditor);
-          return true;
-        case "text":
-          targetEditor.commands.insertContent(paste.content, {
-            applyInputRules: false,
-            applyPasteRules: false,
-          });
-          return true;
-        default: {
-          paste satisfies never;
-          return panic("Unhandled chat paste");
-        }
-      }
-    },
     handleKeyDown: (view, event) => {
       if (handleMessageHistoryKeyDown(view.state, event)) {
         return true;
@@ -1141,11 +1272,11 @@ export const useChatEditor = ({
         }
       }
 
-      // Submit on Enter or Cmd/Ctrl+Enter. Shift+Enter falls
-      // through to the HardBreak extension (newline). A
-      // suggestion plugin a surface registers owns Enter while its
-      // popup is open — let it pick the highlighted item instead of
-      // submitting the prompt.
+      // Submit on Enter (the plain send) or Cmd/Ctrl+Enter (the queue
+      // action). Shift+Enter falls through to the HardBreak extension
+      // (newline). A suggestion plugin a surface registers owns Enter
+      // while its popup is open — let it pick the highlighted item instead
+      // of submitting the prompt.
       if (event.key !== "Enter" || event.isComposing) {
         return false;
       }
@@ -1157,7 +1288,14 @@ export const useChatEditor = ({
       }
 
       event.preventDefault();
-      detached(submitHandlerRef.current?.(), "chat-editor-provider.submit");
+      detached(
+        submitHandlerRef.current?.(
+          event.metaKey || event.ctrlKey
+            ? CHAT_MEMBER_SEND_ACTION.queue
+            : CHAT_MEMBER_SEND_ACTION.send,
+        ),
+        "chat-editor-provider.submit",
+      );
       return true;
     },
   }));
@@ -1331,15 +1469,49 @@ export const useChatEditor = ({
     [editor, markDraftStarted],
   );
 
+  // As the stored draft does (`appendParagraphToDraftDoc`): its own
+  // paragraph, or the whole content of an empty composer.
+  const appendParagraph = useCallback(
+    (text: string) => {
+      if (!isUsableEditor(editor)) {
+        return;
+      }
+
+      markDraftStarted();
+      const textNode = { type: "text", text };
+      const { doc } = editor.state;
+      // An empty composer is one empty paragraph: write inside it.
+      if (editor.isEmpty && doc.firstChild?.type.name === "paragraph") {
+        editor.commands.insertContentAt(1, textNode);
+        return;
+      }
+      editor.commands.insertContentAt(doc.content.size, {
+        type: "paragraph",
+        content: [textNode],
+      });
+    },
+    [editor, markDraftStarted],
+  );
+
   useExternalSyncEffect(
     () =>
       registerActiveEditor({
+        appendParagraph,
         focus,
         insertMention,
         insertPastedText,
+        restoreMessageDraft,
         threadKey,
       }),
-    [focus, insertMention, insertPastedText, registerActiveEditor, threadKey],
+    [
+      appendParagraph,
+      focus,
+      insertMention,
+      insertPastedText,
+      registerActiveEditor,
+      restoreMessageDraft,
+      threadKey,
+    ],
   );
 
   const updateAttachments = useCallback(
@@ -1394,8 +1566,8 @@ export const useChatEditor = ({
 
       for (const file of Array.from(files)) {
         if (
-          nextAttachments.filter((item) => item.type === "file").length >=
-          CHAT_FILES_PER_MESSAGE
+          nextAttachments.filter((item) => item.type !== "pasted_text")
+            .length >= CHAT_FILES_PER_MESSAGE
         ) {
           break;
         }
@@ -1524,11 +1696,11 @@ export const useChatEditor = ({
   }, [addFiles]);
 
   const submit = useCallback(
-    async (send: ChatSend) => {
+    async (send: ChatSend, action?: ChatMemberSendAction) => {
       if (!isUsableEditor(editor)) {
         return;
       }
-      const html = editor.isEmpty ? "" : editor.getHTML().trim();
+      const html = chatComposerHtml(editor);
       const doc = editor.getJSON();
       const files = attachmentsRef.current;
 
@@ -1536,24 +1708,20 @@ export const useChatEditor = ({
         !confirmedCredentialSendRef.current &&
         containsCredentialCandidate(editor.getText())
       ) {
-        stellaToast.warning(t("chat.credentialSendTitle"), {
-          description: t("chat.credentialSendDescription"),
-          action: {
-            label: t("chat.credentialSendAction"),
-            onClick: () => {
-              confirmedCredentialSendRef.current = true;
-              detached(
-                submitHandlerRef.current?.(),
-                "chat-editor-provider.credential-send-anyway",
-              );
-            },
-          },
+        warnCredentialSend(() => {
+          confirmedCredentialSendRef.current = true;
+          detached(
+            submitHandlerRef.current?.(action ?? CHAT_MEMBER_SEND_ACTION.send),
+            "chat-editor-provider.credential-send-anyway",
+          );
         });
         return;
       }
       confirmedCredentialSendRef.current = false;
 
-      if (!html && files.length === 0) {
+      // Nothing a model reads (spaces, a lone line break): the draft stays
+      // in the composer and nothing is sent.
+      if (!chatDraftHasModelContent({ files, html })) {
         return;
       }
 
@@ -1615,15 +1783,15 @@ export const useChatEditor = ({
       editor,
       queryClient,
       setDraft,
-      t,
       threadKey,
+      warnCredentialSend,
     ],
   );
 
   const canSubmit = !isEmpty || attachments.length > 0;
 
   const setSubmitHandler = useCallback(
-    (handler: (() => Promise<void>) | null) => {
+    (handler: ChatComposerSubmitHandler | null) => {
       submitHandlerRef.current = handler;
     },
     [],

@@ -1,7 +1,9 @@
 import { Result } from "better-result";
 import { eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
+import { apiDateSchema } from "@stll/api-contract/api-date";
+import { currencyCodeSchema } from "@stll/api-contract/currency-code";
 import { Temporal } from "@stll/time";
 
 import { expenseCategorySchema } from "@/api/db/billing-validators";
@@ -11,30 +13,34 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import {
-  tCurrencyCode,
-  tMinorUnitAmount,
-  tSafeId,
+  minorUnitAmountSchema,
+  resourceIdSchema,
 } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
 import { formatTodayInTimeZone } from "@/api/lib/timezone";
 
-const createExpenseBodySchema = t.Object({
-  matterId: tSafeId("entity"),
-  dateIncurred: t.String({ format: "date" }),
-  timezoneId: t.String({ minLength: 1, maxLength: 64 }),
-  amount: tMinorUnitAmount(1),
-  currency: tCurrencyCode,
+const createExpenseBodySchema = v.object({
+  matterId: resourceIdSchema("entity"),
+  dateIncurred: apiDateSchema,
+  timezoneId: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
+  amount: minorUnitAmountSchema(1),
+  currency: currencyCodeSchema,
   category: expenseCategorySchema,
-  description: t.String({ minLength: 1, maxLength: 10_000 }),
-  invoiceDescription: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
-  billable: t.Optional(t.Boolean()),
-  markup: t.Optional(t.Integer({ minimum: 0, maximum: 100 })),
+  description: v.pipe(v.string(), v.minLength(1), v.maxLength(10_000)),
+  invoiceDescription: v.optional(
+    v.nullable(v.pipe(v.string(), v.maxLength(10_000))),
+  ),
+  billable: v.optional(v.boolean()),
+  markup: v.optional(
+    v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(100)),
+  ),
 });
 
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   description:
     "Record a disbursement in the current matter against a work item " +
     "(matterId: the document, folder, or task the cost belongs to). amount " +

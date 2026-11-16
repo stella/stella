@@ -17,8 +17,8 @@ a clean isolated checkout of the PR head. Preserve unrelated changes.
 
 Pin every GitHub query and mutation to the resolved full `owner/name` repository
 and PR number. Require every refreshed PR to retain that identity, and evaluate
-checks, reviews, replies, resolutions, and merge eligibility only for its exact
-current head SHA. Stop and restart the evaluation when the head changes.
+checks, reviews, dispositions, resolutions, and merge eligibility only for its
+exact current head SHA. Stop and restart the evaluation when the head changes.
 
 Rebase or restack according to repository policy before trusting results. Review
 conflict resolutions and push safely. Preserve an explicit draft state unless the
@@ -36,8 +36,9 @@ canonical source and check the generated delta for drift.
 
 ## 3. Converge Reviews and CI
 
-Run `/rabbit-round` for the current head. Push accepted fixes before replying to
-review threads. Then refresh reviews and required checks for the new head.
+Run `/rabbit-round` for the current head. Push accepted fixes before recording
+their dispositions in the PR body. Never post GitHub comments or review-thread
+replies. Then refresh reviews and required checks for the new head.
 
 When bots or CI are still running, use the environment's monitor or wait mechanism;
 do not occupy the shell with sleep polling. Repeat only when new evidence arrives:
@@ -53,10 +54,11 @@ at most two review rounds after the first green head. When actionable findings k
 arriving past that, keep the green head and triage the remaining findings yourself
 with a concrete accept, push-back, or defer. Open one named follow-up PR for the
 accepted fixes; make it stacked only when repository policy or the existing branch
-stack requires that. Then reply to each deferred finding with that PR's URL, and
-resolve the thread where the finding has one: the named follow-up is the
-disposition, not a promise. A deferred top-level comment stays open; the reply is
-its terminal state.
+stack requires that. Then record each deferred finding in the PR body with that
+PR's URL, and resolve the thread where the finding has one and every participant
+is a confirmed allowed bot: the named follow-up is the disposition, not a
+promise. A deferred top-level comment has no resolution state; its PR body entry
+is its terminal state.
 
 The budget never defers a release-blocking defect. A finding that names a
 security, authorization, data-loss, or data-corruption defect, and survives

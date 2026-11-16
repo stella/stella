@@ -1,0 +1,3 @@
+{
+  "create-trigger": "Each egress backstop trigger is a catalog-only creation that reads no rows; SHARE ROW EXCLUSIVE is held only for the statement, under 5s lock_timeout and 30s statement_timeout."
+}

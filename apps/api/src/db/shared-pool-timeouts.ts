@@ -136,6 +136,13 @@ type SharedReadGuards = {
   statementTimeoutMs: number;
   lockTimeoutMs?: number;
   idleInTransactionTimeoutMs?: number;
+  /**
+   * A deadline for the whole transaction, counted from this statement.
+   * `statement_timeout` restarts with every statement, so only this bounds
+   * a run of statements: past it the server ends the session, whatever the
+   * transaction is doing.
+   */
+  transactionTimeoutMs?: number;
 };
 
 /** Install the public read guards together so setup costs one round trip. */
@@ -145,8 +152,13 @@ export const setSharedReadTransactionGuards = async (
     statementTimeoutMs,
     lockTimeoutMs,
     idleInTransactionTimeoutMs,
+    transactionTimeoutMs,
   }: SharedReadGuards,
 ): Promise<void> => {
+  const transaction =
+    transactionTimeoutMs === undefined
+      ? sql``
+      : sql`, set_config('transaction_timeout', ${`${effectiveTimeout(transactionTimeoutMs)}ms`}, true)`;
   const lock =
     lockTimeoutMs === undefined
       ? sql``
@@ -161,6 +173,7 @@ export const setSharedReadTransactionGuards = async (
       set_config('statement_timeout', ${`${effectiveTimeout(statementTimeoutMs)}ms`}, true)
       ${lock}
       ${idle}
+      ${transaction}
   `);
 };
 

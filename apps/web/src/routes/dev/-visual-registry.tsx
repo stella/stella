@@ -4,6 +4,8 @@ import type { ComponentType, ReactElement, ReactNode } from "react";
 import { panic } from "better-result";
 import * as v from "valibot";
 
+import { routeSearchSchema } from "@/route-search-params";
+
 import { visualRegistry } from "./-visual-metadata";
 import type { VisualName } from "./-visual-metadata";
 
@@ -12,11 +14,25 @@ type VisualLoader = {
 };
 
 const visualLoaders = {
+  "mcp-reconnect": {
+    load: async () => {
+      const { McpReconnectPlayground } =
+        await import("./-components/mcp-reconnect-playground");
+      return { default: McpReconnectPlayground };
+    },
+  },
   "task-metadata": {
     load: async () => {
       const { TaskMetadataPlayground } =
         await import("./-components/task-metadata-playground");
       return { default: TaskMetadataPlayground };
+    },
+  },
+  "overview-stat-cards": {
+    load: async () => {
+      const { OverviewStatCardsPlayground } =
+        await import("./-components/overview-stat-cards-playground");
+      return { default: OverviewStatCardsPlayground };
     },
   },
   "column-composer": {
@@ -31,6 +47,13 @@ const visualLoaders = {
       const { HandoffConfirmationPlayground } =
         await import("./-components/handoff-confirmation-playground");
       return { default: HandoffConfirmationPlayground };
+    },
+  },
+  "case-law-text-availability": {
+    load: async () => {
+      const { CaseLawTextAvailabilityPlayground } =
+        await import("./-components/case-law-text-availability-playground");
+      return { default: CaseLawTextAvailabilityPlayground };
     },
   },
   "hungarian-decision": {
@@ -75,6 +98,27 @@ const visualLoaders = {
       return { default: ChatLongPastePlayground };
     },
   },
+  "button-label": {
+    load: async () => {
+      const { ButtonLabelPlayground } =
+        await import("./-components/button-label-playground");
+      return { default: ButtonLabelPlayground };
+    },
+  },
+  "menu-commits": {
+    load: async () => {
+      const { MenuCommitsPlayground } =
+        await import("./-components/menu-commits-playground");
+      return { default: MenuCommitsPlayground };
+    },
+  },
+  "chat-composer-reference": {
+    load: async () => {
+      const { ChatComposerReferencePlayground } =
+        await import("./-components/chat-composer-reference-playground");
+      return { default: ChatComposerReferencePlayground };
+    },
+  },
   "chat-continuation-error": {
     load: async () => {
       const { ChatContinuationErrorPlayground } =
@@ -110,11 +154,39 @@ const visualLoaders = {
       };
     },
   },
+  "chat-answer-footer": {
+    load: async () => {
+      const [{ ChatCitationsPlayground }, { CHAT_ANSWER_FOOTER_CASSETTE }] =
+        await Promise.all([
+          import("./-components/chat-citations-playground"),
+          import("./-components/chat-answer-footer-cassette"),
+        ]);
+      return {
+        default: () => (
+          <ChatCitationsPlayground cassette={CHAT_ANSWER_FOOTER_CASSETTE} />
+        ),
+      };
+    },
+  },
   "chat-link-icons": {
     load: async () => {
       const { ChatLinkIconsPlayground } =
         await import("./-components/chat-link-icons-playground");
       return { default: ChatLinkIconsPlayground };
+    },
+  },
+  "chat-follow-ups": {
+    load: async () => {
+      const { ChatFollowUpsPlayground } =
+        await import("./-components/chat-follow-ups-playground");
+      return { default: ChatFollowUpsPlayground };
+    },
+  },
+  "ask-user": {
+    load: async () => {
+      const { AskUserPlayground } =
+        await import("./-components/ask-user-playground");
+      return { default: AskUserPlayground };
     },
   },
   "reader-answers": {
@@ -212,7 +284,7 @@ const visualLoaders = {
 const isVisualName = (input: unknown): input is VisualName =>
   typeof input === "string" && Object.hasOwn(visualRegistry, input);
 
-export const visualSearchSchema = v.object({
+export const visualSearchSchema = routeSearchSchema({
   visual: v.optional(v.custom<VisualName>(isVisualName)),
 });
 

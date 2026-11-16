@@ -1,30 +1,32 @@
 import { Result } from "better-result";
 import { eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { entities, workspaces } from "@/api/db/schema";
 import type { LinkMetadata } from "@/api/db/schema";
 import { entityFileRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture, detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
-import { tDefaultVarchar } from "@/api/lib/custom-schema";
+import { defaultVarcharSchema } from "@/api/lib/custom-schema";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
+import { normalizeEntityName } from "@/api/lib/entities/entity-name";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 
-const clipBodySchema = t.Object({
-  title: tDefaultVarchar,
-  url: t.String({ minLength: 1, maxLength: 2048 }),
-  snippet: t.Optional(t.String({ maxLength: 10_000 })),
-  citation: t.Optional(t.String({ maxLength: 1000 })),
-  jurisdiction: t.Optional(t.String({ maxLength: 128 })),
-  sourceType: t.Optional(t.String({ maxLength: 64 })),
+const clipBodySchema = v.object({
+  title: defaultVarcharSchema,
+  url: v.pipe(v.string(), v.minLength(1), v.maxLength(2048)),
+  snippet: v.exactOptional(v.pipe(v.string(), v.maxLength(10_000))),
+  citation: v.exactOptional(v.pipe(v.string(), v.maxLength(1000))),
+  jurisdiction: v.exactOptional(v.pipe(v.string(), v.maxLength(128))),
+  sourceType: v.exactOptional(v.pipe(v.string(), v.maxLength(64))),
 });
 
 export default createSafeHandler(
@@ -53,6 +55,7 @@ export default createSafeHandler(
       recordAuditEvent,
       body: { title, url, snippet, citation, jurisdiction, sourceType },
     } = ctx;
+    const name = normalizeEntityName(title);
 
     // Non-authoritative fast-fail: cheap, unlocked, avoids doing
     // metadata work for a request that's obviously over the limit.
@@ -101,7 +104,7 @@ export default createSafeHandler(
           id: entityId,
           workspaceId,
           kind: "link",
-          name: title,
+          name,
           metadata,
           createdBy: user.id,
           docSequence: entityStamp.docSequence,
@@ -135,7 +138,7 @@ export default createSafeHandler(
                 old: null,
                 new: {
                   kind: "link",
-                  name: title,
+                  name,
                   metadata,
                   currentVersionId: entityVersionId,
                 },
@@ -170,7 +173,15 @@ export default createSafeHandler(
       );
     }
 
-    flushEntitySearchRepairs([entityId]).catch(captureError);
+    detached(
+      async () =>
+        flushEntitySearchRepairs([entityId]).catch(
+          createErrorCapture(
+            handlerErrorContext("clip.flushEntitySearchRepairs"),
+          ),
+        ),
+      "entities-clip.flush-entity-search-repairs",
+    );
 
     return Result.ok({ entityId });
   },

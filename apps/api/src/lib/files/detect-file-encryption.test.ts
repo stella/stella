@@ -22,6 +22,7 @@ import {
   isEncryptedPdf,
   PDF_WORKER_PARSE_ERROR_EXIT_CODE,
 } from "@/api/lib/files/pdf-utils";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
@@ -133,10 +134,20 @@ describe("uploadFileEncryption", () => {
     const analytics = installRecordingAnalytics();
     try {
       expect(
-        uploadFileEncryption(unsure, { mimeType: PDF_MIME_TYPE })?.encrypted,
+        uploadFileEncryption(
+          unsure,
+          handlerErrorContext("test.detectEncryption", {
+            mimeType: PDF_MIME_TYPE,
+          }),
+        )?.encrypted,
       ).toBe(false);
       expect(
-        uploadFileEncryption(unreadable, { mimeType: PDF_MIME_TYPE }),
+        uploadFileEncryption(
+          unreadable,
+          handlerErrorContext("test.detectEncryption", {
+            mimeType: PDF_MIME_TYPE,
+          }),
+        ),
       ).toBeNull();
       // Both are reported; the unsure one is told apart by its stage.
       expect(
@@ -184,9 +195,24 @@ describe("retainedFileEncryption", () => {
     const analytics = installRecordingAnalytics();
     try {
       const context = { mimeType: PDF_MIME_TYPE };
-      expect(retainedFileEncryption(unsure, context).encrypted).toBe(false);
-      expect(retainedFileEncryption(unreadable, context).encrypted).toBe(false);
-      expect(retainedFileEncryption(known, context).encrypted).toBe(true);
+      expect(
+        retainedFileEncryption(
+          unsure,
+          handlerErrorContext("test.detectEncryption", context),
+        ).encrypted,
+      ).toBe(false);
+      expect(
+        retainedFileEncryption(
+          unreadable,
+          handlerErrorContext("test.detectEncryption", context),
+        ).encrypted,
+      ).toBe(false);
+      expect(
+        retainedFileEncryption(
+          known,
+          handlerErrorContext("test.detectEncryption", context),
+        ).encrypted,
+      ).toBe(true);
       expect(
         analytics.exceptions().map((event) => event.properties),
       ).toMatchObject([

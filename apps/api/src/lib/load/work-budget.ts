@@ -9,6 +9,8 @@ type WorkBudgetRefusal = {
 type WorkBudgetAdmission = {
   type: "admitted";
   release: () => void;
+  /** Whether the request waited in the queue before it was admitted. */
+  queued: boolean;
 };
 
 export type WorkBudgetResult = WorkBudgetAdmission | WorkBudgetRefusal;
@@ -17,14 +19,37 @@ type WorkBudgetRequest = {
   slots?: number;
   bytes?: number;
   signal?: AbortSignal;
+  /**
+   * Where the request waits: lower ranks are admitted first, compared key by
+   * key, and equal ranks in arrival order. Without a rank a request queues
+   * behind every waiter, so a budget whose callers never rank is plain FIFO.
+   */
+  rank?: readonly number[];
 };
 type Waiter = {
   slots: number;
+  rank: readonly number[];
   bytes: number;
   signal: AbortSignal | undefined;
   finish: (result: WorkBudgetResult) => void;
   timer: ReturnType<typeof setTimeout>;
   onAbort: () => void;
+};
+
+const UNRANKED: readonly number[] = [Number.POSITIVE_INFINITY];
+
+/** Lexicographic: the first key that differs decides; a shorter prefix goes first. */
+const compareRanks = (
+  left: readonly number[],
+  right: readonly number[],
+): number => {
+  for (let index = 0; index < Math.min(left.length, right.length); index++) {
+    const difference = (left[index] ?? 0) - (right[index] ?? 0);
+    if (difference !== 0) {
+      return difference;
+    }
+  }
+  return left.length - right.length;
 };
 
 // Memory recovery raises no event, so a queue held back by memory pressure
@@ -88,6 +113,7 @@ export const createWorkBudget = ({
     waiter.finish({
       type: "admitted",
       release: releaseFor(waiter.slots, waiter.bytes),
+      queued: true,
     });
   };
 
@@ -118,6 +144,7 @@ export const createWorkBudget = ({
     slots = 1,
     bytes = 0,
     signal,
+    rank = UNRANKED,
   }: WorkBudgetRequest): Promise<WorkBudgetResult> => {
     if (signal?.aborted) {
       return { type: "refused", reason: "aborted", retryAfterMs: 0 };
@@ -130,7 +157,11 @@ export const createWorkBudget = ({
     if (waiters.length === 0 && fits(slots, bytes)) {
       slotsInUse += slots;
       bytesInUse += bytes;
-      return { type: "admitted", release: releaseFor(slots, bytes) };
+      return {
+        type: "admitted",
+        release: releaseFor(slots, bytes),
+        queued: false,
+      };
     }
     if (waiters.length >= maxWaiters) {
       return { type: "refused", reason: "busy", retryAfterMs: maxWaitMs };
@@ -138,6 +169,7 @@ export const createWorkBudget = ({
     return await new Promise((resolve) => {
       const waiter: Waiter = {
         slots,
+        rank,
         bytes,
         signal,
         finish: resolve,
@@ -159,7 +191,10 @@ export const createWorkBudget = ({
         drain();
       };
       signal?.addEventListener("abort", waiter.onAbort, { once: true });
-      waiters.push(waiter);
+      const behind = waiters.findIndex(
+        (queued) => compareRanks(queued.rank, rank) > 0,
+      );
+      waiters.splice(behind === -1 ? waiters.length : behind, 0, waiter);
     });
   };
 

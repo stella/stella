@@ -11,6 +11,8 @@ import {
 } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 
+import { waitForExternalState } from "@stll/property-testing/external-state";
+
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -81,6 +83,7 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
     const version = (
       await db.execute(
         sql`SELECT current_setting('server_version_num')::int AS version`,
+        "objects",
       )
     ).at(0)?.["version"];
     expect(version).toBeGreaterThanOrEqual(180_000);
@@ -596,9 +599,9 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
       ): Promise<T> =>
         await db.transaction(async (tx) => {
           const value = await fn(tx);
-          const role = (await tx.execute(sql`SELECT current_user AS role`)).at(
-            0,
-          )?.["role"];
+          const role = (
+            await tx.execute(sql`SELECT current_user AS role`, "objects")
+          ).at(0)?.["role"];
           if (typeof role === "string") {
             observedRoles.push(role);
           }
@@ -944,10 +947,10 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
           return await callback(asTestRaw<Transaction>(tx));
         });
       const firstPid = (
-        await firstDb.execute(sql`SELECT pg_backend_pid() AS pid`)
+        await firstDb.execute(sql`SELECT pg_backend_pid() AS pid`, "objects")
       ).at(0)?.["pid"];
       const secondPid = (
-        await secondDb.execute(sql`SELECT pg_backend_pid() AS pid`)
+        await secondDb.execute(sql`SELECT pg_backend_pid() AS pid`, "objects")
       ).at(0)?.["pid"];
       if (typeof firstPid !== "number" || typeof secondPid !== "number") {
         throw new TypeError("Expected PostgreSQL backend identifiers");
@@ -979,23 +982,17 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
         await Promise.all([firstEntered.promise, secondEntered.promise]);
         // Observe both server-side waits before releasing the row: a
         // read-then-update mutation must have read the old row twice.
-        const deadline = Date.now() + 3000;
-        let bothBlocked = false;
-        while (Date.now() < deadline) {
-          // db-await-in-loop: bounded synchronization on actual backend lock waits.
-          const row = (
-            await locker.unsafe<{ blocked: boolean }[]>(
-              "SELECT cardinality(pg_blocking_pids($1::int)) > 0 AND cardinality(pg_blocking_pids($2::int)) > 0 AS blocked",
-              [firstPid, secondPid],
-            )
-          ).at(0);
-          if (row?.blocked === true) {
-            bothBlocked = true;
-            break;
-          }
-          await Bun.sleep(10);
-        }
-        expect(bothBlocked).toBe(true);
+        await waitForExternalState({
+          description: "both refreshes wait on the row lock",
+          timeoutMs: 3000,
+          read: async () =>
+            (
+              await locker.unsafe<{ blocked: boolean }[]>(
+                "SELECT cardinality(pg_blocking_pids($1::int)) > 0 AND cardinality(pg_blocking_pids($2::int)) > 0 AS blocked",
+                [firstPid, secondPid],
+              )
+            ).at(0)?.blocked === true,
+        });
         expect(calls).toBe(0);
       } finally {
         await locker.unsafe("COMMIT");
@@ -1745,7 +1742,10 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
           sql.raw(`SET search_path TO ${schema}, public`),
         );
         const pid = (
-          await worker.db.execute(sql`SELECT pg_backend_pid() AS pid`)
+          await worker.db.execute(
+            sql`SELECT pg_backend_pid() AS pid`,
+            "objects",
+          )
         ).at(0)?.["pid"];
         if (typeof pid !== "number") {
           panic("Missing independent worker pid");
@@ -1794,22 +1794,19 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
       try {
         await entered.promise;
         released.resolve(undefined);
-        const deadline = performance.now() + 3000;
-        let blocked = false;
-        while (!blocked && performance.now() < deadline) {
-          // db-await-in-loop: each claimant must reach a server-side lock before the decisive rows are released.
-          const expression = pids
-            .map((pid) => `cardinality(pg_blocking_pids(${pid})) > 0`)
-            .join(" AND ");
-          blocked =
+        // Each claimant must reach a server-side lock before the decisive
+        // rows are released.
+        const expression = pids
+          .map((pid) => `cardinality(pg_blocking_pids(${pid})) > 0`)
+          .join(" AND ");
+        await waitForExternalState({
+          description: "every claimant waits on the row lock",
+          timeoutMs: 3000,
+          read: async () =>
             (await locker.unsafe(`SELECT ${expression} AS blocked`)).at(0)?.[
               "blocked"
-            ] === true;
-          if (!blocked) {
-            await Bun.sleep(10);
-          }
-        }
-        expect(blocked).toBe(true);
+            ] === true,
+        });
         expect(counts).toBe(0);
       } finally {
         released.resolve(undefined);
@@ -2057,7 +2054,7 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
     });
     expect(budgets).toEqual([120_000, 120_000]);
     const fixturePid = (
-      await db.execute(sql`SELECT pg_backend_pid() AS pid`)
+      await db.execute(sql`SELECT pg_backend_pid() AS pid`, "objects")
     ).at(0)?.["pid"];
     for (const pid of pids) {
       expect(pid).not.toBe(fixturePid);
@@ -2066,9 +2063,9 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
 
   test("the production database clock ignores a worker wall clock that is a month ahead", async () => {
     const sourceId = await seedCountedSource(0);
-    const before = (await db.execute(sql`SELECT clock_timestamp() AS now`)).at(
-      0,
-    )?.["now"];
+    const before = (
+      await db.execute(sql`SELECT clock_timestamp() AS now`, "objects")
+    ).at(0)?.["now"];
     if (!(before instanceof Date)) {
       panic("Expected PostgreSQL database clock Date");
     }
@@ -2086,9 +2083,9 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
     } finally {
       setSystemTime();
     }
-    const after = (await db.execute(sql`SELECT clock_timestamp() AS now`)).at(
-      0,
-    )?.["now"];
+    const after = (
+      await db.execute(sql`SELECT clock_timestamp() AS now`, "objects")
+    ).at(0)?.["now"];
     if (!(after instanceof Date)) {
       panic("Expected PostgreSQL database clock Date");
     }

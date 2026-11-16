@@ -1,23 +1,34 @@
-import { describe, expect, mock, test } from "bun:test";
-import { Elysia } from "elysia";
+import { afterEach, describe, expect, mock, test } from "bun:test";
 
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 
+import { createHttpApp } from "@/api/http/app";
+import { responseCachePolicy } from "@/api/http/cache";
+import { routes } from "@/api/http/route";
 import {
   MACHINE_API_KEY_LENGTH,
   MACHINE_API_KEY_PREFIX,
 } from "@/api/lib/machine-api-key-config";
 import {
+  createSecurityCanary,
   createSecurityCanaryAlertDeduplicator,
-  createSecurityCanaryInterceptor,
   SECURITY_CANARY_WARNING,
   SECURITY_CANARY_WARNING_HEADER,
 } from "@/api/lib/security-canary";
+import { serveForTest } from "@/api/tests/helpers/test-server";
+import type { TestServer } from "@/api/tests/helpers/test-server";
 
 const CANARY_CREDENTIAL = `${MACHINE_API_KEY_PREFIX}${"a".repeat(
   MACHINE_API_KEY_LENGTH,
 )}`;
 const CANARY_DIGEST = hashSha256Hex(CANARY_CREDENTIAL);
+
+const servers: TestServer[] = [];
+afterEach(async () => {
+  await Promise.all(
+    servers.splice(0).map(async (server) => await server.stop()),
+  );
+});
 
 const buildApp = ({
   claimAlert = async () => ({ status: "emit", reason: "claimed" }) as const,
@@ -32,7 +43,7 @@ const buildApp = ({
 }) => {
   const state = { handlerCalls: 0 };
   const onTriggered = mock();
-  const interceptor = createSecurityCanaryInterceptor({
+  const canary = createSecurityCanary({
     getConfiguredDigest: () => configuredDigest,
     getCorrelationId: () => "req_test",
     claimAlert,
@@ -40,10 +51,26 @@ const buildApp = ({
       onTriggered(trigger);
     },
   });
-  const app = new Elysia().onRequest(interceptor).get("/ordinary", () => {
-    state.handlerCalls += 1;
-    return { ok: true };
-  });
+  // The cache policy sits outside the canary, as in the API pipeline, so the
+  // refusal leaves with the same private policy as every other answer.
+  const app = serveForTest(
+    createHttpApp({
+      middleware: [responseCachePolicy, canary],
+      routes: routes({
+        "/ordinary": {
+          GET: {
+            access: "public",
+            config: {},
+            run: async () => {
+              state.handlerCalls += 1;
+              return await Promise.resolve({ ok: true });
+            },
+          },
+        },
+      }),
+    }),
+  );
+  servers.push(app);
 
   return { app, onTriggered, state };
 };
@@ -58,13 +85,13 @@ const requestWithAuthorization = (authorization: string): Request =>
     headers: { authorization },
   });
 
-describe("security canary interceptor", () => {
+describe("security canary", () => {
   test("does nothing when the deployment has no canary configured", async () => {
     const { app, onTriggered, state } = buildApp({
       configuredDigest: undefined,
     });
 
-    const response = await app.handle(requestWithCredential(CANARY_CREDENTIAL));
+    const response = await app.fetch(requestWithCredential(CANARY_CREDENTIAL));
 
     expect(response.status).toBe(200);
     expect(state.handlerCalls).toBe(1);
@@ -79,7 +106,7 @@ describe("security canary interceptor", () => {
       MACHINE_API_KEY_LENGTH,
     )}`;
 
-    const response = await app.handle(
+    const response = await app.fetch(
       requestWithCredential(unrelatedCredential),
     );
 
@@ -88,12 +115,12 @@ describe("security canary interceptor", () => {
     expect(onTriggered).not.toHaveBeenCalled();
   });
 
-  test("stops a canary request before routing and emits one correlation-only event", async () => {
+  test("stops a canary request before its route runs and emits one correlation-only event", async () => {
     const { app, onTriggered, state } = buildApp({
       configuredDigest: CANARY_DIGEST,
     });
 
-    const response = await app.handle(requestWithCredential(CANARY_CREDENTIAL));
+    const response = await app.fetch(requestWithCredential(CANARY_CREDENTIAL));
 
     expect(response.status).toBe(403);
     expect(response.headers.get("cache-control")).toBe("private, no-store");
@@ -125,9 +152,7 @@ describe("security canary interceptor", () => {
         configuredDigest: CANARY_DIGEST,
       });
 
-      const response = await app.handle(
-        requestWithAuthorization(authorization),
-      );
+      const response = await app.fetch(requestWithAuthorization(authorization));
 
       expect(response.status).toBe(403);
       expect(state.handlerCalls).toBe(0);
@@ -141,7 +166,7 @@ describe("security canary interceptor", () => {
       configuredDigest: CANARY_DIGEST,
     });
 
-    const response = await app.handle(requestWithCredential(CANARY_CREDENTIAL));
+    const response = await app.fetch(requestWithCredential(CANARY_CREDENTIAL));
 
     expect(response.status).toBe(403);
     expect(state.handlerCalls).toBe(0);
@@ -159,7 +184,7 @@ describe("security canary interceptor", () => {
       configuredDigest: CANARY_DIGEST,
     });
 
-    const response = await app.handle(requestWithCredential(CANARY_CREDENTIAL));
+    const response = await app.fetch(requestWithCredential(CANARY_CREDENTIAL));
 
     expect(response.status).toBe(403);
     expect(state.handlerCalls).toBe(0);
@@ -175,7 +200,7 @@ describe("security canary interceptor", () => {
       configuredDigest: "not-a-sha256-digest",
     });
 
-    const response = await app.handle(requestWithCredential(CANARY_CREDENTIAL));
+    const response = await app.fetch(requestWithCredential(CANARY_CREDENTIAL));
 
     expect(response.status).toBe(200);
     expect(state.handlerCalls).toBe(1);
@@ -184,7 +209,7 @@ describe("security canary interceptor", () => {
 });
 
 describe("security canary alert deduplicator", () => {
-  test("claims once across interceptor instances sharing Redis state", async () => {
+  test("claims once across canary instances sharing Redis state", async () => {
     let claimed = false;
     const send = mock(async () => {
       if (claimed) {

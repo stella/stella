@@ -16,8 +16,10 @@ import path from "node:path";
 import { createSha256 } from "@stll/sha256/node";
 
 import {
+  canonicalSnapshotUpgrades,
   findMigrationIdentityViolation,
   findMigrationImmutabilityViolation,
+  findMigrationTimestampViolations,
   formatAliasSummary,
   readMigrationBaseSnapshot,
   readMigrationChanges,
@@ -59,15 +61,6 @@ const immutabilityViolation = ({
   });
 
 describe("migration identity", () => {
-  test("accepts a migration stamped before one already on the base branch", () => {
-    expect(
-      findMigrationIdentityViolation({
-        addedDirectories: [migrationDirectory("20260801110000_late_arrival")],
-        removedDirectories: [],
-      }),
-    ).toBeNull();
-  });
-
   test("accepts two new migrations with the same timestamp", () => {
     expect(
       findMigrationIdentityViolation({
@@ -204,7 +197,268 @@ describe("migration identity", () => {
   });
 });
 
+describe("new migration timestamp ordering", () => {
+  const newestBaseDirectory = migrationDirectory(FILE_NAME);
+  const baseDirectories = [
+    newestBaseDirectory,
+    migrationDirectory("20260701120000_older"),
+  ];
+
+  test.each([
+    ["equal to", "20260801120000_equal"],
+    ["older than", "20260801110000_older"],
+  ])("rejects a timestamp %s the newest base migration", (_relation, name) => {
+    const directory = migrationDirectory(name);
+    expect(
+      findMigrationTimestampViolations({
+        addedDirectories: [directory],
+        baseDirectories,
+      }),
+    ).toEqual([{ type: "stale-timestamp", directory, newestBaseDirectory }]);
+  });
+
+  test("accepts a timestamp newer than the newest base migration", () => {
+    expect(
+      findMigrationTimestampViolations({
+        addedDirectories: [migrationDirectory("20260801130000_newer")],
+        baseDirectories,
+      }),
+    ).toEqual([]);
+  });
+
+  test("rejects the second branch when two branches add the same stamp", () => {
+    const cwd = mkdtempSync(path.join(tmpdir(), "migration-branch-order-"));
+    const runGit = (...arguments_: string[]) => {
+      const result = Bun.spawnSync(["git", ...arguments_], {
+        cwd,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      expect(result.exitCode).toBe(0);
+    };
+    const stamp = "20260801130000";
+    try {
+      runGit("init", "-b", "main");
+      runGit("config", "user.name", "Test User");
+      runGit("config", "user.email", "test@example.com");
+      runGit("config", "commit.gpgsign", "false");
+      writeFileSync(path.join(cwd, "README.md"), "fixture\n");
+      runGit("add", ".");
+      runGit("commit", "-m", "Initial fixture");
+
+      runGit("switch", "-c", "first");
+      const first = migrationDirectory(`${stamp}_first`);
+      mkdirSync(path.join(cwd, first), { recursive: true });
+      writeFileSync(path.join(cwd, first, "migration.sql"), "SELECT 1;\n");
+      runGit("add", ".");
+      runGit("commit", "-m", "Add first migration");
+
+      runGit("switch", "main");
+      runGit("switch", "-c", "second");
+      const second = migrationDirectory(`${stamp}_second`);
+      mkdirSync(path.join(cwd, second), { recursive: true });
+      writeFileSync(path.join(cwd, second, "migration.sql"), "SELECT 2;\n");
+      runGit("add", ".");
+      runGit("commit", "-m", "Add second migration");
+
+      runGit("switch", "main");
+      runGit("merge", "--ff-only", "first");
+      runGit("switch", "second");
+      const { changes, baseDirectories: refreshedBaseDirectories } =
+        readMigrationBaseSnapshot({
+          baseRef: "main",
+          cwd,
+        });
+      expect(
+        findMigrationTimestampViolations({
+          addedDirectories: changes.addedDirectories,
+          baseDirectories: refreshedBaseDirectories,
+        }),
+      ).toEqual([
+        {
+          type: "stale-timestamp",
+          directory: second,
+          newestBaseDirectory: first,
+        },
+      ]);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test("names the stale migration among several additions", () => {
+    const directory = migrationDirectory("20260801110000_stale");
+    expect(
+      findMigrationTimestampViolations({
+        addedDirectories: [
+          migrationDirectory("20260801130000_newer"),
+          directory,
+          migrationDirectory("20260801140000_latest"),
+        ],
+        baseDirectories,
+      }),
+    ).toEqual([{ type: "stale-timestamp", directory, newestBaseDirectory }]);
+  });
+
+  test("accepts additions when the base has no migrations", () => {
+    expect(
+      findMigrationTimestampViolations({
+        addedDirectories: [migrationDirectory("20260801110000_first")],
+        baseDirectories: [],
+      }),
+    ).toEqual([]);
+  });
+
+  test("reports every stale addition", () => {
+    const addedDirectories = [
+      migrationDirectory("20260801110000_older"),
+      migrationDirectory("20260801120000_equal"),
+    ];
+    expect(
+      findMigrationTimestampViolations({ addedDirectories, baseDirectories }),
+    ).toEqual(
+      addedDirectories.map((directory) => ({
+        type: "stale-timestamp",
+        directory,
+        newestBaseDirectory,
+      })),
+    );
+  });
+});
+
 describe("migration immutability", () => {
+  test("accepts only a complete canonical snapshot format upgrade, preserving the SQL guard", async () => {
+    const first = `${migrationDirectory(FILE_NAME)}/snapshot.json`;
+    const second = `${migrationDirectory("20260801130000_next")}/snapshot.json`;
+    const firstId = "11111111-1111-4111-8111-111111111111";
+    const base = {
+      version: "8",
+      dialect: "postgres",
+      id: firstId,
+      prevIds: ["00000000-0000-0000-0000-000000000000"],
+      ddl: [
+        {
+          entityType: "tables",
+          schema: "public",
+          name: "fixture",
+          isRlsEnabled: false,
+        },
+      ],
+      renames: [],
+    };
+    const baseSnapshots = new Map<string, unknown>([
+      [first, base],
+      [
+        second,
+        {
+          ...base,
+          id: "22222222-2222-4222-8222-222222222222",
+          prevIds: [firstId],
+          ddl: base.ddl.map((row) => ({ ...row, isRlsEnabled: true })),
+        },
+      ],
+    ]);
+    const directory = mkdtempSync(
+      path.join(tmpdir(), "snapshot-upgrade-test-"),
+    );
+    try {
+      for (const [file, snapshot] of baseSnapshots) {
+        const target = path.join(directory, file);
+        mkdirSync(path.dirname(target), { recursive: true });
+        writeFileSync(target, JSON.stringify(snapshot));
+      }
+      const { up } = await import("drizzle-kit/cli");
+      expect(
+        (
+          await up({
+            dialect: "postgresql",
+            out: path.join(directory, "apps/api/drizzle"),
+          })
+        ).status,
+      ).toBe("ok");
+      const headSnapshots = new Map<string, unknown>();
+      for (const file of baseSnapshots.keys()) {
+        const snapshot: unknown = JSON.parse(
+          readFileSync(path.join(directory, file), "utf-8"),
+        );
+        headSnapshots.set(file, snapshot);
+      }
+      const accepted = await canonicalSnapshotUpgrades({
+        baseSnapshots,
+        headSnapshots,
+      });
+      expect([...accepted]).toEqual([first, second]);
+      expect(
+        findMigrationImmutabilityViolation({
+          modifiedFiles: [first, second],
+          baseInventory: [],
+          headInventory: [],
+          baseHashes: {},
+          headHashes: {},
+          snapshotUpgrades: accepted,
+        }),
+      ).toBeNull();
+      expect(
+        findMigrationImmutabilityViolation({
+          modifiedFiles: [FILE],
+          baseInventory: [],
+          headInventory: [],
+          baseHashes: { [FILE]: BASE_HASH },
+          headHashes: { [FILE]: HEAD_HASH },
+          snapshotUpgrades: new Set([FILE]),
+        }),
+      ).toEqual({
+        type: "edited-base-migration",
+        file: FILE,
+        baseHash: BASE_HASH,
+        headHash: HEAD_HASH,
+      });
+
+      const firstUpgraded = headSnapshots.get(first);
+      if (typeof firstUpgraded !== "object" || firstUpgraded === null) {
+        throw new TypeError("Expected the canonical base snapshot");
+      }
+      // A version bump alone cannot bless schema, identity or footprint edits.
+      for (const changed of [
+        { ...firstUpgraded, ddl: [] },
+        { ...firstUpgraded, footprints: [] },
+        { ...firstUpgraded, id: "33333333-3333-4333-8333-333333333333" },
+        { ...firstUpgraded, prevIds: ["33333333-3333-4333-8333-333333333333"] },
+        { ...firstUpgraded, version: "8" },
+        { ...firstUpgraded, version: "10" },
+        { ...firstUpgraded, addedMetadata: true },
+      ]) {
+        const edited = new Map(headSnapshots);
+        edited.set(first, changed);
+        expect(
+          await canonicalSnapshotUpgrades({
+            baseSnapshots,
+            headSnapshots: edited,
+          }),
+        ).toEqual(new Set());
+      }
+      const partial = new Map(headSnapshots);
+      partial.set(second, baseSnapshots.get(second));
+      expect(
+        await canonicalSnapshotUpgrades({
+          baseSnapshots,
+          headSnapshots: partial,
+        }),
+      ).toEqual(new Set());
+      // Once upgraded, later edits at the same version remain immutable.
+      const edited = new Map(headSnapshots);
+      edited.set(first, { ...firstUpgraded, footprints: [] });
+      expect(
+        await canonicalSnapshotUpgrades({
+          baseSnapshots: headSnapshots,
+          headSnapshots: edited,
+        }),
+      ).toEqual(new Set());
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   test("rejects an edit to a base migration without a new matching alias", () => {
     expect(immutabilityViolation()).toEqual({
       type: "edited-base-migration",
@@ -445,6 +699,10 @@ describe("migration immutability", () => {
         `${JSON.stringify([mainAlias])}\n`,
       );
       runGit("add", ".");
+      const newestMain = migrationDirectory("20260801150000_main_tip");
+      mkdirSync(path.join(cwd, newestMain), { recursive: true });
+      writeFileSync(path.join(cwd, newestMain, "migration.sql"), "SELECT 5;\n");
+      runGit("add", ".");
       runGit("commit", "-m", "Append unrelated alias");
       expect(runGit("show", `main:${inventoryPath}`)).toContain(
         mainAlias.fileName,
@@ -453,6 +711,7 @@ describe("migration immutability", () => {
 
       const unchanged = readMigrationBaseSnapshot({ baseRef: "main", cwd });
       expect(unchanged.mergeBase).toBe(branchPoint);
+      expect(unchanged.baseDirectories).toContain(newestMain);
       expect(unchanged.changes.modifiedFiles).toEqual([]);
       expect(unchanged.baseInventory).toEqual([]);
       expect(
@@ -518,9 +777,10 @@ describe("migration immutability", () => {
   });
 });
 
-test("the migration CLI rejects bad new dependencies and accepts an aliased base edit", () => {
+test("the migration CLI rejects bad new dependencies and accepts an aliased base edit", async () => {
   const cwd = mkdtempSync(path.join(tmpdir(), "migration-cli-"));
   const scriptPath = path.join(cwd, "scripts/check-migration-order.ts");
+  const stampsPath = path.join(cwd, "scripts/migration-stamps.ts");
   const ledgerPath = path.join(cwd, "apps/api/src/lib/db/migration-ledger.ts");
   const inventoryPath = path.join(
     cwd,
@@ -550,6 +810,7 @@ test("the migration CLI rejects bad new dependencies and accepts an aliased base
       path.join(import.meta.dir, "check-migration-order.ts"),
       scriptPath,
     );
+    copyFileSync(path.join(import.meta.dir, "migration-stamps.ts"), stampsPath);
     copyFileSync(
       path.resolve(
         import.meta.dir,
@@ -560,6 +821,22 @@ test("the migration CLI rejects bad new dependencies and accepts an aliased base
     writeFileSync(inventoryPath, "[]\n");
     const originalSql = "SELECT 1;\n";
     writeFileSync(path.join(cwd, FILE), originalSql);
+    const snapshotPath = path.join(
+      cwd,
+      migrationDirectory(FILE_NAME),
+      "snapshot.json",
+    );
+    writeFileSync(
+      snapshotPath,
+      JSON.stringify({
+        version: "8",
+        dialect: "postgres",
+        id: "11111111-1111-4111-8111-111111111111",
+        prevIds: ["00000000-0000-0000-0000-000000000000"],
+        ddl: [],
+        renames: [],
+      }),
+    );
     runGit("init", "-b", "main");
     runGit("config", "user.name", "Test User");
     runGit("config", "user.email", "test@example.com");
@@ -571,6 +848,24 @@ test("the migration CLI rejects bad new dependencies and accepts an aliased base
       path.join(cwd, "node_modules"),
       "dir",
     );
+
+    const staleDirectory = migrationDirectory("20260801110000_stale");
+    runGit("switch", "-c", "stale");
+    mkdirSync(path.join(cwd, staleDirectory), { recursive: true });
+    writeFileSync(
+      path.join(cwd, staleDirectory, "migration.sql"),
+      "SELECT 2;\n",
+    );
+    runGit("add", "apps/api/drizzle");
+    runGit("commit", "-m", "Add stale migration");
+    const stale = runGate();
+    expect(stale.exitCode).not.toBe(0);
+    expect(stale.stderr.toString()).toContain(staleDirectory);
+    expect(stale.stderr.toString()).toContain(migrationDirectory(FILE_NAME));
+    expect(stale.stderr.toString()).toContain(
+      "Re-stamp the unmerged migration",
+    );
+    runGit("switch", "main");
 
     const added = migrationDirectory("20260801130000_added");
     runGit("switch", "-c", "malformed");
@@ -631,6 +926,44 @@ test("the migration CLI rejects bad new dependencies and accepts an aliased base
     expect(malformedAliased.stderr.toString()).toContain(
       "Malformed migration dependency",
     );
+
+    runGit("switch", "main");
+    runGit("switch", "-c", "snapshot-format");
+    const { up } = await import("drizzle-kit/cli");
+    expect(
+      (
+        await up({
+          dialect: "postgresql",
+          out: path.join(cwd, "apps/api/drizzle"),
+        })
+      ).status,
+    ).toBe("ok");
+    const canonical = readFileSync(snapshotPath, "utf-8");
+    const canonicalJson: unknown = JSON.parse(canonical);
+    if (typeof canonicalJson !== "object" || canonicalJson === null) {
+      throw new TypeError("Expected a canonical snapshot");
+    }
+    const noncanonical = JSON.stringify({
+      ...canonicalJson,
+      addedMetadata: true,
+    });
+    writeFileSync(snapshotPath, noncanonical);
+    runGit("add", "apps/api/drizzle");
+    runGit("commit", "-m", "Change snapshot metadata");
+    // Dirty canonical bytes cannot authorize a noncanonical committed snapshot.
+    writeFileSync(snapshotPath, canonical);
+    const dirtyCanonical = runGate();
+    expect(dirtyCanonical.exitCode).not.toBe(0);
+    expect(dirtyCanonical.stderr.toString()).toContain(
+      "edited-non-sql-in-base-folder",
+    );
+    runGit("add", "apps/api/drizzle");
+    runGit("commit", "-m", "Use canonical snapshot format");
+    // Conversely the committed canonical conversion is the pre-push artifact.
+    writeFileSync(snapshotPath, noncanonical);
+    const committedCanonical = runGate();
+    expect(committedCanonical.stderr.toString()).toBe("");
+    expect(committedCanonical.exitCode).toBe(0);
   } finally {
     rmSync(cwd, { recursive: true, force: true });
   }

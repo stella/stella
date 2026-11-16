@@ -1,8 +1,9 @@
 import { hashKey } from "@tanstack/react-query";
 
 import type { EntityFind } from "@stll/api-contract";
+import { isUuid } from "@stll/api-contract/safe-id";
 
-import type { ViewSort } from "@/lib/eden-client";
+import type { ViewSort } from "@/lib/api";
 import type { ConditionNode, EntityKind, WorkspaceProperty } from "@/lib/types";
 
 /**
@@ -95,6 +96,19 @@ export const normalizeVisibleFieldIds = (
   fieldIds: string[] | undefined,
 ): string[] =>
   fieldIds === undefined ? [] : [...new Set(fieldIds)].toSorted();
+
+/**
+ * Per-entity keys carry the entity id third, after the entity root. Every other
+ * key under the root (views, trees, counts, folders, activity, facets) spans
+ * many entities and is a collection, so a new aggregate key is refreshed by an
+ * entity change without being listed here.
+ */
+export const isEntityCollectionQueryKey = (
+  queryKey: readonly unknown[],
+): boolean => {
+  const segment = queryKey.at(2);
+  return !(typeof segment === "string" && isUuid(segment));
+};
 
 export const entitiesKeys = {
   all: (workspaceId: string) => ["entities", workspaceId],
@@ -248,6 +262,11 @@ export const entitiesKeys = {
       },
     ];
   },
+  folders: (workspaceId: string) => [
+    ...entitiesKeys.all(workspaceId),
+    "folders",
+  ],
+  files: (workspaceId: string) => [...entitiesKeys.all(workspaceId), "files"],
   summaries: (workspaceId: string) => [
     ...entitiesKeys.all(workspaceId),
     "summaries",

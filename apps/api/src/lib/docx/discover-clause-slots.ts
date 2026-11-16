@@ -74,13 +74,13 @@ export const discoverClauseSlots = async (
   const zip = await loadDocx(file.bytes);
   const slots = new Map<string, ClauseSlot>();
 
-  for (const path of templateContentPartPaths(Object.keys(zip.files))) {
-    const entry = zip.file(path);
+  for (const path of templateContentPartPaths(zip.paths())) {
+    const entry = zip.entry(path);
     if (!entry) {
       continue;
     }
 
-    const xml = await entry.async("string");
+    const xml = await entry.text();
     collectClauseSlots(slimdom.parseXmlDocument(xml), slots);
   }
 

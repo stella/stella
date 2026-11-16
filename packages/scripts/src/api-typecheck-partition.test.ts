@@ -23,7 +23,7 @@ import {
 import { childExitStatus } from "./child-exit-status";
 import { CI_GENERATED_OUTPUTS } from "./generated-files";
 
-test("API test ownership follows transitive imports and fails when its derived partition drifts", () => {
+test("API test ownership follows transitive imports and fails when its derived partition drifts", async () => {
   const root = mkdtempSync(path.join(tmpdir(), "api-test-partition-"));
   const write = (filename: string, contents: string) => {
     const target = path.join(root, filename);
@@ -109,30 +109,32 @@ test("API test ownership follows transitive imports and fails when its derived p
       }),
     );
     const tasks = Object.fromEntries(
-      [
-        "src",
-        "tests",
-        "declarations",
-        "scripts",
-        "contracts",
-        "visual-sandbox",
-      ].map((name) => [
-        `@stll/api#typecheck:${name}`,
-        {
-          inputs: apiResolvedTypecheckInputs(
-            path.join(root, `apps/api/tsconfig.${name}.json`),
-          ),
-        },
-      ]),
+      await Promise.all(
+        [
+          "src",
+          "tests",
+          "declarations",
+          "scripts",
+          "contracts",
+          "visual-sandbox",
+        ].map(async (name) => [
+          `@stll/api#typecheck:${name}`,
+          {
+            inputs: await apiResolvedTypecheckInputs(
+              path.join(root, `apps/api/tsconfig.${name}.json`),
+            ),
+          },
+        ]),
+      ),
     );
     const writeTasks = () => write("turbo.json", JSON.stringify({ tasks }));
     writeTasks();
-    expect(deriveApiTestPartition(root)).toEqual({
+    expect(await deriveApiTestPartition(root)).toEqual({
       independent: ["src/alpha.test.ts"],
       coupled: ["src/beta.test.ts", "src/dynamic.test.ts", "src/gamma.test.ts"],
     });
-    expect(apiTestPartitionIssues(root)).toEqual([]);
-    expect(apiTypecheckInputIssues(root)).toEqual([]);
+    expect(await apiTestPartitionIssues(root)).toEqual([]);
+    expect(await apiTypecheckInputIssues(root)).toEqual([]);
     const original = tasks["@stll/api#typecheck:src"];
     if (!original) {
       panic("Missing source inputs");
@@ -141,7 +143,7 @@ test("API test ownership follows transitive imports and fails when its derived p
     original.inputs = [...saved, "!src/**/*.test.ts"];
     writeTasks();
     expect(
-      apiTypecheckInputIssues(root).map(({ message }) => message),
+      (await apiTypecheckInputIssues(root)).map(({ message }) => message),
     ).toContain(
       "@stll/api#typecheck:src cache inputs must cover the native resolved program and workspace discovery; regenerate API test partition",
     );
@@ -151,9 +153,11 @@ test("API test ownership follows transitive imports and fails when its derived p
       "apps/api/src/hidden.ts",
       "import './alpha.test';\nexport type Value = number;\n",
     );
-    expect(deriveApiTestPartition(root).independent).toEqual([]);
+    expect((await deriveApiTestPartition(root)).independent).toEqual([]);
     expect(
-      apiTestPartitionIssues(root).map(({ path: filename }) => filename),
+      (await apiTestPartitionIssues(root)).map(
+        ({ path: filename }) => filename,
+      ),
     ).toContain("src/alpha.test.ts");
     write("apps/api/src/hidden.ts", "export type Value = number;\n");
     // A transitive package dependency moves the test across the boundary,
@@ -162,9 +166,11 @@ test("API test ownership follows transitive imports and fails when its derived p
       "packages/shared/src/bridge.ts",
       "export type { Value } from '../../../apps/api/src/hidden';\n",
     );
-    expect(deriveApiTestPartition(root).independent).toEqual([]);
+    expect((await deriveApiTestPartition(root)).independent).toEqual([]);
     expect(
-      apiTestPartitionIssues(root).map(({ path: filename }) => filename),
+      (await apiTestPartitionIssues(root)).map(
+        ({ path: filename }) => filename,
+      ),
     ).toContain("src/alpha.test.ts");
     write(
       "packages/shared/package.json",
@@ -182,13 +188,13 @@ test("API test ownership follows transitive imports and fails when its derived p
       "apps/api/src/alpha.test.ts",
       "import type { Value } from '@stll/shared';\n",
     );
-    expect(deriveApiTestPartition(root).independent).toEqual([]);
+    expect((await deriveApiTestPartition(root)).independent).toEqual([]);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
 });
 
-test("native input capture requires every canonical runtime generated source", () => {
+test("native input capture requires every canonical runtime generated source", async () => {
   const root = mkdtempSync(path.join(tmpdir(), "api-generated-inputs-"));
   const outputs = [
     ...CI_GENERATED_OUTPUTS.capabilityRuntime,

@@ -1,6 +1,5 @@
-import { Value } from "@sinclair/typebox/value";
 import { describe, expect, expectTypeOf, test } from "bun:test";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import {
   ENTITY_FIND_SCOPE_TYPES,
@@ -14,9 +13,9 @@ describe("find schema", () => {
   test("a term cannot arrive without the scope it searches", () => {
     // The pairing is the point: a term with no scope would be a third
     // behaviour ("the name, and nothing else") no scope kind names.
-    expect(Value.Check(tFind, { term: "lease" })).toBe(false);
+    expect(v.is(tFind, { term: "lease" })).toBe(false);
     expect(
-      Value.Check(tFind, {
+      v.is(tFind, {
         scope: { propertyIds: [], type: "all" },
         term: "lease",
       }),
@@ -28,15 +27,22 @@ describe("find term length", () => {
   const scope = { propertyIds: [], type: "all" };
 
   test("the floor is the contract's, not a copy of it", () => {
-    expect(tFind.properties.term.minLength).toBe(ENTITY_FIND_TERM_MIN_LENGTH);
+    const minLength = tFind.entries.term.pipe.find(
+      (action) => action.type === "min_length",
+    );
+    expect(
+      minLength !== undefined && "requirement" in minLength
+        ? minLength.requirement
+        : undefined,
+    ).toBe(ENTITY_FIND_TERM_MIN_LENGTH);
   });
 
   test("a term one character short is rejected, one at the floor accepted", () => {
     const short = "a".repeat(ENTITY_FIND_TERM_MIN_LENGTH - 1);
     const enough = "a".repeat(ENTITY_FIND_TERM_MIN_LENGTH);
 
-    expect(Value.Check(tFind, { scope, term: short })).toBe(false);
-    expect(Value.Check(tFind, { scope, term: enough })).toBe(true);
+    expect(v.is(tFind, { scope, term: short })).toBe(false);
+    expect(v.is(tFind, { scope, term: enough })).toBe(true);
   });
 
   // The floor the SQL enforces is over the trimmed term, so the wire has to
@@ -56,7 +62,7 @@ describe("find term length", () => {
   ])(
     "the schema accepts %j exactly when its trimmed length clears the floor",
     (term) => {
-      expect(Value.Check(tFind, { scope, term })).toBe(
+      expect(v.is(tFind, { scope, term })).toBe(
         term.trim().length >= ENTITY_FIND_TERM_MIN_LENGTH,
       );
     },
@@ -68,18 +74,21 @@ describe("find scope schema", () => {
     // A subset would still typecheck, so pin equality: the wire schema
     // accepts exactly the contract's scope kinds, and no more.
     expectTypeOf<
-      Static<typeof tFindScope>["type"]
+      v.InferOutput<typeof tFindScope>["type"]
     >().toEqualTypeOf<EntityFindScopeType>();
-    expect(tFindScope.properties.type.anyOf.map((member) => member.const)) //
-      .toEqual([...ENTITY_FIND_SCOPE_TYPES]);
+    expect(tFindScope.entries.type.options).toEqual([
+      ...ENTITY_FIND_SCOPE_TYPES,
+    ]);
   });
 
   test("a scope that omits its kind is rejected, not defaulted to `all`", () => {
-    // `t.UnionEnum` would advertise a default of the first member, and Elysia
-    // fills defaults before validating. The scope would then widen to `all`,
-    // reaching the row name the caller never asked for.
-    const scope = Value.Default(tFindScope, { propertyIds: [] });
+    // A default on the kind would widen an omitted scope to `all`, reaching
+    // the row name the caller never asked for.
+    const decoded = v.safeParse(tFindScope, { propertyIds: [] });
 
-    expect(Value.Check(tFindScope, scope)).toBe(false);
+    expect(decoded.success).toBe(false);
+    expect(decoded.issues?.map((issue) => v.getDotPath(issue))).toEqual([
+      "type",
+    ]);
   });
 });

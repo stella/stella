@@ -19,32 +19,7 @@ describe("legal resolve response", () => {
         language: "en",
         languageAlternates: [],
         readerUrl: "https://example.test/decision",
-        text: {
-          status: "readable",
-          blocks: [],
-          extent: { type: "complete" },
-        },
-      },
-    },
-    {
-      status: "resolved",
-      document: {
-        kind: "decision",
-        decisionId: "decision-id",
-        identifier: "x",
-        country: "CZE",
-        caseNumber: "1 A 2/2024",
-        ecli: null,
-        court: "Court",
-        decisionDate: null,
-        language: "en",
-        languageAlternates: [],
-        readerUrl: "https://example.test/decision",
-        text: {
-          status: "readable",
-          blocks: [],
-          extent: { type: "partial", returnedChars: 8000, totalChars: 9000 },
-        },
+        text: { status: "readable", charCount: 9000 },
       },
     },
     {
@@ -81,6 +56,11 @@ describe("legal resolve response", () => {
     },
     { status: "not_found", reason: "unknown_document" },
     {
+      status: "not_found",
+      reason: "unknown_document",
+      hint: "Use collection Zb. for 513/1991.",
+    },
+    {
       status: "ambiguous",
       candidates: [
         {
@@ -97,6 +77,16 @@ describe("legal resolve response", () => {
     expect(v.safeParse(legalResolveResponseSchema, value).success).toBe(true);
   });
 
+  test("rejects a non-text recovery hint", () => {
+    expect(
+      v.safeParse(legalResolveResponseSchema, {
+        status: "not_found",
+        reason: "unknown_document",
+        hint: { collection: "Zb." },
+      }).success,
+    ).toBe(false);
+  });
+
   test("rejects the former free-form metadata envelope", () => {
     expect(
       v.safeParse(legalResolveResponseSchema, {
@@ -111,18 +101,11 @@ describe("legal resolve response", () => {
   });
 
   test.each([
-    { status: "readable", blocks: [] },
-    {
-      status: "readable",
-      blocks: [],
-      extent: { type: "complete", returnedChars: 0, totalChars: 0 },
-    },
-    {
-      status: "readable",
-      blocks: [],
-      extent: { type: "partial", totalChars: 1 },
-    },
-  ])("rejects an invalid readable extent", (text) => {
+    { status: "readable" },
+    { status: "readable", charCount: "1200" },
+    { status: "readable", charCount: 1, blocks: [] },
+    { status: "readable", charCount: 1, extent: { type: "complete" } },
+  ])("rejects a readable decision that is not identity only", (text) => {
     expect(
       v.safeParse(legalResolveResponseSchema, {
         status: "resolved",

@@ -1,35 +1,57 @@
-import Elysia from "elysia";
-
+import { mount, routes } from "@/api/http/route";
+import {
+  deploymentFeatureGate,
+  deploymentFeatureGateExcept,
+} from "@/api/lib/deployment-feature-route";
 import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
 import { createStandardApiRateLimitOptions } from "@/api/lib/rate-limit/standard-api";
 
 import batch from "./batch";
 import batchStatus from "./batch-status";
+import {
+  consentWithdrawalException,
+  readBillingDraftSettings,
+  updateBillingDraftSettings,
+} from "./billing-draft-settings";
+import billingDrafts from "./billing-drafts";
 import candidates from "./candidates";
 import create from "./create";
 import matters from "./matters";
 
-export const desktopTimeEntriesRoute = new Elysia({
-  prefix: "/v1/desktop",
-})
-  .use(rateLimit(createStandardApiRateLimitOptions()))
-  .get("/matter-candidates", candidates.handler, {
-    response: candidates.config.response,
-  })
-  .put("/time-entries/batch", batch.handler, {
-    body: batch.config.body,
-    response: batch.config.response,
-  })
-  .put("/time-entries/batch/status", batchStatus.handler, {
-    body: batchStatus.config.body,
-    response: batchStatus.config.response,
-  })
-  .get("/matters", matters.handler, {
-    query: matters.config.query,
-    response: matters.config.response,
-  })
-  .put("/time-entries/:workspaceId", create.handler, {
-    params: create.config.params,
-    body: create.config.body,
-    response: create.config.response,
-  });
+export const desktopTimeEntriesRoute = mount(
+  [
+    routes(
+      {
+        "/billing-drafts/settings": { GET: readBillingDraftSettings },
+        "/billing-drafts": { POST: billingDrafts },
+      },
+      { middleware: [deploymentFeatureGate("FEATURE_TIME_BILLING")] },
+    ),
+    // A consent withdrawal stays reachable whatever the deployment flag says;
+    // with the flag off every other request, a malformed one included,
+    // answers as an absent route, and the handler refuses every other change
+    // without the feature.
+    routes(
+      { "/billing-drafts/settings": { PUT: updateBillingDraftSettings } },
+      {
+        middleware: [
+          deploymentFeatureGateExcept(
+            "FEATURE_TIME_BILLING",
+            consentWithdrawalException,
+          ),
+        ],
+      },
+    ),
+    routes({
+      "/matter-candidates": { GET: candidates },
+      "/time-entries/batch": { PUT: batch },
+      "/time-entries/batch/status": { PUT: batchStatus },
+      "/matters": { GET: matters },
+      "/time-entries/:workspaceId": { PUT: create },
+    }),
+  ],
+  {
+    prefix: "/v1/desktop",
+    middleware: [rateLimit(createStandardApiRateLimitOptions())],
+  },
+);

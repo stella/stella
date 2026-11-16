@@ -35,8 +35,8 @@ if (!databaseUrl || !runPostgresTests) {
           client: runTransactionsInCallerContext(openClient({ max: 1 }).sql),
           logger: queryCountLogger,
         });
-        // Nine statements: two and a savepoint's one in the first
-        // transaction, two in each of three concurrent ones, one outside.
+        // Nine queries plus BEGIN/COMMIT for each of four transactions.
+        // Savepoint control statements do not contribute.
         const request = async () =>
           await runWithQueryCounter(async (counter) => {
             await db.transaction(async (tx) => {
@@ -55,7 +55,10 @@ if (!databaseUrl || !runPostgresTests) {
               }),
             );
             await db.execute(sql`SELECT 6`);
-            return counter.count;
+            return {
+              queries: counter.count,
+              transactionRoundTrips: counter.transactions,
+            };
           });
 
         // The first round opens the pool's connection; later rounds wait on it.
@@ -64,7 +67,10 @@ if (!databaseUrl || !runPostgresTests) {
             Array.from({ length: CONCURRENT_REQUESTS }, request),
           );
           expect(counts).toEqual(
-            Array.from({ length: CONCURRENT_REQUESTS }, () => 9),
+            Array.from({ length: CONCURRENT_REQUESTS }, () => ({
+              queries: 9,
+              transactionRoundTrips: 8,
+            })),
           );
         }
       });

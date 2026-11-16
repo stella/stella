@@ -20,13 +20,21 @@ type FactDateProps = {
   precision: FactDatePrecision | null;
 };
 
-export const FactDate = ({ occurredOn, precision }: FactDateProps) => {
+/** A stored fact date in the reader's locale, at its precision. */
+export const useFactDateText = () => {
   const format = useFormatter();
+  return (occurredOn: string, precision: FactDatePrecision): string =>
+    format.dateTime(
+      Temporal.PlainDate.from(occurredOn).toZonedDateTime({ timeZone: "UTC" })
+        .epochMilliseconds,
+      FACT_DATE_FORMATS[precision],
+    );
+};
+
+export const FactDate = ({ occurredOn, precision }: FactDateProps) => {
+  const dateText = useFactDateText();
   if (occurredOn === null || precision === null) {
     return null;
   }
-  const instant = Temporal.PlainDate.from(occurredOn).toZonedDateTime({
-    timeZone: "UTC",
-  }).epochMilliseconds;
-  return <span>{format.dateTime(instant, FACT_DATE_FORMATS[precision])}</span>;
+  return <span>{dateText(occurredOn, precision)}</span>;
 };

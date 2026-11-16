@@ -13,10 +13,12 @@ import {
   overlappingVatRatePeriods,
 } from "@/api/lib/billing/vat-rates";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
+import { authorizeOrganizationReplay } from "@/api/lib/idempotency/organization-replay-authorization";
 import { organizationResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   realtime: organizationResourceSetUpdates(RESOURCE_TYPE.VAT_RATE),
   description:
     "Add the statutory VAT rate preset for Slovakia or Czechia to the active organization. Existing overlapping periods with the same code are skipped.",
@@ -74,9 +76,10 @@ const applyVatRatePreset = createSafeRootHandler(
     );
     return Result.ok(result);
   },
+  { authorize: authorizeOrganizationReplay },
 );
 
-declareAggregateMutation(applyVatRatePreset.handler, {
+declareAggregateMutation(applyVatRatePreset, {
   type: "independent",
   reason:
     "Adds one organization's statutory VAT rate periods under that organization's VAT rate advisory lock; no aggregate state spans organizations.",

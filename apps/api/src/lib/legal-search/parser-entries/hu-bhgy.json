@@ -1,0 +1,11 @@
+{
+  "type": "parser",
+  "name": "HU_BHGY",
+  "key": "hu-bhgy",
+  "parserVersion": 31,
+  "sourceFingerprintVersion": 0,
+  "scope": {
+    "type": "all",
+    "reason": "Dependency patch tracking only: @tanstack/ai is reached through the desktop runner wire schema in transaction infrastructure, not parser execution. No parser-owned value changes; the matching no-stored-row-effect declaration requires no replay."
+  }
+}

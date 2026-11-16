@@ -23,6 +23,7 @@ import publishAnnouncement, {
 import listNotifications from "@/api/handlers/notifications/list";
 import markAllNotificationsRead from "@/api/handlers/notifications/read-all";
 import markNotificationRead from "@/api/handlers/notifications/read-state/update";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
@@ -30,8 +31,10 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import {
+  createNotificationsInTransaction,
   fanOutNotifications,
   NOTIFICATION_INSERT_BATCH_SIZE,
+  pingNotificationRecipients,
 } from "@/api/lib/notifications";
 import type { NewNotification } from "@/api/lib/notifications";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -128,7 +131,7 @@ const contextFor = ({
     createAuditRecorder: () => recordAuditEvent,
     recordAuditEvent,
     request: new Request("https://example.test/v1/notifications"),
-    route: "/test/notifications",
+    route: "/v1/notifications" satisfies ApiRoutePath,
   };
 };
 
@@ -663,5 +666,110 @@ describe("notifications follow matter access", () => {
     expect(readAtById.get(visible)).not.toBeNull();
     // Marking everything read does not reach a row the recipient cannot see.
     expect(readAtById.get(hidden)).toBeNull();
+  });
+});
+
+describe("push alerts for committed notifications", () => {
+  const mention = (idempotencyKey: string): NewNotification => ({
+    kind: NOTIFICATION_KIND.MENTION,
+    metadata: { actorName: "Ada" },
+    entityType: "entity",
+    entityId: ids.entityA1,
+    workspaceId: ids.wsA1,
+    userId: ids.userA1,
+    organizationId: ids.orgA,
+    idempotencyKey,
+  });
+
+  const exportReady = (idempotencyKey: string): NewNotification => ({
+    kind: NOTIFICATION_KIND.REPORT_EXPORT_SUCCEEDED,
+    metadata: {},
+    entityType: "report_export",
+    entityId: createSafeId<"reportExport">(),
+    workspaceId: ids.wsA1,
+    userId: ids.userA1,
+    organizationId: ids.orgA,
+    idempotencyKey,
+  });
+
+  const fileAsRecipient = async (rows: readonly NewNotification[]) =>
+    await createScopedDb(
+      testDb,
+      [ids.wsA1],
+      ids.orgA,
+      ids.userA1,
+    )(
+      async (tx) =>
+        await createNotificationsInTransaction(
+          rows,
+          asTestRaw<Parameters<typeof createNotificationsInTransaction>[1]>(tx),
+        ),
+    );
+
+  test("the write hands back the ids it filed, and after commit each is queued for the recipient's devices", async () => {
+    const pings = await fileAsRecipient([
+      mention("test:push-a"),
+      mention("test:push-b"),
+    ]);
+    const filed = pings.flatMap(({ notificationIds }) => notificationIds);
+    seeded.push(...filed);
+
+    expect(pings).toEqual([
+      {
+        userId: ids.userA1,
+        organizationId: ids.orgA,
+        notificationIds: filed,
+      },
+    ]);
+    const stored = await testDb
+      .select({ id: notifications.id })
+      .from(notifications)
+      .where(inArray(notifications.id, filed));
+    expect(stored).toHaveLength(2);
+
+    const queued: string[][] = [];
+    pingNotificationRecipients(pings, (notificationIds) => {
+      queued.push([...notificationIds]);
+    });
+    expect(queued).toEqual([filed]);
+  });
+
+  test("a kind that asks nothing of the person is filed and pinged, never pushed", async () => {
+    const pings = await fileAsRecipient([exportReady("test:push-export")]);
+    const written = await testDb
+      .select({ id: notifications.id })
+      .from(notifications)
+      .where(eq(notifications.idempotencyKey, "test:push-export"));
+    seeded.push(...written.map(({ id }) => id));
+
+    expect(written).toHaveLength(1);
+    expect(pings).toEqual([
+      { userId: ids.userA1, organizationId: ids.orgA, notificationIds: [] },
+    ]);
+  });
+
+  test("a replayed write files nothing new, so nothing is queued twice", async () => {
+    const first = await fileAsRecipient([mention("test:push-replay")]);
+    seeded.push(...first.flatMap(({ notificationIds }) => notificationIds));
+
+    const replay = await fileAsRecipient([mention("test:push-replay")]);
+    expect(replay).toEqual([]);
+
+    const queued: string[][] = [];
+    pingNotificationRecipients(replay, (notificationIds) => {
+      queued.push([...notificationIds]);
+    });
+    expect(queued).toEqual([[]]);
+  });
+
+  test("filing does not depend on push: unconfigured, the write and its ping still go through", async () => {
+    const row = mention("test:push-unconfigured");
+    await fanOutNotifications([row], fanOutDb());
+    const stored = await testDb
+      .select({ id: notifications.id })
+      .from(notifications)
+      .where(eq(notifications.idempotencyKey, row.idempotencyKey));
+    seeded.push(...stored.map(({ id }) => id));
+    expect(stored).toHaveLength(1);
   });
 });

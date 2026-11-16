@@ -7,6 +7,8 @@ import { Doc, encodeStateAsUpdate, XmlElement, XmlText } from "yjs";
 
 import { FOLIO_YJS_ATTR_SCHEMA_VERSION } from "@stll/folio-core/server";
 import { sha256Hex } from "@stll/sha256/node";
+import { createTestClock } from "@stll/test-kit";
+import { createTestState } from "@stll/test-state";
 
 import { folioCollabRooms, workspaces } from "@/api/db/schema";
 import { createMockDatabase } from "@/api/db/sql-client";
@@ -18,6 +20,9 @@ import { createFileKey } from "@/api/lib/file-key";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+const testState = createTestState({ file: import.meta.path, config: env });
+const workerState = testState.forConfig(envDocumentProcessingWorker);
 
 type Row = Record<string, unknown>;
 type QueuedRows = Row[] | (() => Row[]);
@@ -446,7 +451,7 @@ describe("folio collaboration room snapshot generation", () => {
     expect(loaded).toEqual({
       generation: 3,
       loadOutcome: "loaded",
-      snapshotBase64: Buffer.from(snapshot).toString("base64"),
+      snapshotBase64: Buffer.from(snapshot).toBase64(),
       snapshotRevision: 5,
     });
     // The store confirming the first key is gone is what sends the read back
@@ -566,7 +571,7 @@ describe("folio collaboration room snapshot generation", () => {
             ? {
                 generation: 3,
                 loadOutcome: "loaded",
-                snapshotBase64: Buffer.from(replacement).toString("base64"),
+                snapshotBase64: Buffer.from(replacement).toBase64(),
                 snapshotRevision: 5,
               }
             : {
@@ -601,6 +606,7 @@ describe("folio collaboration room snapshot generation", () => {
   );
 
   test("a refused snapshot resets its own generation and retires only its object", async () => {
+    const testClock = createTestClock();
     const authorized = await authorize(validRow());
     if (authorized.status !== "authorized") {
       throw new Error("Expected an authorized snapshot target");
@@ -618,7 +624,7 @@ describe("folio collaboration room snapshot generation", () => {
           generation: 3,
           yjsSnapshotFileId,
           yjsSnapshotRevision: 4,
-          yjsSnapshotUpdatedAt: new Date(),
+          yjsSnapshotUpdatedAt: new Date(testClock.now()),
         },
       ],
       [{ generation: 4 }],
@@ -748,34 +754,28 @@ describe("folio collaboration room snapshot generation", () => {
     if (authorized.status !== "authorized") {
       return;
     }
-    const priorFlag = env.FEATURE_FILE_USAGE_LIMITS;
-    const priorWorkerFlag =
-      envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS;
-    env.FEATURE_FILE_USAGE_LIMITS = true;
-    envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = false;
+
+    testState.setConfig("FEATURE_FILE_USAGE_LIMITS", true);
+    workerState.setConfig("FEATURE_FILE_USAGE_LIMITS", false);
     fake.failNext({ method: "PUT", code: "AccessDenied", status: 403 });
-    try {
-      const result = await storeFolioCollabSnapshot({
-        authority: { type: "participant", userId: firstUserId },
-        expectedGeneration: 3,
-        expectedSnapshotRevision: 0,
-        snapshotBytes: new TextEncoder().encode("snapshot"),
-        value: authorized.value,
-      });
-      expect(result).toMatchObject({
-        status: "error",
-        error: { reason: "storage_unavailable" },
-      });
-      expect(
-        fake.requests.filter(({ method }) => method === "DELETE"),
-      ).toHaveLength(1);
-      expect(scopedInsertedRows).toHaveLength(1);
-      expect(scopedDeleteCalls).toBe(0);
-      expect([...fake.objects.keys()]).toEqual([]);
-    } finally {
-      env.FEATURE_FILE_USAGE_LIMITS = priorFlag;
-      envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = priorWorkerFlag;
-    }
+
+    const result = await storeFolioCollabSnapshot({
+      authority: { type: "participant", userId: firstUserId },
+      expectedGeneration: 3,
+      expectedSnapshotRevision: 0,
+      snapshotBytes: new TextEncoder().encode("snapshot"),
+      value: authorized.value,
+    });
+    expect(result).toMatchObject({
+      status: "error",
+      error: { reason: "storage_unavailable" },
+    });
+    expect(
+      fake.requests.filter(({ method }) => method === "DELETE"),
+    ).toHaveLength(1);
+    expect(scopedInsertedRows).toHaveLength(1);
+    expect(scopedDeleteCalls).toBe(0);
+    expect([...fake.objects.keys()]).toEqual([]);
   });
 
   test("accepts a generation-fenced store from the collaboration service", () => {

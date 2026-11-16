@@ -76,6 +76,12 @@ const CONTEXTUAL_OR_RESET_LEGACY_FIELDS = [
   "userId",
   "activityGroup",
   "workItemId",
+  // Completion creates a native timer entry; the replaced draft's external
+  // identity and import timestamp do not identify the new entry.
+  "externalSource",
+  "externalId",
+  "externalChangeKey",
+  "importedAt",
   // Rate and currency retain their snapshot only in the same matter; the owner
   // can override billability, and completion supplies the timer narrative.
   "rateAtEntry",
@@ -117,6 +123,11 @@ true satisfies UnbackedProjectionKeys<
   : never;
 
 const UNPROJECTED_CONFIRMED_ENTRY_COLUMNS = [
+  // Import provenance is not part of the timer completion receipt.
+  "externalSource",
+  "externalId",
+  "externalChangeKey",
+  "importedAt",
   // Scope and attribution remain on the owner's draft, not this completion receipt.
   "organizationId",
   "workspaceId",

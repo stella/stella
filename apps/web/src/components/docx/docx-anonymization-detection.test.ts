@@ -1,6 +1,6 @@
 import { Schema } from "@tiptap/pm/model";
 import type { Node as PMNode } from "@tiptap/pm/model";
-import { afterEach, beforeEach, expect, jest, test } from "bun:test";
+import { beforeEach, expect, jest, test } from "bun:test";
 
 import type { AnonymizationTerm } from "@stll/folio-react";
 
@@ -185,10 +185,6 @@ beforeEach(() => {
     anonymizationDetectionsByFieldId: {},
     anonymizationPipelineStatusByFieldId: {},
   });
-});
-
-afterEach(() => {
-  jest.useRealTimers();
 });
 
 const PARAGRAPHS = 100;

@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { expect, test } from "bun:test";
 
 import { createApproveMcpAuthorizationHandler } from "@/api/handlers/mcp-connectors/approve-authorization";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -84,7 +85,8 @@ const setup = ({
       "https://api.example.test/v1/mcp/connectors/example/approve-authorization",
       { method: "POST" },
     ),
-    route: "/v1/mcp/connectors/:slug/approve-authorization",
+    route:
+      "/v1/mcp/connectors/:slug/approve-authorization" satisfies ApiRoutePath,
   });
   return { handler, context, saved, audits, discovered: () => discovered };
 };

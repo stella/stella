@@ -7,14 +7,54 @@
  * (ciphertext + IV) in organizationSettings.
  */
 
+import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
+import { declareFingerprintFields } from "@stll/errors";
 
 import { normalizeOrgAIConfig, type OrgAIConfig } from "@/api/lib/ai-config";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent, encryptContent } from "@/api/lib/content-encryption";
 import type { EncryptedContent } from "@/api/lib/content-encryption";
+import { ConfigurationError } from "@/api/lib/errors/tagged-errors";
+import { logger } from "@/api/lib/observability/logger";
+
+export type OrgAIConfigReadFailure =
+  | "missing-key"
+  | "decryption-failed"
+  | "incomplete-envelope"
+  | "invalid-json"
+  | "invalid-schema";
+
+/** A content-free description of an unreadable decrypted configuration. */
+export class OrgAIConfigReadError extends TaggedError("OrgAIConfigReadError")<{
+  message: string;
+  reason: OrgAIConfigReadFailure;
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
+
+export const unreadableOrgAIConfig = (
+  organizationId: SafeId<"organization">,
+  reason: OrgAIConfigReadFailure,
+): OrgAIConfigReadError => {
+  // This is deliberately independent from exception capture. The failure is
+  // anticipated (and capture policy suppresses it), but operators still need
+  // to distinguish a missing key from corrupt stored bytes.
+  logger.warn("organization_ai_config.read_failed", {
+    action: "decrypt",
+    organizationId,
+    reason,
+    source: "organization_ai_config",
+  });
+  return new OrgAIConfigReadError({
+    message: "Decrypted organization AI configuration is unreadable",
+    reason,
+  });
+};
 
 const standardProviderSchema = v.picklist(
   TANSTACK_AI_PROVIDERS.filter((provider) => provider !== "anthropic"),
@@ -112,12 +152,39 @@ export const encryptAIConfig = async (
  */
 export const decryptAIConfig = async (
   organizationId: SafeId<"organization">,
-  ciphertext: Buffer,
-  iv: Buffer,
-): Promise<OrgAIConfig> => {
-  const json = await decryptContent(organizationId, ciphertext, iv);
-  const parsed: unknown = JSON.parse(json);
-  return normalizeOrgAIConfig(v.parse(orgAIConfigSchema, parsed));
+  ciphertext: Buffer | null | undefined,
+  iv: Buffer | null | undefined,
+  decrypt: typeof decryptContent = decryptContent,
+): Promise<Result<OrgAIConfig, OrgAIConfigReadError>> => {
+  if (!ciphertext || !iv) {
+    return Result.err(
+      unreadableOrgAIConfig(organizationId, "incomplete-envelope"),
+    );
+  }
+
+  const decrypted = await Result.tryPromise({
+    try: async () => await decrypt(organizationId, ciphertext, iv),
+    catch: (error: unknown) =>
+      error instanceof ConfigurationError
+        ? unreadableOrgAIConfig(organizationId, "missing-key")
+        : unreadableOrgAIConfig(organizationId, "decryption-failed"),
+  });
+  if (decrypted.isErr()) {
+    return Result.err(decrypted.error);
+  }
+  const json = decrypted.value;
+  const decoded = Result.try({
+    try: (): unknown => JSON.parse(json),
+    catch: () => unreadableOrgAIConfig(organizationId, "invalid-json"),
+  });
+  if (Result.isError(decoded)) {
+    return Result.err(decoded.error);
+  }
+  const parsed = v.safeParse(orgAIConfigSchema, decoded.value);
+  if (!parsed.success) {
+    return Result.err(unreadableOrgAIConfig(organizationId, "invalid-schema"));
+  }
+  return Result.ok(normalizeOrgAIConfig(parsed.output));
 };
 
 /**

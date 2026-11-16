@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import type { SQL } from "bun";
 /**
  * The provision-citation state behaviour PGlite cannot show, on real
@@ -11,6 +12,7 @@ import type { SQL } from "bun";
 import { describe, expect, test } from "bun:test";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import { waitForExternalState } from "@stll/property-testing/external-state";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -25,6 +27,7 @@ import {
 import { runProvisionStateBackfill } from "@/api/lib/case-law/provision-state-backfill/backfill";
 import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { withReservedSession } from "@/api/lib/scheduler/tasks/case-law-provision-state-backfill";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
@@ -42,23 +45,22 @@ const waitForBackendState = async (
   observer: SQL,
   { pid, state }: { pid: number; state: "blocked" | "sleeping" | "closed" },
 ) => {
-  const deadline = Date.now() + 3000;
-  while (Date.now() < deadline) {
-    const [row] = await observer`
-      SELECT cardinality(pg_blocking_pids(${pid}::int)) > 0 AS blocked,
-        EXISTS (
-          SELECT 1 FROM pg_stat_activity WHERE pid = ${pid}
-            AND state = 'active' AND query = 'SELECT pg_sleep(30)'
-        ) AS sleeping,
-        NOT EXISTS (
-          SELECT 1 FROM pg_stat_activity WHERE pid = ${pid}
-        ) AS closed`;
-    if (row?.[state] === true) {
-      return;
-    }
-    await Bun.sleep(10);
-  }
-  throw new Error(`backend ${String(pid)} never became ${state}`);
+  await waitForExternalState({
+    description: `backend ${String(pid)} is ${state}`,
+    timeoutMs: 3000,
+    read: async () => {
+      const [row] = await observer`
+        SELECT cardinality(pg_blocking_pids(${pid}::int)) > 0 AS blocked,
+          EXISTS (
+            SELECT 1 FROM pg_stat_activity WHERE pid = ${pid}
+              AND state = 'active' AND query = 'SELECT pg_sleep(30)'
+          ) AS sleeping,
+          NOT EXISTS (
+            SELECT 1 FROM pg_stat_activity WHERE pid = ${pid}
+          ) AS closed`;
+      return row?.[state] === true;
+    },
+  });
 };
 
 const backendPid = async (client: SQL): Promise<number> => {
@@ -400,13 +402,15 @@ if (!databaseUrl || !runPostgresTests) {
           observationOrder: bigint,
           overrides: Partial<RawIngestionResult>,
         ) => {
-          await processDecision({
-            input: plainTextIngestionResult({ ...input, ...overrides }),
-            observationOrder,
-            sourceId: fixture.sourceId,
-            scopedDb,
-            observedAt: new Date(),
-          });
+          (
+            await processDecision({
+              input: plainTextIngestionResult({ ...input, ...overrides }),
+              observationOrder,
+              sourceId: fixture.sourceId,
+              scopedDb,
+              observedAt: new Date(),
+            })
+          ).unwrap();
         };
         const owed = async () => {
           const [row] = await observer`
@@ -664,54 +668,77 @@ if (!databaseUrl || !runPostgresTests) {
      */
     test("an abort stops the statement in flight and discards its connection", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
-        const pool = openClient({ max: 1 }).sql;
+        const STATEMENT_BACKSTOP_MS = 10_000;
+        const pool = openClient({
+          max: 2,
+          connection: { statement_timeout: STATEMENT_BACKSTOP_MS },
+        }).sql;
         const observer = openClient().sql;
+        const holder = await openClient().sql.reserve();
+        const lockKey = `provision-abort-${Bun.randomUUIDv7()}`;
         const controller = new AbortController();
         let reservedPid: unknown;
-        const started = Date.now();
-        const outcome = await withReservedSession({
-          reserve: async () => await pool.reserve(),
-          cancelBackend: async (pid) =>
-            await observer`SELECT pg_cancel_backend(${pid})`,
-          signal: controller.signal,
-          work: async (session) => {
-            const [row] = await session.query("SELECT pg_backend_pid() AS pid");
-            reservedPid =
-              row !== null && typeof row === "object" && "pid" in row
-                ? row.pid
-                : undefined;
-            if (typeof reservedPid !== "number") {
-              throw new TypeError(
-                "Expected the reserved PostgreSQL backend pid",
+        try {
+          await holder`SELECT pg_advisory_lock(hashtextextended(${lockKey}, 0))`;
+          const outcome = await withReservedSession({
+            reserve: async () => await pool.reserve(),
+            cancelBackend: async (pid) =>
+              await observer`SELECT pg_cancel_backend(${pid})`,
+            signal: controller.signal,
+            work: async (session) => {
+              const [row] = await session.query(
+                "SELECT pg_backend_pid() AS pid",
               );
-            }
-            const statement = session.query("SELECT pg_sleep(30)").then(
-              () => "finished",
-              () => "cancelled",
-            );
-            try {
+              reservedPid =
+                row !== null && typeof row === "object" && "pid" in row
+                  ? row.pid
+                  : undefined;
+              const blocked = Result.tryPromise(
+                async () =>
+                  await session.query(
+                    "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+                    [lockKey],
+                  ),
+              );
+              if (typeof reservedPid !== "number") {
+                throw new TypeError(
+                  "Expected the reserved PostgreSQL backend pid",
+                );
+              }
               await waitForBackendState(observer, {
                 pid: reservedPid,
-                state: "sleeping",
+                state: "blocked",
               });
               controller.abort();
-              return await statement;
-            } finally {
-              controller.abort();
-              await statement;
-            }
-          },
-        });
-        expect(outcome).toBe("cancelled");
-        expect(Date.now() - started).toBeLessThan(10_000);
-        if (typeof reservedPid !== "number") {
-          throw new TypeError("Expected the discarded PostgreSQL backend pid");
+              return await blocked;
+            },
+          });
+          // The held lock prevents success; the error identity distinguishes
+          // explicit cancellation from the statement timeout's failure backstop.
+          expect(outcome.isErr()).toBe(true);
+          if (outcome.isErr()) {
+            expect(getPgErrorCode(outcome.error)).toBe(PG_ERROR.QUERY_CANCELED);
+            expect(outcome.error.cause).toMatchObject({
+              message: "canceling statement due to user request",
+            });
+          }
+          if (typeof reservedPid !== "number") {
+            throw new TypeError(
+              "Expected the discarded PostgreSQL backend pid",
+            );
+          }
+          expect(await backendPid(pool)).not.toBe(reservedPid);
+          await waitForBackendState(observer, {
+            pid: reservedPid,
+            state: "closed",
+          });
+        } finally {
+          try {
+            await holder`SELECT pg_advisory_unlock(hashtextextended(${lockKey}, 0))`;
+          } finally {
+            await holder.release();
+          }
         }
-        expect(await backendPid(pool)).not.toBe(reservedPid);
-        await waitForBackendState(observer, {
-          pid: reservedPid,
-          state: "closed",
-        });
       });
     }, 30_000);
   });

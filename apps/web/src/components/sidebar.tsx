@@ -4,6 +4,7 @@ import { useHotkey } from "@tanstack/react-hotkeys";
 import { useTranslations } from "use-intl";
 
 import {
+  PanelTrigger,
   Sidebar as SidebarShell,
   SidebarContent,
   SidebarFooter,
@@ -112,6 +113,7 @@ const SidebarTrigger = (
 };
 
 export {
+  PanelTrigger,
   Sidebar,
   SidebarContent,
   SidebarFooter,

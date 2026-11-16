@@ -10,6 +10,7 @@ import {
   lt,
   lte,
   min,
+  notInArray,
   or,
   type SQL,
   sql,
@@ -23,6 +24,12 @@ import {
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  lockCorpusProjectionServingStatesForCleanup,
+  lockCorpusProjectionStatesOfRevisions,
+  lockPendingCorpusProjectionCleanups,
+} from "@/api/lib/db/aggregate-lock";
+import { transitionBatch } from "@/api/lib/db/transitions";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import type {
   CorpusIndexClient,
@@ -30,7 +37,10 @@ import type {
   CorpusIndexError,
 } from "@/api/lib/legal-search/corpus-index-client";
 import { corpusIndexMaturationPeriodMs } from "@/api/lib/legal-search/corpus-index-config";
-import { requireCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
+import {
+  type CorpusIndexManifest,
+  requireCorpusIndexManifest,
+} from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   CORPUS_INDEX_APPEND_CANCEL_REASON,
   type CorpusIndexIntentStatus,
@@ -38,9 +48,10 @@ import {
 import { lockRegisteredCorpusProjectionManifestForMutation } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import {
   CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
-  corpusIndexUnknownAppendBarrierAt,
   countCorpusProjectionRevisions,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
+import { CORPUS_INDEX_PROJECTION_INTENT_LIFECYCLE } from "@/api/lib/legal-search/corpus-index-projection-intent-transition-spec";
+import { corpusProjectionAppendPublishBarrier } from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
 import {
   lockCorpusIndexProjectionIntentMutationsTx,
   lockCorpusIndexProjectionMutationsTx,
@@ -56,11 +67,18 @@ import {
   judgeCorpusProjectionCleanupSettlement,
 } from "@/api/lib/legal-search/corpus-index-projection-settlement-judgement";
 import {
+  corpusIndexProjectionCleanupIsDue,
+  corpusIndexProjectionIntentIsOutstanding,
+  corpusIndexProjectionRevisionIsRestorable,
+  corpusIndexProjectionStateServesRevision,
+} from "@/api/lib/legal-search/corpus-index-projection-sql";
+import {
   CORPUS_PROJECTION_APPEND_RETRY_BASE_MS,
   CORPUS_PROJECTION_APPEND_RETRY_CAP_MS,
   CORPUS_PROJECTION_APPEND_UNKNOWN_ATTEMPT_LIMIT,
   CORPUS_PROJECTION_LEASE_MAX_MS,
   CORPUS_PROJECTION_LEASE_MIN_MS,
+  corpusProjectionDeliveredTogether,
 } from "@/api/lib/legal-search/corpus-index-projection-store";
 import { logger } from "@/api/lib/observability/logger";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
@@ -73,9 +91,14 @@ const CORPUS_PROJECTION_REOPEN_CONVERGED_STATUSES = [
   "cleanup_committed",
   "cleanup_stalled",
 ] as const satisfies readonly CorpusIndexIntentStatus[];
+/** Revisions an absent census expects gone; one it observes reopens. */
+const CORPUS_PROJECTION_REOPEN_FROM_STATUSES = [
+  "settled",
+  "withdrawn",
+] as const satisfies readonly CorpusIndexIntentStatus[];
 const CORPUS_PROJECTION_REOPENABLE_STATUSES = [
   ...CORPUS_PROJECTION_REOPEN_CONVERGED_STATUSES,
-  "settled",
+  ...CORPUS_PROJECTION_REOPEN_FROM_STATUSES,
 ] as const satisfies readonly CorpusIndexIntentStatus[];
 const CORPUS_PROJECTION_REOPEN_CONVERGED_STATUS_SET =
   new Set<CorpusIndexIntentStatus>(CORPUS_PROJECTION_REOPEN_CONVERGED_STATUSES);
@@ -119,7 +142,7 @@ const lockCorpusProjectionIntentsById = async (
     .for("update");
 };
 
-export type CorpusProjectionCleanupLease = {
+type CorpusProjectionCleanupLease = {
   intentId: ProjectionIntentId;
   family: CorpusFamily;
   generation: string;
@@ -138,6 +161,351 @@ type ClaimCorpusProjectionCleanupOptions<Family extends CorpusFamily> =
     newLeaseToken?: () => string;
   };
 
+/**
+ * Why the claim took a revision. Only `unserved` is the ordinary case: no
+ * upsert state names the revision, so deleting it hides nothing. The other two
+ * delete a copy an upsert state still names, and exist only for rows an
+ * earlier release left behind (it queued served revisions for cleanup); no
+ * writer in this release creates one, so both only shrink:
+ *
+ * - `served_after_delete`: a delete may already have been issued, so the copy
+ *   may already be gone and holding the cleanup back would only keep the
+ *   entity hidden. It settles and the entity is appended again.
+ * - `served_unproven`: never claimed, but more than one desired change
+ *   separates it from the desired state and its content differs from what
+ *   the state desires, so an erasure undone in between cannot be ruled out
+ *   and the copy may be the pre-erasure one. Deleting it is the safe
+ *   direction; the entity is appended anew. It also takes a never-claimed
+ *   copy whose cleanup an earlier release's erasure or drift repair queued
+ *   (`last_error` set), even when an undo brought the desired content back
+ *   to exactly the copy's: `last_error` is what singles out preparation for
+ *   the restore, so that small class is deleted on purpose rather than
+ *   restored (see `corpusIndexProjectionRevisionIsRestorable`).
+ */
+const CORPUS_PROJECTION_CLEANUP_CLAIM_KINDS = [
+  "unserved",
+  "served_after_delete",
+  "served_unproven",
+] as const;
+type CorpusProjectionCleanupClaimKind =
+  (typeof CORPUS_PROJECTION_CLEANUP_CLAIM_KINDS)[number];
+
+const CLEANUP_CANDIDATE_RESTORE = "restore";
+const CORPUS_PROJECTION_CLEANUP_DISPOSITIONS = [
+  CLEANUP_CANDIDATE_RESTORE,
+  ...CORPUS_PROJECTION_CLEANUP_CLAIM_KINDS,
+] as const;
+type CorpusProjectionCleanupDisposition =
+  (typeof CORPUS_PROJECTION_CLEANUP_DISPOSITIONS)[number];
+
+const requireCleanupDisposition = (
+  value: unknown,
+): CorpusProjectionCleanupDisposition =>
+  CORPUS_PROJECTION_CLEANUP_DISPOSITIONS.find(
+    (disposition) => disposition === value,
+  ) ?? panic(`Unknown corpus projection cleanup disposition: ${String(value)}`);
+
+export type CorpusProjectionCleanupClaim = {
+  leases: CorpusProjectionCleanupLease[];
+  /** Leases per kind; the counts sum to `leases.length`. */
+  claimed: Record<CorpusProjectionCleanupClaimKind, number>;
+  /** Served revisions no delete reached, returned to `applied` instead. */
+  restoredIntentIds: ProjectionIntentId[];
+  /**
+   * Candidates the turn read but left queued: another transaction held the
+   * revision or its serving state, or the revision stopped being due before
+   * it was locked. A later turn reaches them again. The claim never waits on
+   * a lock.
+   */
+  skippedLocked: number;
+};
+
+type CorpusProjectionCleanupPageOptions = {
+  family: CorpusFamily;
+  generation: string;
+  indexId: string;
+  limit: number;
+  scopedEntityIds: readonly string[] | null;
+  /** Candidates an earlier page of the same turn already read. */
+  excludedIntentIds: readonly ProjectionIntentId[];
+};
+
+/**
+ * The cleanup claim's walk: the next `limit` revisions in queue order, each
+ * with the state that serves it, if any (one probe of the applied-revision
+ * unique index). Unlocked: every row it returns leaves the queue or is
+ * reported skipped in this turn, so the walk costs the pages it reads.
+ * Exported so the plan guard explains the exact statement the claim issues.
+ */
+export const corpusProjectionCleanupClaimPage = (
+  tx: Transaction,
+  {
+    family,
+    generation,
+    indexId,
+    limit,
+    scopedEntityIds,
+    excludedIntentIds,
+  }: CorpusProjectionCleanupPageOptions,
+) =>
+  tx
+    .select({
+      id: corpusIndexProjectionIntents.id,
+      entityId: corpusIndexProjectionIntents.entityId,
+      servingEntityId: corpusIndexProjectionStates.entityId,
+    })
+    .from(corpusIndexProjectionIntents)
+    .leftJoin(
+      corpusIndexProjectionStates,
+      eq(
+        corpusIndexProjectionStates.appliedRevision,
+        corpusIndexProjectionIntents.id,
+      ),
+    )
+    .where(
+      and(
+        eq(corpusIndexProjectionIntents.family, family),
+        eq(corpusIndexProjectionIntents.generation, generation),
+        eq(corpusIndexProjectionIntents.indexId, indexId),
+        scopedEntityIds === null
+          ? undefined
+          : inArray(corpusIndexProjectionIntents.entityId, scopedEntityIds),
+        excludedIntentIds.length === 0
+          ? undefined
+          : notInArray(corpusIndexProjectionIntents.id, [...excludedIntentIds]),
+        eq(corpusIndexProjectionIntents.status, "cleanup_pending"),
+        corpusIndexProjectionCleanupIsDue({
+          cleanupNotBefore: corpusIndexProjectionIntents.cleanupNotBefore,
+          leaseExpiresAt: corpusIndexProjectionIntents.leaseExpiresAt,
+        }),
+      ),
+    )
+    .orderBy(
+      asc(corpusIndexProjectionIntents.cleanupNotBefore),
+      asc(corpusIndexProjectionIntents.createdAt),
+    )
+    .limit(limit);
+
+const noCleanupClaims = () =>
+  ({
+    unserved: 0,
+    served_after_delete: 0,
+    served_unproven: 0,
+  }) satisfies Record<CorpusProjectionCleanupClaimKind, number>;
+
+type CleanupPageRow = Awaited<
+  ReturnType<typeof corpusProjectionCleanupClaimPage>
+>[number];
+
+type LockDecidableCleanupPageOptions = {
+  family: CorpusFamily;
+  generation: string;
+  page: readonly CleanupPageRow[];
+};
+
+/**
+ * Lock the page's serving states, then the revisions whose serving is decidable:
+ * those no state serves, and those whose state this transaction now holds.
+ */
+const lockDecidableCleanupPageTx = async (
+  tx: Transaction,
+  { family, generation, page }: LockDecidableCleanupPageOptions,
+) => {
+  const servingEntityIds = [
+    ...new Set(
+      page.flatMap(({ servingEntityId }) =>
+        servingEntityId === null ? [] : [servingEntityId],
+      ),
+    ),
+  ];
+  const heldStates =
+    servingEntityIds.length === 0
+      ? []
+      : await lockCorpusProjectionServingStatesForCleanup(tx, {
+          family,
+          generation,
+          entityIds: servingEntityIds,
+        });
+  const heldEntityIds = new Set(heldStates.map(({ entityId }) => entityId));
+  const decidable = page.filter(
+    ({ servingEntityId }) =>
+      servingEntityId === null || heldEntityIds.has(servingEntityId),
+  );
+  const locked =
+    decidable.length === 0
+      ? []
+      : await lockPendingCorpusProjectionCleanups(
+          tx,
+          decidable.map(({ id }) => id),
+        );
+  return {
+    decidable: locked.map(({ id }) => id),
+    skippedLocked: page.length - locked.length,
+  };
+};
+
+/**
+ * Pages one claim turn reads at most. A page whose candidates are all held
+ * elsewhere would otherwise fill the turn with nothing and keep heading the
+ * queue; each further page reads past what the turn already saw.
+ */
+const CLEANUP_CLAIM_MAX_PAGES = 4;
+
+type LockCleanupCandidatesOptions = Omit<
+  CorpusProjectionCleanupPageOptions,
+  "excludedIntentIds"
+>;
+
+/**
+ * Read and lock the turn's candidates, page after page, until `limit` are
+ * decidable, the queue runs out, or `CLEANUP_CLAIM_MAX_PAGES` were read.
+ */
+const lockCleanupCandidatesTx = async (
+  tx: Transaction,
+  options: LockCleanupCandidatesOptions,
+) => {
+  const decidable: ProjectionIntentId[] = [];
+  const seen: ProjectionIntentId[] = [];
+  let skippedLocked = 0;
+  for (let page = 0; page < CLEANUP_CLAIM_MAX_PAGES; page += 1) {
+    const wanted = options.limit - decidable.length;
+    // db-await-in-loop: each page starts past the rows the previous one read
+    const rows = await corpusProjectionCleanupClaimPage(tx, {
+      ...options,
+      limit: wanted,
+      excludedIntentIds: seen,
+    });
+    seen.push(...rows.map(({ id }) => id));
+    // db-await-in-loop: locks follow the page they decide
+    const locked = await lockDecidableCleanupPageTx(tx, {
+      family: options.family,
+      generation: options.generation,
+      page: rows,
+    });
+    decidable.push(...locked.decidable);
+    skippedLocked += locked.skippedLocked;
+    if (rows.length < wanted || decidable.length >= options.limit) {
+      break;
+    }
+  }
+  return { decidable, skippedLocked };
+};
+
+/** Each locked candidate's disposition, read under the locks just taken. */
+const decideCleanupCandidatesTx = async (
+  tx: Transaction,
+  intentIds: readonly ProjectionIntentId[],
+) => {
+  if (intentIds.length === 0) {
+    return [];
+  }
+  const served = {
+    revisionId: corpusIndexProjectionIntents.id,
+    appliedRevision: corpusIndexProjectionStates.appliedRevision,
+    desiredAction: corpusIndexProjectionStates.desiredAction,
+    appliedAction: corpusIndexProjectionStates.appliedAction,
+  };
+  const rows = await tx
+    .select({
+      id: corpusIndexProjectionIntents.id,
+      entityId: corpusIndexProjectionIntents.entityId,
+      disposition: sql<string>`CASE
+        WHEN ${corpusIndexProjectionStateServesRevision(served)} IS NOT TRUE
+          THEN ${"unserved" satisfies CorpusProjectionCleanupDisposition}
+        WHEN ${corpusIndexProjectionRevisionIsRestorable({
+          ...served,
+          revisionEpoch: corpusIndexProjectionIntents.epoch,
+          revisionFingerprint: corpusIndexProjectionIntents.fingerprint,
+          revisionIndexId: corpusIndexProjectionIntents.indexId,
+          cleanupAttempts: corpusIndexProjectionIntents.cleanupAttempts,
+          revisionAppliedAt: corpusIndexProjectionIntents.appliedAt,
+          lastError: corpusIndexProjectionIntents.lastError,
+          appliedEpoch: corpusIndexProjectionStates.appliedEpoch,
+          desiredEpoch: corpusIndexProjectionStates.desiredEpoch,
+          desiredFingerprint: corpusIndexProjectionStates.desiredFingerprint,
+          desiredIndexId: corpusIndexProjectionStates.desiredIndexId,
+        })}
+          THEN ${CLEANUP_CANDIDATE_RESTORE satisfies CorpusProjectionCleanupDisposition}
+        WHEN ${corpusIndexProjectionIntents.cleanupAttempts} > 0
+          THEN ${"served_after_delete" satisfies CorpusProjectionCleanupDisposition}
+        ELSE ${"served_unproven" satisfies CorpusProjectionCleanupDisposition}
+      END`,
+    })
+    .from(corpusIndexProjectionIntents)
+    .leftJoin(
+      corpusIndexProjectionStates,
+      eq(
+        corpusIndexProjectionStates.appliedRevision,
+        corpusIndexProjectionIntents.id,
+      ),
+    )
+    .where(inArray(corpusIndexProjectionIntents.id, [...intentIds]))
+    .orderBy(asc(corpusIndexProjectionIntents.id))
+    .limit(intentIds.length);
+  return rows.map((row) => ({
+    id: row.id,
+    entityId: row.entityId,
+    disposition: requireCleanupDisposition(row.disposition),
+  }));
+};
+
+type RestoreServedRevisionsOptions = {
+  intentIds: readonly ProjectionIntentId[];
+  claimAt: Date | SQL<Date>;
+};
+
+/**
+ * Return served revisions no delete reached to `applied`. The columns are
+ * the ones the revision held while applied: preparation only queued it, and
+ * the publish barrier and every append instant are immutable.
+ */
+const restoreServedRevisionsTx = async (
+  tx: Transaction,
+  { intentIds, claimAt }: RestoreServedRevisionsOptions,
+): Promise<void> => {
+  if (intentIds.length === 0) {
+    return;
+  }
+  const restored = await transitionBatch({
+    tx,
+    spec: CORPUS_INDEX_PROJECTION_INTENT_LIFECYCLE,
+    ids: intentIds,
+    options: {
+      to: "applied",
+      from: ["cleanup_pending"],
+      set: {
+        leaseToken: null,
+        leaseExpiresAt: null,
+        cleanupNotBefore: null,
+        lastError: null,
+        updatedAt: claimAt,
+      },
+    },
+    // Bookkeeping on the derived public corpus projection: no tenant data
+    // and no actor; the claim's telemetry reports restores.
+    recordTransitionAuditEvent: () => undefined,
+  });
+  if (restored.length !== intentIds.length) {
+    return panic(
+      `Corpus projection cleanup restored ${restored.length} of ${intentIds.length} revisions`,
+    );
+  }
+};
+
+/**
+ * Claim the next cleanup batch of one index. Cleanup never deletes the copy an
+ * upsert state serves, except the two kinds `CORPUS_PROJECTION_CLEANUP_CLAIM_KINDS`
+ * names; a served revision no delete reached is restored instead.
+ *
+ * Lock order is the projection order: mutation fence, manifest, then the
+ * serving states by entity, then the revisions by id. Both row locks skip
+ * what another transaction holds, so the claim never waits on a row and
+ * cannot close a lock cycle with any writer. Whether a revision is served is
+ * decided under its state's lock: nothing can start naming a
+ * `cleanup_pending` revision (only `append_committed -> applied` names one),
+ * so a revision the page saw unserved stays unserved, and one it saw served
+ * is re-read once its state is held.
+ */
 export const claimCorpusProjectionCleanupTx = async <
   Family extends CorpusFamily,
 >(
@@ -152,7 +520,7 @@ export const claimCorpusProjectionCleanupTx = async <
     testNow,
     newLeaseToken = () => Bun.randomUUIDv7(),
   }: ClaimCorpusProjectionCleanupOptions<Family>,
-): Promise<CorpusProjectionCleanupLease[]> => {
+): Promise<CorpusProjectionCleanupClaim> => {
   const limit = validateCleanupBatchSize(requestedLimit);
   const leaseMs = validateLeaseMs(requestedLeaseMs);
   const scopedEntityIds = entityIdsForCorpusProjectionWorkScope(scope);
@@ -161,74 +529,87 @@ export const claimCorpusProjectionCleanupTx = async <
     family,
     generation,
   );
-  const candidates = await tx
-    .select({
-      id: corpusIndexProjectionIntents.id,
-      entityId: corpusIndexProjectionIntents.entityId,
-    })
-    .from(corpusIndexProjectionIntents)
-    .where(
-      and(
-        eq(corpusIndexProjectionIntents.family, family),
-        eq(corpusIndexProjectionIntents.generation, generation),
-        eq(corpusIndexProjectionIntents.indexId, indexId),
-        scopedEntityIds === null
-          ? undefined
-          : inArray(corpusIndexProjectionIntents.entityId, scopedEntityIds),
-        eq(corpusIndexProjectionIntents.status, "cleanup_pending"),
-        sql`${corpusIndexProjectionIntents.cleanupNotBefore} <= clock_timestamp()`,
-        or(
-          isNull(corpusIndexProjectionIntents.leaseExpiresAt),
-          sql`${corpusIndexProjectionIntents.leaseExpiresAt} <= clock_timestamp()`,
-        ),
-      ),
-    )
-    .orderBy(
-      asc(corpusIndexProjectionIntents.cleanupNotBefore),
-      asc(corpusIndexProjectionIntents.createdAt),
-    )
-    .limit(limit)
-    .for("update", { skipLocked: true });
-  if (candidates.length === 0) {
-    return [];
-  }
-  const claimAt = testNow ?? sql<Date>`clock_timestamp()`;
-  const leaseToken = newLeaseToken();
-  const leaseExpiresAt =
-    testNow === undefined
-      ? sql<Date>`clock_timestamp() + ${leaseMs} * INTERVAL '1 millisecond'`
-      : new Date(testNow.getTime() + leaseMs);
-  const ids = candidates.map(({ id }) => id);
-  const updated = await tx
-    .update(corpusIndexProjectionIntents)
-    .set({
-      status: "cleanup_started",
-      leaseToken,
-      leaseExpiresAt,
-      cleanupStartedAt: claimAt,
-      cleanupAttempts: sql`${corpusIndexProjectionIntents.cleanupAttempts} + 1`,
-      updatedAt: claimAt,
-    })
-    .where(
-      and(
-        inArray(corpusIndexProjectionIntents.id, ids),
-        eq(corpusIndexProjectionIntents.status, "cleanup_pending"),
-      ),
-    )
-    .returning({ id: corpusIndexProjectionIntents.id });
-  if (updated.length !== candidates.length) {
-    return panic(
-      `Corpus projection cleanup claimed ${updated.length} of ${candidates.length} revisions`,
-    );
-  }
-  return candidates.map((candidate) => ({
-    intentId: candidate.id,
+  const { decidable, skippedLocked } = await lockCleanupCandidatesTx(tx, {
     family,
     generation,
-    entityId: candidate.entityId,
     indexId,
-    leaseToken,
-  }));
+    limit,
+    scopedEntityIds,
+  });
+  const decided = await decideCleanupCandidatesTx(tx, decidable);
+  const claimAt = testNow ?? sql<Date>`clock_timestamp()`;
+  const restoredIntentIds = decided
+    .filter(({ disposition }) => disposition === CLEANUP_CANDIDATE_RESTORE)
+    .map(({ id }) => id);
+  await restoreServedRevisionsTx(tx, { intentIds: restoredIntentIds, claimAt });
+  const toClaim = decided.flatMap(({ id, entityId, disposition }) =>
+    disposition === CLEANUP_CANDIDATE_RESTORE
+      ? []
+      : [{ id, entityId, kind: disposition }],
+  );
+  const claimed = noCleanupClaims();
+  for (const { kind } of toClaim) {
+    claimed[kind] += 1;
+  }
+  const leaseToken = newLeaseToken();
+  if (toClaim.length > 0) {
+    const leaseExpiresAt =
+      testNow === undefined
+        ? sql<Date>`clock_timestamp() + ${leaseMs} * INTERVAL '1 millisecond'`
+        : new Date(testNow.getTime() + leaseMs);
+    const updated = await tx
+      .update(corpusIndexProjectionIntents)
+      .set({
+        status: "cleanup_started",
+        leaseToken,
+        leaseExpiresAt,
+        cleanupStartedAt: claimAt,
+        cleanupAttempts: sql`${corpusIndexProjectionIntents.cleanupAttempts} + 1`,
+        updatedAt: claimAt,
+      })
+      .where(
+        and(
+          inArray(
+            corpusIndexProjectionIntents.id,
+            toClaim.map(({ id }) => id),
+          ),
+          eq(corpusIndexProjectionIntents.status, "cleanup_pending"),
+        ),
+      )
+      .returning({ id: corpusIndexProjectionIntents.id });
+    if (updated.length !== toClaim.length) {
+      return panic(
+        `Corpus projection cleanup claimed ${updated.length} of ${toClaim.length} revisions`,
+      );
+    }
+  }
+  if (
+    restoredIntentIds.length > 0 ||
+    claimed.served_after_delete > 0 ||
+    claimed.served_unproven > 0
+  ) {
+    logger.warn("corpus_projection.cleanup_served_revisions", {
+      family,
+      generation,
+      index: indexId,
+      restored: restoredIntentIds.length,
+      claimed_after_delete: claimed.served_after_delete,
+      claimed_unproven: claimed.served_unproven,
+    });
+  }
+  return {
+    leases: toClaim.map(({ id, entityId }) => ({
+      intentId: id,
+      family,
+      generation,
+      entityId,
+      indexId,
+      leaseToken,
+    })),
+    claimed,
+    restoredIntentIds,
+    skippedLocked,
+  };
 };
 
 type RecordCorpusProjectionDeleteOptions = {
@@ -910,6 +1291,7 @@ export const settleCorpusProjectionCleanupTx = async (
   { proof, testNow }: SettleCorpusProjectionCleanupOptions,
 ): Promise<number> => {
   await lockCorpusIndexProjectionIntentMutationsTx(tx, proof.intentIds);
+  await lockCorpusProjectionStatesOfRevisions(tx, proof.intentIds);
   await lockCorpusProjectionIntentsById(tx, proof.intentIds);
   const transitionAt = testNow ?? sql<Date>`clock_timestamp()`;
   const rows = await tx
@@ -939,7 +1321,59 @@ export const settleCorpusProjectionCleanupTx = async (
       `Corpus projection settlement matched ${rows.length} of ${proof.intentIds.length} verified revisions`,
     );
   }
+  await wakeStatesAwaitingSettlementTx(tx, {
+    intentIds: proof.intentIds,
+    transitionAt,
+  });
   return rows.length;
+};
+
+type WakeStatesAwaitingSettlementOptions = {
+  intentIds: readonly ProjectionIntentId[];
+  transitionAt: Date | SQL<Date>;
+};
+
+/**
+ * A state that stopped naming its copy is queued for the append walk at the
+ * instant that copy can have settled
+ * (`corpusProjectionRetiredRevisionRunnableAt`). Once its entity has no
+ * outstanding revision left, it is runnable now. A failure backoff
+ * (`retry_not_before`) is left alone.
+ */
+const wakeStatesAwaitingSettlementTx = async (
+  tx: Transaction,
+  { intentIds, transitionAt }: WakeStatesAwaitingSettlementOptions,
+): Promise<void> => {
+  const settledEntities = tx
+    .select({
+      family: corpusIndexProjectionIntents.family,
+      generation: corpusIndexProjectionIntents.generation,
+      entityId: corpusIndexProjectionIntents.entityId,
+    })
+    .from(corpusIndexProjectionIntents)
+    .where(inArray(corpusIndexProjectionIntents.id, [...intentIds]));
+  // audit: skip - scheduling bookkeeping on the derived public corpus projection
+  await tx
+    .update(corpusIndexProjectionStates)
+    .set({ updatedAt: transitionAt })
+    .where(
+      and(
+        sql`(${corpusIndexProjectionStates.family}, ${corpusIndexProjectionStates.generation}, ${corpusIndexProjectionStates.entityId}) IN (${settledEntities})`,
+        isNull(corpusIndexProjectionStates.appliedRevision),
+        isNull(corpusIndexProjectionStates.retryNotBefore),
+        // Queued for a later instant than the clock reads: only the
+        // settlement bound sets one.
+        sql`${corpusIndexProjectionStates.updatedAt} > clock_timestamp()`,
+        sql`NOT EXISTS (
+          SELECT 1
+          FROM ${corpusIndexProjectionIntents} outstanding
+          WHERE outstanding.family = ${corpusIndexProjectionStates.family}
+            AND outstanding.generation = ${corpusIndexProjectionStates.generation}
+            AND outstanding.entity_id = ${corpusIndexProjectionStates.entityId}
+            AND ${corpusIndexProjectionIntentIsOutstanding(sql`outstanding.status`)}
+        )`,
+      ),
+    );
 };
 
 /**
@@ -1084,7 +1518,11 @@ type ReopenCorpusProjectionCleanupOptions = {
   testNow?: Date;
 };
 
-/** Reopen exact settled revisions when a later census observes them again. */
+/**
+ * Reopen exact settled or withdrawn revisions when a later census observes
+ * them: a withdrawal is disproved the way a settlement is, and its revision
+ * takes the same exact cleanup.
+ */
 export const reopenCorpusProjectionCleanupTx = async (
   tx: Transaction,
   {
@@ -1173,7 +1611,7 @@ export const reopenCorpusProjectionCleanupTx = async (
             AND reopened.generation = ${corpusIndexProjectionStates.generation}
             AND reopened.entity_id = ${corpusIndexProjectionStates.entityId}
             AND reopened.epoch <= ${corpusIndexProjectionStates.appliedEpoch}
-            AND reopened.status = 'settled'
+            AND ${inArray(sql`reopened.status`, CORPUS_PROJECTION_REOPEN_FROM_STATUSES)}
         )`,
       ),
     );
@@ -1195,7 +1633,10 @@ export const reopenCorpusProjectionCleanupTx = async (
       and(
         inArray(corpusIndexProjectionIntents.id, intentIds),
         eq(corpusIndexProjectionIntents.indexId, indexId),
-        eq(corpusIndexProjectionIntents.status, "settled"),
+        inArray(
+          corpusIndexProjectionIntents.status,
+          CORPUS_PROJECTION_REOPEN_FROM_STATUSES,
+        ),
       ),
     )
     .returning({ id: corpusIndexProjectionIntents.id });
@@ -1408,9 +1849,96 @@ const updateExpiredAppendStatesTx = async (
   }
 };
 
+type CommitExpiredOfflineAppendsOptions = {
+  manifest: CorpusIndexManifest;
+  /** Expired starts of any delivery; only offline ones are committed. */
+  rows: readonly {
+    id: ProjectionIntentId;
+    appendStartedAt: Date | null;
+  }[];
+  transitionAt: Date | SQL<Date>;
+};
+
+/**
+ * An expired offline start is not an unknown write. Its document count was
+ * stored with the start and its indexer is killed by a deadline counted from
+ * that start, so it is recorded as committed behind the instant the run has
+ * certainly ended (`offline_unended`), and the prover's census decides it:
+ * exact applies it, empty withdraws it, anything else retires it. Only a
+ * revision its state still wants advances; any other goes to cleanup with the
+ * unknown appends. It commits with the fault `none`, so the proof charges
+ * nobody whatever it decides, and its withdrawal halves no request.
+ */
+const commitExpiredOfflineAppendsTx = async (
+  tx: Transaction,
+  { manifest, rows, transitionAt }: CommitExpiredOfflineAppendsOptions,
+): Promise<Set<ProjectionIntentId>> => {
+  // audit: skip - lease recovery bookkeeping on the derived public corpus projection
+  if (rows.length === 0) {
+    return new Set();
+  }
+  const barrierSql = sqlCaseFragment({
+    operand: sql`${corpusIndexProjectionIntents.id}`,
+    branches: rows.map(({ id, appendStartedAt }) => {
+      const barrier = corpusProjectionAppendPublishBarrier(
+        {
+          type: "offline_unended",
+          appendStartedAt:
+            appendStartedAt ??
+            panic(`Append-started projection intent has no start: ${id}`),
+        },
+        manifest,
+      );
+      return sql`WHEN ${id}::uuid THEN ${barrier}::timestamptz`;
+    }),
+    fallback: sql`${corpusIndexProjectionIntents.appendPublishBarrierAt}`,
+  });
+  const committed = await transitionBatch({
+    tx,
+    spec: CORPUS_INDEX_PROJECTION_INTENT_LIFECYCLE,
+    ids: rows.map(({ id }) => id),
+    options: {
+      to: "append_committed",
+      from: ["append_started"],
+      guard: sql`${corpusIndexProjectionIntents.appendDelivery} = 'offline_indexer'
+        AND ${corpusIndexProjectionIntents.expectedDocumentCount} IS NOT NULL
+        AND EXISTS (
+          SELECT 1
+          FROM ${corpusIndexProjectionStates} state
+          WHERE state.family = ${corpusIndexProjectionIntents.family}
+            AND state.generation = ${corpusIndexProjectionIntents.generation}
+            AND state.entity_id = ${corpusIndexProjectionIntents.entityId}
+            AND state.desired_action = 'upsert'
+            AND state.desired_epoch = ${corpusIndexProjectionIntents.epoch}
+            AND state.desired_fingerprint = ${corpusIndexProjectionIntents.fingerprint}
+            AND state.desired_index_id = ${corpusIndexProjectionIntents.indexId}
+        )`,
+      set: {
+        leaseToken: null,
+        leaseExpiresAt: null,
+        appendCommittedAt: transitionAt,
+        appendPublishBarrierAt: barrierSql,
+        // A start that expired unrecorded never ran its documents to a
+        // verdict this process saw (a crash, a rejected delivery, a lost
+        // lock): whatever the census finds, nobody is charged for it.
+        appendFault: "none",
+        // No `last_error`: a revision this census applies must stay
+        // restorable like any other (`corpusIndexProjectionRevisionIsRestorable`).
+        updatedAt: transitionAt,
+      },
+    },
+    // Bookkeeping on the derived public corpus projection: no tenant data
+    // and no actor.
+    recordTransitionAuditEvent: () => undefined,
+  });
+  return new Set(committed.map(({ id }) => id));
+};
+
 /**
  * Recover expired intents by phase: cancel a reservation, treat an append as
- * an unknown write requiring cleanup, and retry an expired delete exactly.
+ * an unknown write requiring cleanup unless its offline delivery lets a census
+ * decide it (`commitExpiredOfflineAppendsTx`), and retry an expired delete
+ * exactly.
  */
 export const recoverExpiredCorpusProjectionIntentsTx = async <
   Family extends CorpusFamily,
@@ -1561,54 +2089,117 @@ export const recoverExpiredCorpusProjectionIntentsTx = async <
   const appendStarted = rows.filter(
     ({ status }) => status === "append_started",
   );
-  if (appendStarted.length > 0) {
-    const barriers = appendStarted.map((row) => {
-      if (row.appendStartedAt === null) {
-        return panic(
-          `Append-started projection intent has no start: ${row.id}`,
-        );
-      }
-      return {
-        id: row.id,
-        barrier: corpusIndexUnknownAppendBarrierAt(
-          row.appendStartedAt,
-          manifest,
-        ),
-      };
-    });
-    const barrierSql = sqlCaseFragment({
-      operand: sql`${corpusIndexProjectionIntents.id}`,
-      branches: barriers.map(
-        ({ id, barrier }) => sql`WHEN ${id} THEN ${barrier}::timestamptz`,
+  const offlineCommitted = await commitExpiredOfflineAppendsTx(tx, {
+    manifest,
+    rows: appendStarted,
+    transitionAt,
+  });
+  await retireExpiredUnknownAppendsTx(tx, {
+    family,
+    generation,
+    manifest,
+    rows: appendStarted.filter(({ id }) => !offlineCommitted.has(id)),
+    transitionAt,
+  });
+  return rows.map(recoveredIntent);
+};
+
+type RetireExpiredUnknownAppendsOptions = {
+  family: CorpusFamily;
+  generation: string;
+  manifest: CorpusIndexManifest;
+  rows: readonly (ExpiredAppendStateTarget & {
+    id: ProjectionIntentId;
+    appendStartedAt: Date | null;
+    appendRequestRevisionCount: number | null;
+  })[];
+  transitionAt: Date | SQL<Date>;
+};
+
+/**
+ * An expired append whose outcome is unknown may have written anything up to
+ * its request's end, so it goes to exact cleanup behind the barrier counted
+ * from its start, and its entity is charged as the request decides.
+ */
+const retireExpiredUnknownAppendsTx = async (
+  tx: Transaction,
+  {
+    family,
+    generation,
+    manifest,
+    rows,
+    transitionAt,
+  }: RetireExpiredUnknownAppendsOptions,
+): Promise<void> => {
+  // audit: skip - lease recovery bookkeeping on the derived public corpus projection
+  if (rows.length === 0) {
+    return;
+  }
+  const barriers = rows.map((row) => {
+    if (row.appendStartedAt === null) {
+      return panic(`Append-started projection intent has no start: ${row.id}`);
+    }
+    return {
+      id: row.id,
+      barrier: corpusProjectionAppendPublishBarrier(
+        { type: "unknown", appendStartedAt: row.appendStartedAt },
+        manifest,
       ),
-      fallback: sql`${corpusIndexProjectionIntents.appendPublishBarrierAt}`,
-    });
-    await tx
-      .update(corpusIndexProjectionIntents)
-      .set({
-        status: "cleanup_pending",
-        leaseToken: null,
-        leaseExpiresAt: null,
-        appendPublishBarrierAt: barrierSql,
-        cleanupNotBefore: barrierSql,
-        lastError: "projection append lease expired with unknown outcome",
-        updatedAt: transitionAt,
-      })
-      .where(
-        and(
+    };
+  });
+  const barrierSql = sqlCaseFragment({
+    operand: sql`${corpusIndexProjectionIntents.id}`,
+    branches: barriers.map(
+      ({ id, barrier }) => sql`WHEN ${id} THEN ${barrier}::timestamptz`,
+    ),
+    fallback: sql`${corpusIndexProjectionIntents.appendPublishBarrierAt}`,
+  });
+  await tx
+    .update(corpusIndexProjectionIntents)
+    .set({
+      status: "cleanup_pending",
+      leaseToken: null,
+      leaseExpiresAt: null,
+      appendPublishBarrierAt: barrierSql,
+      cleanupNotBefore: barrierSql,
+      lastError: "projection append lease expired with unknown outcome",
+      updatedAt: transitionAt,
+    })
+    .where(
+      and(
+        inArray(
+          corpusIndexProjectionIntents.id,
+          rows.map(({ id }) => id),
+        ),
+        eq(corpusIndexProjectionIntents.status, "append_started"),
+      ),
+    );
+  // Charged by what each request delivered together: an offline request's
+  // started rows, never its planned total.
+  const delivered = new Map(
+    (
+      await tx
+        .select({
+          id: corpusIndexProjectionIntents.id,
+          deliveredTogether: corpusProjectionDeliveredTogether(),
+        })
+        .from(corpusIndexProjectionIntents)
+        .where(
           inArray(
             corpusIndexProjectionIntents.id,
-            appendStarted.map(({ id }) => id),
+            rows.map(({ id }) => id),
           ),
-          eq(corpusIndexProjectionIntents.status, "append_started"),
-        ),
-      );
-    await updateExpiredAppendStatesTx(tx, {
-      family,
-      generation,
-      targets: appendStarted,
-      transitionAt,
-    });
-  }
-  return rows.map(recoveredIntent);
+        )
+    ).map(({ id, deliveredTogether }) => [id, deliveredTogether]),
+  );
+  await updateExpiredAppendStatesTx(tx, {
+    family,
+    generation,
+    targets: rows.map((row) => ({
+      ...row,
+      appendRequestRevisionCount:
+        delivered.get(row.id) ?? row.appendRequestRevisionCount,
+    })),
+    transitionAt,
+  });
 };

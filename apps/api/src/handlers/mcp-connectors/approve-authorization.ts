@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, eq, exists, isNull, or, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   mcpConnectorAuthorizationReviews,
@@ -23,12 +23,15 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.accountControl,
   realtime: mcpConnectorRealtimeUpdates,
   mcp: { type: "internal", reason: "mcp_transport" },
-  params: t.Object({ slug: t.String({ minLength: 1, maxLength: 80 }) }),
-  body: t.Object({
-    confirmedIssuer: t.String({ maxLength: 2048 }),
-    confirmedEndpointOrigins: t.Array(t.String({ maxLength: 2048 }), {
-      maxItems: 3,
-    }),
+  params: v.object({
+    slug: v.pipe(v.string(), v.minLength(1), v.maxLength(80)),
+  }),
+  body: v.object({
+    confirmedIssuer: v.pipe(v.string(), v.maxLength(2048)),
+    confirmedEndpointOrigins: v.pipe(
+      v.array(v.pipe(v.string(), v.maxLength(2048))),
+      v.maxLength(3),
+    ),
   }),
 } satisfies HandlerConfig;
 

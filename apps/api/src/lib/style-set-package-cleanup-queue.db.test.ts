@@ -49,6 +49,7 @@ import type {
   RecordingAnalytics,
   RecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
+import { heldSchedulerLease } from "@/api/tests/helpers/scheduler-lease";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -211,7 +212,7 @@ const seedSchedulerJob = async () => {
       task: RECONCILE_STYLE_SET_PACKAGE_CLEANUPS_TASK,
       schedule: { type: "interval", everyMs: 300_000 },
       nextRunAt: new Date(),
-      lockedBy: "test-style-set-cleanup-lease",
+      ...heldSchedulerLease("test-style-set-cleanup-lease"),
     })
     .returning();
   return job ?? panic("Expected scheduler job");
@@ -512,7 +513,7 @@ describe("pending style set package cleanup reconciliation", () => {
   });
 
   test.each(["defect", "transient"] as const)(
-    "the real runner records one %s exception and a failed cleanup tick",
+    "the real runner records a %s failure and a failed cleanup tick",
     async (grade) => {
       const cause =
         grade === "defect"
@@ -539,11 +540,21 @@ describe("pending style set package cleanup reconciliation", () => {
       });
 
       expect(status).toBe("failed");
-      expect(analytics.exceptions()).toHaveLength(1);
-      expect(analytics.exceptions().at(0)?.properties).toMatchObject({
-        "error.class": "StyleSetPackageCleanupRequeueError",
-        "failure.grade": grade,
-        "failure.reason": grade === "defect" ? "unclassified" : "network_reset",
+      expect(analytics.exceptions()).toHaveLength(grade === "defect" ? 1 : 0);
+      if (grade === "defect") {
+        expect(analytics.exceptions().at(0)?.properties).toMatchObject({
+          "error.class": "StyleSetPackageCleanupRequeueError",
+          "failure.grade": grade,
+          "failure.reason": "tagged_failure",
+        });
+      }
+      expect(
+        logs.records.find(({ message }) => message === "scheduler.job_failed")
+          ?.attributes,
+      ).toMatchObject({
+        "failure.shadow_grade": grade,
+        "failure.shadow_reason":
+          grade === "defect" ? "tagged_failure" : "network_reset",
       });
       expect(
         logs.records.filter(

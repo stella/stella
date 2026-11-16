@@ -4,7 +4,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import {
   resolveCurrentExtractionFileField,
   resolveCurrentFileSourceField,
@@ -15,7 +15,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
 const readEntityByIdParamsSchema = workspaceParams({
-  entityId: tSafeId("entity", { description: "Document entity ID" }),
+  entityId: resourceIdSchema("entity", { description: "Document entity ID" }),
 });
 
 type ReadEntityByIdHandlerProps = {

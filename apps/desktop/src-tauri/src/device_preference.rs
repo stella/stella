@@ -38,6 +38,27 @@ impl DevicePreference {
     (!value.is_empty()).then(|| value.to_string())
   }
 
+  /// What is stored, telling nothing stored (`Ok(None)`: no file, or an
+  /// empty one) from a stored value that cannot be read (`Err`), so a caller
+  /// that rewrites the value never replaces one it could not read.
+  pub fn read_stored(&self) -> Result<Option<String>, String> {
+    let path = self
+      .path
+      .as_deref()
+      .ok_or_else(|| "app data directory is unavailable".to_string())?;
+    match fs::symlink_metadata(path) {
+      Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+      Err(error) => return Err(error.to_string()),
+      Ok(meta) if !meta.file_type().is_file() => {
+        return Err("preference path is not a regular file".to_string());
+      }
+      Ok(_) => {}
+    }
+    let raw = fs::read_to_string(path).map_err(|error| error.to_string())?;
+    let value = raw.trim();
+    Ok((!value.is_empty()).then(|| value.to_string()))
+  }
+
   /// Writes only on a change, so start-up reconciliation never touches the
   /// disk when nothing changed.
   pub fn write(&self, value: &str) -> Result<(), String> {
@@ -63,37 +84,9 @@ fn write_atomically(path: &Path, value: &str) -> Result<(), String> {
   let parent = path
     .parent()
     .ok_or_else(|| "preference path is invalid".to_string())?;
-  fs::create_dir_all(parent)
+  crate::local_store::create_private_dir(parent)
     .map_err(|error| format!("preference directory failed: {error}"))?;
-
-  // Written beside the target and renamed into place, as the clipboard store
-  // does: the rename replaces whatever sits at the path in one step instead
-  // of following a link planted there after the check above.
-  let temp_path = path.with_extension(format!(
-    "{}.{}.tmp",
-    std::process::id(),
-    uuid::Uuid::new_v4()
-  ));
-  if let Err(error) = fs::write(&temp_path, value) {
-    let _ = fs::remove_file(&temp_path);
-    return Err(format!("preference write failed: {error}"));
-  }
-  #[cfg(unix)]
-  {
-    use std::os::unix::fs::PermissionsExt;
-
-    if let Err(error) =
-      fs::set_permissions(&temp_path, fs::Permissions::from_mode(0o600))
-    {
-      let _ = fs::remove_file(&temp_path);
-      return Err(format!("preference permissions failed: {error}"));
-    }
-  }
-  if let Err(error) = fs::rename(&temp_path, path) {
-    let _ = fs::remove_file(&temp_path);
-    return Err(format!("preference replace failed: {error}"));
-  }
-  Ok(())
+  crate::local_store::write_private_atomic(path, value.as_bytes())
 }
 
 #[cfg(test)]
@@ -124,7 +117,7 @@ mod tests {
   #[test]
   fn a_directory_at_the_path_is_neither_read_nor_replaced() {
     let path = temp_path("value");
-    fs::create_dir_all(&path).unwrap();
+    crate::local_store::create_private_dir(&path).unwrap();
     let preference = DevicePreference::at(path.clone());
 
     assert_eq!(preference.read(), None);

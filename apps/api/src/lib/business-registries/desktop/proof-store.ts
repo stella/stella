@@ -78,6 +78,7 @@ export const pruneDesktopProofReceipts = async ({
     catch: (cause) =>
       new HandlerError({
         status: 503,
+        code: "internal_error",
         message: "Desktop account proof cleanup is unavailable",
         cause,
       }),
@@ -122,6 +123,7 @@ export class ConsumedDesktopDeviceProof {
       catch: (cause) =>
         new HandlerError({
           status: 503,
+          code: "internal_error",
           message: "Desktop account proof verification is unavailable",
           cause,
         }),

@@ -57,6 +57,13 @@ export const SETTING_USER_ID = "app.user_id";
 export const SETTING_ACCOUNT_EXPORT_ORGANIZATION_ID =
   "app.account_export_organization_id";
 export const SETTING_ACCOUNT_EXPORT_USER_ID = "app.account_export_user_id";
+/**
+ * Organization ids, comma-separated, whose row this transaction may delete.
+ * The organization delete guard trigger refuses every other row; only the
+ * deletion owner (completeOrganizationDeletion) sets it in production.
+ */
+export const SETTING_ORGANIZATION_DELETION_IDS =
+  "app.organization_deletion_ids";
 
 export const WORKSPACE_ACCESS_MODE = {
   explicit: "explicit",
@@ -106,7 +113,8 @@ END`;
 export const workspaceCheck = workspaceAccessCheck(sql`workspace_id`);
 
 /** Check the row's `id` against the transaction workspace authorization.
- * Used by `workspaces`, which scopes on `id` rather than `workspace_id`. */
+ * Only for `workspaces`, whose `id` is the workspace id: on any other table
+ * `id` never matches and every row reads as hidden; use `workspaceCheck`. */
 export const workspaceIdCheck = workspaceAccessCheck(sql`id`);
 
 // Embedded chat data must remain visible only while every contributing
@@ -287,6 +295,27 @@ const chatTurnScopeCheck = sql`(
   )
 )`;
 
+// Queue rows mirror the turn rows' ownership columns and prove they match
+// the owning thread, with the thread's embedded-data scope, as turns do.
+const chatQueueScopeCheck = (
+  table: "chat_queued_messages" | "chat_queue_holds",
+) => sql`(
+  ${userCheck} AND
+  ${organizationCheck} AND
+  (workspace_id IS NULL OR ${workspaceCheck}) AND
+  EXISTS (
+    SELECT 1 FROM chat_threads ct
+    WHERE ct.id = ${sql.raw(table)}.thread_id
+      AND ct.user_id = ${sql.raw(table)}.user_id
+      AND ct.organization_id = ${sql.raw(table)}.organization_id
+      AND ct.workspace_id IS NOT DISTINCT FROM ${sql.raw(table)}.workspace_id
+      AND (
+        cardinality(ct.data_workspace_ids) = 0
+        OR ${workspaceArrayCheck(sql`ct.data_workspace_ids`)}
+      )
+  )
+)`;
+
 const fileChatThreadScopeCheck = sql`(
   ${userCheck} AND
   ${organizationCheck} AND
@@ -440,6 +469,41 @@ export const wsOrganizationPolicies = (
     using: workspaceOrganizationCheck,
   }),
 ];
+
+/**
+ * Workspace policies for a table whose organization_id was added after rows
+ * existed. Every new row must record its organization and match the
+ * session's; a row written before the column carries none and stays reachable
+ * through its workspace alone, so its history and pending work keep working.
+ * Policy names match `wsPolicies`, which such a table used before.
+ */
+export const wsRecordedOrganizationPolicies = () => {
+  const recordedOrganizationCheck = sql`(
+  ${workspaceCheck} AND (organization_id IS NULL OR ${organizationCheck})
+)`;
+  return [
+    p.pgPolicy("workspace_select", {
+      for: "select",
+      to: stella,
+      using: recordedOrganizationCheck,
+    }),
+    p.pgPolicy("workspace_insert", {
+      for: "insert",
+      to: stella,
+      withCheck: workspaceOrganizationCheck,
+    }),
+    p.pgPolicy("workspace_update", {
+      for: "update",
+      to: stella,
+      using: recordedOrganizationCheck,
+    }),
+    p.pgPolicy("workspace_delete", {
+      for: "delete",
+      to: stella,
+      using: recordedOrganizationCheck,
+    }),
+  ];
+};
 
 const wsOrganizationUserCheck = sql`(
   ${userCheck} AND ${workspaceOrganizationCheck}
@@ -1216,6 +1280,80 @@ export const chatToolGrantPolicies = () => [
   }),
 ];
 
+// A chat limit reminder is the member's own: only they set, read or cancel
+// it in the active org. Moving the time is a delete and a new insert.
+const chatLimitReminderCheck = sql`(
+  ${organizationCheck} AND ${userCheck}
+)`;
+
+// Row security is forced on this table, so the owner role the reminder sweep
+// and member offboarding use needs its own policy to reach every row.
+const chatLimitReminderOwnerCheck = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_limit_reminders'::regclass)`;
+
+export const chatLimitReminderPolicies = () => [
+  p.pgPolicy("chat_limit_reminder_owner", {
+    for: "all",
+    to: "public",
+    using: chatLimitReminderOwnerCheck,
+    withCheck: chatLimitReminderOwnerCheck,
+  }),
+  p.pgPolicy("chat_limit_reminder_select", {
+    for: "select",
+    to: stella,
+    using: chatLimitReminderCheck,
+  }),
+  p.pgPolicy("chat_limit_reminder_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: chatLimitReminderCheck,
+  }),
+  p.pgPolicy("chat_limit_reminder_delete", {
+    for: "delete",
+    to: stella,
+    using: chatLimitReminderCheck,
+  }),
+  p.pgPolicy("chat_limit_reminder_no_update", {
+    as: "restrictive",
+    for: "update",
+    to: stella,
+    using: sql`false`,
+  }),
+];
+
+// Stored browser site approvals follow the tool grants: per user+org, never
+// edited in place, and reachable by the owner role for member offboarding.
+const chatBrowserSiteGrantOwnerCheck = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_browser_site_grants'::regclass)`;
+
+export const chatBrowserSiteGrantPolicies = () => [
+  p.pgPolicy("chat_browser_site_grant_owner", {
+    for: "all",
+    to: "public",
+    using: chatBrowserSiteGrantOwnerCheck,
+    withCheck: chatBrowserSiteGrantOwnerCheck,
+  }),
+  p.pgPolicy("chat_browser_site_grant_select", {
+    for: "select",
+    to: stella,
+    using: chatToolGrantCheck,
+  }),
+  p.pgPolicy("chat_browser_site_grant_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: chatToolGrantCheck,
+  }),
+  p.pgPolicy("chat_browser_site_grant_delete", {
+    for: "delete",
+    to: stella,
+    using: chatToolGrantCheck,
+  }),
+  p.pgPolicy("chat_browser_site_grant_no_update", {
+    as: "restrictive",
+    for: "update",
+    to: stella,
+    using: sql`false`,
+  }),
+];
+
 const workspaceViewTemplateCheck = sql`(
   ${organizationCheck} AND ${userCheck}
 )`;
@@ -1297,8 +1435,29 @@ export const entityViewPolicies = () => [
   }),
 ];
 
+/**
+ * A bound skill is reachable only through its binding: a matter-bound one
+ * where the caller reaches that matter, a client-bound one where the caller
+ * reaches at least one matter of that client (`workspaces.client_id`). An
+ * unbound skill has both columns null. `table` qualifies the skill's columns
+ * (`agent_skills` in its own policies, `s` in a child's subquery).
+ */
+// sql-perf-allow: bounded by one skill row; the client probe uses workspaces_org_client_id_idx and runs only for client-bound skills
+const agentSkillBindingReachCheck = (table: string) => sql`(
+  (${sql.raw(table)}.bound_workspace_id IS NULL
+    OR ${workspaceAccessCheck(sql.raw(`${table}.bound_workspace_id`))})
+  AND (${sql.raw(table)}.bound_client_id IS NULL OR EXISTS (
+    SELECT 1
+    FROM workspaces bound_matter
+    WHERE bound_matter.organization_id = ${sql.raw(table)}.organization_id
+      AND bound_matter.client_id = ${sql.raw(table)}.bound_client_id
+      AND ${workspaceAccessCheck(sql`bound_matter.id`)}
+  ))
+)`;
+
 const agentSkillVisibleCheck = sql`(
   ${organizationCheck} AND (scope = 'team' OR ${userCheck})
+  AND ${agentSkillBindingReachCheck("agent_skills")}
 )`;
 
 const organizationManagementRoleValues = sql.raw(
@@ -1306,7 +1465,7 @@ const organizationManagementRoleValues = sql.raw(
 );
 
 /** The session user holds a management role in the session organization. */
-const organizationManagerCheck = sql`EXISTS (
+export const organizationManagerCheck = sql`EXISTS (
   SELECT 1
   FROM member m
   WHERE m.organization_id = (SELECT current_setting(
@@ -1317,6 +1476,30 @@ const organizationManagerCheck = sql`EXISTS (
     ))
     AND m.role IN (${organizationManagementRoleValues})
 )`;
+
+export const billingGuidelinePolicies = () => [
+  p.pgPolicy("organization_select", {
+    for: "select",
+    to: stella,
+    using: organizationCheck,
+  }),
+  p.pgPolicy("admin_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: sql`${organizationCheck} AND ${organizationManagerCheck}`,
+  }),
+  p.pgPolicy("admin_update", {
+    for: "update",
+    to: stella,
+    using: sql`${organizationCheck} AND ${organizationManagerCheck}`,
+    withCheck: sql`${organizationCheck} AND ${organizationManagerCheck}`,
+  }),
+  p.pgPolicy("admin_delete", {
+    for: "delete",
+    to: stella,
+    using: sql`${organizationCheck} AND ${organizationManagerCheck}`,
+  }),
+];
 
 // Internal work is visible to its owner and approvers, never every org member.
 const internalTimeEntryAccessCheck = sql`(
@@ -1364,15 +1547,35 @@ export const timeEntryPolicies = () => [
 ];
 
 /**
- * Who may write a skill row: owners and admins for team skills, the author for
- * private ones. Members who can see a team skill propose and comment on it
+ * Who may write a skill (`table` qualifies its columns):
+ * - a team skill: owners and admins, or its author when it is bound to a
+ *   matter (a matter member keeps a skill for their own matter);
+ * - a private skill: its author, and only a manager may bind one to a client.
+ * Every write also needs the binding's reach, so nobody writes a skill they
+ * could not read. Members who can see a team skill propose and comment on it
  * through the child tables instead. Mirrors `canManageSkill`.
  */
+const agentSkillWriteRule = (table: string) => {
+  const column = (name: string) => sql.raw(`${table}.${name}`);
+  const isAuthor = sql`${column("user_id")} = (SELECT current_setting(
+    '${sql.raw(SETTING_USER_ID)}', true
+  ))`;
+  return sql`(
+    (
+      (${column("scope")} = 'team' AND (
+        ${organizationManagerCheck}
+        OR (${column("bound_workspace_id")} IS NOT NULL AND ${isAuthor})
+      ))
+      OR (${column("scope")} = 'private' AND ${isAuthor} AND (
+        ${column("bound_client_id")} IS NULL OR ${organizationManagerCheck}
+      ))
+    )
+    AND ${agentSkillBindingReachCheck(table)}
+  )`;
+};
+
 const agentSkillWriteCheck = sql`(
-  ${organizationCheck} AND (
-    (scope = 'team' AND ${organizationManagerCheck})
-    OR (scope = 'private' AND ${userCheck})
-  )
+  ${organizationCheck} AND ${agentSkillWriteRule("agent_skills")}
 )`;
 
 const agentSkillInsertCheck = sql`(
@@ -1397,12 +1600,7 @@ const agentSkillResourceWriteCheck = sql`(
     FROM agent_skills s
     WHERE s.id = skill_id
       AND s.organization_id = agent_skill_resources.organization_id
-      AND (
-        (s.scope = 'team' AND ${organizationManagerCheck})
-        OR (s.scope = 'private' AND s.user_id = (SELECT current_setting(
-          '${sql.raw(SETTING_USER_ID)}', true
-        )))
-      )
+      AND ${agentSkillWriteRule("s")}
   )
 )`;
 
@@ -1653,6 +1851,58 @@ export const chatTurnPolicies = () => [
   }),
 ];
 
+const queuedMessageScopeCheck = chatQueueScopeCheck("chat_queued_messages");
+
+export const chatQueuedMessagePolicies = () => [
+  p.pgPolicy("chat_queued_message_select", {
+    for: "select",
+    to: stella,
+    using: queuedMessageScopeCheck,
+  }),
+  p.pgPolicy("chat_queued_message_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: queuedMessageScopeCheck,
+  }),
+  p.pgPolicy("chat_queued_message_update", {
+    for: "update",
+    to: stella,
+    using: queuedMessageScopeCheck,
+    withCheck: queuedMessageScopeCheck,
+  }),
+  p.pgPolicy("chat_queued_message_delete", {
+    for: "delete",
+    to: stella,
+    using: queuedMessageScopeCheck,
+  }),
+];
+
+const queueHoldScopeCheck = chatQueueScopeCheck("chat_queue_holds");
+
+export const chatQueueHoldPolicies = () => [
+  p.pgPolicy("chat_queue_hold_select", {
+    for: "select",
+    to: stella,
+    using: queueHoldScopeCheck,
+  }),
+  p.pgPolicy("chat_queue_hold_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: queueHoldScopeCheck,
+  }),
+  p.pgPolicy("chat_queue_hold_update", {
+    for: "update",
+    to: stella,
+    using: queueHoldScopeCheck,
+    withCheck: queueHoldScopeCheck,
+  }),
+  p.pgPolicy("chat_queue_hold_delete", {
+    for: "delete",
+    to: stella,
+    using: queueHoldScopeCheck,
+  }),
+];
+
 const chatSecretScopeCheck = sql`(
   ${userCheck} AND ${organizationCheck} AND
   EXISTS (
@@ -1692,6 +1942,28 @@ export const chatSecretPolicies = () => [
     for: "delete",
     to: stella,
     using: chatSecretScopeCheck,
+  }),
+];
+
+const chatLocalRunStepContentOwnerCheck = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_local_run_step_contents'::regclass)`;
+
+// What a local run's steps produced is thread content: a member reads a step
+// only with its thread, under the thread's own scope. Nothing but the
+// gateway's owner connection writes it, settled against the run that sends
+// it, so the application role gets no write policy.
+export const chatLocalRunStepContentPolicies = () => [
+  p.pgPolicy("chat_local_run_step_contents_owner_access", {
+    for: "all",
+    to: "public",
+    using: chatLocalRunStepContentOwnerCheck,
+    withCheck: chatLocalRunStepContentOwnerCheck,
+  }),
+  p.pgPolicy("chat_local_run_step_content_select", {
+    for: "select",
+    to: stella,
+    using: chatDerivedThreadScopeCheck(
+      sql`chat_local_run_step_contents.thread_id`,
+    ),
   }),
 ];
 
@@ -1873,3 +2145,102 @@ export const templateChatThreadPolicies = () => [
     using: templateChatThreadScopeCheck,
   }),
 ];
+
+type InvoicePolicyColumns = {
+  id: p.AnyPgColumn;
+  organizationId: p.AnyPgColumn;
+  workspaceId: p.AnyPgColumn;
+  clientId: p.AnyPgColumn;
+  originalInvoiceId: p.AnyPgColumn;
+};
+
+/** The owner-evaluated predicate sees hidden lines, preventing partial invoices. */
+export const invoicePolicies = (table: InvoicePolicyColumns) => {
+  const access = sql`public.stella_invoice_access(${table.id}, ${table.organizationId}, ${table.workspaceId}, ${table.clientId}, ${table.originalInvoiceId})`;
+  return [
+    p.pgPolicy("invoices_workspace_select", {
+      for: "select",
+      to: stella,
+      using: access,
+    }),
+    p.pgPolicy("invoices_workspace_insert", {
+      for: "insert",
+      to: stella,
+      withCheck: access,
+    }),
+    p.pgPolicy("invoices_workspace_update", {
+      for: "update",
+      to: stella,
+      using: access,
+      withCheck: access,
+    }),
+    p.pgPolicy("invoices_workspace_delete", {
+      for: "delete",
+      to: stella,
+      using: access,
+    }),
+  ];
+};
+
+/**
+ * A row that belongs to one invoice (a line, a payment) is visible and
+ * writable only while its invoice is: the invoice's own policy decides
+ * whole-invoice access, so a caller never sees part of an invoice it cannot open.
+ */
+export const completeInvoiceVisibilityPolicy = (
+  tableName: "invoice_lines" | "invoice_payments",
+  table: { invoiceId: p.AnyPgColumn },
+) =>
+  p.pgPolicy(`${tableName}_complete_invoice`, {
+    as: "restrictive",
+    for: "all",
+    to: stella,
+    using: sql`EXISTS (SELECT 1 FROM public.invoices i WHERE i.id = ${table.invoiceId})`,
+    withCheck: sql`EXISTS (SELECT 1 FROM public.invoices i WHERE i.id = ${table.invoiceId})`,
+  });
+
+const INVOICE_PAYMENTS_OWNER = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.invoice_payments'::regclass)`;
+
+/**
+ * FORCE RLS applies to the table owner, which runs the online backfill that
+ * records the settlement of invoices marked paid before payment records
+ * existed. It reads every payment (so a repaired invoice leaves its selection)
+ * and inserts only legacy-origin, recorder-less settlements; it never updates or deletes.
+ */
+export const invoicePaymentOwnerBackfillPolicies = (
+  table: { origin: p.AnyPgColumn; recordedBy: p.AnyPgColumn },
+  legacyOrigin: SQL,
+) => [
+  p.pgPolicy("invoice_payments_owner_select", {
+    for: "select",
+    to: "public",
+    using: INVOICE_PAYMENTS_OWNER,
+  }),
+  p.pgPolicy("invoice_payments_owner_backfill_insert", {
+    for: "insert",
+    to: "public",
+    withCheck: sql`${INVOICE_PAYMENTS_OWNER} AND ${table.origin} = ${legacyOrigin} AND ${table.recordedBy} IS NULL`,
+  }),
+];
+
+/**
+ * Payments are reversed by voiding, never removed: the request role cannot
+ * delete one. The organization's own deletion still cascades.
+ */
+export const invoicePaymentNoDeletePolicy = () =>
+  p.pgPolicy("invoice_payments_no_delete", {
+    as: "restrictive",
+    for: "delete",
+    to: stella,
+    using: sql`false`,
+  });
+
+// FORCE RLS applies to the table owner, which runs the SECURITY DEFINER
+// invoice access, guard, and reserved-charge functions. They must see every
+// line to decide whole-invoice visibility; owner writes remain denied.
+export const invoiceLineOwnerReadPolicy = () =>
+  p.pgPolicy("invoice_lines_owner_select", {
+    for: "select",
+    to: "public",
+    using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.invoice_lines'::regclass)`,
+  });

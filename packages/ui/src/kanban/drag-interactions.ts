@@ -4,6 +4,7 @@ import { draggable } from "@atlaskit/pragmatic-drag-and-drop/adapter/element-ada
 import { centerUnderPointer } from "@atlaskit/pragmatic-drag-and-drop/utils/center-under-pointer";
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/utils/set-custom-native-drag-preview";
+import { panic } from "better-result";
 
 type AtlaskitDraggableOptions = Parameters<typeof draggable>[0];
 
@@ -17,6 +18,15 @@ type AtlaskitDraggableOptions = Parameters<typeof draggable>[0];
 export const KANBAN_CARD_DRAG_MIME =
   "application/x-stella-kanban-card" as const;
 
+/**
+ * What the pointer carries: the card itself, or a preview the caller draws
+ * (a stack standing for several selected cards). `render` returns its own
+ * cleanup, run once the browser has taken its snapshot.
+ */
+export type KanbanCardDragPreview =
+  | { type: "card" }
+  | { type: "custom"; render: (container: HTMLElement) => () => void };
+
 export type RegisterKanbanCardDragOptions = {
   /** The drag wrapper rendered by `KanbanCardShell`. */
   element: AtlaskitDraggableOptions["element"];
@@ -26,6 +36,22 @@ export type RegisterKanbanCardDragOptions = {
   canDrag?: AtlaskitDraggableOptions["canDrag"];
   onDragStart?: AtlaskitDraggableOptions["onDragStart"];
   onDrop?: AtlaskitDraggableOptions["onDrop"];
+  /** Read when the drag starts; omit to always carry the card. */
+  getDragPreview?: (() => KanbanCardDragPreview) | undefined;
+};
+
+/** The styled card inside the shell's drag wrapper, at its rendered width. */
+const appendCardClone = (element: Element, container: HTMLElement) => {
+  const card = element.firstElementChild;
+  if (!(card instanceof HTMLElement)) {
+    return;
+  }
+  const clone = card.cloneNode(true);
+  if (!(clone instanceof HTMLElement)) {
+    return;
+  }
+  clone.style.width = `${card.getBoundingClientRect().width}px`;
+  container.append(clone);
 };
 
 /**
@@ -41,6 +67,7 @@ export const registerKanbanCardDrag = ({
   canDrag,
   onDragStart,
   onDrop,
+  getDragPreview,
 }: RegisterKanbanCardDragOptions): (() => void) =>
   draggable({
     element,
@@ -54,16 +81,19 @@ export const registerKanbanCardDrag = ({
         nativeSetDragImage,
         getOffset: centerUnderPointer,
         render: ({ container }) => {
-          const card = element.firstElementChild;
-          if (!(card instanceof HTMLElement)) {
-            return;
+          const preview: KanbanCardDragPreview = getDragPreview?.() ?? {
+            type: "card",
+          };
+          switch (preview.type) {
+            case "custom":
+              return preview.render(container);
+            case "card":
+              appendCardClone(element, container);
+              return undefined;
+            default:
+              preview satisfies never;
+              return panic(`Unhandled kanban drag preview: ${String(preview)}`);
           }
-          const clone = card.cloneNode(true);
-          if (!(clone instanceof HTMLElement)) {
-            return;
-          }
-          clone.style.width = `${card.getBoundingClientRect().width}px`;
-          container.append(clone);
         },
       });
     },

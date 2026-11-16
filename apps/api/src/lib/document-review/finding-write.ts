@@ -3,17 +3,25 @@
  *
  * Both producers land here: the review worker, which executes one document at a
  * time from a queued run, and the files-table path, which grades many documents
- * through the property DAG. One row builder and one upsert, so the conflict key
- * and the columns a re-delivered write refreshes cannot drift between them.
+ * through the property DAG. Every batch either one writes goes through
+ * `writeReviewFindingBatch`: one row builder, one upsert and one progress
+ * recount, so the conflict key, the columns a re-delivered write refreshes and
+ * the progress a reviewer sees cannot drift between them. Where the two differ,
+ * the difference is the `executor` variant of that call.
  */
 
+import { panic } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import { documentReviewFindings, documentReviewRuns } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import type { LockedTableRun } from "@/api/lib/db/aggregate-lock";
+import { DOCUMENT_REVIEW_RUN_EXECUTOR } from "@/api/lib/document-review/run-contract";
 import type { DocumentReviewFindingPayload } from "@/api/lib/document-review/run-contract";
+import { finalizeReviewRun } from "@/api/lib/document-review/run-finalize";
+import type { FinalizeReviewRunResult } from "@/api/lib/document-review/run-finalize";
 
 export type DocumentReviewFindingRow =
   typeof documentReviewFindings.$inferInsert;
@@ -63,7 +71,7 @@ export const buildDocumentReviewFindingRow = ({
  * re-delivery must refresh what the engine said, never reset what a lawyer
  * decided about it.
  */
-export const upsertDocumentReviewFindings = async (
+const upsertDocumentReviewFindings = async (
   tx: Transaction,
   rows: readonly DocumentReviewFindingRow[],
 ): Promise<void> => {
@@ -93,10 +101,11 @@ type RecountDocumentReviewFindingProgressArgs = {
 };
 
 /**
- * Recount after all concurrent review passes settle. Each pass reports useful
- * intermediate progress, but their transactions may take snapshots before a
- * sibling commits and leave the last update stale. This final pass runs after
- * both producers have committed, so the run row reflects the durable set.
+ * Set the run's `completed` to the findings it holds, which is what the review
+ * surface polls. Every batch runs it in the transaction that wrote its rows, so
+ * the number never runs ahead of them. Batches that overlap without the run's
+ * row lock may each count before a sibling commits and leave the last update
+ * stale, so the worker runs it once more after its pass settles.
  */
 export const recountDocumentReviewFindingProgress = async ({
   tx,
@@ -120,4 +129,80 @@ export const recountDocumentReviewFindingProgress = async ({
         eq(documentReviewRuns.status, "running"),
       ),
     );
+};
+
+type WriteReviewFindingBatchArgs = {
+  tx: Transaction;
+  workspaceId: SafeId<"workspace">;
+  rows: readonly DocumentReviewFindingRow[];
+} & (
+  | {
+      /** One pass writes every batch, and the run completes once after it
+       *  through `finalizeWorkerRun`, so a batch commits and reports progress
+       *  only. A shortfall then fails the run instead of waiting for more. */
+      executor: typeof DOCUMENT_REVIEW_RUN_EXECUTOR.WORKER;
+      runId: SafeId<"documentReviewRun">;
+    }
+  | {
+      /** Batches arrive from independent workflow jobs and any one may be the
+       *  last, so each tries to complete the run. Takes the run under the row
+       *  lock `lockActiveTableRun` holds: without it the last two batches would
+       *  each count without the other's uncommitted findings. */
+      executor: typeof DOCUMENT_REVIEW_RUN_EXECUTOR.TABLE;
+      run: LockedTableRun;
+      entityId: SafeId<"entity">;
+      expectedFindingCount: number;
+    }
+);
+
+export type WriteReviewFindingBatchResult =
+  { type: "deferred" } | FinalizeReviewRunResult;
+
+const batchRunId = (
+  args: WriteReviewFindingBatchArgs,
+): SafeId<"documentReviewRun"> => {
+  switch (args.executor) {
+    case DOCUMENT_REVIEW_RUN_EXECUTOR.WORKER:
+      return args.runId;
+    case DOCUMENT_REVIEW_RUN_EXECUTOR.TABLE:
+      return args.run.id;
+    default:
+      args satisfies never;
+      return panic("Unhandled review run executor");
+  }
+};
+
+/**
+ * Commit one batch of a run's findings: the upsert, the progress recount, and
+ * for the files-table path the completion attempt, all in the caller's
+ * transaction. The one way either executor writes findings.
+ */
+export const writeReviewFindingBatch = async (
+  args: WriteReviewFindingBatchArgs,
+): Promise<WriteReviewFindingBatchResult> => {
+  const { tx, workspaceId, rows } = args;
+  const runId = batchRunId(args);
+  if (rows.some((row) => row.runId !== runId)) {
+    return panic("A finding batch holds rows of another run");
+  }
+  await upsertDocumentReviewFindings(tx, rows);
+  await recountDocumentReviewFindingProgress({ tx, workspaceId, runId });
+
+  switch (args.executor) {
+    case DOCUMENT_REVIEW_RUN_EXECUTOR.WORKER:
+      return { type: "deferred" };
+    case DOCUMENT_REVIEW_RUN_EXECUTOR.TABLE:
+      return await finalizeReviewRun({
+        tx,
+        workspaceId,
+        runId,
+        entityId: args.entityId,
+        fileFieldId: args.run.fileFieldId,
+        executor: DOCUMENT_REVIEW_RUN_EXECUTOR.TABLE,
+        expectedFindingCount: args.expectedFindingCount,
+      });
+    default:
+      args satisfies never;
+      return panic("Unhandled review run executor");
+  }
 };

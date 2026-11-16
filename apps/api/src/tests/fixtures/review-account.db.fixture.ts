@@ -1,6 +1,13 @@
 import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
+
+import { AUTH_SIGN_IN_CODE_UNAVAILABLE_ERROR_CODE } from "@stll/auth-model";
+import { compareCodeUnit } from "@stll/collation";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
+
+// Constants only: safe to load before the fixture's environment is read.
+import { SETTING_USER_ID } from "@/api/db/rls";
 
 const email = process.env["APP_REVIEW_ACCOUNT_EMAIL"];
 const organizationId = process.env["APP_REVIEW_ORGANIZATION_ID"];
@@ -12,15 +19,16 @@ test("provisions one verified owner, rotates credentials, and refuses HTTP creat
   const { getAuth } = await import("@/api/lib/auth");
   const { env } = await import("@/api/env");
   const { rootDb } = await import("@/api/db/root");
-  const { user, organization, verification, oauthResource } =
+  const { user, verification, oauthResource } =
     await import("@/api/db/auth-schema");
-  const { userProfessionalUseAcceptances } = await import("@/api/db/schema");
+  const { accountAuditLogs, userProfessionalUseAcceptances } =
+    await import("@/api/db/schema");
+  const { brandPersistedUserId } = await import("@/api/lib/safe-id-boundaries");
   const { getBetterAuthOAuthResources } =
     await import("@/api/lib/oauth-resource-policy");
   const { getAuthEndpointUrl } = await import("@/api/lib/auth/auth-paths");
   const { REVIEW_ACCOUNT_REFUSAL_MESSAGE } =
     await import("@/api/lib/auth/review-account-policy");
-  const { readDevOtp } = await import("@/api/lib/dev-otp-store");
   const { MCP_DEFAULT_RESOURCE_SCOPES } = await import("@stll/api-contract");
   const { getMcpResourceUrl } = await import("@/api/mcp/constants");
   const { OAUTH_CONSENT_PAGE_PATH, readOAuthRedirect, registerOAuthClient } =
@@ -47,13 +55,16 @@ test("provisions one verified owner, rotates credentials, and refuses HTTP creat
     if (stored.allowedScopes === null) {
       return panic("Configured OAuth resource has no allowed scopes");
     }
-    return { ...stored, allowedScopes: stored.allowedScopes.toSorted() };
+    return {
+      ...stored,
+      allowedScopes: stored.allowedScopes.toSorted(compareCodeUnit),
+    };
   });
   expect(storedResources).toHaveLength(configuredResources.length);
   for (const resource of configuredResources) {
     expect(normalizedResources).toContainEqual({
       ...resource,
-      allowedScopes: resource.allowedScopes.toSorted(),
+      allowedScopes: resource.allowedScopes.toSorted(compareCodeUnit),
       disabled: false,
     });
   }
@@ -140,11 +151,22 @@ test("provisions one verified owner, rotates credentials, and refuses HTTP creat
         },
       },
     ];
-    await auth.api.sendVerificationOTP({ body: { email, type: "sign-in" } });
-    const otp = readDevOtp(email);
-    if (!otp) {
-      panic("Auth did not issue the fixture OTP");
-    }
+    // No sign-in code is issued for the address; the one redeemed below
+    // stands for a code stored before the account was restricted.
+    const codeRequest = await post("/email-otp/send-verification-otp", {
+      email,
+      type: "sign-in",
+    });
+    expect(codeRequest.status).toBe(409);
+    expect(await codeRequest.json()).toMatchObject({
+      code: AUTH_SIGN_IN_CODE_UNAVAILABLE_ERROR_CODE,
+    });
+    const otp = "482916";
+    await context.internalAdapter.createVerificationValue({
+      identifier: `sign-in-otp-${email}`,
+      value: `${otp}:0`,
+      expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+    });
     for (const { path, status, body } of httpCreationPaths) {
       const response = await post(path, {
         email,
@@ -192,6 +214,23 @@ test("provisions one verified owner, rotates credentials, and refuses HTTP creat
         where: { organizationId: { eq: organizationId } },
       }),
     ).toEqual(memberships);
+    // FORCE RLS binds even owner reads of account history to the account.
+    const creationHistory = await rootDb.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('${sql.raw(SETTING_USER_ID)}', ${created.id}, true)`,
+      );
+      return await tx
+        .select({
+          eventType: accountAuditLogs.eventType,
+          resourceId: accountAuditLogs.resourceId,
+        })
+        .from(accountAuditLogs)
+        .where(eq(accountAuditLogs.userId, brandPersistedUserId(created.id)));
+    });
+    expect(creationHistory).toContainEqual({
+      eventType: "organization.created",
+      resourceId: organizationId,
+    });
     const firstAcceptances = await rootDb
       .select()
       .from(userProfessionalUseAcceptances)
@@ -326,10 +365,9 @@ test("provisions one verified owner, rotates credentials, and refuses HTTP creat
     expect(rotatedAccounts).toHaveLength(1);
     expect(rotatedAccounts.at(0)?.id).toBe(credential.id);
   } finally {
-    await rootDb
-      .delete(organization)
-      .where(eq(organization.id, organizationId));
-    await rootDb.delete(user).where(eq(user.email, email));
+    await deleteOrganizationsForTest(rootDb, [organizationId]);
+    // Account history is append-only and keeps the review account's row;
+    // each run provisions its own random account.
     await rootDb.delete(user).where(eq(user.email, ordinaryEmail));
     await rootDb
       .delete(verification)

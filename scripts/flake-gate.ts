@@ -12,6 +12,7 @@ import { repoRelativePath } from "@stll/portable-path";
 
 import apiManifest from "../apps/api/package.json" with { type: "json" };
 import { isDbTest } from "../apps/api/scripts/test-batch-plan";
+import { API_TEST_FILES_ENCODED_ENV } from "../apps/api/scripts/test-file-shards";
 import { selectTestPaths } from "../apps/api/scripts/test-path-filters";
 import { analyzeModule, selectApiTestImpact } from "./api-test-impact";
 import { testFailures } from "./ci-failure-digest";
@@ -29,6 +30,10 @@ import {
   type RustTarget,
   selectRustTargets,
 } from "./flake-gate-rust";
+import {
+  encodePlanFileList,
+  encodePostgresTestSelection,
+} from "./plan-output-codec";
 
 export const REPEATS = 5;
 export const MAX_CHANGED_TEST_FILES = 10;
@@ -147,14 +152,17 @@ export const selectTargets = ({
       if (gate) {
         env = {
           [gate[1].gate]: gate[1].gateValue,
-          CI_POSTGRES_TEST_SELECTION: JSON.stringify({
+          CI_POSTGRES_TEST_SELECTION_ENCODED: encodePostgresTestSelection({
             mode: "selected",
             files: [relative],
           }),
           CI_POSTGRES_TEST_SHARD: "",
         };
       } else {
-        env = { API_TEST_FILES: relative, API_TEST_SHARD: "" };
+        env = {
+          [API_TEST_FILES_ENCODED_ENV]: encodePlanFileList([relative]),
+          API_TEST_SHARD: "",
+        };
       }
       // CI generates prerequisites once; the API entry retains its own preloads,
       // batching, service setup, and exact selection instead of parsing shell scripts.

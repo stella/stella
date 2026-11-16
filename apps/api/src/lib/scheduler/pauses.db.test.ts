@@ -592,16 +592,18 @@ if (!databaseUrl || !runPostgresTests) {
               }),
             ).toBe("skipped");
             expect(invoked).toEqual([]);
-            expect(logs.at("ERROR")).toContainEqual(
+            expect(logs.at("INFO")).toContainEqual(
               expect.objectContaining({
-                message: "scheduler.job.paused_job_ran",
+                message: "scheduler.job.pause_honored",
                 attributes: expect.objectContaining({
                   jobId,
                   pausedBy: PAUSED_BY,
                   pauseReason: PAUSE_REASON,
+                  phase: "before_start",
                 }),
               }),
             );
+            expect(logs.at("ERROR")).toEqual([]);
             const [persisted] = await db
               .select()
               .from(schedulerJobs)
@@ -746,16 +748,18 @@ if (!databaseUrl || !runPostgresTests) {
             }),
           ).toBe("skipped");
           expect(checkpoints).toEqual(["pause committed", "aborted"]);
-          expect(logs.at("ERROR")).toContainEqual(
+          expect(logs.at("INFO")).toContainEqual(
             expect.objectContaining({
-              message: "scheduler.job.paused_job_ran",
+              message: "scheduler.job.pause_honored",
               attributes: expect.objectContaining({
                 jobId,
                 pausedBy: PAUSED_BY,
                 pauseReason: PAUSE_REASON,
+                phase: "while_running",
               }),
             }),
           );
+          expect(logs.at("ERROR")).toEqual([]);
           const [persisted] = await db
             .select()
             .from(schedulerJobs)

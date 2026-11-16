@@ -1,13 +1,10 @@
 {
   "duplicatesCommon": [],
   "duplicateValues": [
-    "demo.matters",
-    "demo.status",
     "footer.agent",
     "footer.anonymization",
     "footer.editor",
     "footer.publicData",
-    "footer.status",
     "footer.templates",
     "footer.workspace",
     "nav.pillars.workspace",
@@ -19,28 +16,10 @@
     "nav.products.workspace.eyebrow",
     "nav.products.workspace.title",
     "products.cli-mcp.adjacent.product:workspace.body",
-    "products.workspace.capabilities.0.title",
     "story.agentEyebrow",
     "story.workspaceEyebrow"
   ],
   "identicalToSource": {
-    "demo.documents": [
-      "fr"
-    ],
-    "demo.notes": [
-      "fr"
-    ],
-    "demo.source": [
-      "fr"
-    ],
-    "demo.sources": [
-      "fr"
-    ],
-    "demo.status": [
-      "de",
-      "pl",
-      "pt-BR"
-    ],
     "footer.agent": [
       "cs",
       "sk"
@@ -65,16 +44,6 @@
       "de",
       "pl",
       "pt-BR"
-    ],
-    "nav.beta": [
-      "cs",
-      "de",
-      "es",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
     ],
     "nav.blog": [
       "cs",
@@ -110,5 +79,6 @@
       "pl",
       "sk"
     ]
-  }
+  },
+  "unusedKeys": []
 }

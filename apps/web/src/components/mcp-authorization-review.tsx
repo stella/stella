@@ -1,6 +1,7 @@
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
+import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
 
 export const McpAuthorizationReview = ({
   issuer,
@@ -15,15 +16,11 @@ export const McpAuthorizationReview = ({
       <p className="text-muted-foreground text-sm">
         {t("knowledge.mcp.authorizationReviewDescription")}
       </p>
-      <dl className="flex min-w-0 flex-col gap-2 text-sm">
-        <dt className="font-medium">
-          {t("knowledge.mcp.authorizationServer")}
-        </dt>
-        <dd className="break-all">
-          <BidiText>{issuer}</BidiText>
-        </dd>
-        <dt className="font-medium">{t("knowledge.mcp.endpointOrigins")}</dt>
-        <dd>
+      <DetailsGrid orientation="vertical" variant="list">
+        <DetailsItem label={t("knowledge.mcp.authorizationServer")}>
+          <BidiText className="break-all">{issuer}</BidiText>
+        </DetailsItem>
+        <DetailsItem label={t("knowledge.mcp.endpointOrigins")}>
           <ul className="flex flex-col gap-1">
             {endpointOrigins.map((origin) => (
               <li className="break-all" key={origin}>
@@ -31,8 +28,8 @@ export const McpAuthorizationReview = ({
               </li>
             ))}
           </ul>
-        </dd>
-      </dl>
+        </DetailsItem>
+      </DetailsGrid>
     </div>
   );
 };

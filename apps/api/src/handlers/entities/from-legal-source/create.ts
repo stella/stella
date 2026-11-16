@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   RESOURCE_TYPE,
@@ -24,9 +24,9 @@ import {
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
-const createFromLegalSourceBodySchema = t.Object({
-  name: t.String({ minLength: 1, maxLength: 256 }),
-  source: t.String({ minLength: 1 }),
+const createFromLegalSourceBodySchema = v.object({
+  name: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
+  source: v.pipe(v.string(), v.minLength(1)),
 });
 
 const CREATE_FROM_LEGAL_SOURCE_ERROR_CODE = {

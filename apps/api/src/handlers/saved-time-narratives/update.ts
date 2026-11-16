@@ -1,12 +1,13 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { savedTimeNarratives } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { narrativeLanguageSchema } from "@/api/lib/billing/narrative-language";
+import { displayNameSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { pickDefined } from "@/api/lib/pick-defined";
 
@@ -24,10 +25,12 @@ const config = {
   featureAccess: { featureId: "time-billing", type: "required" },
   mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   params: savedTimeNarrativeParamsSchema,
-  body: t.Object({
-    name: t.Optional(t.String({ minLength: 1, maxLength: 128 })),
-    narrative: t.Optional(t.String({ minLength: 1, maxLength: 10_000 })),
-    narrativeLanguage: t.Optional(narrativeLanguageSchema),
+  body: v.object({
+    name: v.optional(displayNameSchema({ maxLength: 128 })),
+    narrative: v.optional(
+      v.pipe(v.string(), v.minLength(1), v.maxLength(10_000)),
+    ),
+    narrativeLanguage: v.optional(narrativeLanguageSchema),
   }),
 } satisfies HandlerConfig;
 

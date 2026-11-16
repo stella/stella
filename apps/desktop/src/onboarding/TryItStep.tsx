@@ -188,11 +188,7 @@ export const TryItStep = ({ onBack, onContinue, snapshot }: StepProps) => {
                 ? feedbackMessage({ feedback, keys, layout, locale, t })
                 : t("tryUnfocused")}
             </p>
-            <Button
-              onClick={() => setRecordingRequested(true)}
-              size="sm"
-              variant="ghost"
-            >
+            <Button onClick={() => setRecordingRequested(true)} variant="ghost">
               {t("tryChange")}
             </Button>
           </>

@@ -1,6 +1,9 @@
 import { Result, TaggedError } from "better-result";
 import { and, asc, eq } from "drizzle-orm";
 
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
+import { declareFingerprintFields } from "@stll/errors";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import { createFencedRlsDatabase } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
@@ -28,6 +31,7 @@ import {
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import type { BoundedReadResult } from "@/api/lib/db/read-bounded";
 import {
@@ -43,7 +47,10 @@ import { recordOrganizationStorageTeardown } from "@/api/lib/organization-storag
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { ReviewOrganizationConfig } from "@/api/lib/review-organization/config";
 import { inOrder } from "@/api/lib/review-organization/in-order";
-import { sweepReviewOrganization } from "@/api/lib/review-organization/reset-scope";
+import {
+  clearReviewOrganizationBilling,
+  sweepReviewOrganization,
+} from "@/api/lib/review-organization/reset-scope";
 import { seedReviewOrganization } from "@/api/lib/review-organization/seed";
 import {
   ReviewSeedError,
@@ -59,8 +66,14 @@ import {
 } from "@/api/lib/root-scoped-db";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
+import type { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { executeAuthorizedWorkspaceDeletion } from "@/api/lib/workspace-deletion";
 import type { WorkspaceDeletionDependencies } from "@/api/lib/workspace-deletion";
+import {
+  lockOrganizationForWholeOrganizationWork,
+  organizationHasActiveHold,
+  settleOrganizationHoldRead,
+} from "@/api/lib/workspaces/legal-holds/holds";
 
 export const REVIEW_RESET_REFUSAL = {
   unconfigured: "unconfigured",
@@ -82,7 +95,11 @@ export class ReviewResetRefusedError extends TaggedError(
 )<{
   message: string;
   reason: ReviewResetRefusalReason;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 const refuse = (reason: ReviewResetRefusalReason, message: string) =>
   Result.err(new ReviewResetRefusedError({ message, reason }));
@@ -201,7 +218,13 @@ const resolveReviewTarget = async (
 };
 
 type ReviewResetKind =
-  "matters" | "contacts" | "clauses" | "templates" | "playbooks" | "sweep";
+  | "billing"
+  | "matters"
+  | "contacts"
+  | "clauses"
+  | "templates"
+  | "playbooks"
+  | "sweep";
 
 /** One row the reset could not delete, and why. */
 type ReviewResetFailure = {
@@ -211,7 +234,9 @@ type ReviewResetFailure = {
 };
 
 export type ReviewResetReport = {
-  deleted: Record<Exclude<ReviewResetKind, "sweep">, number>;
+  deleted: Record<Exclude<ReviewResetKind, "billing" | "sweep">, number>;
+  /** Billing rows removed before the matters, per table. */
+  billing: ReadonlyMap<string, number>;
   /** Rows the closing sweep removed, per table. */
   swept: ReadonlyMap<string, number>;
   failures: ReviewResetFailure[];
@@ -219,8 +244,12 @@ export type ReviewResetReport = {
 };
 
 export type ReviewResetDependencies = {
+  flushWorkspaceSearchRepairs: typeof flushWorkspaceSearchRepairs;
   seed?: ReviewSeedDependencies | undefined;
-  workspaceDeletion?: Omit<WorkspaceDeletionDependencies, "database">;
+  workspaceDeletion?: Omit<
+    WorkspaceDeletionDependencies,
+    "database" | "flushWorkspaceSearchRepairs"
+  >;
   /** Test seam: runs after the target is proved, before the first delete. */
   afterTargetResolved?: (() => Promise<void>) | undefined;
   /** Test seam: runs after the per-row deletes, before the sweep transaction. */
@@ -251,7 +280,7 @@ class ReviewMembershipChangedError extends TaggedError(
  */
 export type MembershipFence = {
   tripped: boolean;
-  assert: (tx: Pick<Transaction, "select">) => Promise<void>;
+  assert: (tx: Transaction) => Promise<void>;
 };
 
 export const createMembershipFence = (
@@ -261,18 +290,24 @@ export const createMembershipFence = (
   const fence: MembershipFence = {
     tripped: false,
     assert: async (tx) => {
+      // The organization row lock also takes the object-intent lifecycle lock
+      // and the exclusive legal-hold fence, and the membership read below
+      // reads the hold state under them: every deletion in the transaction
+      // then answers its hold check without another statement.
       if (!fence.tripped) {
-        await tx
-          .select({ id: organization.id })
-          .from(organization)
-          .where(eq(organization.id, target.organizationId))
-          .for("update");
+        await lockOrganizationForWholeOrganizationWork({
+          tx,
+          organizationId: target.organizationId,
+        });
       }
       const members = fence.tripped
         ? null
         : await readBounded(
             tx
-              .select({ userId: member.userId })
+              .select({
+                userId: member.userId,
+                activeHold: organizationHasActiveHold(target.organizationId),
+              })
               .from(member)
               .where(eq(member.organizationId, target.organizationId))
               .orderBy(asc(member.userId)),
@@ -280,7 +315,7 @@ export const createMembershipFence = (
           );
       const sole =
         members?.type === "complete" ? members.rows.at(0) : undefined;
-      if (sole?.userId !== target.userId) {
+      if (sole === undefined || sole.userId !== target.userId) {
         fence.tripped = true;
         abortTransaction(
           new ReviewMembershipChangedError({
@@ -288,6 +323,14 @@ export const createMembershipFence = (
               "The review organization has members other than the review account",
           }),
         );
+      }
+      const hold = await settleOrganizationHoldRead({
+        tx,
+        organizationId: target.organizationId,
+        activeHold: sole.activeHold,
+      });
+      if (hold.isErr()) {
+        abortTransaction(hold.error);
       }
       await afterCheck?.();
     },
@@ -321,7 +364,7 @@ export type ReviewResetOptions = {
   /** The scheduler run, stamped on every audit row the reset writes. */
   runId: string;
   signal: AbortSignal;
-  dependencies?: ReviewResetDependencies | undefined;
+  dependencies: ReviewResetDependencies;
 };
 
 const failureReason = (error: unknown): string =>
@@ -381,6 +424,44 @@ const deleteEach = async <TRow extends { id: string }>(
   return { deleted, failures };
 };
 
+/**
+ * Empty the billing records an authorized matter deletion refuses to take
+ * (time, expenses and invoices), in one fenced owner transaction, before the
+ * matters go.
+ */
+const clearBillingRecords = async (
+  scope: ResetScope,
+): Promise<{
+  cleared: ReadonlyMap<string, number>;
+  failures: ReviewResetFailure[];
+}> => {
+  const { organizationId } = scope.target;
+  if (scope.fence.tripped || scope.signal.aborted) {
+    return { cleared: new Map(), failures: [] };
+  }
+  const outcome = await Result.tryPromise({
+    try: async () =>
+      await withAggregateTransaction(scope.db, async (tx) => {
+        await scope.fence.assert(tx);
+        return await clearReviewOrganizationBilling(tx, organizationId);
+      }),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(outcome)) {
+    return {
+      cleared: new Map(),
+      failures: [
+        {
+          kind: "billing",
+          id: organizationId,
+          reason: failureReason(outcome.error),
+        },
+      ],
+    };
+  }
+  return { cleared: outcome.value, failures: [] };
+};
+
 const deleteMatters = async (scope: ResetScope) => {
   const { organizationId, userId } = scope.target;
   // Bounded by the organization's matter cap, as every enumeration below is
@@ -394,7 +475,7 @@ const deleteMatters = async (scope: ResetScope) => {
     LIMITS.workspacesCount,
   );
   return await deleteEach(scope, "matters", rows, async (matter) => {
-    if (matter.status === "archived") {
+    if (matter.status === WORKSPACE_STATUS.archived) {
       const unarchived = await Result.gen(() =>
         unarchiveWorkspaceHandler({
           safeDb: scope.safeDb,
@@ -422,6 +503,8 @@ const deleteMatters = async (scope: ResetScope) => {
               return await callback(tx);
             }),
         },
+        flushWorkspaceSearchRepairs:
+          scope.dependencies.flushWorkspaceSearchRepairs,
       },
     );
     return Result.isOk(outcome) && outcome.value.status !== "deleted"
@@ -432,13 +515,19 @@ const deleteMatters = async (scope: ResetScope) => {
 
 const deleteContacts = async (scope: ResetScope) => {
   const { organizationId } = scope.target;
-  const rows = await readBounded(
-    scope.db
-      .select({ id: contacts.id })
-      .from(contacts)
-      .where(eq(contacts.organizationId, organizationId))
-      .orderBy(asc(contacts.id)),
-    LIMITS.contactsCount,
+  // The owner connection reads contacts inside their organization only.
+  const rows = await withOwnerOrganizationScope(
+    scope.db,
+    organizationId,
+    async (tx) =>
+      await readBounded(
+        tx
+          .select({ id: contacts.id })
+          .from(contacts)
+          .where(eq(contacts.organizationId, organizationId))
+          .orderBy(asc(contacts.id)),
+        LIMITS.contactsCount,
+      ),
   );
   return await deleteEach(
     scope,
@@ -451,6 +540,8 @@ const deleteContacts = async (scope: ResetScope) => {
           organizationId,
           contactId: contact.id,
           recordAuditEvent: scope.recorderFor(null),
+          flushWorkspaceSearchRepairs:
+            scope.dependencies.flushWorkspaceSearchRepairs,
         }),
       ),
   );
@@ -642,7 +733,7 @@ export const resetReviewOrganization = async ({
   rlsDatabase,
   runId,
   signal,
-  dependencies = {},
+  dependencies,
 }: ReviewResetOptions): Promise<
   Result<ReviewResetReport, ReviewResetRefusedError>
 > => {
@@ -695,8 +786,10 @@ export const resetReviewOrganization = async ({
   };
 
   await dependencies.afterTargetResolved?.();
-  // Matters first: their documents, tasks and time entries go with them, and
-  // a contact that is a matter's client cannot be deleted before it.
+  // Billing records first: a matter deletion refuses a matter that has them.
+  // Then matters: their documents and tasks go with them, and a contact that
+  // is a matter's client cannot be deleted before it.
+  const billing = await clearBillingRecords(scope);
   const matters = await deleteMatters(scope);
   const contactsOutcome = await deleteContacts(scope);
   const clausesOutcome = await deleteClauses(scope);
@@ -711,6 +804,7 @@ export const resetReviewOrganization = async ({
   };
   const sweep = await sweepRemainingRows(scope);
   const failures = [
+    ...billing.failures,
     ...matters.failures,
     ...contactsOutcome.failures,
     ...clausesOutcome.failures,
@@ -719,6 +813,7 @@ export const resetReviewOrganization = async ({
     ...sweep.failures,
   ];
   const { swept } = sweep;
+  const { cleared: billingCleared } = billing;
 
   if (fence.tripped) {
     return refuse(
@@ -729,6 +824,7 @@ export const resetReviewOrganization = async ({
   if (signal.aborted) {
     return Result.ok({
       deleted,
+      billing: billingCleared,
       swept,
       failures,
       seed: Result.err(
@@ -758,5 +854,11 @@ export const resetReviewOrganization = async ({
     dependencies.seed,
   );
 
-  return Result.ok({ deleted, swept, failures, seed });
+  return Result.ok({
+    deleted,
+    billing: billingCleared,
+    swept,
+    failures,
+    seed,
+  });
 };

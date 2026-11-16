@@ -132,6 +132,7 @@ const createStore = ({
       calls.saves.push({ analysis, contentHash });
       return await Promise.resolve(saveWrites);
     },
+    savePartial: async () => await Promise.resolve(false),
     clear: async () => {
       await Promise.resolve();
     },

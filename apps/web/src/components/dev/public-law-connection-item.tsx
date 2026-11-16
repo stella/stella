@@ -14,19 +14,19 @@ import { MenuItem } from "@stll/ui/menu";
 import { cn } from "@stll/ui/utils";
 
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 
 const CONNECTING_POLL_INTERVAL_MS = 1000;
 
 /**
- * The dev guard answers outside dev with a 404, which Eden reports as an
+ * The dev guard answers outside dev with a 404, which the API client reports as an
  * error; a successful raw `Response` is not a state the route produces.
  */
 const unexpectedResponse = () =>
   panic("The dev public-law connection route returned a raw Response");
 
 const readPublicLawConnection = async (signal: AbortSignal) => {
-  const data = unwrapEden(
+  const data = unwrapApiResponse(
     await api.dev["public-law-connection"].get({ fetch: { signal } }),
   );
   return data instanceof Response ? unexpectedResponse() : data;
@@ -108,7 +108,9 @@ export const PublicLawConnectionItem = () => {
   const connection = useQuery(publicLawConnectionOptions);
   const connect = useMutation({
     mutationFn: async () => {
-      const data = unwrapEden(await api.dev["public-law-connection"].post());
+      const data = unwrapApiResponse(
+        await api.dev["public-law-connection"].post(),
+      );
       return data instanceof Response ? unexpectedResponse() : data;
     },
     onSuccess: (data) => {
@@ -142,14 +144,16 @@ export const PublicLawConnectionItem = () => {
       <span className="flex min-w-0 flex-col">
         <span>{view.label}</span>
         {detail !== undefined && (
+          // The whole detail shows: a menu item cannot host a tooltip
+          // (its popup would act through the item), and a connection error
+          // is worth reading in full in this developer menu.
           <span
             className={cn(
-              "line-clamp-3 max-w-64 text-xs wrap-break-word",
+              "max-w-64 text-xs wrap-break-word",
               view.tone === "destructive" || connect.isError
                 ? "text-destructive-foreground"
                 : "text-muted-foreground",
             )}
-            title={detail}
           >
             {detail}
           </span>

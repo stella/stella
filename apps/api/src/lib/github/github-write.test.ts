@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { describe, expect, spyOn, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 
 import {
   githubWrite,
@@ -10,7 +10,10 @@ import {
   toGithubUserText,
   toGithubUserTitle,
 } from "@/api/lib/github/outbound-text";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
 
 type SentRequest = { url: string; init: RequestInit | undefined };
 
@@ -31,12 +34,16 @@ const postIssue = async (
   sent: SentRequest[];
 }> => {
   const sent: SentRequest[] = [];
-  const fetchSpy = spyOn(globalThis, "fetch").mockImplementation(
-    asFetchMock(async (input: string | URL | Request, init?: RequestInit) => {
-      sent.push({ url: requestUrl(input), init });
-      return response;
-    }),
+  const fetchSpy = Object.assign(
+    mock(
+      asFetchMock(async (input: string | URL | Request, init?: RequestInit) => {
+        sent.push({ url: requestUrl(input), init });
+        return response;
+      }),
+    ),
+    { preconnect: globalThis.fetch.preconnect },
   );
+  testFetchState.set(fetchSpy);
   try {
     const result = await githubWrite({
       token: "secret",
@@ -46,7 +53,7 @@ const postIssue = async (
     });
     return { result, sent };
   } finally {
-    fetchSpy.mockRestore();
+    testFetchState.restore();
   }
 };
 

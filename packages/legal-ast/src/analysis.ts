@@ -184,11 +184,19 @@ export const CURRENT_ANALYSIS_VERSION = 4;
 export type AnalysisGenerating = {
   version: typeof CURRENT_ANALYSIS_VERSION;
   status: "generating";
+  /** Unique ownership token for the run that claimed this sentinel. */
+  runId: string;
   startedAt: string;
   inputFingerprint: AnalysisInputFingerprint;
+  /** Complete top-level sections emitted by the in-flight model run. */
+  partialTree: DecisionAnalysis["tree"];
 };
 
-export type PersistedDecisionAnalysis = DecisionAnalysis | AnalysisGenerating;
+/** A pre-run-id sentinel remains readable only so its five-minute lease applies. */
+type LegacyAnalysisGenerating = Omit<AnalysisGenerating, "runId">;
+
+export type PersistedDecisionAnalysis =
+  DecisionAnalysis | AnalysisGenerating | LegacyAnalysisGenerating;
 
 export const analysisAnnotationSchema: v.GenericSchema<AnalysisAnnotation> =
   v.object({
@@ -223,6 +231,8 @@ export const analysisHeadingSchema: v.GenericSchema<AnalysisHeading> = v.object(
     children: v.array(v.lazy(() => analysisHeadingSchema)),
   },
 );
+
+export const analysisTreeSchema = v.array(analysisHeadingSchema);
 
 const inputFingerprintSchema = v.pipe(v.string(), v.minLength(1));
 
@@ -345,7 +355,7 @@ const decisionAnalysisCoreEntries = {
   generatedAt: v.string(),
   model: v.string(),
   inputFingerprint: inputFingerprintSchema,
-  tree: v.array(analysisHeadingSchema),
+  tree: analysisTreeSchema,
 } as const;
 
 const decisionAnalysisV2Schema: v.GenericSchema<DecisionAnalysisV2> =
@@ -375,16 +385,30 @@ const decisionAnalysisV4Schema: v.GenericSchema<DecisionAnalysisV4> =
 export const decisionAnalysisSchema: v.GenericSchema<DecisionAnalysis> =
   v.union([decisionAnalysisV2Schema, decisionAnalysisV4Schema]);
 
+const analysisGeneratingEntries = {
+  version: v.literal(CURRENT_ANALYSIS_VERSION),
+  status: v.literal("generating"),
+  startedAt: v.string(),
+  inputFingerprint: inputFingerprintSchema,
+  partialTree: v.optional(analysisTreeSchema, []),
+} as const;
+
 const analysisGeneratingSchema: v.GenericSchema<AnalysisGenerating> =
   v.strictObject({
-    version: v.literal(CURRENT_ANALYSIS_VERSION),
-    status: v.literal("generating"),
-    startedAt: v.string(),
-    inputFingerprint: inputFingerprintSchema,
+    ...analysisGeneratingEntries,
+    partialTree: analysisTreeSchema,
+    runId: v.pipe(v.string(), v.uuid()),
   });
 
-const persistedDecisionAnalysisSchema: v.GenericSchema<PersistedDecisionAnalysis> =
-  v.union([analysisGeneratingSchema, decisionAnalysisSchema]);
+const legacyAnalysisGeneratingSchema = v.strictObject(
+  analysisGeneratingEntries,
+);
+
+const persistedDecisionAnalysisSchema = v.union([
+  analysisGeneratingSchema,
+  legacyAnalysisGeneratingSchema,
+  decisionAnalysisSchema,
+]);
 
 export const isAnalysisGenerating = (val: unknown): val is AnalysisGenerating =>
   v.is(analysisGeneratingSchema, val);

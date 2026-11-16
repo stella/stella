@@ -10,6 +10,7 @@ import { Input } from "@stll/ui/input";
 
 import { SecretInput } from "@/components/secret-input";
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
+import { INVALID_SIGN_IN_CODE } from "@/lib/account/auth-code-report";
 import { useAnalytics } from "@/lib/analytics/provider";
 import {
   authClient,
@@ -25,10 +26,11 @@ import { LastUsedFieldBadge } from "./last-used-sign-in";
 import { SIGN_IN_METHOD, signInMethodVariant } from "./sign-in-panel.logic";
 import type { SignInMethod } from "./sign-in-panel.logic";
 
-const passwordFormSchema = v.strictObject({
-  email: emailSchema(),
-  password: v.string(),
-});
+const passwordFormSchema = (invalidEmail: string) =>
+  v.strictObject({
+    email: emailSchema(invalidEmail),
+    password: v.string(),
+  });
 
 /** The slice of a form field a single text input binds to. */
 type TextFieldBinding = {
@@ -69,16 +71,19 @@ export const EmailCredentialField = ({
 
 export const SecretCredentialField = ({
   autoComplete,
+  autoFocus,
   field,
   placeholder,
 }: {
   autoComplete: "current-password" | "new-password" | "one-time-code";
+  autoFocus: boolean;
   field: TextFieldBinding;
   placeholder: string;
 }) => (
   <Field name={field.name}>
     <SecretInput
       autoComplete={autoComplete}
+      autoFocus={autoFocus}
       onBlur={field.handleBlur}
       onChange={(e) => field.handleChange(e.target.value)}
       placeholder={placeholder}
@@ -99,10 +104,13 @@ export const getOrganizationCallbackUrl = (redirectTo: string) => {
 
 export const PasswordSignInForm = ({
   autoFocus,
+  defaultEmail,
   lastUsed,
   redirectTo,
 }: {
   autoFocus: boolean;
+  /** An address already typed on this page; focus then starts at the password. */
+  defaultEmail: string;
   lastUsed: SignInMethod | null;
   redirectTo: string;
 }) => {
@@ -112,8 +120,8 @@ export const PasswordSignInForm = ({
   const invalidateSession = useInvalidateSession();
   const form = useForm(
     schemaFormOptions({
-      schema: passwordFormSchema,
-      defaultValues: { email: "", password: "" },
+      schema: passwordFormSchema(t("validation.invalidEmail")),
+      defaultValues: { email: defaultEmail, password: "" },
       submitValues: "schema-output",
       onSubmit: async ({ value }) => {
         const { data, error } = await authClient.signIn.email({
@@ -123,9 +131,20 @@ export const PasswordSignInForm = ({
         });
 
         if (error) {
-          analytics.captureError(toAuthClientError(error));
+          analytics.captureError(toAuthClientError(error), {
+            fingerprintKey: "PasswordSignInForm.onSubmit:failure",
+            scope: {
+              type: "handler",
+              handlerId: "PasswordSignInForm.onSubmit:failure",
+            },
+          });
           if (error.status !== HTTP_TOO_MANY_REQUESTS) {
-            notifyUserError(toAuthClientError(error), t("errors.actionFailed"));
+            notifyUserError(
+              toAuthClientError(error),
+              error.code === INVALID_SIGN_IN_CODE
+                ? t("auth.invalidEmailOrPassword")
+                : t("errors.actionFailed"),
+            );
           }
           return;
         }
@@ -168,7 +187,7 @@ export const PasswordSignInForm = ({
       <form.Field name="email">
         {(field) => (
           <EmailCredentialField
-            autoFocus={autoFocus}
+            autoFocus={autoFocus && defaultEmail === ""}
             field={field}
             lastUsed={lastUsed === SIGN_IN_METHOD.password}
           />
@@ -178,6 +197,7 @@ export const PasswordSignInForm = ({
         {(field) => (
           <SecretCredentialField
             autoComplete="current-password"
+            autoFocus={autoFocus && defaultEmail !== ""}
             field={field}
             placeholder={t("auth.password")}
           />

@@ -1,11 +1,12 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import * as v from "valibot";
+
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import { toSafeId } from "@/api/lib/branded-types";
 import { MCP_MODES } from "@/api/mcp/constants";
 import type { McpMode } from "@/api/mcp/constants";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { toMcpTools } from "@/api/mcp/gateway/list-tools";
 import { getMcpInstructions, MCP_INSTRUCTIONS } from "@/api/mcp/instructions";
 import { listMcpResources, readMcpResource } from "@/api/mcp/resources";
@@ -23,8 +24,12 @@ import { MCP_INTERNAL_TOOL_FAILURE } from "@/api/mcp/tool-call-outcome";
 import { namedToolNames, scopeProseToSurface } from "@/api/mcp/tool-mentions";
 import * as toolUtils from "@/api/mcp/tool-utils";
 import { handleMcpToolCall } from "@/api/mcp/tools";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 /**
  * No surface tells a model to call a tool that surface does not list. The
@@ -35,14 +40,9 @@ import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
  * reference, or an error hint the dispatch boundary emits.
  */
 
-let previousFeaturePublicLaw: boolean;
 beforeEach(() => {
-  previousFeaturePublicLaw = env.FEATURE_PUBLIC_LAW;
   // Every gate open: the widest set of texts a surface can serve.
-  env.FEATURE_PUBLIC_LAW = true;
-});
-afterEach(() => {
-  env.FEATURE_PUBLIC_LAW = previousFeaturePublicLaw;
+  testState.setConfig("FEATURE_PUBLIC_LAW", true);
 });
 
 /** Every `description` string anywhere in a JSON value. */
@@ -181,18 +181,21 @@ describe.each(MCP_MODES.map((mode) => ({ mode })))(
       expect(offendersIn(mode, texts)).toEqual([]);
     });
 
-    test("in the connect-time instructions, gate open or closed", () => {
+    test("in the connect-time instructions, gate open or closed", async () => {
       const texts = [{ where: "max", text: MCP_INSTRUCTIONS[mode] }];
       for (const gate of [true, false]) {
-        env.FEATURE_PUBLIC_LAW = gate;
-        texts.push({ where: `gate=${gate}`, text: getMcpInstructions(mode) });
+        testState.setConfig("FEATURE_PUBLIC_LAW", gate);
+        texts.push({
+          where: `gate=${gate}`,
+          text: await getMcpInstructions(mode),
+        });
       }
       expect(offendersIn(mode, texts)).toEqual([]);
     });
 
     test("in every reference resource it serves", async () => {
       const texts: { where: string; text: string }[] = [];
-      for (const resource of listMcpResources(mode)) {
+      for (const resource of await listMcpResources(mode)) {
         texts.push({
           where: resource.uri,
           text: resource.description ?? "",
@@ -207,8 +210,10 @@ describe.each(MCP_MODES.map((mode) => ({ mode })))(
       expect(offendersIn(mode, texts)).toEqual([]);
     });
 
-    test("and points only at reference resources it serves", () => {
-      const served = new Set(listMcpResources(mode).map(({ uri }) => uri));
+    test("and points only at reference resources it serves", async () => {
+      const served = new Set(
+        (await listMcpResources(mode)).map(({ uri }) => uri),
+      );
       const texts = [
         MCP_INSTRUCTIONS[mode],
         ...toMcpTools(listStaticMcpToolDefinitions(mode), { mode }).flatMap(
@@ -239,23 +244,26 @@ describe.each(MCP_MODES.map((mode) => ({ mode })))(
 describe("the dispatch boundary scopes the hints it emits", () => {
   // Every DB seam throws, so the handler fails on its first query and the
   // central pipeline answers with its internal-failure envelope.
-  const throwingScopedDb = asTestRaw<McpRequestContext["scopedDb"]>(() => {
-    throw new Error("database unavailable");
-  });
-  const failingContext = (): McpRequestContext => ({
-    accessibleWorkspaceIds: [],
-    accessibleWorkspaceIdSet: new Set(),
-    accessibleWorkspaceStatusById: new Map(),
-    accessibleWorkspaces: [],
-    grantedScopes: ["stella:search", "stella:read"],
-    memberRole: "owner",
-    organizationId: toSafeId<"organization">("org_1"),
-    recordAuditEvent: asTestRaw(async () => undefined),
-    safeDb: toSafeDbMock(throwingScopedDb),
-    scopedDb: throwingScopedDb,
-    userId: toSafeId<"user">("user_1"),
-    userEmail: "standard@example.test",
-  });
+  const throwingScopedDb = asTestRaw<AuthorizedMcpRequestContext["scopedDb"]>(
+    () => {
+      throw new Error("database unavailable");
+    },
+  );
+  const failingContext = (): AuthorizedMcpRequestContext =>
+    authorizedMcpContextForTest({
+      accessibleWorkspaceIds: [],
+      accessibleWorkspaceIdSet: new Set(),
+      accessibleWorkspaceStatusById: new Map(),
+      accessibleWorkspaces: [],
+      grantedScopes: ["stella:search", "stella:read"],
+      memberRole: "owner",
+      organizationId: toSafeId<"organization">("org_1"),
+      recordAuditEvent: asTestRaw(async () => undefined),
+      safeDb: toSafeDbMock(throwingScopedDb),
+      scopedDb: throwingScopedDb,
+      userId: toSafeId<"user">("user_1"),
+      userEmail: "standard@example.test",
+    });
 
   const INTERNAL_ERROR_ENVELOPE = v.object({
     error: v.object({

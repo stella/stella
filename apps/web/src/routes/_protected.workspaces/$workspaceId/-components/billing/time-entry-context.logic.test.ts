@@ -25,6 +25,7 @@ const entry = {
   narrativeLanguage: null,
   noCharge: false,
   rateAtEntry: 12_000,
+  returnComment: null,
   source: "manual",
   status: "draft",
   taskCode: null,

@@ -1,0 +1,11 @@
+{
+  "id": "embedded-metric-namespaces",
+  "type": "full",
+  "check": [
+    "bun",
+    "--cwd=packages/scripts",
+    "run",
+    "test",
+    "src/embedded-metric-namespaces.test.ts"
+  ]
+}

@@ -3,10 +3,10 @@ import { EventType } from "@tanstack/ai";
 import type { AnyTextAdapter } from "@tanstack/ai";
 import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
 import { Result } from "better-result";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import * as v from "valibot";
+import { afterEach, describe, expect, test } from "bun:test";
 
 import { MODEL_DEFAULTS_LEDGER } from "@stll/ai-catalog/model-defaults-ledger";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
@@ -22,6 +22,11 @@ import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispa
 import { resolveTanStackTextModel } from "@/api/lib/tanstack-ai-generate";
 import { createTanStackTextAdapterFactory } from "@/api/lib/tanstack-ai-models";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+
+const testState = createTestState({ file: import.meta.path, config: env });
+
+const testFetchState = createTestFetch();
 
 const MODEL = MODEL_DEFAULTS_LEDGER.chat.openrouter.candidate.modelId;
 const POLICY_ID = "credential-inference-fixture";
@@ -41,32 +46,7 @@ type FactoryPolicy =
   | { dataClass: "customer"; managedAIResidency: ManagedAIResidency }
   | { dataClass: "public_corpus" };
 
-let previousEnv = {
-  AI_PROVIDER: env.AI_PROVIDER,
-  FEATURE_MANAGED_PROVIDER_CHECKS: env.FEATURE_MANAGED_PROVIDER_CHECKS,
-  OPENROUTER_API_KEY: env.OPENROUTER_API_KEY,
-  OPENROUTER_WIF_AUDIENCE: env.OPENROUTER_WIF_AUDIENCE,
-  OPENROUTER_WIF_POLICY_ID: env.OPENROUTER_WIF_POLICY_ID,
-  OPENROUTER_WIF_STS_REGION: env.OPENROUTER_WIF_STS_REGION,
-  REQUIRE_PERSONAL_AI_KEY: env.REQUIRE_PERSONAL_AI_KEY,
-  USE_MOCK_AI: env.USE_MOCK_AI,
-};
-
-beforeEach(() => {
-  previousEnv = {
-    AI_PROVIDER: env.AI_PROVIDER,
-    FEATURE_MANAGED_PROVIDER_CHECKS: env.FEATURE_MANAGED_PROVIDER_CHECKS,
-    OPENROUTER_API_KEY: env.OPENROUTER_API_KEY,
-    OPENROUTER_WIF_AUDIENCE: env.OPENROUTER_WIF_AUDIENCE,
-    OPENROUTER_WIF_POLICY_ID: env.OPENROUTER_WIF_POLICY_ID,
-    OPENROUTER_WIF_STS_REGION: env.OPENROUTER_WIF_STS_REGION,
-    REQUIRE_PERSONAL_AI_KEY: env.REQUIRE_PERSONAL_AI_KEY,
-    USE_MOCK_AI: env.USE_MOCK_AI,
-  };
-});
-
 afterEach(() => {
-  Object.assign(env, previousEnv);
   resetMetricLineSinkForTesting();
 });
 
@@ -179,6 +159,7 @@ const readFailure = async (adapter: AnyTextAdapter, path: RequestPath) => {
   const chatOptions = {
     model: MODEL,
     messages: [{ role: "user" as const, content: "fixture request" }],
+    threadId: "openrouter-credential-inference-thread",
     logger: resolveDebugOption(false),
   };
   const structuredOptions = { chatOptions, outputSchema };
@@ -212,25 +193,29 @@ const readFailure = async (adapter: AnyTextAdapter, path: RequestPath) => {
 const install401Fetch = () => {
   const originalFetch = globalThis.fetch;
   const requests: { url: URL; authorization: string | null }[] = [];
-  globalThis.fetch = Object.assign(
-    async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
-      const request =
-        input instanceof Request ? input : new Request(input.toString(), init);
-      requests.push({
-        url: new URL(request.url),
-        authorization: request.headers.get("authorization"),
-      });
-      return Response.json(
-        { error: { code: 401, message: "fixture unauthorized" } },
-        { status: 401 },
-      );
-    },
-    { preconnect: originalFetch.preconnect },
+  testFetchState.set(
+    Object.assign(
+      async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+        const request =
+          input instanceof Request
+            ? input
+            : new Request(input.toString(), init);
+        requests.push({
+          url: new URL(request.url),
+          authorization: request.headers.get("authorization"),
+        });
+        return Response.json(
+          { error: { code: 401, message: "fixture unauthorized" } },
+          { status: 401 },
+        );
+      },
+      { preconnect: originalFetch.preconnect },
+    ),
   );
   return {
     requests,
     restore: () => {
-      globalThis.fetch = originalFetch;
+      testFetchState.restore();
     },
   };
 };
@@ -302,14 +287,14 @@ const runFederated401 = async (
 
 describe("federated OpenRouter 401 recovery at the inference boundary", () => {
   test("maps customer eu/us and public-corpus 401s for chat and structured paths", async () => {
-    env.FEATURE_MANAGED_PROVIDER_CHECKS = false;
-    env.OPENROUTER_API_KEY = undefined;
-    env.USE_MOCK_AI = false;
-    env.AI_PROVIDER = "openrouter";
-    env.REQUIRE_PERSONAL_AI_KEY = false;
-    env.OPENROUTER_WIF_POLICY_ID = POLICY_ID;
-    env.OPENROUTER_WIF_AUDIENCE = AUDIENCE;
-    env.OPENROUTER_WIF_STS_REGION = REGION;
+    testState.setConfig("FEATURE_MANAGED_PROVIDER_CHECKS", false);
+    testState.setConfig("OPENROUTER_API_KEY", undefined);
+    testState.setConfig("USE_MOCK_AI", false);
+    testState.setConfig("AI_PROVIDER", "openrouter");
+    testState.setConfig("REQUIRE_PERSONAL_AI_KEY", false);
+    testState.setConfig("OPENROUTER_WIF_POLICY_ID", POLICY_ID);
+    testState.setConfig("OPENROUTER_WIF_AUDIENCE", AUDIENCE);
+    testState.setConfig("OPENROUTER_WIF_STS_REGION", REGION);
     const logger = installRecordingLogger();
     const metricLines: string[] = [];
     setMetricLineSinkForTesting((line) => {
@@ -339,41 +324,21 @@ describe("federated OpenRouter 401 recovery at the inference boundary", () => {
       expect(telemetry).not.toContain(JWT);
       expect(telemetry).not.toContain(FIRST_TOKEN);
       expect(telemetry).not.toContain(NEXT_TOKEN);
-      const metricSchema = v.object({
-        _aws: v.object({
-          CloudWatchMetrics: v.array(
-            v.object({
-              Dimensions: v.array(v.array(v.string())),
-            }),
-          ),
-        }),
-      });
-      const dimensions = metricLines.flatMap((line) =>
-        v
-          .parse(metricSchema, JSON.parse(line))
-          ._aws.CloudWatchMetrics.map((metric) => metric.Dimensions),
-      );
-      expect(dimensions.length).toBeGreaterThan(0);
-      expect(
-        dimensions.every((value) =>
-          value.every(
-            (dimension) =>
-              JSON.stringify(dimension) === JSON.stringify(["outcome"]) ||
-              dimension.length === 0,
-          ),
-        ),
-      ).toBe(true);
+      expect(metricLines.length).toBeGreaterThan(0);
+      for (const line of metricLines) {
+        expect(JSON.parse(line)).not.toHaveProperty("_aws");
+      }
     } finally {
       logger.restore();
     }
   });
 
   test("preserves static and BYOK 401s without invalidating a cached token", async () => {
-    env.FEATURE_MANAGED_PROVIDER_CHECKS = false;
-    env.OPENROUTER_API_KEY = undefined;
-    env.USE_MOCK_AI = false;
-    env.AI_PROVIDER = "openrouter";
-    env.REQUIRE_PERSONAL_AI_KEY = false;
+    testState.setConfig("FEATURE_MANAGED_PROVIDER_CHECKS", false);
+    testState.setConfig("OPENROUTER_API_KEY", undefined);
+    testState.setConfig("USE_MOCK_AI", false);
+    testState.setConfig("AI_PROVIDER", "openrouter");
+    testState.setConfig("REQUIRE_PERSONAL_AI_KEY", false);
     const providerState = createCredentialProvider();
     const first = await providerState.provider.get();
     expect(Result.isOk(first)).toBe(true);

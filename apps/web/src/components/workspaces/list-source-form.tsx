@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
 import { LEGAL_LIST_SOURCE_QUOTE_MAX_LENGTH } from "@stll/api-contract/limits";
 import { Button } from "@stll/ui/button";
 import { Field, FieldError, FieldLabel } from "@stll/ui/field";
@@ -16,16 +17,21 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { PDF_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
+import {
+  resourceMutation,
+  resourceQueryOptions,
+} from "@/lib/workspace-realtime";
 import {
   entityOptions,
   workspaceFilesOptions,
 } from "@/lib/workspaces/queries/entities";
-import { legalListKeys } from "@/lib/workspaces/queries/legal-lists";
 
 export type ListSourceFormProps = {
   workspaceId: string;
@@ -42,12 +48,13 @@ export const ListSourceForm = ({
   onClose,
   onCreated,
 }: ListSourceFormProps) => {
+  const submit = useIdempotentSubmit();
   const t = useTranslations();
   const analytics = useAnalytics();
   const format = useFormatter();
   const queryClient = useQueryClient();
-  const filesView = useQueryView(useQuery(workspaceFilesOptions(workspaceId)));
-  useQueryViewError(filesView);
+  const filesView = queryView(useQuery(workspaceFilesOptions(workspaceId)));
+  useQueryViewError(filesView, "ListSourceForm:query");
   const files = filesView.type === "items" ? filesView.items : [];
   const schema = v.object({
     sourceEntityId: v.pipe(
@@ -73,47 +80,66 @@ export const ListSourceForm = ({
       ),
     ),
   });
-  const create = useMutation({
+  const createSource = resourceMutation({
+    mutation: "createListItemSource",
+    queryClient,
     mutationFn: async ({
-      sourceEntityId,
-      page,
-      quote,
-    }: v.InferOutput<typeof schema>) => {
+      input: { sourceEntityId, page, quote },
+    }: {
+      workspaceId: string;
+      input: v.InferOutput<typeof schema>;
+    }) => {
       const isPdf =
         files.find((file) => file.entityId === sourceEntityId)?.mimeType ===
         PDF_MIME;
       // Resolve a live version at submission, rather than pinning a stale picker entry.
-      const document = await queryClient.query({
-        ...entityOptions(workspaceId, sourceEntityId),
-        staleTime: 0,
-      });
+      const document = await queryClient.query(
+        resourceQueryOptions(
+          {
+            ...entityOptions(workspaceId, sourceEntityId),
+            staleTime: 0,
+          },
+          {
+            resources: [RESOURCE_TYPE.ENTITY],
+            scope: { type: "workspace", workspaceId },
+          },
+        ),
+      );
       const listApi = api.lists({
         workspaceId: toSafeId<"workspace">(workspaceId),
       });
-      return unwrapEden(
-        await listApi["item-sources"].post({
-          listId: toSafeId<"legalList">(listId),
-          itemEntityId: toSafeId<"entity">(itemEntityId),
-          sourceEntityId: document.entityId,
-          sourceEntityVersionId: document.currentVersionId,
-          locator:
-            isPdf && page !== ""
-              ? { type: "pdf-page", pageNumber: Number(page) }
-              : { type: "document" },
-          quote: quote === "" ? null : quote,
+      return unwrapApiResponse(
+        await submit.run({
+          operation: `list-source-create:${workspaceId}`,
+          send: async (creationPayload) =>
+            listApi["item-sources"].post(creationPayload),
+          body: {
+            listId: toSafeId<"legalList">(listId),
+            itemEntityId: toSafeId<"entity">(itemEntityId),
+            sourceEntityId: document.entityId,
+            sourceEntityVersionId: document.currentVersionId,
+            locator:
+              isPdf && page !== ""
+                ? { type: "pdf-page" as const, pageNumber: Number(page) }
+                : { type: "document" as const },
+            quote: quote === "" ? null : quote,
+          },
         }),
       );
     },
-    onSuccess: async () => {
-      // Sources, history, and the fact's firstSource all live below this key.
-      await queryClient.invalidateQueries({
-        queryKey: legalListKeys.items(workspaceId, listId),
-      });
+  });
+  const create = useMutation({
+    mutationFn: async (input: v.InferOutput<typeof schema>) =>
+      await createSource({ workspaceId, input }),
+    onSuccess: () => {
       onCreated?.();
       onClose();
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "ListSourceForm:failure",
+        scope: { type: "handler", handlerId: "ListSourceForm:failure" },
+      });
       notifyUserError(error, t("errors.actionFailed"));
     },
   });

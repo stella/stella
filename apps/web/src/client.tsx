@@ -1,6 +1,9 @@
 import { bootClientRuntime } from "@/lib/analytics/web-hang/client-bootstrap";
 import { installPreloadErrorRecovery } from "@/lib/preload-error-recovery";
+import { runZodWithoutEval } from "@/security/zod-jitless";
 
+// Before any lazily loaded module builds a zod schema.
+runZodWithoutEval();
 // The runtime chunk can fail before any of its modules evaluate.
 installPreloadErrorRecovery();
 bootClientRuntime({

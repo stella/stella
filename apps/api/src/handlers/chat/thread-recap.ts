@@ -11,6 +11,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
 
@@ -119,7 +120,13 @@ export const generateThreadRecapText = async ({
   } catch (error) {
     aiAnalytics.captureError(error);
     if (isUnanticipatedAIFailure(error)) {
-      captureError(error, { threadId, feature: "chat.thread_recap" });
+      captureError(
+        error,
+        handlerErrorContext("chat.generateThreadRecapText", {
+          threadId,
+          feature: "chat.thread_recap",
+        }),
+      );
     }
     return null;
   }

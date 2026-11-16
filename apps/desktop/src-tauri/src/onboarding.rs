@@ -1,7 +1,8 @@
 //! First-run setup: a short tour in its own window that explains what the
-//! app does, asks for the permissions it needs, and ends with one real use
-//! of the clipboard shortcut. The step logic is a pure function over a small
-//! context; this module also owns the device-level progress and the window.
+//! app does, asks for the permissions it needs, and lets the user try the
+//! clipboard shortcut and, where the account has it, dictation. The step
+//! logic is a pure function over a small context; this module also owns the
+//! device-level progress and the window.
 
 use std::sync::Mutex;
 
@@ -12,15 +13,20 @@ use crate::device_preference::DevicePreference;
 use crate::feature_gate::{DesktopFeature, FeatureGates};
 use crate::permissions::{
   DesktopSurface, Permission, PermissionRow, PermissionStatus, required_permissions,
+  surface_available,
 };
+use crate::window_placement::WorkArea;
 
 pub const ONBOARDING_WINDOW_LABEL: &str = "onboarding";
 /// Payload-free: the window re-reads the snapshot.
 pub const CHANGED_EVENT: &str = "onboarding-changed";
 const PROGRESS_FILE_NAME: &str = "onboarding-v1.json";
 const HISTORY_FILE_NAME: &str = "onboarding-history-v1.json";
+/// The setup window's size. The browser harness reads these lines and
+/// renders every step at this size (`tests/desktop-window-sizes.ts`); the
+/// activity step, with its permission row, sets the height.
 const WINDOW_WIDTH: f64 = 620.0;
-const WINDOW_HEIGHT: f64 = 540.0;
+const WINDOW_HEIGHT: f64 = 680.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -31,17 +37,19 @@ pub enum Step {
   Activity,
   Permissions,
   TryIt,
+  Dictation,
   Done,
 }
 
 impl Step {
-  pub const ALL: [Self; 7] = [
+  pub const ALL: [Self; 8] = [
     Self::Welcome,
     Self::Connect,
     Self::HowItWorks,
     Self::Activity,
     Self::Permissions,
     Self::TryIt,
+    Self::Dictation,
     Self::Done,
   ];
 }
@@ -51,7 +59,11 @@ impl Step {
 pub struct FlowContext {
   pub linked: bool,
   pub activity_available: bool,
-  /// Rows left for the Permissions step once Activity asked for its own.
+  /// Dictation is on for the account and this build carries the speech
+  /// engine.
+  pub dictation_available: bool,
+  /// Rows left for the Permissions step once Activity and Dictation asked
+  /// for their own.
   pub has_permission_rows: bool,
   /// Clipboard history exists; managed policy can turn it off, and then
   /// there is no shortcut to try.
@@ -71,6 +83,7 @@ pub fn visible_steps(context: FlowContext, current: Step) -> Vec<Step> {
           Step::Activity => context.activity_available,
           Step::Permissions => context.has_permission_rows,
           Step::TryIt => context.clipboard,
+          Step::Dictation => context.dictation_available,
           Step::Welcome | Step::HowItWorks | Step::Done => true,
         }
     })
@@ -189,6 +202,7 @@ pub fn restarted(progress: Progress) -> Progress {
 #[serde(rename_all = "camelCase")]
 pub enum Introduction {
   ActivityTimeline,
+  Dictation,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -197,6 +211,23 @@ pub struct SetupHistory {
   /// Permissions seen granted; one that goes missing reopens setup for it.
   pub granted: Vec<Permission>,
   pub introduced: Vec<Introduction>,
+}
+
+/// Whether a feature that just became available is introduced now: only once
+/// the first run is over, and only once per feature.
+pub fn should_introduce(
+  progress: Progress,
+  history: &SetupHistory,
+  introduction: Introduction,
+) -> bool {
+  progress.first_run_finished() && !history.introduced.contains(&introduction)
+}
+
+/// Records that the user has seen a feature, in its introduction or the tour.
+pub fn record_introduced(history: &mut SetupHistory, introduction: Introduction) {
+  if !history.introduced.contains(&introduction) {
+    history.introduced.push(introduction);
+  }
 }
 
 /// What the setup window shows: the tour, the permissions that were turned
@@ -333,7 +364,12 @@ pub struct OnboardingSnapshot {
   pub activity_available: bool,
   /// Asked on the Activity step, beside what they enable.
   pub activity_permissions: Vec<Permission>,
+  pub dictation_available: bool,
+  /// Asked on the Dictation step, once dictation is turned on.
+  pub dictation_permissions: Vec<Permission>,
   pub document_app: Option<DocumentApp>,
+  /// Read for the last step, which points at the icon.
+  pub tray_location: Option<TrayLocation>,
 }
 
 async fn permission_rows(app: &AppHandle) -> Result<Vec<PermissionRow>, String> {
@@ -357,15 +393,35 @@ pub fn activity_step_permissions(activity_available: bool) -> &'static [Permissi
   }
 }
 
-/// Whether the Permissions step has rows the Activity step does not ask for.
+/// The permissions the Dictation step asks for, beside the switch that
+/// needs them.
+pub fn dictation_step_permissions(dictation_available: bool) -> &'static [Permission] {
+  if dictation_available {
+    required_permissions(DesktopSurface::Dictation)
+  } else {
+    &[]
+  }
+}
+
+/// Whether the Permissions step has rows that neither the Activity step nor
+/// the Dictation step asks for.
 pub fn has_permission_step_rows(
   activity_available: bool,
+  dictation_available: bool,
   rows: &[PermissionRow],
 ) -> bool {
   let asked_by_activity = activity_step_permissions(activity_available);
-  rows
-    .iter()
-    .any(|row| !asked_by_activity.contains(&row.permission))
+  let asked_by_dictation = dictation_step_permissions(dictation_available);
+  rows.iter().any(|row| {
+    !asked_by_activity.contains(&row.permission)
+      && !asked_by_dictation.contains(&row.permission)
+  })
+}
+
+/// Dictation needs both the account's access and a build with the speech
+/// engine.
+fn dictation_available(app: &AppHandle) -> bool {
+  surface_available(DesktopSurface::Dictation, &app.state::<FeatureGates>())
 }
 
 async fn flow_context(app: &AppHandle) -> FlowContext {
@@ -376,13 +432,19 @@ async fn flow_context(app: &AppHandle) -> FlowContext {
   let activity_available = app
     .state::<FeatureGates>()
     .is_enabled(DesktopFeature::ActivityTimeline);
+  let dictation_available = dictation_available(app);
   // An unreadable snapshot is logged by `permission_rows`; setup then skips
   // the Permissions step rather than failing.
   let rows = permission_rows(app).await.unwrap_or_default();
   FlowContext {
     linked,
     activity_available,
-    has_permission_rows: has_permission_step_rows(activity_available, &rows),
+    dictation_available,
+    has_permission_rows: has_permission_step_rows(
+      activity_available,
+      dictation_available,
+      &rows,
+    ),
     clipboard: !crate::managed_policy::current().clipboard_disabled,
   }
 }
@@ -417,7 +479,15 @@ async fn snapshot(app: &AppHandle) -> Result<OnboardingSnapshot, String> {
     activity_available: context.activity_available,
     activity_permissions: activity_step_permissions(context.activity_available)
       .to_vec(),
+    dictation_available: context.dictation_available,
+    dictation_permissions: dictation_step_permissions(context.dictation_available)
+      .to_vec(),
     document_app,
+    tray_location: if step == Step::Done {
+      read_tray_location(app)
+    } else {
+      None
+    },
   })
 }
 
@@ -475,7 +545,10 @@ pub fn show_if_pending(app: &AppHandle, background_launch: bool) {
 pub fn feature_enabled(app: &AppHandle, feature: DesktopFeature) {
   let introduction = match feature {
     DesktopFeature::ActivityTimeline => Introduction::ActivityTimeline,
-    DesktopFeature::TimeBilling => return,
+    DesktopFeature::Dictation if dictation_available(app) => Introduction::Dictation,
+    DesktopFeature::Dictation
+    | DesktopFeature::DictationCloud
+    | DesktopFeature::LocalAgents => return,
   };
   if app.get_webview_window(ONBOARDING_WINDOW_LABEL).is_some() {
     return;
@@ -485,8 +558,8 @@ pub fn feature_enabled(app: &AppHandle, feature: DesktopFeature) {
     let Ok(mut onboarding) = state.lock() else {
       return;
     };
-    let introduce = onboarding.progress.first_run_finished()
-      && !onboarding.history.introduced.contains(&introduction);
+    let introduce =
+      should_introduce(onboarding.progress, &onboarding.history, introduction);
     if introduce {
       onboarding.mode = Mode::Introduce {
         feature: introduction,
@@ -501,7 +574,7 @@ pub fn feature_enabled(app: &AppHandle, feature: DesktopFeature) {
 
 pub fn show(app: &AppHandle) {
   #[cfg(target_os = "macos")]
-  let _ = app.show();
+  crate::logging::best_effort(app.show(), "show onboarding application");
   if let Some(window) = app.get_webview_window(ONBOARDING_WINDOW_LABEL) {
     if window.show().and_then(|()| window.set_focus()).is_err() {
       tracing::warn!("onboarding window could not be focused");
@@ -567,7 +640,10 @@ pub fn shortcut_pressed(app: &AppHandle) {
       .await
       .is_ok()
     {
-      let _ = app.emit_to(ONBOARDING_WINDOW_LABEL, CHANGED_EVENT, ());
+      crate::logging::best_effort(
+        app.emit_to(ONBOARDING_WINDOW_LABEL, CHANGED_EVENT, ()),
+        "emit onboarding change",
+      );
     }
   });
 }
@@ -623,10 +699,17 @@ pub async fn onboarding_complete(
   let activity = app
     .state::<FeatureGates>()
     .is_enabled(DesktopFeature::ActivityTimeline);
+  let dictation = dictation_available(&app);
   locked(&state)?.update_history(|history| {
     remember_granted(&mut history.granted, &rows);
-    if activity && !history.introduced.contains(&Introduction::ActivityTimeline) {
-      history.introduced.push(Introduction::ActivityTimeline);
+    // The tour showed these features; they are not introduced again.
+    for (shown, introduction) in [
+      (activity, Introduction::ActivityTimeline),
+      (dictation, Introduction::Dictation),
+    ] {
+      if shown {
+        record_introduced(history, introduction);
+      }
     }
   });
   locked(&state)?.save(Progress::Completed);
@@ -651,11 +734,7 @@ pub async fn onboarding_dismiss(app: AppHandle) -> Result<(), String> {
           .granted
           .retain(|permission| !still_off.contains(permission));
       }
-      Mode::Introduce { feature } => {
-        if !progress.introduced.contains(&feature) {
-          progress.introduced.push(feature);
-        }
-      }
+      Mode::Introduce { feature } => record_introduced(progress, feature),
     });
   }
   close_window(&app);
@@ -690,7 +769,10 @@ pub async fn onboarding_restart(app: AppHandle) -> Result<(), String> {
     let progress = restarted(onboarding.progress);
     onboarding.save(progress);
   }
-  let _ = app.emit_to(ONBOARDING_WINDOW_LABEL, CHANGED_EVENT, ());
+  crate::logging::best_effort(
+    app.emit_to(ONBOARDING_WINDOW_LABEL, CHANGED_EVENT, ()),
+    "emit onboarding change",
+  );
   show(&app);
   Ok(())
 }
@@ -698,26 +780,106 @@ pub async fn onboarding_restart(app: AppHandle) -> Result<(), String> {
 /// Opens the main window's settings from the last step.
 #[tauri::command]
 pub async fn onboarding_open_settings(app: AppHandle) -> Result<(), String> {
-  crate::ensure_main_window(&app, "general");
+  crate::ensure_main_window(&app, crate::PreferencesTab::General);
   Ok(())
 }
 
+/// Where the document-app probe is created. Private files open only under the
+/// app's own roots in production; the temp directory is approved in tests alone.
+#[cfg(target_os = "macos")]
+fn document_app_probe_dir() -> Option<std::path::PathBuf> {
+  dirs::cache_dir().map(|root| {
+    root
+      .join(crate::config::APP_DATA_DIR_NAME)
+      .join("document-app-probe")
+  })
+}
+
+/// The screen edge the app's status icon sits on: the menu bar on macOS,
+/// usually the taskbar's notification area on Windows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ScreenEdge {
+  Top,
+  Bottom,
+  Left,
+  Right,
+}
+
+/// Where the status icon sits on its screen, so the last setup step can
+/// point at the real icon rather than describe it.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrayLocation {
+  pub edge: ScreenEdge,
+  /// The icon's centre along that edge: 0 at its left (or top) end, 1 at
+  /// its right (or bottom) end.
+  pub along: f64,
+}
+
+/// Places `icon` on the nearest edge of `screen`. `None` when the icon has
+/// no size or its centre is off that screen, as for an icon Windows keeps in
+/// its hidden overflow.
+fn tray_location(icon: WorkArea, screen: WorkArea) -> Option<TrayLocation> {
+  if icon.width <= 0.0
+    || icon.height <= 0.0
+    || screen.width <= 0.0
+    || screen.height <= 0.0
+  {
+    return None;
+  }
+  let centre_x = icon.x + icon.width / 2.0 - screen.x;
+  let centre_y = icon.y + icon.height / 2.0 - screen.y;
+  if !(0.0..=screen.width).contains(&centre_x)
+    || !(0.0..=screen.height).contains(&centre_y)
+  {
+    return None;
+  }
+  let distances = [
+    (ScreenEdge::Top, centre_y),
+    (ScreenEdge::Bottom, screen.height - centre_y),
+    (ScreenEdge::Left, centre_x),
+    (ScreenEdge::Right, screen.width - centre_x),
+  ];
+  let (edge, _) = distances
+    .into_iter()
+    .min_by(|(_, left), (_, right)| left.total_cmp(right))?;
+  let along = match edge {
+    ScreenEdge::Top | ScreenEdge::Bottom => centre_x / screen.width,
+    ScreenEdge::Left | ScreenEdge::Right => centre_y / screen.height,
+  };
+  Some(TrayLocation { edge, along })
+}
+
+/// Where the status icon is now, read from the OS; `None` when it cannot
+/// tell (no icon yet, or one hidden in an overflow area).
+fn read_tray_location(app: &AppHandle) -> Option<TrayLocation> {
+  let placement = crate::tray::status_icon_placement(app)?;
+  tray_location(placement.frame, placement.screen)
+}
+
 /// The default app for `.docx`, read from the OS. macOS answers for a file,
-/// so a short-lived empty probe file in the temp directory carries the type.
+/// so a short-lived empty probe file in the app cache carries the type.
 #[cfg(target_os = "macos")]
 fn document_app() -> Option<DocumentApp> {
   use objc2_app_kit::NSWorkspace;
   use objc2_foundation::{NSString, NSURL};
 
-  let probe = std::env::temp_dir()
-    .join(format!("stella-document-app-{}.docx", uuid::Uuid::new_v4()));
-  std::fs::write(&probe, []).ok()?;
+  let directory = document_app_probe_dir()?;
+  crate::local_store::create_private_dir(&directory).ok()?;
+  let probe =
+    directory.join(format!("stella-document-app-{}.docx", uuid::Uuid::new_v4()));
+  crate::local_store::open_private(crate::local_store::OpenMode::CreateNew, &probe)
+    .ok()?;
   let url = NSURL::fileURLWithPath(&NSString::from_str(probe.to_str()?));
   let app_path = NSWorkspace::sharedWorkspace()
     .URLForApplicationToOpenURL(&url)
     .and_then(|app| app.path())
     .map(|path| std::path::PathBuf::from(path.to_string()));
-  let _ = std::fs::remove_file(&probe);
+  crate::logging::best_effort(
+    std::fs::remove_file(&probe),
+    "remove document application probe",
+  );
   let app_path = app_path?;
   let info = plist::Value::from_file(app_path.join("Contents/Info.plist")).ok()?;
   let info = info.as_dictionary()?;
@@ -736,26 +898,60 @@ fn document_app() -> Option<DocumentApp> {
 mod tests {
   use super::*;
 
+  /// The probe must sit under a root the production private-file policy
+  /// approves: the temp directory is approved only in test builds, so a probe
+  /// there passes every test while detection fails in the shipped app.
+  #[cfg(target_os = "macos")]
+  #[test]
+  fn document_app_probe_uses_an_approved_production_root() {
+    let directory = document_app_probe_dir().unwrap();
+    assert!(
+      directory.starts_with(
+        dirs::cache_dir()
+          .unwrap()
+          .join(crate::config::APP_DATA_DIR_NAME)
+      )
+    );
+    assert!(!directory.starts_with(std::env::temp_dir()));
+  }
+
   /// Every combination with clipboard history; its absence has its own test.
-  const CONTEXTS: [FlowContext; 8] = {
+  const CONTEXTS: [FlowContext; 16] = {
     let mut contexts = [FlowContext {
       linked: false,
       activity_available: false,
+      dictation_available: false,
       has_permission_rows: false,
       clipboard: true,
-    }; 8];
+    }; 16];
     let mut index = 0;
-    while index < 8 {
+    while index < 16 {
       contexts[index] = FlowContext {
         linked: index & 1 != 0,
         activity_available: index & 2 != 0,
         has_permission_rows: index & 4 != 0,
+        dictation_available: index & 8 != 0,
         clipboard: true,
       };
       index += 1;
     }
     contexts
   };
+
+  /// The step Done follows in `context`.
+  fn last_before_done(context: FlowContext) -> Step {
+    let steps = visible_steps(context, Step::Welcome);
+    steps[steps.len() - 2]
+  }
+
+  /// The step a successful Try it moves to.
+  fn after_try_it(context: FlowContext) -> Step {
+    if context.dictation_available {
+      Step::Dictation
+    } else {
+      Step::Done
+    }
+  }
   const INPUTS: [Input; 3] = [Input::Continue, Input::Back, Input::ShortcutPressed];
 
   /// Every input sequence of length `depth` from Welcome, deterministically.
@@ -774,14 +970,19 @@ mod tests {
   }
 
   #[test]
-  fn done_is_reached_only_through_try_it() {
+  fn done_is_reached_only_through_try_it_or_dictation_after_it() {
     for context in CONTEXTS {
-      for walk in walks(7) {
+      for walk in walks(8) {
         let mut step = Step::Welcome;
         for input in walk {
           let next = next_step(step, input, context);
           if next == Step::Done && step != Step::Done {
-            assert_eq!(step, Step::TryIt, "{context:?}");
+            let expected = if context.dictation_available {
+              Step::Dictation
+            } else {
+              Step::TryIt
+            };
+            assert_eq!(step, expected, "{context:?}");
           }
           step = next;
         }
@@ -792,7 +993,7 @@ mod tests {
   #[test]
   fn every_step_reached_is_visible_and_inapplicable_steps_never_appear() {
     for context in CONTEXTS {
-      for walk in walks(7) {
+      for walk in walks(8) {
         let mut step = Step::Welcome;
         for input in walk {
           step = next_step(step, input, context);
@@ -806,6 +1007,9 @@ mod tests {
           if !context.activity_available {
             assert_ne!(step, Step::Activity);
           }
+          if !context.dictation_available {
+            assert_ne!(step, Step::Dictation);
+          }
         }
       }
     }
@@ -816,9 +1020,12 @@ mod tests {
     for context in CONTEXTS {
       assert_eq!(
         next_step(Step::TryIt, Input::ShortcutPressed, context),
-        Step::Done
+        after_try_it(context)
       );
-      assert_eq!(next_step(Step::TryIt, Input::Continue, context), Step::Done);
+      assert_eq!(
+        next_step(Step::TryIt, Input::Continue, context),
+        after_try_it(context)
+      );
       for step in Step::ALL.into_iter().filter(|step| *step != Step::TryIt) {
         assert_eq!(next_step(step, Input::ShortcutPressed, context), step);
       }
@@ -842,6 +1049,7 @@ mod tests {
     let linked = FlowContext {
       linked: true,
       activity_available: true,
+      dictation_available: true,
       has_permission_rows: true,
       clipboard: true,
     };
@@ -875,7 +1083,7 @@ mod tests {
     for context in CONTEXTS {
       for step in Step::ALL {
         let expected = if step == Step::TryIt {
-          Step::Done
+          after_try_it(context)
         } else {
           step
         };
@@ -900,16 +1108,20 @@ mod tests {
           assert_ne!(step, Step::TryIt, "{context:?}");
         }
       }
-      let before_done = if context.has_permission_rows {
+      let before_done = if context.dictation_available {
+        Step::Dictation
+      } else if context.has_permission_rows {
         Step::Permissions
       } else if context.activity_available {
         Step::Activity
       } else {
         Step::HowItWorks
       };
+      assert_eq!(last_before_done(context), before_done);
       assert_eq!(next_step(before_done, Input::Continue, context), Step::Done);
-      // A resume point saved on Try it before the policy settles on Done.
-      assert_eq!(settle(Step::TryIt, context), Step::Done);
+      // A resume point saved on Try it before the policy settles on the
+      // step after it.
+      assert_eq!(settle(Step::TryIt, context), after_try_it(context));
     }
   }
 
@@ -922,6 +1134,9 @@ mod tests {
       },
       Progress::Replaying {
         resume: Step::Activity,
+      },
+      Progress::FirstRun {
+        resume: Step::Dictation,
       },
     ] {
       let stored = serde_json::to_string(&progress).unwrap();
@@ -942,7 +1157,7 @@ mod tests {
       SetupHistory::default(),
       SetupHistory {
         granted: vec![Permission::Notifications, Permission::Accessibility],
-        introduced: vec![Introduction::ActivityTimeline],
+        introduced: vec![Introduction::ActivityTimeline, Introduction::Dictation],
       },
     ] {
       let stored = serde_json::to_string(&history).unwrap();
@@ -1037,22 +1252,60 @@ mod tests {
   }
 
   #[test]
+  fn dictation_is_offered_after_try_it_and_right_before_done() {
+    for context in CONTEXTS
+      .into_iter()
+      .filter(|context| context.dictation_available)
+    {
+      let steps = visible_steps(context, Step::Welcome);
+      let position = |step: Step| steps.iter().position(|s| *s == step);
+      assert_eq!(
+        position(Step::Dictation),
+        position(Step::TryIt).map(|index| index + 1)
+      );
+      assert_eq!(last_before_done(context), Step::Dictation);
+    }
+  }
+
+  #[test]
   fn the_activity_step_owns_its_permissions_and_the_permissions_step_the_rest() {
     let accessibility_only =
       rows(&[(Permission::Accessibility, PermissionStatus::NotDetermined)]);
-    assert!(!has_permission_step_rows(true, &accessibility_only));
-    assert!(has_permission_step_rows(false, &accessibility_only));
+    assert!(!has_permission_step_rows(true, false, &accessibility_only));
+    assert!(has_permission_step_rows(false, false, &accessibility_only));
     let mixed = rows(&[
       (Permission::Notifications, PermissionStatus::NotDetermined),
       (Permission::Accessibility, PermissionStatus::NotDetermined),
     ]);
-    assert!(has_permission_step_rows(true, &mixed));
-    assert!(!has_permission_step_rows(true, &[]));
+    assert!(has_permission_step_rows(true, false, &mixed));
+    assert!(!has_permission_step_rows(true, false, &[]));
     assert_eq!(
       activity_step_permissions(true),
       required_permissions(DesktopSurface::ActivityDetails)
     );
     assert!(activity_step_permissions(false).is_empty());
+  }
+
+  #[test]
+  fn the_dictation_step_owns_its_permissions_and_the_permissions_step_the_rest() {
+    let dictation_only = rows(&[
+      (Permission::Microphone, PermissionStatus::NotDetermined),
+      (Permission::Accessibility, PermissionStatus::NotDetermined),
+    ]);
+    for activity in [false, true] {
+      assert!(!has_permission_step_rows(activity, true, &dictation_only));
+    }
+    assert!(has_permission_step_rows(false, false, &dictation_only));
+    let mixed = rows(&[
+      (Permission::Notifications, PermissionStatus::NotDetermined),
+      (Permission::Microphone, PermissionStatus::NotDetermined),
+    ]);
+    assert!(has_permission_step_rows(false, true, &mixed));
+    assert_eq!(
+      dictation_step_permissions(true),
+      required_permissions(DesktopSurface::Dictation)
+    );
+    assert!(dictation_step_permissions(false).is_empty());
   }
 
   #[test]
@@ -1106,6 +1359,46 @@ mod tests {
   }
 
   #[test]
+  fn a_feature_is_introduced_once_and_only_after_the_first_run() {
+    for introduction in [Introduction::ActivityTimeline, Introduction::Dictation] {
+      let mut history = SetupHistory::default();
+      for step in Step::ALL {
+        assert!(!should_introduce(
+          Progress::FirstRun { resume: step },
+          &history,
+          introduction
+        ));
+      }
+      let replaying = Progress::Replaying {
+        resume: Step::Welcome,
+      };
+      assert!(should_introduce(
+        Progress::Completed,
+        &history,
+        introduction
+      ));
+      assert!(should_introduce(replaying, &history, introduction));
+      record_introduced(&mut history, introduction);
+      record_introduced(&mut history, introduction);
+      assert_eq!(history.introduced, vec![introduction]);
+      assert!(!should_introduce(
+        Progress::Completed,
+        &history,
+        introduction
+      ));
+      assert!(!should_introduce(replaying, &history, introduction));
+    }
+    // Each feature keeps its own record.
+    let mut history = SetupHistory::default();
+    record_introduced(&mut history, Introduction::ActivityTimeline);
+    assert!(should_introduce(
+      Progress::Completed,
+      &history,
+      Introduction::Dictation
+    ));
+  }
+
+  #[test]
   fn remembering_grants_adds_and_never_forgets() {
     let mut granted = vec![Permission::Accessibility];
     remember_granted(
@@ -1126,5 +1419,90 @@ mod tests {
       &rows(&[(Permission::Notifications, PermissionStatus::Granted)]),
     );
     assert_eq!(granted, before);
+  }
+
+  const SCREEN: WorkArea = WorkArea {
+    x: 0.0,
+    y: 0.0,
+    width: 2880.0,
+    height: 1800.0,
+  };
+
+  fn icon_at(x: f64, y: f64) -> WorkArea {
+    WorkArea {
+      x,
+      y,
+      width: 44.0,
+      height: 44.0,
+    }
+  }
+
+  #[test]
+  fn a_menu_bar_icon_sits_on_the_top_edge_where_it_is_drawn() {
+    let location = tray_location(icon_at(2178.0, 0.0), SCREEN).unwrap();
+    assert_eq!(location.edge, ScreenEdge::Top);
+    assert!((location.along - 2200.0 / 2880.0).abs() < 1e-9);
+  }
+
+  #[test]
+  fn a_taskbar_icon_sits_on_the_bottom_edge_of_its_own_screen() {
+    let second = WorkArea {
+      x: 2880.0,
+      y: 0.0,
+      width: 1920.0,
+      height: 1080.0,
+    };
+    let location = tray_location(icon_at(2880.0 + 1700.0, 1040.0), second).unwrap();
+    assert_eq!(location.edge, ScreenEdge::Bottom);
+    assert!((location.along - 1722.0 / 1920.0).abs() < 1e-9);
+  }
+
+  #[cfg(target_os = "macos")]
+  #[test]
+  fn native_screen_frames_keep_a_secondary_menu_bar_in_its_own_points() {
+    use crate::window_placement::logical_work_area;
+    use objc2_foundation::{NSPoint, NSRect, NSSize};
+
+    // A 1x display beside a 1920-point 2x primary. Global physical
+    // coordinates would also place this icon inside the primary display.
+    let screen = NSRect::new(NSPoint::new(1920.0, 0.0), NSSize::new(1920.0, 1080.0));
+    let icon = NSRect::new(NSPoint::new(2989.0, 1058.0), NSSize::new(22.0, 22.0));
+    let location = tray_location(
+      logical_work_area(1080.0, icon),
+      logical_work_area(1080.0, screen),
+    )
+    .unwrap();
+
+    assert_eq!(location.edge, ScreenEdge::Top);
+    assert!((location.along - 1080.0 / 1920.0).abs() < 1e-9);
+  }
+
+  #[test]
+  fn a_vertical_taskbar_reports_the_position_down_its_edge() {
+    let location = tray_location(icon_at(4.0, 1500.0), SCREEN).unwrap();
+    assert_eq!(location.edge, ScreenEdge::Left);
+    assert!((location.along - 1522.0 / 1800.0).abs() < 1e-9);
+  }
+
+  #[test]
+  fn an_icon_without_a_size_or_off_its_screen_has_no_location() {
+    let hidden = WorkArea {
+      width: 0.0,
+      height: 0.0,
+      ..icon_at(100.0, 100.0)
+    };
+    assert_eq!(tray_location(hidden, SCREEN), None);
+    assert_eq!(tray_location(icon_at(-400.0, 10.0), SCREEN), None);
+  }
+
+  #[test]
+  fn every_location_is_a_fraction_of_its_edge() {
+    for x in (0..2880).step_by(97) {
+      for y in (0..1800).step_by(83) {
+        let icon = icon_at(f64::from(x) - 22.0, f64::from(y) - 22.0);
+        let location = tray_location(icon, SCREEN).unwrap();
+        assert!((0.0..=1.0).contains(&location.along), "{location:?}");
+      }
+    }
   }
 }

@@ -72,7 +72,7 @@ import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserProblem } from "@/lib/errors/user-toast";
 
 /**
  * Why an apply could not reach the document, in words. Total over the block
@@ -425,6 +425,10 @@ export const useReviewActions = ({
   const captureResolveFailure = (context: PersistChangeOptions["context"]) => {
     getAnalytics().captureError(
       new Error(`DOCX suggestion ${context} failed to persist`),
+      {
+        fingerprintKey: "useReviewActions.captureResolveFailure:Error",
+        scope: { type: "handler", handlerId: `docx-suggestion.${context}` },
+      },
     );
   };
 
@@ -433,11 +437,11 @@ export const useReviewActions = ({
   const surfaceBatchResolveToast = useLatestCallback(
     (results: readonly DocxWriteResult[]) => {
       if (results.includes("failed")) {
-        notifyUserError(undefined, t("docxReview.persistFailed"));
+        notifyUserProblem(t("docxReview.persistFailed"));
         return;
       }
       if (results.includes("pending-limit")) {
-        notifyUserError(undefined, t("docxReview.pendingLimitReached"));
+        notifyUserProblem(t("docxReview.pendingLimitReached"));
         return;
       }
       if (results.includes("stale")) {
@@ -656,7 +660,7 @@ export const useReviewActions = ({
       // The staging bridge re-stages any member already taken out of
       // suggested mode once it is pending again.
       releaseClaim(claimed, "rejected");
-      notifyUserError(undefined, t("errors.actionFailed"));
+      notifyUserProblem(t("errors.actionFailed"));
       return;
     }
     for (const { member, rejected } of unstaged) {
@@ -732,7 +736,7 @@ export const useReviewActions = ({
       status === "accepted" &&
       !undoAcceptedMembers(docxEditorRef.current, members)
     ) {
-      notifyUserError(undefined, t("errors.actionFailed"));
+      notifyUserProblem(t("errors.actionFailed"));
       return;
     }
     for (const member of members) {

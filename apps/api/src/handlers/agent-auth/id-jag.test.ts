@@ -2,7 +2,6 @@ import { panic } from "better-result";
 import {
   afterAll,
   afterEach,
-  beforeAll,
   beforeEach,
   describe,
   expect,
@@ -13,6 +12,8 @@ import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import type { CryptoKey, JWK } from "jose";
 import * as v from "valibot";
 
+import { OPAQUE_ORGANIZATION_SLUG_PATTERN } from "@stll/auth-model";
+import { createTestState } from "@stll/test-state";
 import { DAY_IN_MS } from "@stll/time";
 
 import {
@@ -33,23 +34,32 @@ import { oauthClient, organization, user } from "@/api/db/auth-schema";
 import { registrationDailyBudget } from "@/api/db/registration-budget-schema";
 import { rootDb } from "@/api/db/root";
 import { env } from "@/api/env";
-import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
+import { withoutContentEncryptionKeyForTesting } from "@/api/env-content-encryption";
 import {
   agentAuthConfirmRoute,
   agentAuthRoute,
 } from "@/api/handlers/agent-auth/routes";
+import { createHttpApp } from "@/api/http/app";
 import { getAuthIssuerUrl } from "@/api/lib/auth/auth-paths";
 import {
   type LogRecord,
   resetLogSinkForTesting,
   setLogSinkForTesting,
 } from "@/api/lib/observability/logger";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
 import { createHumanSession as createHumanSessionWithJar } from "@/api/tests/helpers/human-session";
 import {
   initAgentAuthTestDb,
   releaseAgentAuthTestDb,
 } from "@/api/tests/helpers/mock-agent-auth-db";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+import { serveForTest } from "@/api/tests/helpers/test-server";
+import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const testState = createTestState({ file: import.meta.path, config: env });
+
+const testFetchState = createTestFetch();
 
 // These tests drive the ID-JAG path end to end against the same
 // better-auth instance + database the API uses at runtime. The external
@@ -57,15 +67,6 @@ import {
 // stubbed `globalThis.fetch` for the issuer's well-known URL. A
 // trusted-issuer row is inserted so the (empty-by-default) allow-list
 // accepts it; every other issuer stays rejected.
-
-let priorStorageSetting = false;
-beforeEach(() => {
-  priorStorageSetting = env.AGENT_CLIENT_STORAGE_V1_ENABLED;
-  env.AGENT_CLIENT_STORAGE_V1_ENABLED = true;
-});
-afterEach(() => {
-  env.AGENT_CLIENT_STORAGE_V1_ENABLED = priorStorageSetting;
-});
 
 type Json = Record<string, unknown>;
 
@@ -81,19 +82,27 @@ const ISSUER = "https://idp.test.stella.dev";
 const JWKS_URL = `${ISSUER}/.well-known/jwks.json`;
 const CLIENT_ID = "test-agent-client";
 
+// Both agent-auth tables over a real socket, as the API serves them.
+const server = serveForTest(
+  createHttpApp({
+    routes: [...agentAuthRoute, ...agentAuthConfirmRoute],
+    middleware: [errorBoundary],
+  }),
+);
+
 let issuerKid: string;
 let issuerPrivateKey: CryptoKey;
 let issuerPublicJwk: JWK;
 const realFetch = globalThis.fetch;
 
 const enableFeature = () => {
-  env.FEATURE_AGENT_ID_JAG = true;
+  testState.setConfig("FEATURE_AGENT_ID_JAG", true);
 };
 const disableFeature = () => {
-  env.FEATURE_AGENT_ID_JAG = false;
+  testState.setConfig("FEATURE_AGENT_ID_JAG", false);
 };
 
-beforeAll(async () => {
+testState.beforeAll(async () => {
   await initAgentAuthTestDb();
   const { privateKey, publicKey } = await generateKeyPair("ES256", {
     extractable: true,
@@ -101,7 +110,10 @@ beforeAll(async () => {
   issuerPrivateKey = privateKey;
   issuerKid = "test-issuer-key";
   issuerPublicJwk = { ...(await exportJWK(publicKey)), kid: issuerKid };
+});
 
+beforeEach(() => {
+  testState.setConfig("AGENT_CLIENT_STORAGE_V1_ENABLED", true);
   // Stub only the issuer JWKS URL; everything else hits the real fetch.
   const resolveUrl = (input: Parameters<typeof fetch>[0]): string => {
     if (typeof input === "string") {
@@ -122,21 +134,19 @@ beforeAll(async () => {
     }
     return await realFetch(input, init);
   };
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test stub: the call signature matches, but `typeof fetch` also carries a `preconnect` static this stub does not need
-  globalThis.fetch = fetchStub as typeof fetch;
+  testFetchState.set(asFetchMock(fetchStub));
 });
 
 afterAll(async () => {
-  globalThis.fetch = realFetch;
-  disableFeature();
+  await server.stop();
   await releaseAgentAuthTestDb();
 });
 
 afterEach(async () => {
+  testFetchState.restore();
   await rootDb
     .delete(agentTrustedIssuer)
     .where(eq(agentTrustedIssuer.issuer, ISSUER));
-  disableFeature();
 });
 
 const trustIssuer = async (attestationPolicy?: unknown) => {
@@ -190,7 +200,7 @@ const mintIdJag = async (overrides: IdJagOverrides = {}): Promise<string> => {
 };
 
 const postIdentity = async (body: Json) =>
-  await agentAuthRoute.handle(
+  await server.fetch(
     new Request(`${BASE}${AGENT_AUTH_IDENTITY_PATH}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -199,7 +209,7 @@ const postIdentity = async (body: Json) =>
   );
 
 const postToken = async (body: Json) =>
-  await agentAuthRoute.handle(
+  await server.fetch(
     new Request(`${BASE}${AGENT_AUTH_TOKEN_PATH}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -208,7 +218,7 @@ const postToken = async (body: Json) =>
   );
 
 const postConfirm = async (body: Json, cookieHeader: string) =>
-  await agentAuthConfirmRoute.handle(
+  await server.fetch(
     new Request(`${BASE}${AGENT_AUTH_CONFIRM_PATH}`, {
       method: "POST",
       headers: { "content-type": "application/json", cookie: cookieHeader },
@@ -339,8 +349,7 @@ describe("agent-auth ID-JAG storage configuration", () => {
       sub: `sub-stepup-${Bun.randomUUIDv7()}`,
     };
     await createHumanSession(stepUpIdentity.email);
-    const originalKey = envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY;
-    envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY = undefined;
+    const restoreKey = withoutContentEncryptionKeyForTesting();
     try {
       for (const identity of [readyIdentity, stepUpIdentity]) {
         const response = await postIdentity(
@@ -353,7 +362,7 @@ describe("agent-auth ID-JAG storage configuration", () => {
         expect(body["claim_token"]).toBeUndefined();
       }
     } finally {
-      envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY = originalKey;
+      restoreKey();
     }
   });
 });
@@ -444,13 +453,44 @@ describe("agent-auth ID-JAG new identity (auto-provision)", () => {
         .where(eq(organization.id, delegation.organizationId))
         .limit(1)
     ).at(0);
-    expect(createdOrganization?.slug).toMatch(
-      /^agent-[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u,
-    );
+    expect(createdOrganization?.slug).toMatch(OPAQUE_ORGANIZATION_SLUG_PATTERN);
   });
 });
 
 describe("agent-auth ID-JAG replay + freshness", () => {
+  test.each([
+    ["an object without requiredAmr", {}],
+    ["an empty requiredAmr list", { requiredAmr: [] }],
+    ["a non-array requiredAmr", { requiredAmr: "mfa" }],
+    ["a requiredAmr list with a non-string value", { requiredAmr: [1] }],
+    ["an unknown policy key", { requiredAmr: ["mfa"], mode: "any" }],
+  ])("rejects malformed issuer attestation policy: %s", async (_, policy) => {
+    enableFeature();
+    await trustIssuer(policy);
+    const assertion = await mintIdJag({ amr: ["mfa"] });
+
+    const response = await postIdentity(identityAssertionBody(assertion));
+
+    expect(response.status).toBe(401);
+    expect((await readJson(response))["error"]).toBe("invalid_assertion");
+  });
+
+  test("requires every configured issuer AMR value", async () => {
+    enableFeature();
+    await trustIssuer({ requiredAmr: ["pwd", "mfa"] });
+
+    const missing = await postIdentity(
+      identityAssertionBody(await mintIdJag({ amr: ["pwd"] })),
+    );
+    const satisfied = await postIdentity(
+      identityAssertionBody(await mintIdJag({ amr: ["pwd", "mfa"] })),
+    );
+
+    expect(missing.status).toBe(401);
+    expect((await readJson(missing))["error"]).toBe("invalid_assertion");
+    expect(satisfied.status).toBe(200);
+  });
+
   test("a replayed jti is rejected", async () => {
     enableFeature();
     await trustIssuer();
@@ -591,7 +631,7 @@ describe("agent-auth ID-JAG full exchange", () => {
     enableFeature();
     await trustIssuer();
     for (const mode of ["error", "no_change"] as const) {
-      env.AGENT_CLIENT_STORAGE_V1_ENABLED = false;
+      testState.setConfig("AGENT_CLIENT_STORAGE_V1_ENABLED", false);
       const assertion = await mintIdJag({
         email: `idjag-deferred-${Bun.randomUUIDv7()}@external.test`,
         sub: `sub-deferred-${Bun.randomUUIDv7()}`,
@@ -629,7 +669,7 @@ describe("agent-auth ID-JAG full exchange", () => {
         records.push(record);
       });
       try {
-        env.AGENT_CLIENT_STORAGE_V1_ENABLED = true;
+        testState.setConfig("AGENT_CLIENT_STORAGE_V1_ENABLED", true);
         const token = await postToken({
           grant_type: AGENT_AUTH_JWT_BEARER_GRANT_TYPE,
           assertion: String(identityBody["identity_assertion"]),

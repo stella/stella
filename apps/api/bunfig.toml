@@ -1,0 +1,9 @@
+[install]
+# Fail on a missing import instead of installing it at run time.
+auto = "disable"
+
+[test]
+preload = [
+  "./src/tests/statement-ceiling-hooks.ts",
+  "./src/tests/hermetic-file-deletion-preload.ts",
+]

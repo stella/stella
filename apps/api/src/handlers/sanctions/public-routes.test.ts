@@ -1,14 +1,23 @@
 import { Result } from "better-result";
-import { describe, expect, mock, test } from "bun:test";
-import Elysia from "elysia";
+import { afterEach, describe, expect, mock, test } from "bun:test";
 
+import { MAX_CONTACT_NATIONALITY_CODES } from "@stll/api-contract/contact-write";
 import { COUNTRY_CODES } from "@stll/country-codes";
+import { createTestState } from "@stll/test-state";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { env } from "@/api/env";
 import { createPublicSanctionsRoute } from "@/api/handlers/sanctions/public-routes";
+import { createHttpApp } from "@/api/http/app";
+import {
+  CACHE_CONTROL_HEADER,
+  PRIVATE_CACHE_CONTROL,
+  responseCachePolicy,
+} from "@/api/http/cache";
+import { routes } from "@/api/http/route";
+import type { RouteDefinition } from "@/api/http/route";
 import { isSafePublicHandler } from "@/api/lib/api-handlers";
-import { MAX_CONTACT_NATIONALITY_CODES } from "@/api/lib/business-registries/nationality-codes";
+import { defineEndpoint } from "@/api/lib/endpoints";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { SANCTIONS_WARMING_RETRY_AFTER_SECONDS } from "@/api/lib/lists/sanctions/public-screening";
 import { SanctionsPublicRoleError } from "@/api/lib/lists/sanctions/read-db";
@@ -19,17 +28,17 @@ import {
   screenSanctionsSubject,
   unavailableSanctionsScreening,
 } from "@/api/lib/lists/sanctions/screening-service";
-import { answerRequestError } from "@/api/lib/observability/request-lifecycle";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { InMemoryRateLimitContext } from "@/api/lib/rate-limit/rate-limit";
-import {
-  CACHE_CONTROL_HEADER,
-  PRIVATE_CACHE_CONTROL,
-} from "@/api/lib/security-headers";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
+import { serveForTest } from "@/api/tests/helpers/test-server";
+import type { TestServer } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 // @ts-expect-error The anonymous boundary must not accept a tenant-scoped handle.
 const scopedHandleIsPublic: ScopedDb extends SanctionsPublicReadDb
@@ -63,6 +72,13 @@ const testDb = (
     ),
   );
 
+const servers: TestServer[] = [];
+afterEach(async () => {
+  await Promise.all(
+    servers.splice(0).map(async (server) => await server.stop()),
+  );
+});
+
 const appWith = (screen: typeof screenSanctionsSubject, db = testDb()) => {
   const route = createPublicSanctionsRoute({
     db,
@@ -74,8 +90,27 @@ const appWith = (screen: typeof screenSanctionsSubject, db = testDb()) => {
       generator: () => "test-client",
     },
   });
-  return { route, app: new Elysia().onError(answerRequestError).use(route) };
+  const app = serveForTest(
+    createHttpApp({
+      routes: [
+        ...route,
+        // An unbudgeted sibling, to show the budget stays on its own route.
+        ...routes({
+          "/other": { GET: defineEndpoint.public({}, () => "ok") },
+        }),
+      ],
+      middleware: [responseCachePolicy, errorBoundary],
+    }),
+  );
+  servers.push(app);
+  return { route, app };
 };
+
+/** The handler a safe factory registered, behind its route definition. */
+const handlerOf = (definition: RouteDefinition | undefined): unknown =>
+  definition !== undefined && "handler" in definition
+    ? definition.handler
+    : undefined;
 
 const clearScreen = () =>
   mock<typeof screenSanctionsSubject>(async () =>
@@ -103,7 +138,7 @@ describe("anonymous sanctions search", () => {
         }),
       ),
     );
-    const response = await app.handle(
+    const response = await app.fetch(
       request({ type: "organization", name: "Example Trading" }),
     );
     const body = asTestRaw<{ retryAfterSeconds: number | null }>(
@@ -133,7 +168,7 @@ describe("anonymous sanctions search", () => {
           ),
         ),
       );
-      const response = await app.handle(
+      const response = await app.fetch(
         request({ type: "organization", name: "Example Trading" }),
       );
       expect(response.status).toBe(200);
@@ -172,7 +207,7 @@ describe("anonymous sanctions search", () => {
       Result.ok(partial),
     );
     const { app } = appWith(screen);
-    const response = await app.handle(
+    const response = await app.fetch(
       request({ type: "organization", name: "Synthetic Company" }),
     );
     expect(response.status).toBe(200);
@@ -185,7 +220,7 @@ describe("anonymous sanctions search", () => {
   test("is a safe anonymous POST and labels lists without firm jurisdictions", async () => {
     const screen = clearScreen();
     const { app, route } = appWith(screen);
-    const response = await app.handle(
+    const response = await app.fetch(
       request({
         type: "organization",
         name: "Example Trading",
@@ -205,16 +240,18 @@ describe("anonymous sanctions search", () => {
       },
       practiceJurisdictions: [],
     });
-    const mounted = route.routes.filter(
-      ({ path }) => path === "/sanctions/search",
-    );
+    const mounted = route.filter(({ path }) => path === "/sanctions/search");
     expect(mounted).toHaveLength(1);
     expect(mounted.at(0)?.method).toBe("POST");
-    expect(isSafePublicHandler(mounted.at(0)?.handler)).toBe(true);
-    expect(
-      (await app.handle(new Request("http://localhost/sanctions/search")))
-        .status,
-    ).toBe(404);
+    expect(isSafePublicHandler(handlerOf(mounted.at(0)?.definition))).toBe(
+      true,
+    );
+    // Another method on the search path is refused and names the one served.
+    const wrongMethod = await app.fetch(
+      new Request("http://localhost/sanctions/search"),
+    );
+    expect(wrongMethod.status).toBe(405);
+    expect(wrongMethod.headers.get("allow")).toBe("POST");
   });
 
   test("retains partial date precision and validates nationality codes", async () => {
@@ -225,7 +262,7 @@ describe("anonymous sanctions search", () => {
       { precision: "month", year: 1980, month: 2 },
       { precision: "day", year: 1980, month: 2, day: 29 },
     ]) {
-      const response = await app.handle(
+      const response = await app.fetch(
         request({
           type: "person",
           firstName: " Alex ",
@@ -248,7 +285,7 @@ describe("anonymous sanctions search", () => {
     }
     expect(
       (
-        await app.handle(
+        await app.fetch(
           request({ type: "person", firstName: "Alex", lastName: "Tester" }),
         )
       ).status,
@@ -272,7 +309,7 @@ describe("anonymous sanctions search", () => {
         nationalityCodes: ["ZZ"],
       },
     ]) {
-      expect([400, 422]).toContain((await app.handle(request(subject))).status);
+      expect([400, 422]).toContain((await app.fetch(request(subject))).status);
     }
     expect(screen.mock.calls).toHaveLength(count);
   });
@@ -280,20 +317,19 @@ describe("anonymous sanctions search", () => {
   test("bounds searches on the mounted route without affecting siblings", async () => {
     const screen = clearScreen();
     const { app } = appWith(screen);
-    app.get("/other", () => "ok");
     for (let index = 0; index < 20; index += 1) {
       expect(
-        (await app.handle(request({ type: "organization", name: "Example" })))
+        (await app.fetch(request({ type: "organization", name: "Example" })))
           .status,
       ).toBe(200);
     }
     expect(
-      (await app.handle(request({ type: "organization", name: "Example" })))
+      (await app.fetch(request({ type: "organization", name: "Example" })))
         .status,
     ).toBe(429);
     expect(screen.mock.calls).toHaveLength(20);
     expect(
-      (await app.handle(new Request("http://localhost/other"))).status,
+      (await app.fetch(new Request("http://localhost/other"))).status,
     ).toBe(200);
   });
 
@@ -322,7 +358,7 @@ describe("anonymous sanctions search", () => {
     const requests = Array.from(
       { length: maximum },
       async () =>
-        await appWith(screen, db).app.handle(
+        await appWith(screen, db).app.fetch(
           request({ type: "organization", name: "Held" }),
         ),
     );
@@ -330,7 +366,7 @@ describe("anonymous sanctions search", () => {
       await allStarted.promise;
       const { app } = appWith(screen, db);
       const began = performance.now();
-      const rejected = await app.handle(
+      const rejected = await app.fetch(
         request({ type: "organization", name: "Private Admission Sentinel" }),
       );
       expect(rejected.status).toBe(503);
@@ -360,7 +396,7 @@ describe("anonymous sanctions search", () => {
         Array.from({ length: maximum }, () => 200),
       );
       expect(
-        (await app.handle(request({ type: "organization", name: "Released" })))
+        (await app.fetch(request({ type: "organization", name: "Released" })))
           .status,
       ).toBe(200);
     } finally {
@@ -396,13 +432,13 @@ describe("anonymous sanctions search", () => {
         count += 1
       ) {
         expect(
-          (await app.handle(request({ type: "organization", name: "Example" })))
+          (await app.fetch(request({ type: "organization", name: "Example" })))
             .status,
         ).toBe(500);
       }
       expect(
         (
-          await appWith(clearScreen()).app.handle(
+          await appWith(clearScreen()).app.fetch(
             request({ type: "organization", name: "Recovered" }),
           )
         ).status,
@@ -416,7 +452,7 @@ describe("anonymous sanctions search", () => {
     const marker = "Private Validation Sentinel";
     const name = marker.padEnd(600, "x");
     expect(name.length).toBeGreaterThan(512);
-    const response = await app.handle(request({ type: "organization", name }));
+    const response = await app.fetch(request({ type: "organization", name }));
     expect(response.status).toBe(422);
     expect(await response.text()).not.toContain(marker);
     expect(screen.mock.calls).toHaveLength(0);
@@ -445,11 +481,11 @@ describe("anonymous sanctions search", () => {
               lastName: "Tester",
               [field]: input,
             };
-      expect((await app.handle(request(subject(value)))).status).toBe(200);
+      expect((await app.fetch(request(subject(value)))).status).toBe(200);
       expect(validateRole.mock.calls).toHaveLength(1);
       expect(screen.mock.calls).toHaveLength(1);
       for (const input of [`${value}a`, ""]) {
-        const response = await app.handle(request(subject(input)));
+        const response = await app.fetch(request(subject(input)));
         expect(response.status).toBe(422);
         expect(response.headers.get(CACHE_CONTROL_HEADER)).toBe(
           PRIVATE_CACHE_CONTROL,
@@ -464,7 +500,7 @@ describe("anonymous sanctions search", () => {
       if (field === "name") {
         screen.mockImplementationOnce(screenSanctionsSubject);
       }
-      const blank = await app.handle(request(subject(" ")));
+      const blank = await app.fetch(request(subject(" ")));
       // The full person's other name still supplies a usable identity.
       expect(blank.status).toBe(field === "name" ? 400 : 200);
     },
@@ -477,7 +513,7 @@ describe("anonymous sanctions search", () => {
     );
     const { app } = appWith(screen, testDb(validateRole));
     const subject = { type: "person", firstName: "Alex", lastName: "Tester" };
-    const valid = await app.handle(
+    const valid = await app.fetch(
       request({ ...subject, nationalityCodes: [...COUNTRY_CODES] }),
     );
     expect(valid.status).toBe(200);
@@ -487,7 +523,7 @@ describe("anonymous sanctions search", () => {
         String.fromCodePoint(65 + Math.floor(index / 26), 65 + (index % 26)),
     );
     // Distinct syntactically valid codes isolate cardinality from uniqueness.
-    const boundary = await app.handle(
+    const boundary = await app.fetch(
       request({
         ...subject,
         nationalityCodes: distinct.slice(0, MAX_CONTACT_NATIONALITY_CODES),
@@ -498,7 +534,7 @@ describe("anonymous sanctions search", () => {
       PRIVATE_CACHE_CONTROL,
     );
     for (const nationalityCodes of [distinct, ["CZ", "CZ"]]) {
-      const response = await app.handle(
+      const response = await app.fetch(
         request({ ...subject, nationalityCodes }),
       );
       expect(response.status).toBe(422);
@@ -520,9 +556,7 @@ describe("anonymous sanctions search", () => {
       `Registered ${"r ".repeat(249)}`.slice(0, 512),
       "Registered ".repeat(46),
     ]) {
-      const response = await app.handle(
-        request({ type: "organization", name }),
-      );
+      const response = await app.fetch(request({ type: "organization", name }));
       expect(response.status).toBe(400);
       expect(await response.text()).not.toContain(name);
     }
@@ -533,7 +567,7 @@ describe("anonymous sanctions search", () => {
   test("accepts legitimate names beyond the previous twelve-token cap", async () => {
     const screen = clearScreen();
     const { app } = appWith(screen);
-    const response = await app.handle(
+    const response = await app.fetch(
       request({
         type: "person",
         firstName: "Abu Muhammad Abd al-Rahman bin Ali",
@@ -553,7 +587,7 @@ describe("anonymous sanctions search", () => {
         Result.err(new SanctionsPublicRoleError({ message: marker })),
       ),
     );
-    const response = await app.handle(
+    const response = await app.fetch(
       request({ type: "organization", name: "Example" }),
     );
     expect(response.status).toBe(500);
@@ -565,7 +599,7 @@ describe("anonymous sanctions search", () => {
     const analytics = installRecordingAnalytics();
     const logger = installRecordingLogger();
     const previousDebug = env.DEBUG_UNREDACTED_ERRORS;
-    env.DEBUG_UNREDACTED_ERRORS = true;
+    testState.setConfig("DEBUG_UNREDACTED_ERRORS", true);
     const secret = "Private Query Sentinel";
     try {
       for (const screen of [
@@ -578,7 +612,7 @@ describe("anonymous sanctions search", () => {
         },
       ]) {
         const { app } = appWith(screen);
-        const response = await app.handle(
+        const response = await app.fetch(
           request({ type: "organization", name: secret }),
         );
         expect([400, 500]).toContain(response.status);
@@ -589,7 +623,7 @@ describe("anonymous sanctions search", () => {
       expect(JSON.stringify(logger.records)).not.toContain(secret);
       expect(JSON.stringify(analytics.events)).not.toContain(secret);
     } finally {
-      env.DEBUG_UNREDACTED_ERRORS = previousDebug;
+      testState.setConfig("DEBUG_UNREDACTED_ERRORS", previousDebug);
       logger.restore();
       analytics.restore();
     }
@@ -619,16 +653,16 @@ test("public identity responses are never cached, including validation and serve
     { type: "organization", name: "---" },
     { type: "organization" },
   ]) {
-    const response = await app.handle(request(subject));
+    const response = await app.fetch(request(subject));
     expect(response.headers.get(CACHE_CONTROL_HEADER)).toBe(
       PRIVATE_CACHE_CONTROL,
     );
     expect([200, 400, 422]).toContain(response.status);
   }
   for (let index = 0; index < 20; index += 1) {
-    await app.handle(request({ type: "organization", name: "Example" }));
+    await app.fetch(request({ type: "organization", name: "Example" }));
   }
-  const limited = await app.handle(
+  const limited = await app.fetch(
     request({ type: "organization", name: "Example" }),
   );
   expect(limited.status).toBe(429);
@@ -636,7 +670,7 @@ test("public identity responses are never cached, including validation and serve
   const failed = appWith(async () => {
     throw new TypeError("Matcher unavailable");
   }).app;
-  const error = await failed.handle(
+  const error = await failed.fetch(
     request({ type: "organization", name: "Example" }),
   );
   expect(error.status).toBe(500);
@@ -670,7 +704,7 @@ test.each([
       Result.ok(undefined),
     );
     const { app } = appWith(screen, testDb(validateRole));
-    const response = await app.handle(
+    const response = await app.fetch(
       new Request("http://localhost/sanctions/search", {
         method: "POST",
         headers: { "content-type": contentType },
@@ -686,11 +720,11 @@ test.each([
     expect(screen.mock.calls).toHaveLength(0);
     for (let count = 1; count < 20; count += 1) {
       expect(
-        (await app.handle(request({ type: "organization", name: "Example" })))
+        (await app.fetch(request({ type: "organization", name: "Example" })))
           .status,
       ).toBe(200);
     }
-    const refused = await app.handle(
+    const refused = await app.fetch(
       request({ type: "organization", name: "Example" }),
     );
     expect(refused.status).toBe(429);

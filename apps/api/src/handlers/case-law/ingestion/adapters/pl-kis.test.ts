@@ -1,29 +1,19 @@
 import { panic, Result } from "better-result";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 
 import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
 import { sha256Hex as legacySha256Hex } from "@stll/sha256/node";
 
 import {
-  decodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/handlers/case-law/ingestion/adapter";
-/**
- * pl-kis against payloads eureka.mf.gov.pl served.
- *
- * One listing page and one detail per ingested category are captured verbatim
- * with provenance sidecars. Paging, resuming and the tip are driven through a
- * stubbed transport, because the behaviour under test is the cursor's.
- */
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
-import {
-  assemblePlKisDecision,
+  assemblePlKisDecision as uncheckedAssemblePlKisDecision,
   encodePlKisCursor,
   parsePlKisCursor,
   parsePlKisProvision,
   parsePlKisSlice,
   PL_KIS_INCLUDED_CATEGORIES,
+  PL_KIS_LISTING_COLUMNS,
   PL_KIS_UNDATED_SLICE,
+  PL_KIS_UNDIVIDED_DOCUMENT,
   plKisAdapter,
   plKisCategoryById,
   plKisCategoryLabel,
@@ -41,15 +31,41 @@ import {
   readPlKisListing,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-kis";
 import type { PlKisBuildResult } from "@/api/handlers/case-law/ingestion/adapters/pl-kis";
-import { parsePlKisDocumentHtml } from "@/api/handlers/case-law/ingestion/parsers/pl-kis";
+import { parsePlKisDocumentHtml as uncheckedParsePlKisDocumentHtml } from "@/api/handlers/case-law/ingestion/parsers/pl-kis";
 import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
-import { toPlainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import {
+  decodeSourceRawEnvelope,
+  encodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  toPlainTextIngestionResult,
+} from "@/api/lib/legal-search/ingestion-types";
+/**
+ * pl-kis against payloads eureka.mf.gov.pl served.
+ *
+ * One listing page and one detail per ingested category are captured verbatim
+ * with provenance sidecars. Paging, resuming and the tip are driven through a
+ * stubbed transport, because the behaviour under test is the cursor's.
+ */
+import type {
+  IngestionResult,
+  StoredRawReparseInput,
+} from "@/api/lib/legal-search/ingestion-types";
 import { rehydrateMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
-import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";
+import {
+  AST_STRUCTURE_DEGRADED,
+  validateAst,
+} from "@/api/lib/legal-search/parsers/validate-ast";
+import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+import { installTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import { PL_KIS_METADATA_URL_SCHEMA } from "./pl-kis.metadata-urls";
+
+const assemblePlKisDecision = guardParser(uncheckedAssemblePlKisDecision);
+
+const parsePlKisDocumentHtml = guardParser(uncheckedParsePlKisDocumentHtml);
 
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
 
@@ -153,10 +169,9 @@ const urlOf = (input: string | URL | Request): string => {
 const stubPublisher = (
   answer: (call: Call) => Response,
 ): { calls: Call[]; restore: () => void } => {
-  const original = globalThis.fetch;
   const calls: Call[] = [];
-  globalThis.fetch = asFetchMock(
-    async (input: string | URL | Request, init?: RequestInit) => {
+  const installation = installTestFetch(
+    asFetchMock(async (input: string | URL | Request, init?: RequestInit) => {
       const call = {
         url: urlOf(input),
         method: init?.method ?? "GET",
@@ -164,14 +179,9 @@ const stubPublisher = (
       };
       calls.push(call);
       return await Promise.resolve(answer(call));
-    },
+    }),
   );
-  return {
-    calls,
-    restore: () => {
-      globalThis.fetch = original;
-    },
-  };
+  return { calls, restore: installation.restore };
 };
 
 const json = (body: unknown, status = 200): Response =>
@@ -272,8 +282,11 @@ describe("the search request", () => {
     const body: unknown = JSON.parse(
       plKisListingBody({
         categories: [1],
-        issuedFrom: "2010-03-01",
-        issuedTo: "2010-03-31",
+        issueDateWindow: {
+          field: "DT_WYD",
+          from: "2010-03-01",
+          to: "2010-03-31",
+        },
       }),
     );
     expect(body).toMatchObject({
@@ -326,6 +339,12 @@ const CAPTURED = PL_KIS_INCLUDED_CATEGORIES.filter(
   ({ slug }) => slug !== "19-spor",
 );
 
+/** Captured rows that state no issue date: the walk reads them as undated. */
+const UNDATED_CAPTURES: ReadonlySet<string> = new Set([
+  "20-broszura",
+  "27-pigulka",
+]);
+
 describe("every ingested category, as the service served it", () => {
   for (const category of CAPTURED) {
     test(`${category.slug}: keyed, typed and read`, async () => {
@@ -333,9 +352,33 @@ describe("every ingested category, as the service served it", () => {
       expect(decision.sourceDocumentId).toBe(plKisDocumentIdOf(row));
       expect(decision.sourceDocumentId).toMatch(/^\d+$/u);
       expect(decision.decisionType === category.decisionType).toBe(true);
-      expect(decision.caseNumber === String(row["SYG"]).trim()).toBe(true);
-      expect(decision.court.length).toBeGreaterThan(0);
-      expect(decision.decisionDate).toMatch(/^\d{4}-\d{2}-\d{2}$/u);
+      const signature =
+        category.fields.signature === null
+          ? undefined
+          : row[category.fields.signature];
+      if (signature !== undefined && typeof signature !== "string") {
+        throw new TypeError("The captured publisher signature is not a string");
+      }
+      expect(
+        decision.caseNumber === (signature?.trim() ?? plKisDocumentIdOf(row)),
+      ).toBe(true);
+
+      const authorities =
+        category.fields.authority === null
+          ? []
+          : row[category.fields.authority];
+      expect(decision.court).toBe(
+        Array.isArray(authorities) ? (authorities.at(0) ?? "") : "",
+      );
+      // A row states its date in the field its template names, or states
+      // none and is read as undated; a misnamed field would read every row
+      // of the category as undated.
+      const issued = row[category.fields.date];
+      expect(issued === undefined).toBe(UNDATED_CAPTURES.has(category.slug));
+      if (issued !== undefined) {
+        expect(issued).toMatch(/^\d{4}-\d{2}-\d{2}$/u);
+      }
+      expect(decision.decisionDate === issued).toBe(true);
       expect(decision.fulltext?.length ?? 0).toBeGreaterThan(100);
       expect(decision.isListingOnly).toBeUndefined();
       // Nothing the service states is a field the inventory has not decided.
@@ -356,6 +399,9 @@ describe("every ingested category, as the service served it", () => {
       }
     });
 
+    if (category.fields.signature !== "SYG") {
+      continue;
+    }
     test(`${category.slug}: the signature is a Polish docket`, async () => {
       const rows = await readListingFixture(category.slug);
       for (const row of rows) {
@@ -470,7 +516,107 @@ describe("every ingested category, as the service served it", () => {
       expect(built.decision.sourceRawObjects?.["document-pdf"]?.bytes).toEqual(
         pdfBytes,
       );
+      const decision = built.decision;
+      const part = "document-pdf";
+      const input = {
+        raw: new TextEncoder().encode(
+          encodeSourceRawEnvelope(
+            decodeSourceRawEnvelope(decision.sourceRaw ?? "") ??
+              panic("Missing envelope"),
+            {
+              [part]: {
+                location: part,
+                sha256: legacySha256Hex(pdfBytes),
+                byteLength: pdfBytes.byteLength,
+                contentType: "application/pdf",
+              },
+            },
+          ),
+        ),
+        readObject: async () => Result.ok(pdfBytes),
+        contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+        caseNumber: decision.caseNumber,
+        sourceDocumentId: decision.sourceDocumentId ?? null,
+        language: decision.language,
+        court: decision.court,
+        ecli: decision.ecli ?? null,
+        decisionDate: decision.decisionDate ?? null,
+        decisionType: decision.decisionType ?? null,
+        sourceUrl: decision.sourceUrl ?? null,
+        documentUrl: decision.documentUrl ?? null,
+        metadata: decision.metadata,
+      } as const satisfies StoredRawReparseInput;
+      const reparse =
+        plKisAdapter.reparseStoredRaw ?? panic("Missing KIS replay");
+      const { restore } = stubPublisher(() => panic("Replay must not fetch"));
+      try {
+        const replay = await reparse(input);
+        expect(replay).toEqual({ type: "parsed", result: decision });
+        expect(await reparse(input)).toEqual(replay);
+        // Without its PDF object the row replays from the stored listing and
+        // detail, as it did before document objects were captured.
+        expect(
+          await reparse({
+            ...input,
+            raw: new TextEncoder().encode(decision.sourceRaw),
+          }),
+        ).toMatchObject({
+          type: "parsed",
+          result: { caseNumber: decision.caseNumber },
+        });
+        expect(
+          await reparse({ ...input, readObject: async () => Result.ok(null) }),
+        ).toMatchObject({
+          type: "parsed",
+          result: { caseNumber: decision.caseNumber },
+        });
+      } finally {
+        restore();
+      }
     }
+  });
+
+  test("unreadable fetched PDFs retain their bytes and participate in the source hash", async () => {
+    const row = rowFor(700_041);
+    const rawParts = plKisRawPartsOf(
+      row,
+      JSON.stringify(detailFor("700041", undefined)),
+    );
+    const firstPdf = new TextEncoder().encode("%PDF-unreadable-first");
+    const secondPdf = new TextEncoder().encode("%PDF-unreadable-second");
+    const first = await assemblePlKisDecision({
+      row,
+      rawParts,
+      pdfBytes: firstPdf,
+    });
+    const again = await assemblePlKisDecision({
+      row,
+      rawParts,
+      pdfBytes: firstPdf,
+    });
+    const second = await assemblePlKisDecision({
+      row,
+      rawParts,
+      pdfBytes: secondPdf,
+    });
+
+    expect(first.type).toBe("detail-unavailable");
+    expect(second.type).toBe("detail-unavailable");
+    expect(first.decision.fulltext).toBeUndefined();
+    expect(first.decision.sourceRawObjects?.["document-pdf"]).toEqual({
+      bytes: firstPdf,
+      contentType: "application/pdf",
+    });
+    expect(second.decision.sourceRawObjects?.["document-pdf"]?.bytes).toEqual(
+      secondPdf,
+    );
+    expect(first.decision.rawHash).toBe(again.decision.rawHash);
+    expect(first.decision.rawHash).not.toBe(second.decision.rawHash);
+    const firstRaw =
+      first.decision.sourceRaw ?? panic("first source envelope missing");
+    expect(first.decision.rawHash).toBe(
+      legacySha256Hex(`${firstRaw}\n${legacySha256Hex(firstPdf)}`),
+    );
   });
 
   test("a corrected PDF under an unchanged detail changes the hash", async () => {
@@ -707,8 +853,7 @@ describe("the document", () => {
           : [];
       const html = Array.isArray(fields)
         ? fields.find(
-            (field) =>
-              isRecord(field) && field["key"] === "TRESC_INTERESARIUSZ",
+            (field) => isRecord(field) && field["key"] === category.fields.body,
           )
         : undefined;
       const source =
@@ -857,11 +1002,17 @@ describe("the reconciliation slices", () => {
     );
     expect(PL_KIS_UNDATED_SLICE < plKisSlice("2004-07", "01-ind")).toBe(true);
     expect(plKisPreviousSlice(plKisSlice("2004-08", "01-ind"))).toBe(
-      plKisSlice("2004-07", "19-spor"),
+      plKisSlice(
+        "2004-07",
+        PL_KIS_INCLUDED_CATEGORIES.at(-1)?.slug ?? panic("No categories"),
+      ),
     );
     expect(
       plKisNextSlice(
-        plKisSlice("2026-09", "19-spor"),
+        plKisSlice(
+          "2026-09",
+          PL_KIS_INCLUDED_CATEGORIES.at(-1)?.slug ?? panic("No categories"),
+        ),
         new Date("2026-09-23T10:00:00Z"),
       ),
     ).toBeNull();
@@ -1176,6 +1327,10 @@ describe("the crawl", () => {
         "https://eureka.mf.gov.pl/api/public/v1/informacje/600000/eksport/PDF",
       );
       const [decision] = Result.isOk(page) ? page.value.decisions : [];
+      expect(decision?.sourceRawObjects?.["document-pdf"]).toEqual({
+        bytes: new TextEncoder().encode("not a pdf"),
+        contentType: "application/pdf",
+      });
       // The listing proves the document exists (rule 20).
       expect(decision?.sourceDocumentId).toBe("600000");
       expect(decision?.isListingOnly).toBe(true);
@@ -1450,5 +1605,228 @@ test("quarantine identities retain the legacy SHA-256 serialization", () => {
         thesis: null,
       }),
     )}`,
+  );
+});
+
+test("category month requests use the publisher template date discriminator", async () => {
+  for (const category of PL_KIS_INCLUDED_CATEGORIES) {
+    const stub = stubPublisher(() => json({ results: [], totalHits: 0 }));
+    try {
+      await plKisAdapter.reconciliation.listSlicePage({
+        slice: plKisSlice("2026-08", category.slug),
+        page: 0,
+      });
+      expect(bodyOf(stub.calls.at(0))["filter"]).toMatchObject({
+        KATEGORIA_INFORMACJI: [category.id],
+        [`${category.fields.date}_start`]: "2026-08-01",
+        [`${category.fields.date}_end`]: "2026-08-31",
+      });
+    } finally {
+      stub.restore();
+    }
+  }
+});
+test("all source categories are admitted by total and crawl requests without widening a page", async () => {
+  const stub = stubPublisher(() => json({ results: [], totalHits: 1 }));
+  try {
+    await plKisAdapter.getTotalCount(AbortSignal.timeout(5000));
+    expect(bodyOf(stub.calls.at(0))["filter"]).toMatchObject({
+      KATEGORIA_INFORMACJI: PL_KIS_INCLUDED_CATEGORIES.map(({ id }) => id),
+    });
+    const requested = new URL(stub.calls.at(0)?.url ?? "https://invalid.test");
+    expect(requested.searchParams.get("size")).toBe("1");
+  } finally {
+    stub.restore();
+  }
+});
+test.each([
+  ["24-senat", "Interwencja pana senatora", "Odpowiedź Ministra Finansów"],
+  ["25-sejm", null, null],
+] as const)(
+  "%s: a parliamentary answer opens with the question it replies to",
+  async (tag, question, answer) => {
+    const { decision } = await builtFrom(tag);
+    const text = decision.fulltext ?? "";
+    // The capture's question and answer each reach the text, question first.
+    const opening = (html: string) =>
+      html
+        .replaceAll(/<[^>]+>/gu, " ")
+        .replaceAll("&nbsp;", " ")
+        .replaceAll(/\s+/gu, " ")
+        .trim()
+        .split(" ")
+        .slice(0, 3)
+        .join(" ");
+    const detail: unknown = JSON.parse(await readDetailFixture(tag));
+    const fields =
+      isRecord(detail) && isRecord(detail["dokument"])
+        ? detail["dokument"]["fields"]
+        : undefined;
+    const stated = (key: string): string => {
+      const field = (Array.isArray(fields) ? fields : []).find(
+        (candidate: unknown) => isRecord(candidate) && candidate["key"] === key,
+      );
+      const value = isRecord(field) ? field["value"] : undefined;
+      return typeof value === "string"
+        ? value
+        : panic(`${tag}: no ${key} in the capture`);
+    };
+    const questionText = question ?? opening(stated("TRESC_INTERP_ZAPYT"));
+    const answerText = answer ?? opening(stated("TRESC_INTERESARIUSZ"));
+    expect(text.indexOf(questionText)).toBeGreaterThanOrEqual(0);
+    expect(text.indexOf(answerText)).toBeGreaterThan(
+      text.indexOf(questionText),
+    );
+  },
+);
+
+test("23-newsletter: the newsletter's own text is the decision's text", async () => {
+  const { decision } = await builtFrom("23-newsletter");
+  expect(decision.isListingOnly).toBeUndefined();
+  expect(decision.fulltext?.length ?? 0).toBeGreaterThan(1000);
+});
+
+test("reference missing-id identities distinguish the publisher's signature", () => {
+  const first = {
+    KATEGORIA_INFORMACJI: ["Broszura informacyjna"],
+    DT_WYD: "2026-08-05",
+    AUTOR: ["Minister Finansów"],
+    TEZA: "Same thesis",
+    SYG: "DD3.8201.1.2026",
+  };
+  expect(plKisQuarantineId(first)).not.toBe(
+    plKisQuarantineId({ ...first, SYG: "DD3.8201.2.2026" }),
+  );
+});
+
+test("newsletter missing-id identities distinguish the publisher's title and date", () => {
+  const first = {
+    KATEGORIA_INFORMACJI: ["Newsletter"],
+    TYTUL_NEWS: "First",
+    DATA_WYSLANIA_NEWSLETTERA: "2026-08-05",
+  };
+  expect(plKisQuarantineId(first)).not.toBe(
+    plKisQuarantineId({ ...first, TYTUL_NEWS: "Second" }),
+  );
+});
+
+test("newsletter HTML uses the declared body field through fetch and replay without a PDF request", async () => {
+  const row =
+    (await readListingFixture("23-newsletter")).at(0) ??
+    panic("Newsletter capture missing");
+  const detail = await readDetailFixture("23-newsletter");
+  const stub = stubPublisher((call) =>
+    call.url.includes("/informacje/703485") && !call.url.includes("/eksport/")
+      ? new Response(detail, {
+          headers: { "Content-Type": "application/json" },
+        })
+      : new Response("unexpected request", { status: 400 }),
+  );
+  try {
+    const built = await plKisAdapter.reconciliation.buildDecision(row);
+    if (built.type !== "built") {
+      panic("Newsletter capture did not build");
+    }
+    expect(stub.calls).toHaveLength(1);
+    expect(stub.calls.at(0)?.url).not.toContain("/eksport/");
+    const decision = built.decision;
+    const replayed = await plKisAdapter.reparseStoredRaw?.({
+      raw: new TextEncoder().encode(decision.sourceRaw ?? ""),
+      contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+      caseNumber: decision.caseNumber,
+      sourceDocumentId: decision.sourceDocumentId ?? null,
+      language: decision.language,
+      court: decision.court,
+      ecli: null,
+      decisionDate: decision.decisionDate ?? null,
+      decisionType: decision.decisionType ?? null,
+      sourceUrl: decision.sourceUrl ?? null,
+      documentUrl: decision.documentUrl ?? null,
+      metadata: decision.metadata,
+    });
+    expect(replayed?.type).toBe("parsed");
+    if (replayed?.type === "parsed") {
+      expect(replayed.result.fulltext).toBe(decision.fulltext);
+    }
+  } finally {
+    stub.restore();
+  }
+});
+
+test("publisher listing columns remain a closed schema for exhaustive dispositions", () => {
+  // @ts-expect-error Widening the publisher column union would silently admit unmapped fields.
+  expect(PL_KIS_LISTING_COLUMNS.includes("unmapped-publisher-field")).toBe(
+    false,
+  );
+});
+
+describe("a document read as one undivided part", () => {
+  /** The captured detail of a category, its text replaced by `html`. */
+  const detailWithText = async (tag: string, html: string): Promise<string> => {
+    const parsed: unknown = JSON.parse(await readDetailFixture(tag));
+    if (!isRecord(parsed) || !isRecord(parsed["dokument"])) {
+      throw new TypeError(`${tag}: the captured detail has no document`);
+    }
+    const fields = parsed["dokument"]["fields"];
+    return JSON.stringify({
+      ...parsed,
+      dokument: {
+        ...parsed["dokument"],
+        fields: (Array.isArray(fields) ? fields : []).map((field: unknown) =>
+          isRecord(field) && field["key"] === "TRESC_INTERESARIUSZ"
+            ? { ...field, value: html }
+            : field,
+        ),
+      },
+    });
+  };
+
+  const warningsOf = async (tag: string, detail: string) => {
+    const [row] = await readListingFixture(tag);
+    if (row === undefined) {
+      throw new TypeError(`${tag}: the captured listing holds no row`);
+    }
+    const warn = spyOn(logger, "warn");
+    try {
+      const built = await assemblePlKisDecision({
+        row,
+        rawParts: plKisRawPartsOf(row, detail),
+      });
+      expect(built.type).toBe("built");
+      return warn.mock.calls.filter(
+        ([event]) => event === AST_STRUCTURE_DEGRADED,
+      );
+    } finally {
+      warn.mockRestore();
+    }
+  };
+
+  test("is reported with the role its paragraphs share", async () => {
+    const warnings = await warningsOf(
+      "15-opz",
+      await detailWithText(
+        "15-opz",
+        "<p>Pierwszy akapit tekstu.</p><p>Drugi akapit tekstu.</p>",
+      ),
+    );
+    expect(warnings).toEqual([
+      [
+        AST_STRUCTURE_DEGRADED,
+        expect.objectContaining({
+          parser: "pl-kis",
+          codes: PL_KIS_UNDIVIDED_DOCUMENT,
+          role: "intro",
+          category: "14",
+          from: "html",
+        }),
+      ],
+    ]);
+  });
+
+  test.each(["01-ind", "15-opz", "16-opz-odm", "18-opw-odm"])(
+    "%s: the captured document is read in parts and reports nothing",
+    async (tag) => {
+      expect(await warningsOf(tag, await readDetailFixture(tag))).toEqual([]);
+    },
   );
 });

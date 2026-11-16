@@ -102,17 +102,17 @@ describe("decision language identity", () => {
       documentAst: {},
     });
     expect(
-      sanitizeResult({ ...decision, sourceDocumentId: "cluster-1" })
+      sanitizeResult({ ...decision, sourceDocumentId: "cluster-1" }).unwrap()
         .sourceDocumentId,
     ).toBe("cluster-1");
-    const error = refusal(() => sanitizeResult(decision));
+    const error = refusal(() => sanitizeResult(decision).unwrap());
     expect(error).toBeInstanceOf(UnpersistableDecisionFieldError);
     expect(error).toMatchObject({
       field: UNPERSISTABLE_DECISION_FIELDS.SOURCE_DOCUMENT_ID,
     });
     // A docket-keyed jurisdiction still takes a result without one.
     expect(
-      sanitizeResult({ ...decision, country: "CZE" }).sourceDocumentId,
+      sanitizeResult({ ...decision, country: "CZE" }).unwrap().sourceDocumentId,
     ).toBeUndefined();
   });
 });

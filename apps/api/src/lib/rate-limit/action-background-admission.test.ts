@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { describe, expect, expectTypeOf, test } from "bun:test";
 
+import { createTestState } from "@stll/test-state";
+
 import { env } from "@/api/env";
 import { toSafeId } from "@/api/lib/branded-types";
 
@@ -10,6 +12,8 @@ import {
   withActionAdmission,
 } from "./action-admission";
 import { BACKGROUND_ACTION_KIND } from "./action-kinds";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const organizationId = toSafeId<"organization">("background_org");
 const userId = toSafeId<"user">("background_user");
@@ -87,7 +91,7 @@ describe("background action admission", () => {
         const script = args.at(0) ?? "";
         if (script.includes("ZREMRANGEBYSCORE")) {
           if (active === 1) {
-            return 0;
+            return [0, 1000];
           }
           active += 1;
           acquisitions += 1;
@@ -192,7 +196,7 @@ describe("background action admission", () => {
       if (Result.isError(nested)) {
         expect(nested.error).toBeInstanceOf(ActionAdmissionError);
         expect(nested.error).toMatchObject({
-          reason: reply === -1 ? "period_exhausted" : "unavailable",
+          reason: reply === -1 ? "period_exhausted" : "lease_lost",
         });
       }
       expect(executions).toBe(0);
@@ -267,56 +271,54 @@ describe("background action admission", () => {
 
     expect(Result.isError(result)).toBe(true);
     if (Result.isError(result)) {
-      expect(result.error).toMatchObject({ reason: "unavailable" });
+      expect(result.error).toMatchObject({
+        reason: "configuration_incomplete",
+      });
     }
     expect(ran).toBe(false);
   });
   test("a deferred kickoff reserves only at the accepted transaction boundary", async () => {
-    const previous = env.FEATURE_ACTION_ADMISSION;
-    env.FEATURE_ACTION_ADMISSION = true;
-    try {
-      for (const outcome of ["capped", "accepted"] as const) {
-        let reservations = 0;
-        const redis = {
-          send: async (_command: string, args: string[]) => {
-            const script = args.at(0) ?? "";
-            if (script.includes("ZREMRANGEBYSCORE")) {
-              expect(args.at(1)).toBe("2");
-            } else if (script.includes("HEXISTS")) {
-              expect(args.at(1)).toBe("3");
-              reservations += 1;
-            }
-            return 1;
-          },
-        };
-        const result = await withActionAdmission({
-          organizationId,
-          userId,
-          enabled: true,
-          policy,
-          redis,
-          execution: "queued-kickoff",
-          periodReservation: "on-acceptance",
-          periodIdentity: {
-            actionKind: "flow.start",
-            logicalPhaseId: `server-run-${outcome}`,
-          },
-          periodPolicy: { periodMs: 86_400_000, limit: 10 },
-          run: async () => {
-            expect(reservations).toBe(0);
-            if (outcome === "accepted") {
-              expect(await reserveQueuedKickoffPeriod()).toEqual(
-                Result.ok(undefined),
-              );
-            }
-            return outcome;
-          },
-        });
-        expect(result).toEqual(Result.ok(outcome));
-        expect(reservations).toBe(outcome === "accepted" ? 1 : 0);
-      }
-    } finally {
-      env.FEATURE_ACTION_ADMISSION = previous;
+    testState.setConfig("FEATURE_ACTION_ADMISSION", true);
+
+    for (const outcome of ["capped", "accepted"] as const) {
+      let reservations = 0;
+      const redis = {
+        send: async (_command: string, args: string[]) => {
+          const script = args.at(0) ?? "";
+          if (script.includes("ZREMRANGEBYSCORE")) {
+            expect(args.at(1)).toBe("2");
+          } else if (script.includes("HEXISTS")) {
+            expect(args.at(1)).toBe("3");
+            reservations += 1;
+          }
+          return 1;
+        },
+      };
+      const result = await withActionAdmission({
+        organizationId,
+        userId,
+        enabled: true,
+        policy,
+        redis,
+        execution: "queued-kickoff",
+        periodReservation: "on-acceptance",
+        periodIdentity: {
+          actionKind: "flow.start",
+          logicalPhaseId: `server-run-${outcome}`,
+        },
+        periodPolicy: { periodMs: 86_400_000, limit: 10 },
+        run: async () => {
+          expect(reservations).toBe(0);
+          if (outcome === "accepted") {
+            expect(await reserveQueuedKickoffPeriod()).toEqual(
+              Result.ok(undefined),
+            );
+          }
+          return outcome;
+        },
+      });
+      expect(result).toEqual(Result.ok(outcome));
+      expect(reservations).toBe(outcome === "accepted" ? 1 : 0);
     }
   });
 });

@@ -4,12 +4,11 @@ import {
   afterAll,
   describe,
   expect,
+  mock,
   setDefaultTimeout,
-  spyOn,
   test,
 } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import Elysia from "elysia";
 import fc from "fast-check";
 import * as v from "valibot";
 
@@ -22,6 +21,7 @@ import {
 import { compareCodeUnit } from "@stll/collation";
 import { assertProperty } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { createTestState } from "@stll/test-state";
 
 import { user } from "@/api/db/auth-schema";
 import {
@@ -34,8 +34,12 @@ import { createSafeDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import { meRoute } from "@/api/handlers/me/routes";
 import { publicKnowledgeRoute } from "@/api/handlers/public-knowledge/routes";
-import { authMacro, createAuth, getAuth } from "@/api/lib/auth";
+import { createHttpApp } from "@/api/http/app";
+import { routes } from "@/api/http/route";
+import { createAuth, getAuth } from "@/api/lib/auth";
 import { recordAccountProfessionalUse } from "@/api/lib/auth/professional-use";
+import { defineEndpoint } from "@/api/lib/endpoints";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import {
   brandPersistedOrganizationId,
@@ -48,8 +52,11 @@ import {
   initAgentAuthTestDb,
   releaseAgentAuthTestDb,
 } from "@/api/tests/helpers/mock-agent-auth-db";
-import { createTestState } from "@/api/tests/helpers/test-state";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+const testFetchState = createTestFetch();
 
 const testState = createTestState({ file: import.meta.path, config: env });
 setDefaultTimeout(120_000);
@@ -382,24 +389,28 @@ describe("professional-use acceptance", () => {
       }),
       "fixture-signature",
     ].join(".");
-    const providerFetch = spyOn(globalThis, "fetch").mockImplementation(
-      Object.assign(
-        async (input: string | URL | Request) => {
-          const requestUrl =
-            input instanceof Request ? input.url : String(input);
-          if (requestUrl.includes("oauth2.googleapis.com/token")) {
-            return Response.json({
-              access_token: "professional-use-access-token",
-              token_type: "Bearer",
-              expires_in: 3600,
-              id_token: idToken,
-            });
-          }
-          return new Response("Unexpected provider request", { status: 500 });
-        },
-        { preconnect: globalThis.fetch.preconnect },
+    const providerFetch = Object.assign(
+      mock(
+        Object.assign(
+          async (input: string | URL | Request) => {
+            const requestUrl =
+              input instanceof Request ? input.url : String(input);
+            if (requestUrl.includes("oauth2.googleapis.com/token")) {
+              return Response.json({
+                access_token: "professional-use-access-token",
+                token_type: "Bearer",
+                expires_in: 3600,
+                id_token: idToken,
+              });
+            }
+            return new Response("Unexpected provider request", { status: 500 });
+          },
+          { preconnect: globalThis.fetch.preconnect },
+        ),
       ),
+      { preconnect: globalThis.fetch.preconnect },
     );
+    testFetchState.set(providerFetch);
     try {
       const callback = await auth.handler(
         new Request(
@@ -409,7 +420,7 @@ describe("professional-use acceptance", () => {
       );
       expect(callback.status).toBe(302);
     } finally {
-      providerFetch.mockRestore();
+      testFetchState.restore();
     }
     const createdUser = await testDb
       .select({ id: user.id })
@@ -615,32 +626,43 @@ describe("professional-use acceptance", () => {
       headers: person.headers(),
     });
 
-  const signedInProduct = new Elysia()
-    .use(authMacro)
-    .get("/product", () => ({ served: true }), { validateAuth: true });
+  // A member route stands for any signed-in product route.
+  const server = serveForTest(
+    createHttpApp({
+      middleware: [errorBoundary],
+      routes: [
+        ...routes({
+          "/product": {
+            GET: defineEndpoint.member({}, () => ({ served: true })),
+          },
+        }),
+        ...meRoute,
+        ...publicKnowledgeRoute,
+      ],
+    }),
+  );
+  afterAll(async () => {
+    await server.stop();
+  });
 
   const readProduct = async (person: HumanBrowser) =>
-    await signedInProduct.handle(
-      new Request("http://localhost/product", { headers: person.headers() }),
-    );
+    await server.fetch("http://localhost/product", {
+      headers: person.headers(),
+    });
 
   const readOwnState = async (person: HumanBrowser) =>
-    await meRoute.handle(
-      new Request("http://localhost/me/professional-use", {
-        headers: person.headers(),
-      }),
-    );
+    await server.fetch("http://localhost/me/professional-use", {
+      headers: person.headers(),
+    });
 
   const accept = async (person: HumanBrowser, statementVersion: string) => {
     const headers = person.headers();
     headers.set("content-type", "application/json");
-    return await meRoute.handle(
-      new Request("http://localhost/me/professional-use", {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ statementVersion }),
-      }),
-    );
+    return await server.fetch("http://localhost/me/professional-use", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ statementVersion }),
+    });
   };
 
   test("acceptance reads and writes the authenticated account without changing another account", async () => {
@@ -854,12 +876,10 @@ describe("professional-use acceptance", () => {
       "/public/knowledge/template-packs",
       "/public/knowledge/playbook-starters",
     ]) {
-      const anonymous = await publicKnowledgeRoute.handle(
-        new Request(`http://localhost${path}`),
-      );
-      const signedIn = await publicKnowledgeRoute.handle(
-        new Request(`http://localhost${path}`, { headers: person.headers() }),
-      );
+      const anonymous = await server.fetch(`http://localhost${path}`);
+      const signedIn = await server.fetch(`http://localhost${path}`, {
+        headers: person.headers(),
+      });
       expect(anonymous.status).toBe(200);
       expect(signedIn.status).toBe(200);
       expect(await signedIn.text()).toBe(await anonymous.text());

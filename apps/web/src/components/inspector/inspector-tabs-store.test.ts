@@ -1,6 +1,14 @@
 import { QueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
-import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import { Temporal } from "@stll/time";
 import { stellaToast } from "@stll/ui/toast";
@@ -8,6 +16,7 @@ import { stellaToast } from "@stll/ui/toast";
 import {
   holdInspectorRestoreSettle,
   isFileFacet,
+  readPersistedInspectorPaneOpen,
   startNewPageLoadForTest,
 } from "@/components/inspector/inspector-broadcast";
 import {
@@ -121,6 +130,8 @@ class FakeBroadcastChannel {
 }
 
 afterEach(() => {
+  // Spies created in a test stay attached if it fails before restoring them.
+  mock.restore();
   cleanupInspectorBroadcast?.();
   cleanupInspectorBroadcast = null;
   // The next test is a fresh page: this one's pending restore settle ends.
@@ -179,6 +190,8 @@ const installFakeBroadcastChannel = () => {
     configurable: true,
     value: {
       BroadcastChannel: FakeBroadcastChannel,
+      setTimeout: globalThis.setTimeout,
+      clearTimeout: globalThis.clearTimeout,
       localStorage: new MemoryStorage(),
       sessionStorage: new MemoryStorage(),
     },
@@ -695,6 +708,38 @@ describe("replaceFileFieldId", () => {
     expect(tab).toMatchObject({ facet: "preview", type: "pdf" });
   });
 
+  test("reopening an open file applies a requested facet and keeps the reader's otherwise", () => {
+    const contract = {
+      id: "field-contract",
+      entityId: "entity-1",
+      label: "Contract",
+      fileName: "contract.pdf",
+      mimeType: "application/pdf",
+      pdfFileId: null,
+      propertyId: "property-1",
+      workspaceId: "workspace-1",
+    };
+    const contractTab = () =>
+      useInspectorTabsStore
+        .getState()
+        .tabs.find((item) => item.id === contract.id);
+    useInspectorTabsStore.getState().openFile(contract);
+    useInspectorTabsStore.getState().setFileFacet(contract.id, "metadata");
+
+    useInspectorTabsStore
+      .getState()
+      .openFile({ ...contract, facet: "versions" });
+    expect(contractTab()).toMatchObject({ facet: "versions", type: "pdf" });
+
+    useInspectorTabsStore.getState().openFile(contract);
+    expect(contractTab()).toMatchObject({ facet: "versions", type: "pdf" });
+
+    useInspectorTabsStore
+      .getState()
+      .openFileForEntity({ ...contract, facet: "preview" });
+    expect(contractTab()).toMatchObject({ facet: "preview", type: "pdf" });
+  });
+
   test("openFileForEntity drops a stale tab whose id collides with the new field", () => {
     useInspectorTabsStore.getState().openFile({
       id: "field-shared",
@@ -872,6 +917,18 @@ describe("revive suggestion", () => {
     openFullscreenFileTab();
     useInspectorTabsStore.getState().closeTab("field-1");
     expect(useInspectorTabsStore.getState().reviveSuggestion).toBeNull();
+  });
+
+  test("a tab moved to the main view minimizes the pane; a plain close does not", () => {
+    openFullscreenFileTab();
+    useInspectorTabsStore.getState().setMinimized(false);
+    useInspectorTabsStore.getState().closeTab("field-1");
+    expect(useInspectorTabsStore.getState().minimized).toBe(false);
+
+    openFullscreenFileTab();
+    useInspectorTabsStore.getState().closeTab("field-1", { movedToMain: true });
+    expect(useInspectorTabsStore.getState().tabs).toHaveLength(0);
+    expect(useInspectorTabsStore.getState().minimized).toBe(true);
   });
 
   test("closing a side-peek file tab leaves no suggestion", () => {
@@ -1358,6 +1415,30 @@ describe("Inspector tab broadcast", () => {
       groups: [],
       groupAssignments: {},
     });
+  });
+
+  test("reserved pane visibility matches restoration before tabs arrive", () => {
+    installFakeBroadcastChannel();
+    const scope = { organizationId: "org-1", userId: "user-1" };
+    expect(readPersistedInspectorPaneOpen(scope)).toBe(false);
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    openFullscreenFileTab();
+    useInspectorTabsStore.setState({ minimized: false });
+    cleanupInspectorBroadcast();
+    cleanupInspectorBroadcast = null;
+    useInspectorTabsStore.setState({ tabs: [], activeId: null });
+    expect(readPersistedInspectorPaneOpen(scope)).toBe(true);
+    expect(
+      readPersistedInspectorPaneOpen({ ...scope, userId: "other-user" }),
+    ).toBe(false);
+    expect(
+      readPersistedInspectorPaneOpen({ ...scope, organizationId: "other-org" }),
+    ).toBe(false);
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    expect(useInspectorTabsStore.getState().tabs.length).toBeGreaterThan(0);
+    expect(useInspectorTabsStore.getState().minimized).toBe(false);
+    useInspectorTabsStore.setState({ minimized: true });
+    expect(readPersistedInspectorPaneOpen(scope)).toBe(false);
   });
 
   test("a reload restores a full-view file tab in side peek", () => {

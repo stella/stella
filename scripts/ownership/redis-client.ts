@@ -21,9 +21,24 @@ export default {
           "Bounded favicon cache and miss admission; outages return no icon without an origin lease.",
       },
       {
+        path: "apps/api/src/lib/legal-search/public-read-continuation-store.ts",
+        reason:
+          "Continuation leases and stored answers of public-law reads, all reproducible from the request; an outage trips a breaker and each read answers on its own task.",
+      },
+      {
         path: "apps/api/src/lib/admission-redis.ts",
         reason:
           "Admission clients check and periodically refresh the non-eviction policy before issuing coordination commands.",
+      },
+      {
+        path: "apps/api/src/lib/desktop-runner/doorbell.ts",
+        reason:
+          "Desktop runner doorbell over pub/sub; a lost ring waits for the periodic sweep or the desktop's reconnect, which read the queue from Postgres.",
+      },
+      {
+        path: "apps/api/src/lib/desktop-runner/runtime.ts",
+        reason:
+          "Hands the API factory to the desktop runner doorbell; without Redis the doorbell stays in process.",
       },
       {
         path: "apps/api/src/lib/bullmq-queue.ts",
@@ -61,6 +76,16 @@ export default {
           "Queue transport: worker owns its dedicated blocking connection.",
       },
       {
+        path: "apps/api/src/lib/push/push-delivery-worker.ts",
+        reason:
+          "Queue transport: worker owns its dedicated blocking connection; during an outage alerts are skipped and the in-app notification stands.",
+      },
+      {
+        path: "apps/api/src/lib/push/timer-activity-worker.ts",
+        reason:
+          "Queue transport: worker owns its dedicated blocking connection; during an outage the Lock Screen waits for the app to redraw it when it opens.",
+      },
+      {
         path: "apps/api/src/lib/account-export/queue.ts",
         reason:
           "Queue transport: the worker uses a dedicated connection; PostgreSQL requests and cursor recovery reconstruct work after an outage.",
@@ -76,12 +101,12 @@ export default {
           "Queue transport: worker owns its dedicated blocking connection.",
       },
       {
-        path: "apps/api/src/lib/document-review/run-queue.ts",
+        path: "apps/api/src/lib/queue/document-run-queue.ts",
         reason:
-          "Queue transport: worker owns its dedicated blocking connection.",
+          "Queue transport: each document run queue's worker owns its dedicated blocking connection.",
       },
       {
-        path: "apps/api/src/lib/lists/verification/run-queue.ts",
+        path: "apps/api/src/lib/lists/generation/run-queue.ts",
         reason:
           "Queue transport: worker owns its dedicated blocking connection.",
       },
@@ -107,6 +132,11 @@ export default {
       },
       {
         path: "apps/api/src/handlers/reports/report-export-queue.ts",
+        reason:
+          "Queue transport: worker owns its dedicated blocking connection.",
+      },
+      {
+        path: "apps/api/src/handlers/data-exports/data-export-worker.ts",
         reason:
           "Queue transport: worker owns its dedicated blocking connection.",
       },

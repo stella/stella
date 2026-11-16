@@ -1,7 +1,7 @@
-import { Value } from "@sinclair/typebox/value";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
+import * as v from "valibot";
 
 import {
   ACTION_ADMISSION_CODES,
@@ -253,7 +253,7 @@ describe("organization budgets at action admission", () => {
           format,
           ...(aiNarrative === undefined ? {} : { aiNarrative }),
         };
-        expect(Value.Check(reportExportBodySchema, body)).toBe(true);
+        expect(v.is(reportExportBodySchema, body)).toBe(true);
         const consumesServices = reportExportConsumesServices({
           body,
           params: {},
@@ -341,7 +341,7 @@ describe("organization budgets at action admission", () => {
       if (Result.isOk(result)) {
         expectRefusal(
           result.value,
-          ACTION_ADMISSION_CODES.admissionUnavailable,
+          ACTION_ADMISSION_CODES.configurationIncomplete,
         );
       }
       expect(reads).toBe(1);
@@ -559,7 +559,7 @@ describe("organization budgets at action admission", () => {
         runs += 1;
       },
     });
-    expectRefusal(result, ACTION_ADMISSION_CODES.admissionUnavailable);
+    expectRefusal(result, ACTION_ADMISSION_CODES.configurationIncomplete);
     expect(redis.commands).toHaveLength(0);
     expect(runs).toBe(0);
   });
@@ -601,7 +601,12 @@ describe("organization budgets at action admission", () => {
           ran = true;
         },
       });
-      expectRefusal(result, ACTION_ADMISSION_CODES.admissionUnavailable);
+      expectRefusal(
+        result,
+        failure === "read-outage" || failure === "missing-state"
+          ? ACTION_ADMISSION_CODES.organizationStateUnreadable
+          : ACTION_ADMISSION_CODES.configurationIncomplete,
+      );
       expect(redis.commands).toHaveLength(0);
       expect(ran).toBe(false);
     }
@@ -1073,7 +1078,7 @@ describe("the free floor's service budget", () => {
       redis: redis.client,
       run: async () => "completed",
     });
-    expectRefusal(result, ACTION_ADMISSION_CODES.admissionUnavailable);
+    expectRefusal(result, ACTION_ADMISSION_CODES.configurationIncomplete);
     expect(redis.commands).toHaveLength(0);
   });
 

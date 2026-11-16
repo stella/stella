@@ -26,17 +26,9 @@
 import { panic } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { headMatterPrecedesBody } from "@stll/legal-ast/document-ast";
+
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import {
-  decodeSourceRawEnvelope,
-  EMPTY_AST,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  IngestionResult,
-  SourceFieldDisposition,
-  SourceFieldTarget,
-  SourceRawParts,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import {
   getSourceRegistration,
   listSourceRegistrations,
@@ -47,11 +39,21 @@ import {
   metadataUrlSchemaForAdapter,
 } from "@/api/handlers/case-law/ingestion/metadata-url-schemas";
 import { composeDecisionWithSupplements } from "@/api/handlers/case-law/ingestion/supplement-composition";
+import { SOFT_LAW_ADMISSIONS } from "@/api/handlers/soft-law/adapters/registry";
 import { storeTextField } from "@/api/lib/case-law/decision-text";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
 import {
+  decodeSourceRawEnvelope,
+  EMPTY_AST,
   PLAIN_TEXT_FIELD_DEBT,
   PLAIN_TEXT_RESULT_FIELDS,
+  SOURCE_EXCLUSION_REASONS,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  IngestionResult,
+  SourceFieldDisposition,
+  SourceFieldTarget,
+  SourceRawParts,
 } from "@/api/lib/legal-search/ingestion-types";
 import {
   approveMetadataUrls,
@@ -59,8 +61,14 @@ import {
 } from "@/api/lib/legal-search/metadata-urls";
 import { entityResiduesInStoredText } from "@/api/lib/legal-search/parsers/entity-residue";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import {
+  publisherFieldRetentionAudit,
+  sourceExclusionCensus,
+} from "@/api/lib/legal-search/source-exclusion-census";
 import { readSourceRawField } from "@/api/lib/legal-search/source-raw-field";
+import type { SourceRecordPaths } from "@/api/lib/legal-search/source-record-fields";
 import { toMetadataUrl } from "@/api/lib/sanitize-url";
+import { isRecord } from "@/api/lib/type-guards";
 import {
   CASE_LAW_CONFORMANCE_FIXTURES,
   plCourtsFixture,
@@ -73,11 +81,14 @@ import {
   metadataTextAddressDispositionsForAdapter,
   unclassifiedMetadataAddresses,
 } from "@/api/tests/helpers/case-law-metadata-text-census";
+import { nssRecoveryFixture } from "@/api/tests/helpers/cz-nss-recovery";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 
-const originalFetch = globalThis.fetch;
+const testFetchState = createTestFetch();
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
 });
 
 const DECLARED_ADAPTER_KEYS = listSourceRegistrations().map(
@@ -87,6 +98,27 @@ const DECLARED_ADAPTER_KEYS = listSourceRegistrations().map(
 const adapterFor = (key: SourceRegistrationKey) =>
   getSourceRegistration(key)?.source ??
   panic(`${key} is declared but not registered`);
+
+test("every registered source has a reviewable exclusion census", () => {
+  const census = Object.fromEntries([
+    ...DECLARED_ADAPTER_KEYS.map((key) => [
+      key,
+      sourceExclusionCensus(adapterFor(key).sourceFields),
+    ]),
+    ...Object.entries(SOFT_LAW_ADMISSIONS).flatMap(
+      ([authority, registration]) =>
+        registration.state === "registered"
+          ? [
+              [
+                authority,
+                sourceExclusionCensus(registration.adapter.sourceFields),
+              ],
+            ]
+          : [],
+    ),
+  ]);
+  expect(census).toMatchSnapshot();
+});
 
 /** The registry and the fixture census must agree even after runtime widening. */
 const plainTextFixtureFor = (key: SourceRegistrationKey) => {
@@ -118,6 +150,20 @@ const isPresent = (value: unknown): boolean => {
   return Array.isArray(value) ? value.length > 0 : true;
 };
 
+const nestedMetadataValue = (
+  value: unknown,
+  path: readonly string[],
+): unknown => {
+  let current = value;
+  for (const key of path) {
+    if (!isRecord(current) || !Object.hasOwn(current, key)) {
+      return undefined;
+    }
+    current = current[key];
+  }
+  return current;
+};
+
 /** What the row holds where a disposition says the field is stored. */
 const storedValueOf = (
   decision: IngestionResult,
@@ -130,7 +176,9 @@ const storedValueOf = (
         target,
       );
     case "metadata":
-      return decision.metadata[target.key];
+      return target.path === undefined
+        ? decision.metadata[target.key]
+        : nestedMetadataValue(decision.metadata[target.key], target.path);
     case "textField":
       return storeTextField(decision.textFields[target.key]);
     case "result":
@@ -154,7 +202,7 @@ const describeTarget = (target: SourceFieldTarget): string => {
     case "raw":
       return `raw.${target.part}.${target.path.join(".")}`;
     case "metadata":
-      return `metadata.${target.key}`;
+      return `metadata.${target.key}${target.path === undefined ? "" : `.${target.path.join(".")}`}`;
     case "textField":
       return `textFields.${target.key}`;
     case "result":
@@ -212,152 +260,201 @@ describe("every adapter accounts for the fields its source states", () => {
 
     test(`${key}: every field its source states is stored or excluded`, async () => {
       const { sourceFields } = adapterFor(key);
-      const evidence = fixture();
-      const decision = await evidence.buildDecision();
-      const schema = metadataUrlSchemaForAdapter(key);
-      // The branded contract covers every registered source with no field debt.
-      const normalized = plainTextIngestionResult(decision, schema);
-      for (const field of Object.keys(PLAIN_TEXT_RESULT_FIELDS)) {
-        expect(Reflect.get(normalized, field), `${key}.${field}`).toEqual(
-          Reflect.get(decision, field),
-        );
-      }
-      const parts = storedPartsOf(key, decision);
+      const fixtures =
+        key === ADAPTER_KEYS.CZ_NSS ? [fixture, nssRecoveryFixture] : [fixture];
+      const observed = new Set<string>();
+      for (const buildFixture of fixtures) {
+        const evidence = buildFixture();
+        const decision = await guardParser(evidence.buildDecision)();
+        if ("blocks" in decision.documentAst) {
+          expect(
+            headMatterPrecedesBody(decision.documentAst.blocks),
+            `${key}: head matter follows the decision body`,
+          ).toBe(true);
+        }
+        const schema = metadataUrlSchemaForAdapter(key);
+        // The branded contract covers every registered source with no field debt.
+        const normalized = plainTextIngestionResult(decision, schema);
+        for (const field of Object.keys(PLAIN_TEXT_RESULT_FIELDS)) {
+          expect(Reflect.get(normalized, field), `${key}.${field}`).toEqual(
+            Reflect.get(decision, field),
+          );
+        }
+        const parts = storedPartsOf(key, decision);
 
-      expect(
-        unclassifiedMetadataAddresses(decision.metadata, {
+        expect(
+          unclassifiedMetadataAddresses(decision.metadata, {
+            schema,
+            textAddresses: metadataTextAddressDispositionsForAdapter(key),
+            nullOnlyAddresses: metadataNullOnlyAddressesForAdapter(key),
+          }),
+          `${key}: address fields require exact producer declarations`,
+        ).toEqual([]);
+        const metadataCensus = metadataDisplayTextCensus(
+          decision.metadata,
           schema,
-          textAddresses: metadataTextAddressDispositionsForAdapter(key),
-          nullOnlyAddresses: metadataNullOnlyAddressesForAdapter(key),
-        }),
-        `${key}: address fields require exact producer declarations`,
-      ).toEqual([]);
-      const metadataCensus = metadataDisplayTextCensus(
-        decision.metadata,
-        schema,
-      );
-      expect(
-        metadataCensus.unclassified,
-        `${key}: metadata keys the display-text census does not classify: ${metadataCensus.unclassified.join(", ")}. Add each to METADATA_TEXT_DISPOSITIONS as inspected, or excluded with the reason.`,
-      ).toEqual([]);
-      const textOutputs = [
-        { field: "caseNumber", value: decision.caseNumber },
-        { field: "court", value: decision.court },
-        ...(decision.decisionType === undefined
-          ? []
-          : [{ field: "decisionType", value: decision.decisionType }]),
-        ...(decision.judges ?? []).map(({ nameAsPrinted }, index) => ({
-          field: `judges.${index}.nameAsPrinted`,
-          value: nameAsPrinted,
-        })),
-        ...(decision.fulltext === undefined
-          ? []
-          : [{ field: "fulltext", value: decision.fulltext }]),
-        ...Object.entries(decision.textFields).flatMap(([field, value]) =>
-          value.type === "present"
-            ? [{ field: `textFields.${field}`, value: value.text }]
-            : [],
-        ),
-        ...("blocks" in decision.documentAst
-          ? decision.documentAst.blocks.map((block) => ({
-              field: `documentAst.${block.type}.${block.id}`,
-              value: block.plainText,
-            }))
-          : []),
-        ...(decision.sections ?? []).flatMap((section) => [
-          {
-            field: `sections.${section.index}.title`,
-            value: section.title ?? "",
-          },
-          { field: `sections.${section.index}.text`, value: section.text },
-        ]),
-        ...metadataCensus.texts,
-        ...("blocks" in decision.documentAst &&
-        decision.documentAst.metadata.type !== "guidance"
-          ? [
-              ...decision.documentAst.metadata.keywords.map((value, index) => ({
-                field: `documentAst.metadata.keywords.${index}`,
-                value,
-              })),
-              ...decision.documentAst.metadata.statutes.map((value, index) => ({
-                field: `documentAst.metadata.statutes.${index}`,
-                value,
-              })),
-            ]
-          : []),
-      ];
-      const entityResidues = entityResiduesInStoredText(textOutputs);
-      expect(
-        entityResidues,
-        `${key}: normalized case-law text retains character references`,
-      ).toEqual([]);
-
-      const stated = await sourceFields.listSourceFields(parts);
-      expect(
-        stated.length,
-        `${key}: the stored envelope states no fields at all, so this suite would certify nothing. Check listSourceFields against the parts the adapter writes.`,
-      ).toBeGreaterThan(0);
-
-      const undeclared = stated.filter(
-        (field) => sourceFields.fields[field] === undefined,
-      );
-      expect(
-        undeclared,
-        `${key}: its source states fields nothing decided about: ${undeclared.join(", ")}. Store them, or exclude them with the reason.`,
-      ).toEqual([]);
-
-      // `excludedSourceField` rejects a blank reason at the call site, so this
-      // is the backstop for a reason that reaches an inventory some other way.
-      const unreasoned = stated.filter((field) => {
-        const disposition: SourceFieldDisposition | undefined =
-          sourceFields.fields[field];
-        return (
-          disposition?.disposition === "excluded" &&
-          disposition.reason.trim().length === 0
         );
-      });
-      expect(
-        unreasoned,
-        `${key}: these fields are excluded with a blank reason: ${unreasoned.join(", ")}. An exclusion nobody explained is the silence this suite exists to break.`,
-      ).toEqual([]);
+        expect(
+          metadataCensus.unclassified,
+          `${key}: metadata keys the display-text census does not classify: ${metadataCensus.unclassified.join(", ")}. Add each to METADATA_TEXT_DISPOSITIONS as inspected, or excluded with the reason.`,
+        ).toEqual([]);
+        const textOutputs = [
+          { field: "caseNumber", value: decision.caseNumber },
+          { field: "court", value: decision.court },
+          ...(decision.decisionType === undefined
+            ? []
+            : [{ field: "decisionType", value: decision.decisionType }]),
+          ...(decision.judges ?? []).map((judge, index) =>
+            judge.nameAsPrinted === undefined
+              ? {
+                  field: `judges.${index}.czechDeclinedName`,
+                  value: judge.czechDeclinedName,
+                }
+              : {
+                  field: `judges.${index}.nameAsPrinted`,
+                  value: judge.nameAsPrinted,
+                },
+          ),
+          ...(decision.fulltext === undefined
+            ? []
+            : [{ field: "fulltext", value: decision.fulltext }]),
+          ...Object.entries(decision.textFields).flatMap(([field, value]) =>
+            value.type === "present"
+              ? [{ field: `textFields.${field}`, value: value.text }]
+              : [],
+          ),
+          ...("blocks" in decision.documentAst
+            ? decision.documentAst.blocks.map((block) => ({
+                field: `documentAst.${block.type}.${block.id}`,
+                value: block.plainText,
+              }))
+            : []),
+          ...(decision.sections ?? []).flatMap((section) => [
+            {
+              field: `sections.${section.index}.title`,
+              value: section.title ?? "",
+            },
+            { field: `sections.${section.index}.text`, value: section.text },
+          ]),
+          ...metadataCensus.texts,
+          ...("blocks" in decision.documentAst &&
+          decision.documentAst.metadata.type !== "guidance"
+            ? [
+                ...decision.documentAst.metadata.keywords.map(
+                  (value, index) => ({
+                    field: `documentAst.metadata.keywords.${index}`,
+                    value,
+                  }),
+                ),
+                ...decision.documentAst.metadata.statutes.map(
+                  (value, index) => ({
+                    field: `documentAst.metadata.statutes.${index}`,
+                    value,
+                  }),
+                ),
+              ]
+            : []),
+        ];
+        const entityResidues = entityResiduesInStoredText(textOutputs);
+        expect(
+          entityResidues,
+          `${key}: normalized case-law text retains character references`,
+        ).toEqual([]);
 
+        const stated = await sourceFields.listSourceFields(parts);
+        for (const field of stated) {
+          observed.add(field);
+        }
+        expect(
+          stated.length,
+          `${key}: the stored envelope states no fields at all, so this suite would certify nothing. Check listSourceFields against the parts the adapter writes.`,
+        ).toBeGreaterThan(0);
+
+        const audit = publisherFieldRetentionAudit(sourceFields, stated);
+        expect(audit.status, `${key}: publisher fields must be auditable`).toBe(
+          "audited",
+        );
+        switch (audit.status) {
+          case "audited":
+            expect(
+              audit.unmappedFields,
+              `${key}: its source states fields nothing decided about: ${audit.unmappedFields.join(", ")}. Store them, or exclude them with the reason.`,
+            ).toEqual([]);
+            break;
+          case "unavailable":
+            break;
+          default:
+            audit satisfies never;
+            panic("Unhandled publisher field retention observation");
+        }
+
+        // Validate policies that reach the inventory through a dynamic boundary.
+        const unreasoned = stated.filter((field) => {
+          const disposition: SourceFieldDisposition | undefined =
+            sourceFields.fields[field];
+          return (
+            disposition?.disposition === "excluded" &&
+            (!SOURCE_EXCLUSION_REASONS.includes(disposition.reason) ||
+              disposition.justification.trim().length === 0 ||
+              disposition.pointer.trim().length === 0)
+          );
+        });
+        expect(
+          unreasoned,
+          `${key}: these fields have an invalid exclusion policy or missing evidence: ${unreasoned.join(", ")}. An exclusion nobody explained is the silence this suite exists to break.`,
+        ).toEqual([]);
+
+        const unstored = stated.flatMap((field) => {
+          const disposition: SourceFieldDisposition | undefined =
+            sourceFields.fields[field];
+          if (disposition?.disposition !== "stored") {
+            return [];
+          }
+          if (
+            disposition.target.type === "metadata" &&
+            disposition.target.path !== undefined
+          ) {
+            expect(
+              Object.hasOwn(evidence.rawFieldValues ?? {}, field),
+              `${key}: missing source value oracle for nested metadata ${field}`,
+            ).toBe(true);
+            expect(
+              storedValueOf(decision, disposition.target),
+              `${key}: publisher value ${field} changed`,
+            ).toEqual(evidence.rawFieldValues?.[field]);
+            return [];
+          }
+          if (disposition.target.type === "raw") {
+            expect(disposition.target.reason.trim().length).toBeGreaterThan(0);
+            expect(
+              Object.hasOwn(evidence.rawFieldValues ?? {}, field),
+              `${key}: missing source value oracle for ${field}`,
+            ).toBe(true);
+            expect(
+              storedValueOf(decision, disposition.target),
+              `${key}: raw field ${field} changed`,
+            ).toEqual(evidence.rawFieldValues?.[field]);
+            return [];
+          }
+          return isPresent(storedValueOf(decision, disposition.target))
+            ? []
+            : [`${field} -> ${describeTarget(disposition.target)}`];
+        });
+
+        expect(
+          unstored,
+          `${key}: these fields are declared stored, and the decision built from the fixture that states them does not carry them: ${unstored.join("; ")}.`,
+        ).toEqual([]);
+      }
       // The other direction, or a disposition could be declared and never
       // exercised: the checks below only walk what the envelope states, so a
       // stored field the fixture never carries would be certified by nothing.
       const neverObserved = Object.keys(sourceFields.fields).filter(
-        (field) => !stated.includes(field),
+        (field) => !observed.has(field),
       );
       expect(
         neverObserved,
         `${key}: its inventory declares fields the stored envelope never states: ${neverObserved.join(", ")}. The fixture is the union of what the source's pages state, so add them there or drop them from the inventory.`,
-      ).toEqual([]);
-
-      const unstored = stated.flatMap((field) => {
-        const disposition: SourceFieldDisposition | undefined =
-          sourceFields.fields[field];
-        if (disposition?.disposition !== "stored") {
-          return [];
-        }
-        if (disposition.target.type === "raw") {
-          expect(disposition.target.reason.trim().length).toBeGreaterThan(0);
-          expect(
-            Object.hasOwn(evidence.rawFieldValues ?? {}, field),
-            `${key}: missing source value oracle for ${field}`,
-          ).toBe(true);
-          expect(
-            storedValueOf(decision, disposition.target),
-            `${key}: raw field ${field} changed`,
-          ).toEqual(evidence.rawFieldValues?.[field]);
-          return [];
-        }
-        return isPresent(storedValueOf(decision, disposition.target))
-          ? []
-          : [`${field} -> ${describeTarget(disposition.target)}`];
-      });
-
-      expect(
-        unstored,
-        `${key}: these fields are declared stored, and the decision built from the fixture that states them does not carry them: ${unstored.join("; ")}.`,
       ).toEqual([]);
     });
   }
@@ -368,11 +465,16 @@ describe("the display-text census classifies exactly the metadata adapters emit"
     const emitted = new Set<string>();
     for (const key of DECLARED_ADAPTER_KEYS) {
       // Fixtures stub the global fetch, so they build one at a time.
-      const decision =
-        await CASE_LAW_CONFORMANCE_FIXTURES[key]().buildDecision();
-      globalThis.fetch = originalFetch;
-      for (const metadataKey of Object.keys(decision.metadata)) {
-        emitted.add(metadataKey);
+      const fixtures =
+        key === ADAPTER_KEYS.CZ_NSS
+          ? [CASE_LAW_CONFORMANCE_FIXTURES[key], nssRecoveryFixture]
+          : [CASE_LAW_CONFORMANCE_FIXTURES[key]];
+      for (const fixture of fixtures) {
+        const decision = await fixture().buildDecision();
+        testFetchState.restore();
+        for (const metadataKey of Object.keys(decision.metadata)) {
+          emitted.add(metadataKey);
+        }
       }
     }
     const judgment = await plCourtsFixture().buildDecision();
@@ -628,4 +730,45 @@ describe("the display-text census classifies exactly the metadata adapters emit"
       ),
     ).toEqual(["metadata.relatedDecisions.0"]);
   });
+});
+
+type PublisherRecord = {
+  id: string;
+  court?: { name: string; location: { longitude: number } | null } | null;
+  references: readonly { docket: string }[];
+  keywords?: readonly string[] | null;
+  raw?: unknown;
+  attachments?: readonly unknown[];
+};
+
+const fields = {
+  id: "stored",
+  "court.name": "stored",
+  "court.location.longitude": "stored",
+  "references[].docket": "stored",
+  keywords: "stored",
+  raw: "stored",
+  attachments: "stored",
+} as const satisfies Record<SourceRecordPaths<PublisherRecord>, "stored">;
+
+test("publisher fields require a disposition across nested records and arrays", () => {
+  expect(Object.keys(fields)).toEqual([
+    "id",
+    "court.name",
+    "court.location.longitude",
+    "references[].docket",
+    "keywords",
+    "raw",
+    "attachments",
+  ]);
+
+  const { id: _id, ...missingField } = fields;
+  // @ts-expect-error Deleting a publisher field's disposition is rejected.
+  missingField satisfies Record<SourceRecordPaths<PublisherRecord>, "stored">;
+
+  // @ts-expect-error A publisher schema addition requires a disposition.
+  fields satisfies Record<
+    SourceRecordPaths<PublisherRecord & { publication: { date: string } }>,
+    "stored"
+  >;
 });

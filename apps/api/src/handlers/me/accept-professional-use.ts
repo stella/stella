@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { PROFESSIONAL_USE_STATEMENT_VERSION } from "@stll/api-contract/professional-use";
 
@@ -18,10 +18,12 @@ const STATEMENT_VERSION_MAX_LENGTH = 32;
 
 // The client names the statement version it showed, so an outdated page
 // cannot record acceptance of a statement it did not display.
-const requestBody = t.Object(
-  { statementVersion: t.String({ maxLength: STATEMENT_VERSION_MAX_LENGTH }) },
-  { additionalProperties: false },
-);
+const requestBody = v.strictObject({
+  statementVersion: v.pipe(
+    v.string(),
+    v.maxLength(STATEMENT_VERSION_MAX_LENGTH),
+  ),
+});
 
 // Session-only and open to restricted accounts: an operator-created account
 // accepts here on its first interactive sign-in.
@@ -55,7 +57,7 @@ const acceptProfessionalUse = createSafeSessionHandler(
   },
 );
 
-declareAggregateMutation(acceptProfessionalUse.handler, {
+declareAggregateMutation(acceptProfessionalUse, {
   type: "aggregate",
   aggregates: ["professionalUseAcceptance"],
 });

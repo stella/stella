@@ -14,6 +14,7 @@ use crate::types::ErrorResponse;
 
 const RECONNECT_DELAY: Duration = Duration::from_secs(5);
 const STATUS_PROBE_TIMEOUT: Duration = Duration::from_secs(10);
+const MAX_SSE_FRAME_BYTES: usize = 1024 * 1024;
 const TAKEN_OVER_CODE: &str = "desktop_edit_session_taken_over";
 
 #[derive(Debug, serde::Deserialize)]
@@ -139,15 +140,18 @@ pub fn spawn_sse_listener(
           }
         };
 
-        byte_buf.extend_from_slice(&chunk);
+        let Some(frames) = drain_sse_frames(&mut byte_buf, &chunk) else {
+          tracing::warn!(
+            session_id = %session_id,
+            max_frame_bytes = MAX_SSE_FRAME_BYTES,
+            "SSE frame exceeded the byte limit"
+          );
+          break;
+        };
 
-        // Process complete SSE frames (terminated by \n\n).
         // Only decode UTF-8 on frame boundaries to avoid corrupting
         // multi-byte characters split across chunks.
-        while let Some(pos) = find_double_newline(&byte_buf) {
-          let frame_bytes = byte_buf[..pos].to_vec();
-          byte_buf = byte_buf[pos + 2..].to_vec();
-
+        for frame_bytes in frames {
           let Ok(frame) = String::from_utf8(frame_bytes) else {
             continue;
           };
@@ -170,6 +174,25 @@ pub fn spawn_sse_listener(
       tokio::time::sleep(RECONNECT_DELAY).await;
     }
   })
+}
+
+/// Appends `chunk` and returns the SSE frames (terminated by `\n\n`) it
+/// completed, leaving the unterminated remainder in `buffer`. The byte limit
+/// applies to each frame and to the remainder, never to a chunk that carries
+/// several frames; `None` means one of them exceeded it.
+fn drain_sse_frames(buffer: &mut Vec<u8>, chunk: &[u8]) -> Option<Vec<Vec<u8>>> {
+  buffer.extend_from_slice(chunk);
+  let mut frames = Vec::new();
+  while let Some(pos) = find_double_newline(buffer) {
+    if pos > MAX_SSE_FRAME_BYTES {
+      return None;
+    }
+    frames.push(buffer[..pos].to_vec());
+    buffer.drain(..pos + 2);
+  }
+  // A frame at the limit may wait for the second byte of its delimiter.
+  let pending_delimiter = usize::from(buffer.last() == Some(&b'\n'));
+  (buffer.len() <= MAX_SSE_FRAME_BYTES + pending_delimiter).then_some(frames)
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -318,5 +341,72 @@ mod tests {
   fn sse_unexpected_errors_retry_without_cleanup() {
     assert_eq!(classify_sse_rejection(422), SseRejection::Retry);
     assert_eq!(classify_sse_rejection(500), SseRejection::Retry);
+  }
+
+  #[test]
+  fn sse_frame_buffer_accepts_the_exact_limit() {
+    let mut buffer = vec![b'x'; MAX_SSE_FRAME_BYTES - 1];
+    assert_eq!(drain_sse_frames(&mut buffer, b"x"), Some(Vec::new()));
+    assert_eq!(buffer.len(), MAX_SSE_FRAME_BYTES);
+  }
+
+  #[test]
+  fn sse_frame_buffer_rejects_growth_past_the_limit() {
+    let mut buffer = vec![b'x'; MAX_SSE_FRAME_BYTES];
+    assert_eq!(drain_sse_frames(&mut buffer, b"x"), None);
+  }
+
+  #[test]
+  fn sse_frame_buffer_accepts_an_exact_limit_frame_whose_delimiter_is_split() {
+    let frame = vec![b'x'; MAX_SSE_FRAME_BYTES];
+    let mut buffer = Vec::new();
+    assert_eq!(drain_sse_frames(&mut buffer, &frame), Some(Vec::new()));
+    assert_eq!(drain_sse_frames(&mut buffer, b"\n"), Some(Vec::new()));
+    assert_eq!(drain_sse_frames(&mut buffer, b"\n"), Some(vec![frame]));
+    assert!(buffer.is_empty());
+  }
+
+  #[test]
+  fn sse_frame_buffer_rejects_a_frame_past_the_limit_awaiting_its_delimiter() {
+    let mut buffer = vec![b'x'; MAX_SSE_FRAME_BYTES + 1];
+    assert_eq!(drain_sse_frames(&mut buffer, b"\n"), None);
+  }
+
+  #[test]
+  fn sse_frame_buffer_rejects_a_terminated_frame_past_the_limit() {
+    let mut chunk = vec![b'x'; MAX_SSE_FRAME_BYTES + 1];
+    chunk.extend_from_slice(b"\n\n");
+    assert_eq!(drain_sse_frames(&mut Vec::new(), &chunk), None);
+  }
+
+  #[test]
+  fn sse_frame_buffer_accepts_one_chunk_of_frames_each_within_the_limit() {
+    let frame = vec![b'x'; MAX_SSE_FRAME_BYTES - 1];
+    let mut chunk = Vec::new();
+    for _ in 0..3 {
+      chunk.extend_from_slice(&frame);
+      chunk.extend_from_slice(b"\n\n");
+    }
+    chunk.extend_from_slice(b"partial");
+    let mut buffer = Vec::new();
+    assert_eq!(
+      drain_sse_frames(&mut buffer, &chunk),
+      Some(vec![frame.clone(), frame.clone(), frame])
+    );
+    assert_eq!(buffer, b"partial");
+  }
+
+  #[test]
+  fn sse_frame_buffer_completes_a_frame_split_across_chunks() {
+    let mut buffer = Vec::new();
+    assert_eq!(
+      drain_sse_frames(&mut buffer, b"data: {\"a\""),
+      Some(Vec::new())
+    );
+    assert_eq!(
+      drain_sse_frames(&mut buffer, b":1}\n\ndata: "),
+      Some(vec![b"data: {\"a\":1}".to_vec()])
+    );
+    assert_eq!(buffer, b"data: ");
   }
 }

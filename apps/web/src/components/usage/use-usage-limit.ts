@@ -8,10 +8,7 @@ import { APIError } from "@/lib/errors/api";
  * when the backend returns 402.
  *
  * The 402 response body carries `reason`, `required`, and
- * `available` as structured fields. We prefer those when present;
- * falling back to message-text inference so older deployments
- * (and any 402 emitted by an unmetered route) still surface a
- * useful modal.
+ * `available` as structured fields; the API writes the three together.
  *
  * Usage:
  *
@@ -43,49 +40,24 @@ const INITIAL_STATE: ModalState = {
   reason: "usage_limit_exceeded",
 };
 
-const NEED_HAVE_PATTERN =
-  /need\s+(?<required>\d+),\s+have\s+(?<available>\d+)/iu;
-
 const isReason = (value: unknown): value is UsageLimitExceededReason =>
   value === "no_entitlement" ||
   value === "entitlement_inactive" ||
   value === "usage_limit_exceeded";
 
-const extractStructured = (
-  details: Record<string, unknown> | undefined,
-): {
-  reason?: UsageLimitExceededReason;
-  required?: number;
-  available?: number;
-} => {
-  if (!details) {
-    return {};
-  }
-  const out: {
-    reason?: UsageLimitExceededReason;
-    required?: number;
-    available?: number;
-  } = {};
-  const rawReason = details["reason"];
-  const rawRequired = details["required"];
-  const rawAvailable = details["available"];
-  if (isReason(rawReason)) {
-    out.reason = rawReason;
-  }
-  if (typeof rawRequired === "number") {
-    out.required = rawRequired;
-  }
-  if (typeof rawAvailable === "number") {
-    out.available = rawAvailable;
-  }
-  return out;
+const unitsOf = (value: unknown): number =>
+  typeof value === "number" ? value : 0;
+
+type UsageLimitRefusal = {
+  reason: UsageLimitExceededReason;
+  details: Record<string, unknown>;
 };
 
 /**
  * Recognise an HTTP-402 error across the error shapes we
  * receive on the frontend:
  *
- *  - `APIError` from Eden treaty mutations (toAPIError converts
+ *  - `APIError` from API client mutations (toAPIError converts
  *    a 4xx response into one of these).
  *  - Streaming/provider transport errors whose `statusCode === 402`.
  *    Detected here by reading a numeric `statusCode` on any thrown
@@ -100,33 +72,28 @@ const extractStructured = (
  *
  * Returns null when the error is not a 402 from our system.
  */
-export const extractFromError = (
-  error: unknown,
-): { message: string; details?: Record<string, unknown> } | null => {
+export const extractFromError = (error: unknown): UsageLimitRefusal | null => {
   if (APIError.is(error)) {
     if (error.status !== 402) {
       return null;
     }
-    if (!error.details || !isReason(error.details["reason"])) {
+    const { details } = error;
+    const reason = details?.["reason"];
+    if (!details || !isReason(reason)) {
       return null;
     }
-    return {
-      message: error.message,
-      details: error.details,
-    };
+    return { reason, details };
   }
   if (typeof error === "object" && error !== null) {
     const statusCode = "statusCode" in error ? error.statusCode : undefined;
     if (statusCode !== 402) {
       return null;
     }
-    const candidateMessage = "message" in error ? error.message : undefined;
-    const message =
-      typeof candidateMessage === "string" ? candidateMessage : "";
     const responseBody =
       "responseBody" in error ? error.responseBody : undefined;
     const details = parseResponseBody(responseBody);
-    if (!details || !isReason(details["reason"])) {
+    const reason = details?.["reason"];
+    if (!details || !isReason(reason)) {
       // 402 without our reason marker = not from our usage-limit
       // gate; could be an upstream provider's 402 leaking
       // through the transport error envelope. Decline the modal so
@@ -134,7 +101,7 @@ export const extractFromError = (
       // usage-limit CTA for an error we did not raise.
       return null;
     }
-    return { message, details };
+    return { reason, details };
   }
   return null;
 };
@@ -162,36 +129,6 @@ const parseResponseBody = (
   return undefined;
 };
 
-export const reasonFromMessage = (
-  message: string,
-): UsageLimitExceededReason => {
-  const lower = message.toLowerCase();
-  if (lower.includes("no active usage entitlement")) {
-    return "no_entitlement";
-  }
-  if (
-    lower.includes("usage entitlement") &&
-    (lower.includes("cannot consume") || lower.includes("inactive"))
-  ) {
-    return "entitlement_inactive";
-  }
-  return "usage_limit_exceeded";
-};
-
-export const parseAmounts = (
-  message: string,
-): { required: number; available: number } => {
-  const match = NEED_HAVE_PATTERN.exec(message);
-  if (!match) {
-    return { required: 0, available: 0 };
-  }
-  const { required, available } = match.groups ?? {};
-  return {
-    required: Number.parseInt(required ?? "0", 10),
-    available: Number.parseInt(available ?? "0", 10),
-  };
-};
-
 export type UseUsageLimitResult = {
   /**
    * Pass any thrown mutation error here. Returns true if the
@@ -216,14 +153,11 @@ export const useUsageLimit = ({
     if (!extracted) {
       return false;
     }
-    const structured = extractStructured(extracted.details);
-    const reason = structured.reason ?? reasonFromMessage(extracted.message);
-    const fallback = parseAmounts(extracted.message);
     setState({
       open: true,
-      reason,
-      required: structured.required ?? fallback.required,
-      available: structured.available ?? fallback.available,
+      reason: extracted.reason,
+      required: unitsOf(extracted.details["required"]),
+      available: unitsOf(extracted.details["available"]),
     });
     return true;
   };

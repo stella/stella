@@ -3,6 +3,7 @@ import type { ReservedSQL, SQL } from "bun";
 import { describe, expect, test } from "bun:test";
 
 import { defaultConfig } from "@stll/db-load-gate/health";
+import { waitForExternalState } from "@stll/property-testing/external-state";
 
 import type { OnlineIndexConfig } from "../env-online-index";
 import { isRecord } from "../lib/type-guards";
@@ -142,6 +143,10 @@ const installFixtureSchema = async (main: SQL, owner: ReservedSQL) => {
   };
   const tables = declaredTables();
   const texts = [...tables.values()].flat().join("\n");
+  // `search_fold` resolves the extension's dictionary while an index builds.
+  if (texts.includes("search_fold(")) {
+    once("extension:unaccent", `CREATE EXTENSION IF NOT EXISTS "unaccent"`);
+  }
   for (const [, opclass] of texts.matchAll(/\b([a-z0-9_]+_ops)\b/gu)) {
     for (const row of rowsOf(
       await main.unsafe(
@@ -381,15 +386,21 @@ const contendedGate = (
   clock,
   ebs: healthyEbs(clock),
   wait: async (_milliseconds, signal) => {
-    for (let attempt = 0; attempt < 400 && !signal.aborted; attempt++) {
-      const rows = await observer<
-        { waiting: boolean }[]
-      >`SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE pid = ${pid} AND wait_event_type = 'Lock') AS waiting`;
-      if (rows.at(0)?.waiting === true) {
-        return;
-      }
-      await Bun.sleep(5);
-    }
+    await waitForExternalState({
+      description: `backend ${String(pid)} waits on the contender`,
+      intervalMs: 5,
+      timeoutMs: 2000, // timeout: bound observation before checking gate behavior
+      read: async () =>
+        signal.aborted ||
+        (
+          await observer<
+            { waiting: boolean }[]
+          >`SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE pid = ${pid} AND wait_event_type = 'Lock') AS waiting`
+        ).at(0)?.waiting === true,
+      // Proceeds either way: the gate under test decides what a missing
+      // wait means.
+      onTimeout: () => undefined,
+    });
   },
   log: (record) => {
     records.push(record);

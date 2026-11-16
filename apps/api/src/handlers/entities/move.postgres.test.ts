@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { asc, eq } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
@@ -18,6 +18,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 import { moveEntityHandler } from "./move";
 import type { MoveEntityHandlerProps } from "./move";
@@ -136,11 +137,7 @@ const withStatementBarrier = (tx: Transaction, barrier: StatementBarrier) =>
             : new PgDialect().sqlToQuery(query.getSQL()).sql;
         // The control runs the old path on real Postgres: omit only the matter
         // lock, with every entity read/write and ancestry check unchanged.
-        const omitted =
-          barrier.lockMode === "omit" && isWorkspaceLock(compiled);
-        const instrumentedQuery = omitted
-          ? unlockedWorkspaceParentRead(barrier.workspaceId)
-          : query;
+        const instrumentedQuery = omittedMatterLock(barrier, compiled) ?? query;
         const text =
           typeof instrumentedQuery === "string"
             ? instrumentedQuery
@@ -162,6 +159,25 @@ const isAncestorRead = (statement: string) =>
   statement.includes("WITH RECURSIVE ancestors");
 const isWorkspaceLock = (statement: string) =>
   statement.includes('FROM "workspaces"') && statement.includes("FOR UPDATE");
+// The matter lifecycle fence comes first and serializes moves with deletion;
+// it is part of the matter lock the control omits.
+const isWorkspaceLifecycleLock = (statement: string) =>
+  statement.includes("pg_advisory_xact_lock(hashtext(");
+const isMatterLock = (statement: string) =>
+  isWorkspaceLifecycleLock(statement) || isWorkspaceLock(statement);
+// The control's replacement for a matter lock statement, if this is one.
+const omittedMatterLock = (barrier: StatementBarrier, statement: string) => {
+  if (barrier.lockMode !== "omit") {
+    return undefined;
+  }
+  if (isWorkspaceLock(statement)) {
+    return unlockedWorkspaceParentRead(barrier.workspaceId);
+  }
+  if (isWorkspaceLifecycleLock(statement)) {
+    return sql`SELECT NULL`;
+  }
+  return undefined;
+};
 
 const expectDescendantRefusal = (
   result: Awaited<ReturnType<typeof runMove>>,
@@ -265,7 +281,7 @@ if (!databaseUrl || !runPostgresTests) {
                   workspaceId: hierarchy.workspaceId,
                   lockMode,
                   before: (statement) => {
-                    if (isWorkspaceLock(statement)) {
+                    if (isMatterLock(statement)) {
                       releaseFirst.resolve(undefined);
                     }
                   },
@@ -316,9 +332,9 @@ if (!databaseUrl || !runPostgresTests) {
           } finally {
             releaseFirst.resolve(undefined);
             await first;
-            await firstDb
-              .delete(organization)
-              .where(eq(organization.id, hierarchy.organizationId));
+            await deleteOrganizationsForTest(firstDb, [
+              hierarchy.organizationId,
+            ]);
           }
         });
       }, 20_000);
@@ -349,9 +365,7 @@ if (!databaseUrl || !runPostgresTests) {
           ).toEqual(before);
           await expectTerminatingChains(db, hierarchy.workspaceId);
         } finally {
-          await db
-            .delete(organization)
-            .where(eq(organization.id, hierarchy.organizationId));
+          await deleteOrganizationsForTest(db, [hierarchy.organizationId]);
         }
       });
     });

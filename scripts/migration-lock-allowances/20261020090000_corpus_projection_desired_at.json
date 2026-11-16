@@ -1,0 +1,4 @@
+{
+  "add-column": "Nullable, default-free columns are a catalog-only change under a 1s lock_timeout.",
+  "alter-column": "SET DEFAULT changes only the catalog default for future rows (no rewrite or scan) under a 1s lock_timeout."
+}

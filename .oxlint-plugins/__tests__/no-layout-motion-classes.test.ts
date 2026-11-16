@@ -113,6 +113,18 @@ describe.serial(RULE_NAME, () => {
     expect(await lint(source)).toEqual([1, 2, 3, 4, 5, 6, 7]);
   });
 
+  test("reports the hover: none media query and accepts pointer-coarse", async () => {
+    const source = [
+      `export const _a = () => <div className="opacity-0 [@media(hover:none)]:opacity-100" />;`,
+      `export const _b = () => <div className="[@media(any-hover:none)]:block" />;`,
+      `export const _c = () => <div className="[@media(hover:_none)]:block" />;`,
+      `export const _d = () => <div className="opacity-0 pointer-coarse:opacity-100 [@media(hover:hover)]:block" />;`,
+      "",
+    ].join("\n");
+
+    expect(await lint(source)).toEqual([1, 2, 3]);
+  });
+
   test("recognises integer, decimal and fractional duration units", async () => {
     const source = [
       `export const _a = () => <div className="duration-[301ms]" />;`,

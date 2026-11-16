@@ -91,7 +91,7 @@ describe("persisted Folio collaboration snapshot loading", () => {
         ),
       );
       const refusal = migrateFolioYjsSnapshot(snapshotBytes);
-      expect(FOLIO_YJS_ATTR_SCHEMA_VERSION).toBe(13);
+      expect(FOLIO_YJS_ATTR_SCHEMA_VERSION).toBe(14);
       expect(Result.isError(refusal) && refusal.error.code).toBe(
         "unsupported_version",
       );

@@ -38,6 +38,11 @@ for (const scenario of [
   { name: "narrow", query: "", width: 320 },
   { name: "Arabic RTL", query: "?rtl=true", width: 900 },
   { name: "mirror fallback", query: "?fallback=true", width: 900 },
+  {
+    name: "a title shorter than the floor",
+    query: "?sibling=true",
+    width: 900,
+  },
 ]) {
   test(`preserves title geometry, typography and selection on ${scenario.name}`, async ({
     page,
@@ -72,6 +77,21 @@ for (const scenario of [
       end: (await input.inputValue()).length,
       length: (await input.inputValue()).length,
     });
+  });
+}
+
+for (const query of ["?sibling=true", "?sibling=true&fallback=true"]) {
+  test(`a short field keeps its sibling's width in a content-sized row ${query}`, async ({
+    page,
+  }) => {
+    await page.goto(fixturePath + query);
+    const sibling = page.locator("[data-sibling]");
+    const before = (await metrics(sibling)).rect.width;
+    expect(before).toBeGreaterThan(0);
+    await openEditor(page);
+    expect(
+      Math.abs((await metrics(sibling)).rect.width - before),
+    ).toBeLessThanOrEqual(TOLERANCE_PX);
   });
 }
 
@@ -264,7 +284,7 @@ for (const { fallback, rtl } of [
       (element) => {
         const row = element.closest("[data-title-container]");
         if (!(row instanceof HTMLElement)) {
-          throw new Error("the fill field is missing its row");
+          throw new TypeError("the fill field is missing its row");
         }
         const rowBox = row.getBoundingClientRect();
         const fieldBox = element.getBoundingClientRect();

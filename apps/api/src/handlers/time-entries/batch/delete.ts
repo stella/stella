@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, eq, inArray, ne } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
 import { timeEntryRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
@@ -11,11 +11,16 @@ import { getTimePolicyViolation, readTimePolicy } from "@/api/lib/billing-time";
 import { recordBillingCapCrossings } from "@/api/lib/billing/arrangements";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { lockRowsForWrite } from "@/api/lib/db/aggregate-lock";
 import { formatTodayInTimeZone } from "@/api/lib/timezone";
 
-const batchDeleteBodySchema = t.Object({
-  ids: t.Array(tSafeId("timeEntry"), { minItems: 1, maxItems: 200 }),
+const batchDeleteBodySchema = v.object({
+  ids: v.pipe(
+    v.array(resourceIdSchema("timeEntry")),
+    v.minLength(1),
+    v.maxLength(200),
+  ),
 });
 
 const buildBatchDeleteEvents = (params: {
@@ -102,23 +107,26 @@ const batchDelete = createSafeHandler(
         if (runningError) {
           return { type: "policy" as const, error: runningError, rows: [] };
         }
-        const candidates = await tx
-          .select({
-            dateWorked: timeEntries.dateWorked,
-            timezoneId: timeEntries.timezoneId,
-          })
-          .from(timeEntries)
-          .where(
-            and(
-              eq(timeEntries.workspaceId, workspaceId),
-              inArray(timeEntries.id, ids),
-              ne(timeEntries.status, BILLING_STATUS.BILLED),
-              ne(timeEntries.status, BILLING_STATUS.WRITTEN_OFF),
-            ),
-          )
-          .limit(ids.length)
-          .for("update");
-        for (const entry of candidates) {
+        const locked = await lockRowsForWrite({
+          table: timeEntries,
+          query: tx
+            .select({
+              id: timeEntries.id,
+              dateWorked: timeEntries.dateWorked,
+              timezoneId: timeEntries.timezoneId,
+            })
+            .from(timeEntries)
+            .where(
+              and(
+                eq(timeEntries.workspaceId, workspaceId),
+                inArray(timeEntries.id, ids),
+                ne(timeEntries.status, BILLING_STATUS.BILLED),
+                ne(timeEntries.status, BILLING_STATUS.WRITTEN_OFF),
+              ),
+            )
+            .limit(ids.length),
+        });
+        for (const entry of locked.rows) {
           const today = formatTodayInTimeZone({
             timezoneId: entry.timezoneId,
             now,
@@ -137,32 +145,34 @@ const batchDelete = createSafeHandler(
           }
         }
 
-        const deleted = await tx
-          .delete(timeEntries)
-          .where(
-            and(
-              eq(timeEntries.workspaceId, workspaceId),
-              inArray(timeEntries.id, ids),
-              eq(timeEntries.status, BILLING_STATUS.DRAFT),
-            ),
-          )
-          .returning({ id: timeEntries.id });
+        // Only the locked entries passed the policy check: drafts among them
+        // are deleted and the rest written off.
+        const deleted =
+          locked.ids.length === 0
+            ? []
+            : await tx
+                .delete(timeEntries)
+                .where(
+                  locked.where(
+                    and(
+                      eq(timeEntries.workspaceId, workspaceId),
+                      eq(timeEntries.status, BILLING_STATUS.DRAFT),
+                    ),
+                  ),
+                )
+                .returning({ id: timeEntries.id });
 
-        const writtenOff = await tx
-          .update(timeEntries)
-          .set({
-            status: BILLING_STATUS.WRITTEN_OFF,
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(timeEntries.workspaceId, workspaceId),
-              inArray(timeEntries.id, ids),
-              ne(timeEntries.status, BILLING_STATUS.WRITTEN_OFF),
-              ne(timeEntries.status, BILLING_STATUS.BILLED),
-            ),
-          )
-          .returning({ id: timeEntries.id });
+        const writtenOff =
+          locked.ids.length === 0
+            ? []
+            : await tx
+                .update(timeEntries)
+                .set({
+                  status: BILLING_STATUS.WRITTEN_OFF,
+                  updatedAt: new Date(),
+                })
+                .where(locked.where(eq(timeEntries.workspaceId, workspaceId)))
+                .returning({ id: timeEntries.id });
 
         await recordAuditEvent(
           tx,

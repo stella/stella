@@ -57,6 +57,10 @@ const platform = (module: string, reason: string) =>
   }) as const satisfies SchedulerTaskAuthorityEntry;
 
 export const SCHEDULER_TASK_AUTHORITY = {
+  "caseLaw.reconcilePublisherRemovals": platform(
+    "case-law-publisher-removals.ts",
+    "Reconciles publisher removals in the public legal corpus.",
+  ),
   "actions.sweepCosts": platform(
     "action-cost-retention.ts",
     "Retention sweep of usage records past their window.",
@@ -81,6 +85,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "bilingual-run-reconcile.ts",
     "Hands queued runs back to their queue, whose worker resolves the requester's run actor.",
   ),
+  "caseLaw.backfillParsedInputState": platform(
+    "case-law-parsed-input-state-backfill.ts",
+    "Public legal corpus maintenance.",
+  ),
   "caseLaw.backfillProvisionState": platform(
     "case-law-provision-state-backfill.ts",
     "Public legal corpus maintenance.",
@@ -92,6 +100,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
   "caseLaw.censusRawObjects": platform(
     "case-law-raw-storage.ts",
     "Public legal corpus storage census.",
+  ),
+  "caseLaw.refreshCoverage": platform(
+    "case-law-coverage-refresh.ts",
+    "Precomputes the public legal corpus coverage summary.",
   ),
   "caseLaw.reportFreshness": platform(
     "case-law-freshness-report.ts",
@@ -105,13 +117,25 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "case-law-raw-storage.ts",
     "Public legal corpus storage reconciliation.",
   ),
+  "caseLaw.reconcileDecisionIdentifiers": platform(
+    "case-law-decision-identifier-reconciliation.ts",
+    "Public legal corpus identifier reconciliation.",
+  ),
   "caseLaw.reconcileRawSweeps": platform(
     "case-law-raw-storage.ts",
     "Public legal corpus storage reconciliation.",
   ),
-  "caseLaw.refreshBrowseFacets": platform(
-    "case-law-browse-facet-refresh.ts",
-    "Public legal corpus aggregates.",
+  "caseLaw.foldPopulationCounts": platform(
+    "case-law-population-fold.ts",
+    "Folds public legal corpus population deltas under the load governor.",
+  ),
+  "caseLaw.seedPopulationCounts": platform(
+    "case-law-population-seed.ts",
+    "Seeds public legal corpus population counts under the load governor.",
+  ),
+  "caseLaw.foldSitemapTouches": platform(
+    "case-law-sitemap-touch-fold.ts",
+    "Folds public legal corpus sitemap touches under the load governor.",
   ),
   "caseLaw.refreshSitemapShards": platform(
     "case-law-sitemap-shard-refresh.ts",
@@ -135,6 +159,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "chat-turn-reaper.ts",
     "Ends chat turns whose lease expired; reads no content.",
   ),
+  "chat.sendLimitReminders": platform(
+    "chat-limit-reminders.ts",
+    "Files the reminders members asked for when their agent's usage limit resets; reads ids and times only.",
+  ),
   "chat.purgeSecrets": platform(
     "chat-secret-retention.ts",
     "Clears expired encrypted chat payloads while retaining request receipts.",
@@ -157,7 +185,7 @@ export const SCHEDULER_TASK_AUTHORITY = {
   ),
   "documentProcessing.dispatchNativeExtraction": platform(
     "document-processing-native-extraction.ts",
-    "Hands queued native extraction runs to their queue.",
+    "Hands queued native extraction runs to their queue and extracts small ones through the run's own lease, as the worker does.",
   ),
   "documentProcessing.recoverDeadlineScouts": platform(
     "document-deadline-scout-recovery.ts",
@@ -165,7 +193,7 @@ export const SCHEDULER_TASK_AUTHORITY = {
   ),
   "documentReviews.reconcileQueuedRuns": platform(
     "document-review-run-reconcile.ts",
-    "Hands queued runs back to their queue, whose worker resolves the requester's run actor.",
+    "Fails stuck runs and hands queued runs back to their queue, whose worker resolves the requester's run actor.",
   ),
   "entityBuffers.reconcileIntents": platform(
     "buffer-intent-reconciliation.ts",
@@ -196,6 +224,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
   "flows.reconcileOrphanRuns": platform(
     "flow-run-orphan-reconcile.ts",
     "Hands stalled flow runs back to their queue.",
+  ),
+  "emailDeliverability.receive": platform(
+    "email-deliverability-receive.ts",
+    "Applies the mail provider's bounce and complaint events to the accounts whose addresses they name; stores only whether each address is deliverable.",
   ),
   "inboundMail.receive": platform(
     "inbound-mail-receive.ts",
@@ -247,9 +279,17 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "review-organization-reset.ts",
     "Resets the configured restricted review organization; each run first proves its only member is the configured review account.",
   ),
+  "dataExports.maintain": platform(
+    "data-export-maintenance.ts",
+    "Marks exports past their expiry as expired (the bucket lifecycle deletes their files) and resumes or fails stalled runs; queued exports are handed back to their queue, whose worker reads as the requester's membership.",
+  ),
   "reportExports.reconcileQueued": platform(
     "report-export-reconcile.ts",
     "Recovers stuck exports and hands queued ones back to their queue, whose worker resolves the requester's run actor.",
+  ),
+  "requests.sweepReceipts": platform(
+    "request-receipt-retention.ts",
+    "Retention sweep of expired technical request receipts under each receipt's organization and user scope.",
   ),
   "sanctions.backfillMonitoring": platform(
     "sanctions-monitoring-backfill.ts",
@@ -268,10 +308,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "Reports overdue scheduler operator pauses.",
   ),
   "scheduler.dispatchBullMq": {
-    authority: "unclassified",
+    authority: "org-automation",
     module: "apps/api/src/lib/scheduler/bullmq.ts",
     reason:
-      "Forwards to whichever queue a stored job names; the code does not fix the target queue, so the authority depends on data.",
+      "Dispatches only to registered org-automation queues; refuses member-run and unknown queues before enqueueing.",
   },
   "scheduler.noop": {
     authority: "org-automation",
@@ -301,6 +341,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
   "usage.redactWebhookEvents": platform(
     "hosted-usage-webhook-retention.ts",
     "Retention redaction of provider events.",
+  ),
+  "usage.eraseHostedCustomers": platform(
+    "hosted-customer-erasure.ts",
+    "Erases provider customer records after organization deletion.",
   ),
   "workObligations.attentionScout": platform(
     "work-attention-scout.ts",

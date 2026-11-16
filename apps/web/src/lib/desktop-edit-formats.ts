@@ -40,6 +40,22 @@ export const canOpenDesktopEdit = ({
   fileType !== null &&
   lockState !== "locked-by-other";
 
+export const canReleaseDesktopEditLock = ({
+  context,
+  fileType,
+  lockState,
+  readOnly,
+}: {
+  context: DesktopEditActionContext;
+  fileType: DesktopEditFileType | null;
+  lockState: DesktopEditLockState;
+  readOnly: boolean;
+}): boolean =>
+  context === "row" &&
+  !readOnly &&
+  fileType !== null &&
+  lockState !== "unlocked";
+
 type DesktopEditFile = {
   fileName: string | null | undefined;
   mimeType: string | null | undefined;

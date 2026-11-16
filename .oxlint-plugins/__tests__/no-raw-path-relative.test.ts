@@ -6,6 +6,18 @@ import { lintSingleRule } from "./lint-single-rule.ts";
 const lint = async (source: string, sourcePath = "scripts/path-consumer.ts") =>
   await lintSingleRule("no-raw-path-relative", source, { sourcePath });
 
+const MULTILINE_RELATIVE = [
+  'import path from "node:path";',
+  "const relative = path.relative(",
+  "  root,",
+  "  file,",
+  ");",
+].join("\n");
+
+test("reports a raw relative call that spans lines", async () => {
+  expect(await lint(MULTILINE_RELATIVE)).toEqual([2]);
+});
+
 test("reports raw relative calls through identifiers", async () => {
   expect(
     await lint(

@@ -146,7 +146,7 @@ describe("isResourceProjectionModule", () => {
   test("classifies a $inferSelect module that a response surface reaches", () => {
     expect(
       isResourceProjectionModule({
-        relativePath: "apps/api/src/handlers/invoices/invoice-lines.ts",
+        relativePath: "apps/api/src/lib/billing/invoice-lines.ts",
         content: "type InvoiceLineRow = typeof invoiceLines.$inferSelect;",
         responseReachable: true,
       }),
@@ -216,7 +216,7 @@ describe("collectResponseReachable", () => {
 
   test("reaches a guarded projection helper through its route", () => {
     expect(
-      reachable.has(path.join(apiRoot, "handlers/invoices/invoice-lines.ts")),
+      reachable.has(path.join(apiRoot, "lib/billing/invoice-lines.ts")),
     ).toBe(true);
   });
 

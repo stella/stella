@@ -1,9 +1,10 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import { testChatApprovalContextValue } from "@/components/chat/chat-approval-context.test-fixtures";
 import type { ChatUIMessage } from "@/components/chat/chat-ui-tools";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "https://app.example.test/chat/thread" });
 
@@ -131,7 +132,9 @@ test("code block actions of the streaming answer wait until the turn ends", asyn
     rerender([question, answer(`${partial}\n\`\`\`\n\nDone.`)], false);
   });
   await waitFor(() => {
-    expect(view.container.querySelector("[data-incomplete]")).toBeNull();
+    expect(view.container.querySelector("[data-incomplete]") === null).toBe(
+      true,
+    );
     expect(view.container.textContent).toContain("Done.");
   });
   expect(actions().length).toBeGreaterThan(0);
@@ -220,8 +223,8 @@ test("an anonymized thread renders the user's message as text, not HTML source",
     expect(
       userBubble()?.querySelectorAll(
         '[aria-label="Sent to the model as [PERSON_1]."]',
-      ),
-    ).toHaveLength(1);
+      ).length,
+    ).toBe(1);
   });
   expect(userBubble()?.textContent).toBe(
     "Draft a letter to Jana Nováková about <b>",

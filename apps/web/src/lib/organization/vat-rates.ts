@@ -5,7 +5,8 @@ import type { VatRatePresetCountry } from "@stll/api-contract";
 
 import { api } from "@/lib/api";
 import { invokeCapability } from "@/lib/capabilities/capability-request";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
+import type { IdempotentRequest } from "@/lib/idempotency/use-idempotent-submit";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -13,7 +14,7 @@ export const vatRatesKeys = {
   all: (organizationId: string) => ["vat-rates", organizationId] as const,
 };
 const listVatRates = async (cursor: string | undefined, signal: AbortSignal) =>
-  unwrapEden(
+  unwrapApiResponse(
     await api["vat-rates"].get({
       query: { ...(cursor === undefined ? {} : { cursor }) },
       fetch: { signal },
@@ -33,18 +34,26 @@ export type VatRateCommand =
   | { type: "update"; id: string; values: VatRateInput }
   | { type: "archive"; id: string }
   | { type: "applyPreset"; country: VatRatePresetCountry };
-export const sendVatRateCommand = async (command: VatRateCommand) => {
+export const sendVatRateCommand = async (
+  command: VatRateCommand,
+  intentRequest: IdempotentRequest,
+) => {
   if (command.type === "create") {
-    return invokeCapability("vat-rates.create", async (request) =>
-      unwrapEden(await api["vat-rates"].post(command.values, request)),
+    return invokeCapability("vat-rates.create", async (capability) =>
+      unwrapApiResponse(
+        await api["vat-rates"].post(command.values, {
+          ...capability,
+          fetch: { headers: intentRequest.headers },
+        }),
+      ),
     );
   }
   if (command.type === "applyPreset") {
     return invokeCapability("vat-rates.presets.create", async (request) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api["vat-rates"]["apply-preset"].post(
           { country: command.country },
-          request,
+          { ...request, fetch: { headers: intentRequest.headers } },
         ),
       ),
     );
@@ -53,11 +62,11 @@ export const sendVatRateCommand = async (command: VatRateCommand) => {
   switch (command.type) {
     case "update":
       return invokeCapability("vat-rates.update", async (request) =>
-        unwrapEden(await rate.patch(command.values, request)),
+        unwrapApiResponse(await rate.patch(command.values, request)),
       );
     case "archive":
       return invokeCapability("vat-rates.archive", async (request) =>
-        unwrapEden(await rate.archive.post(undefined, request)),
+        unwrapApiResponse(await rate.archive.post(undefined, request)),
       );
     default:
       command satisfies never;

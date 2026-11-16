@@ -1,6 +1,8 @@
 import { panic, Result } from "better-result";
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
+
+import { createTestState } from "@stll/test-state";
 
 import {
   ORGANIZATION_ACCESS_STATE,
@@ -17,6 +19,7 @@ import { envDocumentProcessingWorker } from "@/api/env-document-processing-worke
 import { createSafeId } from "@/api/lib/branded-types";
 import { copyOrganizationFiles } from "@/api/lib/files/copy-organization-files";
 import {
+  DeleteOrganizationFileError,
   deleteOrganizationFilesWithSignal,
   deleteOrganizationFileWithSignal,
 } from "@/api/lib/files/delete-organization-file";
@@ -37,6 +40,7 @@ import {
   writeOrganizationFile,
   writeOrganizationFiles,
 } from "@/api/lib/files/organization-file-usage";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -47,10 +51,12 @@ import type { TestIds } from "@/api/tests/security/rls-helpers";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
+const testState = createTestState({ file: import.meta.path, config: env });
+const workerState = testState.forConfig(envDocumentProcessingWorker);
+
 let testDb: TestDatabase;
 let ids: TestIds;
-const priorFlag = env.FEATURE_FILE_USAGE_LIMITS;
-const priorWorkerFlag = envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS;
+
 const policyId = createSafeId<"usagePolicy">();
 const entitlementId = createSafeId<"usageEntitlement">();
 const assignmentId = createSafeId<"usageSeatAssignment">();
@@ -90,7 +96,7 @@ const releaseConfirmedAbsentReservation = async (key: string) => {
   );
 };
 
-beforeAll(async () => {
+testState.beforeAll(async () => {
   testDb = await getTestDb();
   ids = createTestIds();
   await setupRlsTestData(testDb, ids);
@@ -110,20 +116,19 @@ beforeAll(async () => {
     seats: 1,
     currentPeriodStart: new Date(now - 60_000),
     currentPeriodEnd: new Date(now + 60_000),
-    source: "manual",
+    // The suite walks provider statuses on this row: hosted semantics.
+    source: "hosted",
   });
   await testDb.insert(usageSeatAssignments).values({
     id: assignmentId,
     organizationId: ids.orgA,
     userId: ids.userA1,
   });
-  env.FEATURE_FILE_USAGE_LIMITS = true;
-  envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = true;
+  testState.setConfig("FEATURE_FILE_USAGE_LIMITS", true);
+  workerState.setConfig("FEATURE_FILE_USAGE_LIMITS", true);
 });
 
 afterAll(async () => {
-  env.FEATURE_FILE_USAGE_LIMITS = priorFlag;
-  envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = priorWorkerFlag;
   await testDb
     .delete(organizationFileObjects)
     .where(eq(organizationFileObjects.organizationId, ids.orgA));
@@ -352,13 +357,18 @@ describe("organization file usage", () => {
         Result.isOk(await reconcileOrganizationFileObject(input(key, 6), db())),
       ).toBe(true);
 
-      const unavailableDb = asTestRaw<
-        NonNullable<Parameters<typeof reserveOrganizationFileBytes>[1]>
-      >({
-        transaction: async () => {
+      let transactionCount = 0;
+      const unavailableDb: NonNullable<
+        Parameters<typeof reserveOrganizationFileBytes>[1]
+      > = {
+        transaction: async (run) => {
+          transactionCount += 1;
+          if (transactionCount === 1) {
+            return await db().transaction(run);
+          }
           throw new Error("ledger unavailable");
         },
-      });
+      };
       const deleted = await deleteOrganizationFileWithSignal(
         key,
         AbortSignal.timeout(10_000),
@@ -366,6 +376,12 @@ describe("organization file usage", () => {
       );
 
       expect(Result.isError(deleted)).toBe(true);
+      if (Result.isError(deleted)) {
+        expect(DeleteOrganizationFileError.is(deleted.error)).toBe(true);
+        if (DeleteOrganizationFileError.is(deleted.error)) {
+          expect(deleted.error.stage).toBe("usage_removal");
+        }
+      }
       expect(fake.objects.has(`${envBase.S3_BUCKET}/${key}`)).toBe(false);
       expect((await counter())?.committedBytes).toBe(6n);
       expect(Result.isOk(await removeOrganizationFileBytes(key, db()))).toBe(
@@ -373,6 +389,25 @@ describe("organization file usage", () => {
       );
     } finally {
       fake.stop();
+    }
+  });
+
+  test("distinguishes a storage failure from usage removal", async () => {
+    const fake = startFakeS3();
+    fake.stop();
+
+    const deleted = await deleteOrganizationFileWithSignal(
+      "fixture/unavailable-storage",
+      AbortSignal.timeout(10_000),
+      { fileUsageDb: db() },
+    );
+
+    expect(Result.isError(deleted)).toBe(true);
+    if (Result.isError(deleted)) {
+      expect(DeleteOrganizationFileError.is(deleted.error)).toBe(true);
+      if (DeleteOrganizationFileError.is(deleted.error)) {
+        expect(deleted.error.stage).toBe("storage");
+      }
     }
   });
 
@@ -484,13 +519,19 @@ describe("organization file usage", () => {
       storageBytesPerAssignment: 40n,
       serviceActionsPerPeriod: 3,
     });
-    await testDb.insert(organizationAccessStates).values({
-      organizationId: ids.orgB,
+    const evaluationEnded = {
       state: ORGANIZATION_ACCESS_STATE.evaluationEnded,
       evaluationStartedAt: new Date(now - 120_000),
       evaluationEndsAt: new Date(now - 60_000),
       evaluationEndedAt: new Date(now - 60_000),
-    });
+    };
+    await testDb
+      .insert(organizationAccessStates)
+      .values({ organizationId: ids.orgB, ...evaluationEnded })
+      .onConflictDoUpdate({
+        target: organizationAccessStates.organizationId,
+        set: evaluationEnded,
+      });
     try {
       const freeInput = (objectKey: string, sizeBytes: number) => ({
         organizationId: ids.orgB,
@@ -524,6 +565,10 @@ describe("organization file usage", () => {
       await testDb
         .delete(organizationAccessStates)
         .where(eq(organizationAccessStates.organizationId, ids.orgB));
+      await recordNewOrganizationAccessState(testDb, {
+        organizationId: ids.orgB,
+        now: new Date(),
+      });
       await testDb
         .delete(usagePolicies)
         .where(eq(usagePolicies.id, freePolicyId));
@@ -1131,8 +1176,8 @@ describe("organization file usage", () => {
   });
 
   test("flag off does not call the database", async () => {
-    env.FEATURE_FILE_USAGE_LIMITS = false;
-    envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = false;
+    testState.setConfig("FEATURE_FILE_USAGE_LIMITS", false);
+    workerState.setConfig("FEATURE_FILE_USAGE_LIMITS", false);
     const noDb = {
       transaction: async () => {
         throw new Error("unexpected transaction");
@@ -1145,7 +1190,7 @@ describe("organization file usage", () => {
       >(noDb),
     );
     expect(reservation).toMatchObject({ value: { status: "disabled" } });
-    env.FEATURE_FILE_USAGE_LIMITS = true;
-    envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = true;
+    testState.setConfig("FEATURE_FILE_USAGE_LIMITS", true);
+    workerState.setConfig("FEATURE_FILE_USAGE_LIMITS", true);
   });
 });

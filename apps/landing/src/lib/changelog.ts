@@ -1,6 +1,8 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import { slugify } from "@stll/text-normalize";
+
 import releaseDates from "../data/changelog-release-dates.json";
 import { groupMaintenanceReleases } from "./changelog-release";
 
@@ -31,12 +33,12 @@ const CHANGELOG_DIR = resolveRepoPath(
 const STABLE_CHANGELOG_FILE_PATTERN = /^v\d+\.\d+\.\d+\.md$/u;
 
 const releaseAnchorId = (tagName: string) =>
-  tagName
-    .toLowerCase()
-    .replaceAll(".", "-")
-    .replace(/[^a-z0-9-]/gu, "-")
-    .replace(/-+/gu, "-")
-    .replace(/^-|-$/gu, "");
+  slugify(tagName, {
+    charset: "ascii",
+    fallback: "",
+    maxLength: Number.MAX_SAFE_INTEGER,
+    separator: "-",
+  });
 
 const listReleaseTags = (): string[] => {
   if (!existsSync(CHANGELOG_DIR)) {

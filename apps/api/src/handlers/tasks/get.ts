@@ -3,7 +3,7 @@ import { Result } from "better-result";
 import { entityContextProjection } from "@/api/db/entity-feature-policies";
 import { entities } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { reviewGateForTask } from "@/api/lib/flows/review-gate-task";
 import {
@@ -13,7 +13,9 @@ import {
 
 const parentContext = entityContextProjection(entities.parentId);
 
-const readTaskByIdParamsSchema = workspaceParams({ taskId: tSafeId("entity") });
+const readTaskByIdParamsSchema = workspaceParams({
+  taskId: resourceIdSchema("entity"),
+});
 
 const readTaskById = createSafeHandler(
   {

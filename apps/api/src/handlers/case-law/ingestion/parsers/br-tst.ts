@@ -28,10 +28,10 @@
  * and keep only their text.
  */
 import { panic, Result, TaggedError } from "better-result";
-import * as cheerio from "cheerio";
-import type { AnyNode } from "domhandler";
-import { isTag, isText } from "domhandler";
 
+import { load } from "@stll/html";
+import type * as cheerio from "@stll/html";
+import { type AnyNode, isTag, isText } from "@stll/html/nodes";
 // parser-output-unchanged: imports the document AST from its package owner
 import type {
   Block,
@@ -42,6 +42,7 @@ import type {
 } from "@stll/legal-ast/document-ast";
 import { hasInlineChildren } from "@stll/legal-ast/document-ast";
 import { normalizeInlineLine } from "@stll/legal-ast/inline-line";
+import { positionalBlockAnchor } from "@stll/legal-ast/stable-block-anchors";
 
 import {
   isExcludedHtmlTag,
@@ -149,7 +150,7 @@ const numberedBlocks = (drafts: readonly BlockDraft[]): Block[] =>
     if (style?.type === "heading") {
       return {
         id: `b${position}`,
-        anchorId: `h-${position}`,
+        anchorId: positionalBlockAnchor({ kind: "h", ordinal: position }),
         type: "heading",
         level: 1,
         role: style.role,
@@ -159,7 +160,7 @@ const numberedBlocks = (drafts: readonly BlockDraft[]): Block[] =>
     }
     return {
       id: `b${position}`,
-      anchorId: `p-${position}`,
+      anchorId: positionalBlockAnchor({ kind: "p", ordinal: position }),
       type: "paragraph",
       ...(style === undefined ? {} : { role: style.role }),
       inlines: line.inlines,
@@ -315,7 +316,7 @@ export const parseBrTstHtml = (
   html: string,
   identity: BrTstDocumentIdentity,
 ): Result<BrTstParsedDocument, BrTstParseError> => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   return assemble(identity, numberedBlocks(htmlDrafts($, $("body"))));
 };
 
@@ -388,7 +389,7 @@ export const parseBrTstPrecedent = (
     style: ParagraphStyle | undefined,
   ): void => {
     for (const raw of (value ?? "").split(/\r?\n/u)) {
-      const $ = cheerio.load(raw);
+      const $ = load(raw);
       const line = lineOf(walkInlines($, $("body")));
       if (line !== undefined) {
         drafts.push({ style, line });

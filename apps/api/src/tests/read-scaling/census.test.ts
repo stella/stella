@@ -1,28 +1,82 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+
+import { treeBaseRevision } from "@stll/scripts/src/tree-base-revision";
 
 import { isRecord } from "@/api/lib/type-guards";
 import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
-import api from "@/api/server";
+import { apiApp } from "@/api/server";
 
 import {
   ledgerGitEnv,
-  ledgerMergeBase,
   runLedgerMembershipGuard,
 } from "../../../../../scripts/ledger-membership.ts";
+import { accountExportDownloadScalingScenario } from "./account-exports";
 import apiLedger from "./api-scaling-ledger.json";
+import { chatActiveRunsScalingScenario } from "./chat-active-runs";
+import { chatBackgroundTasksScalingScenario } from "./chat-background-tasks";
+import { browserSiteGrantsScalingScenario } from "./chat-browser-site-grants";
+import { chatLimitReminderScalingScenario } from "./chat-limit-reminder";
+import { chatLocalFilesUndoScalingScenario } from "./chat-local-files-undo";
+import { chatLocalRunStepContentScalingScenario } from "./chat-local-run-step-content";
+import { chatLocalRunnersScalingScenario } from "./chat-local-runners";
+import { chatMcpAppBundleScalingScenario } from "./chat-mcp-app-bundle";
+import {
+  chatQueuedMessageReadScalingScenario,
+  chatQueueReadScalingScenario,
+} from "./chat-queue";
+import { chatPinnedThreadsScalingScenario } from "./chat-threads";
 import { claimCommentScalingScenarios } from "./claim-comments";
+import { reviewHistoryScalingScenarios } from "./claim-review-history";
+import { clientInvoicePrefillScalingScenario } from "./client-invoice-prefill";
+import {
+  conflictCheckListScalingScenario,
+  conflictCheckReadScalingScenario,
+} from "./conflict-checks";
+import { dataBoxSettingsScalingScenarios } from "./data-box-settings";
+import { dataExportReadScalingScenarios } from "./data-exports";
+import { decisionAnchorRedirectsScalingScenario } from "./decision-anchor-redirects";
+import { decisionFilterValidationScalingScenario } from "./decision-filter-validation";
 import { decisionSummaryScalingScenario } from "./decision-summary";
+import { desktopRunnerUpgradeScalingScenario } from "./desktop-runner-upgrade";
+import {
+  desktopDictationModelsScalingScenario,
+  dictationScalingScenario,
+} from "./dictation";
+import {
+  documentAnnotationScalingScenarios,
+  markedPdfDownloadScalingScenario,
+} from "./document-annotations";
+import { graphToolsScalingScenarios } from "./graph-tools";
+import { invoicePaymentScalingScenarios } from "./invoice-payments";
+import { legalHoldScalingScenarios } from "./legal-holds";
+import { legislationMatterLinkScalingScenarios } from "./legislation-matter-links";
 import { exactIconScalingScenario } from "./link-icons";
+import { matterVocabularyScalingScenario } from "./matter-vocabulary";
 import mcpLedger from "./mcp-scaling-ledger.json";
 import { mcpScalingScenarios } from "./mcp-scenarios";
+import { memberBillingScalingScenario } from "./member-billing-access";
+import { memberCandidatesScalingScenario } from "./member-candidates";
+import { memberRoleScalingScenario } from "./member-role";
+import { mobileClientMetadataScalingScenario } from "./mobile-client-metadata";
+import { mobileUpdateScalingScenario } from "./mobile-updates";
+import { myOpenTasksScalingScenario } from "./my-open-tasks";
+import { organizationAuditExportScalingScenario } from "./organization-audit-export";
+import { organizationCreateScalingScenario } from "./organization-create";
+import { organizationSlugScalingScenario } from "./organization-slug";
+import { outlookClientMetadataScalingScenario } from "./outlook-client-metadata";
 import {
   readScenarioRegistry,
   scenarioMembershipViolations,
 } from "./scenario-membership";
 import { readScalingScenarios } from "./scenarios";
+import { sharepointBrowseScalingScenarios } from "./sharepoint-browse";
+import {
+  softLawReadScalingScenario,
+  softLawSearchScalingScenario,
+} from "./soft-law";
 import {
   apiScalingSurface,
   mcpScalingSurface,
@@ -30,24 +84,79 @@ import {
   scalingCoverageViolations,
   withNewWriteRoutes,
 } from "./surface";
+import { timeEntryReportScalingScenario } from "./time-entry-report";
+import { suggestionRangeScalingScenario } from "./time-suggestion-range";
+import {
+  verificationChronologyScalingScenarios,
+  verificationGraphScalingScenarios,
+} from "./verification-graph";
+import { verifyQuoteApiScalingScenario } from "./verify-quote";
 import { writeScalingScenarios } from "./write-scenarios";
 
 const repoRoot = path.resolve(import.meta.dir, "../../../../..");
 const measuredApiScenarios = [
+  ...dataExportReadScalingScenarios,
+  organizationCreateScalingScenario,
+  matterVocabularyScalingScenario,
+  verifyQuoteApiScalingScenario,
   ...readScalingScenarios,
   ...writeScalingScenarios,
+  memberBillingScalingScenario,
   exactIconScalingScenario,
   decisionSummaryScalingScenario,
+  decisionAnchorRedirectsScalingScenario,
+  decisionFilterValidationScalingScenario,
+  accountExportDownloadScalingScenario,
+  desktopRunnerUpgradeScalingScenario,
+  chatLocalRunnersScalingScenario,
+  chatLocalFilesUndoScalingScenario,
+  chatBackgroundTasksScalingScenario,
+  chatLocalRunStepContentScalingScenario,
+  chatActiveRunsScalingScenario,
+  chatPinnedThreadsScalingScenario,
+  chatLimitReminderScalingScenario,
+  chatQueueReadScalingScenario,
+  chatQueuedMessageReadScalingScenario,
+  browserSiteGrantsScalingScenario,
+  conflictCheckListScalingScenario,
+  conflictCheckReadScalingScenario,
+  chatMcpAppBundleScalingScenario,
+  clientInvoicePrefillScalingScenario,
   ...claimCommentScalingScenarios,
+  ...reviewHistoryScalingScenarios,
+  ...verificationGraphScalingScenarios,
+  ...verificationChronologyScalingScenarios,
+  ...graphToolsScalingScenarios,
+  ...dataBoxSettingsScalingScenarios,
+  suggestionRangeScalingScenario,
+  timeEntryReportScalingScenario,
+  mobileClientMetadataScalingScenario,
+  memberRoleScalingScenario,
+  outlookClientMetadataScalingScenario,
+  ...documentAnnotationScalingScenarios,
+  markedPdfDownloadScalingScenario,
+  myOpenTasksScalingScenario,
+  memberCandidatesScalingScenario,
+  mobileUpdateScalingScenario,
+  ...invoicePaymentScalingScenarios,
+  ...legalHoldScalingScenarios,
+  ...legislationMatterLinkScalingScenarios,
+  dictationScalingScenario,
+  desktopDictationModelsScalingScenario,
+  organizationSlugScalingScenario,
+  organizationAuditExportScalingScenario,
+  softLawSearchScalingScenario,
+  softLawReadScalingScenario,
+  ...sharepointBrowseScalingScenarios,
 ];
-const measuredApiReads = api.routes
-  .filter(({ handler }) =>
-    measuredApiScenarios.some((scenario) => scenario.handler === handler),
+const measuredApiReads = apiApp.routes
+  .filter(({ definition }) =>
+    measuredApiScenarios.some((scenario) => scenario.definition === definition),
   )
   .map(({ method, path: routePath }) => `${method} ${routePath}`);
 
 test("previously measured scenarios retain their handler or tool identity", async () => {
-  const base = ledgerMergeBase({ repoRoot, baseRef: "origin/main" });
+  const base = treeBaseRevision({ repoRoot });
   const readBaseSource = (file: string) => {
     const result = Bun.spawnSync(["git", "show", `${base}:${file}`], {
       cwd: repoRoot,
@@ -93,19 +202,21 @@ test("previously measured scenarios retain their handler or tool identity", asyn
         );
       }
       const owner = ownerModule[entry.handlerOwner.exportName];
-      if (!isRecord(owner) || !("handler" in owner)) {
+      if (!isRecord(owner)) {
         panic(
-          `Scaling owner has no handler: ${entry.handlerOwner.file}#${entry.handlerOwner.exportName}`,
+          `Scaling owner is not an endpoint definition: ${entry.handlerOwner.file}#${entry.handlerOwner.exportName}`,
         );
       }
-      expect(owner["handler"]).toBe(
-        measuredApiScenarios.find(({ name }) => name === entry.name)?.handler,
+      const measured = measuredApiScenarios.find(
+        ({ name }) => name === entry.name,
       );
+      expect(measured?.definition === owner).toBe(true);
     }
     expect(
       scenarioMembershipViolations({
         base: readScenarioRegistry({ ...registry, readSource: readBaseSource }),
         current,
+        handlerExists: (file) => existsSync(path.join(repoRoot, file)),
       }),
     ).toEqual([]);
   }
@@ -113,17 +224,19 @@ test("previously measured scenarios retain their handler or tool identity", asyn
 
 test("every scaling scenario exercises a mounted API handler", () => {
   for (const scenario of measuredApiScenarios) {
-    expect(api.routes.some(({ handler }) => handler === scenario.handler)).toBe(
-      true,
-    );
+    expect(
+      apiApp.routes.some(
+        ({ definition }) => definition === scenario.definition,
+      ),
+    ).toBe(true);
   }
 });
 
 test("removing any mounted read scenario makes its coverage fail", () => {
-  const surface = apiScalingSurface(api.routes);
+  const surface = apiScalingSurface(apiApp.routes);
   for (const scenario of measuredApiScenarios) {
-    const mounted = api.routes.filter(
-      ({ handler }) => handler === scenario.handler,
+    const mounted = apiApp.routes.filter(
+      ({ definition }) => definition === scenario.definition,
     );
     expect(mounted.length, scenario.name).toBeGreaterThan(0);
     for (const { method, path: routePath } of mounted) {
@@ -159,7 +272,7 @@ test("every MCP scenario names a registered tool", () => {
 for (const { kind, surface, ledger, measured } of [
   {
     kind: "api",
-    surface: apiScalingSurface(api.routes),
+    surface: apiScalingSurface(apiApp.routes),
     ledger: apiLedger,
     measured: measuredApiReads,
   },
@@ -200,9 +313,9 @@ for (const { kind, surface, ledger, measured } of [
           repoRoot,
           parseLedger: parseScalingLedger,
           // A write route this change mounts may enter with its reason.
-          normalizeBaseEntries: (base) =>
+          normalizeBaseEntries: ({ entries }) =>
             withNewWriteRoutes({
-              base,
+              base: entries,
               current: parseScalingLedger(
                 JSON.stringify(ledger),
                 `${kind}-scaling`,
@@ -212,10 +325,7 @@ for (const { kind, surface, ledger, measured } of [
           label: `${kind}-scaling`,
           remediation:
             "add an exercised scaling case instead of a ledger entry",
-          args: [
-            "--base",
-            ledgerMergeBase({ repoRoot, baseRef: "origin/main" }),
-          ],
+          args: ["--base", treeBaseRevision({ repoRoot })],
         }),
       ).toBe(0);
     });

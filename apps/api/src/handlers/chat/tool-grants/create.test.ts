@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { expect, test } from "bun:test";
 
 import createChatToolGrant from "@/api/handlers/chat/tool-grants/create";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { aggregateExecutionRows } from "@/api/tests/fixtures/aggregate-lock-order";
@@ -62,7 +63,7 @@ const setup = ({ body, reads }: { body: Body; reads: unknown[][] }) => {
     request: new Request("https://api.example.test/v1/chat/tool-grants", {
       method: "POST",
     }),
-    route: "/v1/chat/tool-grants",
+    route: "/v1/chat/tool-grants" satisfies ApiRoutePath,
   });
   return { audits, context, inserted, reads: () => readCount };
 };

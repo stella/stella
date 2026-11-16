@@ -20,7 +20,7 @@ import { CI_GENERATED_OUTPUTS } from "./generated-files";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "../../..");
 
-test("every API TypeScript source has exactly one compiler project owner", () => {
+test("every API TypeScript source has exactly one compiler project owner", async () => {
   const root = realpathSync(mkdtempSync(path.join(tmpdir(), "api-ownership-")));
   const api = path.join(root, "apps/api");
   const write = (file: string, contents: unknown) => {
@@ -70,12 +70,12 @@ test("every API TypeScript source has exactly one compiler project owner", () =>
       "src/routes.test.ts",
       "import { route } from './routes'; export const checked = route;\n",
     );
-    expect(validateApiTypecheckProjects(root)).toEqual([]);
+    expect(await validateApiTypecheckProjects(root)).toEqual([]);
     write("src/new.ts", "export const value = 1;\n");
-    expect(validateApiTypecheckProjects(root)).toEqual([]);
+    expect(await validateApiTypecheckProjects(root)).toEqual([]);
     write("tsconfig.src.json", { extends: "./tsconfig.json", exclude: [] });
     expect(
-      validateApiTypecheckProjects(root).some(({ message }) =>
+      (await validateApiTypecheckProjects(root)).some(({ message }) =>
         message.includes("found 2"),
       ),
     ).toBe(true);
@@ -84,7 +84,7 @@ test("every API TypeScript source has exactly one compiler project owner", () =>
   }
 });
 
-test("unprepared generated API configs skip ownership at install and fail when required", () => {
+test("unprepared generated API configs skip ownership at install and fail when required", async () => {
   const root = realpathSync(
     mkdtempSync(path.join(tmpdir(), "api-unprepared-")),
   );
@@ -121,9 +121,9 @@ test("unprepared generated API configs skip ownership at install and fail when r
       "apps/api/.cache/typecheck-declarations/src.json",
       "apps/api/.cache/typecheck-declarations/tests.json",
     ]);
-    expect(validateApiTypecheckProjects(root)).toEqual([]);
+    expect(await validateApiTypecheckProjects(root)).toEqual([]);
     expect(
-      validateApiTypecheckProjects(root, { requirePrepared: true }),
+      await validateApiTypecheckProjects(root, { requirePrepared: true }),
     ).toEqual([
       {
         path: "apps/api/.cache/typecheck-declarations",
@@ -193,7 +193,7 @@ test("Bun consumers read referenced declarations instead of source", () => {
         "--listFilesOnly",
         "--project=tests/tsconfig.json",
       ],
-      { cwd: directory, encoding: "utf-8" },
+      { maxBuffer: 2 ** 30, cwd: directory, encoding: "utf-8" },
     );
     expect(result.error).toBeUndefined();
     expect(result.status).toBe(0);
@@ -264,7 +264,7 @@ test("the API declaration command emits its public surface", () => {
     const result = spawnSync(
       process.execPath,
       [path.resolve(REPO_ROOT, "apps/api", wrapper), ...args],
-      { cwd: directory, encoding: "utf-8" },
+      { maxBuffer: 2 ** 30, cwd: directory, encoding: "utf-8" },
     );
     expect(result.error).toBeUndefined();
     expect(result.status, result.stdout + result.stderr).toBe(0);

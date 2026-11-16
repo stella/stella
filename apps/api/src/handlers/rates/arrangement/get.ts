@@ -1,9 +1,12 @@
 import { Result } from "better-result";
 import { eq } from "drizzle-orm";
 
+import { BILLING_MATTER_READ_PERMISSION } from "@stll/permissions";
+
 import { billingArrangements } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { billingArrangementResponse } from "@/api/lib/billing/arrangements";
+import { arrangementMoneyResponse } from "@/api/lib/billing/response-schemas";
 import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
@@ -14,6 +17,7 @@ const ARRANGEMENT_COLUMNS = {
   currency: billingArrangements.currency,
   flatFeeAmount: billingArrangements.flatFeeAmount,
   capAmount: billingArrangements.capAmount,
+  capMinutes: billingArrangements.capMinutes,
   alertThresholdBps: billingArrangements.alertThresholdBps,
   revision: billingArrangements.revision,
 };
@@ -25,6 +29,8 @@ const UNPROJECTED_ARRANGEMENT_COLUMNS = [
   // Crossing state is internal audit deduplication; the summary computes live usage.
   "thresholdState",
   "capState",
+  "minuteThresholdState",
+  "minuteCapState",
   "currencyState",
   "crossingSequence",
   // Revision is the configuration's concurrency token; update time is not part of it.
@@ -45,10 +51,11 @@ true satisfies UnexpectedArrangementColumn extends never ? true : never;
 
 const readBillingArrangement = createSafeHandler(
   {
+    moneyResponse: arrangementMoneyResponse,
     contract: "patch",
     description:
       "Read the matter's current hourly or flat-fee billing arrangement. The arrangement field is null for the existing hourly rate-table behavior; call rates.arrangement.update to configure it. Issued invoices retain their own snapshots.",
-    permissions: { rate: ["read"] },
+    permissions: BILLING_MATTER_READ_PERMISSION,
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },
     mcp: {

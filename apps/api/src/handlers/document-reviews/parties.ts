@@ -11,7 +11,7 @@
 
 import { panic, Result } from "better-result";
 import { and, eq, isNull, ne, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -21,6 +21,8 @@ import {
 } from "@/api/db/schema";
 import { resolveReviewSelection } from "@/api/handlers/document-reviews/review-selection";
 import { documentReviewTargetSchema } from "@/api/handlers/document-reviews/schemas";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import {
   ACCOUNT_ACCESS,
@@ -62,9 +64,9 @@ const notDetectedAnswer = (
   entityVersionId: SafeId<"entityVersion">,
 ): ReviewPartiesAnswer => ({ type: "not-detected", entityVersionId });
 
-const documentReviewPartiesBodySchema = t.Object({
+const documentReviewPartiesBodySchema = v.object({
   target: documentReviewTargetSchema,
-  mode: t.Union([t.Literal("cached"), t.Literal("detect")]),
+  mode: v.picklist(["cached", "detect"]),
 });
 
 const config = {
@@ -268,6 +270,10 @@ export const createReviewParties = ({
 
     if (body.mode === "cached") {
       return Result.ok(notDetectedAnswer(entityVersionId));
+    }
+
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.err(storedAIConfigUnreadableError());
     }
 
     yield* requireTanStackAIAvailableForTask({

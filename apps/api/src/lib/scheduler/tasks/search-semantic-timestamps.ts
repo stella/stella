@@ -6,6 +6,7 @@ import { Temporal } from "@stll/time";
 import type { SchedulerPayload } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import type { SchedulerDb, SchedulerTask } from "@/api/lib/scheduler/types";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 
@@ -276,10 +277,13 @@ export const repairSearchSemanticTimestamps = async ({
     }
     if (Result.isError(reindexResult)) {
       failed += 1;
-      captureError(reindexResult.error, {
-        entityId,
-        schedulerTask: REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK,
-      });
+      captureError(
+        reindexResult.error,
+        handlerErrorContext("tasks.reindexNext.reindexResult_error", {
+          entityId,
+          schedulerTask: REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK,
+        }),
+      );
     } else {
       repaired += 1;
     }

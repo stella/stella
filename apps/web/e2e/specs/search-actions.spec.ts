@@ -1,7 +1,13 @@
 import type { Page } from "@playwright/test";
 
 import { apiStatus } from "../helpers/api";
+import type { ApiOk } from "../helpers/route-mock";
+import { apiJson, respond } from "../helpers/route-mock";
 import { expect, test } from "../helpers/test";
+import {
+  PLAYWRIGHT_EXPECT_TIMEOUT_10_SECONDS_MS,
+  PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+} from "../helpers/wait-budgets";
 import {
   createTestWorkspace,
   deleteTestWorkspace,
@@ -11,7 +17,7 @@ import {
 const openSearch = async (page: Page, route = "/workspaces") => {
   await page.goto(route, { waitUntil: "commit" });
   await expect(page.locator('[data-slot="sidebar"]')).toBeVisible({
-    timeout: 30_000,
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
   });
 
   const modifier = await page.evaluate(() =>
@@ -20,7 +26,9 @@ const openSearch = async (page: Page, route = "/workspaces") => {
   await page.keyboard.press(`${modifier}+k`);
 
   const input = page.getByRole("combobox").first();
-  await expect(input).toBeVisible({ timeout: 30_000 });
+  await expect(input).toBeVisible({
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  });
   return input;
 };
 
@@ -166,7 +174,7 @@ test.describe("global create actions", () => {
       .poll(
         async () =>
           await apiStatus(page.request, `/workspaces/${testWorkspace.id}`),
-        { timeout: 10_000 },
+        { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_10_SECONDS_MS },
       )
       .toBe(200);
 
@@ -217,7 +225,7 @@ test.describe("global create actions", () => {
       waitUntil: "domcontentloaded",
     });
     await expect(page.locator('[data-slot="sidebar"]')).toBeVisible({
-      timeout: 30_000,
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
     });
 
     const input = await openSearch(page, `/workspaces/${testWorkspace.id}`);
@@ -228,7 +236,7 @@ test.describe("global create actions", () => {
     await expect(input).toHaveValue("");
     await taskAction.click();
     await expect(page.getByPlaceholder("Untitled task")).toBeVisible({
-      timeout: 30_000,
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
     });
 
     const uploadInput = await openSearch(
@@ -261,15 +269,13 @@ test.describe("global create actions", () => {
     const navigationRoute = "**/v1/workspaces/navigation**";
     await page.route(navigationRoute, async (route) => {
       const response = await route.fetch();
-      const body: unknown = await response.json();
-      if (
-        typeof body !== "object" ||
-        body === null ||
-        !("workspaces" in body)
-      ) {
-        throw new Error("Navigation response has no workspaces");
-      }
-      await route.fulfill({ response, json: { ...body, workspaces: [] } });
+      const body: ApiOk<"v1/workspaces/navigation", "get"> =
+        await response.json();
+      await respond(
+        route,
+        apiJson("v1/workspaces/navigation", "get", { ...body, workspaces: [] }),
+        { response },
+      );
     });
     await openSearch(page, `/workspaces/${testWorkspace.id}`);
     await page

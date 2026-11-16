@@ -4,11 +4,12 @@ import { afterAll, afterEach, expect, jest, test } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 
 import type { MarkdownHybridEditorHandle } from "@/components/markdown/markdown-hybrid-editor";
 import englishMessages from "@/i18n/langs/en.json";
 import { browserStorage } from "@/lib/account/browser-storage";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type { FileTab } from "./inspector-store-types";
 
@@ -183,7 +184,7 @@ const mount = async () => {
     </QueryClientProvider>,
   );
   await waitFor(() =>
-    expect(view.container.querySelector(".md-editor")).not.toBeNull(),
+    expect(view.container.querySelector(".md-editor") === null).toBe(false),
   );
   jest.useFakeTimers();
   return { ...view, client };
@@ -228,6 +229,11 @@ const advance = async (ms: number) => {
     });
   });
 };
+const restoreRealTimersWithPendingRequest = () => {
+  // Flush short UI cleanup without advancing as far as the API's live 30s
+  // total deadline. restoreRealTimers() deliberately drains every timer.
+  restoreRealTimers({ advanceMs: 1000 });
+};
 const startTransport = async () => {
   // Eden's browser multipart path uses two FileReader timer stages. Each
   // stage is scheduled after an async continuation, independently of debounce.
@@ -242,22 +248,31 @@ const publish = async () => {
     throw new TypeError("Expected a publication request");
   }
   publishedText = await request.file.text();
-  await act(async () =>
-    request.answer.resolve(
-      Response.json({
-        fieldId: "next-field",
-        versionId: "version",
-        versionNumber: 2,
-      }),
-    ),
-  );
-  await waitFor(() =>
-    expect(useInspectorTabsStore.getState().tabs.at(0)?.id).toBe("next-field"),
-  );
+  const published = Promise.withResolvers<undefined>();
+  const unsubscribe = useInspectorTabsStore.subscribe(({ tabs }) => {
+    if (tabs.at(0)?.id === "next-field") {
+      published.resolve(undefined);
+    }
+  });
+  try {
+    await act(async () => {
+      request.answer.resolve(
+        Response.json({
+          fieldId: "next-field",
+          versionId: "version",
+          versionNumber: 2,
+        }),
+      );
+      await published.promise;
+    });
+  } finally {
+    unsubscribe();
+  }
+  expect(useInspectorTabsStore.getState().tabs.at(0)?.id).toBe("next-field");
 };
 
 afterEach(async () => {
-  jest.useRealTimers();
+  restoreRealTimers();
   await act(async () => cleanup());
   requests.length = 0;
   publishedText = "Server text";
@@ -280,11 +295,70 @@ test("publication captures the displayed source inside the debounce interval", a
   edit(view.container, "Draft B");
   fireEvent.click(view.getByRole("button", { name: "Save" }));
   await startTransport();
-  jest.useRealTimers();
+  restoreRealTimersWithPendingRequest();
   expect(await requests.at(0)?.file.text()).toBe("Draft B");
   await publish();
-  expect(view.container.textContent).toContain("Draft B");
-  expect(view.queryByRole("button", { name: "Save" })).toBeNull();
+  await waitFor(() => {
+    expect(view.container.textContent).toContain("Draft B");
+    expect(view.queryByRole("button", { name: "Save" }) === null).toBe(true);
+  });
+});
+
+// Mount an immediate and a default editor on real timers, then install fake
+// timers for the debounce assertions.
+const mountEmissionEditors = async () => {
+  const immediateChanges: string[] = [];
+  const debouncedChanges: string[] = [];
+  const immediate = render(
+    <IntlProvider locale="en" messages={englishMessages}>
+      <MarkdownHybridEditor
+        markdown="Original instructions"
+        imagePolicy="data-only"
+        changeEmission="immediate"
+        onMarkdownChange={(text) => {
+          immediateChanges.push(text);
+        }}
+      />
+    </IntlProvider>,
+  );
+  const debounced = render(
+    <IntlProvider locale="en" messages={englishMessages}>
+      <MarkdownHybridEditor
+        markdown="Original instructions"
+        imagePolicy="data-only"
+        onMarkdownChange={(text) => {
+          debouncedChanges.push(text);
+        }}
+      />
+    </IntlProvider>,
+  );
+  await waitFor(() => {
+    expect(immediate.container.querySelector(".md-editor") === null).toBe(
+      false,
+    );
+    expect(debounced.container.querySelector(".md-editor") === null).toBe(
+      false,
+    );
+  });
+  jest.useFakeTimers();
+  return { immediate, debounced, immediateChanges, debouncedChanges };
+};
+
+test("immediate editor changes reach the host before navigation while default editors debounce", async () => {
+  const { immediate, debounced, immediateChanges, debouncedChanges } =
+    await mountEmissionEditors();
+  expect(immediateChanges).toEqual([]);
+  expect(debouncedChanges).toEqual([]);
+
+  edit(immediate.container, "Revised instructions");
+  edit(debounced.container, "Revised instructions");
+  expect(immediateChanges).toEqual(["Revised instructions"]);
+  expect(debouncedChanges).toEqual([]);
+
+  await advance(399);
+  expect(debouncedChanges).toEqual([]);
+  await advance(1);
+  expect(debouncedChanges).toEqual(["Revised instructions"]);
 });
 
 test.each([true, false])(
@@ -312,12 +386,10 @@ test.each([true, false])(
     fireEvent.keyDown(editor, { key: "e", metaKey: true });
     edit(view.container, "Draft C");
     expect(view.container.textContent).not.toContain("Draft C");
-    jest.useRealTimers();
     if (succeeded) {
       await publish();
-      await waitFor(() =>
-        expect(view.container.querySelector(".md-editor")).not.toBeNull(),
-      );
+      await advance(0);
+      expect(view.container.querySelector(".md-editor") === null).toBe(false);
     } else {
       await act(async () =>
         requests
@@ -326,13 +398,11 @@ test.each([true, false])(
             Response.json({ message: "Publication refused" }, { status: 409 }),
           ),
       );
-      await waitFor(() =>
-        expect(
-          view.getByRole("button", { name: "Save" }).hasAttribute("disabled"),
-        ).toBe(false),
-      );
+      await advance(0);
+      expect(
+        view.getByRole("button", { name: "Save" }).hasAttribute("disabled"),
+      ).toBe(false);
     }
-    jest.useFakeTimers();
     edit(view.container, "Draft C");
     await advance(400);
     expect(view.container.textContent).toContain("Draft C");
@@ -368,7 +438,7 @@ test("cancel restores the model and cancels a pending emission before later inpu
   await advance(400);
   fireEvent.click(view.getByRole("button", { name: "Save" }));
   await startTransport();
-  jest.useRealTimers();
+  restoreRealTimersWithPendingRequest();
   expect(await requests.at(0)?.file.text()).toBe("Server text appended");
 });
 
@@ -376,7 +446,7 @@ test("a failed background refetch keeps the retained draft publishable", async (
   const view = await mount();
   edit(view.container, "Draft A");
   await advance(400);
-  jest.useRealTimers();
+  restoreRealTimers();
   storageFails = true;
   await act(async () =>
     view.client.refetchQueries({
@@ -387,7 +457,7 @@ test("a failed background refetch keeps the retained draft publishable", async (
     }),
   );
   await waitFor(() =>
-    expect(view.container.querySelector(".md-editor")).toBeNull(),
+    expect(view.container.querySelector(".md-editor") === null).toBe(true),
   );
   fireEvent.click(view.getByRole("button", { name: "Save" }));
   await waitFor(() => expect(requests).toHaveLength(1));
@@ -398,7 +468,7 @@ test("rename metadata owns the name used by subsequent publication", async () =>
   const view = await mount();
   edit(view.container, "Draft A");
   await advance(400);
-  jest.useRealTimers();
+  restoreRealTimers();
   fireEvent.click(view.getByRole("button", { name: "Rename" }));
   await waitFor(() =>
     expect(useInspectorTabsStore.getState().tabs.at(0)).toMatchObject({
@@ -423,7 +493,7 @@ test("publication settlement preserves metadata confirmed while it was pending",
   await advance(400);
   fireEvent.click(view.getByRole("button", { name: "Save" }));
   await startTransport();
-  jest.useRealTimers();
+  restoreRealTimersWithPendingRequest();
   fireEvent.click(view.getByRole("button", { name: "Rename" }));
   await waitFor(() =>
     expect(useInspectorTabsStore.getState().tabs.at(0)).toMatchObject({
@@ -470,7 +540,7 @@ test("editor resets are fixed points for source and pending notifications", asyn
       expect(changes).toEqual([source, source]);
       await act(async () => view.unmount());
       expect(changes).toEqual([source, source]);
-      jest.useRealTimers();
+      restoreRealTimers();
     }),
     { numRuns: 25 },
   );

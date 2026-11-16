@@ -1,13 +1,19 @@
 import { describe, expect, test } from "bun:test";
 
 import type { Block, HeadingBlock } from "@stll/legal-ast/document-ast";
+import { E_SBIRKA_ANCHORS } from "@stll/legal-ast/statute-anchor-scheme";
 
 import {
-  paragraphFromPreview,
   prepareStatuteReader,
   provisionCitationCountByBlockAnchor,
   statuteLandingAnchorId,
 } from "@/features/statutes/statute-reader-blocks";
+
+/** A Czech statute's blocks, read in e-Sbírka's anchor grammar. */
+const czech = (blocks: readonly Block[]) => ({
+  blocks,
+  scheme: E_SBIRKA_ANCHORS,
+});
 
 const inlineText = (text: string) => [{ type: "text" as const, text }];
 
@@ -157,78 +163,11 @@ describe("statute reader blocks", () => {
     }
   });
 
-  test("e-Sbírka anchor paths recover nested list indentation", () => {
-    const prepared = prepareStatuteReader({
-      blocks: [
-        {
-          anchorId: "par_2-odst_1",
-          id: "paragraph",
-          inlines: inlineText("(1) Intro"),
-          plainText: "(1) Intro",
-          type: "paragraph",
-        },
-        {
-          anchorId: "par_2-odst_1-pism_a",
-          id: "letter",
-          inlines: inlineText("a) provider"),
-          plainText: "a) provider",
-          type: "paragraph",
-        },
-        {
-          anchorId: "par_2-odst_1-pism_a-bod_1",
-          id: "point",
-          inlines: inlineText("1. owner"),
-          plainText: "1. owner",
-          type: "paragraph",
-        },
-      ],
-      statuteTitle: "67/2013 Sb., zákon o službách",
-    }).blocks;
-
-    expect(
-      prepared.map((block) =>
-        block.type === "paragraph" ? block.listDepth : undefined,
-      ),
-    ).toEqual([undefined, 1, 2]);
-  });
-
-  test("a provision read's block indents as the reader indents it", () => {
-    const blocks = [
-      "par_2-odst_1",
-      "par_2-odst_1-pism_a",
-      "par_2-odst_1-pism_a-bod_1",
-    ].map((anchorId): Block => ({
-      anchorId,
-      id: anchorId,
-      inlines: inlineText("wording"),
-      plainText: "wording",
-      type: "paragraph",
-    }));
-    const reader = prepareStatuteReader({
-      blocks,
-      statuteTitle: "67/2013 Sb., zákon o službách",
-    }).blocks;
-    const previews = blocks.map((block) =>
-      paragraphFromPreview({
-        anchorId: block.anchorId,
-        id: block.id,
-        text: block.plainText,
-      }),
-    );
-    const depths = (list: readonly Block[]) =>
-      list.map((block) =>
-        block.type === "paragraph" ? block.listDepth : undefined,
-      );
-
-    expect(depths(previews)).toEqual(depths(reader));
-    expect(depths(previews)).toEqual([undefined, 1, 2]);
-  });
-
   test("citation counts follow namespaced publisher anchors", () => {
     const blocks = [heading("prilohy-cl_7", 2, "Čl. 7")];
 
     expect(
-      provisionCitationCountByBlockAnchor(blocks, [
+      provisionCitationCountByBlockAnchor(czech(blocks), [
         { anchor: "cl_7", decisionCount: 12 },
       ]).get("prilohy-cl_7"),
     ).toBe(12);
@@ -242,13 +181,13 @@ describe("statute reader blocks", () => {
       heading("hlava_2-par_9", 2, "§ 9"),
     ];
 
-    expect(statuteLandingAnchorId(blocks, "cl_7")).toBe("cl_7");
+    expect(statuteLandingAnchorId(czech(blocks), "cl_7")).toBe("cl_7");
     // The local provision id a citation states finds the namespaced block
     // the publisher rendered.
-    expect(statuteLandingAnchorId(blocks, "cl_8")).toBe("prilohy-cl_8");
+    expect(statuteLandingAnchorId(czech(blocks), "cl_8")).toBe("prilohy-cl_8");
     // Two blocks answer to it: guessing would land on the wrong provision.
-    expect(statuteLandingAnchorId(blocks, "par_9")).toBeUndefined();
-    expect(statuteLandingAnchorId(blocks, "cl_99")).toBeUndefined();
-    expect(statuteLandingAnchorId(blocks, undefined)).toBeUndefined();
+    expect(statuteLandingAnchorId(czech(blocks), "par_9")).toBeUndefined();
+    expect(statuteLandingAnchorId(czech(blocks), "cl_99")).toBeUndefined();
+    expect(statuteLandingAnchorId(czech(blocks), undefined)).toBeUndefined();
   });
 });

@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -11,7 +11,7 @@ const config = {
   permissions: { organizationSettings: ["update"] },
   accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "provider_secret" },
-  body: t.Object({ policy: t.UnionEnum([...PERSONAL_API_KEY_POLICIES]) }),
+  body: v.object({ policy: v.picklist([...PERSONAL_API_KEY_POLICIES]) }),
 } satisfies HandlerConfig;
 
 export default createSafeRootHandler(

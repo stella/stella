@@ -1,20 +1,26 @@
 import { Result } from "better-result";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
+import { BILLING_MATTER_READ_PERMISSION } from "@stll/permissions";
 
 import { workspaceContacts, workspaces } from "@/api/db/schema";
 import { dateOfBirthFromColumns } from "@/api/handlers/contacts/person-details";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { contactMoneyResponse } from "@/api/lib/billing/response-schemas";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { hasMemberPermission } from "@/api/lib/permission-authorization";
 
-const readContactByIdParamsSchema = t.Object({
-  contactId: tSafeId("contact", { description: "Contact ID" }),
+const readContactByIdParamsSchema = v.object({
+  contactId: resourceIdSchema("contact", { description: "Contact ID" }),
 });
 
 const readContactById = createSafeRootHandler(
   {
+    moneyResponse: contactMoneyResponse,
     contract: "patch",
     description: "Read a contact by ID.",
     permissions: { workspace: ["read"] },
@@ -23,7 +29,7 @@ const readContactById = createSafeRootHandler(
     access: "read",
     params: readContactByIdParamsSchema,
   },
-  async function* ({ safeDb, session, params }) {
+  async function* ({ safeDb, session, params, memberRole }) {
     // One shared scoped transaction for the whole read-only sequence: the
     // contact row, the two client-matter reads (count across all statuses,
     // rows scoped to active), and the party-matters page. All reads are
@@ -104,7 +110,7 @@ const readContactById = createSafeRootHandler(
                 workspaceContacts.organizationId,
                 session.activeOrganizationId,
               ),
-              eq(workspaces.status, "active"),
+              eq(workspaces.status, WORKSPACE_STATUS.active),
             ),
           )
           .groupBy(
@@ -137,6 +143,12 @@ const readContactById = createSafeRootHandler(
     } = contact;
     return Result.ok({
       ...contactFields,
+      defaultHourlyRate: hasMemberPermission(
+        memberRole,
+        BILLING_MATTER_READ_PERMISSION,
+      )
+        ? contact.defaultHourlyRate
+        : null,
       dateOfBirth: dateOfBirthFromColumns(contact),
       clientMatterCount,
       clientMatters,

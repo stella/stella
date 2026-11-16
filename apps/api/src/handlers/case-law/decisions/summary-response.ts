@@ -1,11 +1,10 @@
-import { t } from "elysia";
-import type { TSchema } from "elysia";
+import * as v from "valibot";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import type { CaseLawDecisionSummary } from "@stll/api-contract/case-law-decision-summary";
 
 import { decisionHeadnotePreviewSchema } from "@/api/lib/case-law/decision-headnote-schema";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import {
   boundedString,
   nullableBoundedString,
@@ -32,23 +31,20 @@ const SUMMARY_TEXT_BYTES = {
   number
 >;
 
-export const decisionSummaryResponseSchema = t.Object(
-  {
-    id: tSafeId("caseLawDecision"),
-    caseNumber: boundedString(SUMMARY_TEXT_BYTES.caseNumber),
-    court: boundedString(SUMMARY_TEXT_BYTES.court),
-    courtAbbreviation: nullableBoundedString(
-      SUMMARY_TEXT_BYTES.courtAbbreviation,
-    ),
-    courtTier: t.UnionEnum(COURT_TIER_LABELS),
-    decisionDate: nullableBoundedString(SUMMARY_TEXT_BYTES.decisionDate),
-    decisionType: nullableBoundedString(SUMMARY_TEXT_BYTES.decisionType),
-    headnote: decisionHeadnotePreviewSchema,
-    citationCount: t.Number(),
-    publication: nullableBoundedString(SUMMARY_TEXT_BYTES.publication),
-  } satisfies Record<keyof CaseLawDecisionSummary, TSchema>,
-  { additionalProperties: false },
-);
+export const decisionSummaryResponseSchema = v.object({
+  id: resourceIdSchema("caseLawDecision"),
+  caseNumber: boundedString(SUMMARY_TEXT_BYTES.caseNumber),
+  court: boundedString(SUMMARY_TEXT_BYTES.court),
+  courtAbbreviation: nullableBoundedString(
+    SUMMARY_TEXT_BYTES.courtAbbreviation,
+  ),
+  courtTier: v.picklist([...COURT_TIER_LABELS]),
+  decisionDate: nullableBoundedString(SUMMARY_TEXT_BYTES.decisionDate),
+  decisionType: nullableBoundedString(SUMMARY_TEXT_BYTES.decisionType),
+  headnote: decisionHeadnotePreviewSchema,
+  citationCount: v.number(),
+  publication: nullableBoundedString(SUMMARY_TEXT_BYTES.publication),
+} satisfies Record<keyof CaseLawDecisionSummary, v.GenericSchema>);
 
 export const projectDecisionSummary = (
   decision: CaseLawDecisionSummary,

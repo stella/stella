@@ -1,7 +1,7 @@
 // `$defs` compaction for the committed capability catalog.
 //
 // A handful of capabilities (the view condition/filter family) declare deeply
-// recursive TypeBox unions whose expanded JSON Schema repeats the same
+// recursive valibot unions whose expanded JSON Schema repeats the same
 // condition subschema a dozen times, serializing to 140-165 KiB each. That is
 // past the catalog's per-entry byte cap, and the exporter used to drop those
 // schemas entirely — which cost exactly those capabilities their typed CLI
@@ -166,29 +166,39 @@ const rewriteSchema = (
       return { $ref: `${DEFS_REF_PREFIX}${name}` };
     }
   }
-  const rewritten: JsonRecord = {};
+  const rewritten = new Map<string, unknown>();
   for (const [key, value] of Object.entries(node)) {
     if (SCHEMA_MAP_KEYWORDS.has(key) && isRecord(value)) {
-      const map: JsonRecord = {};
-      for (const [childKey, child] of Object.entries(value)) {
-        map[childKey] = rewriteSchema(child, context);
-      }
-      rewritten[key] = map;
+      rewritten.set(
+        key,
+        Object.fromEntries(
+          Object.entries(value).map(([childKey, child]) => [
+            childKey,
+            rewriteSchema(child, context),
+          ]),
+        ),
+      );
       continue;
     }
     if (SCHEMA_LIST_KEYWORDS.has(key) && Array.isArray(value)) {
-      rewritten[key] = value.map((child) => rewriteSchema(child, context));
+      rewritten.set(
+        key,
+        value.map((child) => rewriteSchema(child, context)),
+      );
       continue;
     }
     if (!SCHEMA_KEYWORDS.has(key)) {
-      rewritten[key] = value;
+      rewritten.set(key, value);
       continue;
     }
-    rewritten[key] = Array.isArray(value)
-      ? value.map((child) => rewriteSchema(child, context))
-      : rewriteSchema(value, context);
+    rewritten.set(
+      key,
+      Array.isArray(value)
+        ? value.map((child) => rewriteSchema(child, context))
+        : rewriteSchema(value, context),
+    );
   }
-  return rewritten;
+  return Object.fromEntries(rewritten);
 };
 
 export type CapabilityInputSchemaParts = {
@@ -267,7 +277,7 @@ const savingOf = (body: unknown, refCount: number): number =>
  * back byte-identical to their JSON input, with no `$defs` key added.
  *
  * The input is JSON round-tripped before hashing, preserving insertion order
- * and dropping TypeBox symbol metadata. Artifact recompaction supplies existing
+ * and dropping anything JSON cannot carry. Artifact recompaction supplies existing
  * names separately; normal generation must retain the published hash format. The
  * round trip makes the value compacted here exactly the value that would have
  * been serialized, so the exporter's round-trip gate compares like with like.
@@ -276,7 +286,7 @@ export const compactSchemaDefs = (
   inputSchema: CapabilityInputSchemaParts,
   artifactDefNames?: ReadonlyMap<string, string>,
 ): CompactionResult => {
-  // oxlint-disable-next-line unicorn/prefer-structured-clone -- NOT a deep clone: the JSON projection is the point. `structuredClone` would carry through TypeBox's metadata and values JSON drops, so what gets compacted would stop matching what gets written.
+  // oxlint-disable-next-line unicorn/prefer-structured-clone -- NOT a deep clone: the JSON projection is the point. `structuredClone` would keep values JSON drops, so what gets compacted would stop matching what gets written.
   const document: CapabilityInputSchemaParts = JSON.parse(
     JSON.stringify(inputSchema),
   );
@@ -352,12 +362,13 @@ export const compactSchemaDefs = (
     for (const [serialized, { name, node }] of chosen) {
       bodies.set(name, rewriteSchema(node, context, serialized));
     }
-    const compacted: CompactedCapabilityInputSchema = {};
-    for (const part of INPUT_PARTS) {
-      if (document[part] !== undefined) {
-        compacted[part] = rewriteSchema(document[part], context);
-      }
-    }
+    const compacted = Object.fromEntries(
+      INPUT_PARTS.flatMap((part) =>
+        document[part] === undefined
+          ? []
+          : [[part, rewriteSchema(document[part], context)]],
+      ),
+    );
 
     // A def's own body contributes refs to its children, so only refs from
     // OUTSIDE a def plus refs from kept defs count. Recomputing from scratch
@@ -392,12 +403,15 @@ export const compactSchemaDefs = (
     }
 
     // Name-sorted defs; the shard serializer canonicalizes the complete output.
-    const defs: JsonRecord = {};
-    for (const name of [...bodies.keys()].toSorted()) {
-      defs[name] = bodies.get(name);
-    }
-    compacted[DEFS_KEY] = defs;
-    return { inputSchema: compacted, status: "compacted" };
+    return {
+      inputSchema: {
+        ...compacted,
+        $defs: Object.fromEntries(
+          [...bodies.keys()].toSorted().map((name) => [name, bodies.get(name)]),
+        ),
+      },
+      status: "compacted",
+    };
   }
 };
 

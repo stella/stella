@@ -9,12 +9,17 @@ import * as v from "valibot";
 
 import messages from "../../src/i18n/langs/en.json" with { type: "json" };
 import { apiDelete, apiGet } from "../helpers/api";
+import { PLAYWRIGHT_EXPECT_TIMEOUT_60_SECONDS_MS } from "../helpers/wait-budgets";
 import { JOURNEY_TAG } from "../playwright.journeys.config";
 
 const TURN_FILLER = "Clause ".repeat(25_000);
 const MAX_TURNS = 16;
-// Allow the five-minute background compactor cadence and its one-minute run budget.
-const COMPACTION_SETTLE_MS = 6 * 60_000;
+// The compactor's worst case after the thread is marked due: its five-minute
+// cadence, one runner wait (a minute), one sweep (under a minute) and the
+// compactor's one-minute run budget.
+const COMPACTION_SETTLE_MS = 8 * 60_000;
+// One mock-model turn, from send to its persisted reply.
+const TURN_SETTLE_MS = 2 * 60_000;
 const CHAT_THREAD_PATH = /\/chat\/([0-9a-f-]{36})$/u;
 
 const threadSchema = v.object({
@@ -81,17 +86,28 @@ const sendTurn = async ({
     (response) =>
       response.request().method() === "POST" &&
       new URL(response.url()).pathname.endsWith("/v1/chat"),
+    { timeout: TURN_SETTLE_MS },
   );
   await page.getByRole("button", { name: messages.chat.sendPrompt }).click();
   const response = await posted;
   expect(response.ok()).toBe(true);
-  expect(await response.finished()).toBeNull();
   await expect(page).toHaveURL(CHAT_THREAD_PATH);
   const threadId = currentThreadId(page);
-  const thread = await readThread(request, threadId);
-  expect(thread.activeTurnId).toBeNull();
-  expect(assistantMessages(thread)).toHaveLength(turn);
-  return thread;
+  // The streamed response is not the turn's end signal: the browser need not
+  // report its body finished. The thread does: no active turn, this reply kept.
+  await expect
+    .poll(
+      async () => {
+        const thread = await readThread(request, threadId);
+        return {
+          activeTurnId: thread.activeTurnId,
+          assistantReplies: assistantMessages(thread).length,
+        };
+      },
+      { timeout: TURN_SETTLE_MS },
+    )
+    .toEqual({ activeTurnId: null, assistantReplies: turn });
+  return await readThread(request, threadId);
 };
 
 const expectNoTrimmedHistory = async (page: Page, thread: ChatThread) => {
@@ -120,7 +136,9 @@ test(
   async ({ page, request }) => {
     test.setTimeout(11 * 60_000);
     await page.goto("/chat/new", { waitUntil: "commit" });
-    await expect(chatComposer(page)).toBeVisible({ timeout: 60_000 });
+    await expect(chatComposer(page)).toBeVisible({
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_60_SECONDS_MS,
+    });
 
     let turn = 1;
     let thread = await sendTurn({ page, request, turn });
@@ -163,7 +181,9 @@ test(
       reloadedThread.context.summarizedMessageCount,
     ).toBeGreaterThanOrEqual(thread.context.summarizedMessageCount);
     expect(reloadedThread.context.breakdown.summaryTokens).toBeGreaterThan(0);
-    await expect(page.getByRole("log")).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByRole("log")).toBeVisible({
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_60_SECONDS_MS,
+    });
     await expectNoTrimmedHistory(page, reloadedThread);
   },
 );

@@ -14,7 +14,7 @@ import {
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 
 /**
- * Authoritative gate for a flow-definition write: parse the (TypeBox-validated)
+ * Authoritative gate for a flow-definition write: parse the (route-validated)
  * body through the shared valibot schema for normalization + the deep
  * invariants, then verify any trigger-referenced workspace belongs to the
  * caller's organization. The workspace check runs through the org-scoped

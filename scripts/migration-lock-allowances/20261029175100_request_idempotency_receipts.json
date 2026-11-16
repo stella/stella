@@ -1,0 +1,5 @@
+{
+  "add-foreign-key": "The foreign keys are added to a newly created, empty receipt table and reference existing organization and user tables; validation scans no receipt rows. SHARE ROW EXCLUSIVE on the referenced tables is held until the migration transaction commits; lock acquisition is bounded by 1s lock_timeout and each statement by 5s statement_timeout.",
+  "row-level-security": "RLS is enabled and forced only on the newly created, empty receipt table, without scanning rows. ACCESS EXCLUSIVE on that new table is held until the migration transaction commits; lock acquisition is bounded by 1s lock_timeout and each statement by 5s statement_timeout.",
+  "create-policy": "The policies are installed only on the newly created, empty receipt table; their catalog lookups do not scan receipt rows. ACCESS EXCLUSIVE on that new table is held until the migration transaction commits; lock acquisition is bounded by 1s lock_timeout and each statement by 5s statement_timeout."
+}

@@ -4,6 +4,10 @@ set -euo pipefail
 # GitHub response traces stay in a private directory: they contain credentials
 # and payloads. Only HTTP status/retry metadata may leave that directory.
 # bash 3.2 is required by macOS and Windows release runners.
+#
+# When GH_RETRY_STATUS_FILE is set, a failed command writes that metadata to it
+# as "<HTTP status, 0 without a response> <Retry-After seconds or -1>", so a
+# caller can reconcile a write that is not safe to repeat blindly.
 
 if (($# == 0)); then
   echo 'usage: gh-retry.sh <gh subcommand> [args...]' >&2
@@ -47,6 +51,9 @@ cleanup() {
   stop_owned_jobs
   rm -rf "$scratch"
 }
+report_status() {
+  [[ -z "${GH_RETRY_STATUS_FILE:-}" ]] || printf '%s %s\n' "$1" "$2" > "$GH_RETRY_STATUS_FILE"
+}
 trap cleanup EXIT
 trap 'cleanup; exit 130' INT
 trap 'cleanup; exit 143' TERM
@@ -54,11 +61,14 @@ trap 'cleanup; exit 143' TERM
 args=("$@")
 retryable=false
 transport_retryable=false
+response_retryable=false
 method=GET
 explicit_method=''
 endpoint=''
 query=''
 stdin_needed=false
+paginated=false
+exit_status=false
 # Consume option values as values; filenames after -- are never flags.
 for ((i=1; i<${#args[@]}; i+=1)); do
   arg="${args[i]}"
@@ -72,6 +82,15 @@ for ((i=1; i<${#args[@]}; i+=1)); do
       [[ "${args[i]:-}" != - ]] || stdin_needed=true
       ;;
     --input=*) method=POST; [[ "$arg" != --input=- ]] || stdin_needed=true ;;
+    --paginate) paginated=true ;;
+    --exit-status) exit_status=true ;;
+    --exit-status=*)
+      case "${arg#*=}" in
+        1|t|T|TRUE|true|True) exit_status=true ;;
+        0|f|F|FALSE|false|False) exit_status=false ;;
+        *) exit_status=false ;;
+      esac
+      ;;
     -f|-F|--field|--raw-field)
       flag="$arg"; method=POST; i=$((i+1)); value="${args[i]:-}"
       [[ "$value" != query=* ]] || query="${value#query=}"
@@ -95,16 +114,21 @@ done
 case "${args[0]}" in
   api)
     if [[ "$method" == GET || "$method" == HEAD ]]; then
-      retryable=true; transport_retryable=true
+      retryable=true; transport_retryable=true; response_retryable=true
     elif [[ "$endpoint" == graphql && "$query" =~ ^[[:space:]]*(query[[:space:]\(\{]|\{) && ! "$query" =~ (^|[^[:alnum:]_])mutation([^[:alnum:]_]|$) ]]; then
       # GraphQL queries use POST transport, but do not mutate repository state.
-      retryable=true
+      retryable=true; response_retryable=true
     fi
     ;;
-  run) [[ "${args[1]:-}" != list && "${args[1]:-}" != view && "${args[1]:-}" != watch && "${args[1]:-}" != download ]] || { retryable=true; transport_retryable=true; } ;;
+  run)
+    if [[ "${args[1]:-}" == list || "${args[1]:-}" == view || "${args[1]:-}" == watch || "${args[1]:-}" == download ]]; then
+      retryable=true; transport_retryable=true
+      [[ "$exit_status" == true ]] || response_retryable=true
+    fi
+    ;;
   release)
     case "${args[1]:-}" in
-      view|download) retryable=true; transport_retryable=true ;;
+      view|download) retryable=true; transport_retryable=true; response_retryable=true ;;
       upload)
         # Replacing assets by name is the only admitted write. Partial uploads
         # are replaced; creation, dispatch, status rows and mutations run once.
@@ -190,6 +214,7 @@ for ((attempt=1; attempt<=4; attempt+=1)); do
   fi
   if [[ -e "$scratch/deadline" ]]; then
     echo "GitHub retry budget exhausted on attempt $attempt/4" >&2
+    report_status 0 -1
     exit 124
   fi
   if ((status == 0)); then
@@ -213,7 +238,10 @@ for ((attempt=1; attempt<=4; attempt+=1)); do
   http=0
   permanent=0
   transient_http=0
+  successful_http=0
   retry_after=-1
+  last_http=0
+  last_after=-1
   while read -r response_http response_after; do
     if [[ "$response_after" =~ ^[0-9]+$ ]]; then
       # Strip decimal padding before Bash arithmetic; large waits exceed the budget.
@@ -235,11 +263,15 @@ for ((attempt=1; attempt<=4; attempt+=1)); do
       fi
     fi
     http=$response_http
+    last_http=$response_http
+    last_after=$response_after
     if ((http >= 500 && http <= 599 || http == 429 || http == 403 && response_after >= 0)); then
       transient_http=$http
       ((response_after <= retry_after)) || retry_after=$response_after
     elif ((http >= 400 && http <= 499)); then
       permanent=$http
+    elif ((http >= 200 && http <= 299)); then
+      successful_http=$http
     fi
   done < <(awk '
     BEGIN { after=-1 }
@@ -252,15 +284,53 @@ for ((attempt=1; attempt<=4; attempt+=1)); do
     }
     END { print status+0, after }
   ' "$scratch/trace")
-  if ((permanent > 0)); then
+  if [[ "$paginated" == true && "$method" == GET ]]; then
+    # Only the last response belongs to the page whose processing failed.
+    # An absent status means gh failed between requesting and parsing that page.
+    http=$last_http
+    retry_after=$last_after
+    permanent=0
+    transient_http=0
+  elif ((permanent > 0)); then
     http=$permanent
   elif ((transient_http > 0)); then
     http=$transient_http
+  elif ((successful_http > 0)); then
+    http=$successful_http
   fi
   failure="HTTP $http"
   transient=false
+  forward_output=false
   if ((permanent == 0 && (http >= 500 && http <= 599 || http == 429 || http == 403 && retry_after >= 0))); then
     transient=true
+  elif ((http >= 200 && http <= 299)); then
+    if [[ "$response_retryable" == true ]]; then
+      # Classify the response that made gh fail, not stdout from earlier pages.
+      # Typed GraphQL errors are definitive refusals and reach the caller;
+      # decoding failures and other incomplete diagnostics remain retryable.
+      if awk '
+        { body = body $0 "\n" }
+        END {
+          if (body ~ /"errors"[[:space:]]*:/ &&
+              (body ~ /"type"[[:space:]]*:/ ||
+               body ~ /"extensions"[[:space:]]*:[[:space:]]*\{[^}]*"code"[[:space:]]*:/)) exit 1
+          compact = body
+          gsub(/[[:space:]]/, "", compact)
+          if (compact == "" || compact !~ /^(\{.*\}|\[.*\])$/) exit 0
+          lower = tolower(body)
+          transient = lower ~ /(internal server error|service unavailable|bad gateway|gateway timeout|timed out|timeout|couldn.t respond to your request in time|something went wrong while executing your query)/
+          exit !transient
+        }
+      ' "$scratch/trace"; then
+        # gh can fail while decoding a successful response, including a later
+        # page of a paginated read. Repeating a read cannot duplicate a write.
+        transient=true
+      else
+        forward_output=true
+      fi
+    else
+      failure="HTTP $http (operation is not safe to retry)"
+    fi
   elif ((http == 0)) && [[ "$transport_retryable" == true ]] && awk '
     # Match Go transport errors logged by gh, not headers, payloads or decoder
     # failures mentioning EOF. Unknown non-HTTP failures stay single-shot.
@@ -280,12 +350,15 @@ for ((attempt=1; attempt<=4; attempt+=1)); do
   if [[ "$retryable" != true || "$transient" != true ]] || ((attempt == 4)); then
     # Traces are never forwarded: URLs, request bodies and even native error
     # messages can contain credentials. Exit codes and status remain observable.
+    [[ "$forward_output" != true ]] || cat "$scratch/output"
+    report_status "$http" "$retry_after"
     exit "$status"
   fi
   delay=$((2 ** (attempt - 1) + RANDOM % 3))
   ((retry_after <= delay)) || delay=$retry_after
   if ((SECONDS - started + delay >= 60)); then
     echo 'GitHub retry budget exhausted' >&2
+    report_status "$http" "$retry_after"
     exit "$status"
   fi
   echo "Retrying GitHub $failure after attempt $attempt/4 in ${delay}s" >&2

@@ -1,10 +1,11 @@
 import { EventType } from "@tanstack/ai";
 import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
 import { panic, Result } from "better-result";
-import { describe, expect, jest, spyOn, test } from "bun:test";
+import { describe, expect, jest, mock, spyOn, test } from "bun:test";
 
 import { BYOK_DEFAULT_MODELS } from "@stll/ai-catalog";
 import { sleep } from "@stll/concurrency/sleep";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import { MANAGED_AI_RESIDENCIES } from "@/api/lib/chat/ai-data-policy";
@@ -20,11 +21,17 @@ import {
   API_SHUTDOWN_OUTCOME,
   shutdownApiServices,
 } from "@/api/server-shutdown";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+
+const testState = createTestState({ file: import.meta.path, config: env });
+
+const testFetchState = createTestFetch();
 
 const MODEL = BYOK_DEFAULT_MODELS.openrouter.chat.modelId;
 const chatOptions = {
   model: MODEL,
   messages: [{ role: "user" as const, content: "fixture request" }],
+  threadId: "managed-provider-checks-thread",
   logger: resolveDebugOption(false),
 };
 const structuredOptions = {
@@ -36,22 +43,17 @@ const structuredOptions = {
   },
 };
 
-const saveSettings = () => ({
-  FEATURE_MANAGED_PROVIDER_CHECKS: env.FEATURE_MANAGED_PROVIDER_CHECKS,
-  MANAGED_PROVIDER_CHECK_INTERVAL_MS: env.MANAGED_PROVIDER_CHECK_INTERVAL_MS,
-  MANAGED_PROVIDER_CHECK_TIMEOUT_MS: env.MANAGED_PROVIDER_CHECK_TIMEOUT_MS,
-  OPENROUTER_API_KEY: env.OPENROUTER_API_KEY,
-});
-
 describe("managed request catalog checks", () => {
   test("disabled checks make no catalog requests", async () => {
-    const previous = saveSettings();
-    const originalFetch = globalThis.fetch;
-    const fetchSpy = spyOn(globalThis, "fetch").mockRejectedValue(
-      new TypeError("Unexpected catalog request"),
+    const fetchSpy = Object.assign(
+      mock(globalThis.fetch).mockRejectedValue(
+        new TypeError("Unexpected catalog request"),
+      ),
+      { preconnect: globalThis.fetch.preconnect },
     );
+    testFetchState.set(fetchSpy);
     try {
-      env.FEATURE_MANAGED_PROVIDER_CHECKS = false;
+      testState.setConfig("FEATURE_MANAGED_PROVIDER_CHECKS", false);
       const close = await startManagedProviderChecks();
       expect(fetchSpy).not.toHaveBeenCalled();
       for (const residency of MANAGED_AI_RESIDENCIES) {
@@ -59,14 +61,12 @@ describe("managed request catalog checks", () => {
       }
       await close();
     } finally {
-      fetchSpy.mockRestore();
-      globalThis.fetch = originalFetch;
-      Object.assign(env, previous);
+      testFetchState.restore();
+      testFetchState.restore();
     }
   });
 
   test("refreshes availability through the bounded scheduler and drains on close", async () => {
-    const previous = saveSettings();
     const originalFetch = globalThis.fetch;
     const scheduled: {
       options?: Parameters<typeof startNonOverlappingInterval>[0];
@@ -78,25 +78,27 @@ describe("managed request catalog checks", () => {
     let heldRequests = 0;
     const held = Promise.withResolvers<() => Response>();
     const heldStarted = Promise.withResolvers<undefined>();
-    Object.assign(env, {
+    testState.patchConfig({
       FEATURE_MANAGED_PROVIDER_CHECKS: true,
       MANAGED_PROVIDER_CHECK_INTERVAL_MS: 53_000,
       MANAGED_PROVIDER_CHECK_TIMEOUT_MS: 17,
       OPENROUTER_API_KEY: "fixture-key",
     });
-    globalThis.fetch = Object.assign(
-      async () => {
-        requests++;
-        if (holding) {
-          heldRequests++;
-          if (heldRequests === 2) {
-            heldStarted.resolve(undefined);
+    testFetchState.set(
+      Object.assign(
+        async () => {
+          requests++;
+          if (holding) {
+            heldRequests++;
+            if (heldRequests === 2) {
+              heldStarted.resolve(undefined);
+            }
+            return (await held.promise)();
           }
-          return (await held.promise)();
-        }
-        return Response.json({ data: missing ? [] : [{ id: MODEL }] });
-      },
-      { preconnect: originalFetch.preconnect },
+          return Response.json({ data: missing ? [] : [{ id: MODEL }] });
+        },
+        { preconnect: originalFetch.preconnect },
+      ),
     );
     let close: (() => Promise<void>) | undefined;
     try {
@@ -155,42 +157,42 @@ describe("managed request catalog checks", () => {
       }
     } finally {
       await close?.();
-      globalThis.fetch = originalFetch;
-      Object.assign(env, previous);
+      testFetchState.restore();
     }
   });
 
   test("startup checks both hosts and guards every request path before transport", async () => {
-    const previous = saveSettings();
     const originalFetch = globalThis.fetch;
     const requests: string[] = [];
-    Object.assign(env, {
+    testState.patchConfig({
       FEATURE_MANAGED_PROVIDER_CHECKS: true,
       MANAGED_PROVIDER_CHECK_INTERVAL_MS: 53_000,
       MANAGED_PROVIDER_CHECK_TIMEOUT_MS: 37,
       OPENROUTER_API_KEY: "fixture-key",
     });
-    globalThis.fetch = Object.assign(
-      async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
-        const request =
-          input instanceof Request
-            ? input
-            : new Request(input.toString(), init);
-        requests.push(request.url);
-        if (new URL(request.url).pathname.endsWith("/models")) {
-          return Response.json({
-            data: new URL(request.url).hostname.startsWith("eu.")
-              ? [{ id: MODEL }]
-              : [],
-          });
-        }
-        expect(await request.json()).toMatchObject({ model: MODEL });
-        return Response.json(
-          { error: { code: 400, message: "fixture stop" } },
-          { status: 400 },
-        );
-      },
-      { preconnect: originalFetch.preconnect },
+    testFetchState.set(
+      Object.assign(
+        async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+          const request =
+            input instanceof Request
+              ? input
+              : new Request(input.toString(), init);
+          requests.push(request.url);
+          if (new URL(request.url).pathname.endsWith("/models")) {
+            return Response.json({
+              data: new URL(request.url).hostname.startsWith("eu.")
+                ? [{ id: MODEL }]
+                : [],
+            });
+          }
+          expect(await request.json()).toMatchObject({ model: MODEL });
+          return Response.json(
+            { error: { code: 400, message: "fixture stop" } },
+            { status: 400 },
+          );
+        },
+        { preconnect: originalFetch.preconnect },
+      ),
     );
     let close: (() => Promise<void>) | undefined;
     try {
@@ -278,8 +280,7 @@ describe("managed request catalog checks", () => {
       }
     } finally {
       await close?.();
-      globalThis.fetch = originalFetch;
-      Object.assign(env, previous);
+      testFetchState.restore();
     }
   });
 });
@@ -289,9 +290,8 @@ for (const residency of MANAGED_AI_RESIDENCIES) {
     for (const enabled of [false, true]) {
       for (const dataClass of ["customer", "public_corpus"] as const) {
         test(`managed ${residency} ${path} refuses debug logging of provider failures with checks ${enabled} and ${dataClass}`, async () => {
-          const previous = saveSettings();
           const originalFetch = globalThis.fetch;
-          const previousDebug = process.env["OPENROUTER_DEBUG"];
+
           const logSpy = spyOn(console, "log").mockImplementation(() => {});
           const groupSpy = spyOn(console, "group").mockImplementation(() => {});
           const groupEndSpy = spyOn(console, "groupEnd").mockImplementation(
@@ -310,7 +310,7 @@ for (const residency of MANAGED_AI_RESIDENCIES) {
             },
           });
           let requests = 0;
-          Object.assign(env, {
+          testState.patchConfig({
             FEATURE_MANAGED_PROVIDER_CHECKS: enabled,
             MANAGED_PROVIDER_CHECK_INTERVAL_MS: 53_000,
             MANAGED_PROVIDER_CHECK_TIMEOUT_MS: 37,
@@ -318,35 +318,41 @@ for (const residency of MANAGED_AI_RESIDENCIES) {
           });
           const requestBodies: unknown[] = [];
           let close: (() => Promise<void>) | undefined;
-          process.env["OPENROUTER_DEBUG"] = "true";
-          globalThis.fetch = Object.assign(
-            async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
-              const request =
-                input instanceof Request
-                  ? input
-                  : new Request(input.toString(), init);
-              if (new URL(request.url).pathname.endsWith("/models")) {
-                return Response.json({ data: [{ id: MODEL }] });
-              }
-              expect(new URL(request.url).hostname).toBe(
-                dataClass === "customer"
-                  ? `${residency}.openrouter.ai`
-                  : "eu.openrouter.ai",
-              );
-              requestBodies.push(await request.json());
-              requests++;
-              // The first response exercises the 5xx body; the next ends SDK retries.
-              return Response.json(
-                {
-                  error: {
-                    code: requests === 1 ? 503 : 400,
-                    message: "fixture response content",
+          testState.setEnv("OPENROUTER_DEBUG", "true");
+          testFetchState.set(
+            Object.assign(
+              async (
+                input: Parameters<typeof fetch>[0],
+                init?: RequestInit,
+              ) => {
+                const request =
+                  input instanceof Request
+                    ? input
+                    : new Request(input.toString(), init);
+                if (new URL(request.url).pathname.endsWith("/models")) {
+                  return Response.json({ data: [{ id: MODEL }] });
+                }
+                expect(new URL(request.url).hostname).toBe(
+                  dataClass === "customer"
+                    ? `${residency}.openrouter.ai`
+                    : "eu.openrouter.ai",
+                );
+                requestBodies.push(await request.json());
+                requests++;
+                // The first request answers with a 5xx body, the second with a
+                // 4xx one; the SDK sends each once.
+                return Response.json(
+                  {
+                    error: {
+                      code: requests === 1 ? 503 : 400,
+                      message: "fixture response content",
+                    },
                   },
-                },
-                { status: requests === 1 ? 503 : 400 },
-              );
-            },
-            { preconnect: originalFetch.preconnect },
+                  { status: requests === 1 ? 503 : 400 },
+                );
+              },
+              { preconnect: originalFetch.preconnect },
+            ),
           );
           try {
             close = await startManagedProviderChecks();
@@ -354,37 +360,45 @@ for (const residency of MANAGED_AI_RESIDENCIES) {
               dataClass === "customer"
                 ? { dataClass, managedAIResidency: residency }
                 : { dataClass };
+            // Managed requests carry the credential their tier resolved.
             const adapter = createTanStackTextAdapterFactory({
               provider: "openrouter",
+              managedOpenRouterCredential: {
+                type: "static",
+                apiKey: "fixture-key",
+              },
               ...policy,
             })(MODEL);
             const options = {
               ...chatOptions,
+              threadId: "managed-provider-checks-thread",
               logger,
               modelOptions: { models: ["fixture/fallback"] },
             };
             const structured = { ...structuredOptions, chatOptions: options };
-            if (path === "structured") {
-              const result = await Result.tryPromise({
-                try: async () => await adapter.structuredOutput(structured),
-                catch: (error) => error,
-              });
-              expect(result.isErr()).toBe(true);
-            } else {
-              const chunks = [];
-              const stream =
-                path === "chat"
-                  ? adapter.chatStream(options)
-                  : adapter.structuredOutputStream?.(structured);
-              if (stream === undefined) {
-                panic(
-                  "Provider adapter did not expose structured output streaming.",
-                );
+            for (const _status of [503, 400]) {
+              if (path === "structured") {
+                const result = await Result.tryPromise({
+                  try: async () => await adapter.structuredOutput(structured),
+                  catch: (error) => error,
+                });
+                expect(result.isErr()).toBe(true);
+              } else {
+                const chunks = [];
+                const stream =
+                  path === "chat"
+                    ? adapter.chatStream(options)
+                    : adapter.structuredOutputStream?.(structured);
+                if (stream === undefined) {
+                  panic(
+                    "Provider adapter did not expose structured output streaming.",
+                  );
+                }
+                for await (const chunk of stream) {
+                  chunks.push(chunk);
+                }
+                expect(chunks.at(-1)?.type).toBe(EventType.RUN_ERROR);
               }
-              for await (const chunk of stream) {
-                chunks.push(chunk);
-              }
-              expect(chunks.at(-1)?.type).toBe(EventType.RUN_ERROR);
             }
             expect(requests).toBe(2);
             for (const body of requestBodies) {
@@ -397,13 +411,7 @@ for (const residency of MANAGED_AI_RESIDENCIES) {
             logSpy.mockRestore();
             groupSpy.mockRestore();
             groupEndSpy.mockRestore();
-            globalThis.fetch = originalFetch;
-            if (previousDebug === undefined) {
-              delete process.env["OPENROUTER_DEBUG"];
-            } else {
-              process.env["OPENROUTER_DEBUG"] = previousDebug;
-            }
-            Object.assign(env, previous);
+            testFetchState.restore();
           }
         });
       }
@@ -413,7 +421,7 @@ for (const residency of MANAGED_AI_RESIDENCIES) {
 
 test("termination aborts stalled catalog requests within the service deadline", async () => {
   jest.useFakeTimers();
-  const previous = saveSettings();
+
   const originalFetch = globalThis.fetch;
   const scheduled: {
     options?: Parameters<typeof startNonOverlappingInterval>[0];
@@ -425,29 +433,31 @@ test("termination aborts stalled catalog requests within the service deadline", 
   let requests = 0;
   let httpStopped = false;
   let close: (() => Promise<void>) | undefined;
-  Object.assign(env, {
+  testState.patchConfig({
     FEATURE_MANAGED_PROVIDER_CHECKS: true,
     MANAGED_PROVIDER_CHECK_INTERVAL_MS: 53_000,
     MANAGED_PROVIDER_CHECK_TIMEOUT_MS: 30_000,
     OPENROUTER_API_KEY: "fixture-key",
   });
-  globalThis.fetch = Object.assign(
-    async (_input: Parameters<typeof fetch>[0], init?: RequestInit) => {
-      requests++;
-      if (requests <= 2) {
-        return Response.json({ data: [{ id: MODEL }] });
-      }
-      const signal = init?.signal;
-      if (signal === null || signal === undefined) {
-        panic("Catalog request did not receive its cancellation signal");
-      }
-      signals.push(signal);
-      if (signals.length === 2) {
-        started.resolve(undefined);
-      }
-      return await stalled.promise;
-    },
-    { preconnect: originalFetch.preconnect },
+  testFetchState.set(
+    Object.assign(
+      async (_input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+        requests++;
+        if (requests <= 2) {
+          return Response.json({ data: [{ id: MODEL }] });
+        }
+        const signal = init?.signal;
+        if (signal === null || signal === undefined) {
+          panic("Catalog request did not receive its cancellation signal");
+        }
+        signals.push(signal);
+        if (signals.length === 2) {
+          started.resolve(undefined);
+        }
+        return await stalled.promise;
+      },
+      { preconnect: originalFetch.preconnect },
+    ),
   );
   try {
     close = await startManagedProviderChecks((options) => {
@@ -474,6 +484,8 @@ test("termination aborts stalled catalog requests within the service deadline", 
       stopHttp: async () => {
         httpStopped = true;
       },
+      stopChatQueueSender: () => undefined,
+      stopChatTurnAdopter: () => undefined,
       stopScheduler: () => undefined,
       stopSse: () => undefined,
       timeout: sleep(deadlineMs),
@@ -489,8 +501,8 @@ test("termination aborts stalled catalog requests within the service deadline", 
   } finally {
     releaseClose.resolve(undefined);
     await close?.();
-    globalThis.fetch = originalFetch;
-    Object.assign(env, previous);
+    testFetchState.restore();
+
     jest.useRealTimers();
   }
 });

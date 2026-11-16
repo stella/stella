@@ -27,7 +27,7 @@ const workflow = v.parse(
   ),
 );
 
-export const unresolvedCiExpressionPaths = (context: object) => {
+const unresolvedCiExpressionPaths = (context: object) => {
   const model = contextFromNested(context);
   const unresolved: string[] = [];
   for (const [job, definition] of Object.entries(workflow.jobs)) {

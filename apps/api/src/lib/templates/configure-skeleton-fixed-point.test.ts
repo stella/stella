@@ -7,9 +7,8 @@
  * bare entry starts recording a decision nobody made.
  */
 import { describe, expect, test } from "bun:test";
-import JSZip from "jszip";
 
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 
 import { deriveManifest } from "@/api/lib/docx/derived-manifest";
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
@@ -30,15 +29,13 @@ const paragraph = (text: string): string =>
 const buildDocx = async (
   paragraphs: readonly string[],
 ): Promise<ScannedFile> => {
-  const zip = new JSZip();
-  writeZipEntry(
-    zip,
+  const zip = new ZipArchive();
+  zip.set(
     "word/document.xml",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       `<w:document xmlns:w="${W_NS}"><w:body>${paragraphs.map(paragraph).join("")}</w:body></w:document>`,
   );
-  writeZipEntry(
-    zip,
+  zip.set(
     "[Content_Types].xml",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
@@ -46,15 +43,14 @@ const buildDocx = async (
       '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
       "</Types>",
   );
-  writeZipEntry(
-    zip,
+  zip.set(
     "_rels/.rels",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
       '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
       "</Relationships>",
   );
-  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
+  return testDocxFile(await zip.generate({ compression: "store" }));
 };
 
 /** A statement of work with a plain field, a loop and its item fields, and a
@@ -72,8 +68,8 @@ const SOURCE_PARAGRAPHS = [
 /** What `create_template` hands back: one bare person entry per configurable
  *  path, loop item paths included. */
 const documentText = async (docx: ScannedFile): Promise<string> => {
-  const zip = await JSZip.loadAsync(docx.bytes);
-  return (await zip.file("word/document.xml")?.async("string")) ?? "";
+  const zip = await ZipArchive.read(docx.bytes);
+  return (await zip.entry("word/document.xml")?.text()) ?? "";
 };
 
 const skeletonFor = (paths: readonly string[]): FieldMeta[] =>

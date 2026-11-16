@@ -1,9 +1,18 @@
-import { CHAT_CONTINUATION_REJECTED_ERROR_CODE } from "@stll/api-contract";
+import {
+  CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+  CHAT_MESSAGE_EDIT_ERROR_CODE,
+  CHAT_MESSAGE_EMPTY_ERROR_CODE,
+} from "@stll/api-contract";
+import type { ChatMessageEditErrorCode } from "@stll/api-contract";
 
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
-import { hasRunningToolCallInLatestAssistantMessage } from "@/components/chat/chat-ui-tools";
+import {
+  getAwaitedAssistantMessageId,
+  hasRunningToolCallInLatestAssistantMessage,
+} from "@/components/chat/chat-ui-tools";
 import type { ChatStopState } from "@/features/chat/chat-runtime";
 import type { useChatSession } from "@/features/chat/hooks/use-chat-session";
+import type { TranslationKey } from "@/i18n/types";
 import { chatRefusal } from "@/lib/errors/api";
 
 /**
@@ -40,6 +49,11 @@ export const CHAT_USER_ACTIONS = {
   },
   "allow-once": { handler: "handleApprove", via: "session" },
   "always-allow": { handler: "handleAlwaysAllow", via: "session" },
+  /** Answers, or dismisses, a question a run on the member's computer asks. */
+  "answer-local-question": {
+    handler: "answerLocalRunQuestion",
+    via: "session",
+  },
   "answer-question": { handler: "handleAskUserSubmit", via: "session" },
   "attach-files": { via: "page" },
   /** Reads whether a saved credential can answer a private input card. */
@@ -52,19 +66,37 @@ export const CHAT_USER_ACTIONS = {
     handler: "confirmStoredApprovalGrant",
     via: "session",
   },
+  /** Sends the message that runs the next step of a turn paused on its
+   *  budget. */
+  "continue-paused-turn": { handler: "continuePausedTurn", via: "session" },
   /** Resumes the chat with a committed private input receipt. */
   "continue-private-input": {
     handler: "continueRequestSecret",
+    via: "session",
+  },
+  /** Resumes the chat with a confirmed connector receipt. */
+  "continue-connector-request": {
+    handler: "continueConnectConnector",
     via: "session",
   },
   copy: { via: "page" },
   "delete-thread": { via: "request" },
   deny: { handler: "handleDeny", via: "session" },
   "edit-answer": { handler: "handleAskUserEditAndRerun", via: "session" },
+  /** Replaces one of the user's own messages and drops every later turn. */
+  "edit-message": { handler: "editUserMessage", via: "session" },
+  /** Takes a queued message back into the composer. */
+  "edit-queued-message": { handler: "editQueuedMessage", via: "session" },
   export: { via: "page" },
   fork: { via: "request" },
+  /** An open message editor pauses the queue until it closes. */
+  "hold-queue-for-message-edit": {
+    handler: "holdQueueForMessageEdit",
+    via: "session",
+  },
   "improve-prompt": { via: "page" },
   "load-older": { handler: "loadOlder", via: "session" },
+  "move-queued-message": { handler: "moveQueuedMessage", via: "session" },
   "move-to-side": { via: "page" },
   /** Leaves the thread: its request closes, and its turn is not stopped. */
   "new-chat": { handler: "leave", via: "session" },
@@ -73,24 +105,45 @@ export const CHAT_USER_ACTIONS = {
     via: "session",
   },
   "open-draft": { handler: "handleOpenCreateDocumentDraft", via: "session" },
+  /** Opens a sent message's editor; a running turn is stopped first. */
+  "open-message-editor": { handler: "startUserMessageEdit", via: "session" },
   "open-playbook": { handler: "handleOpenPlaybook", via: "session" },
+  /** Holds the queue: nothing queued is sent until it is resumed. */
+  "pause-queue": { handler: "pauseQueue", via: "session" },
+  /** Holds a message until the turn ends, where a plain send would steer
+   *  it (Cmd/Ctrl+Enter, the queue button). */
+  queue: { handler: "queueMessage", via: "session" },
   /** Reloads the canonical answer after an accepted edit or revision conflict. */
   "refresh-edited-answer": { handler: "refreshAnswers", via: "session" },
   "remove-queued-message": { handler: "removeQueuedMessage", via: "session" },
   "rename-thread": { via: "request" },
+  /** Send now over a turn that waits on the member, once confirmed: it
+   *  ends what the turn waits on. */
+  "replace-with-queued-message": {
+    handler: "replaceWithQueuedMessage",
+    via: "session",
+  },
   /** The error's resend after the anonymization boundary refused a turn. */
   "resend-without-anonymization": {
     handler: "resendLatestMessage",
     via: "session",
   },
   "resolve-draft": { handler: "handleCreateDocumentResolve", via: "session" },
+  "resume-queue": { handler: "resumeQueue", via: "session" },
   retry: { handler: "resendLatestMessage", via: "session" },
   "run-client-tool": { handler: "addToolResult", via: "session" },
   "select-matters": { via: "page" },
   "select-model": { via: "request" },
   send: { handler: "sendMessage", via: "session" },
+  /** Reports a connector card's outcome; the server confirms the connection. */
+  "submit-connector-request": {
+    handler: "handleConnectConnector",
+    via: "session",
+  },
   "submit-private-input": { handler: "handleRequestSecret", via: "session" },
-  /** Moves a queued message to the front and stops the running turn. */
+  /** Hands a queued message to a running turn that takes it; otherwise the
+   *  server sends it next, stopping a running turn (a waiting one asks for
+   *  confirmation first). */
   "send-queued-message-now": {
     handler: "sendQueuedMessageNow",
     via: "session",
@@ -152,11 +205,61 @@ const isLatestAssistantMessage = ({
   return latest?.role === "assistant" && latest.id === messageId;
 };
 
-/** Replaying a mismatched continuation cannot repair its server-owned state. */
-export const canRetryChatRequest = (error: Error | undefined): boolean =>
-  chatRefusal(error)?.code !== CHAT_CONTINUATION_REJECTED_ERROR_CODE;
+/**
+ * Refusals that sending the same request again cannot change, with what the
+ * user is told instead of being offered a resend: a mismatched continuation
+ * cannot repair its server-owned state, and a message with nothing for the
+ * model to read stays empty however often it is sent.
+ */
+const FINAL_CHAT_REFUSAL_KEYS = {
+  [CHAT_CONTINUATION_REJECTED_ERROR_CODE]: "chat.sendErrorContinuationRejected",
+  [CHAT_MESSAGE_EMPTY_ERROR_CODE]: "chat.sendErrorMessageEmpty",
+} as const satisfies Record<string, TranslationKey>;
 
-/** Retry regenerates the latest answer, once no turn runs. */
+const isFinalChatRefusalCode = (
+  code: string | undefined,
+): code is keyof typeof FINAL_CHAT_REFUSAL_KEYS =>
+  code !== undefined && Object.hasOwn(FINAL_CHAT_REFUSAL_KEYS, code);
+
+type FinalChatRefusalKey =
+  (typeof FINAL_CHAT_REFUSAL_KEYS)[keyof typeof FINAL_CHAT_REFUSAL_KEYS];
+
+/** The message for a refusal a resend cannot change, if `error` is one. */
+export const finalChatRefusalKey = (
+  error: Error | undefined,
+): FinalChatRefusalKey | undefined => {
+  const code = chatRefusal(error)?.code;
+  return isFinalChatRefusalCode(code)
+    ? FINAL_CHAT_REFUSAL_KEYS[code]
+    : undefined;
+};
+
+/** Why the server refused to edit a message, or null when `error` is no
+ *  such refusal. */
+export const chatMessageEditRefusalCode = (
+  error: unknown,
+): ChatMessageEditErrorCode | null => {
+  const code = chatRefusal(error)?.code;
+  return (
+    Object.values(CHAT_MESSAGE_EDIT_ERROR_CODE).find(
+      (candidate) => candidate === code,
+    ) ?? null
+  );
+};
+
+/** The server refused to edit a message; the page reloads what it stores. */
+export const isChatMessageEditRefusal = (error: Error | undefined): boolean =>
+  chatMessageEditRefusalCode(error) !== null;
+
+/** A final refusal stays final when replayed, and replaying a refused edit
+ *  would answer the history it left in place. */
+export const canRetryChatRequest = (error: Error | undefined): boolean =>
+  finalChatRefusalKey(error) === undefined && !isChatMessageEditRefusal(error);
+
+/**
+ * Retry regenerates the latest answer, once no turn runs. A turn waiting on an
+ * approval or a question is still owned by that decision, not finished.
+ */
 export const canRetryAssistantMessage = ({
   error,
   isGenerating,
@@ -164,7 +267,8 @@ export const canRetryAssistantMessage = ({
 }: AssistantMessageActionState & { error: Error | undefined }): boolean =>
   canRetryChatRequest(error) &&
   !isGenerating &&
-  isLatestAssistantMessage(message);
+  isLatestAssistantMessage(message) &&
+  getAwaitedAssistantMessageId(message.messages) !== message.messageId;
 
 /**
  * Forking reads persisted history, so it is offered on every settled answer
@@ -177,3 +281,23 @@ export const canForkAssistantMessage = ({
   ...message
 }: AssistantMessageActionState): boolean =>
   !isGenerating || !isLatestAssistantMessage(message);
+
+/**
+ * Undoing a local turn's file changes is offered only while nothing runs and
+ * no prompt follows the answer: a send or a streaming turn leaves the turn
+ * behind the computer's newest one, which the server refuses to undo.
+ */
+export const canUndoLocalFilesOf = ({
+  isGenerating,
+  messageId,
+  messages,
+}: AssistantMessageActionState): boolean => {
+  if (isGenerating) {
+    return false;
+  }
+  const index = messages.findIndex(({ id }) => id === messageId);
+  return (
+    index !== -1 &&
+    messages.slice(index + 1).every(({ role }) => role !== "user")
+  );
+};

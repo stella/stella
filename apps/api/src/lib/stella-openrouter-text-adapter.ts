@@ -9,6 +9,7 @@ import type {
 import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
 import { Result } from "better-result";
 
+import { withOptionalsNullable } from "@stll/agent-input";
 import { Temporal } from "@stll/time";
 
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
@@ -22,8 +23,8 @@ import {
   PROVIDER_DATA_POLICY,
   withoutModelVariant,
 } from "@/api/lib/chat/provider-data-policy";
+import { retryHintEvidence } from "@/api/lib/errors/provider-retry-evidence";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { withOptionalsNullable } from "@/api/lib/json-schema/null-optionals";
 import {
   readEvidence,
   readProviderStatus,
@@ -92,18 +93,21 @@ export class StellaOpenRouterTextAdapter extends OpenRouterTextAdapter<OpenRoute
           if (!isRecord(error) || !(error["rawResponse"] instanceof Response)) {
             return error;
           }
+          const { headers } = error["rawResponse"];
           const requestId =
-            error["rawResponse"].headers.get("x-request-id") ??
-            error["rawResponse"].headers.get("request-id");
-          if (requestId === null) {
+            headers.get("x-request-id") ?? headers.get("request-id");
+          const retryHints = retryHintEvidence(headers);
+          if (requestId === null && retryHints.headers === undefined) {
             return error;
           }
           // The adapter carries provider-owned evidence through rawEvent.
-          // Project the request id here, while the SDK response is available.
+          // Project the request id and the retry hints here, while the SDK
+          // response is available.
           Object.defineProperty(error, "rawEvent", {
             configurable: true,
             value: {
-              requestId,
+              ...(requestId === null ? {} : { requestId }),
+              ...retryHints,
               status: readProviderStatus(error)?.status,
               cause: error["rawEvent"] ?? error["error"] ?? error["metadata"],
             },
@@ -158,26 +162,22 @@ export class StellaOpenRouterTextAdapter extends OpenRouterTextAdapter<OpenRoute
 }
 
 /**
- * The SDK's own default retries a 5xx for up to an hour, sleeping up to a
- * minute between attempts, and a sleep does not see the run's cancel. A turn
- * waits a few seconds for a transient failure and then reports it; each
- * sleep is short, so a cancel lands within one.
+ * The SDK sends each request once. The generation layer owns every retry
+ * (`provider-retry-policy.ts`), so each send passes the checks it makes
+ * before a dispatch; the SDK's own default would retry a 5xx for up to an
+ * hour below them.
  */
 const OPENROUTER_RETRY: NonNullable<OpenRouterConfig["retryConfig"]> = {
-  strategy: "backoff",
-  backoff: {
-    initialInterval: 250,
-    maxInterval: 1000,
-    exponent: 1.5,
-    maxElapsedTime: 4000,
-  },
-  retryConnectionErrors: true,
+  strategy: "none",
 };
 
 const OPENROUTER_DATA_REGION_FILTER = "Filter by Data Region";
 
-const isManagedRoutingRefusal = (error: unknown): boolean => {
+const isManagedProviderRefusal = (error: unknown): boolean => {
   const status = readProviderStatus(error)?.status;
+  if (status === 402) {
+    return true;
+  }
   if (status !== 404 || typeof error !== "object" || error === null) {
     return false;
   }
@@ -230,7 +230,7 @@ const withManagedRequestEligibility = async function* ({
     yield {
       type: EventType.RUN_STARTED,
       runId: Bun.randomUUIDv7(),
-      threadId: options.threadId ?? Bun.randomUUIDv7(),
+      threadId: options.threadId,
       model: options.model,
       timestamp: Temporal.Now.instant().epochMilliseconds,
       ...(options.parentRunId === undefined
@@ -250,7 +250,7 @@ const withManagedRequestEligibility = async function* ({
     };
     return;
   }
-  yield* withManagedProviderErrors(stream, isManagedRoutingRefusal);
+  yield* withManagedProviderErrors(stream, isManagedProviderRefusal);
 };
 
 const withManagedProviderErrors = async function* (
@@ -374,7 +374,9 @@ class InstanceOpenRouterTextAdapter extends StellaOpenRouterTextAdapter {
   override chatStream(options: OpenRouterTextOptions) {
     return withManagedProviderErrors(
       super.chatStream({ ...options, logger: resolveDebugOption(false) }),
-      this.isFederatedCredentialRefusal,
+      (error) =>
+        this.isFederatedCredentialRefusal(error) ||
+        isManagedProviderRefusal(error),
     );
   }
 
@@ -387,7 +389,9 @@ class InstanceOpenRouterTextAdapter extends StellaOpenRouterTextAdapter {
           logger: resolveDebugOption(false),
         },
       }),
-      this.isFederatedCredentialRefusal,
+      (error) =>
+        this.isFederatedCredentialRefusal(error) ||
+        isManagedProviderRefusal(error),
     );
   }
 
@@ -461,7 +465,7 @@ class ManagedOpenRouterTextAdapter extends InstanceOpenRouterTextAdapter {
     const result = await Result.tryPromise({
       try: async () => await super.structuredOutput(options),
       catch: (error) =>
-        isManagedRoutingRefusal(error)
+        isManagedProviderRefusal(error)
           ? managedProviderUnavailable("openrouter")
           : error,
     });

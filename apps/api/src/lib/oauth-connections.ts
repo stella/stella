@@ -1,12 +1,21 @@
 import { Result } from "better-result";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 
 import { oauthClient, oauthConsent, organization } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
+import { oauthGrantRevocations } from "@/api/db/schema";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  createAuditRecorder,
+} from "@/api/lib/audit-log";
 import { revokeOAuthClientAuthArtifacts } from "@/api/lib/auth-artifacts";
+import { ACCESS_TOKEN_EXPIRES_IN_SECONDS } from "@/api/lib/auth/access-token-lifetime";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 
 /**
  * Per /conventions-security ("Handlers must not import the root db
@@ -17,6 +26,31 @@ import { LIMITS } from "@/api/lib/limits";
  * reach this module through the narrow helpers below, never `rootDb`
  * directly.
  */
+
+type FindOAuthGrantIdentityOptions = {
+  clientId: string;
+  userId: string;
+  referenceId: string;
+};
+
+/** Resolves the consent identity bound to the provider's user and organization. */
+export const findOAuthGrantIdentity = async ({
+  clientId,
+  userId,
+  referenceId,
+}: FindOAuthGrantIdentityOptions) =>
+  await rootDb
+    .select({ id: oauthConsent.id })
+    .from(oauthConsent)
+    .where(
+      and(
+        eq(oauthConsent.clientId, clientId),
+        eq(oauthConsent.userId, userId),
+        eq(oauthConsent.referenceId, referenceId),
+      ),
+    )
+    .limit(1)
+    .then((rows) => rows.at(0));
 
 export type OAuthConnectionSummary = {
   id: string;
@@ -89,13 +123,22 @@ export type DisconnectedOAuthConnection = {
  * handler turns that into a 404 without revealing whether the id belongs
  * to someone else).
  */
-export const disconnectOAuthConnectionForUser = async (
-  userId: SafeId<"user">,
-  consentId: string,
-): Promise<Result<DisconnectedOAuthConnection | null, HandlerError>> =>
+type DisconnectOAuthConnectionOptions = {
+  consentId: string;
+  request: Request;
+  userId: SafeId<"user">;
+};
+
+export const disconnectOAuthConnectionForUser = async ({
+  consentId,
+  request,
+  userId,
+}: DisconnectOAuthConnectionOptions): Promise<
+  Result<DisconnectedOAuthConnection | null, HandlerError>
+> =>
   await Result.tryPromise({
     try: async () =>
-      await rootDb.transaction(async (tx) => {
+      await withAggregateTransaction(rootDb, async (tx) => {
         const deletedConsents = await tx
           .delete(oauthConsent)
           .where(
@@ -120,6 +163,59 @@ export const disconnectOAuthConnectionForUser = async (
           clientId: consent.clientId,
           referenceId: consent.referenceId,
         });
+
+        const revokedAt = new Date();
+        await tx
+          .delete(oauthGrantRevocations)
+          .where(
+            and(
+              eq(oauthGrantRevocations.userId, userId),
+              sql`${oauthGrantRevocations.revokedAt} < CURRENT_TIMESTAMP - ${ACCESS_TOKEN_EXPIRES_IN_SECONDS} * INTERVAL '1 second'`,
+            ),
+          );
+
+        if (consent.referenceId) {
+          await tx
+            .insert(oauthGrantRevocations)
+            .values({
+              organizationId: consent.referenceId,
+              userId,
+              oauthClientId: consent.clientId,
+              grantId: consent.id,
+              revokedAt,
+            })
+            .onConflictDoNothing({
+              target: [
+                oauthGrantRevocations.organizationId,
+                oauthGrantRevocations.userId,
+                oauthGrantRevocations.oauthClientId,
+                oauthGrantRevocations.grantId,
+              ],
+            });
+        }
+        const event = {
+          action: AUDIT_ACTION.DELETE,
+          resourceType: AUDIT_RESOURCE_TYPE.MCP_CONNECTION,
+          resourceId: consent.clientId,
+        } as const;
+        if (consent.referenceId) {
+          await createAuditRecorder({
+            organizationId: brandPersistedOrganizationId(consent.referenceId),
+            request,
+            server: null,
+            userId,
+            workspaceId: null,
+          })(tx, event);
+        } else {
+          await createAuditRecorder({
+            account: { userId },
+            request,
+            server: null,
+          })(tx, {
+            type: "account.oauth_connection.disconnected",
+            resourceId: consent.clientId,
+          });
+        }
 
         return { id: consent.id };
       }),

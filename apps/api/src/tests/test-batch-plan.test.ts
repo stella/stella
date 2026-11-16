@@ -6,6 +6,7 @@ import path from "node:path";
 import {
   listApiTestPaths,
   planApiTestBatches,
+  PROPERTY_TEST_MARKERS,
 } from "../../scripts/api-test-plan";
 import {
   classifyTestBatch,
@@ -19,7 +20,6 @@ import {
 } from "../../scripts/test-batch-plan";
 
 const API_ROOT = path.resolve(import.meta.dir, "../..");
-const PROPERTY_MARKER = ["fc", "assert"].join(".");
 
 describe("API test batch planning", () => {
   test("keeps every DB-backed property file in its own process", async () => {
@@ -37,7 +37,9 @@ describe("API test batch planning", () => {
         })),
       )
     )
-      .filter(({ source }) => source.includes(PROPERTY_MARKER))
+      .filter(({ source }) =>
+        PROPERTY_TEST_MARKERS.some((marker) => source.includes(marker)),
+      )
       .filter(
         ({ source, testPath }) =>
           classifyTestBatch({
@@ -236,14 +238,17 @@ describe("API test batch planning", () => {
       'import rootDb from "@/api/db/root";',
       'import * as pglite from "@electric-sql/pglite";',
       'import "@/api/db/root";',
+      'import {} from "@/api/db/root";',
     ]) {
       expect(isDbTest(testPath, source)).toBe(true);
     }
 
     for (const source of [
       'import type { RootDb } from "@/api/db/root";',
+      'import type {} from "@/api/db/root";',
       'import { type RootDb } from "@/api/db/root";',
       'import type * as pglite from "@electric-sql/pglite";',
+      'import type {} from "@electric-sql/pglite";',
       'const example = "@/api/db/root";',
       '// import { rootDb } from "@/api/db/root";',
       'test("mentions pglite", () => {});',

@@ -1,7 +1,8 @@
 import { panic } from "better-result";
 import { readFileSync, writeFileSync } from "node:fs";
-import ts from "typescript6";
 import * as v from "valibot";
+
+import { parseSource, walk } from "./syntax-tree";
 
 const turboTypecheckInputsSchema = v.object({
   tasks: v.record(
@@ -27,33 +28,37 @@ export const writeTurboTypecheckInputs = (
   inputs: ReadonlyMap<string, readonly string[]>,
 ) => {
   const text = readFileSync(filename, "utf-8");
-  const document = ts.parseJsonText(filename, text);
+  const document = parseSource(`${filename}.js`, `(${text}\n)`);
   const edits: { start: number; end: number; text: string }[] = [];
-  const visit = (node: ts.Node) => {
-    if (ts.isPropertyAssignment(node) && ts.isStringLiteral(node.name)) {
-      const expected = inputs.get(node.name.text);
-      if (expected && ts.isObjectLiteralExpression(node.initializer)) {
-        for (const property of node.initializer.properties) {
-          if (
-            ts.isPropertyAssignment(property) &&
-            ts.isStringLiteral(property.name) &&
-            property.name.text === "inputs"
-          ) {
-            edits.push({
-              start: property.initializer.getStart(document),
-              end: property.initializer.end,
-              text: JSON.stringify(expected, null, 2).replaceAll(
-                "\n",
-                () => `\n${lineIndent(text, property.getStart(document))}`,
-              ),
-            });
-          }
-        }
+  walk(document.program, (node) => {
+    if (
+      node.type !== "Property" ||
+      node.key.type !== "Literal" ||
+      typeof node.key.value !== "string"
+    ) {
+      return;
+    }
+    const expected = inputs.get(node.key.value);
+    if (!expected || node.value.type !== "ObjectExpression") {
+      return;
+    }
+    for (const property of node.value.properties) {
+      if (
+        property.type === "Property" &&
+        property.key.type === "Literal" &&
+        property.key.value === "inputs"
+      ) {
+        edits.push({
+          start: property.value.start - 1,
+          end: property.value.end - 1,
+          text: JSON.stringify(expected, null, 2).replaceAll(
+            "\n",
+            () => `\n${lineIndent(text, property.start - 1)}`,
+          ),
+        });
       }
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(document);
+  });
   if (edits.length !== inputs.size) {
     panic("Missing split API Turbo task inputs");
   }

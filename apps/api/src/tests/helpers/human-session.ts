@@ -1,4 +1,5 @@
 import { panic } from "better-result";
+import * as v from "valibot";
 
 import {
   PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD,
@@ -6,6 +7,10 @@ import {
 } from "@stll/api-contract/professional-use";
 
 import { getAuth } from "@/api/lib/auth";
+import { getAuthEndpointUrl } from "@/api/lib/auth/auth-paths";
+import { toSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
+import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
 import { readDevOtp } from "@/api/lib/dev-otp-store";
 
 const responseCookiePairs = (res: Response): [string, string][] =>
@@ -30,7 +35,7 @@ const responseCookiePairs = (res: Response): [string, string][] =>
  */
 export type HumanBrowser = {
   email: string;
-  userId: string;
+  userId: SafeId<"user">;
   cookieHeader: () => string;
   headers: () => Headers;
   setActiveOrganization: (organizationId: string) => Promise<void>;
@@ -43,6 +48,41 @@ type SignInHumanOptions = {
    * account is created accepted.
    */
   displayedStatementVersion: string | null;
+};
+
+/** The browser a sign-in response leaves behind: its cookies and session. */
+const toHumanBrowser = async (
+  email: string,
+  signInRes: Response,
+): Promise<HumanBrowser> => {
+  const auth = getAuth();
+  const jar = new Map(responseCookiePairs(signInRes));
+  const cookieHeader = () =>
+    [...jar].map(([name, value]) => `${name}=${value}`).join("; ");
+  const headers = () => new Headers({ cookie: cookieHeader() });
+  const session = await auth.api.getSession({ headers: headers() });
+  if (!session?.user) {
+    panic("sign-in produced no session");
+  }
+  return {
+    email,
+    userId: toSafeId<"user">(session.user.id),
+    cookieHeader,
+    headers,
+    setActiveOrganization: async (organizationId) => {
+      const setActiveRes = await auth.api.setActiveOrganization({
+        body: { organizationId },
+        headers: headers(),
+        asResponse: true,
+      });
+      if (!setActiveRes.ok) {
+        panic(`setActiveOrganization failed: ${String(setActiveRes.status)}`);
+      }
+      for (const [name, value] of responseCookiePairs(setActiveRes)) {
+        jar.set(name, value);
+      }
+    },
+  };
 };
 
 /** Sign a verified user in (password-less email OTP), creating them if new. */
@@ -75,32 +115,63 @@ export const signInHuman = async (
           },
     asResponse: true,
   });
-  const jar = new Map(responseCookiePairs(signInRes));
-  const cookieHeader = () =>
-    [...jar].map(([name, value]) => `${name}=${value}`).join("; ");
-  const headers = () => new Headers({ cookie: cookieHeader() });
-  const session = await auth.api.getSession({ headers: headers() });
-  if (!session?.user) {
-    panic("sign-in produced no session");
-  }
+  return await toHumanBrowser(email, signInRes);
+};
+
+type SignInHumanFromOAuthPageOptions = {
+  email: string;
+  /** The signed request the sign-in page received. */
+  oauthQuery: string;
+  /** The browser as it reached the page, with whatever session it held. */
+  prior: HumanBrowser;
+};
+
+const oauthRedirectSchema = v.looseObject({ url: v.string() });
+
+/**
+ * Sign in on the OAuth sign-in page, as the web page posts it: the signed
+ * request rides along, and the provider answers with where the
+ * authorization continues for the account that signed in.
+ */
+export const signInHumanFromOAuthPage = async ({
+  email,
+  oauthQuery,
+  prior,
+}: SignInHumanFromOAuthPageOptions): Promise<{
+  browser: HumanBrowser;
+  redirect: URL;
+}> => {
+  const auth = getAuth();
+  await auth.api.sendVerificationOTP({ body: { email, type: "sign-in" } });
+  const otp =
+    readDevOtp(email) ??
+    panic(
+      "dev OTP not stashed; run the suite through `bun run test`, which opts into local development access.",
+    );
+  const address = `203.0.113.${String(Math.floor(Math.random() * 254) + 1)}`;
+  const signInRes = await auth.handler(
+    new Request(getAuthEndpointUrl("sign-in/email-otp"), {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        "content-type": "application/json",
+        cookie: prior.cookieHeader(),
+        "x-forwarded-for": address,
+        [AUTH_CLIENT_ADDRESS_HEADER]: address,
+      },
+      body: JSON.stringify({
+        email,
+        otp,
+        [PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD]:
+          PROFESSIONAL_USE_STATEMENT_VERSION,
+        oauth_query: oauthQuery,
+      }),
+    }),
+  );
+  const answer = v.parse(oauthRedirectSchema, await signInRes.clone().json());
   return {
-    email,
-    userId: session.user.id,
-    cookieHeader,
-    headers,
-    setActiveOrganization: async (organizationId) => {
-      const setActiveRes = await auth.api.setActiveOrganization({
-        body: { organizationId },
-        headers: headers(),
-        asResponse: true,
-      });
-      if (!setActiveRes.ok) {
-        panic(`setActiveOrganization failed: ${String(setActiveRes.status)}`);
-      }
-      for (const [name, value] of responseCookiePairs(setActiveRes)) {
-        jar.set(name, value);
-      }
-    },
+    browser: await toHumanBrowser(email, signInRes),
+    redirect: new URL(answer.url),
   };
 };
 
@@ -134,7 +205,7 @@ export const createHumanSession = async ({
     browser,
     cookieHeader: browser.cookieHeader(),
     email,
-    userId: session.user.id,
+    userId: toSafeId<"user">(session.user.id),
     organizationId: session.session.activeOrganizationId,
   };
 };

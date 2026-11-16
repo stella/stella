@@ -4,7 +4,8 @@ import { CASE_LAW_RESEARCH_COLUMNS_PER_ORGANIZATION_MAX } from "@stll/api-contra
 
 import { questionColumnsOptions } from "@/features/case-law/research/queries";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 /**
  * Whether the organization already holds every question column it may add.
@@ -25,8 +26,8 @@ export const useQuestionColumnsCountLimit = (enabled: boolean): boolean => {
     enabled: enabled && activeOrganizationId !== null,
     select: (columns) => columns.length,
   });
-  const countView = useQueryView(countQuery);
-  useQueryViewError(countView);
+  const countView = queryView(countQuery);
+  useQueryViewError(countView, "useQuestionColumnsCountLimit:query");
   const count = countView.type === "items" ? countView.items : undefined;
 
   if (

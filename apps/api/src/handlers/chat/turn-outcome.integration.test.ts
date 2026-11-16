@@ -1,12 +1,13 @@
 import { panic, Result } from "better-result";
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { desc, eq, inArray } from "drizzle-orm";
+import { afterAll, describe, expect, test } from "bun:test";
+import { eq, inArray } from "drizzle-orm";
 
 import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
 import type { TanStackAIProvider } from "@stll/ai-catalog";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { AI_ERROR_KINDS } from "@stll/api-contract";
 import { propertyTestTimeout } from "@stll/property-testing";
+import { createTestState } from "@stll/test-state";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
@@ -34,6 +35,7 @@ import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { runChatThreadCompaction } from "@/api/lib/chat/thread-compaction";
+import { NEWEST_CHAT_TURN_FIRST } from "@/api/lib/chat/turn-order";
 import { CHAT_TURN_STATUSES } from "@/api/lib/chat/turn-status";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
@@ -72,7 +74,7 @@ import type {
   ProviderWireCassette,
   ProviderWireExchange,
 } from "@/api/tests/helpers/provider-wire-cassette";
-import { installProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
+import { registerProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
 import type { ProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
 import { replayedHarnessModel } from "@/api/tests/helpers/replayed-harness-model";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -109,6 +111,8 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import { withQueryLogger } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 // Every settled chat turn against what it showed the user. A turn runs
 // through the real send handler and `streamChat`, answered by a provider's
@@ -183,12 +187,18 @@ let ids: TestIds;
 let safeDb: SafeDb;
 let scopedDb: ScopedDb;
 let replay: ProviderWireReplay;
-let previousMockAI: typeof env.USE_MOCK_AI;
-let previousBedrockEndpoint: string | undefined;
+
 const seededThreadIds: SafeId<"chatThread">[] = [];
 const seededSkillIds: SafeId<"agentSkill">[] = [];
 
-beforeAll(
+registerProviderWireReplay({
+  onInstall: (active) => {
+    replay = active;
+  },
+  options: () => ({ profile }),
+});
+
+testState.beforeAll(
   async () =>
     await profile.measure("fixture", async () => {
       const fixture = await getRlsFixture();
@@ -198,26 +208,19 @@ beforeAll(
         createScopedDb(testDb, [ids.wsA1, ids.wsA2], ids.orgA, ids.userA1),
       );
       safeDb = toSafeDbMock(scopedDb);
-      previousMockAI = env.USE_MOCK_AI;
-      env.USE_MOCK_AI = false;
-      previousBedrockEndpoint = process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"];
-      process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"] =
-        "https://bedrock-runtime.us-east-1.amazonaws.com.cassette.invalid";
-      replay = installProviderWireReplay({ profile });
+
+      testState.setConfig("USE_MOCK_AI", false);
+
+      testState.setEnv(
+        "AWS_ENDPOINT_URL_BEDROCK_RUNTIME",
+        "https://bedrock-runtime.us-east-1.amazonaws.com.cassette.invalid",
+      );
     }),
 );
 
 afterAll(async () => {
   try {
     await profile.measure("close", async () => {
-      replay.restore();
-      env.USE_MOCK_AI = previousMockAI;
-      if (previousBedrockEndpoint === undefined) {
-        delete process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"];
-      } else {
-        process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"] =
-          previousBedrockEndpoint;
-      }
       if (seededThreadIds.length > 0) {
         await testDb
           .delete(chatThreads)
@@ -396,7 +399,6 @@ const prepareThread = async (
       );
       const outcome = await runChatThreadCompaction({
         abortSignal: AbortSignal.timeout(TURN_TIMEOUT_MS),
-        dataWorkspaceIds: [],
         orgAIConfig: orgConfigOf(provider, { fallback: false }),
         managedAIResidency: "eu" as const,
         organizationId: ids.orgA,
@@ -405,6 +407,8 @@ const prepareThread = async (
         safeDb,
         threadId,
         triggerTokens: 1,
+        userId: ids.userA1,
+        withStoredContentEgress: async ({ work }) => await work(),
       });
       replay.takeFindings();
       expect(
@@ -607,7 +611,7 @@ const runTurn = async (combination: TurnCombination): Promise<TurnResult> =>
         })
         .from(chatTurns)
         .where(eq(chatTurns.threadId, threadId))
-        .orderBy(desc(chatTurns.createdAt), desc(chatTurns.id))
+        .orderBy(...NEWEST_CHAT_TURN_FIRST)
         .limit(1);
       const stored = await harness.readThreadMessages(threadId);
       return {
@@ -903,7 +907,7 @@ const checkPinnedContinuationFallback = async (
       .select({ status: chatTurns.status })
       .from(chatTurns)
       .where(eq(chatTurns.threadId, threadId))
-      .orderBy(desc(chatTurns.createdAt), desc(chatTurns.id))
+      .orderBy(...NEWEST_CHAT_TURN_FIRST)
       .limit(1);
     expect(turn?.status).toBe(
       selection === "automatic" ? "completed" : "failed",

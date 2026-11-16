@@ -7,7 +7,7 @@ import { isListItemType } from "@stll/api-contract/entity-options";
 
 import { api } from "@/lib/api";
 import { normalizeOptionalArray } from "@/lib/arrays";
-import { shouldRetryAPIRequest, unwrapEden } from "@/lib/errors/api";
+import { shouldRetryAPIRequest, unwrapApiResponse } from "@/lib/errors/api";
 import { stringCursorSeed, visitCursorPages } from "@/lib/infinite-query";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import type { QueryOptionsInput } from "@/lib/react-query";
@@ -85,6 +85,7 @@ type RawWorkspaceEntity = Omit<
     propertyId: string;
     entityId: string;
     content: WorkspaceField["content"];
+    aiSettlement?: WorkspaceField["aiSettlement"];
     ocrExportStatus?: WorkspaceField["ocrExportStatus"];
   }[];
   cellMetadata: {
@@ -105,6 +106,9 @@ export const toWorkspaceEntity = (
       entityId: toSafeId<"entity">(field.entityId),
       propertyId,
       content: field.content,
+      ...(field.aiSettlement === undefined
+        ? {}
+        : { aiSettlement: field.aiSettlement }),
       ocrExportStatus: field.ocrExportStatus ?? "unavailable",
     };
   }
@@ -189,7 +193,7 @@ export const entitiesOptions = (key: EntitiesOptionsInput) =>
           { fetch: { signal } },
         );
 
-      const { items: rawEntities, ...rest } = unwrapEden(response);
+      const { items: rawEntities, ...rest } = unwrapApiResponse(response);
       const entities: WorkspaceEntity[] = rawEntities.map(toWorkspaceEntity);
 
       return { ...rest, entities };
@@ -225,7 +229,7 @@ export const entitiesWindowOptions = (key: EntitiesWindowOptionsInput) =>
           { fetch: { signal } },
         );
 
-      const { items: rawEntities, ...rest } = unwrapEden(response);
+      const { items: rawEntities, ...rest } = unwrapApiResponse(response);
       const entities: WorkspaceEntity[] = rawEntities.map(toWorkspaceEntity);
 
       return { ...rest, entities };
@@ -268,7 +272,7 @@ export const filesystemEntitiesOptions = (
               { fetch: { signal } },
             );
 
-          return unwrapEden(response);
+          return unwrapApiResponse(response);
         },
         visit: (data) => {
           entities.push(...data.items.map(toWorkspaceEntity));
@@ -296,7 +300,7 @@ export const filesystemEntitiesOptions = (
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
 
-const kanbanGroupOptions = (key: KanbanGroupOptionsInput) =>
+export const kanbanGroupOptions = (key: KanbanGroupOptionsInput) =>
   infiniteQueryOptions({
     queryKey: entitiesKeys.kanbanGroup(key),
     queryFn: async ({ signal, pageParam }) => {
@@ -331,7 +335,7 @@ const kanbanGroupOptions = (key: KanbanGroupOptionsInput) =>
           { fetch: { signal } },
         );
 
-      const { items: rawEntities, ...rest } = unwrapEden(response);
+      const { items: rawEntities, ...rest } = unwrapApiResponse(response);
       const entities: WorkspaceEntity[] = rawEntities.map(toWorkspaceEntity);
 
       return { ...rest, entities };
@@ -371,7 +375,7 @@ export const groupCountsOptions = (key: GroupCountsOptionsInput) =>
           { fetch: { signal } },
         );
 
-      return unwrapEden(response).counts;
+      return unwrapApiResponse(response).counts;
     },
   });
 
@@ -401,7 +405,7 @@ export const entityOptions = (workspaceId: string, entityId: string) =>
         .entity({ entityId: toSafeId<"entity">(entityId) })
         .get({ fetch: { signal } });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
   });
 
@@ -422,7 +426,7 @@ export const entitySummariesOptions = (workspaceId: string) =>
               },
             });
 
-          return unwrapEden(response);
+          return unwrapApiResponse(response);
         },
         visit: (data) => {
           summaries.push(...data.items.map(({ id, name }) => ({ id, name })));
@@ -441,7 +445,7 @@ export const entitySummariesCountOptions = (workspaceId: string) =>
         .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .summaries.count.get({ fetch: { signal }, query: {} });
 
-      return unwrapEden(response).totalCount;
+      return unwrapApiResponse(response).totalCount;
     },
   });
 
@@ -471,7 +475,7 @@ const fetchAllWorkspaceFolders = async ({
           },
         });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     visit: (data) => {
       folders.push(
@@ -492,7 +496,7 @@ const fetchAllWorkspaceFolders = async ({
 // organizer payload.
 export const workspaceFoldersOptions = (workspaceId: string) =>
   queryOptions({
-    queryKey: [...entitiesKeys.all(workspaceId), "folders"],
+    queryKey: entitiesKeys.folders(workspaceId),
     queryFn: async ({ signal }) =>
       await fetchAllWorkspaceFolders({ signal, workspaceId }),
   });
@@ -504,6 +508,7 @@ export type WorkspaceFile = {
   parentId: string | null;
   fileName: string;
   mimeType: string;
+  sizeBytes: number;
 };
 
 const fetchAllWorkspaceFiles = async ({
@@ -526,7 +531,7 @@ const fetchAllWorkspaceFiles = async ({
           },
         });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     visit: (data) => {
       files.push(
@@ -537,6 +542,7 @@ const fetchAllWorkspaceFiles = async ({
           parentId: file.parentId,
           fileName: file.fileName,
           mimeType: file.mimeType,
+          sizeBytes: file.sizeBytes,
         })),
       );
     },
@@ -545,12 +551,42 @@ const fetchAllWorkspaceFiles = async ({
   return files;
 };
 
+const FILE_SEARCH_PAGE_SIZE = 50;
+
+type WorkspaceFileSearchKey = { workspaceId: string; search: string };
+
+// One bounded page of the matter's files per request, filtered on the
+// server, so a picker never walks the whole matter before showing anything.
+// Under the files key, so whatever refreshes the file list refreshes it too.
+export const workspaceFileSearchOptions = ({
+  workspaceId,
+  search,
+}: WorkspaceFileSearchKey) =>
+  infiniteQueryOptions({
+    queryKey: [...entitiesKeys.files(workspaceId), "search", search.trim()],
+    queryFn: async ({ signal, pageParam }) => {
+      const response = await api
+        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .files.get({
+          fetch: { signal },
+          query: {
+            limit: FILE_SEARCH_PAGE_SIZE,
+            ...(search.trim() !== "" && { search: search.trim() }),
+            ...(pageParam !== undefined && { cursor: pageParam }),
+          },
+        });
+      return unwrapApiResponse(response);
+    },
+    initialPageParam: stringCursorSeed(),
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+  });
+
 // Fetches every file-bearing entity in bounded pages, with just the
 // columns the organizer needs. The organizer still operates across the
 // whole matter, but no single request returns the whole file set.
 export const workspaceFilesOptions = (workspaceId: string) =>
   queryOptions({
-    queryKey: [...entitiesKeys.all(workspaceId), "files"],
+    queryKey: entitiesKeys.files(workspaceId),
     queryFn: async ({ signal }) =>
       await fetchAllWorkspaceFiles({ signal, workspaceId }),
   });

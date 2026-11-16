@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useState } from "react";
 import type { MouseEvent, ReactNode } from "react";
 
 import { useHotkey } from "@tanstack/react-hotkeys";
@@ -15,7 +15,7 @@ import {
 } from "@stll/ui/inspector";
 import { matterChromeStyle, resolveMatterColor } from "@stll/ui/matter-colors";
 import type { MatterChromeStyle } from "@stll/ui/matter-colors";
-import { Menu, MenuPopup, MenuTrigger } from "@stll/ui/menu";
+import { Menu, MenuAnchor, MenuPopup } from "@stll/ui/menu";
 import { Separator } from "@stll/ui/separator";
 import { Sheet, SheetHeader, SheetPopup, SheetTitle } from "@stll/ui/sheet";
 import { Skeleton } from "@stll/ui/skeleton";
@@ -27,6 +27,7 @@ import { WorkspaceFrame } from "@stll/workspace-ui/workspace-frame";
 
 import { ApiVersionMismatchReporter } from "@/components/api-version-mismatch-refresh";
 import { AppSidebar } from "@/components/app-sidebar";
+import { appSidebarSurfaceOf } from "@/components/app-sidebar-surface";
 import "@/features/case-law/case-decision-details-inspector-registration";
 import "@/features/case-law/case-decision-inspector-registration";
 import "@/features/inbox/signal-inspector-registration";
@@ -34,10 +35,12 @@ import "@/features/knowledge/playbook-editor/playbook-draft-view-registration";
 import "@/features/statutes/provision-inspector-registration";
 import "@/features/statutes/statute-inspector-registration";
 import { AppBreadcrumbs } from "@/components/breadcrumbs/app-breadcrumbs";
+import { useTrailEndsAtMatter } from "@/components/breadcrumbs/use-trail-ends-at-matter";
 import { ChatEditorProvider } from "@/components/chat-editor-provider";
 import { ChatMentionProviders } from "@/components/chat-mention-providers";
 import { DocxEditorHost } from "@/components/docx/docx-editor-host";
 import { DragAndDropLiveRegion } from "@/components/drag-and-drop-live-region";
+import { resolveInspectorDockVisibility } from "@/components/inspector/inspector-dock-visibility";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import type { InspectorTab } from "@/components/inspector/inspector-tabs-store";
 import { newChatMatterScope } from "@/components/inspector/new-chat-scope";
@@ -51,6 +54,7 @@ import { AIAvailabilityProvider } from "@/components/require-ai-key";
 import { SelfhostUpdateBanner } from "@/components/selfhost-update-banner";
 import { ShortcutEchoHud } from "@/components/shortcut-echo-hud";
 import {
+  PanelTrigger,
   SidebarProvider,
   SidebarToggleHotkey,
   SidebarTrigger,
@@ -61,6 +65,7 @@ import { AttachedTemplateUploadDialog } from "@/components/workspaces/attached-t
 import { CreateMatterDialog } from "@/components/workspaces/create-matter-dialog";
 import { DocumentReferenceUploadDialog } from "@/components/workspaces/document-reference-upload-dialog";
 import { useGlobalChatMentionRegistration } from "@/features/chat/hooks/use-global-chat-mention-registration";
+import { MakeSkillReviewDialog } from "@/features/chat/make-skill-review-dialog";
 import { PlaybookPaneLeaveConfirmation } from "@/features/knowledge/playbook-editor/playbook-pane-leave-confirmation";
 import { GlobalTimer } from "@/features/time-timers/global-timer";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
@@ -74,8 +79,10 @@ import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { usePinnedStore } from "@/lib/pinned-store";
+import { queryView } from "@/lib/query-view.logic";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
+import { useUserEventRefreshes } from "@/lib/user-events-sse";
 import {
   workspaceOptions,
   workspacesNavigationOptions,
@@ -197,8 +204,12 @@ export const ProtectedAppFrame = ({
   const analyticsUser = user;
   const inspectorBroadcastUserId = user.id;
   const inspectorBroadcastOrganizationId = user.activeOrganizationId;
+  useUserEventRefreshes({
+    organizationId: user.activeOrganizationId,
+    userId: user.id,
+  });
   const activeWorkspaceId = useRouteWorkspaceId();
-  const workspaceNavigationView = useQueryView(
+  const workspaceNavigationView = queryView(
     useChromeQuery(
       workspacesNavigationOptions({
         organizationId: inspectorBroadcastOrganizationId,
@@ -206,7 +217,7 @@ export const ProtectedAppFrame = ({
       }),
     ),
   );
-  useQueryViewError(workspaceNavigationView);
+  useQueryViewError(workspaceNavigationView, "ProtectedAppFrame:query");
   const workspaceNavigation =
     workspaceNavigationView.type === "items"
       ? workspaceNavigationView.items
@@ -218,19 +229,18 @@ export const ProtectedAppFrame = ({
     ? resolveMatterColor(activeWorkspaceId, activeWorkspace?.color ?? null)
     : null;
   const routeMatterChromeStyle = matterChromeStyle(activeMatterColor);
+  // Restore the authenticated tab scope before any previous scope can paint.
+  const reserveInspectorPane = useInspectorTabPersistence({
+    organizationId: inspectorBroadcastOrganizationId,
+    userId: inspectorBroadcastUserId,
+  });
   const inspectorPaneOpen = useInspectorTabsStore(
     (state) => state.tabs.length > 0 && !state.minimized,
   );
   const viewportWidth = useViewportWidth();
   const forceSidebarCollapsed = shouldForceSidebarCollapsed({
-    inspectorPaneOpen,
+    inspectorPaneOpen: inspectorPaneOpen || reserveInspectorPane,
     viewportWidth,
-  });
-
-  // Restore the authenticated tab scope before any previous scope can paint.
-  useInspectorTabPersistence({
-    organizationId: inspectorBroadcastOrganizationId,
-    userId: inspectorBroadcastUserId,
   });
 
   // Mod+J — toggles the inspector pane. With tabs already open it
@@ -274,10 +284,18 @@ export const ProtectedAppFrame = ({
                   composition="host-responsive"
                   endDock={
                     <WorkspaceInspectorSidePanel
+                      reservePane={reserveInspectorPane}
                       routeMatterChromeStyle={routeMatterChromeStyle}
                     />
                   }
-                  navigation={{ content: <AppSidebar />, mode: "responsive" }}
+                  navigation={{
+                    content: (
+                      <AppSidebar
+                        surface={appSidebarSurfaceOf(activeMatterColor)}
+                      />
+                    ),
+                    mode: "responsive",
+                  }}
                   topBar={() => <ProtectedContent />}
                 >
                   {children}
@@ -288,6 +306,7 @@ export const ProtectedAppFrame = ({
                 <DocxEditorHost />
                 <QuickEntry />
                 <CreateMatterDialog />
+                <MakeSkillReviewDialog />
                 <AttachedTemplateUploadDialog />
                 <DocumentReferenceUploadDialog />
                 <ShortcutEchoHud />
@@ -317,6 +336,7 @@ function ProtectedContent() {
     shouldThrow: false,
   });
   const workspaceId = projectMatch?.params.workspaceId;
+  const showMatterActions = useTrailEndsAtMatter();
   const isPinned = workspaceId ? pinnedIds.has(workspaceId) : false;
   // Not mounting the bell is the whole gate: it is the only consumer of the
   // notifications query and of the user event stream.
@@ -347,11 +367,6 @@ function ProtectedContent() {
     }
     toggleInspector();
   };
-  // Desktop keeps the rail mounted once tabs exist, so the rail is
-  // the restore affordance. Mobile has no rail; after Back minimizes
-  // the sheet, the chrome button must reappear so the user can return.
-  const canShowInspectorButton =
-    inspectorTabsCount === 0 || (isMobile && inspectorMinimized);
   const inspectorButtonTitle = (() => {
     if (inspectorTabsCount === 0) {
       return t("inspector.openChat");
@@ -366,16 +381,22 @@ function ProtectedContent() {
   // space after the last icon) offers a quick "Open new chat"
   // shortcut without forcing a trip to the inspector toggle.
   const [chatMenuOpen, setChatMenuOpen] = useState(false);
-  const chatMenuAnchorRef = useRef<{
+  const [chatMenuAnchor, setChatMenuAnchor] = useState<{
     getBoundingClientRect: () => DOMRect;
   } | null>(null);
+  const [chatMenuOpener, setChatMenuOpener] = useState<HTMLElement | null>(
+    null,
+  );
   const handleIconRowContextMenu = (e: MouseEvent) => {
     e.preventDefault();
     const x = e.clientX;
     const y = e.clientY;
-    chatMenuAnchorRef.current = {
+    setChatMenuOpener(
+      e.currentTarget instanceof HTMLElement ? e.currentTarget : null,
+    );
+    setChatMenuAnchor({
       getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
-    };
+    });
     setChatMenuOpen(true);
   };
   const handleOpenNewChatFromMenu = () => {
@@ -387,13 +408,13 @@ function ProtectedContent() {
     setChatMenuOpen(false);
   };
 
-  const workspaceView = useQueryView(
+  const workspaceView = queryView(
     useChromeQuery({
       ...workspaceOptions(workspaceId ?? ""),
       enabled: !!workspaceId,
     }),
   );
-  useQueryViewError(workspaceView);
+  useQueryViewError(workspaceView, "ProtectedContent:query");
   const workspace =
     workspaceView.type === "items" ? workspaceView.items : undefined;
   const chromeActions = (
@@ -401,20 +422,24 @@ function ProtectedContent() {
       className="ms-auto flex shrink-0 items-center gap-0.5"
       onContextMenu={handleIconRowContextMenu}
     >
-      {workspaceId && (
+      {workspaceId && showMatterActions && (
         <>
-          <Button
-            onClick={() => togglePin(workspaceId)}
-            size="icon-sm"
-            title={isPinned ? t("common.unpin") : t("common.pin")}
-            variant="ghost"
-          >
-            {isPinned ? (
-              <PinOffIcon className="size-4" />
-            ) : (
-              <PinIcon className="size-4" />
-            )}
-          </Button>
+          {/* A phone's bar leaves the matter's crumb too little room with
+              this beside it; the matter's menu and inspector still pin. */}
+          {!isMobile && (
+            <Button
+              onClick={() => togglePin(workspaceId)}
+              size="icon-sm"
+              title={isPinned ? t("common.unpin") : t("common.pin")}
+              variant="ghost"
+            >
+              {isPinned ? (
+                <PinOffIcon className="size-4" />
+              ) : (
+                <PinIcon className="size-4" />
+              )}
+            </Button>
+          )}
           <Button
             onClick={() => {
               openMatterInspector({
@@ -433,20 +458,6 @@ function ProtectedContent() {
       )}
       <GlobalTimer />
       {inboxPreviewEnabled && <NotificationBell />}
-      {canShowInspectorButton && (
-        <div className="contents md:hidden">
-          <Separator className="mx-1 h-4" orientation="vertical" />
-          <Button
-            className="size-7"
-            onClick={handleInspectorButtonClick}
-            size="icon"
-            title={inspectorButtonTitle}
-            variant="ghost"
-          >
-            <PanelRightIcon className="size-4" />
-          </Button>
-        </div>
-      )}
     </div>
   );
 
@@ -460,7 +471,7 @@ function ProtectedContent() {
         {isMobile && (
           <>
             <SidebarTrigger className="-ms-1" />
-            <Separator className="me-2 h-4" orientation="vertical" />
+            <Separator className="h-4" orientation="vertical" />
           </>
         )}
         <AppBreadcrumbs />
@@ -470,21 +481,35 @@ function ProtectedContent() {
             shell's own pin/matter/inspector icons without this shell importing
             any chat slice. */}
         <ChromeHeaderActionsSlot />
+        {/* Mobile has no rails: the inspector toggle closes the row at the
+            inline end as the sidebar trigger opens it at the start, and each
+            opens its panel as a sheet from its own edge. Desktop keeps the
+            inspector rail's own toggle. */}
+        {isMobile && (
+          <>
+            <Separator className="h-4" orientation="vertical" />
+            <PanelTrigger
+              className="-me-1"
+              label={inspectorButtonTitle}
+              onClick={handleInspectorButtonClick}
+              side="right"
+            />
+          </>
+        )}
         <Menu
           onOpenChange={(nextOpen) => {
             setChatMenuOpen(nextOpen);
             if (!nextOpen) {
-              chatMenuAnchorRef.current = null;
+              setChatMenuAnchor(null);
             }
           }}
           open={chatMenuOpen}
         >
-          <MenuTrigger
-            nativeButton={false}
-            render={<span className="sr-only" />}
-          />
-          {/* oxlint-disable-next-line react/refs -- reads the imperatively-captured trigger anchor to position the menu; the menu-open state that gates this render is set in the same handler that captures the anchor */}
-          <MenuPopup anchor={chatMenuAnchorRef.current ?? undefined}>
+          <MenuAnchor />
+          <MenuPopup
+            anchor={chatMenuAnchor ?? undefined}
+            finalFocus={() => chatMenuOpener}
+          >
             <ChatMenuContent label={t("chat.newChat")}>
               <LazyNewChatMenuItem
                 label={t("chat.newChat")}
@@ -567,8 +592,10 @@ const getInspectorTabWorkspaceId = (
  * inspector chrome.
  */
 function WorkspaceInspectorSidePanel({
+  reservePane,
   routeMatterChromeStyle,
 }: {
+  reservePane: boolean;
   routeMatterChromeStyle: MatterChromeStyle;
 }) {
   const t = useTranslations();
@@ -584,9 +611,12 @@ function WorkspaceInspectorSidePanel({
   const setMinimized = useInspectorTabsStore((s) => s.setMinimized);
   // Desktop keeps a rail-mounted inspector shell; mobile uses a
   // sheet and relies on the topbar restore button after Back.
-  // Pane content is shown only when a tab exists and the inspector
-  // is not minimized.
-  const showPaneContent = tabs.length > 0 && !minimized;
+  const { dockOpen: showPaneContent, sheetOpen } =
+    resolveInspectorDockVisibility({
+      reservePane,
+      tabCount: tabs.length,
+      minimized,
+    });
   const activeWorkspaceId = resolveInspectorWorkspaceId({
     activeId,
     routeWorkspaceId,
@@ -663,10 +693,13 @@ function WorkspaceInspectorSidePanel({
         onOpenChange={(open) => {
           setMinimized(!open);
         }}
-        open={showPaneContent}
+        open={sheetOpen}
       >
+        {/* The sheet's default edge width leaves the page peeking past the
+            backdrop, as the sidebar sheet does, so a tap outside dismisses
+            it from either edge. */}
         <SheetPopup
-          className="h-dvh w-full max-w-none border-0 md:hidden"
+          className="h-dvh md:hidden"
           showCloseButton={false}
           side="inline-end"
           style={routeMatterChromeStyle}

@@ -1,10 +1,17 @@
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { status } from "elysia";
 
-import { RESOURCE_TYPE, type ResourceType } from "@stll/api-contract";
+import {
+  REALTIME_EVENT_TYPE,
+  RESOURCE_MUTATION_ID_HEADER,
+  RESOURCE_TYPE,
+  type ResourceType,
+} from "@stll/api-contract";
+import { resourceMutationDigest } from "@stll/api-contract/realtime-mutation-digest";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import createClaimRecheck from "@/api/handlers/lists/verifications/claim-rechecks/create";
+import { status } from "@/api/http/status";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import {
   ACCOUNT_ACCESS,
@@ -17,6 +24,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { broadcastWorkspaceResourceSetUpdated } from "@/api/lib/resource-realtime";
 import {
   announceResourceSetUpdates,
   noResourceSetUpdates,
@@ -44,9 +52,15 @@ const ORGANIZATION_ID = toSafeId<"organization">(
 const USER_ID = toSafeId<"user">("019e7000-0000-7000-8000-0000000000a3");
 
 type Announcement =
-  | { audience: "workspace"; id: SafeId<"workspace">; type: ResourceType }
+  | {
+      audience: "workspace";
+      id: SafeId<"workspace">;
+      type: ResourceType;
+      mutationDigest?: string;
+    }
   | {
       audience: "organization";
+      mutationDigest?: string;
       id: SafeId<"organization">;
       type: ResourceType;
     };
@@ -57,11 +71,25 @@ const recorder = () => {
     announceResourceSetUpdates({
       ...options,
       broadcasts: {
-        workspace: (id, type) => {
-          announcements.push({ audience: "workspace", id, type });
+        workspace: (id, type, broadcastOptions) => {
+          announcements.push({
+            audience: "workspace",
+            id,
+            type,
+            ...(broadcastOptions?.mutationDigest === undefined
+              ? {}
+              : { mutationDigest: broadcastOptions.mutationDigest }),
+          });
         },
-        organization: (id, type) => {
-          announcements.push({ audience: "organization", id, type });
+        organization: (id, type, broadcastOptions) => {
+          announcements.push({
+            audience: "organization",
+            id,
+            type,
+            ...(broadcastOptions?.mutationDigest === undefined
+              ? {}
+              : { mutationDigest: broadcastOptions.mutationDigest }),
+          });
         },
       },
     });
@@ -121,6 +149,70 @@ const baseConfig = {
 } satisfies WorkspaceHandlerConfig;
 
 describe("a matter handler's declared resource sets", () => {
+  test("the workspace broadcaster retains mutation correlation on the wire", async () => {
+    const mutationId = "019e7000-0000-7000-8000-0000000000b1";
+    const mutationDigest = await resourceMutationDigest(mutationId);
+    const emitted: unknown[] = [];
+    broadcastWorkspaceResourceSetUpdated(WORKSPACE_ID, RESOURCE_TYPE.ENTITY, {
+      mutationDigest,
+      broadcastEvent: (workspaceId, event) => {
+        expect(workspaceId).toBe(WORKSPACE_ID);
+        emitted.push(event);
+      },
+    });
+    expect(JSON.stringify(emitted)).not.toContain(mutationId);
+    expect(emitted).toEqual([
+      {
+        type: REALTIME_EVENT_TYPE.RESOURCE_SET_UPDATED,
+        resourceType: RESOURCE_TYPE.ENTITY,
+        mutationDigest,
+      },
+    ]);
+  });
+
+  test("committed resource sets share the request mutation digest", async () => {
+    const mutationId = "019e7000-0000-7000-8000-0000000000b1";
+    for (const header of [
+      mutationId,
+      mutationId,
+      "019e7000-0000-7000-8000-0000000000b2",
+      "invalid-id",
+    ]) {
+      const { announcements, announce } = recorder();
+      const endpoint = createSafeHandler(
+        {
+          ...baseConfig,
+          realtime: workspaceResourceSetUpdates([
+            RESOURCE_TYPE.ENTITY,
+            RESOURCE_TYPE.LEGAL_LIST,
+          ]),
+        },
+        async function* () {
+          return Result.ok({ ok: true });
+        },
+        { announce },
+      );
+      const ctx = requestContext();
+      ctx.request.headers.set(RESOURCE_MUTATION_ID_HEADER, header);
+      expect(await endpoint.handler(asTestRaw(ctx))).toEqual({ ok: true });
+      const expectedDigest =
+        header === "invalid-id"
+          ? undefined
+          : await resourceMutationDigest(header);
+      expect(JSON.stringify(announcements)).not.toContain(mutationId);
+      expect(announcements).toEqual(
+        [RESOURCE_TYPE.ENTITY, RESOURCE_TYPE.LEGAL_LIST].map((type) => ({
+          audience: "workspace",
+          id: WORKSPACE_ID,
+          type,
+          ...(expectedDigest === undefined
+            ? {}
+            : { mutationDigest: expectedDigest }),
+        })),
+      );
+    }
+  });
+
   for (const realtime of [
     undefined,
     noResourceSetUpdates("Owned by the handler"),
@@ -221,6 +313,41 @@ describe("a matter handler's declared resource sets", () => {
       },
     ]);
   });
+
+  for (const outcome of ["committed", "replayed", "refused"] as const) {
+    test(`claim recheck ${outcome} follows its declared verification broadcast boundary`, async () => {
+      const { announcements, announce } = recorder();
+      const endpoint = createSafeHandler(
+        { ...baseConfig, realtime: createClaimRecheck.config.realtime },
+        async function* () {
+          expect(announcements).toEqual([]);
+          return outcome === "refused"
+            ? Result.err(
+                new HandlerError({ status: 409, message: "Claim changed" }),
+              )
+            : Result.ok({ replayed: outcome === "replayed" });
+        },
+        { announce },
+      );
+      const result = await endpoint.handler(asTestRaw(requestContext()));
+      expect(result).toEqual(
+        outcome === "refused"
+          ? expect.objectContaining({ code: 409 })
+          : { replayed: outcome === "replayed" },
+      );
+      expect(announcements).toEqual(
+        outcome === "refused"
+          ? []
+          : [
+              {
+                audience: "workspace",
+                id: WORKSPACE_ID,
+                type: RESOURCE_TYPE.LEGAL_LIST_VERIFICATION,
+              },
+            ],
+      );
+    });
+  }
 
   test("a typed refusal announces nothing", async () => {
     const { announcements, announce } = recorder();
@@ -392,6 +519,7 @@ describe("an organization handler's declared resource sets", () => {
       async function* () {
         return Result.ok({ ok: true });
       },
+      { authorize: async () => Result.ok(undefined) },
     );
   });
 });

@@ -1,13 +1,15 @@
 import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
+import type { FingerprintFields } from "@stll/errors/fingerprint-fields";
+
 /** An inclusive range of court-assigned paragraph numbers. */
 export type DecisionParagraphRange = {
   readonly from: number;
   readonly to: number;
 };
 
-const MAX_DECISION_PARAGRAPH_RANGE_SPAN = 500;
+export const MAX_DECISION_PARAGRAPH_RANGE_SPAN = 500;
 const MAX_DECISION_PARAGRAPH_RANGE_INPUT_CHARS = 33;
 // Group-free so the published JSON Schema pattern is portable across validators.
 const PARAGRAPH_RANGE_PATTERN = /^\d+(?:[-–]\d+)?$/u;
@@ -21,7 +23,11 @@ export class DecisionParagraphRangeError extends TaggedError(
 )<{
   message: string;
   reason: DecisionParagraphRangeErrorReason;
-}> {}
+}> {
+  static readonly stellaExceptionFingerprintFields = [
+    "reason",
+  ] as const satisfies FingerprintFields<DecisionParagraphRangeError>;
+}
 
 const invalidRange = (
   reason: DecisionParagraphRangeErrorReason,

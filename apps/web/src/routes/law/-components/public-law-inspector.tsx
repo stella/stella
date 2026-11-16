@@ -221,7 +221,11 @@ const AnonymousViewDock = ({ tabs }: { tabs: readonly GenericTab[] }) => {
         */}
         {expanded && (
           <Suspense fallback={<div className="bg-background flex-1" />}>
-            <RegisteredView onClose={() => closeTab(active.id)} tab={active} />
+            <RegisteredView
+              onClose={() => closeTab(active.id)}
+              onMoveToMain={() => closeTab(active.id, { movedToMain: true })}
+              tab={active}
+            />
           </Suspense>
         )}
       </div>
@@ -262,6 +266,7 @@ const RailTabButton = ({ active, onActivate, tab }: RailTabButtonProps) => {
 
 type RegisteredViewProps = {
   onClose: () => void;
+  onMoveToMain: () => void;
   tab: GenericTab;
 };
 
@@ -270,7 +275,11 @@ type RegisteredViewProps = {
  * owns its own hooks and re-render queue. Nothing renders while the chunk
  * carrying the registration is still loading.
  */
-const RegisteredView = ({ onClose, tab }: RegisteredViewProps) => {
+const RegisteredView = ({
+  onClose,
+  onMoveToMain,
+  tab,
+}: RegisteredViewProps) => {
   const registration = getInspectorView(tab.viewType);
 
   if (registration === undefined) {
@@ -282,6 +291,7 @@ const RegisteredView = ({ onClose, tab }: RegisteredViewProps) => {
   return (
     <Renderer
       onClose={onClose}
+      onMoveToMain={onMoveToMain}
       tab={{
         id: tab.id,
         label: tab.label,

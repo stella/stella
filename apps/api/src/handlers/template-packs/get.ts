@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { agentInputNormalizationMetadata } from "@stll/agent-input";
 import { TEMPLATE_PACK_SLUG_PATTERN } from "@stll/template-packs/schema";
@@ -21,24 +21,30 @@ import {
   readTemplatePackOrganizationContext,
 } from "./organization-context";
 
-export const templatePackParamsSchema = t.Object({
-  packId: t.String({
-    minLength: 1,
-    maxLength: 64,
-    pattern: TEMPLATE_PACK_SLUG_PATTERN.source,
-  }),
+export const templatePackParamsSchema = v.object({
+  packId: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(64),
+    v.regex(new RegExp(TEMPLATE_PACK_SLUG_PATTERN.source, "u")),
+  ),
 });
 
-const getTemplatePackQuerySchema = t.Object({
-  locale: t.Optional(
-    t.String({
-      minLength: 2,
-      maxLength: 35,
-      ...agentInputNormalizationMetadata(
-        { kind: "locale" },
-        "BCP-47 tag of the caller's interface language",
-      ),
-    }),
+const { description: localeDescription, ...localeNormalization } =
+  agentInputNormalizationMetadata(
+    { kind: "locale" },
+    "BCP-47 tag of the caller's interface language",
+  );
+
+const getTemplatePackQuerySchema = v.object({
+  locale: v.optional(
+    v.pipe(
+      v.string(),
+      v.minLength(2),
+      v.maxLength(35),
+      v.metadata(localeNormalization),
+      v.description(localeDescription),
+    ),
   ),
 });
 

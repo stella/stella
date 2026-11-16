@@ -19,6 +19,8 @@ const ALLOWED_LIMIT_COLUMN_READS = {
   "src/db/schema/usage.ts": "declares the columns and their checks",
   "src/handlers/usage/create-hosted-setup.ts":
     "reads the capacity a plan would grant at checkout, before any entitlement exists",
+  "src/lib/usage/manual-entitlement.ts":
+    "reads the capacity a manual grant would set, before the entitlement changes",
 } as const satisfies Record<string, string>;
 
 const readsLimitColumns = (source: string): boolean =>

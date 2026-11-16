@@ -1,7 +1,7 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/time" });
 
@@ -16,6 +16,7 @@ const { useQuickEntryHotkey } =
 afterEach(() => {
   cleanup();
   useQuickEntryStore.getState().closeDialog();
+  useQuickEntryStore.getState().finishClosing();
 });
 
 afterAll(async () => {
@@ -74,6 +75,7 @@ describe("global log-time shortcut", () => {
       ...scope,
     });
     useQuickEntryStore.getState().closeDialog();
+    useQuickEntryStore.getState().finishClosing();
 
     const nextScope = { userId: "user-b", organizationId: "organization-b" };
     hook.rerender({ scope: nextScope });
@@ -105,6 +107,7 @@ describe("global log-time shortcut", () => {
       ...scope,
     });
     useQuickEntryStore.getState().closeDialog();
+    useQuickEntryStore.getState().finishClosing();
     hook.rerender({ enabled: false });
     pressLogTime();
     expect(useQuickEntryStore.getState().dialog).toEqual({ status: "closed" });

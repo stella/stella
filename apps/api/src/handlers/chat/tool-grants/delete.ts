@@ -1,12 +1,12 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { chatToolGrants } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 
@@ -15,7 +15,7 @@ const config = {
   permissions: { chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "chat_thread_ui" },
-  params: t.Object({ grantId: tSafeId("chatToolGrant") }),
+  params: v.object({ grantId: resourceIdSchema("chatToolGrant") }),
 } satisfies HandlerConfig;
 
 /** Remove one of the user's stored approvals. Idempotent. */
@@ -71,7 +71,7 @@ const deleteChatToolGrant = createSafeRootHandler(
   },
 );
 
-declareAggregateMutation(deleteChatToolGrant.handler, {
+declareAggregateMutation(deleteChatToolGrant, {
   type: "aggregate",
   aggregates: ["chatToolGrants"],
 });

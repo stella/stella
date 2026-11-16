@@ -1,9 +1,14 @@
 import { and, eq, isNull } from "drizzle-orm";
 
+import {
+  workspaceAcceptsWrites,
+  type WorkspaceStatus,
+} from "@stll/api-contract/workspace-status";
+
 import { member, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { workspaces } from "@/api/db/schema";
-import { env } from "@/api/env";
+import { readFeatureAccessGrants } from "@/api/env-feature-access";
 import { resolveFeatureAccess } from "@/api/lib/auth/feature-access/context";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
@@ -16,7 +21,7 @@ import { memberReachesMatterSql } from "@/api/lib/workspaces/authorized-workspac
 type VerificationWorkspaceAccessOptions = {
   organizationRole: string | null;
   reachesMatter: boolean;
-  workspaceStatus: string | null;
+  workspaceStatus: WorkspaceStatus | null;
 };
 
 const canExecuteListVerificationInWorkspace = ({
@@ -24,7 +29,7 @@ const canExecuteListVerificationInWorkspace = ({
   reachesMatter,
   workspaceStatus,
 }: VerificationWorkspaceAccessOptions): boolean =>
-  workspaceStatus === "active" &&
+  workspaceAcceptsWrites(workspaceStatus) &&
   canWriteWorkspaceEntities({ organizationRole, reachesMatter });
 
 type ResolveListVerificationAccessArgs = {
@@ -39,7 +44,7 @@ export const resolveListVerificationAccess = async ({
   tx,
   organizationId,
   userId,
-  grants = env.API_FEATURE_ACCESS_GRANTS,
+  grants = readFeatureAccessGrants().grants,
   workspaceId,
 }: ResolveListVerificationAccessArgs): Promise<ListVerificationAccessResult> => {
   if (

@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
-import { vApiDate } from "./api-date";
+import { apiDateSchema } from "./api-date";
 import type { CaseLawJurisdiction } from "./case-law-jurisdictions";
 import launchReadiness from "./launch-readiness.json" with { type: "json" };
 import { publicCountriesFor } from "./public-country-capability";
@@ -34,7 +34,7 @@ const launchReadinessCountrySchema = v.pipe(
 const launchReadinessEntrySchema = v.strictObject({
   country: launchReadinessCountrySchema,
   evalSetExists: v.literal(true),
-  lastCensusDate: vApiDate,
+  lastCensusDate: apiDateSchema,
   lastCensusGreen: v.literal(true),
 });
 

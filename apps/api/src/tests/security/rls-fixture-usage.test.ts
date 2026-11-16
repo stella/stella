@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import path from "node:path";
-import ts from "typescript6";
+
+import { parseSource, walk } from "@stll/scripts/src/syntax-tree";
 
 type FixtureUsageViolation = {
   file: string;
@@ -11,14 +12,9 @@ type FixtureUsageViolation = {
 // `beforeAll` each one still has. Counts only shrink as suites migrate; keyed by
 // file so unrelated edits that move lines never fail the census.
 const LEGACY_FIXTURE_USAGES: ReadonlyMap<string, number> = new Map([
-  [
-    "apps/api/src/handlers/chat/provider-wire-transcripts.integration.test.ts",
-    1,
-  ],
   ["apps/api/src/handlers/reports/report-export-queue.integration.test.ts", 1],
   ["apps/api/src/handlers/templates/fills/create.integration.test.ts", 1],
   ["apps/api/src/lib/account-audit.test.ts", 3],
-  ["apps/api/src/lib/audit-log-details.db.test.ts", 1],
   ["apps/api/src/lib/bilingual/run-queue.test.ts", 1],
   ["apps/api/src/lib/bilingual/run-worker-inputs.integration.test.ts", 1],
   ["apps/api/src/lib/document-review/run-inputs.test.ts", 1],
@@ -43,11 +39,44 @@ const LEGACY_FIXTURE_USAGES: ReadonlyMap<string, number> = new Map([
   ["apps/api/src/lib/scheduler/tasks/memory-extractor.integration.test.ts", 1],
   ["apps/api/src/lib/style-set-package-cleanup-queue.db.test.ts", 1],
   ["apps/api/src/lib/style-set-package-cleanup-reference.test.ts", 1],
-  ["apps/api/src/lib/tasks/update-task-eligibility.integration.test.ts", 1],
   ["apps/api/src/lib/workflow-queue.integration.test.ts", 1],
   ["apps/api/src/tests/helpers/chat-thread-invariants.test.ts", 1],
   ["apps/api/src/tests/security/rls-scoped-db.test.ts", 1],
 ]);
+
+/** Lines of the `getRlsFixture()` calls outside a `beforeAll` callback. */
+const callsOutsideSetup = (file: string, source: string): number[] => {
+  const { locate, program } = parseSource(file, source);
+  const lines: number[] = [];
+  walk(program, (node, ancestors) => {
+    if (
+      node.type !== "CallExpression" ||
+      node.callee.type !== "Identifier" ||
+      node.callee.name !== "getRlsFixture"
+    ) {
+      return;
+    }
+    const chain = [...ancestors, node];
+    // Suite setup is bun's `beforeAll`, or a test-state fixture's
+    // (`testState.beforeAll`), which registers one and is the only setup hook
+    // `no-direct-test-state` allows in a file that uses the fixture.
+    const insideBeforeAll = chain.some(
+      (ancestor, index) =>
+        ancestor.type === "CallExpression" &&
+        ((ancestor.callee.type === "Identifier" &&
+          ancestor.callee.name === "beforeAll") ||
+          (ancestor.callee.type === "MemberExpression" &&
+            !ancestor.callee.computed &&
+            ancestor.callee.property.type === "Identifier" &&
+            ancestor.callee.property.name === "beforeAll")) &&
+        ancestor.arguments.at(0) === chain[index + 1],
+    );
+    if (!insideBeforeAll) {
+      lines.push(locate(node.start).line);
+    }
+  });
+  return lines;
+};
 
 const findFixtureUsageViolations = async () => {
   const outsideSetup: FixtureUsageViolation[] = [];
@@ -63,41 +92,9 @@ const findFixtureUsageViolations = async () => {
     const source = await Bun.file(
       path.resolve(import.meta.dir, "../../..", relativeFile),
     ).text();
-    const sourceFile = ts.createSourceFile(
-      file,
-      source,
-      ts.ScriptTarget.Latest,
-      true,
-      ts.ScriptKind.TS,
-    );
-
-    const visit = (node: ts.Node, insideBeforeAll: boolean) => {
-      if (
-        ts.isCallExpression(node) &&
-        ts.isIdentifier(node.expression) &&
-        node.expression.text === "getRlsFixture" &&
-        !insideBeforeAll
-      ) {
-        const line =
-          sourceFile.getLineAndCharacterOfPosition(node.getStart()).line + 1;
-        outsideSetup.push({ file, line });
-      }
-
-      if (
-        ts.isCallExpression(node) &&
-        ts.isIdentifier(node.expression) &&
-        node.expression.text === "beforeAll"
-      ) {
-        node.forEachChild((child) =>
-          visit(child, child === node.arguments.at(0) || insideBeforeAll),
-        );
-        return;
-      }
-
-      node.forEachChild((child) => visit(child, insideBeforeAll));
-    };
-
-    visit(sourceFile, false);
+    for (const line of callsOutsideSetup(file, source)) {
+      outsideSetup.push({ file, line });
+    }
   }
 
   const countByFile = new Map<string, number>();

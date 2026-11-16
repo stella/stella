@@ -8,3 +8,12 @@ test-strict = "test --workspace --all-targets --features allocation-tests --lock
 
 [registries.crates-io]
 protocol = "sparse"
+
+# The speech engine. Portable CPU kernels, so a build never tunes to the build
+# machine; ggml's own threadpool, so nothing needs an OpenMP runtime. ggml's
+# ARM CPU backend refuses MSVC, so ARM64 Windows builds with clang-cl.
+[env]
+TRANSCRIBE_CMAKE_ARGS = "-DGGML_NATIVE=OFF -DGGML_OPENMP=OFF"
+CC_aarch64_pc_windows_msvc = "clang-cl"
+CXX_aarch64_pc_windows_msvc = "clang-cl"
+CMAKE_GENERATOR_aarch64_pc_windows_msvc = "Ninja"

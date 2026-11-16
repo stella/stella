@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { parseDataUrl, toDataUrl } from "@/api/lib/data-url";
 
@@ -18,7 +18,8 @@ const payload = fc.uint8Array({ maxLength: 4096 });
 
 describe("data URL codec (properties)", () => {
   test("parseDataUrl recovers the exact bytes and mime toDataUrl emitted", () => {
-    fc.assert(
+    assertProperty(
+      "parseDataUrl recovers the exact bytes and mime toDataUrl emitted",
       fc.property(payload, mimeType, (bytes, mime) => {
         const result = parseDataUrl({
           url: toDataUrl(bytes, mime),
@@ -30,12 +31,13 @@ describe("data URL codec (properties)", () => {
           expect([...result.value.bytes]).toEqual([...bytes]);
         }
       }),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
   test("a payload larger than maxBytes is always rejected", () => {
-    fc.assert(
+    assertProperty(
+      "a payload larger than maxBytes is always rejected",
       fc.property(
         fc.uint8Array({ minLength: 1, maxLength: 4096 }),
         mimeType,
@@ -47,12 +49,13 @@ describe("data URL codec (properties)", () => {
           expect(Result.isError(result)).toBe(true);
         },
       ),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
   test("a mime type other than expected is always rejected", () => {
-    fc.assert(
+    assertProperty(
+      "a mime type other than expected is always rejected",
       fc.property(payload, mimeType, mimeType, (bytes, actual, expected) => {
         fc.pre(actual !== expected);
         const result = parseDataUrl({
@@ -62,7 +65,7 @@ describe("data URL codec (properties)", () => {
         });
         expect(Result.isError(result)).toBe(true);
       }),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 });

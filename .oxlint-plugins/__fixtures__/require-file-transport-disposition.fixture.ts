@@ -1,24 +1,30 @@
 // Passive regression fixture for
 // `require-file-transport-disposition/require-file-transport-disposition`.
 //
-// The rule is module-scoped: a `t.File()` anywhere in the module puts every
-// handler config in it under the transport requirement, so the "no binary field
-// at all" case cannot be expressed here (it is a module with no `t.File`).
+// The rule is module-scoped: a `v.file()` or `fileSchema(...)` anywhere in the
+// module puts every handler config in it under the transport requirement, so
+// the "no binary field at all" case cannot be expressed here (it is a module
+// with no file schema).
+
+import * as v from "valibot";
 
 type HandlerConfig = Record<string, unknown>;
 
-declare const t: {
-  Object: (shape: Record<string, unknown>) => unknown;
-  File: (options?: unknown) => unknown;
-  Optional: (schema: unknown) => unknown;
-  String: (options?: unknown) => unknown;
-};
+declare const fileSchema: (options: { maxBytes: number }) => v.GenericSchema;
+declare const createSafeRootHandler: (
+  config: Record<string, unknown>,
+  handler: () => void,
+) => unknown;
 declare const permissions: Record<string, readonly string[]>;
 
-const uploadBodySchema = t.Object({ file: t.File({ maxSize: "5m" }) });
-const prefillBodySchema = t.Object({
-  file: t.Optional(t.File({ maxSize: "5m" })),
-  text: t.String(),
+const MAX_BYTES = 5_000_000;
+
+const uploadBodySchema = v.object({
+  file: fileSchema({ maxBytes: MAX_BYTES }),
+});
+const prefillBodySchema = v.object({
+  file: v.optional(v.pipe(v.file(), v.maxSize(MAX_BYTES))),
+  text: v.pipe(v.string(), v.maxLength(256)),
 });
 
 // MUST flag: the module declares a file field, so this config's silent
@@ -29,6 +35,17 @@ export const undeclaredFileConfig = {
   mcp: { type: "capability", reason: "document_processing" },
   body: uploadBodySchema,
 } satisfies HandlerConfig;
+
+// MUST flag: a config passed straight to the factory is a handler config too.
+export const inlineFileHandler = createSafeRootHandler(
+  // oxlint-disable-next-line require-file-transport-disposition/require-file-transport-disposition -- fixture: an inline factory config must declare its transport
+  {
+    permissions,
+    mcp: { type: "capability", reason: "document_processing" },
+    body: uploadBodySchema,
+  },
+  () => undefined,
+);
 
 // Allowed: the required file leg is declared, with the alternative transport.
 // expect-clean: require-file-transport-disposition/require-file-transport-disposition
@@ -62,11 +79,14 @@ export const declaredFilelessConfig = {
 
 // Allowed: an `internal` disposition never enters the capability catalog, so
 // there is no client-facing transport to describe.
-export const internalConfig = {
-  permissions,
-  mcp: { type: "internal", reason: "upload_mechanics" },
-  body: uploadBodySchema,
-} satisfies HandlerConfig;
+export const internalHandler = createSafeRootHandler(
+  {
+    permissions,
+    mcp: { type: "internal", reason: "upload_mechanics" },
+    body: uploadBodySchema,
+  },
+  () => undefined,
+);
 
 // Allowed: not a handler config, so the transport requirement does not apply.
 export const unrelatedObject = {

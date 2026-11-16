@@ -35,3 +35,11 @@ apps/api/drizzle/                       @jan-kubica
 # Catalogue curation — only maintainers flip recommendations.
 packages/catalogue/entries/recommended.json   @jan-kubica
 packages/catalogue/MAINTAINERS                @jan-kubica
+
+# Design system: the components, the names DESIGN.md gives them, and the
+# ledgers that hold every exception to them. A new variant, a native-markup
+# exception or another plain Button is a design decision.
+packages/ui/                                    @jan-kubica
+/DESIGN.md                                      @jan-kubica
+.oxlint-plugins/no-native-ui-exceptions.json    @jan-kubica
+.oxlint-plugins/ui-usage-ledger.json            @jan-kubica

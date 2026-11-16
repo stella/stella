@@ -1,14 +1,10 @@
-import type { Context } from "elysia";
-
 import { VISUAL_SANDBOX_PATH } from "@stll/api-contract/visual-sandbox";
 
 import { env } from "@/api/env";
+import { routes } from "@/api/http/route";
 import { frontendOrigins } from "@/api/lib/dev-origins";
-import {
-  CACHE_CONTROL_HEADER,
-  EMBEDDABLE_FRAME_HEADERS,
-  PRIVATE_CACHE_CONTROL,
-} from "@/api/lib/security-headers";
+import { defineEndpoint } from "@/api/lib/endpoints";
+import { EMBEDDABLE_FRAME_HEADERS } from "@/api/lib/security-headers";
 import { runtimeMode } from "@/api/runtime-mode";
 
 import { visualOuterDocument, visualOuterPolicy } from "./document";
@@ -20,28 +16,23 @@ const origins = frontendOrigins({
 const document = visualOuterDocument(origins);
 const policy = visualOuterPolicy(origins);
 
-export const handleVisualSandboxRequest = (
-  request: Request,
-  set: Context["set"],
-): Response | undefined => {
-  if (
-    request.method !== "GET" ||
-    new URL(request.url).pathname !== VISUAL_SANDBOX_PATH
-  ) {
-    return undefined;
-  }
-  delete set.headers["X-Frame-Options"];
-  delete set.headers["Content-Security-Policy"];
-  return new Response(document, {
-    headers: {
-      [CACHE_CONTROL_HEADER]: PRIVATE_CACHE_CONTROL,
-      "Content-Security-Policy": policy,
-      "Content-Type": "text/html; charset=utf-8",
-      ...EMBEDDABLE_FRAME_HEADERS,
-      "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
-      "Referrer-Policy": "no-referrer",
-      "X-Content-Type-Options": "nosniff",
-      "X-DNS-Prefetch-Control": "off",
-    },
-  });
-};
+/** The outer visual sandbox document; its policy names who may frame it. */
+const visualSandboxDocument = defineEndpoint.public(
+  {},
+  () =>
+    new Response(document, {
+      headers: {
+        "Content-Security-Policy": policy,
+        "Content-Type": "text/html; charset=utf-8",
+        ...EMBEDDABLE_FRAME_HEADERS,
+        "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+        "Referrer-Policy": "no-referrer",
+        "X-Content-Type-Options": "nosniff",
+        "X-DNS-Prefetch-Control": "off",
+      },
+    }),
+);
+
+export const visualSandboxRoute = routes({
+  [VISUAL_SANDBOX_PATH]: { GET: visualSandboxDocument },
+});

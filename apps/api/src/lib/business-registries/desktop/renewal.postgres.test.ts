@@ -4,7 +4,6 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, sql, TransactionRollbackError } from "drizzle-orm";
-import Elysia from "elysia";
 import {
   calculateJwkThumbprint,
   exportJWK,
@@ -13,6 +12,7 @@ import {
 } from "jose";
 import { randomBytes } from "node:crypto";
 
+import { waitForExternalState } from "@stll/property-testing/external-state";
 import { sha256Base64Url } from "@stll/sha256/bun";
 
 import {
@@ -28,8 +28,11 @@ import { auditLogs } from "@/api/db/schema";
 import { desktopDeviceProofReplays } from "@/api/db/schema/desktop-device-proof-replay";
 import type { TransactionOf } from "@/api/db/scoped";
 import renewDesktopAccount from "@/api/handlers/desktop-registry/renew";
+import { createHttpApp } from "@/api/http/app";
+import { routes } from "@/api/http/route";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import {
@@ -37,6 +40,8 @@ import {
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
 import { createDesktopDeviceSigner } from "@/api/tests/helpers/desktop-device-proof";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 
 import {
   DESKTOP_REGISTRY_KEY_CONFIG,
@@ -370,6 +375,7 @@ describe.skipIf(!enabled)("desktop credential renewal (postgres)", () => {
           await fixture.recordAuditEvent(tx, event);
           throw new HandlerError({
             status: 503,
+            code: "internal_error",
             message: "Fixture renewal audit failure",
           });
         },
@@ -646,9 +652,7 @@ describe.skipIf(!enabled)("desktop credential renewal (postgres)", () => {
           .where(eq(auditLogs.resourceId, fixture.keyId));
         await db.delete(apikey).where(eq(apikey.id, fixture.keyId));
         await db.delete(member).where(eq(member.id, fixture.memberId));
-        await db
-          .delete(organization)
-          .where(eq(organization.id, fixture.organizationId));
+        await deleteOrganizationsForTest(db, [fixture.organizationId]);
         await cleanProofFixture(fixture);
         await db.delete(user).where(eq(user.id, fixture.userId));
       }
@@ -712,26 +716,21 @@ describe.skipIf(!enabled)("desktop credential renewal (postgres)", () => {
                       ...fixture,
                     }).then(() => undefined);
               drain = Promise.allSettled([first, second]);
-              const deadline = performance.now() + 5000;
-              while (performance.now() < deadline) {
-                const snapshot = (
-                  await observerDb
-                    .select({
-                      waiting: sql<number>`(SELECT count(*)::integer FROM pg_stat_activity
-                    WHERE pid IN (${firstWorker.pid}, ${secondWorker.pid})
-                      AND wait_event_type = 'Lock')`,
-                    })
-                    .from(apikey)
-                    .where(eq(apikey.id, fixture.keyId))
-                ).at(0);
-                if (snapshot?.waiting === 2) {
-                  return;
-                }
-                await Bun.sleep(10);
-              }
-              throw new TypeError(
-                "Both credential writers must wait before releasing the row lock",
-              );
+              await waitForExternalState({
+                description:
+                  "both credential writers wait before the row lock is released",
+                read: async () =>
+                  (
+                    await observerDb
+                      .select({
+                        waiting: sql<number>`(SELECT count(*)::integer FROM pg_stat_activity
+                      WHERE pid IN (${firstWorker.pid}, ${secondWorker.pid})
+                        AND wait_event_type = 'Lock')`,
+                      })
+                      .from(apikey)
+                      .where(eq(apikey.id, fixture.keyId))
+                  ).at(0)?.waiting === 2,
+              });
             });
           } finally {
             if (drain) {
@@ -837,9 +836,7 @@ describe.skipIf(!enabled)("desktop credential renewal (postgres)", () => {
             .where(eq(auditLogs.resourceId, fixture.keyId));
           await db.delete(apikey).where(eq(apikey.id, fixture.keyId));
           await db.delete(member).where(eq(member.id, fixture.memberId));
-          await db
-            .delete(organization)
-            .where(eq(organization.id, fixture.organizationId));
+          await deleteOrganizationsForTest(db, [fixture.organizationId]);
           await cleanProofFixture(fixture);
           await db.delete(user).where(eq(user.id, fixture.userId));
         }
@@ -862,8 +859,8 @@ describe.skipIf(!enabled)(
           const fixture = await db.transaction(
             async (tx) => await seedFixture(tx, openClient().db),
           );
-          const currentKey = `${DESKTOP_REGISTRY_KEY_PREFIX}${randomBytes(64).toString("hex")}`;
-          const successorKey = `${DESKTOP_REGISTRY_KEY_PREFIX}${randomBytes(64).toString("hex")}`;
+          const currentKey = `${DESKTOP_REGISTRY_KEY_PREFIX}${randomBytes(64).toHex()}`;
+          const successorKey = `${DESKTOP_REGISTRY_KEY_PREFIX}${randomBytes(64).toHex()}`;
           const device = await createDesktopDeviceSigner();
           try {
             await db
@@ -883,10 +880,11 @@ describe.skipIf(!enabled)(
               })
               .where(eq(apikey.id, fixture.keyId));
             const before = await readKey(db, fixture.keyId);
-            const app = new Elysia().post(
-              "/renew",
-              renewDesktopAccount.handler,
-              renewDesktopAccount.config,
+            await using server = serveForTest(
+              createHttpApp({
+                middleware: [errorBoundary],
+                routes: routes({ "/renew": { POST: renewDesktopAccount } }),
+              }),
             );
             const unsigned = () =>
               new Request("http://localhost/renew", {
@@ -911,7 +909,7 @@ describe.skipIf(!enabled)(
                 signed.headers.get("DPoP") ?? panic("Proof header required"),
               );
             }
-            const response = await app.handle(request);
+            const response = await server.fetch(request);
             const payload: unknown = await response.json();
             expect(response.status).toBe(proofState === "valid" ? 200 : 401);
             const after = await readKey(db, fixture.keyId);
@@ -942,9 +940,7 @@ describe.skipIf(!enabled)(
               .delete(apikey)
               .where(eq(apikey.referenceId, fixture.userId));
             await db.delete(member).where(eq(member.userId, fixture.userId));
-            await db
-              .delete(organization)
-              .where(eq(organization.id, fixture.organizationId));
+            await deleteOrganizationsForTest(db, [fixture.organizationId]);
             await db.delete(user).where(eq(user.id, fixture.userId));
           }
         });

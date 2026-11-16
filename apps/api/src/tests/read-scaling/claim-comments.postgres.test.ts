@@ -1,13 +1,14 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { createTestState } from "@stll/test-state";
+
 import { env } from "@/api/env";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
-import api from "@/api/server";
+import { apiApp } from "@/api/server";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { organizationFeatureGrants } from "@/api/tests/helpers/feature-grants";
-import { createTestState } from "@/api/tests/helpers/test-state";
 
 import {
   claimCommentScalingScenarios,
@@ -58,7 +59,9 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
           scenario,
         ] of claimCommentScalingScenarios.entries()) {
           expect(
-            api.routes.some(({ handler }) => handler === scenario.handler),
+            apiApp.routes.some(
+              ({ definition }) => definition === scenario.definition,
+            ),
           ).toBe(true);
           const at10 = small.at(index) ?? panic(`${scenario.name}: unmeasured`);
           const at200 =

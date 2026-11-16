@@ -1,6 +1,8 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
   ACCOUNT_ACCESS,
@@ -13,11 +15,9 @@ import {
   toSuggestFieldsError,
 } from "@/api/lib/templates/suggest-template-fields";
 
-const suggestFieldsBodySchema = t.Object({
-  // The text the editor chose to send: the whole document or just the current
-  // selection. Bounded so a pathological document can't blow up the prompt.
-  text: t.String({ maxLength: 200_000 }),
-  instructions: t.Optional(t.String({ maxLength: 2000 })),
+const suggestFieldsBodySchema = v.object({
+  text: v.pipe(v.string(), v.maxLength(200_000)),
+  instructions: v.optional(v.pipe(v.string(), v.maxLength(2000))),
 });
 
 const config = {
@@ -55,6 +55,7 @@ const config = {
 const suggestFields = createSafeRootHandler(
   config,
   async function* ({
+    orgAIConfigStatus,
     modelAdmission,
     session,
     body,
@@ -63,6 +64,10 @@ const suggestFields = createSafeRootHandler(
     managedAIResidency,
     user,
   }) {
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.err(storedAIConfigUnreadableError());
+    }
+
     const organizationId = session.activeOrganizationId;
     const { text, instructions } = body;
     const trimmed = text.trim();

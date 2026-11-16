@@ -1,0 +1,118 @@
+import { describe, expect, test } from "bun:test";
+
+import { INVOICE_STATUS, INVOICE_STATUSES } from "@stll/api-contract";
+
+import {
+  checkPaymentAmount,
+  invoiceTakesPayments,
+  isPartiallyPaid,
+} from "./invoice-payments.logic";
+
+describe("invoiceTakesPayments", () => {
+  test("an issued invoice takes payments while finalized or sent", () => {
+    expect(INVOICE_STATUSES.filter(invoiceTakesPayments)).toEqual([
+      INVOICE_STATUS.FINALIZED,
+      INVOICE_STATUS.SENT,
+    ]);
+  });
+
+  test("a finalized or sent invoice with payments is partially paid", () => {
+    expect(isPartiallyPaid({ status: "finalized", paidAmount: 1 })).toBe(true);
+    expect(isPartiallyPaid({ status: "sent", paidAmount: 1 })).toBe(true);
+    expect(isPartiallyPaid({ status: "sent", paidAmount: 0 })).toBe(false);
+    expect(isPartiallyPaid({ status: "paid", paidAmount: 100 })).toBe(false);
+  });
+});
+
+describe("checkPaymentAmount", () => {
+  test("accepts Slovak decimals and rejects an ambiguous dot", () => {
+    expect(
+      checkPaymentAmount({
+        input: "1234,56",
+        currency: "EUR",
+        locale: "sk-SK",
+        outstandingAmount: 200_000,
+      }),
+    ).toEqual({ type: "ok", amount: 123_456 });
+    expect(
+      checkPaymentAmount({
+        input: "1.234",
+        currency: "EUR",
+        locale: "sk-SK",
+        outstandingAmount: 200_000,
+      }),
+    ).toEqual({ type: "invalid_format" });
+  });
+  test("accepts up to the outstanding amount, in the invoice's minor units", () => {
+    expect(
+      checkPaymentAmount({
+        input: "60.00",
+        currency: "USD",
+        locale: "en-US",
+        outstandingAmount: 6000,
+      }),
+    ).toEqual({ type: "ok", amount: 6000 });
+    expect(
+      checkPaymentAmount({
+        input: "12.5",
+        currency: "EUR",
+        locale: "en-US",
+        outstandingAmount: 6000,
+      }),
+    ).toEqual({ type: "ok", amount: 1250 });
+    // A zero-decimal currency counts whole units.
+    expect(
+      checkPaymentAmount({
+        input: "100",
+        currency: "JPY",
+        locale: "en-US",
+        outstandingAmount: 100,
+      }),
+    ).toEqual({ type: "ok", amount: 100 });
+  });
+
+  test("refuses one minor unit above the outstanding amount", () => {
+    expect(
+      checkPaymentAmount({
+        input: "60.01",
+        currency: "USD",
+        locale: "en-US",
+        outstandingAmount: 6000,
+      }),
+    ).toEqual({ type: "more_than_outstanding" });
+    expect(
+      checkPaymentAmount({
+        input: "101",
+        currency: "JPY",
+        locale: "en-US",
+        outstandingAmount: 100,
+      }),
+    ).toEqual({ type: "more_than_outstanding" });
+  });
+
+  test("refuses nothing, zero and a negative amount as not positive", () => {
+    for (const input of ["", "0", "0.00", "-5"]) {
+      expect(
+        checkPaymentAmount({
+          input,
+          currency: "USD",
+          locale: "en-US",
+          outstandingAmount: 6000,
+        }),
+      ).toEqual({ type: "not_positive" });
+    }
+  });
+
+  test("refuses text that is not an amount as a format problem", () => {
+    for (const input of ["abc", "1.2.3", "12.345"]) {
+      expect(
+        checkPaymentAmount({
+          input,
+          currency: "USD",
+          locale: "en-US",
+          outstandingAmount: 6000,
+        }),
+      ).toEqual({ type: "invalid_format" });
+    }
+  });
+});

@@ -1,5 +1,6 @@
 import type { PropsWithChildren } from "react";
 
+import type { HandlerExceptionScope } from "@stll/errors";
 import { UploadIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
@@ -20,6 +21,7 @@ const FILE_DROP_ZONE_COVERAGE_CLASSES = {
 } as const satisfies Record<FileDropZoneCoverage, string>;
 
 type FileDropZoneProps = PropsWithChildren<{
+  exceptionScope: HandlerExceptionScope;
   /** Files dropped onto the zone (folders are flattened to their files). */
   onDrop: (files: File[]) => void;
   /** Opt in to preserving the dropped folder structure instead of flattening. */
@@ -38,6 +40,7 @@ type FileDropZoneProps = PropsWithChildren<{
  * editor so both get identical drop behaviour and overlay from one place.
  */
 export const FileDropZone = ({
+  exceptionScope,
   onDrop,
   onDropTree,
   label,
@@ -47,6 +50,7 @@ export const FileDropZone = ({
   children,
 }: FileDropZoneProps) => {
   const { ref, isDropTarget, isInnerActive } = useExternalFileDrop({
+    exceptionScope,
     onDrop,
     onDropTree,
     enabled,

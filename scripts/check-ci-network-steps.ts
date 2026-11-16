@@ -5,7 +5,8 @@
 // - retry: a `run:` command that fetches (curl, wget, cargo fetch/install,
 //   any other cargo command that resolves the dependency graph, bun
 //   install/ci/add, npm/pnpm/yarn install, npx/bunx of a remote package,
-//   docker pull, playwright install, gh release download, git clone) runs
+//   docker pull, playwright install, gh release download, or a git network
+//   command (clone, fetch, ls-remote, pull) runs
 //   through scripts/retry.sh, or scripts/gh-retry.sh for the GitHub API. A
 //   curl that carries its own `--retry N --retry-all-errors` budget counts as
 //   retried, and a curl or wget that only names a loopback address is a
@@ -84,7 +85,26 @@ const FETCH_PATTERNS: readonly { kind: string; pattern: RegExp }[] = [
     pattern:
       /(?:\bgh|gh-retry\.sh["']?|\$\{?GH_RETRY_SCRIPT\}?["']?)\s+release\s+download(?=\s|$)/u,
   },
-  { kind: "git clone", pattern: /\bgit\s+(?:-c\s+\S+\s+)*clone(?=\s|$)/u },
+  {
+    kind: "git clone",
+    pattern:
+      /\bgit\s+(?:(?:(?:-c|-C)\s+(?:[^\s"']|"[^"]*"|'[^']*')+|--no-pager|--(?:git-dir|work-tree)=(?:[^\s"']|"[^"]*"|'[^']*')+)\s+)*clone(?=\s|$)/u,
+  },
+  {
+    kind: "git fetch",
+    pattern:
+      /\bgit\s+(?:(?:(?:-c|-C)\s+(?:[^\s"']|"[^"]*"|'[^']*')+|--no-pager|--(?:git-dir|work-tree)=(?:[^\s"']|"[^"]*"|'[^']*')+)\s+)*fetch(?=\s|$)/u,
+  },
+  {
+    kind: "git ls-remote",
+    pattern:
+      /\bgit\s+(?:(?:(?:-c|-C)\s+(?:[^\s"']|"[^"]*"|'[^']*')+|--no-pager|--(?:git-dir|work-tree)=(?:[^\s"']|"[^"]*"|'[^']*')+)\s+)*ls-remote(?=\s|$)/u,
+  },
+  {
+    kind: "git pull",
+    pattern:
+      /\bgit\s+(?:(?:(?:-c|-C)\s+(?:[^\s"']|"[^"]*"|'[^']*')+|--no-pager|--(?:git-dir|work-tree)=(?:[^\s"']|"[^"]*"|'[^']*')+)\s+)*pull(?=\s|$)/u,
+  },
 ];
 
 // Cargo downloads every crate missing from its cache whenever a command reads
@@ -121,7 +141,7 @@ const CONTROL_PREFIX =
   /^(?:(?:if|while|until|time|!|\{|\(|\$\(|`|exec|command|env|[A-Za-z_]\w*=(?:\$\(|`|"[^"]*"|'[^']*'|[^\s$`(]*))(?:\s+|(?<=[(`])))+/u;
 // A command retries only when the retry helper is the command it runs.
 const RETRY_START =
-  /^(?:(?:bash|sh)\s+)?(?:["']?[^\s"']*(?:gh-)?retry\.sh["']?|"?\$\{?\w*(?:retry|RETRY)\w*\}?"?)(?:\s|$)/u;
+  /^(?:(?:bash|sh|"?\$\{?BASH\}?"?)\s+)?(?:["']?[^\s"']*(?:gh-)?retry\.sh["']?|"?\$\{?\w*(?:retry|RETRY)\w*\}?"?)(?:\s|$)/u;
 
 /** Whether a command segment runs through the retry helper. */
 const startsWithRetry = (segment: string): boolean =>
@@ -563,12 +583,55 @@ type RunContext = {
   shell?: ShellContext;
 };
 
+// `bun run <name>` runs a script from the working directory's package.json.
+const PACKAGE_SCRIPT_RUN = /\bbun\s+(?:--\S+\s+)*run\s+(?<name>[\w:.-]+)/u;
+
+/**
+ * Fetches in the package.json scripts a step runs with `bun run`, retried
+ * when the step runs them through retry.sh. Without this, a step that runs
+ * an install script by name escapes both the retry and the timeout rule.
+ */
+const packageScriptFetches = (
+  repo: Repository,
+  run: string,
+  { cwd = ".", declared, shell = {} }: RunContext,
+): NetworkFetch[] => {
+  const file = path.posix.join(cwd, "package.json");
+  const text = repo.read(file);
+  if (text === null) {
+    return [];
+  }
+  const parsed: unknown = JSON.parse(text);
+  const scripts =
+    record(parsed) && record(parsed["scripts"]) ? parsed["scripts"] : {};
+  return logicalLines(run).flatMap((line) =>
+    segments(line).flatMap((segment) => {
+      const name = PACKAGE_SCRIPT_RUN.exec(segment)?.groups?.["name"];
+      if (name === undefined) {
+        return [];
+      }
+      const command = scripts[name];
+      if (typeof command !== "string") {
+        return [];
+      }
+      const wrapped = startsWithRetry(segment);
+      return scanShell(command, `${file}#${name}`, declared, shell).map(
+        (fetch) => ({ ...fetch, wrapped: fetch.wrapped || wrapped }),
+      );
+    }),
+  );
+};
+
 export const runFetches = (
   repo: Repository,
   run: string,
-  { actionDir, label, cwd = ".", declared, shell = {} }: RunContext,
+  context: RunContext,
 ): NetworkFetch[] => {
-  const fetches = scanShell(run, label, declared, shell);
+  const { actionDir, label, cwd = ".", declared, shell = {} } = context;
+  const fetches = [
+    ...scanShell(run, label, declared, shell),
+    ...packageScriptFetches(repo, run, context),
+  ];
   const visited = new Set<string>();
   const follow = (
     source: string,
@@ -784,6 +847,19 @@ export const networkViolations = (
         rawJob["steps"],
       ).entries()) {
         const name = stepName(step, index);
+        const uses = step["uses"];
+        const withInputs = record(step["with"]) ? step["with"] : {};
+        if (
+          typeof uses === "string" &&
+          uses.startsWith("actions/checkout@") &&
+          withInputs["filter"] === "blob:none"
+        ) {
+          add({
+            id: violationId(file, job, name, "retry"),
+            rule: "retry",
+            message: `${file}: ${job}: ${name}: partial-clone actions/checkout must use stella/.github/actions/partial-clone-checkout`,
+          });
+        }
         const fetches: NetworkFetch[] = [];
         const run = step["run"];
         if (typeof run === "string") {
@@ -806,7 +882,6 @@ export const networkViolations = (
             });
           }
         }
-        const uses = step["uses"];
         const action = typeof uses === "string" ? localAction(uses) : null;
         if (action !== null) {
           fetches.push(...summarizeAction(action, new Set()).fetches);

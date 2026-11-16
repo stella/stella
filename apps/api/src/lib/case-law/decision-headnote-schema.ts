@@ -1,6 +1,4 @@
-import { Type } from "@sinclair/typebox";
-import type { TSchema } from "@sinclair/typebox";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   DECISION_HEADNOTE_KEYWORDS,
@@ -13,57 +11,55 @@ import { LIMITS } from "@/api/lib/limits";
 import { boundedString } from "@/api/lib/search/response-text-bounds";
 
 type DecisionHeadnoteSchemaByType = {
-  readonly [Type in DecisionHeadnotePreview["type"]]: TSchema & {
-    static: Extract<DecisionHeadnotePreview, { readonly type: Type }>;
-  };
+  readonly [Type in DecisionHeadnotePreview["type"]]: v.GenericSchema<
+    unknown,
+    Extract<DecisionHeadnotePreview, { readonly type: Type }>
+  >;
 };
 
+const headnoteTextSchema = v.pipe(
+  boundedString(LIMITS.caseLawHeadnoteMaxChars * 4),
+  v.minLength(1),
+);
+
 const DECISION_HEADNOTE_SCHEMAS = {
-  [TEXT_FIELD_TYPE.ABSENT]: t.Object(
-    {
-      type: t.Literal(TEXT_FIELD_TYPE.ABSENT),
-      reason: t.UnionEnum(TEXT_ABSENCE_REASONS),
-    },
-    { additionalProperties: false },
+  [TEXT_FIELD_TYPE.ABSENT]: v.pipe(
+    v.object({
+      type: v.literal(TEXT_FIELD_TYPE.ABSENT),
+      reason: v.picklist(TEXT_ABSENCE_REASONS),
+    }),
+    v.readonly(),
   ),
-  [TEXT_FIELD_TYPE.PRESENT]: t.Object(
-    {
-      type: t.Literal(TEXT_FIELD_TYPE.PRESENT),
-      text: t.String({
-        ...boundedString(LIMITS.caseLawHeadnoteMaxChars * 4),
-        minLength: 1,
-      }),
-      truncated: t.Boolean(),
-    },
-    { additionalProperties: false },
+  [TEXT_FIELD_TYPE.PRESENT]: v.pipe(
+    v.object({
+      type: v.literal(TEXT_FIELD_TYPE.PRESENT),
+      text: headnoteTextSchema,
+      truncated: v.boolean(),
+    }),
+    v.readonly(),
   ),
-  [DECISION_HEADNOTE_KEYWORDS]: t.Object(
-    {
-      type: t.Literal(DECISION_HEADNOTE_KEYWORDS),
+  [DECISION_HEADNOTE_KEYWORDS]: v.pipe(
+    v.object({
+      type: v.literal(DECISION_HEADNOTE_KEYWORDS),
       // The terms share the prose budget: a row is one row either way.
-      items: t.Array(
-        t.String({
-          ...boundedString(LIMITS.caseLawHeadnoteMaxChars * 4),
-          minLength: 1,
-        }),
-        { minItems: 1, maxItems: LIMITS.caseLawHeadnoteKeywords },
+      items: v.pipe(
+        v.array(headnoteTextSchema),
+        v.minLength(1),
+        v.maxLength(LIMITS.caseLawHeadnoteKeywords),
+        v.readonly(),
       ),
-      omitted: Type.Integer({ minimum: 0 }),
-    },
-    { additionalProperties: false },
+      omitted: v.pipe(v.number(), v.integer(), v.minValue(0)),
+    }),
+    v.readonly(),
   ),
 } as const satisfies DecisionHeadnoteSchemaByType;
 
-const decisionHeadnoteRuntimeSchema = t.Union([
+// The branches are closed and exhaustively keyed by the shared discriminator,
+// so the union's output is `DecisionHeadnotePreview` itself.
+export const decisionHeadnotePreviewSchema = v.union([
   DECISION_HEADNOTE_SCHEMAS.absent,
   DECISION_HEADNOTE_SCHEMAS.present,
   DECISION_HEADNOTE_SCHEMAS.keywords,
 ]);
-
-// SAFETY: the runtime branches are closed and exhaustively keyed by the shared
-// discriminator; Unsafe preserves their union instead of TypeBox's
-// intersection-like inference for object unions.
-export const decisionHeadnotePreviewSchema =
-  Type.Unsafe<DecisionHeadnotePreview>(decisionHeadnoteRuntimeSchema);
 
 export const decisionKeywordsPreviewSchema = DECISION_HEADNOTE_SCHEMAS.keywords;

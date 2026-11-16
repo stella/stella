@@ -1,9 +1,10 @@
 /**
  * The judges a decision names, against the real schema.
  *
- * Three things only the database decides are exercised here: which name finds
- * a roster row, that a replacement leaves nothing of the previous write
- * behind, and that a roster import links the names that were waiting for it.
+ * Four things only the database decides are exercised here: which name finds
+ * a roster row, which roster row a declined name is, that a replacement leaves
+ * nothing of the previous write behind, and that a roster import links the
+ * names that were waiting for it.
  */
 
 import type { PGlite } from "@electric-sql/pglite";
@@ -40,6 +41,7 @@ const OTHER_COURT = "Nejvyšší soud";
 const sourceId = createSafeId<"caseLawSource">();
 const decisionId = createSafeId<"caseLawDecision">();
 const otherCourtDecisionId = createSafeId<"caseLawDecision">();
+const benchDecisionId = createSafeId<"caseLawDecision">();
 
 const RAPPORTEUR = "JUDr. Vojtěch Šimáček";
 const DISSENTING = "Mgr. Ludmila Nováková";
@@ -98,6 +100,15 @@ beforeAll(async () => {
       country: COUNTRY,
       language: "cs",
       languageGroupKey: "judges-decision",
+    },
+    {
+      id: benchDecisionId,
+      sourceId,
+      caseNumber: "III. ÚS 290/26",
+      court: COURT,
+      country: COUNTRY,
+      language: "cs",
+      languageGroupKey: "judges-bench",
     },
     {
       id: otherCourtDecisionId,
@@ -293,3 +304,80 @@ test(
   },
   DB_TEST_TIMEOUT_MS,
 );
+
+test("a declined bench is stored under the roster's names, and a name it cannot place is left out", async () => {
+  const svatonId = await insertJudge("Jan Svatoň");
+  const hulmakId = await insertJudge("Milan Hulmák");
+  const zemanovaId = await insertJudge("Daniela Zemanová");
+  // Two rows a declined "Jana Zemana" could be: neither is chosen.
+  await insertJudge("Jan Zeman");
+  await insertJudge("Jana Zemanová");
+
+  await replaceDecisionJudges(asTx(), {
+    decisionId: benchDecisionId,
+    judges: [
+      // The opening sentence: "z předsedy Jana Svatoně (soudce
+      // zpravodaje), soudce Milana Hulmáka a soudkyně Daniely Zemanové".
+      {
+        role: DECISION_JUDGE_ROLE.PRESIDING,
+        czechDeclinedName: "Jana Svatoně",
+      },
+      {
+        role: DECISION_JUDGE_ROLE.RAPPORTEUR,
+        czechDeclinedName: "Jana Svatoně",
+      },
+      {
+        role: DECISION_JUDGE_ROLE.PANEL_MEMBER,
+        czechDeclinedName: "Milana Hulmáka",
+      },
+      {
+        role: DECISION_JUDGE_ROLE.PANEL_MEMBER,
+        czechDeclinedName: "Daniely Zemanové",
+      },
+      {
+        role: DECISION_JUDGE_ROLE.PANEL_MEMBER,
+        czechDeclinedName: "Petra Nováka",
+      },
+      {
+        role: DECISION_JUDGE_ROLE.PANEL_MEMBER,
+        czechDeclinedName: "Jana Zemana",
+      },
+      // The record card, surname first, after the sentence as the adapter
+      // orders them.
+      { role: DECISION_JUDGE_ROLE.RAPPORTEUR, nameAsPrinted: "Svatoň Jan" },
+    ],
+  });
+
+  expect(await storedJudges(benchDecisionId)).toEqual([
+    {
+      role: DECISION_JUDGE_ROLE.PANEL_MEMBER,
+      name: "Milan Hulmák",
+      nameKey: judgeNameKey("Milan Hulmák"),
+      judgeId: hulmakId,
+      position: 0,
+    },
+    {
+      role: DECISION_JUDGE_ROLE.PANEL_MEMBER,
+      name: "Daniela Zemanová",
+      nameKey: judgeNameKey("Daniela Zemanová"),
+      judgeId: zemanovaId,
+      position: 1,
+    },
+    {
+      role: DECISION_JUDGE_ROLE.PRESIDING,
+      name: "Jan Svatoň",
+      nameKey: judgeNameKey("Jan Svatoň"),
+      judgeId: svatonId,
+      position: 0,
+    },
+    // The card and the sentence name one rapporteur, so one row, under
+    // the name the sentence resolved to.
+    {
+      role: DECISION_JUDGE_ROLE.RAPPORTEUR,
+      name: "Jan Svatoň",
+      nameKey: judgeNameKey("Jan Svatoň"),
+      judgeId: svatonId,
+      position: 0,
+    },
+  ]);
+});

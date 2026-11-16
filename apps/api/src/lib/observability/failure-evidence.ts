@@ -26,7 +26,8 @@ import {
   isActionAdmissionCode,
 } from "@stll/api-contract/action-admission";
 import type { FailureBrand } from "@stll/errors";
-import { readFailureBrand } from "@stll/errors";
+import { readFailureBrand, readFingerprintFields } from "@stll/errors";
+import { MAX_EXCEPTION_CAUSE_DEPTH } from "@stll/errors/exception-cause-chain";
 
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { errorClassNameFrom } from "@/api/lib/errors/error-tag";
@@ -35,7 +36,8 @@ import {
   HandlerError,
 } from "@/api/lib/errors/tagged-errors";
 
-export const MAX_EVIDENCE_DEPTH = 6;
+// parser-output-unchanged: error snapshot depth derives from the shared exception identity bound.
+export const MAX_EVIDENCE_DEPTH = MAX_EXCEPTION_CAUSE_DEPTH;
 
 // A stack is read from where its frames start, so these bound only the frame
 // block: a 1 MB message costs a newline count, never a 1 MB split.
@@ -80,6 +82,10 @@ const STACK_FRAME_PREFIX = "at ";
 // reported as present but empty.
 const RECOGNIZED_FRAME_ORIGIN =
   /^(?:(?:[^\s]*\/)?(?:apps|packages|node_modules)\/|\/app\/|(?:node|bun|native):)/u;
+
+// `panic()` builds its error inside the library, so that frame would name the
+// helper on every panic. The caller is the site that failed.
+const PANIC_HELPER_FRAME = /\/better-result(?:@[^/]*)?\//u;
 
 type EvidenceNodeKind = "error" | "plain" | "primitive" | "tagged";
 
@@ -139,7 +145,16 @@ export type EvidenceNode = {
   /** The prototype chain, read once; identity checks run against it. */
   readonly prototypes: readonly object[];
   readonly frame: FrameEvidence;
+  /** Static deadline identity and duration, trusted only on TimeoutError nodes. */
+  readonly timeout:
+    | {
+        readonly label: string;
+        readonly timeoutMs: number | undefined;
+        readonly callerFrame: FrameEvidence;
+      }
+    | undefined;
   readonly extraction: Readonly<Record<string, string>> | undefined;
+  readonly discriminators?: Readonly<Record<string, string>> | undefined;
 };
 
 export type FailureEvidence = {
@@ -149,7 +164,11 @@ export type FailureEvidence = {
   readonly cycleTo: number | undefined;
 };
 
-type ReadState = { failed: boolean };
+type ReadState = {
+  failed: boolean;
+  reads: WeakMap<object, Map<string, unknown>>;
+  views: WeakMap<object, object>;
+};
 
 const attempt = <TValue>(
   state: ReadState,
@@ -166,8 +185,24 @@ const attempt = <TValue>(
   return result.value.read;
 };
 
-const readKey = (state: ReadState, value: object, key: string): unknown =>
-  attempt(state, (): unknown => Reflect.get(value, key), undefined);
+const readKey = (state: ReadState, value: object, key: string): unknown => {
+  let reads = state.reads.get(value);
+  if (reads === undefined) {
+    reads = new Map();
+    state.reads.set(value, reads);
+  }
+  if (reads.has(key)) {
+    return reads.get(key);
+  }
+  const receiver = state.views.get(value) ?? value;
+  const result = attempt(
+    state,
+    (): unknown => Reflect.get(value, key, receiver),
+    undefined,
+  );
+  reads.set(key, result);
+  return result;
+};
 
 const isObject = (value: unknown): value is object =>
   typeof value === "object" && value !== null;
@@ -305,7 +340,11 @@ export const readProviderStatus = (
   if (!isObject(value)) {
     return undefined;
   }
-  const state: ReadState = { failed: false };
+  const state: ReadState = {
+    failed: false,
+    reads: new WeakMap(),
+    views: new WeakMap(),
+  };
   const body = readKey(state, value, "error");
   return providerStatusFrom({
     isHandlerError: prototypeChain(state, value).includes(
@@ -457,7 +496,10 @@ const frameBlockOffset = ({
   return offsetAfterLines(stack, countLines(message));
 };
 
-const topFrame = (parts: StackParts): FrameEvidence => {
+const topFrame = (
+  parts: StackParts,
+  skipLocation: (location: string) => boolean = () => false,
+): FrameEvidence => {
   const stack = nonEmptyString(parts.stack);
   if (stack === undefined) {
     return { kind: "absent" };
@@ -475,6 +517,9 @@ const topFrame = (parts: StackParts): FrameEvidence => {
   for (const line of lines.slice(0, MAX_STACK_FRAME_LINES)) {
     const location = frameLocation(line);
     if (location !== undefined) {
+      if (skipLocation(location) || PANIC_HELPER_FRAME.test(location)) {
+        continue;
+      }
       return RECOGNIZED_FRAME_ORIGIN.test(location)
         ? { kind: "recognized", location }
         : { kind: "unrecognized" };
@@ -526,6 +571,7 @@ const PRIMITIVE_NODE: EvidenceNode = {
   brand: undefined,
   prototypes: [],
   frame: { kind: "absent" },
+  timeout: undefined,
   extraction: undefined,
 };
 
@@ -543,6 +589,31 @@ const nodeKind = (isError: boolean, isTagged: boolean): EvidenceNodeKind => {
 
 const readNode = (state: ReadState, value: object): ReadNodeResult => {
   const prototypes = prototypeChain(state, value);
+  const declared = readFingerprintFields({
+    value,
+    prototypes,
+    read: (object, key) => readKey(state, object, key),
+  });
+  const { fields } = declared;
+  if (declared.status === "read_failed") {
+    state.failed = true;
+  }
+  // Only declared application errors use a cached receiver. Native accessors
+  // (DOMException, for example) require their original branded instance.
+  if (fields !== undefined) {
+    state.views.set(
+      value,
+      new Proxy(value, {
+        get: (target, property) => {
+          const result: unknown =
+            typeof property === "string"
+              ? readKey(state, target, property)
+              : Reflect.get(target, property);
+          return result;
+        },
+      }),
+    );
+  }
   const isError = prototypes.includes(Error.prototype);
   const isHandlerError = prototypes.includes(HandlerError.prototype);
   const rawTag = readKey(state, value, "_tag");
@@ -563,6 +634,14 @@ const readNode = (state: ReadState, value: object): ReadNodeResult => {
             : undefined,
       })
     : undefined;
+  const isTimeoutError =
+    className === "TimeoutError" || (isTagged && rawTag === "TimeoutError");
+  const label = isTimeoutError
+    ? nonEmptyString(readKey(state, value, "label"))
+    : undefined;
+  const timeoutMsValue = isTimeoutError
+    ? readKey(state, value, "timeoutMs")
+    : undefined;
   const code = readKey(state, value, "code");
   const errno = readKey(state, value, "errno");
   const syscall = readKey(state, value, "syscall");
@@ -577,12 +656,12 @@ const readNode = (state: ReadState, value: object): ReadNodeResult => {
       ? ACTION_ADMISSION_REFUSALS[codeString]
       : undefined;
   const sqlState = sqlStateFrom({ syscall, errno, code });
-  const pgIdentifiers: Partial<Record<PgIdentifierProperty, string>> = {};
+  const pgIdentifiers = new Map<PgIdentifierProperty, string>();
   if (sqlState !== undefined) {
     for (const property of PG_IDENTIFIER_PROPERTIES) {
       const identifier = nonEmptyString(readKey(state, value, property));
       if (identifier !== undefined) {
-        pgIdentifiers[property] = identifier;
+        pgIdentifiers.set(property, identifier);
       }
     }
   }
@@ -601,6 +680,17 @@ const readNode = (state: ReadState, value: object): ReadNodeResult => {
   } else if (admission !== undefined) {
     handler = { status: admission.status, code: codeString };
   }
+  const stack =
+    className === undefined ? undefined : readKey(state, value, "stack");
+  const message =
+    className === undefined ? undefined : readKey(state, value, "message");
+  const frameParts = { stack, message, name, className: className ?? "" };
+  const brand = readFailureBrand(value, {
+    prototypes,
+    read: (object, key) => readKey(state, object, key),
+  });
+  const discriminators =
+    brand === undefined ? fields : { ...fields, failureReason: brand.reason };
   const node: EvidenceNode = {
     kind: nodeKind(isError, isTagged),
     tag:
@@ -625,8 +715,8 @@ const readNode = (state: ReadState, value: object): ReadNodeResult => {
         (className !== undefined && PG_DRIVER_CLASS_NAMES.has(className)) ||
         (name === PG_PROTOCOL_ERROR_NAME &&
           sqlState !== undefined &&
-          pgIdentifiers.severity !== undefined)),
-    pgIdentifiers,
+          pgIdentifiers.has("severity"))),
+    pgIdentifiers: Object.fromEntries(pgIdentifiers),
     ownStatus,
     providerStatus: providerStatusFrom({
       isHandlerError,
@@ -642,17 +732,24 @@ const readNode = (state: ReadState, value: object): ReadNodeResult => {
       bodyCode: nestedKey(state, body, "code"),
     }),
     handler,
-    brand: readFailureBrand(value, prototypes),
+    brand,
+    discriminators,
     prototypes,
-    frame:
-      className === undefined
-        ? { kind: "absent" }
-        : topFrame({
-            stack: readKey(state, value, "stack"),
-            message: readKey(state, value, "message"),
-            name,
-            className,
-          }),
+    frame: className === undefined ? { kind: "absent" } : topFrame(frameParts),
+    timeout:
+      label === undefined
+        ? undefined
+        : {
+            label,
+            timeoutMs:
+              typeof timeoutMsValue === "number" &&
+              Number.isFinite(timeoutMsValue)
+                ? timeoutMsValue
+                : undefined,
+            callerFrame: topFrame(frameParts, (location) =>
+              location.includes("packages/concurrency/src/with-timeout.ts:"),
+            ),
+          },
     extraction: prototypes.includes(ExtractionWorkerError.prototype)
       ? extractionFields(state, value)
       : undefined,
@@ -663,7 +760,11 @@ const readNode = (state: ReadState, value: object): ReadNodeResult => {
 const evidenceCache = new WeakMap<object, FailureEvidence>();
 
 const walk = (error: unknown): FailureEvidence => {
-  const state: ReadState = { failed: false };
+  const state: ReadState = {
+    failed: false,
+    reads: new WeakMap(),
+    views: new WeakMap(),
+  };
   const nodes: EvidenceNode[] = [];
   const seen = new Map<object, number>();
   let current = error;

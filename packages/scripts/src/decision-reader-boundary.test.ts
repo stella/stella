@@ -1,11 +1,19 @@
 import { expect, test } from "bun:test";
-import { existsSync, readFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
-import ts from "typescript6";
 
 import { repoRelativePath } from "@stll/portable-path";
 
 import { canonicalModuleId } from "../../../.oxlint-plugins/module-id";
+import { parseSource, walk } from "./syntax-tree";
+import { createProgram } from "./typescript-program";
 
 const packageRoot = path.resolve(import.meta.dirname, "../../decision-reader");
 const productionDependencyRoots = new Set([
@@ -29,70 +37,63 @@ const reactEffects = new Set([
   "useInsertionEffect",
 ]);
 
-const lifecycleViolations = (source: string) => {
-  const tree = ts.createSourceFile(
-    "source.tsx",
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX,
-  );
+const lifecycleViolations = (source: string, filename = "source.tsx") => {
+  const parsed = parseSource(filename, source);
   const violations: string[] = [];
-  const visit = (node: ts.Node) => {
-    if (
-      ts.isImportDeclaration(node) &&
-      ts.isStringLiteral(node.moduleSpecifier) &&
-      node.moduleSpecifier.text === "react"
-    ) {
-      const bindings = node.importClause?.namedBindings;
-      if (bindings && ts.isNamedImports(bindings)) {
-        for (const element of bindings.elements) {
-          const imported = element.propertyName?.text ?? element.name.text;
-          if (reactEffects.has(imported)) {
-            violations.push(imported);
-          }
+  walk(parsed.program, (node, ancestors) => {
+    if (node.type === "ImportDeclaration" && node.source.value === "react") {
+      for (const binding of node.specifiers) {
+        if (binding.type !== "ImportSpecifier") {
+          continue;
+        }
+        const imported =
+          binding.imported.type === "Identifier"
+            ? binding.imported.name
+            : binding.imported.value;
+        if (reactEffects.has(imported)) {
+          violations.push(imported);
         }
       }
     }
-    // Count global references as well as calls: assigning fetch to an alias
-    // must not bypass the package's network boundary.
+    const parent = ancestors.at(-1);
     if (
-      ts.isIdentifier(node) &&
-      (node.text === "fetch" || node.text === "XMLHttpRequest") &&
-      (!ts.isPropertyAccessExpression(node.parent) || node.parent.name !== node)
+      node.type === "Identifier" &&
+      (node.name === "fetch" || node.name === "XMLHttpRequest") &&
+      !(
+        parent?.type === "MemberExpression" &&
+        !parent.computed &&
+        parent.property === node
+      )
     ) {
-      violations.push(node.text);
+      violations.push(node.name);
     }
-    if (ts.isPropertyAccessExpression(node)) {
-      const member = node.name.text;
-      const globalOwner =
-        ts.isIdentifier(node.expression) &&
-        ["window", "globalThis", "self"].includes(node.expression.text);
+    if (node.type !== "MemberExpression") {
+      return;
+    }
+    let member: string | undefined;
+    if (node.computed) {
       if (
-        reactEffects.has(member) ||
-        (globalOwner && (member === "fetch" || member === "XMLHttpRequest"))
+        node.property.type === "Literal" &&
+        typeof node.property.value === "string"
       ) {
-        violations.push(member);
+        member = node.property.value;
       }
+    } else if (node.property.type === "Identifier") {
+      member = node.property.name;
     }
+    if (member === undefined) {
+      return;
+    }
+    const globalOwner =
+      node.object.type === "Identifier" &&
+      ["window", "globalThis", "self"].includes(node.object.name);
     if (
-      ts.isElementAccessExpression(node) &&
-      ts.isStringLiteral(node.argumentExpression)
+      reactEffects.has(member) ||
+      (globalOwner && (member === "fetch" || member === "XMLHttpRequest"))
     ) {
-      const member = node.argumentExpression.text;
-      const globalOwner =
-        ts.isIdentifier(node.expression) &&
-        ["window", "globalThis", "self"].includes(node.expression.text);
-      if (
-        reactEffects.has(member) ||
-        (globalOwner && (member === "fetch" || member === "XMLHttpRequest"))
-      ) {
-        violations.push(member);
-      }
+      violations.push(member);
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(tree);
+  });
   return violations;
 };
 
@@ -110,64 +111,54 @@ const dependencyRoot = (specifier: string) =>
     ? specifier.split("/").slice(0, 2).join("/")
     : specifier.split("/").at(0);
 
-const moduleSpecifiers = (source: string) => {
-  const tree = ts.createSourceFile(
-    "source.tsx",
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX,
-  );
+const moduleSpecifiers = (source: string, filename = "source.tsx") => {
+  const parsed = parseSource(filename, source);
   const specifiers: string[] = [];
-  const visit = (node: ts.Node) => {
+  walk(parsed.program, (node) => {
     if (
-      (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
-      node.moduleSpecifier &&
-      ts.isStringLiteral(node.moduleSpecifier)
+      (node.type === "ImportDeclaration" ||
+        node.type === "ExportNamedDeclaration" ||
+        node.type === "ExportAllDeclaration") &&
+      node.source
     ) {
-      specifiers.push(node.moduleSpecifier.text);
+      specifiers.push(node.source.value);
+    }
+    if (node.type === "TSExternalModuleReference") {
+      specifiers.push(node.expression.value);
+    }
+    if (node.type === "TSImportType") {
+      specifiers.push(node.source.value);
     }
     if (
-      ts.isImportEqualsDeclaration(node) &&
-      ts.isExternalModuleReference(node.moduleReference)
+      node.type !== "ImportExpression" &&
+      !(
+        node.type === "CallExpression" &&
+        node.callee.type === "Identifier" &&
+        node.callee.name === "require"
+      )
     ) {
-      const expression = node.moduleReference.expression;
+      return;
+    }
+    const argument =
+      node.type === "ImportExpression" ? node.source : node.arguments.at(0);
+    if (argument?.type === "Literal" && typeof argument.value === "string") {
+      specifiers.push(argument.value);
+    } else if (
+      argument?.type === "TemplateLiteral" &&
+      argument.expressions.length === 0
+    ) {
       specifiers.push(
-        ts.isStringLiteral(expression)
-          ? expression.text
-          : "<computed module specifier>",
+        argument.quasis.map(({ value }) => value.cooked ?? value.raw).join(""),
       );
+    } else {
+      specifiers.push("<computed module specifier>");
     }
-    if (
-      ts.isCallExpression(node) &&
-      (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-        (ts.isIdentifier(node.expression) &&
-          node.expression.text === "require"))
-    ) {
-      const argument = node.arguments.at(0);
-      specifiers.push(
-        argument &&
-          (ts.isStringLiteral(argument) ||
-            ts.isNoSubstitutionTemplateLiteral(argument))
-          ? argument.text
-          : "<computed module specifier>",
-      );
-    }
-    if (
-      ts.isImportTypeNode(node) &&
-      ts.isLiteralTypeNode(node.argument) &&
-      ts.isStringLiteral(node.argument.literal)
-    ) {
-      specifiers.push(node.argument.literal.text);
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(tree);
+  });
   return specifiers;
 };
 
 const boundaryViolations = (file: string, source: string) =>
-  moduleSpecifiers(source).filter((specifier) => {
+  moduleSpecifiers(source, file).filter((specifier) => {
     if (specifier.startsWith(".")) {
       const destination = path.resolve(path.dirname(file), specifier);
       return (
@@ -201,32 +192,38 @@ test("shared decision identity exports resolve to context-free package owners", 
     expect(
       boundaryViolations(resolved, readFileSync(resolved, "utf-8")),
     ).toEqual([]);
-    expect(lifecycleViolations(readFileSync(resolved, "utf-8"))).toEqual([]);
+    expect(
+      lifecycleViolations(readFileSync(resolved, "utf-8"), resolved),
+    ).toEqual([]);
   }
 });
 
-test("reader catalogue types compile without DOM or JSX dependencies", () => {
+test("reader catalogue types compile without DOM or JSX dependencies", async () => {
   const entry = Bun.resolveSync(
     "@stll/decision-reader/reader-message-types",
     path.join(repositoryRoot, "apps/api"),
   );
-  const program = ts.createProgram({
+  const opened = await createProgram({
     rootNames: [entry],
-    options: {
-      lib: ["lib.esnext.d.ts"],
+    compilerOptions: {
+      lib: ["ESNext"],
       types: [],
       noEmit: true,
       strict: true,
       skipLibCheck: true,
     },
   });
-  expect(
-    ts
-      .getPreEmitDiagnostics(program)
-      .map((diagnostic) =>
-        ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"),
-      ),
-  ).toEqual([]);
+  try {
+    expect(
+      [
+        ...(await opened.program.getProgramDiagnostics()),
+        ...(await opened.program.getSyntacticDiagnostics()),
+        ...(await opened.program.getSemanticDiagnostics()),
+      ].map(({ text }) => text),
+    ).toEqual([]);
+  } finally {
+    await opened.close();
+  }
 });
 
 test("reader production imports stay inside its context-free boundary", () => {
@@ -239,7 +236,7 @@ test("reader production imports stay inside its context-free boundary", () => {
     const file = path.join(packageRoot, relativeFile);
     const source = readFileSync(file, "utf-8");
     expect(boundaryViolations(file, source), relativeFile).toEqual([]);
-    expect(lifecycleViolations(source), relativeFile).toEqual([]);
+    expect(lifecycleViolations(source, file), relativeFile).toEqual([]);
   }
 });
 
@@ -312,13 +309,113 @@ const removedReaderImportViolations = (file: string, source: string) => {
           .replaceAll(/\/\*[\s\S]*?\*\//gu, "")
           .matchAll(/@import\s+(?:url\(\s*)?["']?([^"')\s;]+)/gu),
       ].map((match) => match[1] ?? "")
-    : moduleSpecifiers(source);
+    : moduleSpecifiers(source, file);
   return specifiers.filter((specifier) =>
     removedReaderModules.has(
       canonicalModuleId(specifier.replace(/[?#].*$/u, ""), file),
     ),
   );
 };
+
+type ScannedSource =
+  | { status: "read"; text: string }
+  /** Listed by the scan, and not there when it was read. */
+  | { status: "gone" };
+
+const readScannedSource = (file: string): ScannedSource => {
+  try {
+    return {
+      status: "read",
+      text: readFileSync(path.join(repositoryRoot, file), "utf-8"),
+    };
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+      return { status: "gone" };
+    }
+    throw error;
+  }
+};
+
+const RESCAN_ATTEMPTS = 5;
+
+/**
+ * Every file the patterns list, with its text, each one read. Generators
+ * rewrite their outputs (for one, the MCP apps' bundles module) while other
+ * packages' tests run, so a listed path can be briefly absent. Such a file is
+ * not skipped: it is read again once the rest are, and it leaves the scan
+ * only when a fresh listing no longer names it. A file that stays listed and
+ * unreadable fails the scan.
+ */
+const scannedSources = (
+  patterns: readonly string[],
+  include: (file: string) => boolean = () => true,
+): { file: string; text: string }[] => {
+  const list = () =>
+    new Set(
+      patterns.flatMap((pattern) => [
+        ...new Bun.Glob(pattern).scanSync({ cwd: repositoryRoot }),
+      ]),
+    );
+  const sources: { file: string; text: string }[] = [];
+  let pending = [...list()].filter(include);
+  for (let attempt = 0; pending.length > 0; attempt += 1) {
+    const gone: string[] = [];
+    for (const file of pending) {
+      const source = readScannedSource(file);
+      if (source.status === "read") {
+        sources.push({ file, text: source.text });
+      } else {
+        gone.push(file);
+      }
+    }
+    if (gone.length === 0) {
+      break;
+    }
+    const listed = list();
+    pending = gone.filter((file) => listed.has(file));
+    if (pending.length > 0 && attempt + 1 >= RESCAN_ATTEMPTS) {
+      throw new Error(
+        `Listed and unreadable after ${RESCAN_ATTEMPTS} reads: ${pending.join(", ")}`,
+      );
+    }
+  }
+  return sources;
+};
+
+test("scanned sources recover when a listed file disappears before reading", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "decision-reader-scan-"));
+  try {
+    const disappearingFile = path.join(directory, "disappearing.ts");
+    const siblingFile = path.join(directory, "sibling.ts");
+    writeFileSync(disappearingFile, "export const missing = true;\n");
+    writeFileSync(siblingFile, "export const present = true;\n");
+
+    const relativeDirectory = repoRelativePath(repositoryRoot, directory);
+    const relativeDisappearingFile = repoRelativePath(
+      repositoryRoot,
+      disappearingFile,
+    );
+    const relativeSiblingFile = repoRelativePath(repositoryRoot, siblingFile);
+    const observed: string[] = [];
+
+    const sources = scannedSources([`${relativeDirectory}/*.ts`], (file) => {
+      observed.push(file);
+      if (file === relativeDisappearingFile) {
+        rmSync(disappearingFile);
+      }
+      return true;
+    });
+
+    expect(observed.toSorted()).toEqual(
+      [relativeDisappearingFile, relativeSiblingFile].toSorted(),
+    );
+    expect(sources).toEqual([
+      { file: relativeSiblingFile, text: "export const present = true;\n" },
+    ]);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
 
 test("web has no second owner for any extracted reader module", () => {
   expect(
@@ -330,21 +427,14 @@ test("web has no second owner for any extracted reader module", () => {
 
 test("source imports never reference any removed reader module", () => {
   const violations: { file: string; specifier: string }[] = [];
-  for (const pattern of [
+  for (const { file, text } of scannedSources([
     "apps/*/src/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs,css}",
     "packages/*/src/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs,css}",
     "scripts/**/*.{ts,tsx,js,jsx}",
     ".oxlint-plugins/**/*.{ts,tsx,js,jsx}",
-  ]) {
-    for (const file of new Bun.Glob(pattern).scanSync({
-      cwd: repositoryRoot,
-    })) {
-      for (const specifier of removedReaderImportViolations(
-        file,
-        readFileSync(path.join(repositoryRoot, file), "utf-8"),
-      )) {
-        violations.push({ file, specifier });
-      }
+  ])) {
+    for (const specifier of removedReaderImportViolations(file, text)) {
+      violations.push({ file, specifier });
     }
   }
   expect(violations).toEqual([]);
@@ -412,44 +502,34 @@ test("removed reader stylesheet imports reject CSS import forms", () => {
 // Owns source entry definitions: a module painting decision text delegates its
 // renderer to the shared package. The metafile guard owns shipped reachability.
 const mcpReaderRequiresSharedPackage = (file: string, source: string) => {
-  const tree = ts.createSourceFile(
-    file,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX,
-  );
+  const parsed = parseSource(file, source);
   const readerPath =
     /(?:^|\/)(?:decision-reader|decision-text|document-ast-text)(?:\/|\.)/u.test(
       file,
     );
   const imports = new Set<string>();
   const namespaces = new Set<string>();
-  for (const statement of tree.statements) {
+  for (const statement of parsed.program.body) {
     if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier) ||
-      !statement.moduleSpecifier.text.startsWith("@stll/decision-reader/") ||
-      statement.importClause?.phaseModifier === ts.SyntaxKind.TypeKeyword
+      statement.type !== "ImportDeclaration" ||
+      !statement.source.value.startsWith("@stll/decision-reader/") ||
+      statement.importKind === "type"
     ) {
       continue;
     }
-    const bindings = statement.importClause?.namedBindings;
-    if (bindings && ts.isNamedImports(bindings)) {
-      for (const binding of bindings.elements) {
-        if (!binding.isTypeOnly) {
-          imports.add(binding.name.text);
-        }
+    for (const binding of statement.specifiers) {
+      if (binding.type === "ImportSpecifier" && binding.importKind !== "type") {
+        imports.add(binding.local.name);
       }
-    }
-    if (bindings && ts.isNamespaceImport(bindings)) {
-      namespaces.add(bindings.name.text);
+      if (binding.type === "ImportNamespaceSpecifier") {
+        namespaces.add(binding.local.name);
+      }
     }
   }
   const rendered = { reader: false, shared: false };
-  const visit = (node: ts.Node) => {
-    if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
-      const name = node.tagName.getText(tree);
+  walk(parsed.program, (node) => {
+    if (node.type === "JSXOpeningElement") {
+      const name = source.slice(node.name.start, node.name.end);
       const rendersNative =
         /^(?:article|p|h[1-6]|table|blockquote|figure|pre)$/u.test(name);
       const readerElement =
@@ -459,32 +539,22 @@ const mcpReaderRequiresSharedPackage = (file: string, source: string) => {
       rendered.reader ||= (readerPath && rendersNative) || readerElement;
       rendered.shared ||=
         imports.has(name) ||
-        (ts.isPropertyAccessExpression(node.tagName) &&
-          ts.isIdentifier(node.tagName.expression) &&
-          namespaces.has(node.tagName.expression.text));
+        (node.name.type === "JSXMemberExpression" &&
+          node.name.object.type === "JSXIdentifier" &&
+          namespaces.has(node.name.object.name));
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(tree);
+  });
   // The build's metafile guard owns reachability. This source guard owns modules
   // that paint reader UI; data modules and bootstraps delegate that rendering.
   return rendered.reader && !rendered.shared;
 };
 
 test("MCP decision reader entries use the shared rendering package", () => {
-  for (const file of new Bun.Glob(
-    "packages/mcp-apps/src/**/*.{ts,tsx}",
-  ).scanSync({ cwd: repositoryRoot })) {
-    if (/\.(?:test|spec)\.[cm]?[jt]sx?$/u.test(file)) {
-      continue;
-    }
-    expect(
-      mcpReaderRequiresSharedPackage(
-        file,
-        readFileSync(path.join(repositoryRoot, file), "utf-8"),
-      ),
-      file,
-    ).toBe(false);
+  for (const { file, text } of scannedSources(
+    ["packages/mcp-apps/src/**/*.{ts,tsx}"],
+    (candidate) => !/\.(?:test|spec)\.[cm]?[jt]sx?$/u.test(candidate),
+  )) {
+    expect(mcpReaderRequiresSharedPackage(file, text), file).toBe(false);
   }
 });
 

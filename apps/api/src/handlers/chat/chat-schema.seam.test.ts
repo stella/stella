@@ -23,6 +23,7 @@ import {
   SUGGEST_CHANGES_TOOL_NAME,
 } from "@/api/handlers/chat/tools/folio-agent-tools";
 import { toSafeId } from "@/api/lib/branded-types";
+import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 
 const CALL_ID = "call_seam_suggest_changes";
 const MESSAGE_ID = toSafeId<"chatMessage">("msg_seam_suggest_changes");
@@ -148,6 +149,7 @@ const streamProviderToolCall = async (
 
   const chunks: StreamChunk[] = [];
   for await (const chunk of adapter.chatStream({
+    threadId: "chat-schema.seam-thread",
     logger: resolveDebugOption(false),
     messages: [{ role: "user", content: "Suggest changes." }],
     model: adapter.model,
@@ -246,6 +248,7 @@ const continuationOutcome = async ({
   rawArguments: string;
 }): Promise<string> => {
   const result = await validateMessage({
+    toolCallOwnership: "cloud",
     message: {
       id: MESSAGE_ID,
       role: "assistant",
@@ -263,6 +266,7 @@ const continuationOutcome = async ({
       },
     ],
     safeDb: noDbReads,
+    refRegistry: createChatRefRegistry(),
     threadId: toSafeId<"chatThread">("thread_seam_suggest_changes"),
     tools: clientTools,
     userId: toSafeId<"user">("user_seam_suggest_changes"),

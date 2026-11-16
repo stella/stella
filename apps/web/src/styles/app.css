@@ -18,6 +18,10 @@
  * compiled package output must be scanned explicitly: node_modules is outside
  * Tailwind's default source detection. */
 @source "../../../../node_modules/@stll/folio-react/dist/**/*.js";
+/* Streamdown styles its own code blocks, tables and controls with utilities,
+ * for the same reason. scripts/check-tailwind-sources.ts fails when a
+ * dependency that ships class names has no @source here. */
+@source "../../../../node_modules/streamdown/dist/**/*.js";
 
 /* Resolved on the root element, where the theme and palette classes live,
  * because a subtree may re-point `--background` (the inspector's matter tint). */

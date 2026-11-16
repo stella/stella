@@ -10,7 +10,7 @@ import {
   isSkillToolName,
 } from "@/api/lib/mcp-upstream/namespace";
 import type { McpMode } from "@/api/mcp/constants";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type { McpRequestResources } from "@/api/mcp/context";
 import type { McpFeatureAccessContext } from "@/api/mcp/feature-access";
 import {
   isMcpDescriptorFeatureEnabled,
@@ -58,9 +58,11 @@ import type {
   McpToolInputSchema,
   RuntimeMcpToolOutputContract,
 } from "@/api/mcp/tool-types";
+import { withMcpToolSchemaVersion } from "@/api/mcp/tool-versions";
 import {
   mcpToolAuthorityRefusal,
   type McpWriteToolPermissions,
+  openMcpRead,
 } from "@/api/mcp/write-tool-authority";
 
 // The gate's one owner is `mcp/tool-feature.ts`, so the resource list and the
@@ -95,6 +97,7 @@ const externalMcpToolAccess = ({
   | {
       access: "read";
       readClass: "tenant";
+      permissions: ReturnType<typeof openMcpRead>;
       annotations: McpToolAnnotations & {
         destructiveHint: false;
         readOnlyHint: true;
@@ -115,6 +118,9 @@ const externalMcpToolAccess = ({
     ? {
         access: "read",
         readClass: "tenant",
+        permissions: openMcpRead(
+          "the upstream connector authorizes with its own credentials",
+        ),
         annotations: {
           title,
           destructiveHint: false,
@@ -143,7 +149,7 @@ const externalMcpToolAccess = ({
 
 const projectFeatureToolDefinition = (
   definition: McpToolDefinition,
-  context: McpRequestContext,
+  context: McpRequestResources,
 ) => {
   const featureId = resolveMcpDescriptorFeatureId({
     context,
@@ -162,7 +168,7 @@ export const listGatewayMcpToolDefinitions = async ({
   scopes,
   externalGatewayDependencies,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   mode: McpMode;
   scopes?: readonly string[];
   externalGatewayDependencies?: ExternalGatewayDependencies;
@@ -224,13 +230,18 @@ export const getGatewayMcpToolDefinition = async ({
   toolName,
   externalGatewayDependencies,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   mode: McpMode;
   toolName: string;
   externalGatewayDependencies?: ExternalGatewayDependencies;
 }): Promise<McpToolDefinition | undefined> => {
   const staticTool = getStaticMcpToolDefinition(toolName, mode);
   if (staticTool) {
+    // A tool hidden from the member role stays unknown, even on a call by
+    // name, before any authority refusal could reveal it.
+    if (!isStaticToolShownToMemberRole(context, staticTool)) {
+      return undefined;
+    }
     // Keep role refusals reachable over HTTP before the enrolment lookup;
     // authorized callers still see an unenrolled tool as unknown.
     if (
@@ -243,13 +254,12 @@ export const getGatewayMcpToolDefinition = async ({
     ) {
       return staticTool;
     }
-    return isStaticToolShownToMemberRole(context, staticTool) &&
-      isMcpDescriptorFeatureEnabled({
-        context,
-        kind: "tools",
-        id: staticTool.name,
-        featureId: staticTool.featureId,
-      })
+    return isMcpDescriptorFeatureEnabled({
+      context,
+      kind: "tools",
+      id: staticTool.name,
+      featureId: staticTool.featureId,
+    })
       ? staticTool
       : undefined;
   }
@@ -339,6 +349,7 @@ export const skillToolDefinition = (
 ): McpToolDefinition => ({
   access: "read",
   readClass: "tenant",
+  permissions: openMcpRead("reads only a stored skill visible to the caller"),
   annotations: {
     ...SKILL_TOOL_ANNOTATIONS,
     title: toDynamicToolTitle(skill.displayName) || skill.exposedName,
@@ -556,7 +567,7 @@ export const toMcpTools = (
   return definitions.map(
     ({ _meta, annotations, description, inputSchema, name }) => {
       const outputContract = resolveMcpToolOutputContract(name, mode);
-      return {
+      return withMcpToolSchemaVersion({
         ...(_meta === undefined ? {} : { _meta }),
         annotations,
         description: scopeDescription(name, description),
@@ -574,7 +585,7 @@ export const toMcpTools = (
                   : toScopedWireSchema(outputContract.outputSchema, hidden),
             }),
         title: annotations.title,
-      };
+      });
     },
   );
 };

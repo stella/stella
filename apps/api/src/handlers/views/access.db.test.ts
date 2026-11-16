@@ -1,15 +1,8 @@
-import {
-  afterAll,
-  beforeAll,
-  describe,
-  expect,
-  setDefaultTimeout,
-  test,
-} from "bun:test";
+import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
-import { ElysiaCustomStatusResponse } from "elysia/error";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
 import { user } from "@/api/db/auth-schema";
 import { workspaceViews, workspaceViewTemplates } from "@/api/db/schema";
@@ -20,6 +13,7 @@ import createViewTemplate from "@/api/handlers/view-templates/create";
 import deleteViewTemplate from "@/api/handlers/view-templates/delete";
 import listViewTemplates from "@/api/handlers/view-templates/list";
 import readNavigation from "@/api/handlers/workspaces/read-navigation";
+import { HttpStatusResponse } from "@/api/http/status";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import { avtViewAccessStatus } from "@/api/lib/auth/feature-access/view-eligibility";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
@@ -42,6 +36,8 @@ import listViews from "./list";
 import reorderViews from "./reorder";
 import exportTableView from "./table/export";
 import updateView from "./update";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 setDefaultTimeout(120_000);
 let testDb: TestDatabase;
@@ -99,7 +95,7 @@ const withAccess = async <T>(
   });
   const previous = env.API_FEATURE_ACCESS_GRANTS;
   const previousDeployment = env.FEATURE_LEGAL_LISTS;
-  env.FEATURE_LEGAL_LISTS = true;
+  testState.setConfig("FEATURE_LEGAL_LISTS", true);
   const grantsByStatus = {
     available: {
       "legal-lists": [{ type: "organization", organizationId: ids.orgA }],
@@ -116,7 +112,7 @@ const withAccess = async <T>(
       ],
     },
   } satisfies Record<typeof status, FeatureAccessGrants>;
-  env.API_FEATURE_ACCESS_GRANTS = grantsByStatus[status];
+  testState.setConfig("API_FEATURE_ACCESS_GRANTS", grantsByStatus[status]);
   try {
     const resolved = await context().safeDb(
       async (tx) =>
@@ -139,20 +135,20 @@ const withAccess = async <T>(
     return await run();
   } finally {
     restoreRuntime();
-    env.API_FEATURE_ACCESS_GRANTS = previous;
-    env.FEATURE_LEGAL_LISTS = previousDeployment;
+    testState.setConfig("API_FEATURE_ACCESS_GRANTS", previous);
+    testState.setConfig("FEATURE_LEGAL_LISTS", previousDeployment);
   }
 };
 
 const expectNotFound = (result: unknown) => {
-  expect(result).toBeInstanceOf(ElysiaCustomStatusResponse);
-  if (result instanceof ElysiaCustomStatusResponse) {
+  expect(result).toBeInstanceOf(HttpStatusResponse);
+  if (result instanceof HttpStatusResponse) {
     expect(result.code).toBe(404);
     expect(result.response).toEqual({ message: "Not found" });
   }
 };
 
-beforeAll(async () => {
+testState.beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
@@ -292,7 +288,7 @@ describe("AVT views follow the current access grant", () => {
             body: { id: newViewId, name: "View", layout: layout("avt") },
           }),
         ),
-      ).not.toBeInstanceOf(ElysiaCustomStatusResponse);
+      ).not.toBeInstanceOf(HttpStatusResponse);
       const templateName = createSafeId<"workspaceViewTemplate">();
       const template = await createViewTemplate.handler(
         createTestHandlerContext<
@@ -302,8 +298,8 @@ describe("AVT views follow the current access grant", () => {
           body: { name: templateName, layout: layout("avt") },
         }),
       );
-      expect(template).not.toBeInstanceOf(ElysiaCustomStatusResponse);
-      if (!(template instanceof ElysiaCustomStatusResponse)) {
+      expect(template).not.toBeInstanceOf(HttpStatusResponse);
+      if (!(template instanceof HttpStatusResponse)) {
         seededTemplateIds.push(template.id);
         expect(
           await deleteViewTemplate.handler(
@@ -314,7 +310,7 @@ describe("AVT views follow the current access grant", () => {
               params: { workspaceId: ids.wsA1, templateId: template.id },
             }),
           ),
-        ).not.toBeInstanceOf(ElysiaCustomStatusResponse);
+        ).not.toBeInstanceOf(HttpStatusResponse);
       }
       const tableExport = await exportTableView.handler(
         createTestHandlerContext<Parameters<typeof exportTableView.handler>[0]>(
@@ -325,8 +321,8 @@ describe("AVT views follow the current access grant", () => {
           },
         ),
       );
-      expect(tableExport).toBeInstanceOf(ElysiaCustomStatusResponse);
-      if (tableExport instanceof ElysiaCustomStatusResponse) {
+      expect(tableExport).toBeInstanceOf(HttpStatusResponse);
+      if (tableExport instanceof HttpStatusResponse) {
         expect(tableExport.code).toBe(400);
       }
       const id = createSafeId<"workspaceView">();
@@ -337,7 +333,7 @@ describe("AVT views follow the current access grant", () => {
           body: { id, name: "View", layout: layout("avt") },
         }),
       );
-      expect(created).not.toBeInstanceOf(ElysiaCustomStatusResponse);
+      expect(created).not.toBeInstanceOf(HttpStatusResponse);
       const renamed = await updateView.handler(
         createTestHandlerContext<Parameters<typeof updateView.handler>[0]>({
           ...context(),
@@ -353,7 +349,7 @@ describe("AVT views follow the current access grant", () => {
           body: { targetType: "filesystem" },
         }),
       );
-      expect(converted).not.toBeInstanceOf(ElysiaCustomStatusResponse);
+      expect(converted).not.toBeInstanceOf(HttpStatusResponse);
       const stored = await testDb.query.workspaceViews.findFirst({
         where: { id: { eq: id } },
       });
@@ -568,7 +564,7 @@ test("granted AVT targets support rename, conversion and dedicated controls", as
         body: { name: "Granted view" },
       }),
     );
-    expect(renamed).not.toBeInstanceOf(ElysiaCustomStatusResponse);
+    expect(renamed).not.toBeInstanceOf(HttpStatusResponse);
     const converted = await convertView.handler(
       createTestHandlerContext<Parameters<typeof convertView.handler>[0]>({
         ...context(),
@@ -576,7 +572,7 @@ test("granted AVT targets support rename, conversion and dedicated controls", as
         body: { targetType: "filesystem" },
       }),
     );
-    expect(converted).not.toBeInstanceOf(ElysiaCustomStatusResponse);
+    expect(converted).not.toBeInstanceOf(HttpStatusResponse);
     expect(
       await convertView.handler(
         createTestHandlerContext<Parameters<typeof convertView.handler>[0]>({
@@ -585,7 +581,7 @@ test("granted AVT targets support rename, conversion and dedicated controls", as
           body: { targetType: "avt" },
         }),
       ),
-    ).not.toBeInstanceOf(ElysiaCustomStatusResponse);
+    ).not.toBeInstanceOf(HttpStatusResponse);
     const report = await exportReport.handler(
       createTestHandlerContext<Parameters<typeof exportReport.handler>[0]>({
         ...context(),
@@ -597,8 +593,8 @@ test("granted AVT targets support rename, conversion and dedicated controls", as
         },
       }),
     );
-    expect(report).toBeInstanceOf(ElysiaCustomStatusResponse);
-    if (report instanceof ElysiaCustomStatusResponse) {
+    expect(report).toBeInstanceOf(HttpStatusResponse);
+    if (report instanceof HttpStatusResponse) {
       expect(report.code).toBe(400);
     }
     const viewIds = (
@@ -614,7 +610,7 @@ test("granted AVT targets support rename, conversion and dedicated controls", as
           body: { viewIds },
         }),
       ),
-    ).not.toBeInstanceOf(ElysiaCustomStatusResponse);
+    ).not.toBeInstanceOf(HttpStatusResponse);
     expect(
       await deleteView.handler(
         createTestHandlerContext<Parameters<typeof deleteView.handler>[0]>({
@@ -622,7 +618,7 @@ test("granted AVT targets support rename, conversion and dedicated controls", as
           params: { workspaceId: ids.wsA1, viewId },
         }),
       ),
-    ).not.toBeInstanceOf(ElysiaCustomStatusResponse);
+    ).not.toBeInstanceOf(HttpStatusResponse);
   });
 });
 
@@ -648,8 +644,8 @@ test.each(["unavailable", "colleague", "available"] as const)(
           >({ ...context(), query: {} }),
         ),
     );
-    expect(result).not.toBeInstanceOf(ElysiaCustomStatusResponse);
-    if (!(result instanceof ElysiaCustomStatusResponse)) {
+    expect(result).not.toBeInstanceOf(HttpStatusResponse);
+    if (!(result instanceof HttpStatusResponse)) {
       expect(
         result.items.find((row) => row.id === ids.wsA1)?.defaultViewId,
       ).toBe(status === "available" ? viewId : ordinaryId);
@@ -674,7 +670,7 @@ test("deployment availability remains a ceiling for granted AVT controls", async
     layout: layout("avt"),
   });
   await withAccess("available", async () => {
-    env.FEATURE_LEGAL_LISTS = false;
+    testState.setConfig("FEATURE_LEGAL_LISTS", false);
     expectNotFound(
       await deleteView.handler(
         createTestHandlerContext<Parameters<typeof deleteView.handler>[0]>({

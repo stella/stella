@@ -7,7 +7,7 @@
 
 import { panic, Result } from "better-result";
 import { and, asc, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   documentReviewFindings,
@@ -17,7 +17,7 @@ import {
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import {
   buildIssuesTableRows,
   describeIssuesTableBasis,
@@ -25,6 +25,7 @@ import {
   renderIssuesTableDocx,
 } from "@/api/lib/document-review/issues-table";
 import {
+  basisReferenceWorkspaceIds,
   readReferencePassageTexts,
   referencePassageIds,
 } from "@/api/lib/document-review/reference-passages";
@@ -32,7 +33,6 @@ import {
   basisForReader,
   findingForReader,
   readableReferenceWorkspaces,
-  referenceWorkspacesByPosition,
 } from "@/api/lib/document-review/reference-visibility";
 import { DOCUMENT_REVIEW_FINDINGS_PER_RUN_MAX } from "@/api/lib/document-review/run-contract";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -73,8 +73,8 @@ const config = {
   permissions: { workspace: ["read"] },
   access: "read",
   mcp: { type: "internal", reason: "document_processing" },
-  params: workspaceParams({ runId: tSafeId("documentReviewRun") }),
-  query: t.Object({ format: t.UnionEnum([...ISSUES_TABLE_FORMATS]) }),
+  params: workspaceParams({ runId: resourceIdSchema("documentReviewRun") }),
+  query: v.object({ format: v.picklist([...ISSUES_TABLE_FORMATS]) }),
 } satisfies WorkspaceHandlerConfig;
 
 const exportDocumentReviewRun = createSafeHandler(
@@ -147,7 +147,7 @@ const exportDocumentReviewRun = createSafeHandler(
       safeDb,
       basis: run.basis,
     });
-    const positionWorkspaces = referenceWorkspacesByPosition(run.basis);
+    const runSources = basisReferenceWorkspaceIds(run.basis);
     const basis = basisForReader(run.basis, readable);
     const rows = buildIssuesTableRows({
       basis,
@@ -157,7 +157,7 @@ const exportDocumentReviewRun = createSafeHandler(
         decision,
         payload: {
           finding: findingForReader(payload.finding, {
-            positionWorkspaces,
+            runSources,
             readable,
           }),
         },

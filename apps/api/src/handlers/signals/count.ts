@@ -1,7 +1,8 @@
 import { panic, Result } from "better-result";
 import { sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
+import { API_CALENDAR_DATE_CHECK } from "@stll/api-contract/api-date";
 import { SIGNAL_VIEW } from "@stll/api-contract/signals";
 
 import { entities, signals } from "@/api/db/schema";
@@ -21,13 +22,16 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "ui_navigation_state" },
   access: "read",
-  query: t.Object({
-    asOf: t.Optional(
-      t.String({
-        format: "date",
-        description:
+  query: v.object({
+    asOf: v.optional(
+      v.pipe(
+        v.string(),
+        v.isoDate(),
+        API_CALENDAR_DATE_CHECK,
+        v.description(
           "The caller's calendar day (YYYY-MM-DD); defaults to the organization's day in its time zone",
-      }),
+        ),
+      ),
     ),
   }),
 } satisfies HandlerConfig;

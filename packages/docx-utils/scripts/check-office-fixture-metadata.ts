@@ -1,9 +1,10 @@
 #!/usr/bin/env bun
 
 import { Result, TaggedError } from "better-result";
-import JSZip from "jszip";
 import path from "node:path";
 import { parseXmlDocument } from "slimdom";
+
+import { ZipArchive } from "@stll/docx-core/zip";
 
 import { OFFICE_ARCHIVE_FORMATS } from "../src/office-formats";
 import {
@@ -53,25 +54,36 @@ export const inspectOfficeFixture = async ({
 }: InspectOfficeFixtureOptions): Promise<
   Result<OfficeFixtureMetadataError[], OfficeFixtureMetadataError>
 > => {
+  // Entries inflate and check their CRC-32 when read, so read every entry
+  // up front: a damaged archive fails as the archive, not as whichever part
+  // the metadata pass happened to open first.
   const loaded = await Result.tryPromise({
-    try: async () => await JSZip.loadAsync(bytes, { checkCRC32: true }),
+    try: async () => {
+      const archive = await ZipArchive.read(bytes);
+      await Promise.all(archive.entries().map(async (entry) => entry.bytes()));
+      return archive;
+    },
     catch: () => failure({ filePath, field: "archive", reason: "unreadable" }),
   });
   if (Result.isError(loaded)) {
     return loaded;
   }
   const findings = new Map<string, OfficeFixtureMetadataError>();
-  for (const part of Object.keys(loaded.value.files).filter(
-    (candidate) =>
-      isOfficeIdentityPart(candidate) || candidate === "META-INF/manifest.xml",
-  )) {
-    const entry = loaded.value.file(part);
-    if (entry === null) {
+  for (const part of loaded.value
+    .paths()
+    .filter(
+      (candidate) =>
+        isOfficeIdentityPart(candidate) ||
+        candidate === "META-INF/manifest.xml",
+    )) {
+    const entry = loaded.value.entry(part);
+    if (entry === undefined) {
       continue;
     }
     const parsed = await Result.tryPromise({
       try: async () => {
-        const xml = await entry.async("string");
+        // Every entry is checked against its CRC-32 as it is read.
+        const xml = await entry.text();
         if (/<!DOCTYPE/iu.test(xml)) {
           throw failure({ filePath, field: part, reason: "invalid-xml" });
         }

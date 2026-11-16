@@ -1,7 +1,14 @@
 import { describe, expect, test } from "bun:test";
 
 import { FetchBoundaryError } from "@stll/errors";
-import type { IngestionStopKind } from "@stll/legal-atlas/ingestion-cycle";
+import type { FailureGrade, FailureReason } from "@stll/errors";
+import {
+  INGESTION_STOP_KIND,
+  type IngestionStopKind,
+} from "@stll/legal-atlas/ingestion-cycle";
+
+import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
+import { readEvidence } from "@/api/lib/observability/failure-evidence";
 
 import {
   AdapterFetchError,
@@ -17,13 +24,46 @@ const adapterError = (cause: unknown) =>
     cause,
   });
 
+const EXPECTED_GRADING = {
+  source_unreachable: { grade: "transient", reason: "upstream_unavailable" },
+  publisher_refusal: { grade: "anticipated", reason: "publisher_refused" },
+  adapter_error: { grade: "defect", reason: "tagged_failure" },
+  deadline: { grade: "defect", reason: "timeout_unbounded" },
+  internal_error: { grade: "defect", reason: "tagged_failure" },
+} as const satisfies Record<
+  IngestionStopKind,
+  { grade: FailureGrade; reason: FailureReason }
+>;
+
+const expectGrading = (error: AdapterFetchError) => {
+  expect(
+    gradeFailure(
+      readEvidence(error),
+      failureSink({ event: "ingestion.test", expected: [] }),
+    ),
+  ).toMatchObject(EXPECTED_GRADING[error.stopKind]);
+};
+
 describe("ingestion failure kinds", () => {
+  for (const stopKind of Object.values(INGESTION_STOP_KIND)) {
+    test(`grades declared ${stopKind} outcomes through the real grader`, () => {
+      expectGrading(
+        new AdapterFetchError({
+          adapterKey: "pl-tk",
+          cursor: null,
+          message: "Page failed",
+          stopKind,
+        }),
+      );
+    });
+  }
+
   for (const httpStatus of [
     401, 403, 429, 408, 500, 502, 503, 504, 200, 400, 404,
   ]) {
     test(`classifies HTTP ${httpStatus} at the ingestion boundary`, () => {
       let expected: IngestionStopKind = "adapter_error";
-      if (httpStatus >= 500 || httpStatus === 408) {
+      if (httpStatus >= 500 || httpStatus === 408 || httpStatus < 300) {
         expected = "source_unreachable";
       } else if ([401, 403, 429].includes(httpStatus)) {
         expected = "publisher_refusal";
@@ -35,6 +75,7 @@ describe("ingestion failure kinds", () => {
         httpStatus,
       });
       expect(error.stopKind).toBe(expected);
+      expectGrading(error);
       expect(ingestionStopKindOf(new Error("Wrapped", { cause: error }))).toBe(
         expected,
       );
@@ -49,6 +90,37 @@ describe("ingestion failure kinds", () => {
       ).toBe(expected);
     });
   }
+
+  test.each([
+    {
+      shape: "statusless retry failure",
+      cause: new FetchBoundaryError({
+        url: "https://example.com",
+        message: "Fetch failed after retries",
+      }),
+    },
+    {
+      shape: "empty reply after TLS",
+      cause: Object.assign(new TypeError("Empty reply from server"), {
+        code: "ECONNRESET",
+      }),
+    },
+    {
+      shape: "TLS close during body read",
+      cause: Object.assign(new TypeError("message omitted"), {
+        code: "ERR_TLS_CONNECTION_CLOSED",
+      }),
+    },
+  ])("classifies $shape through every adapter wrapper", ({ cause }) => {
+    expectGrading(adapterError(cause));
+    expectGrading(adapterError(new Error("Retry failed", { cause })));
+    expect(adapterError(cause).stopKind).toBe("source_unreachable");
+    expect(adapterError(new Error("Retry failed", { cause })).stopKind).toBe(
+      "source_unreachable",
+    );
+    expect(ingestionStopKindOf(cause, "adapter")).toBe("source_unreachable");
+    expect(ingestionStopKindOf(cause)).toBe("internal_error");
+  });
 
   test("a body-read connection reset is a source failure", () => {
     const cause = Object.assign(new TypeError("message omitted"), {
@@ -69,6 +141,15 @@ describe("ingestion failure kinds", () => {
     const callerAbort = new DOMException("Unable to connect", "AbortError");
     expect(adapterError(callerAbort).stopKind).toBe("deadline");
     expect(ingestionStopKindOf(callerAbort)).toBe("deadline");
+    expect(
+      adapterError(
+        new FetchBoundaryError({
+          url: "https://example.com",
+          message: "Request failed",
+          cause: callerAbort,
+        }),
+      ).stopKind,
+    ).toBe("deadline");
     const connectTimeout = Object.assign(new TypeError("message omitted"), {
       code: "ETIMEDOUT",
     });

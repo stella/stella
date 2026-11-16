@@ -14,11 +14,10 @@ export const VERIFICATION_CODE_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789";
 export const VERIFICATION_CODE_LENGTH = 10;
 
 /**
- * Regex source rather than a `RegExp`, because Elysia's `t.String({ pattern })`
- * takes the source string and `new RegExp` takes it too, so the route guard and
- * every client check read one value. Interpolating the alphabet is sound only
- * because it holds no character that is special inside a class, which the
- * frozen contract above guarantees.
+ * Regex source rather than a `RegExp`: the route guard and every client check
+ * build their own `RegExp` from this one value. Interpolating the alphabet is
+ * sound only because it holds no character that is special inside a class,
+ * which the frozen contract above guarantees.
  */
 export const VERIFICATION_CODE_PATTERN = `^[${VERIFICATION_CODE_ALPHABET}]{${VERIFICATION_CODE_LENGTH}}$`;
 

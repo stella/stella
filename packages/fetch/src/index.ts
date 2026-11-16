@@ -1,11 +1,11 @@
 // parser-output-unchanged: transport timeout fields on the fetcher type do not change parsed output.
 export { isConnectionFailure } from "./connection-failure";
-
 export type FetchTimeout =
-  { type: "headers"; ms: number } | { type: "idle"; ms: number };
+  { type: "total"; ms: number } | { type: "headers"; ms: number };
 
 export type TransportRequestInit = RequestInit & {
-  timeout?: FetchTimeout;
+  /** `false` turns off the runtime's own idle limit; the signal owns the deadline. */
+  timeout?: FetchTimeout | false;
   timeoutMs?: number;
 };
 
@@ -17,10 +17,10 @@ export type Fetcher = (
 export type FetchWithTimeoutInit = Omit<RequestInit, "signal"> & {
   signal?: AbortSignal | undefined;
 } & (
-    | { timeout: FetchTimeout; timeoutMs?: never }
+    | { timeout: FetchTimeout; timeoutMs?: number }
     // Existing numeric callers are enumerated by the transfer-window guard.
     | {
-        /** Choose a headers or idle timeout for new callers. */
+        /** Use an explicit timeout policy for new callers. */
         timeoutMs: number;
         timeout?: never;
       }
@@ -36,18 +36,13 @@ const executeFetchWithTimeout = async (
     input instanceof Request ? input.signal : undefined,
   ].filter((candidate): candidate is AbortSignal => candidate !== undefined);
   const activeFetcher = fetcher ?? globalThis.fetch;
-  if (timeout === undefined) {
-    const total = AbortSignal.timeout(timeoutMs);
-    return await activeFetcher(input, {
-      ...init,
-      signal: AbortSignal.any([...callerSignals, total]),
-    });
-  }
+  const duration = timeout?.ms ?? timeoutMs;
 
   if (
-    !Number.isFinite(timeout.ms) ||
-    timeout.ms < 0 ||
-    timeout.ms > 2_147_483_647
+    typeof duration !== "number" ||
+    !Number.isFinite(duration) ||
+    duration < 0 ||
+    duration > 2_147_483_647
   ) {
     throw new DOMException(
       "Invalid fetch timeout duration",
@@ -55,6 +50,27 @@ const executeFetchWithTimeout = async (
     );
   }
 
+  if (timeout === undefined || timeout.type === "total") {
+    // A total deadline covers the whole exchange through the transport's own
+    // signal, and the caller gets the transport's response unchanged: a body
+    // re-wrapped in a script stream is invisible to the browser's network
+    // inspection and costs a stream hop on every response.
+    //
+    // Bun also cuts a response that stays silent for about five minutes, and it
+    // reads that limit from `timeout`. Left on, it overrules a longer deadline:
+    // an ingest waiting on a ten minute commit window fails with a TimeoutError
+    // its caller never set. The caller's deadline is the only limit here. A
+    // `headers` policy keeps Bun's limit, as nothing else bounds its body.
+    return await activeFetcher(input, {
+      ...init,
+      signal: AbortSignal.any([
+        ...callerSignals,
+        AbortSignal.timeout(duration),
+      ]),
+      timeout: false,
+      timeoutMs: duration,
+    });
+  }
   const controller = new AbortController();
   const combined = AbortSignal.any([...callerSignals, controller.signal]);
   const expire = () =>
@@ -64,13 +80,17 @@ const executeFetchWithTimeout = async (
     clearTimeout(timer);
     timer = undefined;
   };
-  const reset = () => {
-    clear();
-    timer = setTimeout(expire, timeout.ms);
-  };
-  reset();
+  timer = setTimeout(expire, duration);
   const response = await Promise.resolve()
-    .then(async () => await activeFetcher(input, { ...init, signal: combined }))
+    .then(
+      async () =>
+        await activeFetcher(input, {
+          ...init,
+          signal: combined,
+          timeout,
+          timeoutMs: duration,
+        }),
+    )
     .finally(clear);
   if (combined.aborted) {
     // The abort reason is the failure. Cancelling only releases the body, and
@@ -78,95 +98,7 @@ const executeFetchWithTimeout = async (
     await Promise.allSettled([response.body?.cancel(combined.reason)]);
     throw combined.reason;
   }
-  if (timeout.type === "headers" || response.body === null) {
-    return response;
-  }
-
-  const reader = response.body.getReader();
-  let stopped = false;
-  let cancellation: Promise<void> | undefined;
-  let abort: () => void;
-  const finish = () => {
-    stopped = true;
-    clear();
-    combined.removeEventListener("abort", abort);
-  };
-  const body = new ReadableStream<Uint8Array>({
-    start(stream) {
-      abort = () => {
-        if (stopped) {
-          return;
-        }
-        finish();
-        stream.error(combined.reason);
-        // The fetch signal aborts the transport; cancellation drains the reader
-        // even when an injected fetcher does not implement signal handling.
-        cancellation = reader.cancel(combined.reason).then(
-          () => reader.releaseLock(),
-          () => reader.releaseLock(),
-        );
-      };
-      combined.addEventListener("abort", abort, { once: true });
-      if (combined.aborted) {
-        abort();
-        return;
-      }
-    },
-    async pull(stream) {
-      if (stopped) {
-        await cancellation;
-        return;
-      }
-      reset();
-      await reader
-        .read()
-        .finally(clear)
-        .then(
-          ({ done, value }) => {
-            if (stopped) {
-              return undefined;
-            }
-            if (done) {
-              finish();
-              reader.releaseLock();
-              stream.close();
-              return undefined;
-            }
-            stream.enqueue(value);
-            return undefined;
-          },
-          (error: unknown) => {
-            if (stopped) {
-              return;
-            }
-            finish();
-            reader.releaseLock();
-            stream.error(error);
-          },
-        );
-      await cancellation;
-    },
-    async cancel(reason: unknown) {
-      if (stopped) {
-        await cancellation;
-        return;
-      }
-      finish();
-      await reader.cancel(reason).finally(() => reader.releaseLock());
-    },
-  });
-  const wrapped = new Response(body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers: response.headers,
-  });
-  // Response's constructor does not carry transport metadata across a stream.
-  Object.defineProperties(wrapped, {
-    url: { value: response.url },
-    redirected: { value: response.redirected },
-    type: { value: response.type },
-  });
-  return wrapped;
+  return response;
 };
 
 /** Creates a wrapper with the supplied transport and an explicit timeout policy. */

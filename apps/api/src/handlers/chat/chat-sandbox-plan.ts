@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 
 import type { StellaSandboxRunInput } from "@stll/agent-engine";
+import { CHAT_INPUT_REFUSAL_CODE } from "@stll/api-contract";
 
 import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -38,6 +39,7 @@ export const resolveChatSandboxPlan = async (
 ): Promise<StellaSandboxRunInput> => {
   if (!env.AGENT_SANDBOX_RUNS_ENABLED) {
     throw new HandlerError({
+      code: CHAT_INPUT_REFUSAL_CODE.agentRunsDisabled,
       status: 422,
       message: "Agent sandbox runs are not enabled for this deployment.",
     });
@@ -69,6 +71,7 @@ export const resolveChatSandboxPlan = async (
     });
     throw new HandlerError({
       status: 502,
+      code: "internal_error",
       message: "Agent sandbox configuration is incomplete.",
     });
   }

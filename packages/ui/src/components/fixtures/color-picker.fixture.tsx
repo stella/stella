@@ -27,10 +27,9 @@ const ColorPickerFixture = () => {
         moreLabel="Custom color"
         onSelect={setValue}
         presets={PRESETS}
+        trigger={<button type="button">Choose color</button>}
         value={value}
-      >
-        <button type="button">Choose color</button>
-      </ColorPicker>
+      />
       <output aria-label="Selected color">{value}</output>
     </main>
   );

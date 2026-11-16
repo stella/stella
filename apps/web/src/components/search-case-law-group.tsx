@@ -8,34 +8,31 @@ import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronRightIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import { SEARCH_HIT_DESCENDANT_MARK_CLASS } from "@stll/ui/text-mark";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import type { GlobalSearchHit } from "@/lib/api-contract";
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { searchInfiniteOptions } from "@/lib/search";
-import type { SearchParams } from "@/lib/search";
+import { caseLawSectionInfiniteOptions } from "@/lib/search";
 
-type SearchCaseLawGroupProps = {
-  expanded: boolean;
-  onExpandedChange: (expanded: boolean) => void;
+type SearchCaseLawResultsProps = {
   query: string;
   debouncedQuery: string;
   organizationId: string;
   userId: string;
-  searchFilters: Pick<
-    SearchParams,
-    | "workspaceIds"
-    | "kinds"
-    | "editedByUserIds"
-    | "mimeTypes"
-    | "updatedFrom"
-    | "updatedTo"
-  >;
   selectedHitId?: string | undefined;
   onPreview: (hit: GlobalSearchHit) => void;
   onOpen: (hit: GlobalSearchHit) => void;
 };
+
+type SearchCaseLawGroupProps = SearchCaseLawResultsProps & {
+  expanded: boolean;
+  onExpandedChange: (expanded: boolean) => void;
+};
+
+/** One page of the section, as the palette asks for it. */
+const CASE_LAW_SECTION_PAGE_SIZE = 10;
 
 export const SearchCaseLawGroup = ({
   expanded,
@@ -68,27 +65,28 @@ export const SearchCaseLawGroup = ({
   );
 };
 
-const SearchCaseLawResults = ({
+/**
+ * Case-law hits for the typed query, from the corpus search engine. The
+ * collapsible group in the All scope and the Case law scope both render it.
+ */
+export const SearchCaseLawResults = ({
   query,
   debouncedQuery,
   organizationId,
   userId,
-  searchFilters,
   selectedHitId,
   onPreview,
   onOpen,
-}: Omit<SearchCaseLawGroupProps, "expanded" | "onExpandedChange">) => {
+}: SearchCaseLawResultsProps) => {
   const t = useTranslations();
   const ready = query.trim().length > 0 && query === debouncedQuery;
   const result = useInfiniteQuery(
-    searchInfiniteOptions({
+    caseLawSectionInfiniteOptions({
       enabled: ready,
       organizationId,
       userId,
       query: debouncedQuery,
-      ...searchFilters,
-      types: ["case-law"],
-      limit: 10,
+      limit: CASE_LAW_SECTION_PAGE_SIZE,
     }),
   );
   const hits =
@@ -132,34 +130,48 @@ const SearchCaseLawResults = ({
         )}
       {hits.map((hit) => (
         <div className="flex min-w-0 items-start gap-1" key={hit.id}>
-          <button
+          <Button
             aria-pressed={selectedHitId === hit.id}
-            className="hover:bg-muted focus-visible:ring-ring aria-pressed:bg-muted min-h-11 min-w-0 flex-1 rounded-md px-2 py-2 text-start outline-none focus-visible:ring-2"
+            className="min-w-0 flex-1"
             onClick={() => onPreview(hit)}
             onFocus={() => onPreview(hit)}
-            type="button"
+            variant="plain"
           >
-            <span className="block truncate text-sm font-medium" dir="auto">
-              {hit.title || hit.id}
+            <span
+              className={cn(
+                "hover:bg-muted block min-h-11 rounded-md px-2 py-2",
+                selectedHitId === hit.id && "bg-muted",
+              )}
+            >
+              <TruncatedText className="text-sm font-medium" dir="auto">
+                {hit.title || hit.id}
+              </TruncatedText>
+              {hit.headline && (
+                <TruncatedText
+                  dangerouslySetInnerHTML={{
+                    // safe-html: server-escaped + <mark>-highlighted by the case-law search response
+                    __html: hit.headline,
+                  }}
+                  dir="auto"
+                  hint={false}
+                  lines={2}
+                  render={
+                    <span
+                      className={cn(
+                        "text-muted-foreground mt-0.5 text-xs",
+                        SEARCH_HIT_DESCENDANT_MARK_CLASS,
+                      )}
+                    />
+                  }
+                />
+              )}
             </span>
-            {hit.headline && (
-              <span
-                className={cn(
-                  "text-muted-foreground mt-0.5 line-clamp-2 text-xs",
-                  SEARCH_HIT_DESCENDANT_MARK_CLASS,
-                )}
-                dangerouslySetInnerHTML={{
-                  // safe-html: server-escaped + <mark>-highlighted by global search mappers
-                  __html: hit.headline,
-                }}
-                dir="auto"
-              />
-            )}
-          </button>
+          </Button>
           <Button
             aria-label={t("common.open")}
             className="min-h-11 min-w-11 shrink-0"
             onClick={() => onOpen(hit)}
+            tooltip={t("common.open")}
             variant="ghost"
           >
             <DirectionalIcon className="size-4" icon={ChevronRightIcon} />

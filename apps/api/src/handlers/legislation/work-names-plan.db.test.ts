@@ -115,13 +115,19 @@ test(
   "the name lookups seek the match-key index",
   async () => {
     const own = await explain((tx) =>
-      ownNameVersionsQuery(tx, { matchKey: "o věci 42", country: "CZE" }),
+      ownNameVersionsQuery(tx, {
+        matchKeys: ["zákona o věci 42", "zákon o věci 42"],
+        country: "CZE",
+      }),
     );
     const cited = await explain((tx) =>
-      citedKeysQuery(tx, { matchKey: "občanský zákoník", country: "CZE" }),
+      citedKeysQuery(tx, {
+        matchKeys: ["zákona o věci 42", "zákon o věci 42"],
+        country: "CZE",
+      }),
     );
     const anyCountry = await explain((tx) =>
-      ownNameVersionsQuery(tx, { matchKey: "o věci 42" }),
+      ownNameVersionsQuery(tx, { matchKeys: ["o věci 42"] }),
     );
 
     for (const plan of [own, cited, anyCountry]) {

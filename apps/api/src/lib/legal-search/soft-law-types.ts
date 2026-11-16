@@ -81,7 +81,7 @@ export const SOFT_LAW_ATTEMPT_STATES = [
   "retryable",
 ] as const;
 type SoftLawAuthorityDefinition = {
-  domain: "data-protection" | "competition";
+  domain: "data-protection" | "competition" | "labour";
   jurisdiction: string;
   name: string;
 };
@@ -91,6 +91,11 @@ export const SOFT_LAW_AUTHORITIES = {
     domain: "data-protection",
     jurisdiction: "CZE",
     name: "Úřad pro ochranu osobních údajů",
+  },
+  "cz-suip": {
+    domain: "labour",
+    jurisdiction: "CZE",
+    name: "Státní úřad inspekce práce",
   },
   "eu-edpb": {
     domain: "data-protection",
@@ -411,7 +416,7 @@ export type SoftLawMetadata = {
   sourceDocumentId?: string;
   statedReference: SoftLawStated<string>;
   issuedOn: SoftLawStated<string>;
-  /** Historical CZ rows and retry receipts predate these publisher fields. EU adapters must provide all three. */
+  /** Historical CZ rows and retry receipts predate these publisher fields. Authorities requiring identified expressions supply all three. */
   expression?: SoftLawExpression;
   stage?: SoftLawStage;
   relations?: readonly SoftLawRelation[];
@@ -419,6 +424,11 @@ export type SoftLawMetadata = {
     state: (typeof SOFT_LAW_VALIDITY_STATES)[number];
     basis: (typeof SOFT_LAW_VALIDITY_BASES)[number];
   };
+};
+export type SoftLawRawProvenance = {
+  url: string;
+  retrievedAt: string;
+  sha256: string;
 };
 export type SoftLawEntry = {
   type: "document";
@@ -430,6 +440,8 @@ export type SoftLawEntry = {
     role: string;
     contentBase64: string;
     contentType: string;
+    /** Older persisted envelopes predate per-response provenance. */
+    provenance?: SoftLawRawProvenance;
   }[];
   metadata: SoftLawMetadata;
   sourceDates: Readonly<Record<string, string>>;
@@ -491,6 +503,8 @@ export type SoftLawDocumentInput = {
     role: string;
     bytes: Uint8Array;
     contentType: string;
+    /** Older persisted envelopes predate per-response provenance. */
+    provenance?: SoftLawRawProvenance;
     /** Historical CZ envelopes predate this distinction. */
     purpose?: "document" | "discovery";
   }[];
@@ -528,6 +542,8 @@ export type SoftLawRawObject = Omit<
 > & {
   key: string;
 };
+export type SoftLawAdapterConfiguration =
+  { type: "default" } | { type: "admission-file"; path: string };
 export type SoftLawSourceAdapter = {
   key: string;
   authority: SoftLawAuthority;

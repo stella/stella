@@ -1,0 +1,93 @@
+import * as v from "valibot";
+
+import { Temporal } from "@stll/time";
+
+import { isApiDate } from "./api-date";
+
+export const CONTACT_BIRTH_YEAR_MIN = 1900;
+
+// UTC+14 reaches each calendar date first, so a user's current date is never future.
+export const CONTACT_DATE_TIME_ZONE = "Pacific/Kiritimati";
+
+const yearSchema = v.pipe(
+  v.number(),
+  v.integer(),
+  v.minValue(CONTACT_BIRTH_YEAR_MIN),
+);
+const monthSchema = v.pipe(
+  v.number(),
+  v.integer(),
+  v.minValue(1),
+  v.maxValue(12),
+);
+const daySchema = v.pipe(
+  v.number(),
+  v.integer(),
+  v.minValue(1),
+  v.maxValue(31),
+);
+
+const contactDateShapeSchema = v.variant("precision", [
+  v.strictObject({ precision: v.literal("year"), year: yearSchema }),
+  v.strictObject({
+    precision: v.literal("month"),
+    year: yearSchema,
+    month: monthSchema,
+  }),
+  v.strictObject({
+    precision: v.literal("day"),
+    year: yearSchema,
+    month: monthSchema,
+    day: daySchema,
+  }),
+]);
+
+export type ContactDate = v.InferOutput<typeof contactDateShapeSchema>;
+
+const pad = (value: number) => String(value).padStart(2, "0");
+
+export const isValidContactBirthDate = (
+  value: ContactDate,
+  currentInstant = Temporal.Now.instant(),
+): boolean => {
+  const today = currentInstant
+    .toZonedDateTimeISO(CONTACT_DATE_TIME_ZONE)
+    .toPlainDate();
+  const todayParts = [today.year, today.month, today.day];
+  const parts = [
+    value.year,
+    ...(value.precision === "year" ? [] : [value.month]),
+    ...(value.precision === "day" ? [value.day] : []),
+  ];
+  if (!parts.every(Number.isInteger) || value.year < CONTACT_BIRTH_YEAR_MIN) {
+    return false;
+  }
+  if (value.precision !== "year" && (value.month < 1 || value.month > 12)) {
+    return false;
+  }
+  if (
+    value.precision === "day" &&
+    !isApiDate(`${value.year}-${pad(value.month)}-${pad(value.day)}`)
+  ) {
+    return false;
+  }
+  for (const [index, part] of parts.entries()) {
+    const todayPart = todayParts[index] ?? 0;
+    if (part < todayPart) {
+      return true;
+    }
+    if (part > todayPart) {
+      return false;
+    }
+  }
+  return true;
+};
+
+/** A birth date at the precision known, bounded by real chronology. */
+export const contactBirthDateSchema = v.pipe(
+  contactDateShapeSchema,
+  v.check(
+    isValidContactBirthDate,
+    "Expected a valid birth date from 1900 through today",
+  ),
+);

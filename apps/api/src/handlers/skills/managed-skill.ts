@@ -5,6 +5,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { agentSkills } from "@/api/db/schema";
 import type { AgentSkillScope } from "@/api/db/schema";
 import { canManageSkill } from "@/api/lib/agent-skills/access";
+import type { SkillBinding } from "@/api/lib/agent-skills/binding";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
@@ -17,7 +18,10 @@ const SKILL_MANAGEMENT_PERMISSION = {
 } as const satisfies Record<SkillManagementAction, "update" | "delete">;
 
 type RequireSkillManagerOptions = {
-  skill: { scope: AgentSkillScope; userId: string };
+  skill: SkillBinding & {
+    scope: AgentSkillScope;
+    userId: string;
+  };
   memberRole: AuthorizedMemberRole;
   userId: SafeId<"user">;
   action: SkillManagementAction;
@@ -71,6 +75,8 @@ export const loadManagedSkill = async ({
       safeDb((tx) =>
         tx
           .select({
+            boundClientId: agentSkills.boundClientId,
+            boundWorkspaceId: agentSkills.boundWorkspaceId,
             id: agentSkills.id,
             origin: agentSkills.origin,
             scope: agentSkills.scope,

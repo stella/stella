@@ -1,6 +1,7 @@
 import * as v from "valibot";
 
 import { DOCTRINAL_TREATMENTS } from "@stll/api-contract/case-law-doctrine";
+import { extractionWarningsSchema } from "@stll/api-contract/case-law-extraction-warnings";
 import { DECISION_TEXT_WITHHELD_REASON } from "@stll/api-contract/case-law-text-field";
 import { CITATION_PASSAGE_MENTIONS } from "@stll/legal-ast/citation-passage";
 
@@ -23,6 +24,10 @@ export const READ_CASE_LAW_CITATIONS_PROJECTION = v.strictObject({
     v.picklist(DOCTRINAL_TREATMENTS.filter((value) => value !== "not_stated")),
   ),
   polarity: v.optional(v.picklist(CITATION_TREATMENTS)),
+  // Echoed, like `doctrine` and `polarity`, when the passage filter ran, with
+  // how many citations the page read before it did.
+  passageQuery: v.optional(v.string()),
+  scannedCitations: v.optional(v.number()),
   // The decision the citations were read from, echoed so a paged reply still
   // says what it is about.
   decisionId: passthroughId(),
@@ -57,6 +62,8 @@ export const READ_CASE_LAW_CITATIONS_PROJECTION = v.strictObject({
           resourceName: passthroughId(),
         }),
       ),
+      // Extraction defects in the citing decision's stored text.
+      extractionWarnings: extractionWarningsSchema,
       // An excerpt of the citing paragraph, by AST anchor. Null where none is
       // available. `truncated` says the block was longer than the excerpt;
       // `mention` says whether the document left a choice of paragraph, in

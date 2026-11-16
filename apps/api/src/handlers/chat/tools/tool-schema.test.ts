@@ -30,7 +30,7 @@ import * as v from "valibot";
 import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
 import {
   BROWSER_CONTROL_PROTOCOL_VERSION,
-  type BrowserClientCapability,
+  type BrowserExtensionCapability,
 } from "@stll/api-contract";
 import {
   DOCX_SUGGEST_CHANGES_OPTIONS_BY_SURFACE,
@@ -75,9 +75,14 @@ import {
   projectToolMapForSubagent,
 } from "@/api/handlers/chat/tools/subagent-tools";
 import { getChatToolPolicy } from "@/api/handlers/chat/tools/tool-policy";
+import {
+  NO_SKILL_BINDING_SCOPE,
+  UNBOUND,
+} from "@/api/lib/agent-skills/binding";
 import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
 import { ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS } from "@/api/lib/agent-skills/skills";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import { toSafeId } from "@/api/lib/branded-types";
 import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
 import {
@@ -193,6 +198,7 @@ const getChatTools = (
 };
 
 const editableActiveSkillContext: ActiveChatSkillContext = {
+  binding: UNBOUND,
   body: "# Instructions\nUse the checklist.",
   description: "Review closing files.",
   displayName: "Closing Review",
@@ -302,12 +308,13 @@ const suggestChangesOperationTypeEnum = (
 // register by default (no disabled slugs).
 const DEFAULT_BROWSER_CLIENT = {
   protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
-} satisfies BrowserClientCapability;
+  status: "connected",
+} satisfies BrowserExtensionCapability;
 
 const buildFullCoverageChatTools = (
   thirdPartyBoundary: ChatThirdPartyBoundary = rawThirdPartyBoundary,
   refRegistry: ChatRefRegistry = createChatRefRegistry(),
-  browserClient: BrowserClientCapability | null = DEFAULT_BROWSER_CLIENT,
+  browserExtension: BrowserExtensionCapability | null = DEFAULT_BROWSER_CLIENT,
 ) => {
   const webSearchProvider: WebSearchProvider = {
     name: "tavily",
@@ -350,7 +357,7 @@ const buildFullCoverageChatTools = (
     hasActiveDocxEditClient: true,
     hasActiveDocxFileClient: true,
     docxSuggestionSurface: "file-overlay",
-    browserClient: browserClient ?? undefined,
+    browserExtension: browserExtension ?? undefined,
     // Explicit "manual": DEFAULT_CHAT_EDIT_APPLY_MODE is now "auto", which
     // would suppress suggest_changes here (this call sets no
     // activeFile, so the auto tool never registers either) and drop it out
@@ -391,6 +398,7 @@ const autoApplyActiveFile = {
 } as const;
 
 const autoApplyBaseArgs = {
+  workspaceStatusById: new Map<string, AccessibleWorkspace["status"]>(),
   orgAIConfig: null,
   managedAIResidency: "eu" as const,
   organizationId,
@@ -440,6 +448,7 @@ const serializeFullCoverageChatTools = (): Tool[] =>
   });
 
 const commonProviderOptions = (tools: Tool[]) => ({
+  threadId: "tool-schema-thread",
   logger: resolveDebugOption(false),
   messages: [{ role: "user" as const, content: "Contract probe." }],
   tools,
@@ -826,6 +835,7 @@ describe("chat tool schemas", () => {
   test("construct skill tools as JSON-schema-compatible AI tools", () => {
     expect(() =>
       createSkillTools({
+        bindingScope: NO_SKILL_BINDING_SCOPE,
         organizationId,
         safeDb: unusedSafeDb,
         skills: offeredSkillCatalog([
@@ -842,6 +852,7 @@ describe("chat tool schemas", () => {
 
   test("does not offer skill lookup when the catalog is empty", () => {
     const tools = createSkillTools({
+      bindingScope: NO_SKILL_BINDING_SCOPE,
       organizationId,
       safeDb: unusedSafeDb,
       skills: offeredSkillCatalog([]),
@@ -854,6 +865,7 @@ describe("chat tool schemas", () => {
 
   test("keeps installed skill names out of tool schema descriptions", () => {
     const tools = createSkillTools({
+      bindingScope: NO_SKILL_BINDING_SCOPE,
       organizationId,
       safeDb: unusedSafeDb,
       skills: offeredSkillCatalog([
@@ -871,6 +883,7 @@ describe("chat tool schemas", () => {
 
   test("chat tools expose readonly data through the stella API", () => {
     const tools = getChatTools({
+      workspaceStatusById: new Map<string, AccessibleWorkspace["status"]>(),
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
       memberRole: sessionMemberRole("owner"),
@@ -940,8 +953,22 @@ describe("chat tool schemas", () => {
     ).not.toHaveProperty(BROWSER_CONTROL_TOOL_NAME);
   });
 
+  test.each([
+    BROWSER_CONTROL_PROTOCOL_VERSION - 1,
+    BROWSER_CONTROL_PROTOCOL_VERSION + 1,
+  ])("omits browser control for protocol version %s", (protocolVersion) => {
+    expect(
+      buildFullCoverageChatTools(
+        rawThirdPartyBoundary,
+        createChatRefRegistry(),
+        { protocolVersion, status: "connected" },
+      ),
+    ).not.toHaveProperty(BROWSER_CONTROL_TOOL_NAME);
+  });
+
   test("keeps historical remember calls schema-valid while memory is disabled", () => {
     const baseArgs = {
+      workspaceStatusById: new Map<string, AccessibleWorkspace["status"]>(),
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
       memberRole: sessionMemberRole("owner"),
@@ -1016,6 +1043,7 @@ describe("chat tool schemas", () => {
 
   test("registers the folio-agents read_document/find_text tools only when the file-overlay docx client is active", () => {
     const baseArgs = {
+      workspaceStatusById: new Map<string, AccessibleWorkspace["status"]>(),
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
       memberRole: sessionMemberRole("owner"),
@@ -1178,6 +1206,7 @@ describe("chat tool schemas", () => {
 
   test("only exposes current skill edit tools for editable active skill chats", () => {
     const tools = getChatTools({
+      workspaceStatusById: new Map<string, AccessibleWorkspace["status"]>(),
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
       memberRole: sessionMemberRole("owner"),
@@ -1238,6 +1267,7 @@ describe("chat tool schemas", () => {
 
   test("does not expose full body replacement for truncated active skill bodies", () => {
     const tools = getChatTools({
+      workspaceStatusById: new Map<string, AccessibleWorkspace["status"]>(),
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
       memberRole: sessionMemberRole("owner"),
@@ -1284,6 +1314,7 @@ describe("chat tool schemas", () => {
 
   test("applies approval and anonymization policies by tool risk", () => {
     const tools = getChatTools({
+      workspaceStatusById: new Map<string, AccessibleWorkspace["status"]>(),
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
       memberRole: sessionMemberRole("owner"),
@@ -1338,7 +1369,7 @@ describe("chat tool schemas", () => {
       throw new Error("Expected chat tools to be registered");
     }
 
-    expect(businessRegistryLookup.needsApproval).toBeUndefined();
+    expect(businessRegistryLookup.needsApproval).toBe(true);
     const businessRegistrySchema = convertSchemaToJsonSchema(
       businessRegistryLookup.inputSchema,
     );
@@ -1347,7 +1378,7 @@ describe("chat tool schemas", () => {
     ).toContain("GB");
     expect(getChatToolPolicy(businessRegistryLookup)).toEqual({
       kind: "public_official",
-      needsApproval: false,
+      needsApproval: true,
       requiresAnonymization: false,
     });
     expect(updateEntityFields.needsApproval).toBe(true);
@@ -2005,6 +2036,7 @@ describe("chat tool schemas", () => {
     const chunks: StreamChunk[] = [];
 
     for await (const chunk of adapter.chatStream({
+      threadId: "tool-schema-thread",
       logger: resolveDebugOption(false),
       messages: [{ role: "user", content: "Run the round-trip tool." }],
       model: adapter.model,
@@ -2030,6 +2062,7 @@ describe("chat tool schemas", () => {
     }
 
     for await (const chunk of adapter.chatStream({
+      threadId: "tool-schema-thread",
       logger: resolveDebugOption(false),
       messages: [
         { role: "user", content: "Run the round-trip tool." },
@@ -2288,6 +2321,7 @@ describe("chat tool schemas", () => {
   // includes archived matters).
   describe("create_matter_document authorization", () => {
     const baseArgs = {
+      workspaceStatusById: new Map<string, AccessibleWorkspace["status"]>(),
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
       organizationId,
@@ -2553,6 +2587,7 @@ describe("registry write tool approval policy", () => {
 
   const buildToolsWithWorkspace = () =>
     getChatTools({
+      workspaceStatusById: new Map<string, AccessibleWorkspace["status"]>(),
       featureAccessSnapshot: enrolledTimeBillingSnapshot({
         organizationId,
         userId,
@@ -2646,6 +2681,7 @@ describe("registry write tool approval policy", () => {
 
   test("every write tool is registered behind approval before the first matter exists", () => {
     const tools = getChatTools({
+      workspaceStatusById: new Map<string, AccessibleWorkspace["status"]>(),
       featureAccessSnapshot: enrolledTimeBillingSnapshot({
         organizationId,
         userId,

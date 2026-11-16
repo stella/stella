@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
+import { foldSearchMatchText } from "@stll/text-normalize";
 
 import { filterFieldsByLabel } from "@/components/workspaces/view-toolbar-filters.logic";
 
@@ -29,34 +30,40 @@ const searchText = fc
   )
   .map((characters) => characters.join(""));
 
-const containsPreviousScalarSearchKey = (content: string, query: string) => {
-  const contentScalars = Array.from(content.toWellFormed());
-  const queryScalars = Array.from(query.toWellFormed());
-  if (queryScalars.length === 0) {
-    return true;
-  }
-  return contentScalars.some((_, start) =>
-    queryScalars.every(
-      (scalar, offset) => contentScalars.at(start + offset) === scalar,
-    ),
+/**
+ * The search contract: a field matches when it contains the trimmed query once
+ * both are folded for search (case, accents, ligatures, Arabic variants).
+ */
+const matchesFolded = (field: string | null | undefined, query: string) => {
+  const needle = foldSearchMatchText(query.trim().toWellFormed());
+  return (
+    needle === "" ||
+    (field !== null &&
+      field !== undefined &&
+      foldSearchMatchText(field.toWellFormed()).includes(needle))
   );
 };
 
 describe("filter field labels", () => {
-  it("trims and case-folds the query without folding accents", () => {
+  it("trims the query and folds case and accents", () => {
     const fields = [{ label: "Café status" }, { label: "Case number" }];
 
     expect(filterFieldsByLabel(fields, " CASE ")).toEqual([
       { label: "Case number" },
     ]);
-    expect(filterFieldsByLabel(fields, "cafe")).toEqual([]);
+    expect(filterFieldsByLabel(fields, "cafe")).toEqual([
+      { label: "Café status" },
+    ]);
+    expect(filterFieldsByLabel([{ label: "Ügyfél" }], "ugyfel")).toEqual([
+      { label: "Ügyfél" },
+    ]);
   });
 
   it("returns every field in input order for an empty or whitespace query", () => {
     const fields = [{ label: "Second" }, { label: "First" }];
 
-    expect(filterFieldsByLabel(fields, "")).toBe(fields);
-    expect(filterFieldsByLabel(fields, "   ")).toBe(fields);
+    expect(filterFieldsByLabel(fields, "")).toEqual(fields);
+    expect(filterFieldsByLabel(fields, "   ")).toEqual(fields);
   });
 
   it("matches malformed fields by replacement scalar without matching emoji", () => {
@@ -67,24 +74,18 @@ describe("filter field labels", () => {
   });
 });
 
-it("field filtering matches the previous trimmed substring behavior", () => {
+it("field filtering keeps exactly the fields whose label matches", () => {
   assertProperty(
-    "field filtering matches the previous trimmed substring behavior",
+    "field filtering keeps exactly the fields whose label matches",
     fc.property(
       fc.array(fc.record({ label: searchText }), {
         maxLength: GENERATED_FILTER_FIELDS_MAX_COUNT,
       }),
       searchText,
       (fields, query) => {
-        const normalized = query.trim().toLowerCase();
-        const expected = normalized
-          ? fields.filter((field) =>
-              containsPreviousScalarSearchKey(
-                field.label.toLowerCase(),
-                normalized,
-              ),
-            )
-          : fields;
+        const expected = fields.filter((field) =>
+          matchesFolded(field.label, query),
+        );
 
         expect(filterFieldsByLabel(fields, query)).toEqual(expected);
       },

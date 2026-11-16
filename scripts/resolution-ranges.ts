@@ -61,25 +61,6 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 /**
- * Intentional below-floor overrides, grandfathered with the reason each is
- * safe. A NEW below-floor pin must be fixed (raise the version to satisfy its
- * dependents), NOT added here — this list is only for overrides that are
- * deliberately, knowingly held below what some dependents declare.
- */
-const ALLOWED_BELOW_FLOOR: ReadonlyMap<string, string> = new Map([
-  [
-    "@emnapi/core",
-    "Pinned to 1.9.1 (with @emnapi/runtime) to hold the @stll napi/emnapi " +
-      "WASM ABI at one version; some third-party wasm sidecars declare ^1.11 " +
-      "but run against 1.9.1 here. See the @stll napi architecture notes.",
-  ],
-  [
-    "@emnapi/runtime",
-    "Pinned to 1.9.1 (with @emnapi/core) for the @stll napi/emnapi WASM ABI.",
-  ],
-]);
-
-/**
  * The minimum version that satisfies a range, for the caret/tilde/gte/exact
  * shapes package.json deps overwhelmingly use. Returns null for anything that
  * cannot be safely reduced to one floor (unions `||`, an explicit upper bound
@@ -233,13 +214,11 @@ export type ResolutionViolation = {
 };
 
 export type AnalyzeResolutionRangesOptions = {
-  readonly allowedBelowFloor?: ReadonlyMap<string, string>;
   readonly declared: DeclaredRanges;
   readonly rootManifest: Manifest;
 };
 
 export const analyzeResolutionRanges = ({
-  allowedBelowFloor = ALLOWED_BELOW_FLOOR,
   declared,
   rootManifest,
 }: AnalyzeResolutionRangesOptions): readonly ResolutionViolation[] => {
@@ -250,9 +229,6 @@ export const analyzeResolutionRanges = ({
       continue;
     }
     for (const [packageName, pinned] of Object.entries(overrides)) {
-      if (allowedBelowFloor.has(packageName)) {
-        continue; // grandfathered intentional override
-      }
       // Only an exact-version override can be compared to a range floor; a
       // range or non-semver specifier (`workspace:`, `catalog:`, `npm:…`) is
       // skipped.

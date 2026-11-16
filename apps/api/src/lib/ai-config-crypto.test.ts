@@ -1,20 +1,195 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
+
+import { createTestState } from "@stll/test-state";
 
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
+import { ConfigurationError } from "@/api/lib/errors/tagged-errors";
 
-process.env["EMAIL_PROVIDER"] ??= "smtp";
-process.env["GOTENBERG_PASSWORD"] ??= "gotenberg";
-process.env["GOTENBERG_URL"] ??= "http://localhost:3003";
-process.env["GOTENBERG_USERNAME"] ??= "gotenberg";
-process.env["REDIS_URL"] ??= "redis://localhost:6379";
-process.env["SMTP_HOST"] ??= "localhost";
-process.env["SMTP_PORT"] ??= "1025";
+const testState = createTestState({ file: import.meta.path, config: {} });
+
+testState.setEnvIfAbsent("EMAIL_PROVIDER", "smtp");
+testState.setEnvIfAbsent("GOTENBERG_PASSWORD", "gotenberg");
+testState.setEnvIfAbsent("GOTENBERG_URL", "http://localhost:3003");
+testState.setEnvIfAbsent("GOTENBERG_USERNAME", "gotenberg");
+testState.setEnvIfAbsent("REDIS_URL", "redis://localhost:6379");
+testState.setEnvIfAbsent("SMTP_HOST", "localhost");
+testState.setEnvIfAbsent("SMTP_PORT", "1025");
 
 const { decryptAIConfig, encryptAIConfig, isOrgAIConfig, maskApiKey } =
   await import("@/api/lib/ai-config-crypto");
 const { encryptContent } = await import("@/api/lib/content-encryption");
 const { normalizeOrgAIConfig } = await import("@/api/lib/ai-config");
+const captureModule = await import("@/api/lib/analytics/capture");
+const { installRecordingAnalytics, installRecordingLogger } =
+  await import("@/api/tests/helpers/recording-telemetry");
+const { assertSettingsFailureConfidential } =
+  await import("@/api/tests/helpers/settings-failure-confidentiality");
+
+const descriptorGraph = (value: unknown, seen = new Set<object>()): unknown => {
+  if ((typeof value !== "object" && typeof value !== "function") || !value) {
+    return value;
+  }
+  if (seen.has(value)) {
+    return "[cycle]";
+  }
+  seen.add(value);
+  return Reflect.ownKeys(value).map((key) => {
+    const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
+    return {
+      key: String(key),
+      value:
+        descriptor && "value" in descriptor
+          ? descriptorGraph(descriptor.value, seen)
+          : "[accessor]",
+    };
+  });
+};
+
+describe("unreadable configuration boundary", () => {
+  const organizationId = toSafeId<"organization">("org_marked_crypto_test");
+  const marker = "provider-secret-boundary-marker";
+  const markedError = Object.assign(
+    new Error(marker, {
+      cause: Object.assign(new Error(`nested-${marker}`), { nested: marker }),
+    }),
+    { metadata: { marker } },
+  );
+
+  test.each([
+    {
+      reason: "incomplete-envelope",
+      ciphertext: null,
+      iv: null,
+      decrypt: async () => marker,
+    },
+    {
+      reason: "missing-key",
+      ciphertext: Buffer.from(marker),
+      iv: Buffer.alloc(12, 1),
+      decrypt: async () => {
+        throw new ConfigurationError({ message: marker });
+      },
+    },
+    {
+      reason: "decryption-failed",
+      ciphertext: Buffer.from(marker),
+      iv: Buffer.alloc(12, 1),
+      decrypt: async () => {
+        throw markedError;
+      },
+    },
+    {
+      reason: "invalid-json",
+      ciphertext: Buffer.from(marker),
+      iv: Buffer.alloc(12, 1),
+      decrypt: async () => `{${marker}`,
+    },
+    {
+      reason: "invalid-schema",
+      ciphertext: Buffer.from(marker),
+      iv: Buffer.alloc(12, 1),
+      decrypt: async () => JSON.stringify({ [marker]: marker }),
+    },
+  ] as const)("returns only the classified $reason error", async (fixture) => {
+    const analytics = installRecordingAnalytics();
+    const logs = installRecordingLogger();
+    const capture = spyOn(captureModule, "captureError");
+    const devErrors = spyOn(console, "error").mockImplementation(
+      () => undefined,
+    );
+    const ciphertext = fixture.ciphertext ?? Buffer.from(`cipher-${marker}`);
+    const iv = fixture.iv ?? Buffer.from(`iv-${marker}`);
+    const markers = [
+      marker,
+      `nested-${marker}`,
+      ciphertext.toString("hex"),
+      ciphertext.toString("base64"),
+      iv.toString("hex"),
+      iv.toString("base64"),
+    ];
+
+    try {
+      const result = await decryptAIConfig(
+        organizationId,
+        fixture.ciphertext,
+        fixture.iv,
+        fixture.decrypt,
+      );
+
+      expect(result.isErr()).toBe(true);
+      if (result.isOk()) {
+        throw new Error("Expected an unreadable configuration");
+      }
+      expect(result.error.reason).toBe(fixture.reason);
+      expect(Reflect.ownKeys(result.error).map(String).toSorted()).toEqual([
+        "_tag",
+        "column",
+        "line",
+        "message",
+        "name",
+        "originalColumn",
+        "originalLine",
+        "reason",
+        "sourceURL",
+        "stack",
+      ]);
+      expect(result.error).toMatchObject({
+        _tag: "OrgAIConfigReadError",
+        message: "Decrypted organization AI configuration is unreadable",
+        name: "OrgAIConfigReadError",
+        reason: fixture.reason,
+      });
+      expect(logs.records).toEqual([
+        expect.objectContaining({
+          message: "organization_ai_config.read_failed",
+          attributes: {
+            action: "decrypt",
+            organizationId,
+            reason: fixture.reason,
+            source: "organization_ai_config",
+          },
+        }),
+      ]);
+      expect(analytics.events).toEqual([]);
+      expect(capture).not.toHaveBeenCalled();
+      expect(devErrors).not.toHaveBeenCalled();
+
+      assertSettingsFailureConfidential({
+        reason: fixture.reason,
+        organizationId,
+        outputs: {
+          analyticsEvents: analytics.events,
+          captureEntries: capture.mock.calls,
+          developmentEntries: devErrors.mock.calls,
+          groupIdentifies: analytics.groupIdentifies,
+          logRecords: logs.records,
+          returned: result.error,
+        },
+      });
+
+      const recorded = JSON.stringify(
+        descriptorGraph({
+          analytics: analytics.events,
+          captureArguments: capture.mock.calls,
+          development: devErrors.mock.calls,
+          error: result.error,
+          logs: logs.records,
+        }),
+      );
+      for (const secret of markers) {
+        expect(recorded).not.toContain(secret);
+      }
+      expect(recorded).not.toContain("cause");
+      expect(recorded).not.toContain("metadata");
+    } finally {
+      devErrors.mockRestore();
+      capture.mockRestore();
+      logs.restore();
+      analytics.restore();
+    }
+  });
+});
 
 describe("maskApiKey", () => {
   test("retains only provider prefix and last four", () => {
@@ -287,7 +462,9 @@ describe("decision model in the stored blob", () => {
       JSON.stringify({ providers, overrideModels }),
     );
 
-    const config = await decryptAIConfig(organizationId, ciphertext, iv);
+    const config = (
+      await decryptAIConfig(organizationId, ciphertext, iv)
+    ).unwrap();
 
     expect(config.decision).toBeNull();
   });
@@ -307,7 +484,8 @@ describe("decision model in the stored blob", () => {
           decision,
         });
         expect(
-          (await decryptAIConfig(organizationId, ciphertext, iv)).decision,
+          (await decryptAIConfig(organizationId, ciphertext, iv)).unwrap()
+            .decision,
         ).toEqual(decision);
       }
     }
@@ -325,7 +503,9 @@ describe("decision model in the stored blob", () => {
       overrideModels,
       decision,
     });
-    const config = await decryptAIConfig(organizationId, ciphertext, iv);
+    const config = (
+      await decryptAIConfig(organizationId, ciphertext, iv)
+    ).unwrap();
 
     expect(config.decision).toEqual(decision);
   });
@@ -342,7 +522,9 @@ describe("decision model in the stored blob", () => {
       overrideModels,
       decision: null,
     });
-    const config = await decryptAIConfig(organizationId, ciphertext, iv);
+    const config = (
+      await decryptAIConfig(organizationId, ciphertext, iv)
+    ).unwrap();
     expect(config.providers).toEqual([
       {
         provider: "anthropic",

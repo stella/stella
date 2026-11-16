@@ -5,19 +5,24 @@
  */
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import * as cheerio from "cheerio";
 
+import { load } from "@stll/html";
 import type { Block } from "@stll/legal-ast/document-ast";
 
 import {
   BR_TST_PARAGRAPH_STYLES,
   brTstDespachoTextOf,
-  parseBrTstDespacho,
-  parseBrTstHtml,
-  parseBrTstPrecedent,
+  parseBrTstDespacho as uncheckedParseBrTstDespacho,
+  parseBrTstHtml as uncheckedParseBrTstHtml,
+  parseBrTstPrecedent as uncheckedParseBrTstPrecedent,
 } from "@/api/handlers/case-law/ingestion/parsers/br-tst";
 import { visibleHtmlText } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { isRecord } from "@/api/lib/type-guards";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+const parseBrTstDespacho = guardParser(uncheckedParseBrTstDespacho);
+const parseBrTstHtml = guardParser(uncheckedParseBrTstHtml);
+const parseBrTstPrecedent = guardParser(uncheckedParseBrTstPrecedent);
 
 const FIXTURES = new URL("../adapters/__fixtures__/", import.meta.url);
 
@@ -52,7 +57,7 @@ const words = (text: string): string[] =>
  * end a word, an inline tag inside one does not.
  */
 const publishedText = (html: string): string => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   $("br").replaceWith(" ");
   return $("body p")
     .toArray()

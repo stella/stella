@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -7,10 +14,15 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
   actionlintWorkflowSource,
+  ARTIFACT_DOWNLOAD_EXCEPTION_REASON,
+  ARTIFACT_DOWNLOAD_EXCEPTIONS,
   checkWorkflowYaml,
   parseWorkflowYaml,
   validateActionMetadata,
+  validateArtifactDownloadExceptions,
+  validateArtifactDownloads,
   validateLocalActionReferences,
+  validateLocalActionsAfterCheckout,
   validateNoRubyProcessSpawns,
   validateNoRubyShell,
   validateWorkflowJobTimeouts,
@@ -20,6 +32,97 @@ import {
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const FIXTURES = path.join(import.meta.dirname, "__fixtures__/workflow-yaml");
+
+const runIosCertificateImport = (keychains: string[], listStatus = 0) => {
+  const workflow = readFileSync(
+    path.join(ROOT, ".github/workflows/release-mobile-ios.yml"),
+    "utf-8",
+  );
+  const script =
+    /- name: Import the distribution certificate[\s\S]*? {8}run: \|\n((?: {10}[^\n]*\n)+)/u.exec(
+      workflow,
+    )?.[1];
+  if (!script) {
+    throw new Error("iOS certificate import step is missing");
+  }
+  const root = mkdtempSync(path.join(tmpdir(), "ios-signing-"));
+  const githubEnv = path.join(root, "github-env");
+  try {
+    const result = Bun.spawnSync(
+      [
+        "/bin/bash",
+        "-c",
+        String.raw`
+security() {
+  case "$*" in
+    "list-keychains -d user")
+      printf '%s\n' "$EXISTING_KEYCHAINS"
+      return "$LIST_STATUS"
+      ;;
+    "list-keychains -d user -s "*)
+      shift 4
+      printf '%s\0' "$@"
+      ;;
+  esac
+}
+openssl() { printf '%s\n' 'test-password'; }
+` + script.replace(/^ {10}/gmu, ""),
+      ],
+      {
+        env: {
+          ...process.env,
+          RUNNER_TEMP: root,
+          GITHUB_ENV: githubEnv,
+          CERTIFICATE_BASE64:
+            Buffer.from("test-certificate").toString("base64"),
+          CERTIFICATE_PASSWORD: "test-password",
+          EXISTING_KEYCHAINS: keychains
+            .map((keychain) => `    "${keychain}"`)
+            .join("\n"),
+          LIST_STATUS: String(listStatus),
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    return {
+      exitCode: result.exitCode,
+      stderr: result.stderr.toString(),
+      keychains: result.stdout.toString().split("\0").filter(Boolean),
+      published: existsSync(githubEnv) ? readFileSync(githubEnv, "utf-8") : "",
+      signingKeychain: path.join(root, "release-signing.keychain-db"),
+    };
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+};
+
+test("iOS signing preserves each existing keychain path as one argument", () => {
+  for (const keychains of [
+    [],
+    ["fixtures/keychains/login.keychain-db"],
+    [
+      "fixtures/Build Agent/team signing.keychain-db",
+      "fixtures/keychains/System.keychain",
+    ],
+    ["fixtures/keychains/signing [one]*.keychain-db"],
+  ]) {
+    const result = runIosCertificateImport(keychains);
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toBe("");
+    expect(result.keychains).toEqual([result.signingKeychain, ...keychains]);
+    expect(result.published).toBe(
+      `MOBILE_SIGNING_KEYCHAIN=${result.signingKeychain}\n`,
+    );
+  }
+});
+
+test("iOS signing stops when the existing keychain list cannot be read", () => {
+  const result = runIosCertificateImport(["/partial/login.keychain-db"], 17);
+  expect(result.exitCode).toBe(17);
+  expect(result.keychains).toEqual([]);
+  expect(result.published).toBe("");
+});
 
 test("archive action lint rewrites are one-to-one and preserve workflow semantics", () => {
   const source = `jobs:
@@ -42,6 +145,42 @@ test("archive action lint rewrites are one-to-one and preserve workflow semantic
   expect(source.match(/uses: ['"]?\$\//gu)).toHaveLength(2);
   expect(normalized.match(/uses: ['"]?\.\//gu)).toHaveLength(2);
   expect(normalized).toContain("run: echo '$/.github/actions/ci-install'");
+});
+
+test("archive normalization preserves shared step aliases and repeated references", () => {
+  const source = `jobs:
+  first:
+    steps: &shared
+      - uses: $/.github/actions/ci-install
+        with:
+          flags: '["--frozen-lockfile"]'
+  second:
+    steps: *shared
+  third:
+    steps:
+      - uses: $/.github/actions/ci-install
+`;
+  const normalized = actionlintWorkflowSource({
+    source,
+    root: ROOT,
+    file: "fixture.yml",
+  });
+  expect(normalized).toBe(source.replaceAll("uses: $/", "uses: ./"));
+  const expected = Bun.YAML.parse(source.replaceAll("uses: $/", "uses: ./"));
+  expect(Bun.YAML.parse(normalized)).toEqual(expected);
+});
+
+test("archive normalization never rewrites text inside a script body", () => {
+  const source = `jobs:
+  check:
+    steps:
+      - uses: $/.github/actions/ci-install
+      - run: |
+          uses: $/.github/actions/ci-install
+`;
+  expect(() =>
+    actionlintWorkflowSource({ source, root: ROOT, file: "fixture.yml" }),
+  ).toThrow("normalization must be one-to-one");
 });
 
 test("archive normalization preserves scalar spelling, indentation and line endings", () => {
@@ -256,7 +395,141 @@ describe("workflow YAML validation", () => {
   });
 
   test("a composite action may use action.yaml", async () => {
-    await checkWorkflowYaml(path.join(FIXTURES, "yaml-action-root"));
+    await checkWorkflowYaml(path.join(FIXTURES, "yaml-action-root"), []);
+  });
+
+  test("every repository step that keeps actions/download-artifact has a typed reason", async () => {
+    // The repository check passes with the real list; each entry names a step
+    // that still uses the action, so a converted step cannot leave one behind.
+    expect(ARTIFACT_DOWNLOAD_EXCEPTIONS.length).toBeGreaterThan(0);
+    for (const exception of ARTIFACT_DOWNLOAD_EXCEPTIONS) {
+      expect(Object.values(ARTIFACT_DOWNLOAD_EXCEPTION_REASON)).toContain(
+        exception.reason,
+      );
+      expect(exception.detail.trim()).not.toBe("");
+    }
+    const [first, ...rest] = ARTIFACT_DOWNLOAD_EXCEPTIONS;
+    expect(first).toBeDefined();
+    const rejection = await rejectionOf(checkWorkflowYaml(ROOT, rest));
+    expect(rejection instanceof Error ? rejection.message : "").toBe(
+      `${first?.file ?? ""} job ${first?.job ?? ""} step "${first?.step ?? ""}" uses actions/download-artifact; download artifacts of this run with scripts/download-run-artifact.sh, which bounds each attempt and retries a stalled one once (an exception needs a reason in ARTIFACT_DOWNLOAD_EXCEPTIONS in scripts/check-workflow-yaml.ts)`,
+    );
+  });
+
+  test("a workflow or composite step using actions/download-artifact outside the exceptions names its file and step", () => {
+    const workflow = Bun.YAML.parse(`jobs:
+  report:
+    steps:
+      - name: Download reports
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: report-*
+`);
+    expect(() =>
+      validateArtifactDownloads({
+        value: workflow,
+        file: ".github/workflows/report.yml",
+        exceptions: [],
+      }),
+    ).toThrow(
+      '.github/workflows/report.yml job report step "Download reports" uses actions/download-artifact; download artifacts of this run with scripts/download-run-artifact.sh',
+    );
+    const action = {
+      name: "setup",
+      description: "Fixture composite action",
+      runs: {
+        using: "composite",
+        steps: [{ name: "Fetch build", uses: "actions/download-artifact@v8" }],
+      },
+    };
+    expect(() =>
+      validateArtifactDownloads({
+        value: action,
+        file: ".github/actions/setup/action.yml",
+        exceptions: [],
+      }),
+    ).toThrow(
+      '.github/actions/setup/action.yml step "Fetch build" uses actions/download-artifact',
+    );
+    // Steps inside a parallel group are checked like any other step.
+    const parallel = {
+      jobs: {
+        check: {
+          steps: [
+            {
+              parallel: [
+                { name: "Inner", uses: "actions/download-artifact@v8" },
+              ],
+            },
+          ],
+        },
+      },
+    };
+    expect(() =>
+      validateArtifactDownloads({
+        value: parallel,
+        file: ".github/workflows/parallel.yml",
+        exceptions: [],
+      }),
+    ).toThrow('job check step "Inner" uses actions/download-artifact');
+  });
+
+  test("an exception admits exactly its own step and a stale exception is refused", () => {
+    const exception = {
+      file: ".github/workflows/report.yml",
+      job: "report",
+      step: "Download reports",
+      reason: ARTIFACT_DOWNLOAD_EXCEPTION_REASON.anotherRun,
+      detail: "Reads the producing run through run-id.",
+    } as const;
+    const workflow = {
+      jobs: {
+        report: {
+          steps: [
+            { name: "Download reports", uses: "actions/download-artifact@v8" },
+          ],
+        },
+        other: {
+          steps: [
+            { name: "Download reports", uses: "actions/download-artifact@v8" },
+          ],
+        },
+      },
+    };
+    expect(() =>
+      validateArtifactDownloads({
+        value: workflow,
+        file: ".github/workflows/report.yml",
+        exceptions: [exception],
+      }),
+    ).toThrow(
+      'job other step "Download reports" uses actions/download-artifact',
+    );
+    const admitted = validateArtifactDownloads({
+      value: { jobs: { report: workflow.jobs.report } },
+      file: ".github/workflows/report.yml",
+      exceptions: [exception],
+    });
+    expect(() =>
+      validateArtifactDownloadExceptions([exception], admitted),
+    ).not.toThrow();
+    expect(() => validateArtifactDownloadExceptions([exception], [])).toThrow(
+      '.github/workflows/report.yml job report step "Download reports" is listed in ARTIFACT_DOWNLOAD_EXCEPTIONS but does not use actions/download-artifact; remove the stale exception',
+    );
+    // Other actions with a similar name are not artifact downloads.
+    expect(
+      validateArtifactDownloads({
+        value: {
+          jobs: {
+            report: {
+              steps: [{ name: "Upload", uses: "actions/upload-artifact@v7" }],
+            },
+          },
+        },
+        file: ".github/workflows/report.yml",
+        exceptions: [],
+      }),
+    ).toEqual([]);
   });
 
   test("a composite action stored as action.yaml is validated", async () => {
@@ -266,5 +539,84 @@ describe("workflow YAML validation", () => {
       "message",
       `${file}: runs.steps[0] run and shell must be nonempty strings`,
     );
+  });
+});
+
+describe("workspace actions run after the checkout that brings them", () => {
+  const CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
+  const file = "workflow.yml";
+  const job = (steps: Record<string, unknown>[]) => ({
+    jobs: { build: { "timeout-minutes": 5, steps } },
+  });
+
+  test("a workspace action before any checkout is rejected", () => {
+    expect(() =>
+      validateLocalActionsAfterCheckout(
+        job([{ uses: "./.github/actions/partial-clone-checkout" }]),
+        file,
+      ),
+    ).toThrow(
+      `${file}: job build uses ./.github/actions/partial-clone-checkout before checking out the repository there; a workspace action cannot run before the checkout that brings it`,
+    );
+  });
+
+  test("a root checkout, local or through the shared retry action, makes workspace actions usable", () => {
+    for (const uses of [
+      CHECKOUT,
+      "stella/.github/actions/partial-clone-checkout@c6d66dfa2a5ad1f96a21b819fe456fecdd3d6f6d",
+    ]) {
+      expect(() =>
+        validateLocalActionsAfterCheckout(
+          job([{ uses }, { uses: "./.github/actions/ci-install" }]),
+          file,
+        ),
+      ).not.toThrow();
+    }
+  });
+
+  test("a checkout into a directory reaches only actions under it", () => {
+    const steps = [{ uses: CHECKOUT, with: { path: ".workflow-source" } }];
+    expect(() =>
+      validateLocalActionsAfterCheckout(
+        job([...steps, { uses: "./.workflow-source/.github/actions/build" }]),
+        file,
+      ),
+    ).not.toThrow();
+    expect(() =>
+      validateLocalActionsAfterCheckout(
+        job([...steps, { uses: "./.github/actions/build" }]),
+        file,
+      ),
+    ).toThrow("before checking out the repository there");
+  });
+
+  test("checkout and action paths compare as the checkout resolves them", () => {
+    for (const [destination, uses] of [
+      ["source//nested/", "./source/nested/.github/actions/build"],
+      ["./source/./nested", "./source/nested/.github/actions/build"],
+      ["source/nested", "./source//nested/.github/actions/build"],
+      ["./", "./.github/actions/build"],
+    ] as const) {
+      expect(
+        () =>
+          validateLocalActionsAfterCheckout(
+            job([{ uses: CHECKOUT, with: { path: destination } }, { uses }]),
+            file,
+          ),
+        `${destination} -> ${uses}`,
+      ).not.toThrow();
+    }
+  });
+
+  test("a checkout of another repository does not bring this one's actions", () => {
+    expect(() =>
+      validateLocalActionsAfterCheckout(
+        job([
+          { uses: CHECKOUT, with: { repository: "stella/folio" } },
+          { uses: "./.github/actions/build" },
+        ]),
+        file,
+      ),
+    ).toThrow("before checking out the repository there");
   });
 });

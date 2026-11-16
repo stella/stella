@@ -7,6 +7,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   EMAIL_OTP_ALLOWED_ATTEMPTS,
+  emailOtpPromotionEmail,
   requireEmailOtpResetConfirmation,
 } from "@/api/lib/auth/email-otp-reset-confirmation";
 
@@ -22,6 +23,12 @@ type FixtureOptions = {
   olderValue?: string;
 };
 
+type SweepObservation = {
+  email: string;
+  accounts: number;
+  sessions: number;
+};
+
 const createFixture = async ({
   verified = false,
   providers = ["microsoft"],
@@ -29,7 +36,36 @@ const createFixture = async ({
   expiresAt = new Date(Date.now() + 60_000),
   olderValue,
 }: FixtureOptions = {}) => {
+  const sweeps: SweepObservation[] = [];
   const auth = betterAuth({
+    databaseHooks: {
+      user: {
+        update: {
+          // Production sweeps durable credentials at this point; record what
+          // the account still holds when it does.
+          before: async (update, ctx) => {
+            const promoted = emailOtpPromotionEmail(update, ctx);
+            if (!ctx || promoted === undefined) {
+              return;
+            }
+            const found =
+              await ctx.context.internalAdapter.findUserByEmail(promoted);
+            if (!found) {
+              return;
+            }
+            sweeps.push({
+              email: promoted,
+              accounts: (
+                await ctx.context.internalAdapter.findAccounts(found.user.id)
+              ).length,
+              sessions: (
+                await ctx.context.internalAdapter.listSessions(found.user.id)
+              ).length,
+            });
+          },
+        },
+      },
+    },
     baseURL: "http://localhost:3001",
     secret: "test-secret-that-is-long-enough-for-better-auth",
     database: memoryAdapter({
@@ -115,7 +151,7 @@ const createFixture = async ({
     }),
     session: await context.internalAdapter.findSession(session.token),
   });
-  return { signIn, readState };
+  return { signIn, readState, sweeps };
 };
 
 describe("email code access reset confirmation", () => {
@@ -161,6 +197,33 @@ describe("email code access reset confirmation", () => {
     const replay = await fixture.signIn({ email, otp, confirmReset: true });
     expect(replay.status).toBe(400);
     expect(await replay.json()).toMatchObject({ code: "INVALID_OTP" });
+  });
+
+  test("credentials are swept once the old providers and sessions are gone and before the new session", async () => {
+    const fixture = await createFixture({
+      providers: ["microsoft", "google"],
+    });
+    expect((await fixture.signIn({ email, otp })).status).toBe(409);
+    expect(fixture.sweeps).toEqual([]);
+    const response = await fixture.signIn({
+      email: email.toUpperCase(),
+      otp,
+      confirmReset: true,
+    });
+    expect(response.status).toBe(200);
+    expect(fixture.sweeps).toEqual([{ email, accounts: 0, sessions: 0 }]);
+  });
+
+  test("an unverified account without linked providers is swept on its first proof", async () => {
+    const fixture = await createFixture({ providers: [] });
+    expect((await fixture.signIn({ email, otp })).status).toBe(200);
+    expect(fixture.sweeps).toEqual([{ email, accounts: 0, sessions: 0 }]);
+  });
+
+  test("a verified account's sign-in sweeps nothing", async () => {
+    const fixture = await createFixture({ verified: true });
+    expect((await fixture.signIn({ email, otp })).status).toBe(200);
+    expect(fixture.sweeps).toEqual([]);
   });
 
   test.each([undefined, false, true, "true"])(

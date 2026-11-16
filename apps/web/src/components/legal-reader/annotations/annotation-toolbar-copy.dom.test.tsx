@@ -1,9 +1,10 @@
 import { createRef } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
+import { Result } from "better-result";
+import { afterAll, afterEach, expect, mock, spyOn, test } from "bun:test";
 
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import { createWebTestEnvironment } from "../../../../tests/environment.test-fixtures";
 
@@ -48,6 +49,8 @@ Object.defineProperty(HTMLElement.prototype, "getBoundingClientRect", {
 });
 
 afterEach(async () => {
+  // Spies created in a test stay attached if it fails before restoring them.
+  mock.restore();
   document.getSelection()?.removeAllRanges();
   await act(async () => cleanup());
 });
@@ -86,11 +89,11 @@ const mountToolbar = async () => {
           activeAnnotation={null}
           activeSpans={[]}
           controller={{
-            create: async () => undefined,
+            create: async () => Result.ok(undefined),
             redo: async () => undefined,
-            remove: async () => undefined,
+            remove: async () => Result.ok(undefined),
             undo: async () => undefined,
-            update: async () => undefined,
+            update: async () => Result.ok(undefined),
           }}
           mode="guest"
           onActivateAnnotation={() => undefined}
@@ -149,8 +152,32 @@ test("native copy confirms only for a selection inside the reader", async () => 
   await act(async () => {
     document.dispatchEvent(new Event("copy", { bubbles: true }));
   });
-
   expect(outsideView.queryByRole("button", { name: "Copied" })).toBeNull();
+
+  // Back on the reader's words, the bar carries no confirmation over.
+  const inside = outsideView.getByText(SELECTED_TEXT).firstChild;
+  if (inside === null) {
+    throw new TypeError("Reader fixture is missing");
+  }
+  range.selectNodeContents(inside);
+  document.getSelection()?.removeAllRanges();
+  document.getSelection()?.addRange(range);
+  await act(async () => document.dispatchEvent(new Event("selectionchange")));
+
+  expect(await outsideView.findByRole("button", { name: "Copy" })).toBeTruthy();
+  expect(outsideView.queryByRole("button", { name: "Copied" })).toBeNull();
+});
+
+test("a new selection clears a native copy's confirmation", async () => {
+  const view = await mountToolbar();
+  await act(async () => {
+    document.dispatchEvent(new Event("copy", { bubbles: true }));
+  });
+  expect(view.getByRole("button", { name: "Copied" })).toBeTruthy();
+
+  await act(async () => document.dispatchEvent(new Event("selectionchange")));
+
+  expect(view.queryByRole("button", { name: "Copied" })).toBeNull();
 });
 
 test("a copy format confirms in place without a success toast", async () => {

@@ -120,7 +120,7 @@ test("endpoint discovery and pinned construction remain at their owner", async (
   ).toEqual([]);
 });
 
-test("test fixtures and other tools can model Docker commands", async () => {
+test("fixtures in tests and other tools can model Docker commands", async () => {
   const results = await Promise.all(
     ["packages/scripts/src/dev-docker.test.ts", "scripts/ci-images.ts"].map(
       async (lintCase, index) => {

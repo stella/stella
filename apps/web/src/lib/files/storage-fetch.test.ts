@@ -17,7 +17,13 @@ describe("storage fetches", () => {
   test("returns the response body and forwards the abort signal", async () => {
     const controller = new AbortController();
     const response = new Response("hello");
-    const fetchMock = setFetch(mock(async () => response));
+    let request: Parameters<FetchHandler> | undefined;
+    setFetch(
+      mock(async (...args: Parameters<FetchHandler>) => {
+        request = args;
+        return response;
+      }),
+    );
 
     const buffer = await fetchStorageArrayBuffer("https://storage.local/file", {
       signal: controller.signal,
@@ -25,9 +31,12 @@ describe("storage fetches", () => {
     });
 
     expect(new TextDecoder().decode(buffer)).toBe("hello");
-    expect(fetchMock).toHaveBeenCalledWith("https://storage.local/file", {
-      signal: controller.signal,
-    });
+    expect(request).toBeDefined();
+    const [url, init] = request ?? [];
+    expect(url).toBe("https://storage.local/file");
+    expect(init).toMatchObject({ timeoutMs: 60_000 });
+    controller.abort();
+    expect(init?.signal?.aborted).toBe(true);
   });
 
   test("preserves storage HTTP status failures", async () => {
@@ -79,12 +88,15 @@ describe("storage fetches", () => {
   });
 
   test("wraps response body storage network failures", async () => {
-    const response = new Response("ignored");
-    Object.defineProperty(response, "arrayBuffer", {
-      value: mock(async () => {
-        throw new TypeError("NetworkError when attempting to fetch resource.");
+    const response = new Response(
+      new ReadableStream({
+        pull(stream) {
+          stream.error(
+            new TypeError("NetworkError when attempting to fetch resource."),
+          );
+        },
       }),
-    });
+    );
     setFetch(mock(async () => response));
 
     const error = await catchError(

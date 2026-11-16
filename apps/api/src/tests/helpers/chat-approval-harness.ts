@@ -1,4 +1,3 @@
-import { Value } from "@sinclair/typebox/value";
 import { toolDefinition } from "@tanstack/ai";
 import type { UIMessage } from "@tanstack/ai-client";
 import { panic, Result, TaggedError } from "better-result";
@@ -7,9 +6,14 @@ import * as v from "valibot";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { CHAT_TURN_ID_HEADER, CHAT_TURN_INTENT } from "@stll/api-contract";
+import type { ChatTurnBudget } from "@stll/chat-limits";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatTurns } from "@/api/db/schema";
+import {
+  createMembershipSafeDb,
+  createMembershipScopedDb,
+} from "@/api/db/scoped";
 import { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts";
 import { agUiSendMessageBodySchema } from "@/api/handlers/chat/chat-schema";
 import type {
@@ -19,6 +23,7 @@ import type {
 } from "@/api/handlers/chat/chat-schema";
 import { reapOwnerlessChatTurnOnTx } from "@/api/handlers/chat/chat-turn-persistence";
 import { relinquishChatTurnRuns } from "@/api/handlers/chat/chat-turn-run";
+import type { LocalChatRun } from "@/api/handlers/chat/local-run-chunks";
 import {
   decodeMessagePageCursor,
   loadChatMessagePage,
@@ -38,9 +43,13 @@ import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-sc
 import cancelTurn from "@/api/handlers/chat/turns/cancel";
 import { joinChatTurn, probeChatTurn } from "@/api/handlers/chat/turns/resume";
 import type { ChatPart } from "@/api/handlers/chat/types";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
-import { resolveMemberAuthorization } from "@/api/lib/auth";
+import {
+  featureAccessSnapshotFromAuthorization,
+  resolveMemberAuthorization,
+} from "@/api/lib/auth";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -52,6 +61,7 @@ import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { startExecutionAdmission } from "@/api/lib/rate-limit/execution-admission";
 import { createReapOwnerlessChatTurnsTask } from "@/api/lib/scheduler/tasks/chat-turn-reaper";
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
+import { readAuthorizedWorkspaces } from "@/api/lib/workspaces/authorized-workspace-ids";
 import type { anonymizeTextFields } from "@/api/mcp/anonymization";
 import type {
   ChatHarnessPhase,
@@ -101,6 +111,7 @@ import type {
   WebChatContext,
 } from "@/api/tests/helpers/chat-web-client";
 import { findTranscriptViolations } from "@/api/tests/helpers/provider-request-transcript";
+import { installTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -253,11 +264,13 @@ export type HarnessModel = Pick<
 >;
 
 export const createApprovalHarness = ({
+  compactMessages = compactMessagesForContext,
   beforeTurnSettles,
   boundaryAnonymizer,
   failingApprovalNames = [],
   grantableApprovalConnectorId,
   ids,
+  localRunOf,
   model,
   organizationAIConfig = orgAIConfig,
   promptCachingEnabled = false,
@@ -269,7 +282,16 @@ export const createApprovalHarness = ({
   textAdapterFactory,
   user,
   withDirectRefTool = false,
+  workspaceId: homeWorkspaceId,
 }: {
+  /** Observe or control the real send's pre-model compaction boundary. */
+  compactMessages?: typeof compactMessagesForContext | undefined;
+  /**
+   * The run on the member's computer a thread's next turn answers through, as
+   * the send's routing would hand it over. `undefined` is a cloud turn.
+   */
+  localRunOf?:
+    ((threadId: SafeId<"chatThread">) => LocalChatRun | undefined) | undefined;
   /**
    * Replaces the anonymizer an anonymized turn's provider boundary calls, so a
    * test can make it fail. The real pipeline by default.
@@ -326,6 +348,8 @@ export const createApprovalHarness = ({
   promptCachingEnabled?: boolean | undefined;
   /** Registers `DIRECT_REF_TOOL_NAME` too. */
   withDirectRefTool?: boolean | undefined;
+  /** Home matter supplied by the route's authorized workspace boundary. */
+  workspaceId?: SafeId<"workspace"> | undefined;
   /** Uses a local adapter through the same resolution seam as scripted replies. */
   textAdapterFactory?: NonNullable<
     Parameters<typeof installScriptedProvider>[0]
@@ -352,6 +376,10 @@ export const createApprovalHarness = ({
     notify: () => void;
   }>();
   const turnSettlementFailures = new Map<string, unknown>();
+  /** Per thread: the narrower budget its turns run under. */
+  const turnBudgets = new Map<string, ChatTurnBudget>();
+  /** Every run started on a thread, by its terminal promise. */
+  const runSettlements = new Map<string, Promise<unknown>[]>();
   const notifyTurnSettlement = (threadId: string) => {
     for (const listener of turnSettlementListeners) {
       if (listener.threadId === threadId) {
@@ -422,10 +450,53 @@ export const createApprovalHarness = ({
       return await startExecutionAdmission(options);
     },
     indexThread: async () => await Promise.resolve(undefined),
-    // An approved write reads the member's role again when it runs; read it
-    // from this test's database, not the shared pools.
-    resolveCurrentMembership: async (lookup) =>
-      await resolveMemberAuthorization(lookup, testDb),
+    // Delayed tools rebuild live authority from this test's database, not the
+    // shared pools.
+    resolveCurrentExecutionContext: async ({
+      organizationId,
+      userId: executionUserId,
+    }) => {
+      const authorization = await resolveMemberAuthorization(
+        { organizationId, userId: executionUserId },
+        testDb,
+      );
+      if (authorization === null) {
+        return Result.ok(null);
+      }
+      const databaseIdentity = {
+        organizationId,
+        serverValidatedWorkspaceIds: [],
+        userId: executionUserId,
+      };
+      const executionScopedDb = asTestRaw<ScopedDb>(
+        createMembershipScopedDb(testDb, databaseIdentity),
+      );
+      const workspaces = await executionScopedDb(
+        async (tx) => await readAuthorizedWorkspaces(tx, { organizationId }),
+      );
+      if (workspaces.isErr()) {
+        return workspaces;
+      }
+      const accessibleWorkspaces = workspaces.value.workspaces;
+      const accessibleIds = new Set(accessibleWorkspaces.map(({ id }) => id));
+      return Result.ok({
+        accessibleWorkspaces,
+        featureAccessSnapshot: featureAccessSnapshotFromAuthorization({
+          organizationId,
+          userId: executionUserId,
+          authorization,
+        }),
+        pinServerValidatedWorkspaceId: (workspaceId) =>
+          accessibleIds.has(workspaceId),
+        role: authorization.role,
+        billingAccess: authorization.billingAccess,
+        safeDb: asTestRaw<SafeDb>(
+          createMembershipSafeDb(testDb, databaseIdentity),
+        ),
+        scopedDb: executionScopedDb,
+        userEmail: authorization.email,
+      });
+    },
     loadExternalMcpTools: async () => {
       const close = async () => await Promise.resolve(undefined);
       return await Promise.resolve({
@@ -460,11 +531,14 @@ export const createApprovalHarness = ({
         sources.web ?? { urlFetcher: null, webSearchProvider: null },
       ),
     rollbackSideEffects: rollbackUnpersistedChatSideEffects,
-    compactMessagesForContext,
+    compactMessagesForContext: compactMessages,
     streamResponse: async (props) => {
       // The run owns every terminal path, including checkpoint restoration and
       // failures that produce no onFinish event. Its notification only wakes
       // the persisted-row oracle; it does not replace that oracle.
+      const settlements = runSettlements.get(props.threadId) ?? [];
+      settlements.push(props.run.settled);
+      runSettlements.set(props.threadId, settlements);
       void props.run.settled.then(
         () => notifyTurnSettlement(props.threadId),
         (error: unknown) => {
@@ -472,8 +546,13 @@ export const createApprovalHarness = ({
           notifyTurnSettlement(props.threadId);
         },
       );
+      const turnBudget = turnBudgets.get(props.threadId);
       return await streamChat({
         ...props,
+        ...(turnBudget === undefined ? {} : { turnBudget }),
+        ...(localRunOf === undefined
+          ? {}
+          : { localRun: localRunOf(props.threadId) }),
         onFinish: async (event) => {
           await beforeTurnSettles?.({
             outcome: event.outcome,
@@ -524,20 +603,22 @@ export const createApprovalHarness = ({
   ): SendMessageCtx => {
     const request = createTornDownRequest({
       signal,
-      url: "http://localhost/v1/chat/send",
+      url: "http://localhost/v1/chat",
     });
     if (sources.contextMatterIds !== undefined) {
       // The matters the page's context names, as its composer sends them
-      // (TanStack mirrors the forwarded props as `data`).
+      // (older TanStack clients also mirror forwarded props as `data`).
       const contextMatterIds = [...sources.contextMatterIds];
       Object.assign(body.forwardedProps, { contextMatterIds });
-      Object.assign(body.data, { contextMatterIds });
+      if (body.data !== undefined) {
+        Object.assign(body.data, { contextMatterIds });
+      }
     }
     if (user?.context !== undefined) {
       // The profile the page sends with every message.
       const userContext = { ...user.context };
       Object.assign(body.forwardedProps, { userContext });
-      if (typeof body.data === "object") {
+      if (body.data !== undefined) {
         Object.assign(body.data, { userContext });
       }
     }
@@ -555,7 +636,10 @@ export const createApprovalHarness = ({
         ]),
       getActiveWorkspaceIds: async () =>
         await Promise.resolve([ids.wsA1, ids.wsA2]),
-      getWorkspaceAccess: async () => await Promise.resolve(null),
+      getWorkspaceAccess: async (workspaceId: SafeId<"workspace">) =>
+        workspaceId === homeWorkspaceId
+          ? { id: workspaceId, status: "active" }
+          : null,
       memberRole: sessionMemberRole("owner"),
       orgAIConfig: organizationAIConfig,
       orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
@@ -564,9 +648,10 @@ export const createApprovalHarness = ({
       promptCachingEnabled,
       recordAuditEvent: async () => await Promise.resolve(),
       request: request.request,
-      route: "/v1/chat/send",
+      route: "/v1/chat" satisfies ApiRoutePath,
       safeDb,
       scopedDb,
+      set: { headers: {}, status: 200 },
       session: { activeOrganizationId: ids.orgA },
       user: { id: userId },
     });
@@ -661,6 +746,7 @@ export const createApprovalHarness = ({
         : { parentRunId: resume.interruptedRunId, resume: resume.items };
     const forwardedProps = {
       activeFile,
+      workspaceId: homeWorkspaceId,
       contextMatterIds: [],
       message,
       runId,
@@ -671,6 +757,7 @@ export const createApprovalHarness = ({
     return contextFromBody(
       asTestRaw<SendBody>({
         activeFile,
+        workspaceId: homeWorkspaceId,
         threadId,
         runId: forwardedProps.runId,
         state: {},
@@ -770,7 +857,8 @@ export const createApprovalHarness = ({
           `http://localhost/v1/chat/threads/${threadId}/turns/${turnId}/cancel`,
           { method: "POST" },
         ),
-        route: "/v1/chat/threads/:threadId/turns/:turnId/cancel",
+        route:
+          "/v1/chat/threads/:threadId/turns/:turnId/cancel" satisfies ApiRoutePath,
         safeDb,
         session: { activeOrganizationId: ids.orgA },
         set,
@@ -1291,13 +1379,15 @@ export const createApprovalHarness = ({
    * has ended and been checked.
    */
   const postChatBody = async (
-    raw: unknown,
+    posted: unknown,
     signal: AbortSignal | undefined,
   ): Promise<{ done: Promise<void>; response: Response }> => {
-    if (!Value.Check(agUiSendMessageBodySchema, raw)) {
-      const errors = [...Value.Errors(agUiSendMessageBodySchema, raw)]
+    // Decoded exactly as the route decodes it: unknown keys are dropped.
+    const decoded = v.safeParse(agUiSendMessageBodySchema, posted);
+    if (!decoded.success) {
+      const errors = decoded.issues
         .slice(0, 3)
-        .map(({ message, path }) => `${path}: ${message}`);
+        .map((issue) => `${v.getDotPath(issue) ?? "$"}: ${issue.message}`);
       clientFindings.push(
         ...violationsOf(CHAT_ORACLE.clientRequestsAccepted, [
           { invalidBody: errors },
@@ -1310,6 +1400,7 @@ export const createApprovalHarness = ({
         }),
       };
     }
+    const raw = decoded.output;
     const endRecord = beginRecord(raw);
     if (raw.forwardedProps.turnIntent === CHAT_TURN_INTENT.regenerate) {
       provider.promptLedgerOf(raw.threadId).replacesTail();
@@ -1405,7 +1496,8 @@ export const createApprovalHarness = ({
           },
           query: Object.fromEntries(url.searchParams),
           request: new Request(url.toString(), init),
-          route: `/v1/chat/threads/:threadId/turns/:turnId/${delivery}`,
+          route:
+            `/v1/chat/threads/:threadId/turns/:turnId/${delivery}` satisfies ApiRoutePath,
           safeDb,
           scopedDb,
           session: { activeOrganizationId: ids.orgA },
@@ -1472,9 +1564,11 @@ export const createApprovalHarness = ({
       });
     }
   };
-  globalThis.fetch = Object.assign(routedFetch, {
-    preconnect: originalFetch.preconnect,
-  });
+  const fetchInstallation = installTestFetch(
+    Object.assign(routedFetch, {
+      preconnect: originalFetch.preconnect,
+    }),
+  );
 
   /** A browser tab that loads `threadId` now, as a page load does. */
   const openWebClient = async (
@@ -1672,8 +1766,15 @@ export const createApprovalHarness = ({
       threadId,
     });
 
+  /** Resolves once every run started on `threadId` has finished, including
+   *  the work it does after its turn settles. */
+  const awaitRunsSettled = async (threadId: SafeId<"chatThread">) => {
+    await Promise.allSettled(runSettlements.get(threadId) ?? []);
+  };
+
   return {
     approveContext,
+    awaitRunsSettled,
     /** Resolves once no turn on the thread is still accepted or running. */
     awaitSettledTurns,
     checkWebClient,
@@ -1702,7 +1803,7 @@ export const createApprovalHarness = ({
           await relinquishChatTurnRuns();
           await Promise.all(abandonedReads);
         } finally {
-          globalThis.fetch = originalFetch;
+          fetchInstallation.restore();
           provider.restore();
         }
         if (turnSettlementFailures.size > 0) {
@@ -1748,6 +1849,16 @@ export const createApprovalHarness = ({
     /** From now on, `threadId`'s responses reach the page whole again. */
     streamWhole: (threadId: SafeId<"chatThread">) => {
       liveThreads.delete(threadId);
+    },
+    /**
+     * From now on, `threadId`'s turns run under `budget` instead of
+     * `CHAT_TURN_BUDGET`, so a scripted turn reaches a cap in a few steps.
+     */
+    limitTurnBudget: (
+      threadId: SafeId<"chatThread">,
+      budget: ChatTurnBudget,
+    ) => {
+      turnBudgets.set(threadId, budget);
     },
     /**
      * Runs `race` once, when the next send has read its thread and is about

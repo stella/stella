@@ -1,0 +1,11 @@
+{
+  "type": "parser",
+  "name": "BR_TST",
+  "key": "br-tst",
+  "parserVersion": 1,
+  "sourceFingerprintVersion": 0,
+  "scope": {
+    "type": "all",
+    "reason": "the source's first parser; there are no stored rows to narrow"
+  }
+}

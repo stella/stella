@@ -32,6 +32,7 @@ import {
   receiveSesInboundMail,
   SesInboundError,
 } from "@/api/lib/email/inbound/ses";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import {
   type GatedTestDb,
   openGatedTestDatabase,
@@ -40,6 +41,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -145,7 +147,7 @@ if (!databaseUrl || !runPostgresTests) {
     const gated = openGatedTestDatabase(databaseUrl);
     db = gated.db;
     gated.cleanUp(async () => {
-      await db.delete(organization).where(eq(organization.id, organizationId));
+      await deleteOrganizationsForTest(db, [organizationId]);
       for (const id of [memberId, colleagueId, adminId, snapshotUserId]) {
         await db.delete(user).where(eq(user.id, id));
       }
@@ -177,6 +179,10 @@ if (!databaseUrl || !runPostgresTests) {
         name: "Inbound integration",
         slug: `inbound-${organizationId}`,
         createdAt: new Date(),
+      });
+      await recordNewOrganizationAccessState(db, {
+        organizationId,
+        now: new Date(),
       });
       await db.insert(member).values([
         {

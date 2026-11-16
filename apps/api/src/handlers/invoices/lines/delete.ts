@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import type { InvoiceTotals } from "@stll/invoicing";
+import { withBillingRead } from "@stll/permissions";
 
 import { resultTx } from "@/api/db/safe-db";
 import {
@@ -11,35 +12,38 @@ import {
   invoiceLines,
   timeEntries,
 } from "@/api/db/schema";
-import {
-  lockDraftInvoiceForLines,
-  recalculateInvoiceTotals,
-} from "@/api/handlers/invoices/invoice-lines";
 import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { flatFeeInvoiceRefusal } from "@/api/lib/billing/invoice-arrangements";
+import {
+  lockDraftInvoiceForLines,
+  recalculateInvoiceTotals,
+} from "@/api/lib/billing/invoice-lines";
+import { invoiceLineMoneyResponse } from "@/api/lib/billing/response-schemas";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const lineParamsSchema = workspaceParams({
-  invoiceId: tSafeId("invoice"),
-  lineId: tSafeId("invoiceLine"),
+  invoiceId: resourceIdSchema("invoice"),
+  lineId: resourceIdSchema("invoiceLine"),
 });
 
 type DeletedLine = { id: SafeId<"invoiceLine">; totals: InvoiceTotals };
 
 const deleteInvoiceLine = createSafeHandler(
   {
+    moneyResponse: invoiceLineMoneyResponse,
     contract: "patch",
     description:
       "Remove one line from a draft invoice and recompute its totals. A time " +
       "entry or expense line returns its entry to approved, unbilled status, " +
-      "so it can be billed again. Only draft invoices can be edited.",
-    permissions: { invoice: ["update"] },
+      "so it can be billed again. Only never-issued drafts can be edited; " +
+      "issued invoices require a credit note even after reverting to draft.",
+    permissions: withBillingRead({ invoice: ["update"] }),
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },
     realtime: invoiceRealtimeUpdates,
@@ -75,22 +79,28 @@ const deleteInvoiceLine = createSafeHandler(
               ),
             )
             .limit(1);
-          const runningError = await guardRunningTimeEntries({
+          const running = await guardRunningTimeEntries({
             tx,
+            organizationId: session.activeOrganizationId,
             workspaceId,
             actorUserId: user.id,
             selection: {
-              type: "entries",
-              ids: sourceLine?.timeEntryId ? [sourceLine.timeEntryId] : [],
+              type: "invoice",
+              runningCheck: "additional",
+              invoiceId: params.invoiceId,
+              additionalIds: sourceLine?.timeEntryId
+                ? [sourceLine.timeEntryId]
+                : [],
             },
           });
-          if (runningError) {
-            return Result.err(runningError);
+          if (running.isErr()) {
+            return Result.err(running.error);
           }
           const invoiceResult = await lockDraftInvoiceForLines(
             tx,
             {
               invoiceId: params.invoiceId,
+              matterLocks: running.value,
               organizationId: session.activeOrganizationId,
               workspaceId,
             },

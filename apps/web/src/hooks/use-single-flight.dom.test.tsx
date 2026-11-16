@@ -1,9 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { rejectionOf } from "@stll/property-testing/rejection";
-
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 
@@ -21,10 +20,11 @@ test("a second submit in the same frame is ignored until the first settles", asy
   const submit = async () => {
     calls += 1;
     await first.promise;
+    return "saved";
   };
 
-  let firstRun: Promise<void> = Promise.resolve();
-  let secondRun: Promise<void> = Promise.resolve();
+  let firstRun: Promise<string | undefined> = Promise.resolve(undefined);
+  let secondRun: Promise<string | undefined> = Promise.resolve(undefined);
   act(() => {
     firstRun = result.current.run(submit);
     secondRun = result.current.run(submit);
@@ -34,7 +34,10 @@ test("a second submit in the same frame is ignored until the first settles", asy
 
   await act(async () => {
     first.resolve(undefined);
-    await Promise.all([firstRun, secondRun]);
+    expect(await Promise.all([firstRun, secondRun])).toEqual([
+      "saved",
+      undefined,
+    ]);
   });
   expect(result.current.pending).toBe(false);
 

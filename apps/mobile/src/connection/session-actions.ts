@@ -1,0 +1,136 @@
+import { Result } from "better-result";
+
+import { TokenError } from "./errors";
+import { type InstallMarker, madeByThisInstall } from "./install-marker";
+import type { SessionGeneration, SessionStore, StoredSession } from "./session";
+
+type KeepSignInOptions = {
+  readonly store: SessionStore;
+  readonly transition: ReturnType<SessionStore["begin"]>;
+  readonly session: StoredSession;
+  readonly revoke: (session: StoredSession) => Promise<void>;
+  readonly publish: (generation: SessionGeneration) => void;
+};
+
+/**
+ * Stores a new sign-in's grant and publishes it. A grant the app does not
+ * adopt (the keychain refused it, or a later sign-in or sign-out took over)
+ * is one nobody will use, so it goes back to the server.
+ */
+export const keepSignIn = async ({
+  store,
+  transition,
+  session,
+  revoke,
+  publish,
+}: KeepSignInOptions): Promise<Result<void, TokenError>> => {
+  const stored = await Result.tryPromise({
+    try: async () => await transition.write(session),
+    catch: (cause) =>
+      new TokenError({ message: "The keychain refused the session", cause }),
+  });
+  const adopted =
+    Result.isOk(stored) &&
+    stored.value.type === "committed" &&
+    store.isCurrent(stored.value.generation)
+      ? stored.value.generation
+      : undefined;
+  if (adopted === undefined) {
+    await revoke(session);
+    return Result.isError(stored)
+      ? Result.err(stored.error)
+      : Result.ok(undefined);
+  }
+  store.commit(adopted, () => publish(adopted));
+  return Result.ok(undefined);
+};
+
+type SignOutOptions = {
+  readonly store: SessionStore;
+  readonly session: StoredSession | undefined;
+  readonly beforeEnd: (session: StoredSession) => Promise<void>;
+  readonly revoke: (session: StoredSession) => Promise<void>;
+  readonly publish: (generation: SessionGeneration) => void;
+  /**
+   * Runs when the session is still the current one after this sign-out (the
+   * keychain kept it, or a sign-in took over the clear), so whatever
+   * `beforeEnd` set aside for an ending session can let a later end run.
+   */
+  readonly kept: () => void;
+};
+
+export const signOutSession = async ({
+  store,
+  session,
+  beforeEnd,
+  revoke,
+  publish,
+  kept,
+}: SignOutOptions) => {
+  const generation = store.generation();
+  if (session !== undefined) {
+    await beforeEnd(session);
+    await revoke(session);
+  }
+  // Cleanup uses the current grant; a later sign-in owns any replacement.
+  if (!store.isCurrent(generation)) {
+    return Result.ok(undefined);
+  }
+  const transition = store.begin();
+  const cleared = await Result.tryPromise({
+    try: async () => await transition.clear(),
+    catch: (cause) =>
+      new TokenError({ message: "The keychain kept the session", cause }),
+  });
+  if (Result.isOk(cleared) && cleared.value.type === "committed") {
+    const outcome = cleared.value;
+    store.commit(outcome.generation, () => publish(outcome.generation));
+  }
+  if (store.isCurrent(generation)) {
+    kept();
+  }
+  return Result.isError(cleared)
+    ? Result.err(cleared.error)
+    : Result.ok(undefined);
+};
+
+type RestoreSessionOptions = {
+  readonly store: SessionStore;
+  readonly generation: SessionGeneration;
+  readonly marker: InstallMarker;
+  readonly beforeEnd: (session: StoredSession) => Promise<void>;
+  readonly revoke: (session: StoredSession) => Promise<void>;
+};
+
+/**
+ * The session a launch starts with. One an earlier installation kept (the
+ * app was deleted and installed again) is signed out the way the person
+ * would sign out, before any screen shows it, and the launch starts signed
+ * out.
+ */
+export const restoreSession = async ({
+  store,
+  generation,
+  marker,
+  beforeEnd,
+  revoke,
+}: RestoreSessionOptions): Promise<StoredSession | undefined> => {
+  const session = await store.read(generation);
+  if (session === undefined || (await madeByThisInstall(marker, session))) {
+    return session;
+  }
+  // Nothing shows the session yet, so there is nothing to publish. The
+  // launch starts signed out either way: a keychain that kept the session
+  // is cleared on a later launch, since the marker still does not name it.
+  (
+    await signOutSession({
+      store,
+      session,
+      beforeEnd,
+      revoke,
+      publish: () => undefined,
+      kept: () => undefined,
+    })
+  ).unwrapOr(undefined);
+  return undefined;
+};

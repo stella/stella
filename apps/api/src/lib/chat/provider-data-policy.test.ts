@@ -11,6 +11,7 @@ import {
   TANSTACK_AI_PROVIDERS,
 } from "@stll/ai-catalog";
 import { MODEL_DEFAULTS_LEDGER } from "@stll/ai-catalog/model-defaults-ledger";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import { DECISION_MODEL_PROVIDERS } from "@/api/lib/ai-config";
@@ -19,6 +20,7 @@ import type {
   AIRequestPolicy,
 } from "@/api/lib/chat/ai-data-policy";
 import { MANAGED_AI_RESIDENCIES } from "@/api/lib/chat/ai-data-policy";
+import type { ManagedOpenRouterCredential } from "@/api/lib/chat/openrouter-credential";
 import {
   assertManagedOpenRouterModel,
   isManagedProviderAvailable,
@@ -45,12 +47,20 @@ import {
   findTranscriptProblems,
   providerWireFormatOf,
 } from "@/api/tests/helpers/provider-request-transcript";
-import { createTestState } from "@/api/tests/helpers/test-state";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+
+const testFetchState = createTestFetch();
 
 const testState = createTestState({ file: import.meta.path, config: env });
 
 const REQUEST_TEXT = "Reply with OK.";
 const REQUEST_API_KEY = "test-request-key";
+// Managed requests carry the credential their tier resolved; the factory
+// never reads one from the environment.
+const MANAGED_CREDENTIAL = {
+  type: "static",
+  apiKey: REQUEST_API_KEY,
+} as const satisfies ManagedOpenRouterCredential;
 
 const ORIGINAL_REQUESTS = {
   openai: (model: string) => ({
@@ -59,6 +69,7 @@ const ORIGINAL_REQUESTS = {
     authorization: `Bearer ${REQUEST_API_KEY}`,
     apiKey: null,
     body: {
+      include: ["reasoning.encrypted_content"],
       max_output_tokens: 64,
       model,
       input: [
@@ -143,38 +154,32 @@ const ORIGINAL_REQUESTS = {
 
 describe("provider request policy", () => {
   test("requires a configured Bedrock organization credential", () => {
-    const previousMock = env.USE_MOCK_AI;
-    const previousKey = env.BEDROCK_API_KEY;
-    env.BEDROCK_API_KEY = "test-instance-key";
-    try {
-      for (const mockMode of [false, true]) {
-        env.USE_MOCK_AI = mockMode;
-        for (const apiKey of ["", " ", "\t\n "]) {
-          for (const dataClass of ["customer", "public_corpus"] as const) {
-            const resolved = Result.try({
-              try: () =>
-                createTanStackTextAdapterFactory({
-                  provider: "bedrock",
-                  apiKey,
-                  dataClass,
-                }),
-              catch: (error) => error,
+    testState.setConfig("BEDROCK_API_KEY", "test-instance-key");
+
+    for (const mockMode of [false, true]) {
+      testState.setConfig("USE_MOCK_AI", mockMode);
+      for (const apiKey of ["", " ", "\t\n "]) {
+        for (const dataClass of ["customer", "public_corpus"] as const) {
+          const resolved = Result.try({
+            try: () =>
+              createTanStackTextAdapterFactory({
+                provider: "bedrock",
+                apiKey,
+                dataClass,
+              }),
+            catch: (error) => error,
+          });
+          expect(Result.isError(resolved)).toBe(true);
+          if (Result.isError(resolved)) {
+            expect(HandlerError.is(resolved.error)).toBe(true);
+            expect(resolved.error).toMatchObject({
+              status: 403,
+              message:
+                'BEDROCK_API_KEY is required for TanStack AI provider "bedrock".',
             });
-            expect(Result.isError(resolved)).toBe(true);
-            if (Result.isError(resolved)) {
-              expect(HandlerError.is(resolved.error)).toBe(true);
-              expect(resolved.error).toMatchObject({
-                status: 403,
-                message:
-                  'BEDROCK_API_KEY is required for TanStack AI provider "bedrock".',
-              });
-            }
           }
         }
       }
-    } finally {
-      env.USE_MOCK_AI = previousMock;
-      env.BEDROCK_API_KEY = previousKey;
     }
   });
 
@@ -204,21 +209,11 @@ describe("provider request policy", () => {
   });
 
   test("request factories enforce the provider policy for every data class and check mode", () => {
-    const previous = {
-      USE_MOCK_AI: env.USE_MOCK_AI,
-      FEATURE_MANAGED_PROVIDER_CHECKS: env.FEATURE_MANAGED_PROVIDER_CHECKS,
-      ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY,
-      BEDROCK_API_KEY: env.BEDROCK_API_KEY,
-      GOOGLE_GENERATIVE_AI_API_KEY: env.GOOGLE_GENERATIVE_AI_API_KEY,
-      MISTRAL_API_KEY: env.MISTRAL_API_KEY,
-      OPENAI_API_KEY: env.OPENAI_API_KEY,
-      OPENROUTER_API_KEY: env.OPENROUTER_API_KEY,
-    };
     const dataClasses = {
       customer: "customer",
       public_corpus: "public_corpus",
     } as const satisfies { [DataClass in AIDataClass]: DataClass };
-    Object.assign(env, {
+    testState.patchConfig({
       USE_MOCK_AI: false,
       ANTHROPIC_API_KEY: REQUEST_API_KEY,
       BEDROCK_API_KEY: REQUEST_API_KEY,
@@ -227,205 +222,196 @@ describe("provider request policy", () => {
       OPENAI_API_KEY: REQUEST_API_KEY,
       OPENROUTER_API_KEY: REQUEST_API_KEY,
     });
-    try {
-      for (const enabled of [false, true]) {
-        env.FEATURE_MANAGED_PROVIDER_CHECKS = enabled;
-        for (const provider of AI_PROVIDERS) {
-          for (const dataClass of Object.values(dataClasses)) {
-            for (const managedAIResidency of MANAGED_AI_RESIDENCIES) {
-              const policy =
-                dataClass === "customer"
-                  ? { dataClass, managedAIResidency }
-                  : { dataClass };
-              const result = Result.try({
-                try: () =>
-                  createTanStackTextAdapterFactory({ provider, ...policy }),
-                catch: (error) => error,
-              });
-              if (dataClass === "customer" && provider !== "openrouter") {
-                expect(result.isErr()).toBe(true);
-                if (Result.isError(result)) {
-                  expect(result.error).toMatchObject({
-                    status: 503,
-                    code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
-                  });
-                }
-                continue;
-              }
-              expect(result.isOk()).toBe(
-                resolveTanStackAIProviderSupport({ provider }).supported,
-              );
-              if (Result.isError(result)) {
-                expect(result.error).not.toMatchObject({
-                  code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
-                });
-              }
-            }
-          }
-        }
-      }
-    } finally {
-      Object.assign(env, previous);
-    }
-  });
 
-  test("resolves model metadata independently of request availability", () => {
-    const previous = {
-      USE_MOCK_AI: env.USE_MOCK_AI,
-      AI_PROVIDER: env.AI_PROVIDER,
-      ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY,
-      BEDROCK_API_KEY: env.BEDROCK_API_KEY,
-      GOOGLE_GENERATIVE_AI_API_KEY: env.GOOGLE_GENERATIVE_AI_API_KEY,
-      MISTRAL_API_KEY: env.MISTRAL_API_KEY,
-      OPENAI_API_KEY: env.OPENAI_API_KEY,
-      OPENROUTER_API_KEY: env.OPENROUTER_API_KEY,
-    };
-    Object.assign(env, {
-      USE_MOCK_AI: false,
-      ANTHROPIC_API_KEY: REQUEST_API_KEY,
-      BEDROCK_API_KEY: REQUEST_API_KEY,
-      GOOGLE_GENERATIVE_AI_API_KEY: REQUEST_API_KEY,
-      MISTRAL_API_KEY: REQUEST_API_KEY,
-      OPENAI_API_KEY: REQUEST_API_KEY,
-      OPENROUTER_API_KEY: REQUEST_API_KEY,
-    });
-    try {
+    for (const enabled of [false, true]) {
+      testState.setConfig("FEATURE_MANAGED_PROVIDER_CHECKS", enabled);
       for (const provider of AI_PROVIDERS) {
-        if (!resolveTanStackAIProviderSupport({ provider }).supported) {
-          continue;
-        }
-        env.AI_PROVIDER = provider;
-        for (const dataClass of ["customer", "public_corpus"] as const) {
-          const available = isManagedProviderAvailable(provider, dataClass);
-          const info = getTanStackTextModelInfoForTask("chat", null, {
-            organizationId: null,
-            dataClass,
-            modelTier: MANAGED_MODEL_TIER.standard,
-          });
-          expect(info).toMatchObject({
-            keySource: "instance",
-            provider,
-            availability: available ? "available" : "unavailable",
-          });
-          const selection = `${provider}::${info.modelId}`;
-          expect(
-            getTanStackTextModelInfoById(selection, null, "chat", {
-              dataClass,
-              modelTier: MANAGED_MODEL_TIER.standard,
-            }),
-          ).toMatchObject(info);
+        for (const dataClass of Object.values(dataClasses)) {
           for (const managedAIResidency of MANAGED_AI_RESIDENCIES) {
             const policy =
               dataClass === "customer"
                 ? { dataClass, managedAIResidency }
                 : { dataClass };
-            const options = {
-              organizationId: null,
-              modelTier: MANAGED_MODEL_TIER.standard,
-              ...policy,
-            };
-            if (!available) {
-              expect(() =>
-                getTanStackTextModelForTask("chat", null, options),
-              ).toThrow("Managed AI is not available");
-              expect(() =>
-                getTanStackTextModelById(selection, null, {
-                  task: "chat",
-                  ...options,
+            // The managed path serves only the credential its tier hands
+            // in; the factory never reads a key from the environment.
+            const result = Result.try({
+              try: () =>
+                createTanStackTextAdapterFactory({
+                  provider,
+                  ...policy,
+                  ...(provider === "openrouter"
+                    ? { managedOpenRouterCredential: MANAGED_CREDENTIAL }
+                    : {}),
                 }),
-              ).toThrow("Managed AI is not available");
+              catch: (error) => error,
+            });
+            if (dataClass === "customer" && provider !== "openrouter") {
+              expect(result.isErr()).toBe(true);
+              if (Result.isError(result)) {
+                expect(result.error).toMatchObject({
+                  status: 503,
+                  code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
+                });
+              }
               continue;
             }
-            expect(
+            expect(result.isOk()).toBe(
+              resolveTanStackAIProviderSupport({ provider }).supported,
+            );
+            if (Result.isError(result)) {
+              expect(result.error).not.toMatchObject({
+                code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
+              });
+            }
+          }
+        }
+      }
+    }
+    const withoutCredential = Result.try({
+      try: () =>
+        createTanStackTextAdapterFactory({
+          provider: "openrouter",
+          dataClass: "customer",
+          managedAIResidency: MANAGED_AI_RESIDENCIES[0],
+        }),
+      catch: (error) => error,
+    });
+    expect(
+      Result.isError(withoutCredential) && withoutCredential.error,
+    ).toMatchObject({ status: 503, code: MANAGED_PROVIDER_UNAVAILABLE_CODE });
+  });
+
+  test("resolves model metadata independently of request availability", () => {
+    testState.patchConfig({
+      USE_MOCK_AI: false,
+      ANTHROPIC_API_KEY: REQUEST_API_KEY,
+      BEDROCK_API_KEY: REQUEST_API_KEY,
+      GOOGLE_GENERATIVE_AI_API_KEY: REQUEST_API_KEY,
+      MISTRAL_API_KEY: REQUEST_API_KEY,
+      OPENAI_API_KEY: REQUEST_API_KEY,
+      OPENROUTER_API_KEY: REQUEST_API_KEY,
+    });
+
+    for (const provider of AI_PROVIDERS) {
+      if (!resolveTanStackAIProviderSupport({ provider }).supported) {
+        continue;
+      }
+      testState.setConfig("AI_PROVIDER", provider);
+      for (const dataClass of ["customer", "public_corpus"] as const) {
+        const available = isManagedProviderAvailable(provider, dataClass);
+        const info = getTanStackTextModelInfoForTask("chat", null, {
+          organizationId: null,
+          dataClass,
+          modelTier: MANAGED_MODEL_TIER.standard,
+        });
+        expect(info).toMatchObject({
+          keySource: "instance",
+          provider,
+          availability: available ? "available" : "unavailable",
+        });
+        const selection = `${provider}::${info.modelId}`;
+        expect(
+          getTanStackTextModelInfoById(selection, null, "chat", {
+            dataClass,
+            modelTier: MANAGED_MODEL_TIER.standard,
+          }),
+        ).toMatchObject(info);
+        for (const managedAIResidency of MANAGED_AI_RESIDENCIES) {
+          const policy =
+            dataClass === "customer"
+              ? { dataClass, managedAIResidency }
+              : { dataClass };
+          const options = {
+            organizationId: null,
+            modelTier: MANAGED_MODEL_TIER.standard,
+            managedOpenRouterCredential: MANAGED_CREDENTIAL,
+            ...policy,
+          };
+          if (!available) {
+            expect(() =>
               getTanStackTextModelForTask("chat", null, options),
-            ).toMatchObject({
-              keySource: info.keySource,
-              modelId: info.modelId,
-              provider: info.provider,
-            });
-            expect(
+            ).toThrow("Managed AI is not available");
+            expect(() =>
               getTanStackTextModelById(selection, null, {
                 task: "chat",
                 ...options,
               }),
-            ).toMatchObject({
-              keySource: info.keySource,
-              modelId: info.modelId,
-              provider: info.provider,
-            });
+            ).toThrow("Managed AI is not available");
+            continue;
           }
+          expect(
+            getTanStackTextModelForTask("chat", null, options),
+          ).toMatchObject({
+            keySource: info.keySource,
+            modelId: info.modelId,
+            provider: info.provider,
+          });
+          expect(
+            getTanStackTextModelById(selection, null, {
+              task: "chat",
+              ...options,
+            }),
+          ).toMatchObject({
+            keySource: info.keySource,
+            modelId: info.modelId,
+            provider: info.provider,
+          });
         }
       }
-    } finally {
-      Object.assign(env, previous);
     }
   });
 
   test("applies customer request policy for every provider and residency", () => {
-    const previousMock = env.USE_MOCK_AI;
-    const previousKey = env.OPENROUTER_API_KEY;
-    env.USE_MOCK_AI = false;
-    env.OPENROUTER_API_KEY = "test-instance-key";
-    try {
-      for (const provider of AI_PROVIDERS) {
-        for (const managedAIResidency of MANAGED_AI_RESIDENCIES) {
-          const options = {
-            provider,
-            dataClass: "customer" as const,
-            managedAIResidency,
-          };
-          if (provider === "openrouter") {
-            expect(
-              createTanStackTextAdapterFactory(options)(
-                "google/gemini-3.8-flash",
-              ).name,
-            ).toBe("openrouter");
-            continue;
-          }
-          expect(() => createTanStackTextAdapterFactory(options)).toThrow(
-            HandlerError,
-          );
-          expect(() => createTanStackTextAdapterFactory(options)).toThrow(
-            "Managed AI is not available",
-          );
-          const resolved = Result.try({
-            try: () => createTanStackTextAdapterFactory(options),
-            catch: (error) => error,
-          });
-          expect(Result.isError(resolved)).toBe(true);
-          if (Result.isError(resolved)) {
-            expect(
-              gradeFailure(
-                readEvidence(resolved.error),
-                failureSink({ event: "background-generation", expected: [] }),
-              ).grade,
-            ).toBe("anticipated");
-          }
+    testState.setConfig("USE_MOCK_AI", false);
+    testState.setConfig("OPENROUTER_API_KEY", "test-instance-key");
+
+    for (const provider of AI_PROVIDERS) {
+      for (const managedAIResidency of MANAGED_AI_RESIDENCIES) {
+        const options = {
+          provider,
+          dataClass: "customer" as const,
+          managedAIResidency,
+          managedOpenRouterCredential: MANAGED_CREDENTIAL,
+        };
+        if (provider === "openrouter") {
+          expect(
+            createTanStackTextAdapterFactory(options)("google/gemini-3.8-flash")
+              .name,
+          ).toBe("openrouter");
+          continue;
+        }
+        expect(() => createTanStackTextAdapterFactory(options)).toThrow(
+          HandlerError,
+        );
+        expect(() => createTanStackTextAdapterFactory(options)).toThrow(
+          "Managed AI is not available",
+        );
+        const resolved = Result.try({
+          try: () => createTanStackTextAdapterFactory(options),
+          catch: (error) => error,
+        });
+        expect(Result.isError(resolved)).toBe(true);
+        if (Result.isError(resolved)) {
+          expect(
+            gradeFailure(
+              readEvidence(resolved.error),
+              failureSink({ event: "background-generation", expected: [] }),
+            ).grade,
+          ).toBe("anticipated");
         }
       }
-    } finally {
-      env.USE_MOCK_AI = previousMock;
-      env.OPENROUTER_API_KEY = previousKey;
     }
   });
 
   test.each(TANSTACK_AI_PROVIDERS)(
     "preserves %s credential-owned requests and applies managed public-corpus policy",
     async (provider) => {
-      const previous = {
-        USE_MOCK_AI: env.USE_MOCK_AI,
-        ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY,
-        BEDROCK_API_KEY: env.BEDROCK_API_KEY,
-        GOOGLE_GENERATIVE_AI_API_KEY: env.GOOGLE_GENERATIVE_AI_API_KEY,
-        MISTRAL_API_KEY: env.MISTRAL_API_KEY,
-        OPENAI_API_KEY: env.OPENAI_API_KEY,
-        OPENROUTER_API_KEY: env.OPENROUTER_API_KEY,
-      };
       const originalFetch = globalThis.fetch;
-      const previousBedrockEndpoint =
-        process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"];
-      process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"] =
-        "https://bedrock-runtime.us-east-1.amazonaws.com.cassette.invalid";
+
+      testState.setEnv(
+        "AWS_ENDPOINT_URL_BEDROCK_RUNTIME",
+        "https://bedrock-runtime.us-east-1.amazonaws.com.cassette.invalid",
+      );
       const apiKey = REQUEST_API_KEY;
       const requests: {
         url: string;
@@ -434,7 +420,7 @@ describe("provider request policy", () => {
         contentType: string | null;
         apiKey: string | null;
       }[] = [];
-      Object.assign(env, {
+      testState.patchConfig({
         USE_MOCK_AI: false,
         ANTHROPIC_API_KEY: apiKey,
         BEDROCK_API_KEY: apiKey,
@@ -443,35 +429,37 @@ describe("provider request policy", () => {
         OPENAI_API_KEY: apiKey,
         OPENROUTER_API_KEY: apiKey,
       });
-      globalThis.fetch = Object.assign(
-        async (
-          input: Parameters<typeof globalThis.fetch>[0],
-          init?: RequestInit,
-        ) => {
-          const request =
-            input instanceof Request
-              ? input
-              : new Request(input.toString(), init);
-          requests.push({
-            url: request.url,
-            body: await request.json(),
-            authorization: request.headers.get("authorization"),
-            contentType: request.headers.get("content-type"),
-            apiKey:
-              request.headers.get("x-api-key") ??
-              request.headers.get("x-goog-api-key"),
-          });
-          return new Response(
-            JSON.stringify({
-              error: { code: 400, message: "Request unavailable" },
-            }),
-            {
-              status: 400,
-              headers: { "content-type": "application/json" },
-            },
-          );
-        },
-        { preconnect: originalFetch.preconnect },
+      testFetchState.set(
+        Object.assign(
+          async (
+            input: Parameters<typeof globalThis.fetch>[0],
+            init?: RequestInit,
+          ) => {
+            const request =
+              input instanceof Request
+                ? input
+                : new Request(input.toString(), init);
+            requests.push({
+              url: request.url,
+              body: await request.json(),
+              authorization: request.headers.get("authorization"),
+              contentType: request.headers.get("content-type"),
+              apiKey:
+                request.headers.get("x-api-key") ??
+                request.headers.get("x-goog-api-key"),
+            });
+            return new Response(
+              JSON.stringify({
+                error: { code: 400, message: "Request unavailable" },
+              }),
+              {
+                status: 400,
+                headers: { "content-type": "application/json" },
+              },
+            );
+          },
+          { preconnect: originalFetch.preconnect },
+        ),
       );
       try {
         const model = MODEL_DEFAULTS_LEDGER.chat[provider].candidate.modelId;
@@ -484,6 +472,7 @@ describe("provider request policy", () => {
           apiKey: expected.apiKey,
         };
         const chatOptions = {
+          threadId: "provider-data-policy-test",
           model,
           logger: resolveDebugOption(false),
           messages: [{ role: "user" as const, content: REQUEST_TEXT }],
@@ -492,6 +481,9 @@ describe("provider request policy", () => {
         const baseline = createTanStackTextAdapterFactory({
           provider,
           dataClass: "public_corpus",
+          ...(provider === "openrouter"
+            ? { managedOpenRouterCredential: MANAGED_CREDENTIAL }
+            : {}),
         })(model);
         for await (const _chunk of baseline.chatStream(chatOptions)) {
           /* consume stream */
@@ -523,14 +515,7 @@ describe("provider request policy", () => {
           expect(requests.at(0)).toEqual(expectedRequest);
         }
       } finally {
-        globalThis.fetch = originalFetch;
-        Object.assign(env, previous);
-        if (previousBedrockEndpoint === undefined) {
-          delete process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"];
-        } else {
-          process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"] =
-            previousBedrockEndpoint;
-        }
+        testFetchState.restore();
       }
     },
   );
@@ -542,24 +527,26 @@ describe("provider request policy", () => {
     testState.setConfig("AI_PROVIDER", "openrouter");
     testState.setConfig("REQUIRE_PERSONAL_AI_KEY", false);
     testState.setConfig("OPENROUTER_API_KEY", REQUEST_API_KEY);
-    globalThis.fetch = Object.assign(
-      async (
-        input: Parameters<typeof globalThis.fetch>[0],
-        init?: RequestInit,
-      ) => {
-        const request =
-          input instanceof Request
-            ? input
-            : new Request(input.toString(), init);
-        requests.push({ url: request.url, body: await request.json() });
-        return new Response(
-          JSON.stringify({
-            error: { code: 400, message: "Request unavailable" },
-          }),
-          { status: 400, headers: { "content-type": "application/json" } },
-        );
-      },
-      { preconnect: originalFetch.preconnect },
+    testFetchState.set(
+      Object.assign(
+        async (
+          input: Parameters<typeof globalThis.fetch>[0],
+          init?: RequestInit,
+        ) => {
+          const request =
+            input instanceof Request
+              ? input
+              : new Request(input.toString(), init);
+          requests.push({ url: request.url, body: await request.json() });
+          return new Response(
+            JSON.stringify({
+              error: { code: 400, message: "Request unavailable" },
+            }),
+            { status: 400, headers: { "content-type": "application/json" } },
+          );
+        },
+        { preconnect: originalFetch.preconnect },
+      ),
     );
     try {
       for (const managedAIResidency of MANAGED_AI_RESIDENCIES) {
@@ -581,6 +568,7 @@ describe("provider request policy", () => {
           organizationId: null,
           task: "chat",
           modelTier: MANAGED_MODEL_TIER.standard,
+          managedOpenRouterCredential: MANAGED_CREDENTIAL,
           ...policy,
         });
         expect(model.provider).toBe("openrouter");
@@ -588,6 +576,7 @@ describe("provider request policy", () => {
           MODEL_DEFAULTS_LEDGER.chat.openrouter.candidate.modelId,
         );
         for await (const _chunk of model.adapter.chatStream({
+          threadId: "provider-data-policy-test",
           model: model.modelId,
           logger: resolveDebugOption(false),
           messages: [{ role: "user", content: REQUEST_TEXT }],
@@ -607,114 +596,109 @@ describe("provider request policy", () => {
         });
       }
     } finally {
-      globalThis.fetch = originalFetch;
+      testFetchState.restore();
     }
   });
 
   test("rejects unsupported managed OpenRouter selections for every data class and residency", () => {
-    const previousMock = env.USE_MOCK_AI;
-    const previousKey = env.OPENROUTER_API_KEY;
-    env.USE_MOCK_AI = false;
-    env.OPENROUTER_API_KEY = "test-instance-key";
-    try {
-      for (const managedAIResidency of MANAGED_AI_RESIDENCIES) {
-        for (const dataClass of ["customer", "public_corpus"] as const) {
-          const policy =
-            dataClass === "customer"
-              ? { dataClass, managedAIResidency }
-              : { dataClass };
-          const factory = createTanStackTextAdapterFactory({
-            provider: "openrouter",
-            ...policy,
-          });
-          for (const modelId of [
-            "openrouter/auto",
-            "openrouter/auto:online",
-            "google/gemini-3.8-flash:batch",
-            "google/gemini-3.8-flash:online",
-            "google/gemini-3.8-flash:online:free",
-            "not/in-the-catalog",
-            "gpt-4o-mini",
+    testState.setConfig("USE_MOCK_AI", false);
+    testState.setConfig("OPENROUTER_API_KEY", "test-instance-key");
+
+    for (const managedAIResidency of MANAGED_AI_RESIDENCIES) {
+      for (const dataClass of ["customer", "public_corpus"] as const) {
+        const policy =
+          dataClass === "customer"
+            ? { dataClass, managedAIResidency }
+            : { dataClass };
+        const factory = createTanStackTextAdapterFactory({
+          provider: "openrouter",
+          managedOpenRouterCredential: MANAGED_CREDENTIAL,
+          ...policy,
+        });
+        for (const modelId of [
+          "openrouter/auto",
+          "openrouter/auto:online",
+          "google/gemini-3.8-flash:batch",
+          "google/gemini-3.8-flash:online",
+          "google/gemini-3.8-flash:online:free",
+          "not/in-the-catalog",
+          "gpt-4o-mini",
+        ]) {
+          const eligibility = assertManagedOpenRouterModel(modelId);
+          expect(eligibility.isErr()).toBe(true);
+          if (eligibility.isErr()) {
+            expect(eligibility.error).toMatchObject({
+              status: 503,
+              code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
+            });
+          }
+          for (const select of [
+            () => factory(modelId),
+            () =>
+              getTanStackTextModelInfoById(
+                `openrouter::${modelId}`,
+                null,
+                "chat",
+                { dataClass, modelTier: MANAGED_MODEL_TIER.standard },
+              ),
           ]) {
-            const eligibility = assertManagedOpenRouterModel(modelId);
-            expect(eligibility.isErr()).toBe(true);
-            if (eligibility.isErr()) {
-              expect(eligibility.error).toMatchObject({
-                status: 503,
-                code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
-              });
-            }
-            for (const select of [
-              () => factory(modelId),
-              () =>
-                getTanStackTextModelInfoById(
-                  `openrouter::${modelId}`,
-                  null,
-                  "chat",
-                  { dataClass, modelTier: MANAGED_MODEL_TIER.standard },
-                ),
-            ]) {
-              const selection = Result.try({
-                try: () => select(),
-                catch: (error) => error,
-              });
-              expect(selection.isErr()).toBe(true);
-              if (selection.isErr()) {
-                expect(selection.error).toMatchObject({
-                  status: 503,
-                  code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
-                });
-              }
-            }
-            const result = Result.try({
-              try: () =>
-                getTanStackTextModelById(`openrouter::${modelId}`, null, {
-                  organizationId: null,
-                  task: "chat",
-                  ...policy,
-                  modelTier: MANAGED_MODEL_TIER.standard,
-                }),
+            const selection = Result.try({
+              try: () => select(),
               catch: (error) => error,
             });
-            expect(result.isErr()).toBe(true);
-            if (result.isErr()) {
-              expect(result.error).toMatchObject({
+            expect(selection.isErr()).toBe(true);
+            if (selection.isErr()) {
+              expect(selection.error).toMatchObject({
                 status: 503,
                 code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
               });
             }
           }
-          for (const model of BYOK_MODEL_OPTIONS.openrouter) {
-            expect(assertManagedOpenRouterModel(model).isOk()).toBe(true);
-            expect(factory(model).name).toBe("openrouter");
+          const result = Result.try({
+            try: () =>
+              getTanStackTextModelById(`openrouter::${modelId}`, null, {
+                organizationId: null,
+                task: "chat",
+                ...policy,
+                modelTier: MANAGED_MODEL_TIER.standard,
+              }),
+            catch: (error) => error,
+          });
+          expect(result.isErr()).toBe(true);
+          if (result.isErr()) {
+            expect(result.error).toMatchObject({
+              status: 503,
+              code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
+            });
           }
         }
+        for (const model of BYOK_MODEL_OPTIONS.openrouter) {
+          expect(assertManagedOpenRouterModel(model).isOk()).toBe(true);
+          expect(factory(model).name).toBe("openrouter");
+        }
       }
-    } finally {
-      env.USE_MOCK_AI = previousMock;
-      env.OPENROUTER_API_KEY = previousKey;
     }
   });
 
   test("rejects unsafe managed primary models before sending", async () => {
-    const previousMock = env.USE_MOCK_AI;
-    const previousKey = env.OPENROUTER_API_KEY;
     const originalFetch = globalThis.fetch;
     let sent = 0;
-    env.USE_MOCK_AI = false;
-    env.OPENROUTER_API_KEY = "test-instance-key";
-    globalThis.fetch = Object.assign(
-      async () => {
-        sent += 1;
-        return new Response(
-          JSON.stringify({ error: { message: "Unexpected request" } }),
-          {
-            status: 400,
-            headers: { "content-type": "application/json" },
-          },
-        );
-      },
-      { preconnect: originalFetch.preconnect },
+    testState.setConfig("USE_MOCK_AI", false);
+    testState.setConfig("OPENROUTER_API_KEY", "test-instance-key");
+    testFetchState.set(
+      Object.assign(
+        async () => {
+          sent += 1;
+          return new Response(
+            JSON.stringify({ error: { message: "Unexpected request" } }),
+            {
+              status: 400,
+              headers: { "content-type": "application/json" },
+            },
+          );
+        },
+        { preconnect: originalFetch.preconnect },
+      ),
     );
     try {
       for (const managedAIResidency of MANAGED_AI_RESIDENCIES) {
@@ -726,6 +710,7 @@ describe("provider request policy", () => {
           const model = "google/gemini-3.8-flash";
           const adapter = createTanStackTextAdapterFactory({
             provider: "openrouter",
+            managedOpenRouterCredential: MANAGED_CREDENTIAL,
             ...policy,
           })(model);
           for (const invalidModel of [
@@ -735,6 +720,7 @@ describe("provider request policy", () => {
             "not/in-the-catalog",
           ]) {
             const chatOptions = {
+              threadId: "provider-data-policy-test",
               model: invalidModel,
               messages: [{ role: "user" as const, content: REQUEST_TEXT }],
               logger: resolveDebugOption(false),
@@ -791,9 +777,7 @@ describe("provider request policy", () => {
         }
       }
     } finally {
-      globalThis.fetch = originalFetch;
-      env.USE_MOCK_AI = previousMock;
-      env.OPENROUTER_API_KEY = previousKey;
+      testFetchState.restore();
     }
   });
 
@@ -900,48 +884,57 @@ describe("provider request policy", () => {
         const { status, message, routingRefusal } = response;
         test(`applies ${scenario.name} request options on ${path} with status ${status} and routing ${routingRefusal}`, async () => {
           const originalFetch = globalThis.fetch;
-          const previousMock = env.USE_MOCK_AI;
-          const previousKey = env.OPENROUTER_API_KEY;
+
           const requests: { url: string; body: unknown }[] = [];
-          env.USE_MOCK_AI = false;
-          env.OPENROUTER_API_KEY = "test-instance-key";
-          globalThis.fetch = Object.assign(
-            async (
-              input: Parameters<typeof globalThis.fetch>[0],
-              init?: RequestInit,
-            ) => {
-              const request =
-                input instanceof Request
-                  ? input
-                  : new Request(input.toString(), init);
-              requests.push({ url: request.url, body: await request.json() });
-              if (status === "aborted") {
-                throw new DOMException("Request aborted", "AbortError");
-              }
-              return new Response(
-                JSON.stringify({
-                  error: {
-                    code: status,
-                    message,
-                    ...("metadata" in response
-                      ? { metadata: response.metadata }
-                      : {}),
-                  },
-                }),
-                { status, headers: { "content-type": "application/json" } },
-              );
-            },
-            { preconnect: originalFetch.preconnect },
+          testState.setConfig("USE_MOCK_AI", false);
+          testState.setConfig("OPENROUTER_API_KEY", "test-instance-key");
+          testFetchState.set(
+            Object.assign(
+              async (
+                input: Parameters<typeof globalThis.fetch>[0],
+                init?: RequestInit,
+              ) => {
+                const request =
+                  input instanceof Request
+                    ? input
+                    : new Request(input.toString(), init);
+                requests.push({ url: request.url, body: await request.json() });
+                if (status === "aborted") {
+                  throw new DOMException("Request aborted", "AbortError");
+                }
+                return new Response(
+                  JSON.stringify({
+                    error: {
+                      code: status,
+                      message,
+                      ...("metadata" in response
+                        ? { metadata: response.metadata }
+                        : {}),
+                    },
+                  }),
+                  { status, headers: { "content-type": "application/json" } },
+                );
+              },
+              { preconnect: originalFetch.preconnect },
+            ),
           );
           try {
             const model = scenario.strict
               ? "google/gemini-3.8-flash"
               : "google/gemini-3.8-flash:online";
-            const adapter = createTanStackTextAdapterFactory({
-              provider: "openrouter",
-              ...scenario.options,
-            })(model);
+            // A customer key serves its own request; managed requests carry
+            // the tier's credential.
+            const adapter = createTanStackTextAdapterFactory(
+              "apiKey" in scenario.options
+                ? { provider: "openrouter", ...scenario.options }
+                : {
+                    provider: "openrouter",
+                    managedOpenRouterCredential: MANAGED_CREDENTIAL,
+                    ...scenario.options,
+                  },
+            )(model);
             const chatOptions = {
+              threadId: "provider-data-policy-test",
               model,
               logger: resolveDebugOption(false),
               messages: [{ role: "user" as const, content: "Reply with OK." }],
@@ -1084,9 +1077,7 @@ describe("provider request policy", () => {
               });
             }
           } finally {
-            globalThis.fetch = originalFetch;
-            env.USE_MOCK_AI = previousMock;
-            env.OPENROUTER_API_KEY = previousKey;
+            testFetchState.restore();
           }
         });
       }

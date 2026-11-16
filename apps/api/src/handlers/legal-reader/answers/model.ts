@@ -187,6 +187,7 @@ export const runReaderAnswerModel = async (
   const streamed = await Result.tryPromise({
     try: async () => {
       for await (const chunk of streamRun({
+        threadId: input.answerId,
         userId: input.admission.userId,
         admission: input.admission,
         model,
@@ -242,6 +243,7 @@ export const runReaderAnswerModel = async (
           return Result.err(
             new HandlerError({
               status: 502,
+              code: "internal_error",
               message: "Reader answer generation failed",
             }),
           );
@@ -260,6 +262,7 @@ export const runReaderAnswerModel = async (
         return Result.err(
           new HandlerError({
             status: 502,
+            code: "internal_error",
             message: "Reader answer generation did not complete",
           }),
         );

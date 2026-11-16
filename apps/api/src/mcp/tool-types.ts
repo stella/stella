@@ -4,11 +4,15 @@ import type {
 } from "@modelcontextprotocol/server";
 import type * as v from "valibot";
 
-import type { SearchPaginationOutcome } from "@stll/api-contract/search";
+import type {
+  SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET,
+  SearchPaginationOutcome,
+} from "@stll/api-contract/search";
 
 import type { AccountAccess } from "@/api/lib/api-handlers";
 import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
 import type { FeatureId } from "@/api/lib/feature-access/registry";
+import type { WindowedReadSurface } from "@/api/lib/files/windowed-read-surface";
 import type {
   MCP_ADVANCED_RESOURCE_SCOPES,
   MCP_ALL_RESOURCE_SCOPES,
@@ -17,7 +21,11 @@ import type { McpRequestContext } from "@/api/mcp/context";
 import type { McpErrorCode, McpValidationIssue } from "@/api/mcp/error-codes";
 import type { MCP_INTERNAL_TOOL_FAILURE } from "@/api/mcp/tool-call-outcome";
 import type { TextWindowResult } from "@/api/mcp/tool-utils";
-import type { McpWriteToolPermissions } from "@/api/mcp/write-tool-authority";
+import type {
+  AuthorizedMcpRequestContext,
+  McpReadToolPermissions,
+  McpWriteToolPermissions,
+} from "@/api/mcp/write-tool-authority";
 
 /**
  * v2 types `Tool["inputSchema"]` as an arbitrary JSON value, which loses the
@@ -27,11 +35,9 @@ import type { McpWriteToolPermissions } from "@/api/mcp/write-tool-authority";
 export type JsonSchema = JsonSchemaType;
 
 /**
- * Every MCP tool accepts one named-argument object, never a scalar root. The
- * authoring type also accepts TypeBox/Elysia's runtime schemas, which carry
- * non-enumerable symbols beyond their JSON fields. Wire projections rebuild
- * and validate the enumerable JSON recursively, so those symbols never enter
- * the protocol payload.
+ * Every MCP tool accepts one named-argument object, never a scalar root. Wire
+ * projections rebuild and validate the enumerable JSON recursively, so only
+ * JSON fields enter the protocol payload.
  */
 export type McpToolInputSchema = {
   type: "object";
@@ -101,7 +107,7 @@ const MCP_ANONYMIZED_EXCLUSION_REASONS = [
   "personal_register_data",
 ] as const;
 
-export type McpAnonymizedExclusionReason =
+type McpAnonymizedExclusionReason =
   (typeof MCP_ANONYMIZED_EXCLUSION_REASONS)[number];
 
 /**
@@ -159,7 +165,7 @@ export type McpToolAnnotationReasons = Readonly<{
 
 export type McpReadClass = "tenant" | "public" | "both";
 
-export type McpReadClassResolver = (
+type McpReadClassResolver = (
   args: unknown,
 ) => McpReadClass | undefined | Promise<McpReadClass | undefined>;
 
@@ -185,6 +191,12 @@ export type McpToolAccessBranch =
       access: "read";
       readClass: McpReadClass | McpReadClassResolver;
       annotations: McpToolAnnotations & { readOnlyHint: true };
+      /**
+       * The member authority required before a permission-gated read can reach
+       * its handler, or an explicit reason the read is open to every caller
+       * admitted by its scope.
+       */
+      permissions: McpReadToolPermissions;
     }
   | {
       access: "write";
@@ -203,7 +215,7 @@ export type McpToolAccessBranch =
       accountAccess: AccountAccess;
     };
 
-export type McpToolDestructiveBehavior =
+type McpToolDestructiveBehavior =
   | { type: "always" }
   | {
       type: "input-discriminator";
@@ -307,6 +319,9 @@ const MCP_CLI_TOOL_SCOPE_BY_RESOURCE_SCOPE = {
   "stella:billing_write": "billing_write",
   "stella:admin_read": "admin_read",
   "stella:admin_write": "admin_write",
+  "stella:account_export_read": null,
+  "stella:account_export_write": null,
+  "stella:organization_create": "organization_create",
   "stella:feedback": "feedback",
   "stella:skills": null,
   "stella:external_mcps": null,
@@ -323,7 +338,7 @@ export const MCP_CLI_TOOL_SCOPES: readonly McpCliToolScope[] = Object.values(
   MCP_CLI_TOOL_SCOPE_BY_RESOURCE_SCOPE,
 ).filter((scope): scope is McpCliToolScope => scope !== null);
 
-export type McpCliDiscriminatorSubcommand = {
+type McpCliDiscriminatorSubcommand = {
   command: string;
   destructive?: boolean;
   include?: readonly string[];
@@ -486,7 +501,8 @@ export type McpStructuredTextField = {
  * metadata back into the payload. Windowing runs after anonymization so an
  * entity name can never be split across a window edge.
  */
-export type McpStructuredWindow = {
+type McpStructuredWindow = {
+  surface: WindowedReadSurface;
   apply: (window: TextWindowResult) => void;
   cursor: string | undefined;
   maxChars: number;
@@ -511,6 +527,7 @@ export type InternalToolStructuredError = {
   hint?: string;
   issues?: readonly McpValidationIssue[];
   retryable?: boolean;
+  retryAfterMs?: number;
   contactUrl?: string;
   requestId?: string;
 } & (
@@ -518,7 +535,7 @@ export type InternalToolStructuredError = {
   | { code: Exclude<McpErrorCode, "internal_error"> }
 );
 
-export type InternalToolTextError = {
+type InternalToolTextError = {
   type: "text";
   message: string;
 };
@@ -557,7 +574,9 @@ export type InternalToolResult<TData = unknown> =
 export type McpEgressPlan<TPayload = unknown> =
   | {
       egress: "compatSearch";
-      paginationOutcome?: SearchPaginationOutcome;
+      paginationOutcome?:
+        | SearchPaginationOutcome
+        | typeof SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET;
       nextCursor: string | null | undefined;
       results: readonly McpCompatSearchResult[];
     }
@@ -597,7 +616,7 @@ export type McpToolHandler<TData = unknown> = ({
   context,
 }: {
   args: Record<string, unknown>;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
 }) => McpToolResponse<TData> | Promise<McpToolResponse<TData>>;
 
 type TypedMcpToolHandlerResult<TData> =
@@ -605,7 +624,7 @@ type TypedMcpToolHandlerResult<TData> =
 
 export type TypedMcpToolHandler<TData> = (options: {
   args: Record<string, unknown>;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
 }) => TypedMcpToolHandlerResult<TData>;
 
 type TypedHandlerData<THandler> =
@@ -671,11 +690,8 @@ export type HandlerOutputsMatchByName<
   ? false
   : true;
 
-export type AssertTrue<TValue extends true> = TValue;
-
-export type McpToolHandlerMap<
-  TDefinitions extends readonly McpToolDefinition[],
-> = Readonly<Record<TDefinitions[number]["name"], McpToolHandler>>;
+type McpToolHandlerMap<TDefinitions extends readonly McpToolDefinition[]> =
+  Readonly<Record<TDefinitions[number]["name"], McpToolHandler>>;
 
 export type McpToolOutputContractMap<
   TDefinitions extends readonly McpToolDefinition[],

@@ -13,6 +13,7 @@ import { cn } from "@stll/ui/utils";
 import {
   isListItemType,
   ITEM_TYPE_TRANSLATION_KEYS,
+  type TaskPriority,
 } from "@/components/workspaces/tasks/task-detail-constants";
 import { isTaskOverdue } from "@/components/workspaces/tasks/task-overdue";
 import { useFormatter } from "@/i18n/formatting-context";
@@ -22,7 +23,7 @@ import { UTC_CALENDAR_DATE_FORMAT } from "@/lib/relative-time";
 import type { WorkspaceEntity } from "@/lib/types";
 
 const PRIORITY_CONFIG: Record<
-  string,
+  Exclude<TaskPriority, "none">,
   { icon: typeof ArrowUpIcon; className: string }
 > = {
   urgent: {
@@ -78,7 +79,7 @@ export const TaskBadges = ({ entity, className }: TaskBadgesProps) => {
       )}
     >
       {showItemType && (
-        <span className="bg-muted rounded px-1.5 py-0.5">
+        <span className="bg-muted rounded-sm px-1.5 py-0.5">
           {t(ITEM_TYPE_TRANSLATION_KEYS[listItemType])}
         </span>
       )}

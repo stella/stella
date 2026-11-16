@@ -1,10 +1,11 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { eq, inArray, sql, TransactionRollbackError } from "drizzle-orm";
+import { and, eq, inArray, sql, TransactionRollbackError } from "drizzle-orm";
 import fc from "fast-check";
 
 import { HOSTED_CHECKOUT_REFUSAL_CODE } from "@stll/api-contract/hosted-checkout";
 import { assertProperty, propertyConfig } from "@stll/property-testing";
+import { createTestState } from "@stll/test-state";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -37,8 +38,14 @@ import {
   createTestHandlerContext,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 
 import createHostedSetup from "./create-hosted-setup";
+
+const testState = createTestState({ file: import.meta.path, config: env });
+
+const testFetchState = createTestFetch();
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -118,25 +125,27 @@ const requestUrl = (input: Parameters<typeof globalThis.fetch>[0]): string => {
 
 /** Replaces the provider's HTTP API; every other dependency is real. */
 const installFakeProvider = (
-  respond: (call: number) => Response,
+  respond: (call: number) => Response | Promise<Response>,
 ): FakeProvider => {
   const originalFetch = globalThis.fetch;
   let calls = 0;
-  globalThis.fetch = Object.assign(
-    async (input: Parameters<typeof globalThis.fetch>[0]) => {
-      const url = requestUrl(input);
-      if (new URL(url).origin !== new URL(PROVIDER_BASE_URL).origin) {
-        return panic(`Unexpected outbound request to ${url}`);
-      }
-      calls += 1;
-      return respond(calls);
-    },
-    { preconnect: originalFetch.preconnect },
+  testFetchState.set(
+    Object.assign(
+      async (input: Parameters<typeof globalThis.fetch>[0]) => {
+        const url = requestUrl(input);
+        if (new URL(url).origin !== new URL(PROVIDER_BASE_URL).origin) {
+          return panic(`Unexpected outbound request to ${url}`);
+        }
+        calls += 1;
+        return respond(calls);
+      },
+      { preconnect: originalFetch.preconnect },
+    ),
   );
   return {
     calls: () => calls,
     restore: () => {
-      globalThis.fetch = originalFetch;
+      testFetchState.restore();
     },
   };
 };
@@ -168,17 +177,20 @@ const withHostedEnv = async (fn: () => Promise<void>) => {
     HOSTED_USAGE_WEBHOOK_SECRET_PREVIOUS:
       env.HOSTED_USAGE_WEBHOOK_SECRET_PREVIOUS,
   };
-  env.FEATURE_USAGE = true;
-  env.HOSTED_USAGE_PROVIDER = "polar";
-  env.HOSTED_USAGE_PROVIDER_API_VERSION = DEFAULT_POLAR_API_VERSION;
-  env.HOSTED_USAGE_PROVIDER_API_KEY = "provider_fixture_key";
-  env.HOSTED_USAGE_PROVIDER_BASE_URL = PROVIDER_BASE_URL;
-  env.HOSTED_USAGE_WEBHOOK_SECRET = WEBHOOK_SECRET;
-  env.HOSTED_USAGE_WEBHOOK_SECRET_PREVIOUS = undefined;
+  testState.setConfig("FEATURE_USAGE", true);
+  testState.setConfig("HOSTED_USAGE_PROVIDER", "polar");
+  testState.setConfig(
+    "HOSTED_USAGE_PROVIDER_API_VERSION",
+    DEFAULT_POLAR_API_VERSION,
+  );
+  testState.setConfig("HOSTED_USAGE_PROVIDER_API_KEY", "provider_fixture_key");
+  testState.setConfig("HOSTED_USAGE_PROVIDER_BASE_URL", PROVIDER_BASE_URL);
+  testState.setConfig("HOSTED_USAGE_WEBHOOK_SECRET", WEBHOOK_SECRET);
+  testState.setConfig("HOSTED_USAGE_WEBHOOK_SECRET_PREVIOUS", undefined);
   try {
     await fn();
   } finally {
-    Object.assign(env, previous);
+    testState.patchConfig(previous);
   }
 };
 
@@ -351,6 +363,82 @@ if (!databaseUrl || !runPostgresTests) {
   });
 } else {
   describe("hosted subscription checkout claims (postgres)", () => {
+    test("membership removal during provider creation withholds the checkout URL", async () => {
+      await withHostedEnv(async () => {
+        await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+          const setup = openClient();
+          const fixture = await setup.db.transaction(
+            async (tx) => await seedFixture(tx),
+          );
+          const secondOwnerId = mintAuthProviderId<"user">();
+          await setup.db.insert(user).values({
+            id: secondOwnerId,
+            name: "Second hosted checkout owner",
+            email: `${secondOwnerId}@example.test`,
+          });
+          await setup.db.insert(organizationAccessStates).values({
+            organizationId: fixture.organizationId,
+            state: ORGANIZATION_ACCESS_STATE.selfManagedKeys,
+          });
+          await setup.db.insert(member).values({
+            id: mintAuthProviderIdValue(),
+            organizationId: fixture.organizationId,
+            userId: secondOwnerId,
+            role: "owner",
+            createdAt: new Date(),
+          });
+          const providerStarted = Promise.withResolvers<undefined>();
+          const releaseProvider = Promise.withResolvers<undefined>();
+          const provider = installFakeProvider(async (call) => {
+            providerStarted.resolve(undefined);
+            await releaseProvider.promise;
+            return sessionResponse(call);
+          });
+          try {
+            const responsePromise = startCheckout({
+              fixture,
+              safeDb: createSafeDb(
+                markRlsDatabase(openClient().db),
+                [],
+                fixture.organizationId,
+                fixture.userId,
+              ),
+            });
+            await providerStarted.promise;
+            await setup.db
+              .delete(member)
+              .where(
+                and(
+                  eq(member.organizationId, fixture.organizationId),
+                  eq(member.userId, fixture.userId),
+                ),
+              );
+            releaseProvider.resolve(undefined);
+
+            expect(await responsePromise).toMatchObject({ code: 403 });
+            expect(provider.calls()).toBe(1);
+          } finally {
+            provider.restore();
+            releaseProvider.resolve(undefined);
+            await deleteOrganizationsForTest(setup.db, [
+              fixture.organizationId,
+            ]);
+            await setup.db
+              .delete(user)
+              .where(inArray(user.id, [fixture.userId, secondOwnerId]));
+            await setup.db
+              .delete(usagePolicies)
+              .where(
+                inArray(usagePolicies.id, [
+                  fixture.policyId,
+                  fixture.seatPolicyId,
+                ]),
+              );
+          }
+        });
+      });
+    });
+
     test("concurrent identical starts share exactly one provider session", async () => {
       await withHostedEnv(async () => {
         await assertProperty(
@@ -436,9 +524,9 @@ if (!databaseUrl || !runPostgresTests) {
                     expect(claims.at(0)?.claimId).not.toBe(staleClaimId);
                   } finally {
                     provider.restore();
-                    await setup.db
-                      .delete(organization)
-                      .where(eq(organization.id, fixture.organizationId));
+                    await deleteOrganizationsForTest(setup.db, [
+                      fixture.organizationId,
+                    ]);
                     await setup.db
                       .delete(user)
                       .where(eq(user.id, fixture.userId));
@@ -503,6 +591,14 @@ if (!databaseUrl || !runPostgresTests) {
       "a start for %s supersedes the open session",
       async (_name, requestsFor) => {
         await withRolledBackFixture(async (tx, fixture) => {
+          // A seat count is checked against the organization's recorded
+          // access state, so the organization needs one.
+          await tx.insert(organizationAccessStates).values({
+            organizationId: fixture.organizationId,
+            state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
+            evaluationStartedAt: sql`now()`,
+            evaluationEndsAt: sql`now() + interval '14 days'`,
+          });
           const requests = requestsFor(fixture);
           const provider = installFakeProvider(sessionResponse);
           try {
@@ -628,13 +724,13 @@ if (!databaseUrl || !runPostgresTests) {
       });
     });
 
-    test("a created session reaches the caller when the claim update fails", async () => {
+    test("a created session stays undisclosed when the authority recheck fails", async () => {
       await withRolledBackFixture(async (tx, fixture) => {
         const provider = installFakeProvider(sessionResponse);
         try {
           const scoped = scopedSafeDb(tx, fixture);
-          // Database work after the provider call fails, so only the claim
-          // update is affected.
+          // Database work after the provider call fails, including the final
+          // authority check that gates URL disclosure.
           const failingAfterProvider: SafeDb = async (run, retry) =>
             provider.calls() === 0
               ? await scoped(run, retry)
@@ -643,10 +739,7 @@ if (!databaseUrl || !runPostgresTests) {
                 });
           expect(
             await startCheckout({ fixture, safeDb: failingAfterProvider }),
-          ).toEqual({
-            hostedSessionId: "checkout_1",
-            url: "https://buy.provider.test/1",
-          });
+          ).toMatchObject({ code: 500 });
           expect(provider.calls()).toBe(1);
         } finally {
           provider.restore();

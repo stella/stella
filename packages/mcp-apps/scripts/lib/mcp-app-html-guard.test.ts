@@ -3,8 +3,9 @@ import path from "node:path";
 
 import { repoRelativePath } from "@stll/portable-path";
 
+import { assembleMcpAppDocument } from "../../src/app-document";
 import { MCP_APPS } from "../../src/manifest";
-import { inspectMcpAppHtml } from "./mcp-app-html-guard";
+import { inspectMcpAppDocument, inspectMcpAppHtml } from "./mcp-app-html-guard";
 
 test("the HTML guard checks elements, not React script strings", () => {
   expect(
@@ -96,6 +97,40 @@ test.each([
 ])("ordinary CSS passes the style checks: %s", (css) => {
   expect(inspectMcpAppHtml(`<style>${css}</style>`)).toEqual([]);
   expect(inspectMcpAppHtml(`<div style="${css}"></div>`)).toEqual([]);
+});
+
+test("an assembled document must parse back into its parts", () => {
+  const shell = [
+    "<!doctype html><html><head>",
+    "</head><body>",
+    "</body></html>",
+  ] as const;
+  expect(
+    inspectMcpAppDocument(
+      assembleMcpAppDocument({
+        shell,
+        styles: ["a{}"],
+        scripts: ["var r = 1;"],
+        module: 'const s = "<\\/script>";',
+      }),
+      {
+        shell,
+        styles: ["a{}"],
+        scripts: ["var r = 1;"],
+        module: 'const s = "<\\/script>";',
+      },
+    ),
+  ).toEqual([]);
+  const early = {
+    shell,
+    styles: ['a{content:"</style>"}'],
+    scripts: ['const s = "</script>";'],
+    module: "await 0;",
+  };
+  expect(inspectMcpAppDocument(assembleMcpAppDocument(early), early)).toEqual([
+    "Styles do not parse back as assembled",
+    "Scripts do not parse back as assembled",
+  ]);
 });
 
 test("committed MCP app bundles pass the HTML guard", async () => {

@@ -3,8 +3,10 @@ import type {
   agentSkillRevisions,
   agentSkills,
   aiMemories,
+  billingDraftUserSettings,
   chatMessageRevisions,
   chatMessages,
+  chatQueuedMessages,
   chatThreads,
   legalReaderAnnotations,
   legalReaderAnswerMessages,
@@ -47,6 +49,9 @@ type AccountExportProjectionSignatures = {
     row: typeof chatMessageRevisions.$inferSelect,
     role: (typeof chatMessages.$inferSelect)["role"],
   ) => unknown;
+  chat_queued_messages: (
+    row: typeof chatQueuedMessages.$inferSelect,
+  ) => unknown;
   ai_memories: (row: typeof aiMemories.$inferSelect) => unknown;
   agent_skills: (
     row: typeof agentSkills.$inferSelect,
@@ -69,6 +74,9 @@ type AccountExportProjectionSignatures = {
   ) => unknown;
   saved_time_narratives: (
     row: typeof savedTimeNarratives.$inferSelect,
+  ) => unknown;
+  billing_draft_user_settings: (
+    row: typeof billingDraftUserSettings.$inferSelect,
   ) => unknown;
   template_lookup_format_user_defaults: (
     row: typeof templateLookupFormatUserDefaults.$inferSelect,

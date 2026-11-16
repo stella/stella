@@ -1,4 +1,4 @@
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { LIMITS } from "@/api/lib/limits";
 
@@ -7,8 +7,13 @@ import { LIMITS } from "@/api/lib/limits";
  * number rather than reached by a chain of cursors. Bounded in the schema so
  * a request past the deepest result is refused before it reaches a handler.
  */
-export const tDecisionPageOffset = () =>
-  t.Integer({ minimum: 0, maximum: LIMITS.caseLawResultDepthMax - 1 });
+export const decisionPageOffsetSchema = () =>
+  v.pipe(
+    v.number(),
+    v.integer(),
+    v.minValue(0),
+    v.maxValue(LIMITS.caseLawResultDepthMax - 1),
+  );
 
 export const DECISION_PAGE_CURSOR_AND_OFFSET_MESSAGE =
   "A page is addressed by cursor or by offset, not both";

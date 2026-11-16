@@ -18,10 +18,13 @@ import type {
   KanbanGroup,
 } from "@stll/ui/kanban";
 import type { OptionColor } from "@stll/ui/option-color";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { UserIdentity } from "@/components/user-avatar";
 import { KanbanCard } from "@/components/workspaces/kanban/kanban-card";
+import type { KanbanSelection } from "@/components/workspaces/kanban/kanban-selection";
+import type { KanbanDraggedCard } from "@/components/workspaces/kanban/kanban-selection.logic";
 import {
   useKanbanColumnDrag,
   useKanbanEntityDropTarget,
@@ -47,10 +50,9 @@ type KanbanSubgroupBoardProps = {
     ((columnValue: string, color: OptionColor) => void) | undefined;
   onCreateTask: (columnValue: string, laneValue: string | null) => void;
   onDropCard: (
-    entityId: string,
+    cards: readonly KanbanDraggedCard[],
     columnValue: string,
     laneValue: string | null,
-    sourceSubgroupValue: string | null | undefined,
   ) => void;
   onHideColumn: (columnValue: string) => void;
   onLoadMore: () => void;
@@ -63,6 +65,7 @@ type KanbanSubgroupBoardProps = {
     edge: Edge | null,
   ) => void;
   properties: WorkspaceProperty[];
+  selection: KanbanSelection;
   workspaceId: string;
 };
 
@@ -85,6 +88,7 @@ export const KanbanSubgroupBoard = ({
   onRenameEntity,
   onReorderColumn,
   properties,
+  selection,
   workspaceId,
 }: KanbanSubgroupBoardProps) => {
   const t = useTranslations();
@@ -127,6 +131,7 @@ export const KanbanSubgroupBoard = ({
           onLoadMore={onLoadMore}
           onRenameEntity={onRenameEntity}
           properties={properties}
+          selection={selection}
           workspaceId={workspaceId}
         />
       )}
@@ -161,14 +166,14 @@ type WorkspaceKanbanSubgroupCellProps = {
   loadedEntityCount: number;
   onCreateTask: (columnValue: string, laneValue: string | null) => void;
   onDropCard: (
-    entityId: string,
+    cards: readonly KanbanDraggedCard[],
     columnValue: string,
     laneValue: string | null,
-    sourceSubgroupValue: string | null | undefined,
   ) => void;
   onLoadMore: () => void;
   onRenameEntity: (entityId: string, newName: string) => void;
   properties: WorkspaceProperty[];
+  selection: KanbanSelection;
   workspaceId: string;
 };
 
@@ -187,6 +192,7 @@ const WorkspaceKanbanSubgroupCell = ({
   onLoadMore,
   onRenameEntity,
   properties,
+  selection,
   workspaceId,
 }: WorkspaceKanbanSubgroupCellProps) => {
   const cellRef = useRef<HTMLDivElement>(null);
@@ -198,9 +204,9 @@ const WorkspaceKanbanSubgroupCell = ({
     elementRef: cellRef,
     enabled: canMoveCards,
     name: `${cell.coordinate.column.type === "group" ? cell.coordinate.column.group.label : cell.coordinate.column.destination.label}, ${cell.coordinate.lane.type === "group" ? cell.coordinate.lane.group.label : ""}`,
-    onDrop: (entityId, sourceSubgroupValue) => {
+    onDrop: (cards) => {
       if (columnValue !== null) {
-        onDropCard(entityId, columnValue, laneValue, sourceSubgroupValue);
+        onDropCard(cards, columnValue, laneValue);
       }
     },
   });
@@ -249,6 +255,7 @@ const WorkspaceKanbanSubgroupCell = ({
           entity={entity}
           onRename={onRenameEntity}
           properties={properties}
+          selection={{ owner: selection, scope: cell.rows }}
           workspaceId={workspaceId}
         />
       )}
@@ -371,7 +378,7 @@ const WorkspaceKanbanColumnHeading = ({
         dragHandle={
           canEdit ? (
             <div
-              className="text-muted-foreground hover:text-foreground shrink-0 cursor-grab opacity-0 transition-opacity group-hover/column:opacity-100"
+              className="text-muted-foreground hover:text-foreground shrink-0 cursor-grab opacity-0 transition-opacity group-hover/column:opacity-100 pointer-coarse:opacity-100"
               ref={dragHandleRef}
             >
               <GripVerticalIcon className="size-3.5" />
@@ -437,14 +444,18 @@ const SubgroupIdentity = ({ group }: { group: KanbanGroup }) => {
           className="size-2.5 shrink-0 rounded-full"
           style={{ backgroundColor: group.color }}
         />
-        <span className="truncate text-sm font-medium">{group.label}</span>
+        <TruncatedText className="text-sm font-medium">
+          {group.label}
+        </TruncatedText>
       </span>
     );
   }
   return (
     <span className="flex max-w-80 items-center gap-2">
       <Rows3Icon className="text-muted-foreground size-4 shrink-0" />
-      <span className="truncate text-sm font-medium">{group.label}</span>
+      <TruncatedText className="text-sm font-medium">
+        {group.label}
+      </TruncatedText>
     </span>
   );
 };

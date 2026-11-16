@@ -1,6 +1,5 @@
 import { panic } from "better-result";
 import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
-import type { MaybePromise } from "elysia";
 
 import type { Transaction } from "@/api/db/root";
 import type {
@@ -28,6 +27,8 @@ import type {
   AuditResourceType,
 } from "../audit-log.constants";
 
+type MaybePromise<T> = T | Promise<T>;
+
 export { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "../audit-log.constants";
 export type { AuditAction, AuditResourceType } from "../audit-log.constants";
 export type { NonChatAuditResourceType } from "../audit-log-details";
@@ -46,6 +47,15 @@ type AuditMetadata = Record<string, unknown>;
 
 export type AuditActivityCategory = (typeof AUDIT_ACTIVITY_CATEGORIES)[number];
 
+/**
+ * What a user's dispatched work started from. `chat_queue`: the server sent
+ * a message the user queued, as the user. `chat_turn_handover`: the server
+ * continued the user's chat turn after the task running it stopped, as the
+ * user.
+ */
+export type UserDispatchSource =
+  "chat" | "chat_queue" | "chat_turn_handover" | "action" | "api";
+
 export type AuditExecutionContext = {
   performer:
     | { type: "user"; id: SafeId<"user"> }
@@ -55,7 +65,7 @@ export type AuditExecutionContext = {
     | {
         type: "user_dispatch";
         userId: SafeId<"user">;
-        source: "chat" | "action" | "api";
+        source: UserDispatchSource;
         sourceId?: string;
       }
     | {
@@ -286,6 +296,7 @@ type AuditActivityCategoryResolver =
   AuditActivityCategory | ((event: AuditEvent) => AuditActivityCategory);
 
 const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
+  legal_hold: "matter",
   service_oauth_client: "team",
   legal_resolve: "court",
   entity: entityActivityCategory,
@@ -296,6 +307,7 @@ const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
   workspace_member: "team",
   workspace_contact: "team",
   case_law_matter_link: "court",
+  legislation_matter_link: "court",
   case_law_decision_annotation: "court",
   statute_annotation: "court",
   case_law_research_column: "court",
@@ -313,6 +325,7 @@ const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
   agent_skill_comment: "other",
   agent_skill_proposal: "other",
   ai_memory: "other",
+  conflict_check: "other",
   announcement: "other",
   billing_code: "other",
   chat_file: "other",
@@ -320,12 +333,15 @@ const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
   chat_thread: "other",
   chat_tool_execution: "other",
   chat_tool_grant: "other",
+  chat_browser_site_grant: "other",
+  chat_local_folder_approval: "other",
   clause: "other",
   clause_category: "other",
   clause_template_link: "other",
   clause_variant: "other",
   contact: "other",
   contact_directory: "other",
+  document_annotation: "documents",
   document_type: "other",
   file_comparison: "documents",
   usage_allocation: "other",
@@ -348,10 +364,12 @@ const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
   mcp_connection: "other",
   mcp_gateway_tool: "other",
   mcp_web_handoff: "other",
+  organization_access_state: "other",
   organization_settings: "other",
   property: "other",
   rate_entry: "other",
   report_export: "other",
+  data_export: "other",
   rate_table: "other",
   saved_search: "other",
   search_history: "other",
@@ -489,7 +507,7 @@ const createOrganizationBackgroundAuditRecorder =
     });
   };
 
-type AccountAuditEvent = {
+export type AccountAuditEvent = {
   type: AccountAuditEventType;
   resourceId: string;
 };

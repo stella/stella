@@ -1,28 +1,41 @@
-import { describe, expect, spyOn, test } from "bun:test";
-import { Elysia } from "elysia";
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 
 import { BYOK_DEFAULT_MODELS } from "@stll/ai-catalog";
+import { createTestState } from "@stll/test-state";
 
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { flowDefinitions } from "@/api/db/schema";
 import { env } from "@/api/env";
 import startFlowRunHandler from "@/api/handlers/flows/runs/start";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
+import { createHttpApp } from "@/api/http/app";
+import { routes } from "@/api/http/route";
+import type { RouteDefinition } from "@/api/http/route";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import * as handlerErrorResolution from "@/api/lib/errors/handler-error-resolution";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import * as queuedActionAdmission from "@/api/lib/rate-limit/queued-action-admission";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+const testState = createTestState({ file: import.meta.path, config: env });
+
+// Spies created in a test stay attached if it fails before restoring them.
+afterEach(() => {
+  mock.restore();
+});
 
 describe("manual flow start admission response", () => {
   test.each([
     "busy",
     "period_exhausted",
     "not_enabled",
-    "unavailable",
+    "store_unavailable",
     "configuration_unavailable",
   ] as const)(
     "%s reaches shared resolution and returns its HTTP refusal without inserting or auditing",
@@ -70,7 +83,10 @@ describe("manual flow start admission response", () => {
         modelId: BYOK_DEFAULT_MODELS.openai.chat.modelId,
       } as const;
       const refusal = new ActionAdmissionError({
-        reason: reason === "configuration_unavailable" ? "unavailable" : reason,
+        reason:
+          reason === "configuration_unavailable"
+            ? "configuration_incomplete"
+            : reason,
         message: "Private admission detail",
       });
       const contactUrl = "https://example.test/contact";
@@ -92,22 +108,26 @@ describe("manual flow start admission response", () => {
             );
       const resolve = spyOn(handlerErrorResolution, "resolveHandlerError");
       const previousContactUrl = env.ACTION_LIMIT_CONTACT_URL;
-      env.ACTION_LIMIT_CONTACT_URL = contactUrl;
+      testState.setConfig("ACTION_LIMIT_CONTACT_URL", contactUrl);
       const previousEnabled = env.FEATURE_ACTION_ADMISSION;
       const previousPeriodMs = env.ACTION_ADMISSION_PERIOD_MS;
       const previousPeriodActions = env.ACTION_ADMISSION_PERIOD_ACTIONS;
-      env.FEATURE_ACTION_ADMISSION = true;
-      env.ACTION_ADMISSION_PERIOD_MS = undefined;
-      env.ACTION_ADMISSION_PERIOD_ACTIONS = undefined;
+      testState.setConfig("FEATURE_ACTION_ADMISSION", true);
+      testState.setConfig("ACTION_ADMISSION_PERIOD_MS", undefined);
+      testState.setConfig("ACTION_ADMISSION_PERIOD_ACTIONS", undefined);
       try {
-        const app = new Elysia().post(
-          "/flow-start",
-          async ({ set, request }) =>
+        // The handler core under a member context the test builds, answered
+        // through the HTTP layer so the refusal is read off the wire.
+        const flowStart: RouteDefinition = {
+          access: "public",
+          config: {},
+          run: async ({ ctx: { set, request } }) =>
             await startFlowRunHandler.handler(
               asTestRaw({
                 set,
                 request,
-                route: "/flow-start",
+                route:
+                  "/v1/workspaces/:workspaceId/flows/runs" satisfies ApiRoutePath,
                 workspaceId,
                 user: { id: userId },
                 session: { activeOrganizationId: organizationId },
@@ -129,8 +149,14 @@ describe("manual flow start admission response", () => {
                 createAuditRecorder: () => recordAuditEvent,
               }),
             ),
+        };
+        await using server = serveForTest(
+          createHttpApp({
+            routes: routes({ "/flow-start": { POST: flowStart } }),
+            middleware: [errorBoundary],
+          }),
         );
-        const response = await app.handle(
+        const response = await server.fetch(
           new Request("http://localhost/flow-start", { method: "POST" }),
         );
         if (kickoff !== null) {
@@ -152,10 +178,13 @@ describe("manual flow start admission response", () => {
       } finally {
         kickoff?.mockRestore();
         resolve.mockRestore();
-        env.ACTION_LIMIT_CONTACT_URL = previousContactUrl;
-        env.FEATURE_ACTION_ADMISSION = previousEnabled;
-        env.ACTION_ADMISSION_PERIOD_MS = previousPeriodMs;
-        env.ACTION_ADMISSION_PERIOD_ACTIONS = previousPeriodActions;
+        testState.setConfig("ACTION_LIMIT_CONTACT_URL", previousContactUrl);
+        testState.setConfig("FEATURE_ACTION_ADMISSION", previousEnabled);
+        testState.setConfig("ACTION_ADMISSION_PERIOD_MS", previousPeriodMs);
+        testState.setConfig(
+          "ACTION_ADMISSION_PERIOD_ACTIONS",
+          previousPeriodActions,
+        );
       }
     },
   );

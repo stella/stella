@@ -1,7 +1,8 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import { formatMoneyCents } from "@stll/money";
 import { Temporal } from "@stll/time";
+import { summarizeRecordField } from "@stll/workspace-ui/field-value-logic";
 
 import type { TableTreeNode } from "@/components/workspaces/table/types";
 import { getFormatter, getFormattingLocale } from "@/i18n/i18n-store";
@@ -11,8 +12,6 @@ import type {
   WorkspaceField,
   WorkspaceProperty,
 } from "@/lib/types";
-
-const DOCUMENT_ROUTE_SUFFIX = "/document";
 
 const dateOnlyEpoch = (value: string): number =>
   Temporal.PlainDate.from(value).toZonedDateTime({
@@ -26,9 +25,6 @@ const instantEpoch = (value: string): number =>
 type InternalColId = "select" | "add-property";
 
 export const getInternalColId = (col: InternalColId): InternalColId => col;
-
-export const isWorkspaceDocumentRoutePath = (pathname: string) =>
-  pathname.endsWith(DOCUMENT_ROUTE_SUFFIX);
 
 // -- Internal property IDs (metadata columns stored in view config) --
 
@@ -89,12 +85,25 @@ export const getFieldValue = (field: WorkspaceField | undefined) => {
       return field.content.name;
     case "clip":
       return field.content.url;
+    case "record": {
+      const summary = summarizeRecordField(
+        field.content.state,
+        ({ amountMinor, currency }) =>
+          formatMoneyCents({
+            amountCents: amountMinor,
+            currency,
+            locale: getFormattingLocale(),
+          }),
+      );
+      return summary.type === "text" ? summary.text : "";
+    }
     case "error":
     case "pending":
     case "unsupported":
       return "";
     default:
-      return "";
+      field.content satisfies never;
+      return panic(`Unhandled content: ${String(field.content)}`);
   }
 };
 

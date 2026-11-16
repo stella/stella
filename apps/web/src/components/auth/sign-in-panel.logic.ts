@@ -1,18 +1,15 @@
+import type { AuthSocialProviderId } from "@stll/auth-model";
+
+/** One flag per social provider the API knows. */
+type SocialProviderFlags = Record<AuthSocialProviderId, boolean>;
+
 export type AuthCapabilities = {
   emailOtp: boolean;
   localPassword: boolean;
   /** Password sign-in for one configured account only: offered quietly. */
   reviewPasswordSignIn: boolean;
   bootstrap: boolean;
-  social: {
-    google: boolean;
-    microsoft: boolean;
-  };
-};
-
-type SocialProviderFlags = {
-  google: boolean;
-  microsoft: boolean;
+  social: SocialProviderFlags;
 };
 
 export const resolveSignInOptions = ({
@@ -26,7 +23,8 @@ export const resolveSignInOptions = ({
     socialProviderFlags.google && authCapabilities.social.google;
   const showMicrosoft =
     socialProviderFlags.microsoft && authCapabilities.social.microsoft;
-  const showSocialProviders = showGoogle || showMicrosoft;
+  const showApple = socialProviderFlags.apple && authCapabilities.social.apple;
+  const showSocialProviders = showGoogle || showMicrosoft || showApple;
   const showLocalPassword = authCapabilities.localPassword;
   // Email OTP, social sign-in and the first-user bootstrap create an account
   // for a new address; a local password only signs an existing one in.
@@ -48,10 +46,38 @@ export const resolveSignInOptions = ({
       !authCapabilities.bootstrap,
     showGoogle,
     showMicrosoft,
+    showApple,
     showSocialProviders,
     hasAboveEmailOptions: showSocialProviders || showLocalPassword,
   };
 };
+
+/** Sign-in methods a link may ask the page to open with (`?method=`). */
+export const SIGN_IN_ENTRY_METHOD = { password: "password" } as const;
+
+export type SignInEntryMethod =
+  (typeof SIGN_IN_ENTRY_METHOD)[keyof typeof SIGN_IN_ENTRY_METHOD];
+
+/**
+ * Whether the password form for the one password account stands in for the
+ * email step. The page shows one or the other, never both: two forms that
+ * each ask for an address read as one broken form.
+ */
+export type PasswordEntry =
+  { type: "closed" } | { type: "open"; email: string };
+
+export const initialPasswordEntry = ({
+  entryMethod,
+  options,
+}: {
+  entryMethod: SignInEntryMethod | undefined;
+  options: Pick<SignInOptions, "showEmailOtp" | "showReviewPasswordSignIn">;
+}): PasswordEntry =>
+  options.showReviewPasswordSignIn &&
+  // Asked for by link, or the only way to type an address on this page.
+  (entryMethod === SIGN_IN_ENTRY_METHOD.password || !options.showEmailOtp)
+    ? { type: "open", email: "" }
+    : { type: "closed" };
 
 /**
  * Sign-in methods as better-auth's last-login-method plugin names them in
@@ -61,6 +87,7 @@ export const resolveSignInOptions = ({
 export const SIGN_IN_METHOD = {
   google: "google",
   microsoft: "microsoft",
+  apple: "apple",
   emailOtp: "email-otp",
   password: "email",
 } as const;
@@ -73,6 +100,7 @@ const isMethodShown: Record<SignInMethod, (options: SignInOptions) => boolean> =
   {
     [SIGN_IN_METHOD.google]: (options) => options.showGoogle,
     [SIGN_IN_METHOD.microsoft]: (options) => options.showMicrosoft,
+    [SIGN_IN_METHOD.apple]: (options) => options.showApple,
     [SIGN_IN_METHOD.emailOtp]: (options) => options.showEmailOtp,
     [SIGN_IN_METHOD.password]: (options) =>
       options.showLocalPassword && !options.showBootstrap,

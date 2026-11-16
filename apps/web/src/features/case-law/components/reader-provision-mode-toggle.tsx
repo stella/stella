@@ -1,7 +1,7 @@
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { BookTextIcon } from "@stll/ui/icons";
+import { ScrollTextIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import type { useReaderProvisionMode } from "@/hooks/use-reader-provision-mode";
@@ -31,7 +31,10 @@ export const ReaderProvisionModeToggle = ({
       tooltip={t("caseLaw.reader.expandProvisions")}
       variant="ghost"
     >
-      <BookTextIcon aria-hidden="true" className={cn(TOGGLE_SIZE[size].icon)} />
+      <ScrollTextIcon
+        aria-hidden="true"
+        className={cn(TOGGLE_SIZE[size].icon)}
+      />
     </Button>
   );
 };

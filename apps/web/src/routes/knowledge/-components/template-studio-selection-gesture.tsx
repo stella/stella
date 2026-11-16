@@ -26,6 +26,7 @@ import {
 import { MenuPreviewLayout, PreviewPane } from "@stll/ui/preview-pane";
 import { Separator } from "@stll/ui/separator";
 import { Skeleton } from "@stll/ui/skeleton";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import type { BlockGestureKind } from "@/features/knowledge/views/templates/directive-kinds";
@@ -403,7 +404,15 @@ export const useTemplateStudioSelectionGesture = ({
       return;
     }
     if (error) {
-      getAnalytics().captureError(toAPIError(error));
+      getAnalytics().captureError(toAPIError(error), {
+        fingerprintKey:
+          "useTemplateStudioSelectionGesture.fetchGestureSuggestion:failure",
+        scope: {
+          type: "handler",
+          handlerId:
+            "useTemplateStudioSelectionGesture.fetchGestureSuggestion:failure",
+        },
+      });
       setEnrichment({ status: "idle" });
       return;
     }
@@ -440,7 +449,13 @@ export const useTemplateStudioSelectionGesture = ({
       if (sequence !== enrichSeqRef.current) {
         return;
       }
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "useTemplateStudioSelectionGesture:failure",
+        scope: {
+          type: "handler",
+          handlerId: "useTemplateStudioSelectionGesture:failure",
+        },
+      });
       setEnrichment({ status: "idle" });
       notifyUserError(error, t("errors.actionFailed"));
     });
@@ -689,7 +704,7 @@ const GestureInsertPreview = ({ kind }: { kind: GestureInsertKind }) => {
             marker={
               <span>
                 {GESTURE_PREVIEW_SAMPLE.fieldBefore}
-                <code className="bg-primary/10 text-primary rounded px-1 py-0.5 text-xs">
+                <code className="bg-primary/10 text-primary rounded-sm px-1 py-0.5 text-xs">
                   {GESTURE_PREVIEW_SAMPLE.fieldMarker}
                 </code>
                 {GESTURE_PREVIEW_SAMPLE.fieldAfter}
@@ -859,11 +874,14 @@ const GestureSplitRow = ({
                 variant="ghost"
               >
                 <OptionIcon className="text-muted-foreground size-3.5 shrink-0" />
-                <span className="min-w-0 truncate">{option.label}</span>
+                <TruncatedText>{option.label}</TruncatedText>
                 {option.sublabel === undefined ? null : (
-                  <code className="text-muted-foreground text-3xs ms-auto min-w-0 truncate">
+                  <TruncatedText
+                    className="text-muted-foreground text-3xs ms-auto"
+                    render={<code />}
+                  >
                     {option.sublabel}
-                  </code>
+                  </TruncatedText>
                 )}
               </Button>
             );
@@ -920,11 +938,10 @@ const GestureAiRow = ({
       onClick={onAcceptAi}
       onMouseDown={keepEditorFocus}
       size="sm"
-      title={label}
       variant="ghost"
     >
       <TypeIcon className="size-3.5 shrink-0" />
-      <span className="min-w-0 truncate">{label}</span>
+      <TruncatedText>{label}</TruncatedText>
       <AiActionIcon className="ms-auto size-3.5 shrink-0" />
     </Button>
   );

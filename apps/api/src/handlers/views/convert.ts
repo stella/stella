@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   CONVERTIBLE_VIEW_LAYOUTS,
@@ -18,7 +18,7 @@ import {
   avtViewAccessStatus,
   isAvtLayoutVisible,
 } from "@/api/lib/auth/feature-access/view-eligibility";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -46,10 +46,8 @@ const config = {
     reason: "workspace_schema",
     consumesServices: false,
   },
-  params: workspaceParams({ viewId: tSafeId("workspaceView") }),
-  body: t.Object({
-    targetType: t.UnionEnum([...CONVERTIBLE_VIEW_LAYOUTS]),
-  }),
+  params: workspaceParams({ viewId: resourceIdSchema("workspaceView") }),
+  body: v.object({ targetType: v.picklist([...CONVERTIBLE_VIEW_LAYOUTS]) }),
 } satisfies WorkspaceHandlerConfig;
 
 const convertView = createSafeHandler(

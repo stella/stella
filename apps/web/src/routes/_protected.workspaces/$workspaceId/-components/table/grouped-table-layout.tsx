@@ -75,8 +75,8 @@ import { WorkspaceTableSkeletonRows } from "@/components/workspaces/table/worksp
 import { WorkspaceTable } from "@/components/workspaces/table/workspace-table/workspace-table";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
+import { queryView } from "@/lib/query-view.logic";
 import type { EntityKind, WorkspaceView } from "@/lib/types";
-import { useQueryView } from "@/lib/use-query-view";
 import { visibleEntityFieldIds } from "@/lib/workspaces/queries/entities";
 import type { EntitiesFindKey } from "@/lib/workspaces/queries/entities.logic";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
@@ -156,7 +156,7 @@ export const GroupedTableLayout = ({
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
   const columnLayout = useViewColumnLayout({ workspaceId, view });
   const tableState = useViewTableState({ workspaceId, view, columnLayout });
-  const columns = useTableColumns({ properties, view });
+  const columns = useTableColumns({ properties, view, workspaceId });
   // Deferred alongside the group keys (each section defers its own), so the
   // marks describe the rows on screen, not a term still being fetched.
   const find = useDeferredValue(
@@ -259,7 +259,7 @@ export const GroupedTableLayout = ({
     }),
     enabled: groupByPropertyId !== null && !isUnsupportedGrouping,
   });
-  const groupCountsView = useQueryView(groupCounts, { isEmpty: () => false });
+  const groupCountsView = queryView(groupCounts, { isEmpty: () => false });
   const countsData =
     groupCountsView.type === "items" ? groupCountsView.items : undefined;
   const countByValue = useMemo(() => {
@@ -675,7 +675,7 @@ const GroupSection = ({
     }),
     enabled: hasRows && (eager || hasScrolledIntoView),
   });
-  const queryState = useQueryView(query);
+  const queryState = queryView(query);
   const queryData = queryState.type === "items" ? queryState.items : undefined;
 
   // When a group empties (its last row moved/deleted), the count is 0 and the

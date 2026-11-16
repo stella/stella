@@ -249,6 +249,7 @@ const main = () => {
     `${JSON.stringify({ entries }, null, 2)}\n`,
   );
   const head = execFileSync("git", ["rev-parse", "--short", "HEAD"], {
+    maxBuffer: 2 ** 30,
     cwd: ROOT_DIR,
     encoding: "utf-8",
   }).trim();

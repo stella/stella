@@ -104,11 +104,11 @@ describe("agent skill RLS", () => {
       userId: ids.userB1,
     });
 
-    const error = await scopedQuery(
-      [ids.wsA1],
-      ids.orgA,
-      async (tx) =>
-        await tryCatch(async () => {
+    const error = await tryCatch(async () =>
+      scopedQuery(
+        [ids.wsA1],
+        ids.orgA,
+        async (tx) => {
           await tx.insert(agentSkillResources).values({
             id: testId(),
             organizationId: ids.orgA,
@@ -117,8 +117,9 @@ describe("agent skill RLS", () => {
             content: "foreign",
             sizeBytes: 7,
           });
-        }),
-      ids.userA1,
+        },
+        ids.userA1,
+      ),
     );
 
     expect(isPgError(error, PG_ERROR.INSUFFICIENT_PRIVILEGE)).toBe(true);
@@ -167,7 +168,7 @@ const readPolicies = async (policyNames: readonly string[]) =>
   `);
 
 describe("agent skill policy migrations", () => {
-  test("the write policy migration leaves the policies as the schema declares them", async () => {
+  test("the write policy migrations leave the policies as the schema declares them", async () => {
     const policyNames = [
       "agent_skill_insert",
       "agent_skill_update",
@@ -178,6 +179,7 @@ describe("agent skill policy migrations", () => {
     ];
     const fromSchema = await readPolicies(policyNames);
     await applyMigration("20260925230000_agent_skill_write_policies");
+    await applyMigration("20261016100500_agent_skill_binding");
     const migrated = await readPolicies(policyNames);
 
     expect(fromSchema.rows).toHaveLength(policyNames.length);
@@ -296,28 +298,30 @@ describe("agent skill anchor lock", () => {
       userId: ids.userAdmin,
     });
 
-    const lockError = await scopedQuery(
-      [ids.wsA1],
-      ids.orgA,
-      async (tx) =>
-        await tryCatch(async () => {
+    const lockError = await tryCatch(async () =>
+      scopedQuery(
+        [ids.wsA1],
+        ids.orgA,
+        async (tx) => {
           await tx.execute(sql`SELECT lock_agent_skill_for_anchor(${skillId})`);
-        }),
-      ids.userA1,
+        },
+        ids.userA1,
+      ),
     );
     // Revisions are read-only to the request role: even a manager's update is
     // refused before any row policy is consulted.
-    const updateError = await scopedQuery(
-      [ids.wsA1],
-      ids.orgA,
-      async (tx) =>
-        await tryCatch(async () => {
+    const updateError = await tryCatch(async () =>
+      scopedQuery(
+        [ids.wsA1],
+        ids.orgA,
+        async (tx) => {
           await tx
             .update(agentSkillRevisions)
             .set({ body: "rewritten" })
             .where(eq(agentSkillRevisions.skillId, skillId));
-        }),
-      ids.userAdmin,
+        },
+        ids.userAdmin,
+      ),
     );
 
     expect(lockError).toBeNull();
@@ -339,16 +343,17 @@ describe("agent skill anchor lock", () => {
     });
 
     const lockAsMember = async (skillId: SafeId<"agentSkill">) =>
-      await scopedQuery(
-        [ids.wsA1],
-        ids.orgA,
-        async (tx) =>
-          await tryCatch(async () => {
+      await tryCatch(async () =>
+        scopedQuery(
+          [ids.wsA1],
+          ids.orgA,
+          async (tx) => {
             await tx.execute(
               sql`SELECT lock_agent_skill_for_anchor(${skillId})`,
             );
-          }),
-        ids.userA1,
+          },
+          ids.userA1,
+        ),
       );
     const privateError = await lockAsMember(privateSkillId);
     const foreignError = await lockAsMember(foreignSkillId);
@@ -434,11 +439,11 @@ describe("agent skill write RLS", () => {
             .returning({ id: agentSkillResources.id }),
         actorId(actor),
       );
-      const insertError = await scopedQuery(
-        [ids.wsA1],
-        ids.orgA,
-        async (tx) =>
-          await tryCatch(async () => {
+      const insertError = await tryCatch(async () =>
+        scopedQuery(
+          [ids.wsA1],
+          ids.orgA,
+          async (tx) => {
             await tx.insert(agentSkillResources).values({
               id: testId(),
               organizationId: ids.orgA,
@@ -447,8 +452,9 @@ describe("agent skill write RLS", () => {
               content: "added",
               sizeBytes: 5,
             });
-          }),
-        actorId(actor),
+          },
+          actorId(actor),
+        ),
       );
       const deletedSkills = await scopedQuery(
         [ids.wsA1],
@@ -477,11 +483,11 @@ describe("agent skill write RLS", () => {
 
   test("only an owner or admin may create a team skill", async () => {
     const insertAs = async (userId: SafeId<"user">) =>
-      await scopedQuery(
-        [ids.wsA1],
-        ids.orgA,
-        async (tx) =>
-          await tryCatch(async () => {
+      await tryCatch(async () =>
+        scopedQuery(
+          [ids.wsA1],
+          ids.orgA,
+          async (tx) => {
             await tx.insert(agentSkills).values(
               skillRow({
                 organizationId: ids.orgA,
@@ -490,8 +496,9 @@ describe("agent skill write RLS", () => {
                 userId,
               }),
             );
-          }),
-        userId,
+          },
+          userId,
+        ),
       );
 
     const memberError = await insertAs(ids.userA1);
@@ -502,11 +509,11 @@ describe("agent skill write RLS", () => {
   });
 
   test("a member may create a private skill of their own", async () => {
-    const error = await scopedQuery(
-      [ids.wsA1],
-      ids.orgA,
-      async (tx) =>
-        await tryCatch(async () => {
+    const error = await tryCatch(async () =>
+      scopedQuery(
+        [ids.wsA1],
+        ids.orgA,
+        async (tx) => {
           await tx.insert(agentSkills).values(
             skillRow({
               organizationId: ids.orgA,
@@ -515,8 +522,9 @@ describe("agent skill write RLS", () => {
               userId: ids.userA1,
             }),
           );
-        }),
-      ids.userA1,
+        },
+        ids.userA1,
+      ),
     );
 
     expect(error).toBeNull();
@@ -530,17 +538,18 @@ describe("agent skill write RLS", () => {
       userId: ids.userA1,
     });
 
-    const error = await scopedQuery(
-      [ids.wsA1],
-      ids.orgA,
-      async (tx) =>
-        await tryCatch(async () => {
+    const error = await tryCatch(async () =>
+      scopedQuery(
+        [ids.wsA1],
+        ids.orgA,
+        async (tx) => {
           await tx
             .update(agentSkills)
             .set({ scope: "team" })
             .where(eq(agentSkills.id, skillId));
-        }),
-      ids.userA1,
+        },
+        ids.userA1,
+      ),
     );
 
     expect(isPgError(error, PG_ERROR.INSUFFICIENT_PRIVILEGE)).toBe(true);

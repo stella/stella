@@ -48,6 +48,8 @@ new Bun.CryptoHasher("md5");
 crypto.subtle.digest("SHA-1", bytes);
 // expect-clean: no-raw-sha256/no-raw-sha256
 crypto.subtle.digest(algorithm, bytes);
+// oxlint-disable-next-line no-raw-sha256/no-raw-sha256 -- fixture proves Node HMAC is confined
+cryptoModule.createHmac("sha256", "key");
 
 // oxlint-disable-next-line no-raw-sha256/no-raw-sha256 -- fixture proves raw primitive values cannot escape
 let make = createHash;

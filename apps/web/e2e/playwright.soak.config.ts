@@ -1,5 +1,7 @@
-import { defineConfig, devices } from "@playwright/test";
+import { defineConfig } from "@playwright/test";
 import path from "node:path";
+
+import { devices } from "@stll/playwright-tools/devices";
 
 import { WORKSPACE_REPLAY_ENV } from "./soak/env";
 

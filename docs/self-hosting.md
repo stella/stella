@@ -30,6 +30,7 @@ The production Compose contract contains exactly these services:
 
 - `api`: HTTP API and the authoritative scheduled-job loop; readiness `/ready`.
 - `document-processing-worker`: Durable document-processing queue consumer; readiness `api-ready`.
+- `file-derivative-worker`: Durable file-derivative queue consumer; readiness `api-ready`.
 - `gotenberg`: Private authenticated document-conversion sidecar; readiness `/health`.
 
 Its generated environment template is `deploy/selfhost/.env.example`.
@@ -223,7 +224,9 @@ standalone scheduler service to omit accidentally. OCR uses the CPU ONNX models
 bundled in the API image. AnyDoc first inspects each PDF and queues OCR only
 when the document has no usable text layer. Set
 `DOCUMENT_PROCESSING_IDLE_EXIT_MINUTES` on batch workers that should exit after
-the queue stays empty.
+the queue stays empty. Manual OCR requests are accepted while a worker is
+running or has run within the last two batch intervals; otherwise the action
+reports OCR as unavailable.
 The original PDF remains unchanged: stella stores and indexes only the derived
 searchable text.
 
@@ -321,6 +324,16 @@ it and without configuration. Users install stella desktop, open **Settings → 
 app, and click **Connect**. The desktop app shows a local approval prompt and
 stores the exact trusted web/API origin before accepting Office file handoffs.
 
+Each release refuses desktop builds below its desktop support floor (see
+[Desktop Support](./releases.md#desktop-support)). On a self-hosted server the
+floor moves only when the server is upgraded, and it never exceeds the newest
+published desktop build. A desktop that updates itself is therefore accepted
+after every upgrade: its updater reads the public download feed, not this
+server. A server older than the desktop app accepts it. Where in-app updates are
+turned off or the download feed is unreachable, deploy a desktop build at or
+above the new release's floor before upgrading the server. No server setting
+lowers or disables the floor.
+
 ## Database migrations
 
 Apply SQL migrations from `apps/api/drizzle/` before running the API against a
@@ -402,7 +415,7 @@ must build `apps/web/Dockerfile` with their own public URLs, or run
 ## Run With Docker Compose
 
 From the repository root, validate the production profile, inspect the resolved
-Compose model, migrate, then start the three declared services. Run the web SSR
+Compose model, migrate, then start the declared services. Run the web SSR
 server separately as described above.
 
 <!-- BEGIN GENERATED SELF-HOST RUN COMMANDS -->

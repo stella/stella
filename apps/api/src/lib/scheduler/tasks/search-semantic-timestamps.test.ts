@@ -9,10 +9,12 @@ import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemet
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
-const executeMock = mock(
-  async (_query: SQL): Promise<Record<string, unknown>[]> => [],
-);
-const upsertSearchDocumentMock = mock(async () => undefined);
+const executeDefault = async (
+  _query: SQL,
+): Promise<Record<string, unknown>[]> => [];
+const executeMock = mock(executeDefault);
+const upsertSearchDocumentDefault = async () => undefined;
+const upsertSearchDocumentMock = mock(upsertSearchDocumentDefault);
 
 const { repairSearchSemanticTimestamps } =
   await import("@/api/lib/scheduler/tasks/search-semantic-timestamps");
@@ -29,6 +31,10 @@ const runRepair = async (
 let analytics: RecordingAnalytics;
 
 beforeEach(() => {
+  executeMock.mockReset();
+  executeMock.mockImplementation(executeDefault);
+  upsertSearchDocumentMock.mockReset();
+  upsertSearchDocumentMock.mockImplementation(upsertSearchDocumentDefault);
   analytics = installRecordingAnalytics();
   executeMock.mockClear();
   upsertSearchDocumentMock.mockClear();

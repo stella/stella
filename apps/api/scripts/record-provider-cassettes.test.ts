@@ -1,7 +1,9 @@
 import { EventType } from "@tanstack/ai";
 import type { StreamChunk } from "@tanstack/ai";
 import { panic } from "better-result";
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
+
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import {
@@ -24,9 +26,10 @@ import {
 import {
   bodyBytesOf,
   decodeAwsEventStream,
-  installProviderWireReplay,
+  registerProviderWireReplay,
 } from "@/api/tests/helpers/provider-wire-replay";
 import type { ProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 
 import {
   keptHeaders,
@@ -40,6 +43,10 @@ import {
   scenariosToRecord,
   wireCarriesNull,
 } from "./record-provider-cassettes";
+
+const testState = createTestState({ file: import.meta.path, config: env });
+
+const testFetchState = createTestFetch();
 
 const SECRET = "sk-recording-secret";
 /** A fresh recording's redaction. */
@@ -259,7 +266,6 @@ test("every recording answers the prompt the recorder sends today", () => {
   ).toEqual([]);
 });
 let upstream: ProviderWireReplay;
-let previousMockAI: typeof env.USE_MOCK_AI;
 
 const recordAndReplay = async (
   provider: ProviderWireProvider,
@@ -316,15 +322,13 @@ const recordAndReplay = async (
 };
 
 describe("a recording replays", () => {
-  beforeAll(() => {
-    previousMockAI = env.USE_MOCK_AI;
-    env.USE_MOCK_AI = false;
-    upstream = installProviderWireReplay();
+  registerProviderWireReplay({
+    onInstall: (replay) => {
+      upstream = replay;
+    },
   });
-
-  afterAll(() => {
-    upstream.restore();
-    env.USE_MOCK_AI = previousMockAI;
+  testState.beforeAll(() => {
+    testState.setConfig("USE_MOCK_AI", false);
   });
 
   test("stops reading a response at the size limit", async () => {
@@ -333,23 +337,25 @@ describe("a recording replays", () => {
     const slice = new Uint8Array(64 * 1024).fill(0x61);
     // Bytes served per request; a retrying SDK asks more than once.
     const served: number[] = [];
-    const replayFetch = globalThis.fetch;
-    globalThis.fetch = Object.assign(
-      async () => {
-        const request = served.push(0) - 1;
-        return await Promise.resolve(
-          new Response(
-            new ReadableStream<Uint8Array>({
-              pull: (controller) => {
-                served[request] = (served[request] ?? 0) + slice.length;
-                controller.enqueue(slice);
-              },
-            }),
-            { headers: { "content-type": "text/event-stream" } },
-          ),
-        );
-      },
-      { preconnect: () => undefined },
+
+    testFetchState.set(
+      Object.assign(
+        async () => {
+          const request = served.push(0) - 1;
+          return await Promise.resolve(
+            new Response(
+              new ReadableStream<Uint8Array>({
+                pull: (controller) => {
+                  served[request] = (served[request] ?? 0) + slice.length;
+                  controller.enqueue(slice);
+                },
+              }),
+              { headers: { "content-type": "text/event-stream" } },
+            ),
+          );
+        },
+        { preconnect: () => undefined },
+      ),
     );
     let outcome = "recorded";
     try {
@@ -357,7 +363,7 @@ describe("a recording replays", () => {
     } catch (error) {
       outcome = error instanceof Error ? error.message : "refused";
     } finally {
-      globalThis.fetch = replayFetch;
+      testFetchState.restore();
     }
     expect(outcome).toContain("exceeds the recording size limit");
     expect(served.length).toBeGreaterThan(0);

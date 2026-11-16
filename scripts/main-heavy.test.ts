@@ -14,6 +14,7 @@ import { Script } from "node:vm";
 import * as v from "valibot";
 
 import { ciExpressionContext } from "./ci-expression-context";
+import { isRepositoryCheckoutAction } from "./ci-job-classification/checkout-actions";
 import { contextFromNested, evaluate, UNKNOWN } from "./github-expression";
 import { mainHeavyJobs, thinJobs } from "./main-heavy-plan";
 
@@ -250,6 +251,7 @@ const heavyCheckoutCensus = (workflow: CheckoutWorkflow) => {
       ),
     ),
     run_required: "true",
+    heavy_proof: "true",
     trusted: "true",
     suite_depth: "full",
     queue_depth: "full",
@@ -298,7 +300,7 @@ const heavyCheckoutCensus = (workflow: CheckoutWorkflow) => {
   const checkoutOwners = new Set([...mainHeavyJobs(workflow), ...executed]);
   const checkouts = [...checkoutOwners].flatMap((job) =>
     (workflow.jobs[job]?.steps ?? [])
-      .filter(({ uses }) => uses?.startsWith("actions/checkout@"))
+      .filter(({ uses }) => isRepositoryCheckoutAction(uses))
       .map((step) => ({ job, step })),
   );
   expect(checkouts.length).toBeGreaterThan(0);
@@ -447,7 +449,7 @@ test("source checkouts use the selected event SHA while tooling uses the workflo
   };
   for (const [job, body] of Object.entries(ciWorkflow.jobs)) {
     for (const checkout of body.steps?.filter(({ uses }) =>
-      uses?.startsWith("actions/checkout@"),
+      isRepositoryCheckoutAction(uses),
     ) ?? []) {
       const reference = checkout.with?.["ref"];
       if (reference === undefined) {
@@ -518,7 +520,7 @@ test("source checkouts use the selected event SHA while tooling uses the workflo
   );
   const marketingCheckouts =
     marketing.jobs["check"]?.steps?.filter(({ uses }) =>
-      uses?.startsWith("actions/checkout@"),
+      isRepositoryCheckoutAction(uses),
     ) ?? [];
   expect(marketingCheckouts.length).toBeGreaterThan(0);
   for (const checkout of marketingCheckouts) {

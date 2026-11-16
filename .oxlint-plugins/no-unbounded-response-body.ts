@@ -7,7 +7,7 @@
 // byte ceiling instead:
 //
 //   - outbound HTTP: `safeOutboundFetchBytes` / `safeOutboundFetchStream`
-//     (`@/api/lib/safe-outbound-fetch`), or `readCappedBytes`
+//     (`@/api/lib/auth/authorized-outbound-fetch`), or `readCappedBytes`
 //     (`@stll/skills/streaming`) over `response.body`;
 //   - case-law publishers: `readPublisherText` / `readPublisherBytes`, or
 //     `readBodyText` over a `readPublisher` outcome
@@ -39,8 +39,8 @@
 // `<output>.Body`. Native Bun S3 handles are confined by
 // `no-native-s3-object-read`.
 //
-// Not reported: `Request` bodies and Elysia `t.File()` uploads (bounded by the
-// route schema's `maxSize`), `Bun.file(...)` reads, `new Response(stream)`
+// Not reported: `Request` bodies and `fileSchema()` uploads (bounded by the
+// route schema's `v.maxSize`), `Bun.file(...)` reads, `new Response(stream)`
 // wrappers around local subprocess output, and any receiver whose provenance
 // is not visible in the file. The modules that implement the bounded readers
 // are excluded in `oxlint.config.ts`.
@@ -184,7 +184,7 @@ export default eslintCompatPlugin({
           fetchBody:
             "`.{{method}}()` buffers the whole fetch response with no size " +
             "limit. Read it with a byte ceiling: safeOutboundFetchBytes / " +
-            "safeOutboundFetchStream (@/api/lib/safe-outbound-fetch), or " +
+            "safeOutboundFetchStream (@/api/lib/auth/authorized-outbound-fetch), or " +
             "readCappedBytes (@stll/skills/streaming) over response.body. " +
             "Case-law publisher reads: readPublisherText / " +
             "readPublisherBytes, or readBodyText over a " +

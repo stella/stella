@@ -15,7 +15,6 @@ import { Panic, Result, UnhandledException } from "better-result";
  */
 import {
   afterAll,
-  beforeAll,
   beforeEach,
   describe,
   expect,
@@ -29,6 +28,7 @@ import { and, asc, eq } from "drizzle-orm";
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 import { inspectDocxPackage } from "@stll/folio-core/server";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
+import { createTestState } from "@stll/test-state";
 import { parseTimeZoneId } from "@stll/time";
 
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -81,10 +81,12 @@ import { startFlowRun } from "@/api/lib/flows/start-flow-run";
 import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
 import { updateTaskHandler } from "@/api/lib/tasks/update-task";
-import type { McpRequestContext } from "@/api/mcp/context";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { handleMcpToolCall } from "@/api/mcp/tools";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
@@ -102,6 +104,13 @@ import {
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+const testState = createTestState({ file: import.meta.path, config: env });
+
+beforeEach(() => {
+  enqueueFlowStepMock.mockClear();
+  generateTanStackTextForTaskMock.mockClear();
+});
 
 setDefaultTimeout(60_000);
 
@@ -274,7 +283,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
   let workspaceId: SafeId<"workspace">;
   let fake: FakeS3;
 
-  beforeAll(async () => {
+  testState.beforeAll(async () => {
     fake = startFakeS3();
     organizationId = mintAuthProviderId<"organization">();
     userId = mintAuthProviderId<"user">();
@@ -286,6 +295,10 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       name: "Flow Worker Test Org",
       slug: `flow-worker-test-${organizationId}`,
       createdAt: new Date(),
+    });
+    await recordNewOrganizationAccessState(testDb, {
+      organizationId,
+      now: new Date(),
     });
     await testDb.insert(user).values({
       id: userId,
@@ -669,85 +682,83 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
         where: { runId: { eq: runId } },
         orderBy: { index: "asc" },
       });
-      const previousGovernedWorkflow = env.FEATURE_GOVERNED_WORKFLOW;
-      env.FEATURE_GOVERNED_WORKFLOW = governedWorkflow;
-      try {
-        if (path === "Kanban") {
-          const lanePropertyId = createSafeId<"property">();
-          await testDb.insert(properties).values({
-            id: lanePropertyId,
-            workspaceId,
-            name: "Lane",
-            status: "fresh",
-            content: { type: "text", version: 1 },
-            tool: { type: "manual-input", version: 1 },
-          });
-          const flushCount = flushedEntityIds.length;
-          expect(
-            await updateKanbanPlacement.handler(
-              asTestRaw<Parameters<typeof updateKanbanPlacement.handler>[0]>({
-                ...context,
-                body: {
-                  entityId: taskEntityId,
-                  status,
-                  fields: [
-                    {
-                      propertyId: lanePropertyId,
-                      content: { type: "text", version: 1, value: "Reviewed" },
-                    },
-                  ],
-                },
-              }),
-            ),
-          ).toEqual({});
-          expect(flushedEntityIds.slice(flushCount)).toEqual([[taskEntityId]]);
-          const lane = await testDb.query.fields.findFirst({
-            where: { propertyId: { eq: lanePropertyId } },
-            columns: { content: true },
-          });
-          expect(lane?.content).toEqual({
-            type: "text",
-            version: 1,
-            value: "Reviewed",
-          });
-        } else {
-          const mcpContext = {
-            accessibleWorkspaceIds: [workspaceId],
-            accessibleWorkspaceIdSet: new Set([workspaceId]),
-            accessibleWorkspaceStatusById: new Map([
-              [workspaceId, "active" as const],
-            ]),
-            accessibleWorkspaces: [],
-            grantedScopes: [],
-            memberRole: "owner",
-            organizationId,
-            recordAuditEvent: context.recordAuditEvent,
-            safeDb,
-            scopedDb: asTestRaw<McpRequestContext["scopedDb"]>(
-              context.scopedDb,
-            ),
-            userId,
-            userEmail: `${userId}@example.com`,
-          } satisfies McpRequestContext;
-          const result = await handleMcpToolCall({
-            toolName: "save_task",
-            args: { task_id: taskEntityId, status, name: "Reviewed task" },
-            context: mcpContext,
-          });
-          expect(result.isError).not.toBe(true);
-          expect(result.structuredContent).toEqual({
-            taskId: taskEntityId,
-            updated: true,
-          });
-          const task = await testDb.query.entities.findFirst({
-            where: { id: { eq: taskEntityId } },
-            columns: { name: true },
-          });
-          expect(task?.name).toBe("Reviewed task");
-        }
-      } finally {
-        env.FEATURE_GOVERNED_WORKFLOW = previousGovernedWorkflow;
+
+      testState.setConfig("FEATURE_GOVERNED_WORKFLOW", governedWorkflow);
+
+      if (path === "Kanban") {
+        const lanePropertyId = createSafeId<"property">();
+        await testDb.insert(properties).values({
+          id: lanePropertyId,
+          workspaceId,
+          name: "Lane",
+          status: "fresh",
+          content: { type: "text", version: 1 },
+          tool: { type: "manual-input", version: 1 },
+        });
+        const flushCount = flushedEntityIds.length;
+        expect(
+          await updateKanbanPlacement.handler(
+            asTestRaw<Parameters<typeof updateKanbanPlacement.handler>[0]>({
+              ...context,
+              body: {
+                entityId: taskEntityId,
+                status,
+                fields: [
+                  {
+                    propertyId: lanePropertyId,
+                    content: { type: "text", version: 1, value: "Reviewed" },
+                  },
+                ],
+              },
+            }),
+          ),
+        ).toEqual({});
+        expect(flushedEntityIds.slice(flushCount)).toEqual([[taskEntityId]]);
+        const lane = await testDb.query.fields.findFirst({
+          where: { propertyId: { eq: lanePropertyId } },
+          columns: { content: true },
+        });
+        expect(lane?.content).toEqual({
+          type: "text",
+          version: 1,
+          value: "Reviewed",
+        });
+      } else {
+        const mcpContext = authorizedMcpContextForTest({
+          accessibleWorkspaceIds: [workspaceId],
+          accessibleWorkspaceIdSet: new Set([workspaceId]),
+          accessibleWorkspaceStatusById: new Map([
+            [workspaceId, "active" as const],
+          ]),
+          accessibleWorkspaces: [],
+          grantedScopes: [],
+          memberRole: "owner",
+          organizationId,
+          recordAuditEvent: context.recordAuditEvent,
+          safeDb,
+          scopedDb: asTestRaw<AuthorizedMcpRequestContext["scopedDb"]>(
+            context.scopedDb,
+          ),
+          userId,
+          userEmail: `${userId}@example.com`,
+        });
+        const result = await handleMcpToolCall({
+          toolName: "save_task",
+          args: { task_id: taskEntityId, status, name: "Reviewed task" },
+          context: mcpContext,
+        });
+        expect(result.isError).not.toBe(true);
+        expect(result.structuredContent).toEqual({
+          taskId: taskEntityId,
+          updated: true,
+        });
+        const task = await testDb.query.entities.findFirst({
+          where: { id: { eq: taskEntityId } },
+          columns: { name: true },
+        });
+        expect(task?.name).toBe("Reviewed task");
       }
+
       const after = await testDb.query.flowRunSteps.findMany({
         where: { runId: { eq: runId } },
         orderBy: { index: "asc" },
@@ -2004,8 +2015,8 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       const replay = installProviderWireReplay({ retryAfterMs: 1 });
       const analytics = installRecordingAnalytics();
       const logs = installRecordingLogger();
-      const previousMockAI = env.USE_MOCK_AI;
-      env.USE_MOCK_AI = false;
+
+      testState.setConfig("USE_MOCK_AI", false);
       try {
         replay.serve(cassette);
         const model = instanceWireErrorModel(cassette.model);
@@ -2089,7 +2100,6 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
           }),
         ).not.toContain(providerCallErrorSentinel(cassette));
       } finally {
-        env.USE_MOCK_AI = previousMockAI;
         logs.restore();
         analytics.restore();
         replay.restore();

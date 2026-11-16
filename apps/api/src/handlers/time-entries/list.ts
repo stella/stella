@@ -1,6 +1,13 @@
 import { Result } from "better-result";
 import { and, asc, eq, gt, gte, isNotNull, lte, or } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { API_CALENDAR_DATE_CHECK } from "@stll/api-contract/api-date";
+import {
+  booleanFromString,
+  numberFromString,
+} from "@stll/api-contract/http-input";
+import { BILLING_MATTER_READ_PERMISSION } from "@stll/permissions";
 
 import {
   timeEntrySourceSchema,
@@ -12,6 +19,7 @@ import {
   timeEntryReadColumns,
 } from "@/api/handlers/time-entries/time-entry-columns";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
+import { timeEntryPageMoneyResponse } from "@/api/lib/billing/response-schemas";
 import { canApproveTimeEntries } from "@/api/lib/billing/time-entry-authorization";
 import {
   selectTimekeeperNames,
@@ -19,9 +27,9 @@ import {
 } from "@/api/lib/billing/timekeeper-names";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  tPaginationCursor,
-  tSafeId,
-  tUserId,
+  paginationCursorSchema,
+  resourceIdSchema,
+  userIdSchema,
   withDescription,
 } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -33,6 +41,7 @@ import {
   isDateOnlyPaginationCursorPart,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
@@ -48,6 +57,11 @@ type TimeEntryRow = typeof timeEntries.$inferSelect;
 
 // Columns intentionally not sent to the client.
 const UNPROJECTED_TIME_ENTRY_LIST_COLUMNS = [
+  // Import provenance is reserved for the time-entry import contract.
+  "externalSource",
+  "externalId",
+  "externalChangeKey",
+  "importedAt",
   // Tenant scope, implied by the caller's active organization.
   "organizationId",
   // The route is already scoped to one workspace via params.workspaceId.
@@ -82,52 +96,65 @@ true satisfies UnexpectedProjectedTimeEntryListColumn extends never
   ? true
   : never;
 
-const readTimeEntriesQuerySchema = t.Object({
-  limit: t.Optional(
-    t.Integer({
-      minimum: 1,
-      maximum: LIMITS.timeEntriesPageSizeMax,
-      description: "Max entries to return",
-    }),
+const readTimeEntriesQuerySchema = v.object({
+  limit: v.optional(
+    v.pipe(
+      numberFromString(
+        v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(1),
+          v.maxValue(LIMITS.timeEntriesPageSizeMax),
+        ),
+      ),
+      v.description("Max entries to return"),
+    ),
   ),
-  cursor: t.Optional(tPaginationCursor()),
-  userId: t.Optional(
-    withDescription(tUserId, "List only entries recorded by this user"),
+  cursor: v.optional(paginationCursorSchema()),
+  userId: v.optional(
+    withDescription(userIdSchema, "List only entries recorded by this user"),
   ),
-  scope: t.Optional(
-    t.Literal("me", {
-      description: "List only entries recorded by the signed-in user",
-    }),
+  scope: v.optional(
+    v.pipe(
+      v.literal("me"),
+      v.description("List only entries recorded by the signed-in user"),
+    ),
   ),
-  workItemId: t.Optional(
-    tSafeId("entity", {
+  workItemId: v.optional(
+    resourceIdSchema("entity", {
       description:
         "List only entries carrying this optional document, folder, or task context",
     }),
   ),
-  dateFrom: t.Optional(
-    t.String({
-      format: "date",
-      description:
+  dateFrom: v.optional(
+    v.pipe(
+      v.string(),
+      v.isoDate(),
+      API_CALENDAR_DATE_CHECK,
+      v.description(
         "List only entries worked on or after this ISO date (YYYY-MM-DD)",
-    }),
+      ),
+    ),
   ),
-  dateTo: t.Optional(
-    t.String({
-      format: "date",
-      description:
+  dateTo: v.optional(
+    v.pipe(
+      v.string(),
+      v.isoDate(),
+      API_CALENDAR_DATE_CHECK,
+      v.description(
         "List only entries worked on or before this ISO date (YYYY-MM-DD)",
-    }),
+      ),
+    ),
   ),
-  status: t.Optional(
+  status: v.optional(
     withDescription(
       timeEntryStatusSchema,
       "List only entries with this status",
     ),
   ),
-  source: t.Optional(timeEntrySourceSchema),
-  billable: t.Optional(t.BooleanString()),
-  hasActiveTimer: t.Optional(t.BooleanString()),
+  source: v.optional(timeEntrySourceSchema),
+  billable: v.optional(booleanFromString()),
+  hasActiveTimer: v.optional(booleanFromString()),
 });
 
 type TimeEntryCursor = {
@@ -152,13 +179,14 @@ const decodeTimeEntryCursor = (cursor: string): TimeEntryCursor | null => {
 
 const readTimeEntries = createSafeHandler(
   {
+    moneyResponse: timeEntryPageMoneyResponse,
     contract: "patch",
     description:
       "List time entries in a matter, optionally filtered by workItemId " +
       "(the document, folder, or task providing context), userId or scope=me, " +
       "a date-worked range (dateFrom/dateTo, ISO YYYY-MM-DD), and status. Returns each " +
       "entry's id, entity, user, date, minutes, rate (minor currency " +
-      "units), currency, narrative, and status.",
+      "units; null without billing access), currency, narrative, and status.",
     permissions: { timeEntry: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },
@@ -309,7 +337,12 @@ const readTimeEntries = createSafeHandler(
         timezoneId: row.timezoneId,
         durationMinutes: row.durationMinutes,
         billedMinutes: row.billedMinutes,
-        rateAtEntry: row.rateAtEntry,
+        rateAtEntry: hasMemberPermission(
+          memberRole,
+          BILLING_MATTER_READ_PERMISSION,
+        )
+          ? row.rateAtEntry
+          : null,
         currency: row.currency,
         approverUserId: row.approverUserId,
         approvedByUserId: row.approvedByUserId,

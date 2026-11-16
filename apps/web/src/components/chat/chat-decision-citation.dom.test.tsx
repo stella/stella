@@ -10,11 +10,11 @@ import {
   createCaseLawDecisionRouteParams,
 } from "@stll/api-contract/case-law-decision-route";
 import { toSafeId } from "@stll/api-contract/safe-id";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { ChatUIMessage } from "@/components/chat/chat-ui-tools";
 import { publicCaseLawCountryFromParam } from "@/features/case-law/case-law-jurisdiction";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import { dockedChatLegalPayloads } from "../../../e2e/helpers/docked-chat-legal-payloads";
 
@@ -24,6 +24,8 @@ const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
+const { WebReaderPresentationProvider } =
+  await import("@/components/legal-reader/web-reader-presentation");
 const { ChatThreadTestRouter } = await import("@/lib/chat-thread-test-router");
 const { decisionOptions, decisionBySlugOptions } =
   await import("@/features/case-law/queries/decisions");
@@ -67,7 +69,9 @@ const mount = (client: InstanceType<typeof QueryClient>, children: ReactNode) =>
       <QueryClientProvider client={client}>
         <IntlProvider locale="en" messages={messages} timeZone="UTC">
           <FormattingProvider locale="en" timeZone="UTC">
-            {children}
+            <WebReaderPresentationProvider>
+              {children}
+            </WebReaderPresentationProvider>
           </FormattingProvider>
         </IntlProvider>
       </QueryClientProvider>
@@ -122,10 +126,9 @@ test("two decisions from one court render each case number once as the accessibl
   );
   await waitFor(() =>
     expect(
-      screen.container.querySelectorAll(
-        '[data-citation-presentation="inline"]',
-      ),
-    ).toHaveLength(2),
+      screen.container.querySelectorAll('[data-citation-presentation="inline"]')
+        .length,
+    ).toBe(2),
   );
   const rendered = screen.container.querySelector("p")?.textContent ?? "";
   expect(rendered.split(first.caseNumber)).toHaveLength(2);
@@ -218,8 +221,8 @@ test("a real slug cache read contributes its resolved canonical decision to answ
   );
   await waitFor(() =>
     expect(
-      screen.container.querySelectorAll("[data-decision-citation]"),
-    ).toHaveLength(2),
+      screen.container.querySelectorAll("[data-decision-citation]").length,
+    ).toBe(2),
   );
   expect(
     screen.container.querySelector(`[data-decision-citation="${second.id}"]`),

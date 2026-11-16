@@ -1,4 +1,20 @@
+// parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
+// parser-output-unchanged: span styles are read only under the opt-in `parseSpanStyle` option, which only cz-nss passes and cz-nss bumps its own version; every other walk is unchanged.
+// parser-output-unchanged: [cz-uohs] its reader supplies text directly and retains the same footnote inlines; replay fixture fields are unchanged.
+// parser-output-unchanged: [cz-ns] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [cz-nss] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [cz-us] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [cz-regional] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [sk-courts] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [sk-us] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-findok] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [hu-bhgy] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [uk-fcl] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [pl-kis] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [pl-uokik] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [us-courtlistener] registered replay fixture fields are unchanged by numeric index normalization.
 // parser-output-unchanged: visible text walks the same nodes in the same order and skips the same script/style subtrees; inline and visible text output is unchanged.
+// parser-output-unchanged: `<sup>` becomes a superscript only under the opt-in `superscripts` option; every walk without it unwraps it as before.
 // parser-output-unchanged: exports the existing script/style exclusion as a selector so pl-tk can clean its owned DOM clone once; other parsers keep using the unchanged tag predicate.
 // parser-output-unchanged: [cz-regional] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
 // parser-output-unchanged: [sk-courts] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
@@ -32,15 +48,21 @@
  * keeps a thin local alias over one core.
  */
 
-import type * as cheerio from "cheerio";
-import { type AnyNode, type Element, isTag, isText } from "domhandler";
-
+import type * as cheerio from "@stll/html";
+import { type AnyNode, type Element, isTag, isText } from "@stll/html/nodes";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Inline } from "@stll/legal-ast/document-ast";
-import { hasInlineChildren } from "@stll/legal-ast/document-ast";
+import { plainTextOf } from "@stll/legal-ast/document-ast";
+import { flattenInlineText } from "@stll/legal-ast/inline";
 // parser-output-unchanged: the inline-line helpers moved unchanged to their package owner so library parsers can import them.
 import { stripInlinePrefix } from "@stll/legal-ast/inline-line";
 
+import {
+  inlineStyleIsAsposeSpacer,
+  inlineStyleIsBold,
+  inlineStyleIsInlineBlock,
+  inlineStyleIsItalic,
+} from "@/api/lib/legal-search/document-builders/inline-style";
 // parser-output-unchanged: the visible-text helpers moved unchanged to visible-html-text.ts so AST validation can reuse them without importing the parser module.
 import {
   EXCLUDED_HTML_SELECTOR,
@@ -146,7 +168,23 @@ export type WalkInlinesOptions = {
    * text axis; any other element is walked as usual.
    */
   pageAnchor?: (element: Element) => InlinePageAnchor | undefined;
+  /**
+   * Read `<sup>` as a superscript inline. Off, its text is unwrapped onto
+   * the baseline as before; a publisher whose markup states superscripts
+   * the reader should show opts in.
+   */
+  superscripts?: boolean;
+  /** Publisher classes that mark raised text on a span. */
+  superscriptClasses?: readonly string[];
 };
+
+const isSuperscriptElement = (
+  element: cheerio.Cheerio<AnyNode>,
+  { superscripts, superscriptClasses }: WalkInlinesOptions,
+): boolean =>
+  (superscripts === true && element.is("sup")) ||
+  (element.is("span") &&
+    superscriptClasses?.some((name) => element.hasClass(name)) === true);
 
 type InlinePageAnchor = Extract<Inline, { type: "page-anchor" }>;
 
@@ -208,8 +246,6 @@ export const walkInlines = (
       }
 
       if (options.parseSpanStyle && tag === "span") {
-        const style = $child.attr("style") ?? "";
-
         // Aspose spacer spans carry horizontal space rather than words:
         // tab stops, alignment fills, and the gap between two
         // letter-spaced words. Emit that gap instead of dropping the
@@ -217,21 +253,26 @@ export const walkInlines = (
         // leaves the letter-spacing reassembly to guess a boundary that
         // is no longer in the text. Older conversions sometimes put real
         // words inside these spans, so only whitespace-only spans become
-        // a gap.
+        // a gap. Image alt text counts as words: `.text()` does not see it.
         if (
-          style.includes("-aw-import:ignore") ||
-          style.includes("-aw-import:spaces") ||
-          style.includes("display:inline-block")
+          inlineStyleIsAsposeSpacer(child) ||
+          inlineStyleIsInlineBlock(child)
         ) {
           const innerText = $child.text().trim();
-          if (!innerText) {
+          const carriesAltText =
+            options.parseImgAlt === true &&
+            $child
+              .find("img")
+              .toArray()
+              .some((img) => ($(img).attr("alt") ?? "").trim() !== "");
+          if (!innerText && !carriesAltText) {
             appendTextInline(inlines, ASPOSE_SPACER_GAP, childAnon);
             return;
           }
         }
 
-        const isBold = style.includes("font-weight:bold");
-        const isItalic = style.includes("font-style:italic");
+        const isBold = inlineStyleIsBold(child);
+        const isItalic = inlineStyleIsItalic(child);
         const children = walk($child, childAnon);
         if (children.length === 0) {
           return;
@@ -248,6 +289,14 @@ export const walkInlines = (
           inlines.push({ type: "italic", children });
         } else {
           inlines.push(...children);
+        }
+        return;
+      }
+
+      if (isSuperscriptElement($child, options)) {
+        const children = walk($child, childAnon);
+        if (children.length > 0) {
+          inlines.push({ type: "superscript", children });
         }
         return;
       }
@@ -318,19 +367,7 @@ export const walkInlines = (
   return walk(el, options.anonymized ?? false);
 };
 
-export const inlinesToPlainText = (inlines: readonly Inline[]): string => {
-  let text = "";
-  for (const node of inlines) {
-    if (node.type === "text") {
-      text += node.text;
-    } else if (node.type === "line-break") {
-      text += "\n";
-    } else if (hasInlineChildren(node)) {
-      text += inlinesToPlainText(node.children);
-    }
-  }
-  return text;
-};
+export const inlinesToPlainText = flattenInlineText;
 
 /**
  * Strip a leading run of presentational page furniture, matched by `pattern`
@@ -348,7 +385,7 @@ export const stripFurniturePrefix = (
   inlines: readonly Inline[],
   pattern: RegExp,
 ): Inline[] => {
-  const text = inlinesToPlainText(inlines);
+  const text = plainTextOf(inlines);
   const lead = text.length - text.trimStart().length;
   const match = pattern.exec(text.slice(lead))?.at(0);
 

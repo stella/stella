@@ -12,6 +12,7 @@ import {
   beforeEach,
   describe,
   expect,
+  mock,
   setDefaultTimeout,
   spyOn,
   test,
@@ -107,9 +108,14 @@ const actor = createRootRunActor(
 );
 const outputEntityId = createSafeId<"entity">();
 
-const settingsSpy = spyOn(aiConfigLoader, "loadOrgAISettings");
-const translateSpy = spyOn(translationAI, "translateTaggedSegments");
-const writeSpy = spyOn(entityWriter, "createEntityFromBuffer");
+// Spies typed through spyOn itself, naming each module as a whole: a typed
+// member access here would leave the module's other exports looking unused.
+type SpyOn<T extends object, K extends keyof T> = ReturnType<
+  typeof spyOn<T, K>
+>;
+let settingsSpy: SpyOn<typeof aiConfigLoader, "loadOrgAISettings">;
+let translateSpy: SpyOn<typeof translationAI, "translateTaggedSegments">;
+let writeSpy: SpyOn<typeof entityWriter, "createEntityFromBuffer">;
 
 const readRun = async () =>
   (
@@ -126,6 +132,10 @@ const sourceReads = () =>
   );
 
 beforeEach(async () => {
+  settingsSpy = spyOn(aiConfigLoader, "loadOrgAISettings");
+  translateSpy = spyOn(translationAI, "translateTaggedSegments");
+  writeSpy = spyOn(entityWriter, "createEntityFromBuffer");
+
   settingsSpy.mockReset();
   translateSpy.mockReset();
   writeSpy.mockReset();
@@ -172,6 +182,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  mock.restore();
   await testDb
     .delete(documentTranslationUnits)
     .where(eq(documentTranslationUnits.runId, runId));

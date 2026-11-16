@@ -7,6 +7,7 @@ import {
   AUTOVACUUM_SQL,
   LONG_TRANSACTION_SQL,
 } from "@stll/db-load-gate/indicators";
+import { waitForExternalState } from "@stll/property-testing/external-state";
 
 import { createDatabaseLoadVerdictReader } from "@/api/db/backfill-runtime";
 import type { Transaction } from "@/api/db/root";
@@ -30,11 +31,14 @@ const restrictedRunner = (db: GatedTestDb, role: string, schema: string) => ({
         sql.raw(`SET LOCAL search_path TO ${schema}, pg_catalog, public`),
       );
       const visibility = (
-        await tx.execute(sql`
+        await tx.execute(
+          sql`
         SELECT current_user AS role,
           pg_has_role(current_user, 'pg_read_all_stats', 'USAGE')
           OR EXISTS (SELECT 1 FROM pg_roles WHERE rolname = current_user AND rolsuper) AS visible
-      `)
+      `,
+          "objects",
+        )
       ).at(0);
       expect(visibility?.["role"]).toBe(role);
       expect(visibility?.["visible"]).toBe(false);
@@ -75,6 +79,7 @@ describe.skipIf(!enabled)(
       const version = (
         await db.execute(
           sql`SELECT current_setting('server_version_num')::int AS version`,
+          "objects",
         )
       ).at(0);
       expect(version?.["version"]).toBeGreaterThanOrEqual(180_000);
@@ -89,6 +94,7 @@ describe.skipIf(!enabled)(
         const existing = (
           await tx.execute(
             sql`SELECT to_regprocedure('public.stella_database_load_indicators(regclass)') IS NOT NULL AS installed`,
+            "objects",
           )
         ).at(0);
         if (existing?.["installed"] === true) {
@@ -159,12 +165,14 @@ describe.skipIf(!enabled)(
         const access = (
           await tx.execute(
             sql`SELECT pg_catalog.has_table_privilege('stella_ingestion', ${target}::regclass, 'SELECT') AS permitted`,
+            "objects",
           )
         ).at(0);
         expect(access?.["permitted"]).toBe(true);
         const row = (
           await tx.execute(
             sql`SELECT * FROM public.stella_database_load_indicators(${target}::regclass)`,
+            "objects",
           )
         ).at(0);
         if (row === undefined) {
@@ -181,13 +189,16 @@ describe.skipIf(!enabled)(
         expect(row["observed_at"]).toBeInstanceOf(Date);
       });
       const definition = (
-        await db.execute(sql`
+        await db.execute(
+          sql`
         SELECT p.prosecdef AS definer, p.provolatile AS volatility, p.proconfig AS configuration,
           r.rolsuper OR pg_has_role(r.oid, 'pg_read_all_stats', 'USAGE') AS owner_visible,
           pg_get_function_result(p.oid) AS result
         FROM pg_proc p JOIN pg_roles r ON r.oid = p.proowner
         WHERE p.oid = 'public.stella_database_load_indicators(regclass)'::regprocedure
-      `)
+      `,
+          "objects",
+        )
       ).at(0);
       expect(definition?.["definer"]).toBe(true);
       expect(definition?.["volatility"]).toBe("v");
@@ -260,6 +271,7 @@ describe.skipIf(!enabled)(
       const rights = (
         await db.execute(
           sql`SELECT has_function_privilege(${role}, 'public.stella_database_load_indicators(regclass)', 'EXECUTE') AS executable`,
+          "objects",
         )
       ).at(0);
       expect(rights?.["executable"]).toBe(false);
@@ -285,13 +297,16 @@ describe.skipIf(!enabled)(
 
     test("the non-superuser execute grantee cannot read indicators for an inaccessible target", async () => {
       const permissions = (
-        await db.execute(sql`
+        await db.execute(
+          sql`
         SELECT
           pg_catalog.has_table_privilege(session_user, ${deniedTarget}::regclass, 'SELECT') AS login_permitted,
           pg_catalog.has_table_privilege('stella_ingestion', ${deniedTarget}::regclass, 'SELECT') AS grantee_permitted,
           pg_catalog.has_function_privilege('stella_ingestion', 'public.stella_database_load_indicators(regclass)', 'EXECUTE') AS executable,
           (SELECT rolsuper FROM pg_catalog.pg_roles WHERE rolname = 'stella_ingestion') AS superuser
-      `)
+      `,
+          "objects",
+        )
       ).at(0);
       expect(permissions).toEqual({
         login_permitted: true,
@@ -355,6 +370,7 @@ describe.skipIf(!enabled)(
                 const visible = (
                   await tx.execute(
                     sql`SELECT pg_has_role(${blindOwner}, 'pg_read_all_stats', 'USAGE') AS visible`,
+                    "objects",
                   )
                 ).at(0);
                 expect(visible?.["visible"]).toBe(false);
@@ -492,6 +508,7 @@ describe.skipIf(!enabled)(
             const other = (
               await tx.execute(
                 sql`SELECT * FROM public.stella_database_load_indicators(${`${schema}.pg_database`}::regclass)`,
+                "objects",
               )
             ).at(0);
             expect(other?.["vacuum_active"]).toBe(false);
@@ -633,9 +650,13 @@ describe.skipIf(!enabled)(
           );
           await client`SELECT pg_stat_force_next_flush()`;
           const seen = new Set<string>();
-          const deadline = performance.now() + 110_000;
-          while (seen.size < 2 && performance.now() < deadline) {
-            const progress = await client`
+          // Autovacuum workers run on the server's schedule; each read checks
+          // the verdict while a phase is still active.
+          await waitForExternalState({
+            description: "autovacuum and autoanalyze run on public.target_a",
+            timeoutMs: 110_000,
+            read: async () => {
+              const progress = await client`
           SELECT 'vacuum' AS phase, progress.pid FROM pg_stat_progress_vacuum AS progress
           JOIN pg_stat_activity AS worker USING (pid)
           WHERE progress.relid = 'public.target_a'::regclass AND worker.backend_type = 'autovacuum worker'
@@ -646,42 +667,43 @@ describe.skipIf(!enabled)(
           WHERE progress.relid = 'public.target_a'::regclass AND worker.backend_type = 'autovacuum worker'
             AND progress.datid = (SELECT oid FROM pg_database WHERE datname = current_database())
         `;
-            for (const row of progress) {
-              const phase = row["phase"];
-              if (typeof phase !== "string" || seen.has(phase)) {
-                continue;
-              }
-              const direct = (
-                await client`SELECT vacuum_active FROM public.stella_database_load_indicators('public.target_a'::regclass)`
-              ).at(0);
-              const verdict = await readA();
-              const stillActive = (
-                await client`
+              for (const row of progress) {
+                const phase = row["phase"];
+                if (typeof phase !== "string" || seen.has(phase)) {
+                  continue;
+                }
+                const direct = (
+                  await client`SELECT vacuum_active FROM public.stella_database_load_indicators('public.target_a'::regclass)`
+                ).at(0);
+                const verdict = await readA();
+                const stillActive = (
+                  await client`
             SELECT EXISTS (SELECT 1 FROM pg_stat_progress_vacuum WHERE pid = ${row["pid"]} AND ${phase} = 'vacuum'
               UNION ALL SELECT 1 FROM pg_stat_progress_analyze WHERE pid = ${row["pid"]} AND ${phase} = 'analyze') AS active
           `
-              ).at(0);
-              if (stillActive?.["active"] !== true) {
-                continue;
+                ).at(0);
+                if (stillActive?.["active"] !== true) {
+                  continue;
+                }
+                expect(direct?.["vacuum_active"]).toBe(true);
+                expect(verdict.kind).toBe("degraded");
+                expect(
+                  verdict.signals.find(
+                    ({ indicator }) => indicator === "autovacuum_on_target",
+                  ),
+                ).toMatchObject({ kind: "degraded", value: 1 });
+                const other = (
+                  await client`SELECT vacuum_active FROM public.stella_database_load_indicators('public.target_b'::regclass)`
+                ).at(0);
+                expect(other?.["vacuum_active"]).toBe(false);
+                expect((await readB()).kind).toBe("normal");
+                seen.add(phase);
               }
-              expect(direct?.["vacuum_active"]).toBe(true);
-              expect(verdict.kind).toBe("degraded");
-              expect(
-                verdict.signals.find(
-                  ({ indicator }) => indicator === "autovacuum_on_target",
-                ),
-              ).toMatchObject({ kind: "degraded", value: 1 });
-              const other = (
-                await client`SELECT vacuum_active FROM public.stella_database_load_indicators('public.target_b'::regclass)`
-              ).at(0);
-              expect(other?.["vacuum_active"]).toBe(false);
-              expect((await readB()).kind).toBe("normal");
-              seen.add(phase);
-            }
-            if (seen.size < 2) {
-              await Bun.sleep(10);
-            }
-          }
+              return seen.size === 2;
+            },
+            // The diagnostics below name what was observed.
+            onTimeout: () => undefined,
+          });
           if (seen.size !== 2) {
             const settings =
               await client`SELECT current_setting('autovacuum') AS enabled, current_setting('autovacuum_naptime') AS naptime`;

@@ -3,10 +3,7 @@ import { and, asc, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { entities, fields } from "@/api/db/schema";
-import {
-  dueFromToday,
-  openAgendaTask,
-} from "@/api/handlers/workspaces/agenda-conditions";
+import { openAgendaTask } from "@/api/handlers/workspaces/agenda-conditions";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import type {
@@ -123,7 +120,6 @@ export const readSearchPreviewHandler = async ({
               eq(entities.workspaceId, workspaceId),
               openAgendaTask(entities),
               isNotNull(entities.dueDate),
-              dueFromToday(entities),
             ),
           )
           .orderBy(asc(entities.dueDate), asc(entities.id))

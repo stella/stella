@@ -95,9 +95,9 @@ predicate.
 ## Why these tests matter
 
 The `SafeId` branded type and env validation schema are the
-foundation of Stella's access control model. The `authMacro`
+foundation of Stella's access control model. `authenticateMember`
 produces a `SafeId<"organization">` only after session
-validation, and `workspaceAccessMacro` produces a
+validation, and `authorizeWorkspace` produces a
 `SafeId<"workspace">` only after verifying the workspace
 belongs to the session's organization. If these boundaries
 are weakened (e.g., by removing the brand, accepting empty

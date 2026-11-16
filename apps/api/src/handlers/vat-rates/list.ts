@@ -1,12 +1,15 @@
 import { panic, Result } from "better-result";
 import { and, desc, eq, isNull } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { apiDateSchema } from "@stll/api-contract/api-date";
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import { vatRates } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { vatRateOnDate } from "@/api/lib/billing/vat-rates";
-import { tPaginationCursor } from "@/api/lib/custom-schema";
+import { paginationCursorSchema } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -64,12 +67,19 @@ const config = {
     consumesServices: false,
   },
   access: "read",
-  query: t.Object({
-    on: t.Optional(t.String({ format: "date" })),
-    limit: t.Optional(
-      t.Integer({ minimum: 1, maximum: LIMITS.vatRatesPageSizeMax }),
+  query: v.object({
+    on: v.optional(apiDateSchema),
+    limit: v.optional(
+      numberFromString(
+        v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(1),
+          v.maxValue(LIMITS.vatRatesPageSizeMax),
+        ),
+      ),
     ),
-    cursor: t.Optional(tPaginationCursor()),
+    cursor: v.optional(paginationCursorSchema()),
   }),
 } satisfies HandlerConfig;
 

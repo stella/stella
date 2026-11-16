@@ -2,18 +2,19 @@ import { expect, test } from "bun:test";
 import fc from "fast-check";
 
 import {
-  propertyConfig,
+  assertProperty,
   propertySeed,
   propertyTestTimeout,
 } from "@stll/property-testing";
 
 import { encodeRegistryComponent } from "./encode-registry-component.js";
-import { registryString } from "./property-test-helpers.test.js";
+import { registryString } from "./tests/test-helpers.js";
 
 test(
   "URL components round-trip Unicode scalar values",
   () => {
-    fc.assert(
+    assertProperty(
+      "URL components round-trip Unicode scalar values",
       fc.property(registryString, (source) => {
         const scalarText = Array.from(source, (character) => {
           const code = character.codePointAt(0) ?? 0;
@@ -25,7 +26,7 @@ test(
         expect(decodeURIComponent(encoded)).toBe(scalarText);
         expect(encoded).toBe(encodeURIComponent(scalarText));
       }),
-      propertyConfig({ seed: propertySeed() }),
+      { seed: propertySeed() },
     );
   },
   propertyTestTimeout(10_000),

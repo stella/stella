@@ -2,7 +2,7 @@ import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { nullableStringCursorSeed } from "@/lib/infinite-query";
-import { unwrapPublicLawEden } from "@/lib/public-law-api";
+import { unwrapPublicLawResponse } from "@/lib/public-law-api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -19,6 +19,11 @@ const decisionCitationKeys = {
     ...decisionCitationKeys.all,
     decisionId,
     direction,
+  ],
+  inText: (decisionId: string) => [
+    ...decisionCitationKeys.all,
+    decisionId,
+    "in-text",
   ],
   summary: (decisionId: string) => [
     ...decisionCitationKeys.all,
@@ -51,9 +56,38 @@ export const decisionCitationsInfiniteOptions = (
           fetch: { signal },
         });
 
-      const data = unwrapPublicLawEden(response, "listPublicDecisionCitations");
+      const data = unwrapPublicLawResponse(
+        response,
+        "listPublicDecisionCitations",
+      );
 
       return data;
+    },
+    initialPageParam: nullableStringCursorSeed(),
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
+    staleTime: ROUTE_QUERY_STALE_TIME_MS,
+  });
+
+/**
+ * Every citation a decision's text makes, for linking that text. The kind of
+ * a citation decides what it counts for, never whether the reader links it.
+ */
+export const decisionInTextCitationsInfiniteOptions = (decisionId: string) =>
+  infiniteQueryOptions({
+    queryKey: decisionCitationKeys.inText(decisionId),
+    queryFn: async ({ pageParam, signal }) => {
+      const response = await api.case
+        .decisions({ decisionId: toSafeId<"caseLawDecision">(decisionId) })
+        .citations.get({
+          query: {
+            direction: "outgoing",
+            kinds: "all",
+            ...(pageParam !== null && { cursor: pageParam }),
+          },
+          fetch: { signal },
+        });
+
+      return unwrapPublicLawResponse(response, "listPublicDecisionCitations");
     },
     initialPageParam: nullableStringCursorSeed(),
     getNextPageParam: (lastPage) => lastPage.nextCursor,
@@ -72,7 +106,7 @@ export const decisionLeadingCitationsOptions = (
         .decisions({ decisionId: toSafeId<"caseLawDecision">(decisionId) })
         .citations.leading.get({ query: { direction }, fetch: { signal } });
 
-      const data = unwrapPublicLawEden(
+      const data = unwrapPublicLawResponse(
         response,
         "listLeadingDecisionCitations",
       );
@@ -97,7 +131,7 @@ export const decisionCitationSummaryOptions = (decisionId: string) =>
         .decisions({ decisionId: toSafeId<"caseLawDecision">(decisionId) })
         .citations.summary.get({ fetch: { signal } });
 
-      const data = unwrapPublicLawEden(
+      const data = unwrapPublicLawResponse(
         response,
         "summarizePublicDecisionCitations",
       );

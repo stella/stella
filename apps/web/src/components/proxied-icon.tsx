@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { exactIconOptions } from "@/features/chat/link-icons";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 
 type ProxiedIconProps = Omit<ComponentProps<"img">, "alt" | "src"> & {
   alt: string;
@@ -26,7 +26,7 @@ export const useProxiedIconSrc = (
     ...exactIconOptions(iconUrl ?? ""),
     enabled: iconUrl !== undefined,
   });
-  const iconView = useQueryView(iconQuery);
+  const iconView = queryView(iconQuery);
   const icon = iconView.type === "items" ? iconView.items : undefined;
   const blob = icon?.type === "icon" ? icon.blob : undefined;
   const [localIcon, setLocalIcon] = useState<{

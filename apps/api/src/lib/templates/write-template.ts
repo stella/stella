@@ -16,7 +16,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import {
   lockObjectCleanupIntentsForWriter,
   lockOrganizationObjectIntentsForWriter,
-  reserveObjectCleanupIntents,
+  reserveObjectCleanupIntentsForKey,
   retirePublishedObjectCleanupIntentsInTransaction,
   settleObjectCleanupIntentsAfterWriterInTransaction,
 } from "@/api/lib/buffer-intent-reconciliation";
@@ -136,7 +136,7 @@ const writeTemplateAttempt = async function* ({
     templateId,
     writeId: createSafeId<"templateVersion">(),
   });
-  const reservation = await reserveObjectCleanupIntents({
+  const reservation = await reserveObjectCleanupIntentsForKey({
     objectKey: s3Key,
     organizationId,
     safeDb,
@@ -181,6 +181,7 @@ const writeTemplateAttempt = async function* ({
       return Result.err(
         new HandlerError({
           status: 503,
+          code: "internal_error",
           message:
             "Template storage write could not be confirmed. Retry the operation.",
         }),

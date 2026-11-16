@@ -12,6 +12,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { isCanonicalFailureCancellation } from "./ci-cancellation-contract";
+import { isRepositoryCheckoutAction } from "./ci-job-classification/checkout-actions";
 import {
   NETWORK_DEPTH_METHOD,
   prepareComparisonBaseline,
@@ -385,7 +386,7 @@ describe("network baseline workflows", () => {
     });
     for (const job of Object.values(jobs)) {
       for (const step of job.steps) {
-        if (step.uses?.startsWith("actions/checkout@")) {
+        if (isRepositoryCheckoutAction(step.uses)) {
           expect(step.with?.["persist-credentials"]).toBe(false);
           expect(step.with?.["ref"]).toBe(githubExpression("github.sha"));
         }
@@ -462,7 +463,7 @@ describe("network baseline workflows", () => {
         "needs.ci-plan.outputs.target_base_sha",
       );
       const checkout = job.steps.find((step) =>
-        step.uses?.startsWith("actions/checkout@"),
+        isRepositoryCheckoutAction(step.uses),
       );
       expect(checkout?.with?.["fetch-depth"]).toBe(0);
     }
@@ -795,6 +796,7 @@ describe("merge-base preparation integration", () => {
       const prepare = (script: string) =>
         run(["bash", script], {
           GH_RETRY_SCRIPT: path.join(root, "scripts/gh-retry.sh"),
+          NETWORK_RETRY_SCRIPT: path.join(root, "scripts/retry.sh"),
           PATH: `${path.join(directory, "bin")}:${runnerPath}`,
           BASE_SHA: recordedBase,
           GITHUB_EVENT_NAME: "pull_request",

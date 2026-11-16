@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { createTestState } from "@stll/test-state";
+
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { flowDefinitions } from "@/api/db/schema";
 import { env } from "@/api/env";
@@ -17,6 +19,7 @@ const organizationId = mintAuthProviderId<"organization">();
 const userId = mintAuthProviderId<"user">();
 const workspaceId = createSafeId<"workspace">();
 const definitionId = createSafeId<"flowDefinition">();
+const state = createTestState({ file: import.meta.path, config: env });
 const definition = {
   id: definitionId,
   name: "Review document",
@@ -35,13 +38,8 @@ const definition = {
 >;
 
 const withAdmission = async (run: () => Promise<void>) => {
-  const previous = env.FEATURE_ACTION_ADMISSION;
-  env.FEATURE_ACTION_ADMISSION = true;
-  try {
-    await run();
-  } finally {
-    env.FEATURE_ACTION_ADMISSION = previous;
-  }
+  state.setConfig("FEATURE_ACTION_ADMISSION", true);
+  await run();
 };
 
 describe("flow kickoff acceptance", () => {
@@ -71,6 +69,7 @@ describe("flow kickoff acceptance", () => {
           entered.resolve(undefined);
           await proceed.promise;
           return {
+            billingAccess: false,
             memberId: "member",
             email: "member@example.test",
             role: "owner",
@@ -190,7 +189,7 @@ describe("flow kickoff acceptance", () => {
           lease.abort(
             new ActionAdmissionError({
               message: "Lease lost at commit",
-              reason: "unavailable",
+              reason: "lease_lost",
             }),
           );
         }
@@ -232,7 +231,7 @@ describe("flow kickoff acceptance", () => {
 
   test("manual admission refusals retain their original typed error and write nothing", async () => {
     await withAdmission(async () => {
-      for (const reason of ["busy", "unavailable"] as const) {
+      for (const reason of ["busy", "lease_lost"] as const) {
         let inserted = false;
         let enqueued = false;
         const error = new ActionAdmissionError({
@@ -326,7 +325,7 @@ describe("flow kickoff acceptance", () => {
           lease.abort(
             new ActionAdmissionError({
               message: "Lease lost before insertion",
-              reason: "unavailable",
+              reason: "lease_lost",
             }),
           );
           return await run(lease.signal, async () => undefined);
@@ -361,6 +360,7 @@ describe("flow kickoff acceptance", () => {
           {
             findDefinition: async () => definition,
             resolveAuthorization: async () => ({
+              billingAccess: false,
               memberId: "member",
               email: "member@example.test",
               role: "owner",
@@ -373,7 +373,7 @@ describe("flow kickoff acceptance", () => {
               lease.abort(
                 new ActionAdmissionError({
                   message: "Lease lost at commit",
-                  reason: "unavailable",
+                  reason: "lease_lost",
                 }),
               );
               return { outcome: "started" };
@@ -386,7 +386,7 @@ describe("flow kickoff acceptance", () => {
                 lease.abort(
                   new ActionAdmissionError({
                     message: "Lease lost before insertion",
-                    reason: "unavailable",
+                    reason: "lease_lost",
                   }),
                 );
               }

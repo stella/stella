@@ -2,11 +2,15 @@ import { describe, expect, test } from "bun:test";
 import assert from "node:assert/strict";
 import PostalMime from "postal-mime";
 
+import { createTestState } from "@stll/test-state";
+
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 
 import { INBOUND_MAIL_LIMITS } from "./limits";
 import type { InboundMessageError } from "./message";
 import { parseInboundMessage } from "./message";
+
+const testState = createTestState({ file: import.meta.path, config: {} });
 
 const parseValidInboundMessage = async (raw: Uint8Array) => {
   const result = await parseInboundMessage(raw);
@@ -71,14 +75,14 @@ describe("inbound MIME normalization", () => {
           "Content-Type: text/html; charset=utf-8",
           "Content-Transfer-Encoding: base64",
           "",
-          Buffer.from("<p>Přiložený návrh.</p>").toString("base64"),
+          Buffer.from("<p>Přiložený návrh.</p>").toBase64(),
           "--alternative--",
           "--mixed",
           "Content-Type: application/pdf",
           `Content-Disposition: ${disposition}; filename*=utf-8''n%C3%A1vrh.pdf`,
           "Content-Transfer-Encoding: base64",
           "",
-          Buffer.from("%PDF-1.7\nfixture\n").toString("base64"),
+          Buffer.from("%PDF-1.7\nfixture\n").toBase64(),
           "--mixed--",
           "",
         ].join("\r\n"),
@@ -317,7 +321,7 @@ describe("inbound MIME normalization", () => {
         'Content-Disposition: attachment; filename="forward.eml"',
         "Content-Transfer-Encoding: base64",
         "",
-        Buffer.from(original).toString("base64"),
+        Buffer.from(original).toBase64(),
         "--outer--",
       ].join("\r\n"),
     );
@@ -552,9 +556,7 @@ describe("inbound MIME normalization", () => {
         'Content-Disposition: attachment; filename="large.pdf"',
         "Content-Transfer-Encoding: base64",
         "",
-        Buffer.alloc(INBOUND_MAIL_LIMITS.attachmentBytes + 1, 0x41).toString(
-          "base64",
-        ),
+        Buffer.alloc(INBOUND_MAIL_LIMITS.attachmentBytes + 1, 0x41).toBase64(),
         "--outer--",
       ].join("\r\n"),
     );
@@ -580,7 +582,7 @@ describe("inbound MIME normalization", () => {
         'Content-Disposition: attachment; filename="brief.pdf"',
         "Content-Transfer-Encoding: base64",
         "",
-        Buffer.from([0x4d, 0x5a, 0, 0]).toString("base64"),
+        Buffer.from([0x4d, 0x5a, 0, 0]).toBase64(),
         "--outer--",
       ].join("\r\n"),
     );
@@ -636,7 +638,7 @@ describe("inbound MIME normalization", () => {
           'Content-Disposition: attachment; filename="original.eml"',
           "Content-Transfer-Encoding: base64",
           "",
-          Buffer.from(original).toString("base64"),
+          Buffer.from(original).toBase64(),
           "--outer--",
         ].join("\r\n"),
       );
@@ -733,7 +735,6 @@ describe("inbound MIME normalization", () => {
   });
 
   test("date storage and content identity stay stable across host timezones", async () => {
-    const previousTimezone = process.env.TZ;
     const ambiguous = message(
       baseHeaders.replace("12:00:00 +0000", "12:00:00"),
       "Body",
@@ -744,28 +745,19 @@ describe("inbound MIME normalization", () => {
     );
     const identities = new Set<string>();
     const providerDates = new Set<string | undefined>();
-    try {
-      for (const timezone of [
-        "UTC",
-        "America/Los_Angeles",
-        "Pacific/Auckland",
-      ]) {
-        process.env.TZ = timezone;
-        providerDates.add((await PostalMime.parse(ambiguous)).date);
-        const withoutZone = await parseValidInboundMessage(ambiguous);
-        const withZone = await parseValidInboundMessage(zoned);
-        expect(withoutZone.message.date).toBeNull();
-        expect(withZone.message.date).toBe("2026-09-26T12:00:00.000Z");
-        identities.add(
-          JSON.stringify([
-            withoutZone.message.contentHash,
-            withZone.message.contentHash,
-          ]),
-        );
-      }
-    } finally {
-      // Bun's date cache needs a reassignment when restoring an unset TZ.
-      process.env.TZ = previousTimezone ?? "";
+    for (const timezone of ["UTC", "America/Los_Angeles", "Pacific/Auckland"]) {
+      testState.setEnv("TZ", timezone);
+      providerDates.add((await PostalMime.parse(ambiguous)).date);
+      const withoutZone = await parseValidInboundMessage(ambiguous);
+      const withZone = await parseValidInboundMessage(zoned);
+      expect(withoutZone.message.date).toBeNull();
+      expect(withZone.message.date).toBe("2026-09-26T12:00:00.000Z");
+      identities.add(
+        JSON.stringify([
+          withoutZone.message.contentHash,
+          withZone.message.contentHash,
+        ]),
+      );
     }
     expect(providerDates.size).toBeGreaterThan(1);
     expect(identities.size).toBe(1);
@@ -779,7 +771,7 @@ describe("inbound MIME normalization", () => {
         `Content-Disposition: attachment; filename="${fileName}"`,
         "Content-Transfer-Encoding: base64",
         "",
-        Buffer.from(content).toString("base64"),
+        Buffer.from(content).toBase64(),
       ].join("\r\n");
     const email = (parts: string[]) =>
       message(

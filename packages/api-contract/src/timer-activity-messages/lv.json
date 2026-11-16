@@ -1,0 +1,11 @@
+{
+  "timer": "Taimeris",
+  "running": "Darbojas",
+  "paused": "Apturēts",
+  "noMatter": "Bez lietas",
+  "noDescription": "Bez apraksta",
+  "more": "{count, plural, zero {vēl # taimeru} one {vēl # taimeris} other {vēl # taimeri}}",
+  "startedElsewhere": "Citā ierīcē tika palaists taimeris",
+  "pause": "Apturēt",
+  "resume": "Turpināt"
+}

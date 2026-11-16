@@ -9,6 +9,10 @@
  * of no particular script (digits, punctuation, spaces) stays in the face
  * of the text around it.
  *
+ * The bold chain, for the signer name, puts DejaVu Sans Bold (the same
+ * DejaVu 2.37 release, under the same licence) before the regular chain:
+ * a character Bold cannot draw falls back to the regular faces.
+ *
  * Imported as file assets rather than read from a path next to this module:
  * `bun build --compile` embeds an imported asset in the binary, while a path
  * built from `import.meta.dir` points into a source tree the compiled image
@@ -26,6 +30,7 @@ import {
   type Shaper,
 } from "@stll/folio-core/text-shaping";
 
+import dejaVuBoldPath from "./fonts/DejaVuSans-Bold.ttf" with { type: "file" };
 import dejaVuLicensePath from "./fonts/DejaVuSans-LICENSE.txt" with { type: "file" };
 import dejaVuPath from "./fonts/DejaVuSans.ttf" with { type: "file" };
 import cjkLicensePath from "./fonts/NotoSansCJK-LICENSE.txt" with { type: "file" };
@@ -53,14 +58,31 @@ export type StampFace = {
 export type StampFonts = {
   /** In fallback order. */
   faces: readonly StampFace[];
+  /** The bold chain, in fallback order; ends with every face of `faces`. */
+  bold: readonly StampFace[];
   shaper: Shaper;
 };
+
+/** The stamp fonts with the bold chain as the one to set text in. */
+export const boldStampFonts = (fonts: StampFonts): StampFonts => ({
+  ...fonts,
+  faces: fonts.bold,
+});
+
+const LATIN_GREEK_CYRILLIC_ARABIC_HEBREW =
+  /[\p{Script=Latin}\p{Script=Greek}\p{Script=Cyrillic}\p{Script=Arabic}\p{Script=Hebrew}]/u;
+
+const BOLD_SOURCE = {
+  key: "DejaVuSansBold",
+  path: dejaVuBoldPath,
+  owns: LATIN_GREEK_CYRILLIC_ARABIC_HEBREW,
+} as const;
 
 const FACE_SOURCES = [
   {
     key: "DejaVuSans",
     path: dejaVuPath,
-    owns: /[\p{Script=Latin}\p{Script=Greek}\p{Script=Cyrillic}\p{Script=Arabic}\p{Script=Hebrew}]/u,
+    owns: LATIN_GREEK_CYRILLIC_ARABIC_HEBREW,
   },
   {
     key: "NotoSansDevanagari",
@@ -78,6 +100,7 @@ const FACE_SOURCES = [
   { key: "NotoSansKR", path: hangulPath, owns: /\p{Script=Hangul}/u },
 ] as const;
 
+/** DejaVu Sans and DejaVu Sans Bold share one licence. */
 const LICENSE_PATHS = [
   dejaVuLicensePath,
   cjkLicensePath,
@@ -89,7 +112,7 @@ const readFace = async ({
   key,
   owns,
   path,
-}: (typeof FACE_SOURCES)[number]): Promise<StampFace> => {
+}: (typeof FACE_SOURCES)[number] | typeof BOLD_SOURCE): Promise<StampFace> => {
   const parsed = parseSfnt(new Uint8Array(await Bun.file(path).bytes()));
   if (parsed.isErr()) {
     // The faces are built and committed with the code; one that does not
@@ -100,13 +123,14 @@ const readFace = async ({
 };
 
 const readFonts = async (): Promise<StampFonts> => {
-  const [faces, shaper] = await Promise.all([
+  const [faces, boldFace, shaper] = await Promise.all([
     Promise.all(FACE_SOURCES.map(readFace)),
+    readFace(BOLD_SOURCE),
     Bun.file(textShaperPath)
       .bytes()
       .then(async (wasm) => await getShaper({ wasm })),
   ]);
-  return { faces, shaper };
+  return { bold: [boldFace, ...faces], faces, shaper };
 };
 
 let loaded: StampFonts | undefined;

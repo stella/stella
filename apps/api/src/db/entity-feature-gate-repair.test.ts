@@ -1,6 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { is } from "drizzle-orm";
-import { PgTable } from "drizzle-orm/pg-core";
 
 import { entityFeatureGateMetadata } from "@/api/db/entity-feature-gate-metadata";
 import { entityFeaturePolicyDefinitions } from "@/api/db/entity-feature-policies";
@@ -10,6 +8,7 @@ import { blockStatementsOf } from "@/api/tests/helpers/lock-taking-sql";
 import { createEntityFeatureGateRepair } from "./entity-feature-gate-repair";
 import type { OnlineTableGate, PolicyDefinition } from "./online-ddl";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
+import { schemaTables } from "./schema-tables";
 
 const RELATIONS = ["alpha", "beta", "gamma"] as const;
 
@@ -151,7 +150,7 @@ describe("entity feature gate cutover", () => {
   });
 
   test("the schema defines the policy of every gate relation", () => {
-    const tables = Object.values(schema).filter((table) => is(table, PgTable));
+    const tables = schemaTables(schema);
     const policies = new Set(
       entityFeaturePolicyDefinitions(tables).map(({ tableName }) => tableName),
     );

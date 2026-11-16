@@ -274,3 +274,37 @@ test("diff diagnostics name reductions, removed files and increases in sorted or
   );
   expect(formatFileDeltas([])).toBe("");
 });
+
+for (const file of [
+  "__proto__",
+  "constructor",
+  "toString",
+  "hasOwnProperty",
+  "1",
+  "žluťoučký.ts",
+]) {
+  test(`reported file ${file} retains its own counts and symbols across repeated rows`, () => {
+    const report = {
+      issues: [
+        { file, exports: [{ name: "first" }] },
+        { file, types: [{ name: "second" }], nsExports: [{ name: "third" }] },
+      ],
+    };
+    expect(summarizeKnipReport(report)).toEqual({
+      ".": { count: 3, files: { [file]: 3 } },
+    });
+    const current = summarizeKnipReport(report);
+    const baseline = { ".": { count: 3, files: { "previous.ts": 3 } } };
+    expect(checkRegressions(current, baseline)).toHaveLength(1);
+    expect(diffSummaries(current, baseline)[0]?.regressedFiles).toEqual([
+      { file, from: 0, to: 3 },
+    ]);
+    const symbols = collectIssueSymbols(report);
+    expect(Object.hasOwn(symbols, file)).toBe(true);
+    expect(symbols[file]).toEqual([
+      "first (exports)",
+      "second (types)",
+      "third (nsExports)",
+    ]);
+  });
+}

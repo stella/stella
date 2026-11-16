@@ -1,6 +1,5 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { sql } from "drizzle-orm";
 
 import {
   DECISION_DOCKET_GRAMMARS,
@@ -50,16 +49,6 @@ export type DocketFamilyScenario = ReturnType<typeof docketFamilyScenario>;
 
 /** A file with more decisions than one identity read keeps. */
 const LARGE_FILE_SIZE = LIMITS.caseLawSearchPageSizeMax + 20;
-
-/**
- * The public reader's grant on the case-file key. It ships a release after
- * the column, so the suites set it as that release will, and take it away to
- * read as a reader that does not hold it yet.
- */
-export const docketFamilyKeyGrantSql = (mode: "grant" | "revoke") =>
-  mode === "grant"
-    ? sql`GRANT SELECT (docket_family_key) ON TABLE case_law_decisions TO stella_public_law_reader`
-    : sql`REVOKE SELECT (docket_family_key) ON TABLE case_law_decisions FROM stella_public_law_reader`;
 
 export const docketFamilyScenario = (number: number) => {
   const n = String(number);
@@ -338,8 +327,6 @@ export const describeDocketFamilyIdentity = (
   context: () => {
     caseLawDb: CaseLawPublicReadDb;
     scenario: DocketFamilyScenario;
-    /** Sets the reader's grant on the case-file key, as its owner. */
-    setFamilyKeyGrant: (mode: "grant" | "revoke") => Promise<void>;
   },
 ): void => {
   const { lookedUp, read, searched } = identityReaders(
@@ -390,23 +377,6 @@ export const describeDocketFamilyIdentity = (
           status: "ambiguous",
           reason: "several",
         });
-      }
-    });
-
-    test("a reader without the case-file key's grant reads the file by its spellings", async () => {
-      // The release before the grant: no error, and no claim the file is whole.
-      const { dockets, ids } = context().scenario;
-      await context().setFamilyKeyGrant("revoke");
-      try {
-        expect(await searched(dockets.legacy)).toEqual(
-          sorted(ids.legacySibling),
-        );
-        expect(await lookedUp(dockets.legacy)).toMatchObject({
-          status: "incomplete_identifier",
-          missing: ["sheet"],
-        });
-      } finally {
-        await context().setFamilyKeyGrant("grant");
       }
     });
 

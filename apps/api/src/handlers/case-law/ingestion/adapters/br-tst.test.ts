@@ -17,11 +17,6 @@ import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 import { Temporal } from "@stll/time";
 
 import {
-  decodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
-import {
   BR_TST_HELD_LISTINGS,
   BR_TST_LISTING_PAGE_SIZE,
   BR_TST_MUTABLE_DAYS,
@@ -39,23 +34,30 @@ import {
   parseBrTstCursor,
 } from "@/api/handlers/case-law/ingestion/adapters/br-tst";
 import type { BrTstCursor } from "@/api/handlers/case-law/ingestion/adapters/br-tst";
-import { rejectionOf } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import {
   listReconciliationSlice,
   MAX_SLICE_PAGES,
+  SLICE_LISTING_PROOF,
 } from "@/api/handlers/case-law/ingestion/slice-listing";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { BR_TST_PRECEDENTS_SLICE } from "@/api/lib/legal-search/ingestion-constants";
+import {
+  decodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@/api/lib/legal-search/ingestion-types";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
+import { rejectionOf } from "@/api/tests/helpers/case-law-adapter-test-utils";
 import {
   BR_TST_RECORDINGS,
   brTstRecordedRecords,
 } from "@/api/tests/helpers/case-law-enrolled-fixtures";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
-const originalFetch = globalThis.fetch;
+const testFetchState = createTestFetch();
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
 });
 
 /** Noon in Brasília on 2026-10-25: the 24th is the last closed day. */
@@ -319,8 +321,8 @@ const urlOf = (input: string | URL | Request): string => {
 /** Script the search and record every request the walk sent. */
 const stubSearch = (answer: (call: Call) => Response): Call[] => {
   const calls: Call[] = [];
-  globalThis.fetch = asFetchMock(
-    async (input: string | URL | Request, init?: RequestInit) => {
+  testFetchState.set(
+    asFetchMock(async (input: string | URL | Request, init?: RequestInit) => {
       const match = /\/rest\/pesquisa-textual\/(\d+)\/(\d+)$/u.exec(
         urlOf(input),
       );
@@ -334,7 +336,7 @@ const stubSearch = (answer: (call: Call) => Response): Call[] => {
       };
       calls.push(call);
       return await Promise.resolve(answer(call));
-    },
+    }),
   );
   return calls;
 };
@@ -378,7 +380,7 @@ const walkAt = (day: string, offset = 0): string =>
     phase: "walk",
     regime: "sweep",
     window: { type: "day", day, part: "all" },
-    offset,
+    rowsRead: offset,
   });
 
 describe("the walk", () => {
@@ -446,7 +448,7 @@ describe("the walk", () => {
         phase: "walk",
         regime: "sweep",
         window: { type: "day", day: "2024-03-15", part: "all" },
-        offset: 20,
+        rowsRead: 20,
         reported: 45,
       }),
       { now: NOW },
@@ -456,7 +458,7 @@ describe("the walk", () => {
       phase: "walk",
       regime: "sweep",
       window: { type: "day", day: "2024-03-15", part: "all" },
-      offset: 0,
+      rowsRead: 0,
     });
   });
 
@@ -482,6 +484,7 @@ describe("the walk", () => {
     expect(Result.isOk(page) && page.value).toEqual({
       decisions: [],
       nextCursor: parked,
+      publisherRequest: "none",
     });
   });
 
@@ -515,7 +518,7 @@ describe("the walk", () => {
       phase: "walk",
       regime: "sweep",
       window: { type: "day", day: "2024-03-15", part: "despacho" },
-      offset: 0,
+      rowsRead: 0,
       split: { dayTotal: BR_TST_OFFSET_CEILING + 1, partsTotal: 3 },
     });
   });
@@ -585,6 +588,7 @@ const listSlice = async (slice: string) => {
   const { reconciliation } = brTstAdapter;
   return await listReconciliationSlice({
     adapterKey: brTstAdapter.key,
+    proof: SLICE_LISTING_PROOF.COUNT,
     listSlicePage: reconciliation.listSlicePage,
     slice,
     pageDelayMs: 0,
@@ -708,6 +712,7 @@ type SliceLister = ReturnType<typeof createBrTstSliceLister>;
 const listWith = async (lister: SliceLister, slice: string) =>
   await listReconciliationSlice({
     adapterKey: brTstAdapter.key,
+    proof: SLICE_LISTING_PROOF.COUNT,
     listSlicePage: lister.listSlicePage,
     slice,
     pageDelayMs: 0,

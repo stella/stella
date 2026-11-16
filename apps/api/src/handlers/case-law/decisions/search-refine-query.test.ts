@@ -129,7 +129,11 @@ describe("isIncompleteCaseLawRefineGeneration", () => {
         "unknown",
       ] as const
     ).map((kind) => new ProviderCallError({ model, status: 502, kind })),
-    new HandlerError({ status: 502, message: "AI generation was cancelled" }),
+    new HandlerError({
+      status: 502,
+      code: "internal_error",
+      message: "AI generation was cancelled",
+    }),
   ])("keeps a provider answer or a cancelled run final: %#", (error) => {
     expect(isIncompleteCaseLawRefineGeneration(error)).toBe(false);
   });

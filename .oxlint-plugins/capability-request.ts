@@ -18,7 +18,7 @@
  *   invokeCapability("x.y", (request) => api.x.post(body, request))
  *   (request) => api.x({ id }).patch(body, { ...request, query })
  *
- * Boundary: the Eden write must sit directly in the capability callback (not in
+ * Boundary: the API client write must sit directly in the capability callback (not in
  * a nested function) and be rooted at a registered client import, followed
  * through local immutable aliases. Writes outside capability callbacks are
  * counted by the `undeclared-eden-writes` ratchet metric, which can only
@@ -26,12 +26,13 @@
  */
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
+import { CAPABILITY_REQUEST_HEADER } from "../packages/api-contract/src/capability-request.ts";
 import {
-  EDEN_CLIENT_EXPORTS,
-  EDEN_CLIENT_MODULES,
-  EDEN_WRITE_METHODS,
-  EDEN_WRITE_OPTIONS_INDEX,
-} from "./eden-client.ts";
+  API_CLIENT_CLIENT_EXPORTS,
+  API_CLIENT_CLIENT_MODULES,
+  API_CLIENT_WRITE_METHODS,
+  API_CLIENT_WRITE_OPTIONS_INDEX,
+} from "./api-client-chain.ts";
 import type { AstNode, ImportedFromOptions } from "./utils.ts";
 import {
   getPropertyName,
@@ -78,8 +79,8 @@ const isClientRooted = (
     isImportedFrom({
       context,
       node,
-      modules: EDEN_CLIENT_MODULES,
-      names: EDEN_CLIENT_EXPORTS,
+      modules: API_CLIENT_CLIENT_MODULES,
+      names: API_CLIENT_CLIENT_EXPORTS,
     })
   ) {
     return true;
@@ -98,7 +99,7 @@ const isClientRooted = (
   return initializer !== null && isClientRooted(context, initializer, visited);
 };
 
-const isEdenWrite = (context: Context, call: AstNode): boolean => {
+const isApiClientWrite = (context: Context, call: AstNode): boolean => {
   const callee = unwrapExpression(call.callee);
   if (callee?.type !== "MemberExpression") {
     return false;
@@ -106,7 +107,7 @@ const isEdenWrite = (context: Context, call: AstNode): boolean => {
   const method = memberPropertyName(callee);
   return (
     method !== null &&
-    EDEN_WRITE_METHODS.has(method) &&
+    API_CLIENT_WRITE_METHODS.has(method) &&
     isClientRooted(context, callee.object)
   );
 };
@@ -164,7 +165,7 @@ const capabilityRequestParam = (
 
 const passesRequest = (call: AstNode, request: string): boolean => {
   const options = Array.isArray(call.arguments)
-    ? unwrapExpression(call.arguments.at(EDEN_WRITE_OPTIONS_INDEX))
+    ? unwrapExpression(call.arguments.at(API_CLIENT_WRITE_OPTIONS_INDEX))
     : null;
   if (options === null) {
     return false;
@@ -192,11 +193,11 @@ const passesRequest = (call: AstNode, request: string): boolean => {
     spread !== -1 &&
     properties
       .slice(spread + 1)
-      .every((property) => !mayReplaceHeaders(property))
+      .every((property) => !mayReplaceHeaders(property, request))
   );
 };
 
-const mayReplaceHeaders = (property: unknown): boolean => {
+const mayReplaceHeaders = (property: unknown, request: string): boolean => {
   if (!isAstNode(property) || property.type !== "Property") {
     return true;
   }
@@ -204,10 +205,55 @@ const mayReplaceHeaders = (property: unknown): boolean => {
     return true;
   }
   const key = property.key;
-  return (
-    !isAstNode(key) ||
-    (key.type === "Identifier" && key.name === "headers") ||
-    (key.type === "Literal" && key.value === "headers")
+  if (!isAstNode(key)) {
+    return true;
+  }
+  if (
+    (key.type !== "Identifier" || key.name !== "headers") &&
+    (key.type !== "Literal" || key.value !== "headers")
+  ) {
+    return false;
+  }
+  const headers = unwrapExpression(property.value);
+  if (
+    headers?.type !== "ObjectExpression" ||
+    !Array.isArray(headers.properties)
+  ) {
+    return true;
+  }
+  // HTTP header names ignore case. Every custom name must be static and
+  // distinct from the declaration before the exact request headers are spread.
+  const custom = headers.properties.slice(0, -1);
+  if (
+    custom.some((header) => {
+      if (
+        !isAstNode(header) ||
+        header.type !== "Property" ||
+        header.computed === true ||
+        header.method === true ||
+        header.kind !== "init"
+      ) {
+        return true;
+      }
+      const name = getPropertyName(header.key);
+      return (
+        name === null ||
+        name.toLowerCase() === CAPABILITY_REQUEST_HEADER.toLowerCase()
+      );
+    })
+  ) {
+    return true;
+  }
+  const final = headers.properties.at(-1);
+  if (!isAstNode(final) || final.type !== "SpreadElement") {
+    return true;
+  }
+  const source = unwrapExpression(final.argument);
+  return !(
+    source?.type === "MemberExpression" &&
+    memberPropertyName(source) === "headers" &&
+    isIdentifierReference(source.object) &&
+    source.object.name === request
   );
 };
 
@@ -284,7 +330,7 @@ export default eslintCompatPlugin({
             ) {
               context.report({ node, messageId: "dynamicCapability" });
             }
-            if (!isEdenWrite(context, node)) {
+            if (!isApiClientWrite(context, node)) {
               return;
             }
             const fn = nearestFunction(node);

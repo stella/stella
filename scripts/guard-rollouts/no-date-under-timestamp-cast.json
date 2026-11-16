@@ -1,0 +1,20 @@
+{
+  "id": "no-date-under-timestamp-cast",
+  "rules": ["no-truncated-timestamp-comparison/no-date-under-timestamp-cast"],
+  "type": "changed-lines",
+  "expiresAt": "2026-11-21T00:00:00.000Z",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "no-truncated-timestamp-comparison/no-date-under-timestamp-cast",
+    "apps",
+    "packages",
+    "scripts"
+  ]
+}

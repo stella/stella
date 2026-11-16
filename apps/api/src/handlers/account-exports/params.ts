@@ -1,10 +1,10 @@
-import { t } from "elysia";
+import * as v from "valibot";
 
-import { tUuid, withDescription } from "@/api/lib/custom-schema";
+import { uuidSchema, withDescription } from "@/api/lib/custom-schema";
 
-export const accountExportParams = t.Object({
+export const accountExportParams = v.object({
   exportId: withDescription(
-    tUuid,
+    uuidSchema,
     "Export ID returned by account-exports.create or account-exports.get.",
   ),
 });

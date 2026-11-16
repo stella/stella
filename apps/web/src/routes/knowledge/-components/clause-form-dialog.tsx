@@ -15,6 +15,7 @@ import {
   DialogTitle,
 } from "@stll/ui/dialog";
 import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
 import {
   Select,
   SelectItem,
@@ -32,6 +33,7 @@ import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { toSafeId } from "@/lib/safe-id";
 
 import { ClauseEditor, type ClauseEditorReviewStatus } from "./clause-editor";
@@ -110,6 +112,7 @@ const ClauseFormDialogBody = ({
   categories,
   initial,
 }: ClauseFormDialogBodyProps) => {
+  const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
   const isEdit = !!initial?.id;
 
@@ -179,13 +182,17 @@ const ClauseFormDialogBody = ({
           ? undefined
           : toSafeId<"clauseCategory">(form.categoryId);
 
-      const response = await api.clauses.put({
-        title: form.title.trim(),
-        ...(description && { description }),
-        ...(usageNotes && { usageNotes }),
-        ...(language && { language }),
-        ...(categoryId && { categoryId }),
-        body,
+      const response = await idempotentSubmit.run({
+        operation: "clauses.create",
+        send: async (creationPayload) => api.clauses.put(creationPayload),
+        body: {
+          title: form.title.trim(),
+          ...(description && { description }),
+          ...(usageNotes && { usageNotes }),
+          ...(language && { language }),
+          ...(categoryId && { categoryId }),
+          body,
+        },
       });
 
       setSaving(false);
@@ -223,9 +230,7 @@ const ClauseFormDialogBody = ({
       </DialogHeader>
       <DialogPanel className="grid gap-4">
         <div className="grid gap-1.5">
-          <label className="text-sm font-medium" htmlFor="clause-title">
-            {t("clauses.titleLabel")}
-          </label>
+          <Label htmlFor="clause-title">{t("clauses.titleLabel")}</Label>
           <Input
             id="clause-title"
             maxLength={DEFAULT_VARCHAR_MAX_LENGTH}
@@ -241,9 +246,7 @@ const ClauseFormDialogBody = ({
         </div>
 
         <div className="grid gap-1.5">
-          <label className="text-sm font-medium" htmlFor="clause-description">
-            {t("common.description")}
-          </label>
+          <Label htmlFor="clause-description">{t("common.description")}</Label>
           <Input
             id="clause-description"
             onChange={(e) =>
@@ -259,9 +262,7 @@ const ClauseFormDialogBody = ({
 
         <div className="grid grid-cols-2 gap-4">
           <div className="grid gap-1.5">
-            <label className="text-sm font-medium" htmlFor="clause-language">
-              {t("common.language")}
-            </label>
+            <Label htmlFor="clause-language">{t("common.language")}</Label>
             <Input
               id="clause-language"
               maxLength={10}
@@ -318,9 +319,7 @@ const ClauseFormDialogBody = ({
         </div>
 
         <div className="grid gap-1.5">
-          <label className="text-sm font-medium" htmlFor="clause-usage-notes">
-            {t("clauses.usageNotes")}
-          </label>
+          <Label htmlFor="clause-usage-notes">{t("clauses.usageNotes")}</Label>
           <Textarea
             className="min-h-[60px]"
             id="clause-usage-notes"

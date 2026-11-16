@@ -10,7 +10,7 @@ import {
   resolveVariable,
 } from "./utils.ts";
 
-const SLEEP_HELPERS = new Set([
+export const SLEEP_HELPERS = new Set([
   "sleep",
   "delay",
   "abortableSleep",

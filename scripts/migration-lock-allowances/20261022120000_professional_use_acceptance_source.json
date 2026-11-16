@@ -1,0 +1,4 @@
+{
+  "add-column": "Merged history adds a constant-default column as a catalog-only change under a 1s lock_timeout.",
+  "add-constraint": "Merged history adds the CHECK constraint NOT VALID under a 1s lock_timeout, then validates it separately."
+}

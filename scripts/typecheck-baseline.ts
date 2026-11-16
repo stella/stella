@@ -8,7 +8,7 @@
 // explosion in a widely-instantiated generic lands as "typecheck got slow"
 // weeks later, with no diff to point at. Lint and tests see none of it.
 //
-// This runs the native tsc (tsgo, via packages/scripts/src/tsc-native.ts)
+// This runs the native tsc (tsrs, via packages/scripts/src/tsc-native.ts)
 // with --extendedDiagnostics and --singleThreaded per project. CI compares the
 // deterministic size counters with the merge base; nightly checks the committed
 // cumulative budget. Native tsc uses independent checker-local caches in
@@ -192,7 +192,7 @@ const parseCounters = (diagnostics: string, project: string): ParseResult => {
       ok: false,
       error:
         `Could not find Types/Instantiations in --extendedDiagnostics output\n` +
-        `for ${project}. Did the tsgo output format change? Output was:\n\n${diagnostics}`,
+        `for ${project}. Did the compiler output format change? Output was:\n\n${diagnostics}`,
     };
   }
   return { ok: true, counters: { types, instantiations } };
@@ -496,7 +496,7 @@ const runReport = (): number => {
   const hasBaseline = baselineExists();
   const baseline = hasBaseline ? readBaseline() : null;
 
-  console.log("\ntypecheck cost (tsgo --extendedDiagnostics)\n");
+  console.log("\ntypecheck cost (tsrs --extendedDiagnostics)\n");
   for (const m of result.measured) {
     console.log(`  ${m.id}  (${m.context})`);
     for (const field of GATED_FIELDS) {
@@ -662,6 +662,72 @@ const runCheck = (): number => {
 
 // Verbatim tsgo 7.0.2 output from
 // `-p apps/api --noEmit --extendedDiagnostics --singleThreaded`.
+type FieldStatusCase = {
+  label: string;
+  field: GatedField;
+  current: number;
+  baseline: number;
+  expected: FieldStatus;
+};
+
+const SELF_TEST_FIELD_CASES = [
+  // An inference explosion (x2) MUST fail.
+  {
+    label: "explosion",
+    field: "instantiations",
+    current: 18_000_000,
+    baseline: 9_000_000,
+    expected: "regressed",
+  },
+  // Routine feature growth inside 5% must pass.
+  {
+    label: "routine-growth",
+    field: "instantiations",
+    current: 9_300_000,
+    baseline: 9_000_000,
+    expected: "ok",
+  },
+  // Small projects get an absolute floor: +15k types on a 100k project is
+  // > 5% but under the floor — new specs, not an explosion.
+  {
+    label: "small-within-floor",
+    field: "types",
+    current: 115_000,
+    baseline: 100_000,
+    expected: "ok",
+  },
+  {
+    label: "small-past-floor",
+    field: "types",
+    current: 130_000,
+    baseline: 100_000,
+    expected: "regressed",
+  },
+  // A real improvement is a ratchet-down prompt, not a failure.
+  {
+    label: "improvement",
+    field: "types",
+    current: 900_000,
+    baseline: 1_000_000,
+    expected: "dropped",
+  },
+  // A new PROJECTS entry with no baseline must be acknowledged.
+  {
+    label: "new-project",
+    field: "types",
+    current: 50_000,
+    baseline: 0,
+    expected: "regressed",
+  },
+  {
+    label: "still-empty",
+    field: "types",
+    current: 0,
+    baseline: 0,
+    expected: "ok",
+  },
+] as const satisfies readonly FieldStatusCase[];
+
 const SELF_TEST_DIAGNOSTICS = [
   "Files:              7107",
   "Lines:           1137044",
@@ -753,37 +819,18 @@ const runSelfTest = (): number => {
     failures.push("parser accepted output missing Types/Instantiations");
   }
 
-  const expectStatus = (
-    label: string,
-    field: GatedField,
-    current: number,
-    baseline: number,
-    expected: FieldStatus,
-  ) => {
+  for (const {
+    label,
+    field,
+    current,
+    baseline,
+    expected,
+  } of SELF_TEST_FIELD_CASES) {
     const actual = compareField(field, current, baseline);
     if (actual !== expected) {
       failures.push(`${label}: compareField = ${actual}, want ${expected}`);
     }
-  };
-  // An inference explosion (x2) MUST fail.
-  expectStatus(
-    "explosion",
-    "instantiations",
-    18_000_000,
-    9_000_000,
-    "regressed",
-  );
-  // Routine feature growth inside 5% must pass.
-  expectStatus("routine-growth", "instantiations", 9_300_000, 9_000_000, "ok");
-  // Small projects get an absolute floor: +15k types on a 100k project is
-  // > 5% but under the floor — new specs, not an explosion.
-  expectStatus("small-within-floor", "types", 115_000, 100_000, "ok");
-  expectStatus("small-past-floor", "types", 130_000, 100_000, "regressed");
-  // A real improvement is a ratchet-down prompt, not a failure.
-  expectStatus("improvement", "types", 900_000, 1_000_000, "dropped");
-  // A new PROJECTS entry with no baseline must be acknowledged.
-  expectStatus("new-project", "types", 50_000, 0, "regressed");
-  expectStatus("still-empty", "types", 0, 0, "ok");
+  }
 
   // The whole-run diff must isolate the exploding project+field.
   const baseline: Baseline = {

@@ -1,45 +1,35 @@
 import { panic, Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeTokenHandler } from "@/api/lib/api-handlers";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { acknowledgeFolioCollabSeed } from "@/api/lib/folio-collab-rooms";
-import {
-  permissiveBodySchema,
-  validatePostAuth,
-} from "@/api/lib/permissive-route-schema";
 
-import { authorizeFolioCollabCredentials } from "./room-credentials";
+import {
+  folioCollabRoomCredentialsSchema,
+  verifyFolioCollabRoomCaller,
+} from "./room-credentials";
 
 const config = {
   contract: "patch",
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "session_token_exchange" },
-  body: permissiveBodySchema({
-    keys: ["roomId", "token", "snapshotSha256Hex"],
+  body: v.object({
+    ...folioCollabRoomCredentialsSchema.entries,
+    snapshotSha256Hex: v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u)),
   }),
 } satisfies TokenHandlerConfig;
 
-const seedReceiptSchema = t.Object({
-  snapshotSha256Hex: t.String({ pattern: "^[0-9a-f]{64}$" }),
-});
-
 const acknowledgeSeed = createSafeTokenHandler(
   config,
-  async function* ({ body }) {
-    const { room } = yield* Result.await(authorizeFolioCollabCredentials(body));
-    const receipt = validatePostAuth(seedReceiptSchema, body);
-    if (!receipt.ok) {
-      return Result.err(
-        new HandlerError({ status: 422, message: receipt.message }),
-      );
-    }
+  verifyFolioCollabRoomCaller,
+  async function* ({ body, caller: { room } }) {
     const acknowledged = yield* Result.await(
       acknowledgeFolioCollabSeed({
         value: room,
-        snapshotSha256Hex: receipt.value.snapshotSha256Hex,
+        snapshotSha256Hex: body.snapshotSha256Hex,
       }),
     );
     switch (acknowledged.status) {
@@ -67,7 +57,7 @@ const acknowledgeSeed = createSafeTokenHandler(
   },
 );
 
-declareAggregateMutation(acknowledgeSeed.handler, {
+declareAggregateMutation(acknowledgeSeed, {
   type: "aggregate",
   aggregates: ["workspace", "folioCollabRoom"],
 });

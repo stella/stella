@@ -10,7 +10,8 @@
  *  - The route exists only when SMOKE_SESSION_SECRET is configured.
  *    That presence check is the environment gate: infrastructure
  *    injects the secret on non-production deployments only, and
- *    production must never configure it. A NODE_ENV guard would be
+ *    production must never configure it (the API refuses to boot with
+ *    it set and DEPLOY_ENVIRONMENT=production). A NODE_ENV guard would be
  *    meaningless here — the deployed binary is compiled with
  *    NODE_ENV=production and Bun inlines that read at build time,
  *    so it cannot distinguish staging from production at runtime.
@@ -25,16 +26,24 @@
  *    organization settings API.
  */
 
-import Elysia from "elysia";
 import { timingSafeEqual } from "node:crypto";
 
 import { sha256Bytes as hashSha256Bytes } from "@stll/sha256/bun";
 
 import { env } from "@/api/env";
+import { routes } from "@/api/http/route";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
+import { defineEndpoint } from "@/api/lib/endpoints";
 import { logger } from "@/api/lib/observability/logger";
+import { releaseLoadAllowed } from "@/api/lib/scheduler/release-load-deployment";
+import { parseJourneyPrerequisiteId } from "@/api/lib/smoke-session/journey-prerequisites";
 import {
+  bringJourneyPrerequisitesForward,
+  bringReleaseLoadJobsForward,
   mintSmokeSession,
   parseSmokePrincipal,
+  readJourneyPrerequisites,
+  readReleaseLoadJobRuns,
 } from "@/api/lib/smoke-session/store";
 
 const notAvailable = () => new Response("Not available", { status: 404 });
@@ -49,8 +58,9 @@ const isAuthorizedSmokeCaller = (headerSecret: string | null): boolean => {
   return timingSafeEqual(a, b);
 };
 
-export const smokeRoute = new Elysia({ prefix: "/smoke" }).post(
-  "/session",
+// No body is read: the secret travels in a header and the principal in the query.
+const mintSession = defineEndpoint.public(
+  { bodyMode: "none" },
   async ({ request }) => {
     if (!isAuthorizedSmokeCaller(request.headers.get("x-smoke-secret"))) {
       return notAvailable();
@@ -72,4 +82,115 @@ export const smokeRoute = new Elysia({ prefix: "/smoke" }).post(
     });
     return smokeSession;
   },
+);
+
+/**
+ * The scheduled corpus jobs the release proof's MCP load overlaps. Gated
+ * twice: the smoke secret, as for the session route, and the deployment,
+ * which must be staging (`releaseLoadAllowed`; any other or unknown origin
+ * refuses). A caller holding the secret can only move the listed recurring
+ * jobs' next run forward, never pause, edit or add a job.
+ */
+const isAuthorizedReleaseLoadCaller = (request: Request): boolean =>
+  releaseLoadAllowed(env.PUBLIC_URL) &&
+  isAuthorizedSmokeCaller(request.headers.get("x-smoke-secret"));
+
+const readScheduledLoadJobs = defineEndpoint.public(
+  { bodyMode: "none" },
+  async ({ request }) => {
+    if (!isAuthorizedReleaseLoadCaller(request)) {
+      return notAvailable();
+    }
+    return { runs: await readReleaseLoadJobRuns() };
+  },
+);
+
+const bringScheduledLoadJobsForward = defineEndpoint.public(
+  { bodyMode: "none" },
+  async ({ request }) => {
+    if (!isAuthorizedReleaseLoadCaller(request)) {
+      return notAvailable();
+    }
+    const dueAt = new Date();
+    const jobs = await bringReleaseLoadJobsForward();
+    logger.info("smoke.scheduled_jobs_brought_forward", {
+      "smoke.job_ids": jobs.map(({ id }) => id).join(","),
+    });
+    return { dueAt, jobs };
+  },
+);
+
+declareAggregateMutation(bringScheduledLoadJobsForward, {
+  type: "independent",
+  reason:
+    "Moves the next run of fixed recurring corpus jobs to now on a non-production deployment. The scheduler's lease claim arbitrates with every replica, so the update shares no aggregate with a request.",
+});
+
+const unknownJourney = () => new Response("Unknown journey", { status: 400 });
+
+/**
+ * The scheduled jobs a deployed journey depends on
+ * (`lib/smoke-session/journey-prerequisites.ts`), under the same two gates.
+ * The journey is parsed only after them, as the session route's principal.
+ */
+const bringJourneyPrerequisiteJobsForward = defineEndpoint.public(
+  { bodyMode: "none" },
+  async ({ request }) => {
+    if (!isAuthorizedReleaseLoadCaller(request)) {
+      return notAvailable();
+    }
+    const journey = parseJourneyPrerequisiteId(
+      new URL(request.url).searchParams.get("journey"),
+    );
+    if (journey === null) {
+      return unknownJourney();
+    }
+    const dueAt = new Date();
+    const jobs = await bringJourneyPrerequisitesForward(journey);
+    logger.info("smoke.scheduled_jobs_brought_forward", {
+      "smoke.journey": journey,
+      "smoke.job_ids": jobs.map(({ id }) => id).join(","),
+    });
+    return { dueAt: dueAt.toISOString(), jobIds: jobs.map(({ id }) => id) };
+  },
+);
+
+declareAggregateMutation(bringJourneyPrerequisiteJobsForward, {
+  type: "independent",
+  reason:
+    "Moves the next run of a journey's declared recurring jobs ahead of every due job on a non-production deployment. The scheduler's lease claim arbitrates with every replica, so the update shares no aggregate with a request.",
+});
+
+const readJourneyPrerequisiteJobs = defineEndpoint.public(
+  { bodyMode: "none" },
+  async ({ request }) => {
+    if (!isAuthorizedReleaseLoadCaller(request)) {
+      return notAvailable();
+    }
+    const params = new URL(request.url).searchParams;
+    const journey = parseJourneyPrerequisiteId(params.get("journey"));
+    if (journey === null) {
+      return unknownJourney();
+    }
+    const since = new Date(params.get("since") ?? "");
+    if (Number.isNaN(since.getTime())) {
+      return new Response("since must be an ISO timestamp", { status: 400 });
+    }
+    return { prerequisites: await readJourneyPrerequisites(journey, since) };
+  },
+);
+
+export const smokeRoute = routes(
+  {
+    "/session": { POST: mintSession },
+    "/scheduled-jobs": {
+      GET: readScheduledLoadJobs,
+      POST: bringScheduledLoadJobsForward,
+    },
+    "/scheduled-jobs/journey-prerequisites": {
+      GET: readJourneyPrerequisiteJobs,
+      POST: bringJourneyPrerequisiteJobsForward,
+    },
+  },
+  { prefix: "/smoke" },
 );

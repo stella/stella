@@ -29,19 +29,19 @@
  * ids), optional E2E_EDGE_HEADER_NAME / E2E_EDGE_HEADER_VALUE.
  */
 import { panic, TaggedError } from "better-result";
-import * as cheerio from "cheerio";
 import * as v from "valibot";
 
 import { loadCatalogue } from "@stll/catalogue";
 import { printError, sanitizeErrorForOutput } from "@stll/errors";
 import { fetchWithTimeout } from "@stll/fetch";
+import { load } from "@stll/html";
 
 import {
   CACHE_CONTROL_HEADER,
   NO_STORE_DIRECTIVE,
   PRIVATE_CACHE_CONTROL,
   publicCacheControl,
-} from "../lib/security-headers";
+} from "../http/cache";
 
 const REQUEST_TIMEOUT_MS = 20_000;
 
@@ -338,7 +338,7 @@ export const evaluateStatus = (
  * scripts, styles, templates and comments never counts.
  */
 export const headMetaContents = (html: string, name: string): string[] => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   return $("head > meta")
     .toArray()
     .filter((meta) => $(meta).attr("name")?.toLowerCase() === name)

@@ -5,7 +5,6 @@ import {
   getTableConfig,
   pgPolicy,
   PgRole,
-  PgTable,
   pgTable,
   text,
   uuid,
@@ -24,6 +23,12 @@ import {
 import * as schema from "@/api/db/schema";
 import { createPolicyStatementsOf } from "@/api/tests/helpers/lock-taking-sql";
 
+import {
+  effectiveEntityFeatureGateDefinitions,
+  readEffectiveEntityFeatureGateDefinitions,
+} from "./entity-feature-gate-migrations";
+import { schemaTables } from "./schema-tables";
+
 const scopePolicies = (tableName: string) => {
   const workspaceScope = sql`CASE WHEN workspace_id = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting('app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[])) THEN true ELSE workspace_id IN (SELECT aw.authorized_workspace_id FROM public.stella_authorized_workspaces aw) END`;
   const organizationScope = sql`organization_id = (SELECT current_setting('app.organization_id', true))`;
@@ -35,6 +40,21 @@ const scopePolicies = (tableName: string) => {
     }),
   ];
 };
+
+test("effective gate definitions use the last migration event", () => {
+  const first = `CREATE OR REPLACE FUNCTION public.entity_feature_gate_graph() RETURNS jsonb LANGUAGE sql AS $graph$ SELECT '{"version":1}'::jsonb $graph$;
+CREATE POLICY workspace_entity_feature ON public.fixture USING (false);`;
+  const replacement = `DROP POLICY workspace_entity_feature ON public.fixture;
+CREATE OR REPLACE FUNCTION public.entity_feature_gate_graph() RETURNS jsonb LANGUAGE sql AS $graph$ SELECT '{"version":2}'::jsonb $graph$;`;
+  const effective = effectiveEntityFeatureGateDefinitions([first, replacement]);
+
+  expect(effective.functions.get("entity_feature_gate_graph")).toContain(
+    '"version":2',
+  );
+  expect(effective.policies.has("fixture.workspace_entity_feature")).toBe(
+    false,
+  );
+});
 
 const entityReader = (tableName: string, policy: ReturnType<typeof pgPolicy>) =>
   pgTable(
@@ -258,7 +278,7 @@ test("a new unpaired relationship without its derived workspace array fails cens
 });
 
 test("the live entity gate census has scope keys and parent-first ordering", () => {
-  const tables = Object.values(schema).filter((table) => is(table, PgTable));
+  const tables = schemaTables(schema);
   const descriptors = entityFeatureGateMetadata(tables);
   const positions = new Map(
     descriptors.map(({ tableName }, index) => [tableName, index]),
@@ -443,16 +463,14 @@ test("a classified reference without a foreign key does not prove parent existen
 });
 
 test("the migration trigger graph exactly matches the schema-derived census", async () => {
-  const migration = await Bun.file(
-    new URL(
-      "../../drizzle/20261009112500_entity_feature_row_gates/migration.sql",
-      import.meta.url,
-    ),
-  ).text();
+  const migration =
+    (await readEffectiveEntityFeatureGateDefinitions()).functions.get(
+      "entity_feature_gate_graph",
+    ) ?? "";
   const graphText = /\$metadata\$(.+)\$metadata\$/u.exec(migration)?.at(1);
   expect(graphText).toBeDefined();
   const graph: unknown = JSON.parse(graphText ?? "null");
-  const tables = Object.values(schema).filter((table) => is(table, PgTable));
+  const tables = schemaTables(schema);
   const descriptors = entityFeatureGateMetadata(tables);
   expect(graph).toEqual(
     Object.fromEntries(
@@ -465,13 +483,11 @@ test("the migration trigger graph exactly matches the schema-derived census", as
 });
 
 test("migration propagation plans are derived from the complete gate census", async () => {
-  const migration = await Bun.file(
-    new URL(
-      "../../drizzle/20261009112500_entity_feature_row_gates/migration.sql",
-      import.meta.url,
-    ),
-  ).text();
-  const tables = Object.values(schema).filter((table) => is(table, PgTable));
+  const migration =
+    (await readEffectiveEntityFeatureGateDefinitions()).functions.get(
+      "entity_feature_gate_propagate",
+    ) ?? "";
+  const tables = schemaTables(schema);
   const expected = entityFeatureGatePropagationSql(
     entityFeatureGateMetadata(tables),
   );
@@ -483,13 +499,9 @@ test("migration propagation plans are derived from the complete gate census", as
 });
 
 test("the migration grants maintenance policies only to the dedicated gate role", async () => {
-  const migration = await Bun.file(
-    new URL(
-      "../../drizzle/20261009112500_entity_feature_row_gates/migration.sql",
-      import.meta.url,
-    ),
-  ).text();
-  const tables = Object.values(schema).filter((table) => is(table, PgTable));
+  const effective = await readEffectiveEntityFeatureGateDefinitions();
+  const migration = [...effective.policies.values()].join("\n");
+  const tables = schemaTables(schema);
   const descriptors = entityFeatureGateMetadata(tables);
   const expected = await createPolicyStatementsOf(
     entityFeaturePolicyDefinitions(tables, "entity_feature_gate_maintenance"),
@@ -515,7 +527,7 @@ test("the migration grants maintenance policies only to the dedicated gate role"
     );
   };
 
-  expect(descriptors).toHaveLength(47);
+  expect(descriptors).toHaveLength(actual.length);
   expect(schemaPolicies).toHaveLength(descriptors.length);
   expect(schemaPolicies.every((policy) => targetsGateRole(policy.to))).toBe(
     true,
@@ -539,6 +551,9 @@ test("the migration grants maintenance policies only to the dedicated gate role"
   expect(migration).not.toMatch(
     /CREATE POLICY "entity_feature_gate_maintenance"[^;]+\bTO\s+(?:PUBLIC|"public")\b/iu,
   );
+  // A later CREATE OR REPLACE keeps a routine's privileges, so the revokes
+  // where the routines were first created still hold.
+  const created = effective.revokes;
   for (const signature of [
     "entity_feature_gate_value(text, jsonb)",
     "entity_feature_gate_write()",
@@ -546,20 +561,15 @@ test("the migration grants maintenance policies only to the dedicated gate role"
     "entity_feature_gate_repair_missing()",
     "entity_feature_gate_backfill(text, text, integer)",
   ]) {
-    expect(migration).toContain(
-      `REVOKE ALL ON FUNCTION public.${signature} FROM PUBLIC;`,
-    );
+    expect(created).toContain(signature);
   }
 });
 
 test("migration maintenance grants match each descriptor's read and write columns", async () => {
-  const migration = await Bun.file(
-    new URL(
-      "../../drizzle/20261009112500_entity_feature_row_gates/migration.sql",
-      import.meta.url,
-    ),
-  ).text();
-  const tables = Object.values(schema).filter((table) => is(table, PgTable));
+  const migration = [
+    ...(await readEffectiveEntityFeatureGateDefinitions()).grants.values(),
+  ].join("\n");
+  const tables = schemaTables(schema);
   const descriptors = entityFeatureGateMetadata(tables);
   const grants = [
     ...migration.matchAll(
@@ -607,9 +617,7 @@ test("migration maintenance grants match each descriptor's read and write column
 });
 
 test("the version gate's direct parent lookup covers its complete inherited scope", () => {
-  const descriptors = entityFeatureGateMetadata(
-    Object.values(schema).filter((table) => is(table, PgTable)),
-  );
+  const descriptors = entityFeatureGateMetadata(schemaTables(schema));
   const versions = descriptors.find(
     ({ tableName }) => tableName === "entity_versions",
   );
