@@ -1,11 +1,21 @@
 import { panic } from "better-result";
-import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  spyOn,
+  test,
+} from "bun:test";
 import { eq } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
 import { officeFileEvidence } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
+import { resetWorkAdmissionForTesting } from "@/api/lib/load/work-admission";
 import { OBJECT_READ_TIMEOUT_MS } from "@/api/lib/s3";
 import { XLSX_MIME_TYPE } from "@/api/mime-types";
 import { activeFileContextFixture } from "@/api/tests/helpers/active-file-context";
@@ -20,6 +30,9 @@ import { loadOfficeEvidence } from "./office-evidence";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
+const isCallable = (value: unknown): value is (...args: unknown[]) => unknown =>
+  typeof value === "function";
+
 describe.skipIf(!enabled)("Office evidence storage boundaries", () => {
   const fixture = activeFileContextFixture({
     fileName: "schedule.xlsx",
@@ -27,6 +40,8 @@ describe.skipIf(!enabled)("Office evidence storage boundaries", () => {
   });
   beforeAll(fixture.seed);
   afterAll(fixture.dispose);
+  beforeEach(() => resetWorkAdmissionForTesting({ readRssBytes: () => 0 }));
+  afterEach(() => resetWorkAdmissionForTesting());
   const evidence = () =>
     rootDb
       .select()
@@ -90,7 +105,14 @@ describe.skipIf(!enabled)("Office evidence storage boundaries", () => {
       const loading = loadOfficeEvidence(fixture);
       try {
         if (hold !== null) {
-          await hold.reached;
+          await Promise.race([
+            hold.reached,
+            loading.then(() =>
+              panic(
+                "Office evidence completed before reaching the held S3 read",
+              ),
+            ),
+          ]);
           expect(timeoutSpy.mock.calls).toContainEqual([
             OBJECT_READ_TIMEOUT_MS,
           ]);
@@ -102,7 +124,7 @@ describe.skipIf(!enabled)("Office evidence storage boundaries", () => {
                 ([, delay]) => delay === LIMITS.workPoolHeavySidecarDeadlineMs,
               )
               ?.at(0);
-            if (typeof fireDeadline !== "function") {
+            if (!isCallable(fireDeadline)) {
               panic("Office evidence did not acquire its admission deadline");
             }
             fireDeadline();

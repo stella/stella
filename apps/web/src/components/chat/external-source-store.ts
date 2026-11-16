@@ -55,13 +55,13 @@ export const useExternalSourceStore = create<ExternalSourceState>()(
       ),
     registerSources: (sources) =>
       set((state) => {
-        const sourcesByUrl = { ...state.sourcesByUrl };
+        const sourcesByUrl = new Map(Object.entries(state.sourcesByUrl));
         for (const source of sources) {
           const existing =
-            sourcesByUrl[sourceKey(source.url)] ??
+            sourcesByUrl.get(sourceKey(source.url)) ??
             (source.sourceUrl === undefined
               ? undefined
-              : sourcesByUrl[sourceKey(source.sourceUrl)]);
+              : sourcesByUrl.get(sourceKey(source.sourceUrl)));
           const merged = {
             ...existing,
             ...source,
@@ -79,11 +79,11 @@ export const useExternalSourceStore = create<ExternalSourceState>()(
           };
           for (const url of [source.url, merged.url, merged.sourceUrl]) {
             if (url !== undefined) {
-              sourcesByUrl[sourceKey(url)] = merged;
+              sourcesByUrl.set(sourceKey(url), merged);
             }
           }
         }
-        return { sourcesByUrl };
+        return { sourcesByUrl: Object.fromEntries(sourcesByUrl) };
       }),
   }),
 );

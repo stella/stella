@@ -411,15 +411,26 @@ describe("search dialog close actions", () => {
 describe("search facet labels", () => {
   test("retains a controlled selection label after later results omit it", () => {
     const selected = ["user-1"];
+    const current = {};
     const resolved = rememberSelectedFacetLabels(
-      {},
+      current,
       selected,
       new Map([["user-1", "Ada Lovelace"]]),
     );
 
-    expect(rememberSelectedFacetLabels(resolved, selected, new Map())).toEqual({
-      "user-1": "Ada Lovelace",
-    });
+    expect(resolved).not.toBe(current);
+    expect(current).toEqual({});
+    expect(rememberSelectedFacetLabels(resolved, selected, new Map())).toBe(
+      resolved,
+    );
+    expect(
+      rememberSelectedFacetLabels(
+        resolved,
+        selected,
+        new Map([["user-1", "Ada Lovelace"]]),
+      ),
+    ).toBe(resolved);
+    expect(resolved).toEqual({ "user-1": "Ada Lovelace" });
   });
 });
 

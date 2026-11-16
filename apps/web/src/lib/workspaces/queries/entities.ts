@@ -172,26 +172,28 @@ export const entitiesOptions = (key: EntitiesOptionsInput) =>
     queryKey: entitiesKeys.sample(key),
     queryFn: async ({ signal }) => {
       const fieldMode = key.fieldMode ?? "visible";
-      const response = await api
-        .entities({ workspaceId: toSafeId<"workspace">(key.workspaceId) })
-        ["query-window"].post(
-          {
-            filters: key.filters,
-            sorts: key.sorts,
-            ...(key.search?.trim() && { search: key.search.trim() }),
-            excludedKinds: normalizeOptionalArray(key.excludedKinds),
-            fieldMode,
-            fieldIds:
-              fieldMode === "visible"
-                ? normalizeVisibleFieldIds(key.fieldIds).map((fieldId) =>
-                    toSafeId<"property">(fieldId),
-                  )
-                : [],
-            previewableForAi: key.previewableForAi ?? false,
-            limit: key.pageSize ?? DEFAULT_ENTITY_VIEW_PAGE_SIZE,
-          },
-          { fetch: { signal } },
-        );
+      const entitiesApi = api.entities({
+        workspaceId: toSafeId<"workspace">(key.workspaceId),
+      });
+
+      const response = await entitiesApi["query-window"].post(
+        {
+          filters: key.filters,
+          sorts: key.sorts,
+          ...(key.search?.trim() && { search: key.search.trim() }),
+          excludedKinds: normalizeOptionalArray(key.excludedKinds),
+          fieldMode,
+          fieldIds:
+            fieldMode === "visible"
+              ? normalizeVisibleFieldIds(key.fieldIds).map((fieldId) =>
+                  toSafeId<"property">(fieldId),
+                )
+              : [],
+          previewableForAi: key.previewableForAi ?? false,
+          limit: key.pageSize ?? DEFAULT_ENTITY_VIEW_PAGE_SIZE,
+        },
+        { fetch: { signal } },
+      );
 
       const { items: rawEntities, ...rest } = unwrapApiResponse(response);
       const entities: WorkspaceEntity[] = rawEntities.map(toWorkspaceEntity);
@@ -205,29 +207,31 @@ export const entitiesWindowOptions = (key: EntitiesWindowOptionsInput) =>
     queryKey: entitiesKeys.window(key),
     queryFn: async ({ signal, pageParam }) => {
       const fieldMode = key.fieldMode ?? "visible";
-      const response = await api
-        .entities({ workspaceId: toSafeId<"workspace">(key.workspaceId) })
-        ["query-window"].post(
-          {
-            filters: key.filters,
-            sorts: key.sorts,
-            ...(key.search?.trim() && { search: key.search.trim() }),
-            ...findRequestFields(key),
-            limit: key.limit ?? DEFAULT_ENTITY_WINDOW_SIZE,
-            excludedKinds: normalizeOptionalArray(key.excludedKinds),
-            fieldMode,
-            fieldIds:
-              fieldMode === "visible"
-                ? normalizeVisibleFieldIds(key.fieldIds).map((fieldId) =>
-                    toSafeId<"property">(fieldId),
-                  )
-                : [],
-            previewableForAi: key.previewableForAi ?? false,
-            includeAssignees: key.includeAssignees ?? false,
-            ...(pageParam !== undefined && { cursor: pageParam }),
-          },
-          { fetch: { signal } },
-        );
+      const entitiesApi = api.entities({
+        workspaceId: toSafeId<"workspace">(key.workspaceId),
+      });
+
+      const response = await entitiesApi["query-window"].post(
+        {
+          filters: key.filters,
+          sorts: key.sorts,
+          ...(key.search?.trim() && { search: key.search.trim() }),
+          ...findRequestFields(key),
+          limit: key.limit ?? DEFAULT_ENTITY_WINDOW_SIZE,
+          excludedKinds: normalizeOptionalArray(key.excludedKinds),
+          fieldMode,
+          fieldIds:
+            fieldMode === "visible"
+              ? normalizeVisibleFieldIds(key.fieldIds).map((fieldId) =>
+                  toSafeId<"property">(fieldId),
+                )
+              : [],
+          previewableForAi: key.previewableForAi ?? false,
+          includeAssignees: key.includeAssignees ?? false,
+          ...(pageParam !== undefined && { cursor: pageParam }),
+        },
+        { fetch: { signal } },
+      );
 
       const { items: rawEntities, ...rest } = unwrapApiResponse(response);
       const entities: WorkspaceEntity[] = rawEntities.map(toWorkspaceEntity);
@@ -253,24 +257,26 @@ export const filesystemEntitiesOptions = (
       >();
       await visitCursorPages({
         getPage: async (cursor) => {
-          const response = await api
-            .entities({ workspaceId: toSafeId<"workspace">(key.workspaceId) })
-            ["filesystem-tree"].post(
-              {
-                ...(cursor !== undefined && { cursor }),
-                filters: key.filters,
-                sorts: key.sorts,
-                ...(key.search?.trim() && { search: key.search.trim() }),
-                fieldMode,
-                fieldIds:
-                  fieldMode === "visible"
-                    ? normalizeVisibleFieldIds(key.fieldIds).map((fieldId) =>
-                        toSafeId<"property">(fieldId),
-                      )
-                    : [],
-              },
-              { fetch: { signal } },
-            );
+          const entitiesApi = api.entities({
+            workspaceId: toSafeId<"workspace">(key.workspaceId),
+          });
+
+          const response = await entitiesApi["filesystem-tree"].post(
+            {
+              ...(cursor !== undefined && { cursor }),
+              filters: key.filters,
+              sorts: key.sorts,
+              ...(key.search?.trim() && { search: key.search.trim() }),
+              fieldMode,
+              fieldIds:
+                fieldMode === "visible"
+                  ? normalizeVisibleFieldIds(key.fieldIds).map((fieldId) =>
+                      toSafeId<"property">(fieldId),
+                    )
+                  : [],
+            },
+            { fetch: { signal } },
+          );
 
           return unwrapApiResponse(response);
         },
@@ -305,35 +311,37 @@ export const kanbanGroupOptions = (key: KanbanGroupOptionsInput) =>
     queryKey: entitiesKeys.kanbanGroup(key),
     queryFn: async ({ signal, pageParam }) => {
       const fieldMode = key.fieldMode ?? "visible";
-      const response = await api
-        .entities({ workspaceId: toSafeId<"workspace">(key.workspaceId) })
-        ["kanban-group"].post(
-          {
-            filters: key.filters,
-            sorts: key.sorts,
-            ...findRequestFields(key),
-            limit: key.limit ?? DEFAULT_ENTITY_WINDOW_SIZE,
-            fieldMode,
-            fieldIds:
-              fieldMode === "visible"
-                ? normalizeVisibleFieldIds(key.fieldIds).map((fieldId) =>
-                    toSafeId<"property">(fieldId),
-                  )
-                : [],
-            groupByPropertyId:
-              key.groupByPropertyId === "_status" ||
-              key.groupByPropertyId === "_kind"
-                ? key.groupByPropertyId
-                : toSafeId<"property">(key.groupByPropertyId),
-            groupValue: key.groupValue,
-            excludedKinds: normalizeOptionalArray(key.excludedKinds),
-            ...(key.optionValues !== undefined && {
-              optionValues: key.optionValues,
-            }),
-            ...(pageParam !== undefined && { cursor: pageParam }),
-          },
-          { fetch: { signal } },
-        );
+      const entitiesApi = api.entities({
+        workspaceId: toSafeId<"workspace">(key.workspaceId),
+      });
+
+      const response = await entitiesApi["kanban-group"].post(
+        {
+          filters: key.filters,
+          sorts: key.sorts,
+          ...findRequestFields(key),
+          limit: key.limit ?? DEFAULT_ENTITY_WINDOW_SIZE,
+          fieldMode,
+          fieldIds:
+            fieldMode === "visible"
+              ? normalizeVisibleFieldIds(key.fieldIds).map((fieldId) =>
+                  toSafeId<"property">(fieldId),
+                )
+              : [],
+          groupByPropertyId:
+            key.groupByPropertyId === "_status" ||
+            key.groupByPropertyId === "_kind"
+              ? key.groupByPropertyId
+              : toSafeId<"property">(key.groupByPropertyId),
+          groupValue: key.groupValue,
+          excludedKinds: normalizeOptionalArray(key.excludedKinds),
+          ...(key.optionValues !== undefined && {
+            optionValues: key.optionValues,
+          }),
+          ...(pageParam !== undefined && { cursor: pageParam }),
+        },
+        { fetch: { signal } },
+      );
 
       const { items: rawEntities, ...rest } = unwrapApiResponse(response);
       const entities: WorkspaceEntity[] = rawEntities.map(toWorkspaceEntity);
@@ -360,20 +368,22 @@ export const groupCountsOptions = (key: GroupCountsOptionsInput) =>
   queryOptions({
     queryKey: entitiesKeys.groupCounts(key),
     queryFn: async ({ signal }) => {
-      const response = await api
-        .entities({ workspaceId: toSafeId<"workspace">(key.workspaceId) })
-        ["group-counts"].post(
-          {
-            filters: key.filters,
-            ...findRequestFields(key),
-            groupByPropertyId:
-              key.groupByPropertyId === "_status" ||
-              key.groupByPropertyId === "_kind"
-                ? key.groupByPropertyId
-                : toSafeId<"property">(key.groupByPropertyId),
-          },
-          { fetch: { signal } },
-        );
+      const entitiesApi = api.entities({
+        workspaceId: toSafeId<"workspace">(key.workspaceId),
+      });
+
+      const response = await entitiesApi["group-counts"].post(
+        {
+          filters: key.filters,
+          ...findRequestFields(key),
+          groupByPropertyId:
+            key.groupByPropertyId === "_status" ||
+            key.groupByPropertyId === "_kind"
+              ? key.groupByPropertyId
+              : toSafeId<"property">(key.groupByPropertyId),
+        },
+        { fetch: { signal } },
+      );
 
       return unwrapApiResponse(response).counts;
     },

@@ -10,11 +10,17 @@ test("object schemas build and parse without evaluating strings", () => {
   globalThis.Function = new Proxy(original, {
     apply: (target, thisArgument, argumentsList: unknown[]) => {
       evaluated.push(argumentsList);
-      return Reflect.apply(target, thisArgument, argumentsList);
+      const result: unknown = Reflect.apply(
+        target,
+        thisArgument,
+        argumentsList,
+      );
+      return result;
     },
     construct: (target, argumentsList: unknown[]) => {
       evaluated.push(argumentsList);
-      return Reflect.construct(target, argumentsList);
+      const instance: object = Reflect.construct(target, argumentsList);
+      return instance;
     },
   });
   try {

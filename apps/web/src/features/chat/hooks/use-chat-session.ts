@@ -25,6 +25,7 @@ import {
   QUEUED_MESSAGE_FILES_ON_REMOVE,
   type QueuedMessageFilesOnRemove,
 } from "@stll/api-contract/chat-queue";
+import { CHAT_LOCAL_RUN_STEER_SOURCE } from "@stll/api-contract/chat-run-target";
 import { requiresPerCallChatApproval } from "@stll/api-contract/chat-secret";
 import type { RequestSecretOutput } from "@stll/api-contract/chat-secret";
 import {
@@ -139,10 +140,10 @@ import {
   isQueueInsteadRefusal,
   messagePartsOf,
   queuedSendNow,
+  queuedSteerOf,
   queueMoveTarget,
   snapshotChatRequestOptions,
   steerableMessageText,
-  steerableQueuedText,
   withQueuedMessageMoved,
   withQueuedMessageRemoved,
 } from "@/features/chat/chat-queue.logic";
@@ -824,6 +825,20 @@ export const useChatSession = ({
   /** Queued messages this page removed (or handed to a turn): their leaving
    *  the queue is no turn the server started. */
   const removedHereRef = useRef(new Set<string>());
+  /**
+   * After a steer the turn took: the server removed the message at the
+   * revision the turn was handed. One edited since stays queued, and when the
+   * server later sends it, that is a turn this page did not start.
+   */
+  const settleSteeredHandOff = useCallback(
+    async (id: string) => {
+      await refreshQueue();
+      if (readQueue().items.some((queued) => queued.id === id)) {
+        removedHereRef.current.delete(id);
+      }
+    },
+    [readQueue, refreshQueue],
+  );
   /** Remove queued message `id` at the `revision` this page read: one
    *  edited since stays queued (the server refuses the removal). */
   const removeFromQueue = useCallback(
@@ -1053,6 +1068,7 @@ export const useChatSession = ({
           const outcome = await chat.steerLocalTurn({
             inputId: input.id,
             text: input.text,
+            source: { type: CHAT_LOCAL_RUN_STEER_SOURCE.composer },
           });
           if (outcome.type === "steered") {
             return;
@@ -1253,24 +1269,35 @@ export const useChatSession = ({
               const whole = await Result.tryPromise(
                 async () => await readQueuedChatMessage(threadRef.threadId, id),
               );
-              const read = Result.isOk(whole) ? whole.value : null;
-              const text =
-                read === null
-                  ? null
-                  : steerableQueuedText({ item, parts: read.message.parts });
+              // A read of another revision than the queue showed is a
+              // message changed since (switched to anonymized, say): it is
+              // sent next, as it now is.
+              const steer = Result.isOk(whole)
+                ? queuedSteerOf({ item, read: whole.value })
+                : null;
+              // Taken, the server removes it from the queue at the revision
+              // the turn was handed (one edited since stays queued).
+              removedHereRef.current.add(id);
               const steered =
-                text !== null &&
-                (await chat.steerLocalTurn({ inputId: id, text })).type ===
-                  "steered";
-              await writeQueue(async () =>
-                // Removed at the revision the turn was handed: one edited
-                // since stays queued.
-                steered && read !== null
-                  ? await removeFromQueue(id, {
-                      files: QUEUED_MESSAGE_FILES_ON_REMOVE.delete,
-                      revision: read.revision,
-                    })
-                  : await sendQueuedChatMessageNow(threadRef.threadId, id),
+                steer !== null &&
+                (
+                  await chat.steerLocalTurn({
+                    inputId: id,
+                    text: steer.text,
+                    source: {
+                      type: CHAT_LOCAL_RUN_STEER_SOURCE.queued,
+                      revision: steer.revision,
+                    },
+                  })
+                ).type === "steered";
+              if (steered) {
+                await settleSteeredHandOff(id);
+                return;
+              }
+              removedHereRef.current.delete(id);
+              await writeQueue(
+                async () =>
+                  await sendQueuedChatMessageNow(threadRef.threadId, id),
               );
             })(),
             "use-chat-session.steer-queued-message",
@@ -1295,7 +1322,7 @@ export const useChatSession = ({
     [
       chat,
       readQueue,
-      removeFromQueue,
+      settleSteeredHandOff,
       threadRef.threadId,
       threadSendState,
       writeQueue,
@@ -2198,29 +2225,29 @@ export const useChatSession = ({
           type: DOCX_MIME,
         });
         const contentSha256Hex = await sha256Hex(draft.buffer);
-        const response = await api
-          .entities({ workspaceId: toSafeId<"workspace">(matterId) })
-          ["upload-generated-document"].post({
-            file,
-            contentSha256Hex,
-            messageId: toSafeId<"chatMessage">(draftMessageId),
-            name: draft.fileName,
-            propertyId: fileProperty.id,
-            ...(draftChatThreadId === null
-              ? {}
-              : {
-                  draftChatThreadId: toSafeId<"chatThread">(draftChatThreadId),
-                }),
-            threadId: toSafeId<"chatThread">(threadRef.threadId),
-            ...(threadRef.scope === "workspace"
-              ? {
-                  threadWorkspaceId: toSafeId<"workspace">(
-                    threadRef.workspaceId,
-                  ),
-                }
-              : {}),
-            toolCallId,
-          });
+        const entitiesApi = api.entities({
+          workspaceId: toSafeId<"workspace">(matterId),
+        });
+
+        const response = await entitiesApi["upload-generated-document"].post({
+          file,
+          contentSha256Hex,
+          messageId: toSafeId<"chatMessage">(draftMessageId),
+          name: draft.fileName,
+          propertyId: fileProperty.id,
+          ...(draftChatThreadId === null
+            ? {}
+            : {
+                draftChatThreadId: toSafeId<"chatThread">(draftChatThreadId),
+              }),
+          threadId: toSafeId<"chatThread">(threadRef.threadId),
+          ...(threadRef.scope === "workspace"
+            ? {
+                threadWorkspaceId: toSafeId<"workspace">(threadRef.workspaceId),
+              }
+            : {}),
+          toolCallId,
+        });
         if (response.error) {
           throw toAPIError(response.error);
         }
@@ -2435,19 +2462,22 @@ export const useChatSession = ({
     steerOnResumeRef.current = null;
     detached(
       (async () => {
+        // Taken, the server removes it from the queue at that revision.
+        removedHereRef.current.add(steered.id);
         const outcome = await chat.steerLocalTurn({
           inputId: steered.id,
           text: steered.text,
+          source: {
+            type: CHAT_LOCAL_RUN_STEER_SOURCE.queued,
+            revision: steered.revision,
+          },
         });
+        if (outcome.type !== "steered") {
+          removedHereRef.current.delete(steered.id);
+        }
         switch (outcome.type) {
           case "steered":
-            await writeQueue(
-              async () =>
-                await removeFromQueue(steered.id, {
-                  files: QUEUED_MESSAGE_FILES_ON_REMOVE.delete,
-                  revision: steered.revision,
-                }),
-            );
+            await settleSteeredHandOff(steered.id);
             return;
           case "refused":
             notifySteerRefused(outcome.reason);
@@ -2461,7 +2491,7 @@ export const useChatSession = ({
       })(),
       "use-chat-session.steer-on-resume",
     );
-  }, [chat, notifySteerRefused, removeFromQueue, turnRunning, writeQueue]);
+  }, [chat, notifySteerRefused, settleSteeredHandOff, turnRunning]);
 
   // The server sends the first queued message as a turn of its own, which
   // this page did not start: once that message has left the queue (not

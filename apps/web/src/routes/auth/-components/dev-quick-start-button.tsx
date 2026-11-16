@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { Result, TaggedError } from "better-result";
 
@@ -9,6 +10,7 @@ import { stellaToast } from "@stll/ui/toast";
 
 import { useMountEffect } from "@/hooks/use-effect";
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
+import { updateUserResource } from "@/lib/account/update-user";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { authClient, isTwoFactorRedirect } from "@/lib/auth-client";
@@ -327,6 +329,7 @@ export const DevQuickStartContinuation = ({
 }) => {
   const analytics = useAnalytics();
   const invalidateSession = useInvalidateSession();
+  const queryClient = useQueryClient();
   const phase = useSyncExternalStore(
     devQuickStartRuntime.subscribe,
     devQuickStartRuntime.getPhase,
@@ -349,11 +352,13 @@ export const DevQuickStartContinuation = ({
 
     const result = await Result.tryPromise({
       try: async () => {
-        const updated = await authClient.updateUser({
-          name: "Dev Quick Start",
+        const updated = await updateUserResource({
+          queryClient,
+          input: { name: "Dev Quick Start" },
+          owner: null,
         });
-        if (updated.error) {
-          throw toAuthClientError(updated.error);
+        if (Result.isError(updated)) {
+          throw updated.error;
         }
 
         await runDevQuickStart({

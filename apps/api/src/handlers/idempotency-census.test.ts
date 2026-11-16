@@ -1268,8 +1268,6 @@ const IDEMPOTENCY_EXCEPTIONS = {
     "Folder reservations, file uploads and file organization require lifecycle work beyond the create response.",
   "src/handlers/invoices/create.ts":
     "The create response is one step of create, finalize and read workflows; replaying it does not replay their completion.",
-  "src/handlers/lists/items/sources/create.ts":
-    "The source form resolves a live document version before creation, so a manual retry can submit a different version for the same user intent.",
   "src/handlers/properties/create.ts":
     "Property creation participates in upload task chains whose completion is outside this create operation.",
   "src/handlers/views/create.ts":

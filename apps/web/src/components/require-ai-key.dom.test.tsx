@@ -244,16 +244,10 @@ test.each([
 );
 
 test.each([
-  [
-    "permission_required",
-    "Only an organization admin can connect an AI provider.",
-  ],
-  [
-    "account_restricted",
-    "AI provider settings are unavailable for this account.",
-  ],
+  ["permission_required", messages.ai.keyRequired.permissionRequired],
+  ["account_restricted", messages.ai.keyRequired.accountFeaturesUnavailable],
 ] as const)(
-  "%s capability never renders settings guidance or reads AI config",
+  "%s capability explains unavailable AI without exposing configuration",
   async (capability, message) => {
     providerConfiguration = capability;
     const queryClient = new QueryClient({
@@ -284,11 +278,16 @@ test.each([
       </QueryClientProvider>,
     );
 
-    await settle();
-    expect(screen.queryByText(message)).toBeNull();
+    const status = await screen.findByRole("status");
+    expect(status.textContent).toContain(message);
     expect(
-      screen.queryByRole("heading", { name: "Connect AI provider" }),
-    ).toBeNull();
+      screen.queryByRole("button", { name: messages.ai.keyRequired.cta }) ===
+        null,
+    ).toBe(true);
+    expect(
+      screen.queryByRole("dialog", { name: messages.ai.keyRequired.title }) ===
+        null,
+    ).toBe(true);
     expect(aiConfigRequests).toBe(0);
     queryClient.clear();
   },

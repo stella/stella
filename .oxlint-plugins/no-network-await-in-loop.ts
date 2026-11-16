@@ -24,7 +24,8 @@
 //     `api` and `apiClient`), e.g.
 //     `await api.documents({ id }).get()`. Computed access is traversed, so a
 //     generated hyphenated route (`api["copy-to-workspace"].post(...)`) still
-//     resolves to the imported client.
+//     resolves to the imported client. Stable local API route receivers are
+//     followed too; awaited values and completed request calls are not receivers.
 //
 // "Inside a loop" walks up `parent` links from the await to the first
 // position that re-runs on every iteration: a loop BODY, a `while` / `do`
