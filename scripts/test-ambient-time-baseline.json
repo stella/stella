@@ -1694,11 +1694,6 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/lib/mcp-upstream/connections.test.ts": {
-    "count": 7,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/api/src/lib/mcp-upstream/oauth.test.ts": {
     "count": 2,
     "owner": "api",
