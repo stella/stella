@@ -418,7 +418,7 @@ export type CorpusProjectionOfflineIngestedShard = {
  *
  * Only ingested shards measure the rate: a failure may stop on its first line
  * and a kill bounds the rate only from above. Only shards at least as large
- * as the judged revision count, since a small shard carries the fixed cost of
+ * as the judged revision count, since a small shard carries the fixed time of
  * a process start, a commit and merges, and would read a large revision's
  * marginal rate as far slower than it is.
  */

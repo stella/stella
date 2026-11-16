@@ -992,9 +992,9 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
    */
   async #nextDecidableAtMs(nowMs: number): Promise<number | null> {
     const t = corpusIndexProjectionIntents;
-    const endedAfter = sql.raw(`${String(this.#plan.endedAfterMs)}`);
+    const endedAfter = sql.raw(String(this.#plan.endedAfterMs));
     const publishDelay = sql.raw(
-      `${String(corpusIndexAppendPublishDelayMs(this.#manifest))}`,
+      String(corpusIndexAppendPublishDelayMs(this.#manifest)),
     );
     const decidableAt = sql<string>`(CASE
       WHEN ${t.status} = 'append_started' THEN ${t.leaseExpiresAt}
