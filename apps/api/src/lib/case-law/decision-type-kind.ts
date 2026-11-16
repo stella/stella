@@ -1,3 +1,4 @@
+// parser-output-unchanged: adds the Brazilian decision types to the facet table, which no parser reads.
 import { panic } from "better-result";
 
 import {
@@ -140,11 +141,15 @@ export const STATED_DECISION_TYPE_KINDS = {
     "top_up_tax_opinion",
   "postanowienie rozstrzygające spór o właściwość": "order",
 
-  // Brazilian (TST). A súmula, an orientação jurisprudencial and a
-  // precedente normativo state the court's settled reading of the law for
-  // later cases, as a Hungarian uniformity decision does.
+  // Brazilian. A panel's judgment (TST and TJDFT); a TST despacho; a
+  // decision one TJDFT judge, or the TJDFT presidency, gives alone. A
+  // súmula, an orientação jurisprudencial and a precedente normativo (TST)
+  // state the court's settled reading of the law for later cases, as a
+  // Hungarian uniformity decision does.
   acórdão: "judgment",
   despacho: "order",
+  "decisão monocrática": "decision",
+  "decisão da presidência": "decision",
   súmula: "uniformity_decision",
   "orientação jurisprudencial": "uniformity_decision",
   "orientação jurisprudencial transitória": "uniformity_decision",

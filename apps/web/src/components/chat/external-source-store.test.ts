@@ -51,9 +51,13 @@ for (const readerFirst of [true, false]) {
     const sources = readerFirst ? [reader, publisher] : [publisher, reader];
     const state = useExternalSourceStore.getState();
     for (const source of sources) {
+      const previous = useExternalSourceStore.getState().sourcesByUrl;
+      const before = { ...previous };
       state.registerSources([source]);
+      expect(previous).toEqual(before);
+      expect(useExternalSourceStore.getState().sourcesByUrl).not.toBe(previous);
     }
     expect(state.getSource(url)?.url).toBe(url);
-    expect(state.getSource(sourceUrl)).toEqual(state.getSource(url));
+    expect(state.getSource(sourceUrl)).toBe(state.getSource(url));
   });
 }

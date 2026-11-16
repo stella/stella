@@ -499,6 +499,21 @@ const ADAPTER_CONFORMANCE = {
     disposition: "excluded",
     reason: "the complete JSON-LD export is covered by adapter fixture tests",
   },
+  [ADAPTER_KEYS.BR_TJDFT]: {
+    disposition: "exercised",
+    // Every closed publication day answers an empty window, so the frontier
+    // crosses the last closed day's two bases and waits on a day that has
+    // not closed: a cycle there sends nothing and returns its cursor.
+    exhaustedSource: () =>
+      jsonResponse({
+        hits: { value: 0 },
+        agregacoes: {},
+        paginacao: { pagina: 0, tamanho: 40 },
+        registros: [],
+      }),
+    maxSteadyStateCursors: 1,
+    maxSteadyStatePositions: 0,
+  },
   [ADAPTER_KEYS.BR_TST]: {
     disposition: "excluded",
     reason:
