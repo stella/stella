@@ -7080,7 +7080,7 @@
       "downloadWithComments": "Stiahnuť s komentármi",
       "duplicateUpload": {
         "description": "{count, plural, one {# súbor je totožný s dokumentom, ktorý tento spis už obsahuje.} few {# súbory sú totožné s dokumentmi, ktoré tento spis už obsahuje.} many {# súboru je totožných s dokumentmi, ktoré tento spis už obsahuje.} other {# súborov je totožných s dokumentmi, ktoré tento spis už obsahuje.}} Vyberte, čo s každým z nich urobiť.",
-        "matchedDocument": "Totožné s <bdi>{documentName}</bdi>",
+        "matchedDocument": "Totožné s dokumentom <bdi>{documentName}</bdi>",
         "skip": "Tento súbor preskočiť",
         "title": "Už v spise",
         "uploadAnyway": "Napriek tomu nahrať"

@@ -922,7 +922,10 @@ export const useCreateFileEntities = (workspaceId: string) => {
     input: CreateFileEntitiesInput,
   ) => {
     if (input.referenceCheck === REFERENCE_CHECK.skip) {
-      mutate(input);
+      detached(
+        uploadAfterDuplicateCheck(input, mutate),
+        "use-create-file-entities.duplicate-check",
+      );
       return;
     }
     detached(

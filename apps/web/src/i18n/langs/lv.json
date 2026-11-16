@@ -7080,7 +7080,7 @@
       "downloadWithComments": "Lejupielādēt ar komentāriem",
       "duplicateUpload": {
         "description": "{count, plural, zero {# failu sakrīt ar dokumentiem, kas jau ir šajā lietā.} one {# fails sakrīt ar dokumentu, kas jau ir šajā lietā.} other {# faili sakrīt ar dokumentiem, kas jau ir šajā lietā.}} Izvēlieties, ko darīt ar katru.",
-        "matchedDocument": "Sakrīt ar <bdi>{documentName}</bdi>",
+        "matchedDocument": "Sakrīt ar dokumentu <bdi>{documentName}</bdi>",
         "skip": "Izlaist šo failu",
         "title": "Jau ir šajā lietā",
         "uploadAnyway": "Tomēr augšupielādēt"
