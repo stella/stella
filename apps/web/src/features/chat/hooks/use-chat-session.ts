@@ -1258,7 +1258,7 @@ export const useChatSession = ({
             stellaToast.info(t("chat.queue.noLongerQueued"));
             return;
           }
-          draftManager?.restoreMessageDraftIntoThread(
+          draftManager.restoreMessageDraftIntoThread(
             threadRef,
             composerDraftOfParts(message.parts),
           );
