@@ -147,7 +147,6 @@
     "scripts/generate-mobile-icons.test.ts": ["**"],
     "scripts/generate-mobile-ui-theme.test.ts": ["**"],
     "scripts/generate-npm-release-jobs.test.ts": ["**"],
-    "scripts/generate-outcome-page.test.ts": ["**"],
     "scripts/generate-playwright-devices.test.ts": ["**"],
     "scripts/generate-tailwind-classes.test.ts": ["**"],
     "scripts/generated-conflicts-workflows.test.ts": ["**"],

@@ -79,7 +79,7 @@ const PURE_AUTOFIX = {
   "mobile-folio-fonts": "scripts/generate-mobile-folio-fonts.ts",
   // Renders a committed component with the lockfile-pinned React and compiles
   // its utilities with the pinned Tailwind; reads only committed files.
-  "outcome-page": "scripts/generate-outcome-page.ts",
+  "outcome-page": "packages/ui/scripts/generate-outcome-page.ts",
   // The committed release policy renders package names inside fixed markers.
   "published-package-list": "scripts/check-published-package-lists.ts",
   // Reads glossary data, normalizes Unicode and formats fixed Markdown tables.

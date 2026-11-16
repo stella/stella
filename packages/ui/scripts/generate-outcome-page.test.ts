@@ -3,7 +3,6 @@ import { expect, test } from "bun:test";
 import {
   OUTCOME_PAGE_SLOTS,
   outcomePageArtifacts,
-  styleHash,
 } from "./generate-outcome-page";
 
 const artifacts = await outcomePageArtifacts();
@@ -64,18 +63,17 @@ test("every class the markup uses has a rule, and every token it reads is define
 test("follows the system colour scheme and drops motion when it is reduced", () => {
   const css = styleOf(pages[0]?.contents ?? "");
   expect(css).toContain("@media (prefers-color-scheme:dark)");
-  expect(css).toMatch(/prefers-reduced-motion:no-preference/u);
+  expect(css).toMatch(/prefers-reduced-motion: ?no-preference/u);
   expect(css).toContain("@keyframes outcome-badge");
 });
 
-test("the CLI's template and CSP hash match the pages exactly", () => {
+test("the CLI carries the pages exactly, and both share one stylesheet", () => {
   const cli = artifacts.find(({ path }) =>
     path.endsWith("outcome-page.gen.ts"),
   );
   for (const { contents } of pages) {
     expect(cli?.contents).toContain(JSON.stringify(contents));
-    expect(cli?.contents).toContain(
-      JSON.stringify(styleHash(styleOf(contents))),
-    );
   }
+  // The CLI admits the stylesheet by one hash, so the tones must not differ.
+  expect(new Set(pages.map(({ contents }) => styleOf(contents))).size).toBe(1);
 });

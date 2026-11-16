@@ -4,7 +4,7 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 // can close this tab") shows that one design, filled with its own words. The
 // pages a local loopback server answers cannot run React, so they are
 // rendered from the same component into a generated template
-// (`scripts/generate-outcome-page.ts`); a hand-written HTML page, a tab that
+// (`packages/ui/scripts/generate-outcome-page.ts`); a hand-written HTML page, a tab that
 // closes itself or a hand-built message card is a second design that drifts.
 //
 // Flags:
@@ -34,7 +34,7 @@ import {
 const OUTCOME_OWNERS = [
   "packages/ui/src/components/outcome-screen.tsx",
   "packages/ui/src/components/outcome-screen-view.tsx",
-  "scripts/generate-outcome-page.ts",
+  "packages/ui/scripts/generate-outcome-page.ts",
   "packages/cli/src/auth/outcome-page.gen.ts",
 ];
 
@@ -264,7 +264,7 @@ export default eslintCompatPlugin({
       meta: {
         type: "problem",
         messages: {
-          htmlDocument: `Do not write an HTML page by hand: it becomes a second outcome design that nobody keeps in step. ${OWNER_HINT}; a page served without React fills the template \`scripts/generate-outcome-page.ts\` renders from it.`,
+          htmlDocument: `Do not write an HTML page by hand: it becomes a second outcome design that nobody keeps in step. ${OWNER_HINT}; a page served without React fills the template \`packages/ui/scripts/generate-outcome-page.ts\` renders from it.`,
           windowClose: `Do not close the tab from here: closing it, and falling back when the browser refuses, is the outcome screen's job. ${OWNER_HINT} with its \`closeTab\` option.`,
           messageCard: `Do not build an outcome screen from a frame with a title and one action. ${OWNER_HINT}.`,
           statusRegion: `Do not build an outcome screen from a status region with a heading. ${OWNER_HINT}.`,

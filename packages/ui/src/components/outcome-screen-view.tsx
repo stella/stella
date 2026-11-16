@@ -6,7 +6,7 @@ import { StellaMark } from "./stella-mark";
 import { StellaWordmarkLatin } from "./stella-wordmark";
 
 // The outcome screen's markup, with no browser behaviour: `OutcomeScreen`
-// (./outcome-screen.tsx) adds closing the tab, and
+// (./outcome-screen.tsx) adds closing the tab, and this package's
 // `scripts/generate-outcome-page.ts` renders this view into the template the
 // loopback listeners serve, where no script runs.
 

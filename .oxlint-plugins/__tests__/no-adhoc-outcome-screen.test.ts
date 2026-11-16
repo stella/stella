@@ -38,7 +38,7 @@ test("pages in tests, captured fixtures and the outcome owners are allowed", asy
       "apps/api/src/handlers/example.test.ts",
       "apps/api/src/handlers/adapters/__fixtures__/court-page.ts",
       "apps/api/src/handlers/parsers/court.test-fixture.ts",
-      "scripts/generate-outcome-page.ts",
+      "packages/ui/scripts/generate-outcome-page.ts",
       "packages/cli/src/auth/outcome-page.gen.ts",
       "apps/api/src/handlers/visual-sandbox/srcdoc.ts",
     ].map(

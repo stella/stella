@@ -11,6 +11,7 @@ import { timingSafeEqual } from "node:crypto";
 import { createServer } from "node:http";
 import type { IncomingMessage, ServerResponse } from "node:http";
 
+import { sha256Base64Url } from "../sha256.js";
 import {
   CLIENT_NAME,
   LOOPBACK_REDIRECT_PATH,
@@ -19,7 +20,6 @@ import {
 import { LoopbackCallbackError, LoopbackTimeoutError } from "./errors.js";
 import {
   OUTCOME_PAGE_SLOTS,
-  OUTCOME_PAGE_STYLE_SHA256,
   OUTCOME_PAGE_TEMPLATES,
 } from "./outcome-page.gen.js";
 
@@ -123,6 +123,14 @@ const escapeHtml = (text: string) =>
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
 
+// Both tones share one stylesheet (the generator's test holds it to that), so
+// one hash admits it under the CSP.
+const OUTCOME_PAGE_STYLE_HASH = (() => {
+  const page = OUTCOME_PAGE_TEMPLATES.success;
+  const start = page.indexOf("<style>") + "<style>".length;
+  return sha256Base64Url(page.slice(start, page.indexOf("</style>", start)));
+})();
+
 const OUTCOME_SLOT_PATTERN = new RegExp(
   Object.values(OUTCOME_PAGE_SLOTS)
     .map((slot) => slot.replaceAll(/[{}]/gu, (brace) => `\\${brace}`))
@@ -132,9 +140,9 @@ const OUTCOME_SLOT_PATTERN = new RegExp(
 
 /**
  * The outcome page, from the template rendered from `@stll/ui/outcome-screen`
- * (`scripts/generate-outcome-page.ts`). Every slot is filled with escaped
- * text; only the organization's name comes from the redirect, and only once
- * its `state` matched this sign-in.
+ * (`packages/ui/scripts/generate-outcome-page.ts`). Every slot is filled with
+ * escaped text; only the organization's name comes from the redirect, and only
+ * once its `state` matched this sign-in.
  */
 const renderCallbackPage = (page: CallbackPageOptions) => {
   const ok = page.status === "success";
@@ -161,7 +169,7 @@ const renderCallbackPage = (page: CallbackPageOptions) => {
   );
 
   return {
-    contentSecurityPolicy: `default-src 'none'; style-src 'sha256-${OUTCOME_PAGE_STYLE_SHA256}'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
+    contentSecurityPolicy: `default-src 'none'; style-src 'sha256-${OUTCOME_PAGE_STYLE_HASH}'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
     html,
   };
 };

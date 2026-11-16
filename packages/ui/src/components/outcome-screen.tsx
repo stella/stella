@@ -7,9 +7,9 @@ import type { OutcomeScreenViewProps } from "./outcome-screen-view";
 // The one screen a flow ends on: "ChatGPT is connected", "Signed in",
 // "Invitation declined". Every such flow fills this design with its own words
 // (`no-adhoc-outcome-screen` rejects any other). Pages a local loopback server
-// answers cannot run React, so `scripts/generate-outcome-page.ts` renders the
-// same markup (./outcome-screen-view.tsx) into a self-contained HTML template
-// they fill in.
+// answers cannot run React, so `scripts/generate-outcome-page.ts` (in this
+// package) renders the same markup (./outcome-screen-view.tsx) into a
+// self-contained HTML template they fill in.
 
 /** How long a tab that asked to close waits before it counts as still open. */
 const CLOSE_FALLBACK_MS = 150;

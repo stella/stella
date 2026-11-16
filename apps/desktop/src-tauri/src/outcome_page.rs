@@ -1,8 +1,9 @@
 //! The page a local loopback listener answers a browser with once a flow ends
 //! ("ChatGPT is connected"). It is `OutcomeScreen` from
 //! `@stll/ui/outcome-screen`, rendered into a self-contained template by
-//! `scripts/generate-outcome-page.ts`; this module only fills its slots with
-//! escaped text, so the desktop shows the same design as the web and the CLI.
+//! `packages/ui/scripts/generate-outcome-page.ts`; this module only fills its
+//! slots with escaped text, so the desktop shows the same design as the web and
+//! the CLI.
 //! No other module here writes an HTML document (a test below enforces it).
 
 /// Which of the two rendered pages to answer with.
