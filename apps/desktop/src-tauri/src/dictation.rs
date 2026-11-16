@@ -431,6 +431,22 @@ pub fn cleanup_enabled(app: &AppHandle) -> bool {
   app.state::<DictationState>().update(|inner| inner.cleanup)
 }
 
+/// Starts a dictation: marks it recording and reads the speech model under
+/// the lock the model's removal takes, so a removal either sees the dictation
+/// and refuses, or has already marked the model missing and none is used.
+pub fn start_recording(app: &AppHandle) -> Option<PathBuf> {
+  let model = change(app, |inner| {
+    inner.phase = Phase::Recording;
+    if inner.model == ModelState::Missing {
+      None
+    } else {
+      installed_model()
+    }
+  });
+  show_phase_in_tray(app, Phase::Recording);
+  model
+}
+
 pub fn set_phase(app: &AppHandle, phase: Phase) {
   change(app, |inner| inner.phase = phase);
   show_phase_in_tray(app, phase);
@@ -756,6 +772,48 @@ pub fn dictation_download_model(
       };
       change(&handle, |inner| inner.model = model);
     });
+  }
+  Ok(read_snapshot(&app, &state))
+}
+
+/// Deletes the speech model from this computer, for someone who transcribes
+/// with stella AI or wants the disk space back. Refused while a dictation runs
+/// or the model downloads. A warm worker lets go of the model once it idles.
+#[tauri::command]
+pub fn dictation_remove_model(
+  app: AppHandle,
+  state: State<'_, DictationState>,
+) -> Result<DictationSnapshot, String> {
+  if !available(&app) {
+    return Err("dictation is not available on this computer".to_string());
+  }
+  let path = model_path().ok_or("app data directory is unavailable")?;
+  // Checked and marked missing under one lock, so no download or dictation
+  // starts on a model about to go.
+  let busy = change(&app, |inner| {
+    let busy = inner.phase != Phase::Idle
+      || matches!(inner.model, ModelState::Downloading { .. });
+    if !busy {
+      inner.model = ModelState::Missing;
+    }
+    busy
+  });
+  if busy {
+    return Err("the speech model is in use".to_string());
+  }
+  match std::fs::remove_file(&path) {
+    Ok(()) => {}
+    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+    Err(error) => {
+      // Still on disk, for example while Windows has it open.
+      let model = if installed_model().is_some() {
+        ModelState::Ready
+      } else {
+        ModelState::Missing
+      };
+      change(&app, |inner| inner.model = model);
+      return Err(format!("speech model removal failed: {error}"));
+    }
   }
   Ok(read_snapshot(&app, &state))
 }
