@@ -13,6 +13,7 @@ import { readAdmittedCourtPage } from "@/api/handlers/case-law/decisions/shelf-c
 import { status } from "@/api/http/status";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { readNonRedistributableCaseLawSourceIds } from "@/api/lib/case-law/non-redistributable-sources";
+import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution-sql";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   readPublicLawCountry,
@@ -129,6 +130,14 @@ export const listBrowseCourtsHandler = async (
 const COUNT_CAP = LIMITS.caseLawBrowseListingDepth + 1;
 
 /**
+ * A row counts only when its source may be redistributed, as the listing
+ * the calendar links to applies: a withheld source's periods are never
+ * named or counted.
+ */
+const servable = (alias: string) =>
+  sql`EXISTS (SELECT 1 FROM case_law_sources AS servable_source WHERE servable_source.id = ${sql.identifier(alias)}.source_id AND ${redistributableCaseLawSourceFor(sql`servable_source.descriptor`)})`;
+
+/**
  * The years a court holds decisions in: one index descent per year, from the
  * court's first dated decision to its last, never a walk of its rows.
  */
@@ -138,6 +147,7 @@ const courtYearsStatement = (country: string, court: string) => sql`
     FROM case_law_published_decisions first_decision
     WHERE first_decision.country = ${country}
       AND first_decision.court = ${court}
+      AND ${servable("first_decision")}
       AND coalesce(first_decision.decision_date, '-infinity'::date) > '-infinity'::date
     UNION ALL
     SELECT (
@@ -145,6 +155,7 @@ const courtYearsStatement = (country: string, court: string) => sql`
       FROM case_law_published_decisions next_decision
       WHERE next_decision.country = ${country}
         AND next_decision.court = ${court}
+        AND ${servable("next_decision")}
         AND coalesce(next_decision.decision_date, '-infinity'::date)
           >= make_date(extract(year FROM year_walk.day)::int + 1, 1, 1)
     )
@@ -161,6 +172,7 @@ const courtYearsStatement = (country: string, court: string) => sql`
     FROM case_law_published_decisions undated_decision
     WHERE undated_decision.country = ${country}
       AND undated_decision.court = ${court}
+      AND ${servable("undated_decision")}
       AND coalesce(undated_decision.decision_date, '-infinity'::date) = '-infinity'::date
     LIMIT ${COUNT_CAP}
   ) AS undated
@@ -197,6 +209,7 @@ const periodCountsStatement = (
       FROM case_law_published_decisions decision
       WHERE decision.country = ${country}
         AND decision.court = ${court}
+        AND ${servable("decision")}
         AND coalesce(decision.decision_date, '-infinity'::date)
           >= (${start}::date + (part.value - 1) * ${step})::date
         AND coalesce(decision.decision_date, '-infinity'::date)

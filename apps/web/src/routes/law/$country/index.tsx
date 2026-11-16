@@ -5,6 +5,7 @@ import { useTranslations } from "use-intl";
 import {
   caseLawBrowseCourtSegment,
   createCaseLawJurisdictionHubPath,
+  hasSearch,
 } from "@/features/case-law/browse-path";
 import {
   publicCaseLawPageCountryFromParam,
@@ -64,7 +65,7 @@ export const Route = createFileRoute("/law/$country/")({
       courts: [...bySegment].map(([segment, name]) => ({ segment, name })),
     };
   },
-  head: ({ loaderData, params }) => {
+  head: ({ loaderData, match, params }) => {
     const t = getTranslator();
     const country = caseLawCountryName(
       getFormatter(),
@@ -76,6 +77,8 @@ export const Route = createFileRoute("/law/$country/")({
     });
     const path = createCaseLawJurisdictionHubPath(params.country);
     return createPublicLawHead({
+      // Any query string makes this a variant of the hub, never the hub.
+      indexing: hasSearch(match.search) ? "noindex" : "default",
       description,
       jsonLd: createLegalCollectionJsonLd({
         t,

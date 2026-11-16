@@ -72,6 +72,10 @@ export const publicCaseLawHubPathFor = (
     : createCaseLawJurisdictionHubPath(toCaseLawCountryParam(scope));
 };
 
+/** Whether a route's parsed search carries any parameter at all. */
+export const hasSearch = (search: object): boolean =>
+  Object.keys(search).length > 0;
+
 const pageSuffix = (page: number): string =>
   page > 1 ? `/page/${String(page)}` : "";
 

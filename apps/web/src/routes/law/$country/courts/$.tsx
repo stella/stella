@@ -4,6 +4,7 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import {
+  CASE_LAW_BROWSE_MAX_PAGES,
   CASE_LAW_BROWSE_READING_LANGUAGES,
   isCaseLawBrowsePeriodSplit,
 } from "@stll/api-contract/case-law-browse-hubs";
@@ -18,6 +19,7 @@ import {
   type CaseLawBrowseListing,
   type CaseLawBrowseTarget,
   createCaseLawBrowsePath,
+  hasSearch,
   parseCaseLawBrowseSplat,
 } from "@/features/case-law/browse-path";
 import {
@@ -94,7 +96,10 @@ const readPage = async (
       kind: "decisions",
       target: listed,
       decisions: page.items,
-      hasNext: page.nextCursor !== null,
+      // The last addressable page links no further, even when the period
+      // holds more (a busy day): those decisions stay sitemap-only.
+      hasNext:
+        page.nextCursor !== null && listed.page < CASE_LAW_BROWSE_MAX_PAGES,
     };
   };
   const periods = async (year?: number, month?: number) => {
@@ -179,7 +184,7 @@ export const Route = createFileRoute("/law/$country/courts/$")({
       page: await readPage(queryClient, scope, court, target),
     };
   },
-  head: ({ loaderData, params }) => {
+  head: ({ loaderData, match, params }) => {
     if (loaderData === undefined) {
       return {};
     }
@@ -195,6 +200,8 @@ export const Route = createFileRoute("/law/$country/courts/$")({
         : t("caseLaw.browse.periodDescription", { court, country, period });
     const path = createCaseLawBrowsePath(params.country, page.target);
     return createPublicLawHead({
+      // Any query string makes this a variant of the hub, never the hub.
+      indexing: hasSearch(match.search) ? "noindex" : "default",
       description,
       jsonLd: createLegalCollectionJsonLd({
         t,
