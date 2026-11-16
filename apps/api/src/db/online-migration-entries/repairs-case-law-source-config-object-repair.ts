@@ -4,6 +4,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "repairs-case-law-source-config-object-repair",
   revision: 1205,
+  lifecycle: "finalized",
   type: "repairs",
   values: [CASE_LAW_SOURCE_CONFIG_OBJECT_REPAIR],
 } satisfies OnlineMigrationEntry;

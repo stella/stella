@@ -4,6 +4,7 @@ import { READER_ANSWER_CONSTRAINTS } from "../reader-answer-constraint-validatio
 export default {
   id: "constraints-reader-answer-constraints",
   revision: 1340,
+  lifecycle: "finalized",
   type: "constraints",
   values: [...READER_ANSWER_CONSTRAINTS],
 } satisfies OnlineMigrationEntry;
