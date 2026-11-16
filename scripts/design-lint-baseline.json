@@ -414,7 +414,6 @@
   },
   "no-imported-class-constant/no-imported-class-constant": {},
   "require-bounded-request-schema/require-bounded-request-schema": {
-    "apps/api/src/handlers/api-keys/mint.ts": 3,
     "apps/api/src/handlers/audit-logs/query.ts": 5,
     "apps/api/src/handlers/case-law/decisions/sitemap.ts": 4,
     "apps/api/src/handlers/chat/chat-schema.ts": 3,
