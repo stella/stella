@@ -9,6 +9,8 @@ import type { TestClock } from "@stll/test-kit";
 
 import { WORKSPACE_ACCESS_MODE } from "@/api/db/rls";
 import {
+  createExplicitSafeDb,
+  createExplicitScopedDb,
   createMembershipScopedDb,
   createSafeDb,
   markRlsDatabase,
@@ -294,6 +296,33 @@ describe("scoped transaction deadline", () => {
         "db.transaction.duration_ms": timeoutMs + 1,
         "db.transaction.connection_wait_ms": timeoutMs * 2,
       });
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("observes an explicit workspace scope under the deadline it is given", async () => {
+    const warn = spyOn(logger, "warn").mockImplementation(() => undefined);
+    try {
+      const clock = createTestClock();
+      const { timeoutMs } = TRANSACTION_DEADLINE.request;
+      const { database, params } = pooledDatabase(clock, 0);
+      const workspaceId = createSafeId<"workspace">();
+      const identity = {
+        workspaceIds: [workspaceId],
+        organizationId: mintAuthProviderId<"organization">(),
+        userId: mintAuthProviderId<"user">(),
+        deadline: observedOn(clock),
+      };
+      const overrun = async () => {
+        await clock.advance(timeoutMs + 1);
+      };
+      await createExplicitScopedDb(database, identity)(overrun);
+      const safe = await createExplicitSafeDb(database, identity)(overrun);
+      expect(Result.isOk(safe)).toBe(true);
+      expect(warn).toHaveBeenCalledTimes(2);
+      expect(params).toContain(WORKSPACE_ACCESS_MODE.explicit);
+      expect(params).toContain(`{${workspaceId}}`);
     } finally {
       warn.mockRestore();
     }

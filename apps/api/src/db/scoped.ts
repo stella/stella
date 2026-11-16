@@ -394,6 +394,30 @@ export const createScopedDb =
       fn,
     });
 
+type ExplicitScopedDbOptions = {
+  workspaceIds: SafeId<"workspace">[];
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user"> | null;
+  /** A request scope passes `TRANSACTION_DEADLINE.request`; background work none. */
+  deadline?: TransactionDeadline | undefined;
+};
+
+/** An explicit workspace scope that a request context opens under its deadline. */
+export const createExplicitScopedDb =
+  <TTransaction extends ScopedTransactionBase>(
+    database: RlsDatabase<TTransaction>,
+    { workspaceIds, organizationId, userId, deadline }: ExplicitScopedDbOptions,
+  ) =>
+  async <T>(fn: (tx: TTransaction) => Promise<T>): Promise<T> =>
+    await runScopedTransaction({
+      database,
+      workspaceScope: { type: WORKSPACE_ACCESS_MODE.explicit, workspaceIds },
+      organizationId,
+      userId,
+      deadline,
+      fn,
+    });
+
 /**
  * A transaction on the application role with no tenant settings, for a call
  * that carries only a token. Every row policy is closed in it, so it reaches
@@ -565,13 +589,11 @@ const toSafeDbError = (cause: unknown): SafeDbError => {
   return new UnhandledException({ cause });
 };
 
-/** Result-wrapped form of createScopedDb for an explicit workspace scope. */
-export const createSafeDb =
+/** Result-wrapped form of createExplicitScopedDb. */
+export const createExplicitSafeDb =
   <TTransaction extends ScopedTransactionBase>(
     database: RlsDatabase<TTransaction>,
-    workspaceIds: SafeId<"workspace">[],
-    organizationId: SafeId<"organization">,
-    userId: SafeId<"user"> | null,
+    { workspaceIds, organizationId, userId, deadline }: ExplicitScopedDbOptions,
   ) =>
   async <T>(
     fn: (tx: TTransaction) => Promise<T>,
@@ -588,12 +610,21 @@ export const createSafeDb =
             },
             organizationId,
             userId,
+            deadline,
             fn,
           }),
         catch: toSafeDbError,
       },
       retry,
     );
+
+/** Result-wrapped form of createScopedDb for an explicit workspace scope. */
+export const createSafeDb = <TTransaction extends ScopedTransactionBase>(
+  database: RlsDatabase<TTransaction>,
+  workspaceIds: SafeId<"workspace">[],
+  organizationId: SafeId<"organization">,
+  userId: SafeId<"user"> | null,
+) => createExplicitSafeDb(database, { workspaceIds, organizationId, userId });
 
 /** Result-wrapped membership scope used by authenticated request contexts. */
 export const createMembershipSafeDb =
