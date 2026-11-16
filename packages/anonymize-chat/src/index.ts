@@ -116,12 +116,21 @@ export const isChatSendMode = (value: unknown): value is ChatSendMode =>
 export const getPreferredChatSendMode = (anonymized: boolean): ChatSendMode =>
   anonymized ? CHAT_SEND_MODE.anonymized : CHAT_SEND_MODE.rawOverride;
 
+/**
+ * Why a send was refused at the anonymized boundary, where sending it without
+ * anonymization is the member's way on: `third_party_boundary_refusal` for
+ * content stella cannot anonymize, `local_run_anonymized_refusal` for a turn
+ * on the member's computer, whose agent reads their matters as they are and
+ * so never runs anonymized.
+ */
 export const CHAT_TRANSPORT_ERROR_CODE = {
   thirdPartyBoundaryRefusal: "third_party_boundary_refusal",
+  localRunAnonymizedRefusal: "local_run_anonymized_refusal",
 } as const;
 
 const CHAT_TRANSPORT_ERROR_CODE_VALUES = [
   CHAT_TRANSPORT_ERROR_CODE.thirdPartyBoundaryRefusal,
+  CHAT_TRANSPORT_ERROR_CODE.localRunAnonymizedRefusal,
 ] as const;
 
 type ChatTransportErrorCodeValue =
@@ -140,6 +149,10 @@ export const chatTransportErrorCodeSchema = v.picklist(
 );
 export type ChatTransportErrorCode = ChatTransportErrorCodeValue;
 
+export const isChatTransportErrorCode = (
+  value: unknown,
+): value is ChatTransportErrorCode => v.is(chatTransportErrorCodeSchema, value);
+
 export const chatTransportErrorPayloadSchema = v.strictObject({
   code: chatTransportErrorCodeSchema,
   message: v.string(),
@@ -147,13 +160,6 @@ export const chatTransportErrorPayloadSchema = v.strictObject({
 export type ChatTransportErrorPayload = v.InferOutput<
   typeof chatTransportErrorPayloadSchema
 >;
-
-export const createThirdPartyBoundaryRefusalPayload = (
-  message: string,
-): ChatTransportErrorPayload => ({
-  code: CHAT_TRANSPORT_ERROR_CODE.thirdPartyBoundaryRefusal,
-  message,
-});
 
 export const parseChatTransportErrorPayload = (
   payload: unknown,
@@ -172,10 +178,10 @@ export const parseChatTransportErrorMessage = (
   }
 };
 
+/** Every transport refusal is one the member can send past without anonymization. */
 export const isThirdPartyBoundaryRefusalPayload = (
   payload: ChatTransportErrorPayload | null,
-): boolean =>
-  payload?.code === CHAT_TRANSPORT_ERROR_CODE.thirdPartyBoundaryRefusal;
+): boolean => payload !== null;
 
 export const isThirdPartyBoundaryRefusalError = (error: Error): boolean =>
   isThirdPartyBoundaryRefusalPayload(

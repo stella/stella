@@ -103,6 +103,7 @@
     "pickFailed": "Impossible d’ouvrir le sélecteur de fichiers. Réessayez.",
     "sendFileRefused": "Un fichier n’a pas pu être envoyé, donc le message n’a pas été envoyé. Retirez le fichier et réessayez.",
     "sendFileNotAnonymizable": "Cette conversation est anonymisée et stella n’a pas pu anonymiser l’un des fichiers, donc rien n’a été envoyé. Retirez le fichier et réessayez.",
+    "sendLocalRunNotAnonymizable": "Cette conversation est anonymisée et l’agent de code de votre ordinateur lit vos documents tels quels, donc rien ne lui a été envoyé.",
     "pickTitle": "Choisissez une conversation",
     "pickDescription": "Choisissez un fil dans la liste ou démarrez-en un avec +.",
     "runBanner": {

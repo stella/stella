@@ -219,4 +219,17 @@ describe("sending files", () => {
     // Without files the server refused the message itself.
     expect(sendRefusal(answered(422), false)).toBe("failed");
   });
+
+  test("says an anonymized message to the agent on the computer was refused for that", () => {
+    const refused = new ApiRequestError({
+      message: "refused",
+      status: 422,
+      code: "local_run_anonymized_refusal",
+    });
+    for (const withFiles of [false, true]) {
+      expect(sendRefusal(refused, withFiles)).toBe(
+        "local-run-not-anonymizable",
+      );
+    }
+  });
 });

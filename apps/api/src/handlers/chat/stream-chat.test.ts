@@ -270,6 +270,7 @@ describe("agent sandbox third-party boundary", () => {
     const error = resolveAgentRunBoundaryError({
       boundary: { type: CHAT_SEND_MODE.anonymized },
       runMode: CHAT_RUN_MODE.agent,
+      runsOn: "agent_sandbox",
     });
 
     expect(error).toMatchObject({
@@ -278,11 +279,27 @@ describe("agent sandbox third-party boundary", () => {
     });
   });
 
+  test("refuses an anonymized turn on the member's computer, naming the computer", () => {
+    const error = resolveAgentRunBoundaryError({
+      boundary: { type: CHAT_SEND_MODE.anonymized },
+      runMode: CHAT_RUN_MODE.agent,
+      runsOn: "computer",
+    });
+
+    expect(error).toMatchObject({
+      code: CHAT_TRANSPORT_ERROR_CODE.localRunAnonymizedRefusal,
+      status: 422,
+    });
+    expect(error?.message).toContain("your computer");
+    expect(error?.message).not.toContain("sandbox");
+  });
+
   test("allows an explicit agent run at the raw boundary", () => {
     expect(
       resolveAgentRunBoundaryError({
         boundary: { type: "raw" },
         runMode: CHAT_RUN_MODE.agent,
+        runsOn: "computer",
       }),
     ).toBeNull();
   });

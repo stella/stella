@@ -103,6 +103,7 @@
     "pickFailed": "Výber súborov sa nepodarilo otvoriť. Skúste to znova.",
     "sendFileRefused": "Súbor sa nepodarilo odoslať, takže sa správa neodoslala. Odstráňte súbor a skúste to znova.",
     "sendFileNotAnonymizable": "Táto konverzácia je anonymizovaná a stella nedokázala anonymizovať jeden zo súborov, takže sa nič neodoslalo. Odstráňte súbor a skúste to znova.",
+    "sendLocalRunNotAnonymizable": "Táto konverzácia je anonymizovaná a programovací agent vo vašom počítači číta vaše dokumenty tak, ako sú, preto sa mu nič neodoslalo.",
     "pickTitle": "Vyberte konverzáciu",
     "pickDescription": "Vyberte vlákno zo zoznamu alebo začnite nové tlačidlom +.",
     "runBanner": {

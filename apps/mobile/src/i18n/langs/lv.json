@@ -103,6 +103,7 @@
     "pickFailed": "Neizdevās atvērt failu atlasītāju. Mēģiniet vēlreiz.",
     "sendFileRefused": "Neizdevās nosūtīt failu, tāpēc ziņa netika nosūtīta. Noņemiet failu un mēģiniet vēlreiz.",
     "sendFileNotAnonymizable": "Šī saruna ir anonimizēta, un stella nevarēja anonimizēt vienu no failiem, tāpēc nekas netika nosūtīts. Noņemiet failu un mēģiniet vēlreiz.",
+    "sendLocalRunNotAnonymizable": "Šī saruna ir anonimizēta, un programmēšanas aģents jūsu datorā lasa jūsu dokumentus tādus, kādi tie ir, tāpēc tam nekas netika nosūtīts.",
     "pickTitle": "Izvēlieties sarunu",
     "pickDescription": "Izvēlieties pavedienu no saraksta vai sāciet jaunu ar +.",
     "runBanner": {

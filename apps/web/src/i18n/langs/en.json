@@ -3461,6 +3461,7 @@
       "legalHoldActive": "Deletion is blocked because these records must be preserved.",
       "legalSourceEntityLimitReached": "This matter has reached its item limit, so the document could not be created.",
       "legalSourceFilePropertyMissing": "This matter is missing a file property, so the document could not be created.",
+      "localRunAnonymizedRefusal": "The coding agent on your computer reads your documents as they are, so a message to it cannot be anonymized. Send it without anonymization.",
       "matterContactCapacityExceeded": "This matter has more contacts than can be displayed. Remove visible contact links to reveal the remaining contacts.",
       "matterContactCapacityReached": "This matter has reached its contact limit. Remove a contact link before adding another.",
       "mcpAuthorizationApprovalRequired": "An administrator must approve this connector before you can connect.",

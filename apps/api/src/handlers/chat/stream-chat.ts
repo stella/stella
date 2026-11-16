@@ -29,7 +29,7 @@ import {
 } from "@stll/ai-catalog";
 import {
   CHAT_SEND_MODE,
-  createThirdPartyBoundaryRefusalPayload,
+  CHAT_TRANSPORT_ERROR_CODE,
 } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import { CHAT_INPUT_REFUSAL_CODE } from "@stll/api-contract";
@@ -61,7 +61,10 @@ import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { userFiles } from "@/api/db/schema";
 import type { UsageEventLane } from "@/api/db/schema";
 import type { AnonymizationRefusal } from "@/api/handlers/chat/anonymization-refusal";
-import { refuseAnonymizedCrossing } from "@/api/handlers/chat/anonymization-refusal";
+import {
+  anonymizationRefusalPayload,
+  refuseAnonymizedCrossing,
+} from "@/api/handlers/chat/anonymization-refusal";
 import { NO_ANSWER_QUOTE_CHECKER } from "@/api/handlers/chat/answer-quote-checks";
 import type { AnswerQuoteChecker } from "@/api/handlers/chat/answer-quote-checks";
 import { modelAcceptsDocumentAttachment } from "@/api/handlers/chat/attachment-modality";
@@ -702,6 +705,7 @@ export const streamChat = async ({
   const agentBoundaryError = resolveAgentRunBoundaryError({
     boundary: thirdPartyBoundary,
     runMode,
+    runsOn: localRun === undefined ? "agent_sandbox" : "computer",
   });
   if (agentBoundaryError !== null) {
     return {
@@ -1402,18 +1406,21 @@ const thirdPartyBoundaryRefusalResponse = (
   new ChatTurnFailureResponse({
     cause: error,
     failureCode: error.failureCode,
-    payload: createThirdPartyBoundaryRefusalPayload(error.message),
+    payload: anonymizationRefusalPayload(error),
     status: error.status,
   });
 
 type ResolveAgentRunBoundaryErrorInput = {
   boundary: Pick<ChatThirdPartyBoundary, "type">;
   runMode: ChatRunMode | undefined;
+  /** Where an agent turn runs: the agent sandbox, or the member's computer. */
+  runsOn: "agent_sandbox" | "computer";
 };
 
 export const resolveAgentRunBoundaryError = ({
   boundary,
   runMode,
+  runsOn,
 }: ResolveAgentRunBoundaryErrorInput): AnonymizationRefusal<422> | null => {
   if (
     runMode !== CHAT_RUN_MODE.agent ||
@@ -1422,6 +1429,17 @@ export const resolveAgentRunBoundaryError = ({
     return null;
   }
 
+  if (runsOn === "computer") {
+    return refuseAnonymizedCrossing({
+      message:
+        "A turn on your computer cannot be sent anonymized: the agent there reads your matters as they are. Send it without anonymization, or run it on stella.",
+      offerRawRetry: true,
+      rawRetryCode: CHAT_TRANSPORT_ERROR_CODE.localRunAnonymizedRefusal,
+      reason: "mode_policy",
+      site: "local_run",
+      status: 422,
+    });
+  }
   return refuseAnonymizedCrossing({
     message:
       "Agent sandbox access is not available in anonymized mode because its MCP tools can return raw workspace data.",

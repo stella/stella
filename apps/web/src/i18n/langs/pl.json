@@ -3461,6 +3461,7 @@
       "legalHoldActive": "Usunięcie jest zablokowane, ponieważ te dane muszą zostać zachowane.",
       "legalSourceEntityLimitReached": "Ta sprawa osiągnęła limit elementów, dlatego nie można było utworzyć dokumentu.",
       "legalSourceFilePropertyMissing": "W tej sprawie brakuje właściwości pliku, dlatego nie można było utworzyć dokumentu.",
+      "localRunAnonymizedRefusal": "Agent programistyczny na Twoim komputerze odczytuje Twoje dokumenty w oryginalnej postaci, więc wiadomości do niego nie można zanonimizować. Wyślij ją bez anonimizacji.",
       "matterContactCapacityExceeded": "Ta sprawa zawiera więcej kontaktów, niż można wyświetlić. Usuń widoczne powiązania z kontaktami, aby wyświetlić pozostałe kontakty.",
       "matterContactCapacityReached": "Ta sprawa osiągnęła limit kontaktów. Usuń jedno powiązanie z kontaktem przed dodaniem kolejnego.",
       "mcpAuthorizationApprovalRequired": "Administrator musi zatwierdzić ten konektor, zanim będzie można się połączyć.",

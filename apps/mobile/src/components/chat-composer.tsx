@@ -440,6 +440,7 @@ function useNoticeText({
       failed: t("sendFailed"),
       "file-refused": t("sendFileRefused"),
       "file-not-anonymizable": t("sendFileNotAnonymizable"),
+      "local-run-not-anonymizable": t("sendLocalRunNotAnonymizable"),
     } as const satisfies Record<SendRefusal, string>;
     return sendErrorText[sendError];
   }

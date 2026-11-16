@@ -2895,6 +2895,7 @@
   "errors.apiCodes.legalHoldActive": "Deletion is blocked because these records must be preserved.",
   "errors.apiCodes.legalSourceEntityLimitReached": "This matter has reached its item limit, so the document could not be created.",
   "errors.apiCodes.legalSourceFilePropertyMissing": "This matter is missing a file property, so the document could not be created.",
+  "errors.apiCodes.localRunAnonymizedRefusal": "The coding agent on your computer reads your documents as they are, so a message to it cannot be anonymized. Send it without anonymization.",
   "errors.apiCodes.matterContactCapacityExceeded": "This matter has more contacts than can be displayed. Remove visible contact links to reveal the remaining contacts.",
   "errors.apiCodes.matterContactCapacityReached": "This matter has reached its contact limit. Remove a contact link before adding another.",
   "errors.apiCodes.mcpAuthorizationApprovalRequired": "An administrator must approve this connector before you can connect.",
