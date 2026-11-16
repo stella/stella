@@ -1,9 +1,21 @@
 import { Result } from "better-result";
 import { afterEach, describe, expect, jest, test } from "bun:test";
 
+import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
+import {
+  CHAT_COMMAND_ERROR_CODE,
+  CHAT_COMMAND_ID_HEADER,
+  CHAT_COMMAND_MAX_RETRIES,
+} from "@stll/api-contract/chat-command";
 import { SSE_SILENCE_BOUND_MS } from "@stll/api-contract/sse-heartbeat";
 
-import { chatFetchClient } from "./chat-fetch";
+import { APIError } from "@/lib/errors/api";
+
+import {
+  chatCommandFetchClient,
+  ChatCommandReplayedError,
+  chatFetchClient,
+} from "./chat-fetch";
 import { findChatRequestError } from "./chat-request-error";
 
 const originalFetch = globalThis.fetch;
@@ -233,5 +245,119 @@ describe("chat stream deadlines", () => {
       name: "TimeoutError",
     });
     expect(released).toHaveLength(1);
+  });
+});
+
+describe("a member's command sent through the chat transport", () => {
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const TURN_ID = "0198c0de-0000-7000-8000-000000000001";
+
+  /** The server: answers each request in turn, recording its command id. */
+  const serve = (answers: readonly (() => Response)[]) => {
+    const commandIds: (string | null)[] = [];
+    globalThis.fetch = Object.assign(
+      async (_input: RequestInfo | URL, init?: RequestInit) => {
+        commandIds.push(new Headers(init?.headers).get(CHAT_COMMAND_ID_HEADER));
+        const answer = answers[commandIds.length - 1];
+        if (answer === undefined) {
+          throw new TypeError("Failed to fetch");
+        }
+        return await Promise.resolve(answer());
+      },
+      { preconnect: originalFetch.preconnect },
+    );
+    return commandIds;
+  };
+
+  const send = async () =>
+    await Result.tryPromise({
+      try: async () =>
+        await chatCommandFetchClient("https://example.test/v1/chat/", {
+          body: "{}",
+          method: "POST",
+        }),
+      catch: (error) => error,
+    });
+
+  const lost = () => {
+    throw new TypeError("Failed to fetch");
+  };
+
+  test("is sent again under the same id after a lost response", async () => {
+    const commandIds = serve([
+      lost,
+      () => new Response("data: {}\n\n", { status: 200 }),
+    ]);
+    const outcome = await send();
+    expect(Result.isOk(outcome) && outcome.value.status).toBe(200);
+    expect(commandIds).toHaveLength(2);
+    expect(commandIds[0]).toMatch(/^[0-9a-f-]{36}$/u);
+    expect(commandIds[1]).toBe(commandIds[0] ?? "");
+  });
+
+  test(`is sent at most ${String(CHAT_COMMAND_MAX_RETRIES + 1)} times`, async () => {
+    const commandIds = serve([]);
+    const outcome = await send();
+    expect(Result.isError(outcome)).toBe(true);
+    if (Result.isError(outcome)) {
+      expect(findChatRequestError(outcome.error)?.kind).toBe(
+        "connection_failed",
+      );
+    }
+    expect(commandIds).toHaveLength(CHAT_COMMAND_MAX_RETRIES + 1);
+    expect(new Set(commandIds).size).toBe(1);
+  });
+
+  test("a replay of an earlier attempt names its turn and is no refusal", async () => {
+    serve([
+      lost,
+      () =>
+        Response.json(
+          {
+            code: CHAT_COMMAND_ERROR_CODE.replayed,
+            message: "The command was accepted earlier; join its turn",
+          },
+          { headers: { [CHAT_TURN_ID_HEADER]: TURN_ID }, status: 409 },
+        ),
+    ]);
+    const outcome = await send();
+    expect(Result.isError(outcome)).toBe(true);
+    if (Result.isError(outcome)) {
+      expect(ChatCommandReplayedError.is(outcome.error)).toBe(true);
+      expect(
+        ChatCommandReplayedError.is(outcome.error) && outcome.error.turnId,
+      ).toBe(TURN_ID);
+    }
+  });
+
+  test("a refusal is the server's, and not sent again", async () => {
+    const commandIds = serve([
+      () =>
+        Response.json(
+          { code: "chat_turn_running", message: "A turn is running" },
+          { headers: { [CHAT_TURN_ID_HEADER]: TURN_ID }, status: 409 },
+        ),
+    ]);
+    const outcome = await send();
+    expect(Result.isError(outcome)).toBe(true);
+    if (Result.isError(outcome)) {
+      expect(APIError.is(outcome.error)).toBe(true);
+      expect(APIError.is(outcome.error) && outcome.error.status).toBe(409);
+    }
+    expect(commandIds).toHaveLength(1);
+  });
+
+  test("a plain chat request carries no command id", async () => {
+    const commandIds = serve([
+      () => new Response("data: {}\n\n", { status: 200 }),
+    ]);
+    await chatFetchClient("https://example.test/v1/chat/", {
+      body: "{}",
+      method: "POST",
+    });
+    expect(commandIds).toEqual([null]);
   });
 });
