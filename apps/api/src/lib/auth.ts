@@ -28,6 +28,7 @@ import {
 import { panic, Result } from "better-result";
 import { and, count, eq, inArray, sql } from "drizzle-orm";
 
+import { MEMBER_BILLING_ACCESS_REFUSAL_CODE } from "@stll/api-contract/billing-money";
 import { LEGAL_HOLD_ACTIVE } from "@stll/api-contract/legal-holds";
 import { MCP_HANDOFF_STEP_UP_REQUIRED } from "@stll/api-contract/mcp-web-handoff";
 import {
@@ -38,7 +39,10 @@ import {
   WORKSPACE_STATUS,
   workspaceIsVisible,
 } from "@stll/api-contract/workspace-status";
-import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
+import {
+  BETTER_AUTH_ORGANIZATION_OPTIONS,
+  BILLING_ACCESS_MEMBER_FIELDS,
+} from "@stll/auth-model";
 import { errorOutputLogger } from "@stll/errors";
 import { isUiLocale } from "@stll/locales";
 import { ac, assignableRoles, roles } from "@stll/permissions";
@@ -57,6 +61,7 @@ import {
   rlsDb,
   rootDb,
 } from "@/api/db/root";
+import type { SafeDb } from "@/api/db/safe-db";
 import {
   featureEnrolments,
   userProfessionalUseAcceptances,
@@ -80,8 +85,12 @@ import { loadOrgSettingsForAuth } from "@/api/lib/ai-config-loader";
 import { captureError, detached } from "@/api/lib/analytics/capture";
 import { getServerAnalytics } from "@/api/lib/analytics/client";
 import { API_KEY_PLUGIN_CONFIGS } from "@/api/lib/api-key-plugin-configs";
-import { createAuditRecorder } from "@/api/lib/audit-log";
-import type { AuditExecutionContext } from "@/api/lib/audit-log";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  createAuditRecorder,
+} from "@/api/lib/audit-log";
+import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import {
   AUTH_DATABASE_ADAPTER_OPTIONS,
   AUTH_DATABASE_ID_OPTIONS,
@@ -285,7 +294,10 @@ import {
   hasAccountForProvider,
   hasCredentialAccount,
 } from "@/api/lib/db/account-row";
-import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import {
+  lockMemberBillingAccessRows,
+  withAggregateTransaction,
+} from "@/api/lib/db/aggregate-lock";
 import {
   resolveWorkspaceMemberAccess,
   resolveWorkspaceMemberAuthority,
@@ -345,7 +357,11 @@ import {
   completeOrganizationDeletion,
   OrganizationStorageTeardownBoundError,
 } from "@/api/lib/organization-storage-teardown";
-import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import {
+  hasManagementPermission,
+  sessionMemberRole as memberSessionAuthority,
+  sessionMemberRole,
+} from "@/api/lib/permission-authorization";
 import {
   AUTH_FRAMEWORK_BUDGET_RULES,
   observeFrameworkAuthStorage,
@@ -1850,6 +1866,7 @@ export const createAuth = (
 
   const organizationPlugin = organization({
     ...BETTER_AUTH_ORGANIZATION_OPTIONS,
+    schema: { member: { additionalFields: BILLING_ACCESS_MEMBER_FIELDS } },
     ac,
     roles,
     organizationHooks: {
@@ -3097,6 +3114,7 @@ const getSessionAndMemberAuthorization = async ({
 
           return {
             role: authorization.role,
+            billingAccess: authorization.billingAccess,
             workspace: authorization.workspace,
             email: authorization.email,
             emailVerified: authorization.emailVerified,
@@ -3301,6 +3319,7 @@ export const resolveMemberAuthorization = async (
       .select({
         memberId: member.id,
         role: member.role,
+        billingAccess: member.billingAccess,
         email: authUser.email,
         ...featureAccessColumns(organizationId),
         ...professionalUseColumns,
@@ -3325,6 +3344,7 @@ export const resolveMemberAuthorization = async (
           memberId: row.memberId,
           email: row.email,
           role: row.role,
+          billingAccess: row.billingAccess,
           workspace: null,
           emailVerified: row.emailVerified,
           userDeleted: row.userDeleted,
@@ -3339,6 +3359,7 @@ export const resolveMemberAuthorization = async (
       memberId: member.id,
       email: authUser.email,
       role: member.role,
+      billingAccess: member.billingAccess,
       workspaceId: workspaces.id,
       workspaceStatus: workspaces.status,
       ...featureAccessColumns(organizationId),
@@ -3382,6 +3403,7 @@ export const resolveMemberAuthorization = async (
       memberId: row.memberId,
       email: row.email,
       role: row.role,
+      billingAccess: row.billingAccess,
       workspace: null,
       ...featureFacts,
     };
@@ -3391,6 +3413,7 @@ export const resolveMemberAuthorization = async (
     memberId: row.memberId,
     email: row.email,
     role: row.role,
+    billingAccess: row.billingAccess,
     workspace: { id: row.workspaceId, status: row.workspaceStatus },
     ...featureFacts,
   };
@@ -3745,6 +3768,7 @@ export type ResolvedIdentity = {
   authorization: { role: MemberRole } & Pick<
     MemberAuthorization,
     | "workspace"
+    | "billingAccess"
     | "email"
     | "emailVerified"
     | "userDeleted"
@@ -3990,7 +4014,7 @@ export const resolveValidateAuth = async ({
       return panic("Unhandled professional-use state");
   }
   const { role } = authorization;
-  const memberRole = sessionMemberRole(role);
+  const memberRole = sessionMemberRole(role, authorization.billingAccess);
   // Feature access comes from the member lookup above, so gated routes and
   // handlers reuse it instead of resolving it with queries of their own.
   const featureAccessSnapshot = featureAccessSnapshotFromAuthorization({
@@ -4344,3 +4368,82 @@ export const issueDesktopAccountGrant = async (
 export const claimDesktopAccountGrant = async (
   options: Omit<ConsumeDesktopLinkGrantOptions, "db">,
 ) => await consumeDesktopLinkGrant({ ...options, db: rootDb });
+
+type SetMemberBillingAccessOptions = {
+  organizationId: SafeId<"organization">;
+  actorUserId: SafeId<"user">;
+  targetMemberId: string;
+  /**
+   * The caller's scoped transaction. The application role may update only
+   * `billing_access` (and the member's own navigation state) on a membership
+   * of the active organization; the actor's authority is rechecked under the
+   * row locks.
+   */
+  safeDb: SafeDb;
+  billingAccess: boolean;
+  recordAuditEvent: AuditRecorder;
+};
+
+export const setMemberBillingAccess = async ({
+  organizationId,
+  actorUserId,
+  targetMemberId,
+  safeDb,
+  billingAccess,
+  recordAuditEvent,
+}: SetMemberBillingAccessOptions) =>
+  (
+    await safeDb(async (tx) => {
+      const rows = await lockMemberBillingAccessRows({
+        tx,
+        organizationId,
+        actorUserId,
+        targetMemberId,
+      });
+      const actor = rows.find((row) => row.userId === actorUserId);
+      if (
+        !actor ||
+        !isMemberRole(actor.role) ||
+        !hasManagementPermission(
+          memberSessionAuthority(actor.role, actor.billingAccess),
+          { member: ["update"] },
+        )
+      ) {
+        return Result.err(
+          new HandlerError({ status: 403, message: "Forbidden" }),
+        );
+      }
+      const target = rows.find((row) => row.id === targetMemberId);
+      if (!target) {
+        return Result.err(
+          new HandlerError({
+            status: 404,
+            code: MEMBER_BILLING_ACCESS_REFUSAL_CODE.memberNotFound,
+            message: "Member not found",
+          }),
+        );
+      }
+      if (target.billingAccess === billingAccess) {
+        return Result.ok({ memberId: target.id, billingAccess });
+      }
+      await tx
+        .update(member)
+        .set({ billingAccess })
+        .where(
+          and(
+            eq(member.id, target.id),
+            eq(member.organizationId, organizationId),
+          ),
+        );
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+        resourceId: organizationId,
+        changes: {
+          billingAccess: { old: target.billingAccess, new: billingAccess },
+        },
+        metadata: { field: "memberBillingAccess", memberId: target.id },
+      });
+      return Result.ok({ memberId: target.id, billingAccess });
+    })
+  ).andThen((result) => result);

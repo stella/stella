@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { createTestState } from "@stll/test-state";
+
 import { env } from "@/api/env";
 import { ACCOUNT_ACCESS } from "@/api/lib/api-handlers";
 import { REVIEW_ACCOUNT_EXCLUDED_SCOPES } from "@/api/lib/auth/review-account-policy";
@@ -10,6 +12,8 @@ import {
 import { MCP_MODES, MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
 import { isAccountAuthorizedForMcpTool } from "@/api/mcp/write-tool-authority";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const reviewEmail = "review@example.test";
 const demoEmail = "limited@example.test";
@@ -28,15 +32,18 @@ const withRestrictedAccounts = async (run: () => Promise<void> | void) => {
     reviewEmail: env.APP_REVIEW_ACCOUNT_EMAIL,
     reviewOrganization: env.APP_REVIEW_ORGANIZATION_ID,
   };
-  env.DEMO_ACCOUNT_EMAIL = demoEmail;
-  env.APP_REVIEW_ACCOUNT_EMAIL = reviewEmail;
-  env.APP_REVIEW_ORGANIZATION_ID = "org_review";
+  testState.setConfig("DEMO_ACCOUNT_EMAIL", demoEmail);
+  testState.setConfig("APP_REVIEW_ACCOUNT_EMAIL", reviewEmail);
+  testState.setConfig("APP_REVIEW_ORGANIZATION_ID", "org_review");
   try {
     await run();
   } finally {
-    env.DEMO_ACCOUNT_EMAIL = previous.demoEmail;
-    env.APP_REVIEW_ACCOUNT_EMAIL = previous.reviewEmail;
-    env.APP_REVIEW_ORGANIZATION_ID = previous.reviewOrganization;
+    testState.setConfig("DEMO_ACCOUNT_EMAIL", previous.demoEmail);
+    testState.setConfig("APP_REVIEW_ACCOUNT_EMAIL", previous.reviewEmail);
+    testState.setConfig(
+      "APP_REVIEW_ORGANIZATION_ID",
+      previous.reviewOrganization,
+    );
   }
 };
 

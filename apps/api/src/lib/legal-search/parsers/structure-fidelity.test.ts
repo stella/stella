@@ -383,3 +383,95 @@ test("a decision that opens a ruling before its reasons holds it", () => {
     ),
   ).toEqual([]);
 });
+
+test("the Court of Justice's appearances and recital are its layout, a cut sentence is not", () => {
+  // A party's line, then the recital the court runs on in its own paragraph.
+  expect(
+    sentenceCuts([
+      "-     w imieniu Komisji Europejskiej – B.-R. Killmann oraz W. Roels, w charakterze pełnomocników,",
+      "podjąwszy, po zapoznaniu się ze stanowiskiem rzecznika generalnego, decyzję o rozstrzygnięciu sprawy bez opinii,",
+    ]),
+  ).toEqual([]);
+  expect(
+    sentenceCuts([
+      "the European Commission, by E. Montaguti, J. Tomkin and F. Wilman, acting as Agents,",
+      "after hearing the Opinion of the Advocate General at the sitting on 8 June 2023,",
+    ]),
+  ).toEqual([]);
+  // A dashed line a sentence goes on from is still cut when no recital follows.
+  expect(
+    sentenceCuts([
+      "-     w imieniu Komisji Europejskiej – B.-R. Killmann oraz W. Roels, w charakterze pełnomocników,",
+      "którzy wnieśli o oddalenie skargi w całości jako bezzasadnej,",
+    ]),
+  ).toEqual(["p-0"]);
+  // A sentence a page cuts is still a cut sentence.
+  expect(
+    sentenceCuts([
+      "Rozporządzenie Ministra Finansów i Gospodarki z dnia 7 grudnia 2025 r. zmieniające",
+      "rozporządzenie w sprawie wystawiania faktur (Dz. U. poz. 1742).",
+    ]),
+  ).toEqual(["p-0"]);
+});
+
+test("an operative part's interpretation formula is the court's layout", () => {
+  expect(
+    sentenceCuts([
+      "Artykuły 1, 2, 7 i 15 Umowy, w związku z art. 9 ust. 2 załącznika I do tej umowy,",
+      "należy interpretować w ten sposób, że:",
+    ]),
+  ).toEqual([]);
+  expect(
+    sentenceCuts([
+      "Article 2(1) of Directive 93/13/EEC, read in conjunction with Articles 4 and 5 thereof,",
+      "must be interpreted as not precluding legislation of general application.",
+    ]),
+  ).toEqual([]);
+});
+
+test("a sentence opening on its date after a full stop is not a stray number", () => {
+  const strays = (texts: readonly string[]): string[] =>
+    structureFidelityIn(paragraphs(texts))
+      .filter(
+        ({ rule }) => rule === STRUCTURE_FIDELITY_RULES.STRAY_LEADING_NUMBER,
+      )
+      .map(({ anchorId }) => anchorId);
+  expect(
+    strays([
+      "System UE CCI będzie wdrażany w dwóch fazach.",
+      "1 lipca 2024 r. została wdrożona w Polsce I fazy systemu, jako moduł AIS/CCI.",
+    ]),
+  ).toEqual([]);
+  // A date cut off the line above is still a stray number.
+  expect(
+    strays([
+      "Wyrok wydano dnia",
+      "22 marca 2018 r. w składzie trzech sędziów.",
+    ]),
+  ).toEqual(["p-1"]);
+  // So is a page number the line above lost.
+  expect(
+    strays([
+      "Zgodnie z art. 479.",
+      "45 wzorców umownych uznano za niedozwolone.",
+    ]),
+  ).toEqual(["p-1"]);
+});
+
+test("ruling verbs in a document that rules on nothing open no ruling", () => {
+  const blocks = roled([
+    [
+      "argumentation",
+      "Zwalnia się z obowiązku local filing w Polsce, tylko jeżeli central filing nastąpił w jurysdykcji wskazanej we właściwym wykazie.",
+    ],
+  ]);
+  const rulingsWithoutHolding = (document: "decision" | "other") =>
+    structureFidelityIn(blocks, "pl", document)
+      .filter(
+        ({ rule }) => rule === STRUCTURE_FIDELITY_RULES.RULING_WITHOUT_HOLDING,
+      )
+      .map(({ anchorId }) => anchorId);
+  expect(rulingsWithoutHolding("other")).toEqual([]);
+  // A decision that opens a ruling and holds none is still flagged.
+  expect(rulingsWithoutHolding("decision")).toEqual(["p-0"]);
+});

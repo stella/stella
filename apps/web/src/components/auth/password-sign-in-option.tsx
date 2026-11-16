@@ -1,5 +1,3 @@
-import { useState } from "react";
-
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -7,33 +5,41 @@ import { Button } from "@stll/ui/button";
 import { PasswordSignInForm } from "./password-sign-in-form";
 
 /**
- * Password sign-in kept out of the way: a quiet link that opens the form.
- * Offered when the deployment allows one configured account to use a
- * password rather than as a sign-in method for everyone.
+ * Password sign-in for the one account a deployment lets use a password,
+ * standing in for the email step, with the way back to it.
  */
 export const PasswordSignInOption = ({
+  email,
+  onUseEmailCode,
   redirectTo,
 }: {
+  /** The address already typed in the email step. */
+  email: string;
+  /** Absent when the page has no email step to return to. */
+  onUseEmailCode: (() => void) | undefined;
   redirectTo: string;
 }) => {
   const t = useTranslations();
-  const [open, setOpen] = useState(false);
 
-  if (open) {
-    return (
-      <PasswordSignInForm autoFocus lastUsed={null} redirectTo={redirectTo} />
-    );
-  }
   return (
-    <Button
-      aria-expanded={false}
-      className="self-center"
-      onClick={() => setOpen(true)}
-      size="sm"
-      type="button"
-      variant="link"
-    >
-      {t("auth.usePassword")}
-    </Button>
+    <>
+      <PasswordSignInForm
+        autoFocus
+        defaultEmail={email}
+        lastUsed={null}
+        redirectTo={redirectTo}
+      />
+      {onUseEmailCode && (
+        <Button
+          className="self-center"
+          onClick={onUseEmailCode}
+          size="sm"
+          type="button"
+          variant="link"
+        >
+          {t("auth.useEmailCode")}
+        </Button>
+      )}
+    </>
   );
 };

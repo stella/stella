@@ -343,13 +343,16 @@ export const updateClauseHandler = async function* ({
   // is still persisted; it will be unsearchable until the next
   // update re-indexes it.
   if (searchFieldsChanged) {
-    const searchVectorResult = await updateSearchVector(
+    const searchVectorResult = await updateSearchVector({
       safeDb,
       clauseId,
-      body.title ?? existing.title,
-      body.description !== undefined ? body.description : existing.description,
-      body.body ?? existing.body,
-    );
+      title: body.title ?? existing.title,
+      description:
+        body.description !== undefined
+          ? body.description
+          : existing.description,
+      body: body.body ?? existing.body,
+    });
     if (Result.isError(searchVectorResult)) {
       captureError(
         searchVectorResult.error,

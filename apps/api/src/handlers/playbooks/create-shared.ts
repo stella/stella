@@ -37,7 +37,7 @@ import type { StarterPlaybookId } from "@/api/lib/workflow/starter-playbooks";
 // per-org cap, and the audit row in one place means a starter playbook is
 // exercised through exactly the same invariants as a hand-authored one.
 
-export type CreatePlaybookDefinitionBody = {
+type CreatePlaybookDefinitionBody = {
   name: string;
   description?: string;
   scope?: PlaybookScope;
@@ -49,7 +49,7 @@ export type CreatePlaybookDefinitionResult = {
   outcome: "created" | "existing";
 };
 
-export type CreatePlaybookDefinitionOrigin =
+type CreatePlaybookDefinitionOrigin =
   { type: "authored" } | { type: "starter"; starterId: StarterPlaybookId };
 
 type CreatePlaybookDefinitionArgs = {

@@ -672,8 +672,11 @@ const steerChatTurn = async (
   if (run.isErr()) {
     return run;
   }
-  if (run.value === null || !run.value.steerable) {
-    return Result.ok("unavailable");
+  if (run.value === null) {
+    return Result.ok({ type: "refused", reason: "no_run" });
+  }
+  if (!run.value.steerable) {
+    return Result.ok({ type: "refused", reason: "harness_cannot_steer" });
   }
   const queued = await queue(deps, owner, {
     type: DESKTOP_RUNNER_SERVER_MESSAGE.runInput,
@@ -681,11 +684,30 @@ const steerChatTurn = async (
     inputId,
     message: { role: "user", content: text },
   });
-  return queued.map((outcome) =>
-    outcome.type === "queued" || outcome.type === "duplicate"
-      ? "queued"
-      : "unavailable",
-  );
+  return queued.map(steerOutcomeOf);
+};
+
+/** What a steer's `run.input` command became, as the chat is told. */
+const steerOutcomeOf = (
+  outcome: QueueCommandOutcome,
+): ChatLocalRunSteerOutcome => {
+  switch (outcome.type) {
+    case "queued":
+    case "duplicate":
+      return { type: "queued" };
+    case "run_not_found":
+    case "run_ended":
+      return { type: "refused", reason: "no_run" };
+    case "command_limit":
+      return { type: "refused", reason: "run_full" };
+    case "not_requested":
+      return panic("A run.input answers no request of the run");
+    case "too_large":
+      return panic("A steer the request bounds admit outgrew one frame");
+    default:
+      outcome satisfies never;
+      return panic("Unhandled run command outcome");
+  }
 };
 
 type BackgroundTasksOptions = {

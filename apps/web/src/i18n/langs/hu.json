@@ -71,6 +71,7 @@
     "chooseRewriteInstruction": "Átírási lehetőségek",
     "editWithAI": "Szerkesztés AI-val",
     "keyRequired": {
+      "accountFeaturesUnavailable": "Az AI-funkciók nem érhetők el ehhez a fiókhoz.",
       "accountRestricted": "Az AI-szolgáltató beállításai nem érhetők el ehhez a fiókhoz.",
       "configUnreadable": "Az AI-szolgáltató konfigurációja nem olvasható. Kérje meg a szervezet egyik rendszergazdáját, hogy csatlakoztassa újra.",
       "cta": "AI-beállítások megnyitása",
@@ -159,6 +160,7 @@
     "handoffAccount": "Folytatja <account>{email}</account> fiókkal a(z) <organization>{organizationName}</organization> szervezetben?",
     "handoffTitle": "Tovább a Stellába",
     "headline": "Tisztán látás minden ügyben.",
+    "invalidEmailOrPassword": "Hibás e-mail-cím vagy jelszó.",
     "invitation": {
       "declined": "Meghívó elutasítva",
       "declinedDescription": "Elutasította ezt a meghívót. Biztonságosan bezárhatja ezt az oldalt.",
@@ -207,6 +209,7 @@
       "useBackupCode": "Inkább biztonsági kód használata"
     },
     "useDifferentEmail": "Másik e-mail-cím használata",
+    "useEmailCode": "Bejelentkezés e-mailben kapott kóddal",
     "usePassword": "Bejelentkezés jelszóval",
     "weSentCodeTo": "Kódot küldtünk a következő címre: <email>{emailAddress}</email>"
   },
@@ -2200,6 +2203,15 @@
     "sourcePlaceholder": "Csevegés erről: {title}",
     "sourcePlaceholderAction": "Csevegés erről:",
     "sources": "Források:",
+    "steerRefused": {
+      "cannotSteer": "Ez az ügynök munka közben nem fogad üzeneteket.",
+      "noRun": "Az ügynök most nem fut a számítógépén.",
+      "notPlain": "Munka közben csak fájlok nélküli, nem anonimizált módban küldött szöveges üzenetet küldhet az ügynöknek.",
+      "notTaken": "Az ügynök most nem tudta fogadni az üzenetét.",
+      "runFull": "Az ügynök most nem fogad több üzenetet.",
+      "title": "Az üzenete a sorban vár, amíg az ügynök végez",
+      "turnNotRunning": "Az ügynök jelenleg nem dolgozik."
+    },
     "stopFailed": "Nem sikerült leállítani a választ. Próbálja újra.",
     "stopResponse": "Leállítás",
     "stopped": "Leállítva",
@@ -3458,54 +3470,18 @@
       "validationTooShort": "Túl rövid: legalább {limit, number} karakter kell.",
       "versionConflict": "Valaki más módosította, miközben szerkesztette. Töltse újra az aktuális verzióért."
     },
-    "failedToAcceptInvitation": "Nem sikerült elfogadni a meghívót",
-    "failedToAddParty": "Nem sikerült hozzáadni a felet",
-    "failedToCancelInvitation": "Nem sikerült visszavonni a meghívót",
     "failedToChangeViewType": "A nézettípus módosítása nem sikerült",
-    "failedToCheckSlugAvailability": "Nem sikerült ellenőrizni a slug elérhetőségét",
-    "failedToCreateContact": "Nem sikerült létrehozni az ügyfelet",
-    "failedToCreateEntity": "Nem sikerült létrehozni az elemet",
-    "failedToCreateOrganization": "Nem sikerült létrehozni a szervezetet",
-    "failedToCreateProperty": "Nem sikerült létrehozni a tulajdonságot",
     "failedToCreateView": "A nézet létrehozása nem sikerült",
-    "failedToCreateWorkspace": "Nem sikerült létrehozni az ügyet",
-    "failedToDeclineInvitation": "Nem sikerült elutasítani a meghívót",
-    "failedToDeleteContact": "Nem sikerült törölni az ügyfelet",
     "failedToDeleteEntities": "Nem sikerült törölni az elemeket",
-    "failedToDeleteProperty": "Nem sikerült törölni a tulajdonságot",
     "failedToDeleteTemplate": "Nem sikerült törölni a sablont",
     "failedToDeleteView": "A nézet törlése nem sikerült",
     "failedToDeleteWorkspace": "Nem sikerült törölni az ügyet",
     "failedToDuplicateView": "A nézet duplikálása nem sikerült",
-    "failedToExportNoData": "Nincs exportálható adat",
-    "failedToFetchFile": "Nem sikerült lekérni a fájlt a tárolóból",
-    "failedToInviteMember": "Nem sikerült meghívni a tagot",
-    "failedToMoveItem": "Nem sikerült áthelyezni az elemet",
-    "failedToRemoveMember": "Nem sikerült eltávolítani a tagot",
-    "failedToRemoveParty": "Nem sikerült eltávolítani a felet",
     "failedToRenameView": "A nézet átnevezése nem sikerült",
-    "failedToRenameWorkspace": "Nem sikerült átnevezni az ügyet",
     "failedToReorderViews": "A nézetek átrendezése nem sikerült",
-    "failedToResendInvitation": "Nem sikerült újraküldeni a meghívót",
     "failedToSaveTemplate": "Nem sikerült menteni a sablont",
-    "failedToSelectOrganization": "Nem sikerült kiválasztani a szervezetet",
-    "failedToSendInvitation": "Nem sikerült elküldeni a meghívót",
-    "failedToSendVerificationCode": "Nem sikerült elküldeni az ellenőrző kódot",
-    "failedToSetActiveOrganization": "Nem sikerült beállítani az aktív szervezetet",
-    "failedToSetClient": "Nem sikerült beállítani az ügyfelet",
-    "failedToSignOut": "Nem sikerült kijelentkezni",
     "failedToStartWorkflow": "Nem sikerült elindítani a munkafolyamatot",
-    "failedToUpdateContact": "Nem sikerült frissíteni az ügyfelet",
-    "failedToUpdateField": "Nem sikerült frissíteni a mezőt",
-    "failedToUpdateMatterNumbering": "Nem sikerült frissíteni az ügyszámozást",
-    "failedToUpdateOrganization": "Nem sikerült frissíteni a szervezetet",
-    "failedToUpdateProperty": "Nem sikerült frissíteni a tulajdonságot",
-    "failedToUpdateRole": "Nem sikerült frissíteni a szerepkört",
-    "failedToUpdateWorkspace": "Nem sikerült frissíteni az ügyet",
-    "failedToUploadFiles": "Nem sikerült feltölteni a fájlokat",
-    "failedToVerifyOtp": "Nem sikerült ellenőrizni a kódot",
     "matterNotFound": "Ügy nem található",
-    "partyAlreadyExists": "A kontakt már rendelkezik ezzel a szereppel az ügyben",
     "uploadFailed": "Feltöltés sikertelen"
   },
   "feedback": {
@@ -4148,7 +4124,6 @@
     "assignTo": "Hozzárendelés",
     "confidence": "{percent} megbízhatóság",
     "dismissReason": "Indok (nem kötelező)",
-    "empty": "Most semmi sem vár Önre. Adjon fel kérést a fenti gombbal.",
     "evidence": {
       "current": "Most",
       "daysOverdue": "Késés napokban",
@@ -4164,10 +4139,8 @@
       "verdict": "Eredmény"
     },
     "filter": {
-      "any": "Bármely",
       "mine": "Nekem kiosztva"
     },
-    "newRequest": "Új kérés",
     "openMatter": "Ügy megnyitása",
     "origin": {
       "manual": "Kolléga",
@@ -4175,11 +4148,6 @@
       "source": "Külső forrás"
     },
     "proposalView": "Javaslatok: {view}",
-    "request": {
-      "created": "Kérés elküldve",
-      "description": "Írja le, mit nézzen át a jogi csapat. A kérés a beérkezettek közé kerül feldolgozásra.",
-      "submit": "Kérés küldése"
-    },
     "scout": {
       "documentDeadlines": "Határidők a dokumentumból",
       "documentReview": "Playbook-ellenőrzés",
@@ -4199,9 +4167,7 @@
     "suggestion": {
       "assign": "Hozzárendelés",
       "createDeadline": "Határidő létrehozása",
-      "createTask": "Feladat létrehozása",
-      "fileToWorkspace": "Ügyhöz csatolás",
-      "runReview": "Ellenőrzés indítása"
+      "createTask": "Feladat létrehozása"
     },
     "verdict": {
       "safe": "Biztonságos"
@@ -4330,7 +4296,6 @@
       "matterColumnsHeading": "Ügyadatok",
       "noMatterColumns": "Ehhez a dokumentumhoz még nincs rögzítve adat",
       "stellaHeading": "A stellában tárolva",
-      "updatedAt": "Frissítve",
       "versionCurrent": "v{version} (aktuális)"
     },
     "moveToMain": "Áthelyezés a fő nézetbe",
@@ -4341,22 +4306,11 @@
     "review": {
       "acceptChange": "Módosítás elfogadása",
       "acceptFinding": "Megállapítás elfogadása",
-      "actionNeeded": "Teendő",
-      "addComment": "Hozzáadás megjegyzésként",
       "addNote": "Megjegyzés hozzáadása az ellenfélnek",
       "addNotePlaceholder": "Amit az ellenfélnek látnia kell",
       "addNoteSubmit": "Megjegyzés hozzáadása",
       "addReference": "{name} hozzáadása referenciaként",
-      "addTopic": "Téma hozzáadása",
       "allDecided": "Itt minden megállapítás eldöntve.",
-      "assessment": {
-        "additionalInTarget": "További elem a céldokumentumban",
-        "aligned": "Összhangban",
-        "dealSpecific": "Ügyletspecifikus",
-        "different": "Eltérő",
-        "missingFromTarget": "Hiányzik a céldokumentumból",
-        "notComparable": "Nem összehasonlítható"
-      },
       "basisCombined": "{count, plural, one {Ellenőrzés a(z) {name} alapján, összevetés # referenciadokumentummal} other {Ellenőrzés a(z) {name} alapján, összevetés # referenciadokumentummal}}",
       "basisDivider": "és / vagy",
       "basisPlaybook": "Ellenőrzés a(z) {name} alapján",
@@ -4372,7 +4326,6 @@
       },
       "checks": "Vizsgált szempont:",
       "commentFailed": "A megjegyzést nem sikerült hozzáadni",
-      "comparedWithReferences": "{count, plural, one {Összevetve # referenciadokumentummal} other {Összevetve # referenciadokumentummal}}",
       "decidedCount": "{count, number} eldöntve",
       "decision": "Döntés",
       "decisionFailed": "A döntést nem sikerült rögzíteni",
@@ -4380,7 +4333,6 @@
         "accepted": "Elfogadva",
         "dismissed": "Elvetve"
       },
-      "description": "Válasszon egy kidolgozott playbookot, referenciadokumentumokat vagy mindkettőt.",
       "dismissFinding": "Megállapítás elvetése",
       "documentChanged": "A dokumentum az ellenőrzés óta megváltozott.",
       "documentCutNotice": "<strong>A(z) {documentName} dokumentumot nem sikerült teljes egészében elolvasni.</strong> Ehhez a modellhez túl hosszú, ezért a szöveg körülbelül {percent}-a kimaradt. A válasz nélküli pozíció ellenőrzésre jelölve jelenik meg, mert a válasz a kimaradt részben is lehet.",
@@ -4415,7 +4367,6 @@
       "impact": {
         "favourable": "Kedvező",
         "neutral": "Nincs hatás",
-        "notJudged": "Nem értékelt",
         "unfavourable": "Kedvezőtlen"
       },
       "impactForSide": {
@@ -4423,8 +4374,6 @@
         "neutral": "Nincs hatás {role} számára",
         "unfavourable": "Rosszabb {role} számára"
       },
-      "insertFailed": "A javasolt szöveget nem sikerült beilleszteni",
-      "insertSuggestion": "Javasolt szöveg beillesztése",
       "insufficientEvidence": "A megadott dokumentumok nem tartalmaznak elegendő bizonyítékot ehhez a témához.",
       "marginNotes": {
         "above": "{count, number} fent",
@@ -4433,12 +4382,10 @@
         "label": "Megállapítások az érintett kikötések mellett",
         "unanchored": "Nincs kikötéshez kötve"
       },
-      "newTopic": "Új ellenőrzési téma",
       "noEditor": "Nyissa meg a dokumentumot a módosítások elfogadásához",
       "noMaterialDifferences": "Nem találtunk lényeges eltérést",
       "noPassage": "Nincs szövegrész",
       "noPlaybooksMatch": "Nincs egyező playbook.",
-      "noReferencesFound": "Nincs egyező DOCX-dokumentum.",
       "notCompared": "Nem összevetve",
       "notComparedCount": "Nem összevetve: {count, number}",
       "noteAdded": "Megjegyzés hozzáadva az ellenfélnek",
@@ -4464,10 +4411,8 @@
         "title": "Képviseljük:"
       },
       "playbookDeleted": "Ez a playbook már nem létezik; az ellenőrzés feljegyzésként megmarad.",
-      "playbookFindings": "Playbook megállapításai",
       "playbookOutdated": "A playbooknak van újabb jóváhagyott verziója.",
       "playbookSection": "Playbook",
-      "playbookTopic": "A playbook alapján",
       "presence": {
         "absent": "Nem",
         "present": "Igen"
@@ -4478,26 +4423,22 @@
       "readOnlyRun": "Ebben az ellenőrzésben eldöntve",
       "recommendation": "Ajánlás:",
       "referenceDocument": "Referenciadokumentum",
-      "referenceFindings": "Referencia-összehasonlítás",
       "referenceLimitReached": "Elérte a referencialimitet",
       "referencePlaceholder": "Referenciadokumentumok keresése",
       "referencesCount": "{count, number}/{max, number}",
       "referencesDisagree": "A referenciák eltérnek",
       "referencesSection": "Referenciadokumentumok",
       "removeReference": "{name} referencia eltávolítása",
-      "removeTopic": "{name} téma eltávolítása",
       "reopen": "Újranyitás",
       "results": "Ellenőrzési eredmények",
       "reviewAgain": "Új ellenőrzés indítása",
       "reviewPositionsFirst": "Először az álláspontok ellenőrzése",
-      "reviewedAgainstCombined": "{count, plural, one {Ellenőrizve a(z) {name} alapján és összevetve # referenciadokumentummal} other {Ellenőrizve a(z) {name} alapján és összevetve # referenciadokumentummal}}",
       "reviewing": "Ellenőrzés folyamatban…",
       "reviewingHint": "Nagy dokumentumok esetén ez néhány percet is igénybe vehet.",
       "run": "Ellenőrzés indítása",
       "saveAsPlaybook": "Mentés playbookként",
       "saveAsPlaybookFailed": "Ezt az ellenőrzést nem sikerült playbookként menteni",
       "savedAsPlaybook": "Playbookként mentve",
-      "scoreTopics": "Témák ellenőrzése",
       "searchPlaybooks": "Playbookok keresése",
       "showInDocument": "Megjelenítés a dokumentumban",
       "sizeConfirmStart": "Ellenőrzés indítása",
@@ -4526,10 +4467,6 @@
       "targetColumn": "Ez a dokumentum",
       "targetDocument": "Céldokumentum",
       "title": "Dokumentum ellenőrzése",
-      "topicContext": "További kontextus",
-      "topicContextPlaceholder": "Mit vegyen figyelembe az ellenőrzés ennél a témánál?",
-      "topicName": "Téma neve",
-      "topicsDescription": "Erősítse meg a javasolt témákat, adjon hozzá sajátot, vagy egészítse ki a kontextust az értékelés előtt.",
       "topicsTitle": "Mire terjedjen ki az ellenőrzés?",
       "why": "Miért",
       "whyItMatters": "Miért fontos:"
@@ -4975,7 +4912,6 @@
   "lawHome": {
     "clearRecent": "Előzmények törlése",
     "clearRecentConfirmation": "Törli az összes legutóbbi keresését, határozatát és jogszabályát ebben a szervezetben? Ez a művelet nem vonható vissza.",
-    "enteringIntoForce": "Hamarosan hatályba lép",
     "importFailed": "A helyi előzményeket nem sikerült importálni. Továbbra is ezen az eszközön vannak mentve.",
     "inForceFrom": "Hatálybalépés: {date}",
     "noRecent": "Még nincs legutóbbi tevékenység",
@@ -4986,12 +4922,10 @@
     "recentLoadFailed": "A legutóbbi tevékenységet nem sikerült betölteni.",
     "recentSearchFilter": "Keresések",
     "recentUpdateFailed": "A legutóbbi tevékenységet nem sikerült frissíteni.",
-    "recentlyInForce": "Nemrég hatályba lépett",
     "searchLabel": "Keresés a jogi adatbázisban",
     "searchPlaceholder": "Ügyszám, jogszabályszám, ECLI vagy kulcsszavak",
     "signals": "Jelzések",
-    "topCourts": "A legfelsőbb bíróságoktól",
-    "tryIdentifier": "Próbáljon ki egy azonosítót"
+    "topCourts": "A legfelsőbb bíróságoktól"
   },
   "legalReader": {
     "annotations": {
@@ -5035,7 +4969,6 @@
         "summary": "{count, plural, one {# kiemelés vagy megjegyzés már nem illeszkedik a szöveghez} other {# kiemelés és megjegyzés már nem illeszkedik a szöveghez}}"
       },
       "removeHighlight": "Kiemelés eltávolítása",
-      "sharedBadge": "Megosztva",
       "styleHighlight": "Kiemelés",
       "styleSquiggly": "Hullámos vonal",
       "styleStrikethrough": "Áthúzás",
@@ -5115,7 +5048,6 @@
     "contacts": "Kapcsolatok",
     "inbox": "Beérkezett",
     "knowledge": "Analitika",
-    "myTodos": "Feladataim",
     "pinned": "Rögzített",
     "recentMatters": "Legutóbbi ügyek",
     "recents": "Legutóbbiak",
@@ -5355,14 +5287,10 @@
       }
     },
     "matterNumber": {
-      "description": "Állítsa be az új ügyszámok generálásának módját",
       "nextPreview": "Következő hivatkozási szám",
       "padding": "Számjegyek",
       "paddingDescription": "A sorszám minimális számjegyeinek száma",
       "pattern": "Minta",
-      "patternInvalidTokens": "A minta ismeretlen tokeneket tartalmaz",
-      "patternMustContainSeq": "A mintának tartalmaznia kell a '{'SEQ'}' tokent",
-      "patternRequired": "A minta megadása kötelező",
       "presets": {
         "sequential": "Sorszámos (001)",
         "yearMonthSequential": "Év-Hónap / Sorszámos (2026-02/001)",
@@ -5370,18 +5298,16 @@
       },
       "showInTitle": "Szám megjelenítése az ügy neve mellett",
       "showInTitleDescription": "Ha ki van kapcsolva, a cím pontosan a megadott név.",
-      "title": "Ügyszámozás",
       "tokenHelp": "Elérhető tokenek: '{'SEQ'}' (sorszám), '{'YYYY'}' (év), '{'YY'}' (kétjegyű év), '{'MM'}' (hónap)"
     },
     "members": {
+      "billingAccess": "Számlázási adatok megtekintése",
       "changeRole": "Szerepkör módosítása",
-      "changeRoleDescription": "Szerepkör frissítése: {email}",
       "confirmRoleChangeDescription": "{email} szerepköre erről: {oldRole} erre módosul: {newRole}.",
       "confirmRoleChangeTitle": "Szerepkör módosítása",
       "joined": "Csatlakozott",
       "noMembersFound": "Nincsenek tagok",
-      "typeEmailToConfirm": "A megerősítéshez írja be ezt: {email}",
-      "updateRole": "Szerepkör frissítése"
+      "typeEmailToConfirm": "A megerősítéshez írja be ezt: {email}"
     },
     "newOrganization": "Új szervezet",
     "newOrganizationDescription": "Hozzon létre egy szervezetet, amelynek Ön lesz a tulajdonosa.",
@@ -5399,7 +5325,6 @@
       "member": "Tag",
       "owner": "Tulajdonos"
     },
-    "settingsDescription": "Szervezet nevének és slugjának szerkesztése",
     "startOver": "Újrakezdés",
     "startOverDescription": "Előfordulhat, hogy az eredeti kérés már létrehozott egy szervezetet. Az újrakezdés előtt ellenőrizze a szervezeteit; egy új kérés újabb szervezetet hozhat létre.",
     "startOverTitle": "Új létrehozási kérést indít?",
@@ -6933,7 +6858,6 @@
       "apiKeyPlaceholder": "00000000-0000-0000-0000-000000000000:fx",
       "currentKey": "Tárolt kulcs",
       "description": "Állítson be egy DeepL API-kulcsot a dokumentumfordítás engedélyezéséhez. A Free és a Pro kulcsok egyaránt támogatottak.",
-      "removing": "Eltávolítás…",
       "tierFree": "Free",
       "tierPro": "Pro",
       "title": "DeepL-fordítás"
@@ -7025,9 +6949,6 @@
     "deleteItem": "Elem törlése",
     "deleteItems": "{count, plural, one {# elem} other {# elem}} törlése",
     "deleteItemsDescription": "Biztosan törölni szeretne {count, plural, one {# elemet} other {# elemet}}? Ez a művelet nem vonható vissza.",
-    "deleteSelectedRows": "Kijelölt sorok törlése",
-    "deleteSelectedRowsDescription": "{count, plural, one {Biztosan törölni szeretné a kijelölt # sort? Ez a művelet nem vonható vissza.} other {Biztosan törölni szeretné a kijelölt # sort? Ez a művelet nem vonható vissza.}}",
-    "deleteSelection": "Kijelölés törlése",
     "deleteWorkspace": "Ügy törlése",
     "deleteWorkspaceConfirmDescription": "Biztosan törölni szeretné ezt az ügyet? Ez a művelet nem vonható vissza.",
     "deletedItem": "Törölve: {name}",
@@ -7053,7 +6974,6 @@
       "title": "Hozza létre az első ügyét"
     },
     "entitiesCount": "{count, plural, one {# elem} other {# elem}}",
-    "exportToCsv": "Exportálás CSV-be",
     "fields": {
       "calculating": "Számítás...",
       "errored": "Hiba",
@@ -7085,17 +7005,13 @@
         "authRequiredTitle": "A munkamenet lejárt",
         "editInApplication": "Szerkesztés itt: <bdi>{application}</bdi>",
         "editLocallyPrompt": "Szerkessze a fájlt helyben, és szinkronizálja a módosításokat a stellával.",
-        "forceRelease": "Kényszerített feloldás",
         "notOpenedDescription": "A stella desktop nem erősítette meg, hogy a(z) <bdi>{application}</bdi> megnyílt. Indítsa el a stella desktop alkalmazást, majd próbálja újra.",
         "openAction": "Megnyitás asztali alkalmazásban",
         "openedDescription": "A(z) <bdi>{application}</bdi> megnyit egy helyi másolatot. A szerkesztés befejezése után automatikusan új verzió jön létre.",
         "openedTitle": "Megnyitva a stella desktop alkalmazásban",
-        "opening": "Megnyitás...",
         "releaseLock": "Zárolás feloldása",
         "sentDescription": "Várakozás, amíg a(z) <bdi>{application}</bdi> megnyitja a helyi másolatot.",
         "sentTitle": "Elküldve a stella desktop alkalmazásnak",
-        "takeoverNoResponse": "Nincs válasz",
-        "takeoverNoResponseDescription": "A zárolás tulajdonosa nem válaszolt. Kényszerítheti a feloldást.",
         "takeoverWaiting": "Válaszra várás",
         "takeoverWaitingDescription": "{name} felkérése a zárolás feloldására...",
         "unavailableDescription": "Az asztali szerkesztés használata előtt indítsa el a stella desktop alkalmazást, és hagyja futni.",
@@ -7129,7 +7045,6 @@
       "fileTooLarge": "A fájl nagyobb, mint {limit, number} MB.",
       "includeReferenceNumber": "Hivatkozási szám hozzáadása",
       "itemLimitReached": "Ez az ügy elérte az elemek korlátját.",
-      "maxEntitiesReached": "Elérte a maximális elemszámot",
       "ocrAlreadyProcessed": "A szövegfelismerés már befejeződött",
       "ocrBatchHelp": "A sorban álló dokumentumokat a következő OCR-köteg dolgozza fel.",
       "ocrQueueFailed": "A szövegfelismerést nem sikerült várólistára tenni",
@@ -7228,8 +7143,7 @@
         "uploadAsNewDocumentHere": "Feltöltés ide új dokumentumként"
       },
       "versionUploadFailed": "Verzió feltöltése sikertelen",
-      "versionUploaded": "Új verzió feltöltve",
-      "xfaFormNotSupported": "Ez a PDF XFA-űrlapot tartalmaz. Az előnézet esetleg nem jelenik meg megfelelően."
+      "versionUploaded": "Új verzió feltöltve"
     },
     "filesystem": {
       "collapseAll": "Összes mappa összecsukása",
@@ -7296,18 +7210,12 @@
       "emptyFoldersToDelete": "{count, plural, one {# törölhető üres mappa} other {# törölhető üres mappa}}",
       "expandFolder": "Mappa kibontása",
       "failed": "A rendezés sikertelen",
-      "folderPlaceholder": "pl. Compliance/2025",
       "generateAi": "AI-javaslatok generálása",
       "generating": "AI-javaslatok generálása...",
       "instructionsEmpty": "Nincs egyedi utasítás",
-      "instructionsHelp": "Ügyenként mentve. A rendszerprompton felül használjuk.",
       "instructionsPlaceholder": "pl. Magyar mappaneveket használj, csoportosíts ellenfél szerint, az évszámot tedd a dátum elé.",
       "instructionsTitle": "AI utasítások",
-      "moveTo": "Fájl áthelyezése mappába",
-      "moveToHint": "Adjon meg egy elérési utat, vagy válasszon meglévő mappát.",
-      "moveToTitle": "Áthelyezés mappába",
       "organized": "Fájlok rendezve",
-      "reset": "Vissza az AI-javaslatokhoz",
       "selectedOfTotal": "{selected, number} / {total, number}",
       "summaryToMove": "áthelyezésre",
       "summaryToRename": "átnevezésre",
@@ -7316,25 +7224,7 @@
       "wasNamed": "korábban {name}"
     },
     "infosoud": {
-      "courtPlaceholder": "Bíróság vagy kód keresése",
-      "courtsFailed": "Nem sikerült betölteni az InfoSoud bíróságait",
-      "eventCount": "{count, plural, one {# esemény} other {# esemény}}",
-      "events": "Események",
-      "hearings": "Tárgyalások",
-      "importAgenda": "Mentés az Agendába",
-      "importAgendaFailed": "Az InfoSoud elemeket nem sikerült menteni az Agendába",
-      "importAgendaResult": "{count, plural, one {# elem mentve az Agendába} other {# elem mentve az Agendába}}",
-      "importAgendaUpToDate": "Az Agenda már naprakész",
-      "lookup": "Keresés",
-      "lookupFailed": "Az InfoSoud-keresés sikertelen",
-      "noHearings": "Nincs kitűzött tárgyalás",
-      "notFound": "Ehhez a bírósághoz és sp. zn.-hez nem található ügy az InfoSoudban.",
-      "relatedCases": "Kapcsolódó ügyek",
-      "spisZn": "Sp. zn.",
-      "spisZnPlaceholder": "pl. 1 T 64/2024",
-      "statusDate": "Állapot dátuma",
-      "title": "InfoSoud",
-      "validTo": "Érvényes eddig"
+      "title": "InfoSoud"
     },
     "justification": "Indoklás:",
     "kanban": {
@@ -7353,15 +7243,12 @@
     "leadPicker": {
       "noMatchingMembers": "Nincs megfelelő tag"
     },
-    "lockMatter": "Zárolás",
     "matterInfo": "Ügy adatai",
     "mattersCount": "{count, plural, one {# ügy} other {# ügy}}",
     "members": {
       "addMember": "Hozzáadás az ügyhöz",
       "addMemberDescription": "Csapattag hozzáadása ehhez az ügyhöz",
-      "alreadyMember": "A felhasználó már tag",
       "alreadyOnMatter": "Már tagja ennek az ügynek",
-      "cannotRemoveLast": "Az utolsó tag nem távolítható el",
       "noMembersFound": "Nem található tag",
       "removeMemberConfirm": "Eltávolítja ezt a tagot az ügyből?"
     },
@@ -7370,11 +7257,6 @@
     "noDocuments": "Még nincsenek dokumentumok",
     "noGrouping": "Ne csoportosítson",
     "noItems": "Még nincsenek elemek",
-    "noMatters": "Még nincsenek ügyek. Hozza létre az első ügyét a kezdéshez.",
-    "operators": {
-      "containsEvery": "Mindegyiket tartalmazza",
-      "equals": "Egyenlő"
-    },
     "overview": {
       "activity": {
         "actorActions": {
@@ -7396,10 +7278,8 @@
         "automatedService": "Automatizált szolgáltatás",
         "deletedUser": "Törölt felhasználó",
         "details": {
-          "actor": "Végrehajtotta",
           "approval": "Jóváhagyás",
           "approvedBy": "Jóváhagyta",
-          "channel": "Csatorna",
           "dateTime": "Dátum és idő",
           "notAvailable": "Nem érhető el",
           "openTarget": "Elem megnyitása",
@@ -7440,7 +7320,6 @@
           "dateTime": "Dátum és idő",
           "provenance": "Eredet"
         },
-        "loadEarlier": "Korábbiak betöltése",
         "loading": "Betöltés…",
         "provenance": {
           "connected": "Csatlakoztatott hozzáféréssel",
@@ -7490,8 +7369,6 @@
           "timeline": "Idővonalnézet"
         }
       },
-      "atAGlance": "Áttekintés",
-      "getStarted": "Kezdje el dokumentumok feltöltésével vagy az első mappa létrehozásával.",
       "matterDetails": "Ügy részletei",
       "membersCount": "{count, plural, one {# tag} other {# tag}}",
       "nextDeadline": "Következő határidő",
@@ -7502,15 +7379,13 @@
       "totalDocuments": "Összes dokumentum",
       "totalItems": "Elemek",
       "totalThisWeek": "Összesen ezen a héten",
-      "upcomingTasks": "Közelgő agenda",
-      "uploaded": "feltöltötte"
+      "upcomingTasks": "Közelgő agenda"
     },
     "parties": {
       "addParty": "Fél hozzáadása",
       "changeClient": "Ügyfél módosítása",
       "client": "Ügyfél",
       "movedToClient": "A(z) <bdi>{matterName}</bdi> ügy átkerült a(z) <bdi>{clientName}</bdi> ügyfélhez",
-      "noClient": "Nincs ügyfél hozzárendelve",
       "noClientOptional": "Nincs ügyfél (nem kötelező)",
       "noParties": "Ehhez az ügyhöz nincsenek felek hozzáadva.",
       "partyRoles": {
@@ -7533,9 +7408,7 @@
       "recentClients": "Legutóbbi ügyfelek",
       "removeClient": "Ügyfél eltávolítása",
       "removeParty": "Fél eltávolítása",
-      "removePartyConfirm": "Biztosan eltávolítja ezt a felet az ügyből?",
-      "searchContacts": "Kontaktok keresése...",
-      "setClient": "Ügyfél beállítása"
+      "searchContacts": "Kontaktok keresése..."
     },
     "pdf": {
       "adjustForDarkMode": "Oldalak igazítása sötét módhoz",
@@ -7551,7 +7424,6 @@
         "refusedTooLong": "Ez a szakasz túl hosszú a megjelöléshez. Válasszon rövidebbet."
       },
       "backToPeek": "Vissza a betekintéshez",
-      "entitySidebar": "Dokumentum részletei",
       "evidence": "Indoklás",
       "incorrectPassword": "Hibás jelszó. Kérjük, próbálja újra.",
       "nextPage": "Következő oldal",
@@ -7624,7 +7496,6 @@
         "duplicate": "Duplikálás",
         "editPages": "Oldalak szerkesztése",
         "multiSelectHint": "További oldalak kijelöléséhez tartsa lenyomva a(z) {modifier} billentyűt",
-        "pageCount": "{count, plural, one {# oldal} other {# oldal}}",
         "pageNumber": "{number}. oldal",
         "pages": "Oldalak",
         "redo": "Oldalszerkesztés ismétlése",
@@ -7640,7 +7511,6 @@
         "signatureWarning": "A PDF szerkesztése érvényteleníti a digitális aláírásokat.",
         "signatureWarningWithSign": "A szerkesztés érvényteleníti a meglévő digitális aláírásokat. Az innen indított aláírás először menti a módosításokat, majd az új verziót írja alá.",
         "sourceLimit": "A PDF-fájlok együttes mérete nem haladhatja meg a 100 MB-ot.",
-        "title": "Oldalak szerkesztése",
         "undo": "Oldalszerkesztés visszavonása",
         "unsupportedDescription": "Ez a PDF nem szerkeszthető a böngészőben.",
         "unsupportedPDF": "Nem támogatott PDF",
@@ -7654,7 +7524,6 @@
         "pageLocator": "{page}. o.",
         "pageRangeLocator": "{start}–{end}. o."
       },
-      "showOriginal": "Eredeti oldalak megjelenítése",
       "unlock": "Feloldás"
     },
     "playbooks": {
@@ -7671,8 +7540,6 @@
     },
     "possibleDuplicates": "Lehetséges duplikátumok",
     "properties": {
-      "addCondition": "Feltétel hozzáadása",
-      "addInputProperty": "Adjon hozzá legalább egy bemeneti tulajdonságot a \"@\" használatával",
       "addOption": "Opció hozzáadása",
       "addPromptForBetterResults": "Adjon hozzá promptot a jobb eredményekért",
       "addReadingSource": "hozzáadás",
@@ -7680,10 +7547,8 @@
       "bulk": {
         "addAnother": "Másik oszlop hozzáadása",
         "createFailed": "Nem sikerült létrehozni az oszlopokat",
-        "createMany": "{count} oszlop létrehozása",
         "createdMany": "{count, plural, one {# oszlop létrehozva} other {# oszlop létrehozva}}",
         "createdOne": "Oszlop létrehozva",
-        "promptPlaceholder": "Mit nyerjen ki ez az oszlop? A / és a @ használatához pontosítsa az oszlop párbeszédpaneljén.",
         "title": "Oszlopok hozzáadása"
       },
       "chipManual": "AI nélkül",
@@ -7691,18 +7556,10 @@
       "chipNumber": "Szám",
       "chipSingle": "Címke",
       "chipText": "Szöveg",
-      "clip": "Részlet",
       "composerTitle": "Mondja el a stellának, mit keressen",
       "conditionSeparator": "ÉS",
       "conditions": "Feltételek ({count})",
       "createColumn": "Oszlop létrehozása",
-      "createOption": "\"{option}\" létrehozása",
-      "defaultNames": {
-        "file": "Fájltulajdonság",
-        "multiSelect": "Többszörös választás tulajdonság",
-        "singleSelect": "Egyszeres választás tulajdonság",
-        "text": "Szöveges tulajdonság"
-      },
       "defaultPromptPrefix": "Keresd meg: {propertyName} ",
       "defaultPromptPropertyName": "információ",
       "deleteProperty": "Tulajdonság törlése",
@@ -7714,20 +7571,9 @@
       "editConditionsWhen": "Kinyerés futtatása csak akkor, ha …",
       "enterAValue": "Adjon meg egy értéket",
       "extractEntityType": "Információ kinyerése",
-      "extractEntityTypeDescription": "Hozzon létre AI által kitöltött táblázatoszlopot.",
-      "extractionInstruction": "Utasítás az AI-nak",
-      "extractionInstructionHelp": "Újrafut, ha a forrásdokumentumok vagy hivatkozott oszlopok megváltoznak.",
-      "extractionInstructionPlaceholder": "Példa: keresd meg a szerződés megszűnésének dátumát. Csak a dátumot add vissza.",
       "extractionPlaceholder": "Írja le, mit keressen. A @ beírásával hivatkozhat egy másik oszlopra.",
-      "extractionScope": "Kinyerés hatóköre",
-      "file": "Fájl",
-      "flowNoInputs": "nincs bemenet",
       "ifNoMatchFound": "Ha nincs találat",
-      "inputs": "Bemenetek",
-      "inputsHelp": "Válassza ki, mely oszlopokat olvassa az AI. Kattintással hozzáadhatja vagy eltávolíthatja őket.",
-      "int": "Egész szám",
       "keepEmpty": "Hagyja üresen",
-      "manualColumn": "Kézi oszlop",
       "markAllAsLocked": "Összes cella zárolása",
       "markAllAsReviewed": "Mind megjelölése ellenőrzöttként",
       "markThisGroupAsLocked": "Csoport zárolása",
@@ -7735,39 +7581,15 @@
       "markedAsLocked": "{count, plural, one {# cella zárolva} other {# cella zárolva}}",
       "markedAsReviewed": "{count, plural, one {# cella ellenőrzöttként megjelölve} other {# cella ellenőrzöttként megjelölve}}",
       "money": "Pénzösszeg",
-      "multiSelect": "Többszörös választás",
-      "nameProperty": "Névelőzmény",
       "newColumn": "Új oszlop",
-      "newColumnDescription": "Válassza ki, hogyan töltődjön ki ez a táblázatoszlop.",
       "newColumnName": "Oszlop neve",
-      "noConditionFields": "Nincs szűrésre használható mező.",
-      "noFirstDocument": "Még nincsenek dokumentumok az előnézethez.",
       "noPropertiesFound": "Nincsenek tulajdonságok",
-      "optionsHelp": "Adja meg az értékeket, amelyek közül az AI választhat.",
       "optionsLabel": "Lehetőségek",
       "person": "Személy",
-      "previewEmpty": "Az AI nem adott vissza értéket.",
-      "previewMockNotice": "Mock előnézet: a háttér még nincs bekötve.",
-      "previewOnFirst": "Előnézet: {document}",
-      "previewSkipped": "Ezen a dokumentumon nincs alkalmazható bemenet.",
-      "previewSubject": "Próbálja ki egy mintán",
-      "previewUnsupported": "Az előnézet ehhez a dokumentumtípushoz nem támogatott.",
       "readingFrom": "Az AI innen olvas:",
-      "record": "Rekord",
-      "referencesItself": "A tulajdonság más tulajdonságokon keresztül hivatkozik önmagára",
-      "resultType": "Eredmény típusa",
       "returnsLabel": "Formátum",
-      "scopeFile": "Aktuális fájl",
-      "scopeFileDescription": "Használja ezt: {property}, és futtassa most ezt a fájlt.",
-      "scopeFileUnavailable": "Ehhez a nézethez nem érhető el fájlforrás.",
-      "scopeMatter": "Teljes ügy",
-      "scopeMatterDescription": "Használja az összes fájloszlopot, és futtassa az ügyet.",
-      "searchOrAddOptions": "Opciók keresése vagy hozzáadása",
       "selectColor": "Szín kiválasztása",
-      "selectField": "Mező kiválasztása",
-      "selectOperator": "Operátor kiválasztása",
       "setPromptPlaceholder": "Adjon meg promptot az információ kinyeréséhez",
-      "singleSelect": "Egyszeres választás",
       "sortAscendingDate": "Legrégebbi elöl",
       "sortAscendingNumber": "Legkisebb elöl",
       "sortAscendingText": "A → Zs",
@@ -7776,10 +7598,7 @@
       "sortDescendingText": "Zs → A",
       "splitOptions": "{count, plural, one {Felosztás # lehetőségre} other {Felosztás # lehetőségre}}",
       "suggestWithAI": "Javaslat AI-val",
-      "text": "Szöveg",
       "typeChangeWarning": "A meglévő adatok törlődnek, és mentéskor újraépülnek.",
-      "unnamedColumn": "ez az oszlop",
-      "unsupported": "Nem támogatott",
       "untitledColumn": "Oszlop neve, pl. Hatálybalépés dátuma"
     },
     "reference": "Hivatkozási szám",
@@ -7808,14 +7627,9 @@
       "flagCell": "Cella megjelölése",
       "flags": {
         "contradiction": "Ellentmondás",
-        "contradictionDescription": "Más adatokkal ütközhet.",
         "followUp": "Utánkövetés",
-        "followUpDescription": "Következő lépést igényel.",
         "important": "Fontos",
-        "importantDescription": "Kulcsértéket jelöl.",
-        "needsReview": "Ellenőrizendő",
-        "needsReviewDescription": "Kézi ellenőrzést igényel.",
-        "verifiedDescription": "Kézzel megerősítve."
+        "needsReview": "Ellenőrizendő"
       },
       "lock": {
         "lock": "Cella zárolása",
@@ -7829,16 +7643,11 @@
     },
     "tasksCount": "{count, plural, one {# agendatétel} other {# agendatétel}}",
     "team": "Csapat",
-    "tools": {
-      "aiModel": "AI modell",
-      "manualInput": "Kézzel"
-    },
     "unarchiveBeforeDelete": "Az ügy törlése előtt szüntesse meg az archiválását.",
     "unarchiveMatter": "Visszaállítás",
     "uploadDocuments": "Dokumentumok feltöltése",
     "views": {
       "addAdvancedFilter": "Speciális szűrő hozzáadása",
-      "addFields": "Mezők hozzáadása",
       "advancedFilterCount": "{count, plural, =0 {bármelyik} one {# szabály} other {# szabály}}",
       "aiGenerated": "AI által generált",
       "calendar": {
@@ -7854,7 +7663,6 @@
         "week": "Hét",
         "year": "Év"
       },
-      "cannotDeleteRequired": "Legalább egy ilyen típusú nézet szükséges",
       "copySuffix": "{name} (másolat)",
       "deleteView": "Nézet törlése",
       "exportCsv": "CSV exportálása",
@@ -7863,7 +7671,6 @@
       "exportFailed": "Az exportálás sikertelen",
       "exportTable": "Táblázat exportálása",
       "exportXlsx": "XLSX exportálása",
-      "fields": "Mezők:",
       "filter": "Szűrés",
       "filterByPlaceholder": "Szűrés…",
       "filtersWithCount": "{count, plural, one {# szűrő} other {# szűrő}}",
@@ -7897,7 +7704,6 @@
       "noFindResultsHint": "Próbáljon rövidebb kifejezést, vagy keressen több oszlopban.",
       "removeAdvancedFilter": "Speciális szűrő eltávolítása",
       "reportExport": {
-        "action": "Jelentés exportálása…",
         "aiSummaries": "AI-összefoglalók belefoglalása",
         "completed": "A jelentés elkészült",
         "customize": "Testreszabás",
@@ -7938,7 +7744,6 @@
         "day": "Nap",
         "endDate": "Befejező dátum",
         "month": "Hónap",
-        "noDates": "Nincsenek dátumok beállítva",
         "quarter": "Negyedév",
         "showTable": "Táblázat megjelenítése",
         "startDate": "Kezdő dátum",
@@ -7948,9 +7753,6 @@
       "viewSettings": "Nézetbeállítások"
     },
     "workflow": {
-      "allManualInputsDescription": "A munkafolyamat indításához adjon hozzá legalább egy AI tulajdonságot",
-      "allManualInputsTitle": "Minden tulajdonság kézi bevitel",
-      "generate": "Generálás",
       "largeRunPrompt": {
         "description": "Ez {count} dokumentumhoz sorolja be az AI-kivonatolást. Csak akkor indítsa el, ha most ennyi fájlt szeretne feldolgozni.",
         "start": "Kivonatolás indítása",
@@ -7963,12 +7765,7 @@
         "standard": "Indítás most",
         "title": "Csökkentett kreditek használata?"
       },
-      "someFieldsOutdatedDescription": "Frissítse az egyszeres és többszörös választás mezőket, hogy megfeleljenek a tulajdonság opcióinak",
-      "someFieldsOutdatedTitle": "Egyes mezők elavultak",
-      "startedSuccessfully": "Munkafolyamat sikeresen elindítva",
-      "starting": "Munkafolyamat indítása...",
-      "terminated": "Munkafolyamat megszakítva",
-      "terminatedDescription": "A munkafolyamat hiba miatt megszakadt. Kérjük, lépjen kapcsolatba az ügyfélszolgálattal."
+      "startedSuccessfully": "Munkafolyamat sikeresen elindítva"
     }
   }
 }

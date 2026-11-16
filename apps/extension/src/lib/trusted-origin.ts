@@ -96,10 +96,15 @@ export const createStellaOriginTrust = ({
   };
 };
 
+const trustedOrigins = parseTrustedOriginList(rawStellaOrigins, buildMode);
+
 const stellaOriginTrust = createStellaOriginTrust({
-  hostedOrigins: parseTrustedOriginList(rawStellaOrigins, buildMode),
+  hostedOrigins: trustedOrigins,
   trustLoopback: buildTrustsLoopback(buildMode),
 });
+
+/** The configured stella the popup opens when no stella tab is open. */
+export const STELLA_START_ORIGIN: string | undefined = trustedOrigins.at(0);
 
 export const STELLA_CONTENT_SCRIPT_MATCHES =
   stellaOriginTrust.contentScriptMatches;

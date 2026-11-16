@@ -825,6 +825,7 @@ const recordAccepted = async (
               documentCount: 2,
             },
           ],
+          delivery: { type: "ingest_api" },
         },
       ),
   );

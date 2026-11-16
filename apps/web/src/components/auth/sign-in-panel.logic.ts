@@ -52,6 +52,33 @@ export const resolveSignInOptions = ({
   };
 };
 
+/** Sign-in methods a link may ask the page to open with (`?method=`). */
+export const SIGN_IN_ENTRY_METHOD = { password: "password" } as const;
+
+export type SignInEntryMethod =
+  (typeof SIGN_IN_ENTRY_METHOD)[keyof typeof SIGN_IN_ENTRY_METHOD];
+
+/**
+ * Whether the password form for the one password account stands in for the
+ * email step. The page shows one or the other, never both: two forms that
+ * each ask for an address read as one broken form.
+ */
+export type PasswordEntry =
+  { type: "closed" } | { type: "open"; email: string };
+
+export const initialPasswordEntry = ({
+  entryMethod,
+  options,
+}: {
+  entryMethod: SignInEntryMethod | undefined;
+  options: Pick<SignInOptions, "showEmailOtp" | "showReviewPasswordSignIn">;
+}): PasswordEntry =>
+  options.showReviewPasswordSignIn &&
+  // Asked for by link, or the only way to type an address on this page.
+  (entryMethod === SIGN_IN_ENTRY_METHOD.password || !options.showEmailOtp)
+    ? { type: "open", email: "" }
+    : { type: "closed" };
+
 /**
  * Sign-in methods as better-auth's last-login-method plugin names them in
  * its browser cookie (set only after a sign-in succeeds; the value is the

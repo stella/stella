@@ -27,6 +27,7 @@ import type { Block } from "@stll/legal-ast/document-ast";
 import type { ReaderTextQuoteSelector } from "@stll/legal-ast/reader-text-quote";
 import { cents } from "@stll/money";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -86,6 +87,8 @@ import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 import type { RegistryReadToolName } from "./ref-field-map";
 import { READ_TOOL_REF_FIELD_MAP } from "./ref-field-map";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const testFetchState = createTestFetch();
 
@@ -2383,14 +2386,12 @@ const recordedExceptions = () =>
 
 // Production serves the public-law pages, so every corpus result carries an
 // `url`; a decision or statute without a slug is addressed by its id there.
-let previousFeaturePublicLaw = env.FEATURE_PUBLIC_LAW;
 
 afterEach(() => {
   // Spies created in a test stay attached if it fails before restoring them.
   mock.restore();
   analytics?.restore();
   analytics = null;
-  env.FEATURE_PUBLIC_LAW = previousFeaturePublicLaw;
 });
 
 beforeEach(() => {
@@ -2419,8 +2420,8 @@ beforeEach(() => {
   readServedSoftLawMock.mockReset();
   searchProviderSearchMock.mockReset();
   analytics = installRecordingAnalytics();
-  previousFeaturePublicLaw = env.FEATURE_PUBLIC_LAW;
-  env.FEATURE_PUBLIC_LAW = true;
+
+  testState.setConfig("FEATURE_PUBLIC_LAW", true);
   for (const handlerMock of ALL_MOCKS) {
     handlerMock.mockReset();
   }
@@ -2441,8 +2442,8 @@ describe("registry projection contract", () => {
   for (const toolName of ["search_case_law", "search_legislation"] as const) {
     test(`${toolName} projects the publisher as primary when the deployment cannot serve the item`, async () => {
       const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
-      const previous = env.FEATURE_PUBLIC_LAW;
-      env.FEATURE_PUBLIC_LAW = false;
+
+      testState.setConfig("FEATURE_PUBLIC_LAW", false);
       try {
         const call =
           corpusEntries()
@@ -2494,7 +2495,6 @@ describe("registry projection contract", () => {
           expect(item["source_url"]).toBeUndefined();
         }
       } finally {
-        env.FEATURE_PUBLIC_LAW = previous;
         restore();
       }
     });

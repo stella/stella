@@ -1,5 +1,3 @@
-import type { ComponentProps } from "react";
-
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -8,10 +6,6 @@ import {
   resolveChatComposerAction,
 } from "@stll/chat/composer";
 import { Button } from "@stll/ui/button";
-import {
-  COMPOSER_CONTROL_BUTTON_SIZE,
-  COMPOSER_SEND_BUTTON_CLASS,
-} from "@stll/ui/composer";
 import { ArrowUpIcon, RotateCcwIcon, SquareIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
@@ -25,8 +19,6 @@ type ChatComposerActionButtonProps = ChatComposerActionState & {
   className?: string;
   guideAnchorsEnabled?: boolean;
   iconClassName?: string;
-  size?: ComponentProps<typeof Button>["size"];
-  variant?: ComponentProps<typeof Button>["variant"];
 };
 
 export const ChatComposerActionButton = (
@@ -71,12 +63,7 @@ export const ChatComposerActionButton = (
     }
   };
 
-  const {
-    className,
-    iconClassName,
-    size = COMPOSER_CONTROL_BUTTON_SIZE,
-    variant,
-  } = props;
+  const { className, iconClassName } = props;
 
   return (
     <Button
@@ -86,25 +73,13 @@ export const ChatComposerActionButton = (
       )}
       aria-busy={mode === "stop" && props.stopping === true ? true : undefined}
       aria-label={label}
-      // Canonical composer send/stop/retry look, baked in so every chat
-      // surface renders the identical round, foreground-filled button
-      // without repeating the styling at each call site. Callers pass
-      // only state + handlers; `className` remains available for
-      // positioning overrides and wins via twMerge if it must.
-      className={cn(
-        // `size-7` pins the circle to the ComposerPlusMenu trigger's
-        // diameter at every breakpoint (`icon-sm` alone is 32px below
-        // `sm`), so a composer row's two round ends always match.
-        COMPOSER_SEND_BUTTON_CLASS,
-        className,
-        !enabled && "opacity-50",
-      )}
+      className={cn(className, !enabled && "opacity-50")}
       disabled={!enabled}
       onClick={handleClick}
-      size={size}
+      size="icon-round"
       tooltip={false}
       type="button"
-      variant={variant}
+      variant="composer"
     >
       <span
         aria-hidden="true"

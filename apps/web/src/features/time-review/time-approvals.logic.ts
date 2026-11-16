@@ -22,9 +22,11 @@ export type PersonReview = {
  * which never reaches an invoice, and zero for no-charge time.
  */
 export const reviewAmount = (row: TimeReviewRowData): CentsAmount | null =>
-  row.currency === UNPRICED_TIME_ENTRY_CURRENCY || !row.billable
+  row.rateAtEntry === null ||
+  row.currency === UNPRICED_TIME_ENTRY_CURRENCY ||
+  !row.billable
     ? null
-    : timeEntryAmount(row);
+    : timeEntryAmount({ ...row, rateAtEntry: row.rateAtEntry });
 
 const totalsOf = (rows: readonly ReviewRowWithPerson[]) => {
   let billedMinutes = 0;

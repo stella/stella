@@ -73,20 +73,32 @@ export const createTestState = <Config extends object>({
       }
     });
   };
-  const captureConfig = (key: PropertyKey) => {
-    const descriptor = Object.getOwnPropertyDescriptor(config, key);
+  const configKeys = new WeakMap<object, Map<PropertyKey, symbol>>();
+  const captureConfig = (target: object, key: PropertyKey) => {
+    let keys = configKeys.get(target);
+    if (keys === undefined) {
+      keys = new Map();
+      configKeys.set(target, keys);
+    }
+    const property = typeof key === "symbol" ? key : String(key);
+    let identity = keys.get(property);
+    if (identity === undefined) {
+      identity = Symbol(String(key));
+      keys.set(property, identity);
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(target, key);
     const restoreAccessor = (() => {
       if (descriptor?.get !== undefined && descriptor.set !== undefined) {
-        const value: unknown = descriptor.get.call(config);
-        return () => descriptor.set?.call(config, value);
+        const value: unknown = descriptor.get.call(target);
+        return () => descriptor.set?.call(target, value);
       }
       return undefined;
     })();
-    capture(typeof key === "symbol" ? key : `config:${String(key)}`, () => {
+    capture(identity, () => {
       const restored =
         descriptor === undefined
-          ? Reflect.deleteProperty(config, key)
-          : Reflect.defineProperty(config, key, descriptor);
+          ? Reflect.deleteProperty(target, key)
+          : Reflect.defineProperty(target, key, descriptor);
       if (!restored) {
         panic(`Could not restore test configuration key ${String(key)}`);
       }
@@ -97,6 +109,28 @@ export const createTestState = <Config extends object>({
     captureEnv(key);
     process.env[key] = value;
   };
+
+  const forConfig = <Target extends object>(target: Target) => ({
+    setConfig: <Key extends keyof Target>(key: Key, value: Target[Key]) => {
+      captureConfig(target, key);
+      target[key] = value;
+    },
+    deleteConfig: (key: keyof Target) => {
+      captureConfig(target, key);
+      if (!Reflect.deleteProperty(target, key)) {
+        panic(`Could not delete test configuration key ${String(key)}`);
+      }
+    },
+    patchConfig: (values: Partial<Target>) => {
+      assertOpen();
+      for (const key of Reflect.ownKeys(values)) {
+        captureConfig(target, key);
+        if (!Reflect.set(target, key, Reflect.get(values, key))) {
+          panic(`Could not set test configuration key ${String(key)}`);
+        }
+      }
+    },
+  });
 
   beforeEach(() => {
     // A later teardown hook can write after our afterEach has already run.
@@ -161,24 +195,7 @@ export const createTestState = <Config extends object>({
         panic(`Could not delete test environment key ${key}`);
       }
     },
-    setConfig: <Key extends keyof Config>(key: Key, value: Config[Key]) => {
-      captureConfig(key);
-      config[key] = value;
-    },
-    deleteConfig: (key: keyof Config) => {
-      captureConfig(key);
-      if (!Reflect.deleteProperty(config, key)) {
-        panic(`Could not delete test configuration key ${String(key)}`);
-      }
-    },
-    patchConfig: (values: Partial<Config>) => {
-      assertOpen();
-      for (const key of Reflect.ownKeys(values)) {
-        captureConfig(key);
-        if (!Reflect.set(config, key, Reflect.get(values, key))) {
-          panic(`Could not set test configuration key ${String(key)}`);
-        }
-      }
-    },
+    ...forConfig(config),
+    forConfig,
   };
 };

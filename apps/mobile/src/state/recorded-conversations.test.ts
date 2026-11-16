@@ -141,6 +141,8 @@ const drawn = (blocks: readonly AnswerBlock[]) =>
         const { key: _place, ...subagent } = block;
         return subagent;
       }
+      case "steered":
+        return { steered: block.text };
       default:
         block satisfies never;
         return panic("Unhandled answer block");

@@ -8,7 +8,7 @@ import {
 } from "@stll/property-testing";
 
 import { encodeRegistryComponent } from "./encode-registry-component.js";
-import { registryString } from "./property-test-helpers.test.js";
+import { registryString } from "./tests/test-helpers.js";
 
 test(
   "URL components round-trip Unicode scalar values",

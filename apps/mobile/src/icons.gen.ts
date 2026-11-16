@@ -72,6 +72,10 @@ export { MicIcon as DictateIcon } from "lucide-react-native";
 // of pages with no pen, so it never reads as signing the document.
 export { FileStackIcon as EditPagesIcon } from "lucide-react-native";
 
+// Published glyphs remain available to package consumers even when no
+// repository component imports them.
+export { CircleOffIcon, DollarSignIcon, ScissorsIcon } from "lucide-react-native";
+
 // --- Plain re-exports ------------------------------------------------------
 // @generated-start by scripts/codemod-icons.ts: edit by importing a lucide name and rerunning it
 export type { LucideIcon } from "lucide-react-native";
@@ -120,7 +124,6 @@ export {
   CircleDotIcon,
   CircleHelpIcon,
   CircleIcon,
-  CircleOffIcon,
   CircleUserRoundIcon,
   ClipboardCheckIcon,
   ClipboardCopyIcon,
@@ -139,7 +142,6 @@ export {
   CpuIcon,
   CropIcon,
   DatabaseIcon,
-  DollarSignIcon,
   DownloadIcon,
   EditIcon,
   EllipsisIcon,
@@ -267,7 +269,6 @@ export {
   SaveIcon,
   ScanSearchIcon,
   ScanTextIcon,
-  ScissorsIcon,
   ScrollTextIcon,
   SearchIcon,
   SearchXIcon,

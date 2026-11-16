@@ -266,6 +266,15 @@ export const isReviewAccountBodyEmailPath = (path: string): boolean =>
   path === SEND_VERIFICATION_OTP_PATH ||
   Object.hasOwn(BODY_EMAIL_AUTH_PATH_OPERATIONS, path);
 
+/** A request to email a sign-in code to the address in its body. */
+export const isSignInCodeRequest = ({
+  path,
+  otpType,
+}: {
+  path: string;
+  otpType: unknown;
+}): boolean => path === SEND_VERIFICATION_OTP_PATH && otpType === "sign-in";
+
 export const resolveReviewAccountBodyEmailOperation = ({
   path,
   otpType,
