@@ -70,6 +70,7 @@ import {
 import {
   createMembershipSafeDb,
   createMembershipScopedDb,
+  TRANSACTION_DEADLINE,
 } from "@/api/db/scoped";
 import type { TransactionOf } from "@/api/db/scoped";
 import { env } from "@/api/env";
@@ -3749,9 +3750,10 @@ const hasSyntheticSessionAuthority = async (current: {
 
 /**
  * A member a credential proved. Built only here, by the request resolvers,
- * and by the chat queue's sender (`lib/chat/queued-turn-member.ts`), which
- * proves the member from a fresh membership lookup; the `queued-turn-member`
- * ownership row confines both this type and `resolveValidateAuth`.
+ * and for chat work the server starts (`lib/chat/server-started-member.ts`),
+ * which proves the member from a fresh membership lookup; the
+ * `server-started-member` ownership row confines both this type and
+ * `resolveValidateAuth`.
  */
 export type ResolvedIdentity = {
   userId: SafeId<"user">;
@@ -4058,6 +4060,7 @@ export const resolveValidateAuth = async ({
     organizationId: activeOrganizationId,
     serverValidatedWorkspaceIds,
     userId,
+    deadline: TRANSACTION_DEADLINE.request,
   };
   const { scopedDb, safeDb } = createAuthDatabases(databaseIdentity);
 

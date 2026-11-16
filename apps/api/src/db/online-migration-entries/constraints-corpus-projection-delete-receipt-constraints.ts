@@ -4,6 +4,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "constraints-corpus-projection-delete-receipt-constraints",
   revision: 1290,
+  lifecycle: "finalized",
   type: "constraints",
   values: [...CORPUS_PROJECTION_DELETE_RECEIPT_CONSTRAINTS],
 } satisfies OnlineMigrationEntry;

@@ -5,6 +5,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "indexes-document-outstanding-date-index",
   revision: 500,
+  lifecycle: "finalized",
   type: "indexes",
   values: [DOCUMENT_OUTSTANDING_DATE_INDEX],
 } satisfies OnlineMigrationEntry;

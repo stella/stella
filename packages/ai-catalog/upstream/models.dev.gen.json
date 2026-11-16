@@ -7490,7 +7490,7 @@
         "cost": {
           "cache_read": 0.075,
           "input": 0.3,
-          "output": 30
+          "output": 2.5
         },
         "limit": {
           "output": 32768
@@ -7660,7 +7660,7 @@
       "gemini-3-pro-image": {
         "cost": {
           "input": 2,
-          "output": 120
+          "output": 12
         },
         "limit": {
           "output": 32768
@@ -7688,7 +7688,7 @@
       "gemini-3.1-flash-image": {
         "cost": {
           "input": 0.5,
-          "output": 60
+          "output": 3
         },
         "limit": {
           "output": 32768
@@ -7753,7 +7753,7 @@
       "gemini-3.1-flash-lite-image": {
         "cost": {
           "input": 0.25,
-          "output": 30
+          "output": 1.5
         },
         "limit": {
           "output": 4096
@@ -10734,11 +10734,6 @@
         "tool_call": false
       },
       "gpt-image-2": {
-        "cost": {
-          "cache_read": 1.25,
-          "input": 5,
-          "output": 30
-        },
         "limit": {
           "output": 0
         },

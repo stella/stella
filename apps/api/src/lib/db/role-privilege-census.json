@@ -4378,7 +4378,6 @@
         "table:public.organization_data_exports:POLICY:organization_select",
         "table:public.organization_data_exports:POLICY:organization_update",
         "table:public.organization_data_exports:POLICY:review_reset_owner_delete",
-        "table:public.organization_data_exports:POLICY:review_reset_owner_select",
         "table:public.organization_data_exports:RLS_ENABLED:true",
         "table:public.organization_data_exports:RLS_FORCED:true",
         "table:public.organization_data_exports:SELECT:EFFECTIVE",

@@ -14,8 +14,10 @@ import {
   chatQueueHolds,
   chatThreads,
   chatTurns,
+  entityDeletionCleanupRequests,
   ORGANIZATION_ACCESS_STATE,
   organizationAccessStates,
+  userFiles,
 } from "@/api/db/schema";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import type { QueuedChatSend } from "@/api/handlers/chat/chat-schema";
@@ -32,9 +34,11 @@ import {
   replaceQueuedChatMessageOnTx,
 } from "@/api/handlers/chat/queue/chat-queue-store";
 import type { ChatTurnOutcome } from "@/api/handlers/chat/types";
+import { deleteChatFilesOnTx } from "@/api/handlers/chat/upload-files";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
+import { ACTIVE_CHAT_TURN_STATUSES } from "@/api/lib/chat/turn-status";
 import {
   admitMemberMessageOnTx,
   holdChatQueueOnTx,
@@ -44,6 +48,7 @@ import {
   takeQueuedChatMessageOnTx,
 } from "@/api/lib/db/chat-queue-gate";
 import { sweepThreadsWithDueQueueOnTx } from "@/api/lib/db/chat-queue-system";
+import { createUserFileKey } from "@/api/lib/file-key";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import {
@@ -51,7 +56,10 @@ import {
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
 import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
-import { chatQueueReadScalingScenario } from "@/api/tests/read-scaling/chat-queue";
+import {
+  chatQueuedMessageReadScalingScenario,
+  chatQueueReadScalingScenario,
+} from "@/api/tests/read-scaling/chat-queue";
 import { readScalingViolations } from "@/api/tests/read-scaling/measurement";
 
 const clock = createTestClock();
@@ -68,6 +76,7 @@ type TurnStatus =
   | "accepted"
   | "running"
   | "awaiting-user"
+  | "handed-over"
   | "completed"
   | "failed"
   | "cancelled"
@@ -77,6 +86,7 @@ const ACTIVE: ReadonlySet<TurnStatus> = new Set([
   "accepted",
   "running",
   "awaiting-user",
+  "handed-over",
 ]);
 
 /** A plain model of one thread's queue and its newest turn. */
@@ -122,6 +132,8 @@ type Operation =
   | { type: "run" }
   | { type: "wait" }
   | { type: "answer" }
+  | { type: "hand-over" }
+  | { type: "adopt" }
   | { type: "end"; outcome: TerminalOutcome }
   | { type: "take"; stale: boolean };
 
@@ -145,6 +157,8 @@ const operation: fc.Arbitrary<Operation> = fc.oneof(
   fc.record({ type: fc.constant("run") }),
   fc.record({ type: fc.constant("wait") }),
   fc.record({ type: fc.constant("answer") }),
+  fc.record({ type: fc.constant("hand-over") }),
+  fc.record({ type: fc.constant("adopt") }),
   fc.record({
     type: fc.constant("end"),
     outcome: fc.constantFrom<TerminalOutcome>(
@@ -267,7 +281,7 @@ const suite = (
         .where(
           and(
             eq(chatTurns.threadId, threadId),
-            inArray(chatTurns.status, ["accepted", "running", "awaiting-user"]),
+            inArray(chatTurns.status, [...ACTIVE_CHAT_TURN_STATUSES]),
           ),
         )
     ).at(0)?.id ?? panic("The model has an active turn the store lacks");
@@ -287,6 +301,7 @@ const suite = (
       const assistantMessageId = createSafeId<"chatMessage">();
       const needsAnswer =
         status === "awaiting-user" ||
+        status === "handed-over" ||
         status === "completed" ||
         status === "failed";
       if (needsAnswer) {
@@ -324,6 +339,12 @@ const suite = (
               assistantMessageId,
               interactionToolCallId: "call-1",
               interactionType: "approval" as const,
+            };
+          case "handed-over":
+            return {
+              ...cleared,
+              assistantMessageId,
+              leaseExpiresAt: sql<Date>`now() + interval '90 seconds'`,
             };
           case "completed":
             return {
@@ -461,7 +482,7 @@ const suite = (
       .where(
         and(
           eq(chatTurns.threadId, threadId),
-          inArray(chatTurns.status, ["accepted", "running", "awaiting-user"]),
+          inArray(chatTurns.status, [...ACTIVE_CHAT_TURN_STATUSES]),
         ),
       );
     expect(active.length).toBe(ACTIVE.has(model.turn) ? 1 : 0);
@@ -490,6 +511,7 @@ const suite = (
               send: sendOf(id, op.text),
               threadId,
               tx,
+              uploadedFileIds: [],
             }),
         );
         if (model.queue.length >= 20) {
@@ -531,11 +553,29 @@ const suite = (
         if (item === undefined) {
           return;
         }
+        // A removal that read an older or newer revision leaves it queued.
+        const stale = await withLock(
+          threadId,
+          owner,
+          async (tx) =>
+            await removeQueuedChatMessageOnTx({
+              id: item.id,
+              revision: item.revision + 1,
+              threadId,
+              tx,
+            }),
+        );
+        expect(stale.type).toBe("changed");
         const removed = await withLock(
           threadId,
           owner,
           async (tx) =>
-            await removeQueuedChatMessageOnTx({ id: item.id, threadId, tx }),
+            await removeQueuedChatMessageOnTx({
+              id: item.id,
+              revision: item.revision,
+              threadId,
+              tx,
+            }),
         );
         expect(removed.type).toBe("removed");
         model.queue.splice(op.slot, 1);
@@ -548,7 +588,12 @@ const suite = (
           threadId,
           owner,
           async (tx) =>
-            await removeQueuedChatMessageOnTx({ id: item.id, threadId, tx }),
+            await removeQueuedChatMessageOnTx({
+              id: item.id,
+              revision: item.revision,
+              threadId,
+              tx,
+            }),
         );
         expect(again.type).toBe("not-found");
         return;
@@ -635,6 +680,36 @@ const suite = (
         return;
       case "answer":
         if (model.turn !== "awaiting-user") {
+          return;
+        }
+        await setTurnStatus({ owner, status: "running", threadId });
+        model.turn = "running";
+        return;
+      case "hand-over": {
+        if (model.turn !== "running") {
+          return;
+        }
+        // Its owner released it for another task: not an end of the turn,
+        // so the queue keeps waiting behind it.
+        const turnId = await setTurnStatus({
+          owner,
+          status: "handed-over",
+          threadId,
+        });
+        await withLock(threadId, owner, async (tx) => {
+          await holdChatQueueAfterTurnOnTx({
+            outcome: "handed-over",
+            threadId,
+            turnId,
+            tx,
+          });
+        });
+        expect(CHAT_QUEUE_AFTER_TURN["handed-over"].type).toBe("wait");
+        model.turn = "handed-over";
+        return;
+      }
+      case "adopt":
+        if (model.turn !== "handed-over") {
           return;
         }
         await setTurnStatus({ owner, status: "running", threadId });
@@ -746,6 +821,7 @@ const suite = (
           send: sendOf(id, "next"),
           threadId,
           tx,
+          uploadedFileIds: [],
         });
         await acceptTurnOnTx({
           messageId: createSafeId<"chatMessage">(),
@@ -786,6 +862,7 @@ const suite = (
           send: sendOf(id, "next"),
           threadId,
           tx,
+          uploadedFileIds: [],
         });
       });
       const holdAway = async (revision: number) =>
@@ -838,6 +915,7 @@ const suite = (
             send: sendOf(id, "waiting"),
             threadId,
             tx,
+            uploadedFileIds: [],
           });
         });
       };
@@ -865,6 +943,128 @@ const suite = (
       expect(readScalingViolations({ small: at10, large: at200 })).toEqual([]);
     });
 
+    test("removing a queued message deletes the files its enqueue stored, and only those", async () => {
+      const owner = await seedOwner();
+      const threadId = await seedThread(owner);
+      const seedFile = async () => {
+        const id = createSafeId<"userFile">();
+        await database.insert(userFiles).values({
+          fileName: "lease.pdf",
+          id,
+          mimeType: "application/pdf",
+          s3Key: createUserFileKey({
+            fileId: id,
+            mimeType: "application/pdf",
+            organizationId: owner.organizationId,
+          }),
+          sha256Hex: "0".repeat(64),
+          sizeBytes: 1,
+          threadId,
+          userId: owner.userId,
+        });
+        return id;
+      };
+      // One file the enqueue stored, one stored before (a sent message's).
+      const stored = await seedFile();
+      const earlier = await seedFile();
+      const queuedId = createSafeId<"chatMessage">();
+      await withLock(threadId, owner, async (tx) => {
+        await enqueueChatMessageOnTx({
+          id: queuedId,
+          send: sendOf(queuedId, "with files"),
+          threadId,
+          tx,
+          uploadedFileIds: [stored],
+        });
+      });
+      const deletion = await withLock(threadId, owner, async (tx) => {
+        const removed = await removeQueuedChatMessageOnTx({
+          id: queuedId,
+          revision: 0,
+          threadId,
+          tx,
+        });
+        if (removed.type !== "removed") {
+          return panic("The queued message was not removed");
+        }
+        expect(removed.uploadedFileIds).toEqual([stored]);
+        return await deleteChatFilesOnTx({
+          fileIds: removed.uploadedFileIds,
+          organizationId: owner.organizationId,
+          recordAuditEvent: async () => undefined,
+          threadId,
+          tx,
+          userId: owner.userId,
+          workspaceId: null,
+        });
+      });
+      const left = await database
+        .select({ id: userFiles.id })
+        .from(userFiles)
+        .where(eq(userFiles.threadId, threadId));
+      expect(left.map(({ id }) => id)).toEqual([earlier]);
+      // The thread holds no legal hold, so the stored file was deleted.
+      const cleanup =
+        deletion.type === "deleted"
+          ? deletion.cleanup
+          : panic("The thread holds no legal hold, yet nothing was deleted");
+      expect(cleanup).toHaveLength(1);
+      const [request] = await database
+        .select({ s3Keys: entityDeletionCleanupRequests.s3Keys })
+        .from(entityDeletionCleanupRequests)
+        .where(inArray(entityDeletionCleanupRequests.id, cleanup));
+      expect(request?.s3Keys).toEqual([
+        createUserFileKey({
+          fileId: stored,
+          mimeType: "application/pdf",
+          organizationId: owner.organizationId,
+        }),
+      ]);
+      // A thread's chat files hold its deletion back (RESTRICT): the
+      // fixture's own cleanup removes the thread after them.
+      await database.delete(userFiles).where(eq(userFiles.threadId, threadId));
+    });
+
+    test("reading a queued message whole costs the same however many messages wait", async () => {
+      const owner = await seedOwner();
+      const queueIn = async (threadId: SafeId<"chatThread">) => {
+        const id = createSafeId<"chatMessage">();
+        await withLock(threadId, owner, async (tx) => {
+          await enqueueChatMessageOnTx({
+            id,
+            send: sendOf(id, "waiting ".repeat(100)),
+            threadId,
+            tx,
+            uploadedFileIds: [],
+          });
+        });
+        return id;
+      };
+      const measureAt = async (others: number) => {
+        const threadId = await seedThread(owner);
+        const messageId = await queueIn(threadId);
+        for (let index = 0; index < others; index += 1) {
+          // db-await-in-loop: seeds the member's other waiting messages before the measured read.
+          await queueIn(await seedThread(owner));
+        }
+        return await chatQueuedMessageReadScalingScenario.measure({
+          database,
+          messageId,
+          organizationId: owner.organizationId,
+          threadId,
+          userId: owner.userId,
+        });
+      };
+      const at10 = await measureAt(10);
+      const at200 = await measureAt(200);
+      console.info(
+        "handler-scaling",
+        JSON.stringify({ name: "chat queued message read", at10, at200 }),
+      );
+      expect(at10.statements).toBeGreaterThan(0);
+      expect(readScalingViolations({ small: at10, large: at200 })).toEqual([]);
+    });
+
     test("a bounded sweep reaches every due queue in turn", async () => {
       const owner = await seedOwner();
       const threads = [await seedThread(owner), await seedThread(owner)];
@@ -877,6 +1077,7 @@ const suite = (
             send: sendOf(id, "next"),
             threadId,
             tx,
+            uploadedFileIds: [],
           });
         });
       }

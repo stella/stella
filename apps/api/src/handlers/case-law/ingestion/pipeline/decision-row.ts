@@ -469,13 +469,13 @@ const writeDecisionRow = async (
         await writeDecisionJudges(tx, write, existing.id);
       }
 
-      return await finishRefreshedRowTx(
+      return await finishRefreshedRowTx({
         tx,
         write,
         existing,
         replacedState,
         projectionLock,
-      );
+      });
     }
 
     if (inputProvenance.type === "stored") {

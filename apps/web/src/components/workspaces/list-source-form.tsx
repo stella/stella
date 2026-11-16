@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
 import { LEGAL_LIST_SOURCE_QUOTE_MAX_LENGTH } from "@stll/api-contract/limits";
 import { Button } from "@stll/ui/button";
 import { Field, FieldError, FieldLabel } from "@stll/ui/field";
@@ -24,10 +25,13 @@ import { toSafeId } from "@/lib/safe-id";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
 import { useQueryViewError } from "@/lib/use-query-view";
 import {
+  resourceMutation,
+  resourceQueryOptions,
+} from "@/lib/workspace-realtime";
+import {
   entityOptions,
   workspaceFilesOptions,
 } from "@/lib/workspaces/queries/entities";
-import { legalListKeys } from "@/lib/workspaces/queries/legal-lists";
 
 export type ListSourceFormProps = {
   workspaceId: string;
@@ -76,20 +80,31 @@ export const ListSourceForm = ({
       ),
     ),
   });
-  const create = useMutation({
+  const createSource = resourceMutation({
+    mutation: "createListItemSource",
+    queryClient,
     mutationFn: async ({
-      sourceEntityId,
-      page,
-      quote,
-    }: v.InferOutput<typeof schema>) => {
+      input: { sourceEntityId, page, quote },
+    }: {
+      workspaceId: string;
+      input: v.InferOutput<typeof schema>;
+    }) => {
       const isPdf =
         files.find((file) => file.entityId === sourceEntityId)?.mimeType ===
         PDF_MIME;
       // Resolve a live version at submission, rather than pinning a stale picker entry.
-      const document = await queryClient.query({
-        ...entityOptions(workspaceId, sourceEntityId),
-        staleTime: 0,
-      });
+      const document = await queryClient.query(
+        resourceQueryOptions(
+          {
+            ...entityOptions(workspaceId, sourceEntityId),
+            staleTime: 0,
+          },
+          {
+            resources: [RESOURCE_TYPE.ENTITY],
+            scope: { type: "workspace", workspaceId },
+          },
+        ),
+      );
       const listApi = api.lists({
         workspaceId: toSafeId<"workspace">(workspaceId),
       });
@@ -112,11 +127,11 @@ export const ListSourceForm = ({
         }),
       );
     },
-    onSuccess: async () => {
-      // Sources, history, and the fact's firstSource all live below this key.
-      await queryClient.invalidateQueries({
-        queryKey: legalListKeys.items(workspaceId, listId),
-      });
+  });
+  const create = useMutation({
+    mutationFn: async (input: v.InferOutput<typeof schema>) =>
+      await createSource({ workspaceId, input }),
+    onSuccess: () => {
       onCreated?.();
       onClose();
     },

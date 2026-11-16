@@ -4,6 +4,7 @@ import { ORGANIZATION_AI_INSTRUCTIONS_CONSTRAINT_VALIDATIONS } from "../organiza
 export default {
   id: "repairs-organization-ai-instructions-constraint-validations",
   revision: 1432,
+  lifecycle: "finalized",
   type: "repairs",
   values: [...ORGANIZATION_AI_INSTRUCTIONS_CONSTRAINT_VALIDATIONS],
 } satisfies OnlineMigrationEntry;

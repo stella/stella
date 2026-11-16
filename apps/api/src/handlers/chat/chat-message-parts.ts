@@ -2370,3 +2370,56 @@ const isChatMessageMetadataEmpty = (metadata: ChatMessageMetadata): boolean =>
   metadata.turnTiming === undefined &&
   metadata.turnModel === undefined &&
   metadata.usage === undefined;
+
+const stringifyToolPayload = (value: unknown): unknown => JSON.stringify(value);
+
+const toolResultPayload = ({
+  outputsByCallId,
+  part,
+}: {
+  outputsByCallId: ReadonlyMap<string, unknown>;
+  part: Extract<ChatPart, { type: "tool-result" }>;
+}): unknown => {
+  if (outputsByCallId.has(part.toolCallId)) {
+    return outputsByCallId.get(part.toolCallId);
+  }
+  if (part.state === "error" && part.error !== undefined) {
+    return { error: part.error };
+  }
+  return undefined;
+};
+
+/**
+ * A message's tool results with their content restated from the outputs of
+ * their calls, so the stored and the streamed content cannot disagree.
+ */
+export const synchronizeToolResultContent = (
+  parts: readonly ChatPart[],
+): ChatPart[] => {
+  const outputsByCallId = new Map<string, unknown>();
+  for (const part of parts) {
+    if (part.type === "tool-call" && part.output !== undefined) {
+      outputsByCallId.set(part.id, part.output);
+    }
+  }
+
+  return parts.map((part) => {
+    if (part.type !== "tool-result" || part.state === "streaming") {
+      return part;
+    }
+    const payload = toolResultPayload({ outputsByCallId, part });
+    if (Array.isArray(part.content)) {
+      if (!deepEquals(part.content, payload)) {
+        panic(`Canonical tool result ${part.toolCallId} disagrees with output`);
+      }
+      return part;
+    }
+    const content = stringifyToolPayload(payload);
+    if (typeof content !== "string") {
+      panic(
+        `Canonical tool result ${part.toolCallId} has no serializable output`,
+      );
+    }
+    return { ...part, content };
+  });
+};

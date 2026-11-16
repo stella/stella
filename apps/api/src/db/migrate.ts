@@ -11,17 +11,17 @@ import {
   requireEbsConfiguration,
   resolveEbsConfiguration,
 } from "../lib/db/ebs-signal-reader";
+import { parseMigrateArguments } from "./migrate-arguments";
 import { runMigrationsUntilSettled } from "./migration-runner";
-import {
-  assertOnlineRepairRehearsalCoverage,
-  parseOnlineRepairRehearsalArguments,
-} from "./online-migration-rehearsal-guard";
+import { assertOnlineRepairRehearsalCoverage } from "./online-migration-rehearsal-guard";
 import type { OnlineRepairRehearsalRecord } from "./online-migration-rehearsal-guard";
 import { prepareOnlineRepairRehearsalReport } from "./online-migration-rehearsal-report";
 import { ONLINE_MIGRATION_REPAIRS } from "./online-migrations";
 import { createSqlClient } from "./sql-client";
 
-const reportPath = parseOnlineRepairRehearsalArguments(process.argv.slice(2));
+const { reportPath, onlineScope } = parseMigrateArguments(
+  process.argv.slice(2),
+);
 
 // An index build would hold forever on a load gate nobody configured, and the
 // deploy waits on this process: reject that before any connection opens.
@@ -52,6 +52,7 @@ await runScriptWithErrorOutput(async () => {
       databaseUrl: url,
       migrationsFolder,
       ebs: ebs.value,
+      onlineScope,
       observeRepair:
         report === null ? undefined : (record) => observations.push(record),
     });

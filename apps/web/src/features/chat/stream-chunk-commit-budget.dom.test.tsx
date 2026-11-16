@@ -487,6 +487,13 @@ const createStreamingServer = (
     ) {
       return threadPage();
     }
+    // Nothing is queued in the chat.
+    if (
+      method === "GET" &&
+      /^\/v1\/chat\/threads\/[^/]+\/queue$/u.test(url.pathname)
+    ) {
+      return Response.json({ hold: null, items: [] });
+    }
     unexpected.push(`${method} ${url.pathname}`);
     return Response.json({ message: "Not served" }, { status: 404 });
   };
@@ -582,7 +589,7 @@ const commitRateWhileStreaming = async (kind: StreamChunkKind) => {
   await server.closed;
   // Let the page settle what the end of the run started.
   await sleep(100);
-  expect(await sent).toEqual(Result.ok(undefined));
+  expect(await sent).toEqual(Result.ok(CHAT_SEND_SENT));
   expect(server.burst.stopEnabled, "Stop is enabled during the burst").toBe(
     true,
   );

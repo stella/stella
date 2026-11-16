@@ -322,3 +322,46 @@ test("the command compares two commits and fails towards a deploy", () => {
     rmSync(repo, { force: true, recursive: true });
   }
 });
+
+for (const key of [
+  "__proto__",
+  "constructor",
+  "toString",
+  "hasOwnProperty",
+  "dependency",
+  "1",
+]) {
+  test(`lockfile traversal distinguishes installed and absent own dependency ${key}`, () => {
+    const workspace = {
+      name: LANDING_PACKAGE,
+      dependencies: { [key]: "workspace:*" },
+    };
+    const source = {
+      workspaces: {
+        "apps/landing": workspace,
+        [key]: { name: "@stll/dependency" },
+      },
+      packages: { [key]: [`@stll/dependency@workspace:${key}`] },
+      patchedDependencies: { [key]: "patches/fixture.patch" },
+      trustedDependencies: [],
+    };
+    const parsed = parseLockfile(source);
+    expect(parsed).toEqual(source);
+    if (parsed === undefined) {
+      throw new TypeError("Valid lockfile was refused");
+    }
+    expect(Object.hasOwn(parsed.workspaces, key)).toBe(true);
+    expect(Object.hasOwn(parsed.packages, key)).toBe(true);
+    expect(Object.hasOwn(parsed.patchedDependencies ?? {}, key)).toBe(true);
+    expect(workspaceClosure(parsed, LANDING_PACKAGE)).toEqual({
+      workspaceDirectories: new Set(["apps/landing", key]),
+      packageKeys: new Set([key]),
+    });
+    expect(
+      workspaceClosure({ ...parsed, packages: {} }, LANDING_PACKAGE),
+    ).toEqual({
+      workspaceDirectories: new Set(["apps/landing"]),
+      packageKeys: new Set(),
+    });
+  });
+}

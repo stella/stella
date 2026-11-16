@@ -1,3 +1,4 @@
+// parser-output-unchanged: Removes migration-only field exclusions after all producers migrate.
 // parser-output-unchanged: Adds nested inventory addresses without changing result construction.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: adapter callback normalization preserves successful parsing and translates typed read failures at its protocol boundary.
@@ -1458,7 +1459,7 @@ export const sourceTotalRead = (value: number): SourceTotalCount =>
  * a result field is a column of the row, and the last two are not fields at all.
  */
 export type SourceFieldTarget =
-  /** Exact JSON field retained in a named raw part; `*` visits every array row. */
+  /** Empty paths retain the whole response; JSON paths address exact values (`*` visits every row). */
   | {
       readonly type: "raw";
       readonly part: string;
@@ -1518,23 +1519,7 @@ export type SourceFieldDisposition =
       readonly justification: string;
       readonly pointer: string;
       readonly [STATED_REASON]: true;
-    }
-  | {
-      readonly disposition: "excluded";
-      readonly legacy: true;
-      readonly reason: string;
-      readonly [STATED_REASON]: true;
     };
-
-/** Migration-only constructor, held to the exact legacy source exclusion census. */
-export const legacyExcludedSourceField = <const TText extends string>(
-  reason: StatedReason<TText>,
-): SourceFieldDisposition => ({
-  disposition: "excluded",
-  reason,
-  legacy: true,
-  [STATED_REASON]: true,
-});
 
 /** Closed policy vocabulary; exclusion is a decision that must be reviewable. */
 export const SOURCE_EXCLUSION_REASONS = [

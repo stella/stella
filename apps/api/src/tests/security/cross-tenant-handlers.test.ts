@@ -105,6 +105,7 @@ import enqueueChatMessage from "@/api/handlers/chat/queue/enqueue";
 import moveQueuedChatMessage from "@/api/handlers/chat/queue/move";
 import pauseChatQueue from "@/api/handlers/chat/queue/pause";
 import readChatQueue from "@/api/handlers/chat/queue/read";
+import readQueuedChatMessage from "@/api/handlers/chat/queue/read-message";
 import replaceQueuedChatMessage from "@/api/handlers/chat/queue/replace";
 import resumeChatQueue from "@/api/handlers/chat/queue/resume";
 import sendQueuedChatMessageNow from "@/api/handlers/chat/queue/send-now";
@@ -3180,6 +3181,28 @@ const isolationCases: IsolationCase[] = [
       }),
   },
   {
+    name: "chat queued message read",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(readQueuedChatMessage, workspaceA, {
+        params: { messageId: chatQueuedFirstB, threadId: chatQueueThreadB },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(readQueuedChatMessage, sameUserWorkspaceB, {
+        params: { messageId: chatQueuedFirstB, threadId: chatQueueThreadB },
+      }),
+    expectDenied: (result) => {
+      expect(getStatusCode(result)).toBe(404);
+    },
+    expectPositive: (result) =>
+      expect(result).toMatchObject({
+        message: {
+          id: chatQueuedFirstB,
+          parts: [{ type: "text", content: "First" }],
+        },
+        revision: 0,
+      }),
+  },
+  {
     name: "chat queue enqueue",
     runAAgainstB: async ({ workspaceA }) => ({
       response: await runHandler(enqueueChatMessage, workspaceA, {
@@ -3368,6 +3391,7 @@ const isolationCases: IsolationCase[] = [
     runAAgainstB: async ({ workspaceA }) => ({
       response: await runHandler(cancelQueuedChatMessage, workspaceA, {
         params: { threadId: chatQueueThreadB, messageId: chatQueuedSecondB },
+        query: { files: "delete", revision: 0 },
       }),
       queue: await chatQueueOfB(),
     }),
@@ -3377,6 +3401,7 @@ const isolationCases: IsolationCase[] = [
         sameUserWorkspaceB,
         {
           params: { threadId: chatQueueThreadB, messageId: chatQueuedSecondB },
+          query: { files: "delete", revision: 0 },
         },
       );
       return {
@@ -3397,7 +3422,9 @@ const isolationCases: IsolationCase[] = [
     },
     expectPositive: (result) =>
       expect(result).toEqual({
-        response: {},
+        response: {
+          message: queuedSendOf(chatQueuedSecondB, "Second").message,
+        },
         ids: [chatQueuedThirdB, chatQueuedFirstB],
       }),
   },

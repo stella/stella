@@ -4,6 +4,7 @@ import { ORGANIZATION_ACCESS_STATE_CONSTRAINT_VALIDATIONS } from "../organizatio
 export default {
   id: "repairs-organization-access-state-constraint-validations",
   revision: 1070,
+  lifecycle: "finalized",
   type: "repairs",
   values: [...ORGANIZATION_ACCESS_STATE_CONSTRAINT_VALIDATIONS],
 } satisfies OnlineMigrationEntry;

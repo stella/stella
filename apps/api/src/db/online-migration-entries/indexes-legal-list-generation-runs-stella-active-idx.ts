@@ -3,6 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "indexes-legal-list-generation-runs-stella-active-idx",
   revision: 1429,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     {

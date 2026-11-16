@@ -2096,6 +2096,23 @@
       "noResults": "Žádné odpovídající dovednosti",
       "tryOne": "Začni s jedním z těchto"
     },
+    "queue": {
+      "actions": "Akce zprávy ve frontě",
+      "editNeedsComposer": "Zprávu ve frontě upravíte, když otevřete tento chat.",
+      "heldByMember": "Fronta je pozastavená.",
+      "heldComputerAway": "Čeká se na váš počítač: zprávy ve frontě se odešlou, jakmile se připojí.",
+      "heldSendRefused": "Fronta je pozastavená: první zprávu se nepodařilo odeslat. Upravte ji nebo odeberte a pak pokračujte.",
+      "heldTurnFailed": "Fronta je pozastavená: poslední odpověď selhala. Pokračováním odešlete další zprávu.",
+      "heldTurnInterrupted": "Fronta je pozastavená: poslední odpověď byla přerušena. Pokračováním odešlete další zprávu.",
+      "heldUsageLimit": "Fronta je pozastavená: dosáhli jste limitu využití. Pokračujte, až se obnoví.",
+      "noLongerQueued": "Tato zpráva už ve frontě není.",
+      "notSent": "Nepodařilo se odeslat",
+      "pause": "Pozastavit frontu",
+      "replaceDescription": "Chat čeká na vaši odpověď. Odesláním této zprávy teď zrušíte otázku nebo schválení, na které čeká.",
+      "replaceTitle": "Odeslat tuto zprávu hned?",
+      "resume": "Obnovit frontu",
+      "waitForEdit": "Nejdřív odešlete nebo zrušte otevřenou úpravu; zpráva zůstane v poli pro psaní."
+    },
     "queuePrompt": "Odeslat, až agent skončí",
     "queuedAttachmentCount": "{count, plural, one {# příloha} few {# přílohy} other {# příloh} many {# přílohy}}",
     "queuedNotice": "Zařazeno: odešle se po dokončení aktuální odpovědi",

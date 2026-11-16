@@ -485,6 +485,13 @@ const serveThread = ({
         },
       );
     }
+    // Nothing is queued in the chat.
+    if (
+      method === "GET" &&
+      /^\/v1\/chat\/threads\/[^/]+\/queue$/u.test(url.pathname)
+    ) {
+      return Response.json({ hold: null, items: [] });
+    }
     unexpected.push(`${method} ${url.pathname}`);
     return Response.json({ message: "Not served" }, { status: 404 });
   };
@@ -610,7 +617,7 @@ describe("a turn paused on a local run's question", () => {
       organizationId: ORGANIZATION_ID,
       threadId: THREAD_ID,
     });
-    let sent: Promise<void> | undefined;
+    let sent: Promise<unknown> | undefined;
     await act(async () => {
       sent = live.session().sendMessage({
         content: "Draft the lease",
@@ -648,7 +655,7 @@ describe("a turn paused on a local run's question", () => {
       organizationId: ORGANIZATION_ID,
       threadId: THREAD_ID,
     });
-    let sent: Promise<void> | undefined;
+    let sent: Promise<unknown> | undefined;
     await act(async () => {
       sent = live.session().sendMessage({
         content: "Draft the lease",

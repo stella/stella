@@ -596,9 +596,9 @@
   },
   {
     "file": "apps/api/src/db/scoped.ts",
-    "fingerprint": "0d8e1c0920ab27a71bcd3fc39e6bbb4a7bc09c9cacf525156c0e75923893f5e7",
+    "fingerprint": "a0d461591d9aabd02a6e3345d40088c1e01e780e8883b00ca61898780df9e8dd",
     "count": 1,
-    "reason": "Reuse request feature decisions within the existing scoped transaction; transaction boundary and lock acquisitions are unchanged."
+    "reason": "The scoped transaction runner opens the same transaction; it only notes when its callback is entered and passes an optional request deadline into the settings statement it already sends."
   },
   {
     "file": "apps/api/src/db/scoped.ts",

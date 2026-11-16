@@ -2096,6 +2096,23 @@
       "noResults": "Nincs egyező készség",
       "tryOne": "Kezdésként próbálja ki valamelyiket"
     },
+    "queue": {
+      "actions": "A sorban álló üzenet műveletei",
+      "editNeedsComposer": "Nyissa meg ezt a csevegést a sorban álló üzenet szerkesztéséhez.",
+      "heldByMember": "A sor szüneteltetve.",
+      "heldComputerAway": "Várakozás a számítógépére: a sorban álló üzenetek elmennek, amint csatlakozik.",
+      "heldSendRefused": "A sor szüneteltetve: az első üzenetet nem sikerült elküldeni. Szerkessze vagy távolítsa el, majd folytassa.",
+      "heldTurnFailed": "A sor szüneteltetve: az utolsó válasz sikertelen volt. Folytassa a következő üzenet elküldéséhez.",
+      "heldTurnInterrupted": "A sor szüneteltetve: az utolsó válasz megszakadt. Folytassa a következő üzenet elküldéséhez.",
+      "heldUsageLimit": "A sor szüneteltetve: elérte a használati korlátot. Folytassa, amikor visszaáll.",
+      "noLongerQueued": "Ez az üzenet már nincs a sorban.",
+      "notSent": "Nem sikerült elküldeni",
+      "pause": "Sor szüneteltetése",
+      "replaceDescription": "Ez a csevegés az Ön válaszára vár. Ha most elküldi ezt az üzenetet, a kérdés vagy jóváhagyás, amelyre vár, megszűnik.",
+      "replaceTitle": "Elküldi most ezt az üzenetet?",
+      "resume": "Sor folytatása",
+      "waitForEdit": "Előbb küldje el vagy vesse el a nyitott szerkesztést; az üzenete a beviteli mezőben marad."
+    },
     "queuePrompt": "Küldés, amikor az ügynök végzett",
     "queuedAttachmentCount": "{count, plural, one {# melléklet} other {# melléklet}}",
     "queuedNotice": "Sorba állítva – a jelenlegi válasz befejeztével küldjük el",

@@ -3,6 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "indexes-rate-entries-table-role-from-idx",
   revision: 320,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     {

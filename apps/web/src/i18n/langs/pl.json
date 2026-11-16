@@ -2096,6 +2096,23 @@
       "noResults": "Brak pasujących umiejętności",
       "tryOne": "Zacznij od jednego z tych"
     },
+    "queue": {
+      "actions": "Akcje wiadomości w kolejce",
+      "editNeedsComposer": "Otwórz ten czat, aby edytować wiadomość w kolejce.",
+      "heldByMember": "Kolejka wstrzymana.",
+      "heldComputerAway": "Oczekiwanie na Twój komputer: wiadomości z kolejki zostaną wysłane, gdy się połączy.",
+      "heldSendRefused": "Kolejka wstrzymana: nie udało się wysłać pierwszej wiadomości. Edytuj ją lub usuń, a potem wznów.",
+      "heldTurnFailed": "Kolejka wstrzymana: ostatnia odpowiedź nie powiodła się. Wznów, aby wysłać następną wiadomość.",
+      "heldTurnInterrupted": "Kolejka wstrzymana: ostatnia odpowiedź została przerwana. Wznów, aby wysłać następną wiadomość.",
+      "heldUsageLimit": "Kolejka wstrzymana: osiągnięto limit użycia. Wznów, gdy zostanie odnowiony.",
+      "noLongerQueued": "Tej wiadomości nie ma już w kolejce.",
+      "notSent": "Nie udało się wysłać",
+      "pause": "Wstrzymaj kolejkę",
+      "replaceDescription": "Ten czat czeka na Twoją odpowiedź. Wysłanie tej wiadomości teraz anuluje pytanie lub zatwierdzenie, na które czeka.",
+      "replaceTitle": "Wysłać tę wiadomość teraz?",
+      "resume": "Wznów kolejkę",
+      "waitForEdit": "Najpierw wyślij lub anuluj otwartą edycję; wiadomość zostaje w polu wpisywania."
+    },
     "queuePrompt": "Wyślij, gdy agent skończy",
     "queuedAttachmentCount": "{count, plural, one {# załącznik} few {# załączniki} many {# załączników} other {# załącznika}}",
     "queuedNotice": "W kolejce: zostanie wysłana po zakończeniu bieżącej odpowiedzi",

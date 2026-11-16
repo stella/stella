@@ -304,9 +304,7 @@ export const ChatThreadPage = ({
     resendLatestMessage,
     sendMessage,
     queueMessage,
-    queuedMessages,
-    removeQueuedMessage,
-    sendQueuedMessageNow,
+    queue,
     stop,
     stopPending,
     leave,
@@ -694,8 +692,7 @@ export const ChatThreadPage = ({
         [CHAT_MEMBER_SEND_ACTION.send]: sendMessage,
         [CHAT_MEMBER_SEND_ACTION.queue]: queueMessage,
       } satisfies Record<ChatMemberSendAction, typeof sendMessage>;
-      await send[action](message.value);
-      return CHAT_SEND_SENT;
+      return await send[action](message.value);
     },
   );
   const handleSend = useLatestCallback(
@@ -833,11 +830,7 @@ export const ChatThreadPage = ({
                           onContinuePausedTurn={handleContinuePausedTurn}
                           onResend={resendLatestMessage}
                           onSendWithoutAnonymization={sendWithoutAnonymization}
-                          queuedMessageActions={{
-                            remove: removeQueuedMessage,
-                            sendNow: sendQueuedMessageNow,
-                          }}
-                          queuedMessages={queuedMessages}
+                          queue={queue}
                           stickyUserMessages
                           streamdownComponents={streamdownComponents}
                           computerWait={computerWait}
@@ -933,8 +926,7 @@ export const ChatThreadPage = ({
                           );
                           return CHAT_SEND_KEPT;
                         }
-                        await sendMessage(message.value);
-                        return CHAT_SEND_SENT;
+                        return await sendMessage(message.value);
                       }),
                       "chat-thread-page.submit",
                     );

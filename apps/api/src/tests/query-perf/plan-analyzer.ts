@@ -1,6 +1,8 @@
+import { panic } from "better-result";
+
 import { PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT } from "@/api/lib/public-law-relations";
 import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
-import { isRecord } from "@/api/lib/type-guards";
+import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import type { ExplainPlanDocument } from "@/api/tests/explain-as-stella";
 
 import { isExceptedPlanViolation } from "./plan-exceptions";
@@ -35,6 +37,35 @@ export type PlanViolation = {
 const children = (node: Record<string, unknown>) => {
   const plans = node["Plans"];
   return Array.isArray(plans) ? plans.filter(isRecord) : [];
+};
+
+const rowCounter = (node: Record<string, unknown>, name: string) => {
+  const value = node[name] ?? 0;
+  return typeof value === "number"
+    ? value
+    : panic(`Plan node ${name} is not a number`);
+};
+
+/** Rows returned or rejected by every scan of a relation, over all its loops. */
+export const relationRowsVisited = (
+  node: Record<string, unknown>,
+  relation: string,
+): number => {
+  const own =
+    node["Relation Name"] === relation
+      ? (rowCounter(node, "Actual Rows") +
+          rowCounter(node, "Rows Removed by Filter") +
+          rowCounter(node, "Rows Removed by Index Recheck")) *
+        rowCounter(node, "Actual Loops")
+      : 0;
+  const plans = node["Plans"] ?? [];
+  if (!isUnknownArray(plans) || !plans.every(isRecord)) {
+    return panic("Plan children are malformed");
+  }
+  return plans.reduce(
+    (sum, child) => sum + relationRowsVisited(child, relation),
+    own,
+  );
 };
 
 const hasOuterStreamBound = (node: Record<string, unknown>): boolean => {

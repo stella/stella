@@ -7,6 +7,7 @@ import {
 export default {
   id: "indexes-time-entries-one-active-timer-per-user-idx",
   revision: 590,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     onlineUniqueIndexDefinition(

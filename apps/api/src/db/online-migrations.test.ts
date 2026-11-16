@@ -48,6 +48,7 @@ import {
   reportOnlineMigrations as reportOnlineMigrationsWithOwnership,
   runOnlineMigrations as runOnlineMigrationsWithGate,
 } from "./online-migrations";
+import { ONLINE_SCOPE, onlineStepLifecycle } from "./online-step-lifecycle";
 import {
   EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES,
   type ExecutableOnlineUniqueIndexName,
@@ -984,6 +985,144 @@ describe("online migrations", () => {
     );
     expect(indexOfStatement(harness.statements, REINDEX_FRAGMENT)).toBe(-1);
     expect(harness.released()).toBe(true);
+  });
+
+  test.each([ONLINE_SCOPE.all, ONLINE_SCOPE.finalized])(
+    "a %s run walks exactly the steps of its scope",
+    async (scope) => {
+      const harness = createHarness();
+      const records: MigrationTimingRecord[] = [];
+      let now = 0;
+
+      await runOnlineMigrations(harness.pool, {
+        scope,
+        repairs: ONLINE_MIGRATION_REPAIRS,
+        timing: {
+          clock: () => (now += 5),
+          emit: (record) => {
+            records.push(record);
+          },
+        },
+      });
+
+      const walked = records.flatMap((record) =>
+        record.event === "migrate.online_step_duration"
+          ? [`${record.kind}:${record.name}`]
+          : [],
+      );
+      const inScope = (kind: "index" | "cutover", name: string) =>
+        scope === ONLINE_SCOPE.all ||
+        onlineStepLifecycle(kind, name) === ONLINE_SCOPE.finalized;
+      const expected = [
+        ...ONLINE_MIGRATION_INDEXES.filter(({ name }) =>
+          inScope("index", name),
+        ).map(({ name }) => `index:${name}`),
+        ...ONLINE_MIGRATION_INDEX_CUTOVERS.filter(({ final }) =>
+          inScope("cutover", final.name),
+        ).map(({ final }) => `cutover:${final.name}`),
+      ];
+      expect(
+        walked.filter((step) => !step.startsWith("replacement_drop:")),
+      ).toEqual(expected);
+      const pendingDrops = walked.filter(
+        (step) =>
+          step.startsWith("replacement_drop:") &&
+          onlineStepLifecycle(
+            "replacement_drop",
+            step.slice("replacement_drop:".length),
+          ) === ONLINE_SCOPE.pending,
+      );
+      expect(pendingDrops.length > 0).toBe(scope === ONLINE_SCOPE.all);
+      // The registry holds pending indexes, so the finalized walk is smaller.
+      expect(
+        expected.length <
+          ONLINE_MIGRATION_INDEXES.length +
+            ONLINE_MIGRATION_INDEX_CUTOVERS.length,
+      ).toBe(scope === ONLINE_SCOPE.finalized);
+    },
+  );
+
+  test("a finalized run neither reads nor runs a pending repair", async () => {
+    const pendingRepair = ONLINE_MIGRATION_REPAIRS.find(
+      ({ name }) =>
+        onlineStepLifecycle("repair", name) === ONLINE_SCOPE.pending,
+    );
+    if (!pendingRepair) {
+      throw new TypeError("Expected a pending repair fixture");
+    }
+    const touched: string[] = [];
+    const watched = {
+      ...pendingRepair,
+      readCompletion: async () => {
+        touched.push("read");
+        return await Promise.resolve({
+          type: "incomplete",
+          reason: "fixture postcondition",
+        } as const);
+      },
+      repair: async () => {
+        touched.push("repair");
+        return await Promise.resolve({ type: "complete" } as const);
+      },
+    } satisfies OnlineRepair;
+
+    await runOnlineMigrations(createHarness().pool, {
+      scope: ONLINE_SCOPE.finalized,
+      repairs: [watched],
+    });
+
+    expect(touched).toEqual([]);
+  });
+
+  test("startup records a pending entry's missing index whatever migration is newest", async () => {
+    const pendingIndex = ONLINE_MIGRATION_INDEXES.find(
+      ({ name, introducedBy }) =>
+        typeof introducedBy === "string" &&
+        onlineStepLifecycle("index", name) === ONLINE_SCOPE.pending,
+    );
+    if (!pendingIndex || typeof pendingIndex.introducedBy !== "string") {
+      throw new TypeError("Expected a pending migration-owned index fixture");
+    }
+    const newestAppliedMigration = "99991231000000_later_fixture";
+    const harness = createHarness({
+      newestAppliedMigration,
+      missingIndexes: [pendingIndex.name],
+    });
+    expect(await reportOnlineMigrations(harness.pool, { repairs: [] })).toEqual(
+      {
+        newestAppliedMigration,
+        pending: [
+          {
+            kind: "index",
+            name: pendingIndex.name,
+            introducedBy: pendingIndex.introducedBy,
+          },
+        ],
+      },
+    );
+    const finalizedIndex = ONLINE_MIGRATION_INDEXES.find(
+      ({ name, introducedBy }) =>
+        typeof introducedBy === "string" &&
+        onlineStepLifecycle("index", name) === ONLINE_SCOPE.finalized,
+    );
+    if (!finalizedIndex) {
+      throw new TypeError("Expected a finalized migration-owned index fixture");
+    }
+    expect(
+      await rejectionOf(
+        reportOnlineMigrations(
+          createHarness({
+            newestAppliedMigration,
+            missingIndexes: [finalizedIndex.name],
+          }).pool,
+          { repairs: [] },
+        ),
+      ),
+    ).toMatchObject({
+      message: expect.stringContaining(
+        `Online index ${finalizedIndex.name} introduced by`,
+      ),
+    });
   });
 
   test("every online step reports its duration, in the order the phase runs them", async () => {

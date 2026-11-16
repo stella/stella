@@ -36,8 +36,15 @@ import type {
   OnlineIndexCutover,
   OnlineIndexReplacement,
 } from "./online-migration-entry";
+import { ONLINE_LIFECYCLE } from "./online-migration-entry";
 import { ONLINE_MIGRATION_ENTRIES } from "./online-migration-registry";
 import type { OnlineRepairRehearsalRecord } from "./online-migration-rehearsal-guard";
+import {
+  isInOnlineScope,
+  ONLINE_SCOPE,
+  onlineStepLifecycle,
+} from "./online-step-lifecycle";
+import type { OnlineScope } from "./online-step-lifecycle";
 
 // Catalog work keeps a short lock budget; every statement that locks a table
 // runs through the gate in `online-ddl.ts`, which lifts it and watches the
@@ -206,6 +213,8 @@ type OnlineIndexState = { type: "missing" } | PresentIndexState;
 type OnlineMigrationMode =
   | {
       operation: "repair";
+      /** The steps this run builds; the rest are left to their owner. */
+      scope: OnlineScope;
       indexGate: OnlineIndexGateOptions;
       reserveObserver: () => Promise<OnlineMigrationConnection>;
       timing: MigrationTiming;
@@ -231,11 +240,14 @@ export type OnlineRepairOptions = OnlineMigrationOptions & {
   reserveObserver: () => Promise<OnlineMigrationConnection>;
   /** Where each step's duration goes; JSON lines on stdout otherwise. */
   timing?: MigrationTiming;
+  /** Which entries to build; every entry unless a deploy opts out. */
+  scope?: OnlineScope | undefined;
 };
 
 export const runOnlineMigrations = async (
   pool: OnlineMigrationPool,
   {
+    scope = ONLINE_SCOPE.all,
     indexGate,
     reserveObserver,
     timing = DEFAULT_MIGRATION_TIMING,
@@ -244,7 +256,7 @@ export const runOnlineMigrations = async (
 ): Promise<OnlineMigrationOutcome> =>
   await processOnlineMigrations(
     pool,
-    { operation: "repair", indexGate, reserveObserver, timing },
+    { operation: "repair", scope, indexGate, reserveObserver, timing },
     options,
   );
 
@@ -351,6 +363,11 @@ const reportPendingStep = ({
   step,
   reason,
 }: ReportPendingStepOptions): void => {
+  // A pending entry is built after rollout, so no release reads it yet.
+  if (onlineStepLifecycle(step.kind, step.name) === ONLINE_LIFECYCLE.pending) {
+    recordPendingStep(report, step);
+    return;
+  }
   if (typeof step.introducedBy !== "string") {
     panic(
       `Online ${step.kind} ${step.name} owned by ${step.introducedBy.owner} is not complete: ${reason}`,
@@ -519,6 +536,16 @@ const processOnlineIndexAt = async ({
   if (!index) {
     return COMPLETE;
   }
+  if (
+    mode.operation === "repair" &&
+    !isInOnlineScope(mode.scope, "index", index.name)
+  ) {
+    return await processOnlineIndexAt({
+      connection,
+      mode,
+      offset: offset + 1,
+    });
+  }
 
   if (mode.operation === "repair") {
     const step = {
@@ -564,6 +591,16 @@ const processOnlineIndexCutoverAt = async ({
   const cutover = ONLINE_MIGRATION_INDEX_CUTOVERS.at(offset);
   if (!cutover) {
     return COMPLETE;
+  }
+  if (
+    mode.operation === "repair" &&
+    !isInOnlineScope(mode.scope, "cutover", cutover.final.name)
+  ) {
+    return await processOnlineIndexCutoverAt({
+      connection,
+      mode,
+      offset: offset + 1,
+    });
   }
 
   if (mode.operation === "repair") {
@@ -680,6 +717,19 @@ const processOnlineRepairAt = async ({
   const repair = repairs.at(offset);
   if (!repair) {
     return COMPLETE;
+  }
+  if (
+    mode.operation === "repair" &&
+    !isInOnlineScope(mode.scope, "repair", repair.name)
+  ) {
+    return await processOnlineRepairAt({
+      connection,
+      mode,
+      repairs,
+      log,
+      observeRepair,
+      offset: offset + 1,
+    });
   }
 
   const completion = await repair.readCompletion(connection);
@@ -823,6 +873,11 @@ const retireReplacedIndexAt = async (
   const replacement = ONLINE_INDEX_REPLACEMENTS.at(offset);
   if (!replacement) {
     return COMPLETE;
+  }
+  if (
+    !isInOnlineScope(repair.scope, "replacement_drop", replacement.legacyName)
+  ) {
+    return await retireReplacedIndexAt(connection, repair, offset + 1);
   }
 
   const step = {
