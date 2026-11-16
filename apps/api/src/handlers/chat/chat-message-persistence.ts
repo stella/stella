@@ -149,6 +149,50 @@ type ChatTurnWrites = {
 
 const NO_TURN_WRITES: ChatTurnWrites = { superseded: undefined };
 
+/** Apply `settlement` to its turn, and say how it went. */
+const settleOrReleaseOnTx = async ({
+  pings,
+  settlement,
+  tx,
+}: {
+  pings: ChatRunPings;
+  settlement: ChatTurnSettlement;
+  tx: Transaction;
+}): Promise<{
+  result: "not-owned" | "settled" | "stop-requested";
+  released: ReleasedChatTurn | undefined;
+}> => {
+  switch (settlement.kind) {
+    case "outcome":
+      return {
+        result: await settleChatTurnOnTx({
+          assistantMessageId: settlement.assistantMessageId,
+          execution: settlement.execution,
+          failureCode: settlement.failureCode,
+          failureRetryable: settlement.failureRetryable,
+          outcome: settlement.outcome,
+          pings,
+          tx,
+        }),
+        released: undefined,
+      };
+    case "release": {
+      const released = await releaseChatTurnOnTx({
+        assistantMessageId: settlement.assistantMessageId,
+        execution: settlement.execution,
+        pings,
+        tx,
+      });
+      return released.type === "released"
+        ? { result: "settled", released: released.turn }
+        : { result: released.type, released: undefined };
+    }
+    default:
+      settlement satisfies never;
+      return panic("Unhandled chat turn settlement kind");
+  }
+};
+
 const applyChatTurnWritesOnTx = async ({
   acceptance,
   pings,
@@ -171,41 +215,14 @@ const applyChatTurnWritesOnTx = async ({
   if (settlement === undefined) {
     return writes;
   }
-  if (settlement.kind === "release") {
-    const released = await releaseChatTurnOnTx({
-      assistantMessageId: settlement.assistantMessageId,
-      execution: settlement.execution,
-      pings,
-      tx,
-    });
-    switch (released.type) {
-      case "released":
-        return { ...writes, released: released.turn };
-      case "stop-requested":
-        throw new ChatTurnStopRequestedError({
-          message: "The user stopped the chat turn before it was released",
-        });
-      case "not-owned":
-        throw new ChatTurnNotOwnedError({
-          message: "Another execution settled the chat turn first",
-        });
-      default:
-        released satisfies never;
-        return panic("Unhandled chat turn release");
-    }
-  }
-  const settled = await settleChatTurnOnTx({
-    assistantMessageId: settlement.assistantMessageId,
-    execution: settlement.execution,
-    failureCode: settlement.failureCode,
-    failureRetryable: settlement.failureRetryable,
-    outcome: settlement.outcome,
+  const { result: settled, released } = await settleOrReleaseOnTx({
     pings,
+    settlement,
     tx,
   });
   switch (settled) {
     case "settled":
-      return writes;
+      return { ...writes, released };
     case "stop-requested":
       throw new ChatTurnStopRequestedError({
         message: "The user stopped the chat turn before it settled",

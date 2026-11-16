@@ -12,6 +12,7 @@ import {
   type SQL,
   sql,
 } from "drizzle-orm";
+import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 
 import { memberWaitsOf } from "@stll/api-contract/chat-member-wait";
 import {
@@ -1994,42 +1995,81 @@ export const settleChatTurnOnTx = async ({
     return "not-owned";
   }
 
-  const owned = ownedByExecution(execution);
   const isUserStop =
     outcome.type === "cancelled" && outcome.reason === USER_STOP_OUTCOME.reason;
+  const written = await writeOwnedChatTurnOnTx({
+    execution,
+    honoursStop: !isUserStop,
+    pings,
+    tx,
+    values,
+  });
+  if (written.type !== "written") {
+    return written.type;
+  }
+  const settled = written.row;
+  await closeChatRunLogOnTx({
+    organizationId: settled.organizationId,
+    runId: settled.runId,
+    turnId: settled.id,
+    tx,
+  });
+  await holdChatQueueAfterTurnOnTx({
+    outcome: outcome.type,
+    threadId: settled.threadId,
+    turnId: settled.id,
+    tx,
+  });
+  return "settled";
+};
+
+/**
+ * The one write that moves a running turn its execution owns to the turn's
+ * next status: a compare-and-set on the owning execution and, unless the
+ * write is the member's stop itself, on no stop request. The stop request
+ * and this write both lock the turn row, so exactly one of them lands first.
+ * Says which refused it when it did not land.
+ */
+const writeOwnedChatTurnOnTx = async ({
+  execution,
+  honoursStop,
+  pings,
+  tx,
+  values,
+}: {
+  execution: ChatTurnExecution;
+  /** Whether a stop request recorded first refuses the write. */
+  honoursStop: boolean;
+  pings: ChatRunPings;
+  tx: Transaction;
+  values: PgUpdateSetSource<typeof chatTurns>;
+}) => {
+  const owned = ownedByExecution(execution);
   // audit: skip — internal lifecycle settlement; the assistant message mutation is audited in this transaction
   const updated = await tx
     .update(chatTurns)
     .set(values)
-    .where(isUserStop ? owned : and(owned, isNull(chatTurns.cancelRequestedAt)))
+    .where(
+      honoursStop ? and(owned, isNull(chatTurns.cancelRequestedAt)) : owned,
+    )
     .returning({
       ...CHAT_RUN_OWNER_COLUMNS,
       id: chatTurns.id,
       runId: chatTurns.runId,
     });
   recordChatRunOwners(pings, updated);
-  const [settled, ...others] = updated;
-  if (settled !== undefined && others.length === 0) {
-    await closeChatRunLogOnTx({
-      organizationId: settled.organizationId,
-      runId: settled.runId,
-      turnId: settled.id,
-      tx,
-    });
-    await holdChatQueueAfterTurnOnTx({
-      outcome: outcome.type,
-      threadId: settled.threadId,
-      turnId: settled.id,
-      tx,
-    });
-    return "settled";
+  const [row, ...others] = updated;
+  if (row !== undefined && others.length === 0) {
+    return { type: "written", row } as const;
   }
   const stillOwned = await tx
     .select({ id: chatTurns.id })
     .from(chatTurns)
     .where(owned)
     .limit(1);
-  return stillOwned.length === 1 ? "stop-requested" : "not-owned";
+  return {
+    type: stillOwned.length === 1 ? "stop-requested" : "not-owned",
+  } as const;
 };
 
 /**
@@ -2100,33 +2140,24 @@ export const releaseChatTurnOnTx = async ({
     return panic("A running chat turn cannot be handed over");
   }
   const handedOver = planned.state;
-  // The stop request and this write both lock the turn row, so exactly one
-  // of them lands first, as for a settlement.
-  // audit: skip — internal lifecycle release; the assistant message mutation is audited in this transaction
-  const released = await tx
-    .update(chatTurns)
-    .set({
+  const written = await writeOwnedChatTurnOnTx({
+    execution,
+    honoursStop: true,
+    pings,
+    tx,
+    values: {
       assistantMessageId: handedOver.assistantMessageId,
       executionId: null,
       interactionToolCallId: null,
       interactionType: null,
       leaseExpiresAt: handedOver.adoptBy,
       status: handedOver.status,
-    })
-    .where(and(owned, isNull(chatTurns.cancelRequestedAt)))
-    .returning({ ...CHAT_RUN_OWNER_COLUMNS, id: chatTurns.id });
-  recordChatRunOwners(pings, released);
-  const row = released.at(0);
-  if (row === undefined) {
-    const stillOwned = await tx
-      .select({ id: chatTurns.id })
-      .from(chatTurns)
-      .where(owned)
-      .limit(1);
-    return stillOwned.length === 1
-      ? { type: "stop-requested" }
-      : { type: "not-owned" };
+    },
+  });
+  if (written.type !== "written") {
+    return { type: written.type };
   }
+  const { row } = written;
   await holdChatQueueAfterTurnOnTx({
     outcome: handedOver.status,
     threadId: row.threadId,

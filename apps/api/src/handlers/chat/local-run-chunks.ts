@@ -1980,7 +1980,7 @@ async function* readRunChunks({
         yield* computer({ status: "connected" });
       }
       for (const item of page.value.items) {
-        if (gate.open(finished) && !abortSignal.aborted) {
+        if (gate.open(finished)) {
           yield* release();
           return;
         }

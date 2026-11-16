@@ -84,6 +84,9 @@ import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
+// Runs as a postgres suite: the adopting task resolves its member through
+// the root pool, as a task started on the server does.
+//
 // The owner of a running local turn stops: an API task with a member's
 // computer working on the turn, stopped through the path its shutdown takes,
 // while another task listens for released turns. The computer never stops,
@@ -385,16 +388,16 @@ const readAnswer = async (messageId: SafeId<"chatMessage">) => {
 /** What an answer says, without the bookkeeping each store adds. */
 const sayings = (parts: readonly ChatPart[]) =>
   parts.map((part) => {
-    switch (part.type) {
-      case "text":
-        return ["text", part.content];
-      case "tool-call":
-        return ["tool-call", part.name, part.arguments, part.state];
-      case "tool-result":
-        return ["tool-result", part.toolCallId, part.state];
-      default:
-        return [part.type];
+    if (part.type === "text") {
+      return ["text", part.content];
     }
+    if (part.type === "tool-call") {
+      return ["tool-call", part.name, part.arguments, part.state];
+    }
+    if (part.type === "tool-result") {
+      return ["tool-result", part.toolCallId, part.state];
+    }
+    return [part.type];
   });
 
 /** The answer a page builds from the chunks of a turn's log. */

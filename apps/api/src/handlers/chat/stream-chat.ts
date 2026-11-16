@@ -2902,6 +2902,7 @@ type StreamSettlementOptions = Pick<
   | "getResponseMessage"
   | "mapMessageId"
   | "onFinish"
+  | "onRelease"
   | "processor"
 > & {
   runSignal: AbortSignal;
@@ -2927,6 +2928,7 @@ const createStreamSettlement = ({
   getResponseMessage,
   mapMessageId,
   onFinish,
+  onRelease,
   processor,
   deferredRunFinishedChunks,
   rawArgumentsByIncompleteToolCallId,
@@ -2938,6 +2940,24 @@ const createStreamSettlement = ({
   announceBeforeFailure,
   terminal,
 }: StreamSettlementOptions) => {
+  /**
+   * Store the answer so far of a read released to another task instead of
+   * an outcome: the adopter continues the message and settles the turn, so
+   * nothing here ends it or closes it for viewers. Finalizing only captures
+   * the message as it stands.
+   */
+  const release = async (): Promise<void> => {
+    terminal.state = "settled";
+    finalizeResponseProcessor(processor);
+    const store =
+      onRelease ?? panic("A released turn's processor has no release");
+    await store(
+      releasedAnswer(
+        mapMessageId(ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL),
+        getResponseMessage(),
+      ),
+    );
+  };
   const admissionCut = () =>
     chatTurnRunCutOf(abortSignal.reason) === "admission-lost";
   const admissionLost = () =>
@@ -3048,7 +3068,22 @@ const createStreamSettlement = ({
       timestamp: Temporal.Now.instant().epochMilliseconds,
     };
   };
+  /**
+   * End the stream for a lost admission, or a control cut that also cut it:
+   * the outcome stored, then what the run deferred and the refusal.
+   */
+  const endForAdmission =
+    async function* (): AsyncGenerator<PublicStreamChunk> {
+      const outcome = admissionCutByControl()
+        ? cutShortOutcome()
+        : admissionLossOutcome();
+      await terminalize({ flushProcessor: admissionCutByControl(), outcome });
+      yield* deferredRunFinishedChunks.splice(0);
+      yield* admissionFailureChunks(outcome);
+    };
   return {
+    endForAdmission,
+    release,
     admissionLost,
     admissionCutByControl,
     cutShortOutcome,
@@ -3718,6 +3753,57 @@ const closingChunks = function* (
   yield* finished;
 };
 
+/**
+ * Whether the turn's answer is already produced before this read: the answer
+ * a released read stored is this turn's (`answerSoFar`), so a read that only
+ * ends it completes the turn.
+ */
+const releasedAnswerShown = (
+  answerSoFar: ChatTurnAnswerSoFar,
+  initialResponseMessage: ChatMessage | undefined,
+): boolean =>
+  answerSoFar === "released" &&
+  arrayOrEmpty(initialResponseMessage?.parts).length > 0;
+
+/**
+ * `source` without the marker a read released to another task ends with
+ * (`CHAT_TURN_RELEASED_EVENT`), and whether it ended so.
+ */
+const withoutReleaseMarker = (source: AsyncIterable<PublicStreamChunk>) => {
+  const seen = { released: false };
+  return {
+    released: () => seen.released,
+    source: (async function* (): AsyncIterable<PublicStreamChunk> {
+      for await (const chunk of source) {
+        if (isChatTurnReleasedChunk(chunk)) {
+          seen.released = true;
+          continue;
+        }
+        yield chunk;
+      }
+    })(),
+  };
+};
+
+/**
+ * The answer so far of a read released to another task: the processor's
+ * message as it stands under the turn's id, empty when nothing was shown yet.
+ */
+const releasedAnswer = (
+  id: SafeId<"chatMessage">,
+  current: ChatMessage | null,
+): PersistableChatMessage =>
+  current === null
+    ? toPersistableChatMessage({ id, parts: [], role: "assistant" })
+    : toPersistableChatMessage({
+        id,
+        parts: current.parts,
+        role: "assistant",
+        ...(current.metadata === undefined
+          ? {}
+          : { metadata: current.metadata }),
+      });
+
 export const processServerChatStream = async function* ({
   abortSignal,
   dismissesAwaited = false,
@@ -3751,13 +3837,9 @@ export const processServerChatStream = async function* ({
     reportSnapshotFailure,
   );
   // Source deltas or new content in an explicit UI snapshot establish an
-  // answer. Continuation history alone cannot make an empty run successful;
-  // the answer a released read stored can, being this turn's.
-  let producedAnswer =
-    answerSoFar === "released" &&
-    arrayOrEmpty(initialResponseMessage?.parts).length > 0;
-  /** The source ended by releasing its turn to another task. */
-  let released = false;
+  // answer. Continuation history alone cannot make an empty run successful.
+  let producedAnswer = releasedAnswerShown(answerSoFar, initialResponseMessage);
+  const releasable = withoutReleaseMarker(source);
   const rawArgumentsByIncompleteToolCallId = new Map<string, string>();
   const toolCallsWithCompleteInput = approvedCallIdsOf(initialResponseMessage);
   // One accepted turn has exactly one terminal callback. Set before awaiting
@@ -3770,6 +3852,8 @@ export const processServerChatStream = async function* ({
     cutShortOutcome,
     admissionLossOutcome,
     admissionFailureChunks,
+    endForAdmission,
+    release,
     terminalize,
   } = createStreamSettlement({
     abortSignal,
@@ -3780,6 +3864,7 @@ export const processServerChatStream = async function* ({
     getResponseMessage,
     mapMessageId,
     onFinish,
+    onRelease,
     processor,
     deferredRunFinishedChunks,
     rawArgumentsByIncompleteToolCallId,
@@ -3795,7 +3880,7 @@ export const processServerChatStream = async function* ({
     for await (const sourceRead of readSourceUntilCut({
       initialMessages,
       mapMessageId,
-      source,
+      source: releasable.source,
       signal: runSignal,
     })) {
       if (Result.isError(sourceRead)) {
@@ -3803,10 +3888,6 @@ export const processServerChatStream = async function* ({
         throw error;
       }
       const sourceChunk = sourceRead.value;
-      if (isChatTurnReleasedChunk(sourceChunk)) {
-        released = true;
-        continue;
-      }
       trackIncompleteToolCallInput(
         sourceChunk,
         rawArgumentsByIncompleteToolCallId,
@@ -3821,12 +3902,7 @@ export const processServerChatStream = async function* ({
       ) {
         runState.usage =
           tokenUsageFromTerminalChunk(sourceChunk) ?? runState.usage;
-        const outcome = admissionCutByControl()
-          ? cutShortOutcome()
-          : admissionLossOutcome();
-        await terminalize({ flushProcessor: admissionCutByControl(), outcome });
-        yield* deferredRunFinishedChunks.splice(0);
-        yield* admissionFailureChunks(outcome);
+        yield* endForAdmission();
         return;
       }
       const processed = processPersistenceChunk({
@@ -3868,34 +3944,12 @@ export const processServerChatStream = async function* ({
       yield chunk;
     }
 
-    if (released) {
-      // Released, not ended: the adopter continues this message and settles
-      // the turn, so nothing here gives it an outcome or closes it for
-      // viewers. Finalizing only captures the message as it stands.
-      terminal.state = "settled";
-      finalizeResponseProcessor(processor);
-      const release =
-        onRelease ?? panic("A released turn's processor has no release");
-      const current = getResponseMessage();
-      await release(
-        toPersistableChatMessage({
-          id: responseMessageId,
-          parts: current?.parts ?? [],
-          role: "assistant",
-          ...(current?.metadata !== undefined
-            ? { metadata: current.metadata }
-            : {}),
-        }),
-      );
+    if (releasable.released()) {
+      await release();
       return;
     }
     if (admissionLost() || admissionCutByControl()) {
-      const outcome = admissionCutByControl()
-        ? cutShortOutcome()
-        : admissionLossOutcome();
-      await terminalize({ flushProcessor: admissionCutByControl(), outcome });
-      yield* deferredRunFinishedChunks.splice(0);
-      yield* admissionFailureChunks(outcome);
+      yield* endForAdmission();
       return;
     }
     const finalRunFinishedChunks = deferredRunFinishedChunks.splice(0);
