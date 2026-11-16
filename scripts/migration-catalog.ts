@@ -160,7 +160,7 @@ const snapshotData = async (
   tables: readonly Row[],
   columns: readonly Row[],
 ): Promise<Record<string, string>> => {
-  const data: Record<string, string> = {};
+  const data = new Map<string, string>();
   for (const table of tables) {
     const schema = String(table["schema"]);
     const name = String(table["name"]);
@@ -204,10 +204,12 @@ const snapshotData = async (
       FROM (SELECT md5((${expression})::text) AS row_hash
             FROM ${quoteIdentifier(schema)}.${quoteIdentifier(name)} t) rows`,
     );
-    data[`${schema}.${name}`] =
-      `${String(digest.at(0)?.["count"])}:${String(digest.at(0)?.["digest"])}`;
+    data.set(
+      `${schema}.${name}`,
+      `${String(digest.at(0)?.["count"])}:${String(digest.at(0)?.["digest"])}`,
+    );
   }
-  return data;
+  return Object.fromEntries(data);
 };
 
 /** Catalog only non-system objects. Database-local names are stable across both paths. */
@@ -374,10 +376,12 @@ export const snapshotCatalog = async (
 
   const data = await snapshotData(client, tables, columns);
 
-  const enums: Record<string, string[]> = {};
+  const enums = new Map<string, string[]>();
   for (const row of enumRows) {
     const key = `${String(row["schema"])}.${String(row["name"])}`;
-    (enums[key] ??= []).push(String(row["label"]));
+    const labels = enums.get(key) ?? [];
+    labels.push(String(row["label"]));
+    enums.set(key, labels);
   }
   return {
     schemas: rowsByKey(schemas, ["name"]),
@@ -393,7 +397,7 @@ export const snapshotCatalog = async (
     sequences: rowsByKey(sequences, ["schema", "name"]),
     types: rowsByKey(types, ["schema", "name"]),
     defaultAcls: rowsByKey(defaultAcls, ["schema", "owner", "kind"]),
-    enums,
+    enums: Object.fromEntries(enums),
     memberships,
     ledger: ledgerPairs(
       ledgerRows.map((row) => ({
