@@ -20,6 +20,7 @@ import {
   resolvePreserveTokensForTrigger,
 } from "@/api/lib/chat/compaction-tokens";
 import { ModelDeadlineExceededError } from "@/api/lib/errors/provider-call-error";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
@@ -98,12 +99,9 @@ describe("chat history compaction", () => {
     expect(captured).not.toContain(SKILL_SUMMARY_SECRET);
     expect(captured).toContain("ORDINARY CONVERSATION");
     expect(captured).toContain("ORDINARY OUTCOME");
-    if (Result.isError(result)) {
-      throw result.error;
-    }
-    expect(result.value.messages.slice(1)).toEqual(tail);
-    expect(result.value.messages.at(-1)).toBe(tail.at(-1));
-    expect(JSON.stringify(result.value.messages.at(-1))).toContain(
+    expect(result.messages.slice(1)).toEqual(tail);
+    expect(result.messages.at(-1)).toBe(tail.at(-1));
+    expect(JSON.stringify(result.messages.at(-1))).toContain(
       SKILL_SUMMARY_SECRET,
     );
     expect(JSON.stringify(messages)).toBe(before);
@@ -248,20 +246,15 @@ describe("chat history compaction", () => {
       triggerTokens: 50,
     });
 
-    expect(Result.isOk(compacted)).toBe(true);
-    if (Result.isError(compacted)) {
-      return;
-    }
-
-    expect(compacted.value.notice).toBeNull();
-    expect(compacted.value.messages).toHaveLength(2);
-    expect(compacted.value.messages.at(0)?.role).toBe("user");
-    expect(compacted.value.messages.at(0)?.parts.at(0)).toEqual({
+    expect(compacted.notice).toBeNull();
+    expect(compacted.messages).toHaveLength(2);
+    expect(compacted.messages.at(0)?.role).toBe("user");
+    expect(compacted.messages.at(0)?.parts.at(0)).toEqual({
       type: "text",
       content:
         "Earlier conversation compacted from 2 message(s).\n\nold work summary",
     });
-    expect(compacted.value.messages.at(1)?.id).toBe("msg_3");
+    expect(compacted.messages.at(1)?.id).toBe("msg_3");
   });
 
   test("preserves chat history from the latest user turn boundary", () => {
@@ -328,9 +321,47 @@ describe("chat history compaction", () => {
       triggerTokens: 20,
     });
 
-    expect(Result.isOk(compacted)).toBe(true);
+    expect(compacted.notice).toBeNull();
     expect(transcriptSeenBySummarizer).toContain("[ORG_1]");
     expect(transcriptSeenBySummarizer).not.toContain("Acme s.r.o.");
+  });
+
+  test("keeps the newest history that fits and says so when the transcript cannot be prepared", async () => {
+    const messages = [
+      textMessage({ id: "msg_1", role: "user", text: "old fact ".repeat(80) }),
+      textMessage({
+        id: "msg_2",
+        role: "assistant",
+        text: "old answer ".repeat(80),
+      }),
+      textMessage({ id: "msg_3", role: "user", text: "latest question" }),
+    ];
+    const refusal = new HandlerError({
+      status: 422,
+      message: "The transcript could not be anonymized",
+    });
+    const reported: unknown[] = [];
+    let summarized = false;
+
+    const compacted = await compactChatMessages({
+      messages,
+      onSummaryError: (error) => {
+        reported.push(error);
+      },
+      prepareTranscript: async () => await Promise.resolve(Result.err(refusal)),
+      preserveTokens: 20,
+      summarizeTranscript: async () => {
+        summarized = true;
+        return "summary";
+      },
+      triggerTokens: 50,
+    });
+
+    // The turn goes on without its oldest history, and is told so.
+    expect(compacted.messages.map(({ id }) => id)).toEqual(["msg_3"]);
+    expect(compacted.notice).toEqual({ type: "history-trimmed" });
+    expect(reported).toEqual([refusal]);
+    expect(summarized).toBe(false);
   });
 
   test("masks bulky file attachments in the transcript", () => {
@@ -514,10 +545,6 @@ describe("chat history compaction", () => {
           summarizeTranscript,
         });
 
-        expect(compacted.status).toBe("ok");
-        if (compacted.status === "error") {
-          return;
-        }
         const preservedTail = planChatCompaction({
           messages: longThread,
           ...budget,
@@ -526,7 +553,7 @@ describe("chat history compaction", () => {
         if (preservedTail.type !== "compact") {
           return;
         }
-        const kept = compacted.value.messages.map(({ id }) => id);
+        const kept = compacted.messages.map(({ id }) => id);
         // More than the preserved tail: the history the request can carry.
         expect(kept.length).toBeGreaterThan(
           preservedTail.recentMessages.length,
@@ -537,7 +564,7 @@ describe("chat history compaction", () => {
         );
         expect(kept.at(0)?.startsWith("user_")).toBe(true);
         // And the answer is told that earlier history was left out.
-        expect(compacted.value.notice).toEqual({ type: "history-trimmed" });
+        expect(compacted.notice).toEqual({ type: "history-trimmed" });
       });
     }
 
@@ -810,18 +837,20 @@ Continue drafting the termination analysis.
         const oldText = "old request ".repeat(80);
         const compacted =
           history === "chat"
-            ? await compactChatMessagesForModel({
-                ...options,
-                boundary: { type: "raw" },
-                messages: [
-                  textMessage({ id: "old", role: "user", text: oldText }),
-                  textMessage({
-                    id: "latest",
-                    role: "user",
-                    text: "latest request",
-                  }),
-                ],
-              })
+            ? Result.ok(
+                await compactChatMessagesForModel({
+                  ...options,
+                  boundary: { type: "raw" },
+                  messages: [
+                    textMessage({ id: "old", role: "user", text: oldText }),
+                    textMessage({
+                      id: "latest",
+                      role: "user",
+                      text: "latest request",
+                    }),
+                  ],
+                }),
+              )
             : await compactModelMessagesForModel({
                 ...options,
                 task: "chat",

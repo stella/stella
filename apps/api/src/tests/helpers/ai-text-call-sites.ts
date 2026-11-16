@@ -289,14 +289,17 @@ const chatCompactionDriver = textCallSiteDriver({
   finishPolicy: COMPACTION_FINISH_POLICY,
   run: async (cassette) => {
     const summaryErrors: HandlerError[] = [];
-    const result = await compactChatMessagesForModel({
-      ...compactionOptions(cassette),
-      boundary: { type: "raw" },
-      messages: chatThread,
-      onSummaryError: (error) => {
-        summaryErrors.push(error);
-      },
-    });
+    // Chat compaction always settles: a failure trims the history instead.
+    const result = Result.ok(
+      await compactChatMessagesForModel({
+        ...compactionOptions(cassette),
+        boundary: { type: "raw" },
+        messages: chatThread,
+        onSummaryError: (error) => {
+          summaryErrors.push(error);
+        },
+      }),
+    );
     return compactionAnswerOf({
       input: chatThread,
       result,
