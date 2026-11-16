@@ -7700,6 +7700,59 @@ describe("undoing the file changes made since a message", () => {
     await desktop.close();
   });
 
+  test("the edit an undo comes with removes the undone answer, and the edited turn is still told", async () => {
+    const { desktopId, desktop } = await connected();
+    const threadId = await newThread();
+    const { turnId } = await finishedTurn(desktop, desktopId, { threadId });
+    const messageId = await messageOf(turnId);
+    const undo = await accepted(threadId, turnId);
+    await desktop.receive("folder.restore");
+    desktop.send({
+      type: "folder.restored",
+      restoreId: undo.restoreId,
+      outcome: "restored",
+    });
+    expect((await settled(threadId, turnId))?.state).toBe("restored");
+
+    // The edit removes the answers after the edited message, and with them
+    // the turn the undo was asked from.
+    const [answer] = await db
+      .select({ id: chatTurns.assistantMessageId })
+      .from(chatTurns)
+      .where(eq(chatTurns.id, turnId));
+    await db
+      .delete(chatMessages)
+      .where(eq(chatMessages.id, answer?.id ?? panic("the turn answered")));
+    expect(
+      await db
+        .select({ id: chatTurns.id })
+        .from(chatTurns)
+        .where(eq(chatTurns.id, turnId)),
+    ).toEqual([]);
+
+    // The edited turn asks the same message again; its run is told.
+    const editedTurn = createSafeId<"chatTurn">();
+    clock.now += 1;
+    await db.insert(chatTurns).values({
+      id: editedTurn,
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+      threadId,
+      userMessageId: messageId,
+      status: "running",
+      executionId: Bun.randomUUIDv7(),
+      leaseExpiresAt: new Date(clock.now + DAY_MS),
+    });
+    const told = await startTurnRun(desktop, desktopId, {
+      threadId,
+      turnId: editedTurn,
+    });
+    expect(JSON.stringify(told.messages.at(-1))).toContain(
+      FOLDER_RESTORED_NOTE,
+    );
+    await desktop.close();
+  });
+
   test("a member who left a matter the thread holds data of can neither read nor ask an undo", async () => {
     const { desktopId, desktop } = await connected();
     const threadId = await newThread([ids.wsA2]);

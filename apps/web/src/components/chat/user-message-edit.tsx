@@ -429,7 +429,7 @@ const UserMessageEditForm = ({
           read: async () =>
             await Result.tryPromise(
               async () =>
-                await queryClient.fetchQuery({ ...undoOptions, staleTime: 0 }),
+                await queryClient.query({ ...undoOptions, staleTime: 0 }),
             ),
           wait: async (ms) => {
             await sleep(ms);

@@ -937,16 +937,17 @@ export const settleFolderRestore = async (
         userId: binding.userId,
         workspaceId: null,
       });
-      for (const answer of answers) {
-        // await-in-loop: one audit row per marked answer, in this transaction.
-        await recordAuditEvent(tx, {
+      // One audit row per marked answer, written together in this transaction.
+      await recordAuditEvent(
+        tx,
+        answers.map((answer) => ({
           action: AUDIT_ACTION.UPDATE,
           resourceType: AUDIT_RESOURCE_TYPE.CHAT_MESSAGE,
           resourceId: answer.id,
           workspaceId: answer.workspaceId,
           metadata: { reason: "local_files_undone", undoId: restoreId },
-        });
-      }
+        })),
+      );
     }
     return "settled";
   });
