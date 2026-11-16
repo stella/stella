@@ -21,7 +21,10 @@ import type {
 } from "@/api/lib/case-law-public-read-db";
 import { resetPublicCaseLawConfigForTesting } from "@/api/lib/case-law/public-case-law-config";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
-import { corpusIndexReadTarget } from "@/api/lib/legal-search/corpus-index-group-contract";
+import {
+  corpusIndexGroupContractForJurisdiction,
+  corpusIndexReadTarget,
+} from "@/api/lib/legal-search/corpus-index-group-contract";
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexConfigFromManifest,
@@ -140,11 +143,16 @@ let client: PGlite;
 let caseLawDb: CaseLawPublicReadDb;
 
 const search = async (query: string, limit: number, cursor?: string) => {
+  // The group Czech decisions are written to, attested as a serving one is.
+  const { indexGroup } = corpusIndexGroupContractForJurisdiction(
+    MANIFEST,
+    "CZE",
+  );
   const resolution = corpusIndexReadTarget({
     manifest: MANIFEST,
     jurisdiction: "CZE",
-    attestedGroups: new Set(["cs_sk"]),
-    enrolledGroups: new Set(["cs_sk"]),
+    attestedGroups: new Set([indexGroup]),
+    enrolledGroups: new Set([indexGroup]),
   });
   if (resolution.type !== "ready") {
     return panic("Expected the Czech corpus group to be ready");
