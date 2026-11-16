@@ -738,5 +738,11 @@
     "parserVersion": 22,
     "type": "pending-enrolment-wave",
     "wave": "stored-document-objects-dry-run"
+  },
+  {
+    "source": "br-tst",
+    "parserVersion": 2,
+    "type": "pending-enrolment-wave",
+    "wave": "stored-document-objects-dry-run"
   }
 ]
