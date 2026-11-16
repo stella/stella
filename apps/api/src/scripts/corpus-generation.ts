@@ -168,8 +168,8 @@ Options (seed):
 
 Exit codes (parity): 0 no regression, 3 regressions, 4 undecided, 1 refused.
 Exit codes (seed): 0 every route seeded, 5 page budget spent, 6 paused by
-the database-load brake, 7 next row held by a writer, 8 a route appeared
-after the pass began, 1 refused.
+the database-load brake (after 15 minutes of waiting), 7 next row held by a
+writer, 8 a route appeared after the pass began, 1 refused.
 `;
 
 /** Rows `status` and the planners read; the registry holds a handful per family. */
@@ -758,9 +758,23 @@ const withSeedingLane: WithSeedingDatabase = async (work) => {
   return await work(rootDb);
 };
 
+/** How the seed command meets the database-load brake. */
+type SeedingBrake = {
+  /** The page runtime; a test replaces its load reading. */
+  createRuntime: typeof createScriptBackfillRuntime;
+  /** How long a run waits on the brake before it stops with `braked`. */
+  maxWaitMs: number;
+};
+
+const SEEDING_BRAKE: SeedingBrake = {
+  createRuntime: createScriptBackfillRuntime,
+  maxWaitMs: 15 * 60_000,
+};
+
 type CommandContext = {
   withDatabase: WithCorpusDatabase;
   withSeedingDatabase: WithSeedingDatabase;
+  seedingBrake: SeedingBrake;
   indexClient: (manifest: CorpusIndexManifest) => CorpusIndexReader;
   searchEndpoint: (manifest: CorpusIndexManifest) => string | null;
   write: (line: string) => void;
@@ -1349,12 +1363,69 @@ const describeSeedingPage = (
 };
 
 /**
+ * The exit code of a seed run, from how its pass ended and the route rows it
+ * left: one code per reason a run stops short.
+ */
+export const seedRunExit = ({
+  target,
+  paused,
+  outcome,
+  seedings,
+  write,
+}: {
+  target: Pick<DeclaredTarget, "family" | "generation">;
+  /** The run stopped waiting on the database-load brake. */
+  paused: boolean;
+  /** The last page's outcome; null when no page ran. */
+  outcome: CorpusIndexSeedingAdvance | null;
+  seedings: Awaited<ReturnType<typeof readCorpusIndexRouteSeedingsTx>>;
+  write: (line: string) => void;
+}): Result<number, CorpusGenerationRefusal> => {
+  if (paused || outcome === null) {
+    write("paused by the database-load brake; rerun to resume");
+    return Result.ok(SEED_EXIT.braked);
+  }
+  switch (outcome.type) {
+    case "inactive":
+      return Result.err(
+        new CorpusGenerationRetiringError({
+          message: `${target.family}/${target.generation} is ${outcome.status ?? "not registered"}; only a building or serving generation is seeded`,
+          family: target.family,
+          generation: target.generation,
+        }),
+      );
+    case "complete":
+    case "completed":
+      // A completed pass covers the routes it captured as it began; a
+      // route that appeared since needs another pass.
+      if (
+        seedings === null ||
+        seedings.routes.some(({ state }) => state === "unseeded")
+      ) {
+        write("a route appeared after the pass began; rerun to walk it");
+        return Result.ok(SEED_EXIT.routeAppeared);
+      }
+      write("every route of the generation is seeded");
+      return Result.ok(SEED_EXIT.seeded);
+    case "busy":
+      write("the next row is held by a writer; rerun to resume");
+      return Result.ok(SEED_EXIT.busy);
+    case "advanced":
+      write("page budget spent; rerun to resume from the stored cursor");
+      return Result.ok(SEED_EXIT.budgetSpent);
+    default:
+      outcome satisfies never;
+      return panic(`Unhandled seeding outcome: ${String(outcome)}`);
+  }
+};
+
+/**
  * Advance the seeding pass page by page under the database-load brake
  * (`createScriptBackfillRuntime`). Each page seeds and records its cursor in
  * one transaction, so an interrupted run resumes where the database says.
  */
 const runSeed = async (
-  { withSeedingDatabase, write }: CommandContext,
+  { withSeedingDatabase, seedingBrake, write }: CommandContext,
   { target, pages }: Extract<CorpusGenerationCommand, { type: "seed" }>,
 ): Promise<Result<number, CorpusGenerationRefusal>> => {
   write(
@@ -1362,7 +1433,7 @@ const runSeed = async (
   );
   write(declaredLine(target));
   return await withSeedingDatabase(async (rootDb) => {
-    const runtime = createScriptBackfillRuntime({
+    const runtime = seedingBrake.createRuntime({
       name: `corpus-seeding:${target.family}:${target.generation}`,
       tableName: CANONICAL_TABLES[target.family],
       initialSize: SEED_PAGE_LIMIT,
@@ -1374,6 +1445,7 @@ const runSeed = async (
       last: null,
     };
     const startedAt = Temporal.Now.instant().epochMilliseconds;
+    const ran: { paused: boolean } = { paused: false };
     try {
       const pass = await runBackfillPass({
         step: async () =>
@@ -1405,10 +1477,14 @@ const runSeed = async (
           );
         },
         sleep: Bun.sleep,
+        // A run that waits on the brake this long stops, so a wrapper sees
+        // `braked` instead of a run that never returns.
+        maxWaitMs: seedingBrake.maxWaitMs,
       });
       if (pass.isErr()) {
         throw pass.error;
       }
+      ran.paused = pass.value.status === "paused";
     } finally {
       await runtime.close();
     }
@@ -1424,42 +1500,13 @@ const runSeed = async (
           : `  ${route.indexId}: unseeded, ${route.reason} (${route.jurisdictions.join(", ")})`,
       );
     }
-    if (outcome === null) {
-      write("paused by the database-load brake; rerun to resume");
-      return Result.ok(SEED_EXIT.braked);
-    }
-    switch (outcome.type) {
-      case "inactive":
-        return Result.err(
-          new CorpusGenerationRetiringError({
-            message: `${target.family}/${target.generation} is ${outcome.status ?? "not registered"}; only a building or serving generation is seeded`,
-            family: target.family,
-            generation: target.generation,
-          }),
-        );
-      case "complete":
-      case "completed":
-        // A completed pass covers the routes it captured as it began; a
-        // route that appeared since needs another pass.
-        if (
-          seedings === null ||
-          seedings.routes.some(({ state }) => state === "unseeded")
-        ) {
-          write("a route appeared after the pass began; rerun to walk it");
-          return Result.ok(SEED_EXIT.routeAppeared);
-        }
-        write("every route of the generation is seeded");
-        return Result.ok(SEED_EXIT.seeded);
-      case "busy":
-        write("the next row is held by a writer; rerun to resume");
-        return Result.ok(SEED_EXIT.busy);
-      case "advanced":
-        write("page budget spent; rerun to resume from the stored cursor");
-        return Result.ok(SEED_EXIT.budgetSpent);
-      default:
-        outcome satisfies never;
-        return panic(`Unhandled seeding outcome: ${String(outcome)}`);
-    }
+    return seedRunExit({
+      target,
+      paused: ran.paused,
+      outcome,
+      seedings,
+      write,
+    });
   });
 };
 
@@ -1467,6 +1514,7 @@ type RunCorpusGenerationOptions = {
   args: readonly string[];
   withDatabase?: WithCorpusDatabase;
   withSeedingDatabase?: WithSeedingDatabase;
+  seedingBrake?: SeedingBrake;
   indexClient?: (manifest: CorpusIndexManifest) => CorpusIndexReader;
   searchEndpoint?: (manifest: CorpusIndexManifest) => string | null;
   write?: (line: string) => void;
@@ -1478,6 +1526,7 @@ export const runCorpusGenerationCommand = async ({
   args,
   withDatabase = withOperatorDatabase,
   withSeedingDatabase = withSeedingLane,
+  seedingBrake = SEEDING_BRAKE,
   indexClient = (manifest) => getCorpusIndexClient(manifest.cluster),
   searchEndpoint = (manifest) => readCorpusIndexSearchBaseUrl(manifest.cluster),
   write = (line) => process.stdout.write(`${line}\n`),
@@ -1498,6 +1547,7 @@ export const runCorpusGenerationCommand = async ({
   const context: CommandContext = {
     withDatabase,
     withSeedingDatabase,
+    seedingBrake,
     indexClient,
     searchEndpoint,
     write,
