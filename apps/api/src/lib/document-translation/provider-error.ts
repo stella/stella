@@ -1,5 +1,7 @@
 import { panic } from "better-result";
 
+import { BodyByteLimitError } from "@stll/fetch/body-reader";
+
 import { classifyAIError } from "@/api/lib/ai-error";
 import { DeepLTimeoutError, DeepLUpstreamError } from "@/api/lib/deepl/errors";
 import type { DocumentTranslationRunErrorCode } from "@/api/lib/document-translation/contract";
@@ -18,6 +20,10 @@ const isDeepLProviderUnavailable = (error: unknown): boolean =>
 export const documentTranslationProviderErrorCode = (
   error: unknown,
 ): DocumentTranslationRunErrorCode => {
+  // Preserve the existing terminal result of the document publication limit.
+  if (DeepLUpstreamError.is(error) && BodyByteLimitError.is(error.cause)) {
+    return "internal";
+  }
   if (isDeepLProviderUnavailable(error)) {
     return "provider_unavailable";
   }
