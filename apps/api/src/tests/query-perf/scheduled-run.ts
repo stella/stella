@@ -70,6 +70,7 @@ type MeasuredStatement = {
   metrics: QueryPerfMetrics;
   planViolations: PlanViolation[];
   queuedExportRead: ReturnType<typeof queuedExportReadWork>;
+  queuedReadPlan: PlanNode | undefined;
   statement: string;
   writtenRows: number;
 };
@@ -432,14 +433,17 @@ export const measureScheduledStatementsInOrder = async ({
             ? {}
             : { observedWrittenRows: statement.writtenRows }),
         });
+        const queuedExportRead = queuedExportReadWork({
+          ...statement,
+          plan: plan.Plan,
+        });
         measured.push({
           actualRows,
           ...classification,
           metrics: metricsFromPlan(plan),
-          queuedExportRead: queuedExportReadWork({
-            ...statement,
-            plan: plan.Plan,
-          }),
+          queuedExportRead,
+          queuedReadPlan:
+            queuedExportRead === undefined ? undefined : plan.Plan,
           planViolations: analyzePlan({
             document: plan,
             owner: jobId,
@@ -734,10 +738,15 @@ export const measureScheduledJobRun = async ({
   }
   const statements = measured.statements.map(({ query, plan }) => {
     const statement = query.text.replaceAll(/\s+/gu, " ").slice(0, 160);
+    const queuedExportRead = queuedExportReadWork({
+      ...query,
+      plan: plan.Plan,
+    });
     return {
       ...classifyMeasuredStatement({ statement: query.text, plan: plan.Plan }),
       metrics: metricsFromPlan(plan),
-      queuedExportRead: queuedExportReadWork({ ...query, plan: plan.Plan }),
+      queuedExportRead,
+      queuedReadPlan: queuedExportRead === undefined ? undefined : plan.Plan,
       planViolations: analyzePlan({
         document: plan,
         owner: jobId,
