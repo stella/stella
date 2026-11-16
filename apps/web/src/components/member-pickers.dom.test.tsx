@@ -146,7 +146,7 @@ const mount = async (children: () => ReactNode) => {
     },
   });
   clients.push(client);
-  client.setQueryData(sessionOptions.queryKey, {
+  const signedInSession = {
     ...MEMBER_SESSION,
     user: { ...MEMBER_SESSION.user, id: USER_ID },
     session: {
@@ -154,7 +154,8 @@ const mount = async (children: () => ReactNode) => {
       userId: USER_ID,
       activeOrganizationId: ORGANIZATION,
     },
-  });
+  } satisfies typeof MEMBER_SESSION;
+  client.setQueryData(sessionOptions.queryKey, signedInSession);
   const root = router.createRootRoute({ component: router.Outlet });
   const protectedRoute = router.createRoute({
     getParentRoute: () => root,
