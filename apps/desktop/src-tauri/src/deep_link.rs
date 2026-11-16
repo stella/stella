@@ -1254,7 +1254,11 @@ mod tests {
       );
       focuses.push(focus);
     }
-    assert_eq!(focuses, crate::AgentSettingsFocus::ALL);
+    // Every focus once, in whatever order the fixture lists them.
+    assert_eq!(focuses.len(), crate::AgentSettingsFocus::ALL.len());
+    for focus in crate::AgentSettingsFocus::ALL {
+      assert!(focuses.contains(&focus), "{focus:?} has no settings link");
+    }
     let rejected = links["rejected"].as_array().unwrap();
     assert!(!rejected.is_empty());
     for url in rejected {
