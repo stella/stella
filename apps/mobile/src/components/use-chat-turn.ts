@@ -20,13 +20,17 @@ import { epochMilliseconds } from "@/connection/clock";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
 import type { ApiError } from "@/state/api-request";
-import { sendRefusal, sendsAnonymized } from "@/state/chat-attachments";
+import {
+  sendRefusal,
+  sendsAnonymized,
+  steersDraft,
+} from "@/state/chat-attachments";
 import type {
   ChatDraft,
   DraftSendMode,
   SendRefusal,
 } from "@/state/chat-attachments";
-import { sentEntry } from "@/state/chat-messages";
+import { sentEntry, steeringAfterPageRead } from "@/state/chat-messages";
 import type { ChatEntry, ChatRetry } from "@/state/chat-messages";
 import { continuationOf } from "@/state/chat-pending-input";
 import type { PendingAnswer, PendingInput } from "@/state/chat-pending-input";
@@ -340,6 +344,7 @@ export const useChatTurn = ({
     sendError,
     declineAndSteer,
     steering: turn.steering,
+    steeringFromPage: turn.steeringFromPage,
     ...steers,
     stop,
   };
@@ -446,7 +451,7 @@ function declineAndSteerOf({
       readonly onRefused: () => void;
     },
   ): boolean => {
-    if (busy() || draft.files.length > 0) {
+    if (busy() || !steersDraft(draft)) {
       return false;
     }
     setSendError(undefined);
@@ -462,7 +467,7 @@ function declineAndSteerOf({
       if (queued === undefined) {
         return;
       }
-      answer(pending, decline, {
+      const answering = answer(pending, decline, {
         onAccepted: (turnId) => {
           onAccepted();
           void steerQueuedInto(turnId, {
@@ -474,6 +479,11 @@ function declineAndSteerOf({
         // The message stays queued, and is sent once the thread is free.
         onRefused: onDeclineRefused,
       });
+      // A turn opened while the draft was queued: the decline was never
+      // sent, which the member hears as a refused one.
+      if (!answering) {
+        onDeclineRefused();
+      }
     })();
     return true;
   };
@@ -597,7 +607,7 @@ function useTurnSteer({
   const [steerRefusal, onRefusal] = useState<ChatLocalRunSteerRefusal>();
   const steer = (draft: ChatDraft, onRefused: () => void): boolean => {
     const { turnId } = turn;
-    if (turnId === undefined || draft.files.length > 0) {
+    if (turnId === undefined || !steersDraft(draft)) {
       return false;
     }
     onRefusal(undefined);
@@ -888,6 +898,17 @@ function useLiveTurn(
         return;
       }
       showAnswer(applyChatEvent(answer.current, event));
+    },
+    /**
+     * The thread's page was read again: a turn whose start the server
+     * refused said nothing, so the waiting turn takes messages as the page
+     * says, unless a stream is open and says it.
+     */
+    steeringFromPage: (page: ChatTurnSteering) => {
+      const streamOpen = connection.current !== null;
+      setSteering((shown) =>
+        steeringAfterPageRead({ page, shown, streamOpen }),
+      );
     },
     /** What the running turn makes of steer `inputId`, once it says. */
     awaitSteer: async (inputId: string): Promise<SteerOutcome> =>

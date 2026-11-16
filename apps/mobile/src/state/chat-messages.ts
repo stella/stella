@@ -291,6 +291,21 @@ const toPage = (
   retry: latest ? retryOf(page.messages, page.runTarget) : null,
 });
 
+/**
+ * Whether the turn takes a message mid-turn once the thread's page is read
+ * again: as the page says, unless a turn's stream is open, which says it for
+ * its own turn.
+ */
+export const steeringAfterPageRead = ({
+  page,
+  shown,
+  streamOpen,
+}: {
+  readonly page: ChatTurnSteering;
+  readonly shown: ChatTurnSteering;
+  readonly streamOpen: boolean;
+}): ChatTurnSteering => (streamOpen ? shown : page);
+
 /** An older page in front of what is loaded, without a message twice. */
 export const prependOlderPage = (
   loaded: readonly ChatEntry[],

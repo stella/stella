@@ -13,6 +13,7 @@ import {
   readChatThread,
   readOlderChatMessages,
   sentEntry,
+  steeringAfterPageRead,
   toChatEntry,
 } from "./chat-messages";
 import type { ChatEntry } from "./chat-messages";
@@ -366,6 +367,26 @@ describe("reading a thread", () => {
     // A server from before the field: the turn takes none, so nothing waits
     // on a guess.
     expect(await read(pageFor(undefined))).toBe("not_steerable");
+  });
+
+  test("a refused answer leaves the waiting turn steerable as the page reads it again", () => {
+    // Answering opened a turn that takes nothing; the server refused it
+    // before it streamed, so only the page says the wait takes a message.
+    expect(
+      steeringAfterPageRead({
+        page: "steerable",
+        shown: "not_steerable",
+        streamOpen: false,
+      }),
+    ).toBe("steerable");
+    // An open stream says it for its own turn.
+    expect(
+      steeringAfterPageRead({
+        page: "steerable",
+        shown: "not_steerable",
+        streamOpen: true,
+      }),
+    ).toBe("not_steerable");
   });
 
   test("a global thread is read without a matter", () => {

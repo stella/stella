@@ -43,7 +43,8 @@ import { epochMilliseconds } from "@/connection/clock";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
 import type { Load } from "@/state/api-request";
-import type { ChatDraft } from "@/state/chat-attachments";
+import { waitSendRoute } from "@/state/chat-attachments";
+import type { ChatDraft, DraftSendMode } from "@/state/chat-attachments";
 import { CHAT_FAILURE_KEYS, chatFailureStepsKey } from "@/state/chat-failure";
 import {
   prependOlderPage,
@@ -295,6 +296,7 @@ const ThreadMessages = ({
     setAnonymized(latest.value.usedAnonymization);
     setPending(latest.value.pendingInput);
     setRetry(latest.value.retry);
+    turn.steeringFromPage(latest.value.activeTurnSteering);
     return latest.value;
   };
 
@@ -576,21 +578,33 @@ const sendRoutingOf = ({
       }),
       CHAT_MEMBER_SEND_ACTION.send,
     ) === CHAT_SEND_INTENT.steer;
-  const send =
-    !turn.busy && steers && answerable !== null && decline !== null
-      ? (draft: ChatDraft, onRefused: () => void) => {
-          setInputNotice(undefined);
-          return turn.declineAndSteer(answerable, decline, draft, {
-            onAccepted: () => {
-              setPending(null);
-            },
-            onDeclineRefused: () => {
-              answerRefused(answerable);
-            },
-            onRefused,
-          });
-        }
-      : turn.send;
+  const declineOffered =
+    !turn.busy && steers && answerable !== null && decline !== null;
+  const send = (
+    draft: ChatDraft,
+    onRefused: () => void,
+    mode: DraftSendMode,
+  ): boolean => {
+    // Only text declines and steers; a draft with files goes the ordinary
+    // way, which the server queues behind the wait the member still answers.
+    if (
+      answerable === null ||
+      decline === null ||
+      waitSendRoute({ declineOffered, draft }) === "send"
+    ) {
+      return turn.send(draft, onRefused, mode);
+    }
+    setInputNotice(undefined);
+    return turn.declineAndSteer(answerable, decline, draft, {
+      onAccepted: () => {
+        setPending(null);
+      },
+      onDeclineRefused: () => {
+        answerRefused(answerable);
+      },
+      onRefused,
+    });
+  };
   return { send, steerOffered: turn.busy && steers };
 };
 
