@@ -626,7 +626,10 @@
       "unavailable": "Die Umwandlung mit stella AI ist gerade nicht verfügbar.",
       "model": "Umwandlungsmodell",
       "outsideRegion": "Außerhalb Ihrer Region",
-      "outsideRegionNote": "Dieses Modell verarbeitet Audio außerhalb der Region Ihrer Organisation."
+      "outsideRegionNote": "Dieses Modell verarbeitet Audio außerhalb der Region Ihrer Organisation.",
+      "retainsData": "Speichert Ihre Aufnahmen",
+      "retainsDataTitle": "{provider} speichert, was Sie diktieren",
+      "retainsDataWarning": "Dieses Modell läuft über ein Konto ohne Zero Data Retention. {provider} speichert Audio und Transkript von allem, was Sie diktieren, nach eigenen Bedingungen und außerhalb der Kontrolle von stella. Diktieren Sie damit keine vertraulichen Informationen oder Mandantendaten."
     },
     "language": {
       "title": "Diktiersprache",

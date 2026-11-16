@@ -626,7 +626,10 @@
       "unavailable": "La transcription par stella AI n’est pas disponible pour le moment.",
       "model": "Modèle de transcription",
       "outsideRegion": "Hors de votre région",
-      "outsideRegionNote": "Ce modèle traite l’audio hors de la région de votre organisation."
+      "outsideRegionNote": "Ce modèle traite l’audio hors de la région de votre organisation.",
+      "retainsData": "Conserve votre audio",
+      "retainsDataTitle": "{provider} conserve ce que vous dictez",
+      "retainsDataWarning": "Ce modèle fonctionne avec un compte sans conservation nulle des données. {provider} stocke l’audio et la transcription de tout ce que vous dictez selon ses propres conditions, hors du contrôle de stella. N’y dictez aucune information confidentielle ni aucune donnée client."
     },
     "language": {
       "title": "Langue de dictée",

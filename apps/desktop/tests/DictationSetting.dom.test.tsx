@@ -564,6 +564,46 @@ test("a model outside the organization's region is named with its provider and s
   ).toBeTruthy();
 });
 
+test("a model whose provider keeps the audio is labeled and warned about when chosen", async () => {
+  const view = await renderSetting(
+    {
+      ...ENABLED_SNAPSHOT,
+      cloudAvailable: true,
+      cloudModel: "elevenlabs-direct/scribe-v3",
+      destination: "cloud",
+    },
+    (command) =>
+      command === "dictation_get_cloud_models"
+        ? {
+            ...CLOUD_MODELS,
+            models: [
+              ...CLOUD_MODELS.models,
+              {
+                displayName: "Scribe v3",
+                id: "elevenlabs-direct/scribe-v3",
+                outsideRegion: false,
+                provider: "ElevenLabs",
+                retainsData: true,
+              },
+            ],
+          }
+        : undefined,
+  );
+  const { destination } = defaultMessages.dictation;
+  await waitFor(() => {
+    expect(
+      view.getByText(`Scribe v3 · ElevenLabs · ${destination.retainsData}`),
+    ).toBeTruthy();
+  });
+  const warning = view.getByRole("alert");
+  expect(warning.textContent).toContain(
+    destination.retainsDataTitle.replace("{provider}", "ElevenLabs"),
+  );
+  expect(warning.textContent).toContain(
+    destination.retainsDataWarning.replace("{provider}", "ElevenLabs"),
+  );
+});
+
 test("a model in the region adds no note", async () => {
   const { getByText, queryByText } = await renderSetting(
     { ...ENABLED_SNAPSHOT, cloudAvailable: true, destination: "cloud" },
@@ -575,6 +615,11 @@ test("a model in the region adds no note", async () => {
   });
   expect(
     queryByText(defaultMessages.dictation.destination.outsideRegionNote),
+  ).toBeNull();
+  expect(
+    queryByText(defaultMessages.dictation.destination.retainsDataTitle, {
+      exact: false,
+    }),
   ).toBeNull();
 });
 

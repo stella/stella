@@ -626,7 +626,10 @@
       "unavailable": "stella AI teisendamine pole praegu saadaval.",
       "model": "Teisendusmudel",
       "outsideRegion": "Väljaspool teie piirkonda",
-      "outsideRegionNote": "See mudel töötleb heli väljaspool teie organisatsiooni piirkonda."
+      "outsideRegionNote": "See mudel töötleb heli väljaspool teie organisatsiooni piirkonda.",
+      "retainsData": "Säilitab teie heli",
+      "retainsDataTitle": "{provider} säilitab, mida dikteerite",
+      "retainsDataWarning": "See mudel töötab kontol, millel puudub andmete nullsäilitus. {provider} talletab kõige dikteeritu heli ja transkriptsiooni oma tingimustel, väljaspool stella kontrolli. Ärge dikteerige sellega konfidentsiaalset teavet ega kliendiandmeid."
     },
     "language": {
       "title": "Dikteerimise keel",

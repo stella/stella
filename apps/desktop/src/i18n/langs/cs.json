@@ -626,7 +626,10 @@
       "unavailable": "Převod pomocí stella AI teď není k dispozici.",
       "model": "Model převodu",
       "outsideRegion": "Mimo váš region",
-      "outsideRegionNote": "Tento model zpracovává zvuk mimo region vaší organizace."
+      "outsideRegionNote": "Tento model zpracovává zvuk mimo region vaší organizace.",
+      "retainsData": "Uchovává váš zvuk",
+      "retainsDataTitle": "{provider} si ponechává, co diktujete",
+      "retainsDataWarning": "Tento model běží na účtu bez nulového uchovávání dat. {provider} ukládá zvuk i přepis všeho, co nadiktujete, podle vlastních podmínek a mimo kontrolu stella. Nediktujte s ním důvěrné ani klientské informace."
     },
     "language": {
       "title": "Jazyk diktování",

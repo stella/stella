@@ -626,7 +626,10 @@
       "unavailable": "A stella AI átírás most nem érhető el.",
       "model": "Átírási modell",
       "outsideRegion": "A régióján kívül",
-      "outsideRegionNote": "Ez a modell a szervezete régióján kívül dolgozza fel a hangot."
+      "outsideRegionNote": "Ez a modell a szervezete régióján kívül dolgozza fel a hangot.",
+      "retainsData": "Megőrzi a hangfelvételt",
+      "retainsDataTitle": "A(z) {provider} megőrzi, amit diktál",
+      "retainsDataWarning": "Ez a modell nulla adatmegőrzés nélküli fiókon fut. A(z) {provider} saját feltételei szerint, a stella ellenőrzésén kívül tárolja mindannak a hangját és átiratát, amit diktál. Ne diktáljon vele bizalmas vagy ügyféladatokat."
     },
     "language": {
       "title": "Diktálás nyelve",

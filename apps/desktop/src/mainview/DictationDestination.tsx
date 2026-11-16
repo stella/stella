@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { TriangleAlertIcon } from "@stll/ui/icons";
 import {
   Select,
   SelectItem,
@@ -21,6 +22,9 @@ type CloudModel = {
   provider?: string | null;
   /** The model processes audio outside the organization's region. */
   outsideRegion?: boolean;
+  /** The provider keeps the audio and transcript: its account has no zero
+   *  data retention. */
+  retainsData?: boolean;
 };
 
 type CloudModels = {
@@ -122,12 +126,23 @@ export const DictationDestination = ({
     destination === "cloud" && offered !== null && selectedModel !== null
       ? { models: offered.models, selected: selectedModel }
       : null;
-  const selectedOutsideRegion =
-    modelChoice?.models.find(({ id }) => id === modelChoice.selected)
-      ?.outsideRegion === true;
-  /** The name, who runs it, and whether it leaves the region. */
-  const modelLabel = ({ displayName, outsideRegion, provider }: CloudModel) =>
-    [displayName, provider, outsideRegion === true ? t("outsideRegion") : null]
+  const chosen =
+    modelChoice?.models.find(({ id }) => id === modelChoice.selected) ?? null;
+  const selectedOutsideRegion = chosen?.outsideRegion === true;
+  /** The name, who runs it, whether it leaves the region, and whether its
+   *  provider keeps the audio. */
+  const modelLabel = ({
+    displayName,
+    outsideRegion,
+    provider,
+    retainsData,
+  }: CloudModel) =>
+    [
+      displayName,
+      provider,
+      outsideRegion === true ? t("outsideRegion") : null,
+      retainsData === true ? t("retainsData") : null,
+    ]
       .filter((part): part is string => typeof part === "string" && part !== "")
       .join(" · ");
 
@@ -224,6 +239,26 @@ export const DictationDestination = ({
           </Select>
         </div>
       )}
+      {chosen?.retainsData === true ? (
+        <div
+          className="border-destructive/36 bg-destructive/10 text-destructive flex gap-3 rounded-lg border p-3"
+          role="alert"
+        >
+          <TriangleAlertIcon aria-hidden className="mt-0.5 size-5 shrink-0" />
+          <div className="flex min-w-0 flex-col gap-1">
+            <p className="text-sm font-semibold">
+              {t("retainsDataTitle", {
+                provider: chosen.provider ?? chosen.displayName,
+              })}
+            </p>
+            <p className="text-sm leading-relaxed">
+              {t("retainsDataWarning", {
+                provider: chosen.provider ?? chosen.displayName,
+              })}
+            </p>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 };
