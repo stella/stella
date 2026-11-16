@@ -3,7 +3,7 @@ import type { StreamChunk } from "@tanstack/ai";
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import { harnessSessionId } from "@stll/agent-engine";
+import { HARNESS_QUESTION_TOOL, harnessSessionId } from "@stll/agent-engine";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
@@ -53,6 +53,45 @@ const turnChunks = async () =>
       text: "Running the tests. All tests pass.",
     },
     { type: "turn.completed", usage: null, boundary: null },
+  ]);
+
+const question = {
+  id: "item_9",
+  name: HARNESS_QUESTION_TOOL,
+  input: { questions: ["Which law governs the lease?"] },
+};
+
+/** A harness turn that asks the member a question and waits for the answer. */
+const questionTurnChunks = async () =>
+  await harnessChunks([
+    {
+      type: "session.started",
+      sessionId: harnessSessionId("session-asked"),
+      continuation: { type: "fresh" },
+    },
+    { type: "text.delta", messageId: "answer", delta: "Before drafting: " },
+    {
+      type: "question.requested",
+      request: {
+        requestId: "question-request",
+        toolCall: question,
+        questions: [
+          {
+            id: "law",
+            header: "Governing law",
+            prompt: "Which law governs the lease?",
+            options: [
+              { label: "Czech", description: "Czech Civil Code" },
+              { label: "Slovak", description: "Slovak Civil Code" },
+            ],
+            allowsFreeText: false,
+            multiSelect: false,
+            secret: false,
+          },
+        ],
+        answerWith: "response",
+      },
+    },
   ]);
 
 type Processed = {
@@ -140,7 +179,10 @@ const uninterruptedAnswer = async (chunks: readonly StreamChunk[]) => {
  * read caught up with the first `cut` events, while the computer goes on
  * with the rest: the read stops at the first boundary it may stop at.
  */
-const releasedAnswer = async (chunks: readonly StreamChunk[], cut: number) => {
+const readAskedToRelease = async (
+  chunks: readonly StreamChunk[],
+  cut: number,
+) => {
   const computer = createComputer();
   computer.events(chunks.slice(0, cut));
   const handOver = new AbortController();
@@ -156,18 +198,27 @@ const releasedAnswer = async (chunks: readonly StreamChunk[], cut: number) => {
       return await control.readRun(options);
     },
   };
-  const { emitted, finished, released } = await processTurn({
+  const processed = await processTurn({
     initialMessages: [],
     source: localSource(computer)(
       new AbortController().signal,
       handOver.signal,
     ),
   });
+  return { ...processed, readSeq: computer.chatReadSeq() };
+};
+
+/** The answer a task released at `cut` stores (see `readAskedToRelease`). */
+const releasedAnswer = async (chunks: readonly StreamChunk[], cut: number) => {
+  const { emitted, finished, released, readSeq } = await readAskedToRelease(
+    chunks,
+    cut,
+  );
   expect(finished).toBeUndefined();
   return {
     answer: released ?? panic("The turn was not released"),
     emitted,
-    readSeq: computer.chatReadSeq(),
+    readSeq,
   };
 };
 
@@ -232,5 +283,53 @@ describe("a local turn released mid-answer and adopted", () => {
         parts: whole.page.parts,
       });
     }
+  });
+});
+
+describe("a local turn asked to release while the harness asks a question", () => {
+  test("awaits the member's answer from every cut", async () => {
+    const chunks = await questionTurnChunks();
+    const whole = await uninterruptedAnswer(chunks);
+    expect(whole.stored.outcome).toEqual({
+      type: "awaiting-user",
+      interaction: {
+        type: "harness-question",
+        toolCallId: expect.any(String),
+      },
+    });
+    const interrupt = chunks.findIndex(
+      (chunk) => chunk.type === EventType.RUN_FINISHED,
+    );
+    expect(interrupt).toBeGreaterThan(0);
+    // The last cut has read the question's whole input but not the
+    // interrupt that follows it: the turn is not released there, the read
+    // waits for the interrupt and the turn awaits the member on this task.
+    expect(chunks[interrupt - 1]?.type).toBe(EventType.TOOL_CALL_END);
+    for (let cut = 0; cut <= interrupt; cut += 1) {
+      const read = await readAskedToRelease(chunks, cut);
+      if (read.released === undefined) {
+        expect({ cut, outcome: read.finished?.outcome }).toEqual({
+          cut,
+          outcome: whole.stored.outcome,
+        });
+        continue;
+      }
+      expect(cut).toBeLessThan(interrupt);
+      const adopted = await adoptedAnswer({
+        chunks,
+        readSeq: read.readSeq,
+        released: read.released,
+      });
+      expect({ cut, outcome: adopted.stored.outcome }).toEqual({
+        cut,
+        outcome: whole.stored.outcome,
+      });
+      expect({ cut, parts: adopted.stored.responseMessage.parts }).toEqual({
+        cut,
+        parts: whole.stored.responseMessage.parts,
+      });
+    }
+    const last = await readAskedToRelease(chunks, interrupt);
+    expect(last.released).toBeUndefined();
   });
 });

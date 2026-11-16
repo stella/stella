@@ -1877,24 +1877,34 @@ const waitWakers = (abortSignal: AbortSignal, handOverSignal: AbortSignal) =>
 /**
  * When a read may release its turn to another task: asked to, with no call
  * input half read (an adopted read's processor folds a call's input only
- * from the call's start; the input's end follows its start at once), and
- * not between the harness's finish and the run's own end, which an adopted
- * read would not repeat (that end follows at once, and the read settles the
- * turn then).
+ * from the call's start; the input's end follows its start at once), no
+ * harness question between its input and what follows it, and not between
+ * the harness's finish and the run's own end, which an adopted read would
+ * not repeat. A question's interrupt (or, for one answered by the next
+ * message, its result) follows its input at once; the turn awaits the
+ * member on the interrupt, so this read settles it then.
  */
 const releaseGate = (handOverSignal: AbortSignal) => {
-  const streamingInputs = new Set<string>();
+  const holding = new Set<string>();
+  const questions = new Set<string>();
   return {
     observe: (chunk: StreamChunk) => {
       if (chunk.type === EventType.TOOL_CALL_START) {
-        streamingInputs.add(chunk.toolCallId);
+        holding.add(chunk.toolCallId);
+        if (chunk.toolCallName === CHAT_LOCAL_RUN_QUESTION_TOOL) {
+          questions.add(chunk.toolCallId);
+        }
       }
-      if (chunk.type === EventType.TOOL_CALL_END) {
-        streamingInputs.delete(chunk.toolCallId);
+      if (
+        (chunk.type === EventType.TOOL_CALL_END &&
+          !questions.has(chunk.toolCallId)) ||
+        chunk.type === EventType.TOOL_CALL_RESULT
+      ) {
+        holding.delete(chunk.toolCallId);
       }
     },
     open: (finished: boolean) =>
-      handOverSignal.aborted && !finished && streamingInputs.size === 0,
+      handOverSignal.aborted && !finished && holding.size === 0,
   };
 };
 
