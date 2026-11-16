@@ -403,10 +403,10 @@ describe("a request over its model's budget", () => {
     const adapter = {
       ...createScriptedTextAdapter([]),
       structuredOutput: async ({ outputSchema }) => {
-        if (!isRecord(outputSchema) || !isRecord(outputSchema["properties"])) {
+        if (!isRecord(outputSchema) || !isRecord(outputSchema.properties)) {
           expect.unreachable("Expected an object output schema");
         }
-        const keys = Object.keys(outputSchema["properties"]);
+        const keys = Object.keys(outputSchema.properties);
         chunks.push(keys);
         active += 1;
         peak = Math.max(peak, active);
