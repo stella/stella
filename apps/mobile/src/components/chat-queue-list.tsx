@@ -232,7 +232,8 @@ const LoadedQueue = ({
         messageId: item.id,
       });
       if (Result.isError(whole)) {
-        await write(async () => whole);
+        // The failed read is said as a failed write is.
+        await write(async () => await Promise.resolve(whole));
         return;
       }
       const text = queuedMessageText(whole.value.message.parts);
