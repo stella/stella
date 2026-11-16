@@ -534,8 +534,9 @@ export const serveCaseLaw = async (
  * small specialised court to a large court system, so the facet table holds
  * thousands of rows and a source's facets are read the way they are served.
  */
+// Source adapter keys are unique; cz-ns belongs to the provision scenario.
 const FACET_SOURCE_KEYS = [
-  ADAPTER_KEYS.CZ_NS,
+  ADAPTER_KEYS.AT_COURTS,
   ADAPTER_KEYS.CZ_NSS,
   ADAPTER_KEYS.CZ_US,
   ADAPTER_KEYS.SK_COURTS,
