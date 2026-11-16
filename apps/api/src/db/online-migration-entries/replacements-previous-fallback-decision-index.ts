@@ -5,6 +5,7 @@ import { FALLBACK_DECISION_UNIQUE_INDEXES } from "../online-unique-indexes";
 export default {
   id: "replacements-previous-fallback-decision-index",
   revision: 1458,
+  lifecycle: "pending",
   type: "replacements",
   values: [
     {
