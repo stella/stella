@@ -20,8 +20,12 @@ import { epochMilliseconds } from "@/connection/clock";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
 import type { ApiError } from "@/state/api-request";
-import { sendRefusal } from "@/state/chat-attachments";
-import type { ChatDraft, SendRefusal } from "@/state/chat-attachments";
+import { sendRefusal, sendsAnonymized } from "@/state/chat-attachments";
+import type {
+  ChatDraft,
+  DraftSendMode,
+  SendRefusal,
+} from "@/state/chat-attachments";
 import { sentEntry } from "@/state/chat-messages";
 import type { ChatEntry, ChatRetry } from "@/state/chat-messages";
 import { continuationOf } from "@/state/chat-pending-input";
@@ -159,7 +163,11 @@ export const useChatTurn = ({
     thread,
   });
 
-  const send = (draft: ChatDraft, onRefused: () => void): boolean => {
+  const send = (
+    draft: ChatDraft,
+    onRefused: () => void,
+    mode: DraftSendMode,
+  ): boolean => {
     if (connection.current !== null) {
       return false;
     }
@@ -174,7 +182,7 @@ export const useChatTurn = ({
         await sendChatMessage({
           ...thread,
           ...draft,
-          anonymized,
+          anonymized: sendsAnonymized({ mode, threadAnonymized: anonymized }),
           fetch: streamingFetch,
           messageId,
           onEvent: turn.applyEvent,
@@ -188,7 +196,7 @@ export const useChatTurn = ({
         // A turn runs or waits, or messages wait ahead: the server starts
         // nothing and the message waits in the queue, under its own id.
         if (queuesInstead(error)) {
-          void enqueue(draft, messageId, onRefused);
+          void enqueue({ draft, messageId, mode, onRefused });
           return;
         }
         setSendError(sendRefusal(error, draft.files.length > 0));
@@ -415,11 +423,12 @@ function declineAndSteerOf({
     },
   ) => boolean;
   busy: () => boolean;
-  enqueue: (
-    draft: ChatDraft,
-    messageId: string,
-    onRefused: () => void,
-  ) => Promise<QueuedChatItem | undefined>;
+  enqueue: (queued: {
+    draft: ChatDraft;
+    messageId: string;
+    mode: DraftSendMode;
+    onRefused: () => void;
+  }) => Promise<QueuedChatItem | undefined>;
   setSendError: (refusal: SendRefusal | undefined) => void;
   steerQueuedInto: (turnId: string, queued: QueuedSteer) => Promise<boolean>;
 }) {
@@ -442,7 +451,14 @@ function declineAndSteerOf({
     }
     setSendError(undefined);
     void (async () => {
-      const queued = await enqueue(draft, randomUUID(), onRefused);
+      // The routing declines only in a thread that sends raw text, so the
+      // thread's own mode queues the draft raw, as a steer needs.
+      const queued = await enqueue({
+        draft,
+        messageId: randomUUID(),
+        mode: "as-thread",
+        onRefused,
+      });
       if (queued === undefined) {
         return;
       }
@@ -512,15 +528,21 @@ function useTurnQueue({
    * thread is free, after what is queued ahead of it. `onRefused` hands the
    * draft back when the server did not queue it either.
    */
-  const enqueue = async (
-    draft: ChatDraft,
-    messageId: string,
-    onRefused: () => void,
-  ): Promise<QueuedChatItem | undefined> => {
+  const enqueue = async ({
+    draft,
+    messageId,
+    mode,
+    onRefused,
+  }: {
+    draft: ChatDraft;
+    messageId: string;
+    mode: DraftSendMode;
+    onRefused: () => void;
+  }): Promise<QueuedChatItem | undefined> => {
     const queued = await enqueueChatMessage({
       fetch,
       send: queuedChatSend({
-        anonymized,
+        anonymized: sendsAnonymized({ mode, threadAnonymized: anonymized }),
         files: draft.files,
         matterId,
         messageId,
@@ -543,7 +565,12 @@ function useTurnQueue({
   /** Queues the draft behind the turn answering now and what waits already. */
   const queue = (draft: ChatDraft, onRefused: () => void): boolean => {
     setSendError(undefined);
-    void enqueue(draft, randomUUID(), onRefused);
+    void enqueue({
+      draft,
+      messageId: randomUUID(),
+      mode: "as-thread",
+      onRefused,
+    });
     return true;
   };
   return { enqueue, queue };

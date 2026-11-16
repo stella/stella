@@ -1,5 +1,7 @@
 import * as v from "valibot";
 
+import type { CHAT_TRANSPORT_ERROR_CODE } from "@stll/anonymize-chat";
+
 import type { AgentHarness } from "./agent-harness";
 import { apiDateTimeSchema } from "./api-date";
 import {
@@ -394,6 +396,15 @@ export const chatLocalRunSteerOutcomeSchema = v.variant("type", [
 export type ChatLocalRunSteerOutcome = v.InferOutput<
   typeof chatLocalRunSteerOutcomeSchema
 >;
+
+/**
+ * The code an anonymized send refused by the member's computer carries: its
+ * agent reads their matters as they are, so it never runs anonymized.
+ * `@stll/anonymize-chat` owns the code; this is it, bound to the owner's value
+ * at compile time, for a client that reads refusals without that package.
+ */
+export const CHAT_LOCAL_RUN_ANONYMIZED_REFUSAL_CODE =
+  "local_run_anonymized_refusal" satisfies (typeof CHAT_TRANSPORT_ERROR_CODE)["localRunAnonymizedRefusal"];
 
 /**
  * The CUSTOM stream event a turn running on a computer sends while its run

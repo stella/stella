@@ -3465,6 +3465,7 @@
       "legalHoldActive": "Vymazanie je zablokované, pretože tieto záznamy musia byť zachované.",
       "legalSourceEntityLimitReached": "Tento spis dosiahol limit položiek, preto dokument nebolo možné vytvoriť.",
       "legalSourceFilePropertyMissing": "V tomto spise chýba vlastnosť súboru, preto dokument nebolo možné vytvoriť.",
+      "localRunAnonymizedRefusal": "Programovací agent vo vašom počítači číta vaše dokumenty tak, ako sú, takže správu preň nemožno anonymizovať. Odošlite ju bez anonymizácie.",
       "matterContactCapacityExceeded": "Tento spis obsahuje viac kontaktov, než možno zobraziť. Odstránením viditeľných prepojení s kontaktmi zobrazíte zostávajúce kontakty.",
       "matterContactCapacityReached": "Tento spis dosiahol limit kontaktov. Pred pridaním ďalšieho kontaktu odstráňte jedno prepojenie s kontaktom.",
       "mcpAuthorizationApprovalRequired": "Skôr než sa budete môcť pripojiť, musí správca tento konektor schváliť.",
