@@ -31,6 +31,7 @@ import {
 import { AssumeRoleCommand, STSClient } from "@aws-sdk/client-sts";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { Result, TaggedError } from "better-result";
+import { TransformStream } from "node:stream/web";
 
 import { fetchWithTimeout } from "@stll/fetch";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";

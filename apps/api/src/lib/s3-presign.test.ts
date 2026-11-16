@@ -10,6 +10,8 @@ import {
   mock,
   test,
 } from "bun:test";
+import { once } from "node:events";
+import { createServer } from "node:http";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { sha256Base64 as hashSha256Base64 } from "@stll/sha256/node";
@@ -839,43 +841,82 @@ describe("scoped object operations over the S3 wire protocol", () => {
   test.each(["oversized", "undeclared"] as const)(
     "%s object lengths are refused through the real tenant client",
     async (length) => {
-      fake.stop();
-      fake = startFakeS3({
-        readResponse: ({ headers }) => {
-          const responseHeaders = new Headers(headers);
-          if (length === "oversized") {
-            responseHeaders.set(
-              "content-length",
-              String(FILE_SIZE_LIMIT_BYTES.document + 1),
-            );
-          } else {
-            responseHeaders.delete("content-length");
-          }
-          return new Response(
-            new ReadableStream<Uint8Array>({
-              start(controller) {
-                // An open body prevents Bun from deriving a replacement length.
-                controller.enqueue(HELLO_BYTES);
-              },
-            }),
-            { headers: responseHeaders },
-          );
-        },
-      });
       const key = "org_1/ws_1/document.pdf";
       const scope = { organizationId: "org_1", workspaceId: "ws_1" };
-      fake.put("stella", key, HELLO_BYTES, "application/pdf");
-      const controller = new AbortController();
-      const failure = await rejectionOf(
-        readTenantS3ArrayBuffer({ key, scope, signal: controller.signal }),
-      );
-
-      expect(failure).toMatchObject({
-        _tag: "S3PresignError",
-        message: "S3 object length does not satisfy the document byte limit",
+      const requests: { method: string | undefined; path: string }[] = [];
+      // Bun's streaming Response strips Content-Length. A framed response
+      // keeps the declared length while sending only a tiny unfinished body.
+      const server = createServer((request, response) => {
+        requests.push({
+          method: request.method,
+          path: new URL(request.url ?? "/", "http://127.0.0.1").pathname,
+        });
+        response.setHeader("content-type", "application/pdf");
+        if (length === "oversized") {
+          response.setHeader(
+            "content-length",
+            FILE_SIZE_LIMIT_BYTES.document + 1,
+          );
+        }
+        response.write(HELLO_BYTES);
+      }).listen(0, "127.0.0.1");
+      await once(server, "listening");
+      const address = server.address();
+      if (address === null || typeof address === "string") {
+        await server[Symbol.asyncDispose]();
+        throw new Error("Expected a loopback TCP listener");
+      }
+      const client = new AwsS3Client({
+        endpoint: `http://127.0.0.1:${address.port}`,
+        forcePathStyle: true,
+        region: "us-east-1",
+        credentials: {
+          accessKeyId: "test-access-key",
+          secretAccessKey: "test-secret-key",
+        },
       });
-      expect(fake.requests.map(({ method }) => method)).toEqual(["GET"]);
-      expect(controller.signal.aborted).toBe(false);
+      const receivedLengths: unknown[] = [];
+      client.middlewareStack.add(
+        (handleRequest) => async (args) => {
+          const result = await handleRequest(args);
+          receivedLengths.push(
+            result.output !== undefined && "ContentLength" in result.output
+              ? result.output.ContentLength
+              : undefined,
+          );
+          return result;
+        },
+        {
+          step: "deserialize",
+          priority: "high",
+          name: "observeTenantBodyLength",
+        },
+      );
+      setTenantS3OperationHooksForTesting({
+        resolveClient: async () => client,
+      });
+      try {
+        const controller = new AbortController();
+        const failure = await rejectionOf(
+          readTenantS3ArrayBuffer({ key, scope, signal: controller.signal }),
+        );
+
+        expect(receivedLengths).toEqual([
+          length === "oversized"
+            ? FILE_SIZE_LIMIT_BYTES.document + 1
+            : undefined,
+        ]);
+        expect(failure).toMatchObject({
+          _tag: "S3PresignError",
+          message: "S3 object length does not satisfy the document byte limit",
+        });
+        expect(requests).toEqual([{ method: "GET", path: `/stella/${key}` }]);
+        expect(controller.signal.aborted).toBe(false);
+      } finally {
+        client.destroy();
+        server.closeAllConnections();
+        await server[Symbol.asyncDispose]();
+      }
     },
   );
 
