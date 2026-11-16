@@ -104,6 +104,7 @@
     "sendFileRefused": "No se pudo enviar un archivo, así que el mensaje no se envió. Quita el archivo e inténtalo de nuevo.",
     "sendFileNotAnonymizable": "Esta conversación está anonimizada y stella no pudo anonimizar uno de los archivos, así que no se envió nada. Quita el archivo e inténtalo de nuevo.",
     "sendLocalRunNotAnonymizable": "Esta conversación está anonimizada y el agente de programación de tu ordenador lee tus documentos tal como están, así que no se le envió nada.",
+    "sendWithoutAnonymization": "Enviar sin anonimización",
     "pickTitle": "Elija una conversación",
     "pickDescription": "Elija un hilo de la lista o empiece uno nuevo con +.",
     "runBanner": {

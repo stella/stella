@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { ApiRequestError } from "./api-request";
 import {
   admitPickedFiles,
+  asWrittenGetsPast,
   attachmentParts,
   attachmentsSendable,
   base64Bytes,
@@ -12,8 +13,9 @@ import {
   readAttachment,
   readyFiles,
   sendRefusal,
+  sendsAnonymized,
 } from "./chat-attachments";
-import type { ChatAttachment } from "./chat-attachments";
+import type { ChatAttachment, SendRefusal } from "./chat-attachments";
 
 const DOCX =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -231,5 +233,33 @@ describe("sending files", () => {
         "local-run-not-anonymizable",
       );
     }
+  });
+});
+
+describe("sending a refused draft as written", () => {
+  test("is offered only where the agent on the computer refused it anonymized", () => {
+    const refusals = {
+      failed: false,
+      "file-refused": false,
+      "file-not-anonymizable": false,
+      "local-run-not-anonymizable": true,
+    } as const satisfies Record<SendRefusal, boolean>;
+    const isRefusal = (key: string): key is SendRefusal => key in refusals;
+    for (const refusal of Object.keys(refusals).filter(isRefusal)) {
+      expect(asWrittenGetsPast(refusal)).toBe(refusals[refusal]);
+    }
+    expect(asWrittenGetsPast(undefined)).toBe(false);
+  });
+
+  test("goes as written on an anonymized thread, and otherwise as the thread sends", () => {
+    expect(
+      sendsAnonymized({ mode: "as-written", threadAnonymized: true }),
+    ).toBe(false);
+    expect(sendsAnonymized({ mode: "as-thread", threadAnonymized: true })).toBe(
+      true,
+    );
+    expect(
+      sendsAnonymized({ mode: "as-thread", threadAnonymized: false }),
+    ).toBe(false);
   });
 });

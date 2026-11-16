@@ -13,6 +13,7 @@ import { useTranslations } from "use-intl";
 
 import type { ChatLocalRunSteerRefusal } from "@stll/api-contract/chat-run-target";
 import { CHAT_CONTEXT_FILE_MAX_MEGABYTES } from "@stll/chat-limits";
+import { Button } from "@stll/ui/button";
 import { COMPOSER_BOX_CLASS } from "@stll/ui/composer-tokens";
 import { Text } from "@stll/ui/text";
 import { Textarea } from "@stll/ui/textarea";
@@ -36,6 +37,7 @@ import {
 import type { LucideIcon } from "@/icons.gen";
 import { canScan } from "@/native/document-scanner";
 import {
+  asWrittenGetsPast,
   attachmentsSendable,
   CHAT_FILES_PER_MESSAGE,
   readyFiles,
@@ -43,6 +45,7 @@ import {
 import type {
   ChatAttachment,
   ChatDraft,
+  DraftSendMode,
   SendRefusal,
 } from "@/state/chat-attachments";
 import { appendDictation, DICTATION_MAX_SECONDS } from "@/state/dictation";
@@ -96,7 +99,11 @@ export const ChatComposer = ({
    */
   onQueue?: ((draft: ChatDraft, onRefused: () => void) => boolean) | undefined;
   /** Sends the draft; returns false when it was not taken, so it stays in the box. */
-  onSend: (draft: ChatDraft, onRefused: () => void) => boolean;
+  onSend: (
+    draft: ChatDraft,
+    onRefused: () => void,
+    mode: DraftSendMode,
+  ) => boolean;
   /**
    * Hands the draft to the turn answering now, while one that can take it
    * runs (where a plain send steers, `chatSendIntent`); returns false when
@@ -140,7 +147,7 @@ export const ChatComposer = ({
   const hasDraft = message !== "" || files.attachments.length > 0;
   const canSend = hasDraft && attachmentsSendable(files.attachments);
 
-  const send = () => {
+  const send = (mode: DraftSendMode) => {
     if (!canSend) {
       return;
     }
@@ -148,12 +155,16 @@ export const ChatComposer = ({
     // dictation's failure.
     dictation.settleForSend();
     const taken = files.attachments;
-    const accepted = onSend({ text: message, files: readyFiles(taken) }, () => {
-      // Handed back only into an empty box, so nothing typed or attached
-      // since is lost.
-      setDraft((typed) => (typed === "" ? message : typed));
-      files.restore(taken);
-    });
+    const accepted = onSend(
+      { text: message, files: readyFiles(taken) },
+      () => {
+        // Handed back only into an empty box, so nothing typed or attached
+        // since is lost.
+        setDraft((typed) => (typed === "" ? message : typed));
+        files.restore(taken);
+      },
+      mode,
+    );
     if (accepted) {
       setDraft("");
       files.clear();
@@ -225,7 +236,9 @@ export const ChatComposer = ({
       enabled: canSend,
       Icon: ArrowUpIcon,
       label: t("send"),
-      onPress: send,
+      onPress: () => {
+        send("as-thread");
+      },
     };
   } else {
     action = {
@@ -247,9 +260,23 @@ export const ChatComposer = ({
     <View className={`${glass ? "" : "bg-background"} gap-1 px-3 pt-1 pb-2`}>
       {notice === undefined ? null : (
         <Text accessibilityLiveRegion="polite" className="px-1" variant="error">
-          {notice}
+          {notice.text}
         </Text>
       )}
+      {/* The refused draft is back in the box; this sends it as written. */}
+      {notice?.of === "send" && asWrittenGetsPast(sendError) && !busy ? (
+        <Button
+          className="self-start"
+          disabled={!canSend}
+          onPress={() => {
+            send("as-written");
+          }}
+          size="sm"
+          variant="outline"
+        >
+          {t("sendWithoutAnonymization")}
+        </Button>
+      ) : null}
       <Box>
         {files.attachments.length === 0 ? null : (
           <ScrollView
@@ -394,6 +421,9 @@ const GlassBox = ({ children }: React.PropsWithChildren) => (
   </GlassView>
 );
 
+/** What a composer notice is about. */
+type NoticeOf = "dictation" | "file" | "send" | "steer";
+
 /**
  * What the composer says went wrong: with a dictation, a file just added,
  * the last send, else the last steer.
@@ -408,7 +438,7 @@ function useNoticeText({
   dictationNotice: DictationNotice | undefined;
   sendError: SendRefusal | undefined;
   steerRefusal: ChatLocalRunSteerRefusal | undefined;
-}): string | undefined {
+}): { readonly of: NoticeOf; readonly text: string } | undefined {
   const t = useTranslations("chat");
   const scanT = useTranslations("scan");
   const shareT = useTranslations("share");
@@ -418,7 +448,7 @@ function useNoticeText({
       failed: t("dictationFailed"),
       silent: t("dictationSilent"),
     } as const satisfies Record<DictationNotice, string>;
-    return dictationText[dictationNotice];
+    return { of: "dictation", text: dictationText[dictationNotice] };
   }
   if (notice !== undefined) {
     const noticeText = {
@@ -433,7 +463,7 @@ function useNoticeText({
       "pdf-failed": scanT("pdfFailed"),
       "share-failed": shareT("unavailable"),
     } as const satisfies Record<AttachmentNotice, string>;
-    return noticeText[notice];
+    return { of: "file", text: noticeText[notice] };
   }
   if (sendError !== undefined) {
     const sendErrorText = {
@@ -442,7 +472,7 @@ function useNoticeText({
       "file-not-anonymizable": t("sendFileNotAnonymizable"),
       "local-run-not-anonymizable": t("sendLocalRunNotAnonymizable"),
     } as const satisfies Record<SendRefusal, string>;
-    return sendErrorText[sendError];
+    return { of: "send", text: sendErrorText[sendError] };
   }
   if (steerRefusal !== undefined) {
     const steerRefusalText = {
@@ -453,7 +483,7 @@ function useNoticeText({
       queued_message_changed: t("steerRefused.queuedMessageChanged"),
       not_taken: t("steerRefused.notTaken"),
     } as const satisfies Record<ChatLocalRunSteerRefusal, string>;
-    return steerRefusalText[steerRefusal];
+    return { of: "steer", text: steerRefusalText[steerRefusal] };
   }
   return undefined;
 }

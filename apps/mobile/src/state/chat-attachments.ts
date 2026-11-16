@@ -227,6 +227,31 @@ export type SendRefusal =
   | "file-not-anonymizable"
   | "local-run-not-anonymizable";
 
+/**
+ * How a draft's text goes: as the thread sends it (anonymized once the thread
+ * has sent anonymized text), or as written, which the member picks after a
+ * refusal that only sending it as written gets past.
+ */
+export type DraftSendMode = "as-thread" | "as-written";
+
+/**
+ * Whether sending the draft as written gets it past `refusal`: the agent on
+ * the member's computer never runs anonymized, so the web's "Send without
+ * anonymization" is the way on.
+ */
+export const asWrittenGetsPast = (refusal: SendRefusal | undefined): boolean =>
+  refusal === "local-run-not-anonymizable";
+
+/** Whether the draft is sent anonymized. */
+export const sendsAnonymized = ({
+  mode,
+  threadAnonymized,
+}: {
+  readonly mode: DraftSendMode;
+  /** The thread has sent anonymized text before. */
+  readonly threadAnonymized: boolean;
+}): boolean => mode === "as-thread" && threadAnonymized;
+
 export const sendRefusal = (
   error: ApiError,
   withFiles: boolean,
