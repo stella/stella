@@ -1932,6 +1932,29 @@ describe("offline settlement", () => {
           ),
       );
       expect([...caps.values()]).toEqual([nextCap]);
+      // The revision the same request applied exactly, later cleaned up by an
+      // exact repair at its epoch, was delivered in full: it halves nothing.
+      await db.execute(sql`
+        UPDATE corpus_index_projection_states SET work_status = 'repair_scheduled'
+        WHERE entity_id = ${exact.entityId}
+      `);
+      await db.execute(sql`
+        UPDATE corpus_index_projection_intents
+        SET status = 'cleanup_pending',
+            cleanup_not_before = append_publish_barrier_at
+        WHERE id = ${exact.intentId}
+      `);
+      expect((await intentOf(exact.intentId)).status).toBe("cleanup_pending");
+      const repairedCaps = await db.transaction(
+        async (tx) =>
+          await readCorpusProjectionOfflineRequestCapsTx(
+            asTestRaw<Transaction>(tx),
+            [{ ...exact, intentId: partial.intentId }],
+          ),
+      );
+      expect([...repairedCaps.values()]).toEqual([
+        CORPUS_INDEX_OFFLINE_REQUEST_MAX_REVISIONS,
+      ]);
     },
   );
 

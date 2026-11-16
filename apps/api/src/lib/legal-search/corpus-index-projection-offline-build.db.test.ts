@@ -57,6 +57,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
 import {
   CORPUS_PROJECTION_APPEND_UNKNOWN_ATTEMPT_LIMIT,
+  CORPUS_PROJECTION_OFFLINE_LONE_KILL_MESSAGE,
   type CorpusProjectionIntentLease,
   readCorpusProjectionOfflineRequestCapsTx,
   reserveCorpusProjectionIntentsTx,
@@ -516,6 +517,11 @@ const deliverer =
     model.deliveries.push({ revisions: revisions.length, poisoned });
 
     const startedAt = await now(model);
+    /** When the run ended and how long it ran, on the run's one clock. */
+    const ended = async () => {
+      const endedAt = await now(model);
+      return { endedAt, ranMs: endedAt.getTime() - startedAt.getTime() };
+    };
     const publish = (skip: string | null) => {
       if (model.finishedPaths.has(shard.path)) {
         return;
@@ -537,7 +543,7 @@ const deliverer =
           type: "killed_at_deadline",
           exitCode: 137,
           startedAt,
-          endedAt: await now(model),
+          ...(await ended()),
         };
       };
     model.offsetMs += 1000;
@@ -555,7 +561,7 @@ const deliverer =
         type: "ingested",
         exitCode: 0,
         startedAt,
-        endedAt: await now(model),
+        ...(await ended()),
       };
     }
     if (poisoned) {
@@ -566,7 +572,7 @@ const deliverer =
         exitCode: 1,
         cause: "indexer",
         startedAt,
-        endedAt: await now(model),
+        ...(await ended()),
       };
     }
     if (behaviour === "ingest") {
@@ -575,7 +581,7 @@ const deliverer =
         type: "ingested",
         exitCode: 0,
         startedAt,
-        endedAt: await now(model),
+        ...(await ended()),
       };
     }
     if (typeof behaviour === "object") {
@@ -585,14 +591,14 @@ const deliverer =
             type: "ingested",
             exitCode: 0,
             startedAt,
-            endedAt: await now(model),
+            ...(await ended()),
           }
         : {
             type: "failed",
             exitCode: 1,
             cause: "indexer",
             startedAt,
-            endedAt: await now(model),
+            ...(await ended()),
           };
     }
     switch (behaviour) {
@@ -612,7 +618,7 @@ const deliverer =
           exitCode: 1,
           cause: behaviour === "empty" ? "indexer" : "infrastructure",
           startedAt,
-          endedAt: await now(model),
+          ...(await ended()),
         };
       case "throw":
         throw new Error("the delivery lost its connection to the indexer host");
@@ -1823,6 +1829,36 @@ describe("offline route build", () => {
     }
   });
 
+  test("a revision killed alone again and again in one run is charged once, with its own recorded reason", async () => {
+    const model = await newModel(1);
+    const outcome = await runBuild(model, {
+      ...QUIET_RUN,
+      deliveries: Array.from(
+        { length: 8 },
+        () => "kill_before_publish" as const,
+      ),
+      maxShardRevisions: 1,
+    });
+    // The run that charged it does not take it again: one incident cannot
+    // spend its attempts, and the run still drains.
+    expect(outcome?.status).toBe("drained");
+    expect(outcome?.progress.shards.killedAlone).toBe(1);
+    expect(model.shards).toHaveLength(1);
+    const [state] = await readStates(model.entityIds);
+    expect(state?.failureAttempts).toBe(1);
+    expect(state?.workStatus).toBe("retry_scheduled");
+    const [message] = await db
+      .select({ message: corpusIndexProjectionStates.lastFailureMessage })
+      .from(corpusIndexProjectionStates)
+      .where(
+        eq(
+          corpusIndexProjectionStates.entityId,
+          model.entityIds.at(0) ?? panic("No entity"),
+        ),
+      );
+    expect(message?.message).toBe(CORPUS_PROJECTION_OFFLINE_LONE_KILL_MESSAGE);
+  });
+
   test("a first lone kill with a full budget and nothing measured is the revision's own fault: charged like a lone indexer failure, and blocked at the attempt limit", async () => {
     const model = await newModel(1);
     let killedAlone = 0;
@@ -2132,7 +2168,7 @@ describe("offline route build", () => {
     }
   });
 
-  test("after fast failures, a lone kill that a slow complete shard of its size explains is the engine's, not the revision's", async () => {
+  test("after fast failures, a lone kill handed less than a complete shard of its size needed is not the revision's", async () => {
     const model = await newModel(4);
     // Two shards fail at once on what they hold, one ingests only just
     // inside its budget, and the last is handed a minute less and killed.
@@ -2142,9 +2178,9 @@ describe("offline route build", () => {
       deliveries: ["empty", "empty", "ingest_slow", "kill_before_publish"],
       maxShardRevisions: 1,
     });
-    // The failures measure nothing; the slow shard of the same size says
-    // the engine cannot index the killed revision in its budget.
-    expect(outcome?.status).toBe("rate_too_slow");
+    // The failures measure nothing; the slow shard of the same size needed
+    // longer than the killed revision was handed: its budget was short.
+    expect(outcome?.status).toBe("infrastructure_failed");
     expect(outcome?.progress.shards.killedAlone).toBe(0);
     expect(model.shards.map(({ revisionCount }) => revisionCount)).toEqual([
       1, 1, 1, 1,

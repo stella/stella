@@ -94,6 +94,7 @@ export { default as indexes_corpus_index_projection_intents_proof_idx } from "./
 export { default as indexes_corpus_index_projection_states_append_route_idx } from "./online-migration-entries/indexes-corpus-index-projection-states-append-route-idx";
 export { default as indexes_corpus_projection_offline_request } from "./online-migration-entries/indexes-corpus-projection-offline-request";
 export { default as indexes_corpus_projection_offline_start } from "./online-migration-entries/indexes-corpus-projection-offline-start";
+export { default as indexes_corpus_projection_route_in_flight } from "./online-migration-entries/indexes-corpus-projection-route-in-flight";
 export { default as indexes_corpus_projection_unserved_gauge } from "./online-migration-entries/indexes-corpus-projection-unserved-gauge";
 export { default as indexes_corpus_projection_withdrawn_census } from "./online-migration-entries/indexes-corpus-projection-withdrawn-census";
 export { default as indexes_correspondence_attachments_ws_entity_idx } from "./online-migration-entries/indexes-correspondence-attachments-ws-entity-idx";

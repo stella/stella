@@ -593,84 +593,68 @@ describe("offline build plan", () => {
     expect(judge([], 1_000_000, 299_999)).toBe("budget_short");
     // A full window and nothing comparable measured: the revision's fault.
     expect(judge([], 1_000_000, 600_000)).toBe("revision");
-    // Fast-failing or small shards are no evidence either way.
+    // Smaller shards are no evidence, however slow.
     expect(
       judge([{ bytes: 999_999, ms: 600_000_000 }], 1_000_000, 600_000),
     ).toBe("revision");
-    // 2 MB ingested in 400 s: 3 MB in a 600 s budget, so 3 MB fits.
+    // 2 MB took 400 s: 2 MB fit a 600 s budget, but not a 300 s one.
     const slow = [{ bytes: 2_000_000, ms: 400_000 }];
     expect(judge(slow, 2_000_000, 600_000)).toBe("revision");
-    // A budget of 300 s indexes 1.5 MB at that rate: a 2 MB kill is the
-    // engine's.
-    expect(judge(slow, 2_000_000, 300_000)).toBe("rate_too_slow");
+    expect(judge(slow, 2_000_000, 399_999)).toBe("budget_short");
 
-    const shard = fc.record({
-      bytes: fc.integer({ min: 1, max: 2 ** 24 }),
-      ms: fc.integer({ min: 0, max: 60 * 60_000 }),
+    // Shards are built to fit or not, never judged by the rule's arithmetic:
+    // a fitting shard of `sb` bytes ran at most the time that gives `bytes`
+    // exactly the budget at its rate; an exonerating one ran longer.
+    const comparable = fc.record({
+      extraBytes: fc.integer({ min: 0, max: 2 ** 20 }),
+      share: fc.double({ min: 0, max: 1, noNaN: true }),
     });
     assertProperty(
       "offline-build.lone-kill-judgement",
       fc.property(
-        fc.array(shard, { maxLength: 8 }),
-        fc.array(shard, { maxLength: 8 }),
-        fc.integer({ min: 1, max: 2 ** 24 }),
+        fc.integer({ min: 2, max: 2 ** 22 }),
         fc.integer({ min: 1, max: 60 * 60_000 }),
-        fc.integer({ min: 1, max: 4 }),
-        (ingested, others, bytes, killAfterMs, speedUp) => {
-          const verdict = judge(ingested, bytes, killAfterMs);
-          if (killAfterMs < plan.indexingWindowMs) {
-            expect(verdict).toBe("budget_short");
-            return;
-          }
-          // Shards smaller than the judged revision never move the verdict.
-          const smaller = others.map((other) => ({
-            ...other,
-            bytes: Math.max(1, Math.min(other.bytes, bytes - 1)),
-          }));
-          expect(
-            judge(
-              [...ingested, ...smaller.filter((other) => other.bytes < bytes)],
-              bytes,
-              killAfterMs,
-            ),
-          ).toBe(verdict);
-          const comparable = ingested.filter((other) => other.bytes >= bytes);
-          if (comparable.every((other) => other.ms === 0)) {
-            expect(verdict).toBe("revision");
-          }
-          // The engine is blamed only on evidence that, at the comparable
-          // shards' combined rate, the budget indexes fewer bytes than the
-          // revision holds.
-          const comparableBytes = comparable.reduce(
-            (sum, other) => sum + BigInt(other.bytes),
-            0n,
+        fc.array(comparable, { maxLength: 6 }),
+        fc.array(fc.integer({ min: 0, max: 60 * 60_000 }), { maxLength: 6 }),
+        fc.option(
+          fc.record({
+            extraBytes: fc.integer({ min: 0, max: 2 ** 20 }),
+            extraMs: fc.integer({ min: 1, max: 60 * 60_000 }),
+          }),
+        ),
+        (bytes, killAfterMs, fitting, smallerMs, exonerating) => {
+          // The longest a shard of `sb` bytes may have run and still have
+          // indexed `bytes` within the budget at its rate.
+          const fitMs = (sb: number) =>
+            Number((BigInt(killAfterMs) * BigInt(sb)) / BigInt(bytes));
+          const shards = [
+            ...fitting.map(({ extraBytes, share }) => {
+              const sb = bytes + extraBytes;
+              return { bytes: sb, ms: Math.floor(fitMs(sb) * share) };
+            }),
+            // Smaller than the revision: never evidence, however slow.
+            ...smallerMs.map((ms) => ({ bytes: bytes - 1, ms })),
+          ];
+          const verdict = judge(
+            exonerating === null
+              ? shards
+              : [
+                  ...shards,
+                  {
+                    bytes: bytes + exonerating.extraBytes,
+                    ms:
+                      fitMs(bytes + exonerating.extraBytes) +
+                      exonerating.extraMs,
+                  },
+                ],
+            bytes,
+            killAfterMs,
           );
-          const comparableMs = comparable.reduce(
-            (sum, other) => sum + BigInt(other.ms),
-            0n,
+          expect(verdict).toBe(
+            killAfterMs < plan.indexingWindowMs || exonerating !== null
+              ? "budget_short"
+              : "revision",
           );
-          expect(verdict === "rate_too_slow").toBe(
-            comparableMs > 0n &&
-              comparableBytes * BigInt(killAfterMs) <
-                BigInt(bytes) * comparableMs,
-          );
-          // A faster engine, or a longer budget, never shifts the blame from
-          // the revision to the engine.
-          if (verdict === "revision") {
-            expect(
-              judge(
-                ingested.map((other) => ({
-                  ...other,
-                  ms: Math.floor(other.ms / speedUp),
-                })),
-                bytes,
-                killAfterMs,
-              ),
-            ).toBe("revision");
-            expect(judge(ingested, bytes, killAfterMs * speedUp)).toBe(
-              "revision",
-            );
-          }
         },
       ),
     );

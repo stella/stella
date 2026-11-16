@@ -1,5 +1,15 @@
 import { panic, Result } from "better-result";
-import { and, count, eq, gt, inArray, max, min, sql } from "drizzle-orm";
+import {
+  and,
+  count,
+  eq,
+  gt,
+  inArray,
+  max,
+  min,
+  notInArray,
+  sql,
+} from "drizzle-orm";
 import { Buffer } from "node:buffer";
 import { rm } from "node:fs/promises";
 
@@ -120,11 +130,14 @@ import type { IngestionTransactionRunner } from "@/api/lib/replay-safe-ingestion
  *   that can no longer hold the largest revision stops the run
  *   (`rate_too_slow`).
  * - a lone revision killed short (`corpusProjectionOfflineLoneKillJudgement`):
- *   handed less than the plan's indexing window, nothing about it is known
- *   (`none`, `infrastructure_failed`); with the window, its own fault
- *   (`documents`), charged like a lone indexer failure, unless shards the run
- *   ingested to their end, each at least as large, achieved a rate that
- *   cannot index it in its budget (`none`, `rate_too_slow`).
+ *   its own fault (`documents`), charged like a lone indexer failure, unless
+ *   the budget it was handed was short: below the plan's indexing window, or
+ *   below what a shard of at least its size, ingested to its end in this run,
+ *   needed at its rate (`none`, `infrastructure_failed`). A run charges an
+ *   entity for a lone kill at most once and does not take it again, so the
+ *   attempt limit spans runs; the block it may lead to records
+ *   `CORPUS_PROJECTION_OFFLINE_LONE_KILL_MESSAGE`. An engine slower than the
+ *   policy shows as shards of several killed, below.
  * - refused past its deadline, never delivered (a lost lock, a generation
  *   no longer building, no kill budget left), a failure the runner reports
  *   as infrastructure, or a census that cannot answer: nothing about the
@@ -222,9 +235,18 @@ export type CorpusProjectionOfflineShard = {
 /**
  * What the caller's indexer reported for one shard. Timestamps are the
  * indexer host's clock: reported, never compared with the database clock.
+ * `ranMs` is how long the indexer ran, from launch to exit or kill, on the
+ * same monotonic timer that enforces `killAfterMs`: the only duration the
+ * run measures a rate by.
  */
 export type CorpusProjectionOfflineDeliveryOutcome =
-  | { type: "ingested"; exitCode: 0; startedAt: Date; endedAt: Date }
+  | {
+      type: "ingested";
+      exitCode: 0;
+      startedAt: Date;
+      endedAt: Date;
+      ranMs: number;
+    }
   | {
       type: "failed";
       exitCode: number;
@@ -237,12 +259,14 @@ export type CorpusProjectionOfflineDeliveryOutcome =
       cause: "indexer" | "infrastructure";
       startedAt: Date;
       endedAt: Date;
+      ranMs: number;
     }
   | {
       type: "killed_at_deadline";
       exitCode: number | null;
       startedAt: Date;
       endedAt: Date;
+      ranMs: number;
     }
   /** The indexer refused the shard: its kill budget was already spent. */
   | { type: "deadline_passed"; refusedAt: Date };
@@ -644,17 +668,20 @@ const validateDeliveryOutcome = (
 ): CorpusProjectionOfflineDeliveryOutcome => {
   const instant = (value: unknown) =>
     value instanceof Date && Number.isFinite(value.getTime());
+  const duration = (value: number) => Number.isSafeInteger(value) && value >= 0;
   switch (outcome.type) {
     case "ingested":
     case "killed_at_deadline":
       return instant(outcome.startedAt) &&
         instant(outcome.endedAt) &&
+        duration(outcome.ranMs) &&
         (outcome.exitCode === null || Number.isSafeInteger(outcome.exitCode))
         ? outcome
         : panic(`Offline delivery outcome is malformed: ${outcome.type}`);
     case "failed":
       return instant(outcome.startedAt) &&
         instant(outcome.endedAt) &&
+        duration(outcome.ranMs) &&
         Number.isSafeInteger(outcome.exitCode) &&
         DELIVERY_FAILURE_CAUSES.has(outcome.cause)
         ? outcome
@@ -772,6 +799,11 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
   readonly #inFlight = new Map<string, Date>();
   /** Shards the indexer ingested to their end: what judges a lone kill. */
   readonly #ingested: CorpusProjectionOfflineIngestedShard[] = [];
+  /**
+   * Entities this run charged for a lone kill. The run reserves them no more:
+   * one charge per run, so the attempt limit spans runs, not one incident.
+   */
+  readonly #chargedAlone = new Set<string>();
   /**
    * Final files of started shards not yet removed: one never delivered, or
    * whose delivery failed, is removed when the run ends.
@@ -936,9 +968,10 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
       this.#progress.outstanding = 0;
       return "nothing_outstanding";
     }
-    const before = this.#progress.recovered;
+    // The sweep is generation-wide: judge progress by this route's own rows.
+    const before = await this.#countOutstanding();
     await this.#recover();
-    return this.#progress.recovered === before ? "stuck" : "settled_some";
+    return (await this.#countOutstanding()) < before ? "settled_some" : "stuck";
   }
 
   /** The route's revisions started or committed and not decided yet. */
@@ -988,7 +1021,9 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
    * an outstanding revision of the route certainly becomes decidable: a
    * start once its lease has ended (the sweep then moves it), an offline
    * commit once its barrier has passed and its indexer has certainly ended,
-   * an ingest commit at its proof deadline. Null when none lies ahead.
+   * an ingest commit at its proof deadline. A commit that still holds its
+   * lease has no barrier, but exists only inside the one transaction that
+   * applies it, so no other transaction sees it. Null when none lies ahead.
    */
   async #nextDecidableAtMs(nowMs: number): Promise<number | null> {
     const t = corpusIndexProjectionIntents;
@@ -1058,14 +1093,22 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
           // Nothing is decidable now. Wait for the first row that becomes
           // decidable while the run still reserves, then sweep, prove and
           // walk again; otherwise the caller runs the build again later.
-          const nowMs = await this.#databaseNowMs();
-          const decidableAtMs = await this.#nextDecidableAtMs(nowMs);
-          if (decidableAtMs === null || decidableAtMs >= stopReservingAtMs) {
+          const databaseNowMs = await this.#databaseNowMs();
+          const decidableAtMs = await this.#nextDecidableAtMs(databaseNowMs);
+          // Each instant against its own clock: how long until the row is
+          // decidable (database), how long until the run stops reserving
+          // (this process), so no skew between them moves the wake past it.
+          const waitMs =
+            decidableAtMs === null ? null : decidableAtMs - databaseNowMs + 1;
+          if (
+            waitMs === null ||
+            waitMs >= stopReservingAtMs - (await this.#nowMs())
+          ) {
             this.#progress.outstanding = await this.#countOutstanding();
             this.#stop = "awaiting_proof";
             return "drained";
           }
-          await this.#sleep(decidableAtMs - nowMs + 1);
+          await this.#sleep(waitMs);
         }
       } else {
         await this.#sleep(dueInMs);
@@ -1110,6 +1153,12 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
               eq(corpusIndexProjectionStates.desiredIndexId, indexId),
               eq(corpusIndexProjectionStates.workStatus, "retry_scheduled"),
               eq(corpusIndexProjectionStates.appendMode, "batchable"),
+              // Entities this run charged for a lone kill wait for another.
+              this.#chargedAlone.size === 0
+                ? undefined
+                : notInArray(corpusIndexProjectionStates.entityId, [
+                    ...this.#chargedAlone,
+                  ]),
               gt(corpusIndexProjectionStates.retryNotBefore, new Date(nowMs)),
             ),
           ),
@@ -1486,6 +1535,7 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
               generation,
               indexId,
               after: this.#progress.cursor,
+              skipEntityIds: [...this.#chargedAlone],
               limit,
               leaseMs: this.#plan.leaseMs,
               ...(testNow === undefined ? {} : { testNow }),
@@ -1873,10 +1923,7 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
     killAfterMs: number,
   ): Promise<CorpusIndexAppendFault> {
     const shards = this.#progress.shards;
-    const ranMs =
-      outcome.type === "deadline_passed"
-        ? 0
-        : Math.max(0, outcome.endedAt.getTime() - outcome.startedAt.getTime());
+    const ranMs = outcome.type === "deadline_passed" ? 0 : outcome.ranMs;
     const attempted = () => {
       shards.attemptedBytes += shard.bytes;
       shards.attemptedMs += ranMs;
@@ -1905,16 +1952,19 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
             { ingested: this.#ingested, bytes: shard.bytes, killAfterMs },
           );
           switch (judgement) {
-            case "revision":
+            case "revision": {
               shards.killedAlone += 1;
+              // Charged once per run: the run that charges it does not take
+              // it again, so a slow hour cannot spend its attempts.
+              const [entry] = entries;
+              if (entry !== undefined) {
+                this.#chargedAlone.add(entry.lease.entityId);
+              }
               return "documents";
+            }
             case "budget_short":
               shards.infrastructureFailures += 1;
               this.#stop ??= "infrastructure_failed";
-              return "none";
-            case "rate_too_slow":
-              shards.infrastructureFailures += 1;
-              this.#stop ??= "rate_too_slow";
               return "none";
             default:
               judgement satisfies never;
@@ -1983,7 +2033,15 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
                   leaseToken: lease.leaseToken,
                   documentCount,
                 })),
-                delivery: { type: "offline_indexer", fault },
+                delivery: {
+                  type: "offline_indexer",
+                  fault,
+                  killedAlone:
+                    entries.length === 1 &&
+                    entries.every(({ lease }) =>
+                      this.#chargedAlone.has(lease.entityId),
+                    ),
+                },
                 testNow,
               }),
           ),
