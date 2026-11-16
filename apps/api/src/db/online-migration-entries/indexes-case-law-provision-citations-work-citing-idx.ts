@@ -3,6 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "indexes-case-law-provision-citations-work-citing-idx",
   revision: 170,
+  lifecycle: "finalized",
   type: "indexes",
   // A provision's subtree of citing rows as one byte-ordered anchor range.
   // The trailing date, decision and span let the cited-by page group a

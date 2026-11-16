@@ -7,6 +7,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "indexes-chat-content-v3-pending",
   revision: 120,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     ...Object.values(CHAT_CONTENT_V3_SOURCES).map(({ table: tableName }) => ({

@@ -723,6 +723,44 @@ describe("--file <path> (local bytes into the tool's base64 prop)", () => {
     );
   });
 
+  test.each(["constructor", "__proto__"])(
+    "local bytes retain the own declared %s field",
+    async (prop) => {
+      const server = startConfirmGateServer();
+      const tty = makeTtyContext({
+        serverUrl: server.url,
+        stdinData: "",
+        isTTY: false,
+      });
+      const file = await writeDocx(2048);
+      try {
+        await runLeafCommand({
+          context: tty.context,
+          flags: { file, input: JSON.stringify({ confirm: true }) },
+          spec: {
+            ...TEMPLATE_CREATE_SPEC,
+            flags: [],
+            localFileBase64Prop: prop,
+            inputSchema: {
+              type: "object",
+              properties: {
+                [prop]: { type: "string", maxLength: 262_144 },
+                confirm: { type: "boolean" },
+              },
+            },
+          },
+        });
+        expect(server.calls).toHaveLength(1);
+        const args = server.calls[0]?.args ?? {};
+        expect(Object.keys(args)).toEqual(["confirm", prop]);
+        expect(Buffer.from(String(args[prop]), "base64").byteLength).toBe(2048);
+        expect(tty.stderrText()).toBe("");
+      } finally {
+        server.stop();
+      }
+    },
+  );
+
   test("a 300 KB DOCX is refused before any call, naming the cap", async () => {
     const server = startConfirmGateServer();
     const tty = makeTtyContext({

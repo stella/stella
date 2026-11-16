@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, expect, test } from "bun:test";
+import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 import assert from "node:assert/strict";
 
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
@@ -15,6 +15,9 @@ const { act, cleanup, fireEvent, render, renderHook, waitFor } =
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
+const { stellaToast } = await import("@stll/ui/toast");
+const { useInspectorTabsStore } =
+  await import("@/components/inspector/inspector-tabs-store");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
@@ -122,6 +125,72 @@ test("calendar keys its task create for replay and writes the custom date field 
     propertyId,
     content: { type: "date", value: "2026-10-27" },
   });
+});
+
+test("a refused calendar task creates no date field and retries the same submission before opening it", async () => {
+  let attempts = 0;
+  const requests = serveRequests((request) => {
+    if (request.method === "PUT" && ++attempts === 1) {
+      return Response.json(
+        { message: "Calendar create refused" },
+        { status: 400 },
+      );
+    }
+    return Response.json({ entityId });
+  });
+  const client = createClient();
+  const invalidate = spyOn(client, "invalidateQueries");
+  const open = spyOn(
+    useInspectorTabsStore.getState(),
+    "openTask",
+  ).mockImplementation(() => undefined);
+  const toast = spyOn(stellaToast, "add").mockReturnValue("calendar-refusal");
+  const { result } = renderHook(
+    () => useCalendarCreateTask({ workspaceId, datePropertyId: propertyId }),
+    {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <Providers client={client}>{children}</Providers>
+      ),
+    },
+  );
+  try {
+    await act(async () => {
+      await result.current("2026-10-27", "task");
+    });
+    expect(requests).toHaveLength(1);
+    expect(open).not.toHaveBeenCalled();
+    expect(invalidate).not.toHaveBeenCalled();
+    expect(toast).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      await result.current("2026-10-27", "task");
+    });
+    await waitFor(() => expect(requests).toHaveLength(3));
+    expect(
+      requests.map((request) => [
+        request.method,
+        new URL(request.url).pathname,
+      ]),
+    ).toEqual([
+      ["PUT", `/v1/tasks/${workspaceId}`],
+      ["PUT", `/v1/tasks/${workspaceId}`],
+      ["POST", `/v1/fields/${workspaceId}`],
+    ]);
+    const firstKey = requests[0]?.headers.get("Idempotency-Key");
+    expect(firstKey).toEqual(expect.any(String));
+    expect(requests[1]?.headers.get("Idempotency-Key")).toBe(firstKey);
+    expect(requests[2]?.headers.get("Idempotency-Key")).toBeNull();
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(open).toHaveBeenCalledWith({
+      taskId: entityId,
+      workspaceId,
+      isNew: true,
+    });
+    expect(invalidate).toHaveBeenCalled();
+  } finally {
+    toast.mockRestore();
+    open.mockRestore();
+    invalidate.mockRestore();
+  }
 });
 
 test("kanban keys its task create for replay and writes the subgroup field without a key", async () => {

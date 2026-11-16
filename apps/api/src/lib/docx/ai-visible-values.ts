@@ -60,29 +60,28 @@ const deleteNestedPath = (
     return omitKey(values, segment);
   }
 
-  const root: Record<string, unknown> = { ...values };
   const next = values[segment];
   if (isUnknownArray(next)) {
-    root[segment] = next.map((item) =>
-      isRecord(item) ? deleteNestedPath(item, segments, index + 1) : item,
-    );
-    return root;
+    return {
+      ...values,
+      [segment]: next.map((item) =>
+        isRecord(item) ? deleteNestedPath(item, segments, index + 1) : item,
+      ),
+    };
   }
   if (isRecord(next)) {
-    root[segment] = deleteNestedPath(next, segments, index + 1);
+    return {
+      ...values,
+      [segment]: deleteNestedPath(next, segments, index + 1),
+    };
   }
-  return root;
+  return { ...values };
 };
 
 const omitKey = (
   values: Record<string, unknown>,
   omittedKey: string,
-): Record<string, unknown> => {
-  const visible: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(values)) {
-    if (key !== omittedKey) {
-      visible[key] = value;
-    }
-  }
-  return visible;
-};
+): Record<string, unknown> =>
+  Object.fromEntries(
+    Object.entries(values).filter(([key]) => key !== omittedKey),
+  );

@@ -6,9 +6,13 @@ import {
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
 import { PROFESSIONAL_USE_STATUS } from "@stll/api-contract/professional-use";
+import { memberHasPermissions } from "@stll/permissions";
+import type { PermissionInput } from "@stll/permissions";
 
 import { rootKeys } from "@/lib/auth-query-options";
 import { STALE_TIME } from "@/lib/consts";
+import type { toAuthClientError } from "@/lib/errors/auth";
+import { ensureRouteQueryData } from "@/lib/react-query";
 import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
 export { rootKeys, sessionOptions } from "@/lib/auth-query-options";
@@ -24,6 +28,19 @@ export { rootKeys, sessionOptions } from "@/lib/auth-query-options";
  */
 const BOOT_QUERY_RETRY = false;
 
+type AuthClientResult<T> =
+  | { data: T; error: null }
+  | { data: null; error: Parameters<typeof toAuthClientError>[0] };
+
+/** The data of an auth client call, or its error as an `AuthClientError`. */
+const authClientData = async <T>(result: AuthClientResult<T>): Promise<T> => {
+  if (result.error) {
+    const errors = await import("@/lib/errors/auth");
+    throw errors.toAuthClientError(result.error);
+  }
+  return result.data;
+};
+
 /**
  * Reads the session. `bypassCookieCache` asks the server past its session
  * cookie cache, so a change made in another tab (e.g. the active
@@ -32,19 +49,12 @@ const BOOT_QUERY_RETRY = false;
 export const fetchSession = async ({
   bypassCookieCache = false,
 }: { bypassCookieCache?: boolean } = {}) => {
-  const [{ authClient }, { toAuthClientError }] = await Promise.all([
-    import("@/lib/auth-client"),
-    import("@/lib/errors/auth"),
-  ]);
-  const result = await authClient.getSession(
-    bypassCookieCache ? { query: { disableCookieCache: true } } : undefined,
+  const { authClient } = await import("@/lib/auth-client");
+  return await authClientData(
+    await authClient.getSession(
+      bypassCookieCache ? { query: { disableCookieCache: true } } : undefined,
+    ),
   );
-
-  if (result.error) {
-    throw toAuthClientError(result.error);
-  }
-
-  return result.data;
 };
 
 export const roleOptions = resourceQueryOptions(
@@ -52,17 +62,11 @@ export const roleOptions = resourceQueryOptions(
     retry: BOOT_QUERY_RETRY,
     queryKey: rootKeys.role,
     queryFn: async () => {
-      const [{ authClient }, { toAuthClientError }] = await Promise.all([
-        import("@/lib/auth-client"),
-        import("@/lib/errors/auth"),
-      ]);
-      const result = await authClient.organization.getActiveMemberRole();
-
-      if (result.error) {
-        throw toAuthClientError(result.error);
-      }
-
-      return result.data.role;
+      const { authClient } = await import("@/lib/auth-client");
+      const { role } = await authClientData(
+        await authClient.organization.getActiveMemberRole(),
+      );
+      return role;
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   }),
@@ -71,6 +75,48 @@ export const roleOptions = resourceQueryOptions(
     scope: { type: "organization" },
   },
 );
+
+/** The additional membership grant is read only when role grants do not decide the operation. */
+export const activeMemberOptions = resourceQueryOptions(
+  queryOptions({
+    queryKey: ["active-organization-member"],
+    retry: BOOT_QUERY_RETRY,
+    queryFn: async () => {
+      const { authClient } = await import("@/lib/auth-client");
+      return await authClientData(
+        await authClient.organization.getActiveMember(),
+      );
+    },
+    staleTime: STALE_TIME.FIVE.MINUTES,
+  }),
+  {
+    resources: [RESOURCE_TYPE.USER, RESOURCE_TYPE.ORGANIZATION],
+    scope: { type: "organization" },
+  },
+);
+
+type EnsureMemberPermissionOptions = {
+  queryClient: QueryClient;
+  permissions: PermissionInput;
+};
+export const ensureMemberPermission = async ({
+  queryClient,
+  permissions,
+}: EnsureMemberPermissionOptions) => {
+  const role = await ensureRouteQueryData(queryClient, roleOptions);
+  if (memberHasPermissions({ role, billingAccess: false, permissions })) {
+    return true;
+  }
+  if (!permissions.billing?.includes("read")) {
+    return false;
+  }
+  const member = await ensureRouteQueryData(queryClient, activeMemberOptions);
+  return memberHasPermissions({
+    role: member.role,
+    billingAccess: member.billingAccess,
+    permissions,
+  });
+};
 
 /** Refreshes authentication queries; the host finishes frame cleanup after unmount. */
 export const refreshAuthQueries = async (queryClient: QueryClient) => {

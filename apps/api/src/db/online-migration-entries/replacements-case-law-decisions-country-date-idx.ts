@@ -3,6 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "replacements-case-law-decisions-country-date-idx",
   revision: 780,
+  lifecycle: "finalized",
   type: "replacements",
   values: [
     {

@@ -49,6 +49,7 @@ import {
   MembersInvitations,
 } from "@/routes/_protected.settings/organization/-components/members-invitations";
 import { OrganizationListToolbar } from "@/routes/_protected.settings/organization/-components/organization/list-toolbar";
+import { MemberBillingAccessCell } from "@/routes/_protected.settings/organization/-components/organization/member-billing-access-cell";
 import { RoleCell } from "@/routes/_protected.settings/organization/-components/organization/member-role-cell";
 import { filterOrganizationLists } from "@/routes/_protected.settings/organization/-components/organization/members-search.logic";
 
@@ -74,9 +75,14 @@ type MemberSkeletonShape = "identity" | "control" | "text" | "none";
 const SECONDARY_COLUMN_CLASS = "hidden sm:table-cell";
 
 type MemberColumn = {
-  id: "user" | "role" | "joined" | "actions";
+  id: "user" | "role" | "billing" | "joined" | "actions";
   sortKey: SortKey | null;
-  label: "common.user" | "common.role" | "organization.members.joined" | null;
+  label:
+    | "common.user"
+    | "common.role"
+    | "organization.members.joined"
+    | "organization.members.billingAccess"
+    | null;
   skeleton: MemberSkeletonShape;
   secondary?: true;
 };
@@ -84,6 +90,12 @@ type MemberColumn = {
 const MEMBER_COLUMNS: readonly MemberColumn[] = [
   { id: "user", sortKey: "name", label: "common.user", skeleton: "identity" },
   { id: "role", sortKey: "role", label: "common.role", skeleton: "control" },
+  {
+    id: "billing",
+    sortKey: null,
+    label: "organization.members.billingAccess",
+    skeleton: "control",
+  },
   {
     id: "joined",
     sortKey: "joined",
@@ -217,6 +229,13 @@ function Members() {
                         memberEmail={member.user.email}
                         memberId={member.id}
                         memberRole={member.role}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <MemberBillingAccessCell
+                        memberId={member.id}
+                        role={member.role}
+                        billingAccess={member.billingAccess}
                       />
                     </TableCell>
                     <TableCell

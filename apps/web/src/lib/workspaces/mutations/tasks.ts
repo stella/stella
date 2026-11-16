@@ -12,8 +12,9 @@ import { unwrapApiResponse } from "@/lib/errors/api";
 import { readQueryResult } from "@/lib/errors/query-result";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
-import { legalListsQueryRoot } from "@/lib/resource-query-roots.logic";
+import type { IdempotentRequest } from "@/lib/idempotency/use-idempotent-submit";
 import { toSafeId } from "@/lib/safe-id";
+import { resourceMutation } from "@/lib/workspace-realtime";
 import { workspacesKeys } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import { myWorkKeys } from "@/lib/workspaces/queries/my-work";
@@ -26,8 +27,13 @@ export const useCreateTask = () => {
   const analytics = useAnalytics();
   const t = useTranslations();
 
-  return useIdempotentMutation({
-    mutationFn: async (workspaceId: string, replayRequest) =>
+  const createTask = resourceMutation({
+    mutation: "createTask",
+    queryClient,
+    mutationFn: async (
+      { workspaceId }: { workspaceId: string },
+      replayRequest: IdempotentRequest,
+    ) =>
       readQueryResult(
         await runWorkspaceMutation({
           client: queryClient,
@@ -45,15 +51,13 @@ export const useCreateTask = () => {
               );
             return unwrapApiResponse(response);
           },
-          queryKeys: [
-            entitiesKeys.all(workspaceId),
-            taskKeys.all(workspaceId),
-            workspacesKeys.overview(workspaceId),
-            myWorkKeys.all,
-            legalListsQueryRoot(workspaceId),
-          ],
+          queryKeys: [],
         }),
       ),
+  });
+  return useIdempotentMutation({
+    mutationFn: async (workspaceId: string, replayRequest) =>
+      await createTask({ workspaceId }, replayRequest),
     onSuccess: (data, workspaceId) => {
       stellaToast.add({
         title: t("success.taskCreated"),

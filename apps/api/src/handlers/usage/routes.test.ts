@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import type { RouteEntry } from "@/api/http/route";
@@ -9,6 +10,8 @@ import { DB_QUERY_COUNT_HEADER } from "@/api/lib/db-query-counter";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { apiApp } from "@/api/server";
 import { serveForTest } from "@/api/tests/helpers/test-server";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const USAGE_PREFIX = `${STELLA_API_VERSION_PREFIX}/usage/`;
 const usageRoutes = apiApp.routes.filter(({ path }) =>
@@ -19,7 +22,7 @@ const usageRoutes = apiApp.routes.filter(({ path }) =>
 // feature registry decides that), so the flag is read in a strict runtime.
 const withUsageFeature = async (enabled: boolean, run: () => Promise<void>) => {
   const previous = env.FEATURE_USAGE;
-  env.FEATURE_USAGE = enabled;
+  testState.setConfig("FEATURE_USAGE", enabled);
   const restoreRuntimeMode = setRuntimeModeForTesting({
     mode: RUNTIME_MODE.strict,
   });
@@ -27,7 +30,7 @@ const withUsageFeature = async (enabled: boolean, run: () => Promise<void>) => {
     await run();
   } finally {
     restoreRuntimeMode();
-    env.FEATURE_USAGE = previous;
+    testState.setConfig("FEATURE_USAGE", previous);
   }
 };
 

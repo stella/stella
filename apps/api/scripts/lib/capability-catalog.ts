@@ -34,7 +34,7 @@ import type { RouteGate } from "../../src/lib/route-gates";
 import type { HandlerKind } from "../../src/lib/safe-handler-factories";
 
 /** Handler-tree prefix stripped to turn a file path into a capability id. */
-export const HANDLERS_ROOT_PREFIX = "apps/api/src/handlers/";
+const HANDLERS_ROOT_PREFIX = "apps/api/src/handlers/";
 
 /**
  * Internal handler-tree words and the public word each becomes in a capability
@@ -223,11 +223,6 @@ export const isAllowedActionVerb = (id: string): boolean => {
   const verb = deriveActionVerb(id);
   return ALLOWED_ACTION_VERBS.has(verb);
 };
-
-/** Ids whose action verb is in neither allowed set, sorted (empty when all conform). */
-export const findNonConformingActionVerbs = (
-  ids: readonly string[],
-): string[] => ids.filter((id) => !isAllowedActionVerb(id)).toSorted();
 
 export type AccessClassification = {
   access: "read" | "write";
@@ -787,7 +782,7 @@ export const CAPABILITY_DISPATCH = {
  * destructured-context usage handlers actually write (e.g. `set.status`,
  * `redirect(...)`), not just the `ctx.`-qualified form.
  */
-export const CONTEXT_FIDELITY_PATTERNS: readonly {
+const CONTEXT_FIDELITY_PATTERNS: readonly {
   feature: string;
   pattern: RegExp;
 }[] = [
@@ -813,7 +808,7 @@ export const detectContextFidelityFeatures = (source: string): string[] => {
   return [...features].toSorted();
 };
 
-export type ContextFidelityViolation = { id: string; features: string[] };
+type ContextFidelityViolation = { id: string; features: string[] };
 
 export type ContextFidelityScan = {
   /** Catalog ids whose handler uses an un-honorable feature but is not waived. */
@@ -912,7 +907,7 @@ const isDirectBinaryProp = (schema: unknown): boolean => {
 };
 
 /** One top-level input property whose schema carries binary bytes. */
-export type BinarySchemaField = {
+type BinarySchemaField = {
   part: "body" | "params" | "query";
   field: string;
   /** Whether the part's `required` list names it (`v.optional(...)` -> false). */
@@ -1202,7 +1197,7 @@ export const returnsInlineFileResponse = (source: string): boolean =>
  * signal only (keeps the flag table honest); the refusal itself keys off the
  * flag plus the runtime backstop in `mapHandlerResult`.
  */
-export const constructsBinaryLike = (source: string): boolean =>
+const constructsBinaryLike = (source: string): boolean =>
   /\bnew Response\s*\(|\bsecureDocumentResponse\s*\(|\bUint8Array\b|\bArrayBuffer\b|\bnew Blob\s*\(|\bReadableStream\b/u.test(
     source,
   );
@@ -1475,7 +1470,7 @@ export const resolveScope = ({
 // --- Coverage doc (generated docs/capability-coverage.md) -------------------
 
 /** The `mcp` disposition shape a coverage-doc entry carries (mirrors CapabilityMcp). */
-export type CoverageDocMcp =
+type CoverageDocMcp =
   | { type: "tool"; name: string }
   | { type: "covered"; by: string }
   | { type: "capability"; reason: string };

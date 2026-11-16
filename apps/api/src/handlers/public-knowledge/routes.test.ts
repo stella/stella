@@ -23,6 +23,7 @@ import {
   FIXTURE_TEMPLATE_PACKS,
   fixtureTemplatePackContentRoot,
 } from "@stll/template-packs/fixtures";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import { envApiServerSchema } from "@/api/env-schema";
@@ -42,6 +43,8 @@ import {
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { serveForTest } from "@/api/tests/helpers/test-server";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 /**
  * The routes on a real port behind the pipeline stages their answers depend
@@ -73,11 +76,11 @@ const handlerOf = (definition: RouteDefinition): unknown =>
 
 const withFeature = async (enabled: boolean, run: () => Promise<void>) => {
   const previous = env.FEATURE_PUBLIC_KNOWLEDGE;
-  env.FEATURE_PUBLIC_KNOWLEDGE = enabled;
+  testState.setConfig("FEATURE_PUBLIC_KNOWLEDGE", enabled);
   try {
     await run();
   } finally {
-    env.FEATURE_PUBLIC_KNOWLEDGE = previous;
+    testState.setConfig("FEATURE_PUBLIC_KNOWLEDGE", previous);
   }
 };
 

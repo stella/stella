@@ -3,6 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "indexes-contacts-data-box-ids-idx",
   revision: 765,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     {

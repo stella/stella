@@ -3,6 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "indexes-legislation-documents-country-slug-idx",
   revision: 670,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     {

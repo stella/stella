@@ -36,11 +36,8 @@ import {
   chatMessageContentFromMessage,
   toPersistableChatMessage,
 } from "./chat-message-parts";
-import {
-  CHAT_TURN_OWNER_LOST_REASON,
-  ChatTurnOwnership,
-  ChatTurnRun,
-} from "./chat-turn-run";
+import { ChatTurnOwnership, ChatTurnRun } from "./chat-turn-run";
+import { CHAT_TURN_OWNER_LOST_REASON } from "./chat-turn-run-cut";
 import { processServerChatStream, toChatMessage } from "./stream-chat";
 import { createChatMessageIdMapper } from "./stream-message-identity";
 

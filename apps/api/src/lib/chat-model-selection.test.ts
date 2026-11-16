@@ -2,24 +2,27 @@ import { describe, expect, test } from "bun:test";
 
 import { BYOK_MODEL_OPTIONS, TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
 import type { BYOKProvider } from "@stll/ai-catalog";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import { resolveOrgAIModelForTask } from "@/api/lib/ai-config";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 
-process.env["EMAIL_PROVIDER"] ??= "smtp";
-process.env["GOTENBERG_PASSWORD"] ??= "gotenberg";
-process.env["GOTENBERG_URL"] ??= "http://localhost:3003";
-process.env["GOTENBERG_USERNAME"] ??= "gotenberg";
-process.env["REDIS_URL"] ??= "redis://localhost:6379";
-process.env["SMTP_HOST"] ??= "localhost";
-process.env["SMTP_PORT"] ??= "1025";
-process.env["AI_PROVIDER"] = "openai";
-process.env["OPENAI_API_KEY"] ??= "test-openai-instance-key";
+const testState = createTestState({ file: import.meta.path, config: env });
 
-env.AI_PROVIDER = "openai";
-env.OPENAI_API_KEY = "test-openai-instance-key";
+testState.setEnvIfAbsent("EMAIL_PROVIDER", "smtp");
+testState.setEnvIfAbsent("GOTENBERG_PASSWORD", "gotenberg");
+testState.setEnvIfAbsent("GOTENBERG_URL", "http://localhost:3003");
+testState.setEnvIfAbsent("GOTENBERG_USERNAME", "gotenberg");
+testState.setEnvIfAbsent("REDIS_URL", "redis://localhost:6379");
+testState.setEnvIfAbsent("SMTP_HOST", "localhost");
+testState.setEnvIfAbsent("SMTP_PORT", "1025");
+testState.setEnv("AI_PROVIDER", "openai");
+testState.setEnvIfAbsent("OPENAI_API_KEY", "test-openai-instance-key");
+
+testState.setConfig("AI_PROVIDER", "openai");
+testState.setConfig("OPENAI_API_KEY", "test-openai-instance-key");
 
 const {
   decodeChatModelSelection,
@@ -160,36 +163,27 @@ describe("isChatModelSelectionAvailable", () => {
   });
 
   test("offers only the active eligible instance provider", () => {
-    const previous = {
-      AI_PROVIDER: env.AI_PROVIDER,
-      OPENROUTER_API_KEY: env.OPENROUTER_API_KEY,
-      USE_MOCK_AI: env.USE_MOCK_AI,
-      REQUIRE_PERSONAL_AI_KEY: env.REQUIRE_PERSONAL_AI_KEY,
-    };
-    Object.assign(env, {
+    testState.patchConfig({
       AI_PROVIDER: "openrouter",
       OPENROUTER_API_KEY: "test-openrouter-instance-key",
       USE_MOCK_AI: false,
       REQUIRE_PERSONAL_AI_KEY: false,
     });
-    try {
-      expect(
-        isChatModelSelectionAvailable({
-          provider: "openrouter",
-          modelId: "google/gemini-3.7-flash",
-          orgAIConfig: null,
-        }),
-      ).toBe(true);
-      expect(
-        isChatModelSelectionAvailable({
-          provider: "openai",
-          modelId: "gpt-5.4",
-          orgAIConfig: null,
-        }),
-      ).toBe(false);
-    } finally {
-      Object.assign(env, previous);
-    }
+
+    expect(
+      isChatModelSelectionAvailable({
+        provider: "openrouter",
+        modelId: "google/gemini-3.7-flash",
+        orgAIConfig: null,
+      }),
+    ).toBe(true);
+    expect(
+      isChatModelSelectionAvailable({
+        provider: "openai",
+        modelId: "gpt-5.4",
+        orgAIConfig: null,
+      }),
+    ).toBe(false);
   });
 });
 

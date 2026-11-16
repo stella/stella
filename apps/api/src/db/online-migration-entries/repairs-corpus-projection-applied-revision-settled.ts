@@ -4,6 +4,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "repairs-corpus-projection-applied-revision-settled",
   revision: 1209,
+  lifecycle: "finalized",
   type: "repairs",
   values: [CORPUS_PROJECTION_APPLIED_REVISION_SETTLED_REPAIR],
 } satisfies OnlineMigrationEntry;

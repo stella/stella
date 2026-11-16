@@ -9,6 +9,8 @@ import {
   test,
 } from "bun:test";
 
+import { createTestState } from "@stll/test-state";
+
 import { env } from "@/api/env";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { decideMany } from "@/api/lib/workflow/decisions/decide";
@@ -27,13 +29,10 @@ import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
+const testState = createTestState({ file: import.meta.path, config: env });
+
 const testFetchState = createTestFetch();
 
-const original = {
-  requirePersonalKey: env.REQUIRE_PERSONAL_AI_KEY,
-  apiKey: env.TYPESAFE_API_KEY,
-  model: env.TYPESAFE_MODEL,
-};
 const questions = { eligible: noul("Is the applicant eligible?") };
 const organization = {
   providers: [],
@@ -91,18 +90,15 @@ let runtime: ReturnType<typeof setup>;
 
 beforeEach(() => {
   fetch.mockClear();
-  env.REQUIRE_PERSONAL_AI_KEY = false;
-  env.TYPESAFE_API_KEY = "test-instance-key";
-  env.TYPESAFE_MODEL = "jev-test";
+  testState.setConfig("REQUIRE_PERSONAL_AI_KEY", false);
+  testState.setConfig("TYPESAFE_API_KEY", "test-instance-key");
+  testState.setConfig("TYPESAFE_MODEL", "jev-test");
   runtime = setup();
 });
 
 afterEach(() => {
   runtime.analytics.restore();
   runtime.logger.restore();
-  env.REQUIRE_PERSONAL_AI_KEY = original.requirePersonalKey;
-  env.TYPESAFE_API_KEY = original.apiKey;
-  env.TYPESAFE_MODEL = original.model;
 });
 
 describe("decision model request policy", () => {
@@ -174,9 +170,9 @@ describe("decision model request policy", () => {
     "keeps %s instance resolution empty",
     (configuration) => {
       if (configuration === "unconfigured") {
-        env.TYPESAFE_API_KEY = undefined;
+        testState.setConfig("TYPESAFE_API_KEY", undefined);
       } else {
-        env.REQUIRE_PERSONAL_AI_KEY = true;
+        testState.setConfig("REQUIRE_PERSONAL_AI_KEY", true);
       }
       for (const dataClass of ["customer", "public_corpus"] as const) {
         expect(hasInstanceDecisionModel(dataClass)).toBe(false);
@@ -188,7 +184,7 @@ describe("decision model request policy", () => {
   test.each(["customer", "public_corpus"] as const)(
     "keeps %s organization requests unchanged",
     async (dataClass) => {
-      env.REQUIRE_PERSONAL_AI_KEY = true;
+      testState.setConfig("REQUIRE_PERSONAL_AI_KEY", true);
       const client = resolveDecisionModel(organization, dataClass);
       if (client === null) {
         panic("Expected an organization decision model");
