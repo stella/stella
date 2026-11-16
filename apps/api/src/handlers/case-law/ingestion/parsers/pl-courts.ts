@@ -393,13 +393,21 @@ const nextBlockId = (state: ParserState): string => {
   return `b${state.blockIdCounter}`;
 };
 
-const pushHeading = (
-  state: ParserState,
-  level: 1 | 2 | 3,
-  plainText: string,
-  role: "decision-title" | "section-heading",
-  inlines: Inline[],
-): void => {
+type PushHeadingOptions = {
+  state: ParserState;
+  level: 1 | 2 | 3;
+  plainText: string;
+  role: "decision-title" | "section-heading";
+  inlines: Inline[];
+};
+
+const pushHeading = ({
+  state,
+  level,
+  plainText,
+  role,
+  inlines,
+}: PushHeadingOptions): void => {
   state.blockIndex += 1;
   state.blocks.push({
     id: nextBlockId(state),
@@ -913,7 +921,13 @@ const handleLetterHeading = (
     return false;
   }
   if (!state.sawDecisionTitle && state.blocks.length === 0) {
-    pushHeading(state, 1, plainText, "decision-title", inlines);
+    pushHeading({
+      state,
+      level: 1,
+      plainText,
+      role: "decision-title",
+      inlines,
+    });
     state.sawDecisionTitle = true;
     state.decisionTitle = plainText;
     return true;
@@ -1106,7 +1120,13 @@ const handleHeadingText = (
     state.fallbackDecisionTitle === POLISH_DECISION_TITLE_MAP.decyzja &&
     isPlAuthorityDecisionTitle(plainText)
   ) {
-    pushHeading(state, 1, plainText, "decision-title", inlines);
+    pushHeading({
+      state,
+      level: 1,
+      plainText,
+      role: "decision-title",
+      inlines,
+    });
     state.sawDecisionTitle = true;
     state.decisionTitle = POLISH_DECISION_TITLE_MAP.decyzja;
     return true;
@@ -1118,7 +1138,13 @@ const handleHeadingText = (
     state.fallbackDecisionTitle !== undefined &&
     state.fallbackDecisionTitle !== POLISH_DECISION_TITLE_MAP.uzasadnienie
   ) {
-    pushHeading(state, 2, plainText, "section-heading", inlines);
+    pushHeading({
+      state,
+      level: 2,
+      plainText,
+      role: "section-heading",
+      inlines,
+    });
     state.section = "reasoning";
     return true;
   }
@@ -1132,7 +1158,13 @@ const handleHeadingText = (
     !isDecisionTitleText(plainText) &&
     namesPlDocumentType(plainText, state.declaredType)
   ) {
-    pushHeading(state, 1, plainText, "decision-title", inlines);
+    pushHeading({
+      state,
+      level: 1,
+      plainText,
+      role: "decision-title",
+      inlines,
+    });
     state.sawDecisionTitle = true;
     state.decisionTitle = plainText;
     return true;
@@ -1152,12 +1184,24 @@ const handleHeadingText = (
     }
 
     if (isPlReasonsHeading(plainText) && state.sawDecisionTitle) {
-      pushHeading(state, 2, plainText, "section-heading", inlines);
+      pushHeading({
+        state,
+        level: 2,
+        plainText,
+        role: "section-heading",
+        inlines,
+      });
       state.section = "reasoning";
       return true;
     }
 
-    pushHeading(state, 1, plainText, "decision-title", inlines);
+    pushHeading({
+      state,
+      level: 1,
+      plainText,
+      role: "decision-title",
+      inlines,
+    });
     state.sawDecisionTitle = true;
     state.decisionTitle = plainText;
     if (isPlReasonsHeading(plainText)) {
@@ -1171,7 +1215,13 @@ const handleHeadingText = (
     (state.markup === PL_DECISION_MARKUP.COMMON_COURT &&
       isPlNumberedReasonsHeading(plainText))
   ) {
-    pushHeading(state, 2, plainText, "section-heading", inlines);
+    pushHeading({
+      state,
+      level: 2,
+      plainText,
+      role: "section-heading",
+      inlines,
+    });
     state.section = "reasoning";
     return true;
   }
@@ -1181,12 +1231,24 @@ const handleHeadingText = (
     (state.section === "holding" || state.section === "reasoning") &&
     isPlInstructionHeading(plainText)
   ) {
-    pushHeading(state, 2, plainText, "section-heading", inlines);
+    pushHeading({
+      state,
+      level: 2,
+      plainText,
+      role: "section-heading",
+      inlines,
+    });
     return true;
   }
 
   if (state.section !== "reasoning" && isPlHoldingHeading(plainText)) {
-    pushHeading(state, 2, plainText, "section-heading", inlines);
+    pushHeading({
+      state,
+      level: 2,
+      plainText,
+      role: "section-heading",
+      inlines,
+    });
     state.section = "holding";
     return true;
   }
@@ -1232,7 +1294,13 @@ const parseParagraphElement = (
     state.section === "reasoning" &&
     isBoldSubheading(inlines, plainText)
   ) {
-    pushHeading(state, 3, plainText, "section-heading", inlines);
+    pushHeading({
+      state,
+      level: 3,
+      plainText,
+      role: "section-heading",
+      inlines,
+    });
     return true;
   }
 
@@ -1565,13 +1633,13 @@ const parseHeadingElement = (
     return;
   }
 
-  pushHeading(
+  pushHeading({
     state,
-    tag === "h1" || tag === "h2" ? 2 : 3,
+    level: tag === "h1" || tag === "h2" ? 2 : 3,
     plainText,
-    "section-heading",
+    role: "section-heading",
     inlines,
-  );
+  });
 };
 
 const parseNode = (
@@ -2102,7 +2170,13 @@ export const parsePlDecisionContent = (
 
   if (!state.sawDecisionTitle && state.fallbackDecisionTitle !== undefined) {
     const title = state.fallbackDecisionTitle;
-    pushHeading(state, 1, title, "decision-title", textInline(title));
+    pushHeading({
+      state,
+      level: 1,
+      plainText: title,
+      role: "decision-title",
+      inlines: textInline(title),
+    });
     const fallbackHeading = state.blocks.pop();
     if (fallbackHeading === undefined) {
       return panic("Fallback decision title was not added");

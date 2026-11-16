@@ -1380,20 +1380,11 @@
   "eslint/max-params": {
     "apps/api/src/handlers/case-law/ingestion/adapters/at-courts.ts": 1,
     "apps/api/src/handlers/case-law/ingestion/adapters/cz-nss.ts": 1,
-    "apps/api/src/handlers/case-law/ingestion/parsers/pl-courts.ts": 1,
     "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row-update.ts": 1,
-    "apps/api/src/handlers/chat/file-thread-shared.ts": 1,
-    "apps/api/src/handlers/clauses/search-vector.ts": 1,
-    "apps/api/src/lib/legal-search/corpus-index-projection-materials.ts": 2,
     "apps/web/src/lib/render-storm-canary.ts": 2,
-    "apps/web/src/routes/knowledge/-components/template-studio.tsx": 1,
-    "packages/cli/src/auth/login.ts": 1,
-    "packages/scripts/src/i18n-lint.ts": 2,
     "packages/template-conditions/src/index.ts": 1
   },
-  "react/no-children-prop": {
-    "apps/web/src/components/chat/chat-rich-message-part.test.ts": 1
-  },
+  "react/no-children-prop": {},
   "eslint/no-unexpected-multiline": {
     "apps/web/src/components/ai-suggestions/document-review-queries.ts": 5,
     "apps/web/src/components/ai-suggestions/docx-suggestion-persistence.ts": 1,
