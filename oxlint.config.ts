@@ -162,13 +162,11 @@ const colourExemptions = [
     reason:
       "Surfaces no stylesheet reaches name their palette once: mail clients " +
       "drop CSS custom properties, the email preview is a standalone " +
-      "document, the OG card is rasterised SVG, and the CLI's sign-in page " +
-      "is served by the CLI itself.",
+      "document, and the OG card is rasterised SVG.",
     files: [
       "packages/transactional/emails/_shared.ts",
       "apps/api/src/lib/files/email-preview-palette.ts",
       "apps/landing/src/lib/og-card.ts",
-      "packages/cli/src/auth/callback-page-theme.ts",
     ],
   },
 ] as const satisfies readonly ColourExemption[];
@@ -599,6 +597,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-adhoc-loader.fixture.tsx", [
     "no-adhoc-loader/no-adhoc-loader",
+  ]),
+  fixtureRuleOverride("no-adhoc-outcome-screen.fixture.tsx", [
+    "no-adhoc-outcome-screen/no-adhoc-outcome-screen",
   ]),
   fixtureRuleOverride("no-dialog-trigger-menu-item.fixture.tsx", [
     "no-dialog-trigger-menu-item/no-dialog-trigger-menu-item",
@@ -2055,6 +2056,9 @@ const config = defineConfig({
     "apps/web/src/generated/api-routes.gen.ts",
     // Bundled API-owned schemas: validate their source and regenerate this artifact.
     "packages/mcp-apps/src/shared/generated/contracts.js",
+    // The outcome page rendered from `@stll/ui/outcome-screen`; the
+    // generated-files check rebuilds it from the component and the theme.
+    "packages/cli/src/auth/outcome-page.gen.ts",
     "**/*.config.js",
     "**/*.config.cjs",
     // Module-augmentation files must use `interface` for declaration
@@ -2190,6 +2194,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-cn-for-classname-composition.ts",
     "./.oxlint-plugins/no-ref-mirror.ts",
     "./.oxlint-plugins/no-adhoc-loader.ts",
+    "./.oxlint-plugins/no-adhoc-outcome-screen.ts",
     "./.oxlint-plugins/no-shared-suspense-query.ts",
     "./.oxlint-plugins/no-raw-query-error-capture.ts",
     "./.oxlint-plugins/no-bare-chrome-query.ts",
@@ -3151,6 +3156,20 @@ const config = defineConfig({
       ],
       rules: {
         "no-adhoc-loader/no-adhoc-loader": "error",
+      },
+    },
+    {
+      // Every place a flow's end or an HTML page could be built in TypeScript:
+      // the web and desktop apps, the design system, the CLI and the API.
+      files: [
+        "apps/web/src/**/*.{ts,tsx}",
+        "apps/desktop/src/**/*.{ts,tsx}",
+        "packages/ui/src/**/*.{ts,tsx}",
+        "packages/cli/src/**/*.ts",
+        "apps/api/src/**/*.ts",
+      ],
+      rules: {
+        "no-adhoc-outcome-screen/no-adhoc-outcome-screen": "error",
       },
     },
     {

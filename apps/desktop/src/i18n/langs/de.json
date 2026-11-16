@@ -825,9 +825,10 @@
       "storage": "Die Verbindung konnte auf diesem Computer nicht gelesen oder gespeichert werden."
     },
     "callbackConnectedTitle": "ChatGPT ist verbunden",
-    "callbackConnectedBody": "Sie können diesen Tab schließen und zu stella zurückkehren.",
+    "callbackConnectedBody": "Kehren Sie zu stella zurück. KI-Anfragen nutzen jetzt Ihren ChatGPT-Tarif.",
     "callbackNotConnectedTitle": "ChatGPT wurde nicht verbunden",
     "callbackNotConnectedBody": "Kehren Sie zu stella zurück, um zu sehen, was passiert ist, und versuchen Sie es erneut.",
+    "callbackCloseTab": "Sie können diesen Tab schließen.",
     "claudeCode": {
       "title": "Claude Code",
       "description": "Nutzen Sie Ihr Claude-Abonnement für lokale Agenten in stella. Die Nutzung wird auf Ihren Claude-Tarif angerechnet, getrennt von Ihrem stella-Abonnement.",

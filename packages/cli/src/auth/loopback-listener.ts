@@ -11,14 +11,17 @@ import { timingSafeEqual } from "node:crypto";
 import { createServer } from "node:http";
 import type { IncomingMessage, ServerResponse } from "node:http";
 
-import { sha256Base64Url } from "../sha256.js";
-import { CALLBACK_PAGE_THEME_CSS } from "./callback-page-theme.js";
 import {
   CLIENT_NAME,
   LOOPBACK_REDIRECT_PATH,
   SIGN_IN_COMPLETION_TIMEOUT_MS,
 } from "./constants.js";
 import { LoopbackCallbackError, LoopbackTimeoutError } from "./errors.js";
+import {
+  OUTCOME_PAGE_SLOTS,
+  OUTCOME_PAGE_STYLE_SHA256,
+  OUTCOME_PAGE_TEMPLATES,
+} from "./outcome-page.gen.js";
 
 export type LoopbackCallback =
   | { readonly kind: "success"; readonly code: string; readonly state: string }
@@ -110,129 +113,56 @@ const failureText = (
   }
 };
 
-const renderCallbackPage = (page: CallbackPageOptions) => {
-  const ok = page.status === "success";
-  const organizationName = ok ? page.callback.organizationName : null;
-  const { title, message } = ok
-    ? {
-        message: `Return to your terminal to continue with ${CLIENT_NAME}.`,
-        title: "Signed in to stella",
-      }
-    : failureText(page.reason);
-  const statusColor = ok ? "--status-success" : "--status-failure";
+const CLOSE_TAB_NOTE = "You can close this tab.";
 
-  const styles = `${CALLBACK_PAGE_THEME_CSS}
-      :root {
-        color-scheme: light dark;
-        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      }
-      * {
-        box-sizing: border-box;
-      }
-      body {
-        align-items: center;
-        background: var(--page-background);
-        color: var(--page-foreground);
-        display: flex;
-        justify-content: center;
-        margin: 0;
-        min-height: 100vh;
-        padding: 24px;
-        -webkit-font-smoothing: antialiased;
-      }
-      main {
-        background: var(--card-background);
-        border: 1px solid var(--card-border);
-        border-radius: 8px;
-        box-shadow:
-          0 1px 2px var(--card-shadow-near),
-          0 24px 80px var(--card-shadow-far);
-        display: grid;
-        gap: 28px;
-        max-width: 480px;
-        padding: 32px;
-        width: min(100%, 480px);
-      }
-      .brand {
-        align-items: center;
-        color: var(--page-foreground);
-        display: flex;
-        gap: 12px;
-        min-width: 0;
-      }
-      .mark {
-        color: var(--page-foreground);
-        height: 28px;
-        width: 28px;
-      }
-      .wordmark {
-        font-size: 22px;
-        font-weight: 500;
-        letter-spacing: 0;
-        line-height: 1;
-      }
-      h1 {
-        color: var(${statusColor});
-        font-size: 24px;
-        font-weight: 600;
-        letter-spacing: 0;
-        line-height: 1.15;
-        margin: 0;
-        text-wrap: balance;
-      }
-      p {
-        color: var(--body-foreground);
-        font-size: 15px;
-        line-height: 1.6;
-        margin: 10px 0 0;
-        text-wrap: pretty;
-      }
-      .organization {
-        overflow-wrap: anywhere;
-      }
-      @media (prefers-color-scheme: dark) {
-        main {
-          box-shadow: 0 24px 80px var(--card-shadow-far);
-        }
-        path {
-          fill: currentColor;
-        }
-      }
-`;
-  const escapedOrganizationName = organizationName
-    ?.replaceAll("&", "&amp;")
+const escapeHtml = (text: string) =>
+  text
+    .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
 
+const OUTCOME_SLOT_PATTERN = new RegExp(
+  Object.values(OUTCOME_PAGE_SLOTS)
+    .map((slot) => slot.replaceAll(/[{}]/gu, (brace) => `\\${brace}`))
+    .join("|"),
+  "gu",
+);
+
+/**
+ * The outcome page, from the template rendered from `@stll/ui/outcome-screen`
+ * (`scripts/generate-outcome-page.ts`). Every slot is filled with escaped
+ * text; only the organization's name comes from the redirect, and only once
+ * its `state` matched this sign-in.
+ */
+const renderCallbackPage = (page: CallbackPageOptions) => {
+  const ok = page.status === "success";
+  const organizationName = ok ? page.callback.organizationName : null;
+  const failure = ok ? null : failureText(page.reason);
+  const title = failure?.title ?? "Signed in to stella";
+  const signedInDescription = organizationName
+    ? `${escapeHtml(CLIENT_NAME)} can now work in <bdi>${escapeHtml(organizationName)}</bdi>. Return to your terminal to continue.`
+    : escapeHtml(`Return to your terminal to continue with ${CLIENT_NAME}.`);
+  const description =
+    failure === null ? signedInDescription : escapeHtml(failure.message);
+  const slots: Record<string, string> = {
+    [OUTCOME_PAGE_SLOTS.lang]: "en",
+    [OUTCOME_PAGE_SLOTS.dir]: "ltr",
+    [OUTCOME_PAGE_SLOTS.title]: escapeHtml(title),
+    [OUTCOME_PAGE_SLOTS.description]: description,
+    [OUTCOME_PAGE_SLOTS.note]: escapeHtml(CLOSE_TAB_NOTE),
+  };
+  // One pass over the template, so text put into one slot is never read as
+  // another slot.
+  const html = OUTCOME_PAGE_TEMPLATES[ok ? "success" : "error"].replaceAll(
+    OUTCOME_SLOT_PATTERN,
+    (slot) => slots[slot] ?? slot,
+  );
+
   return {
-    contentSecurityPolicy: `default-src 'none'; style-src 'sha256-${sha256Base64Url(styles)}'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
-    html: `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>${title}</title>
-    <style>${styles}</style>
-  </head>
-  <body>
-    <main>
-      <div class="brand">
-        <svg aria-hidden="true" class="mark" fill="currentColor" viewBox="0 0 40 41" xmlns="http://www.w3.org/2000/svg">
-          <path d="M6.58 11.3 16.69 5.05a5.9 5.9 0 0 1 6.62.01l14.68 9.07V9.26L25.52 1.55A11.8 11.8 0 0 0 20 0c-1.97 0-3.88.54-5.53 1.56L4.37 7.81A9.3 9.3 0 0 0 0 15.61a9.3 9.3 0 0 0 4.37 7.8l3.26 2.02-.01.01 11.15 6.9c.14.09.27.16.39.2.68.26 1.42.19 2.03-.19l9.59-5.93.1-.07 2.07-1.28-2.82-1.72-1.1-.69-9.02 5.56-.41-.24-13.01-8.05a5.57 5.57 0 0 1-2.41-4.31c0-1.79.88-3.36 2.41-4.3Z" />
-          <path d="M33.34 29.25 23.24 35.5a5.9 5.9 0 0 1-6.63-.01L1.94 26.43v4.86l12.47 7.71a11.8 11.8 0 0 0 5.52 1.55c1.97 0 3.88-.54 5.53-1.56l10.1-6.25a9.3 9.3 0 0 0 4.37-7.8 9.3 9.3 0 0 0-4.37-7.8l-3.26-2.02.01-.01-11.15-6.9a1.6 1.6 0 0 0-.39-.2 1.64 1.64 0 0 0-2.03.19l-9.59 5.93-.1.07-2.07 1.28 2.82 1.72 1.1.69 9.02-5.56.41.24 13.01 8.05a5.57 5.57 0 0 1 2.41 4.31c0 1.79-.88 3.36-2.41 4.3Z" />
-        </svg>
-        <span class="wordmark">stella</span>
-      </div>
-      <section>
-        <h1>${title}</h1>
-        ${ok && escapedOrganizationName ? `<p class="organization"><bdi>${escapedOrganizationName}</bdi></p>` : ""}
-        <p>${message}</p>
-      </section>
-    </main>
-  </body>
-</html>`,
+    contentSecurityPolicy: `default-src 'none'; style-src 'sha256-${OUTCOME_PAGE_STYLE_SHA256}'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
+    html,
   };
 };
 

@@ -825,9 +825,10 @@
       "storage": "تعذّرت قراءة الاتصال أو حفظه على هذا الكمبيوتر."
     },
     "callbackConnectedTitle": "تم ربط ChatGPT",
-    "callbackConnectedBody": "يمكنك إغلاق علامة التبويب هذه والعودة إلى stella.",
+    "callbackConnectedBody": "عُد إلى stella. تستخدم طلبات الذكاء الاصطناعي الآن خطة ChatGPT الخاصة بك.",
     "callbackNotConnectedTitle": "لم يتم ربط ChatGPT",
     "callbackNotConnectedBody": "عُد إلى stella لمعرفة ما حدث وحاول مرة أخرى.",
+    "callbackCloseTab": "يمكنك إغلاق علامة التبويب هذه.",
     "claudeCode": {
       "title": "Claude Code",
       "description": "استخدم اشتراكك في Claude للوكلاء المحليين في stella. يُحتسب الاستخدام من خطة Claude، بشكل منفصل عن اشتراكك في stella.",

@@ -825,9 +825,10 @@
       "storage": "Šiame kompiuteryje nepavyko nuskaityti ar išsaugoti ryšio."
     },
     "callbackConnectedTitle": "ChatGPT prijungtas",
-    "callbackConnectedBody": "Galite uždaryti šį skirtuką ir grįžti į stellą.",
+    "callbackConnectedBody": "Grįžkite į stellą. DI užklausos dabar naudoja jūsų ChatGPT planą.",
     "callbackNotConnectedTitle": "ChatGPT neprijungtas",
     "callbackNotConnectedBody": "Grįžkite į stellą, pažiūrėkite, kas nutiko, ir bandykite dar kartą.",
+    "callbackCloseTab": "Šį skirtuką galite uždaryti.",
     "claudeCode": {
       "title": "Claude Code",
       "description": "Naudokite savo Claude prenumeratą vietiniams agentams stelloje. Naudojimas skaičiuojamas pagal jūsų Claude planą, atskirai nuo stellos prenumeratos.",

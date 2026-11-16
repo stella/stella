@@ -175,6 +175,11 @@ const TRANSITIVE_GENERATOR_INPUTS = {
   "bun-toolchain": ["packages/portable-path/src/index.ts"],
   "mobile-ui-theme": ["packages/portable-path/src/index.ts"],
   "mobile-icons": ["packages/portable-path/src/index.ts"],
+  "outcome-page": [
+    "packages/portable-path/src/index.ts",
+    "packages/sha256/src/bun.ts",
+    "packages/sha256/src/types.ts",
+  ],
   "mobile-folio-fonts": ["packages/portable-path/src/index.ts"],
   "capability-catalog": [
     "apps/api/package.json",
@@ -1361,6 +1366,39 @@ const GENERATOR_DECLARATIONS = [
     ],
     write: ["bun", "scripts/generate-mobile-icons.ts", "--write"],
     check: ["bun", "scripts/generate-mobile-icons.ts"],
+    autofix: true,
+    after: [],
+  },
+  {
+    // The page the desktop and CLI sign-in listeners answer with: the
+    // OutcomeScreen component rendered with the theme's utilities inlined.
+    id: "outcome-page",
+    outputKind: "committed",
+    outputs: [
+      "packages/ui/generated/outcome-page.*.gen.html",
+      "packages/cli/src/auth/outcome-page.gen.ts",
+    ],
+    inputs: [
+      "scripts/generate-outcome-page.ts",
+      "scripts/generate-mobile-ui-theme.ts",
+      "scripts/generated-artifacts.ts",
+      "packages/scripts/src/generated-artifact-format.ts",
+      "packages/ui/src/components/outcome-screen.tsx",
+      "packages/ui/src/components/stella-mark.tsx",
+      "packages/ui/src/components/stella-mark.shared.ts",
+      "packages/ui/src/components/stella-wordmark.tsx",
+      "packages/ui/src/components/stella-wordmark.shared.ts",
+      "packages/ui/src/hooks/use-latest.ts",
+      "packages/ui/src/icons.ts",
+      "packages/ui/src/lib/utils.ts",
+      "packages/ui/src/styles/theme.css",
+      // The lucide, React and Tailwind versions the lockfile pins.
+      "packages/ui/package.json",
+      "bun.lock",
+    ],
+    checkInputs: [...TRANSITIVE_GENERATOR_INPUTS["outcome-page"]],
+    write: ["bun", "scripts/generate-outcome-page.ts", "--write"],
+    check: ["bun", "scripts/generate-outcome-page.ts"],
     autofix: true,
     after: [],
   },

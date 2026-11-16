@@ -825,9 +825,10 @@
       "storage": "Não foi possível ler nem salvar a conexão neste computador."
     },
     "callbackConnectedTitle": "O ChatGPT está conectado",
-    "callbackConnectedBody": "Você pode fechar esta guia e voltar para o stella.",
+    "callbackConnectedBody": "Volte para o stella. As solicitações de IA agora usam seu plano do ChatGPT.",
     "callbackNotConnectedTitle": "O ChatGPT não foi conectado",
     "callbackNotConnectedBody": "Volte para o stella para ver o que aconteceu e tente de novo.",
+    "callbackCloseTab": "Você pode fechar esta aba.",
     "claudeCode": {
       "title": "Claude Code",
       "description": "Use sua assinatura do Claude para os agentes locais no stella. O uso é descontado do seu plano do Claude, separado da sua assinatura do stella.",

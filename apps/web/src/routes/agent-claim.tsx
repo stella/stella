@@ -18,13 +18,15 @@ import {
 } from "@stll/ui/frame";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
+import { OutcomeScreen } from "@stll/ui/outcome-screen";
 
+import { StellaWordmark } from "@/components/stella-wordmark";
 import { browserApiRootUrl } from "@/lib/api-url";
 import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
 import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { organizationListOptions } from "@/lib/organization/queries";
-import { pageTitle } from "@/lib/page-title";
+import { pageTitle, pageTitleLiteral } from "@/lib/page-title";
 import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
 import { routeSearchSchema } from "@/route-search-params";
@@ -119,17 +121,16 @@ function AgentClaimPage() {
   };
 
   if (status === "claimed") {
+    const title = t("agentClaim.connectedTitle");
     return (
-      <div className="flex flex-1 items-center justify-center">
-        <Frame className="w-full max-w-sm">
-          <FrameHeader>
-            <FrameTitle>{t("agentClaim.connectedTitle")}</FrameTitle>
-            <FrameDescription>
-              {t("agentClaim.connectedDescription")}
-            </FrameDescription>
-          </FrameHeader>
-        </Frame>
-      </div>
+      <OutcomeScreen
+        description={t("agentClaim.connectedDescription")}
+        documentTitle={pageTitleLiteral(title)}
+        note={t("common.closeTabNote")}
+        title={title}
+        tone="success"
+        wordmark={<StellaWordmark className="h-4 w-auto" />}
+      />
     );
   }
 

@@ -825,9 +825,10 @@
       "storage": "Ühendust ei õnnestunud selles arvutis lugeda ega salvestada."
     },
     "callbackConnectedTitle": "ChatGPT on ühendatud",
-    "callbackConnectedBody": "Võite selle vahekaardi sulgeda ja stellasse naasta.",
+    "callbackConnectedBody": "Naaske stellasse. AI-päringud kasutavad nüüd teie ChatGPT paketti.",
     "callbackNotConnectedTitle": "ChatGPT-d ei ühendatud",
     "callbackNotConnectedBody": "Naaske stellasse, et näha, mis juhtus, ja proovige uuesti.",
+    "callbackCloseTab": "Võite selle vahekaardi sulgeda.",
     "claudeCode": {
       "title": "Claude Code",
       "description": "Kasutage stella kohalike agentide jaoks oma Claude’i tellimust. Kasutus arvestatakse teie Claude’i paketist, stella tellimusest eraldi.",

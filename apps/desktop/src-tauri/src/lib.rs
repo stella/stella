@@ -83,6 +83,7 @@ mod logging;
 mod managed_policy;
 mod marker_file;
 mod onboarding;
+mod outcome_page;
 mod pdf_signing;
 mod permissions;
 mod pkcs11_module_setting;

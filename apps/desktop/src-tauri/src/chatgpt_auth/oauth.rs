@@ -377,25 +377,35 @@ async fn callback(
   (status, page_html(shown)).into_response()
 }
 
-fn page_html(page: CallbackPage) -> impl IntoResponse {
-  let (title, body) = match page {
+/// The outcome page (`OutcomeScreen`, see `crate::outcome_page`) in the
+/// app's language.
+fn callback_page(page: CallbackPage) -> String {
+  use crate::outcome_page::{OutcomeText, OutcomeTone, render};
+  let (tone, title, description) = match page {
     CallbackPage::Connected => (
+      OutcomeTone::Success,
       crate::i18n::t("agentSubscriptions.callbackConnectedTitle"),
       crate::i18n::t("agentSubscriptions.callbackConnectedBody"),
     ),
     CallbackPage::NotConnected => (
+      OutcomeTone::Error,
       crate::i18n::t("agentSubscriptions.callbackNotConnectedTitle"),
       crate::i18n::t("agentSubscriptions.callbackNotConnectedBody"),
     ),
   };
-  let html = format!(
-    "<!doctype html><html><head><meta charset=\"utf-8\"><title>{title}</title>\
-     <style>body{{font:15px/1.5 system-ui,sans-serif;margin:15vh auto;max-width:28rem;padding:0 1rem;color:#111}}\
-     @media (prefers-color-scheme:dark){{body{{background:#111;color:#eee}}}}</style></head>\
-     <body><h1>{title}</h1><p>{body}</p></body></html>",
-    title = ammonia::clean_text(title),
-    body = ammonia::clean_text(body),
-  );
+  render(
+    tone,
+    crate::i18n::active_locale(),
+    &OutcomeText {
+      title,
+      description,
+      note: crate::i18n::t("agentSubscriptions.callbackCloseTab"),
+    },
+  )
+}
+
+fn page_html(page: CallbackPage) -> impl IntoResponse {
+  let html = callback_page(page);
   (
     [
       (header::CONTENT_TYPE, "text/html; charset=utf-8"),
@@ -416,6 +426,37 @@ mod tests {
   use super::*;
 
   const REDIRECT: &str = "http://127.0.0.1:43123/auth/callback";
+
+  #[test]
+  fn callback_pages_are_the_filled_outcome_screen() {
+    for (page, tone, title_key) in [
+      (
+        CallbackPage::Connected,
+        "success",
+        "agentSubscriptions.callbackConnectedTitle",
+      ),
+      (
+        CallbackPage::NotConnected,
+        "error",
+        "agentSubscriptions.callbackNotConnectedTitle",
+      ),
+    ] {
+      let html = callback_page(page);
+      let title = ammonia::clean_text(crate::i18n::t(title_key));
+      assert_ne!(crate::i18n::t(title_key), title_key, "{title_key} is missing");
+      assert!(html.contains(&format!("<title>{title}</title>")));
+      assert!(html.contains(&format!(">{title}</h1>")));
+      assert!(html.contains(&format!("data-tone=\"{tone}\"")));
+      assert!(!html.contains("{{"), "a slot was left unfilled");
+    }
+    for key in [
+      "agentSubscriptions.callbackConnectedBody",
+      "agentSubscriptions.callbackNotConnectedBody",
+      "agentSubscriptions.callbackCloseTab",
+    ] {
+      assert!(crate::i18n::locales_missing(key).is_empty(), "{key}");
+    }
+  }
 
   #[test]
   fn pkce_uses_s256_over_a_fresh_verifier() {

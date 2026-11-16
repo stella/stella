@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { sha256Base64Url } from "../sha256.js";
+import { sha256Base64 } from "../sha256.js";
 import { startLoopbackListener } from "./loopback-listener.js";
 
 describe("startLoopbackListener", () => {
@@ -117,6 +117,10 @@ describe("startLoopbackListener", () => {
   });
 });
 
+// The outcome screen's description and note, in the order it draws them.
+const DESCRIPTION = "[data-slot=outcome] > p:nth-of-type(1)";
+const NOTE = "[data-slot=outcome] > p:nth-of-type(2)";
+
 const textContent = async (html: string, selector: string) => {
   let content = "";
   await new HTMLRewriter()
@@ -156,21 +160,22 @@ describe("browser sign-in completion", () => {
       const html = await response.text();
       expect(await textContent(html, "title")).toBe("Signed in to stella");
       expect(await textContent(html, "h1")).toBe("Signed in to stella");
-      expect(await textContent(html, ".wordmark")).toBe("stella");
-      expect(await textContent(html, "section")).toContain(
-        "Return to your terminal to continue with stella CLI.",
-      );
+      expect(await textContent(html, NOTE)).toBe("You can close this tab.");
       expect(await textContent(html, "script")).toBe("");
       expect(html).toContain(
-        "<bdi>Novák &amp; Partners &lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt; &#39;Legal&#39;</bdi>",
+        "stella CLI can now work in <bdi>Novák &amp; Partners &lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt; &#39;Legal&#39;</bdi>. Return to your terminal to continue.",
       );
+      expect(html).not.toContain("{{");
       expect(response.headers.get("cache-control")).toBe("no-store");
+      expect(response.headers.get("referrer-policy")).toBe("no-referrer");
+      expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+      // The CSP admits exactly the page's one stylesheet.
       const styles = await textContent(html, "style");
-      const hash = sha256Base64Url(styles);
+      const hash = sha256Base64(styles);
       expect(response.headers.get("content-security-policy")).toBe(
         `default-src 'none'; style-src 'sha256-${hash}'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
       );
-      expect(styles).toContain("prefers-color-scheme: dark");
+      expect(styles).toContain("prefers-color-scheme:dark");
       expect(html).not.toContain('style="');
       expect(html).not.toContain('src="');
     } finally {
@@ -192,7 +197,10 @@ describe("browser sign-in completion", () => {
       await listener.finish({ kind: "signed_in" });
       const html = await (await answered).text();
       expect(await textContent(html, "h1")).toBe("Signed in to stella");
-      expect(html).not.toContain('<p class="organization">');
+      expect(await textContent(html, DESCRIPTION)).toBe(
+        "Return to your terminal to continue with stella CLI.",
+      );
+      expect(html).not.toContain("<bdi>");
     } finally {
       listener.close();
     }
@@ -224,7 +232,7 @@ describe("browser sign-in completion", () => {
         expect(await textContent(html, "h1")).toBe("Sign-in failed");
         expect(html).not.toContain(organizationName);
         expect(html).not.toContain("authorization-code");
-        expect(html).not.toContain('<p class="organization">');
+        expect(html).not.toContain("<bdi>");
         // The code is never handed to the terminal for exchange.
         const callback = await pending;
         if (stateQuery === "") {
@@ -252,10 +260,10 @@ describe("browser sign-in completion", () => {
       const html = await response.text();
       expect(await textContent(html, "title")).toBe("Sign-in failed");
       expect(await textContent(html, "h1")).toBe("Sign-in failed");
-      expect(await textContent(html, "section > p")).toBe(
+      expect(await textContent(html, DESCRIPTION)).toBe(
         "Return to your terminal for details, then try signing in to stella CLI again.",
       );
-      expect(await textContent(html, ".wordmark")).toBe("stella");
+      expect(html).toContain('data-tone="error"');
       expect(await listener.waitForCallback(1000)).toEqual({
         kind: "error",
         error: "access_denied",
@@ -346,7 +354,7 @@ describe("the browser waits for the terminal's outcome", () => {
         expect(response.status).toBe(500);
         expect(await textContent(html, "title")).toBe(heading);
         expect(await textContent(html, "h1")).toBe(heading);
-        expect(await textContent(html, "section > p")).toBe(message);
+        expect(await textContent(html, DESCRIPTION)).toBe(message);
         expect(html).not.toContain("Signed in to stella");
         expect(html).not.toContain("authorization-code");
       } finally {
@@ -374,7 +382,7 @@ describe("the browser waits for the terminal's outcome", () => {
       const html = await response.text();
       expect(response.status).toBe(504);
       expect(await textContent(html, "h1")).toBe("Sign-in not confirmed");
-      expect(await textContent(html, "section > p")).toBe(
+      expect(await textContent(html, DESCRIPTION)).toBe(
         "stella CLI did not confirm the sign-in in time. Return to your terminal; if it is not signed in, run stella auth login to try again.",
       );
       expect(elapsed).toBeGreaterThanOrEqual(completionTimeoutMs - 5);

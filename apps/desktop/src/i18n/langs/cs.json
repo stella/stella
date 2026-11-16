@@ -825,9 +825,10 @@
       "storage": "Připojení se v tomto počítači nepodařilo načíst ani uložit."
     },
     "callbackConnectedTitle": "ChatGPT je připojen",
-    "callbackConnectedBody": "Tuto kartu můžete zavřít a vrátit se do stelly.",
+    "callbackConnectedBody": "Vraťte se do stelly. Požadavky na AI teď využívají váš tarif ChatGPT.",
     "callbackNotConnectedTitle": "ChatGPT se nepřipojil",
     "callbackNotConnectedBody": "Vraťte se do stelly, zjistěte, co se stalo, a zkuste to znovu.",
+    "callbackCloseTab": "Tuto kartu můžete zavřít.",
     "claudeCode": {
       "title": "Claude Code",
       "description": "Používejte své předplatné Claude pro lokální agenty ve stelle. Využití se započítává do tarifu Claude, odděleně od předplatného stelly.",
