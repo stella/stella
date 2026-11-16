@@ -825,6 +825,8 @@ type RunMigrationsOptions = {
   migrationsSchema?: string;
   migrationsTable?: string;
   runOnline?: OnlineMigrationRunner;
+  /** Which online entries this run builds; every entry by default. */
+  onlineScope?: OnlineRepairOptions["scope"];
   observeRepair?: OnlineRepairOptions["observeRepair"];
   onlineIndexHold?: OnlineIndexHoldRef;
   /** Test seam: lock retry configuration and runtime. */
@@ -901,6 +903,7 @@ export const runMigrations = async ({
   migrationsSchema = "drizzle",
   migrationsTable = "__drizzle_migrations",
   runOnline = runOnlineMigrations,
+  onlineScope,
   observeRepair,
   onlineIndexHold = createOnlineIndexHold(),
   lockWaitRetry = DEFAULT_LOCK_WAIT_RETRY,
@@ -1043,6 +1046,7 @@ export const runMigrations = async ({
         indexGate: { ebs, hold: onlineIndexHold, lockTelemetry },
         reserveObserver: async () => await openOnlineIndexObserver(databaseUrl),
         timing: onlineTiming,
+        scope: onlineScope,
         observeRepair,
         repairs: ONLINE_MIGRATION_REPAIRS,
       },

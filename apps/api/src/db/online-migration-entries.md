@@ -46,3 +46,9 @@ once the release carries the entry. The check compares the entry module, not
 definitions it imports from shared modules: a finalized entry is built by
 `migrate` inside the deploy, so a changed definition behind it still runs
 before the new release serves.
+
+`migrate` builds every entry by default. `migrate --online=finalized` builds
+only finalized entries and leaves pending ones to be built after the rollout.
+Startup records an incomplete pending step as pending whatever migration is
+newest, and still refuses an incomplete finalized index, cutover or retirement
+outside its deploy window; repairs keep their own startup rule.
