@@ -577,3 +577,50 @@ test("a model in the region adds no note", async () => {
     queryByText(defaultMessages.dictation.destination.outsideRegionNote),
   ).toBeNull();
 });
+
+test("a downloaded speech model can be removed, also while stella AI transcribes", async () => {
+  const commands: string[] = [];
+  const { getByRole } = await renderSetting(
+    { ...ENABLED_SNAPSHOT, destination: "cloud" },
+    (command) => {
+      commands.push(command);
+      return command === "dictation_remove_model"
+        ? {
+            ...ENABLED_SNAPSHOT,
+            destination: "cloud",
+            model: { status: "missing" },
+          }
+        : undefined;
+    },
+  );
+
+  fireEvent.click(
+    getByRole("button", { name: defaultMessages.dictation.removeModel }),
+  );
+
+  await waitFor(() => {
+    expect(commands).toContain("dictation_remove_model");
+  });
+  // Gone, and stella AI needs no download prompt in its place.
+  await waitFor(() => {
+    expect(
+      document.body.textContent.includes(defaultMessages.dictation.removeModel),
+    ).toBe(false);
+  });
+  expect(document.body.textContent).not.toContain(
+    defaultMessages.dictation.modelNeeded,
+  );
+});
+
+test("the model cannot be removed while a dictation runs", async () => {
+  const { getByRole } = await renderSetting({
+    ...ENABLED_SNAPSHOT,
+    phase: "recording",
+  });
+
+  expect(
+    getByRole("button", {
+      name: defaultMessages.dictation.removeModel,
+    }).hasAttribute("disabled"),
+  ).toBe(true);
+});

@@ -16,7 +16,7 @@ import type { AnyDrizzle } from "@/api/db/scoped";
 import {
   CASE_LAW_DECISION_VIEWS,
   caseLawDecisionViewGrantStatement,
-  CENSUS_COLUMN_GRANTS_BY_RELATION,
+  CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION,
   PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
   publicLawColumnPairs,
   ROLLOUT_CASE_LAW_SOURCE_COLUMNS,
@@ -24,6 +24,7 @@ import {
   ROLLOUT_CASE_LAW_WHOLE_RELATIONS,
 } from "@/api/lib/public-law-relations";
 import { readPgliteTestSnapshotPath } from "@/api/tests/env";
+import { installCorpusProjectionSeedingGuard } from "@/api/tests/helpers/corpus-projection-seeding-guard";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createSchemaPglite,
@@ -45,6 +46,7 @@ import {
   installPgliteChatTurnRunIdLookup,
   installPgliteCitationDoctrineRls,
   installPgliteConflictCheckRoutines,
+  installPgliteCorpusIndexSeedingLifecycle,
   installPgliteCorpusProjectionRevisionFence,
   installPgliteCorrespondenceSources,
   installPgliteDecisionAliases,
@@ -347,9 +349,9 @@ const CORPUS_PROJECTION_REVISION_TABLE_SQL = quoteSqlIdentifier(
  */
 const PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE: ReadonlySet<string> =
   new Set(
-    publicLawColumnPairs(CENSUS_COLUMN_GRANTS_BY_RELATION).map(
-      ({ relation, column }) => `${relation}.${column}`,
-    ),
+    publicLawColumnPairs(
+      CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION,
+    ).map(({ relation, column }) => `${relation}.${column}`),
   );
 
 const decisionColumnNames = new Set(
@@ -395,6 +397,7 @@ export const ROLE_GRANT_STATEMENTS = [
   `GRANT INSERT ON TABLE "soft_law_sources" TO stella_ingestion`,
   `GRANT INSERT ON TABLE "system_audit_runs" TO stella_ingestion`,
   `GRANT SELECT, INSERT, UPDATE ON TABLE "case_law_decision_aliases" TO stella_ingestion`,
+  `GRANT SELECT, INSERT, UPDATE ON TABLE "case_law_completeness_census" TO stella_ingestion`,
   `GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "case_law_decision_alias_moved_identities" TO stella_ingestion`,
   caseLawDecisionViewGrantStatement("later", "stella_ingestion"),
   `
@@ -650,6 +653,18 @@ export const ROLE_GRANT_STATEMENTS = [
     GRANT SELECT, INSERT ON TABLE "corpus_index_group_withdrawals"
     TO stella_ingestion
   `,
+  // Seeding passes: the seeding walk writes them; the transition that takes
+  // a generation out of the active set deletes its pass, and its route rows
+  // cascade.
+  `
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
+      "corpus_index_generation_seeding_passes"
+    TO stella_ingestion
+  `,
+  `
+    GRANT SELECT, INSERT, UPDATE ON TABLE "corpus_index_route_seedings"
+    TO stella_ingestion
+  `,
   `
     GRANT INSERT, UPDATE ON TABLE
       ${CORPUS_PROJECTION_HISTORY_TABLES_SQL}
@@ -896,6 +911,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteCaseLawSitemapChanges(db);
   await installPgliteCaseLawRankingSignalChanges(db);
   await installPgliteCaseLawPopulationCounts(db);
+  await installPgliteCorpusIndexSeedingLifecycle(db);
   await installPglitePdfSigningTokenScopes(db);
   await installPgliteDesktopPresenceRls(db);
   await installPgliteChatTurnRunIdLookup(db);
@@ -928,6 +944,8 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
     await installPgliteCorrespondenceSources(tx);
   });
   await installPgliteLegalHoldDeleteBackstop(db);
+  // On by default: every suite that commits a canonical row is checked.
+  await installCorpusProjectionSeedingGuard(client);
 
   return client;
 };

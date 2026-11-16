@@ -636,6 +636,9 @@
       "noResults": "Nem található nyelv"
     },
     "modelNeeded": "A beszédmodell ezen a számítógépen fut.",
+    "modelInstalled": "A beszédmodell ({size} MB) ezen a számítógépen van.",
+    "removeModel": "Eltávolítás",
+    "removeFailed": "A beszédmodellt nem sikerült eltávolítani. Próbálja újra.",
     "download": "Letöltés ({size} MB)",
     "downloading": "A beszédmodell letöltése: {percent}%",
     "downloadFailed": "A beszédmodellt nem sikerült letölteni.",
@@ -718,6 +721,11 @@
     "howDocumentsBody": "Egy stella-dokumentumnál válassza a Megnyitás lehetőséget. Mentéskor a módosítás új verzióként kerül vissza a stellába.",
     "howClipboard": "Vágólap",
     "howClipboardBody": "Másoljon a szokásos módon, majd nyomja le ezt: {shortcut}, és válasszon a kimásoltak közül.",
+    "howSigning": "PDF-ek aláírása",
+    "howSigningBodyMac": "Egy stellában lévő PDF-nél válassza az „Aláírás a stella desktoppal” lehetőséget. A tanúsítvány a kulcskarikán vagy az intelligens kártyán marad, az aláírt PDF pedig új verzióként kerül vissza a stellába.",
+    "howSigningBodyPc": "Egy stellában lévő PDF-nél válassza az „Aláírás a stella desktoppal” lehetőséget. A tanúsítvány a tanúsítványtárolóban vagy az intelligens kártyán marad, az aláírt PDF pedig új verzióként kerül vissza a stellába.",
+    "howDictation": "Diktálás",
+    "howDictationBody": "Tartson lenyomva egy billentyűparancsot és beszéljen, a szöveg a használt alkalmazásban jelenik meg. Egy későbbi lépésben kapcsolhatja be.",
     "howActivity": "Tevékenység",
     "howActivityBody": "Nézze meg, mire ment el a napja, és készítsen belőle időbejegyzés-piszkozatokat. Kikapcsolva, amíg el nem indítja.",
     "activityTitle": "Így működik a Tevékenység",
@@ -827,9 +835,10 @@
       "storage": "A kapcsolatot nem sikerült beolvasni vagy menteni ezen a számítógépen."
     },
     "callbackConnectedTitle": "A ChatGPT csatlakoztatva",
-    "callbackConnectedBody": "Bezárhatja ezt a lapot, és visszatérhet a stellába.",
+    "callbackConnectedBody": "Térjen vissza a stellába. Az MI-kérések mostantól a ChatGPT-csomagját használják.",
     "callbackNotConnectedTitle": "A ChatGPT nem csatlakozott",
     "callbackNotConnectedBody": "Térjen vissza a stellába, nézze meg, mi történt, és próbálja újra.",
+    "callbackCloseTab": "Ezt a lapot bezárhatja.",
     "claudeCode": {
       "title": "Claude Code",
       "description": "Használja Claude-előfizetését a stella helyi ügynökeihez. A használat a Claude-csomagját terheli, a stella-előfizetésétől külön.",

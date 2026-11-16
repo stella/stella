@@ -4,8 +4,10 @@ import type { Fetcher } from "@stll/fetch";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { classifyCitation } from "@/api/handlers/case-law/polarity/classifier";
-import { CLASSIFIABLE_POLARITIES } from "@/api/handlers/case-law/polarity/consts";
-import { POLARITY_GUIDANCE } from "@/api/handlers/case-law/polarity/guidance";
+import {
+  MODEL_READING_GUIDANCE,
+  POLARITY_READINGS,
+} from "@/api/handlers/case-law/polarity/model-readings";
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
 import {
   classifyWithSystemOne,
@@ -40,9 +42,11 @@ const fakeClient = (
       typeof init?.body === "string" ? JSON.parse(init.body) : null;
     requests.push(body);
     const probabilities = Object.fromEntries(
-      CLASSIFIABLE_POLARITIES.map((polarity) => [
+      Object.keys(MODEL_READING_GUIDANCE).map((polarity) => [
         polarity,
-        polarity === choice ? confidence : (1 - confidence) / 3,
+        polarity === choice
+          ? confidence
+          : (1 - confidence) / (Object.keys(MODEL_READING_GUIDANCE).length - 1),
       ]),
     );
     const answers = Object.fromEntries(
@@ -81,7 +85,7 @@ const context =
   "soud k závěru, že nárok promlčen nebyl.";
 
 describe("classifyWithSystemOne", () => {
-  test("asks one choice over the polarity vocabulary with the shared guidance as criteria", async () => {
+  test("asks one choice over valid kind and polarity pairs with shared guidance", async () => {
     const { client, requests } = fakeClient("negative", 0.9);
     const reading = await classifyWithSystemOne({
       client,
@@ -113,12 +117,7 @@ describe("classifyWithSystemOne", () => {
       questions: {
         [String(questionKey)]: {
           type: "choice",
-          criteria: Object.fromEntries(
-            CLASSIFIABLE_POLARITIES.map((polarity) => [
-              polarity,
-              POLARITY_GUIDANCE[polarity],
-            ]),
-          ),
+          criteria: MODEL_READING_GUIDANCE,
         },
       },
     });
@@ -146,8 +145,9 @@ describe("classifyWithSystemOne", () => {
                   probabilities: {
                     positive: 0.02,
                     negative: 0.94,
-                    neutral: 0.02,
+                    neutral: 0.01,
                     supportive: 0.02,
+                    form: 0.01,
                   },
                   confidence: 0.94,
                 },
@@ -212,7 +212,12 @@ describe("classifyCitation with the System One tier", () => {
   test("a confident reading is the label, attributed to the tier, with no rule id", async () => {
     const { client } = fakeClient("negative", 0.92);
     const result = await classifyCitation({
-      windows: { mentions: [context], contexts: [context] },
+      windows: {
+        mentions: [context],
+        contexts: [context],
+        evidenceWindows: [{ start: 0, end: context.length }],
+        contextEvidenceWindows: [{ start: 0, end: context.length }],
+      },
       citationText: "sp. zn. 21 Cdo 1234/2020",
       language: "cs",
       observedAt: new Date("2026-09-17T00:00:00Z"),
@@ -228,6 +233,9 @@ describe("classifyCitation with the System One tier", () => {
       ruleId: null,
       source: "system-one",
       confidence: 0.92,
+      classifierVersion: "citation-polarity-v2",
+      evidenceWindows: [{ start: 0, end: context.length }],
+      citedPart: "not-stated",
     });
   });
 
@@ -244,7 +252,12 @@ describe("classifyCitation with the System One tier", () => {
           ? `${context} ${evidence}`
           : context;
       const result = await classifyCitation({
-        windows: { mentions: [excerpt], contexts: [excerpt] },
+        windows: {
+          mentions: [excerpt],
+          contexts: [excerpt],
+          evidenceWindows: [{ start: 0, end: excerpt.length }],
+          contextEvidenceWindows: [{ start: 0, end: excerpt.length }],
+        },
         citationText: "sp. zn. 21 Cdo 1234/2020",
         language: "cs",
         observedAt: new Date("2026-09-17T00:00:00Z"),
@@ -264,8 +277,9 @@ describe("classifyCitation with the System One tier", () => {
                     probabilities: {
                       positive: 0.02,
                       negative: 0.94,
-                      neutral: 0.02,
+                      neutral: 0.01,
                       supportive: 0.02,
+                      form: 0.01,
                     },
                     confidence: 0.94,
                   },
@@ -286,3 +300,56 @@ describe("classifyCitation with the System One tier", () => {
     expect(SYSTEM_ONE_POLARITY_ACCEPT_CONFIDENCE).toBeLessThan(1);
   });
 });
+
+test.each(Object.entries(POLARITY_READINGS))(
+  "each valid model reading gives its specified polarity: %s",
+  async (readingChoice, treatment) => {
+    const result = await classifyCitation({
+      windows: {
+        mentions: [context],
+        contexts: [context],
+        evidenceWindows: [{ start: 0, end: context.length }],
+        contextEvidenceWindows: [{ start: 0, end: context.length }],
+      },
+      citationText: "sp. zn. 21 Cdo 1234/2020",
+      language: "cs",
+      observedAt: new Date("2026-09-17T00:00:00Z"),
+      scopedDb: scopedDbThatMustNotRun,
+      options: {
+        ruleCache: emptyRuleCache("cs"),
+        decisionModel: null,
+        dryRun: true,
+        generator: async ({ questions }) => {
+          expect(Object.keys(questions)).toEqual(["answer"]);
+          return {
+            model: "test-generative",
+            output: {
+              answers: [
+                {
+                  id: "answer",
+                  answer: {
+                    type: "choice",
+                    choice: readingChoice,
+                    probabilities: Object.fromEntries(
+                      Object.keys(MODEL_READING_GUIDANCE).map((key) => [
+                        key,
+                        key === readingChoice ? 1 : 0,
+                      ]),
+                    ),
+                    confidence: 1,
+                  },
+                  evidence: "Na rozdíl od",
+                },
+              ],
+            },
+          };
+        },
+      },
+    });
+    expect(result).toMatchObject({
+      polarity: treatment.polarity,
+      source: "llm",
+      confidence: 1,
+    });
+  },
+);

@@ -636,6 +636,9 @@
       "noResults": "Žádné jazyky nenalezeny"
     },
     "modelNeeded": "Řečový model běží na tomto počítači.",
+    "modelInstalled": "Model řeči ({size} MB) je v tomto počítači.",
+    "removeModel": "Odstranit",
+    "removeFailed": "Model řeči se nepodařilo odstranit. Zkuste to znovu.",
     "download": "Stáhnout ({size} MB)",
     "downloading": "Stahování řečového modelu: {percent} %",
     "downloadFailed": "Řečový model se nepodařilo stáhnout.",
@@ -718,6 +721,11 @@
     "howDocumentsBody": "U dokumentu ve stella zvolte Otevřít. Po uložení se úprava vrátí do stella jako nová verze.",
     "howClipboard": "Schránka",
     "howClipboardBody": "Kopírujte jako obvykle a stisknutím {shortcut} vyberte z toho, co jste zkopírovali.",
+    "howSigning": "Podepisování PDF",
+    "howSigningBodyMac": "U PDF ve stelle zvolte „Podepsat ve stella desktop“. Certifikát zůstane ve vaší klíčence nebo na čipové kartě a podepsané PDF se do stelly vrátí jako nová verze.",
+    "howSigningBodyPc": "U PDF ve stelle zvolte „Podepsat ve stella desktop“. Certifikát zůstane v úložišti certifikátů nebo na čipové kartě a podepsané PDF se do stelly vrátí jako nová verze.",
+    "howDictation": "Diktování",
+    "howDictationBody": "Podržte zkratku a mluvte, text se objeví v aplikaci, kterou používáte. Zapnout ho můžete v jednom z dalších kroků.",
     "howActivity": "Aktivita",
     "howActivityBody": "Podívejte se, kam se váš den poděl, a udělejte z něj koncepty časových záznamů. Vypnuto, dokud ji nespustíte.",
     "activityTitle": "Jak funguje Aktivita",
@@ -827,9 +835,10 @@
       "storage": "Připojení se v tomto počítači nepodařilo načíst ani uložit."
     },
     "callbackConnectedTitle": "ChatGPT je připojen",
-    "callbackConnectedBody": "Tuto kartu můžete zavřít a vrátit se do stelly.",
+    "callbackConnectedBody": "Vraťte se do stelly. Požadavky na AI teď využívají váš tarif ChatGPT.",
     "callbackNotConnectedTitle": "ChatGPT se nepřipojil",
     "callbackNotConnectedBody": "Vraťte se do stelly, zjistěte, co se stalo, a zkuste to znovu.",
+    "callbackCloseTab": "Tuto kartu můžete zavřít.",
     "claudeCode": {
       "title": "Claude Code",
       "description": "Používejte své předplatné Claude pro lokální agenty ve stelle. Využití se započítává do tarifu Claude, odděleně od předplatného stelly.",

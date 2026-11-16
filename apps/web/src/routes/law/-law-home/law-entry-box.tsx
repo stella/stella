@@ -5,14 +5,13 @@ import {
   COMPOSER_BOX_CLASS,
   COMPOSER_BOX_FOCUS_CLASS,
   COMPOSER_LARGE_ACTION_ROW_CLASS,
-  COMPOSER_LARGE_EDITOR_CLASS,
   COMPOSER_LARGE_TEXT_WELL_CLASS,
   COMPOSER_LEADING_GROUP_CLASS,
-  COMPOSER_TEXT_CLASS,
   ComposerStatusRow,
 } from "@stll/ui/composer";
 import { Form } from "@stll/ui/form";
 import { SearchIcon } from "@stll/ui/icons";
+import { Textarea } from "@stll/ui/textarea";
 import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
@@ -68,14 +67,11 @@ export const LawEntryBox = ({
           <div
             className={cn("relative min-w-0", COMPOSER_LARGE_TEXT_WELL_CLASS)}
           >
-            <textarea
+            <Textarea
               aria-label={searchLabel}
               autoComplete="off"
-              className={cn(
-                "placeholder:text-foreground-placeholder block w-full resize-none bg-transparent outline-none",
-                COMPOSER_TEXT_CLASS,
-                COMPOSER_LARGE_EDITOR_CLASS,
-              )}
+              appearance="composer"
+              fieldSizing="fixed"
               dir={contentDir(query)}
               maxLength={maxLength}
               onChange={(event) => onQueryChange(event.currentTarget.value)}

@@ -7,6 +7,7 @@ import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import type { ContactType } from "@stll/api-contract";
+import { SEARCH_QUERY_MAX_LENGTH } from "@stll/api-contract/limits";
 import { BidiText } from "@stll/ui/bidi-text";
 import {
   Combobox,
@@ -304,6 +305,7 @@ export const ContactPicker = ({
       <ComboboxInput
         aria-invalid={invalid}
         autoFocus={autoFocus}
+        maxLength={SEARCH_QUERY_MAX_LENGTH}
         placeholder={placeholder ?? t("workspaces.parties.searchContacts")}
         ref={inputRef ?? null}
         showTrigger={false}

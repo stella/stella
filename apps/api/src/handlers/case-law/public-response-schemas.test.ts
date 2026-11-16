@@ -66,8 +66,11 @@ const stressResponse = (
       return schema["pattern"] === UUID_PATTERN || schema["format"] === "uuid"
         ? "00000000-0000-4000-8000-000000000000"
         : text;
-    case "number":
     case "integer":
+      return typeof schema["minimum"] === "number"
+        ? schema["minimum"]
+        : Number.MAX_SAFE_INTEGER;
+    case "number":
       return typeof schema["minimum"] === "number"
         ? schema["minimum"]
         : Number.MAX_VALUE;
@@ -123,6 +126,33 @@ test("every public case-law response family bounds serialized multibyte response
     ),
     { numRuns: 30 * Object.keys(responseContracts).length },
   );
+});
+
+test("the REST citation response preserves the text withholding reason", () => {
+  const input = {
+    doctrineAvailability: "unavailable",
+    items: [
+      {
+        id: "00000000-0000-4000-8000-000000000000",
+        citationText: null,
+        extractionWarnings: [],
+        textWithheldReason: "source_licence",
+        textIncompleteReason: null,
+        evidenceIncompleteReason: "missing_privileges",
+        sectionIndex: null,
+        treatment: "neutral",
+        doctrine: null,
+        polarityEvidence: null,
+        citedPart: null,
+        decision: null,
+      },
+    ],
+    limit: 20,
+    nextCursor: null,
+  };
+  const output = projectResponseText(input, citationsResponseSchema);
+  expect(v.is(citationsResponseSchema, output)).toBe(true);
+  expect(output.items.at(0)?.textWithheldReason).toBe("source_licence");
 });
 
 test("coverage responses accept more than 100 recorded years", () => {
