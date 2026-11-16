@@ -1,6 +1,11 @@
 import { panic } from "better-result";
 import ts from "typescript6";
 
+// TypeScript exposes symbol categories, modifiers and tuple elements as bitmasks.
+export const hasTypeScriptFlag = (flags: number, flag: number): boolean =>
+  // oxlint-disable-next-line no-bitwise -- Read a TypeScript API bitmask.
+  (flags & flag) !== 0;
+
 type Method = ts.MethodSignature | ts.MethodDeclaration;
 
 const methodKey = (method: Method, source: ts.SourceFile): string =>
