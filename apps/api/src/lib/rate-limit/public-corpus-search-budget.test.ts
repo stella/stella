@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
+import { createTestState } from "@stll/test-state";
 
 import { apiRoutes } from "@/api/api-routes";
 import { env } from "@/api/env";
@@ -25,6 +26,8 @@ import { serveForTest } from "@/api/tests/helpers/test-server";
 
 import { createPublicCorpusRateLimitComposition } from "./public-corpus-rate-limit-composition";
 import { createPublicCorpusAddressRateLimitOptions } from "./public-corpus-rate-limits";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const searchPath = `${STELLA_API_VERSION_PREFIX}/law/statutes/search`;
 const searchKey = scopedGenerator("public-corpus-search");
@@ -74,9 +77,8 @@ describe("public corpus search request budget", () => {
     expect(violations).toEqual([]);
   });
   test("the shared development bypass skips class and ordinary HTTP budgets", async () => {
-    const previous = env.E2E_DISABLE_AUTH_RATE_LIMIT;
     const { server, searchKeys, sharedKeys, kill } = createBudgetApp();
-    env.E2E_DISABLE_AUTH_RATE_LIMIT = true;
+    testState.setConfig("E2E_DISABLE_AUTH_RATE_LIMIT", true);
     try {
       for (const path of [searchPath, "/v1/other"]) {
         for (let index = 0; index <= 30; index += 1) {
@@ -88,7 +90,6 @@ describe("public corpus search request budget", () => {
       expect(searchKeys).toEqual([]);
       expect(sharedKeys).toEqual([]);
     } finally {
-      env.E2E_DISABLE_AUTH_RATE_LIMIT = previous;
       await kill();
     }
   });

@@ -71,6 +71,7 @@
     "chooseRewriteInstruction": "Možnosti úpravy",
     "editWithAI": "Upraviť pomocou AI",
     "keyRequired": {
+      "accountFeaturesUnavailable": "Funkcie AI nie sú pre tento účet dostupné.",
       "accountRestricted": "Nastavenia poskytovateľa AI nie sú pre tento účet dostupné.",
       "configUnreadable": "Konfiguráciu poskytovateľa AI nemožno načítať. Požiadajte správcu organizácie o opätovné pripojenie.",
       "cta": "Otvoriť nastavenia AI",
@@ -3469,54 +3470,18 @@
       "validationTooShort": "Príliš krátke: použite aspoň {limit, number} znakov.",
       "versionConflict": "Niekto iný to počas vašej úpravy zmenil. Načítajte znova aktuálnu verziu."
     },
-    "failedToAcceptInvitation": "Nepodarilo sa prijať pozvánku",
-    "failedToAddParty": "Nepodarilo sa pridať stranu",
-    "failedToCancelInvitation": "Nepodarilo sa zrušiť pozvánku",
     "failedToChangeViewType": "Zmena typu zobrazenia sa nepodarila",
-    "failedToCheckSlugAvailability": "Nepodarilo sa overiť dostupnosť slugu",
-    "failedToCreateContact": "Nepodarilo sa vytvoriť klienta",
-    "failedToCreateEntity": "Nepodarilo sa vytvoriť položku",
-    "failedToCreateOrganization": "Nepodarilo sa vytvoriť organizáciu",
-    "failedToCreateProperty": "Nepodarilo sa vytvoriť vlastnosť",
     "failedToCreateView": "Vytvorenie zobrazenia sa nepodarilo",
-    "failedToCreateWorkspace": "Nepodarilo sa vytvoriť spis",
-    "failedToDeclineInvitation": "Nepodarilo sa odmietnuť pozvánku",
-    "failedToDeleteContact": "Nepodarilo sa vymazať klienta",
     "failedToDeleteEntities": "Nepodarilo sa vymazať položky",
-    "failedToDeleteProperty": "Nepodarilo sa vymazať vlastnosť",
     "failedToDeleteTemplate": "Vzor sa nepodarilo odstrániť",
     "failedToDeleteView": "Odstránenie zobrazenia sa nepodarilo",
     "failedToDeleteWorkspace": "Nepodarilo sa vymazať spis",
     "failedToDuplicateView": "Duplikovanie zobrazenia sa nepodarilo",
-    "failedToExportNoData": "Žiadne dáta na export",
-    "failedToFetchFile": "Nepodarilo sa načítať súbor z úložiska",
-    "failedToInviteMember": "Nepodarilo sa pozvať člena",
-    "failedToMoveItem": "Nepodarilo sa presunúť položku",
-    "failedToRemoveMember": "Nepodarilo sa odstrániť člena",
-    "failedToRemoveParty": "Nepodarilo sa odstrániť stranu",
     "failedToRenameView": "Premenovanie zobrazenia sa nepodarilo",
-    "failedToRenameWorkspace": "Nepodarilo sa premenovať spis",
     "failedToReorderViews": "Zmena poradia zobrazení sa nepodarila",
-    "failedToResendInvitation": "Nepodarilo sa znovu odoslať pozvánku",
     "failedToSaveTemplate": "Vzor sa nepodarilo uložiť",
-    "failedToSelectOrganization": "Nepodarilo sa vybrať organizáciu",
-    "failedToSendInvitation": "Nepodarilo sa odoslať pozvánku",
-    "failedToSendVerificationCode": "Nepodarilo sa odoslať overovací kód",
-    "failedToSetActiveOrganization": "Nepodarilo sa nastaviť aktívnu organizáciu",
-    "failedToSetClient": "Nepodarilo sa nastaviť klienta",
-    "failedToSignOut": "Nepodarilo sa odhlásiť",
     "failedToStartWorkflow": "Nepodarilo sa spustiť pracovný postup",
-    "failedToUpdateContact": "Nepodarilo sa aktualizovať klienta",
-    "failedToUpdateField": "Nepodarilo sa aktualizovať pole",
-    "failedToUpdateMatterNumbering": "Nepodarilo sa aktualizovať číslovanie spisov",
-    "failedToUpdateOrganization": "Nepodarilo sa aktualizovať organizáciu",
-    "failedToUpdateProperty": "Nepodarilo sa aktualizovať vlastnosť",
-    "failedToUpdateRole": "Nepodarilo sa aktualizovať rolu",
-    "failedToUpdateWorkspace": "Nepodarilo sa aktualizovať spis",
-    "failedToUploadFiles": "Nepodarilo sa nahrať súbory",
-    "failedToVerifyOtp": "Nepodarilo sa overiť kód",
     "matterNotFound": "Spis sa nenašiel",
-    "partyAlreadyExists": "Kontakt už má túto rolu v spise",
     "uploadFailed": "Nahrávanie zlyhalo"
   },
   "feedback": {
@@ -4159,7 +4124,6 @@
     "assignTo": "Priradiť",
     "confidence": "Istota {percent}",
     "dismissReason": "Dôvod (nepovinné)",
-    "empty": "Teraz vás nič nečaká. Zadajte požiadavku tlačidlom vyššie.",
     "evidence": {
       "current": "Novo",
       "daysOverdue": "Dní po termíne",
@@ -4175,10 +4139,8 @@
       "verdict": "Výsledok"
     },
     "filter": {
-      "any": "Akýkoľvek",
       "mine": "Priradené mne"
     },
-    "newRequest": "Nová požiadavka",
     "openMatter": "Otvoriť spis",
     "origin": {
       "manual": "Kolega",
@@ -4186,11 +4148,6 @@
       "source": "Externý zdroj"
     },
     "proposalView": "Návrhy: {view}",
-    "request": {
-      "created": "Požiadavka odoslaná",
-      "description": "Opíšte, na čo sa má právny tím pozrieť. Požiadavka sa objaví v doručených na triedenie.",
-      "submit": "Odoslať požiadavku"
-    },
     "scout": {
       "documentDeadlines": "Lehoty z dokumentu",
       "documentReview": "Kontrola podľa playbooku",
@@ -4210,9 +4167,7 @@
     "suggestion": {
       "assign": "Priradiť",
       "createDeadline": "Vytvoriť lehotu",
-      "createTask": "Vytvoriť úlohu",
-      "fileToWorkspace": "Založiť do spisu",
-      "runReview": "Spustiť kontrolu"
+      "createTask": "Vytvoriť úlohu"
     },
     "verdict": {
       "safe": "Bez rizika"
@@ -4341,7 +4296,6 @@
       "matterColumnsHeading": "Údaje v spise",
       "noMatterColumns": "K tomuto dokumentu zatiaľ nie sú vyplnené žiadne údaje",
       "stellaHeading": "Uložené v stelle",
-      "updatedAt": "Aktualizované",
       "versionCurrent": "v{version} (aktuálna)"
     },
     "moveToMain": "Presunúť do hlavného zobrazenia",
@@ -4352,22 +4306,11 @@
     "review": {
       "acceptChange": "Prijať zmenu",
       "acceptFinding": "Prijať zistenie",
-      "actionNeeded": "Na riešenie",
-      "addComment": "Pridať ako komentár",
       "addNote": "Pridať komentár pre protistranu",
       "addNotePlaceholder": "Čo má vidieť protistrana",
       "addNoteSubmit": "Pridať komentár",
       "addReference": "Pridať {name} ako referenciu",
-      "addTopic": "Pridať tému",
       "allDecided": "Všetky zistenia sú rozhodnuté.",
-      "assessment": {
-        "additionalInTarget": "Navyše v cieľovom dokumente",
-        "aligned": "Zhodné",
-        "dealSpecific": "Špecifické pre transakciu",
-        "different": "Odlišné",
-        "missingFromTarget": "Chýba v cieľovom dokumente",
-        "notComparable": "Nedá sa porovnať"
-      },
       "basisCombined": "{count, plural, one {Kontrola podľa {name} a porovnanie s # referenčným dokumentom} few {Kontrola podľa {name} a porovnanie s # referenčnými dokumentmi} other {Kontrola podľa {name} a porovnanie s # referenčnými dokumentmi} many {Kontrola podľa {name} a porovnanie s # referenčného dokumentu}}",
       "basisDivider": "a / alebo",
       "basisPlaybook": "Kontrola podľa {name}",
@@ -4383,7 +4326,6 @@
       },
       "checks": "Posudzuje sa:",
       "commentFailed": "Komentár sa nepodarilo pridať",
-      "comparedWithReferences": "{count, plural, one {Porovnané s # referenčným dokumentom} few {Porovnané s # referenčnými dokumentmi} other {Porovnané s # referenčnými dokumentmi} many {Porovnané s # referenčného dokumentu}}",
       "decidedCount": "rozhodnuté {count, number}",
       "decision": "Rozhodnutie",
       "decisionFailed": "Rozhodnutie sa nepodarilo uložiť",
@@ -4391,7 +4333,6 @@
         "accepted": "Prijaté",
         "dismissed": "Zamietnuté"
       },
-      "description": "Vyberte pripravený playbook, referenčné dokumenty alebo oboje.",
       "dismissFinding": "Zamietnuť zistenie",
       "documentChanged": "Dokument sa od tejto kontroly zmenil.",
       "documentCutNotice": "<strong>Dokument {documentName} nebol prečítaný celý.</strong> Pre tento model je príliš dlhý, preto bolo vynechaných približne {percent} jeho textu. Pozícia bez odpovede je označená na kontrolu, pretože odpoveď môže byť vo vynechanej časti.",
@@ -4426,7 +4367,6 @@
       "impact": {
         "favourable": "Výhodné",
         "neutral": "Bez dopadu",
-        "notJudged": "Neposúdené",
         "unfavourable": "Nevýhodné"
       },
       "impactForSide": {
@@ -4434,8 +4374,6 @@
         "neutral": "Bez dopadu na {role}",
         "unfavourable": "Horšie pre {role}"
       },
-      "insertFailed": "Navrhované znenie sa nepodarilo vložiť",
-      "insertSuggestion": "Vložiť navrhované znenie",
       "insufficientEvidence": "Poskytnuté dokumenty neobsahujú k tejto téme dostatok podkladov.",
       "marginNotes": {
         "above": "{count, number} vyššie",
@@ -4444,12 +4382,10 @@
         "label": "Zistenia vedľa ustanovení, ktorých sa týkajú",
         "unanchored": "Bez väzby na ustanovenie"
       },
-      "newTopic": "Nová téma kontroly",
       "noEditor": "Zmeny prijmete po otvorení dokumentu",
       "noMaterialDifferences": "Nenašli sa žiadne podstatné rozdiely",
       "noPassage": "Žiadna pasáž",
       "noPlaybooksMatch": "Žiadne zodpovedajúce playbooky.",
-      "noReferencesFound": "Nenašli sa žiadne zodpovedajúce dokumenty DOCX.",
       "notCompared": "Neporovnané",
       "notComparedCount": "Neporovnané: {count, number}",
       "noteAdded": "Komentár pre protistranu bol pridaný",
@@ -4475,10 +4411,8 @@
         "title": "Zastupujeme"
       },
       "playbookDeleted": "Tento playbook už neexistuje; kontrola sa uchováva ako záznam.",
-      "playbookFindings": "Zistenia z playbooku",
       "playbookOutdated": "Existuje novšia schválená verzia tohto playbooku.",
       "playbookSection": "Playbook",
-      "playbookTopic": "Prevzaté z playbooku",
       "presence": {
         "absent": "Nie",
         "present": "Áno"
@@ -4489,26 +4423,22 @@
       "readOnlyRun": "Rozhodnuté v tejto kontrole",
       "recommendation": "Odporúčanie:",
       "referenceDocument": "Referenčný dokument",
-      "referenceFindings": "Porovnanie s referenciami",
       "referenceLimitReached": "Dosiahnutý limit referencií",
       "referencePlaceholder": "Hľadať referenčné dokumenty",
       "referencesCount": "{count, number}/{max, number}",
       "referencesDisagree": "Referencie sa líšia",
       "referencesSection": "Referenčné dokumenty",
       "removeReference": "Odstrániť referenciu {name}",
-      "removeTopic": "Odstrániť tému {name}",
       "reopen": "Znovu otvoriť",
       "results": "Výsledky kontroly",
       "reviewAgain": "Spustiť ďalšiu kontrolu",
       "reviewPositionsFirst": "Najprv skontrolovať pozície",
-      "reviewedAgainstCombined": "{count, plural, one {Skontrolované podľa {name} a porovnané s # referenčným dokumentom} few {Skontrolované podľa {name} a porovnané s # referenčnými dokumentmi} other {Skontrolované podľa {name} a porovnané s # referenčnými dokumentmi} many {Skontrolované podľa {name} a porovnané s # referenčného dokumentu}}",
       "reviewing": "Kontrola prebieha…",
       "reviewingHint": "Pri rozsiahlych dokumentoch to môže trvať niekoľko minút.",
       "run": "Spustiť kontrolu",
       "saveAsPlaybook": "Uložiť ako playbook",
       "saveAsPlaybookFailed": "Túto kontrolu sa nepodarilo uložiť ako playbook",
       "savedAsPlaybook": "Uložené ako playbook",
-      "scoreTopics": "Skontrolovať tieto témy",
       "searchPlaybooks": "Hľadať playbooky",
       "showInDocument": "Zobraziť v dokumente",
       "sizeConfirmStart": "Spustiť kontrolu",
@@ -4537,10 +4467,6 @@
       "targetColumn": "Tento dokument",
       "targetDocument": "Cieľový dokument",
       "title": "Kontrola dokumentu",
-      "topicContext": "Doplňujúci kontext",
-      "topicContextPlaceholder": "Čo má kontrola pri tejto téme zohľadniť?",
-      "topicName": "Názov témy",
-      "topicsDescription": "Potvrďte navrhnuté témy, pridajte vlastné alebo pred hodnotením doplňte kontext.",
       "topicsTitle": "Čo má kontrola zahŕňať?",
       "why": "Prečo",
       "whyItMatters": "Prečo je to podstatné:"
@@ -4986,7 +4912,6 @@
   "lawHome": {
     "clearRecent": "Vymazať nedávne",
     "clearRecentConfirmation": "Vymazať všetky vaše nedávne vyhľadávania, rozhodnutia a predpisy v tejto organizácii? Túto akciu nemožno vrátiť späť.",
-    "enteringIntoForce": "Čoskoro nadobudne účinnosť",
     "importFailed": "Miestnu históriu sa nepodarilo importovať. Stále je uložená v tomto zariadení.",
     "inForceFrom": "Účinné od {date}",
     "noRecent": "Zatiaľ žiadna nedávna aktivita",
@@ -4997,12 +4922,10 @@
     "recentLoadFailed": "Nedávnu aktivitu sa nepodarilo načítať.",
     "recentSearchFilter": "Vyhľadávania",
     "recentUpdateFailed": "Nedávnu aktivitu sa nepodarilo aktualizovať.",
-    "recentlyInForce": "Nedávno nadobudlo účinnosť",
     "searchLabel": "Hľadať v právnej databáze",
     "searchPlaceholder": "Spisová značka, číslo predpisu, ECLI alebo kľúčové slová",
     "signals": "Signály",
-    "topCourts": "Z najvyšších súdov",
-    "tryIdentifier": "Vyskúšajte identifikátor"
+    "topCourts": "Z najvyšších súdov"
   },
   "legalReader": {
     "annotations": {
@@ -5046,7 +4969,6 @@
         "summary": "{count, plural, one {# zvýraznenie alebo komentár už nezodpovedá textu} few {# zvýraznenia alebo komentáre už nezodpovedajú textu} many {# zvýraznenia alebo komentára už nezodpovedá textu} other {# zvýraznení a komentárov už nezodpovedá textu}}"
       },
       "removeHighlight": "Odstrániť zvýraznenie",
-      "sharedBadge": "Zdieľané",
       "styleHighlight": "Zvýraznenie",
       "styleSquiggly": "Vlnovka",
       "styleStrikethrough": "Prečiarknutie",
@@ -5126,7 +5048,6 @@
     "contacts": "Kontakty",
     "inbox": "Doručené",
     "knowledge": "Analytika",
-    "myTodos": "Moje úlohy",
     "pinned": "Pripnuté",
     "recentMatters": "Nedávne spisy",
     "recents": "Nedávne",
@@ -5366,14 +5287,10 @@
       }
     },
     "matterNumber": {
-      "description": "Nastavte spôsob generovania referenčných čísel nových spisov",
       "nextPreview": "Ďalšie referenčné číslo",
       "padding": "Číslice",
       "paddingDescription": "Minimálny počet číslic poradového čísla",
       "pattern": "Vzor",
-      "patternInvalidTokens": "Vzor obsahuje nerozpoznané tokeny",
-      "patternMustContainSeq": "Vzor musí obsahovať '{'SEQ'}'",
-      "patternRequired": "Vzor je povinný",
       "presets": {
         "sequential": "Poradový (001)",
         "yearMonthSequential": "Rok-Mesiac / Poradový (2026-02/001)",
@@ -5381,18 +5298,16 @@
       },
       "showInTitle": "Zobraziť číslo vedľa názvu spisu",
       "showInTitleDescription": "Keď je vypnuté, názov je presne ten, ktorý ste zadali.",
-      "title": "Číslovanie spisov",
       "tokenHelp": "Dostupné tokeny: '{'SEQ'}' (poradové číslo), '{'YYYY'}' (rok), '{'YY'}' (2-ciferný rok), '{'MM'}' (mesiac)"
     },
     "members": {
+      "billingAccess": "Prístup k fakturačným údajom",
       "changeRole": "Zmeniť rolu",
-      "changeRoleDescription": "Aktualizovať rolu pre {email}",
       "confirmRoleChangeDescription": "Rola používateľa {email} sa zmení z {oldRole} na {newRole}.",
       "confirmRoleChangeTitle": "Zmeniť rolu",
       "joined": "Pripojil/a sa",
       "noMembersFound": "Neboli nájdení žiadni členovia",
-      "typeEmailToConfirm": "Pre potvrdenie napíšte {email}",
-      "updateRole": "Aktualizovať rolu"
+      "typeEmailToConfirm": "Pre potvrdenie napíšte {email}"
     },
     "newOrganization": "Nová organizácia",
     "newOrganizationDescription": "Vytvorte organizáciu, ktorej budete vlastníkom.",
@@ -5410,7 +5325,6 @@
       "member": "Člen",
       "owner": "Vlastník"
     },
-    "settingsDescription": "Upravte názov a slug organizácie",
     "startOver": "Začať odznova",
     "startOverDescription": "Pôvodná požiadavka už mohla organizáciu vytvoriť. Skôr než začnete odznova, skontrolujte svoje organizácie; nová požiadavka by mohla vytvoriť ďalšiu organizáciu.",
     "startOverTitle": "Začať novú požiadavku na vytvorenie?",
@@ -6944,7 +6858,6 @@
       "apiKeyPlaceholder": "00000000-0000-0000-0000-000000000000:fx",
       "currentKey": "Uložený kľúč",
       "description": "Nastavte API kľúč DeepL pre povolenie prekladu dokumentov. Podporované sú kľúče Free aj Pro.",
-      "removing": "Odstraňuje sa…",
       "tierFree": "Free",
       "tierPro": "Pro",
       "title": "Preklad DeepL"
@@ -7036,9 +6949,6 @@
     "deleteItem": "Vymazať položku",
     "deleteItems": "Vymazať {count, plural, one {# položku} few {# položky} other {# položiek} many {# položky}}",
     "deleteItemsDescription": "Naozaj chcete vymazať {count, plural, one {# položku} few {# položky} other {# položiek} many {# položky}}? Túto akciu nemožno vrátiť späť.",
-    "deleteSelectedRows": "Vymazať vybrané riadky",
-    "deleteSelectedRowsDescription": "{count, plural, one {Naozaj chcete vymazať # vybraný riadok? Túto akciu nemožno vrátiť.} few {Naozaj chcete vymazať # vybrané riadky? Túto akciu nemožno vrátiť.} other {Naozaj chcete vymazať # vybraných riadkov? Túto akciu nemožno vrátiť.} many {Naozaj chcete vymazať # vybraného riadka? Túto akciu nemožno vrátiť.}}",
-    "deleteSelection": "Vymazať výber",
     "deleteWorkspace": "Vymazať spis",
     "deleteWorkspaceConfirmDescription": "Naozaj chcete vymazať tento spis? Túto akciu nemožno vrátiť.",
     "deletedItem": "Odstránené: {name}",
@@ -7064,7 +6974,6 @@
       "title": "Vytvorte prvý spis"
     },
     "entitiesCount": "{count, plural, one {# položka} few {# položky} other {# položiek} many {# položky}}",
-    "exportToCsv": "Exportovať do CSV",
     "fields": {
       "calculating": "Počíta sa...",
       "errored": "Chyba",
@@ -7096,17 +7005,13 @@
         "authRequiredTitle": "Relácia vypršala",
         "editInApplication": "Upraviť v aplikácii <bdi>{application}</bdi>",
         "editLocallyPrompt": "Upravte tento súbor lokálne a synchronizujte zmeny so stellou.",
-        "forceRelease": "Vynútiť uvoľnenie",
         "notOpenedDescription": "stella desktop nepotvrdil otvorenie aplikácie <bdi>{application}</bdi>. Spustite stella desktop a skúste to znova.",
         "openAction": "Otvoriť v desktopovej aplikácii",
         "openedDescription": "Aplikácia <bdi>{application}</bdi> otvorí lokálnu kópiu. Po dokončení úprav sa automaticky vytvorí nová verzia.",
         "openedTitle": "Otvorené v stella desktop",
-        "opening": "Otvára sa...",
         "releaseLock": "Uvoľniť zámok",
         "sentDescription": "Čaká sa, kým aplikácia <bdi>{application}</bdi> otvorí lokálnu kópiu.",
         "sentTitle": "Odoslané do stella desktop",
-        "takeoverNoResponse": "Žiadna odpoveď",
-        "takeoverNoResponseDescription": "Držiteľ zámku neodpovedal. Môžete zámok vynútene uvoľniť.",
         "takeoverWaiting": "Čakanie na odpoveď",
         "takeoverWaitingDescription": "Žiadame {name} o uvoľnenie zámku...",
         "unavailableDescription": "Pred použitím úprav v desktopovej aplikácii spustite stella desktop a nechajte ho bežať.",
@@ -7140,7 +7045,6 @@
       "fileTooLarge": "Súbor je väčší ako {limit, number} MB.",
       "includeReferenceNumber": "Pridať referenčné číslo",
       "itemLimitReached": "Tento spis dosiahol limit položiek.",
-      "maxEntitiesReached": "Dosiahnutý maximálny počet položiek",
       "ocrAlreadyProcessed": "Rozpoznávanie textu už bolo dokončené",
       "ocrBatchHelp": "Dokumenty vo fronte sa spracujú v nasledujúcej dávke OCR.",
       "ocrQueueFailed": "Rozpoznávanie textu sa nepodarilo zaradiť do fronty",
@@ -7239,8 +7143,7 @@
         "uploadAsNewDocumentHere": "Nahrať sem ako nový dokument"
       },
       "versionUploadFailed": "Nahratie verzie zlyhalo",
-      "versionUploaded": "Nová verzia nahraná",
-      "xfaFormNotSupported": "Tento PDF obsahuje formulár XFA. Náhľad sa nemusí zobrazovať správne."
+      "versionUploaded": "Nová verzia nahraná"
     },
     "filesystem": {
       "collapseAll": "Zbaliť všetky priečinky",
@@ -7307,18 +7210,12 @@
       "emptyFoldersToDelete": "{count, plural, one {# prázdny priečinok na zmazanie} few {# prázdne priečinky na zmazanie} other {# prázdnych priečinkov na zmazanie} many {# prázdneho priečinka na zmazanie}}",
       "expandFolder": "Rozbaliť priečinok",
       "failed": "Usporiadanie zlyhalo",
-      "folderPlaceholder": "napr. Compliance/2025",
       "generateAi": "Generovať návrhy pomocou AI",
       "generating": "Generujem návrhy pomocou AI...",
       "instructionsEmpty": "Žiadne vlastné pokyny",
-      "instructionsHelp": "Ukladá sa na úrovni spisu. Použije sa navyše k systémovému promptu.",
       "instructionsPlaceholder": "napr. Používaj slovenské názvy priečinkov, zoskupuj podľa protistrany, dátum uvádzaj s rokom na začiatku.",
       "instructionsTitle": "Pokyny pre AI",
-      "moveTo": "Presunúť súbor do priečinka",
-      "moveToHint": "Zadajte cestu alebo vyberte existujúci priečinok.",
-      "moveToTitle": "Presunúť do priečinka",
       "organized": "Súbory usporiadané",
-      "reset": "Obnoviť návrhy AI",
       "selectedOfTotal": "{selected, number} / {total, number}",
       "summaryToMove": "na presunutie",
       "summaryToRename": "na premenovanie",
@@ -7327,25 +7224,7 @@
       "wasNamed": "pôvodne {name}"
     },
     "infosoud": {
-      "courtPlaceholder": "Vyhľadajte súd alebo kód",
-      "courtsFailed": "Súdy z InfoSoudu sa nepodarilo načítať",
-      "eventCount": "{count, plural, one {# udalosť} few {# udalosti} other {# udalostí} many {# udalosti}}",
-      "events": "Udalosti",
-      "hearings": "Pojednávania",
-      "importAgenda": "Uložiť do Agendy",
-      "importAgendaFailed": "Položky z InfoSoudu sa nepodarilo uložiť do Agendy",
-      "importAgendaResult": "{count, plural, one {# položka uložená do Agendy} few {# položky uložené do Agendy} other {# položiek uložených do Agendy} many {# položky uložené do Agendy}}",
-      "importAgendaUpToDate": "Agenda je už aktuálna",
-      "lookup": "Vyhľadať",
-      "lookupFailed": "Vyhľadanie v InfoSoude zlyhalo",
-      "noHearings": "Nie sú nariadené žiadne pojednávania",
-      "notFound": "Pre tento súd a sp. zn. sa v InfoSoude nenašla vec.",
-      "relatedCases": "Súvisiace veci",
-      "spisZn": "Sp. zn.",
-      "spisZnPlaceholder": "napr. 1 T 64/2024",
-      "statusDate": "Dátum stavu",
-      "title": "InfoSoud",
-      "validTo": "Platné k"
+      "title": "InfoSoud"
     },
     "justification": "Odôvodnenie:",
     "kanban": {
@@ -7364,15 +7243,12 @@
     "leadPicker": {
       "noMatchingMembers": "Žiadni zodpovedajúci členovia"
     },
-    "lockMatter": "Zamknúť",
     "matterInfo": "Informácie o spise",
     "mattersCount": "{count, plural, one {# spis} few {# spisy} other {# spisov} many {# spisu}}",
     "members": {
       "addMember": "Pridať do spisu",
       "addMemberDescription": "Vyberte existujúceho člena tímu, ktorého chcete pridať k tomuto spisu",
-      "alreadyMember": "Používateľ je už členom",
       "alreadyOnMatter": "Už je v tomto spise",
-      "cannotRemoveLast": "Posledného člena nie je možné odstrániť",
       "noMembersFound": "Nenašli sa žiadni členovia",
       "removeMemberConfirm": "Odstrániť tohto člena zo spisu?"
     },
@@ -7381,11 +7257,6 @@
     "noDocuments": "Zatiaľ žiadne dokumenty",
     "noGrouping": "Nezoskupovať",
     "noItems": "Zatiaľ žiadne položky",
-    "noMatters": "Zatiaľ žiadne spisy. Vytvorte prvý spis a začnite.",
-    "operators": {
-      "containsEvery": "Obsahuje všetko",
-      "equals": "Rovná sa"
-    },
     "overview": {
       "activity": {
         "actorActions": {
@@ -7407,10 +7278,8 @@
         "automatedService": "Automatizovaná služba",
         "deletedUser": "Odstránený používateľ",
         "details": {
-          "actor": "Vykonal(a)",
           "approval": "Schválenie",
           "approvedBy": "Schválil(a)",
-          "channel": "Kanál",
           "dateTime": "Dátum a čas",
           "notAvailable": "Nie je k dispozícii",
           "openTarget": "Otvoriť položku",
@@ -7451,7 +7320,6 @@
           "dateTime": "Dátum a čas",
           "provenance": "Pôvod"
         },
-        "loadEarlier": "Načítať staršie",
         "loading": "Načítava sa…",
         "provenance": {
           "connected": "Pomocou pripojeného prístupu",
@@ -7501,8 +7369,6 @@
           "timeline": "Časová os"
         }
       },
-      "atAGlance": "Prehľad",
-      "getStarted": "Začnite nahraním dokumentov alebo vytvorením prvého priečinka.",
       "matterDetails": "Detaily spisu",
       "membersCount": "{count, plural, one {# člen} few {# členovia} other {# členov} many {# člena}}",
       "nextDeadline": "Ďalší termín",
@@ -7513,15 +7379,13 @@
       "totalDocuments": "Celkom dokumentov",
       "totalItems": "Položky",
       "totalThisWeek": "Celkom tento týždeň",
-      "upcomingTasks": "Nadchádzajúca agenda",
-      "uploaded": "nahral(a)"
+      "upcomingTasks": "Nadchádzajúca agenda"
     },
     "parties": {
       "addParty": "Pridať stranu",
       "changeClient": "Zmeniť klienta",
       "client": "Klient",
       "movedToClient": "Spis <bdi>{matterName}</bdi> presunutý ku klientovi <bdi>{clientName}</bdi>",
-      "noClient": "Žiadny klient nepriradený",
       "noClientOptional": "Bez klienta (voliteľné)",
       "noParties": "K tomuto spisu nie sú pridané žiadne strany.",
       "partyRoles": {
@@ -7544,9 +7408,7 @@
       "recentClients": "Nedávni klienti",
       "removeClient": "Odstrániť klienta",
       "removeParty": "Odstrániť stranu",
-      "removePartyConfirm": "Naozaj chcete odstrániť túto stranu zo spisu?",
-      "searchContacts": "Hľadať kontakty...",
-      "setClient": "Nastaviť klienta"
+      "searchContacts": "Hľadať kontakty..."
     },
     "pdf": {
       "adjustForDarkMode": "Prispôsobiť stránky pre tmavý režim",
@@ -7562,7 +7424,6 @@
         "refusedTooLong": "Táto pasáž je na označenie príliš dlhá. Vyberte kratšiu."
       },
       "backToPeek": "Späť do náhľadu",
-      "entitySidebar": "Detaily dokumentu",
       "evidence": "Odôvodnenie",
       "incorrectPassword": "Nesprávne heslo. Skúste znova.",
       "nextPage": "Nasledujúca strana",
@@ -7635,7 +7496,6 @@
         "duplicate": "Duplikovať",
         "editPages": "Upraviť stránky",
         "multiSelectHint": "Podržaním klávesu {modifier} vyberiete viac strán",
-        "pageCount": "{count, plural, one {# strana} few {# strany} other {# strán} many {# strany}}",
         "pageNumber": "Strana {number}",
         "pages": "Strany",
         "redo": "Zopakovať úpravu strany",
@@ -7651,7 +7511,6 @@
         "signatureWarning": "Úpravou tohto PDF sa digitálne podpisy stanú neplatnými.",
         "signatureWarningWithSign": "Úpravami sa existujúce digitálne podpisy stanú neplatnými. Podpísanie odtiaľto najprv uloží vaše úpravy a podpíše novú verziu.",
         "sourceLimit": "Celková veľkosť súborov PDF nesmie prekročiť 100 MB.",
-        "title": "Upraviť stránky",
         "undo": "Vrátiť úpravu strany",
         "unsupportedDescription": "Tento PDF súbor nemožno upraviť v prehliadači.",
         "unsupportedPDF": "Nepodporované PDF",
@@ -7665,7 +7524,6 @@
         "pageLocator": "s. {page}",
         "pageRangeLocator": "s. {start}–{end}"
       },
-      "showOriginal": "Zobraziť pôvodné stránky",
       "unlock": "Odomknúť"
     },
     "playbooks": {
@@ -7682,8 +7540,6 @@
     },
     "possibleDuplicates": "Možné duplicity",
     "properties": {
-      "addCondition": "Pridať podmienku",
-      "addInputProperty": "Pridajte aspoň jednu vstupnú vlastnosť pomocou \"@\"",
       "addOption": "Pridať možnosť",
       "addPromptForBetterResults": "Pridajte prompt pre lepšie výsledky",
       "addReadingSource": "pridať",
@@ -7691,10 +7547,8 @@
       "bulk": {
         "addAnother": "Pridať ďalší stĺpec",
         "createFailed": "Stĺpce sa nepodarilo vytvoriť",
-        "createMany": "Vytvoriť {count, plural, one {# stĺpec} few {# stĺpce} many {# stĺpca} other {# stĺpcov}}",
         "createdMany": "{count, plural, one {Vytvorený # stĺpec} few {Vytvorené # stĺpce} many {Vytvorené # stĺpca} other {Vytvorených # stĺpcov}}",
         "createdOne": "Stĺpec vytvorený",
-        "promptPlaceholder": "Čo má tento stĺpec extrahovať? Ak chcete použiť / a @, upresnite ho v dialógovom okne stĺpca.",
         "title": "Pridať stĺpce"
       },
       "chipManual": "Bez AI",
@@ -7702,18 +7556,10 @@
       "chipNumber": "Číslo",
       "chipSingle": "Štítok",
       "chipText": "Text",
-      "clip": "Pripnúť",
       "composerTitle": "Čo má stella nájsť?",
       "conditionSeparator": "A",
       "conditions": "Podmienky ({count})",
       "createColumn": "Vytvoriť stĺpec",
-      "createOption": "Vytvoriť \"{option}\"",
-      "defaultNames": {
-        "file": "Vlastnosť súboru",
-        "multiSelect": "Vlastnosť viacnásobného výberu",
-        "singleSelect": "Vlastnosť jednoduchého výberu",
-        "text": "Textová vlastnosť"
-      },
       "defaultPromptPrefix": "Nájdi {propertyName} v ",
       "defaultPromptPropertyName": "informácie",
       "deleteProperty": "Vymazať vlastnosť",
@@ -7725,20 +7571,9 @@
       "editConditionsWhen": "Spustiť extrakciu iba vtedy, keď…",
       "enterAValue": "Zadajte hodnotu",
       "extractEntityType": "Vyťažiť informáciu",
-      "extractEntityTypeDescription": "Vytvorte tabuľkový stĺpec vypĺňaný AI.",
-      "extractionInstruction": "Inštrukcia pre AI",
-      "extractionInstructionHelp": "Spustí sa znovu, keď sa zmenia zdrojové dokumenty alebo odkazované stĺpce.",
-      "extractionInstructionPlaceholder": "Príklad: Nájdi dátum ukončenia zmluvy. Vráť iba dátum.",
       "extractionPlaceholder": "Popíšte, čo má nájsť. Pomocou @ odkážete na iný stĺpec.",
-      "extractionScope": "Rozsah extrakcie",
-      "file": "Súbor",
-      "flowNoInputs": "žiadne vstupy",
       "ifNoMatchFound": "Ak sa nenašla zhoda",
-      "inputs": "Vstupy",
-      "inputsHelp": "Vyber stĺpce, z ktorých má AI čítať. Klikni na pridanie alebo odstránenie.",
-      "int": "Celé číslo",
       "keepEmpty": "Ponechať prázdne",
-      "manualColumn": "Manuálny stĺpec",
       "markAllAsLocked": "Uzamknúť všetky bunky",
       "markAllAsReviewed": "Označiť všetko ako skontrolované",
       "markThisGroupAsLocked": "Uzamknúť túto skupinu",
@@ -7746,39 +7581,15 @@
       "markedAsLocked": "{count, plural, one {Uzamknutá # bunka} few {Uzamknuté # bunky} other {Uzamknutých # buniek} many {Uzamknuté # bunky}}",
       "markedAsReviewed": "{count, plural, one {# bunka označená ako skontrolovaná} few {# bunky označené ako skontrolované} other {# buniek označených ako skontrolované} many {# bunky označené ako skontrolované}}",
       "money": "Čiastka",
-      "multiSelect": "Viacnásobný výber",
-      "nameProperty": "Vlastnosť názvu",
       "newColumn": "Nový stĺpec",
-      "newColumnDescription": "Vyberte, ako sa má tento stĺpec tabuľky vypĺňať.",
       "newColumnName": "Názov stĺpca",
-      "noConditionFields": "Nie sú k dispozícii žiadne polia, podľa ktorých možno filtrovať.",
-      "noFirstDocument": "Zatiaľ žiadne dokumenty pre náhľad.",
       "noPropertiesFound": "Neboli nájdené žiadne vlastnosti",
-      "optionsHelp": "Zadaj hodnoty, z ktorých si AI môže vybrať.",
       "optionsLabel": "Možnosti",
       "person": "Osoba",
-      "previewEmpty": "AI nevrátila žiadnu hodnotu.",
-      "previewMockNotice": "Falošný náhľad: backend ešte nie je napojený.",
-      "previewOnFirst": "Náhľad na: {document}",
-      "previewSkipped": "Na tomto dokumente nie je žiadny použiteľný vstup.",
-      "previewSubject": "Vyskúšaj na vzorke",
-      "previewUnsupported": "Náhľad nie je pre tento typ dokumentu podporovaný.",
       "readingFrom": "AI číta z",
-      "record": "Záznam",
-      "referencesItself": "Vlastnosť odkazuje sama na seba cez iné vlastnosti",
-      "resultType": "Typ výsledku",
       "returnsLabel": "Formát",
-      "scopeFile": "Aktuálny súbor",
-      "scopeFileDescription": "Použiť {property} a spustiť tento súbor teraz.",
-      "scopeFileUnavailable": "V tomto zobrazení nie je dostupný zdrojový súbor.",
-      "scopeMatter": "Celý spis",
-      "scopeMatterDescription": "Použiť všetky stĺpce súborov a spustiť celý spis.",
-      "searchOrAddOptions": "Hľadať alebo pridať možnosti",
       "selectColor": "Vyberte farbu",
-      "selectField": "Vybrať pole",
-      "selectOperator": "Vyberte operátor",
       "setPromptPlaceholder": "Nastavte prompt na extrakciu informácií",
-      "singleSelect": "Jednoduchý výber",
       "sortAscendingDate": "Od najstarších",
       "sortAscendingNumber": "Od najnižšej hodnoty",
       "sortAscendingText": "A → Ž",
@@ -7787,10 +7598,7 @@
       "sortDescendingText": "Ž → A",
       "splitOptions": "{count, plural, one {Rozdeliť na # možnosť} few {Rozdeliť na # možnosti} other {Rozdeliť na # možností} many {Rozdeliť na # možnosti}}",
       "suggestWithAI": "Navrhnúť pomocou AI",
-      "text": "Text",
       "typeChangeWarning": "Existujúce dáta sa pri uložení vymažú a znovu vypočítajú.",
-      "unnamedColumn": "tento stĺpec",
-      "unsupported": "Nepodporované",
       "untitledColumn": "Názov stĺpca, napr. Dátum účinnosti"
     },
     "reference": "Referenčné číslo",
@@ -7819,14 +7627,9 @@
       "flagCell": "Označiť bunku",
       "flags": {
         "contradiction": "Rozpor",
-        "contradictionDescription": "Môže byť v rozpore s inými údajmi.",
         "followUp": "Nadviazať",
-        "followUpDescription": "Vyžaduje následný krok.",
         "important": "Dôležité",
-        "importantDescription": "Zvýrazňuje kľúčovú hodnotu.",
-        "needsReview": "Skontrolovať",
-        "needsReviewDescription": "Vyžaduje ručnú kontrolu.",
-        "verifiedDescription": "Ručne potvrdené."
+        "needsReview": "Skontrolovať"
       },
       "lock": {
         "lock": "Zamknúť bunku",
@@ -7840,16 +7643,11 @@
     },
     "tasksCount": "{count, plural, one {# položka agendy} few {# položky agendy} other {# položiek agendy} many {# položky agendy}}",
     "team": "Tím",
-    "tools": {
-      "aiModel": "AI model",
-      "manualInput": "Ručne"
-    },
     "unarchiveBeforeDelete": "Pred odstránením tohto spisu zrušte jeho archiváciu.",
     "unarchiveMatter": "Obnoviť",
     "uploadDocuments": "Nahrať dokumenty",
     "views": {
       "addAdvancedFilter": "Pridať rozšírený filter",
-      "addFields": "Pridať polia",
       "advancedFilterCount": "{count, plural, =0 {ľubovoľné} one {# pravidlo} few {# pravidlá} other {# pravidiel} many {# pravidla}}",
       "aiGenerated": "Vygenerované AI",
       "calendar": {
@@ -7865,7 +7663,6 @@
         "week": "Týždeň",
         "year": "Rok"
       },
-      "cannotDeleteRequired": "Je vyžadované aspoň jedno zobrazenie tohto typu",
       "copySuffix": "{name} (kópia)",
       "deleteView": "Vymazať zobrazenie",
       "exportCsv": "Exportovať CSV",
@@ -7874,7 +7671,6 @@
       "exportFailed": "Export zlyhal",
       "exportTable": "Exportovať tabuľku",
       "exportXlsx": "Exportovať XLSX",
-      "fields": "Polia:",
       "filter": "Filtrovať",
       "filterByPlaceholder": "Filtrovať podľa…",
       "filtersWithCount": "{count, plural, one {# filter} few {# filtre} other {# filtrov} many {# filtra}}",
@@ -7908,7 +7704,6 @@
       "noFindResultsHint": "Skúste kratší výraz alebo hľadajte vo viacerých stĺpcoch.",
       "removeAdvancedFilter": "Odstrániť rozšírený filter",
       "reportExport": {
-        "action": "Exportovať správu…",
         "aiSummaries": "Zahrnúť zhrnutia od AI",
         "completed": "Správa je pripravená",
         "customize": "Prispôsobiť",
@@ -7949,7 +7744,6 @@
         "day": "Deň",
         "endDate": "Dátum ukončenia",
         "month": "Mesiac",
-        "noDates": "Žiadne dátumy nastavené",
         "quarter": "Štvrťrok",
         "showTable": "Zobraziť tabuľku",
         "startDate": "Dátum začiatku",
@@ -7959,9 +7753,6 @@
       "viewSettings": "Nastavenia zobrazenia"
     },
     "workflow": {
-      "allManualInputsDescription": "Na spustenie pracovného postupu pridajte aspoň jednu AI vlastnosť",
-      "allManualInputsTitle": "Všetky vlastnosti sú ručné vstupy",
-      "generate": "Generovať",
       "largeRunPrompt": {
         "description": "Do frontu sa zaradí extrakcia AI pre {count} dokumentov. Spustite ju iba vtedy, ak chcete teraz spracovať toľko súborov.",
         "start": "Spustiť extrakciu",
@@ -7974,12 +7765,7 @@
         "standard": "Spustiť hneď",
         "title": "Použiť znížené kredity?"
       },
-      "someFieldsOutdatedDescription": "Aktualizujte polia jednoduchého a viacnásobného výberu tak, aby zodpovedali možnostiam vlastností",
-      "someFieldsOutdatedTitle": "Niektoré polia sú zastarané",
-      "startedSuccessfully": "Pracovný postup úspešne spustený",
-      "starting": "Spúšťanie pracovného postupu...",
-      "terminated": "Pracovný postup ukončený",
-      "terminatedDescription": "Pracovný postup bol ukončený kvôli chybe. Kontaktujte podporu."
+      "startedSuccessfully": "Pracovný postup úspešne spustený"
     }
   }
 }

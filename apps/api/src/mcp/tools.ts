@@ -666,6 +666,7 @@ const dispatchMcpToolCall = async ({
               context: executionContext,
               mode,
               response,
+              outputSchema: outputContract.outputSchemaSource,
             },
             {
               anonymizeTextFields:

@@ -22,6 +22,7 @@ import {
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { announceChatQueueChange } from "@/api/lib/chat/chat-queue-announcement";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { enforceWritePrecondition } from "@/api/lib/write-contract/write-contract";
@@ -121,6 +122,10 @@ const replaceQueuedChatMessage = createSafeRootHandler(
     }
     switch (outcome.type) {
       case "changed":
+        announceChatQueueChange({
+          organizationId: session.activeOrganizationId,
+          userId: user.id,
+        });
         return Result.ok({ item: outcome.item });
       case "stale":
         return Result.err(queuedMessageChanged());

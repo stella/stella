@@ -1,6 +1,8 @@
 import { Result } from "better-result";
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { afterAll, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
+
+import { createTestState } from "@stll/test-state";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -25,17 +27,14 @@ import {
 import { createStoredTemplate } from "./create-template";
 
 let fixture: Awaited<ReturnType<typeof getRlsFixture>>;
-const originalFlag = env.FEATURE_FILE_USAGE_LIMITS;
-const originalWorkerFlag =
-  envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS;
-beforeAll(async () => {
+const testState = createTestState({ file: import.meta.path, config: env });
+const workerState = testState.forConfig(envDocumentProcessingWorker);
+testState.beforeAll(async () => {
   fixture = await getRlsFixture();
-  env.FEATURE_FILE_USAGE_LIMITS = false;
-  envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = false;
+  testState.setConfig("FEATURE_FILE_USAGE_LIMITS", false);
+  workerState.setConfig("FEATURE_FILE_USAGE_LIMITS", false);
 });
 afterAll(async () => {
-  env.FEATURE_FILE_USAGE_LIMITS = originalFlag;
-  envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = originalWorkerFlag;
   await releaseRlsFixture();
 });
 test("an exhausted scanned template write remains owned by recovery", async () => {

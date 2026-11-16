@@ -233,32 +233,23 @@ for (const colorScheme of ["light", "dark"] as const) {
         popup.getByRole("button", { name: "Use with stella desktop" }),
       ).toBeVisible();
 
-      // The mark draws the bundled symbol in the tile's foreground colour.
-      const symbol = popup.locator(".mark-symbol");
-      await expect(symbol).toHaveCSS(
-        "mask-image",
-        /\/brand\/stella-symbol\.svg/u,
+      // The mark is the extension's own icon, the one the toolbar shows.
+      const mark = popup.locator("img.mark");
+      const icon = await popup.evaluate(
+        () => chrome.runtime.getManifest().icons?.["128"] ?? null,
       );
+      expect(icon).not.toBeNull();
       expect(
-        await popup.evaluate(
-          async () =>
-            (
-              await fetch("/brand/stella-symbol.svg", {
-                signal: AbortSignal.timeout(10_000),
-              })
-            ).ok,
+        await mark.evaluate((image) =>
+          image instanceof HTMLImageElement
+            ? { naturalWidth: image.naturalWidth, src: image.src }
+            : null,
         ),
-      ).toBe(true);
-      const tile = popup.locator(".mark");
-      expect(
-        contrast(
-          await paintedColour(
-            popup,
-            await computed(symbol, "background-color"),
-          ),
-          await paintedColour(popup, await computed(tile, "background-color")),
-        ),
-      ).toBeGreaterThanOrEqual(4.5);
+      ).toEqual({
+        naturalWidth: 128,
+        src: new URL(`/${icon ?? ""}`, popup.url()).href,
+      });
+      await expect(mark).toHaveCSS("width", "32px");
 
       const primary = popup.locator("#primary");
       await expect(primary).toHaveText("Open stella");

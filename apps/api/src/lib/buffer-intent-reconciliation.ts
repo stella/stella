@@ -50,10 +50,9 @@ type DeleteObject = (
   | undefined
 >;
 
-export const BUFFER_INTENT_TTL_MS = 5 * 60 * 1000;
+const BUFFER_INTENT_TTL_MS = 5 * 60 * 1000;
 export const BUFFER_INTENT_STALE_MS = 60 * 1000;
-export const BUFFER_INTENT_HEARTBEAT_MS = 15 * 1000;
-const BUFFER_INTENT_RECONCILE_LIMIT = 25;
+const BUFFER_INTENT_HEARTBEAT_MS = 15 * 1000;
 export const BUFFER_INTENT_DELETE_TIMEOUT_MS = 30 * 1000;
 export const BUFFER_INTENT_WRITE_TIMEOUT_MS = 2 * 60 * 1000;
 export const OBJECT_WRITE_RECOVERY_DELAY_MS = BUFFER_INTENT_WRITE_TIMEOUT_MS;
@@ -800,7 +799,7 @@ export const startBufferIntentHeartbeat = ({
   };
 };
 
-export const isRecoverableBufferIntent = (
+const isRecoverableBufferIntent = (
   value: PendingUploadPurposeData,
   purpose: BufferIntentPurpose,
 ): value is RecoverableBufferIntent =>
@@ -814,7 +813,7 @@ const rejectionReason = (purpose: BufferIntentPurpose): string =>
     ? "Reconciled abandoned server-generated entity bytes"
     : "Reconciled abandoned server-generated version bytes";
 
-export const isBufferIntentPurpose = (
+const isBufferIntentPurpose = (
   purpose: string,
 ): purpose is BufferIntentPurpose =>
   purpose === "entity_create" || purpose === "entity_version";
@@ -1169,30 +1168,6 @@ export const reconcileBufferObjectCleanupIntents = async ({
     }
   }
   return claimedResult.value.length;
-};
-
-/**
- * Claim and remove one bounded workspace batch of final-key objects whose
- * durable intent proves that no entity/version transaction committed. The
- * intent is finalized atomically with the reference, so a committed object
- * can never satisfy this stale-scanning predicate.
- */
-export const reconcileStaleBufferIntents = async ({
-  safeDb,
-  organizationId,
-  workspaceId,
-  purpose,
-}: {
-  safeDb: SafeDb;
-  organizationId: SafeId<"organization">;
-  workspaceId: SafeId<"workspace">;
-  purpose: BufferIntentPurpose;
-}): Promise<void> => {
-  await reconcileStaleBufferIntentBatch({
-    safeDb,
-    scope: { organizationId, workspaceId, purpose },
-    limit: BUFFER_INTENT_RECONCILE_LIMIT,
-  });
 };
 
 /**

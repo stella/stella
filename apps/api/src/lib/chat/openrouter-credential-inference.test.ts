@@ -3,9 +3,10 @@ import { EventType } from "@tanstack/ai";
 import type { AnyTextAdapter } from "@tanstack/ai";
 import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
 import { Result } from "better-result";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 
 import { MODEL_DEFAULTS_LEDGER } from "@stll/ai-catalog/model-defaults-ledger";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
@@ -22,6 +23,8 @@ import { resolveTanStackTextModel } from "@/api/lib/tanstack-ai-generate";
 import { createTanStackTextAdapterFactory } from "@/api/lib/tanstack-ai-models";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const testFetchState = createTestFetch();
 
@@ -43,32 +46,7 @@ type FactoryPolicy =
   | { dataClass: "customer"; managedAIResidency: ManagedAIResidency }
   | { dataClass: "public_corpus" };
 
-let previousEnv = {
-  AI_PROVIDER: env.AI_PROVIDER,
-  FEATURE_MANAGED_PROVIDER_CHECKS: env.FEATURE_MANAGED_PROVIDER_CHECKS,
-  OPENROUTER_API_KEY: env.OPENROUTER_API_KEY,
-  OPENROUTER_WIF_AUDIENCE: env.OPENROUTER_WIF_AUDIENCE,
-  OPENROUTER_WIF_POLICY_ID: env.OPENROUTER_WIF_POLICY_ID,
-  OPENROUTER_WIF_STS_REGION: env.OPENROUTER_WIF_STS_REGION,
-  REQUIRE_PERSONAL_AI_KEY: env.REQUIRE_PERSONAL_AI_KEY,
-  USE_MOCK_AI: env.USE_MOCK_AI,
-};
-
-beforeEach(() => {
-  previousEnv = {
-    AI_PROVIDER: env.AI_PROVIDER,
-    FEATURE_MANAGED_PROVIDER_CHECKS: env.FEATURE_MANAGED_PROVIDER_CHECKS,
-    OPENROUTER_API_KEY: env.OPENROUTER_API_KEY,
-    OPENROUTER_WIF_AUDIENCE: env.OPENROUTER_WIF_AUDIENCE,
-    OPENROUTER_WIF_POLICY_ID: env.OPENROUTER_WIF_POLICY_ID,
-    OPENROUTER_WIF_STS_REGION: env.OPENROUTER_WIF_STS_REGION,
-    REQUIRE_PERSONAL_AI_KEY: env.REQUIRE_PERSONAL_AI_KEY,
-    USE_MOCK_AI: env.USE_MOCK_AI,
-  };
-});
-
 afterEach(() => {
-  Object.assign(env, previousEnv);
   resetMetricLineSinkForTesting();
 });
 
@@ -309,14 +287,14 @@ const runFederated401 = async (
 
 describe("federated OpenRouter 401 recovery at the inference boundary", () => {
   test("maps customer eu/us and public-corpus 401s for chat and structured paths", async () => {
-    env.FEATURE_MANAGED_PROVIDER_CHECKS = false;
-    env.OPENROUTER_API_KEY = undefined;
-    env.USE_MOCK_AI = false;
-    env.AI_PROVIDER = "openrouter";
-    env.REQUIRE_PERSONAL_AI_KEY = false;
-    env.OPENROUTER_WIF_POLICY_ID = POLICY_ID;
-    env.OPENROUTER_WIF_AUDIENCE = AUDIENCE;
-    env.OPENROUTER_WIF_STS_REGION = REGION;
+    testState.setConfig("FEATURE_MANAGED_PROVIDER_CHECKS", false);
+    testState.setConfig("OPENROUTER_API_KEY", undefined);
+    testState.setConfig("USE_MOCK_AI", false);
+    testState.setConfig("AI_PROVIDER", "openrouter");
+    testState.setConfig("REQUIRE_PERSONAL_AI_KEY", false);
+    testState.setConfig("OPENROUTER_WIF_POLICY_ID", POLICY_ID);
+    testState.setConfig("OPENROUTER_WIF_AUDIENCE", AUDIENCE);
+    testState.setConfig("OPENROUTER_WIF_STS_REGION", REGION);
     const logger = installRecordingLogger();
     const metricLines: string[] = [];
     setMetricLineSinkForTesting((line) => {
@@ -356,11 +334,11 @@ describe("federated OpenRouter 401 recovery at the inference boundary", () => {
   });
 
   test("preserves static and BYOK 401s without invalidating a cached token", async () => {
-    env.FEATURE_MANAGED_PROVIDER_CHECKS = false;
-    env.OPENROUTER_API_KEY = undefined;
-    env.USE_MOCK_AI = false;
-    env.AI_PROVIDER = "openrouter";
-    env.REQUIRE_PERSONAL_AI_KEY = false;
+    testState.setConfig("FEATURE_MANAGED_PROVIDER_CHECKS", false);
+    testState.setConfig("OPENROUTER_API_KEY", undefined);
+    testState.setConfig("USE_MOCK_AI", false);
+    testState.setConfig("AI_PROVIDER", "openrouter");
+    testState.setConfig("REQUIRE_PERSONAL_AI_KEY", false);
     const providerState = createCredentialProvider();
     const first = await providerState.provider.get();
     expect(Result.isOk(first)).toBe(true);

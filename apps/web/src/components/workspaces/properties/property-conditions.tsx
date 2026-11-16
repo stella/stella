@@ -17,11 +17,11 @@ import {
 import { RouteIcon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Separator } from "@stll/ui/separator";
+import { PropertyIcon } from "@stll/workspace-ui/property-icon";
 
 import { ConditionBuilder } from "@/components/conditions/condition-builder";
 import type { FieldOption } from "@/components/conditions/condition-builder-logic";
 import { filterCapabilities } from "@/components/workspaces/conditions/filter-capabilities";
-import { PropertyIcon } from "@/components/workspaces/property-helpers";
 import type { PropertyDependency, WorkspaceProperty } from "@/lib/types";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 

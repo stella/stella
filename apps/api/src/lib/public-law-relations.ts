@@ -70,10 +70,6 @@ export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
 export type PublicLawRelation =
   (typeof PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT)[keyof typeof PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT];
 
-export const PUBLIC_CASE_LAW_SCHEMA_IMPORTS = Object.keys(
-  PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT,
-).filter((schemaImport) => schemaImport.startsWith("caseLaw"));
-
 /** How this release relates to a column's grant. */
 export type PublicLawColumnGrant = "required" | "permitted";
 
