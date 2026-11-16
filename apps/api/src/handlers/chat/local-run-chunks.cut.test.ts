@@ -10,6 +10,7 @@ import {
   harnessChunks,
   localSource,
 } from "@/api/tests/helpers/fake-local-computer";
+import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 import {
   CHAT_TURN_OWNER_LOST_REASON,
@@ -222,7 +223,7 @@ describe("a local turn released to another task", () => {
       async () => await Promise.resolve(held.reads >= 3 || undefined),
       {
         description: "three polls of the run while the read may not release",
-        timeoutMs: 2000,
+        timeoutMs: HAPPY_PATH_TIMEOUT_MS,
       },
     );
     if (!held.spun) {
