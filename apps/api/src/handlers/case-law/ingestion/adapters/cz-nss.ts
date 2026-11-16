@@ -1,3 +1,4 @@
+// parser-output-unchanged: Named fetchDecisionContent options preserve its body, argument values and evaluation order.
 // parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
