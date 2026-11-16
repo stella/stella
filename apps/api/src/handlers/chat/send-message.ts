@@ -44,6 +44,7 @@ import {
 import { createTurnAnswerQuoteChecker } from "@/api/handlers/chat/answer-quote-checks";
 import type { TurnBrowserExtension } from "@/api/handlers/chat/browser-extension-capability";
 import {
+  type ChatCommand,
   chatCommandOf,
   ChatCommandReplayedError,
   chatCommandReplayResponse,
@@ -1341,6 +1342,19 @@ const receiptedMemberCommand = async ({
     return receipted === undefined ? Result.ok(command) : Result.err(receipted);
   });
 
+/** What the receipt of a request's command, if it carries one, says. */
+const commandReceiptOutcome = async ({
+  command,
+  ...scope
+}: {
+  command: ChatCommand | undefined;
+  safeDb: SafeDb;
+  threadId: SafeId<"chatThread">;
+}) =>
+  command === undefined
+    ? Result.ok(undefined)
+    : await readChatCommandReceiptOutcome({ command, ...scope });
+
 /** A send's refusal as answered: a replayed command names its turn. */
 const answeredSendRefusal = <E>(
   error: E | ChatCommandReplayedError,
@@ -1368,8 +1382,8 @@ type AcceptIncomingTurnOptions = {
   validationThreadState: ThreadValidationState;
   workspaceId: SafeId<"workspace"> | null;
   indexThread: typeof upsertChatThreadSearchDocument;
-  /** The request's headers, which name the member's command id, if any. */
-  requestHeaders: Readonly<Record<string, string>>;
+  /** The member's command the request carries, its receipt already read. */
+  command: ChatCommand | undefined;
 };
 
 /** Persists the incoming message and establishes the turn's durable owner. */
@@ -1390,7 +1404,7 @@ const acceptIncomingTurn = async ({
   validationThreadState,
   workspaceId,
   indexThread,
-  requestHeaders,
+  command,
 }: AcceptIncomingTurnOptions) =>
   await Result.gen(async function* () {
     const parsedMessage = parseMessage({
@@ -1403,15 +1417,6 @@ const acceptIncomingTurn = async ({
     // authorized before the turn was read (`authorizeRequestedUserMessageEdit`)
     // and every later refusal carries the edit's typed codes.
     const isEdit = body.turnIntent === CHAT_TURN_INTENT.edit;
-    const command = yield* Result.await(
-      receiptedMemberCommand({
-        headers: requestHeaders,
-        message: parsedMessage.message,
-        rewritesHistory: isEdit || isExplicitRegeneration,
-        safeDb,
-        threadId: body.threadId,
-      }),
-    );
     if (
       isExplicitRegeneration &&
       (parsedMessage.message.role !== "user" ||
@@ -1695,6 +1700,16 @@ const acceptIncomingTurn = async ({
           workspaceId,
         }),
       );
+      // The message was already stored: when this command's own first
+      // attempt stored it and took the turn, its receipt says so.
+      if (turnExecution === null) {
+        const receipted = yield* Result.await(
+          commandReceiptOutcome({ command, safeDb, threadId: body.threadId }),
+        );
+        if (receipted !== undefined) {
+          return Result.err(receipted);
+        }
+      }
     } else {
       const persistenceResult = await persistAcceptedMessageWithClaim({
         ...persistenceProps,
@@ -2674,6 +2689,21 @@ export const createSendMessage = (
                 ? { currentVersionId: activeFileEntity.currentVersionId }
                 : {}),
             };
+      // An accepted command's retry is answered before anything checks the
+      // request against the thread, which the first attempt has changed.
+      const command = yield* Result.await(
+        receiptedMemberCommand({
+          headers,
+          message: body.message,
+          rewritesHistory: body.turnIntent !== undefined,
+          safeDb,
+          threadId: body.threadId,
+        }).then((receipted) =>
+          receipted.mapError((error) =>
+            answeredSendRefusal(error, set.headers),
+          ),
+        ),
+      );
       const validationThreadState = yield* Result.await(
         readThreadValidationState({
           caseLawDb: dependencies.caseLawDb,
@@ -2918,7 +2948,7 @@ export const createSendMessage = (
           validationThreadState,
           workspaceId,
           indexThread: dependencies.indexThread,
-          requestHeaders: headers,
+          command,
         });
         if (Result.isError(acceptedTurnResult)) {
           return Result.err(
