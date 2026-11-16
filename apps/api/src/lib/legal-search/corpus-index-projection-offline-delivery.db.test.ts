@@ -1861,16 +1861,23 @@ describe("offline settlement", () => {
       committedBy: "the indexer's verdict",
       fault: "documents",
       appendMode: "single",
+      nextCap: CORPUS_INDEX_OFFLINE_REQUEST_MAX_REVISIONS,
     },
     {
       committedBy: "a kill of the run",
       fault: "killed",
       appendMode: "batchable",
+      nextCap: 1,
     },
-    { committedBy: "the sweep", fault: "none", appendMode: "batchable" },
+    {
+      committedBy: "the sweep",
+      fault: "none",
+      appendMode: "batchable",
+      nextCap: CORPUS_INDEX_OFFLINE_REQUEST_MAX_REVISIONS,
+    },
   ] as const)(
-    "a partial offline revision committed by $committedBy goes to cleanup uncharged, its entity $appendMode",
-    async ({ fault, appendMode }) => {
+    "a partial offline revision committed by $committedBy goes to cleanup uncharged, its entity $appendMode, its next request at most $nextCap",
+    async ({ fault, appendMode, nextCap }) => {
       const model = await newModel();
       const leases = await reserve(model, 2);
       const startedAt = await now(model);
@@ -1914,6 +1921,40 @@ describe("offline settlement", () => {
       const state = await stateOf(partial.entityId);
       expect(state.appendMode).toBe(appendMode);
       expect(state.failureAttempts).toBe(0);
+      // Retired from a killed request it halves like a withdrawal from one;
+      // from a verdict it went to single requests; after a crash nothing is
+      // known, so nothing halves.
+      const caps = await db.transaction(
+        async (tx) =>
+          await readCorpusProjectionOfflineRequestCapsTx(
+            asTestRaw<Transaction>(tx),
+            [{ ...partial, intentId: exact.intentId }],
+          ),
+      );
+      expect([...caps.values()]).toEqual([nextCap]);
+      // The revision the same request applied exactly, later cleaned up by an
+      // exact repair at its epoch, was delivered in full: it halves nothing.
+      await db.execute(sql`
+        UPDATE corpus_index_projection_states SET work_status = 'repair_scheduled'
+        WHERE entity_id = ${exact.entityId}
+      `);
+      await db.execute(sql`
+        UPDATE corpus_index_projection_intents
+        SET status = 'cleanup_pending',
+            cleanup_not_before = append_publish_barrier_at
+        WHERE id = ${exact.intentId}
+      `);
+      expect((await intentOf(exact.intentId)).status).toBe("cleanup_pending");
+      const repairedCaps = await db.transaction(
+        async (tx) =>
+          await readCorpusProjectionOfflineRequestCapsTx(
+            asTestRaw<Transaction>(tx),
+            [{ ...exact, intentId: partial.intentId }],
+          ),
+      );
+      expect([...repairedCaps.values()]).toEqual([
+        CORPUS_INDEX_OFFLINE_REQUEST_MAX_REVISIONS,
+      ]);
     },
   );
 
@@ -2140,5 +2181,47 @@ describe("offline delivery guards", () => {
     expect(await rejected(db.execute(offlineStart(sql`1`)))).toBe(
       "no rejection",
     );
+  });
+
+  test("what a committed offline revision's failure is charged to never changes", async () => {
+    const model = await newModel();
+    const { lease } = await startOffline(model, 1);
+    const recordedAt = await now(model);
+    await db.transaction(
+      async (tx) =>
+        await recordAcceptedCorpusProjectionAppendsTx(
+          asTestRaw<Transaction>(tx),
+          {
+            accepted: [
+              {
+                intentId: lease.intentId,
+                leaseToken: lease.leaseToken,
+                documentCount: 1,
+              },
+            ],
+            delivery: { type: "offline_indexer", fault: "documents" },
+            testNow: recordedAt,
+          },
+        ),
+    );
+    expect((await intentOf(lease.intentId)).appendFault).toBe("documents");
+    const rejected = await db
+      .execute(
+        sql`
+        UPDATE corpus_index_projection_intents SET append_fault = 'none'
+        WHERE id = ${lease.intentId}
+      `,
+      )
+      .then(
+        () => "no rejection",
+        (error: unknown) =>
+          error instanceof Error
+            ? `${error.message} ${String(error.cause)}`
+            : String(error),
+      );
+    expect(rejected).toContain(
+      "corpus index append fault is immutable once committed",
+    );
+    expect((await intentOf(lease.intentId)).appendFault).toBe("documents");
   });
 });

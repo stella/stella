@@ -4046,6 +4046,8 @@ type CorpusProjectionReservationQueueOptions = {
    * isolated keeps to single requests, which only the per-row path sends.
    */
   batchableOnly?: boolean;
+  /** Entities the caller will not take this time; they keep their place. */
+  skipEntityIds?: readonly string[];
 };
 
 /** One position in the reservation queue's order. */
@@ -4070,6 +4072,7 @@ export const corpusProjectionReservationQueue = (
     excludedIndexIds,
     after = null,
     batchableOnly = false,
+    skipEntityIds = [],
   }: CorpusProjectionReservationQueueOptions,
 ) => {
   const runnableAt = sql<Date>`coalesce(
@@ -4121,6 +4124,11 @@ export const corpusProjectionReservationQueue = (
           "retry_scheduled",
           "repair_scheduled",
         ]),
+        skipEntityIds.length === 0
+          ? undefined
+          : notInArray(corpusIndexProjectionStates.entityId, [
+              ...skipEntityIds,
+            ]),
         batchableOnly
           ? eq(corpusIndexProjectionStates.appendMode, "batchable")
           : undefined,

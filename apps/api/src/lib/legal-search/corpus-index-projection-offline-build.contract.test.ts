@@ -223,6 +223,12 @@ const now = async () => {
   return new Date(row?.ms ?? panic("The database returned no clock"));
 };
 
+/** When a run ended and how long it ran, on the run's one clock. */
+const endedSince = async (startedAt: Date) => {
+  const endedAt = await now();
+  return { endedAt, ranMs: endedAt.getTime() - startedAt.getTime() };
+};
+
 /** The token every document of entity `serial` carries. */
 const marker = (serial: number) => `offlinebuild${String(serial)}`;
 
@@ -410,16 +416,16 @@ const engineDelivery =
         type: "killed_at_deadline",
         exitCode: killed.exitCode,
         startedAt,
-        endedAt: await now(),
+        ...(await endedSince(startedAt)),
       } as const;
       delivered.push({ scenario, revisions, outcome });
       return outcome;
     }
     const { exitCode, stderr } = await exited;
-    const endedAt = await now();
+    const { endedAt, ranMs } = await endedSince(startedAt);
     const outcome: CorpusProjectionOfflineDeliveryOutcome =
       exitCode === 0
-        ? { type: "ingested", exitCode: 0, startedAt, endedAt }
+        ? { type: "ingested", exitCode: 0, startedAt, endedAt, ranMs }
         : {
             type: "failed",
             exitCode,
@@ -430,6 +436,7 @@ const engineDelivery =
                 : "indexer",
             startedAt,
             endedAt,
+            ranMs,
           };
     if (exitCode !== 0) {
       process.stderr.write(
