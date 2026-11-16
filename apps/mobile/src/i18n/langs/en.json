@@ -104,6 +104,8 @@
     "pickFailed": "The file picker could not be opened. Try again.",
     "sendFileRefused": "A file could not be sent, so the message was not sent. Remove the file and try again.",
     "sendFileNotAnonymizable": "This conversation is anonymized, and stella could not anonymize one of the files, so nothing was sent. Remove the file and try again.",
+    "sendLocalRunNotAnonymizable": "This conversation is anonymized, and the coding agent on your computer reads your documents as they are, so nothing was sent to it.",
+    "sendWithoutAnonymization": "Send without anonymization",
     "pickTitle": "Pick a conversation",
     "pickDescription": "Choose a thread from the list, or start a new one with +.",
     "runBanner": {
@@ -249,6 +251,7 @@
       },
       "sessionNotResumed": "The coding agent on your computer could not pick up where it left off, so it continued from the messages in this chat.",
       "steered": "Sent while the agent was working",
+      "ranOnModel": "Ran on {model}",
       "desktopSettingsSteps": "In stella desktop on your computer, open Settings › General › AI subscriptions.",
       "errorLimitResetsAt": "The coding agent on your computer reached its usage limit. You can try again after {time}.",
       "limitReminderNotify": "Notify me when it resets",

@@ -103,6 +103,7 @@ const WEB_LOCAL_RUN_KEYS = {
   },
   sessionNotResumed: ["chat", "localRun", "sessionNotResumed"],
   steered: ["chat", "tool", "user_message"],
+  ranOnModel: ["chat", "ranOnModel"],
   desktopSettingsSteps: ["chat", "localRun", "desktopSettingsSteps"],
   errorLimitResetsAt: ["chat", "localRun", "errorLimitResetsAt"],
   limitReminderNotify: ["chat", "localRun", "limitReminderNotify"],

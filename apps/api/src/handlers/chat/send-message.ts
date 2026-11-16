@@ -3018,8 +3018,10 @@ export const createSendMessage = (
           );
         }
 
-        const messagesForContextResult =
-          await dependencies.compactMessagesForContext({
+        // Never fails the turn: a failed compaction carries the newest history
+        // that fits instead (`compactChatMessages`).
+        const messagesForContext = await dependencies.compactMessagesForContext(
+          {
             abortSignal: createMeteredAIAbortSignal(),
             admission: modelAdmission,
             boundary: thirdPartyBoundary,
@@ -3034,12 +3036,8 @@ export const createSendMessage = (
             usageLane: turnLane.lane,
             userId: user.id,
             workspaceId,
-          });
-        if (Result.isError(messagesForContextResult)) {
-          await lifecycle.failCurrentTurn("provider-error", true);
-          return Result.err(messagesForContextResult.error);
-        }
-
+          },
+        );
         if (isClientConnectionAborted()) {
           yield* Result.await(lifecycle.interruptCurrentTurn());
           return Result.err(
@@ -3206,7 +3204,7 @@ export const createSendMessage = (
           hasReachableMatter: toolWorkspaceIds.length > 0,
           latestMentions: parsedMessage.mentions,
           latestUserMessageId: parsedMessage.message.id,
-          messageWindow: messagesForContextResult.value.messages,
+          messageWindow: messagesForContext.messages,
           organizationId: session.activeOrganizationId,
           offeredToolNamesForSkills,
           safeDb,
@@ -3516,7 +3514,7 @@ export const createSendMessage = (
                   ...(parentRunId === undefined ? {} : { parentRunId }),
                   ...(resume === undefined ? {} : { resume }),
                   messages: chatContext.hydratedMessages,
-                  contextNotice: messagesForContextResult.value.notice,
+                  contextNotice: messagesForContext.notice,
                   latestMessageId: parsedMessage.message.id,
                   storedHistory: storedHistory.value,
                   threadToolCallIds: threadNames.toolCallIds,

@@ -225,6 +225,10 @@ export const NO_NATIVE_UI_REGISTRY = {
     nativeRuleId("color-picker"),
     "the native colour input is reported by the colour picker rule",
   ),
+  "highlighted-textarea": owned(
+    nativeRuleId("textarea"),
+    "the textarea rule owns native editing; this component couples its highlighted text layer",
+  ),
   "horizontal-scroller": owned(
     OVERFLOW_RULE,
     "raw overflow scrolling is reported there",

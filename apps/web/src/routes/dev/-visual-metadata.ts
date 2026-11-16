@@ -69,6 +69,7 @@ export const visualRegistry = {
   },
   "table-chart": { label: "Chat table chart", layout: "plain" },
   "oauth-consent": { label: "OAuth consent", layout: "plain" },
+  "outcome-screen": { label: "Outcome screens", layout: "plain" },
   "page-crop": { label: "PDF page crop", layout: "plain" },
   "upload-rejections": { label: "Upload rejection reasons", layout: "plain" },
   "chat-long-paste": { label: "Chat long paste", layout: "plain" },

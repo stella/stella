@@ -104,6 +104,8 @@
     "pickFailed": "A fájlválasztót nem sikerült megnyitni. Próbálja újra.",
     "sendFileRefused": "Egy fájlt nem sikerült elküldeni, ezért az üzenet nem lett elküldve. Távolítsa el a fájlt, és próbálja újra.",
     "sendFileNotAnonymizable": "Ez a beszélgetés anonimizált, és a stella nem tudta anonimizálni az egyik fájlt, ezért semmi sem lett elküldve. Távolítsa el a fájlt, és próbálja újra.",
+    "sendLocalRunNotAnonymizable": "Ez a beszélgetés anonimizált, a számítógépén futó kódoló ügynök pedig a dokumentumait eredeti formájukban olvassa, ezért semmi sem lett elküldve neki.",
+    "sendWithoutAnonymization": "Küldés anonimizálás nélkül",
     "pickTitle": "Válasszon beszélgetést",
     "pickDescription": "Válasszon szálat a listából, vagy kezdjen újat a + gombbal.",
     "runBanner": {
@@ -249,6 +251,7 @@
       },
       "sessionNotResumed": "A számítógépén futó kódoló ügynök nem tudta onnan folytatni, ahol abbahagyta, ezért a csevegés üzeneteiből dolgozott tovább.",
       "steered": "Az ügynök munkája közben elküldve",
+      "ranOnModel": "Ezen a modellen futott: {model}",
       "desktopSettingsSteps": "A számítógépén a stella desktopban nyissa meg a Beállítások › Általános › AI-előfizetések részt.",
       "errorLimitResetsAt": "A számítógépén futó kódoló ügynök elérte a használati korlátját. {time} után újra megpróbálhatja.",
       "limitReminderNotify": "Értesítsen, amikor visszaáll",

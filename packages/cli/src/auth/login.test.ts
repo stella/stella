@@ -658,8 +658,10 @@ describe("login orchestration", () => {
         const page = await browserPages.at(0);
         expect(page?.status).toBe(200);
         expect(await outcomeHeading(page, "success")).toBe(
-          "Signed in to stella",
+          "stella CLI is signed in",
         );
+        // The account the ID token named, listed once the credential is saved.
+        expect(page?.html).toContain("<bdi>person@example.com</bdi>");
         expect(browserAnsweredBeforeExchange).toBe(false);
         expect(await credentialsWhenShown).toBe(1);
       } finally {
@@ -689,9 +691,9 @@ describe("login orchestration", () => {
         expect(page?.status).toBe(500);
         expect(await outcomeHeading(page, "error")).toBe("Sign-in failed");
         expect(page?.html).toContain(
-          "stella CLI could not finish signing in. Return to your terminal for details, then run stella auth login to try again.",
+          "stella CLI could not finish signing in; your terminal shows why. To try again, run:",
         );
-        expect(page?.html).not.toContain("Signed in to stella");
+        expect(page?.html).not.toContain("stella CLI is signed in");
       } finally {
         provider.close();
       }
@@ -717,9 +719,9 @@ describe("login orchestration", () => {
         expect(page?.status).toBe(500);
         expect(await outcomeHeading(page, "error")).toBe("Sign-in not saved");
         expect(page?.html).toContain(
-          "stella CLI could not save your sign-in on this computer.",
+          "stella CLI could not save your sign-in on this computer;",
         );
-        expect(page?.html).not.toContain("Signed in to stella");
+        expect(page?.html).not.toContain("stella CLI is signed in");
       } finally {
         provider.close();
       }

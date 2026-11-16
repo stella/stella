@@ -104,6 +104,8 @@
     "pickFailed": "Failivalijat ei õnnestunud avada. Proovi uuesti.",
     "sendFileRefused": "Üht faili ei saanud saata, seega sõnumit ei saadetud. Eemalda fail ja proovi uuesti.",
     "sendFileNotAnonymizable": "See vestlus on anonüümitud ja stella ei saanud üht faili anonüümida, seega midagi ei saadetud. Eemalda fail ja proovi uuesti.",
+    "sendLocalRunNotAnonymizable": "See vestlus on anonüümitud ja sinu arvutis töötav programmeerimisagent loeb sinu dokumente sellisena, nagu need on, seega talle midagi ei saadetud.",
+    "sendWithoutAnonymization": "Saada anonüümimiseta",
     "pickTitle": "Vali vestlus",
     "pickDescription": "Vali loendist lõim või alusta uut nupuga +.",
     "runBanner": {
@@ -249,6 +251,7 @@
       },
       "sessionNotResumed": "Sinu arvutis töötav programmeerimisagent ei saanud pooleli jäänud kohast edasi minna, seega jätkas ta selle vestluse sõnumite põhjal.",
       "steered": "Saadetud agendi töö ajal",
+      "ranOnModel": "Töötas mudelil {model}",
       "desktopSettingsSteps": "Ava oma arvutis stella desktopis Seaded › Üldine › AI-tellimused.",
       "errorLimitResetsAt": "Sinu arvutis töötav programmeerimisagent jõudis kasutuslimiidini. Uuesti saad proovida alates {time}.",
       "limitReminderNotify": "Teavita mind, kui limiit lähtestub",

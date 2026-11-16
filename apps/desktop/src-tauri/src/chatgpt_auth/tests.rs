@@ -368,6 +368,7 @@ impl Harness {
         open_browser: Box::new(move |url| open.send(url.to_owned()).is_ok()),
         changed: Box::new(move || notify.notify_one()),
         clear_harness_sign_in: Box::new(move || *cleared.lock().unwrap() += 1),
+        color_scheme: Box::new(|| crate::outcome_page::OutcomeScheme::System),
       },
     );
     (auth, Browser { opened })
@@ -920,6 +921,7 @@ async fn discovery_naming_another_origin_is_not_trusted() {
       open_browser: Box::new(|_| panic!("no browser for an untrusted issuer")),
       changed: Box::new(move || notify.notify_one()),
       clear_harness_sign_in: Box::new(|| {}),
+      color_scheme: Box::new(|| crate::outcome_page::OutcomeScheme::System),
     },
   );
   auth.start(SignInIntent::SameAccount);

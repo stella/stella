@@ -104,6 +104,8 @@
     "pickFailed": "Não foi possível abrir o seletor de arquivos. Tente novamente.",
     "sendFileRefused": "Não foi possível enviar um arquivo, então a mensagem não foi enviada. Remova o arquivo e tente novamente.",
     "sendFileNotAnonymizable": "Esta conversa é anonimizada e a stella não conseguiu anonimizar um dos arquivos, então nada foi enviado. Remova o arquivo e tente novamente.",
+    "sendLocalRunNotAnonymizable": "Esta conversa é anonimizada e o agente de programação do seu computador lê seus documentos como estão, então nada foi enviado a ele.",
+    "sendWithoutAnonymization": "Enviar sem anonimização",
     "pickTitle": "Escolha uma conversa",
     "pickDescription": "Escolha uma conversa da lista ou comece uma nova com +.",
     "runBanner": {
@@ -249,6 +251,7 @@
       },
       "sessionNotResumed": "O agente de programação do seu computador não conseguiu retomar de onde parou, então continuou a partir das mensagens deste chat.",
       "steered": "Enviado enquanto o agente trabalhava",
+      "ranOnModel": "Executado com {model}",
       "desktopSettingsSteps": "No stella desktop do seu computador, abra Configurações › Geral › Assinaturas de IA.",
       "errorLimitResetsAt": "O agente de programação do seu computador atingiu o limite de uso. Você poderá tentar novamente a partir de {time}.",
       "limitReminderNotify": "Avise-me quando for renovado",

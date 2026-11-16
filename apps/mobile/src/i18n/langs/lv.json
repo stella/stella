@@ -104,6 +104,8 @@
     "pickFailed": "Neizdevās atvērt failu atlasītāju. Mēģiniet vēlreiz.",
     "sendFileRefused": "Neizdevās nosūtīt failu, tāpēc ziņa netika nosūtīta. Noņemiet failu un mēģiniet vēlreiz.",
     "sendFileNotAnonymizable": "Šī saruna ir anonimizēta, un stella nevarēja anonimizēt vienu no failiem, tāpēc nekas netika nosūtīts. Noņemiet failu un mēģiniet vēlreiz.",
+    "sendLocalRunNotAnonymizable": "Šī saruna ir anonimizēta, un programmēšanas aģents jūsu datorā lasa jūsu dokumentus tādus, kādi tie ir, tāpēc tam nekas netika nosūtīts.",
+    "sendWithoutAnonymization": "Sūtīt bez anonimizācijas",
     "pickTitle": "Izvēlieties sarunu",
     "pickDescription": "Izvēlieties pavedienu no saraksta vai sāciet jaunu ar +.",
     "runBanner": {
@@ -249,6 +251,7 @@
       },
       "sessionNotResumed": "Programmēšanas aģents jūsu datorā nevarēja atsākt no vietas, kur apstājās, tāpēc tas turpināja darbu, balstoties uz šīs tērzēšanas ziņām.",
       "steered": "Nosūtīts aģenta darba laikā",
+      "ranOnModel": "Izpildīts ar modeli {model}",
       "desktopSettingsSteps": "Savā datorā lietotnē stella desktop atveriet sadaļu Iestatījumi › Vispārīgi › AI abonementi.",
       "errorLimitResetsAt": "Programmēšanas aģents jūsu datorā ir sasniedzis lietojuma limitu. Vēlreiz mēģināt varēsiet pēc {time}.",
       "limitReminderNotify": "Paziņot, kad tiks atjaunots",

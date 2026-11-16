@@ -835,9 +835,11 @@
       "storage": "A kapcsolatot nem sikerült beolvasni vagy menteni ezen a számítógépen."
     },
     "callbackConnectedTitle": "A ChatGPT csatlakoztatva",
-    "callbackConnectedBody": "Térjen vissza a stellába. Az MI-kérések mostantól a ChatGPT-csomagját használják.",
+    "callbackConnectedBody": "A stella MI-kérései mostantól a ChatGPT-csomagját használják.",
     "callbackNotConnectedTitle": "A ChatGPT nem csatlakozott",
-    "callbackNotConnectedBody": "Térjen vissza a stellába, nézze meg, mi történt, és próbálja újra.",
+    "callbackNotConnectedBody": "Az okot a stella alkalmazás mutatja. Az újrapróbálkozáshoz nyissa meg az {section} › {group} részt, és kattintson a „{button}” gombra.",
+    "callbackAccount": "Fiók",
+    "callbackPlan": "Csomag",
     "callbackCloseTab": "Ezt a lapot bezárhatja.",
     "claudeCode": {
       "title": "Claude Code",

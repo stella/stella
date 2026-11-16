@@ -79,6 +79,13 @@ const visualLoaders = {
       return { default: OAuthConsentPlayground };
     },
   },
+  "outcome-screen": {
+    load: async () => {
+      const { OutcomeScreenPlayground } =
+        await import("./-components/outcome-screen-playground");
+      return { default: OutcomeScreenPlayground };
+    },
+  },
   "upload-rejections": {
     load: async () => {
       const { UploadRejectionsPlayground } =
