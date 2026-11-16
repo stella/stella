@@ -119,8 +119,9 @@ export const backfillEntrypoints = {
     return withRuntime({
       name: `legislation-corpus-storage:${after ?? "start"}`,
       tableName: "legislation_documents",
-      // Documents, each paying three object PUTs outside the transaction.
-      initialSize: integer("page", 50),
+      // Documents written at once, each paying three object PUTs outside
+      // the transaction.
+      initialSize: integer("page", 4),
       limit: integer("limit", 100_000),
       apply: readApplyFlag(args),
       after,

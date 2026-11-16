@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { and, asc, eq, gt, isNull } from "drizzle-orm";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
@@ -74,6 +75,68 @@ export type LegislationCorpusStorageOutcome =
   | { type: "skipped" }
   | { type: "failed"; error: unknown };
 
+/** One document's PUTs and recording; an error thrown here fails the row. */
+const storeAndRecord = async ({
+  db,
+  row,
+  write,
+}: {
+  db: ScopedDb;
+  row: LegislationCorpusStorageRow;
+  write: typeof writeCorpusDocument;
+}): Promise<LegislationCorpusStorageOutcome> => {
+  // The page can go stale while earlier rows in it write: refuse the PUTs
+  // when the recording below would already refuse the row.
+  const fresh = await db(
+    async (tx) =>
+      await tx
+        .select({ id: legislationDocuments.id })
+        .from(legislationDocuments)
+        .where(
+          and(
+            eq(legislationDocuments.id, row.id),
+            isNull(legislationDocuments.textS3Key),
+            timestampMatchesCasToken(
+              legislationDocuments.updatedAt,
+              row.updatedAtToken,
+            ),
+          ),
+        )
+        .limit(1),
+  );
+  if (fresh.length === 0) {
+    return { type: "skipped" };
+  }
+  const written = await write({
+    documentId: row.id,
+    jurisdiction: row.country,
+    text: row.fulltext,
+    sections: row.sections,
+    ast: row.documentAst,
+    // The page admits only rows with no recorded corpus write.
+    stored: null,
+  });
+  if (written.isErr()) {
+    return { type: "failed", error: written.error };
+  }
+  const outcome = written.value;
+  if (outcome.type === "skipped-empty") {
+    // Nothing readable to store; null pointers already represent it.
+    return { type: "skipped" };
+  }
+  // A refused compare-and-set is not success: the objects exist but the
+  // row still points nowhere, and only the recording makes the work durable.
+  const recorded = await db(
+    async (tx) =>
+      await recordFirstLegislationCorpusWriteTx(tx, {
+        id: row.id,
+        written: outcome.written,
+        updatedAtToken: row.updatedAtToken,
+      }),
+  );
+  return recorded ? { type: "written" } : { type: "skipped" };
+};
+
 /**
  * Store one document's payload and record it. `write` is the corpus object
  * writer, replaceable only so a database test needs no object store.
@@ -87,58 +150,10 @@ export const backfillLegislationCorpusStorageRow = async ({
   row: LegislationCorpusStorageRow;
   write?: typeof writeCorpusDocument;
 }): Promise<LegislationCorpusStorageOutcome> => {
-  try {
-    // The page can go stale while earlier rows in it write: refuse the PUTs
-    // when the recording below would already refuse the row.
-    const fresh = await db(
-      async (tx) =>
-        await tx
-          .select({ id: legislationDocuments.id })
-          .from(legislationDocuments)
-          .where(
-            and(
-              eq(legislationDocuments.id, row.id),
-              isNull(legislationDocuments.textS3Key),
-              timestampMatchesCasToken(
-                legislationDocuments.updatedAt,
-                row.updatedAtToken,
-              ),
-            ),
-          )
-          .limit(1),
-    );
-    if (fresh.length === 0) {
-      return { type: "skipped" };
-    }
-    const written = await write({
-      documentId: row.id,
-      jurisdiction: row.country,
-      text: row.fulltext,
-      sections: row.sections,
-      ast: row.documentAst,
-      // The page admits only rows with no recorded corpus write.
-      stored: null,
-    });
-    if (written.isErr()) {
-      return { type: "failed", error: written.error };
-    }
-    const outcome = written.value;
-    if (outcome.type === "skipped-empty") {
-      // Nothing readable to store; null pointers already represent it.
-      return { type: "skipped" };
-    }
-    // A refused compare-and-set is not success: the objects exist but the
-    // row still points nowhere, and only the recording makes the work durable.
-    const recorded = await db(
-      async (tx) =>
-        await recordFirstLegislationCorpusWriteTx(tx, {
-          id: row.id,
-          written: outcome.written,
-          updatedAtToken: row.updatedAtToken,
-        }),
-    );
-    return recorded ? { type: "written" } : { type: "skipped" };
-  } catch (error) {
-    return { type: "failed", error };
-  }
+  const attempted = await Result.tryPromise(
+    async () => await storeAndRecord({ db, row, write }),
+  );
+  return Result.isError(attempted)
+    ? { type: "failed", error: attempted.error }
+    : attempted.value;
 };

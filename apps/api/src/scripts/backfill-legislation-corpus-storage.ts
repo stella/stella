@@ -20,7 +20,6 @@
  */
 import { panic } from "better-result";
 
-import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import {
   BackfillHeldError,
   runBackfillPass,
@@ -31,7 +30,6 @@ import { Temporal } from "@stll/time";
 
 import { createScriptBackfillHealthReader } from "@/api/db/backfill-runtime";
 import { loadGateHealthConfig } from "@/api/env-online-index";
-import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   enterCaseLawMaintenanceLane,
@@ -42,24 +40,27 @@ import {
   type LegislationCorpusStorageOutcome,
   readLegislationCorpusStoragePage,
 } from "@/api/lib/legal-search/legislation-corpus-storage-backfill";
-import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { refreshCorpusS3, refreshS3 } from "@/api/lib/s3";
 import { brandPersistedLegislationDocumentId } from "@/api/lib/safe-id-boundaries";
 import { backfillEntrypoints } from "@/api/scripts/backfill-entrypoint";
 import { rejectUnknownFlags } from "@/api/scripts/repair-flags";
-
-/** Documents written at once: each pays three object PUTs. */
-const CONCURRENCY = 4;
 
 const USAGE = `Usage: bun run src/scripts/backfill-legislation-corpus-storage.ts [options]
 
   --apply        Write the objects and record them. Omitted, the run only reports.
   --dry-run      Report only, the default; contradicts --apply.
   --limit <n>    Documents this run examines (default 100000).
-  --page <n>     Documents one page reads (default 50).
+  --page <n>     Documents one page reads and writes at once (default 4).
   --after <id>   Resume after this document id, as a previous run printed.`;
 
 rejectUnknownFlags({ known: ["limit", "page", "after"], usage: USAGE });
+
+const documentFailed = failureSink({
+  event: "scripts.legislation_corpus_storage_failed",
+  expected: [],
+});
 
 await runScriptWithErrorOutput(async () => {
   const plan = backfillEntrypoints["legislation-corpus-storage"]({
@@ -126,23 +127,21 @@ await runScriptWithErrorOutput(async () => {
       if (!apply) {
         return { done, sleepMs: 0, value: { rows, outcomes } };
       }
-      for (const batch of chunkItems(rows, CONCURRENCY)) {
-        // db-await-in-loop: bounded page, CONCURRENCY documents at a time
-        outcomes.push(
-          ...(await Promise.all(
-            batch.map(
-              async (row) =>
-                [
-                  row.id,
-                  await backfillLegislationCorpusStorageRow({
-                    db: ingestionDb,
-                    row,
-                  }),
-                ] as const,
-            ),
-          )),
-        );
-      }
+      // The page is small: its documents are written at once.
+      outcomes.push(
+        ...(await Promise.all(
+          rows.map(
+            async (row) =>
+              [
+                row.id,
+                await backfillLegislationCorpusStorageRow({
+                  db: ingestionDb,
+                  row,
+                }),
+              ] as const,
+          ),
+        )),
+      );
       return { done, sleepMs: 0, value: { rows, outcomes } };
     },
     onBatch: ({ value: { rows, outcomes } }) => {
@@ -163,13 +162,10 @@ await runScriptWithErrorOutput(async () => {
             break;
           case "failed":
             failed += 1;
-            captureError(
-              outcome.error,
-              handlerErrorContext("scripts.backfillLegislationCorpusStorage", {
-                documentId,
-                step: "legislationCorpusStorageBackfill",
-              }),
-            );
+            observeFailure(outcome.error, {
+              sink: documentFailed,
+              ctx: { documentId },
+            });
             break;
           default:
             outcome satisfies never;
