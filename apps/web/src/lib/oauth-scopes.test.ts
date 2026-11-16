@@ -203,21 +203,22 @@ describe("OAuth scope display groups", () => {
   });
 
   test("every destructive capability scope triggers the single deletion warning", async () => {
-    // The API derives the catalog in memory and embeds it in this generated
-    // module; npm shards exist only in the packed CLI.
-    const generatedCatalog: unknown = await import(
+    // The API derives the catalog in memory and embeds it at generation;
+    // npm shards exist only in the packed CLI. Its test helper is the one
+    // reader of that embedded catalog.
+    const helper: unknown = await import(
       path.resolve(
         import.meta.dir,
-        "../../../api/src/mcp/generated/capability-catalog.ts",
+        "../../../api/src/tests/helpers/repository-capability-catalog.ts",
       )
     );
-    const { default: catalog } = v.parse(
+    const { repositoryCapabilityCatalog: catalog } = v.parse(
       v.object({
-        default: v.array(
+        repositoryCapabilityCatalog: v.array(
           v.object({ scope: v.string(), destructive: v.boolean() }),
         ),
       }),
-      generatedCatalog,
+      helper,
     );
     const destructiveScopes = new Set(
       catalog
