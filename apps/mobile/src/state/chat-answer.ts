@@ -7,6 +7,8 @@
 // A coding agent's subagent is a row of its own holding the steps it took
 // (`@stll/api-contract/chat-local-run-steps`, which the web reads too).
 
+import * as v from "valibot";
+
 import {
   isLocalRunInterruptedOutput,
   type LocalRunStepCall,
@@ -22,6 +24,10 @@ import {
   localRunToolView,
 } from "@stll/api-contract/chat-local-run-steps";
 import { chatLocalRunParentCallId } from "@stll/api-contract/chat-local-run-tool";
+import {
+  CHAT_LOCAL_RUN_STEER_TOOL,
+  chatLocalRunSteerInputSchema,
+} from "@stll/api-contract/chat-run-target";
 import {
   chatToolLabel,
   countProcessWork,
@@ -91,6 +97,15 @@ export type AnswerBlock =
       readonly steps: readonly AnswerStep[];
       /** What the run got done, by kind, for its settled summary. */
       readonly work: ReadonlyMap<ProcessSummaryKind, number>;
+    }
+  | {
+      /**
+       * A message the person sent while a coding agent worked, which the
+       * agent took into its turn: their own words, where it took them.
+       */
+      readonly type: "steered";
+      readonly key: string;
+      readonly text: string;
     }
   | {
       /** A subagent a coding agent started, holding the steps it took. */
@@ -203,7 +218,21 @@ type Stretch =
       readonly type: "subagent";
       readonly id: string;
       readonly part: AnswerPart;
-    };
+    }
+  | { readonly type: "steered"; readonly key: string; readonly text: string };
+
+/**
+ * The words of a message the person steered a running turn with, stored as
+ * the API's own `user_message` call; `null` for any other part, and for one
+ * whose input is not readable yet (it streams in before the call ends).
+ */
+const steeredText = (part: AnswerPart): string | null => {
+  if (part.type !== "tool-call" || part.name !== CHAT_LOCAL_RUN_STEER_TOOL) {
+    return null;
+  }
+  const input = v.safeParse(chatLocalRunSteerInputSchema, part.input);
+  return input.success ? input.output.text : null;
+};
 
 /** A tool call the grouping can name: one with an id. */
 type IdentifiedCall = { readonly id: string; readonly part: AnswerPart };
@@ -303,6 +332,17 @@ export const answerBlocks = (parts: readonly AnswerPart[]): AnswerBlock[] => {
     // The run's parts between its subagents, each stretch a run of its own.
     const stretches: Stretch[] = [];
     for (const [offset, part] of group.items.entries()) {
+      // A steered message splits the run: the steps before it, its words,
+      // then the steps after.
+      const steered = steeredText(part);
+      if (steered !== null) {
+        stretches.push({
+          type: "steered",
+          key: `steered:${String(group.startIndex + offset)}`,
+          text: steered,
+        });
+        continue;
+      }
       const id = typeof part.id === "string" && isStep(part) ? part.id : null;
       if (id !== null && groups.rowIn.has(id)) {
         continue;
@@ -321,6 +361,10 @@ export const answerBlocks = (parts: readonly AnswerPart[]): AnswerBlock[] => {
     for (const stretch of stretches) {
       if (stretch.type === "subagent") {
         blocks.push(subagentBlock(stretch.id, stretch.part));
+        continue;
+      }
+      if (stretch.type === "steered") {
+        blocks.push(stretch);
         continue;
       }
       const steps = stretch.items.filter(isStep).map(toStep);

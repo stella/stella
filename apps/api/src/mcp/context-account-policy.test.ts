@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { createTestState } from "@stll/test-state";
+
 import type { rootDb } from "@/api/db/root";
 import { env } from "@/api/env";
 import { checkDemoAccountAccess } from "@/api/lib/auth/demo-account-policy";
@@ -13,6 +15,8 @@ import { resolveMcpSessionContext } from "@/api/mcp/context";
 import { McpOrganizationAccessError } from "@/api/mcp/errors";
 import { PLAIN_MEMBER_FACTS } from "@/api/tests/helpers/member-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const admissionQuery = {
   from: () => admissionQuery,
@@ -92,6 +96,7 @@ describe("MCP account authorization", () => {
                   toSafeId<"organization">(organizationId),
                 );
                 return {
+                  billingAccess: false,
                   memberId: "member_one",
                   email: "limited@example.test",
                   role: "owner",
@@ -140,6 +145,7 @@ describe("MCP account authorization", () => {
       {
         request: new Request("https://example.test/mcp"),
         resolveAuthorization: async () => ({
+          billingAccess: false,
           memberId: "member_one",
           email: "standard@example.test",
           role: "owner",
@@ -175,8 +181,8 @@ describe("MCP account authorization", () => {
       reviewEmail: env.APP_REVIEW_ACCOUNT_EMAIL,
       reviewOrganization: env.APP_REVIEW_ORGANIZATION_ID,
     };
-    env.APP_REVIEW_ACCOUNT_EMAIL = "review@example.test";
-    env.APP_REVIEW_ORGANIZATION_ID = "org_review";
+    testState.setConfig("APP_REVIEW_ACCOUNT_EMAIL", "review@example.test");
+    testState.setConfig("APP_REVIEW_ORGANIZATION_ID", "org_review");
     try {
       for (const credentialCase of credentialCases) {
         const outcomes: Record<string, string> = {};
@@ -219,6 +225,7 @@ describe("MCP account authorization", () => {
                 {
                   request: new Request("https://example.test/mcp"),
                   resolveAuthorization: async () => ({
+                    billingAccess: false,
                     memberId: "member_one",
                     email: "Review@Example.Test",
                     role: "owner",
@@ -241,8 +248,11 @@ describe("MCP account authorization", () => {
         });
       }
     } finally {
-      env.APP_REVIEW_ACCOUNT_EMAIL = previous.reviewEmail;
-      env.APP_REVIEW_ORGANIZATION_ID = previous.reviewOrganization;
+      testState.setConfig("APP_REVIEW_ACCOUNT_EMAIL", previous.reviewEmail);
+      testState.setConfig(
+        "APP_REVIEW_ORGANIZATION_ID",
+        previous.reviewOrganization,
+      );
     }
   });
 
@@ -253,10 +263,10 @@ describe("MCP account authorization", () => {
       reviewEmail: env.APP_REVIEW_ACCOUNT_EMAIL,
       reviewOrganization: env.APP_REVIEW_ORGANIZATION_ID,
     };
-    env.DEMO_ACCOUNT_EMAIL = "limited@example.test";
-    env.DEMO_ACCOUNT_ORGANIZATION_ID = "org_limited";
-    env.APP_REVIEW_ACCOUNT_EMAIL = "review@example.test";
-    env.APP_REVIEW_ORGANIZATION_ID = "org_review";
+    testState.setConfig("DEMO_ACCOUNT_EMAIL", "limited@example.test");
+    testState.setConfig("DEMO_ACCOUNT_ORGANIZATION_ID", "org_limited");
+    testState.setConfig("APP_REVIEW_ACCOUNT_EMAIL", "review@example.test");
+    testState.setConfig("APP_REVIEW_ORGANIZATION_ID", "org_review");
     try {
       const outcomes = new Map<string, unknown>();
       for (const email of ["review@example.test", "limited@example.test"]) {
@@ -274,6 +284,7 @@ describe("MCP account authorization", () => {
               {
                 request: new Request("https://example.test/mcp"),
                 resolveAuthorization: async () => ({
+                  billingAccess: false,
                   memberId: "member_one",
                   email,
                   role: "owner",
@@ -297,10 +308,16 @@ describe("MCP account authorization", () => {
           "This operation is unavailable for this account.",
       });
     } finally {
-      env.DEMO_ACCOUNT_EMAIL = previous.demoEmail;
-      env.DEMO_ACCOUNT_ORGANIZATION_ID = previous.demoOrganization;
-      env.APP_REVIEW_ACCOUNT_EMAIL = previous.reviewEmail;
-      env.APP_REVIEW_ORGANIZATION_ID = previous.reviewOrganization;
+      testState.setConfig("DEMO_ACCOUNT_EMAIL", previous.demoEmail);
+      testState.setConfig(
+        "DEMO_ACCOUNT_ORGANIZATION_ID",
+        previous.demoOrganization,
+      );
+      testState.setConfig("APP_REVIEW_ACCOUNT_EMAIL", previous.reviewEmail);
+      testState.setConfig(
+        "APP_REVIEW_ORGANIZATION_ID",
+        previous.reviewOrganization,
+      );
     }
   });
 

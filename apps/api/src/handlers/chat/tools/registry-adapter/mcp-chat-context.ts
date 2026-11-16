@@ -7,6 +7,7 @@ import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import { SOFT_LAW_READ_SURFACE } from "@/api/lib/legal-search/soft-law-serving";
 import {
   credentialPermissionsForContext,
+  memberBillingAccess,
   roleForDisplay,
 } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
@@ -123,6 +124,7 @@ export const buildMcpContextFromChat = (
     // path (the only reader of grantedScopes) is never reached from chat.
     grantedScopes: [],
     memberRole: roleForDisplay(deps.memberRole),
+    billingAccess: memberBillingAccess(deps.memberRole),
     credentialPermissions: credentialPermissionsForContext(deps.memberRole),
     organizationId: deps.organizationId,
     pinServerValidatedWorkspaceId,

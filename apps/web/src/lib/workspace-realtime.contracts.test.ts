@@ -38,6 +38,7 @@ import {
 import {
   agentSkillsQueryRoot,
   catalogueQueryRoot,
+  legalListsQueryRoot,
   mcpQueryRoot,
 } from "@/lib/resource-query-roots.logic";
 import type { ViewLayout } from "@/lib/types";
@@ -60,6 +61,9 @@ import {
   invoicesInfiniteOptions,
   invoicesKeys,
 } from "@/lib/workspaces/queries/invoices";
+import { legalListKeys } from "@/lib/workspaces/queries/legal-lists";
+import { myWorkKeys } from "@/lib/workspaces/queries/my-work";
+import { taskKeys } from "@/lib/workspaces/queries/tasks";
 import {
   timeEntriesKeys,
   timeEntriesOptions,
@@ -130,6 +134,26 @@ const previousInvalidationFor = (factory: string): PreviousInvalidation => {
       const target = timeEntriesKeys.all(WORKSPACE_ID);
       const { queryKey, meta } = timeEntriesOptions(WORKSPACE_ID, USER_ID);
       return { target, readers: [{ queryKey, ...(meta ? { meta } : {}) }] };
+    }
+    case "taskKeys.all": {
+      const target = taskKeys.all(WORKSPACE_ID);
+      return { target, readers: [{ queryKey: target }] };
+    }
+    case "myWorkKeys.all": {
+      const target = myWorkKeys.all;
+      return { target, readers: [{ queryKey: target }] };
+    }
+    case "workspacesKeys.overview": {
+      const target = workspacesKeys.overview(WORKSPACE_ID);
+      return { target, readers: [{ queryKey: target }] };
+    }
+    case "legalListsQueryRoot": {
+      const target = legalListsQueryRoot(WORKSPACE_ID);
+      return { target, readers: [{ queryKey: target }] };
+    }
+    case "legalListKeys.items": {
+      const target = legalListKeys.items(WORKSPACE_ID, "list-coverage");
+      return { target, readers: [{ queryKey: target }] };
     }
     case "entitiesKeys.all": {
       const target = entitiesKeys.all(WORKSPACE_ID);

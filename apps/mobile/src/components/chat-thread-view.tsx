@@ -10,6 +10,16 @@ import {
 } from "react-native";
 import { useTranslations } from "use-intl";
 
+import {
+  CHAT_RUN_TARGET_KIND,
+  type ChatRunTarget,
+} from "@stll/api-contract/chat-run-target";
+import {
+  CHAT_MEMBER_SEND_ACTION,
+  CHAT_SEND_INTENT,
+  CHAT_TURN_STEERING,
+  chatSendIntent,
+} from "@stll/api-contract/chat-send-intent";
 import { StellaMark } from "@stll/ui/stella-mark";
 import { Text } from "@stll/ui/text";
 
@@ -53,6 +63,7 @@ const EMPTY_PAGE: ChatMessagesPage = {
   usedAnonymization: false,
   pendingInput: null,
   retry: null,
+  runTargetKind: CHAT_RUN_TARGET_KIND.cloud,
 };
 
 /**
@@ -197,6 +208,7 @@ const ThreadMessages = ({
   const [cursor, setCursor] = useState(firstPage.olderCursor);
   const [older, setOlder] = useState<PagingState>("idle");
   const [anonymized, setAnonymized] = useState(firstPage.usedAnonymization);
+  const [runTargetKind, setRunTargetKind] = useState(firstPage.runTargetKind);
   const [pending, setPending] = useState(firstPage.pendingInput);
   const [retry, setRetry] = useState(firstPage.retry);
   const [inputNotice, setInputNotice] = useState<InputNotice>();
@@ -214,6 +226,7 @@ const ThreadMessages = ({
       if (Result.isOk(latest)) {
         setEntries((loaded) => prependOlderPage(latest.value.entries, loaded));
         setAnonymized(latest.value.usedAnonymization);
+        setRunTargetKind(latest.value.runTargetKind);
         setPending(latest.value.pendingInput);
         setRetry(latest.value.retry);
         setInputNotice(undefined);
@@ -353,9 +366,11 @@ const ThreadMessages = ({
             busy={turn.busy}
             canStop={turn.canStop}
             onSend={turn.send}
+            onSteer={undefined}
             onStop={turn.stop}
             sendError={turn.sendError}
             shareId={shareId}
+            steerRefusal={undefined}
           />
         </View>
       </View>
@@ -442,14 +457,43 @@ const ThreadMessages = ({
           busy={turn.busy}
           canStop={turn.canStop}
           onSend={turn.send}
+          onSteer={
+            isSteerOfferedOnPhone(turn.busy, runTargetKind)
+              ? turn.steer
+              : undefined
+          }
           onStop={turn.stop}
           sendError={turn.sendError}
           shareId={undefined}
+          steerRefusal={turn.steerRefusal}
         />
       </View>
     </View>
   );
 };
+
+/**
+ * Whether the phone offers to hand a draft to the turn answering now: where
+ * a plain send steers it (`chatSendIntent`). The phone reads no runner list,
+ * so a turn on the member's computer counts as one that takes messages; a
+ * harness that does not is refused by the steer route, and the draft comes
+ * back with the reason.
+ */
+const isSteerOfferedOnPhone = (
+  busy: boolean,
+  runTargetKind: ChatRunTarget["kind"],
+): boolean =>
+  busy &&
+  chatSendIntent(
+    {
+      type: "working",
+      steering:
+        runTargetKind === CHAT_RUN_TARGET_KIND.local
+          ? CHAT_TURN_STEERING.steerable
+          : CHAT_TURN_STEERING.notSteerable,
+    },
+    CHAT_MEMBER_SEND_ACTION.send,
+  ) === CHAT_SEND_INTENT.steer;
 
 /**
  * The turn answering now: the message sent from here, and the answer as it

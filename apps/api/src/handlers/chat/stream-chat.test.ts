@@ -70,7 +70,7 @@ import {
   validateToolCallParts,
 } from "@/api/handlers/chat/chat-schema";
 import { cutShortAssistantMessage } from "@/api/handlers/chat/chat-turn-persistence";
-import { CHAT_TURN_OWNER_LOST_REASON } from "@/api/handlers/chat/chat-turn-run";
+import { CHAT_TURN_OWNER_LOST_REASON } from "@/api/handlers/chat/chat-turn-run-cut";
 import {
   findUnsettledStoredToolCalls,
   settleHistoryForRun,

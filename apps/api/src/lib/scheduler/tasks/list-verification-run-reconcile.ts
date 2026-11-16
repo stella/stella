@@ -10,6 +10,7 @@ import {
   sweepDocumentRuns,
 } from "@/api/lib/queue/document-run-reconcile";
 
+/** Read from exported declarations by the feature-access ownership guard. @public */
 export const featureAccess = {
   type: "required",
   featureId: "list-verification",

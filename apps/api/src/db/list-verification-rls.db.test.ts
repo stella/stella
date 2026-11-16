@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { eq, getColumns, sql } from "drizzle-orm";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { createTestState } from "@stll/test-state";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -40,6 +41,8 @@ import { organizationFeatureGrants } from "@/api/tests/helpers/feature-grants";
 import { matterAccessFunctionStatements } from "@/api/tests/helpers/matter-access-functions";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 
+const testState = createTestState({ file: import.meta.path, config: env });
+
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
@@ -69,7 +72,7 @@ describe.skipIf(!enabled)("list verification row security", () => {
       );
 
       const previousDeployment = env.FEATURE_LEGAL_LISTS;
-      env.FEATURE_LEGAL_LISTS = true;
+      testState.setConfig("FEATURE_LEGAL_LISTS", true);
       const grants = organizationFeatureGrants(organizationId, [
         LIST_VERIFICATION_FEATURE_ID,
       ]);
@@ -503,7 +506,7 @@ describe.skipIf(!enabled)("list verification row security", () => {
         ).toHaveLength(1);
         expect(handedOff).toEqual([runId]);
       } finally {
-        env.FEATURE_LEGAL_LISTS = previousDeployment;
+        testState.setConfig("FEATURE_LEGAL_LISTS", previousDeployment);
         await client.unsafe("RESET ROLE");
         await client.unsafe("RESET search_path");
         await client.unsafe(`DROP SCHEMA ${schema} CASCADE`);

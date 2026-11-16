@@ -23,8 +23,7 @@ import {
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
 
-export const FILE_COMPARISON_APP_RESOURCE_URI =
-  FILE_COMPARISON_TRANSPORT.resourceUri;
+const FILE_COMPARISON_APP_RESOURCE_URI = FILE_COMPARISON_TRANSPORT.resourceUri;
 
 const OPEN_FILE_COMPARISON_INPUT_SCHEMA = nullAsAbsent(v.strictObject({}));
 

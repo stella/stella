@@ -68,6 +68,9 @@
   "connectStella": {
     "message": "اتصال stella"
   },
+  "openStella": {
+    "message": "فتح stella"
+  },
   "adoptTab": {
     "message": "استخدام علامة التبويب هذه مع stella"
   },

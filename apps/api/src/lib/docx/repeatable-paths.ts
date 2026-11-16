@@ -132,13 +132,18 @@ export const writeRowSubPath = (
   value: unknown,
 ): void => {
   if (Object.hasOwn(row, subPath)) {
-    row[subPath] = value;
+    Object.defineProperty(row, subPath, {
+      value,
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
     return;
   }
   const segments = subPath.split(".");
   let current: Record<string, unknown> = row;
   for (const segment of segments.slice(0, -1)) {
-    const next = current[segment];
+    const next = Object.hasOwn(current, segment) ? current[segment] : undefined;
     if (!isRecord(next)) {
       return;
     }
@@ -146,6 +151,11 @@ export const writeRowSubPath = (
   }
   const leaf = segments.at(-1);
   if (leaf !== undefined) {
-    current[leaf] = value;
+    Object.defineProperty(current, leaf, {
+      value,
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
   }
 };

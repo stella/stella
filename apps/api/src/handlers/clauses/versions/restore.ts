@@ -253,13 +253,13 @@ const restoreClauseVersion = createSafeRootHandler(
     }
 
     // Best-effort re-index: the restored body changes searchable text.
-    const searchVectorResult = await updateSearchVector(
+    const searchVectorResult = await updateSearchVector({
       safeDb,
       clauseId,
-      clause.title,
-      clause.description,
-      restoredBody,
-    );
+      title: clause.title,
+      description: clause.description,
+      body: restoredBody,
+    });
     if (Result.isError(searchVectorResult)) {
       captureError(
         searchVectorResult.error,

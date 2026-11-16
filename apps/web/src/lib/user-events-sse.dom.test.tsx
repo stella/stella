@@ -2,6 +2,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import {
+  chatQueueChangedRealtimeEvent,
   chatRunsChangedRealtimeEvent,
   chatThreadsChangedRealtimeEvent,
   newNotificationRealtimeEvent,
@@ -47,6 +48,7 @@ const { act, cleanup, renderHook } = await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { activeChatRunsOptions } = await import("@/features/chat/active-runs");
+const { chatKeys } = await import("@/features/chat/chat-query-contract");
 const { groupedChatThreadsOptions } = await import("@/features/chat/queries");
 const { contactsKeys } = await import("@/lib/contacts/queries");
 const { notificationsOptions } = await import("@/lib/notification-queries");
@@ -79,8 +81,11 @@ const mount = () => {
     pinState: "pinned",
     userId: USER,
   }).queryKey;
+  // One open chat's queue.
+  const chatQueue = chatKeys.queue(ORGANIZATION, USER, "thread-one");
   for (const key of [
     activeRuns,
+    chatQueue,
     chatThreads,
     contactsList,
     otherFirmContacts,
@@ -106,6 +111,7 @@ const mount = () => {
     queryClient.getQueryState(key)?.isInvalidated === true;
   return {
     activeRuns,
+    chatQueue,
     chatThreads,
     contactsList,
     isStale,
@@ -143,7 +149,7 @@ test("a notification event refreshes the notifications", async () => {
   expect(view.isStale(view.contactsList)).toBe(false);
 });
 
-test("a chat run change refreshes the active runs and the chat lists, whose rows turn unread", async () => {
+test("a chat run change refreshes the active runs, the chat lists, whose rows turn unread, and the queues a turn takes from or holds", async () => {
   const view = mount();
   await act(async () => {
     FakeEventSource.opened.at(0)?.push(chatRunsChangedRealtimeEvent());
@@ -151,6 +157,7 @@ test("a chat run change refreshes the active runs and the chat lists, whose rows
 
   expect(view.isStale(view.activeRuns)).toBe(true);
   expect(view.isStale(view.chatThreads)).toBe(true);
+  expect(view.isStale(view.chatQueue)).toBe(true);
   expect(view.isStale(view.notifications)).toBe(false);
   expect(view.isStale(view.contactsList)).toBe(false);
 });
@@ -165,6 +172,18 @@ test("a chat read or pin change refreshes the chat lists only", async () => {
   expect(view.isStale(view.activeRuns)).toBe(false);
   expect(view.isStale(view.notifications)).toBe(false);
   expect(view.isStale(view.contactsList)).toBe(false);
+});
+
+test("a queue change refreshes the open chats' queues only", async () => {
+  const view = mount();
+  await act(async () => {
+    FakeEventSource.opened.at(0)?.push(chatQueueChangedRealtimeEvent());
+  });
+
+  expect(view.isStale(view.chatQueue)).toBe(true);
+  expect(view.isStale(view.activeRuns)).toBe(false);
+  expect(view.isStale(view.chatThreads)).toBe(false);
+  expect(view.isStale(view.notifications)).toBe(false);
 });
 
 test("the first open re-reads nothing: the queries were just fetched", async () => {
@@ -189,6 +208,7 @@ test("a reopen after a drop re-reads everything the stream keeps fresh", async (
 
   expect(view.isStale(view.activeRuns)).toBe(true);
   expect(view.isStale(view.chatThreads)).toBe(true);
+  expect(view.isStale(view.chatQueue)).toBe(true);
   expect(view.isStale(view.notifications)).toBe(true);
   expect(view.isStale(view.contactsList)).toBe(true);
   expect(view.isStale(view.otherFirmContacts)).toBe(false);

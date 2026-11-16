@@ -165,6 +165,10 @@ export const ENUM_COLUMN_ROLES = {
     outcome: ATTRIBUTE,
     source: ATTRIBUTE,
   },
+  // Why a queue waits; any reason may replace another.
+  chat_queue_holds: {
+    reason: ATTRIBUTE,
+  },
   chat_secrets: {
     decision: ATTRIBUTE,
   },
@@ -214,6 +218,7 @@ export const ENUM_COLUMN_ROLES = {
   },
   corpus_index_projection_intents: {
     append_delivery: ATTRIBUTE,
+    append_fault: ATTRIBUTE,
     family: ATTRIBUTE,
   },
   corpus_index_projection_revisions: {

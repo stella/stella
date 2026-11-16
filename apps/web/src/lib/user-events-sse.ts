@@ -195,9 +195,15 @@ export const useUserEventRefreshes = ({
     queryKey: chatKeys.backgroundTaskCounts(organizationId, userId),
   });
 
+  // Each open chat reads its own queue again.
+  const chatQueues = (): UserEventRefresh => ({
+    queryKey: chatKeys.queues(organizationId, userId),
+  });
+
   const refreshes = {
     [USER_EVENT_READ.ACTIVE_CHAT_RUNS]: activeChatRuns,
     [USER_EVENT_READ.CHAT_BACKGROUND_TASKS]: backgroundTasks,
+    [USER_EVENT_READ.CHAT_QUEUES]: chatQueues,
     [USER_EVENT_READ.CHAT_THREADS]: chatThreadLists,
     [USER_EVENT_READ.NOTIFICATIONS]: notifications,
   } satisfies Record<UserEventRead, () => UserEventRefresh>;
@@ -210,6 +216,7 @@ export const useUserEventRefreshes = ({
       activeChatRuns(),
       chatThreadLists(),
       backgroundTasks(),
+      chatQueues(),
       ...organizationEventQueryKeys(
         resourceSetUpdatedRealtimeEvent(RESOURCE_TYPE.CONTACT),
         organizationId,

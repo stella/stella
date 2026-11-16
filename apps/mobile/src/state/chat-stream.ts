@@ -9,6 +9,12 @@ import {
   chatLocalRunParentCallId,
   isChatLocalRunToolName,
 } from "@stll/api-contract/chat-local-run-tool";
+import {
+  CHAT_LOCAL_RUN_STEER_EVENT,
+  chatLocalRunSteerEventSchema,
+  type ChatLocalRunSteerOutcome,
+  chatLocalRunSteerOutcomeSchema,
+} from "@stll/api-contract/chat-run-target";
 import { SSE_SILENCE_BOUND_MS } from "@stll/api-contract/sse-heartbeat";
 
 import { SignedOutError } from "@/connection/errors";
@@ -136,6 +142,12 @@ const chatEventSchema = v.union([
   }),
   // `code` names the failure, as the stored answer's outcome does.
   v.object({ type: v.literal("RUN_ERROR"), code: v.optional(v.unknown()) }),
+  // What became of a message steered into the turn (`steerChatTurn`).
+  v.object({
+    type: v.literal("CUSTOM"),
+    name: v.literal(CHAT_LOCAL_RUN_STEER_EVENT),
+    value: chatLocalRunSteerEventSchema,
+  }),
 ]);
 
 export type ChatEvent = v.InferOutput<typeof chatEventSchema>;
@@ -369,6 +381,10 @@ export const applyChatEvent = (
         status: "failed",
         failure: streamedTurnFailure(event.code),
       };
+    }
+    // A steer's outcome is the turn's to act on, not part of the answer.
+    case "CUSTOM": {
+      return answer;
     }
     default: {
       event satisfies never;
@@ -1008,6 +1024,41 @@ export const probeChatTurn = async ({
       }),
     );
     return Result.ok(probe.type);
+  });
+
+const steerAnswerSchema = v.object({ steer: chatLocalRunSteerOutcomeSchema });
+
+/**
+ * Hands a message to a turn running on the person's computer, without
+ * stopping it: `queued` once the computer was handed it (the turn's stream
+ * then says whether the agent took it), or `refused` with why.
+ */
+export const steerChatTurn = async ({
+  fetch,
+  inputId,
+  source,
+  text,
+  threadId,
+  turnId,
+}: {
+  readonly fetch: Fetch;
+  readonly inputId: string;
+  readonly source: AccessTokenSource;
+  readonly text: string;
+  readonly threadId: string;
+  readonly turnId: string;
+}): Promise<Result<ChatLocalRunSteerOutcome, ApiError>> =>
+  await Result.gen(async function* () {
+    const answered = yield* Result.await(
+      requestApi({
+        fetch,
+        path: `${turnPath(threadId, turnId)}/steer`,
+        body: { inputId, text },
+        schema: steerAnswerSchema,
+        source,
+      }),
+    );
+    return Result.ok(answered.steer);
   });
 
 /** Asks the server to stop a turn; the stream then ends with the run stopped. */

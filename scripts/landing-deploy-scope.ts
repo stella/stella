@@ -90,7 +90,7 @@ const resolveKey = (
 ): readonly string[] | undefined => {
   for (let depth = parent.length; depth >= 0; depth -= 1) {
     const path = [...parent.slice(0, depth), dependency];
-    if (path.join("/") in lock.packages) {
+    if (Object.hasOwn(lock.packages, path.join("/"))) {
       return path;
     }
   }
@@ -344,27 +344,23 @@ export const parseLockfile = (value: unknown): Lockfile | undefined => {
   ) {
     return undefined;
   }
-  const workspaces: Record<string, JsonRecord> = {};
-  for (const [directory, workspace] of Object.entries(value["workspaces"])) {
-    if (isRecord(workspace)) {
-      workspaces[directory] = workspace;
-    }
-  }
-  const packages: Record<string, readonly unknown[]> = {};
-  for (const [key, entry] of Object.entries(value["packages"])) {
-    if (Array.isArray(entry)) {
-      packages[key] = entry;
-    }
-  }
-  const patchedDependencies: Record<string, string> = {};
+  const workspaces = Object.fromEntries(
+    Object.entries(value["workspaces"]).flatMap(([directory, workspace]) =>
+      isRecord(workspace) ? [[directory, workspace] as const] : [],
+    ),
+  );
+  const packages = Object.fromEntries(
+    Object.entries(value["packages"]).flatMap(([key, entry]) =>
+      Array.isArray(entry) ? [[key, entry] as const] : [],
+    ),
+  );
   const patched = value["patchedDependencies"];
-  for (const [ident, patchPath] of Object.entries(
-    isRecord(patched) ? patched : {},
-  )) {
-    if (typeof patchPath === "string") {
-      patchedDependencies[ident] = patchPath;
-    }
-  }
+  const patchedDependencies = Object.fromEntries(
+    Object.entries(isRecord(patched) ? patched : {}).flatMap(
+      ([ident, patchPath]) =>
+        typeof patchPath === "string" ? [[ident, patchPath] as const] : [],
+    ),
+  );
   const trusted = value["trustedDependencies"];
   return {
     workspaces,

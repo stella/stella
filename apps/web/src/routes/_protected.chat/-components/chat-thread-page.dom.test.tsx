@@ -308,6 +308,13 @@ const serveSavedBuilder = ({
       if (pathname.startsWith("/api/auth/")) {
         return Response.json(null);
       }
+      // Nothing is queued in the chat.
+      if (
+        pathname.endsWith(`/chat/threads/${threadRef.threadId}/queue`) &&
+        request.method === "GET"
+      ) {
+        return Response.json({ hold: null, items: [] });
+      }
       unexpected.push(pathname);
       return Response.json(
         { message: `Unexpected page test request: ${pathname}` },

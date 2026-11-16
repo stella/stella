@@ -188,6 +188,7 @@
         "$TURBO_ROOT$/scripts/ownership/*.ts",
         "$TURBO_ROOT$/scripts/ownership-loader.ts",
         "$TURBO_ROOT$/scripts/ownership-types.ts",
+        "$TURBO_ROOT$/scripts/provider-client-modules.ts",
         "$TURBO_ROOT$/scripts/sha256-owners.ts",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
@@ -273,6 +274,7 @@
         "$TURBO_ROOT$/scripts/ownership/*.ts",
         "$TURBO_ROOT$/scripts/ownership-loader.ts",
         "$TURBO_ROOT$/scripts/ownership-types.ts",
+        "$TURBO_ROOT$/scripts/provider-client-modules.ts",
         "$TURBO_ROOT$/scripts/sha256-owners.ts",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
@@ -513,6 +515,7 @@
         "$TURBO_ROOT$/scripts/ownership/*.ts",
         "$TURBO_ROOT$/scripts/ownership-loader.ts",
         "$TURBO_ROOT$/scripts/ownership-types.ts",
+        "$TURBO_ROOT$/scripts/provider-client-modules.ts",
         "$TURBO_ROOT$/scripts/sha256-owners.ts",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
@@ -663,6 +666,7 @@
         "$TURBO_ROOT$/scripts/ownership/*.ts",
         "$TURBO_ROOT$/scripts/ownership-loader.ts",
         "$TURBO_ROOT$/scripts/ownership-types.ts",
+        "$TURBO_ROOT$/scripts/provider-client-modules.ts",
         "$TURBO_ROOT$/scripts/sha256-owners.ts",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
@@ -737,6 +741,7 @@
         "$TURBO_ROOT$/scripts/ownership/*.ts",
         "$TURBO_ROOT$/scripts/ownership-loader.ts",
         "$TURBO_ROOT$/scripts/ownership-types.ts",
+        "$TURBO_ROOT$/scripts/provider-client-modules.ts",
         "$TURBO_ROOT$/scripts/sha256-owners.ts",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
@@ -808,6 +813,7 @@
         "$TURBO_ROOT$/scripts/ownership/*.ts",
         "$TURBO_ROOT$/scripts/ownership-loader.ts",
         "$TURBO_ROOT$/scripts/ownership-types.ts",
+        "$TURBO_ROOT$/scripts/provider-client-modules.ts",
         "$TURBO_ROOT$/scripts/sha256-owners.ts",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
@@ -954,6 +960,7 @@
         "$TURBO_ROOT$/scripts/ownership/*.ts",
         "$TURBO_ROOT$/scripts/ownership-loader.ts",
         "$TURBO_ROOT$/scripts/ownership-types.ts",
+        "$TURBO_ROOT$/scripts/provider-client-modules.ts",
         "$TURBO_ROOT$/scripts/sha256-owners.ts",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
@@ -1145,6 +1152,7 @@
         "$TURBO_ROOT$/scripts/ownership/*.ts",
         "$TURBO_ROOT$/scripts/ownership-loader.ts",
         "$TURBO_ROOT$/scripts/ownership-types.ts",
+        "$TURBO_ROOT$/scripts/provider-client-modules.ts",
         "$TURBO_ROOT$/scripts/sha256-owners.ts",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
@@ -1748,6 +1756,7 @@
         "$TURBO_ROOT$/scripts/ownership/*.ts",
         "$TURBO_ROOT$/scripts/ownership-loader.ts",
         "$TURBO_ROOT$/scripts/ownership-types.ts",
+        "$TURBO_ROOT$/scripts/provider-client-modules.ts",
         "$TURBO_ROOT$/scripts/sha256-owners.ts",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
@@ -1855,7 +1864,6 @@
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/apps/web/src/components/chat/**",
         "$TURBO_ROOT$/apps/web/src/features/chat/chat-runtime.ts",
-        "$TURBO_ROOT$/apps/web/src/features/chat/hooks/use-chat-session-send-queue.logic.ts",
         "$TURBO_ROOT$/apps/web/src/i18n/langs/en.json",
         "$TURBO_ROOT$/apps/web/src/fonts.css",
         "$TURBO_ROOT$/apps/web/public/fonts/**",
@@ -1866,10 +1874,18 @@
         "$TURBO_ROOT$/packages/skills/blueprints/**",
         "$TURBO_ROOT$/packages/skills/skills/**",
         "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/scripts/bundled-consumers.ts",
         "$TURBO_ROOT$/scripts/ledger-membership.ts",
+        "$TURBO_ROOT$/scripts/migration-rehearsal-contender.ts",
+        "$TURBO_ROOT$/scripts/migration-rehearsal-writer-gap.ts",
+        "$TURBO_ROOT$/scripts/check-migration-safety.ts",
+        "$TURBO_ROOT$/scripts/outbound-transport-census.ts",
+        "$TURBO_ROOT$/scripts/outbound-transport-ownership.ts",
+        "$TURBO_ROOT$/scripts/ownership.ts",
         "$TURBO_ROOT$/scripts/guard-rollouts.ts",
         "$TURBO_ROOT$/scripts/ownership/**",
         "$TURBO_ROOT$/scripts/parser-output-fixtures.ts",
+        "$TURBO_ROOT$/scripts/plan-output-codec.ts",
         "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json"
       ]
     },
@@ -1920,7 +1936,8 @@
         "$TURBO_ROOT$/apps/landing/public/images/gradients/**",
         "$TURBO_ROOT$/apps/landing/public/robots.txt",
         "$TURBO_ROOT$/apps/mobile/src/ui-theme.gen.ts",
-        "$TURBO_ROOT$/oxlint.config.ts"
+        "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/scripts/network-baseline-scope.ts"
       ]
     },
     // The palette test checks the colours DESIGN.md documents.
@@ -1978,7 +1995,8 @@
       "dependsOn": ["transit"],
       "inputs": [
         "$TURBO_DEFAULT$",
-        "$TURBO_ROOT$/packages/ui/src/styles/theme.css"
+        "$TURBO_ROOT$/packages/ui/src/styles/theme.css",
+        "$TURBO_ROOT$/scripts/generate-us-courts.ts"
       ]
     },
     "@stll/catalogue#test": {

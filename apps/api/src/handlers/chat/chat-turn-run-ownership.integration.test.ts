@@ -26,11 +26,11 @@ import {
 } from "@/api/handlers/chat/chat-turn-persistence";
 import type { ChatTurnExecution } from "@/api/handlers/chat/chat-turn-persistence";
 import {
-  CHAT_TURN_OWNER_LOST_REASON,
   ChatTurnOwnership,
   ChatTurnRun,
 } from "@/api/handlers/chat/chat-turn-run";
 import type { ChatTurnStoredSettlement } from "@/api/handlers/chat/chat-turn-run";
+import { CHAT_TURN_OWNER_LOST_REASON } from "@/api/handlers/chat/chat-turn-run-cut";
 import type { ChatTurnOutcome } from "@/api/handlers/chat/types";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -115,6 +115,7 @@ const seedRunningTurn = async (member?: Member) => {
     workspaceId: as.workspaceId,
   });
   const acceptance = createChatTurnAcceptance({
+    source: { type: "member" },
     organizationId: ids.orgA,
     threadId,
     userId: as.userId,

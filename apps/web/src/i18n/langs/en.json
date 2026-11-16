@@ -71,6 +71,7 @@
     "chooseRewriteInstruction": "Rewrite options",
     "editWithAI": "Edit with AI",
     "keyRequired": {
+      "accountFeaturesUnavailable": "AI features are not available for this account.",
       "accountRestricted": "AI provider settings are unavailable for this account.",
       "configUnreadable": "The AI provider configuration cannot be read. Ask an organization admin to reconnect it.",
       "cta": "Open AI settings",
@@ -159,6 +160,7 @@
     "handoffAccount": "Continue as <account>{email}</account> in <organization>{organizationName}</organization>?",
     "handoffTitle": "Continue to stella",
     "headline": "Clarity for every case.",
+    "invalidEmailOrPassword": "Incorrect email or password.",
     "invitation": {
       "declined": "Invitation declined",
       "declinedDescription": "You have declined this invitation. You can safely close this page.",
@@ -207,6 +209,7 @@
       "useBackupCode": "Use a backup code instead"
     },
     "useDifferentEmail": "Use a different email",
+    "useEmailCode": "Use an email code instead",
     "usePassword": "Use a password instead",
     "weSentCodeTo": "We sent a code to <email>{emailAddress}</email>"
   },
@@ -2093,6 +2096,23 @@
       "noResults": "No matching skills",
       "tryOne": "Try one of these to start"
     },
+    "queue": {
+      "actions": "Queued message actions",
+      "editNeedsComposer": "Open this chat to edit a queued message.",
+      "heldByMember": "Queue paused.",
+      "heldComputerAway": "Waiting for your computer: queued messages are sent once it connects.",
+      "heldSendRefused": "Queue paused: the first message could not be sent. Edit or remove it, then resume.",
+      "heldTurnFailed": "Queue paused: the last response failed. Resume to send the next message.",
+      "heldTurnInterrupted": "Queue paused: the last response was cut off. Resume to send the next message.",
+      "heldUsageLimit": "Queue paused: your usage limit is reached. Resume once it resets.",
+      "noLongerQueued": "That message is no longer queued.",
+      "notSent": "Could not be sent",
+      "pause": "Pause queue",
+      "replaceDescription": "This chat is waiting for your answer. Sending this message now cancels the question or approval it is waiting on.",
+      "replaceTitle": "Send this message now?",
+      "resume": "Resume queue",
+      "waitForEdit": "Send or cancel the open edit first; your message stays in the composer."
+    },
     "queuePrompt": "Send when the agent finishes",
     "queuedAttachmentCount": "{count, plural, one {# attachment} other {# attachments}}",
     "queuedNotice": "Queued: sends when the current response finishes",
@@ -2200,6 +2220,15 @@
     "sourcePlaceholder": "Chat about {title}",
     "sourcePlaceholderAction": "Chat about",
     "sources": "Sources:",
+    "steerRefused": {
+      "cannotSteer": "This agent cannot take messages while it works.",
+      "noRun": "The agent is not running on your computer right now.",
+      "notPlain": "Only a text message without files, not sent anonymized, can go to the agent while it works.",
+      "notTaken": "The agent could not take your message just now.",
+      "runFull": "The agent cannot take more messages right now.",
+      "title": "Your message is queued until the agent finishes",
+      "turnNotRunning": "The agent is not working right now."
+    },
     "stopFailed": "Couldn't stop the answer. Try again.",
     "stopResponse": "Stop",
     "stopped": "Stopped",
@@ -3458,54 +3487,18 @@
       "validationTooShort": "Too short: use at least {limit, number} characters.",
       "versionConflict": "Someone else changed this while you were editing. Reload to get the current version."
     },
-    "failedToAcceptInvitation": "Failed to accept invitation",
-    "failedToAddParty": "Failed to add party",
-    "failedToCancelInvitation": "Failed to cancel invitation",
     "failedToChangeViewType": "Failed to change view type",
-    "failedToCheckSlugAvailability": "Failed to check slug availability",
-    "failedToCreateContact": "Failed to create client",
-    "failedToCreateEntity": "Failed to create item",
-    "failedToCreateOrganization": "Failed to create organization",
-    "failedToCreateProperty": "Failed to create property",
     "failedToCreateView": "Failed to create view",
-    "failedToCreateWorkspace": "Failed to create matter",
-    "failedToDeclineInvitation": "Failed to decline invitation",
-    "failedToDeleteContact": "Failed to delete client",
     "failedToDeleteEntities": "Failed to delete items",
-    "failedToDeleteProperty": "Failed to delete property",
     "failedToDeleteTemplate": "Failed to delete template",
     "failedToDeleteView": "Failed to delete view",
     "failedToDeleteWorkspace": "Failed to delete matter",
     "failedToDuplicateView": "Failed to duplicate view",
-    "failedToExportNoData": "No data to export",
-    "failedToFetchFile": "Failed to fetch file from storage",
-    "failedToInviteMember": "Failed to invite member",
-    "failedToMoveItem": "Failed to move item",
-    "failedToRemoveMember": "Failed to remove member",
-    "failedToRemoveParty": "Failed to remove party",
     "failedToRenameView": "Failed to rename view",
-    "failedToRenameWorkspace": "Failed to rename matter",
     "failedToReorderViews": "Failed to reorder views",
-    "failedToResendInvitation": "Failed to resend invitation",
     "failedToSaveTemplate": "Failed to save template",
-    "failedToSelectOrganization": "Failed to select organization",
-    "failedToSendInvitation": "Failed to send invitation",
-    "failedToSendVerificationCode": "Failed to send verification code",
-    "failedToSetActiveOrganization": "Failed to set active organization",
-    "failedToSetClient": "Failed to set client",
-    "failedToSignOut": "Failed to sign out",
     "failedToStartWorkflow": "Failed to start workflow",
-    "failedToUpdateContact": "Failed to update client",
-    "failedToUpdateField": "Failed to update field",
-    "failedToUpdateMatterNumbering": "Failed to update matter numbering",
-    "failedToUpdateOrganization": "Failed to update organization",
-    "failedToUpdateProperty": "Failed to update property",
-    "failedToUpdateRole": "Failed to update role",
-    "failedToUpdateWorkspace": "Failed to update matter",
-    "failedToUploadFiles": "Failed to upload files",
-    "failedToVerifyOtp": "Failed to verify code",
     "matterNotFound": "Matter not found",
-    "partyAlreadyExists": "Contact already has this role on the matter",
     "uploadFailed": "Upload failed"
   },
   "feedback": {
@@ -4148,7 +4141,6 @@
     "assignTo": "Assign to",
     "confidence": "{percent} confidence",
     "dismissReason": "Reason (optional)",
-    "empty": "Nothing needs you right now. Post a request to start one.",
     "evidence": {
       "current": "Now",
       "daysOverdue": "Days overdue",
@@ -4164,10 +4156,8 @@
       "verdict": "Verdict"
     },
     "filter": {
-      "any": "Any",
       "mine": "Assigned to me"
     },
-    "newRequest": "New request",
     "openMatter": "Open matter",
     "origin": {
       "manual": "Colleague",
@@ -4175,11 +4165,6 @@
       "source": "External source"
     },
     "proposalView": "Suggestions: {view}",
-    "request": {
-      "created": "Request posted",
-      "description": "Describe what the legal team should look at. It lands in the inbox for triage.",
-      "submit": "Post request"
-    },
     "scout": {
       "documentDeadlines": "Document deadlines",
       "documentReview": "Playbook review",
@@ -4199,9 +4184,7 @@
     "suggestion": {
       "assign": "Assign",
       "createDeadline": "Create deadline",
-      "createTask": "Create task",
-      "fileToWorkspace": "File to matter",
-      "runReview": "Run review"
+      "createTask": "Create task"
     },
     "verdict": {
       "safe": "Safe"
@@ -4330,7 +4313,6 @@
       "matterColumnsHeading": "Matter information",
       "noMatterColumns": "Nothing recorded about this document yet",
       "stellaHeading": "Stored in stella",
-      "updatedAt": "Updated",
       "versionCurrent": "v{version} (current)"
     },
     "moveToMain": "Move to main view",
@@ -4341,22 +4323,11 @@
     "review": {
       "acceptChange": "Accept change",
       "acceptFinding": "Accept finding",
-      "actionNeeded": "Action needed",
-      "addComment": "Add as comment",
       "addNote": "Add comment for counterparty",
       "addNotePlaceholder": "What the counterparty should see",
       "addNoteSubmit": "Add comment",
       "addReference": "Add {name} as a reference",
-      "addTopic": "Add topic",
       "allDecided": "Every finding here has been decided.",
-      "assessment": {
-        "additionalInTarget": "Additional in target",
-        "aligned": "Consistent with references",
-        "dealSpecific": "Deal-specific",
-        "different": "Different",
-        "missingFromTarget": "Missing from target",
-        "notComparable": "Not comparable"
-      },
       "basisCombined": "{count, plural, one {Reviews against {name} and compares with # reference document} other {Reviews against {name} and compares with # reference documents}}",
       "basisDivider": "and / or",
       "basisPlaybook": "Reviews against {name}",
@@ -4372,7 +4343,6 @@
       },
       "checks": "Checks:",
       "commentFailed": "Couldn't add the comment",
-      "comparedWithReferences": "{count, plural, one {Compared with # reference document} other {Compared with # reference documents}}",
       "decidedCount": "{count, number} decided",
       "decision": "Decision",
       "decisionFailed": "Couldn't record your decision",
@@ -4380,7 +4350,6 @@
         "accepted": "Accepted",
         "dismissed": "Dismissed"
       },
-      "description": "Choose an authored playbook, reference documents, or both.",
       "dismissFinding": "Dismiss finding",
       "documentChanged": "This document changed after this review.",
       "documentCutNotice": "<strong>{documentName} was not read in full.</strong> It is too long for this model, so about {percent} of its text was left out. A position with no answer is flagged for review, because the answer may be in the part left out.",
@@ -4415,7 +4384,6 @@
       "impact": {
         "favourable": "Favourable",
         "neutral": "No effect",
-        "notJudged": "Not judged",
         "unfavourable": "Unfavourable"
       },
       "impactForSide": {
@@ -4423,8 +4391,6 @@
         "neutral": "No effect for {role}",
         "unfavourable": "Worse for {role}"
       },
-      "insertFailed": "Couldn't insert the suggested wording",
-      "insertSuggestion": "Insert suggested wording",
       "insufficientEvidence": "The supplied documents do not provide enough evidence for this topic.",
       "marginNotes": {
         "above": "{count, number} above",
@@ -4433,12 +4399,10 @@
         "label": "Findings beside the clauses they are about",
         "unanchored": "Not tied to a clause"
       },
-      "newTopic": "New review topic",
       "noEditor": "Open the document to accept changes",
       "noMaterialDifferences": "No material differences found",
       "noPassage": "No passage",
       "noPlaybooksMatch": "No matching playbooks.",
-      "noReferencesFound": "No matching DOCX documents.",
       "notCompared": "Not compared",
       "notComparedCount": "Not compared: {count, number}",
       "noteAdded": "Comment added for the counterparty",
@@ -4464,10 +4428,8 @@
         "title": "We act for"
       },
       "playbookDeleted": "This playbook no longer exists; the review is kept as a record.",
-      "playbookFindings": "Playbook findings",
       "playbookOutdated": "A newer approved version of this playbook exists.",
       "playbookSection": "Playbook",
-      "playbookTopic": "Seeded from the playbook",
       "presence": {
         "absent": "No",
         "present": "Yes"
@@ -4478,26 +4440,22 @@
       "readOnlyRun": "Decided on this run",
       "recommendation": "Recommendation:",
       "referenceDocument": "Reference document",
-      "referenceFindings": "Reference comparison",
       "referenceLimitReached": "Reference limit reached",
       "referencePlaceholder": "Search reference documents",
       "referencesCount": "{count, number}/{max, number}",
       "referencesDisagree": "References disagree",
       "referencesSection": "Reference documents",
       "removeReference": "Remove reference {name}",
-      "removeTopic": "Remove topic {name}",
       "reopen": "Reopen",
       "results": "Review results",
       "reviewAgain": "Run another review",
       "reviewPositionsFirst": "Review the positions first",
-      "reviewedAgainstCombined": "{count, plural, one {Reviewed against {name} and # reference document} other {Reviewed against {name} and # reference documents}}",
       "reviewing": "Review in progress…",
       "reviewingHint": "This can take up to a couple of minutes for large documents.",
       "run": "Start review",
       "saveAsPlaybook": "Save as playbook",
       "saveAsPlaybookFailed": "Could not save this review as a playbook",
       "savedAsPlaybook": "Saved as a playbook",
-      "scoreTopics": "Review these topics",
       "searchPlaybooks": "Search playbooks",
       "showInDocument": "Show in document",
       "sizeConfirmStart": "Start review",
@@ -4526,10 +4484,6 @@
       "targetColumn": "This document",
       "targetDocument": "Target document",
       "title": "Review document",
-      "topicContext": "Extra context",
-      "topicContextPlaceholder": "What should the review consider for this topic?",
-      "topicName": "Topic name",
-      "topicsDescription": "Confirm the proposed topics, add your own, or give each topic more context before scoring.",
       "topicsTitle": "What should this review cover?",
       "why": "Why",
       "whyItMatters": "Why it matters:"
@@ -4975,7 +4929,6 @@
   "lawHome": {
     "clearRecent": "Clear recent",
     "clearRecentConfirmation": "Delete all your recent searches, decisions and statutes in this organization? This cannot be undone.",
-    "enteringIntoForce": "Entering into force",
     "importFailed": "Local history could not be imported. It is still saved on this device.",
     "inForceFrom": "In force from {date}",
     "noRecent": "No recent activity",
@@ -4986,12 +4939,10 @@
     "recentLoadFailed": "Recent activity could not be loaded.",
     "recentSearchFilter": "Searches",
     "recentUpdateFailed": "Recent activity could not be updated.",
-    "recentlyInForce": "Recently in force",
     "searchLabel": "Search the legal database",
     "searchPlaceholder": "Case number, act number, ECLI or keywords",
     "signals": "Signals",
-    "topCourts": "From the top courts",
-    "tryIdentifier": "Try an identifier"
+    "topCourts": "From the top courts"
   },
   "legalReader": {
     "annotations": {
@@ -5035,7 +4986,6 @@
         "summary": "{count, plural, one {# highlight or comment no longer matches the text} other {# highlights and comments no longer match the text}}"
       },
       "removeHighlight": "Remove highlight",
-      "sharedBadge": "Shared",
       "styleHighlight": "Highlight",
       "styleSquiggly": "Squiggly",
       "styleStrikethrough": "Strikethrough",
@@ -5115,7 +5065,6 @@
     "contacts": "Contacts",
     "inbox": "Inbox",
     "knowledge": "Intelligence",
-    "myTodos": "My tasks",
     "pinned": "Pinned",
     "recentMatters": "Recent matters",
     "recents": "Recents",
@@ -5355,14 +5304,10 @@
       }
     },
     "matterNumber": {
-      "description": "Configure how new matter reference numbers are generated",
       "nextPreview": "Next reference:",
       "padding": "Digits",
       "paddingDescription": "Minimum number of digits for the sequence number",
       "pattern": "Pattern",
-      "patternInvalidTokens": "Pattern contains unrecognized tokens",
-      "patternMustContainSeq": "Pattern must contain '{'SEQ'}'",
-      "patternRequired": "Pattern is required",
       "presets": {
         "sequential": "Sequential (001)",
         "yearMonthSequential": "Year-Month / Sequential (2026-02/001)",
@@ -5370,18 +5315,16 @@
       },
       "showInTitle": "Show the number next to the matter name",
       "showInTitleDescription": "When this is off, the title is exactly the name you entered.",
-      "title": "Matter numbering",
       "tokenHelp": "Available tokens: '{'SEQ'}' (sequence), '{'YYYY'}' (year), '{'YY'}' (2-digit year), '{'MM'}' (month)"
     },
     "members": {
+      "billingAccess": "Billing visibility",
       "changeRole": "Change role",
-      "changeRoleDescription": "Update the role for {email}",
       "confirmRoleChangeDescription": "{email}'s role will change from {oldRole} to {newRole}.",
       "confirmRoleChangeTitle": "Change role",
       "joined": "Joined",
       "noMembersFound": "No members found",
-      "typeEmailToConfirm": "Type {email} to confirm",
-      "updateRole": "Update role"
+      "typeEmailToConfirm": "Type {email} to confirm"
     },
     "newOrganization": "New organization",
     "newOrganizationDescription": "Create an organization that you will own.",
@@ -5399,7 +5342,6 @@
       "member": "Member",
       "owner": "Owner"
     },
-    "settingsDescription": "Edit your organization name and slug",
     "startOver": "Start over",
     "startOverDescription": "The original request may already have created an organization. Check your organizations before starting again; a new request could create another organization.",
     "startOverTitle": "Start a new creation request?",
@@ -6933,7 +6875,6 @@
       "apiKeyPlaceholder": "00000000-0000-0000-0000-000000000000:fx",
       "currentKey": "Stored key",
       "description": "Configure a DeepL API key to enable document translation. Free and Pro keys are both supported.",
-      "removing": "Removing…",
       "tierFree": "Free",
       "tierPro": "Pro",
       "title": "DeepL translation"
@@ -7025,9 +6966,6 @@
     "deleteItem": "Delete item",
     "deleteItems": "Delete {count, plural, one {# item} other {# items}}",
     "deleteItemsDescription": "Are you sure you want to delete {count, plural, one {# item} other {# items}}? This action cannot be undone.",
-    "deleteSelectedRows": "Delete selected rows",
-    "deleteSelectedRowsDescription": "{count, plural, one {Are you sure you want to delete # selected row? This action cannot be undone.} other {Are you sure you want to delete # selected rows? This action cannot be undone.}}",
-    "deleteSelection": "Delete selection",
     "deleteWorkspace": "Delete matter",
     "deleteWorkspaceConfirmDescription": "Are you sure you want to delete this matter? This action cannot be undone.",
     "deletedItem": "Deleted: {name}",
@@ -7053,7 +6991,6 @@
       "title": "Create your first matter"
     },
     "entitiesCount": "{count, plural, one {# item} other {# items}}",
-    "exportToCsv": "Export to CSV",
     "fields": {
       "calculating": "Calculating...",
       "errored": "Errored",
@@ -7085,17 +7022,13 @@
         "authRequiredTitle": "Your session expired",
         "editInApplication": "Edit in <bdi>{application}</bdi>",
         "editLocallyPrompt": "Edit this file locally and sync changes with stella.",
-        "forceRelease": "Force release",
         "notOpenedDescription": "stella desktop did not confirm that <bdi>{application}</bdi> opened. Start stella desktop and try again.",
         "openAction": "Open in desktop",
         "openedDescription": "<bdi>{application}</bdi> opens a local copy. When you finish editing, a new revision is created automatically.",
         "openedTitle": "Opened in stella desktop",
-        "opening": "Opening...",
         "releaseLock": "Release lock",
         "sentDescription": "Waiting for <bdi>{application}</bdi> to open the local copy.",
         "sentTitle": "Sent to stella desktop",
-        "takeoverNoResponse": "No response",
-        "takeoverNoResponseDescription": "The lock holder did not respond. You can force release the lock.",
         "takeoverWaiting": "Waiting for response",
         "takeoverWaitingDescription": "Asking {name} to release the lock...",
         "unavailableDescription": "Start stella desktop and keep it running before using desktop editing.",
@@ -7129,7 +7062,6 @@
       "fileTooLarge": "The file is larger than {limit, number} MB.",
       "includeReferenceNumber": "Include reference number",
       "itemLimitReached": "This matter has reached its item limit.",
-      "maxEntitiesReached": "Maximum number of items reached",
       "ocrAlreadyProcessed": "Text recognition has already completed",
       "ocrBatchHelp": "Queued documents are processed in the next OCR batch.",
       "ocrQueueFailed": "Couldn't queue text recognition",
@@ -7228,8 +7160,7 @@
         "uploadAsNewDocumentHere": "Upload as new document here"
       },
       "versionUploadFailed": "Version upload failed",
-      "versionUploaded": "New version uploaded",
-      "xfaFormNotSupported": "This PDF contains an XFA form. Preview may not display correctly."
+      "versionUploaded": "New version uploaded"
     },
     "filesystem": {
       "collapseAll": "Collapse all folders",
@@ -7296,18 +7227,12 @@
       "emptyFoldersToDelete": "{count, plural, one {# empty folder to delete} other {# empty folders to delete}}",
       "expandFolder": "Expand folder",
       "failed": "Organization failed",
-      "folderPlaceholder": "e.g. Compliance/2025",
       "generateAi": "Generate AI suggestions",
       "generating": "Generating AI suggestions...",
       "instructionsEmpty": "No custom instructions",
-      "instructionsHelp": "Saved per matter. Used in addition to the system prompt.",
       "instructionsPlaceholder": "e.g. Use English folder names, group by counterparty, prefix dates with year.",
       "instructionsTitle": "AI instructions",
-      "moveTo": "Move file to folder",
-      "moveToHint": "Type a path or pick from existing folders.",
-      "moveToTitle": "Move to folder",
       "organized": "Files organized",
-      "reset": "Reset to AI suggestions",
       "selectedOfTotal": "{selected, number} / {total, number}",
       "summaryToMove": "to move",
       "summaryToRename": "to rename",
@@ -7316,25 +7241,7 @@
       "wasNamed": "was {name}"
     },
     "infosoud": {
-      "courtPlaceholder": "Search court or code",
-      "courtsFailed": "Could not load InfoSoud courts",
-      "eventCount": "{count, plural, one {# event} other {# events}}",
-      "events": "Events",
-      "hearings": "Hearings",
-      "importAgenda": "Save to Agenda",
-      "importAgendaFailed": "Could not save InfoSoud items to Agenda",
-      "importAgendaResult": "{count, plural, one {# item saved to Agenda} other {# items saved to Agenda}}",
-      "importAgendaUpToDate": "Agenda is already up to date",
-      "lookup": "Lookup",
-      "lookupFailed": "InfoSoud lookup failed",
-      "noHearings": "No hearings scheduled",
-      "notFound": "No InfoSoud case found for this court and sp. zn.",
-      "relatedCases": "Related cases",
-      "spisZn": "Sp. zn.",
-      "spisZnPlaceholder": "e.g. 1 T 64/2024",
-      "statusDate": "Status date",
-      "title": "InfoSoud",
-      "validTo": "Valid to"
+      "title": "InfoSoud"
     },
     "justification": "Justification:",
     "kanban": {
@@ -7353,15 +7260,12 @@
     "leadPicker": {
       "noMatchingMembers": "No matching members"
     },
-    "lockMatter": "Lock",
     "matterInfo": "Matter info",
     "mattersCount": "{count, plural, one {# matter} other {# matters}}",
     "members": {
       "addMember": "Add to matter",
       "addMemberDescription": "Choose an existing team member to add to this matter",
-      "alreadyMember": "User is already a member",
       "alreadyOnMatter": "Already on this matter",
-      "cannotRemoveLast": "Cannot remove the last member",
       "noMembersFound": "No members found",
       "removeMemberConfirm": "Remove this member from the matter?"
     },
@@ -7370,11 +7274,6 @@
     "noDocuments": "No documents yet",
     "noGrouping": "No grouping",
     "noItems": "No items yet",
-    "noMatters": "No matters yet. Create your first matter to get started.",
-    "operators": {
-      "containsEvery": "Contains every",
-      "equals": "Equals"
-    },
     "overview": {
       "activity": {
         "actorActions": {
@@ -7396,10 +7295,8 @@
         "automatedService": "Automated service",
         "deletedUser": "Deleted user",
         "details": {
-          "actor": "Performed by",
           "approval": "Approval",
           "approvedBy": "Approved by",
-          "channel": "Channel",
           "dateTime": "Date and time",
           "notAvailable": "Not available",
           "openTarget": "Open item",
@@ -7440,7 +7337,6 @@
           "dateTime": "Date and time",
           "provenance": "Origin"
         },
-        "loadEarlier": "Load earlier",
         "loading": "Loading…",
         "provenance": {
           "connected": "Using connected access",
@@ -7490,8 +7386,6 @@
           "timeline": "Timeline view"
         }
       },
-      "atAGlance": "At a glance",
-      "getStarted": "Get started by uploading documents or creating your first folder.",
       "matterDetails": "Matter details",
       "membersCount": "{count, plural, one {# member} other {# members}}",
       "nextDeadline": "Next deadline",
@@ -7502,15 +7396,13 @@
       "totalDocuments": "Total documents",
       "totalItems": "Items",
       "totalThisWeek": "Total this week",
-      "upcomingTasks": "Upcoming agenda",
-      "uploaded": "uploaded"
+      "upcomingTasks": "Upcoming agenda"
     },
     "parties": {
       "addParty": "Add party",
       "changeClient": "Change client",
       "client": "Client",
       "movedToClient": "Moved <bdi>{matterName}</bdi> to <bdi>{clientName}</bdi>",
-      "noClient": "No client assigned",
       "noClientOptional": "No client (optional)",
       "noParties": "No parties added to this matter.",
       "partyRoles": {
@@ -7533,9 +7425,7 @@
       "recentClients": "Recent clients",
       "removeClient": "Remove client",
       "removeParty": "Remove party",
-      "removePartyConfirm": "Are you sure you want to remove this party from the matter?",
-      "searchContacts": "Search contacts...",
-      "setClient": "Set client"
+      "searchContacts": "Search contacts..."
     },
     "pdf": {
       "adjustForDarkMode": "Adjust pages for dark mode",
@@ -7551,7 +7441,6 @@
         "refusedTooLong": "This passage is too long to mark. Select a shorter one."
       },
       "backToPeek": "Back to peek",
-      "entitySidebar": "Document details",
       "evidence": "Justification",
       "incorrectPassword": "Incorrect password. Please try again.",
       "nextPage": "Next page",
@@ -7624,7 +7513,6 @@
         "duplicate": "Make a copy",
         "editPages": "Edit pages",
         "multiSelectHint": "Hold {modifier} to select more",
-        "pageCount": "{count, plural, one {# page} other {# pages}}",
         "pageNumber": "Page {number}",
         "pages": "PDF pages",
         "redo": "Redo page edit",
@@ -7640,7 +7528,6 @@
         "signatureWarning": "Digital signatures will be invalidated when you edit this PDF.",
         "signatureWarningWithSign": "Editing invalidates existing digital signatures. Signing from here saves your edits first and signs the new version.",
         "sourceLimit": "The combined size of the PDFs cannot exceed 100 MB.",
-        "title": "Edit pages",
         "undo": "Undo page edit",
         "unsupportedDescription": "This PDF cannot be edited in the browser.",
         "unsupportedPDF": "Unsupported PDF",
@@ -7654,7 +7541,6 @@
         "pageLocator": "p. {page}",
         "pageRangeLocator": "pp. {start}–{end}"
       },
-      "showOriginal": "Show original pages",
       "unlock": "Unlock"
     },
     "playbooks": {
@@ -7671,8 +7557,6 @@
     },
     "possibleDuplicates": "Possible duplicates",
     "properties": {
-      "addCondition": "Add condition",
-      "addInputProperty": "Add at least one input property using \"@\"",
       "addOption": "Add option",
       "addPromptForBetterResults": "Add a prompt for better results",
       "addReadingSource": "add",
@@ -7680,10 +7564,8 @@
       "bulk": {
         "addAnother": "Add another column",
         "createFailed": "Couldn't create columns",
-        "createMany": "Create {count} columns",
         "createdMany": "{count, plural, one {Created # column} other {Created # columns}}",
         "createdOne": "Column created",
-        "promptPlaceholder": "What should this column extract? Refine in the column dialog to use / and @.",
         "title": "Add columns"
       },
       "chipManual": "Without AI",
@@ -7691,18 +7573,10 @@
       "chipNumber": "Number",
       "chipSingle": "Tag",
       "chipText": "Text",
-      "clip": "Clip",
       "composerTitle": "Tell stella what to find",
       "conditionSeparator": "AND",
       "conditions": "Conditions ({count})",
       "createColumn": "Create column",
-      "createOption": "Create \"{option}\"",
-      "defaultNames": {
-        "file": "File Property",
-        "multiSelect": "Multi Select Property",
-        "singleSelect": "Single Select Property",
-        "text": "Text Property"
-      },
       "defaultPromptPrefix": "Find {propertyName} in ",
       "defaultPromptPropertyName": "information",
       "deleteProperty": "Delete property",
@@ -7714,20 +7588,9 @@
       "editConditionsWhen": "Only run extraction when …",
       "enterAValue": "Enter a value",
       "extractEntityType": "Extract information",
-      "extractEntityTypeDescription": "Create an AI-extracted table column.",
-      "extractionInstruction": "AI instruction",
-      "extractionInstructionHelp": "Reruns when source documents or referenced columns change.",
-      "extractionInstructionPlaceholder": "Example: Find the agreement termination date. Return only the date.",
       "extractionPlaceholder": "Describe what to find. Type @ to reference another column.",
-      "extractionScope": "Extraction scope",
-      "file": "File",
-      "flowNoInputs": "no inputs",
       "ifNoMatchFound": "If no match found",
-      "inputs": "Inputs",
-      "inputsHelp": "Pick the columns the AI should read. Click to add or remove.",
-      "int": "Integer",
       "keepEmpty": "Keep Empty",
-      "manualColumn": "Manual column",
       "markAllAsLocked": "Lock all cells",
       "markAllAsReviewed": "Mark all as reviewed",
       "markThisGroupAsLocked": "Lock this group",
@@ -7735,39 +7598,15 @@
       "markedAsLocked": "{count, plural, one {# cell locked} other {# cells locked}}",
       "markedAsReviewed": "{count, plural, one {# cell marked as reviewed} other {# cells marked as reviewed}}",
       "money": "Money",
-      "multiSelect": "Multi Select",
-      "nameProperty": "Name property",
       "newColumn": "New column",
-      "newColumnDescription": "Choose how this table column should be filled.",
       "newColumnName": "Column name",
-      "noConditionFields": "No fields available to filter on.",
-      "noFirstDocument": "No documents to preview yet.",
       "noPropertiesFound": "No properties found",
-      "optionsHelp": "Define the values the AI may pick from.",
       "optionsLabel": "Options",
       "person": "Person",
-      "previewEmpty": "AI returned no value.",
-      "previewMockNotice": "Mock preview: backend not yet wired.",
-      "previewOnFirst": "Preview on {document}",
-      "previewSkipped": "No applicable input on this document.",
-      "previewSubject": "Try it on a sample",
-      "previewUnsupported": "Preview unsupported for this document type.",
       "readingFrom": "AI reads from",
-      "record": "Record",
-      "referencesItself": "Property references itself through other properties",
-      "resultType": "Result type",
       "returnsLabel": "Format",
-      "scopeFile": "Current file",
-      "scopeFileDescription": "Use {property} and run this file now.",
-      "scopeFileUnavailable": "No file source is available for this view.",
-      "scopeMatter": "Entire matter",
-      "scopeMatterDescription": "Use all file columns and run the matter.",
-      "searchOrAddOptions": "Search or add options",
       "selectColor": "Select color",
-      "selectField": "Select field",
-      "selectOperator": "Select operator",
       "setPromptPlaceholder": "Set a prompt to extract the information",
-      "singleSelect": "Single Select",
       "sortAscendingDate": "Oldest first",
       "sortAscendingNumber": "Lowest first",
       "sortAscendingText": "A → Z",
@@ -7776,10 +7615,7 @@
       "sortDescendingText": "Z → A",
       "splitOptions": "{count, plural, one {Split into # option} other {Split into # options}}",
       "suggestWithAI": "Suggest with AI",
-      "text": "Text",
       "typeChangeWarning": "Existing data will be cleared and rebuilt on save.",
-      "unnamedColumn": "this column",
-      "unsupported": "Unsupported",
       "untitledColumn": "Column name, e.g. Effective date"
     },
     "reference": "Reference number",
@@ -7808,14 +7644,9 @@
       "flagCell": "Flag cell",
       "flags": {
         "contradiction": "Contradiction",
-        "contradictionDescription": "May conflict with other data.",
         "followUp": "Follow up",
-        "followUpDescription": "Needs a next action.",
         "important": "Important",
-        "importantDescription": "Marks a key value.",
-        "needsReview": "Needs review",
-        "needsReviewDescription": "Requires manual review.",
-        "verifiedDescription": "Manually confirmed."
+        "needsReview": "Needs review"
       },
       "lock": {
         "lock": "Lock cell",
@@ -7829,16 +7660,11 @@
     },
     "tasksCount": "{count, plural, one {# agenda item} other {# agenda items}}",
     "team": "Team",
-    "tools": {
-      "aiModel": "AI Model",
-      "manualInput": "Manually"
-    },
     "unarchiveBeforeDelete": "Unarchive this matter before deleting it.",
     "unarchiveMatter": "Unarchive",
     "uploadDocuments": "Upload documents",
     "views": {
       "addAdvancedFilter": "Add advanced filter",
-      "addFields": "Add fields",
       "advancedFilterCount": "{count, plural, =0 {Any} one {# rule} other {# rules}}",
       "aiGenerated": "AI-generated",
       "calendar": {
@@ -7854,7 +7680,6 @@
         "week": "Week",
         "year": "Year"
       },
-      "cannotDeleteRequired": "At least one view of this type is required",
       "copySuffix": "{name} (copy)",
       "deleteView": "Delete view",
       "exportCsv": "Export CSV",
@@ -7863,7 +7688,6 @@
       "exportFailed": "Export failed",
       "exportTable": "Export table",
       "exportXlsx": "Export XLSX",
-      "fields": "Fields:",
       "filter": "Filter",
       "filterByPlaceholder": "Filter by…",
       "filtersWithCount": "{count, plural, one {# filter} other {# filters}}",
@@ -7897,7 +7721,6 @@
       "noFindResultsHint": "Try a shorter term, or search in more columns.",
       "removeAdvancedFilter": "Remove advanced filter",
       "reportExport": {
-        "action": "Export report…",
         "aiSummaries": "Include AI summaries",
         "completed": "Report ready",
         "customize": "Customize",
@@ -7938,7 +7761,6 @@
         "day": "Day",
         "endDate": "End date",
         "month": "Month",
-        "noDates": "No dates set",
         "quarter": "Quarter",
         "showTable": "Show table",
         "startDate": "Start date",
@@ -7948,9 +7770,6 @@
       "viewSettings": "View settings"
     },
     "workflow": {
-      "allManualInputsDescription": "Please add at least one AI property to start the workflow",
-      "allManualInputsTitle": "All properties are manual inputs",
-      "generate": "Generate",
       "largeRunPrompt": {
         "description": "This will queue AI extraction for {count} documents. Start it only if you want to process this many files now.",
         "start": "Start extraction",
@@ -7963,12 +7782,7 @@
         "standard": "Start now",
         "title": "Use reduced credits?"
       },
-      "someFieldsOutdatedDescription": "Please update Single and Multi Select fields to match their property options",
-      "someFieldsOutdatedTitle": "Some fields are outdated",
-      "startedSuccessfully": "Workflow started successfully",
-      "starting": "Starting workflow...",
-      "terminated": "Workflow terminated",
-      "terminatedDescription": "The workflow was terminated due to an error. Please contact support."
+      "startedSuccessfully": "Workflow started successfully"
     }
   }
 }

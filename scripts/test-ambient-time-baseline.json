@@ -119,11 +119,6 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/env-feature-access.test.ts": {
-    "count": 2,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/api/src/handlers/account-exports/download.db.test.ts": {
     "count": 5,
     "owner": "api",
@@ -2562,11 +2557,6 @@
   "packages/mcp-kit/src/envelope.test.ts": {
     "count": 4,
     "owner": "mcp-kit",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "packages/parameter-store/src/read-parameter.test.ts": {
-    "count": 2,
-    "owner": "parameter-store",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "packages/sanctions/src/dense-screening.test.ts": {
