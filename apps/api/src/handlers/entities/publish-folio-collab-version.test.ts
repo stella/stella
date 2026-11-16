@@ -2,14 +2,21 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { ZipArchive } from "@stll/docx-core/zip";
+import { rejectionOf } from "@stll/property-testing/rejection";
 import { sha256Hex as legacySha256Hex } from "@stll/sha256/node";
 
 import { envBase } from "@/api/env-base";
 import { createSafeId } from "@/api/lib/branded-types";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
+import { FOLIO_COLLAB_CHECKPOINT_MAX_BYTES } from "@/api/lib/folio-collab-room-contract";
+import { S3ObjectBudgetError } from "@/api/lib/s3";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { testFileKey } from "@/api/tests/helpers/file-key";
+import {
+  responseByteFile,
+  responseByteStream,
+} from "@/api/tests/helpers/response-byte-stream";
 
 import {
   isFolioCollabIdempotencyConstraintError,
@@ -232,6 +239,65 @@ describe("publication validates the stored checkpoint identity", () => {
           code: "folio_collab_checkpoint_changed",
           status: 409,
         });
+      } finally {
+        store.stop();
+      }
+    },
+  );
+});
+
+describe("publication bounds the stored checkpoint before validation", () => {
+  test.each(["oversized", "undeclared-oversized"] as const)(
+    "refuses a %s checkpoint body instead of validating or publishing it",
+    async (kind) => {
+      const checkpointKey = testFileKey("user-files/publication-budget.docx");
+      const byteLength = FOLIO_COLLAB_CHECKPOINT_MAX_BYTES + 1;
+      using bodyFile = responseByteFile(byteLength);
+      const store = startFakeS3({
+        readResponse: ({ headers }) => {
+          const responseHeaders = new Headers(headers);
+          if (kind === "undeclared-oversized") {
+            responseHeaders.delete("content-length");
+          } else {
+            responseHeaders.set("content-length", String(byteLength));
+          }
+          return new Response(
+            kind === "undeclared-oversized"
+              ? responseByteStream(byteLength).body
+              : bodyFile.body,
+            {
+              headers: responseHeaders,
+            },
+          );
+        },
+      });
+      store.put(
+        envBase.S3_BUCKET,
+        checkpointKey,
+        new Uint8Array(1),
+        DOCX_MIME_TYPE,
+      );
+      try {
+        const read = readPublishableCheckpoint({
+          checkpointKey,
+          expectedSha256Hex: "a".repeat(64),
+          fileName: "checkpoint.docx",
+          signal: AbortSignal.timeout(5000),
+        });
+        if (kind === "oversized") {
+          expect(await rejectionOf(read)).toBeInstanceOf(S3ObjectBudgetError);
+        } else {
+          expect(await rejectionOf(read)).toMatchObject({
+            _tag: "S3ObjectReadError",
+            message: expect.stringContaining("declared no usable length"),
+          });
+        }
+        expect(
+          store.requests.filter(({ method }) => method === "GET"),
+        ).toHaveLength(1);
+        expect(store.requests.every(({ method }) => method === "GET")).toBe(
+          true,
+        );
       } finally {
         store.stop();
       }

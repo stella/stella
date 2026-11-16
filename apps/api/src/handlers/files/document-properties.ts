@@ -5,6 +5,7 @@ import {
 import type { DocumentPropertiesResult } from "@stll/api-contract";
 
 import type { ScopedDb } from "@/api/db/safe-db";
+import { envBase } from "@/api/env-base";
 import { status } from "@/api/http/status";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -19,7 +20,7 @@ import {
   recordLiveVersionDelivery,
 } from "@/api/lib/files/live-version-field";
 import { createFileKey } from "@/api/lib/files/utils";
-import { readS3ArrayBuffer } from "@/api/lib/s3";
+import { readS3ObjectBounded } from "@/api/lib/s3";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 const DOCUMENT_PROPERTIES_READ_TIMEOUT_MS = 30 * 1000;
@@ -76,24 +77,32 @@ export const readDocumentProperties = async ({
 
   const bytes = await withTimeout(
     async (signal) =>
-      await readS3ArrayBuffer(
-        createFileKey({
+      await readS3ObjectBounded({
+        bucket: envBase.S3_BUCKET,
+        key: createFileKey({
           organizationId,
           workspaceId,
           fileId: content.id,
           mimeType: content.mimeType,
         }),
+        maxBytes: DOCUMENT_PROPERTIES_MAX_BYTES,
         signal,
-      ),
+      }),
     {
       label: "Document properties storage read",
       timeoutMs: DOCUMENT_PROPERTIES_READ_TIMEOUT_MS,
     },
   );
 
+  const buffer =
+    bytes.buffer instanceof ArrayBuffer &&
+    bytes.byteOffset === 0 &&
+    bytes.byteLength === bytes.buffer.byteLength
+      ? bytes.buffer
+      : bytes.slice().buffer;
   const result = constrainDocumentPropertiesEditability(
     await extractDocumentProperties({
-      bytes,
+      bytes: buffer,
       mimeType: content.mimeType,
     }),
     canUpdateEntity,

@@ -15,6 +15,7 @@ import {
   fields,
   workspaces,
 } from "@/api/db/schema";
+import { envBase } from "@/api/env-base";
 import { status } from "@/api/http/status";
 import { captureError, detached } from "@/api/lib/analytics/capture";
 import {
@@ -69,6 +70,7 @@ import {
 } from "@/api/lib/files/organization-file-usage";
 import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
 import { createFileKey } from "@/api/lib/files/utils";
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -76,7 +78,7 @@ import { observedStatus } from "@/api/lib/observability/server-error-answer";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import {
   getS3,
-  readS3ArrayBuffer,
+  readS3ObjectBounded,
   S3_OBJECT_WRITE_CERTAINTY,
   writeS3ObjectWithRetry,
 } from "@/api/lib/s3";
@@ -504,10 +506,18 @@ export const finalizeDesktopEditSessionHandler = async ({
         } as const;
       }
 
-      const checkpointBuffer = await readS3ArrayBuffer(
-        checkpointKey,
-        request.signal,
-      );
+      const checkpointBytes = await readS3ObjectBounded({
+        bucket: envBase.S3_BUCKET,
+        key: checkpointKey,
+        maxBytes: FILE_SIZE_LIMIT_BYTES.multipartDocument,
+        signal: request.signal,
+      });
+      const checkpointBuffer =
+        checkpointBytes.buffer instanceof ArrayBuffer &&
+        checkpointBytes.byteOffset === 0 &&
+        checkpointBytes.byteLength === checkpointBytes.buffer.byteLength
+          ? checkpointBytes.buffer
+          : checkpointBytes.slice().buffer;
 
       const validation = await validateDesktopEditFileBuffer({
         buffer: checkpointBuffer,
