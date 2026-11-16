@@ -241,7 +241,7 @@ export const searchReaderIndex = (
   const phrase = phraseRuns(index, queryFindPhrase(query));
   const runs = phrase.length > 0 ? phrase : wordRuns(index, tokens);
 
-  const rangesByPieceId: Record<string, ReaderSearchMatchRange[]> = {};
+  const rangesByPieceId = new Map<string, ReaderSearchMatchRange[]>();
   let matchCount = 0;
   for (const { first, last } of runs) {
     const piece = index.pieces[index.wordPiece[first] ?? 0];
@@ -262,18 +262,18 @@ export const searchReaderIndex = (
       end,
       matchIndex: matchCount,
     };
-    const existingRanges = rangesByPieceId[piece.id];
+    const existingRanges = rangesByPieceId.get(piece.id);
     if (existingRanges) {
       existingRanges.push(range);
     } else {
-      rangesByPieceId[piece.id] = [range];
+      rangesByPieceId.set(piece.id, [range]);
     }
     matchCount += 1;
   }
 
   return {
     matchCount,
-    rangesByPieceId,
+    rangesByPieceId: Object.fromEntries(rangesByPieceId),
   };
 };
 
