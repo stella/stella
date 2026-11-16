@@ -48,6 +48,10 @@ import {
   CITATION_TREATMENTS,
   CITED_PARTS,
 } from "@/api/lib/case-law/citation-vocabulary";
+import {
+  CENSUS_VERDICTS,
+  publisherCensusSchema,
+} from "@/api/lib/case-law/completeness-census-contract";
 import { CASE_LAW_COVERAGE_FRESHNESS } from "@/api/lib/case-law/coverage-freshness";
 import { CASE_LAW_COVERAGE_PARTS } from "@/api/lib/case-law/coverage-parts";
 import { decisionHeadnotePreviewSchema } from "@/api/lib/case-law/decision-headnote-schema";
@@ -378,6 +382,7 @@ const countryCoverage = {
   stored,
   addedLastWeek: numberOrNull,
   completeness,
+  censusVerdict: v.picklist(CENSUS_VERDICTS),
   unreadParts,
   sources: v.pipe(
     v.array(
@@ -397,6 +402,7 @@ const countryCoverage = {
         decisionYearFrom: numberOrNull,
         decisionYearTo: numberOrNull,
         pendingTextCount: v.number(),
+        publisherCensus: publisherCensusSchema,
         storedDecisions: numberOrNull,
         publishedDecisions: v.number(),
         courts: v.pipe(

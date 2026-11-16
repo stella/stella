@@ -53,6 +53,7 @@ test("coverage year bounds cannot read capped facet years", async () => {
       },
     ],
     readArrivals: async () => new Map(),
+    readCensus: async () => new Map(),
     readYearCompleteness: async () => new Map(),
     readFacets: async (country) =>
       Result.ok({
@@ -99,6 +100,7 @@ test("an unread slice ledger leaves every source not reconciled, never failing t
       },
     ],
     readArrivals: async () => new Map(),
+    readCensus: async () => new Map(),
     readYearCompleteness: async () => {
       throw new Error("The slice ledger read was cancelled");
     },

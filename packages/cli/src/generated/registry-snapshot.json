@@ -1042,7 +1042,7 @@
       "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "case_law_coverage",
-    "description": "Case-law availability by jurisdiction/source: held decision-year ranges, last sync, awaiting-text counts, recorded gaps, courts. Check before concluding a decision is missing. Listed countries not yet admitted and without coverage return status unavailable with reason.",
+    "description": "Check held case-law years, sync, pending text, courts and reconciled knownGaps before claiming missing data. publisherCensus: unknown/none-recorded/known; publisher/stored/text counts (slice memberships may overlap). Unmeasured cannot prove completeness. Unadmitted countries return unavailable.",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -1147,6 +1147,10 @@
                 "enum": ["searchable", "in-preparation"],
                 "type": "string"
               },
+              "censusVerdict": {
+                "enum": ["complete", "incomplete", "unmeasured"],
+                "type": "string"
+              },
               "decisions": {
                 "type": "number"
               },
@@ -1174,6 +1178,7 @@
             "required": [
               "country",
               "availability",
+              "censusVerdict",
               "decisions",
               "decisionYearFrom",
               "decisionYearTo",

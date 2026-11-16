@@ -158,6 +158,7 @@ const TABLE_CLASSIFICATIONS = {
   caseLawCitationResolutionProgress: RESEARCH_CORPUS_EXCLUSION,
   caseLawCitationReviews: RESEARCH_CORPUS_EXCLUSION,
   caseLawCitations: RESEARCH_CORPUS_EXCLUSION,
+  caseLawCompletenessCensus: RESEARCH_CORPUS_EXCLUSION,
   caseLawCorpusJurisdictions: RESEARCH_CORPUS_EXCLUSION,
   caseLawCorpusPackRefs: RESEARCH_CORPUS_EXCLUSION,
   caseLawCorpusTombstones: RESEARCH_CORPUS_EXCLUSION,

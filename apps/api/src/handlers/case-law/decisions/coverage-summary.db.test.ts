@@ -15,6 +15,8 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import { unmeasuredSourceCensus } from "@/api/lib/case-law/completeness-census";
+import { publisherCensusOf } from "@/api/lib/case-law/completeness-census-contract";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { isRecord } from "@/api/lib/type-guards";
@@ -156,6 +158,47 @@ test("coverage returns unavailable when a stored answer does not match the curre
     expect(await readCaseLawCoverageHandler(readDb, SERVED_AT)).toEqual(
       CASE_LAW_COVERAGE_FIXTURE,
     );
+  } finally {
+    await client.close();
+  }
+}, 120_000);
+
+// timeout: embedded PostgreSQL builds the complete migration schema for this test.
+test("a stored answer from before the publisher census reads as not measured yet", async () => {
+  const { client, db, readDb } = await createReaderDb();
+  const preCensus = {
+    ...CASE_LAW_COVERAGE_SNAPSHOT_FIXTURE,
+    countries: CASE_LAW_COVERAGE_SNAPSHOT_FIXTURE.countries.map(
+      ({ censusVerdict: _verdict, ...country }) => ({
+        ...country,
+        sources: country.sources.map(
+          ({ publisherCensus: _census, ...source }) => ({
+            ...source,
+            adapterKey: ADAPTER_KEYS.CZ_NS,
+          }),
+        ),
+      }),
+    ),
+  };
+  try {
+    await db.insert(caseLawCoverageSummaries).values({
+      key: "current",
+      sourcePolicy: "[]",
+      answer: preCensus,
+      generatedAt: GENERATED_AT,
+    });
+    const answer = await readCaseLawCoverageHandler(readDb, SERVED_AT);
+    if ("message" in answer) {
+      throw new Error("A pre-census summary must stay readable");
+    }
+    for (const country of answer.countries) {
+      expect(country.censusVerdict).toBe("unmeasured");
+      for (const source of country.sources) {
+        expect(source.publisherCensus).toEqual(
+          publisherCensusOf(unmeasuredSourceCensus(ADAPTER_KEYS.CZ_NS)),
+        );
+      }
+    }
   } finally {
     await client.close();
   }
