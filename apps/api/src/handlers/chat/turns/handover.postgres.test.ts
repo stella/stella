@@ -100,57 +100,6 @@ let ids: TestIds;
 const seededThreads: SafeId<"chatThread">[] = [];
 let emailVerifiedBefore = false;
 
-testState.beforeAll(async () => {
-  const fixture = await getRlsFixture();
-  testDb = fixture.testDb;
-  ids = fixture.ids;
-  // The member may run chat turns on their computer.
-  const [member] = await testDb
-    .select({ emailVerified: user.emailVerified })
-    .from(user)
-    .where(eq(user.id, ids.userA1));
-  emailVerifiedBefore = member?.emailVerified ?? false;
-  await testDb
-    .update(user)
-    .set({ emailVerified: true })
-    .where(eq(user.id, ids.userA1));
-  await testDb
-    .insert(featureEnrolments)
-    .values({
-      featureId: DESKTOP_RUNNER_FEATURE_ID,
-      organizationId: ids.orgA,
-      userId: ids.userA1,
-    })
-    .onConflictDoNothing();
-  testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
-    [DESKTOP_RUNNER_FEATURE_ID]: [
-      { type: "organization", organizationId: ids.orgA },
-    ],
-  });
-});
-
-afterAll(async () => {
-  if (seededThreads.length > 0) {
-    await testDb
-      .delete(chatThreads)
-      .where(inArray(chatThreads.id, seededThreads));
-  }
-  await testDb
-    .delete(featureEnrolments)
-    .where(
-      and(
-        eq(featureEnrolments.featureId, DESKTOP_RUNNER_FEATURE_ID),
-        eq(featureEnrolments.organizationId, ids.orgA),
-        eq(featureEnrolments.userId, ids.userA1),
-      ),
-    );
-  await testDb
-    .update(user)
-    .set({ emailVerified: emailVerifiedBefore })
-    .where(eq(user.id, ids.userA1));
-  await releaseRlsFixture();
-});
-
 const safeDbOf = () =>
   toSafeDbMock(
     asTestRaw<ScopedDb>(
@@ -464,175 +413,238 @@ const uninterrupted = async (chunks: readonly StreamChunk[]) => {
   };
 };
 
-describe("an owner stop mid-turn", () => {
-  test("hands the turn to another task, which finishes the one answer while the computer runs on", async () => {
-    const { before, after } = await turnHalves();
-    const whole = await uninterrupted([...before, ...after]);
-    const seeded = await seedClaimedTurn();
-    const computer = createComputer();
-    computer.events(before);
-    // The owner's read asks for the run's state once it read every stored
-    // event: the owner is mid-turn, waiting on the computer.
-    const caughtUp = Promise.withResolvers<undefined>();
-    const { control } = computer.context;
-    computer.context.control = {
-      ...control,
-      readRun: async (options) => {
-        caughtUp.resolve(undefined);
-        return await control.readRun(options);
-      },
-    };
-    const owner = await startOwner({ computer, seeded });
-    await caughtUp.promise;
+const databaseUrl = process.env["DATABASE_URL"];
+const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
-    // Another task listens for released turns, with the steps a completed
-    // turn takes after it settles in the test's hand.
-    const stopping = new AbortController();
-    const titled: unknown[] = [];
-    const markedDue: unknown[] = [];
-    const quoteChecked: unknown[] = [];
-    const quoteChecker: AnswerQuoteChecker = async (message) => {
-      quoteChecked.push(message.parts.length);
-      return await NO_ANSWER_QUOTE_CHECKER(message);
-    };
-    const adopter = createChatTurnAdopter({
-      signal: stopping.signal,
-      indexThread: async () => {},
-      ownership: new ChatTurnOwnership(),
-      runtime: {
-        control: asTestRaw<DesktopRunnerControl>(computer.context.control),
-        runBell: computer.context.runBell,
-      },
-      answerQuoteChecker: quoteChecker,
-      followUps: {
-        markCompactionDue: async (options) => {
-          markedDue.push(options.threadId);
-          await Promise.resolve();
-        },
-        generateTitle: async (options) => {
-          titled.push(options);
-          await Promise.resolve();
-        },
-      },
+if (!databaseUrl || !runPostgresTests) {
+  describe.skip("an owner stop mid-turn (postgres)", () => {
+    test("requires STELLA_RUN_POSTGRES_TESTS=true and DATABASE_URL", () => {
+      expect(runPostgresTests && Boolean(databaseUrl)).toBe(false);
     });
-    const adoptions: Promise<void>[] = [];
-    const released: { answerId?: SafeId<"chatMessage"> } = {};
-    const stopAnswering = answerChatTurnAdopterDoorbell((turn) => {
-      adoptions.push(adopter.adopt(turn));
+  });
+} else {
+  describe("an owner stop mid-turn (postgres)", () => {
+    testState.beforeAll(async () => {
+      const fixture = await getRlsFixture();
+      testDb = fixture.testDb;
+      ids = fixture.ids;
+      // The member may run chat turns on their computer.
+      const [member] = await testDb
+        .select({ emailVerified: user.emailVerified })
+        .from(user)
+        .where(eq(user.id, ids.userA1));
+      emailVerifiedBefore = member?.emailVerified ?? false;
+      await testDb
+        .update(user)
+        .set({ emailVerified: true })
+        .where(eq(user.id, ids.userA1));
+      await testDb
+        .insert(featureEnrolments)
+        .values({
+          featureId: DESKTOP_RUNNER_FEATURE_ID,
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        })
+        .onConflictDoNothing();
+      testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
+        [DESKTOP_RUNNER_FEATURE_ID]: [
+          { type: "organization", organizationId: ids.orgA },
+        ],
+      });
     });
-    try {
-      // The owner's process stops, as its shutdown gives up its turns.
+
+    afterAll(async () => {
+      if (seededThreads.length > 0) {
+        await testDb
+          .delete(chatThreads)
+          .where(inArray(chatThreads.id, seededThreads));
+      }
+      await testDb
+        .delete(featureEnrolments)
+        .where(
+          and(
+            eq(featureEnrolments.featureId, DESKTOP_RUNNER_FEATURE_ID),
+            eq(featureEnrolments.organizationId, ids.orgA),
+            eq(featureEnrolments.userId, ids.userA1),
+          ),
+        );
+      await testDb
+        .update(user)
+        .set({ emailVerified: emailVerifiedBefore })
+        .where(eq(user.id, ids.userA1));
+      await releaseRlsFixture();
+    });
+
+    test("hands the turn to another task, which finishes the one answer while the computer runs on", async () => {
+      const { before, after } = await turnHalves();
+      const whole = await uninterrupted([...before, ...after]);
+      const seeded = await seedClaimedTurn();
+      const computer = createComputer();
+      computer.events(before);
+      // The owner's read asks for the run's state once it read every stored
+      // event: the owner is mid-turn, waiting on the computer.
+      const caughtUp = Promise.withResolvers<undefined>();
+      const { control } = computer.context;
+      computer.context.control = {
+        ...control,
+        readRun: async (options) => {
+          caughtUp.resolve(undefined);
+          return await control.readRun(options);
+        },
+      };
+      const owner = await startOwner({ computer, seeded });
+      await caughtUp.promise;
+
+      // Another task listens for released turns, with the steps a completed
+      // turn takes after it settles in the test's hand.
+      const stopping = new AbortController();
+      const titled: unknown[] = [];
+      const markedDue: unknown[] = [];
+      const quoteChecked: unknown[] = [];
+      const quoteChecker: AnswerQuoteChecker = async (message) => {
+        quoteChecked.push(message.parts.length);
+        return await NO_ANSWER_QUOTE_CHECKER(message);
+      };
+      const adopter = createChatTurnAdopter({
+        signal: stopping.signal,
+        indexThread: async () => {},
+        ownership: new ChatTurnOwnership(),
+        runtime: {
+          control: asTestRaw<DesktopRunnerControl>(computer.context.control),
+          runBell: computer.context.runBell,
+        },
+        answerQuoteChecker: quoteChecker,
+        followUps: {
+          markCompactionDue: async (options) => {
+            markedDue.push(options.threadId);
+            await Promise.resolve();
+          },
+          generateTitle: async (options) => {
+            titled.push(options);
+            await Promise.resolve();
+          },
+        },
+      });
+      const adoptions: Promise<void>[] = [];
+      const released: { answerId?: SafeId<"chatMessage"> } = {};
+      const stopAnswering = answerChatTurnAdopterDoorbell((turn) => {
+        adoptions.push(adopter.adopt(turn));
+      });
+      try {
+        // The owner's process stops, as its shutdown gives up its turns.
+        expect(
+          await owner.ownership.relinquish(chatTurnRelinquishmentOf(true)),
+        ).toBe("stored");
+        expect(owner.settledHere).toEqual([]);
+        const releasedTurn = await readTurn(seeded.execution.id);
+        expect(releasedTurn.status).toBe("handed-over");
+        expect(releasedTurn.executionId).toBeNull();
+        const checkpointId =
+          releasedTurn.assistantMessageId ??
+          panic("Expected the answer so far");
+        released.answerId = checkpointId;
+        expect(
+          sayings((await readAnswer(checkpointId)).parts).flat(),
+        ).toContain("Running the tests. ");
+        const [log] = await testDb
+          .select({ closedAt: chatRunLogs.closedAt })
+          .from(chatRunLogs)
+          .where(eq(chatRunLogs.runId, seeded.runId));
+        expect(log?.closedAt).toBeNull();
+
+        // The computer works on through the gap and finishes the turn.
+        computer.events(after);
+        computer.finish();
+        await Promise.all(adoptions);
+        expect(adoptions).toHaveLength(1);
+        await waitFor(
+          async () => {
+            const turn = await readTurn(seeded.execution.id);
+            return turn.status === "running" || turn.status === "handed-over"
+              ? undefined
+              : turn;
+          },
+          {
+            description: "the adopted turn's end",
+            timeoutMs: HAPPY_PATH_TIMEOUT_MS,
+          },
+        );
+      } finally {
+        stopAnswering();
+        stopping.abort();
+      }
+
+      const ended = await readTurn(seeded.execution.id);
+      expect(ended.status).toBe("completed");
+      // The adopter continued the stored answer under its id.
+      expect(ended.assistantMessageId).toBe(released.answerId ?? null);
+      const stored = await readAnswer(
+        ended.assistantMessageId ?? panic("Expected the stored answer"),
+      );
+      expect(sayings(stored.parts)).toEqual(sayings(whole.answer.parts));
+      // The adopter checked the answer's quotes, as the send would have.
+      expect(quoteChecked).toHaveLength(1);
+
+      // A page that tails the turn's log through the gap shows the same answer
+      // as one that watched a single task, with one run start and one end.
+      const logged = await readLog(seeded.runId);
+      expect(sayings(pageAnswer(logged).parts)).toEqual(
+        sayings(whole.page.parts),
+      );
       expect(
-        await owner.ownership.relinquish(chatTurnRelinquishmentOf(true)),
-      ).toBe("stored");
-      expect(owner.settledHere).toEqual([]);
-      const releasedTurn = await readTurn(seeded.execution.id);
-      expect(releasedTurn.status).toBe("handed-over");
-      expect(releasedTurn.executionId).toBeNull();
-      const checkpointId =
-        releasedTurn.assistantMessageId ?? panic("Expected the answer so far");
-      released.answerId = checkpointId;
-      expect(sayings((await readAnswer(checkpointId)).parts).flat()).toContain(
-        "Running the tests. ",
+        logged.filter((chunk) => chunk.type === EventType.RUN_STARTED),
+      ).toHaveLength(1);
+      const ends = logged.flatMap((chunk, index) =>
+        chunk.type === EventType.RUN_FINISHED ||
+        chunk.type === EventType.RUN_ERROR
+          ? [index]
+          : [],
       );
-      const [log] = await testDb
-        .select({ closedAt: chatRunLogs.closedAt })
-        .from(chatRunLogs)
-        .where(eq(chatRunLogs.runId, seeded.runId));
-      expect(log?.closedAt).toBeNull();
+      expect(ends).toEqual([logged.length - 1]);
 
-      // The computer works on through the gap and finishes the turn.
-      computer.events(after);
-      computer.finish();
-      await Promise.all(adoptions);
-      expect(adoptions).toHaveLength(1);
-      await waitFor(
-        async () => {
-          const turn = await readTurn(seeded.execution.id);
-          return turn.status === "running" || turn.status === "handed-over"
-            ? undefined
-            : turn;
-        },
-        {
-          description: "the adopted turn's end",
-          timeoutMs: HAPPY_PATH_TIMEOUT_MS,
-        },
-      );
-    } finally {
-      stopAnswering();
-      stopping.abort();
-    }
+      // The computer was never told to stop.
+      expect(computer.queued.interrupts).toBe(0);
 
-    const ended = await readTurn(seeded.execution.id);
-    expect(ended.status).toBe("completed");
-    // The adopter continued the stored answer under its id.
-    expect(ended.assistantMessageId).toBe(released.answerId ?? null);
-    const stored = await readAnswer(
-      ended.assistantMessageId ?? panic("Expected the stored answer"),
-    );
-    expect(sayings(stored.parts)).toEqual(sayings(whole.answer.parts));
-    // The adopter checked the answer's quotes, as the send would have.
-    expect(quoteChecked).toHaveLength(1);
-
-    // A page that tails the turn's log through the gap shows the same answer
-    // as one that watched a single task, with one run start and one end.
-    const logged = await readLog(seeded.runId);
-    expect(sayings(pageAnswer(logged).parts)).toEqual(
-      sayings(whole.page.parts),
-    );
-    expect(
-      logged.filter((chunk) => chunk.type === EventType.RUN_STARTED),
-    ).toHaveLength(1);
-    const ends = logged.flatMap((chunk, index) =>
-      chunk.type === EventType.RUN_FINISHED ||
-      chunk.type === EventType.RUN_ERROR
-        ? [index]
-        : [],
-    );
-    expect(ends).toEqual([logged.length - 1]);
-
-    // The computer was never told to stop.
-    expect(computer.queued.interrupts).toBe(0);
-
-    // A completed first turn: compaction was considered and the new thread
-    // is titled from its question and the answer.
-    expect(markedDue).toEqual([seeded.threadId]);
-    expect(titled).toEqual([
-      expect.objectContaining({
-        initialTitle: extractTitle(seeded.userMessage.parts),
-        threadId: seeded.threadId,
-      }),
-    ]);
-  });
-
-  test("that finds the member's stop recorded first ends the turn as that stop", async () => {
-    const seeded = await seedClaimedTurn();
-    await testDb
-      .update(chatTurns)
-      .set({ cancelRequestedAt: sql`now()` })
-      .where(eq(chatTurns.id, seeded.execution.id));
-
-    const released = await persistHandedOverChatTurn({
-      execution: seeded.execution,
-      indexThread: async () => {},
-      owningAssistantMessage: undefined,
-      recordAuditEvent: noAudit,
-      responseMessage: toPersistableChatMessage({
-        id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
-        parts: [{ content: "Running the tests. ", type: "text" }],
-        role: "assistant",
-      }),
-      safeDb: safeDbOf(),
-      threadId: seeded.threadId,
-      userId: ids.userA1,
-      workspaceId: ids.wsA1,
+      // A completed first turn: compaction was considered and the new thread
+      // is titled from its question and the answer.
+      expect(markedDue).toEqual([seeded.threadId]);
+      expect(titled).toEqual([
+        expect.objectContaining({
+          initialTitle: extractTitle(seeded.userMessage.parts),
+          threadId: seeded.threadId,
+        }),
+      ]);
     });
 
-    expect(released.isOk() ? released.value.type : released.error).toBe(
-      "stopped",
-    );
-    const turn = await readTurn(seeded.execution.id);
-    expect(turn.status).toBe("cancelled");
-    expect(turn.cancellationReason).toBe("user-stop");
+    test("that finds the member's stop recorded first ends the turn as that stop", async () => {
+      const seeded = await seedClaimedTurn();
+      await testDb
+        .update(chatTurns)
+        .set({ cancelRequestedAt: sql`now()` })
+        .where(eq(chatTurns.id, seeded.execution.id));
+
+      const released = await persistHandedOverChatTurn({
+        execution: seeded.execution,
+        indexThread: async () => {},
+        owningAssistantMessage: undefined,
+        recordAuditEvent: noAudit,
+        responseMessage: toPersistableChatMessage({
+          id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
+          parts: [{ content: "Running the tests. ", type: "text" }],
+          role: "assistant",
+        }),
+        safeDb: safeDbOf(),
+        threadId: seeded.threadId,
+        userId: ids.userA1,
+        workspaceId: ids.wsA1,
+      });
+
+      expect(released.isOk() ? released.value.type : released.error).toBe(
+        "stopped",
+      );
+      const turn = await readTurn(seeded.execution.id);
+      expect(turn.status).toBe("cancelled");
+      expect(turn.cancellationReason).toBe("user-stop");
+    });
   });
-});
+}
