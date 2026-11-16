@@ -232,6 +232,7 @@ describe("loadChatMessagePage active turn", () => {
     await testDb.insert(chatTurns).values({
       activeDurationMs: 0,
       activeStartedAt: acceptedAt,
+      createdAt: acceptedAt,
       id: turnId,
       leaseExpiresAt: new Date(acceptedAt.getTime() + 60_000),
       organizationId: ids.orgA,
