@@ -156,7 +156,7 @@ for (const [kind, chip] of Object.entries(CHIP_KINDS)) {
   });
 }
 
-test.each([undefined, null, ""])(
+test.each([undefined, null, "", false])(
   "a pill without hint or activation stays outside the tab order for %s",
   (tooltip) => {
     const view = renderChip(

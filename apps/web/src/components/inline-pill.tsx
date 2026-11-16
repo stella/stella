@@ -104,7 +104,10 @@ export const InlinePill = ({
 }: InlinePillProps): ReactElement => {
   const clickable = onActivate !== undefined;
   const hint =
-    tooltip === undefined || tooltip === null || tooltip === ""
+    tooltip === undefined ||
+    tooltip === null ||
+    tooltip === "" ||
+    tooltip === false
       ? title
       : tooltip;
   const hasHint = hint !== undefined && hint !== "";
