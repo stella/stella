@@ -2,6 +2,7 @@ import type { HotkeyChord } from "@tanstack/react-hotkeys";
 import { useQueryClient } from "@tanstack/react-query";
 import { Result, TaggedError } from "better-result";
 
+import { updateUserResource } from "@/lib/account/update-user";
 import { sessionOptions } from "@/lib/auth-queries";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { SHORTCUT_GROUPS } from "@/lib/hotkeys";
@@ -13,7 +14,6 @@ import {
   validateRebind,
 } from "@/lib/shortcut-overrides";
 import type { RebindError, ShortcutOverrides } from "@/lib/shortcut-overrides";
-import { updateUserResource } from "@/lib/update-user";
 import { useShortcutOverrides } from "@/lib/use-effective-shortcuts";
 
 class ShortcutPersistError extends TaggedError("ShortcutPersistError")<{

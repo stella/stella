@@ -56,6 +56,7 @@ import {
 import { pendingDeletionTasksOptions } from "@/lib/account/queries";
 import { hideSessionDocument } from "@/lib/account/session-document";
 import { signalSessionChange } from "@/lib/account/session-signal";
+import { createUserUpdateMutation } from "@/lib/account/update-user";
 import { forgetUserStorage } from "@/lib/account/user-scoped-storage";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -71,7 +72,6 @@ import { ensureRouteQueryData } from "@/lib/react-query";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
 import { TimeZonePicker } from "@/lib/time-zone-picker";
-import { createUserUpdateMutation } from "@/lib/update-user";
 import { organizationSettingsOptions } from "@/queries/organization-settings";
 import { routePresentation } from "@/routes/-route-presentation";
 import { ChatNotificationsCard } from "@/routes/_protected.settings/-components/account/chat-notifications-card";

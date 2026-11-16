@@ -18,10 +18,10 @@ import {
 import { Field, FieldLabel } from "@stll/ui/field";
 import { Input } from "@stll/ui/input";
 
+import { createUserUpdateMutation } from "@/lib/account/update-user";
 import { sessionOptions } from "@/lib/auth-queries";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { createUserUpdateMutation } from "@/lib/update-user";
 
 const PREFERRED_NAME_MAX_LENGTH = 120;
 

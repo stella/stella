@@ -10,6 +10,10 @@ import { expect, spyOn, test } from "bun:test";
 import { RESOURCE_TYPE } from "@stll/api-contract";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import {
+  createUserUpdateMutation,
+  updateUserResource,
+} from "@/lib/account/update-user";
 import { rootKeys } from "@/lib/auth-query-options";
 import { APIError } from "@/lib/errors/api";
 import { AuthClientError } from "@/lib/errors/auth";
@@ -17,10 +21,6 @@ import {
   installSessionCacheGuard,
   settleAuthTransition,
 } from "@/lib/session-cache-guard";
-import {
-  createUserUpdateMutation,
-  updateUserResource,
-} from "@/lib/update-user";
 import { resourceQueryOptions } from "@/lib/workspace-realtime";
 import { calendarTasksOptions } from "@/lib/workspaces/queries/calendar-tasks";
 import { taskDetailOptions, taskKeys } from "@/lib/workspaces/queries/tasks";
@@ -299,35 +299,39 @@ class ProfileTransportError extends TaggedError("ProfileTransportError")<{
   message: string;
 }> {}
 
-test("a transport rejection keeps its identity through both profile update entry points", async () => {
-  const readers = createReaders();
-  readers.rename();
-  const failure = new ProfileTransportError({
-    message: "Transport disconnected",
-  });
-  const fetch = spyOn(globalThis, "fetch").mockRejectedValue(failure);
-  const owner = { userId, organizationId };
-  try {
-    const update = createUserUpdateMutation({
-      queryClient: readers.client,
-      input: () => ({ name: "Alpha" }),
-      owner,
-    });
-    expect(await rejectionOf(update())).toBe(failure);
-    expect(
-      await rejectionOf(
-        updateUserResource({
-          queryClient: readers.client,
-          input: { name: "Alpha" },
-          owner,
-        }),
-      ),
-    ).toBe(failure);
-    await readers.settle();
-    expect(readers.detail.value()).toBe("Zulu");
-    expect(readers.calendar.value()).toBe("Zulu");
-  } finally {
-    fetch.mockRestore();
-    readers.close();
-  }
-});
+test.each([
+  new ProfileTransportError({ message: "Transport disconnected" }),
+  { reason: "Transport disconnected" },
+  "Transport disconnected",
+])(
+  "a transport rejection keeps its identity through both profile update entry points: %j",
+  async (failure) => {
+    const readers = createReaders();
+    readers.rename();
+    const fetch = spyOn(globalThis, "fetch").mockRejectedValue(failure);
+    const owner = { userId, organizationId };
+    try {
+      const update = createUserUpdateMutation({
+        queryClient: readers.client,
+        input: () => ({ name: "Alpha" }),
+        owner,
+      });
+      expect(await rejectionOf(update())).toBe(failure);
+      expect(
+        await rejectionOf(
+          updateUserResource({
+            queryClient: readers.client,
+            input: { name: "Alpha" },
+            owner,
+          }),
+        ),
+      ).toBe(failure);
+      await readers.settle();
+      expect(readers.detail.value()).toBe("Zulu");
+      expect(readers.calendar.value()).toBe("Zulu");
+    } finally {
+      fetch.mockRestore();
+      readers.close();
+    }
+  },
+);

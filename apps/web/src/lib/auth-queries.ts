@@ -3,6 +3,7 @@ import {
   queryOptions,
   skipToken,
 } from "@tanstack/react-query";
+import { Result } from "better-result";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
 import { PROFESSIONAL_USE_STATUS } from "@stll/api-contract/professional-use";
@@ -12,6 +13,7 @@ import type { PermissionInput } from "@stll/permissions";
 import { rootKeys } from "@/lib/auth-query-options";
 import { STALE_TIME } from "@/lib/consts";
 import type { toAuthClientError } from "@/lib/errors/auth";
+import { readQueryResult } from "@/lib/errors/query-result";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
@@ -33,10 +35,12 @@ type AuthClientResult<T> =
   | { data: null; error: Parameters<typeof toAuthClientError>[0] };
 
 /** The data of an auth client call, or its error as an `AuthClientError`. */
-const authClientData = async <T>(result: AuthClientResult<T>): Promise<T> => {
+export const authClientData = async <T>(
+  result: AuthClientResult<T>,
+): Promise<T> => {
   if (result.error) {
     const errors = await import("@/lib/errors/auth");
-    throw errors.toAuthClientError(result.error);
+    return readQueryResult(Result.err(errors.toAuthClientError(result.error)));
   }
   return result.data;
 };

@@ -26,6 +26,7 @@ import { cn } from "@stll/ui/utils";
 import { InboxQuickJump } from "@/components/auth/inbox-quick-jump";
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
 import { usePulse } from "@/hooks/use-pulse";
+import { updateUserResource } from "@/lib/account/update-user";
 import { useAnalytics } from "@/lib/analytics/provider";
 import {
   authClient,
@@ -37,7 +38,6 @@ import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { COMMON_TIMEZONES } from "@/lib/timezones";
-import { updateUserResource } from "@/lib/update-user";
 
 import {
   accessResetProviders,

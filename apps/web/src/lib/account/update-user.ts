@@ -1,9 +1,10 @@
 import type { QueryClient } from "@tanstack/react-query";
-import { Result } from "better-result";
 
 import { authClient } from "@/lib/auth-client";
+import { authClientData } from "@/lib/auth-queries";
 import { APIError } from "@/lib/errors/api";
-import { AuthClientError, toAuthClientError } from "@/lib/errors/auth";
+import { AuthClientError } from "@/lib/errors/auth";
+import { queryResultWithExpectedRefusal } from "@/lib/errors/query-result";
 import { resourceMutation } from "@/lib/workspace-realtime";
 
 type UserProjectionOwner = {
@@ -33,10 +34,7 @@ export const createUserUpdateMutation = <TVariables = void>({
     },
     mutationFn: async (variables: TVariables) => {
       const response = await authClient.updateUser(input(variables));
-      if (response.error) {
-        throw toAuthClientError(response.error);
-      }
-      return response.data;
+      return await authClientData(response);
     },
   });
 
@@ -53,13 +51,13 @@ export const updateUserResource = async ({
   input,
   owner,
 }: UpdateUserResourceOptions) =>
-  await createUserUpdateMutation({
-    queryClient,
-    input: () => input,
-    owner,
-  })().then(Result.ok, (error: unknown) => {
-    if (AuthClientError.is(error) || APIError.is(error)) {
-      return Result.err(error);
-    }
-    throw error;
+  await queryResultWithExpectedRefusal({
+    run: async () =>
+      await createUserUpdateMutation({
+        queryClient,
+        input: () => input,
+        owner,
+      })(),
+    isExpectedRefusal: (error): error is AuthClientError | APIError =>
+      AuthClientError.is(error) || APIError.is(error),
   });

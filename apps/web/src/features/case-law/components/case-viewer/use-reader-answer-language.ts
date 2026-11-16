@@ -4,10 +4,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 import { panic, Result } from "better-result";
 
+import { updateUserResource } from "@/lib/account/update-user";
 import { sessionOptions } from "@/lib/auth-queries";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { queryView, queryViewError } from "@/lib/query-view.logic";
-import { updateUserResource } from "@/lib/update-user";
 
 type PersistReaderAnswerLanguageInput = {
   queryClient: QueryClient;
