@@ -37,8 +37,9 @@ const config = {
     "the queue once the turn took it. `refused` with a `reason`: " +
     "`turn_not_running`, `no_run` (no run on a computer yet, or it ended), " +
     "`harness_cannot_steer`, `run_full`, or `queued_message_changed` (the " +
-    "queued message was edited, sent or removed since); queue the message " +
-    "as the next one. A turn outside the thread, or one you cannot see, is " +
+    "queued message was edited, sent or removed since, or is queued to be " +
+    "sent anonymized, which a turn on a computer never is); queue the " +
+    "message as the next one. A turn outside the thread, or one you cannot see, is " +
     "a 404.",
   permissions: CHAT_TURN_PERMISSIONS,
   accountAccess: ACCOUNT_ACCESS.sandbox,
@@ -75,7 +76,7 @@ const markQueuedSteer = async ({
   threadId,
   userId,
 }: QueuedSteerMark): Promise<
-  Result<"marked" | "changed" | "unqueued", SafeDbError>
+  Result<"marked" | "changed" | "not-raw" | "unqueued", SafeDbError>
 > => {
   switch (source.type) {
     case CHAT_LOCAL_RUN_STEER_SOURCE.composer:
@@ -138,7 +139,10 @@ const steerChatTurn = createSafeRootHandler(
         userId: user.id,
       }),
     );
-    if (marked === "changed") {
+    // A message queued anonymized is refused like one changed since: the
+    // turn is never handed its text raw, and the member's client sends it
+    // next instead.
+    if (marked === "changed" || marked === "not-raw") {
       return answer({ type: "refused", reason: "queued_message_changed" });
     }
     const steered = await getDesktopRunnerControl().control.steerChatTurn({

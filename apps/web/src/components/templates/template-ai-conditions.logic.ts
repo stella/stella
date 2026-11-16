@@ -132,14 +132,14 @@ export const readConditionOverrides = (
   values: Readonly<Record<string, unknown>>,
   conditionPaths: readonly string[],
 ): Record<string, boolean> => {
-  const overrides: Record<string, boolean> = {};
+  const overrides = new Map<string, boolean>();
   for (const path of conditionPaths) {
     const value = values[path];
     if (typeof value === "boolean") {
-      overrides[path] = value;
+      overrides.set(path, value);
     }
   }
-  return overrides;
+  return Object.fromEntries(overrides);
 };
 
 /** Whether the form carries an answer that can inform a decision. */

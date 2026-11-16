@@ -16,7 +16,9 @@ import type { AnyDrizzle } from "@/api/db/scoped";
 import {
   CASE_LAW_DECISION_VIEWS,
   caseLawDecisionViewGrantStatement,
+  CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION,
   PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
+  publicLawColumnPairs,
   ROLLOUT_CASE_LAW_SOURCE_COLUMNS,
   ROLLOUT_CASE_LAW_SOURCE_RELATION,
   ROLLOUT_CASE_LAW_WHOLE_RELATIONS,
@@ -344,7 +346,11 @@ const CORPUS_PROJECTION_REVISION_TABLE_SQL = quoteSqlIdentifier(
  * harness mirrors the migrations, so it leaves them ungranted too.
  */
 const PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE: ReadonlySet<string> =
-  new Set<string>();
+  new Set(
+    publicLawColumnPairs(
+      CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION,
+    ).map(({ relation, column }) => `${relation}.${column}`),
+  );
 
 const decisionColumnNames = new Set(
   Object.values(getColumns(schema.caseLawDecisions)).map(({ name }) => name),

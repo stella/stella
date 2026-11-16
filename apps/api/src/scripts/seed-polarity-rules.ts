@@ -25,6 +25,7 @@ import {
   SEED_RULES,
 } from "@/api/handlers/case-law/polarity/seed-rules";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 
 await runScriptWithErrorOutput(async () => {
   // Hold the maintenance lane before the first statement: operator passes over
@@ -35,12 +36,13 @@ await runScriptWithErrorOutput(async () => {
 
   // One statement for the whole list; `(pattern, language)` is unique within
   // `SEED_RULES`, so no row is updated twice.
-  await rootDb.transaction(async (tx) => {
+  await withAggregateTransaction(rootDb, async (tx) => {
     await tx
       .insert(caseLawPolarityRules)
       .values(
         SEED_RULES.map((rule) => ({
           pattern: rule.pattern,
+          kind: rule.kind,
           polarity: rule.polarity,
           language: rule.language,
           source: "manual" as const,
@@ -56,6 +58,7 @@ await runScriptWithErrorOutput(async () => {
         // that changed nothing a classifier would ever see. The insert and
         // the update have to establish the same row.
         set: {
+          kind: sql`excluded.kind`,
           polarity: sql`excluded.polarity`,
           confidence: 1,
           source: "manual",
@@ -65,7 +68,8 @@ await runScriptWithErrorOutput(async () => {
 
   let resetIds: string[] = [];
   if (RETIRED_SEED_RULES.length > 0) {
-    const retired = await rootDb.transaction(
+    const retired = await withAggregateTransaction(
+      rootDb,
       async (tx) =>
         await tx
           .update(caseLawPolarityRules)
