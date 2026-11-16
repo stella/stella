@@ -871,8 +871,9 @@ const corpusProjectionOfflineRequestCap = (
 /**
  * Each lease's request cap (`corpusProjectionOfflineRequestCap`), from the
  * withdrawn revisions of its entity at its epoch whose delivery could have
- * failed on its documents, and the number each one's request actually
- * delivered. Those rows are history, so the cap survives
+ * failed on its documents, and those retired from a request killed at its
+ * deadline, and the number each one's request actually delivered. Those
+ * rows are history, so the cap survives
  * any crash, and the lease is the entity's only outstanding revision, so it
  * cannot shrink while the lease is held.
  */
@@ -906,13 +907,31 @@ export const readCorpusProjectionOfflineRequestCapsTx = async (
         inArray(corpusIndexProjectionIntents.entityId, [
           ...new Set(leases.map(({ entityId }) => entityId)),
         ]),
-        eq(corpusIndexProjectionIntents.status, "withdrawn"),
-        // A withdrawal whose delivery said nothing about its documents (a
-        // refusal, a crash, a failure outside the indexer) halves nothing.
-        inArray(corpusIndexProjectionIntents.appendFault, [
-          "documents",
-          "killed",
-        ]),
+        or(
+          // A withdrawal whose delivery said nothing about its documents (a
+          // refusal, a crash, a failure outside the indexer) halves nothing.
+          and(
+            eq(corpusIndexProjectionIntents.status, "withdrawn"),
+            inArray(corpusIndexProjectionIntents.appendFault, [
+              "documents",
+              "killed",
+            ]),
+          ),
+          // A revision retired from a request killed at its deadline (part
+          // of it published, part not) is no less suspect than one withdrawn
+          // from it: it halves too. One retired from a request its indexer
+          // ran to a verdict left its entity in single requests instead.
+          and(
+            eq(corpusIndexProjectionIntents.appendFault, "killed"),
+            inArray(corpusIndexProjectionIntents.status, [
+              "cleanup_pending",
+              "cleanup_started",
+              "cleanup_committed",
+              "cleanup_stalled",
+              "settled",
+            ]),
+          ),
+        ),
       ),
     );
   const delivered = await readOfflineDeliveredCountsTx(

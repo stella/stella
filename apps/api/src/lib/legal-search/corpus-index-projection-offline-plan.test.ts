@@ -26,9 +26,9 @@ import {
   type CorpusProjectionOfflineBuildPolicy,
   corpusProjectionOfflineIndexingWindowMs,
   corpusProjectionOfflineLeaseCanStart,
+  corpusProjectionOfflineLoneKillJudgement,
   corpusProjectionOfflineNextShardClass,
   corpusProjectionOfflinePageLimit,
-  corpusProjectionOfflineRateCannotIndex,
   corpusProjectionOfflineReserveToStartMs,
   corpusProjectionOfflineShardCapAfterKill,
   corpusProjectionOfflineShardClass,
@@ -577,48 +577,100 @@ describe("offline build plan", () => {
     );
   });
 
-  // A lone kill is the engine's only when the rate achieved on shards that
-  // ran to their end cannot index the revision in the kill budget.
-  test("offline-build.lone-kill-rate", () => {
-    const budgetMs = 600_000;
-    // Nothing measured yet: no evidence the engine is too slow.
+  test("offline-build.lone-kill-judgement", () => {
+    const plan = { indexingWindowMs: 300_000 };
+    const judge = (
+      ingested: { bytes: number; ms: number }[],
+      bytes: number,
+      killAfterMs: number,
+    ) =>
+      corpusProjectionOfflineLoneKillJudgement(plan, {
+        ingested,
+        bytes,
+        killAfterMs,
+      });
+    // Handed less than the window: the kill says nothing about the revision.
+    expect(judge([], 1_000_000, 299_999)).toBe("budget_short");
+    // A full window and nothing comparable measured: the revision's fault.
+    expect(judge([], 1_000_000, 600_000)).toBe("revision");
+    // Fast-failing or small shards are no evidence either way.
     expect(
-      corpusProjectionOfflineRateCannotIndex(
-        { bytes: 0, ms: 0 },
-        1_000_000,
-        budgetMs,
-      ),
-    ).toBe(false);
-    // 1 MB in 60 s: 10 MB in the budget, so a 4 MB revision fits.
-    const measured = { bytes: 1_000_000, ms: 60_000 };
-    expect(
-      corpusProjectionOfflineRateCannotIndex(measured, 4_000_000, budgetMs),
-    ).toBe(false);
-    expect(
-      corpusProjectionOfflineRateCannotIndex(measured, 10_000_000, budgetMs),
-    ).toBe(false);
-    expect(
-      corpusProjectionOfflineRateCannotIndex(measured, 10_000_001, budgetMs),
-    ).toBe(true);
+      judge([{ bytes: 999_999, ms: 600_000_000 }], 1_000_000, 600_000),
+    ).toBe("revision");
+    // 2 MB ingested in 400 s: 3 MB in a 600 s budget, so 3 MB fits.
+    const slow = [{ bytes: 2_000_000, ms: 400_000 }];
+    expect(judge(slow, 2_000_000, 600_000)).toBe("revision");
+    // A budget of 300 s indexes 1.5 MB at that rate: a 2 MB kill is the
+    // engine's.
+    expect(judge(slow, 2_000_000, 300_000)).toBe("rate_too_slow");
+
+    const shard = fc.record({
+      bytes: fc.integer({ min: 1, max: 2 ** 24 }),
+      ms: fc.integer({ min: 0, max: 60 * 60_000 }),
+    });
     assertProperty(
-      "offline-build.lone-kill-rate",
+      "offline-build.lone-kill-judgement",
       fc.property(
-        fc.integer({ min: 1, max: 2 ** 30 }),
+        fc.array(shard, { maxLength: 8 }),
+        fc.array(shard, { maxLength: 8 }),
+        fc.integer({ min: 1, max: 2 ** 24 }),
         fc.integer({ min: 1, max: 60 * 60_000 }),
-        fc.integer({ min: 1, max: 2 ** 27 }),
-        fc.integer({ min: 1, max: 60 * 60_000 }),
-        (attemptedBytes, attemptedMs, bytes, killBudgetMs) => {
-          // Exactly when the measured rate indexes fewer bytes in the budget.
+        fc.integer({ min: 1, max: 4 }),
+        (ingested, others, bytes, killAfterMs, speedUp) => {
+          const verdict = judge(ingested, bytes, killAfterMs);
+          if (killAfterMs < plan.indexingWindowMs) {
+            expect(verdict).toBe("budget_short");
+            return;
+          }
+          // Shards smaller than the judged revision never move the verdict.
+          const smaller = others.map((other) => ({
+            ...other,
+            bytes: Math.max(1, Math.min(other.bytes, bytes - 1)),
+          }));
           expect(
-            corpusProjectionOfflineRateCannotIndex(
-              { bytes: attemptedBytes, ms: attemptedMs },
+            judge(
+              [...ingested, ...smaller.filter((other) => other.bytes < bytes)],
               bytes,
-              killBudgetMs,
+              killAfterMs,
             ),
-          ).toBe(
-            BigInt(attemptedBytes) * BigInt(killBudgetMs) <
-              BigInt(bytes) * BigInt(attemptedMs),
+          ).toBe(verdict);
+          const comparable = ingested.filter((other) => other.bytes >= bytes);
+          if (comparable.every((other) => other.ms === 0)) {
+            expect(verdict).toBe("revision");
+          }
+          // The engine is blamed only on evidence that, at the comparable
+          // shards' combined rate, the budget indexes fewer bytes than the
+          // revision holds.
+          const comparableBytes = comparable.reduce(
+            (sum, other) => sum + BigInt(other.bytes),
+            0n,
           );
+          const comparableMs = comparable.reduce(
+            (sum, other) => sum + BigInt(other.ms),
+            0n,
+          );
+          expect(verdict === "rate_too_slow").toBe(
+            comparableMs > 0n &&
+              comparableBytes * BigInt(killAfterMs) <
+                BigInt(bytes) * comparableMs,
+          );
+          // A faster engine, or a longer budget, never shifts the blame from
+          // the revision to the engine.
+          if (verdict === "revision") {
+            expect(
+              judge(
+                ingested.map((other) => ({
+                  ...other,
+                  ms: Math.floor(other.ms / speedUp),
+                })),
+                bytes,
+                killAfterMs,
+              ),
+            ).toBe("revision");
+            expect(judge(ingested, bytes, killAfterMs * speedUp)).toBe(
+              "revision",
+            );
+          }
         },
       ),
     );

@@ -395,21 +395,61 @@ export const corpusProjectionOfflineShardCapAfterKill = (
     : { type: "rate_too_slow", halvedBytes: halved };
 };
 
+/** One shard the indexer ingested to its end: its bytes and its run time. */
+export type CorpusProjectionOfflineIngestedShard = {
+  bytes: number;
+  ms: number;
+};
+
 /**
- * Whether the rate a run achieved cannot index `bytes` within the kill
- * budget: the run's evidence that a lone revision killed at its deadline was
- * too slow for the engine rather than at fault itself. The measurement is
- * every shard the indexer ran to its own end before this one (ingested, or
- * failed on what it held), never a killed one: a kill bounds the rate only
- * from above, and the revision under judgement may be what held it up. With
- * no such measurement there is no evidence, and the kill is the revision's.
+ * Who a lone revision killed at its deadline with documents short is charged
+ * to:
+ * - `budget_short`: it was handed less than the plan's indexing window
+ *   (staging or admission ate the rest), so the kill says nothing about it.
+ *   Nobody is charged and the run stops as an infrastructure failure.
+ * - `rate_too_slow`: shards the run ingested to their end, each at least as
+ *   large as this revision, achieved a rate that cannot index its bytes in
+ *   the budget it was handed. The engine is too slow, not the revision.
+ * - `revision`: otherwise. It had at least the window the plan sized for the
+ *   largest revision at the policy's rate, and nothing the run measured on
+ *   comparable shards says the engine is slower than that, so it is charged
+ *   like a lone failure on its content: blocked at the attempt limit, never
+ *   retried forever.
+ *
+ * Only ingested shards measure the rate: a failure may stop on its first line
+ * and a kill bounds the rate only from above. Only shards at least as large
+ * as the judged revision count, since a small shard carries the fixed cost of
+ * a process start, a commit and merges, and would read a large revision's
+ * marginal rate as far slower than it is.
  */
-export const corpusProjectionOfflineRateCannotIndex = (
-  completed: { bytes: number; ms: number },
-  bytes: number,
-  killBudgetMs: number,
-): boolean =>
-  completed.ms > 0 && completed.bytes * killBudgetMs < bytes * completed.ms;
+export const corpusProjectionOfflineLoneKillJudgement = (
+  plan: Pick<CorpusProjectionOfflinePlan, "indexingWindowMs">,
+  {
+    ingested,
+    bytes,
+    killAfterMs,
+  }: {
+    ingested: readonly CorpusProjectionOfflineIngestedShard[];
+    bytes: number;
+    killAfterMs: number;
+  },
+): "budget_short" | "rate_too_slow" | "revision" => {
+  if (killAfterMs < plan.indexingWindowMs) {
+    return "budget_short";
+  }
+  let comparableBytes = 0;
+  let comparableMs = 0;
+  for (const shard of ingested) {
+    if (shard.bytes >= bytes) {
+      comparableBytes += shard.bytes;
+      comparableMs += shard.ms;
+    }
+  }
+  return comparableMs > 0 &&
+    comparableBytes * killAfterMs < bytes * comparableMs
+    ? "rate_too_slow"
+    : "revision";
+};
 
 /**
  * How many leases the next reservation page may take, so the blocks it
