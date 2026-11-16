@@ -1,8 +1,9 @@
 import { panic, Result } from "better-result";
-import { inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
 
+import { organization, user } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
 import { organizationSettings, sharepointConnections } from "@/api/db/schema";
 import listSharepointDriveItems from "@/api/handlers/sharepoint/drives/items/list";
@@ -16,6 +17,7 @@ import { runWithMeasuredQueryCounter } from "@/api/lib/db-query-counter";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { withTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -87,12 +89,37 @@ export const seedSharepointBrowseScaling = async (
       scope: delegatedReadScopes(["files.read"]),
     })),
   );
+  // Token admission locks the policy and connection rows by their
+  // schema-qualified names, which the temporary scaling tables do not shadow:
+  // mirror the measured member's rows into the real tables.
+  const targetIndex = 0;
+  await db.insert(organization).values({
+    id: target.organizationId,
+    name: "SharePoint browse scaling fixture",
+    slug: `sharepoint-browse-${target.organizationId}`,
+    createdAt: new Date(Temporal.Now.instant().epochMilliseconds),
+  });
+  await db.insert(user).values({
+    id: target.userId,
+    name: "SharePoint browse scaling member",
+    email: `${target.userId}@example.test`,
+    emailVerified: true,
+  });
+  await db.execute(
+    sql`INSERT INTO public.organization_settings (id, organization_id, sharepoint_connection_enabled) VALUES (${settingIds[targetIndex] ?? panic("Settings id for the measured member")}, ${target.organizationId}, true)`,
+  );
+  await db.execute(
+    sql`INSERT INTO public.sharepoint_connections (id, organization_id, user_id, access_token_encrypted, access_token_iv, expires_at, status, scope) VALUES (${connectionIds[targetIndex] ?? panic("Connection id for the measured member")}, ${target.organizationId}, ${target.userId}, ${encrypted.ciphertext}, ${encrypted.iv}, ${expiresAt}, 'connected', ${delegatedReadScopes(["files.read"])})`,
+  );
   const safeDb: SafeDb = async (work) =>
     await Result.tryPromise(async () => await db.transaction(work));
   return {
     ...target,
     safeDb,
     cleanup: async () => {
+      // Deleting the organization cascades to its mirrored rows.
+      await deleteOrganizationsForTest(db, [target.organizationId]);
+      await db.delete(user).where(eq(user.id, target.userId));
       await db
         .delete(sharepointConnections)
         .where(inArray(sharepointConnections.id, connectionIds));
@@ -129,7 +156,7 @@ const measureBrowse = async (
           },
           memberRole: sessionMemberRole("member"),
           safeDb: fixture.safeDb,
-          recordAuditEvent: async () => undefined,
+          recordAuditEvent: async () => await Promise.resolve(),
           params: { driveId: "b!drive", itemId: "root" },
           query: {},
           request: new Request("https://example.test/v1/sharepoint"),
