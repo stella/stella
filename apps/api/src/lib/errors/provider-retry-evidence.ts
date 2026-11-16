@@ -1,5 +1,4 @@
 import type { TextOptions } from "@tanstack/ai";
-import { Result } from "better-result";
 
 import { NETWORK_ERROR_CODE_REASON } from "@/api/lib/observability/failure";
 import { isRecord } from "@/api/lib/type-guards";
@@ -129,29 +128,30 @@ export const recordProviderSends =
     const recording: typeof fetch = Object.assign(
       async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
         record.evidence = undefined;
-        const sent = await Result.tryPromise(
-          async () => await send(input, init),
-        );
-        if (Result.isError(sent)) {
-          const error = sent.error.cause;
-          const code =
-            providerTransportCode(error) ??
-            (isAbortShaped(error) && signal?.aborted !== true
-              ? "ETIMEDOUT"
-              : undefined);
-          record.evidence = code === undefined ? undefined : { code };
-          throw error;
-        }
-        const response = sent.value;
-        if (!response.ok) {
-          const hints = retryHintEvidence(response.headers);
-          const requestId = responseRequestId(response.headers);
-          record.evidence =
-            hints.headers === undefined && requestId === undefined
+        const sent = send(input, init);
+        // Read what the request came back with on a side branch that never
+        // rejects; the caller still gets the send itself, settled as it was.
+        record.evidence = await sent.then(
+          (response): ProviderSendEvidence | undefined => {
+            if (response.ok) {
+              return undefined;
+            }
+            const hints = retryHintEvidence(response.headers);
+            const requestId = responseRequestId(response.headers);
+            return hints.headers === undefined && requestId === undefined
               ? undefined
               : { ...hints, ...(requestId === undefined ? {} : { requestId }) };
-        }
-        return response;
+          },
+          (error: unknown): ProviderSendEvidence | undefined => {
+            const code =
+              providerTransportCode(error) ??
+              (isAbortShaped(error) && signal?.aborted !== true
+                ? "ETIMEDOUT"
+                : undefined);
+            return code === undefined ? undefined : { code };
+          },
+        );
+        return await sent;
       },
       { preconnect: send.preconnect },
     );
