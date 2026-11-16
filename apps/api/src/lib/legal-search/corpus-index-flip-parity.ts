@@ -45,12 +45,14 @@
  *   generation's scope. The read refuses both.
  *
  * Order matters. A candidate state that is missing altogether is found by the
- * coverage walk, page by page over the serving generation's applied copies;
- * the regression statement runs after the walk has ended. Nothing deletes a
- * projection state outside a rebuild, so a state the walk saw is still there
- * for the regression statement to classify, and a state seeded after its page
- * was read is reported as missing, which only overstates. In the other order a
- * decision seeded between the two reads would be reported by neither.
+ * coverage walk, page by page over every serving state that wants an upsert,
+ * shown yet or not; the regression statement runs after the walk has ended.
+ * Nothing deletes a projection state outside a rebuild, so a state the walk
+ * saw is still there for the regression statement to classify, a candidate
+ * state seeded after its page was read is reported as missing, and a serving
+ * state applied after its page was read is still one the walk counted, all of
+ * which only overstates. In the other order a decision seeded between the two
+ * reads would be reported by neither.
  * `readCorpusIndexFlipParity` owns that order; it is the only way to a verdict.
  */
 import { panic, Result, TaggedError } from "better-result";
@@ -74,7 +76,6 @@ import {
   corpusIndexManifestIsPartial,
   requireCorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
-import { readCorpusProjectionCensusIndexIdsTx } from "@/api/lib/legal-search/corpus-index-projection-census-store";
 import {
   CORPUS_INDEX_PROJECTION_SERVING,
   corpusIndexProjectionIsAbsent,
@@ -612,43 +613,36 @@ const readRegressionsTx = async (
 };
 
 /**
- * One page of the coverage walk: the serving generation's applied copies in
- * one index, in entity order, read through its applied-census index, and among
- * them the ones it shows that the candidate has no state for.
+ * One page of the coverage walk: the serving generation's states in entity
+ * order, read through its primary key, and among them the ones that want an
+ * upsert while the candidate has no state at all. Every such state counts,
+ * shown or not yet: one the serving generation applies after its page was
+ * read would otherwise reach readers with nothing in the candidate, and the
+ * regression statement, which walks candidate states, could not see it.
  */
 export const corpusIndexFlipCoveragePageQuery = (
   pair: CorpusIndexFlipPair,
-  {
-    servingIndexId,
-    after,
-    limit,
-  }: { servingIndexId: string; after: string | null; limit: number },
+  { after, limit }: { after: string | null; limit: number },
 ): SQL => {
   const { family, serving, candidate } = pair;
   return sql`
     WITH walked AS MATERIALIZED (
-      SELECT ${states.entityId} AS entity_id
+      SELECT ${states.entityId} AS entity_id,
+        ${states.desiredAction} AS desired_action
       FROM ${states}
-      WHERE ${generationOf(states, family, serving)}
-        AND ${states.appliedIndexId} = ${servingIndexId}
-        -- The applied shape check makes these two conjuncts one condition;
-        -- spelling both is what the applied-census partial index requires.
-        AND ${states.appliedAction} = 'upsert'
-        AND ${states.appliedRevision} IS NOT NULL${
-          after === null
-            ? sql``
-            : sql`
+      WHERE ${generationOf(states, family, serving)}${
+        after === null
+          ? sql``
+          : sql`
         AND ${states.entityId} > ${after}::uuid`
-        }
+      }
       ORDER BY ${states.entityId}
       LIMIT ${limit}
     ),
     missing AS (
       SELECT walked.entity_id::text AS entity_id
       FROM walked
-      ${stateLookup("serving_state", family, serving)}
-      ${namedRevisionLookup(servingState, "serving_revision")}
-      -- One primary-key probe per copy: as an anti-join the planner may
+      -- One primary-key probe per state: as an anti-join the planner may
       -- read the candidate's states whole.
       LEFT JOIN LATERAL (
         SELECT true AS present
@@ -657,7 +651,7 @@ export const corpusIndexFlipCoveragePageQuery = (
           AND ${states.entityId} = walked.entity_id
         LIMIT 1
       ) candidate_presence ON true
-      WHERE ${servingShows}
+      WHERE walked.desired_action = 'upsert'
         AND candidate_presence.present IS NULL
     )
     SELECT
@@ -678,15 +672,12 @@ export const corpusIndexFlipCoveragePageQuery = (
       ), '[]'::json) AS sample`;
 };
 
-/** Where a coverage walk stands: the serving index and the last copy read. */
-export type CorpusIndexFlipCoverageCursor = {
-  servingIndexId: string;
-  after: string | null;
-};
+/** Where a coverage walk stands: the last serving state it read. */
+export type CorpusIndexFlipCoverageCursor = { after: string | null };
 
 type CorpusIndexFlipCoverage =
   | {
-      /** The walk read every serving copy, from the first index on. */
+      /** The walk read every serving state from the first on. */
       type: "complete";
       walked: number;
       missing: number;
@@ -694,8 +685,8 @@ type CorpusIndexFlipCoverage =
     }
   | {
       /**
-       * The walk did not read every copy: its page budget ran out (`next`
-       * says where to resume), it resumed from a cursor, or it was not run.
+       * The walk did not read every state: its page budget ran out (`next`
+       * says where to resume), or it resumed from a cursor.
        */
       type: "incomplete";
       walked: number;
@@ -706,7 +697,7 @@ type CorpusIndexFlipCoverage =
 
 /**
  * The one verdict a caller acts on. `no_regression` only when the coverage
- * walk read every serving copy and found none missing, and the regression
+ * walk read every serving state and found none missing, and the regression
  * statement was exact and empty.
  */
 type CorpusIndexFlipVerdict =
@@ -766,7 +757,7 @@ const verdictOf = (
 };
 
 type CoverageWalkOptions = {
-  /** Serving copies per page, at most `CORPUS_INDEX_FLIP_COVERAGE_PAGE_MAX`. */
+  /** Serving states per page, at most `CORPUS_INDEX_FLIP_COVERAGE_PAGE_MAX`. */
   pageSize: number;
   /** Pages this call may read; 0 skips the walk. */
   pageBudget: number;
@@ -786,21 +777,13 @@ type CoveragePage = {
 const readCoveragePage = async (
   runInTransaction: ProjectionTransactionRunner,
   pair: CorpusIndexFlipPair,
-  {
-    servingIndexId,
-    after,
-    limit,
-  }: { servingIndexId: string; after: string | null; limit: number },
+  { after, limit }: { after: string | null; limit: number },
 ): Promise<Result<CoveragePage, CorpusIndexFlipParityReadError>> => {
   const rows = await runInTransaction(
     async (tx) =>
       await readRows(
         tx,
-        corpusIndexFlipCoveragePageQuery(pair, {
-          servingIndexId,
-          after,
-          limit,
-        }),
+        corpusIndexFlipCoveragePageQuery(pair, { after, limit }),
         pair,
       ),
   );
@@ -822,63 +805,48 @@ const readCoveragePage = async (
 };
 
 /**
- * Walk the serving generation's applied copies index by index, one short
- * read-only transaction per page, within the page budget.
+ * Walk the serving generation's states, one short read-only transaction per
+ * page, within the page budget.
  */
 const walkCoverage = async (
   runInTransaction: ProjectionTransactionRunner,
   pair: CorpusIndexFlipPair,
   { pageSize, pageBudget, resumeFrom }: CoverageWalkOptions,
 ): Promise<Result<CorpusIndexFlipCoverage, CorpusIndexFlipParityReadError>> => {
-  const indexIds = (
-    await runInTransaction(
-      async (tx) =>
-        await readCorpusProjectionCensusIndexIdsTx(tx, {
-          family: pair.family,
-          generation: pair.serving,
-        }),
-    )
-  ).filter(
-    (indexId) => resumeFrom === null || indexId >= resumeFrom.servingIndexId,
-  );
   const sample: string[] = [];
   const tally = { walked: 0, missing: 0, sample, pages: 0 };
-  for (const servingIndexId of indexIds) {
-    let after =
-      resumeFrom?.servingIndexId === servingIndexId ? resumeFrom.after : null;
-    for (;;) {
-      if (tally.pages >= pageBudget) {
-        return Result.ok({
-          type: "incomplete",
-          walked: tally.walked,
-          missing: tally.missing,
-          sample: tally.sample,
-          next: { servingIndexId, after },
-        });
-      }
-      // db-await-in-loop: a keyset walk; each page's cursor comes from the one before it
-      const page = await readCoveragePage(runInTransaction, pair, {
-        servingIndexId,
-        after,
-        limit: pageSize,
+  let after = resumeFrom?.after ?? null;
+  for (;;) {
+    if (tally.pages >= pageBudget) {
+      return Result.ok({
+        type: "incomplete",
+        walked: tally.walked,
+        missing: tally.missing,
+        sample: tally.sample,
+        next: { after },
       });
-      if (Result.isError(page)) {
-        return page;
-      }
-      tally.pages += 1;
-      tally.walked += page.value.walked;
-      tally.missing += page.value.missing;
-      tally.sample.push(
-        ...page.value.sample.slice(
-          0,
-          Math.max(0, CORPUS_INDEX_FLIP_SAMPLE_MAX - tally.sample.length),
-        ),
-      );
-      if (page.value.next === null) {
-        break;
-      }
-      after = page.value.next;
     }
+    // db-await-in-loop: a keyset walk; each page's cursor comes from the one before it
+    const page = await readCoveragePage(runInTransaction, pair, {
+      after,
+      limit: pageSize,
+    });
+    if (Result.isError(page)) {
+      return page;
+    }
+    tally.pages += 1;
+    tally.walked += page.value.walked;
+    tally.missing += page.value.missing;
+    tally.sample.push(
+      ...page.value.sample.slice(
+        0,
+        Math.max(0, CORPUS_INDEX_FLIP_SAMPLE_MAX - tally.sample.length),
+      ),
+    );
+    if (page.value.next === null) {
+      break;
+    }
+    after = page.value.next;
   }
   return Result.ok(
     resumeFrom === null
