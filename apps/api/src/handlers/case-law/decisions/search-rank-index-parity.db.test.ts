@@ -441,7 +441,6 @@ test("a decision whose newer upsert is queued, or whose applied copy awaits clea
   const queuedRevision = projections.get(queued)?.revision ?? panic("No copy");
   const cleanupRevision =
     projections.get(cleanup)?.revision ?? panic("No copy");
-  const cleanupAt = new Date("2026-11-01T00:00:00.000Z");
   // Postgres wants newer content for one decision than the index holds
   // applied; the other's applied revision is already scheduled for cleanup.
   // Both stay served from the applied copy until the new one lands.
@@ -453,9 +452,9 @@ test("a decision whose newer upsert is queued, or whose applied copy awaits clea
     .update(corpusIndexProjectionIntents)
     .set({
       status: "cleanup_pending",
-      // The barrier follows the append it closes.
+      // The barrier and the cleanup wait follow the append they close.
       appendPublishBarrierAt: sql`${corpusIndexProjectionIntents.appendStartedAt}`,
-      cleanupNotBefore: cleanupAt,
+      cleanupNotBefore: sql`${corpusIndexProjectionIntents.appendStartedAt}`,
     })
     .where(
       eq(
