@@ -337,30 +337,30 @@ fields.deadline_at                               timestamptz      null         e
 fields.attempt                                   smallint         null         entities.ts:1519  Bounded automatic-retry attempt for an owned cell.
 ```
 
-## cell_metadata · `cellMetadata` · entities.ts:1615
+## cell_metadata · `cellMetadata` · entities.ts:1623
 
 ```text
-cell_metadata.{...entityFeatureGateColumns()}           spread                             entities.ts:1618
-cell_metadata.{...entityFeatureWorkspaceGateColumns()}  spread                             entities.ts:1619
-cell_metadata.workspace_id                              safeWorkspaceId  fk,not null       entities.ts:1620
-cell_metadata.entity_version_id                         safeUuid         fk,not null       entities.ts:1621
-cell_metadata.property_id                               safeUuid         fk,not null       entities.ts:1624
-cell_metadata.metadata                                  jsonb            not null          entities.ts:1625
-cell_metadata.created_by                                text             fk,null           entities.ts:1626
-cell_metadata.updated_by                                text             fk,null           entities.ts:1629
-cell_metadata.created_at                                timestamptz      default,not null  entities.ts:1632
-cell_metadata.updated_at                                timestamptz      default,not null  entities.ts:1633
+cell_metadata.{...entityFeatureGateColumns()}           spread                             entities.ts:1626
+cell_metadata.{...entityFeatureWorkspaceGateColumns()}  spread                             entities.ts:1627
+cell_metadata.workspace_id                              safeWorkspaceId  fk,not null       entities.ts:1628
+cell_metadata.entity_version_id                         safeUuid         fk,not null       entities.ts:1629
+cell_metadata.property_id                               safeUuid         fk,not null       entities.ts:1632
+cell_metadata.metadata                                  jsonb            not null          entities.ts:1633
+cell_metadata.created_by                                text             fk,null           entities.ts:1634
+cell_metadata.updated_by                                text             fk,null           entities.ts:1637
+cell_metadata.created_at                                timestamptz      default,not null  entities.ts:1640
+cell_metadata.updated_at                                timestamptz      default,not null  entities.ts:1641
 ```
 
-## justifications · `justifications` · entities.ts:1662
+## justifications · `justifications` · entities.ts:1670
 
 ```text
-justifications.{...entityFeatureGateColumns()}           spread                                   entities.ts:1665
-justifications.{...entityFeatureWorkspaceGateColumns()}  spread                                   entities.ts:1666
-justifications.id                                        pUuid            pk,not null             entities.ts:1667
-justifications.workspace_id                              safeWorkspaceId  fk,not null             entities.ts:1668
-justifications.field_id                                  safeUuid         fk,not null             entities.ts:1669
-justifications.content                                   jsonb            not null                entities.ts:1670
-justifications.bounding_boxes                            jsonb            null                    entities.ts:1671
-justifications.file_field_ids                            safeUuid         array,default,not null  entities.ts:1672
+justifications.{...entityFeatureGateColumns()}           spread                                   entities.ts:1673
+justifications.{...entityFeatureWorkspaceGateColumns()}  spread                                   entities.ts:1674
+justifications.id                                        pUuid            pk,not null             entities.ts:1675
+justifications.workspace_id                              safeWorkspaceId  fk,not null             entities.ts:1676
+justifications.field_id                                  safeUuid         fk,not null             entities.ts:1677
+justifications.content                                   jsonb            not null                entities.ts:1678
+justifications.bounding_boxes                            jsonb            null                    entities.ts:1679
+justifications.file_field_ids                            safeUuid         array,default,not null  entities.ts:1680
 ```

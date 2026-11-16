@@ -7079,7 +7079,7 @@
       "downloadSearchablePdf": "PDF avec texte recherchable",
       "downloadWithComments": "Télécharger avec les commentaires",
       "duplicateUpload": {
-        "description": "{count, plural, one {# fichier est identique à un document que ce dossier contient déjà.} other {# fichiers sont identiques à des documents que ce dossier contient déjà.}} Choisissez quoi faire pour chacun.",
+        "description": "{count, plural, one {# fichier est identique à un document que ce dossier contient déjà.} other {# fichiers sont identiques à des documents que ce dossier contient déjà.} many {# fichiers sont identiques à des documents que ce dossier contient déjà.}} Choisissez quoi faire pour chacun.",
         "matchedDocument": "Identique à <bdi>{documentName}</bdi>",
         "skip": "Ignorer ce fichier",
         "title": "Déjà dans ce dossier",

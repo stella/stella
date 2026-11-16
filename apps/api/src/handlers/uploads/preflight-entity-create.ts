@@ -24,6 +24,7 @@ const bodySchema = v.object({
       v.array(documentUploadFileFields.sha256Hex),
       v.maxLength(LIMITS.entitiesCount),
     ),
+    [],
   ),
 });
 
@@ -58,7 +59,7 @@ const preflightEntityCreate = createSafeHandler(
           await findExactDuplicates({
             tx,
             workspaceId,
-            sha256Hexes: body.sha256Hexes ?? [],
+            sha256Hexes: body.sha256Hexes,
           }),
       ),
     );

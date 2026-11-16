@@ -3,6 +3,7 @@ import { Result } from "better-result";
 import { mapWithConcurrency } from "@stll/concurrency";
 
 import { api } from "@/lib/api";
+import { invokeAppOnlyWrite } from "@/lib/capabilities/capability-request";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { hashActiveUploadFile } from "@/lib/files/active-uploads";
 import { toSafeId } from "@/lib/safe-id";
@@ -50,7 +51,11 @@ export const resolveExactDuplicates = async ({
       }),
     });
     const sha256Hexes = [
-      ...new Set(hashed.flatMap(({ sha256Hex }) => sha256Hex ?? [])),
+      ...new Set(
+        hashed
+          .map(({ sha256Hex }) => sha256Hex)
+          .filter((sha256Hex) => sha256Hex !== null),
+      ),
     ];
     if (sha256Hexes.length === 0) {
       return [];
@@ -59,11 +64,15 @@ export const resolveExactDuplicates = async ({
     const uploadsApi = api.uploads({
       workspaceId: toSafeId<"workspace">(workspaceId),
     });
-    const { duplicates } = unwrapApiResponse(
-      await uploadsApi["entity-create"].preflight.post({
-        entityCount: files.length,
-        sha256Hexes,
-      }),
+    const { duplicates } = await invokeAppOnlyWrite(
+      "uploads.entity-create.preflight",
+      async () =>
+        unwrapApiResponse(
+          await uploadsApi["entity-create"].preflight.post({
+            entityCount: files.length,
+            sha256Hexes,
+          }),
+        ),
     );
     const bySha256 = new Map(
       duplicates.map((duplicate) => [duplicate.sha256Hex, duplicate]),

@@ -57,7 +57,8 @@ export type AppOnlyWriteId =
   | "sharepoint.enablement.update"
   | "sharepoint.imports.create"
   | "skills.from-chat.read"
-  | "skills.save-draft.create";
+  | "skills.save-draft.create"
+  | "uploads.entity-create.preflight";
 
 /** Declares an app-only write that deliberately has no automation capability. */
 export const invokeAppOnlyWrite = async <TResult>(

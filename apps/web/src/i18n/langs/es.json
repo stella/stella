@@ -7079,7 +7079,7 @@
       "downloadSearchablePdf": "PDF con texto buscable",
       "downloadWithComments": "Descargar con comentarios",
       "duplicateUpload": {
-        "description": "{count, plural, one {# archivo es idéntico a un documento que este asunto ya contiene.} other {# archivos son idénticos a documentos que este asunto ya contiene.}} Elija qué hacer con cada uno.",
+        "description": "{count, plural, one {# archivo es idéntico a un documento que este asunto ya contiene.} other {# archivos son idénticos a documentos que este asunto ya contiene.} many {# archivos son idénticos a documentos que este asunto ya contiene.}} Elige qué hacer con cada uno.",
         "matchedDocument": "Idéntico a <bdi>{documentName}</bdi>",
         "skip": "Omitir este archivo",
         "title": "Ya está en este asunto",

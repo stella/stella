@@ -65,7 +65,6 @@ import {
 import { AttachedTemplateUploadDialog } from "@/components/workspaces/attached-template-upload-dialog";
 import { CreateMatterDialog } from "@/components/workspaces/create-matter-dialog";
 import { DocumentReferenceUploadDialog } from "@/components/workspaces/document-reference-upload-dialog";
-import { ExactDuplicateUploadDialog } from "@/components/workspaces/exact-duplicate-upload-dialog";
 import { useGlobalChatMentionRegistration } from "@/features/chat/hooks/use-global-chat-mention-registration";
 import { MakeSkillReviewDialog } from "@/features/chat/make-skill-review-dialog";
 import { PlaybookPaneLeaveConfirmation } from "@/features/knowledge/playbook-editor/playbook-pane-leave-confirmation";
@@ -91,6 +90,7 @@ import {
 } from "@/lib/workspaces/queries";
 import { shouldForceSidebarCollapsed } from "@/routes/-inspector-pane-width";
 import { ChatMenuContent } from "@/routes/-protected-app/-components/chat-menu-content";
+import { ExactDuplicateUploadDialog } from "@/routes/-protected-app/-components/exact-duplicate-upload-dialog";
 import { PaymentRetryBanner } from "@/routes/-protected-app/-components/payment-retry-banner";
 import {
   createSessionActivity,
