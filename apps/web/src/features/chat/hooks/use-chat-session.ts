@@ -815,11 +815,18 @@ export const useChatSession = ({
   /** Queued messages this page removed (or handed to a turn): their leaving
    *  the queue is no turn the server started. */
   const removedHereRef = useRef(new Set<string>());
+  /** Remove queued message `id` at the `revision` this page read: one
+   *  edited since stays queued (the server refuses the removal). */
   const removeFromQueue = useCallback(
-    async (id: string) => {
+    async (id: string, revision: number) => {
       removedHereRef.current.add(id);
       const removed = await Result.tryPromise(
-        async () => await removeQueuedChatMessage(threadRef.threadId, id),
+        async () =>
+          await removeQueuedChatMessage({
+            messageId: id,
+            revision,
+            threadId: threadRef.threadId,
+          }),
       );
       // Not removed here after all: if it leaves the queue later, the
       // server sent it.
@@ -1017,7 +1024,11 @@ export const useChatSession = ({
 
   /** A message steered into a turn waiting on the member, handed to the
    *  turn once declining the wait lets it run again; it waits queued. */
-  const steerOnResumeRef = useRef<{ id: string; text: string } | null>(null);
+  const steerOnResumeRef = useRef<{
+    id: string;
+    revision: number;
+    text: string;
+  } | null>(null);
 
   // Where a message goes is `chatSendIntent`'s call, by what the thread is
   // doing and whether the member sent it plainly or queued it.
@@ -1057,8 +1068,21 @@ export const useChatSession = ({
             const approvalIds = openHarnessApprovalRequestIds(
               projectCanonicalChatUIMessages(chat.getSnapshot().messages),
             );
-            if (queued.kind === "sent" && approvalIds.length > 0) {
-              steerOnResumeRef.current = { id: message.id, text };
+            // As queued just now: an edit before the turn resumes keeps it
+            // queued rather than remove what the turn was not handed.
+            const queuedItem = readQueue().items.find(
+              ({ id }) => id === message.id,
+            );
+            if (
+              queued.kind === "sent" &&
+              approvalIds.length > 0 &&
+              queuedItem !== undefined
+            ) {
+              steerOnResumeRef.current = {
+                id: message.id,
+                revision: queuedItem.revision,
+                text,
+              };
               for (const approvalId of approvalIds) {
                 detached(
                   resolveToolApproval({ id: approvalId, approved: false }),
@@ -1117,6 +1141,7 @@ export const useChatSession = ({
       chat,
       enqueueMessage,
       notifySteerRefused,
+      readQueue,
       resolveToolApproval,
       restoreIntoComposer,
       steerTurn,
@@ -1171,7 +1196,7 @@ export const useChatSession = ({
               });
               await writeQueue(async () =>
                 outcome.type === "steered"
-                  ? await removeFromQueue(id)
+                  ? await removeFromQueue(id, item.revision)
                   : await sendQueuedChatMessageNow(threadRef.threadId, id),
               );
             })(),
@@ -1220,17 +1245,21 @@ export const useChatSession = ({
 
   const removeQueuedMessage = useCallback(
     (id: string) => {
+      const item = readQueue().items.find((queued) => queued.id === id);
+      if (item === undefined) {
+        return;
+      }
       updateCachedChatQueue({
         queryClient,
         thread: queueThread,
         update: (current) => withQueuedMessageRemoved({ id, queue: current }),
       });
       detached(
-        writeQueue(async () => await removeFromQueue(id)),
+        writeQueue(async () => await removeFromQueue(id, item.revision)),
         "use-chat-session.remove-queued-message",
       );
     },
-    [queryClient, queueThread, removeFromQueue, writeQueue],
+    [queryClient, queueThread, readQueue, removeFromQueue, writeQueue],
   );
 
   /** "Edit": the message leaves the queue and goes back into the composer,
@@ -1243,10 +1272,14 @@ export const useChatSession = ({
         stellaToast.info(t("chat.queue.editNeedsComposer"));
         return;
       }
+      const item = readQueue().items.find((queued) => queued.id === id);
+      if (item === undefined) {
+        return;
+      }
       detached(
         (async () => {
           const removed = await Result.tryPromise(
-            async () => await removeFromQueue(id),
+            async () => await removeFromQueue(id, item.revision),
           );
           await refreshQueue();
           if (Result.isError(removed)) {
@@ -1266,7 +1299,7 @@ export const useChatSession = ({
         "use-chat-session.edit-queued-message",
       );
     },
-    [draftManager, refreshQueue, removeFromQueue, t, threadRef],
+    [draftManager, readQueue, refreshQueue, removeFromQueue, t, threadRef],
   );
 
   const moveQueuedMessage = useCallback(
@@ -2323,7 +2356,9 @@ export const useChatSession = ({
         });
         switch (outcome.type) {
           case "steered":
-            await writeQueue(async () => await removeFromQueue(steered.id));
+            await writeQueue(
+              async () => await removeFromQueue(steered.id, steered.revision),
+            );
             return;
           case "refused":
             notifySteerRefused(outcome.reason);

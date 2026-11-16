@@ -170,6 +170,8 @@ type Server = {
   order: string[];
   requests: string[];
   unexpected: string[];
+  /** The revision each removal named. */
+  removedRevisions: (string | null)[];
 };
 
 /** The `beforeId` a move request names. */
@@ -192,6 +194,7 @@ const serve = ({ waiting }: { waiting: boolean }) => {
     order: [FIRST, SECOND, THIRD],
     requests: [],
     unexpected: [],
+    removedRevisions: [],
   };
   routeRequest = async (input, init) => {
     await Promise.resolve();
@@ -258,6 +261,7 @@ const serve = ({ waiting }: { waiting: boolean }) => {
     }
     const without = state.order.filter((queued) => queued !== id);
     if (method === "DELETE") {
+      state.removedRevisions.push(url.searchParams.get("revision"));
       state.order = without;
       return Response.json({
         message: {
@@ -494,6 +498,8 @@ test("Move, Remove and Edit change the server's queue, and Edit hands the messag
   });
   expect(server.requests.at(-1)).toBe(`DELETE ${QUEUE_PATH}/${FIRST}`);
   expect(server.order).toEqual([SECOND]);
+  // Each removal names the revision the page read, so one edited since stays.
+  expect(server.removedRevisions).toEqual(["0", "0"]);
   expect(server.unexpected).toEqual([]);
 });
 

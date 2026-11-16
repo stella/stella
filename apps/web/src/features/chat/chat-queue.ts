@@ -86,14 +86,23 @@ export const enqueueChatMessage = async (
     unwrapApiResponse(await queueRoutes(threadId).post({ send })),
   );
 
-/** Remove a queued message; answers it as it was queued, or `null` once it
- *  was no longer queued. */
-export const removeQueuedChatMessage = async (
-  threadId: string,
-  messageId: string,
-) =>
+/** Remove a queued message at the `revision` read; answers it as it was
+ *  queued, or `null` once it was no longer queued. */
+export const removeQueuedChatMessage = async ({
+  messageId,
+  revision,
+  threadId,
+}: {
+  messageId: string;
+  revision: number;
+  threadId: string;
+}) =>
   await invokeAppOnlyWrite("chat.queue.delete", async () =>
-    unwrapApiResponse(await queuedMessageRoutes(threadId, messageId).delete()),
+    unwrapApiResponse(
+      await queuedMessageRoutes(threadId, messageId).delete(undefined, {
+        query: { revision },
+      }),
+    ),
   );
 
 /** Move a queued message before `beforeId`, or to the end with `null`. */

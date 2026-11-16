@@ -1,4 +1,7 @@
 import { panic, Result } from "better-result";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import { CHAT_TURN_PERMISSIONS } from "@/api/handlers/chat/chat-turn-state";
 import {
@@ -8,6 +11,7 @@ import {
 import {
   chatQueuedMessageParams,
   chatThreadNotFound,
+  queuedMessageChanged,
   queuedMessageSent,
 } from "@/api/handlers/chat/queue/shared";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -25,16 +29,21 @@ const config = {
   mcp: { type: "internal", reason: "assistant_chat" },
   description:
     "Remove a queued message and answer it as it was queued (`message`), " +
-    "so it can be written again. Idempotent: a message no longer queued " +
-    "answers as removed with `message: null`, except one that was sent " +
-    "(409 `queued_message_sent`).",
+    "so it can be written again, only at the `revision` you read (409 " +
+    "`queued_message_changed` once it was edited since). Idempotent: a " +
+    "message no longer queued answers as removed with `message: null`, " +
+    "except one that was sent (409 `queued_message_sent`).",
   params: chatQueuedMessageParams,
+  query: v.object({
+    revision: numberFromString(v.pipe(v.number(), v.integer(), v.minValue(0))),
+  }),
 } satisfies HandlerConfig;
 
 const cancelQueuedChatMessage = createSafeRootHandler(
   config,
   async function* ({
     params: { messageId, threadId },
+    query: { revision },
     recordAuditEvent,
     safeDb,
     session,
@@ -53,6 +62,7 @@ const cancelQueuedChatMessage = createSafeRootHandler(
         }
         const removed = await removeQueuedChatMessageOnTx({
           id: messageId,
+          revision,
           threadId,
           tx,
         });
@@ -88,6 +98,8 @@ const cancelQueuedChatMessage = createSafeRootHandler(
               : null,
         });
       }
+      case "changed":
+        return Result.err(queuedMessageChanged());
       case "sent":
         return Result.err(queuedMessageSent());
       default:
