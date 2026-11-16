@@ -1,5 +1,6 @@
 import { create } from "zustand";
 
+import type { WebApiRoutes } from "@/lib/api";
 import type { IdempotentRequest } from "@/lib/idempotency/use-idempotent-submit";
 
 /** Where a new fact comes from: a document, a page of it, and the words.
@@ -12,10 +13,9 @@ type FactSourceInput = {
 
 export type AddFactInput = { statement: string; source: FactSourceInput };
 
-/** How far adding a fact got: being created, added to the list, sourced,
- *  linked. The create's and the re-check's keys are chosen once, so a retry
- *  whose create or re-check already landed replays it instead of adding the
- *  fact twice or grading the claim again. */
+/** Each submitted write keeps its request across panel remounts. A source
+ * version is resolved once, before its first submission, and retained with
+ * its replay key until that submission succeeds. */
 export type AddedFact = {
   input: AddFactInput;
   createRequest: IdempotentRequest;
@@ -23,6 +23,14 @@ export type AddedFact = {
 } & (
   | { step: "creating" }
   | { step: "added" | "sourced" | "linked"; entityId: string }
+  | {
+      step: "sourcing";
+      entityId: string;
+      sourceRequest: {
+        body: WebApiRoutes["lists"][":workspaceId"]["item-sources"]["post"]["body"];
+        request: IdempotentRequest;
+      };
+    }
 );
 
 type AddFactProgressStore = {

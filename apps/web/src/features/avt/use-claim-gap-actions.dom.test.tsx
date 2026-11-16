@@ -57,7 +57,7 @@ afterEach(() => {
   for (const client of clients.splice(0)) {
     client.clear();
   }
-  for (const spy of spies.splice(0)) {
+  for (const spy of spies.splice(0).toReversed()) {
     spy.mockRestore();
   }
   useAddFactProgress.getState().record(progressKey, null);
@@ -116,9 +116,17 @@ type RequestRecord = {
   key: string | null;
   capability: string | null;
 };
-const serve = (refusedPath?: string) => {
+const serve = ({
+  refusedPath,
+  sourceOutcome = "success",
+}: {
+  refusedPath?: string;
+  sourceOutcome?: "success" | "response-lost";
+} = {}) => {
   const requests: RequestRecord[] = [];
+  const sourceWrites = new Map<string, unknown>();
   let refused = false;
+  let sourceResponseLost = false;
   const boundary = spyOn(globalThis, "fetch").mockImplementation(
     Object.assign(
       async (url: RequestInfo | URL, init?: RequestInit) => {
@@ -141,7 +149,11 @@ const serve = (refusedPath?: string) => {
           expect(path).toBe(`/v1/entities/${workspaceId}/entity/${documentId}`);
           return Response.json({
             entityId: documentId,
-            currentVersionId: versionId,
+            currentVersionId: sourceResponseLost
+              ? toSafeId<"entityVersion">(
+                  "019a0000-0000-7000-8000-000000000007",
+                )
+              : versionId,
           } satisfies Pick<
             WebApiRoutes["entities"][":workspaceId"]["entity"][":entityId"]["get"]["response"][200],
             "entityId" | "currentVersionId"
@@ -152,10 +164,17 @@ const serve = (refusedPath?: string) => {
             return Response.json({
               entityId,
             } satisfies WebApiRoutes["tasks"][":workspaceId"]["put"]["response"][200]);
-          case WRITE_PATHS[1]:
+          case WRITE_PATHS[1]: {
+            const key = request.headers.get("Idempotency-Key");
+            sourceWrites.set(key ?? `unkeyed:${sourceWrites.size}`, body);
+            if (sourceOutcome === "response-lost" && !sourceResponseLost) {
+              sourceResponseLost = true;
+              throw new DOMException("Source response lost", "NetworkError");
+            }
             return Response.json({
               id: sourceId,
             } satisfies WebApiRoutes["lists"][":workspaceId"]["item-sources"]["post"]["response"][200]);
+          }
           case WRITE_PATHS[2]:
             return Response.json({
               claimId: claim.id,
@@ -174,7 +193,7 @@ const serve = (refusedPath?: string) => {
     ),
   );
   spies.push(boundary);
-  return requests;
+  return { requests, sourceWrites };
 };
 
 for (const { operation, path } of [
@@ -182,7 +201,7 @@ for (const { operation, path } of [
   { operation: "recheck", path: WRITE_PATHS[3] },
 ] as const) {
   test(`${operation} invalidates registered verification readers only in the bound matter`, async () => {
-    const requests = serve();
+    const { requests } = serve();
     const { client, result } = mountActions();
     const own = registerReader(
       client,
@@ -218,7 +237,7 @@ for (const { operation, path } of [
 
 for (const [index, refusedPath] of WRITE_PATHS.entries()) {
   test(`fact addition resumes after refusal at write ${String(index + 1)} and retains cache ownership`, async () => {
-    const requests = serve(refusedPath);
+    const { requests } = serve({ refusedPath });
     const { client, result } = mountActions();
     const resources = [
       RESOURCE_TYPE.ENTITY,
@@ -295,3 +314,43 @@ for (const [index, refusedPath] of WRITE_PATHS.entries()) {
     ).toBe(true);
   });
 }
+
+test("a lost source response replays the pinned version after the claim panel remounts", async () => {
+  const { requests, sourceWrites } = serve({ sourceOutcome: "response-lost" });
+  const first = mountActions();
+  await act(async () => {
+    expect(
+      await rejectionOf(first.result.current.addFact.mutateAsync(input)),
+    ).toBeDefined();
+  });
+  await waitFor(() => expect(first.result.current.addFact.isError).toBe(true));
+  const sourceAttempts = () =>
+    requests.filter(({ path }) => path === WRITE_PATHS[1]);
+  expect(sourceWrites.size).toBe(1);
+  expect(sourceAttempts()).toHaveLength(1);
+  expect(sourceAttempts()[0]?.key).toEqual(expect.any(String));
+  expect(sourceAttempts()[0]?.body).toMatchObject({
+    sourceEntityVersionId: versionId,
+  });
+  expect(useAddFactProgress.getState().progress[progressKey]?.step).toBe(
+    "sourcing",
+  );
+
+  first.unmount();
+  const resumed = mountActions();
+  await act(async () => {
+    await resumed.result.current.addFact.mutateAsync(input);
+  });
+  await waitFor(() =>
+    expect(resumed.result.current.addFact.isSuccess).toBe(true),
+  );
+  expect(sourceAttempts()).toHaveLength(2);
+  expect(sourceAttempts()[1]?.key).toBe(sourceAttempts()[0]?.key);
+  expect(sourceAttempts()[1]?.body).toEqual(sourceAttempts()[0]?.body);
+  expect(sourceWrites.size).toBe(1);
+  expect(requests.filter(({ method }) => method === "GET")).toHaveLength(1);
+  expect(requests.filter(({ path }) => path === WRITE_PATHS[0])).toHaveLength(
+    1,
+  );
+  expect(useAddFactProgress.getState().progress[progressKey]).toBeUndefined();
+});

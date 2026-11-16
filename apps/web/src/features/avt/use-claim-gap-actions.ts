@@ -205,6 +205,8 @@ export const useClaimGapActions = ({
         }),
         recheckKey: createUuid(),
       };
+      const { input, createRequest, recheckKey: retryKey } = pending;
+      const intent = { input, createRequest, recheckKey: retryKey };
       if (pending.step === "creating") {
         record(pending);
         const created = unwrapApiResponse(
@@ -226,13 +228,13 @@ export const useClaimGapActions = ({
               ),
           }),
         );
-        pending = { ...pending, step: "added", entityId: created.entityId };
+        pending = { ...intent, step: "added", entityId: created.entityId };
       }
       let added = pending;
       const { entityId } = added;
       record(added);
       if (added.step === "added") {
-        await createFactSource({
+        const sourceRequest = await prepareFactSource({
           queryClient,
           submit,
           workspaceId,
@@ -240,12 +242,21 @@ export const useClaimGapActions = ({
           entityId,
           source,
         });
-        added = { ...added, step: "sourced" };
+        added = { ...intent, step: "sourcing", entityId, sourceRequest };
+        record(added);
+      }
+      if (added.step === "sourcing") {
+        await submitFactSource({
+          workspaceId,
+          submit,
+          sourceRequest: added.sourceRequest,
+        });
+        added = { ...intent, step: "sourced", entityId };
         record(added);
       }
       if (added.step === "sourced") {
         await changeLink({ factEntityId: entityId, change: "link" });
-        added = { ...added, step: "linked" };
+        added = { ...intent, step: "linked", entityId };
         record(added);
       }
       // The addition's own key, kept with it across claims and retries.
@@ -274,7 +285,7 @@ export const useClaimGapActions = ({
   return { recheck, recheckPending, link, addFact, addFactResume: resume };
 };
 
-type CreateFactSourceOptions = {
+type PrepareFactSourceOptions = {
   queryClient: QueryClient;
   submit: ReturnType<typeof useIdempotentSubmit>;
   workspaceId: string;
@@ -284,15 +295,14 @@ type CreateFactSourceOptions = {
 };
 
 /** Pin the submitted source to its current version inside the resumable attempt. */
-const createFactSource = async ({
+const prepareFactSource = async ({
   queryClient,
   submit,
   workspaceId,
   listId,
   entityId,
   source,
-}: CreateFactSourceOptions) => {
-  const lists = api.lists({ workspaceId: toSafeId<"workspace">(workspaceId) });
+}: PrepareFactSourceOptions) => {
   const document = await queryClient.query(
     resourceQueryOptions(
       {
@@ -305,28 +315,51 @@ const createFactSource = async ({
       },
     ),
   );
-  unwrapApiResponse(
+  const body = {
+    listId: toSafeId<"legalList">(listId),
+    itemEntityId: toSafeId<"entity">(entityId),
+    sourceEntityId: toSafeId<"entity">(document.entityId),
+    sourceEntityVersionId: toSafeId<"entityVersion">(document.currentVersionId),
+    locator:
+      source.pageNumber === null
+        ? { type: "document" as const }
+        : { type: "pdf-page" as const, pageNumber: source.pageNumber },
+    quote: source.quote,
+  };
+  return {
+    body,
+    request: submit.prepare({
+      operation: `list-source-create:${workspaceId}`,
+      body,
+    }),
+  };
+};
+
+type SubmitFactSourceOptions = {
+  workspaceId: string;
+  submit: ReturnType<typeof useIdempotentSubmit>;
+  sourceRequest: Extract<AddedFact, { step: "sourcing" }>["sourceRequest"];
+};
+
+const submitFactSource = async ({
+  workspaceId,
+  submit,
+  sourceRequest,
+}: SubmitFactSourceOptions) => {
+  const lists = api.lists({ workspaceId: toSafeId<"workspace">(workspaceId) });
+  return unwrapApiResponse(
     await submit.run({
       operation: `list-source-create:${workspaceId}`,
-      body: {
-        listId: toSafeId<"legalList">(listId),
-        itemEntityId: toSafeId<"entity">(entityId),
-        sourceEntityId: toSafeId<"entity">(document.entityId),
-        sourceEntityVersionId: toSafeId<"entityVersion">(
-          document.currentVersionId,
-        ),
-        locator:
-          source.pageNumber === null
-            ? { type: "document" as const }
-            : {
-                type: "pdf-page" as const,
-                pageNumber: source.pageNumber,
-              },
-        quote: source.quote,
-      },
-      send: async (body) =>
+      ...sourceRequest,
+      send: async (body, replay) =>
         await invokeCapability("lists.items.sources.create", async (request) =>
-          lists["item-sources"].post(body, request),
+          lists["item-sources"].post(body, {
+            ...request,
+            headers: {
+              "Idempotency-Key": replay.headers["Idempotency-Key"],
+              ...request.headers,
+            },
+          }),
         ),
     }),
   );
