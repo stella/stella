@@ -50,7 +50,7 @@ test("an organization switch with a failed confirmation read leaves pending and 
         return Response.json({ role: "member" });
       }
       if (url.pathname.endsWith("/set-active")) {
-        switched.push(String(init?.body));
+        switched.push(await new Request(input, init).text());
         return Response.json({ id: "org-other" });
       }
       if (url.pathname.endsWith("/get-session")) {
