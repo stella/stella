@@ -256,7 +256,7 @@ export const CHAT_TURN_ORDINAL_UNIQUE_INDEXES = [
  */
 export const CHAT_TURN_HANDED_OVER_UNIQUE_INDEXES = [
   {
-    introducedBy: "20261116020000_chat_turns_handed_over",
+    introducedBy: "20261116020100_chat_turns_handed_over",
     createSql:
       "CREATE UNIQUE INDEX CONCURRENTLY \"chat_turns_active_thread_v2_uidx\" ON public.\"chat_turns\" USING btree (\"thread_id\") WHERE \"status\" IN ('accepted', 'running', 'awaiting-user', 'handed-over')",
     definitionBody:

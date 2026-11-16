@@ -13,7 +13,7 @@ export default {
   values: [
     ...CHAT_TURN_HANDED_OVER_UNIQUE_INDEXES,
     {
-      introducedBy: "20261116020000_chat_turns_handed_over",
+      introducedBy: "20261116020100_chat_turns_handed_over",
       createSql:
         'CREATE INDEX CONCURRENTLY "chat_turns_org_user_active_v2_idx" ON public."chat_turns" USING btree ("organization_id", "user_id") WHERE "status" IN (\'accepted\', \'running\', \'awaiting-user\', \'handed-over\')',
       definitionBody:
@@ -23,7 +23,7 @@ export default {
       tableName: "chat_turns",
     },
     {
-      introducedBy: "20261116020000_chat_turns_handed_over",
+      introducedBy: "20261116020100_chat_turns_handed_over",
       createSql:
         'CREATE INDEX CONCURRENTLY "chat_turns_org_active_lease_v2_idx" ON public."chat_turns" USING btree ("organization_id", "status", "lease_expires_at", "id") WHERE "status" IN (\'accepted\', \'running\', \'handed-over\')',
       definitionBody:
