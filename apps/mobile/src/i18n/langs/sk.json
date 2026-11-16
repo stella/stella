@@ -295,6 +295,32 @@
       "runFull": "Agent teraz ďalšie správy neprijme.",
       "notTaken": "Agent teraz vašu správu nemohol prijať.",
       "queuedMessageChanged": "Správa sa medzičasom zmenila alebo už nie je v poradí, preto ju agent nedostal."
+    },
+    "queue": {
+      "notice": "V poradí – odošle sa po dokončení aktuálnej odpovede",
+      "prompt": "Odoslať, keď agent skončí",
+      "sendNow": "Odoslať hneď",
+      "remove": "Zrušiť správu v poradí",
+      "edit": "Upraviť",
+      "moveUp": "Posunúť nahor",
+      "moveDown": "Posunúť nadol",
+      "cancel": "Zrušiť",
+      "attachments": "{count, plural, one {# príloha} few {# prílohy} other {# príloh} many {# prílohy}}",
+      "actions": "Akcie správy vo fronte",
+      "notSent": "Nepodarilo sa odoslať",
+      "pause": "Pozastaviť front",
+      "resume": "Obnoviť front",
+      "replaceTitle": "Odoslať túto správu hneď?",
+      "replaceDescription": "Chat čaká na vašu odpoveď. Odoslaním tejto správy teraz zrušíte otázku alebo schválenie, na ktoré čaká.",
+      "noLongerQueued": "Táto správa už vo fronte nie je.",
+      "held": {
+        "turn-failed": "Front je pozastavený: posledná odpoveď zlyhala. Pokračovaním odošlete ďalšiu správu.",
+        "turn-interrupted": "Front je pozastavený: posledná odpoveď bola prerušená. Pokračovaním odošlete ďalšiu správu.",
+        "member": "Front je pozastavený.",
+        "send-refused": "Front je pozastavený: prvú správu sa nepodarilo odoslať. Upravte ju alebo ju odstráňte a potom pokračujte.",
+        "usage-limit": "Front je pozastavený: dosiahli ste limit využitia. Pokračujte, keď sa obnoví.",
+        "computer-away": "Čaká sa na váš počítač: správy vo fronte sa odošlú, keď sa pripojí."
+      }
     }
   },
   "tasks": {
