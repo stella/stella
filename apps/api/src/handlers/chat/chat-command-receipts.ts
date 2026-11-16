@@ -10,7 +10,11 @@ import {
 } from "@stll/api-contract/chat-command";
 
 import type { Transaction } from "@/api/db/root";
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import {
+  abortTransaction,
+  type SafeDb,
+  type SafeDbError,
+} from "@/api/db/safe-db";
 import { chatCommandReceipts } from "@/api/db/schema";
 import type { ResponseHeaders } from "@/api/http/context";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -152,7 +156,7 @@ export const insertChatCommandReceiptOnTx = async ({
     .onConflictDoNothing()
     .returning({ commandId: chatCommandReceipts.commandId });
   if (inserted.length === 0) {
-    throw commandConflict();
+    abortTransaction(commandConflict());
   }
 };
 
