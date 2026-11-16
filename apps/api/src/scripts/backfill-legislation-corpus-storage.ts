@@ -129,6 +129,7 @@ await runScriptWithErrorOutput(async () => {
       }
       // The page is small: its documents are written at once.
       outcomes.push(
+        // db-await-in-loop: each document's objects and compare-and-set are its own; the page is bounded by --page (default 4)
         ...(await Promise.all(
           rows.map(
             async (row) =>
