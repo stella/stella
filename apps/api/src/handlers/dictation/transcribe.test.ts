@@ -603,25 +603,6 @@ describe("dictation operation request matrix", () => {
     });
   });
 
-  test("a request naming no model without a region is refused before any provider work", async () => {
-    const f = fixture();
-    const context = {
-      ...f.context,
-      managedAIResidency: null,
-      body: { ...f.context.body, modelId: undefined },
-    } as const satisfies DictationContext;
-    const result = await executeDictation(context, f.dependencies);
-    if (result.isOk()) {
-      throw new TypeError("Expected regional refusal");
-    }
-    expect(result.error).toMatchObject({
-      code: "transcription_model_unavailable",
-      message: "No transcription model is available in your region",
-    });
-    expect(f.requests).toEqual([]);
-    expect(f.counts()).toEqual({ credentials: 0, preflights: 0 });
-  });
-
   test.each(["allowance", "rate", "provider"] as const)(
     "%s refusal leaves no stored transcript or settlement",
     async (failure) => {

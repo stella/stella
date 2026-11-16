@@ -95,11 +95,12 @@ export const listDictationModels = (
       return endpoint === undefined
         ? []
         : [{ modelId, outsideRegion: endpoint !== managedAIResidency }];
-    })
-    .toSorted(
-      (left, right) => Number(left.outsideRegion) - Number(right.outsideRegion),
-    );
-  const models = offered.map(({ modelId, outsideRegion }) => {
+    });
+  // The regional models first, then those outside the region.
+  const models = [
+    ...offered.filter(({ outsideRegion }) => !outsideRegion),
+    ...offered.filter(({ outsideRegion }) => outsideRegion),
+  ].map(({ modelId, outsideRegion }) => {
     const { displayName, provider } = TRANSCRIPTION_MODELS[modelId];
     return labeled
       ? { id: modelId, displayName, provider, outsideRegion }
