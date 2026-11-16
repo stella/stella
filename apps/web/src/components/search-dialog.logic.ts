@@ -403,16 +403,14 @@ export const rememberSelectedFacetLabels = (
   selected: readonly string[],
   labelsByValue: ReadonlyMap<string, string>,
 ): Record<string, string> => {
-  let next = current;
+  let next: Map<string, string> | undefined;
   for (const value of selected) {
     const label = labelsByValue.get(value);
     if (label === undefined || current[value] === label) {
       continue;
     }
-    if (next === current) {
-      next = { ...current };
-    }
-    next[value] = label;
+    next ??= new Map(Object.entries(current));
+    next.set(value, label);
   }
-  return next;
+  return next === undefined ? current : Object.fromEntries(next);
 };

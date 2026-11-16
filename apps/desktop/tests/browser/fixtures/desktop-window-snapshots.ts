@@ -40,6 +40,8 @@ export const SETUP_PERMISSIONS = {
  *  its setup step, with both permission rows and the field to try it. */
 export const DICTATION_READY = {
   available: true,
+  cleanup: true,
+  destination: "local",
   enabled: true,
   failure: null,
   keys: { code: "Space", modifiers: ["control", "alt"] },

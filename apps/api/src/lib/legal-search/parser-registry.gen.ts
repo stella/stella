@@ -26,6 +26,8 @@ export const ADAPTER_KEYS = {
 
   AT_VWGH: "at-vwgh",
 
+  BR_TJDFT: "br-tjdft",
+
   BR_TST: "br-tst",
 
   CZ_NS: "cz-ns",
@@ -94,6 +96,8 @@ export const PARSER_VERSIONS = {
 
   [ADAPTER_KEYS.AT_VWGH]: 14,
 
+  [ADAPTER_KEYS.BR_TJDFT]: 2,
+
   [ADAPTER_KEYS.BR_TST]: 2,
 
   [ADAPTER_KEYS.CZ_NS]: 33,
@@ -158,6 +162,8 @@ export const SOURCE_FINGERPRINT_VERSIONS = {
   [ADAPTER_KEYS.AT_VFGH]: 0,
 
   [ADAPTER_KEYS.AT_VWGH]: 0,
+
+  [ADAPTER_KEYS.BR_TJDFT]: 0,
 
   [ADAPTER_KEYS.BR_TST]: 0,
 
@@ -225,6 +231,8 @@ export const PARSER_VERSION_SCOPES = {
   [ADAPTER_KEYS.AT_VFGH]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_VFGH], scope: {"type":"all","reason":"Read the parts of an Austrian decision from what the court printed, not from the publisher's section labels: the docket line, formula and bench recital are head matter, the ruling is the holding wherever it is filed, the reasons, instructions on appeal and the place and date follow in order, and Findok decisions carry the same roles. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own. Re-derive stored citations with rule kinds, polarity evidence windows and cited parts; the canonical AST and publisher metadata do not change."} },
 
   [ADAPTER_KEYS.AT_VWGH]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_VWGH], scope: {"type":"all","reason":"Read the parts of an Austrian decision from what the court printed, not from the publisher's section labels: the docket line, formula and bench recital are head matter, the ruling is the holding wherever it is filed, the reasons, instructions on appeal and the place and date follow in order, and Findok decisions carry the same roles. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own. Re-derive stored citations with rule kinds, polarity evidence windows and cited parts; the canonical AST and publisher metadata do not change."} },
+
+  [ADAPTER_KEYS.BR_TJDFT]: { version: PARSER_VERSIONS[ADAPTER_KEYS.BR_TJDFT], scope: {"type":"all","reason":"Re-derive stored citations with rule kinds, polarity evidence windows and cited parts; the canonical AST and publisher metadata do not change."} },
 
   [ADAPTER_KEYS.BR_TST]: { version: PARSER_VERSIONS[ADAPTER_KEYS.BR_TST], scope: {"type":"all","reason":"Re-derive stored citations with rule kinds, polarity evidence windows and cited parts; the canonical AST and publisher metadata do not change."} },
 
