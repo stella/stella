@@ -17,6 +17,11 @@ export default {
         reason:
           "The shared corpus maintenance writer republishes stored payloads across both document families.",
       },
+      {
+        path: "apps/legal-atlas-runner/src/runners/case-law-corpus-storage-backfill.ts",
+        reason:
+          "The operator storage backfill stores the inline payload of rows that have no corpus write yet, for both document families, and records it through the projectability owner.",
+      },
     ],
   },
 } as const satisfies OwnershipEntry;

@@ -13,6 +13,7 @@ import {
   timestampCasToken,
   timestampMatchesCasToken,
 } from "@/api/lib/db/timestamp-cas";
+import { writeProjectedCorpusColumnsTx } from "@/api/lib/legal-search/corpus-projectability-write";
 import { writeCorpusDocument } from "@/api/lib/legal-search/corpus-storage";
 import type {
   DecisionSection,
@@ -188,35 +189,36 @@ const backfillRow = async (
     }
     const result = outcome.written;
 
-    const recorded = await ingestionDb((tx) =>
-      tx
-        .update(caseLawDecisions)
-        .set({
-          textS3Key: result.textKey,
-          normalizedS3Key: result.sectionsKey,
-          astS3Key: result.astKey,
-          contentHash: result.contentHash,
-        })
-        // Compare-and-set on the selected row state: a concurrent
-        // ingestion refresh may have written newer keys, and an
-        // unconditional update would point the row back at the stale
-        // backfill payload.
-        .where(
-          and(
-            eq(caseLawDecisions.id, row.id),
+    // The pointers and the content hash are projection inputs, so the
+    // owner records them and projects the row in the same transaction.
+    const recorded = await ingestionDb(
+      async (tx) =>
+        await writeProjectedCorpusColumnsTx(tx, {
+          family: "case_law",
+          id: row.id,
+          columns: {
+            textS3Key: result.textKey,
+            normalizedS3Key: result.sectionsKey,
+            astS3Key: result.astKey,
+            contentHash: result.contentHash,
+          },
+          // Compare-and-set on the selected row state: a concurrent
+          // ingestion refresh may have written newer keys, and an
+          // unconditional update would point the row back at the stale
+          // backfill payload.
+          where: and(
             isNull(caseLawDecisions.textS3Key),
             timestampMatchesCasToken(
               caseLawDecisions.updatedAt,
               row.updatedAtToken,
             ),
           ),
-        )
-        .returning({ id: caseLawDecisions.id }),
+        }),
     );
 
     // A refused CAS is not success: the objects exist but the row still
     // points nowhere, and only the recording makes the work durable.
-    return recorded.length > 0 ? "written" : "skipped";
+    return recorded ? "written" : "skipped";
   } catch (error) {
     return reportFailure(error);
   }
@@ -277,33 +279,34 @@ const backfillLegislationRow = async (
     }
     const result = outcome.written;
 
-    const recorded = await ingestionDb((tx) =>
-      tx
-        .update(legislationDocuments)
-        .set({
-          textS3Key: result.textKey,
-          normalizedS3Key: result.sectionsKey,
-          astS3Key: result.astKey,
-          contentHash: result.contentHash,
-        })
-        // Compare-and-set on the selected row state: a concurrent
-        // ingestion refresh may have written newer keys, and an
-        // unconditional update would point the row back at the stale
-        // backfill payload.
-        .where(
-          and(
-            eq(legislationDocuments.id, row.id),
+    // The pointers and the content hash are projection inputs, so the
+    // owner records them and projects the row in the same transaction.
+    const recorded = await ingestionDb(
+      async (tx) =>
+        await writeProjectedCorpusColumnsTx(tx, {
+          family: "legislation",
+          id: row.id,
+          columns: {
+            textS3Key: result.textKey,
+            normalizedS3Key: result.sectionsKey,
+            astS3Key: result.astKey,
+            contentHash: result.contentHash,
+          },
+          // Compare-and-set on the selected row state: a concurrent
+          // ingestion refresh may have written newer keys, and an
+          // unconditional update would point the row back at the stale
+          // backfill payload.
+          where: and(
             isNull(legislationDocuments.textS3Key),
             timestampMatchesCasToken(
               legislationDocuments.updatedAt,
               row.updatedAtToken,
             ),
           ),
-        )
-        .returning({ id: legislationDocuments.id }),
+        }),
     );
 
-    return recorded.length > 0 ? "written" : "skipped";
+    return recorded ? "written" : "skipped";
   } catch (error) {
     return reportFailure(error);
   }
