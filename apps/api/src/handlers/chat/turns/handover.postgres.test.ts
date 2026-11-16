@@ -28,6 +28,7 @@ import {
   NO_ANSWER_QUOTE_CHECKER,
 } from "@/api/handlers/chat/answer-quote-checks";
 import {
+  chatMessageContentFromMessage,
   chatMessageFromPersisted,
   toPersistableChatMessage,
   toPersistedChatMessageContentV3,
@@ -581,8 +582,13 @@ if (!databaseUrl || !runPostgresTests) {
       });
       const adoptions: Promise<void>[] = [];
       const released: { answerId?: SafeId<"chatMessage"> } = {};
+      // The ring is answered once the released turn has been read below, so
+      // the adopter's claim cannot overtake those reads.
+      const releaseRead = Promise.withResolvers<undefined>();
       const stopAnswering = answerChatTurnAdopterDoorbell((turn) => {
-        adoptions.push(adopter.adopt(turn));
+        adoptions.push(
+          releaseRead.promise.then(async () => await adopter.adopt(turn)),
+        );
       });
       try {
         // The owner's process stops, as its shutdown gives up its turns.
@@ -605,6 +611,7 @@ if (!databaseUrl || !runPostgresTests) {
           .from(chatRunLogs)
           .where(eq(chatRunLogs.runId, seeded.runId));
         expect(log?.closedAt).toBeNull();
+        releaseRead.resolve(undefined);
 
         // The computer works on through the gap and finishes the turn.
         computer.events(after);
@@ -717,6 +724,54 @@ if (!databaseUrl || !runPostgresTests) {
       const turn = await readTurn(seeded.execution.id);
       expect(turn.status).toBe("cancelled");
       expect(turn.cancellationReason).toBe("user-stop");
+    });
+
+    test("that continues an answer which waited on the member stores it with no outcome", async () => {
+      const seeded = await seedClaimedTurn(staying);
+      // The turn continues an answer that stopped to ask the member.
+      const owning = toPersistableChatMessage({
+        id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
+        metadata: {
+          turnOutcome: {
+            type: "awaiting-user",
+            interaction: { type: "approval", toolCallId: "call_1" },
+          },
+        },
+        parts: [{ content: "May I run the tests?", type: "text" }],
+        role: "assistant",
+      });
+      await db.insert(chatMessages).values({
+        content: chatMessageContentFromMessage(owning),
+        id: owning.id,
+        role: "assistant",
+        threadId: seeded.threadId,
+        userId: staying.userId,
+        workspaceId: null,
+      });
+      expect(owning.metadata?.turnOutcome?.type).toBe("awaiting-user");
+
+      const released = await persistHandedOverChatTurn({
+        execution: seeded.execution,
+        indexThread: async () => {},
+        owningAssistantMessage: owning,
+        recordAuditEvent: noAudit,
+        responseMessage: toPersistableChatMessage({
+          id: owning.id,
+          parts: [{ content: "Running the tests. ", type: "text" }],
+          role: "assistant",
+        }),
+        safeDb: staying.safeDb,
+        threadId: seeded.threadId,
+        userId: staying.userId,
+        workspaceId: null,
+      });
+
+      expect(released.isOk() ? released.value.type : released.error).toBe(
+        "handed-over",
+      );
+      expect(
+        (await readAnswer(owning.id)).metadata?.turnOutcome,
+      ).toBeUndefined();
     });
 
     test("that cannot act for the turn's member says why, and the turn ends as owner-lost at its adopt-by", async () => {

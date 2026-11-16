@@ -2,6 +2,8 @@ import { EventType, RUN_CANCEL_REASON } from "@tanstack/ai";
 import type { StreamChunk } from "@tanstack/ai";
 import { describe, expect, test } from "bun:test";
 
+import { waitFor } from "@stll/test-kit";
+
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import {
   createComputer,
@@ -91,6 +93,9 @@ describe("a cut of a local turn", () => {
   });
 });
 
+/** Run reads a read makes in one go only when it does not wait between them. */
+const SPINNING_READS = 50;
+
 /** A read of a new turn's run that its turn can release to another task. */
 const startReleasableRead = () => {
   const computer = createComputer();
@@ -174,5 +179,58 @@ describe("a local turn released to another task", () => {
 
     expect(rest.some(isChatTurnReleasedChunk)).toBe(false);
     expect(computer.queued.interrupts).toBe(0);
+  });
+
+  test("waits for the run's end at its poll pace while it may not release", async () => {
+    const computer = createComputer();
+    // Reads of the run's state once the hand-over is asked for; a read
+    // that spun on them ends the run itself, so the test cannot hang.
+    const held = { asked: false, reads: 0, spun: false };
+    const { control } = computer.context;
+    computer.context.control = {
+      ...control,
+      readRun: async (options) => {
+        if (held.asked) {
+          held.reads += 1;
+          if (held.reads === SPINNING_READS) {
+            held.spun = true;
+            computer.finish();
+          }
+        }
+        return await control.readRun(options);
+      },
+    };
+    const handOver = new AbortController();
+    const read = localSource(computer)(
+      new AbortController().signal,
+      handOver.signal,
+    )[Symbol.asyncIterator]();
+    computer.events(
+      await harnessChunks([
+        { type: "text.delta", messageId: "answer", delta: "Done." },
+        { type: "turn.completed", usage: null, boundary: null },
+      ]),
+    );
+    let step = await read.next();
+    while (step.done !== true && step.value.type !== EventType.RUN_FINISHED) {
+      step = await read.next();
+    }
+    handOver.abort();
+    held.asked = true;
+    const waiting = read.next();
+    await waitFor(
+      async () => await Promise.resolve(held.reads >= 3 || undefined),
+      {
+        description: "three polls of the run while the read may not release",
+        timeoutMs: 2000,
+      },
+    );
+    if (!held.spun) {
+      computer.finish();
+    }
+    await waiting;
+    await readRest(read);
+
+    expect(held.spun).toBe(false);
   });
 });

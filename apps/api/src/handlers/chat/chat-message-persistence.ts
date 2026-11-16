@@ -985,12 +985,16 @@ const handedOverAssistantMessage = ({
   ) {
     panic("A continuation must persist under its owning message id");
   }
+  const metadata = mergeContinuationMetadata({
+    owning: owningAssistantMessage?.metadata,
+    run: responseMessage.metadata,
+  });
+  // The outcome an owning message carries is how its earlier part ended (a
+  // stop to ask the member); the released answer has none until it ends.
+  delete metadata.turnOutcome;
   return toPersistableChatMessage({
     id: responseMessage.id,
-    metadata: mergeContinuationMetadata({
-      owning: owningAssistantMessage?.metadata,
-      run: responseMessage.metadata,
-    }),
+    metadata,
     parts:
       responseMessage.parts.length > 0 || owningAssistantMessage === undefined
         ? responseMessage.parts

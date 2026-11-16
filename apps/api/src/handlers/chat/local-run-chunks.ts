@@ -1864,6 +1864,17 @@ const readStartOf = (
       };
 
 /**
+ * What ends a read's wait for the computer. A hand-over asked for while the
+ * read may not release yet (a call's input half read, the run's end still
+ * to come) wakes nothing, or the wait would return at once on every pass:
+ * the read waits at its poll pace until it may.
+ */
+const waitWakers = (abortSignal: AbortSignal, handOverSignal: AbortSignal) =>
+  handOverSignal.aborted
+    ? abortSignal
+    : AbortSignal.any([abortSignal, handOverSignal]);
+
+/**
  * When a read may release its turn to another task: asked to, with no call
  * input half read (an adopted read's processor folds a call's input only
  * from the call's start; the input's end follows its start at once), and
@@ -2127,7 +2138,7 @@ async function* readRunChunks({
           yield* computer(step.computer);
           await listener.wait({
             timeoutMs: context.pollMs ?? DEFAULT_POLL_MS,
-            signal: AbortSignal.any([abortSignal, handOverSignal]),
+            signal: waitWakers(abortSignal, handOverSignal),
           });
           continue;
         default:
