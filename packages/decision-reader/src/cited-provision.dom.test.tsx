@@ -222,9 +222,10 @@ describe("a cited provision's wording", () => {
       expect(card.hasAttribute("tabindex")).toBe(false);
       expect(trigger.tagName).toBe("BUTTON");
       expect(trigger.getAttribute("aria-expanded")).toBe("true");
-      expect(
-        card.querySelector(`[id="${trigger.getAttribute("aria-controls")}"]`),
-      ).not.toBeNull();
+      const contentId =
+        trigger.getAttribute("aria-controls") ??
+        panic("Missing disclosure target");
+      expect(card.querySelector(`[id="${contentId}"]`)).not.toBeNull();
       const paragraph =
         wordingOf(card).querySelector("p") ?? panic("Missing wording");
       await act(async () => {
