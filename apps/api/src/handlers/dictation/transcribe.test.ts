@@ -519,12 +519,15 @@ describe("dictation operation request matrix", () => {
     expect(JSON.stringify(f.requests)).not.toContain(matterId);
   });
 
-  test("unknown US model availability never tries a public or alternate-region endpoint", async () => {
+  test("a model the region does not serve never tries the global or another region's endpoint without the caller's opt-in", async () => {
     const f = fixture();
     const context = {
       ...f.context,
       managedAIResidency: "us",
     } as const satisfies DictationContext;
+    expect(TRANSCRIPTION_MODELS[MODEL].residency.us.status).not.toBe(
+      "available",
+    );
     const result = await executeDictation(context, f.dependencies);
     expect(result.isErr()).toBe(true);
     if (result.isOk()) {
@@ -533,10 +536,53 @@ describe("dictation operation request matrix", () => {
     expect(result.error).toMatchObject({
       code: "transcription_model_unavailable",
       message: "This transcription model is not available in your region",
-      hint: "Transcription is not offered in your organization's region yet.",
+      hint: "Choose a transcription model available in your region, or leave the model out.",
     });
     expect(f.requests).toEqual([]);
     expect(f.counts()).toEqual({ credentials: 0, preflights: 0 });
+  });
+
+  test("a caller that labels models outside the region sends a named one to the global endpoint and is billed its price", async () => {
+    const f = fixture();
+    const context = {
+      ...f.context,
+      managedAIResidency: "us",
+      allowOutsideRegion: true,
+    } as const satisfies DictationContext;
+    const result = await executeDictation(context, f.dependencies);
+    if (result.isErr()) {
+      throw result.error;
+    }
+    expect(f.requests.at(0)).toMatchObject({
+      url: "https://openrouter.ai/api/v1/audio/transcriptions",
+      body: { model: MODEL, provider: { zdr: true, data_collection: "deny" } },
+    });
+    expect(f.settlements.at(0)?.caller.transcriptionEndpoint).toBe("global");
+    expect(f.preflightRequirements).toEqual([
+      transcriptionUsageUnits({
+        modelId: MODEL,
+        residency: "global",
+        durationMs: MAX_TRANSCRIPTION_AUDIO_SECONDS * 1000,
+        isByok: false,
+      }).unitsConsumed,
+    ]);
+  });
+
+  test("a default never leaves the region, even for a caller that allows it", async () => {
+    const f = fixture();
+    const context = {
+      ...f.context,
+      allowOutsideRegion: true,
+      body: { ...f.context.body, modelId: undefined },
+    } as const satisfies DictationContext;
+    const result = await executeDictation(context, f.dependencies);
+    if (result.isErr()) {
+      throw result.error;
+    }
+    expect(f.requests.at(0)?.url).toBe(
+      "https://eu.openrouter.ai/api/v1/audio/transcriptions",
+    );
+    expect(f.settlements.at(0)?.caller.transcriptionEndpoint).toBe("eu");
   });
 
   test("a request naming no model is sent to the region's default and settled under it", async () => {
@@ -557,11 +603,11 @@ describe("dictation operation request matrix", () => {
     });
   });
 
-  test("a request naming no model in a region without one is refused before any provider work", async () => {
+  test("a request naming no model without a region is refused before any provider work", async () => {
     const f = fixture();
     const context = {
       ...f.context,
-      managedAIResidency: "us",
+      managedAIResidency: null,
       body: { ...f.context.body, modelId: undefined },
     } as const satisfies DictationContext;
     const result = await executeDictation(context, f.dependencies);

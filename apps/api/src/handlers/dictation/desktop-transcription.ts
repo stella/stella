@@ -4,9 +4,11 @@ import {
   defaultTranscriptionModelId,
   isTranscriptionModelId,
   TRANSCRIPTION_MODELS,
+  transcriptionEndpointFor,
 } from "@stll/ai-catalog/transcription";
 import { AI_FAILURE_CODES } from "@stll/api-contract";
 import {
+  DESKTOP_DICTATION_MODELS_LABELED_QUERY,
   type DesktopDictationModels,
   desktopDictationModelsSchema,
   desktopDictationTranscriptSchema,
@@ -54,17 +56,20 @@ const REQUIRED_FEATURE_ID =
   "desktop-dictation-cloud" satisfies DesktopFeatureId;
 
 /**
- * The transcription models stella AI offers this organization: only those
- * available in its region, and none when its own AI provider does not
- * transcribe. The default is the model a request without one gets.
+ * The transcription models stella AI offers this organization, none when
+ * its own AI provider does not transcribe. A desktop that labels models
+ * also gets the models its region does not serve, marked as leaving it,
+ * after the regional ones; an older desktop reads only the regional ones,
+ * without labels. The default is the model a request without one gets and
+ * never leaves the region.
  */
-export const listDictationModels = ({
-  orgAIConfig,
-  managedAIResidency,
-}: Pick<
-  OrgSettingsForAuth,
-  "orgAIConfig" | "managedAIResidency"
->): DesktopDictationModels => {
+export const listDictationModels = (
+  {
+    orgAIConfig,
+    managedAIResidency,
+  }: Pick<OrgSettingsForAuth, "orgAIConfig" | "managedAIResidency">,
+  { labeled = false }: { labeled?: boolean } = {},
+): DesktopDictationModels => {
   const none = (unavailable: "region" | "provider") => ({
     models: [],
     defaultModelId: null,
@@ -81,17 +86,25 @@ export const listDictationModels = ({
   ) {
     return none("provider");
   }
-  const models = Object.keys(TRANSCRIPTION_MODELS)
+  const offered = Object.keys(TRANSCRIPTION_MODELS)
     .filter(isTranscriptionModelId)
-    .filter(
-      (modelId) =>
-        TRANSCRIPTION_MODELS[modelId].residency[managedAIResidency].status ===
-        "available",
-    )
-    .map((modelId) => ({
-      id: modelId,
-      displayName: TRANSCRIPTION_MODELS[modelId].displayName,
-    }));
+    .flatMap((modelId) => {
+      const endpoint = transcriptionEndpointFor(modelId, managedAIResidency, {
+        outsideRegion: labeled,
+      });
+      return endpoint === undefined
+        ? []
+        : [{ modelId, outsideRegion: endpoint !== managedAIResidency }];
+    })
+    .toSorted(
+      (left, right) => Number(left.outsideRegion) - Number(right.outsideRegion),
+    );
+  const models = offered.map(({ modelId, outsideRegion }) => {
+    const { displayName, provider } = TRANSCRIPTION_MODELS[modelId];
+    return labeled
+      ? { id: modelId, displayName, provider, outsideRegion }
+      : { id: modelId, displayName };
+  });
   if (models.length === 0) {
     return none("region");
   }
@@ -181,7 +194,14 @@ export const createDesktopDictationModelsEndpoint = (
       if (configurationError !== null) {
         return Result.err(configurationError);
       }
-      return Result.ok(listDictationModels(settings));
+      return Result.ok(
+        listDictationModels(settings, {
+          labeled:
+            new URL(request.url).searchParams.get(
+              DESKTOP_DICTATION_MODELS_LABELED_QUERY,
+            ) === "1",
+        }),
+      );
     },
   );
 
@@ -251,6 +271,8 @@ export const createDesktopDictationTranscribeEndpoint = ({
         const session = { activeOrganizationId: account.organizationId };
         const caller: DictationCaller = {
           ...settings,
+          // The desktop lists models outside the region only labeled as such.
+          allowOutsideRegion: true,
           user,
           session,
           safeDb,
