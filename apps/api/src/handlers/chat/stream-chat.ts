@@ -10,6 +10,7 @@ import type {
   ModelMessage,
   RunAgentResumeItem,
   StreamChunk,
+  StreamDurability,
   TokenUsage,
   UIMessage,
 } from "@tanstack/ai";
@@ -228,6 +229,7 @@ import {
   chatToolMapToArray,
 } from "@/api/lib/chat/chat-tool-types";
 import {
+  type ContextNoticeStamp,
   createContextNoticeStamp,
   SESSION_NOT_RESUMED_NOTICE,
 } from "@/api/lib/chat/context-notice";
@@ -1037,7 +1039,7 @@ export const streamChat = async ({
 };
 
 /** What a turn's run produces: its chunks, and the log they are kept in. */
-export type ChatTurnProduction = {
+type ChatTurnProduction = {
   output: AsyncIterable<StreamChunk>;
   durability: StreamDurability;
 };

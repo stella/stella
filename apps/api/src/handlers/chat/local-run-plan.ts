@@ -162,7 +162,7 @@ export const resolveChatLocalRun = async ({
 };
 
 /** The run a handed-over turn reads on, or why the adopter cannot read it. */
-export type AdoptedChatLocalRun =
+type AdoptedChatLocalRun =
   | { type: "adopted"; run: LocalChatRun }
   /** The turn has no chat run on a computer for this member. */
   | { type: "no-run" }

@@ -1540,7 +1540,7 @@ const takeChatTurnOnTx = async ({
 };
 
 /** A handed-over turn this execution now runs, and where it stood. */
-export type AdoptedChatTurn = {
+type AdoptedChatTurn = {
   execution: ChatTurnExecution;
   /** The answer so far the released owner stored; the run continues it. */
   checkpointMessageId: SafeId<"chatMessage">;
@@ -1556,7 +1556,7 @@ export type AdoptedChatTurn = {
  * the others, and a turn a stop or the reaper ended first, get null. From
  * this write on the run log and the turn row refuse every other execution.
  */
-export const adoptHandedOverChatTurnOnTx = async ({
+const adoptHandedOverChatTurnOnTx = async ({
   pings,
   threadId,
   turnId,

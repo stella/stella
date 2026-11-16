@@ -47,7 +47,7 @@ import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 const SWEEP_BATCH_SIZE = 25;
 const SWEEP_CONCURRENCY = 2;
 /** How often every API task looks for a turn whose ring was lost. */
-export const CHAT_TURN_ADOPTION_SWEEP_INTERVAL_MS = 15_000;
+const CHAT_TURN_ADOPTION_SWEEP_INTERVAL_MS = 15_000;
 
 /** A sweep for handed-over turns failed; the next one tries again. */
 const ADOPTION_SWEEP_FAILED = failureSink({
@@ -65,7 +65,7 @@ const ADOPTED_TURN_NOT_STORED = failureSink({
   expected: [],
 });
 
-export type ChatTurnAdoptionDependencies = {
+type ChatTurnAdoptionDependencies = {
   /** Ends adoption when this process stops: a stopping task adopts nothing. */
   signal: AbortSignal;
   indexThread: typeof upsertChatThreadSearchDocument;
@@ -79,7 +79,7 @@ export type ChatTurnAdoptionDependencies = {
 };
 
 /** What one attempt to adopt a handed-over turn did. */
-export type ChatTurnAdoptionOutcome =
+type ChatTurnAdoptionOutcome =
   /** This task runs the turn now. */
   | { type: "adopted" }
   /** Another task took it, or it ended, or its member cannot act any more. */
@@ -312,9 +312,7 @@ const adoptChatTurn = async ({
  * (another task adopting the same turn loses the claim), and sweeps for
  * turns whose ring was lost.
  */
-export const createChatTurnAdopter = (
-  dependencies: ChatTurnAdoptionDependencies,
-) => {
+const createChatTurnAdopter = (dependencies: ChatTurnAdoptionDependencies) => {
   const adopting = new Set<string>();
   const adopt = async (turn: HandedOverChatTurn): Promise<void> => {
     if (adopting.has(turn.turnId)) {
