@@ -2225,6 +2225,7 @@
       "noRun": "Agent teď na vašem počítači neběží.",
       "notPlain": "Agentovi lze během práce poslat jen textovou zprávu bez souborů, neodeslanou v anonymizovaném režimu.",
       "notTaken": "Agent teď vaši zprávu nemohl přijmout.",
+      "queuedMessageChanged": "Zpráva se mezitím změnila nebo už není ve frontě, proto ji agent nedostal.",
       "runFull": "Agent teď další zprávy nepřijme.",
       "title": "Zpráva čeká ve frontě, dokud agent neskončí",
       "turnNotRunning": "Agent právě nepracuje."

@@ -2225,6 +2225,7 @@
       "noRun": "Aģents pašlaik jūsu datorā nedarbojas.",
       "notPlain": "Aģenta darba laikā tam var nosūtīt tikai teksta ziņu bez failiem, kas nav nosūtīta anonimizētajā režīmā.",
       "notTaken": "Aģents pašlaik nevarēja pieņemt jūsu ziņu.",
+      "queuedMessageChanged": "Ziņa ir mainīta vai vairs nav rindā, tāpēc aģents to nesaņēma.",
       "runFull": "Aģents pašlaik nevar pieņemt vairāk ziņu.",
       "title": "Jūsu ziņa gaida rindā, līdz aģents beigs darbu",
       "turnNotRunning": "Aģents pašlaik nestrādā."

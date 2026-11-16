@@ -660,8 +660,6 @@
     "packages/ui/src/lib/slot.tsx": 1,
     "scripts/check-cli-release-coupling.ts": 1,
     "scripts/check-migration-order.ts": 1,
-    "scripts/check-railway-template-draft.ts": 2,
-    "scripts/check-railway-template-shape.ts": 1,
     "scripts/codemod-icons.ts": 2,
     "scripts/crawl-posture.ts": 1,
     "scripts/db-await-in-loop.ts": 1,
@@ -670,7 +668,6 @@
     "scripts/oxlint-rule-ids.ts": 1,
     "scripts/rc-bailouts.ts": 1,
     "scripts/sql-perf-baseline.ts": 2,
-    "scripts/sync-railway-template-source.ts": 2,
     "scripts/tanstack-drift.ts": 3,
     "scripts/typecheck-baseline.ts": 2
   },

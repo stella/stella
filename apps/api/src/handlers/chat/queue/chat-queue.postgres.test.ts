@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { and, asc, countDistinct, eq, inArray, sql } from "drizzle-orm";
 import fc from "fast-check";
@@ -33,6 +33,10 @@ import {
   readChatQueueOnTx,
   replaceQueuedChatMessageOnTx,
 } from "@/api/handlers/chat/queue/chat-queue-store";
+import {
+  createSteeredQueue,
+  markSteeredQueuedMessageOnTx,
+} from "@/api/handlers/chat/queue/steered-message";
 import type { ChatTurnOutcome } from "@/api/handlers/chat/types";
 import { deleteChatFilesOnTx } from "@/api/handlers/chat/upload-files";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -850,6 +854,130 @@ const suite = (
       expect(await takeAndAccept({ id, owner, revision: 0, threadId })).toBe(
         "taken",
       );
+    });
+
+    test("a steered message the turn took is not sent at the turn's end; a refused one is", async () => {
+      const owner = await seedOwner();
+      const threadId = await seedThread(owner);
+      const taken = createSafeId<"chatMessage">();
+      const refused = createSafeId<"chatMessage">();
+      const editedSince = createSafeId<"chatMessage">();
+      await withLock(threadId, owner, async (tx) => {
+        for (const id of [taken, refused, editedSince]) {
+          await enqueueChatMessageOnTx({
+            id,
+            send: sendOf(id, "steer me"),
+            threadId,
+            tx,
+            uploadedFileIds: [],
+          });
+        }
+        await acceptTurnOnTx({
+          messageId: createSafeId<"chatMessage">(),
+          owner,
+          threadId,
+          tx,
+        });
+      });
+      await setTurnStatus({ owner, status: "running", threadId });
+      // The steer route marks each at the revision the member read; a
+      // revision since edited is no longer the message the member saw.
+      expect(
+        await withLock(
+          threadId,
+          owner,
+          async (tx) =>
+            await markSteeredQueuedMessageOnTx({
+              id: taken,
+              revision: 1,
+              threadId,
+              tx,
+            }),
+        ),
+      ).toBe("changed");
+      for (const id of [taken, refused, editedSince]) {
+        expect(
+          await withLock(
+            threadId,
+            owner,
+            async (tx) =>
+              await markSteeredQueuedMessageOnTx({
+                id,
+                revision: 0,
+                threadId,
+                tx,
+              }),
+          ),
+        ).toBe("marked");
+      }
+      await withLock(threadId, owner, async (tx) => {
+        await replaceQueuedChatMessageOnTx({
+          expectedRevision: 0,
+          id: editedSince,
+          send: sendOf(editedSince, "edited after the steer"),
+          threadId,
+          tx,
+        });
+      });
+      // The run holds the first revision's steer under this id: the edited
+      // revision cannot be steered under it too, or the first one's report
+      // would remove the revision the run never had.
+      expect(
+        await withLock(
+          threadId,
+          owner,
+          async (tx) =>
+            await markSteeredQueuedMessageOnTx({
+              id: editedSince,
+              revision: 1,
+              threadId,
+              tx,
+            }),
+        ),
+      ).toBe("changed");
+      const steeredQueue = createSteeredQueue({
+        organizationId: owner.organizationId,
+        recordAuditEvent: async () => {},
+        safeDb: async (run) => Result.ok(await database.transaction(run)),
+        threadId,
+        userId: owner.userId,
+      });
+      // What the turn's producer does with the run's reports, before the
+      // run's end is read.
+      expect((await steeredQueue.settle(taken, "taken")).isOk()).toBe(true);
+      expect((await steeredQueue.settle(refused, "refused")).isOk()).toBe(true);
+      expect((await steeredQueue.settle(editedSince, "taken")).isOk()).toBe(
+        true,
+      );
+      const queued = await database
+        .select({
+          id: chatQueuedMessages.id,
+          position: chatQueuedMessages.position,
+          revision: chatQueuedMessages.revision,
+          steeredRevision: chatQueuedMessages.steeredRevision,
+        })
+        .from(chatQueuedMessages)
+        .where(eq(chatQueuedMessages.threadId, threadId))
+        .orderBy(asc(chatQueuedMessages.position));
+      expect(queued).toEqual([
+        { id: refused, position: 1, revision: 0, steeredRevision: null },
+        { id: editedSince, position: 2, revision: 1, steeredRevision: null },
+      ]);
+      await setTurnStatus({ owner, status: "completed", threadId });
+      // The turn's end: the taken message is gone, the refused one goes
+      // first, the one edited since after it.
+      expect(
+        await takeAndAccept({ id: taken, owner, revision: 0, threadId }),
+      ).toBe("not-due");
+      expect(
+        await takeAndAccept({ id: refused, owner, revision: 0, threadId }),
+      ).toBe("taken");
+      expect(
+        await database
+          .select({ id: chatMessages.id })
+          .from(chatMessages)
+          .where(eq(chatMessages.id, taken)),
+      ).toEqual([]);
     });
 
     test("a refusal the sender met outside the lock holds only a head still due", async () => {

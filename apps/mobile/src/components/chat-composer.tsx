@@ -395,6 +395,7 @@ function useNoticeText({
       no_run: t("steerRefused.noRun"),
       harness_cannot_steer: t("steerRefused.cannotSteer"),
       run_full: t("steerRefused.runFull"),
+      queued_message_changed: t("steerRefused.queuedMessageChanged"),
       not_taken: t("steerRefused.notTaken"),
     } as const satisfies Record<ChatLocalRunSteerRefusal, string>;
     return steerRefusalText[steerRefusal];

@@ -30,6 +30,7 @@ export const REPLAY_CAPABLE_ROUTES = [
     path: "/v1/lists/:workspaceId/generation-candidates/reject",
   },
   { method: "POST", path: "/v1/lists/:workspaceId/generations" },
+  { method: "POST", path: "/v1/lists/:workspaceId/item-sources" },
   { method: "POST", path: "/v1/lists/:workspaceId/sections" },
   { method: "POST", path: "/v1/organizations" },
   { method: "POST", path: "/v1/reader/annotations" },

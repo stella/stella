@@ -2225,6 +2225,7 @@
       "noRun": "Agent teraz na vašom počítači nebeží.",
       "notPlain": "Agentovi možno počas práce poslať len textovú správu bez súborov, neodoslanú v anonymizovanom režime.",
       "notTaken": "Agent teraz vašu správu nemohol prijať.",
+      "queuedMessageChanged": "Správa sa medzičasom zmenila alebo už nie je v poradí, preto ju agent nedostal.",
       "runFull": "Agent teraz ďalšie správy neprijme.",
       "title": "Správa čaká v poradí, kým agent neskončí",
       "turnNotRunning": "Agent práve nepracuje."

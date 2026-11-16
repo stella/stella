@@ -293,7 +293,8 @@
       "noRun": "L’agent ne tourne pas sur votre ordinateur en ce moment.",
       "cannotSteer": "Cet agent n’accepte pas de messages pendant qu’il travaille.",
       "runFull": "L’agent ne peut pas accepter d’autres messages pour le moment.",
-      "notTaken": "L’agent n’a pas pu prendre votre message pour le moment."
+      "notTaken": "L’agent n’a pas pu prendre votre message pour le moment.",
+      "queuedMessageChanged": "Le message a changé ou n’est plus dans la file d’attente, l’agent ne l’a donc pas reçu."
     }
   },
   "tasks": {
