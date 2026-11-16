@@ -159,11 +159,9 @@ const fixture = (
       initialData: snapshot("Before"),
       staleTime: Infinity,
     };
+    const observer = new QueryObserver(client, options);
     if (active) {
-      const observer = new QueryObserver(client, options);
       subscriptions.push(observer.subscribe(() => undefined));
-    } else {
-      client.getQueryCache().build(client, options);
     }
     return {
       name: () =>
