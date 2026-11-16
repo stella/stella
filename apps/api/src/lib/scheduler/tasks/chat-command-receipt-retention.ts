@@ -1,4 +1,4 @@
-import { asc, inArray, lt, sql } from "drizzle-orm";
+import { inArray, lt, sql } from "drizzle-orm";
 
 import { CHAT_COMMAND_RECEIPT_RETENTION_MS } from "@stll/api-contract/chat-command";
 
@@ -30,8 +30,6 @@ const deleteExpiredChatCommandReceipts = async (
         .select({ commandId: chatCommandReceipts.commandId })
         .from(chatCommandReceipts)
         .where(lt(chatCommandReceipts.acceptedAt, sql`${cutoff}::timestamptz`))
-        .orderBy(asc(chatCommandReceipts.acceptedAt))
-        .limit(CHAT_COMMAND_RECEIPT_SWEEP_BATCH_SIZE)
         .$dynamic(),
     run: async (tx, expired) => {
       if (expired.length === 0) {
