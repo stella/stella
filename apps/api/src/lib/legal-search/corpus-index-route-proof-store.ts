@@ -271,7 +271,7 @@ export const revokeCorpusIndexRouteProofTx = async (
  * - `revoked`: drift was repaired on the route after the proving pass started;
  * - `expired`: the proving pass is older than the maximum age.
  */
-export type CorpusIndexRouteProofStatus =
+type CorpusIndexRouteProofStatus =
   | {
       type: "current";
       provenAtUs: string;
