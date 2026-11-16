@@ -1416,7 +1416,7 @@
       "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "read_case_law_citations",
-    "description": "Read citations/citing passages. `cited_by`: citers; `cites`: citations. `doctrine` AND `polarity` filters. `polarity`: 'unclassified': unread; 'mixed': mentions disagreed. `doctrine`: reviewed 'distinguishes'/'limits'; rejected when unavailable. 'not_stated' does not mean followed; 'unread': none was read; null when `doctrineAvailability` is 'unavailable'. `passage.evidenceQuote`: verbatim evidence when text is available. `passage.text` is at most 1200 chars, cut when `passage.truncated`; `passage.mention`: 'sole', 'classified_section' (polarity source mention) or 'latest_of_several' (may not be). `detail`, `passage_query` narrow replies. `appealReviews`: review links. Pass nextCursor as cursor. Use `url` for the reader and `source_url` for the publisher.",
+    "description": "Read citations/citing passages. `cited_by`: citers; `cites`: citations. `doctrine` AND `polarity` filters. `polarity`: 'unclassified': unread; 'mixed': mentions disagreed. `doctrine`: reviewed 'distinguishes'/'limits'; rejected when unavailable. 'not_stated' does not mean followed; 'unread': none was read; null when `doctrineAvailability` is 'unavailable'. `passage.evidenceQuote`: verbatim evidence when text is available. `passage.text` is at most 1200 chars, cut when `passage.truncated`; `passage.mention`: 'sole', 'classified_section' (polarity source mention) or 'latest_of_several' (may not be). `detail`, `passage_query` narrow replies. Pass nextCursor as cursor. Use `url` for the reader and `source_url` for the publisher.",
     "inputSchema": {
       "type": "object",
       "required": ["decision_id", "direction"],

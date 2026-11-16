@@ -1110,8 +1110,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       "chars, cut when `passage.truncated`; `passage.mention`: " +
       "'sole', 'classified_section' (polarity source mention) or " +
       "'latest_of_several' (may not be). `detail`, `passage_query` narrow " +
-      "replies. `appealReviews`: review links. " +
-      "Pass nextCursor as cursor. Use " +
+      "replies. Pass nextCursor as cursor. Use " +
       "`url` for the reader and `source_url` for the publisher.",
     inputSchema: readCaseLawCitationsArgsSchema,
     access: "read",
