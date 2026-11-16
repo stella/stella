@@ -837,7 +837,7 @@ mechanics, and similar), not gaps in coverage.
 | native_tool_ui | 11 |
 | organization_export | 2 |
 | provider_secret | 34 |
-| public_indexing | 11 |
+| public_indexing | 13 |
 | realtime_stream | 10 |
 | search_ui | 21 |
 | session_token_exchange | 21 |
