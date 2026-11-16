@@ -636,6 +636,9 @@
       "noResults": "Nie znaleziono języków"
     },
     "modelNeeded": "Model mowy działa na tym komputerze.",
+    "modelInstalled": "Model mowy ({size} MB) jest na tym komputerze.",
+    "removeModel": "Usuń",
+    "removeFailed": "Nie udało się usunąć modelu mowy. Spróbuj ponownie.",
     "download": "Pobierz ({size} MB)",
     "downloading": "Pobieranie modelu mowy: {percent}%",
     "downloadFailed": "Nie udało się pobrać modelu mowy.",
@@ -718,6 +721,11 @@
     "howDocumentsBody": "Wybierz Otwórz przy dokumencie w stella. Po zapisaniu zmiany wrócą do stella jako nowa wersja.",
     "howClipboard": "Schowek",
     "howClipboardBody": "Kopiuj jak zwykle, a potem naciśnij {shortcut}, aby wybrać spośród skopiowanych treści.",
+    "howSigning": "Podpisywanie PDF",
+    "howSigningBodyMac": "Przy pliku PDF w stelli wybierz „Podpisz w stella desktop”. Certyfikat pozostaje w Twoim pęku kluczy lub na karcie inteligentnej, a podpisany PDF wraca do stelli jako nowa wersja.",
+    "howSigningBodyPc": "Przy pliku PDF w stelli wybierz „Podpisz w stella desktop”. Certyfikat pozostaje w magazynie certyfikatów lub na karcie inteligentnej, a podpisany PDF wraca do stelli jako nowa wersja.",
+    "howDictation": "Dyktowanie",
+    "howDictationBody": "Przytrzymaj skrót i mów, a tekst pojawi się w aplikacji, której używasz. Możesz je włączyć w jednym z kolejnych kroków.",
     "howActivity": "Aktywność",
     "howActivityBody": "Zobacz, na co poszedł Twój dzień, i zamień go w wersje robocze wpisów czasu. Wyłączona, dopóki jej nie uruchomisz.",
     "activityTitle": "Aktywność w skrócie",
@@ -827,9 +835,10 @@
       "storage": "Nie udało się odczytać ani zapisać połączenia na tym komputerze."
     },
     "callbackConnectedTitle": "ChatGPT jest połączony",
-    "callbackConnectedBody": "Możesz zamknąć tę kartę i wrócić do stelli.",
+    "callbackConnectedBody": "Wróć do stelli. Zapytania do AI korzystają teraz z Twojego planu ChatGPT.",
     "callbackNotConnectedTitle": "Nie połączono z ChatGPT",
     "callbackNotConnectedBody": "Wróć do stelli, aby zobaczyć, co się stało, i spróbuj ponownie.",
+    "callbackCloseTab": "Możesz zamknąć tę kartę.",
     "claudeCode": {
       "title": "Claude Code",
       "description": "Korzystaj ze swojej subskrypcji Claude w lokalnych agentach w stelli. Wykorzystanie jest liczone w ramach planu Claude, niezależnie od subskrypcji stelli.",

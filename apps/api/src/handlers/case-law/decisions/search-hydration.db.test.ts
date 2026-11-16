@@ -84,6 +84,7 @@ import {
   installCorpusDispositionScan,
   installCorpusRevisionScan,
 } from "@/api/tests/helpers/corpus-disposition-scan";
+import { optOutOfCorpusProjectionSeedingGuard } from "@/api/tests/helpers/corpus-projection-seeding-guard";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestPglite,
@@ -198,6 +199,10 @@ const heldProjection = ({
 beforeAll(
   async () => {
     client = await createTestPglite();
+    await optOutOfCorpusProjectionSeedingGuard(client, {
+      reason:
+        "Reader suite: stands up canonical rows and their serving states as fixtures; no desired writer runs here, and the writer suites keep the guard.",
+    });
     const db = drizzle({ client });
     await client.exec(
       "CREATE TEXT SEARCH CONFIGURATION public.stella_unaccent (COPY = pg_catalog.simple)",

@@ -15,7 +15,7 @@ import {
   chatThreads,
   chatTurns,
 } from "@/api/db/schema";
-import { createScopedDb } from "@/api/db/scoped";
+import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
@@ -29,7 +29,6 @@ import {
 } from "@/api/tests/helpers/chat-approval-harness";
 import type { ChatHarness } from "@/api/tests/helpers/chat-approval-harness";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
   getRlsFixture,
   releaseRlsFixture,
@@ -54,7 +53,9 @@ beforeAll(async () => {
   scopedDb = asTestRaw<ScopedDb>(
     createScopedDb(testDb, [ids.wsA1, ids.wsA2], ids.orgA, ids.userA1),
   );
-  safeDb = toSafeDbMock(scopedDb);
+  // Classifies database failures as a request's handle does: the losing
+  // first send of a new thread recovers from the thread's key conflict.
+  safeDb = createSafeDb(testDb, [ids.wsA1, ids.wsA2], ids.orgA, ids.userA1);
 });
 
 afterAll(async () => {
@@ -158,7 +159,7 @@ describe("a send retried under its command id", () => {
     }
   });
 
-  test("racing its first attempt, exactly one runs and the other is answered with its turn", async () => {
+  test("racing its first attempt on a new thread, exactly one runs and the other is answered with its turn", async () => {
     const harness = createApprovalHarness({ ids, safeDb, scopedDb, testDb });
     const threadId = newThreadId();
     const commandId = Bun.randomUUIDv7();
@@ -181,6 +182,54 @@ describe("a send retried under its command id", () => {
       for (const ctx of attempts) {
         expect(ctx.set.headers[CHAT_TURN_ID_HEADER]).toBe(turns[0]?.id);
       }
+      expect(await messagesOf(threadId)).toHaveLength(2);
+    } finally {
+      await harness.close();
+    }
+  });
+
+  test("racing its first attempt, which takes the turn between its read and its claim, is answered with that turn", async () => {
+    const harness = createApprovalHarness({ ids, safeDb, scopedDb, testDb });
+    const threadId = newThreadId();
+    const commandId = Bun.randomUUIDv7();
+    const messageId = toSafeId<"chatMessage">(Bun.randomUUIDv7());
+    try {
+      // The thread exists: a retry follows its first attempt by a while.
+      harness.script(threadId, [
+        { finishReason: "stop", text: "Hello.", type: "text" },
+      ]);
+      const opening = commandSend({
+        commandId: Bun.randomUUIDv7(),
+        harness,
+        messageId: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
+        threadId,
+      });
+      expect(await harness.send(opening)).toEqual({ status: "streamed" });
+
+      let raceRan = false;
+      harness.raceNextAcceptance(async () => {
+        harness.script(threadId, [
+          { finishReason: "stop", text: "It runs for a year.", type: "text" },
+        ]);
+        expect(
+          await harness.send(
+            commandSend({ commandId, harness, messageId, threadId }),
+          ),
+        ).toEqual({ status: "streamed" });
+        raceRan = true;
+      });
+      const retry = commandSend({ commandId, harness, messageId, threadId });
+      const outcome = await harness.send(retry);
+
+      // The fixture must reach the race: the first attempt won in between.
+      expect(raceRan).toBe(true);
+      expect(outcome).toEqual(replayed);
+      const receipt = (await receiptOf(commandId)).at(0);
+      expect(retry.set.headers[CHAT_TURN_ID_HEADER]).toBe(
+        receipt?.turnId ?? "",
+      );
+      expect(await turnsOf(threadId)).toHaveLength(2);
+      expect(await messagesOf(threadId)).toHaveLength(4);
     } finally {
       await harness.close();
     }

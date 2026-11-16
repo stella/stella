@@ -50,6 +50,15 @@ describe("converted backfill entrypoints wire operator input to the gated runtim
       },
     },
     {
+      entrypoint: "legislation-corpus-storage",
+      args: ["--apply", "--page", "3", "--limit", "456", "--after", after],
+      expected: {
+        name: `legislation-corpus-storage:${after}`,
+        tableName: "legislation_documents",
+        initialSize: 3,
+      },
+    },
+    {
       entrypoint: "legislation-version-changes",
       args: [
         "--apply",

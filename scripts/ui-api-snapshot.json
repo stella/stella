@@ -1649,6 +1649,7 @@
     ],
     "./number-input": ["NumberInput"],
     "./option-color": ["emptyColor", "optionColors", "resolveOptionColor"],
+    "./outcome-screen": ["OutcomeScreen"],
     "./outline-rail": [
       "OUTLINE_CONTROL_MIN_SIZE",
       "OUTLINE_EMPHASIS",
@@ -2076,6 +2077,7 @@
       "inline-end",
       "inline-start"
     ],
+    "InputGroupTextarea.appearance": ["composer", "default"],
     "InputGroupTextarea.fieldSizing": ["content", "fixed"],
     "InspectorDock.mount": ["content", "shell-end"],
     "InspectorEntityTab.inactiveIcon": ["dim", "legible"],
@@ -2098,6 +2100,8 @@
     "MenuItem.variant": ["default", "destructive"],
     "MenuRadioItem.indicator": ["check", "none"],
     "MenuTrigger.appearance": ["caption", "default"],
+    "OutcomeScreen.surface": ["embedded", "page"],
+    "OutcomeScreen.tone": ["error", "success"],
     "OutlineRail.presentation": ["panel", "popover", "rail"],
     "PanelTrigger.side": ["left", "right"],
     "PopoverContent.layer": [
@@ -2225,6 +2229,7 @@
     ],
     "TextMark.variant": ["dotted", "fill", "strike", "underline", "wavy"],
     "TextMark.weight": ["inherit", "medium"],
+    "Textarea.appearance": ["composer", "default"],
     "Textarea.fieldSizing": ["content", "fixed"],
     "ToastProvider.position": [
       "bottom-center",

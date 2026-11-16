@@ -57,6 +57,10 @@ import {
   openGatedTestDatabase,
   withGatedTestClients,
 } from "@/api/tests/gated-test-database";
+import {
+  guardPostgresSuiteSeeding,
+  insertProjectedFixtureDecisions,
+} from "@/api/tests/helpers/corpus-projection-seeding-guard-postgres";
 import { runEuCompletionTickFixture } from "@/api/tests/helpers/eu-completion-tick";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
@@ -84,7 +88,11 @@ if (!databaseUrl || !enabled) {
   });
 } else {
   describe("EU completion real scheduled wiring", () => {
-    const { db } = openGatedTestDatabase(databaseUrl);
+    const database = openGatedTestDatabase(databaseUrl);
+    // A generation of the suite's own, so the completion writer is held to
+    // the seeding rule.
+    guardPostgresSuiteSeeding(database, { generations: ["case_law_v10"] });
+    const { db } = database;
     const withSource = async (
       run: (sourceId: SafeId<"caseLawSource">) => Promise<void>,
     ) => {
@@ -252,23 +260,25 @@ if (!databaseUrl || !enabled) {
       }
       const candidate = parsed.result;
       const id = createSafeId<"caseLawDecision">();
-      await db.insert(caseLawDecisions).values({
-        id,
-        sourceId,
-        caseNumber: candidate.caseNumber,
-        sourceDocumentId: candidate.sourceDocumentId,
-        court: candidate.court,
-        country: candidate.country,
-        language: candidate.language,
-        ecli: candidate.ecli,
-        decisionDate: candidate.decisionDate,
-        decisionType: candidate.decisionType,
-        sourceUrl: candidate.sourceUrl,
-        documentUrl: candidate.documentUrl,
-        metadata,
-        ...options.offloaded,
-        parserVersion: 1,
-      });
+      await insertProjectedFixtureDecisions(db, [
+        {
+          id,
+          sourceId,
+          caseNumber: candidate.caseNumber,
+          sourceDocumentId: candidate.sourceDocumentId,
+          court: candidate.court,
+          country: candidate.country,
+          language: candidate.language,
+          ecli: candidate.ecli,
+          decisionDate: candidate.decisionDate,
+          decisionType: candidate.decisionType,
+          sourceUrl: candidate.sourceUrl,
+          documentUrl: candidate.documentUrl,
+          metadata,
+          ...options.offloaded,
+          parserVersion: 1,
+        },
+      ]);
       const row = (
         await db
           .select()
@@ -697,19 +707,21 @@ if (!databaseUrl || !enabled) {
             "62021CJ0367",
           );
           const secondId = createSafeId<"caseLawDecision">();
-          await db.insert(caseLawDecisions).values({
-            ...row,
-            id: secondId,
-            caseNumber: "C-367/21",
-            sourceDocumentId: "62021CJ0367:en",
-            sourceUrl: secondSourceUrl,
-            ecli: "ECLI:EU:C:2024:61",
-            metadata: {
-              celex: "62021CJ0367",
+          await insertProjectedFixtureDecisions(db, [
+            {
+              ...row,
+              id: secondId,
+              caseNumber: "C-367/21",
+              sourceDocumentId: "62021CJ0367:en",
+              sourceUrl: secondSourceUrl,
               ecli: "ECLI:EU:C:2024:61",
-              decisionDate: "2024-01-18",
+              metadata: {
+                celex: "62021CJ0367",
+                ecli: "ECLI:EU:C:2024:61",
+                decisionDate: "2024-01-18",
+              },
             },
-          });
+          ]);
           testState.setEnv("CASE_LAW_EU_COMPLETION_MAX_ROWS", "2");
           const notice = new TextDecoder().decode(
             Bun.gunzipSync(
@@ -1269,19 +1281,21 @@ if (!databaseUrl || !enabled) {
             "62021CJ0367",
           );
           const secondId = createSafeId<"caseLawDecision">();
-          await db.insert(caseLawDecisions).values({
-            ...row,
-            id: secondId,
-            caseNumber: "C-367/21",
-            sourceDocumentId: "62021CJ0367:en",
-            sourceUrl: secondSourceUrl,
-            ecli: "ECLI:EU:C:2024:61",
-            metadata: {
-              celex: "62021CJ0367",
+          await insertProjectedFixtureDecisions(db, [
+            {
+              ...row,
+              id: secondId,
+              caseNumber: "C-367/21",
+              sourceDocumentId: "62021CJ0367:en",
+              sourceUrl: secondSourceUrl,
               ecli: "ECLI:EU:C:2024:61",
-              decisionDate: "2024-01-18",
+              metadata: {
+                celex: "62021CJ0367",
+                ecli: "ECLI:EU:C:2024:61",
+                decisionDate: "2024-01-18",
+              },
             },
-          });
+          ]);
           // Hold the first reservation while independently reserving its neighbour.
           await db
             .update(euCompletionReceipts)
@@ -1823,15 +1837,17 @@ if (!databaseUrl || !enabled) {
           changedAt: new Date(),
         });
         const id = createSafeId<"caseLawDecision">();
-        await db.insert(caseLawDecisions).values({
-          id,
-          sourceId,
-          caseNumber: "C-1/26",
-          court: "Court of Justice",
-          country: "EU",
-          language: "en",
-          parserVersion: 1,
-        });
+        await insertProjectedFixtureDecisions(db, [
+          {
+            id,
+            sourceId,
+            caseNumber: "C-1/26",
+            court: "Court of Justice",
+            country: "EU",
+            language: "en",
+            parserVersion: 1,
+          },
+        ]);
         const before = (
           await db
             .select()

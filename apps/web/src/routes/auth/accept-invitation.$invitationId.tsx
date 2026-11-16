@@ -17,6 +17,7 @@ import {
   FramePanel,
   FrameTitle,
 } from "@stll/ui/frame";
+import { OutcomeScreen } from "@stll/ui/outcome-screen";
 import { cn } from "@stll/ui/utils";
 
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
@@ -24,6 +25,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient } from "@/lib/auth-client";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { pageTitleLiteral } from "@/lib/page-title";
 
 import { InvitationRefusal, loadInvitationView } from "./-invitation-view";
 
@@ -177,23 +179,24 @@ function AcceptInvitation({ invitation }: AcceptInvitationProps) {
 
 const DeclinedState = () => {
   const t = useTranslations();
+  const title = t("auth.invitation.declined");
 
   return (
-    <Frame className="w-full max-w-sm">
-      <FrameHeader>
-        <FrameTitle>{t("auth.invitation.declined")}</FrameTitle>
-      </FrameHeader>
-      <FramePanel className="flex flex-col gap-4">
-        <FrameDescription>
-          {t("auth.invitation.declinedDescription")}
-        </FrameDescription>
+    <OutcomeScreen
+      actions={
         <Link
-          className={cn(buttonVariants({ variant: "default" }), "w-full")}
+          className={cn(buttonVariants({ variant: "outline" }))}
           to="/workspaces"
         >
           {t("auth.invitation.goToWorkspaces")}
         </Link>
-      </FramePanel>
-    </Frame>
+      }
+      description={t("auth.invitation.declinedDescription")}
+      documentTitle={pageTitleLiteral(title)}
+      note={t("common.closeTabNote")}
+      surface="embedded"
+      title={title}
+      tone="success"
+    />
   );
 };
