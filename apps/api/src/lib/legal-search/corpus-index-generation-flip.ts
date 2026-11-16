@@ -546,7 +546,7 @@ export const prepareCorpusIndexGenerationFlip = async ({
 };
 
 /** What the flip read under its fence, and what it did. */
-export type CorpusIndexFlipEvidence = {
+type CorpusIndexFlipEvidence = {
   family: CorpusFamily;
   from: string | null;
   to: string;
@@ -700,7 +700,7 @@ const requireSamePairTx = async (
  * `mode: "dry_run"` takes the same transaction and fences and swaps nothing;
  * the caller's transaction then holds no write.
  */
-export const commitCorpusIndexGenerationFlipTx = async (
+const commitCorpusIndexGenerationFlipTx = async (
   tx: Transaction,
   plan: Extract<CorpusIndexFlipPlan, { type: "flip" }>,
   receipt:

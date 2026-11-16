@@ -149,8 +149,9 @@ Options (serve, parity):
   --exempt-minutes <n>   Serving applies newer than this many minutes are the
                          candidate's expected lag (default ${String(PARITY_DEFAULT_EXEMPT_MINUTES)}).
   --coverage-pages <n>   Coverage pages of ${String(PARITY_COVERAGE_PAGE)} serving copies to read
-                         (default ${String(PARITY_DEFAULT_COVERAGE_PAGES)}, at most ${String(PARITY_MAX_COVERAGE_PAGES)}); a walk
-                         that does not reach the end leaves the verdict undecided.
+                         (default ${String(PARITY_DEFAULT_COVERAGE_PAGES)} for parity, ${String(PARITY_MAX_COVERAGE_PAGES)} for serve, at most
+                         ${String(PARITY_MAX_COVERAGE_PAGES)}); a walk that does not reach the end leaves
+                         the verdict undecided.
 
 Options (parity):
   --coverage-from <e>    Resume a walk after serving entity e (or "start");
@@ -531,9 +532,14 @@ const parseCorpusGenerationCommand = (
     case "register":
       return Result.ok({ type: "register", target: target.value, mode });
     case "serve":
+      // A flip must read every serving state, so it walks as far as allowed
+      // unless told otherwise.
       return parseServeCommand(target.value, mode, values, {
         exemptMinutes,
-        coveragePages,
+        coveragePages:
+          values["coverage-pages"] === undefined
+            ? PARITY_MAX_COVERAGE_PAGES
+            : coveragePages,
       });
     case "parity": {
       const coverageFrom = parseCoverageCursor(values["coverage-from"]);
