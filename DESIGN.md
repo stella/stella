@@ -342,7 +342,7 @@ it, and add it here in the same change that adds it to `packages/ui`.
 - `Button` `variant`: `composer`, `default`, `destructive`, `destructive-ghost`, `destructive-outline`, `ghost`, `link`, `muted`, `muted-destructive`, `outline`, `plain`, `secondary`
 - `ButtonTextRun` `variant`: `link`, `plain`
 - `Checkbox` `appearance`: `cell`, `default`
-- `Checkbox` `firstLine` (cell appearance): `control`, `text`
+- `Checkbox` `firstLine`: `control`, `text`
 - `ColorPicker`, `EntityActionsButton`, `SortableHead`, `TableCell`, `TableHead` `align`: `center`, `end`, `start`
 - `ColorPicker`, `EntityActionsButton` `side`: `bottom`, `left`, `right`, `top`
 - `ColorPickerContent` `presentation`: `inline`, `popover`
