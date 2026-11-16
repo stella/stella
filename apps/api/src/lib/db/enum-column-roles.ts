@@ -105,6 +105,11 @@ export const ENUM_COLUMN_ROLES = {
   case_law_decision_judges: {
     role: ATTRIBUTE,
   },
+  case_law_decision_reviews: {
+    evidence_classification: ATTRIBUTE,
+    outcome: ATTRIBUTE,
+    source: ATTRIBUTE,
+  },
   case_law_decisions: {
     case_number_type: ATTRIBUTE,
   },

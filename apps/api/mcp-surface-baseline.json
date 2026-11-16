@@ -215,10 +215,10 @@
       "advanced": {"title": 15, "description": 364, "inputSchema": 913, "outputSchema": 95, "annotations": 92, "payloadUtf8Bytes": 1624}
     },
     "read_case_law_citations": {
-      "advanced": {"title": 23, "description": 734, "inputSchema": 1525, "outputSchema": 1965, "annotations": 101, "payloadUtf8Bytes": 4580},
-      "anonymized": {"title": 23, "description": 734, "inputSchema": 1525, "outputSchema": 1965, "annotations": 101, "payloadUtf8Bytes": 4580},
-      "default": {"title": 23, "description": 734, "inputSchema": 1525, "outputSchema": 1965, "annotations": 101, "payloadUtf8Bytes": 4580},
-      "law": {"title": 23, "description": 734, "inputSchema": 1525, "outputSchema": 1965, "annotations": 101, "payloadUtf8Bytes": 4580}
+      "advanced": {"title": 23, "description": 734, "inputSchema": 1525, "outputSchema": 2640, "annotations": 101, "payloadUtf8Bytes": 5255},
+      "anonymized": {"title": 23, "description": 734, "inputSchema": 1525, "outputSchema": 2640, "annotations": 101, "payloadUtf8Bytes": 5255},
+      "default": {"title": 23, "description": 734, "inputSchema": 1525, "outputSchema": 2640, "annotations": 101, "payloadUtf8Bytes": 5255},
+      "law": {"title": 23, "description": 734, "inputSchema": 1525, "outputSchema": 2640, "annotations": 101, "payloadUtf8Bytes": 5255}
     },
     "read_case_law_decision": {
       "advanced": {"title": 22, "description": 535, "inputSchema": 3040, "outputSchema": 408, "annotations": 100, "payloadUtf8Bytes": 4259},
@@ -277,16 +277,16 @@
       "default": {"title": 20, "description": 107, "inputSchema": 423, "outputSchema": 440, "annotations": 121, "payloadUtf8Bytes": 1261}
     },
     "resolve_case_law_decision": {
-      "advanced": {"title": 27, "description": 471, "inputSchema": 609, "outputSchema": 2343, "annotations": 105, "payloadUtf8Bytes": 3791},
-      "anonymized": {"title": 27, "description": 471, "inputSchema": 609, "outputSchema": 2343, "annotations": 105, "payloadUtf8Bytes": 3791},
-      "default": {"title": 27, "description": 471, "inputSchema": 609, "outputSchema": 2343, "annotations": 105, "payloadUtf8Bytes": 3791},
-      "law": {"title": 27, "description": 471, "inputSchema": 609, "outputSchema": 2343, "annotations": 105, "payloadUtf8Bytes": 3791}
+      "advanced": {"title": 27, "description": 471, "inputSchema": 609, "outputSchema": 3002, "annotations": 105, "payloadUtf8Bytes": 4450},
+      "anonymized": {"title": 27, "description": 471, "inputSchema": 609, "outputSchema": 3002, "annotations": 105, "payloadUtf8Bytes": 4450},
+      "default": {"title": 27, "description": 471, "inputSchema": 609, "outputSchema": 3002, "annotations": 105, "payloadUtf8Bytes": 4450},
+      "law": {"title": 27, "description": 471, "inputSchema": 609, "outputSchema": 3002, "annotations": 105, "payloadUtf8Bytes": 4450}
     },
     "resolve_law_citation": {
-      "advanced": {"title": 27, "description": 746, "inputSchema": 1797, "outputSchema": 2343, "annotations": 105, "payloadUtf8Bytes": 5172},
-      "anonymized": {"title": 27, "description": 746, "inputSchema": 1797, "outputSchema": 2343, "annotations": 105, "payloadUtf8Bytes": 5172},
-      "default": {"title": 27, "description": 746, "inputSchema": 1797, "outputSchema": 2343, "annotations": 105, "payloadUtf8Bytes": 5172},
-      "law": {"title": 27, "description": 746, "inputSchema": 1797, "outputSchema": 2343, "annotations": 105, "payloadUtf8Bytes": 5172}
+      "advanced": {"title": 27, "description": 746, "inputSchema": 1797, "outputSchema": 3002, "annotations": 105, "payloadUtf8Bytes": 5831},
+      "anonymized": {"title": 27, "description": 746, "inputSchema": 1797, "outputSchema": 3002, "annotations": 105, "payloadUtf8Bytes": 5831},
+      "default": {"title": 27, "description": 746, "inputSchema": 1797, "outputSchema": 3002, "annotations": 105, "payloadUtf8Bytes": 5831},
+      "law": {"title": 27, "description": 746, "inputSchema": 1797, "outputSchema": 3002, "annotations": 105, "payloadUtf8Bytes": 5831}
     },
     "resolve_rate": {
       "advanced": {"title": 20, "description": 222, "inputSchema": 495, "outputSchema": 176, "annotations": 98, "payloadUtf8Bytes": 1153},

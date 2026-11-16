@@ -1481,6 +1481,61 @@
     "outputSchema": {
       "type": "object",
       "properties": {
+        "appealReviews": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "enum": [
+                "none_found",
+                "upheld",
+                "overturned",
+                "partly",
+                "under_review",
+                "unknown"
+              ],
+              "type": "string"
+            },
+            "reason": {
+              "enum": ["no_link_in_corpus"],
+              "type": "string"
+            },
+            "basis": {
+              "enum": ["available_corpus"],
+              "type": "string"
+            },
+            "reviewedBy": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "maxItems": 32
+            },
+            "reviews": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "maxItems": 32
+            },
+            "reviewedByTruncated": {
+              "type": "boolean"
+            },
+            "reviewsTruncated": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "status",
+            "basis",
+            "reviewedBy",
+            "reviews",
+            "reviewedByTruncated",
+            "reviewsTruncated"
+          ],
+          "additionalProperties": false
+        },
         "doctrineAvailability": {
           "enum": ["available", "unavailable"],
           "type": "string"
@@ -1643,6 +1698,7 @@
         }
       },
       "required": [
+        "appealReviews",
         "doctrineAvailability",
         "decisionId",
         "direction",
@@ -4232,6 +4288,61 @@
               "required": ["status"],
               "additionalProperties": false
             },
+            "appealReviews": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "enum": [
+                    "none_found",
+                    "upheld",
+                    "overturned",
+                    "partly",
+                    "under_review",
+                    "unknown"
+                  ],
+                  "type": "string"
+                },
+                "reason": {
+                  "enum": ["no_link_in_corpus"],
+                  "type": "string"
+                },
+                "basis": {
+                  "enum": ["available_corpus"],
+                  "type": "string"
+                },
+                "reviewedBy": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "maxItems": 32
+                },
+                "reviews": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "maxItems": 32
+                },
+                "reviewedByTruncated": {
+                  "type": "boolean"
+                },
+                "reviewsTruncated": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "status",
+                "basis",
+                "reviewedBy",
+                "reviews",
+                "reviewedByTruncated",
+                "reviewsTruncated"
+              ],
+              "additionalProperties": false
+            },
             "documentId": {
               "type": "string"
             },
@@ -4529,6 +4640,61 @@
                 }
               },
               "required": ["status"],
+              "additionalProperties": false
+            },
+            "appealReviews": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "enum": [
+                    "none_found",
+                    "upheld",
+                    "overturned",
+                    "partly",
+                    "under_review",
+                    "unknown"
+                  ],
+                  "type": "string"
+                },
+                "reason": {
+                  "enum": ["no_link_in_corpus"],
+                  "type": "string"
+                },
+                "basis": {
+                  "enum": ["available_corpus"],
+                  "type": "string"
+                },
+                "reviewedBy": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "maxItems": 32
+                },
+                "reviews": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "maxItems": 32
+                },
+                "reviewedByTruncated": {
+                  "type": "boolean"
+                },
+                "reviewsTruncated": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "status",
+                "basis",
+                "reviewedBy",
+                "reviews",
+                "reviewedByTruncated",
+                "reviewsTruncated"
+              ],
               "additionalProperties": false
             },
             "documentId": {

@@ -69,6 +69,8 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "case_law_citations.polarity_evidence_windows",
   // Global corpus coverage counts and source metadata contain no member identifiers.
   "case_law_coverage_summaries.answer",
+  // Review evidence quotes public court text and its offsets; no member ids.
+  "case_law_decision_reviews.opening_evidence",
   "case_law_decision_supplements.document_ast",
   "case_law_decision_supplements.metadata",
   "case_law_decisions.sections",

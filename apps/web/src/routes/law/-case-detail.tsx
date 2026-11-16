@@ -28,6 +28,7 @@ import { MoveToSideButton } from "@/components/inspector/move-to-side-button";
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
 import { DECISION_AI_MODE } from "@/features/case-law/components/case-viewer/decision-ai-mode";
+import { DecisionAppealReviews } from "@/features/case-law/components/case-viewer/decision-appeal-reviews";
 import { buildDecisionFacts } from "@/features/case-law/components/case-viewer/decision-facts.logic";
 import { fragmentBlockAnchor } from "@/features/case-law/components/case-viewer/decision-paragraph-landing.logic";
 import { DecisionWorkspace } from "@/features/case-law/components/case-viewer/decision-workspace";
@@ -268,6 +269,14 @@ export function PublicDecisionViewer({
         />
       </ChromeHeaderActions>
       {fileMayHoldOthers && <PublicDecisionFileNote />}
+      {decision.country === "CZE" && (
+        <div className="px-4 py-2">
+          <DecisionAppealReviews
+            reviews={decision.appealReviews}
+            country={decision.country}
+          />
+        </div>
+      )}
       {!noDocument && <InspectorFindBar find={find} />}
       <div className="flex min-h-0 flex-1 overflow-hidden" ref={contentRef}>
         {noDocument && <PublicDecisionTextNotice sourceUrl={originalUrl} />}
