@@ -4,6 +4,8 @@ import path from "node:path";
 import ts from "typescript6";
 
 import type { OnlineStepIntroduction } from "../apps/api/src/db/online-migration-connection";
+import { ONLINE_LIFECYCLE } from "../apps/api/src/db/online-migration-entry";
+import { ONLINE_MIGRATION_ENTRIES } from "../apps/api/src/db/online-migration-registry";
 import {
   ONLINE_UNIQUE_INDEX_NAMES,
   ONLINE_UNIQUE_INDEX_VALIDATION_DEFINITIONS,
@@ -30,6 +32,11 @@ type CheckSourceOptions = {
   source: string;
   indexes: readonly UniqueIndex[];
   newestMigration: string;
+  /**
+   * Indexes whose online entry is still pending: built by the post-rollout
+   * drain, so a release may run before they exist.
+   */
+  pendingIndexes?: ReadonlySet<string>;
 };
 const snakeCase = (name: string) =>
   name.replace(/[A-Z]/gu, (letter) => `_${letter.toLowerCase()}`);
@@ -192,6 +199,7 @@ export const checkOnlineIndexDependencySource = ({
   source,
   indexes,
   newestMigration,
+  pendingIndexes = new Set<string>(),
 }: CheckSourceOptions): OnlineIndexDependency[] => {
   if (
     file === OWNER ||
@@ -314,6 +322,13 @@ export const checkOnlineIndexDependencySource = ({
     if (index?.introducedBy === newestMigration) {
       add(node, index, `depends on newest migration ${newestMigration}`);
     }
+    if (index !== undefined && pendingIndexes.has(index.name)) {
+      add(
+        node,
+        index,
+        "depends on a pending online index; finalize its entry first",
+      );
+    }
   };
   const visit = (node: ts.Node): void => {
     if (ts.isImportSpecifier(node)) {
@@ -403,12 +418,20 @@ if (import.meta.main) {
   ) {
     panic("Online unique index exports do not match the registry");
   }
+  const pendingIndexes = new Set(
+    ONLINE_MIGRATION_ENTRIES.flatMap((entry) =>
+      entry.type === "indexes" && entry.lifecycle === ONLINE_LIFECYCLE.pending
+        ? entry.values.map(({ name }) => name)
+        : [],
+    ),
+  );
   const findings = sourceFiles("apps/api/src").flatMap((file) =>
     checkOnlineIndexDependencySource({
       file,
       source: readFileSync(path.resolve(ROOT, file), "utf-8"),
       indexes: ONLINE_UNIQUE_INDEX_VALIDATION_DEFINITIONS,
       newestMigration,
+      pendingIndexes,
     }),
   );
   for (const finding of findings) {

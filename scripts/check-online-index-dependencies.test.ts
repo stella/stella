@@ -78,6 +78,20 @@ test("detects namespace dependencies in schema modules too", () => {
   );
 });
 
+test("refuses a dependency on an index its entry still leaves pending", () => {
+  const findings = checkOnlineIndexDependencySource({
+    file: "apps/api/src/handlers/example.ts",
+    source:
+      "query.onConflictDoNothing({ target: onlineUniqueIndexTarget(names.CHAT_TURNS_ORG_RUN_ID_UIDX) });",
+    indexes: [index],
+    newestMigration: "20261017000000_latest",
+    pendingIndexes: new Set([index.name]),
+  });
+  expect(findings.map(({ reason }) => reason)).toContain(
+    "depends on a pending online index; finalize its entry first",
+  );
+});
+
 test("detects nested expression conflict targets", () => {
   const expressionIndex = {
     ...index,
