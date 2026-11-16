@@ -2,10 +2,13 @@ import { expect, test } from "bun:test";
 
 import { writeRowSubPath } from "./repeatable-paths";
 import { replaceResolvedValue } from "./resolved-values";
+import type { RichPatchValue } from "./types";
 
-test.each(Object.entries({ replaceResolvedValue, writeRowSubPath }))(
+const WRITERS = ["replaceResolvedValue", "writeRowSubPath"] as const;
+
+test.each(WRITERS)(
   "%s preserves row identity, flat-key precedence and unrelated symbol metadata",
-  (_name, write) => {
+  (writer) => {
     const metadata = Symbol("fill metadata");
     const nested = { name: "nested name" };
     const values = {
@@ -15,22 +18,22 @@ test.each(Object.entries({ replaceResolvedValue, writeRowSubPath }))(
     };
     const alias = values;
 
-    write(values, "party.name", "flat replacement");
+    write({ writer, values, path: "party.name", value: "flat replacement" });
     expect(alias["party.name"]).toBe("flat replacement");
     expect(alias.party).toBe(nested);
     expect(nested.name).toBe("nested name");
     expect(alias[metadata]).toBe("retained");
 
-    write(values, "party.title", "new nested title");
+    write({ writer, values, path: "party.title", value: "new nested title" });
     expect(Object.entries(nested)).toEqual([
       ["name", "nested name"],
       ["title", "new nested title"],
     ]);
-    write(values, "missing.leaf", "unused");
+    write({ writer, values, path: "missing.leaf", value: "unused" });
     expect(Object.hasOwn(values, "missing")).toBe(false);
 
     const richValue = { paragraphs: [] };
-    write(values, "__proto__", richValue);
+    write({ writer, values, path: "__proto__", value: richValue });
     expect(Object.getPrototypeOf(values)).toBe(Object.prototype);
     expect(Object.getOwnPropertyDescriptor(values, "__proto__")).toEqual({
       value: richValue,
@@ -42,32 +45,60 @@ test.each(Object.entries({ replaceResolvedValue, writeRowSubPath }))(
 );
 
 test.each(
-  Object.entries({ replaceResolvedValue, writeRowSubPath }).flatMap(
-    ([name, write]) =>
-      ["party", "__proto__", "constructor"].map((field) => ({
-        name,
-        write,
-        field,
-      })),
+  WRITERS.flatMap((writer) =>
+    ["party", "__proto__", "constructor"].map((field) => ({
+      writer,
+      field,
+    })),
   ),
-)("$name traverses only owned records through $field", ({ write, field }) => {
-  const shared = { retained: "shared value" };
-  const prototype = { [field]: shared };
-  const values = {};
-  Object.setPrototypeOf(values, prototype);
+)(
+  "$writer traverses only owned records through $field",
+  ({ writer, field }) => {
+    const shared = { retained: "shared value" };
+    const prototype = { [field]: shared };
+    const values = {};
+    Object.setPrototypeOf(values, prototype);
 
-  write(values, `${field}.injected`, "must not reach the prototype");
-  expect(shared).toEqual({ retained: "shared value" });
-  expect(Object.hasOwn(shared, "injected")).toBe(false);
-  expect(Object.getPrototypeOf(values)).toBe(prototype);
-  expect(Object.keys(values)).toEqual([]);
+    write({
+      writer,
+      values,
+      path: `${field}.injected`,
+      value: "must not reach the prototype",
+    });
+    expect(shared).toEqual({ retained: "shared value" });
+    expect(Object.hasOwn(shared, "injected")).toBe(false);
+    expect(Object.getPrototypeOf(values)).toBe(prototype);
+    expect(Object.keys(values)).toEqual([]);
 
-  const owned = { retained: "owned value" };
-  const ownValues = { [field]: owned };
-  write(ownValues, `${field}.inserted`, "own replacement");
-  expect(Object.entries(owned)).toEqual([
-    ["retained", "owned value"],
-    ["inserted", "own replacement"],
-  ]);
-  expect(Object.getPrototypeOf(ownValues)).toBe(Object.prototype);
-});
+    const owned = { retained: "owned value" };
+    const ownValues = { [field]: owned };
+    write({
+      writer,
+      values: ownValues,
+      path: `${field}.inserted`,
+      value: "own replacement",
+    });
+    expect(Object.entries(owned)).toEqual([
+      ["retained", "owned value"],
+      ["inserted", "own replacement"],
+    ]);
+    expect(Object.getPrototypeOf(ownValues)).toBe(Object.prototype);
+  },
+);
+
+type WriteOptions = {
+  writer: (typeof WRITERS)[number];
+  values: Record<string, unknown>;
+  path: string;
+  value: RichPatchValue;
+};
+
+const write = ({ writer, values, path, value }: WriteOptions): void => {
+  switch (writer) {
+    case "replaceResolvedValue":
+      replaceResolvedValue(values, path, value);
+      return;
+    case "writeRowSubPath":
+      writeRowSubPath(values, path, value);
+  }
+};
