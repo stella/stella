@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactElement } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, expect, test } from "bun:test";
@@ -123,7 +123,7 @@ afterAll(async () => {
   await unregisterDomEnvironment();
 });
 
-const renderFillPage = (children: ReactNode) => {
+const renderFillPage = (children: ReactElement) => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
