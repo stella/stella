@@ -312,7 +312,7 @@ When a screen needs a look the components lack, add it once here and in
 | Borderless field in a line of text                                 | `Input inline`, `Textarea inline` (one class: `INLINE_FIELD_CLASS_NAME`)               |
 | Fixed-height text area in a row or cell                            | `Textarea fieldSizing="fixed"`                                                         |
 | Number with a unit; stepping number                                | `NumberInput suffix`; it reads as a spin button with its bounds                        |
-| Screen a finished flow ends on (connected, signed in, declined)    | `OutcomeScreen` (`tone`, `counterpart`, `closeTab`); never a hand-built page           |
+| Screen a finished flow ends on (connected, signed in, declined)    | `OutcomeScreen` (`tone`, `counterpart`, `details`); never a hand-built page            |
 | A small control renders small type itself; do not add `text-xs` to |
 | a `sm` button, select, or input.                                   |
 
