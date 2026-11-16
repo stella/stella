@@ -9,9 +9,12 @@ import type { TranscriptionEndpoint } from "@stll/ai-catalog/transcription";
 import {
   ACKNOWLEDGED_TRANSCRIPTION_PRICES,
   checkTranscriptionCatalog,
+  loadTranscriptionFindings,
   parseTranscriptionListing,
   parseZeroRetentionModels,
   REVIEWED_UNOFFERED_TRANSCRIPTION_MODELS,
+  TRANSCRIPTION_LISTING_URLS,
+  ZERO_RETENTION_ENDPOINTS_URL,
 } from "./model-catalog-transcription";
 
 const ENDPOINTS = ["global", "eu", "us"] as const;
@@ -149,4 +152,35 @@ test("listing bodies parse to prices per second and the retention list to model 
     }),
   ).toEqual(new Set(["google/chirp-3"]));
   expect(parseZeroRetentionModels(null)).toBeNull();
+});
+
+test("an unreachable source fails the check instead of passing it", async () => {
+  const unreachable = await loadTranscriptionFindings(async () => ({
+    ok: false,
+    reason: "timeout",
+  }));
+  expect(unreachable.map(({ kind, modelId }) => [kind, modelId])).toEqual([
+    ["unreachable", TRANSCRIPTION_LISTING_URLS.global],
+  ]);
+
+  const listings = matchingListings();
+  const withoutRetention = await loadTranscriptionFindings(async (url) => {
+    const endpoint = (["global", "eu", "us"] as const).find(
+      (candidate) => TRANSCRIPTION_LISTING_URLS[candidate] === url,
+    );
+    return endpoint === undefined
+      ? { ok: false, reason: "timeout" }
+      : {
+          ok: true,
+          body: {
+            data: [...listings[endpoint]].map(([id, price]) => ({
+              id,
+              pricing: { prompt: String(price) },
+            })),
+          },
+        };
+  });
+  expect(withoutRetention.map(({ kind, modelId }) => [kind, modelId])).toEqual([
+    ["unreachable", ZERO_RETENTION_ENDPOINTS_URL],
+  ]);
 });

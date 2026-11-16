@@ -66,7 +66,7 @@ const PRICE_TOLERANCE = 0.005;
 export type TranscriptionListing = ReadonlyMap<string, number>;
 
 export type TranscriptionFinding = {
-  kind: "missing" | "price" | "region" | "retention" | "new";
+  kind: "missing" | "price" | "region" | "retention" | "new" | "unreachable";
   modelId: string;
   detail: string;
 };
@@ -235,8 +235,12 @@ const loadListing = async (
   return [endpoint, listing];
 };
 
-/** Reads every endpoint's listing and the zero-retention list, and checks
- *  the catalog against whatever was reachable. */
+/**
+ * Reads every endpoint's listing and the zero-retention list, and checks
+ * the catalog against whatever was reachable. With no listing, or without
+ * the zero-retention list, the catalog goes unverified, which is itself a
+ * finding: a silent pass would hide a model that lost zero retention.
+ */
 export const loadTranscriptionFindings = async (
   fetchJson: FetchJson,
 ): Promise<TranscriptionFinding[]> => {
@@ -245,17 +249,29 @@ export const loadTranscriptionFindings = async (
   );
   const listings = Object.fromEntries(loaded.filter((entry) => entry !== null));
   if (Object.keys(listings).length === 0) {
-    console.warn("  ⚠ no OpenRouter transcription listing reachable");
-    return [];
+    return [
+      {
+        kind: "unreachable",
+        modelId: TRANSCRIPTION_LISTING_URLS.global,
+        detail: "no OpenRouter transcription listing was reachable",
+      },
+    ];
   }
   const retention = await fetchJson(ZERO_RETENTION_ENDPOINTS_URL);
   const zeroRetention = retention.ok
     ? parseZeroRetentionModels(retention.body)
     : null;
-  if (zeroRetention === null) {
-    console.warn("  ⚠ zero-retention endpoint list unreachable");
-  }
-  return checkTranscriptionCatalog({ listings, zeroRetention });
+  const findings = checkTranscriptionCatalog({ listings, zeroRetention });
+  return zeroRetention === null
+    ? [
+        ...findings,
+        {
+          kind: "unreachable",
+          modelId: ZERO_RETENTION_ENDPOINTS_URL,
+          detail: "the zero-retention endpoint list was unreachable",
+        },
+      ]
+    : findings;
 };
 
 export const printTranscriptionFindings = (
