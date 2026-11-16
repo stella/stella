@@ -46,6 +46,14 @@ const ADMISSION_WAIT_MS = {
 
 const MAX_ADMISSION_WAITERS = 64;
 
+// Sitemap files wait seconds for their slot, so they may hold a quarter of
+// the queue at most; the rest stays free for pages' searches and facets.
+const MAX_ADMISSION_WAITERS_PER_CLASS = {
+  search: MAX_ADMISSION_WAITERS,
+  aggregate: MAX_ADMISSION_WAITERS,
+  sitemap: MAX_ADMISSION_WAITERS / 4,
+} as const satisfies Record<AdmissionClass, number>;
+
 // Requests without a resolvable address share one client key, so together
 // they hold at most one slot per class.
 const UNRESOLVED_CLIENT = "unresolved";
@@ -74,6 +82,8 @@ export const publicCorpusConcurrencyLimit = ({
     capacityOf,
     totalCapacity: policyLimits.totalConcurrency,
     maxWaiters: MAX_ADMISSION_WAITERS,
+    classMaxWaitersOf: (routeClass) =>
+      MAX_ADMISSION_WAITERS_PER_CLASS[routeClass],
   });
   // It waits for or refuses a concurrency slot and decides nothing else.
   return asRouteBudget(async (ctx, inner) => {

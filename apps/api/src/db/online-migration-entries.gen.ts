@@ -4,7 +4,6 @@ export { default as constraints_billing_activity_hour_cap_constraints } from "./
 export { default as constraints_billing_drafts_constraints } from "./online-migration-entries/constraints-billing-drafts-constraints";
 export { default as constraints_case_law_identifier_retry_constraints } from "./online-migration-entries/constraints-case-law-identifier-retry-constraints";
 export { default as constraints_case_law_parsed_source_constraint } from "./online-migration-entries/constraints-case-law-parsed-source-constraint";
-export { default as constraints_case_law_sitemap_range_bounds } from "./online-migration-entries/constraints-case-law-sitemap-range-bounds";
 export { default as constraints_chat_content_v3_constraints } from "./online-migration-entries/constraints-chat-content-v3-constraints";
 export { default as constraints_chat_turns_handed_over_constraints } from "./online-migration-entries/constraints-chat-turns-handed-over-constraints";
 export { default as constraints_client_invoice_constraints } from "./online-migration-entries/constraints-client-invoice-constraints";

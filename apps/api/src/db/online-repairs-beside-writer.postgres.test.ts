@@ -1092,11 +1092,6 @@ const SEEDS = {
     "desktop_runner_events_request_check",
     `INSERT INTO desktop_runner_events (run_id, seq, type, request_id, message) VALUES ('${ID}', 1, 'run.approval_request', '${ID_2}', '{}')`,
   ),
-  case_law_sitemap_shards_range_bounds: noRowSeed(
-    "case_law_sitemap_shards",
-    "case_law_sitemap_shards_range_bounds",
-    SITEMAP_SHARD_INSERT,
-  ),
   chat_turns_interaction_values_check: noRowSeed(
     "chat_turns",
     "chat_turns_interaction_values_check",

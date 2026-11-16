@@ -2919,14 +2919,6 @@ export const caseLawSitemapShards = p.pgTable(
       columns: [t.country, t.year, t.month, t.bucket],
     }),
     p.check("case_law_sitemap_shards_total_positive", sql`${t.total} > 0`),
-    // A month is one `all` row over the whole month, or ranges named by their
-    // position, each bounded on at least one side; a bound is a whole key.
-    p.check(
-      "case_law_sitemap_shards_range_bounds",
-      sql`(${t.rangeStartDate} IS NULL) = (${t.rangeStartId} IS NULL)
-        AND (${t.rangeEndDate} IS NULL) = (${t.rangeEndId} IS NULL)
-        AND (${t.bucket} = 'all') = (${t.rangeStartDate} IS NULL AND ${t.rangeEndDate} IS NULL)`,
-    ),
     ...removalSnapshotPolicies(),
     p.pgPolicy("case_law_sitemap_shard_owner_access", {
       for: "all",

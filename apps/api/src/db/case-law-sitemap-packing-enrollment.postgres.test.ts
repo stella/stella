@@ -47,6 +47,8 @@ type RefreshDb = Parameters<typeof refreshCaseLawSitemapShards>[0];
 const QUIET_MONTH_DECISIONS = 1000;
 /** A month a dozen ranges long, its last one partly filled. */
 const LARGE_MONTH_DECISIONS = 12 * SITEMAP_RANGE_ROWS + 37;
+/** A month listed only as hashed buckets before ranges. */
+const HASHED_ONLY_DECISIONS = 300;
 /** Undated decisions, one range and a bit. */
 const UNDATED_DECISIONS = SITEMAP_RANGE_ROWS + 200;
 const SEEDED =
@@ -174,6 +176,21 @@ if (!databaseUrl || !enabled) {
               ({ lastmod }) => lastmod === dayOf(NEWEST_UPDATE),
             ),
           ).toBe(true);
+          // A country the earlier release listed only as hashed buckets: no
+          // whole-month row is left to discover it by, yet it is enrolled.
+          await isolated.execute(sql`
+            INSERT INTO case_law_decisions
+              (id, source_id, case_number, court, country, language, language_group_key, decision_date, updated_at)
+            SELECT md5('sitemap-hashed-' || i::text)::uuid, ${sourceId}::uuid,
+              'sitemap-hashed-' || i::text, 'Fixture court', 'SVK', 'sk', 'sitemap-hashed-' || i::text,
+              '2025-03-01'::date + (i % 28), ${SEEDED_UPDATE.toISOString()}::timestamptz
+            FROM generate_series(0, ${HASHED_ONLY_DECISIONS - 1}::integer) AS i
+          `);
+          await isolated.execute(sql`
+            INSERT INTO case_law_sitemap_shards (country, year, month, bucket, total, last_modified_at)
+            VALUES ('SVK', '2025', '03', '00', 1, ${SEEDED_UPDATE.toISOString()}::timestamptz),
+              ('SVK', '2025', '03', '01', 1, ${SEEDED_UPDATE.toISOString()}::timestamptz)
+          `);
           // A hundred more listed countries make the enrollment page.
           await isolated.execute(sql`
             INSERT INTO case_law_sitemap_shards (country, year, month, bucket, total, last_modified_at)
@@ -238,7 +255,7 @@ if (!databaseUrl || !enabled) {
             );
           expect(checkpoint?.cursor).toBe("complete");
           expect(checkpoint?.batch).toEqual(initialBatchState(defaultConfig));
-          expect(pageSizes).toEqual([100, 1]);
+          expect(pageSizes).toEqual([100, 2]);
 
           const tickOptions = {
             changeRowBudget: 10_000,
@@ -284,6 +301,33 @@ if (!databaseUrl || !enabled) {
                 shard.year === year &&
                 shard.month === month,
             );
+          // The hashed-only country is listed again, as its month's one file,
+          // and its hashed files are gone.
+          expect(
+            listed.items.filter(({ country }) => country === "svk"),
+          ).toEqual([
+            {
+              bucket: SITEMAP_ALL_BUCKET,
+              country: "svk",
+              lastmod: dayOf(SEEDED_UPDATE),
+              month: "03",
+              year: "2025",
+            },
+          ]);
+          const hashedOnly = await listSitemapShardDecisionsHandler(
+            { country: "svk", year: "2025", month: "03", bucket: "all" },
+            readDb,
+          );
+          if (!("items" in hashedOnly)) {
+            panic("Expected the hashed-only month to be served");
+          }
+          expect(hashedOnly.items).toHaveLength(HASHED_ONLY_DECISIONS);
+          expect(
+            await listSitemapShardDecisionsHandler(
+              { country: "svk", year: "2025", month: "03", bucket: "00" },
+              readDb,
+            ),
+          ).toMatchObject({ code: 404 });
           // The quiet month keeps its one file, its URL and its lastmod.
           expect(monthFiles("2024", "06")).toEqual(
             listedBefore.items.filter(({ year }) => year === "2024"),
@@ -322,6 +366,7 @@ if (!databaseUrl || !enabled) {
                   updatedAt: caseLawDecisions.updatedAt,
                 })
                 .from(caseLawDecisions)
+                .where(eq(caseLawDecisions.country, "CZE"))
             ).map(({ id, updatedAt }) => [id, updatedAt.toISOString()]),
           );
           const served: string[] = [];

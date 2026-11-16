@@ -10,8 +10,6 @@ import {
   setDedicatedLockTimeout,
   setDedicatedStatementTimeout,
 } from "./dedicated-connection-timeouts";
-import { readConstraintCompletion } from "./online-constraint-completion";
-import { validateOnlineConstraints } from "./online-ddl";
 import type {
   MigrationOwnedOnlineRepair,
   OnlineMigrationConnection,
@@ -19,7 +17,7 @@ import type {
 } from "./online-migration-connection";
 
 const COMPLETE = "complete";
-const SITEMAP_RANGES_MIGRATION = "20261116000000_case_law_sitemap_ranges";
+const SITEMAP_RANGES_MIGRATION = "20261116050000_case_law_sitemap_ranges";
 const COUNTRIES_PER_BATCH = 100;
 const checkpointSchema = v.object({ last_country: v.nullable(v.string()) });
 const countrySchema = v.object({ country: v.string() });
@@ -164,26 +162,3 @@ export const CASE_LAW_SITEMAP_RANGE_ENROLLMENT = caseLawSitemapEnrollment({
   name: "case-law-sitemap-range-enrollment",
   reason: "existing sitemap countries need their months cut into ranges",
 });
-
-/** Each listed file is the whole month or a bounded range, never a mix. */
-export const CASE_LAW_SITEMAP_RANGE_BOUNDS_CONSTRAINT = {
-  tableName: "case_law_sitemap_shards",
-  constraintName: "case_law_sitemap_shards_range_bounds",
-} as const;
-
-export const CASE_LAW_SITEMAP_RANGE_BOUNDS_VALIDATION = {
-  name: CASE_LAW_SITEMAP_RANGE_BOUNDS_CONSTRAINT.constraintName,
-  introducedBy: SITEMAP_RANGES_MIGRATION,
-  readCompletion: async (connection) =>
-    await readConstraintCompletion({
-      connection,
-      ...CASE_LAW_SITEMAP_RANGE_BOUNDS_CONSTRAINT,
-      repairName: CASE_LAW_SITEMAP_RANGE_BOUNDS_CONSTRAINT.constraintName,
-    }),
-  repair: async (connection, tables) =>
-    await validateOnlineConstraints({
-      connection,
-      tables,
-      constraints: [CASE_LAW_SITEMAP_RANGE_BOUNDS_CONSTRAINT],
-    }),
-} satisfies MigrationOwnedOnlineRepair;
