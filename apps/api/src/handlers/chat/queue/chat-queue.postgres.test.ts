@@ -971,6 +971,9 @@ const suite = (
           organizationId: owner.organizationId,
         }),
       ]);
+      // A thread's chat files hold its deletion back (RESTRICT): the
+      // fixture's own cleanup removes the thread after them.
+      await database.delete(userFiles).where(eq(userFiles.threadId, threadId));
     });
 
     test("a bounded sweep reaches every due queue in turn", async () => {
