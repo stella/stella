@@ -3,11 +3,12 @@ import { sql } from "drizzle-orm";
 
 import { decisionDocketGrammarForJurisdiction } from "@stll/api-contract/decision-docket-grammar";
 import { readDecisionDocketReference } from "@stll/api-contract/decision-docket-reference";
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import type { Transaction } from "@/api/db/root";
 import { caseLawDecisionReviews, caseLawDecisions } from "@/api/db/schema";
 import type { CitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
-import { bareCitationKey } from "@/api/handlers/case-law/ingestion/citation-extractor";
+import { decisionCitationKeyOf } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { planCzechAppealReviews } from "@/api/handlers/case-law/ingestion/cz-appeal-reviews";
 import { CASE_LAW_REVIEW_EXTRACTION_VERSION } from "@/api/handlers/case-law/ingestion/review-outcomes";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -57,9 +58,16 @@ export const planDecisionReviews = ({
         "Czech appeal extraction produced an invalid reviewed docket",
       );
     }
+    // A docket the grammar read always has a key; the bound helper is the
+    // one every citation_key writer uses.
+    const reviewedCitationKey =
+      decisionCitationKeyOf({
+        caseNumber: reference.family.formatted,
+        caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+      }) ?? panic("A parsed Czech reviewed docket has no citation key");
     return {
       ...review,
-      reviewedCitationKey: bareCitationKey(reference.family.formatted),
+      reviewedCitationKey,
       reviewedDocketFamilyKey: reference.family.canonical,
       reviewedSheetNumber:
         reference.selector.kind === "sheet" ? reference.selector.value : null,
