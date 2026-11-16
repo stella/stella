@@ -6,6 +6,7 @@ import {
   describe,
   expect,
   setSystemTime,
+  spyOn,
   test,
 } from "bun:test";
 import { eq } from "drizzle-orm";
@@ -30,7 +31,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { hashDesktopEditSessionToken } from "@/api/lib/desktop-edit-sessions";
 import { createFileKey } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
-import { S3ObjectBudgetError } from "@/api/lib/s3";
+import { OBJECT_READ_TIMEOUT_MS, S3ObjectBudgetError } from "@/api/lib/s3";
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import {
@@ -148,6 +149,8 @@ describe.skipIf(!enabled)(
       "oversized",
       "undeclared-oversized",
       "invalid-archive",
+      "deadline",
+      "caller-abort",
     ] as const)(
       "a %s checkpoint cannot publish a desktop edit or retire its checkpoint",
       async (kind) => {
@@ -155,9 +158,9 @@ describe.skipIf(!enabled)(
         const checkpointFileId = createSafeId<"userFile">();
         const sessionToken = `${sessionId}${sessionId}`.replaceAll("-", "");
         const byteLength =
-          kind === "invalid-archive"
-            ? 1
-            : FILE_SIZE_LIMIT_BYTES.multipartDocument + 1;
+          kind === "oversized" || kind === "undeclared-oversized"
+            ? FILE_SIZE_LIMIT_BYTES.multipartDocument + 1
+            : 1;
         using bodyFile = responseByteFile(byteLength);
         const checkpointKey = createFileKey({
           fileId: checkpointFileId,
@@ -189,6 +192,19 @@ describe.skipIf(!enabled)(
           new Uint8Array(1),
           DOCX_MIME_TYPE,
         );
+        const caller = new AbortController();
+        const deadline = new AbortController();
+        const hold =
+          kind === "deadline" || kind === "caller-abort"
+            ? store.holdNext({ method: "GET", keyIncludes: checkpointKey })
+            : null;
+        const originalTimeout = AbortSignal.timeout.bind(AbortSignal);
+        const timeoutSpy = spyOn(AbortSignal, "timeout").mockImplementation(
+          (milliseconds) =>
+            milliseconds === OBJECT_READ_TIMEOUT_MS
+              ? deadline.signal
+              : originalTimeout(milliseconds),
+        );
         try {
           await rootDb.insert(desktopEditSessions).values({
             id: sessionId,
@@ -210,11 +226,29 @@ describe.skipIf(!enabled)(
             body: { sessionToken },
             sessionId,
             request: new Request("http://localhost/desktop-edit/finalize", {
-              signal: AbortSignal.timeout(5000),
+              signal: AbortSignal.any([
+                caller.signal,
+                AbortSignal.timeout(5000),
+              ]),
             }),
             server: null,
           });
-          if (kind === "invalid-archive") {
+          if (hold !== null) {
+            const failure = rejectionOf(finalize);
+            try {
+              await hold.reached;
+              expect(timeoutSpy.mock.calls).toContainEqual([
+                OBJECT_READ_TIMEOUT_MS,
+              ]);
+              (kind === "deadline" ? deadline : caller).abort();
+              hold.release();
+              expect(await failure).toMatchObject({ name: "AbortError" });
+            } finally {
+              caller.abort();
+              hold.release();
+              await failure;
+            }
+          } else if (kind === "invalid-archive") {
             const result = await finalize;
             expect(result).toBeInstanceOf(HttpStatusResponse);
             if (result instanceof HttpStatusResponse) {
@@ -261,6 +295,9 @@ describe.skipIf(!enabled)(
             store.objects.has(`${envBase.S3_BUCKET}/${checkpointKey}`),
           ).toBe(true);
         } finally {
+          caller.abort();
+          hold?.release();
+          timeoutSpy.mockRestore();
           try {
             await rootDb
               .delete(desktopEditSessions)

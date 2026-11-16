@@ -78,6 +78,7 @@ import { observedStatus } from "@/api/lib/observability/server-error-answer";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import {
   getS3,
+  OBJECT_READ_TIMEOUT_MS,
   readS3ObjectBounded,
   S3_OBJECT_WRITE_CERTAINTY,
   writeS3ObjectWithRetry,
@@ -510,7 +511,10 @@ export const finalizeDesktopEditSessionHandler = async ({
         bucket: envBase.S3_BUCKET,
         key: checkpointKey,
         maxBytes: FILE_SIZE_LIMIT_BYTES.multipartDocument,
-        signal: request.signal,
+        signal: AbortSignal.any([
+          request.signal,
+          AbortSignal.timeout(OBJECT_READ_TIMEOUT_MS),
+        ]),
       });
       const checkpointBuffer =
         checkpointBytes.buffer instanceof ArrayBuffer &&

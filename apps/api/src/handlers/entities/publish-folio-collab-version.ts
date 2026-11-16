@@ -43,6 +43,7 @@ import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import {
+  OBJECT_READ_TIMEOUT_MS,
   readS3ObjectBounded,
   S3_OBJECT_WRITE_CERTAINTY,
   writeS3ObjectWithRetry,
@@ -157,7 +158,10 @@ export const readPublishableCheckpoint = async ({
     bucket: envBase.S3_BUCKET,
     key: checkpointKey,
     maxBytes: FOLIO_COLLAB_CHECKPOINT_MAX_BYTES,
-    signal,
+    signal: AbortSignal.any([
+      signal,
+      AbortSignal.timeout(OBJECT_READ_TIMEOUT_MS),
+    ]),
   });
   const checkpoint =
     storedCheckpointBytes.buffer instanceof ArrayBuffer &&

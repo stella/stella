@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 
 import { ZipArchive } from "@stll/docx-core/zip";
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -9,7 +9,7 @@ import { envBase } from "@/api/env-base";
 import { createSafeId } from "@/api/lib/branded-types";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { FOLIO_COLLAB_CHECKPOINT_MAX_BYTES } from "@/api/lib/folio-collab-room-contract";
-import { S3ObjectBudgetError } from "@/api/lib/s3";
+import { OBJECT_READ_TIMEOUT_MS, S3ObjectBudgetError } from "@/api/lib/s3";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { testFileKey } from "@/api/tests/helpers/file-key";
@@ -300,6 +300,64 @@ describe("publication bounds the stored checkpoint before validation", () => {
         );
       } finally {
         store.stop();
+      }
+    },
+  );
+});
+
+describe("publication preserves storage read cancellation", () => {
+  test.each(["deadline", "caller"] as const)(
+    "a %s abort stops a held checkpoint read before validation",
+    async (kind) => {
+      const store = startFakeS3();
+      const checkpointKey = testFileKey(
+        "user-files/publication-cancellation.docx",
+      );
+      store.put(
+        envBase.S3_BUCKET,
+        checkpointKey,
+        new Uint8Array(1),
+        DOCX_MIME_TYPE,
+      );
+      const hold = store.holdNext({
+        method: "GET",
+        keyIncludes: checkpointKey,
+      });
+      const deadline = new AbortController();
+      const caller = new AbortController();
+      const originalTimeout = AbortSignal.timeout.bind(AbortSignal);
+      const timeoutSpy = spyOn(AbortSignal, "timeout").mockImplementation(
+        (milliseconds) =>
+          milliseconds === OBJECT_READ_TIMEOUT_MS
+            ? deadline.signal
+            : originalTimeout(milliseconds),
+      );
+      const read = rejectionOf(
+        readPublishableCheckpoint({
+          checkpointKey,
+          expectedSha256Hex: "a".repeat(64),
+          fileName: "checkpoint.docx",
+          signal: caller.signal,
+        }),
+      );
+      try {
+        await hold.reached;
+        expect(timeoutSpy.mock.calls).toContainEqual([OBJECT_READ_TIMEOUT_MS]);
+        (kind === "deadline" ? deadline : caller).abort();
+        hold.release();
+        expect(await read).toMatchObject({ name: "AbortError" });
+        expect(
+          store.requests.filter(({ method }) => method === "GET"),
+        ).toHaveLength(1);
+      } finally {
+        caller.abort();
+        hold.release();
+        try {
+          await read;
+        } finally {
+          timeoutSpy.mockRestore();
+          store.stop();
+        }
       }
     },
   );
