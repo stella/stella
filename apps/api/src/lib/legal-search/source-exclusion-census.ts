@@ -1,17 +1,17 @@
+import { compareCodeUnit } from "@stll/collation";
+
 import type {
   SourceExclusionReason,
   SourceFieldInventory,
 } from "./ingestion-types";
 
-type SourceExclusionCensusEntry = { field: string } & (
-  | { policy: "legacy"; reason: string }
-  | {
-      policy: "justified";
-      reason: SourceExclusionReason;
-      justification: string;
-      pointer: string;
-    }
-);
+type SourceExclusionCensusEntry = {
+  field: string;
+  policy: "justified";
+  reason: SourceExclusionReason;
+  justification: string;
+  pointer: string;
+};
 
 /** Shared by the conformance census and publisher-recall audit reports. */
 export const sourceExclusionCensus = ({
@@ -21,9 +21,6 @@ export const sourceExclusionCensus = ({
     .flatMap(([field, disposition]): SourceExclusionCensusEntry[] => {
       if (disposition.disposition !== "excluded") {
         return [];
-      }
-      if ("legacy" in disposition) {
-        return [{ field, policy: "legacy", reason: disposition.reason }];
       }
       return [
         {
@@ -35,12 +32,7 @@ export const sourceExclusionCensus = ({
         },
       ];
     })
-    .toSorted((left, right) => {
-      if (left.field === right.field) {
-        return 0;
-      }
-      return left.field < right.field ? -1 : 1;
-    });
+    .toSorted((left, right) => compareCodeUnit(left.field, right.field));
 
 /** One projection for live ingestion and the daily publisher-recall audit. */
 export const publisherFieldRetentionAudit = (
@@ -48,7 +40,11 @@ export const publisherFieldRetentionAudit = (
   observedFields: readonly string[],
 ) => {
   const observed = new Set(observedFields);
+  if (observed.size === 0) {
+    return { status: "unavailable", reason: "no-observed-fields" } as const;
+  }
   return {
+    status: "audited" as const,
     observedFieldCount: observed.size,
     unmappedFields: [...observed].filter(
       (field) => !Object.hasOwn(inventory.fields, field),

@@ -6,6 +6,11 @@ import ts from "typescript6";
 
 import { compareCodeUnit } from "@stll/collation";
 
+import {
+  API_CLIENT_CLIENT_MODULES,
+  API_CLIENT_REQUEST_METHODS,
+} from "../.oxlint-plugins/api-client-chain.ts";
+
 const MUTATIONS = new Set(["useMutation", "mutationOptions"]);
 // The retry-stable mutation hook runs its caller's mutationFn once per
 // submission, as useMutation does, so its options are read in place. Only
@@ -87,6 +92,21 @@ type Binding = {
   value?: ts.Node | undefined;
   scope: ts.Node;
 };
+const constBindingValue = ({ node, value }: Binding): ts.Node | undefined =>
+  ts.isVariableDeclaration(node) &&
+  ts.isVariableDeclarationList(node.parent) &&
+  node.parent.getFirstToken()?.kind === ts.SyntaxKind.ConstKeyword
+    ? value
+    : undefined;
+
+const isRouteSegmentCall = (node: ts.CallExpression): boolean =>
+  ts.isPropertyAccessExpression(node.expression) ||
+  (ts.isElementAccessExpression(node.expression) &&
+    ts.isStringLiteral(node.expression.argumentExpression));
+
+const isApiRequestCall = (node: ts.CallExpression): boolean =>
+  API_CLIENT_REQUEST_METHODS.has(callName(node.expression) ?? "");
+
 type Module = {
   source: ts.SourceFile;
   file: string;
@@ -96,6 +116,17 @@ type Module = {
   reexports: Map<string, ImportBinding>;
   exportStars: string[];
 };
+
+/** The API owner's top-level roots remain roots inside its transport helpers. */
+const isOwnedApiRoot = (
+  module: Module | undefined,
+  binding: Binding,
+): boolean =>
+  module !== undefined &&
+  API_CLIENT_CLIENT_MODULES.some((owner) => module.file === `${owner}.ts`) &&
+  binding.scope === module.source &&
+  (binding.name === "api" || binding.name === "apiClient") &&
+  constBindingValue(binding) !== undefined;
 
 export type CensusKey = {
   expression: string;
@@ -596,10 +627,17 @@ class CallScanner {
       return;
     }
     if (ts.isSpreadAssignment(node)) {
-      const spread = this.analyzer.resolve({
-        node: node.expression,
-        env: current.env,
-      });
+      const spreadValue = { node: node.expression, env: current.env };
+      const spread = this.optionsNodes.has(node.parent)
+        ? this.analyzer.transparentOptions(spreadValue)
+        : this.analyzer.resolve(spreadValue);
+      // Factory arguments and bodies still execute before the returned options are spread.
+      if (
+        spread.node !== node.expression ||
+        ts.isCallExpression(unwrap(node.expression))
+      ) {
+        this.scan({ value: spreadValue, depth: depth + 1, active: nextActive });
+      }
       if (
         !ts.isObjectLiteralExpression(spread.node) &&
         this.optionsNodes.has(node.parent)
@@ -980,6 +1018,16 @@ class CensusAnalyzer {
       return { node, env: value.env };
     }
     seen.add(node);
+    if (ts.isCallExpression(node) && this.isResourceMutationFactory(node)) {
+      const options = node.arguments.at(0);
+      const callback =
+        options &&
+        this.property({ node: options, env: value.env }, "mutationFn");
+      if (callback) {
+        // This canonical owner returns a callable that forwards its arguments unchanged.
+        return this.resolve(callback, seen);
+      }
+    }
     if (ts.isIdentifier(node)) {
       const binding = this.bindingFor(node);
       if (binding) {
@@ -1146,6 +1194,126 @@ class CensusAnalyzer {
     const result = body && this.returned(body);
     return result ? this.optionsOf(result, depth + 1) : current;
   };
+  optionsFactoryPrimitive = (call: ts.CallExpression): string | undefined => {
+    let node = unwrap(call.expression);
+    const seen = new Set<ts.Node>();
+    while (ts.isIdentifier(node) && !seen.has(node)) {
+      seen.add(node);
+      const binding = this.bindingFor(node);
+      if (binding) {
+        const initializer = constBindingValue(binding);
+        if (!initializer) {
+          return undefined;
+        }
+        node = unwrap(initializer);
+        continue;
+      }
+      const imported = this.moduleFor(node)?.imports.get(node.text);
+      return imported
+        ? this.importedPrimitive({
+            from: node.getSourceFile().fileName,
+            imported,
+          })
+        : undefined;
+    }
+    return undefined;
+  };
+  stableOptionsFunction = (
+    expression: ts.Node,
+    seen = new Set<ts.Node>(),
+  ): ts.Node | undefined => {
+    const node = unwrap(expression);
+    if (seen.has(node)) {
+      return undefined;
+    }
+    seen.add(node);
+    if (
+      ts.isVariableDeclaration(node.parent) &&
+      (!ts.isVariableDeclarationList(node.parent.parent) ||
+        node.parent.parent.getFirstToken()?.kind !== ts.SyntaxKind.ConstKeyword)
+    ) {
+      return undefined;
+    }
+    if (!ts.isIdentifier(node)) {
+      return functionNode(node) ? node : undefined;
+    }
+    const binding = this.bindingFor(node);
+    if (binding) {
+      const initializer = constBindingValue(binding);
+      return initializer
+        ? this.stableOptionsFunction(initializer, seen)
+        : undefined;
+    }
+    const imported = this.moduleFor(node)?.imports.get(node.text);
+    const exported =
+      imported &&
+      this.exportedFrom({
+        module: this.resolveModule(
+          node.getSourceFile().fileName,
+          imported.module,
+        ),
+        name: imported.imported,
+      });
+    return exported ? this.stableOptionsFunction(exported, seen) : undefined;
+  };
+  transparentOptions = (value: Value, seen = new Set<ts.Node>()): Value => {
+    const current = this.resolve(value);
+    if (
+      !ts.isCallExpression(current.node) ||
+      seen.has(current.node) ||
+      seen.size > 12
+    ) {
+      return current;
+    }
+    seen.add(current.node);
+    const primitive = this.optionsFactoryPrimitive(current.node);
+    if (
+      READER_FACTORIES.has(primitive ?? "") ||
+      primitive === "mutationOptions"
+    ) {
+      const argument = current.node.arguments.at(0);
+      return argument
+        ? this.transparentOptions({ node: argument, env: current.env }, seen)
+        : current;
+    }
+    const target = this.stableOptionsFunction(current.node.expression);
+    if (!target) {
+      return current;
+    }
+    const declaration = target.parent;
+    if (
+      !functionNode(target) ||
+      target.modifiers?.some(
+        (modifier) => modifier.kind === ts.SyntaxKind.AsyncKeyword,
+      ) ||
+      (ts.isFunctionExpression(target) && target.asteriskToken !== undefined) ||
+      target.parameters.some(
+        (parameter) =>
+          parameter.initializer !== undefined ||
+          !ts.isIdentifier(parameter.name),
+      ) ||
+      !ts.isVariableDeclaration(declaration) ||
+      !ts.isVariableDeclarationList(declaration.parent) ||
+      declaration.parent.getFirstToken()?.kind !== ts.SyntaxKind.ConstKeyword
+    ) {
+      return current;
+    }
+    const body = this.invocation(current.node, current.env);
+    if (!body) {
+      return current;
+    }
+    if (!ts.isBlock(body.node)) {
+      return this.transparentOptions(body, seen);
+    }
+    const statement =
+      body.node.statements.length === 1 ? body.node.statements[0] : undefined;
+    return statement && ts.isReturnStatement(statement) && statement.expression
+      ? this.transparentOptions(
+          { node: statement.expression, env: body.env },
+          seen,
+        )
+      : current;
+  };
   keyOf = (value: Value, depth = 0): CensusKey => {
     const expression = normalize(value.node);
     if (depth > 12) {
@@ -1255,8 +1423,14 @@ class CensusAnalyzer {
       return undefined;
     }
     const parts: string[] = [];
-    let node: ts.Expression = call.expression.expression;
+    let node: ts.Node = call.expression.expression;
+    const seen = new Set<ts.Node>();
     while (true) {
+      node = unwrap(node);
+      if (seen.has(node)) {
+        return undefined;
+      }
+      seen.add(node);
       if (ts.isPropertyAccessExpression(node)) {
         parts.unshift(node.name.text);
         node = node.expression;
@@ -1272,6 +1446,9 @@ class CensusAnalyzer {
         continue;
       }
       if (ts.isCallExpression(node)) {
+        if (isApiRequestCall(node)) {
+          return undefined;
+        }
         const argument = node.arguments.at(0);
         if (argument && ts.isObjectLiteralExpression(argument)) {
           for (const item of argument.properties.toReversed()) {
@@ -1287,6 +1464,22 @@ class CensusAnalyzer {
       }
       if (!ts.isIdentifier(node)) {
         return undefined;
+      }
+      const binding = this.bindingFor(node);
+      if (binding && !isOwnedApiRoot(this.moduleFor(node), binding)) {
+        const initializer = constBindingValue(binding);
+        if (!initializer) {
+          return undefined;
+        }
+        const expression = unwrap(initializer);
+        if (
+          ts.isCallExpression(expression) &&
+          !isRouteSegmentCall(expression)
+        ) {
+          return undefined;
+        }
+        node = initializer;
+        continue;
       }
       const imported = this.moduleFor(node)?.imports.get(node.text);
       if (

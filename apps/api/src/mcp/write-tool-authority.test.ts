@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { describe, expect, expectTypeOf, test } from "bun:test";
 
 import { roles } from "@stll/permissions";
+import { createTestState } from "@stll/test-state";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { env } from "@/api/env";
@@ -37,6 +38,8 @@ import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-en
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 import ledger from "./write-tool-authority-ledger.json" with { type: "json" };
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const MEMBER_ROLES: readonly MemberRole[] =
   Object.keys(roles).filter(isMemberRole);
@@ -169,6 +172,7 @@ const chatWriteTools = (
           currentRole === null
             ? null
             : {
+                billingAccess: false,
                 accessibleWorkspaces: [],
                 featureAccessSnapshot,
                 pinServerValidatedWorkspaceId: () => false,
@@ -741,7 +745,7 @@ describe("write tool account access", () => {
 
   test("discovery and dispatch read the declared account access", async () => {
     const previousEmail = env.DEMO_ACCOUNT_EMAIL;
-    env.DEMO_ACCOUNT_EMAIL = "limited@example.test";
+    testState.setConfig("DEMO_ACCOUNT_EMAIL", "limited@example.test");
     try {
       const context = asTestRaw<AuthorizedMcpRequestContext>({
         grantedScopes: [],
@@ -771,7 +775,7 @@ describe("write tool account access", () => {
         },
       });
     } finally {
-      env.DEMO_ACCOUNT_EMAIL = previousEmail;
+      testState.setConfig("DEMO_ACCOUNT_EMAIL", previousEmail);
     }
   });
 });

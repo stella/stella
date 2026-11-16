@@ -561,7 +561,7 @@ type ClaimedChatTurnOwnership =
       failure: { code: ChatTurnFailureCode; retryable: boolean };
       owningAssistantMessage?: PersistableChatMessage | undefined;
     }
-  | { status: "handed-over" };
+  | { status: "with-run" };
 
 type ChatSendLifecycleOptions = {
   ownership?: ChatTurnOwnership;
@@ -763,7 +763,7 @@ export class ChatSendLifecycle {
         return signal.aborted;
       case "preflight":
       case "failure-pending":
-      case "handed-over":
+      case "with-run":
         return false;
       default:
         return panic(this.claimedTurn satisfies never);
@@ -967,7 +967,7 @@ export class ChatSendLifecycle {
         workspaceId: this.options.workspaceId,
       },
     });
-    this.claimedTurn = { status: "handed-over" };
+    this.claimedTurn = { status: "with-run" };
     this.releaseClaim();
     this.connectorsHandedOff = connectors !== undefined;
     return run;
@@ -1139,7 +1139,7 @@ export class ChatSendLifecycle {
                   }),
             };
           case "unclaimed":
-          case "handed-over":
+          case "with-run":
             return undefined;
           default:
             this.claimedTurn satisfies never;
@@ -1199,7 +1199,7 @@ export class ChatSendLifecycle {
       }
     } finally {
       this.releaseClaim();
-      if (this.claimedTurn.status !== "handed-over") {
+      if (this.claimedTurn.status !== "with-run") {
         await this.admission?.release();
       }
     }

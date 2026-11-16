@@ -3,6 +3,7 @@ import { count, eq } from "drizzle-orm";
 import * as v from "valibot";
 
 import { contactCreateFieldsSchema } from "@stll/api-contract/contact-write";
+import { BILLING_MATTER_READ_PERMISSION } from "@stll/permissions";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -20,6 +21,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { contactTaxIdentifiers } from "@/api/lib/billing/invoice-prefill.logic";
+import { contactMoneyResponse } from "@/api/lib/billing/response-schemas";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { authorizeOrganizationReplay } from "@/api/lib/idempotency/organization-replay-authorization";
@@ -31,6 +33,7 @@ import {
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import { announceContactSetChanged } from "@/api/lib/resource-realtime";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { flushContactSearchRepairs } from "@/api/lib/search/projection-repair-flush";
@@ -290,6 +293,7 @@ export const createContactHandler = async function* ({
 
 const createContact = createSafeRootHandler(
   {
+    moneyResponse: contactMoneyResponse,
     contract: "patch",
     idempotency: { type: "replay" },
     description:
@@ -302,7 +306,22 @@ const createContact = createSafeRootHandler(
     mcp: { type: "tool", name: "save_contact" },
     body: createContactBodySchema,
   },
-  async function* ({ safeDb, session, user, body, recordAuditEvent }) {
+  async function* ({
+    safeDb,
+    session,
+    user,
+    body,
+    memberRole,
+    recordAuditEvent,
+  }) {
+    if (
+      body.defaultHourlyRate !== undefined &&
+      !hasMemberPermission(memberRole, BILLING_MATTER_READ_PERMISSION)
+    ) {
+      return Result.err(
+        new HandlerError({ status: 403, message: "Forbidden" }),
+      );
+    }
     return yield* createContactHandler({
       safeDb,
       organizationId: session.activeOrganizationId,

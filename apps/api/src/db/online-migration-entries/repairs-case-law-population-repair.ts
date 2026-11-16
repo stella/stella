@@ -4,6 +4,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "repairs-case-law-population-repair",
   revision: 1203,
+  lifecycle: "finalized",
   type: "repairs",
   values: [CASE_LAW_POPULATION_REPAIR],
 } satisfies OnlineMigrationEntry;

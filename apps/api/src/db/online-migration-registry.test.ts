@@ -13,7 +13,11 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import type { OnlineMigrationEntry } from "./online-migration-entry";
+import { ONLINE_LIFECYCLE } from "./online-migration-entry";
+import type {
+  OnlineLifecycle,
+  OnlineMigrationEntry,
+} from "./online-migration-entry";
 import {
   ONLINE_MIGRATION_ENTRIES,
   orderOnlineMigrationEntries,
@@ -24,6 +28,7 @@ const fixtureEntry = (id: string, revision: number) =>
   ({
     id,
     revision,
+    lifecycle: ONLINE_LIFECYCLE.pending,
     type: "indexes",
     values: [
       {
@@ -272,4 +277,42 @@ describe("online migration entry contract", () => {
       }
     },
   );
+});
+
+describe("online entry lifecycles", () => {
+  const indexLifecycles = new Map<string, OnlineLifecycle>(
+    ONLINE_MIGRATION_ENTRIES.flatMap((entry) =>
+      entry.type === "indexes"
+        ? entry.values.map(({ name }) => [name, entry.lifecycle] as const)
+        : [],
+    ),
+  );
+
+  test("every entry is pending or finalized", () => {
+    const lifecycles: readonly string[] = Object.values(ONLINE_LIFECYCLE);
+    expect(
+      ONLINE_MIGRATION_ENTRIES.filter(
+        ({ lifecycle }) => !lifecycles.includes(lifecycle),
+      ).map(({ id }) => id),
+    ).toEqual([]);
+  });
+
+  // A finalized retirement runs in every migrate; it drops the legacy index
+  // only once its replacements exist, so those must be built there too.
+  test("a finalized replacement retires an index only for finalized replacements", () => {
+    const violations = ONLINE_MIGRATION_ENTRIES.flatMap((entry) =>
+      entry.type === "replacements" &&
+      entry.lifecycle === ONLINE_LIFECYCLE.finalized
+        ? entry.values.flatMap(({ legacyName, replacementNames }) =>
+            replacementNames
+              .filter(
+                (name) =>
+                  indexLifecycles.get(name) === ONLINE_LIFECYCLE.pending,
+              )
+              .map((name) => `${entry.id}: ${legacyName} -> ${name}`),
+          )
+        : [],
+    );
+    expect(violations).toEqual([]);
+  });
 });

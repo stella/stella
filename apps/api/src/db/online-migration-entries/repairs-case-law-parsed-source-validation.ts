@@ -4,6 +4,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "repairs-case-law-parsed-source-validation",
   revision: 990,
+  lifecycle: "finalized",
   type: "repairs",
   values: [CASE_LAW_PARSED_SOURCE_VALIDATION],
 } satisfies OnlineMigrationEntry;

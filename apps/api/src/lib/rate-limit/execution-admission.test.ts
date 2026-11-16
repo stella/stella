@@ -5,6 +5,7 @@ import {
   ACTION_ADMISSION_CODES,
   ACTION_ADMISSION_REFUSALS,
 } from "@stll/api-contract/action-admission";
+import { createTestState } from "@stll/test-state";
 
 import { ORGANIZATION_ACCESS_STATE } from "@/api/db/schema";
 import { env } from "@/api/env";
@@ -26,6 +27,8 @@ import {
 } from "@/api/tests/scoped-db-mock";
 
 import { startExecutionAdmission } from "./execution-admission";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const organizationId = toSafeId<"organization">("org_execution");
 const userId = toSafeId<"user">("user_execution");
@@ -155,42 +158,38 @@ describe("chat execution admission owns settlement independently of transport re
       lease_lost: "lease_lost",
       feature_disabled: "feature_disabled",
     } as const satisfies { [Reason in ActionAdmissionError["reason"]]: Reason };
-    const previousContactUrl = env.ACTION_LIMIT_CONTACT_URL;
-    try {
-      for (const contactUrl of [undefined, "https://example.test/help"]) {
-        env.ACTION_LIMIT_CONTACT_URL = contactUrl;
-        for (const reason of Object.values(reasons)) {
-          const error = actionAdmissionErrorFor(reason, "Admission refused");
-          const acquired = await startExecutionAdmission({
-            organizationStateDb: testOrganizationStateDb,
-            ...action,
-            enabled: true,
-            organizationId,
-            userId,
-            admit: async () => Result.err(error),
+
+    for (const contactUrl of [undefined, "https://example.test/help"]) {
+      testState.setConfig("ACTION_LIMIT_CONTACT_URL", contactUrl);
+      for (const reason of Object.values(reasons)) {
+        const error = actionAdmissionErrorFor(reason, "Admission refused");
+        const acquired = await startExecutionAdmission({
+          organizationStateDb: testOrganizationStateDb,
+          ...action,
+          enabled: true,
+          organizationId,
+          userId,
+          admit: async () => Result.err(error),
+        });
+        expect(Result.isError(acquired)).toBe(true);
+        if (Result.isError(acquired)) {
+          const refusal = ACTION_ADMISSION_REFUSALS[error.code];
+          expect(acquired.error).toMatchObject({
+            status: refusal.status,
+            code: error.code,
+            message: refusal.message,
+            retryable: refusal.retryable,
+            contactUrl:
+              reason === "period_exhausted" ||
+              reason === "daily_exhausted" ||
+              reason === "not_enabled" ||
+              reason === "not_on_plan"
+                ? contactUrl
+                : undefined,
+            cause: error,
           });
-          expect(Result.isError(acquired)).toBe(true);
-          if (Result.isError(acquired)) {
-            const refusal = ACTION_ADMISSION_REFUSALS[error.code];
-            expect(acquired.error).toMatchObject({
-              status: refusal.status,
-              code: error.code,
-              message: refusal.message,
-              retryable: refusal.retryable,
-              contactUrl:
-                reason === "period_exhausted" ||
-                reason === "daily_exhausted" ||
-                reason === "not_enabled" ||
-                reason === "not_on_plan"
-                  ? contactUrl
-                  : undefined,
-              cause: error,
-            });
-          }
         }
       }
-    } finally {
-      env.ACTION_LIMIT_CONTACT_URL = previousContactUrl;
     }
   });
 

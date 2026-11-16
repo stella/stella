@@ -6,6 +6,7 @@ const NEEDS_WORK_SQL =
 export default {
   id: "indexes-corpus-index-projection-states-append-route-idx",
   revision: 1416,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     {

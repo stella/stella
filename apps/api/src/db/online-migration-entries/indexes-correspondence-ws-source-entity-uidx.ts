@@ -7,6 +7,7 @@ import {
 export default {
   id: "indexes-correspondence-ws-source-entity-uidx",
   revision: 710,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     onlineUniqueIndexDefinition(

@@ -26,6 +26,7 @@ import getFeatureEnrolments from "@/api/handlers/organization-settings/feature-e
 import unenrolFeature from "@/api/handlers/organization-settings/feature-enrolments/unenrol";
 import readOrganizationSettings from "@/api/handlers/organization-settings/get";
 import updateLocalRunApprovalCeiling from "@/api/handlers/organization-settings/local-runs/update";
+import updateMemberBillingAccess from "@/api/handlers/organization-settings/members/billing-access/update";
 import updatePracticeJurisdictions from "@/api/handlers/organization-settings/practice-jurisdictions/update";
 import previewOrganizationSettings from "@/api/handlers/organization-settings/preview";
 import readAIConfig from "@/api/handlers/organization-settings/read-ai-config";
@@ -135,6 +136,17 @@ export const organizationSettingsRoute = mount(
         PUT: updateAnonymizationBlacklist,
       },
     }),
+    routes(
+      {
+        "/members/:memberId/billing": { PUT: updateMemberBillingAccess },
+      },
+      {
+        middleware: [
+          deploymentFeatureGate("FEATURE_TIME_BILLING"),
+          featureAccessGate("time-billing"),
+        ],
+      },
+    ),
   ],
   { prefix: "/organization-settings" },
 );

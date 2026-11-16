@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-process.env["VITE_API_URL"] ??= "https://api.example.test";
+import { createTestState } from "@stll/test-state";
+
+const testState = createTestState({ file: import.meta.path, config: {} });
+
+testState.setEnvIfAbsent("VITE_API_URL", "https://api.example.test");
 const { describeSuggestChangesApplyOutcome, hasAutomaticApproval } =
   await import("@/components/chat/tool-approval-card.logic");
 const { isSuggestChangesApplyOutput, SUGGEST_CHANGES_TOOL_NAME } =

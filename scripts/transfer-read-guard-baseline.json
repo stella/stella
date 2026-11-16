@@ -637,13 +637,6 @@
     "reason": "Move the stamped-download source fetch to the @stll/fetch headers policy and an explicit idle-bounded reader before reading the full PDF for stamping."
   },
   {
-    "file": "apps/api/src/handlers/files/get.ts",
-    "function": "module/stampedDownloadHandler",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Move the stamped-download source fetch to the @stll/fetch headers policy and an explicit idle-bounded reader before reading the full PDF for stamping."
-  },
-  {
     "file": "apps/api/src/handlers/flows/run-read.ts",
     "function": "module/getFlowRunHandler",
     "kind": "constant-limit",

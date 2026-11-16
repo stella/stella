@@ -168,7 +168,12 @@ export const resolveAiFields = async ({
       maxLength: field.validation?.maxLength,
     });
     if (draft.type === "drafted") {
-      resolved[field.path] = draft.value;
+      Object.defineProperty(resolved, field.path, {
+        value: draft.value,
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
       continue;
     }
     errors.push({
@@ -245,16 +250,26 @@ const setNestedPath = (
   let current = target;
   for (let i = 0; i < segments.length - 1; i += 1) {
     const segment = segments[i] ?? "";
-    const next = current[segment];
+    const next = Object.hasOwn(current, segment) ? current[segment] : undefined;
     if (isRecord(next)) {
       current = next;
       continue;
     }
     const created: Record<string, unknown> = {};
-    current[segment] = created;
+    Object.defineProperty(current, segment, {
+      value: created,
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
     current = created;
   }
-  current[segments.at(-1) ?? ""] = value;
+  Object.defineProperty(current, segments.at(-1) ?? "", {
+    value,
+    enumerable: true,
+    configurable: true,
+    writable: true,
+  });
 };
 
 /**

@@ -7,6 +7,7 @@ import {
 export default {
   id: "replacements-legislation-documents-eli-version-lang-idx",
   revision: 820,
+  lifecycle: "finalized",
   type: "replacements",
   values: [
     {

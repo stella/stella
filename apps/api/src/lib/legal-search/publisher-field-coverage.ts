@@ -58,19 +58,30 @@ export const recordPublisherFieldCoverage = ({
   observedFields,
   report,
 }: PublisherFieldCoverageOptions) => {
-  const { unmappedFields: unmapped } = publisherFieldRetentionAudit(
-    inventory,
-    observedFields,
-  );
-  if (unmapped.length > 0) {
-    report(PUBLISHER_FIELD_COVERAGE_EVENT.UNMAPPED, {
-      adapterKey,
-      recordCount: 1,
-      unmappedFieldCount: unmapped.length,
-      retainedRaw: true,
-    });
+  const audit = publisherFieldRetentionAudit(inventory, observedFields);
+  switch (audit.status) {
+    case "unavailable":
+      report(PUBLISHER_FIELD_COVERAGE_EVENT.READER_FAILED, {
+        adapterKey,
+        recordCount: 1,
+        retainedRaw: true,
+        readerFailure: audit.reason,
+      });
+      return audit;
+    case "audited":
+      if (audit.unmappedFields.length > 0) {
+        report(PUBLISHER_FIELD_COVERAGE_EVENT.UNMAPPED, {
+          adapterKey,
+          recordCount: 1,
+          unmappedFieldCount: audit.unmappedFields.length,
+          retainedRaw: true,
+        });
+      }
+      return audit;
+    default:
+      audit satisfies never;
+      return panic("Unhandled publisher field retention observation");
   }
-  return { unmapped };
 };
 
 type InspectPublisherFieldCoverageOptions = RetainedPublisherPartsOptions & {
@@ -105,8 +116,17 @@ export const inspectPublisherFieldCoverage = async ({
     return;
   }
   const audit = publisherFieldRetentionAudit(inventory, observed.value);
-  if (audit.unmappedFields.length === 0) {
-    return;
+  switch (audit.status) {
+    case "unavailable":
+      break;
+    case "audited":
+      if (audit.unmappedFields.length === 0) {
+        return;
+      }
+      break;
+    default:
+      audit satisfies never;
+      return panic("Unhandled publisher field retention observation");
   }
   const emit =
     report ?? (await import("@/api/lib/observability/logger")).logger.error;

@@ -4,6 +4,7 @@ import { TIME_ENTRY_SUBMITTED_CONSTRAINT_VALIDATION } from "../time-entry-submit
 export default {
   id: "repairs-time-entry-submitted-constraint-validation",
   revision: 1130,
+  lifecycle: "finalized",
   type: "repairs",
   values: [TIME_ENTRY_SUBMITTED_CONSTRAINT_VALIDATION],
 } satisfies OnlineMigrationEntry;

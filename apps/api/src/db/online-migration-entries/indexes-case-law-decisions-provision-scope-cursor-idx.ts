@@ -3,6 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "indexes-case-law-decisions-provision-scope-cursor-idx",
   revision: 450,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     {

@@ -22,16 +22,16 @@ const kebabCase = (segment: string): string =>
 export const generateResourceTree = (
   resources: readonly ResourceListing[],
 ): ResourceNode => {
-  const showChildren: Record<string, ResourceNode> = {};
+  const showChildren = new Map<string, ResourceNode>();
 
   for (const resource of resources) {
     const key = kebabCase(resource.name);
-    if (showChildren[key] !== undefined) {
+    if (showChildren.has(key)) {
       throw new RouteGenerationError(
         `Duplicate resource command 'reference show ${key}' (uri ${resource.uri})`,
       );
     }
-    showChildren[key] = {
+    showChildren.set(key, {
       kind: "leaf",
       spec: {
         kind: "show",
@@ -39,7 +39,7 @@ export const generateResourceTree = (
         name: resource.name,
         uri: resource.uri,
       },
-    };
+    });
   }
 
   return {
@@ -49,7 +49,7 @@ export const generateResourceTree = (
         kind: "leaf",
         spec: { kind: "list", commandPath: ["reference", "list"] },
       },
-      show: { kind: "route", children: showChildren },
+      show: { kind: "route", children: Object.fromEntries(showChildren) },
     },
   };
 };

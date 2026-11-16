@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 
 import { BYOK_DEFAULT_MODELS } from "@stll/ai-catalog";
+import { createTestState } from "@stll/test-state";
 
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { flowDefinitions } from "@/api/db/schema";
@@ -21,6 +22,8 @@ import * as queuedActionAdmission from "@/api/lib/rate-limit/queued-action-admis
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { serveForTest } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 // Spies created in a test stay attached if it fails before restoring them.
 afterEach(() => {
@@ -105,13 +108,13 @@ describe("manual flow start admission response", () => {
             );
       const resolve = spyOn(handlerErrorResolution, "resolveHandlerError");
       const previousContactUrl = env.ACTION_LIMIT_CONTACT_URL;
-      env.ACTION_LIMIT_CONTACT_URL = contactUrl;
+      testState.setConfig("ACTION_LIMIT_CONTACT_URL", contactUrl);
       const previousEnabled = env.FEATURE_ACTION_ADMISSION;
       const previousPeriodMs = env.ACTION_ADMISSION_PERIOD_MS;
       const previousPeriodActions = env.ACTION_ADMISSION_PERIOD_ACTIONS;
-      env.FEATURE_ACTION_ADMISSION = true;
-      env.ACTION_ADMISSION_PERIOD_MS = undefined;
-      env.ACTION_ADMISSION_PERIOD_ACTIONS = undefined;
+      testState.setConfig("FEATURE_ACTION_ADMISSION", true);
+      testState.setConfig("ACTION_ADMISSION_PERIOD_MS", undefined);
+      testState.setConfig("ACTION_ADMISSION_PERIOD_ACTIONS", undefined);
       try {
         // The handler core under a member context the test builds, answered
         // through the HTTP layer so the refusal is read off the wire.
@@ -175,10 +178,13 @@ describe("manual flow start admission response", () => {
       } finally {
         kickoff?.mockRestore();
         resolve.mockRestore();
-        env.ACTION_LIMIT_CONTACT_URL = previousContactUrl;
-        env.FEATURE_ACTION_ADMISSION = previousEnabled;
-        env.ACTION_ADMISSION_PERIOD_MS = previousPeriodMs;
-        env.ACTION_ADMISSION_PERIOD_ACTIONS = previousPeriodActions;
+        testState.setConfig("ACTION_LIMIT_CONTACT_URL", previousContactUrl);
+        testState.setConfig("FEATURE_ACTION_ADMISSION", previousEnabled);
+        testState.setConfig("ACTION_ADMISSION_PERIOD_MS", previousPeriodMs);
+        testState.setConfig(
+          "ACTION_ADMISSION_PERIOD_ACTIONS",
+          previousPeriodActions,
+        );
       }
     },
   );

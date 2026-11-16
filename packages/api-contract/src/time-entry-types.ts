@@ -19,7 +19,8 @@ export type TimeEntry = {
   narrative: string;
   narrativeLanguage: string | null;
   noCharge: boolean;
-  rateAtEntry: number;
+  /** Null when the caller lacks monetary visibility. */
+  rateAtEntry: number | null;
   /** Why an approver returned the entry to draft; cleared once approved. */
   returnComment: string | null;
   source: TimeEntrySource;

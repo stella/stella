@@ -29,6 +29,7 @@ const SIZES = {
   },
   icon: { box: `${CONTROL} size-11 rounded-lg`, label: "", slop: 0 },
   "icon-lg": { box: `${CONTROL} size-12 rounded-lg`, label: "", slop: 0 },
+  "icon-round": { box: `${CONTROL} size-7 rounded-full`, label: "", slop: 8 },
   "icon-sm": { box: `${CONTROL} size-8 rounded-lg`, label: "", slop: 6 },
   "icon-xl": { box: `${CONTROL} size-11 rounded-full`, label: "", slop: 0 },
   "icon-2xs": { box: `${CONTROL} size-5 rounded-md`, label: "", slop: 12 },
@@ -72,6 +73,7 @@ const SIZES = {
  * held (a row open beside the list, a chosen option).
  */
 const PRESS = {
+  composer: { pressed: "active:opacity-80", selected: "" },
   default: { pressed: "active:opacity-80", selected: "" },
   destructive: { pressed: "active:bg-destructive/18", selected: "" },
   "destructive-outline": { pressed: "active:bg-destructive/4", selected: "" },
