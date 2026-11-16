@@ -56,7 +56,8 @@ const ONLINE_MIGRATIONS_LOCK_SQL =
   "SELECT pg_try_advisory_lock(hashtext('stella-online-migrations')) AS acquired";
 const ONLINE_MIGRATIONS_UNLOCK_SQL =
   "SELECT pg_advisory_unlock(hashtext('stella-online-migrations'))";
-const ONLINE_MIGRATIONS_LOCK_RETRY_MS = 1000;
+/** How often a migrate run waiting for the online lock tries it again. */
+export const ONLINE_MIGRATIONS_LOCK_RETRY_MS = 1000;
 // Startup reads the catalog and checkpoint rows only, so a slower statement is
 // waiting on a lock or a load spike; boot fails fast instead of queueing.
 const STARTUP_VALIDATION_TIMEOUT_SQL = "SET statement_timeout = '5s'";
@@ -359,17 +360,27 @@ export const reportOnlineMigrations = async (
   }
 };
 
+/** A pending unit as the runner and the drain name it: `kind:name`. */
+export const pendingOnlineUnitKey = ({
+  kind,
+  name,
+}: Pick<PendingOnlineMigrationStep, "kind" | "name">): string =>
+  `${kind}:${name}`;
+
 /** What one call of the pending runner did. */
 export type PendingOnlineUnitOutcome =
   /** A migrate run or another runner holds the online lock; try later. */
   | { type: "busy" }
-  /** No pending entry has work left. */
+  /** No pending unit outside `skip` has work left. */
   | { type: "idle" }
-  /** The first pending unit, walked once; `deferred` resumes on a later call. */
+  /**
+   * The first pending unit, walked once. `deferred` resumes on a later call;
+   * `held` is a repair stopped at a durable checkpoint by its health verdict.
+   */
   | {
       type: "ran";
       step: PendingOnlineMigrationStep;
-      outcome: OnlineMigrationOutcome;
+      outcome: OnlineMigrationOutcome | { type: "held"; reason: string };
     };
 
 const READ_LOCK_TIMEOUT_SQL =
@@ -386,8 +397,10 @@ const readLockTimeout = async (
   return row["timeout"];
 };
 
-const isPendingStep: OnlineStepFilter = (kind, name) =>
-  onlineStepLifecycle(kind, name) === ONLINE_LIFECYCLE.pending;
+type PendingOnlineUnitOptions = Omit<OnlineRepairOptions, "scope"> & {
+  /** Units to pass over this call, such as repairs the drain set aside. */
+  skip?: ReadonlySet<string> | undefined;
+};
 
 /**
  * Builds the first unfinished unit of a pending entry, after a rollout that
@@ -395,9 +408,13 @@ const isPendingStep: OnlineStepFilter = (kind, name) =>
  *
  * It never waits for the online lock: a migrate run holding it owns every
  * step, so the runner reports `busy` and a later call retries. It walks one
- * unit per call and then releases the lock, so a migrate run waits behind at
- * most one unit. Units come in the phase's order (indexes, cutovers,
- * retirements, repairs), so an index a repair walks is built first.
+ * unit per call and then releases the lock; the caller pauses between calls
+ * so a migrate run polling for the lock takes it. Validation stops at the
+ * first unfinished unit, and units come in the phase's order (indexes,
+ * cutovers, retirements, repairs), so an index a repair walks is built first.
+ *
+ * The gate leaves index-build settings on the session, so the pool should
+ * hand out a session of its own per call, as the drain does.
  */
 export const runNextPendingOnlineUnit = async (
   pool: OnlineMigrationPool,
@@ -405,8 +422,9 @@ export const runNextPendingOnlineUnit = async (
     indexGate,
     reserveObserver,
     timing = DEFAULT_MIGRATION_TIMING,
+    skip = new Set<string>(),
     ...options
-  }: Omit<OnlineRepairOptions, "scope">,
+  }: PendingOnlineUnitOptions,
 ): Promise<PendingOnlineUnitOutcome> => {
   const connection = await pool.reserve();
   let sessionStatus: "active" | "terminated" = "active";
@@ -422,9 +440,12 @@ export const runNextPendingOnlineUnit = async (
     if (!(await tryAcquireOnlineMigrationLock(connection))) {
       return { type: "busy" };
     }
-    const statementTimeout = await readStatementTimeout(connection);
-    const lockTimeout = await readLockTimeout(connection);
+    let timeouts: { statement: string; lock: string } | undefined;
     try {
+      timeouts = {
+        statement: await readStatementTimeout(connection),
+        lock: await readLockTimeout(connection),
+      };
       await connection.execute(STARTUP_VALIDATION_TIMEOUT_SQL);
       const report: OnlineMigrationStartupReport = {
         newestAppliedMigration: await readNewestAppliedMigration(connection),
@@ -433,7 +454,15 @@ export const runNextPendingOnlineUnit = async (
       };
       const validated = await walkOnlineMigrations({
         connection,
-        mode: { operation: "validate", inScope: isPendingStep, report },
+        mode: {
+          operation: "validate",
+          // Nothing past the first unfinished unit is read.
+          inScope: (kind, name) =>
+            report.pending.length === 0 &&
+            onlineStepLifecycle(kind, name) === ONLINE_LIFECYCLE.pending &&
+            !skip.has(pendingOnlineUnitKey({ kind, name })),
+          report,
+        },
         options,
       });
       if (validated.type !== "complete") {
@@ -445,6 +474,8 @@ export const runNextPendingOnlineUnit = async (
       }
       await connection.execute(ONLINE_MIGRATION_LOCK_TIMEOUT_SQL);
       await connection.execute("SET statement_timeout = '0'");
+      let held: string | undefined;
+      const log = options.log ?? writeOnlineRepairLog;
       const outcome = await walkOnlineMigrations({
         connection,
         mode: {
@@ -454,16 +485,36 @@ export const runNextPendingOnlineUnit = async (
           reserveObserver,
           timing,
         },
-        options,
+        options: {
+          ...options,
+          log: (record) => {
+            if (record.repair === step.name) {
+              held = record.completion.reason;
+            }
+            log(record);
+          },
+        },
       });
-      return { type: "ran", step, outcome };
+      return {
+        type: "ran",
+        step,
+        outcome:
+          held === undefined || outcome.type !== "complete"
+            ? outcome
+            : { type: "held", reason: held },
+      };
     } finally {
       if (sessionIsActive()) {
-        await connection.query(RESTORE_STATEMENT_TIMEOUT_SQL, [
-          statementTimeout,
-        ]);
-        await connection.query(RESTORE_LOCK_TIMEOUT_SQL, [lockTimeout]);
-        await releaseOnlineMigrationLock(connection);
+        try {
+          if (timeouts !== undefined) {
+            await connection.query(RESTORE_STATEMENT_TIMEOUT_SQL, [
+              timeouts.statement,
+            ]);
+            await connection.query(RESTORE_LOCK_TIMEOUT_SQL, [timeouts.lock]);
+          }
+        } finally {
+          await releaseOnlineMigrationLock(connection);
+        }
       }
     }
   } finally {
@@ -651,10 +702,14 @@ const walkOnlineMigrations = async ({
     mode,
     repairs: options.repairs,
     observeRepair: options.observeRepair,
-    log:
-      options.log ??
-      ((record) => process.stderr.write(`${JSON.stringify(record)}\n`)),
+    log: options.log ?? writeOnlineRepairLog,
   });
+};
+
+const writeOnlineRepairLog: NonNullable<OnlineMigrationOptions["log"]> = (
+  record,
+) => {
+  process.stderr.write(`${JSON.stringify(record)}\n`);
 };
 
 type OnlineIndexWalkOptions = {

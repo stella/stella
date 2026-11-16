@@ -44,6 +44,7 @@ import {
   ONLINE_MIGRATION_REPAIRS,
   type OnlineMigrationStartupReport,
   type OnlineRepairOptions,
+  pendingOnlineUnitKey,
   type RegressedOnlineRepair,
   reportOnlineMigrations as reportOnlineMigrationsWithOwnership,
   runNextPendingOnlineUnit,
@@ -1198,6 +1199,83 @@ describe("online migrations", () => {
         `SELECT set_config('lock_timeout', $1, false)\n-- params ${JSON.stringify([SESSION_LOCK_TIMEOUT])}`,
       );
       expect(harness.released()).toBe(true);
+    });
+
+    test("passes over a unit the caller set aside", async () => {
+      const [first, second] = pendingIndexes.filter(declaresOnlineBuild);
+      if (!first || !second) {
+        throw new TypeError("Expected two pending indexes");
+      }
+      const harness = createHarness({
+        missingIndexes: [first.name, second.name],
+      });
+      const outcome = await runNextPendingOnlineUnit(harness.pool, {
+        indexGate: healthyIndexGate,
+        timing: { clock: () => 0, emit: () => undefined },
+        repairs: [],
+        reserveObserver: reserveHealthyObserver,
+        skip: new Set([
+          pendingOnlineUnitKey({ kind: "index", name: first.name }),
+        ]),
+      });
+      expect(outcome).toMatchObject({
+        type: "ran",
+        step: { kind: "index", name: second.name },
+      });
+    });
+
+    test("reports a repair its health verdict holds as held, not complete", async () => {
+      const pendingRepair = ONLINE_MIGRATION_REPAIRS.find(
+        ({ name }) =>
+          onlineStepLifecycle("repair", name) === ONLINE_SCOPE.pending,
+      );
+      if (!pendingRepair || typeof pendingRepair.introducedBy !== "string") {
+        throw new TypeError("Expected a pending migration-owned repair");
+      }
+      const incomplete = {
+        type: "incomplete",
+        reason: "fixture rows remain",
+      } as const;
+      const completions: OnlineRepairCompletion[] = [
+        incomplete,
+        incomplete,
+        {
+          type: "pending",
+          reason: "fixture hold",
+          cursor: null,
+          holdUntil: null,
+          heldSince: null,
+        },
+      ];
+      const held = {
+        ...pendingRepair,
+        readCompletion: async () => {
+          const next = completions.shift();
+          if (next === undefined) {
+            throw new TypeError("Read past the fixture's completions");
+          }
+          return await Promise.resolve(next);
+        },
+        repair: async () =>
+          await Promise.resolve({ type: "complete" } as const),
+      } satisfies OnlineRepair;
+      const outcome = await runNextPendingOnlineUnit(createHarness().pool, {
+        indexGate: healthyIndexGate,
+        timing: { clock: () => 0, emit: () => undefined },
+        repairs: [held],
+        reserveObserver: reserveHealthyObserver,
+        log: () => undefined,
+      });
+      expect(outcome).toEqual({
+        type: "ran",
+        step: {
+          kind: "repair",
+          name: pendingRepair.name,
+          introducedBy: pendingRepair.introducedBy,
+        },
+        outcome: { type: "held", reason: "fixture hold" },
+      });
+      expect(completions).toEqual([]);
     });
 
     test("leaves a missing finalized index to migrate", async () => {
