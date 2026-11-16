@@ -579,7 +579,6 @@
     "apps/api/src/lib/legal-search/parsers/validate-ast.ts": 1,
     "apps/api/src/lib/legal-search/raw-source-storage.ts": 2,
     "apps/api/src/lib/observability/failure-evidence.ts": 1,
-    "apps/api/src/lib/observability/failure.ts": 12,
     "apps/api/src/lib/observability/logger.ts": 1,
     "apps/api/src/lib/observability/observe-failure.ts": 1,
     "apps/api/src/lib/observability/request-context.ts": 1,
