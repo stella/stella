@@ -44,8 +44,10 @@ import {
   ONLINE_MIGRATION_REPAIRS,
   type OnlineMigrationStartupReport,
   type OnlineRepairOptions,
+  pendingOnlineUnitKey,
   type RegressedOnlineRepair,
   reportOnlineMigrations as reportOnlineMigrationsWithOwnership,
+  runNextPendingOnlineUnit,
   runOnlineMigrations as runOnlineMigrationsWithGate,
 } from "./online-migrations";
 import { ONLINE_SCOPE, onlineStepLifecycle } from "./online-step-lifecycle";
@@ -184,6 +186,7 @@ const DELETE_RECEIPT_CONSTRAINT =
 const VALIDATE_DELETE_RECEIPT_FRAGMENT = `VALIDATE CONSTRAINT "${DELETE_RECEIPT_CONSTRAINT}"`;
 /** A pooled session's own timeout, not the role default. */
 const SESSION_STATEMENT_TIMEOUT = "30s";
+const SESSION_LOCK_TIMEOUT = "5s";
 const RESTORED_SESSION_TIMEOUT = `SELECT set_config('statement_timeout', $1, false)\n-- params ${JSON.stringify([SESSION_STATEMENT_TIMEOUT])}`;
 const CLEANUP_STALL_CONSTRAINTS = [
   "corpus_index_projection_intents_status_values",
@@ -1122,6 +1125,168 @@ describe("online migrations", () => {
       message: expect.stringContaining(
         `Online index ${finalizedIndex.name} introduced by`,
       ),
+    });
+  });
+
+  describe("pending runner", () => {
+    const runPending = async (
+      pool: Parameters<typeof runNextPendingOnlineUnit>[0],
+    ) =>
+      await runNextPendingOnlineUnit(pool, {
+        indexGate: healthyIndexGate,
+        timing: { clock: () => 0, emit: () => undefined },
+        repairs: ONLINE_MIGRATION_REPAIRS,
+        reserveObserver: reserveHealthyObserver,
+      });
+    const pendingIndexes = ONLINE_MIGRATION_INDEXES.filter(
+      ({ name }) => onlineStepLifecycle("index", name) === ONLINE_SCOPE.pending,
+    );
+    const finalizedIndex = ONLINE_MIGRATION_INDEXES.find(
+      ({ name }) =>
+        onlineStepLifecycle("index", name) === ONLINE_SCOPE.finalized,
+    );
+    const builds = (statements: readonly string[]) =>
+      statements.filter((statement) =>
+        statement.includes("INDEX CONCURRENTLY"),
+      );
+
+    test("reports busy and reads nothing while the online lock is held", async () => {
+      const harness = createHarness({
+        missingIndexes: pendingIndexes.map(({ name }) => name),
+        onlineLockHeld: true,
+      });
+      expect(await runPending(harness.pool)).toEqual({ type: "busy" });
+      expect(
+        harness.statements.filter((statement) =>
+          statement.includes("pg_catalog"),
+        ),
+      ).toEqual([]);
+      expect(harness.released()).toBe(true);
+    });
+
+    test("is idle once every pending unit is complete", async () => {
+      const harness = createHarness();
+      expect(await runPending(harness.pool)).toEqual({ type: "idle" });
+      expect(builds(harness.statements)).toEqual([]);
+      expect(harness.released()).toBe(true);
+    });
+
+    test("builds the first missing pending index and nothing else", async () => {
+      const [first, second] = pendingIndexes.filter(declaresOnlineBuild);
+      if (!first || !second || !finalizedIndex) {
+        throw new TypeError("Expected two pending and a finalized index");
+      }
+      const harness = createHarness({
+        missingIndexes: [second.name, first.name, finalizedIndex.name],
+      });
+      expect(await runPending(harness.pool)).toEqual({
+        type: "ran",
+        step: {
+          kind: "index",
+          name: first.name,
+          introducedBy: first.introducedBy,
+        },
+        outcome: { type: "complete" },
+      });
+      const built = builds(harness.statements);
+      expect(built.length).toBeGreaterThan(0);
+      for (const statement of built) {
+        expect(statement).toContain(`INDEX CONCURRENTLY "${first.name}"`);
+      }
+      // The session goes back to the pool with the timeouts it came with.
+      expect(harness.statements).toContain(RESTORED_SESSION_TIMEOUT);
+      expect(harness.statements).toContain(
+        `SELECT set_config('lock_timeout', $1, false)\n-- params ${JSON.stringify([SESSION_LOCK_TIMEOUT])}`,
+      );
+      expect(harness.released()).toBe(true);
+    });
+
+    test("passes over a unit the caller set aside", async () => {
+      const [first, second] = pendingIndexes.filter(declaresOnlineBuild);
+      if (!first || !second) {
+        throw new TypeError("Expected two pending indexes");
+      }
+      const harness = createHarness({
+        missingIndexes: [first.name, second.name],
+      });
+      const outcome = await runNextPendingOnlineUnit(harness.pool, {
+        indexGate: healthyIndexGate,
+        timing: { clock: () => 0, emit: () => undefined },
+        repairs: [],
+        reserveObserver: reserveHealthyObserver,
+        skip: new Set([
+          pendingOnlineUnitKey({ kind: "index", name: first.name }),
+        ]),
+      });
+      expect(outcome).toMatchObject({
+        type: "ran",
+        step: { kind: "index", name: second.name },
+      });
+    });
+
+    test("reports a repair its health verdict holds as held, not complete", async () => {
+      const pendingRepair = ONLINE_MIGRATION_REPAIRS.find(
+        ({ name }) =>
+          onlineStepLifecycle("repair", name) === ONLINE_SCOPE.pending,
+      );
+      if (!pendingRepair || typeof pendingRepair.introducedBy !== "string") {
+        throw new TypeError("Expected a pending migration-owned repair");
+      }
+      const incomplete = {
+        type: "incomplete",
+        reason: "fixture rows remain",
+      } as const;
+      const completions: OnlineRepairCompletion[] = [
+        incomplete,
+        incomplete,
+        {
+          type: "pending",
+          reason: "fixture hold",
+          cursor: null,
+          holdUntil: null,
+          heldSince: null,
+        },
+      ];
+      const held = {
+        ...pendingRepair,
+        readCompletion: async () => {
+          const next = completions.shift();
+          if (next === undefined) {
+            throw new TypeError("Read past the fixture's completions");
+          }
+          return await Promise.resolve(next);
+        },
+        repair: async () =>
+          await Promise.resolve({ type: "complete" } as const),
+      } satisfies OnlineRepair;
+      const outcome = await runNextPendingOnlineUnit(createHarness().pool, {
+        indexGate: healthyIndexGate,
+        timing: { clock: () => 0, emit: () => undefined },
+        repairs: [held],
+        reserveObserver: reserveHealthyObserver,
+        log: () => undefined,
+      });
+      expect(outcome).toEqual({
+        type: "ran",
+        step: {
+          kind: "repair",
+          name: pendingRepair.name,
+          introducedBy: pendingRepair.introducedBy,
+        },
+        outcome: { type: "held", reason: "fixture hold" },
+      });
+      expect(completions).toEqual([]);
+    });
+
+    test("leaves a missing finalized index to migrate", async () => {
+      if (!finalizedIndex) {
+        throw new TypeError("Expected a finalized index");
+      }
+      const harness = createHarness({
+        missingIndexes: [finalizedIndex.name],
+      });
+      expect(await runPending(harness.pool)).toEqual({ type: "idle" });
+      expect(builds(harness.statements)).toEqual([]);
     });
   });
 
@@ -2662,6 +2827,9 @@ const createHarness = ({
           }
           if (query.includes("current_setting('statement_timeout')")) {
             return [{ timeout: SESSION_STATEMENT_TIMEOUT }];
+          }
+          if (query.includes("current_setting('lock_timeout')")) {
+            return [{ timeout: SESSION_LOCK_TIMEOUT }];
           }
           if (
             query.includes(" AS acquired") ||
