@@ -932,9 +932,7 @@
     "packages/decision-reader/src/cited-provision.tsx": 1
   },
   "no-native-ui/no-native-checkbox": {},
-  "no-native-ui/no-native-details-grid": {
-    "apps/landing/src/components/react/previews/RegistryLookupPreview.tsx": 3
-  },
+  "no-native-ui/no-native-details-grid": {},
   "no-native-ui/no-native-dialog": {
     "apps/web/src/components/ai-suggestions/host.tsx": 1,
     "apps/web/src/features/chat/answer-edit/answer-edit-panel.tsx": 1
