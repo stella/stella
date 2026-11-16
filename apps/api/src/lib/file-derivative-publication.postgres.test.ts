@@ -131,7 +131,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
             .select({ content: fields.content })
             .from(fields)
             .where(eq(fields.id, document.fieldId));
-          expect(row?.content?.type).toBe("file");
+          expect(row?.content.type).toBe("file");
           const refused = boundary === "over";
           expect(row?.content).toHaveProperty(
             "pdfDerivative",
@@ -174,7 +174,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
           reserve.mockRestore();
           broadcast.mockRestore();
           extract.mockRestore();
-          converter.stop(true);
+          await converter.stop(true);
           store.stop();
           await fixture.dispose();
         }
