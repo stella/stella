@@ -220,6 +220,8 @@ TruncatedText.
 ### Button Variants (CVA)
 
 - **default:** primary foreground on primary background
+- **composer:** background text on foreground fill, retaining the primary
+  action's border, shadows and pressed treatment
 - **destructive:** destructive colours
 - **destructive-outline:** the outline box with destructive text and a
   destructive tint on hover
@@ -243,6 +245,7 @@ TruncatedText.
 Sizes: `default` (h-9), `sm` (h-8, small type), `xs` (h-7, small
 type), `lg` (h-10), `xl` (h-11), `chip` (a 28px pill beside the
 composer's round controls), `icon` and `icon-*` (square),
+`icon-round` (a fixed 28px circle with a 44px touch target),
 `icon-2xs` (a 16px glyph action in a dense row; the touch target
 still grows to 44px under a coarse pointer), `row` (a menu-list row),
 `inline` (a short action inside a line of text: no height, padding or
