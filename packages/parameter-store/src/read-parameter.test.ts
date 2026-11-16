@@ -1,21 +1,19 @@
 import type { GetParameterCommandOutput } from "@aws-sdk/client-ssm";
-import { expect, test } from "bun:test";
-
-import { createFakeTimers } from "@stll/test-kit";
+import { afterEach, expect, jest, test } from "bun:test";
 
 import { readParameter } from "./read-parameter";
+
+afterEach(() => {
+  jest.useRealTimers();
+});
 
 test.each(["enabled", "disabled"] as const)(
   "reads one parameter with decryption %s",
   async (decryption) => {
-    const timers = createFakeTimers();
+    jest.useFakeTimers();
     const result = await readParameter({
       name: "/test/grants",
       decryption,
-      scheduleTimeout: (callback, delayMs) => {
-        const timer = timers.setTimeout(callback, delayMs);
-        return () => timers.clearTimeout(timer);
-      },
       client: {
         send: async (command, { abortSignal }) => {
           expect(command.input).toEqual({
@@ -28,7 +26,7 @@ test.each(["enabled", "disabled"] as const)(
       },
     });
     expect(result.unwrap()).toEqual({ value: "", version: 7 });
-    expect(timers.pendingTimers()).toBe(0);
+    expect(jest.getTimerCount()).toBe(0);
   },
 );
 
@@ -81,7 +79,7 @@ test.each([undefined, {}, { Value: "grants" }, { Version: 1 }])(
 );
 
 test("cancellation reaches an active parameter read", async () => {
-  const timers = createFakeTimers();
+  jest.useFakeTimers();
   const controller = new AbortController();
   const started = Promise.withResolvers<undefined>();
   const response = Promise.withResolvers<GetParameterCommandOutput>();
@@ -89,10 +87,6 @@ test("cancellation reaches an active parameter read", async () => {
     name: "/test/grants",
     decryption: "enabled",
     signal: controller.signal,
-    scheduleTimeout: (callback, delayMs) => {
-      const timer = timers.setTimeout(callback, delayMs);
-      return () => timers.clearTimeout(timer);
-    },
     client: {
       send: async (_command, { abortSignal }) => {
         started.resolve(undefined);
@@ -106,18 +100,18 @@ test("cancellation reaches an active parameter read", async () => {
     },
   });
   await started.promise;
-  expect(timers.pendingTimers()).toBe(1);
+  expect(jest.getTimerCount()).toBe(1);
   controller.abort();
   const result = await pending;
   expect(result.isErr()).toBe(true);
   if (result.isErr()) {
     expect(result.error.reason).toBe("timeout");
   }
-  expect(timers.pendingTimers()).toBe(0);
+  expect(jest.getTimerCount()).toBe(0);
 });
 
 test("an unresponsive client times out even when it ignores cancellation", async () => {
-  const timers = createFakeTimers();
+  jest.useFakeTimers();
   const started = Promise.withResolvers<undefined>();
   let signal: AbortSignal | undefined;
   let settled = false;
@@ -125,10 +119,6 @@ test("an unresponsive client times out even when it ignores cancellation", async
   const pending = readParameter({
     name: "/test/grants",
     decryption: "enabled",
-    scheduleTimeout: (callback, delayMs) => {
-      const timer = timers.setTimeout(callback, delayMs);
-      return () => timers.clearTimeout(timer);
-    },
     client: {
       send: async (_command, options) => {
         signal = options.abortSignal;
@@ -141,18 +131,19 @@ test("an unresponsive client times out even when it ignores cancellation", async
     return result;
   });
   await started.promise;
-  await timers.advance(4999);
+  jest.advanceTimersByTime(4999);
+  await Promise.resolve();
   expect(settled).toBe(false);
   expect(signal?.aborted).toBe(false);
-  expect(timers.pendingTimers()).toBe(1);
-  await timers.advance(1);
+  expect(jest.getTimerCount()).toBe(1);
+  jest.advanceTimersByTime(1);
   expect(signal?.aborted).toBe(true);
   const result = await pending;
   expect(result.isErr()).toBe(true);
   if (result.isErr()) {
     expect(result.error.reason).toBe("timeout");
   }
-  expect(timers.pendingTimers()).toBe(0);
+  expect(jest.getTimerCount()).toBe(0);
   response.resolve({ Parameter: { Value: "late", Version: 1 }, $metadata: {} });
   expect(await pending).toBe(result);
 });
