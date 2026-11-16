@@ -1,0 +1,7 @@
+{
+  "add-column": "The nullable review_extraction_version column has no default and rewrites no existing decision rows. ACCESS EXCLUSIVE covers catalog changes under 1s lock_timeout and 5s statement_timeout.",
+  "replace-view": "Re-creating the published and unredacted decision views appends the new column without changing their row predicates or scanning stored decisions. Catalog locks are bounded by 1s lock_timeout and 5s statement_timeout.",
+  "create-table-references": "The new review table is empty, so its two decision foreign keys validate no existing rows. Referenced-table locks are bounded by 1s lock_timeout and 5s statement_timeout.",
+  "row-level-security": "RLS is enabled and forced on the new empty review table before any role is granted access. The metadata-only change is bounded by 1s lock_timeout and 5s statement_timeout.",
+  "create-policy": "The four access policies are catalog-only metadata on the new empty review table, installed before its grants under 1s lock_timeout and 5s statement_timeout."
+}
