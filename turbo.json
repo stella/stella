@@ -1113,11 +1113,11 @@
         "src/mcp/generated/capability-dispatch/**"
       ]
     },
-    // typecheck prepares the derived contracts and bundles first, so its cache
-    // restores them and lint waits for it.
+    // Build alone restores generated artifacts; diagnostic consumers wait for
+    // that restoration before preparing or reading the same files.
     "@stll/mcp-apps#typecheck": {
       "cache": true,
-      "dependsOn": ["transit", "^generate:capability-runtime"],
+      "dependsOn": ["transit", "^generate:capability-runtime", "build"],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.npmrc",
@@ -1152,21 +1152,7 @@
         "$TURBO_ROOT$/scripts/check-mcp-generated-tracking.ts",
         "$TURBO_ROOT$/bun.lock"
       ],
-      "outputs": [
-        "src/*/generated/app.html.txt",
-        "src/*/generated/app.js.txt",
-        "src/*/generated/app.css.txt",
-        "src/shared/generated/messages.json",
-        "src/shared/generated/schemas.json",
-        "src/shared/generated/reader-messages.json",
-        "src/shared/generated/reader-inputs.json",
-        "src/shared/generated/contracts.js",
-        "src/shared/generated/contracts.d.ts",
-        "src/shared/generated/style.css",
-        "src/generated/runtime.js.txt",
-        "src/generated/runtime.css.txt",
-        "src/generated/bundles.ts"
-      ]
+      "outputs": []
     },
     "@stll/mcp-apps#lint": {
       "dependsOn": ["typecheck"],
@@ -1927,6 +1913,7 @@
       ]
     },
     "@stll/mcp-apps#test": {
+      "dependsOn": ["transit", "build"],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/apps/**",
