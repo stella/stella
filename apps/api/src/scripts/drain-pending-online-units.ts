@@ -38,13 +38,14 @@ if (!url) {
 await runScriptWithErrorOutput(async () => {
   const hold = createOnlineIndexHold();
   const units = await drainPendingOnlineUnits({
-    runUnit: async () =>
+    runUnit: async (skip) =>
       await runNextPendingOnlineUnit(
         { reserve: async () => await openOnlineRepairConnection(url) },
         {
           indexGate: { ebs: ebs.value, hold },
           reserveObserver: async () => await openOnlineIndexObserver(url),
           repairs: ONLINE_MIGRATION_REPAIRS,
+          skip,
         },
       ),
     sleep: Bun.sleep,

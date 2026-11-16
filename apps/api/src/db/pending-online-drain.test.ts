@@ -3,12 +3,14 @@ import { describe, expect, test } from "bun:test";
 import type { PendingOnlineUnitOutcome } from "./online-migrations";
 import {
   drainPendingOnlineUnits,
+  PENDING_ONLINE_HELD_RETRY_MS,
   PENDING_ONLINE_RETRY_MS,
+  PENDING_ONLINE_YIELD_MS,
 } from "./pending-online-drain";
 
 const step = (name: string) =>
   ({
-    kind: "index",
+    kind: "repair",
     name,
     introducedBy: "20261115000000_fixture",
   }) as const;
@@ -23,24 +25,23 @@ const ran = (
 const drain = async (outcomes: readonly PendingOnlineUnitOutcome[]) => {
   const queue = [...outcomes];
   const sleeps: number[] = [];
-  const emitted: PendingOnlineUnitOutcome[] = [];
+  const skips: string[][] = [];
   const units = await drainPendingOnlineUnits({
-    runUnit: async () =>
-      await Promise.resolve(
-        queue.shift() ??
-          (() => {
-            throw new TypeError("Drain ran past idle");
-          })(),
-      ),
+    runUnit: async (skip) => {
+      skips.push([...skip]);
+      const next = queue.shift();
+      if (next === undefined) {
+        throw new TypeError("Drain ran past idle");
+      }
+      return await Promise.resolve(next);
+    },
     sleep: async (milliseconds) => {
       sleeps.push(milliseconds);
       await Promise.resolve();
     },
-    emit: (outcome) => {
-      emitted.push(outcome);
-    },
+    emit: () => undefined,
   });
-  return { units, sleeps, emitted, left: queue.length };
+  return { units, sleeps, skips };
 };
 
 describe("pending online drain", () => {
@@ -48,24 +49,26 @@ describe("pending online drain", () => {
     expect(await drain([{ type: "idle" }])).toEqual({
       units: 0,
       sleeps: [],
-      emitted: [{ type: "idle" }],
-      left: 0,
+      skips: [[]],
     });
   });
 
-  test("walks distinct units back to back", async () => {
+  // A migrate run polls the lock every second; the pause outlasts a poll.
+  test("pauses after every unit so a waiting migrate run takes the lock", async () => {
     const result = await drain([
       ran("a", COMPLETE),
       ran("b", COMPLETE),
       { type: "idle" },
     ]);
     expect(result.units).toBe(2);
-    expect(result.sleeps).toEqual([]);
+    expect(result.sleeps).toEqual([
+      PENDING_ONLINE_YIELD_MS,
+      PENDING_ONLINE_YIELD_MS,
+    ]);
   });
 
   test("waits out a migrate run that holds the online lock", async () => {
     const result = await drain([
-      { type: "busy" },
       { type: "busy" },
       ran("a", COMPLETE),
       { type: "idle" },
@@ -73,22 +76,34 @@ describe("pending online drain", () => {
     expect(result.units).toBe(1);
     expect(result.sleeps).toEqual([
       PENDING_ONLINE_RETRY_MS,
-      PENDING_ONLINE_RETRY_MS,
+      PENDING_ONLINE_YIELD_MS,
     ]);
   });
 
-  test("waits a deferred build's delay and pauses before repeating a unit", async () => {
+  test("waits a deferred build's delay", async () => {
     const result = await drain([
       ran("a", { type: "deferred", step: "a", retryAfterMs: 60_000 }),
       ran("a", COMPLETE),
+      { type: "idle" },
+    ]);
+    expect(result.sleeps).toEqual([60_000, PENDING_ONLINE_YIELD_MS]);
+  });
+
+  test("sets a held repair aside, builds the rest, then retries it", async () => {
+    const result = await drain([
+      ran("a", { type: "held", reason: "database under pressure" }),
+      ran("b", COMPLETE),
+      { type: "idle" },
       ran("a", COMPLETE),
       { type: "idle" },
     ]);
     expect(result.units).toBe(3);
+    expect(result.skips).toEqual([[], ["repair:a"], ["repair:a"], [], []]);
     expect(result.sleeps).toEqual([
-      60_000,
-      PENDING_ONLINE_RETRY_MS,
-      PENDING_ONLINE_RETRY_MS,
+      PENDING_ONLINE_YIELD_MS,
+      PENDING_ONLINE_YIELD_MS,
+      PENDING_ONLINE_HELD_RETRY_MS,
+      PENDING_ONLINE_YIELD_MS,
     ]);
   });
 });
