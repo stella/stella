@@ -207,10 +207,10 @@ export const buildBatchSchema = (
   properties: readonly AIBatchProperty[],
   filenames: JustificationFilenames,
 ) => {
-  const schemaShape: Record<
+  const schemaEntries: [
     string,
-    v.GenericSchema<{ answer: Answer; justification: AIJustificationOutput }>
-  > = {};
+    v.GenericSchema<{ answer: Answer; justification: AIJustificationOutput }>,
+  ][] = [];
 
   for (const property of properties) {
     // Null only for a select with no options: there is nothing to choose from,
@@ -219,13 +219,19 @@ export const buildBatchSchema = (
     if (answer === null) {
       continue;
     }
-    schemaShape[property.id] = v.strictObject({
-      answer,
-      justification: createJustificationSchema(filenames, property.answerShape),
-    });
+    schemaEntries.push([
+      property.id,
+      v.strictObject({
+        answer,
+        justification: createJustificationSchema(
+          filenames,
+          property.answerShape,
+        ),
+      }),
+    ]);
   }
 
-  return v.strictObject(schemaShape);
+  return v.strictObject(Object.fromEntries(schemaEntries));
 };
 
 // --------------- User message templates ---------------

@@ -389,3 +389,32 @@ describe("encodeDocxBlockLine", () => {
     ).toEndWith(text);
   });
 });
+
+test("batch schemas retain property order and the last repeated property's answer schema", () => {
+  const schema = buildBatchSchema(
+    [textProperty, intProperty, { ...intProperty, id: textProperty.id }],
+    noFilenames,
+  );
+  expect(Object.keys(schema.entries)).toEqual([
+    textProperty.id,
+    intProperty.id,
+  ]);
+  expect(
+    v.safeParse(schema, {
+      [textProperty.id]: {
+        answer: { amount: 42, currency: "USD" },
+        justification: [],
+      },
+      [intProperty.id]: { answer: null, justification: [] },
+    }).success,
+  ).toBe(true);
+  expect(
+    v.safeParse(schema, {
+      [textProperty.id]: {
+        answer: "text from the replaced schema",
+        justification: [],
+      },
+      [intProperty.id]: { answer: null, justification: [] },
+    }).success,
+  ).toBe(false);
+});

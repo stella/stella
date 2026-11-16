@@ -695,8 +695,7 @@ export const generateWorkflowData = async ({
     if (Result.isError(chunkOutput)) {
       return chunkOutput;
     }
-    Object.assign(merged, chunkOutput.value);
-    return await runFromChunk(index + 1, merged);
+    return await runFromChunk(index + 1, { ...merged, ...chunkOutput.value });
   };
 
   // Chunk answers accumulate onto the System One answers; the two sets of

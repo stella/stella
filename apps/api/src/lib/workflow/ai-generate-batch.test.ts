@@ -9,6 +9,7 @@ import {
   WorkflowIntegrationError,
 } from "@/api/lib/errors/tagged-errors";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
+import { isRecord } from "@/api/lib/type-guards";
 import type { AnswerShape } from "@/api/lib/workflow/ai-answer-schema";
 import {
   buildWorkflowAIAnalyticsProps,
@@ -284,25 +285,153 @@ describe("a request over its model's budget", () => {
   const generate = async (
     file: PreparedDocxFile,
     textInputs: TextInput[] = [],
+    options: {
+      linkedSkillsMessage?: string;
+      promptCachingEnabled?: boolean;
+      succeed?: boolean;
+    } = {},
   ) => {
     const sentRequests: unknown[] = [];
     const record = (request: unknown) => {
       sentRequests.push(request);
       throw new Error("Synthetic provider failure");
     };
-    const adapter = {
-      ...createScriptedTextAdapter([]),
-      chatStream: record,
-      structuredOutput: record,
-    } satisfies AnyTextAdapter;
+    const data = {
+      [property.id]: { answer: "English law", justification: [] },
+    };
+    const scripted = createScriptedTextAdapter([
+      { type: "text", text: JSON.stringify(data), finishReason: "stop" },
+    ]);
+    const adapter: AnyTextAdapter = options.succeed
+      ? {
+          ...scripted,
+          async *chatStream(request) {
+            sentRequests.push(request);
+            yield* scripted.chatStream(request);
+          },
+          structuredOutput: async ({ chatOptions }) => {
+            sentRequests.push(chatOptions);
+            return { data, rawText: JSON.stringify(data) };
+          },
+        }
+      : {
+          ...createScriptedTextAdapter([]),
+          chatStream: record,
+          structuredOutput: record,
+        };
     const result = await generateWorkflowData({
       files: [file],
       properties: [property],
       filenames: buildJustificationFilenames([file]),
       textInputs,
-      linkedSkillsMessage: null,
+      linkedSkillsMessage: options.linkedSkillsMessage ?? null,
       abortSignal: new AbortController().signal,
       entityVersionId: "entity-version-1",
+      organizationId,
+      workspaceId,
+      admission: testModelAdmission(organizationId),
+      orgAIConfig: null,
+      managedAIResidency: "eu",
+      promptCachingEnabled: options.promptCachingEnabled ?? false,
+      serviceTier: "standard",
+      decisionModel: null,
+      resolveTextModel: async () => ({
+        adapter,
+        keySource: "byok",
+        modelId: "test-model",
+        provider: options.succeed ? "anthropic" : "openai",
+        modelOptions: {},
+      }),
+    });
+    return { result, sentRequests };
+  };
+
+  test("sends exactly the final static cache marker and completes the workflow result", async () => {
+    const { result, sentRequests } = await generate(
+      docxWithBlocks(["Contract terms"]),
+      [],
+      {
+        linkedSkillsMessage: "Linked skill instructions",
+        promptCachingEnabled: true,
+        succeed: true,
+      },
+    );
+    expect(result.isOk()).toBe(true);
+    if (result.isErr()) {
+      expect.unreachable("Expected completed workflow data");
+    }
+    expect(result.value.output[property.id]).toEqual({
+      answer: "English law",
+      justification: [],
+    });
+    expect(sentRequests).toHaveLength(1);
+    expect(sentRequests[0]).toHaveProperty(
+      "messages.0.content",
+      expect.arrayContaining([
+        {
+          type: "text",
+          content: "Linked skill instructions",
+          metadata: { cache_control: { type: "ephemeral", ttl: "5m" } },
+        },
+      ]),
+    );
+    // The system prompt owns a separate marker. The user content has exactly
+    // the document, final static skills part, and dynamic question part.
+    expect(sentRequests[0]).toHaveProperty("messages.0.content.length", 3);
+    expect(sentRequests[0]).not.toHaveProperty(
+      "messages.0.content.0.metadata.cache_control",
+    );
+    expect(sentRequests[0]).not.toHaveProperty(
+      "messages.0.content.2.metadata.cache_control",
+    );
+  });
+
+  test("accumulates serial chunks in property order and lets the later repeated key win", async () => {
+    const properties = Array.from({ length: 20 }, (_, index) => ({
+      ...property,
+      id: toSafeId<"property">(`chunk-property-${String(index)}`),
+    }));
+    const first = properties[0];
+    if (first === undefined) {
+      expect.unreachable("Expected a first property");
+    }
+    const requested = [...properties, first];
+    const chunks: string[][] = [];
+    const expected = new Map<string, { answer: string; justification: [] }>();
+    let active = 0;
+    let peak = 0;
+    const adapter = {
+      ...createScriptedTextAdapter([]),
+      structuredOutput: async ({ outputSchema }) => {
+        if (!isRecord(outputSchema) || !isRecord(outputSchema["properties"])) {
+          expect.unreachable("Expected an object output schema");
+        }
+        const keys = Object.keys(outputSchema["properties"]);
+        chunks.push(keys);
+        active += 1;
+        peak = Math.max(peak, active);
+        await Promise.resolve();
+        const entries = keys.map((key) => {
+          const value = {
+            answer: `Chunk ${String(chunks.length)}`,
+            justification: [],
+          } satisfies { answer: string; justification: [] };
+          expected.set(key, value);
+          return [key, value] as const;
+        });
+        active -= 1;
+        const data = Object.fromEntries(entries);
+        return { data, rawText: JSON.stringify(data) };
+      },
+    } satisfies AnyTextAdapter;
+    const result = await generateWorkflowData({
+      files: [],
+      properties: requested,
+      filenames: [],
+      textInputs: [],
+      linkedSkillsMessage: null,
+      abortSignal: new AbortController().signal,
+      entityVersionId: "entity-version-chunked",
       organizationId,
       workspaceId,
       admission: testModelAdmission(organizationId),
@@ -315,12 +444,25 @@ describe("a request over its model's budget", () => {
         adapter,
         keySource: "byok",
         modelId: "test-model",
-        provider: "openai",
+        provider: "anthropic",
         modelOptions: {},
       }),
     });
-    return { result, sentRequests };
-  };
+    expect(result.isOk()).toBe(true);
+    if (result.isErr()) {
+      expect.unreachable("Expected completed chunked output");
+    }
+    expect(chunks.length).toBeGreaterThan(1);
+    expect(peak).toBe(1);
+    expect(chunks.flat()).toEqual(requested.map(({ id }) => id));
+    expect(Object.keys(result.value.output)).toEqual(
+      properties.map(({ id }) => id),
+    );
+    expect(result.value.output).toEqual(Object.fromEntries(expected));
+    expect(result.value.output[first.id]?.answer).toBe(
+      `Chunk ${String(chunks.length)}`,
+    );
+  });
 
   test("sends the model a cut document, within the budget", async () => {
     const budget = taskBudget();
