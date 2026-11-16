@@ -106,7 +106,7 @@ export const clearSteeredQueuedMessageOnTx = async ({
  * was edited since (the edit is the member's newer word, sent at the turn's
  * end). The caller holds the thread lock and audits a removal.
  */
-export const takeSteeredQueuedMessageOnTx = async ({
+const takeSteeredQueuedMessageOnTx = async ({
   id,
   threadId,
   tx,
@@ -204,5 +204,3 @@ export const createSteeredQueue = ({
     return Result.ok(undefined);
   },
 });
-
-export type SteeredQueue = ReturnType<typeof createSteeredQueue>;
