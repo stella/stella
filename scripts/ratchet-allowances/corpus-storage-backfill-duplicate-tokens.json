@@ -1,0 +1,5 @@
+{
+  "metric": "duplicate-token-blocks",
+  "delta": 2,
+  "reason": "The storage backfill's case-law and legislation passes record their write through the same owner call (recordFirstCorpusWriteTx), with the family as the only difference; the two passes already mirrored each other line for line, and folding them into one generic pass would hide which family's compare-and-set and projection run."
+}
