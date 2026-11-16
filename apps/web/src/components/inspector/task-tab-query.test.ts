@@ -6,7 +6,7 @@ import { taskTabDetailOptions } from "@/components/inspector/task-tab-query";
 
 const countTaskRequests = async (tab: TaskTab) => {
   const queryClient = new QueryClient();
-  const { enabled, queryKey } = taskTabDetailOptions(tab);
+  const { enabled, queryKey } = taskTabDetailOptions(tab, "organization-a");
   const fetchTask = mock(async () => null);
   const observer = new QueryObserver(queryClient, {
     enabled,

@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { Result, TaggedError } from "better-result";
 
@@ -21,6 +22,7 @@ import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { createSubmitIntent } from "@/lib/idempotency/idempotent-submit.logic";
+import { updateUserResource } from "@/lib/update-user";
 import { createRandomValue } from "@/lib/uuid";
 
 import { devQuickStartRuntime } from "./dev-quick-start-runtime";
@@ -327,6 +329,7 @@ export const DevQuickStartContinuation = ({
 }) => {
   const analytics = useAnalytics();
   const invalidateSession = useInvalidateSession();
+  const queryClient = useQueryClient();
   const phase = useSyncExternalStore(
     devQuickStartRuntime.subscribe,
     devQuickStartRuntime.getPhase,
@@ -349,11 +352,13 @@ export const DevQuickStartContinuation = ({
 
     const result = await Result.tryPromise({
       try: async () => {
-        const updated = await authClient.updateUser({
-          name: "Dev Quick Start",
+        const updated = await updateUserResource({
+          queryClient,
+          input: { name: "Dev Quick Start" },
+          owner: null,
         });
-        if (updated.error) {
-          throw toAuthClientError(updated.error);
+        if (Result.isError(updated)) {
+          throw updated.error;
         }
 
         await runDevQuickStart({

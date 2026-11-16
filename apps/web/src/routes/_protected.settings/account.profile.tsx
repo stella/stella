@@ -64,7 +64,6 @@ import { sessionOptions } from "@/lib/auth-queries";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
-import { toAuthClientError } from "@/lib/errors/auth";
 import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { pageTitle } from "@/lib/page-title";
 import { queryView } from "@/lib/query-view.logic";
@@ -72,6 +71,7 @@ import { ensureRouteQueryData } from "@/lib/react-query";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
 import { TimeZonePicker } from "@/lib/time-zone-picker";
+import { createUserUpdateMutation } from "@/lib/update-user";
 import { organizationSettingsOptions } from "@/queries/organization-settings";
 import { routePresentation } from "@/routes/-route-presentation";
 import { ChatNotificationsCard } from "@/routes/_protected.settings/-components/account/chat-notifications-card";
@@ -332,12 +332,14 @@ function ProfilePageBody() {
   });
 
   const updateTimezone = useMutation({
-    mutationFn: async (timezoneId: string) => {
-      const { error } = await authClient.updateUser({ timezoneId });
-      if (error) {
-        throw toAuthClientError(error);
-      }
-    },
+    mutationFn: createUserUpdateMutation({
+      queryClient,
+      owner: {
+        userId: authenticatedUser.id,
+        organizationId: authenticatedUser.activeOrganizationId,
+      },
+      input: (timezoneId: string) => ({ timezoneId }),
+    }),
     onSuccess: async () => {
       stellaToast.add({
         title: t("settings.account.timezoneSaved"),
@@ -353,14 +355,14 @@ function ProfilePageBody() {
   });
 
   const updateDisplayName = useMutation({
-    mutationFn: async () => {
-      const { error } = await authClient.updateUser({
-        name: displayName.trim(),
-      });
-      if (error) {
-        throw toAuthClientError(error);
-      }
-    },
+    mutationFn: createUserUpdateMutation({
+      queryClient,
+      owner: {
+        userId: authenticatedUser.id,
+        organizationId: authenticatedUser.activeOrganizationId,
+      },
+      input: () => ({ name: displayName.trim() }),
+    }),
     onSuccess: async () => {
       stellaToast.add({
         title: t("settings.account.displayNameSaved"),
@@ -376,15 +378,17 @@ function ProfilePageBody() {
   });
 
   const updateWordEditIdentity = useMutation({
-    mutationFn: async () => {
-      const { error } = await authClient.updateUser({
+    mutationFn: createUserUpdateMutation({
+      queryClient,
+      owner: {
+        userId: authenticatedUser.id,
+        organizationId: authenticatedUser.activeOrganizationId,
+      },
+      input: () => ({
         preferredName: preferredName.trim(),
         wordEditShortcut: wordEditShortcut.trim(),
-      });
-      if (error) {
-        throw toAuthClientError(error);
-      }
-    },
+      }),
+    }),
     onSuccess: async () => {
       stellaToast.add({
         title: t("settings.account.wordEditIdentitySaved"),

@@ -65,11 +65,25 @@ const taskReaders = () => {
       stale: () => queryClient.getQueryState(queryKey)?.isInvalidated,
     };
   };
-  const detail = observe(taskDetailOptions(workspaceId, taskId));
-  const calendar = observe(calendarTasksOptions(calendarInput(workspaceId)));
-  const otherDetail = observe(taskDetailOptions(otherWorkspaceId, taskId));
+  const detail = observe(
+    taskDetailOptions({
+      workspaceId,
+      taskId,
+      organizationId: "organization-a",
+    }),
+  );
+  const calendar = observe(
+    calendarTasksOptions(calendarInput(workspaceId), "organization-a"),
+  );
+  const otherDetail = observe(
+    taskDetailOptions({
+      workspaceId: otherWorkspaceId,
+      taskId,
+      organizationId: "organization-a",
+    }),
+  );
   const otherCalendar = observe(
-    calendarTasksOptions(calendarInput(otherWorkspaceId)),
+    calendarTasksOptions(calendarInput(otherWorkspaceId), "organization-a"),
   );
   const invoice = observe(invoiceByIdOptions(workspaceId, "invoice-fixture"));
   return {
@@ -211,12 +225,20 @@ for (const { name, read } of [
   {
     name: "detail",
     read: async (client: QueryClient) =>
-      await client.query(taskDetailOptions(workspaceId, taskId)),
+      await client.query(
+        taskDetailOptions({
+          workspaceId,
+          taskId,
+          organizationId: "organization-a",
+        }),
+      ),
   },
   {
     name: "calendar",
     read: async (client: QueryClient) =>
-      await client.query(calendarTasksOptions(calendarInput(workspaceId))),
+      await client.query(
+        calendarTasksOptions(calendarInput(workspaceId), "organization-a"),
+      ),
   },
 ]) {
   test(`cancelling the ${name} query aborts its actual API transport`, async () => {

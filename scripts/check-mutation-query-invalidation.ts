@@ -605,14 +605,22 @@ const isValidHelperConfig = (
       value.text === "independent"
     );
   }
-  const keptCurrent = hasExactProperties(config, [
-    "resources",
-    "scope",
-    "keptCurrentBy",
-  ]);
+  const organizationReads = objectProperty(config, "organizationReads");
+  const keptCurrent = objectProperty(config, "keptCurrentBy");
+  const fields = ["resources", "scope"];
+  if (keptCurrent) {
+    fields.push("keptCurrentBy");
+  }
+  if (organizationReads) {
+    fields.push("organizationReads");
+  }
   return (
-    (hasExactProperties(config, ["resources", "scope"]) ||
-      (keptCurrent && keptCurrentByNames(config) !== undefined)) &&
+    hasExactProperties(config, fields) &&
+    (!keptCurrent || keptCurrentByNames(config) !== undefined) &&
+    (!organizationReads ||
+      (hasExactProperties(organizationReads, ["organizationId", "resources"]) &&
+        objectProperty(organizationReads, "organizationId") !== undefined &&
+        isValidResourceList(module, organizationReads, names))) &&
     isValidResourceList(module, config, names) &&
     isValidScopeObject(objectProperty(config, "scope"))
   );
@@ -769,19 +777,20 @@ const mutationContractError = ({
   }
   const scope = objectProperty(options, "scope");
   if (scope !== undefined) {
-    const scopeValue = unwrap(scope);
-    const scopeType =
-      ts.isObjectLiteralExpression(scopeValue) &&
-      hasExactProperties(scopeValue, ["type"])
-        ? objectProperty(scopeValue, "type")
-        : undefined;
-    const scopeTypeValue = scopeType ? unwrap(scopeType) : undefined;
-    if (
-      !scopeTypeValue ||
-      !ts.isStringLiteral(scopeTypeValue) ||
-      !["workspace", "organization"].includes(scopeTypeValue.text)
-    ) {
-      return "resourceMutation scope must be a closed workspace or organization scope literal.";
+    const type = objectProperty(scope, "type");
+    const scopeType = type && unwrap(type);
+    const primary =
+      scopeType &&
+      ts.isStringLiteral(scopeType) &&
+      ["workspace", "organization"].includes(scopeType.text) &&
+      hasExactProperties(scope, ["type"]);
+    const projection =
+      scopeType &&
+      ts.isStringLiteral(scopeType) &&
+      scopeType.text === "organization-projection" &&
+      hasExactProperties(scope, ["type", "userId", "organizationId"]);
+    if (!primary && !projection) {
+      return "resourceMutation scope must name a closed primary scope or explicit organization projection identity.";
     }
   }
   const mutation = objectProperty(options, "mutation");
@@ -1153,42 +1162,148 @@ const boundMutationCall = (
     : undefined;
 };
 
+const isPureMutationFactoryValue = (expression: ts.Expression): boolean => {
+  const value = unwrap(expression);
+  if (
+    ts.isIdentifier(value) ||
+    ts.isLiteralExpression(value) ||
+    [
+      ts.SyntaxKind.NullKeyword,
+      ts.SyntaxKind.TrueKeyword,
+      ts.SyntaxKind.FalseKeyword,
+    ].includes(value.kind)
+  ) {
+    return true;
+  }
+  if (ts.isPropertyAccessExpression(value)) {
+    return isPureMutationFactoryValue(value.expression);
+  }
+  if (
+    ts.isBinaryExpression(value) &&
+    [
+      ts.SyntaxKind.QuestionQuestionToken,
+      ts.SyntaxKind.EqualsEqualsEqualsToken,
+      ts.SyntaxKind.ExclamationEqualsEqualsToken,
+    ].includes(value.operatorToken.kind)
+  ) {
+    return (
+      isPureMutationFactoryValue(value.left) &&
+      isPureMutationFactoryValue(value.right)
+    );
+  }
+  if (ts.isConditionalExpression(value)) {
+    return (
+      isPureMutationFactoryValue(value.condition) &&
+      isPureMutationFactoryValue(value.whenTrue) &&
+      isPureMutationFactoryValue(value.whenFalse)
+    );
+  }
+  return (
+    ts.isObjectLiteralExpression(value) &&
+    value.properties.every((property) =>
+      ts.isShorthandPropertyAssignment(property)
+        ? property.objectAssignmentInitializer === undefined
+        : ts.isPropertyAssignment(property) &&
+          !ts.isComputedPropertyName(property.name) &&
+          (ts.isArrowFunction(unwrap(property.initializer)) ||
+            isPureMutationFactoryValue(property.initializer)),
+    )
+  );
+};
+
+/** Imported factories qualify only when evaluating them directly returns the
+ * canonical owner, without eager work or an opaque returned function. */
 const resolvedMutationHelper = (
   module: ModuleIndex,
   expression: ts.Expression,
+  modules: ReadonlyMap<string, ModuleIndex>,
 ): ts.CallExpression | undefined => {
   const resolved = resolveLocal(module, expression, expression);
   if (!resolved) {
     return undefined;
   }
-  if (
-    ts.isCallExpression(resolved) &&
-    canonicalCall(module, resolved, MUTATION_HELPER)
-  ) {
+  if (!ts.isCallExpression(resolved)) {
+    const invocation = boundMutationCall(resolved);
+    const owner =
+      invocation && resolveLocal(module, invocation.expression, invocation);
+    return owner &&
+      ts.isCallExpression(owner) &&
+      canonicalCall(module, owner, MUTATION_HELPER)
+      ? owner
+      : undefined;
+  }
+  if (canonicalCall(module, resolved, MUTATION_HELPER)) {
     return resolved;
   }
-  const invocation = boundMutationCall(resolved);
+  if (!resolved.arguments.every(isPureMutationFactoryValue)) {
+    return undefined;
+  }
+  const target = factoryFunction({
+    module,
+    expression: resolved.expression,
+    reference: resolved,
+    modules,
+    seen: new Set(),
+  });
+  if (
+    !target ||
+    target.functionLike.asteriskToken ||
+    target.functionLike.modifiers?.some(
+      (modifier) => modifier.kind === ts.SyntaxKind.AsyncKeyword,
+    )
+  ) {
+    return undefined;
+  }
+  const hasParameterDefault = (node: ts.Node): boolean =>
+    ((ts.isParameter(node) || ts.isBindingElement(node)) &&
+      (node.initializer !== undefined || node.dotDotDotToken !== undefined)) ||
+    ts.forEachChild(node, hasParameterDefault) === true;
+  if (target.functionLike.parameters.some(hasParameterDefault)) {
+    return undefined;
+  }
+  const body = target.functionLike.body;
+  const statement =
+    body && ts.isBlock(body) && body.statements.length === 1
+      ? body.statements[0]
+      : undefined;
+  const returned = body && ts.isBlock(body) ? undefined : body;
+  const returnExpression =
+    statement && ts.isReturnStatement(statement)
+      ? statement.expression
+      : returned;
   const owner =
-    invocation && resolveLocal(module, invocation.expression, invocation);
-  return owner &&
-    ts.isCallExpression(owner) &&
-    canonicalCall(module, owner, MUTATION_HELPER)
-    ? owner
-    : undefined;
+    returnExpression && ts.isExpression(returnExpression)
+      ? unwrap(returnExpression)
+      : undefined;
+  if (
+    !owner ||
+    !ts.isCallExpression(owner) ||
+    !canonicalCall(target.module, owner, MUTATION_HELPER)
+  ) {
+    return undefined;
+  }
+  const options = owner.arguments.at(0);
+  return options && isPureMutationFactoryValue(options) ? owner : undefined;
 };
 
-const isTaggedMutationSpread = (
-  module: ModuleIndex,
-  expression: ts.Expression,
-  reference: ts.Node,
-) => {
+const isTaggedMutationSpread = ({
+  module,
+  expression,
+  reference,
+  modules,
+}: {
+  module: ModuleIndex;
+  expression: ts.Expression;
+  reference: ts.Node;
+  modules: ReadonlyMap<string, ModuleIndex>;
+}) => {
   const shape = mutationOptionsShape({ module, expression, reference });
   const mutationFunctions =
     shape?.properties.filter(([key]) => key === "mutationFn") ?? [];
   const finalMutationFunction = mutationFunctions.at(-1)?.[1];
   return (
     finalMutationFunction !== undefined &&
-    resolvedMutationHelper(module, finalMutationFunction) !== undefined
+    resolvedMutationHelper(module, finalMutationFunction, modules) !== undefined
   );
 };
 
@@ -1199,6 +1314,7 @@ type MutationExecutionResult =
 
 type MutationExecutionArgs = {
   module: ModuleIndex;
+  modules: ReadonlyMap<string, ModuleIndex>;
   call: ts.CallExpression;
   entry: MutationQueryCensus["mutations"][number];
   contracts: ReadonlyMap<string, MutationContract>;
@@ -1206,6 +1322,7 @@ type MutationExecutionArgs = {
 
 const inspectMutationExecution = ({
   module,
+  modules,
   call,
   entry,
   contracts,
@@ -1218,7 +1335,12 @@ const inspectMutationExecution = ({
         reference: call,
         allowedOverrides: MUTATION_SPREAD_OVERRIDES,
         isTaggedSpread: (spread, reference) =>
-          isTaggedMutationSpread(module, spread, reference),
+          isTaggedMutationSpread({
+            module,
+            expression: spread,
+            reference,
+            modules,
+          }),
       })
     : "unresolved";
   if (spreadValidation === "invalid") {
@@ -1236,7 +1358,7 @@ const inspectMutationExecution = ({
   const finalMutationFunction = orderedMutationFunctions.at(-1)?.[1];
   const helperCalls = new Set<ts.CallExpression>();
   for (const [, expression] of orderedMutationFunctions) {
-    const helper = resolvedMutationHelper(module, expression);
+    const helper = resolvedMutationHelper(module, expression, modules);
     if (helper) {
       helperCalls.add(helper);
     }
@@ -1252,7 +1374,7 @@ const inspectMutationExecution = ({
   };
   visit(call);
   const selectedHelper = finalMutationFunction
-    ? resolvedMutationHelper(module, finalMutationFunction)
+    ? resolvedMutationHelper(module, finalMutationFunction, modules)
     : undefined;
   if (selectedHelper) {
     helperCalls.add(selectedHelper);
@@ -2122,6 +2244,7 @@ export const inspectMutationQueryInvalidation = (
     }
     const execution = inspectMutationExecution({
       module,
+      modules: indexed,
       call,
       entry,
       contracts,

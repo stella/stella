@@ -2,9 +2,8 @@ import type { HotkeyChord } from "@tanstack/react-hotkeys";
 import { useQueryClient } from "@tanstack/react-query";
 import { Result, TaggedError } from "better-result";
 
-import { authClient } from "@/lib/auth-client";
 import { sessionOptions } from "@/lib/auth-queries";
-import { toAuthClientError } from "@/lib/errors/auth";
+import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { SHORTCUT_GROUPS } from "@/lib/hotkeys";
 import type { ShortcutGroup, ShortcutId } from "@/lib/hotkeys";
 import {
@@ -14,6 +13,7 @@ import {
   validateRebind,
 } from "@/lib/shortcut-overrides";
 import type { RebindError, ShortcutOverrides } from "@/lib/shortcut-overrides";
+import { updateUserResource } from "@/lib/update-user";
 import { useShortcutOverrides } from "@/lib/use-effective-shortcuts";
 
 class ShortcutPersistError extends TaggedError("ShortcutPersistError")<{
@@ -40,6 +40,7 @@ export type ShortcutRebinding = {
  */
 export const useShortcutRebinding = (): ShortcutRebinding => {
   const queryClient = useQueryClient();
+  const user = useMaybeAuthenticatedUser();
   const overrides = useShortcutOverrides();
   const groups = applyOverridesToGroups(SHORTCUT_GROUPS, overrides);
 
@@ -50,15 +51,22 @@ export const useShortcutRebinding = (): ShortcutRebinding => {
         ? { ...previous, user: { ...previous.user, userShortcuts: serialized } }
         : previous,
     );
-    const result = await authClient.updateUser({ userShortcuts: serialized });
-    if (result.error) {
+    const result = await updateUserResource({
+      queryClient,
+      input: { userShortcuts: serialized },
+      owner:
+        user === null
+          ? null
+          : { userId: user.id, organizationId: user.activeOrganizationId },
+    });
+    if (Result.isError(result)) {
       // Optimistic write diverged from the server; re-sync from source.
       await queryClient.invalidateQueries({
         queryKey: sessionOptions.queryKey,
       });
       throw new ShortcutPersistError({
         message: "Failed to persist keyboard shortcuts",
-        cause: toAuthClientError(result.error),
+        cause: result.error,
       });
     }
   };

@@ -18,10 +18,10 @@ import {
 import { Field, FieldLabel } from "@stll/ui/field";
 import { Input } from "@stll/ui/input";
 
-import { authClient } from "@/lib/auth-client";
 import { sessionOptions } from "@/lib/auth-queries";
-import { toAuthClientError } from "@/lib/errors/auth";
+import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { createUserUpdateMutation } from "@/lib/update-user";
 
 const PREFERRED_NAME_MAX_LENGTH = 120;
 
@@ -48,18 +48,19 @@ export const AuthorNameRequiredDialog = ({
 }: AuthorNameRequiredDialogProps) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
+  const user = useMaybeAuthenticatedUser();
   const [preferredName, setPreferredName] = useState("");
   const trimmedName = preferredName.trim();
 
   const { mutate, isPending } = useMutation({
-    mutationFn: async () => {
-      const { error } = await authClient.updateUser({
-        preferredName: trimmedName,
-      });
-      if (error) {
-        throw toAuthClientError(error);
-      }
-    },
+    mutationFn: createUserUpdateMutation({
+      queryClient,
+      owner:
+        user === null
+          ? null
+          : { userId: user.id, organizationId: user.activeOrganizationId },
+      input: () => ({ preferredName: trimmedName }),
+    }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: sessionOptions.queryKey,

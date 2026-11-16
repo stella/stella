@@ -4,7 +4,7 @@ import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import { detached } from "@/lib/detached";
 
 export type RealtimeRefreshScheduler = {
-  refresh: (queryKey: QueryKey, prepare?: () => void) => void;
+  refresh: (queryKey: QueryKey, prepare?: () => void, match?: "exact") => void;
   invalidateImmediately: (queryKey: QueryKey) => Promise<void>;
 };
 
@@ -17,40 +17,55 @@ export const createRealtimeRefreshScheduler = (
 ): RealtimeRefreshScheduler => {
   const pending = new Map<
     string,
-    { queryKey: QueryKey; prepare: (() => void) | undefined }
+    {
+      queryKey: QueryKey;
+      prepare: (() => void) | undefined;
+      match: "exact" | undefined;
+    }
   >();
   const queryCache = queryClient.getQueryCache();
 
-  const isFetching = (queryKey: QueryKey) =>
+  const isFetching = (queryKey: QueryKey, match?: "exact") =>
     queryCache
-      .findAll({ queryKey })
+      .findAll({ queryKey, exact: match === "exact" })
       .some(({ state }) => state.fetchStatus === "fetching");
 
-  const startRefresh = (queryKey: QueryKey, prepare?: () => void) => {
+  const startRefresh = (
+    queryKey: QueryKey,
+    prepare?: () => void,
+    match?: "exact",
+  ) => {
     prepare?.();
     detached(
-      queryClient.invalidateQueries({ queryKey }, { cancelRefetch: false }),
+      queryClient.invalidateQueries(
+        { queryKey, exact: match === "exact" },
+        { cancelRefetch: false },
+      ),
       "realtime-refresh.invalidate",
     );
   };
 
   queryCache.subscribe(() => {
-    for (const [keyHash, { queryKey, prepare }] of pending) {
-      if (isFetching(queryKey)) {
+    for (const [keyHash, { queryKey, prepare, match }] of pending) {
+      if (isFetching(queryKey, match)) {
         continue;
       }
       pending.delete(keyHash);
-      startRefresh(queryKey, prepare);
+      startRefresh(queryKey, prepare, match);
     }
   });
 
   return {
-    refresh: (queryKey, prepare) => {
-      if (isFetching(queryKey)) {
-        pending.set(hashKey(queryKey), { queryKey, prepare });
+    refresh: (queryKey, prepare, match) => {
+      if (isFetching(queryKey, match)) {
+        pending.set(`${match ?? "prefix"}:${hashKey(queryKey)}`, {
+          queryKey,
+          prepare,
+          match,
+        });
         return;
       }
-      startRefresh(queryKey, prepare);
+      startRefresh(queryKey, prepare, match);
     },
     invalidateImmediately: async (queryKey) =>
       await queryClient.invalidateQueries({ queryKey }),

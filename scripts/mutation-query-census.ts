@@ -854,7 +854,8 @@ class CensusAnalyzer {
         if (
           type &&
           ts.isStringLiteral(type) &&
-          type.text === "auth-plugin-endpoint" &&
+          (type.text === "auth-plugin-endpoint" ||
+            type.text === "auth-core-endpoint") &&
           method &&
           ts.isStringLiteral(method) &&
           route &&

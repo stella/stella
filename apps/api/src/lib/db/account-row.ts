@@ -54,7 +54,7 @@ export const readAccountProfileForExport = async (
   return rows.at(0);
 };
 
-const ACCOUNT_MEMBERSHIP_PAGE_SIZE = 100;
+export const ACCOUNT_MEMBERSHIP_PAGE_SIZE = 100;
 
 type ListAccountMembershipPageOptions = {
   database: Pick<typeof rootDb, "select">;

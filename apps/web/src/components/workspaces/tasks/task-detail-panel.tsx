@@ -122,14 +122,17 @@ const TaskDetailPanelContent = ({
   const handleClose = () => closeTab(taskId);
   const queryClient = useQueryClient();
   const analytics = useAnalytics();
-  const userId = useAuthenticatedUser().id;
+  const { id: userId, activeOrganizationId } = useAuthenticatedUser();
 
   const {
     data: task,
     error: taskError,
     isLoading,
   } = useQuery(
-    taskTabDetailOptions({ creationStatus, id: taskId, workspaceId }),
+    taskTabDetailOptions(
+      { creationStatus, id: taskId, workspaceId },
+      activeOrganizationId,
+    ),
   );
 
   useExternalSyncEffect(() => {
@@ -388,7 +391,11 @@ const TaskDetailPanelContent = ({
     }
     const previous = isTaskStatus(task?.status) ? task.status : "open";
     const previousKnown = !updateMutation.isPending;
-    const { queryKey } = taskDetailOptions(workspaceId, taskId);
+    const { queryKey } = taskDetailOptions({
+      workspaceId,
+      taskId,
+      organizationId: activeOrganizationId,
+    });
     // The returned promise, not a per-call `onSuccess`: that one is dropped
     // when the panel closes or another edit starts, and the toast with it. A
     // failure is reported by the mutation's own `onError`.

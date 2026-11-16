@@ -4,15 +4,15 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 import { panic, Result } from "better-result";
 
-import { authClient } from "@/lib/auth-client";
 import { sessionOptions } from "@/lib/auth-queries";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { toAuthClientError } from "@/lib/errors/auth";
 import { queryView, queryViewError } from "@/lib/query-view.logic";
+import { updateUserResource } from "@/lib/update-user";
 
 type PersistReaderAnswerLanguageInput = {
   queryClient: QueryClient;
   ownerId: string;
+  organizationId: string;
   language: string;
   documentLanguage: string | undefined;
 };
@@ -20,14 +20,17 @@ type PersistReaderAnswerLanguageInput = {
 const persistReaderAnswerLanguage = async ({
   queryClient,
   ownerId,
+  organizationId,
   language,
   documentLanguage,
 }: PersistReaderAnswerLanguageInput) => {
-  const { error } = await authClient.updateUser({
-    readerAnswerLanguage: language,
+  const updated = await updateUserResource({
+    queryClient,
+    input: { readerAnswerLanguage: language },
+    owner: { userId: ownerId, organizationId },
   });
-  if (error) {
-    return Result.err(toAuthClientError(error));
+  if (Result.isError(updated)) {
+    return Result.err(updated.error);
   }
   const currentSession = queryClient.getQueryData(sessionOptions.queryKey);
   if (currentSession?.user.id !== ownerId) {
@@ -79,6 +82,7 @@ export const useReaderAnswerLanguage = (
     return persistReaderAnswerLanguage({
       queryClient,
       ownerId: user.id,
+      organizationId: user.activeOrganizationId,
       language,
       documentLanguage,
     }).finally(() => {
