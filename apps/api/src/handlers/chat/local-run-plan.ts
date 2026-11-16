@@ -5,6 +5,7 @@ import {
   CHAT_RUN_TARGET_KIND,
   type ChatRunTarget,
   isApprovalModeWithin,
+  isChatLocalRunHarness,
 } from "@stll/api-contract/chat-run-target";
 import {
   DESKTOP_RUNNER_FEATURE_ID,
@@ -21,7 +22,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { DesktopRunnerControl } from "@/api/lib/desktop-runner/control";
 import type { DesktopRunnerRunBell } from "@/api/lib/desktop-runner/doorbell";
 import { getDesktopRunnerControl } from "@/api/lib/desktop-runner/runtime";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  type DatabaseError,
+  HandlerError,
+} from "@/api/lib/errors/tagged-errors";
 import {
   type FeatureAccessSnapshot,
   isFeatureEnabled,
@@ -155,4 +159,74 @@ export const resolveChatLocalRun = async ({
   return Result.ok(
     createLocalChatRun(context, { type: "start", target: runTarget }),
   );
+};
+
+/** The run a handed-over turn reads on, or why the adopter cannot read it. */
+export type AdoptedChatLocalRun =
+  | { type: "adopted"; run: LocalChatRun }
+  /** The turn has no chat run on a computer for this member. */
+  | { type: "no-run" }
+  /** The member may no longer run turns on a computer. */
+  | { type: "unavailable" };
+
+/**
+ * The run of a handed-over turn, read on by the task that adopted it: the
+ * member may still run turns on a computer (a member who lost that is
+ * refused, and the turn ends at its lease), and the run goes on with the
+ * matters the thread reaches now. The approval ceiling was held when the run
+ * started, as for a resumed run.
+ */
+export const adoptChatLocalRun = async ({
+  chatThreadId,
+  chatTurnId,
+  featureAccessSnapshot,
+  organizationId,
+  runtime = getDesktopRunnerControl(),
+  userId,
+  workspaceIds,
+}: Pick<
+  ResolveChatLocalRunOptions,
+  | "chatThreadId"
+  | "featureAccessSnapshot"
+  | "organizationId"
+  | "runtime"
+  | "userId"
+  | "workspaceIds"
+> & {
+  chatTurnId: SafeId<"chatTurn">;
+}): Promise<Result<AdoptedChatLocalRun, DatabaseError>> => {
+  if (
+    !isFeatureEnabled(featureAccessSnapshot, DESKTOP_RUNNER_FEATURE_ID, {
+      organizationId,
+      userId,
+    })
+  ) {
+    return Result.ok({ type: "unavailable" });
+  }
+  const owner = { userId, organizationId };
+  const found = await runtime.control.readHandedOverChatRun({
+    owner,
+    chat: { threadId: chatThreadId, turnId: chatTurnId },
+  });
+  if (found.isErr()) {
+    return Result.err(found.error);
+  }
+  const run = found.value;
+  if (run === null || !isChatLocalRunHarness(run.harness)) {
+    return Result.ok({ type: "no-run" });
+  }
+  return Result.ok({
+    type: "adopted",
+    run: createLocalChatRun(
+      {
+        control: runtime.control,
+        runBell: runtime.runBell,
+        owner,
+        chatThreadId,
+        workspaceIds,
+        mcp: { serverName: MCP_SERVER_NAME, url: getMcpResourceUrl() },
+      },
+      { type: "adopt", harness: run.harness },
+    ),
+  });
 };
