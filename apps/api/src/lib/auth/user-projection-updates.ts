@@ -4,7 +4,7 @@ import { RESOURCE_TYPE } from "@stll/api-contract";
 
 import {
   ACCOUNT_MEMBERSHIP_PAGE_SIZE,
-  listAccountMembershipPage,
+  readAccountMembershipPage,
 } from "@/api/lib/db/account-row";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -21,9 +21,7 @@ const USER_PROJECTION_NOTIFICATION_FAILED = failureSink({
 });
 
 type UserProjectionUpdateOptions = {
-  readMembershipPage?: (
-    options: Omit<Parameters<typeof listAccountMembershipPage>[0], "database">,
-  ) => ReturnType<typeof listAccountMembershipPage>;
+  readMembershipPage?: typeof readAccountMembershipPage;
   publish?: typeof broadcastOrganizationResourceSetUpdated;
   observe?: typeof observeFailure;
 };
@@ -32,7 +30,7 @@ type UserProjectionUpdateOptions = {
  * row belongs to every actual membership, not only the request's active firm. */
 export const createUserProjectionUpdateHook =
   ({
-    readMembershipPage = listAccountMembershipPage,
+    readMembershipPage = readAccountMembershipPage,
     publish = broadcastOrganizationResourceSetUpdated,
     observe = observeFailure,
   }: UserProjectionUpdateOptions = {}) =>

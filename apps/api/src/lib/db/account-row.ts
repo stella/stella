@@ -1,4 +1,5 @@
 import { and, asc, eq, gt, inArray, isNull, ne, or, sql } from "drizzle-orm";
+import type { PgSelect } from "drizzle-orm/pg-core";
 import * as v from "valibot";
 
 import { account, member, user } from "@/api/db/auth-schema";
@@ -56,26 +57,23 @@ export const readAccountProfileForExport = async (
 
 export const ACCOUNT_MEMBERSHIP_PAGE_SIZE = 100;
 
-type ListAccountMembershipPageOptions = {
-  database?: Pick<typeof rootDb, "select">;
+const ACCOUNT_MEMBERSHIP_PROJECTION = {
+  id: member.id,
+  organizationId: member.organizationId,
+  role: member.role,
+  createdAt: member.createdAt,
+};
+
+type AccountMembershipPageOptions = {
   userId: SafeId<"user">;
   after?: string;
 };
 
-/** Reads this account's memberships in bounded organization/id order. */
-export const listAccountMembershipPage = async ({
-  database = rootDb,
-  userId,
-  after,
-}: ListAccountMembershipPageOptions) =>
-  await database
-    .select({
-      id: member.id,
-      organizationId: member.organizationId,
-      role: member.role,
-      createdAt: member.createdAt,
-    })
-    .from(member)
+const accountMembershipPageQuery = <T extends PgSelect>(
+  query: T,
+  { userId, after }: AccountMembershipPageOptions,
+) =>
+  query
     .where(
       and(
         eq(member.userId, userId),
@@ -84,6 +82,29 @@ export const listAccountMembershipPage = async ({
     )
     .orderBy(asc(member.id))
     .limit(ACCOUNT_MEMBERSHIP_PAGE_SIZE);
+
+type ListAccountMembershipPageOptions = AccountMembershipPageOptions & {
+  database: Pick<typeof rootDb, "select">;
+};
+
+/** Reads this account's memberships on the caller's required connection. */
+export const listAccountMembershipPage = async ({
+  database,
+  ...scope
+}: ListAccountMembershipPageOptions) =>
+  await accountMembershipPageQuery(
+    database.select(ACCOUNT_MEMBERSHIP_PROJECTION).from(member).$dynamic(),
+    scope,
+  );
+
+/** Committed account updates fan out to the account's actual memberships. */
+export const readAccountMembershipPage = async (
+  scope: AccountMembershipPageOptions,
+) =>
+  await accountMembershipPageQuery(
+    rootDb.select(ACCOUNT_MEMBERSHIP_PROJECTION).from(member).$dynamic(),
+    scope,
+  );
 
 /** The caller's own email and two-factor enrollment, by their user id. */
 export const readAccountEmailAndTwoFactor = async (
