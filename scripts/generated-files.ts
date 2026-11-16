@@ -2051,6 +2051,7 @@ const GENERATOR_DECLARATIONS = [
       "bunfig.toml",
       "scripts/package-api-compatibility.ts",
       "scripts/package-api-signature-comparison.ts",
+      "scripts/package-api-arity.ts",
       "scripts/package-api-export-space.ts",
       "scripts/publish-packages.ts",
     ],

@@ -108,6 +108,13 @@ const settings = {
 const clients: InstanceType<typeof QueryClient>[] = [];
 const spies: { mockRestore: () => void }[] = [];
 const requests: Request[] = [];
+/** The item-source create body; the assertions read these fields as-is. */
+type SourceRequestBody = {
+  sourceEntityId: unknown;
+  sourceEntityVersionId: unknown;
+  locator: unknown;
+  quote: unknown;
+};
 type MountActionOptions = {
   locale?: string;
   messages?: typeof english;
@@ -245,7 +252,7 @@ const answer = (status = 200) => {
       request.method === "POST" &&
       path === `/v1/lists/${workspaceId}/item-sources`
     ) {
-      const body = await request.clone().json();
+      const body: SourceRequestBody = await request.clone().json();
       if (status !== 200) {
         return Response.json({ message: "Not found" }, { status });
       }
@@ -503,7 +510,7 @@ test("correcting a page validation error allows saving without reopening the for
   });
   await save(mounted);
   await waitFor(() => expect(mounted.created).toHaveLength(1));
-  const body = await requests
+  const body: SourceRequestBody = await requests
     .find((request) => request.method === "POST")
     ?.json();
   expect(body.locator).toEqual({ type: "pdf-page", pageNumber: 1 });
@@ -523,7 +530,7 @@ test("choosing DOCX replaces PDF, clears its page, and accepts a quote at the li
   });
   await save(mounted);
   await waitFor(() => expect(mounted.created).toHaveLength(1));
-  const body = await requests
+  const body: SourceRequestBody = await requests
     .find((request) => request.method === "POST")
     ?.json();
   expect(body.locator).toEqual({ type: "document" });
@@ -537,7 +544,7 @@ test("an optional page and quote can both be omitted", async () => {
   await pickDocument(mounted, "Signed", "Signed agreement");
   await save(mounted);
   await waitFor(() => expect(mounted.created).toHaveLength(1));
-  const body = await requests
+  const body: SourceRequestBody = await requests
     .find((request) => request.method === "POST")
     ?.json();
   expect(body.locator).toEqual({ type: "document" });
@@ -705,8 +712,8 @@ test("ambiguous source retries retain each intent's key and document version", a
   expect(changed.headers.get("Idempotency-Key")).toBeTruthy();
   expect(changed.headers.get("Idempotency-Key")).not.toBe(firstKey);
   expect(replay.headers.get("Idempotency-Key")).toBe(firstKey);
-  const firstBody = await first.clone().json();
-  expect(firstBody.sourceEntityVersionId).toBe(versionId);
+  const firstBody: unknown = await first.clone().json();
+  expect(firstBody).toMatchObject({ sourceEntityVersionId: versionId });
   expect(await replay.clone().json()).toEqual(firstBody);
   expect(await changed.clone().json()).toMatchObject({
     quote: "Different intent",

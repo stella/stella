@@ -11,8 +11,10 @@ import { repoRelativePath } from "@stll/portable-path";
 
 import { parseChangesetEntry, parseChangesetReleases } from "./changeset-entry";
 import { assertOfflineCheckPreload } from "./offline-check-startup";
+import { createCallArityComparison } from "./package-api-arity";
 import {
   genericTypeProbe,
+  hasTypeScriptFlag,
   isGenericTypeDeclaration,
   isGenericTypeProbeName,
   normalizeCompatibilityDeclarations,
@@ -106,14 +108,8 @@ const compilerHost = (): ts.CompilerHost => {
   return host;
 };
 
-// TypeScript exposes symbol categories and modifiers as bitmasks; this is the
-// one place that reads them.
-const hasFlag = (flags: number, flag: number): boolean =>
-  // oxlint-disable-next-line no-bitwise -- TypeScript exposes symbol categories and modifiers as bitmasks.
-  (flags & flag) !== 0;
-
 const hasSymbolFlag = (symbol: ts.Symbol, flag: ts.SymbolFlags): boolean =>
-  hasFlag(symbol.flags, flag);
+  hasTypeScriptFlag(symbol.flags, flag);
 
 const symbolKind = (symbol: ts.Symbol): string => {
   const kinds = [
@@ -590,7 +586,7 @@ export const generateApiReport = (packageDir: string): ApiReport => {
 const hasModifierFlag = (
   declaration: ts.Declaration,
   flag: ts.ModifierFlags,
-): boolean => hasFlag(ts.getCombinedModifierFlags(declaration), flag);
+): boolean => hasTypeScriptFlag(ts.getCombinedModifierFlags(declaration), flag);
 
 const isNonPublicMember = (member: ts.Symbol): boolean =>
   member.name.startsWith("#") ||
@@ -614,6 +610,7 @@ const isReadonlyMember = (member: ts.Symbol): boolean => {
 
 type NarrowingComparison = {
   checker: ts.TypeChecker;
+  callArity: ReturnType<typeof createCallArityComparison>;
   /** Old and new type pairs already compared, so recursive types end. */
   compared: Map<ts.Type, Set<ts.Type>>;
   /** How many types deep below the exported symbol this comparison is. */
@@ -679,6 +676,7 @@ const narrowedTypeMembers = (
       `${label}.${member.name}`,
     );
   });
+  breaks.push(...comparison.callArity(oldType, nextType, label));
   for (const [kind, prefix] of signatureKinds) {
     const oldSignatures = checker.getSignaturesOfType(oldType, kind);
     const nextSignatures = checker.getSignaturesOfType(nextType, kind);
@@ -745,8 +743,8 @@ const nestedNarrowing = (
   label: string,
 ): string[] =>
   comparison.depth < MAX_NESTED_DEPTH &&
-  hasFlag(oldType.flags, ts.TypeFlags.Object) &&
-  hasFlag(nextType.flags, ts.TypeFlags.Object) &&
+  hasTypeScriptFlag(oldType.flags, ts.TypeFlags.Object) &&
+  hasTypeScriptFlag(nextType.flags, ts.TypeFlags.Object) &&
   isPackageDeclaredType(oldType) &&
   isPackageDeclaredType(nextType)
     ? narrowedTypeMembers(
@@ -757,14 +755,23 @@ const nestedNarrowing = (
       )
     : [];
 
-const narrowedMembers = (
-  checker: ts.TypeChecker,
-  oldType: ts.Type,
-  nextType: ts.Type,
-  label: string,
-): string[] =>
+type NarrowedMembersOptions = {
+  checker: ts.TypeChecker;
+  oldType: ts.Type;
+  nextType: ts.Type;
+  label: string;
+  callArity: ReturnType<typeof createCallArityComparison>;
+};
+
+const narrowedMembers = ({
+  checker,
+  oldType,
+  nextType,
+  label,
+  callArity,
+}: NarrowedMembersOptions): string[] =>
   narrowedTypeMembers(
-    { checker, compared: new Map(), depth: 0 },
+    { checker, callArity, compared: new Map(), depth: 0 },
     oldType,
     nextType,
     label,
@@ -846,15 +853,20 @@ const genericTypeComparison = ({
   return { count, probe: checker.getTypeFromTypeNode(probe), defaults };
 };
 
+type TypeSignatureComparisonOptions = Pick<
+  SignatureComparisonOptions,
+  "checker" | "old" | "next" | "label"
+> & {
+  callArity: ReturnType<typeof createCallArityComparison>;
+};
+
 const incompatibleTypeSignatures = ({
   checker,
   old,
   next,
   label,
-}: Pick<
-  SignatureComparisonOptions,
-  "checker" | "old" | "next" | "label"
->): string[] => {
+  callArity,
+}: TypeSignatureComparisonOptions): string[] => {
   const oldType = checker.getDeclaredTypeOfSymbol(old);
   const nextType = checker.getDeclaredTypeOfSymbol(next);
   const oldGeneric = genericTypeComparison({ checker, symbol: old, label });
@@ -869,7 +881,13 @@ const incompatibleTypeSignatures = ({
   ) {
     return [`${label}: incompatible type signature`];
   }
-  const breaks = narrowedMembers(checker, oldType, nextType, label);
+  const breaks = narrowedMembers({
+    checker,
+    oldType,
+    nextType,
+    label,
+    callArity,
+  });
   if (oldGeneric !== undefined && nextGeneric !== undefined) {
     for (const [provided, oldDefault] of oldGeneric.defaults) {
       const nextDefault = nextGeneric.defaults.get(provided);
@@ -883,12 +901,13 @@ const incompatibleTypeSignatures = ({
         );
       } else {
         breaks.push(
-          ...narrowedMembers(
+          ...narrowedMembers({
             checker,
-            oldDefault,
-            nextDefault,
-            `${label}<${provided} arguments>`,
-          ),
+            oldType: oldDefault,
+            nextType: nextDefault,
+            label: `${label}<${provided} arguments>`,
+            callArity,
+          }),
         );
       }
     }
@@ -910,6 +929,14 @@ const incompatibleSymbolSignatures = ({
   if (location === undefined || oldLocation === undefined) {
     return fail(`${label}: cannot resolve exported declaration`);
   }
+  const accepts = createSignatureInputComparison({
+    checker,
+    files,
+    openProgram,
+    oldLocation,
+    nextLocation: location,
+  });
+  const callArity = createCallArityComparison({ checker, accepts });
   if (hasSymbolFlag(old, ts.SymbolFlags.Value)) {
     const oldType = checker.getTypeOfSymbolAtLocation(old, oldLocation);
     const nextType = checker.getTypeOfSymbolAtLocation(next, location);
@@ -938,13 +965,6 @@ const incompatibleSymbolSignatures = ({
         // The value probe aligns the class's type parameters while preserving
         // its constructors, static members and prototype. Construct signatures
         // are bivariant, so also compare their input contracts as callables.
-        const accepts = createSignatureInputComparison({
-          checker,
-          files,
-          openProgram,
-          oldLocation,
-          nextLocation: location,
-        });
         const nextConstructors = checker.getSignaturesOfType(
           nextType,
           ts.SignatureKind.Construct,
@@ -967,12 +987,16 @@ const incompatibleSymbolSignatures = ({
         !hasSymbolFlag(old, ts.SymbolFlags.Module) ||
         hasSymbolFlag(old, ts.SymbolFlags.Class)
       ) {
-        breaks.push(...narrowedMembers(checker, oldType, nextType, label));
+        breaks.push(
+          ...narrowedMembers({ checker, oldType, nextType, label, callArity }),
+        );
       }
     }
   }
   if (hasSymbolFlag(old, ts.SymbolFlags.Type)) {
-    breaks.push(...incompatibleTypeSignatures({ checker, old, next, label }));
+    breaks.push(
+      ...incompatibleTypeSignatures({ checker, old, next, label, callArity }),
+    );
   }
   return breaks;
 };

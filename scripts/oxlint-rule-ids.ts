@@ -80,7 +80,10 @@ export const PLUGIN_ALIASES: Readonly<Record<string, string>> = {
   "react-perf": "react_perf",
 };
 
-export const pluginScope = (plugin: string) => PLUGIN_ALIASES[plugin] ?? plugin;
+export const pluginScope = (plugin: string) =>
+  (Object.hasOwn(PLUGIN_ALIASES, plugin)
+    ? PLUGIN_ALIASES[plugin]
+    : undefined) ?? plugin;
 
 // ESLint core rules oxlint also accepts under the typescript prefix; it
 // configures the ESLint rule for either spelling
