@@ -49,11 +49,11 @@ test("transcription lookup preserves the evidence for every catalog model", () =
       );
     }
     expect(getTranscriptionModel(modelId)).toBe(metadata);
-    expect(metadata.source.url).toBe(
+    const expectedSource: string =
       metadata.route === "openrouter"
         ? `https://openrouter.ai/${modelId}`
-        : "https://elevenlabs.io/pricing/api",
-    );
+        : "https://elevenlabs.io/pricing/api";
+    expect<string>(metadata.source.url).toBe(expectedSource);
     expect(metadata.source.checkedAt).toMatch(/^\d{4}-\d{2}-\d{2}$/u);
     expect(Number.isSafeInteger(metadata.price.usdNumerator)).toBe(true);
     expect(Number.isSafeInteger(metadata.price.secondsDenominator)).toBe(true);
