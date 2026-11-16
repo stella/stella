@@ -15,6 +15,7 @@ import { compareCodeUnit } from "@stll/collation";
  */
 export const EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS: ReadonlySet<string> =
   new Set([
+    "src/db/case-law-polarity-kind.postgres.test.ts",
     "src/db/contacts-rls-maintenance.postgres.test.ts",
     "src/db/data-export-owner-policy.postgres.test.ts",
     "src/db/entity-feature-gate-maintenance.postgres.test.ts",

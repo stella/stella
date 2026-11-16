@@ -9,6 +9,7 @@ import {
 } from "@stll/ai-catalog/transcription";
 import { DESKTOP_DICTATION_UNTYPED_CHARACTERS } from "@stll/api-contract/desktop-dictation-cleanup";
 import {
+  DESKTOP_DICTATION_MODELS_LABELED_QUERY,
   desktopDictationModelsSchema,
   MAX_DESKTOP_DICTATION_TRANSCRIPT_LENGTH,
 } from "@stll/api-contract/desktop-dictation-transcription";
@@ -103,6 +104,42 @@ test("only the models offered in the organization's region are listed", () => {
     }
   }
   expect(JSON.stringify(listed)).not.toMatch(/price|usd/iu);
+});
+
+test("a labeling desktop also gets the models outside its region, after the regional ones and marked", () => {
+  const settings = { orgAIConfig: null, managedAIResidency: "eu" } as const;
+  const regional = listDictationModels(settings);
+  const labeled = listDictationModels(settings, { labeled: true });
+  const outside = Object.keys(TRANSCRIPTION_MODELS)
+    .filter(isTranscriptionModelId)
+    .filter(
+      (modelId) =>
+        TRANSCRIPTION_MODELS[modelId].residency.eu.status !== "available" &&
+        TRANSCRIPTION_MODELS[modelId].residency.global.status === "available",
+    );
+  expect(outside).toContain("google/chirp-3");
+  expect(labeled.models.map(({ id }) => id)).toEqual([
+    ...regional.models.map(({ id }) => id),
+    ...outside,
+  ]);
+  for (const model of labeled.models) {
+    if (!isTranscriptionModelId(model.id)) {
+      throw new TypeError("Expected catalog model id");
+    }
+    expect(model).toEqual({
+      id: model.id,
+      displayName: TRANSCRIPTION_MODELS[model.id].displayName,
+      provider: TRANSCRIPTION_MODELS[model.id].provider,
+      outsideRegion: outside.some((id) => id === model.id),
+    });
+  }
+  // The default never leaves the region.
+  expect(labeled.defaultModelId).toBe(regional.defaultModelId);
+  // An older desktop refuses fields it does not know.
+  for (const model of regional.models) {
+    expect(Object.keys(model).toSorted()).toEqual(["displayName", "id"]);
+  }
+  expect(v.parse(desktopDictationModelsSchema, labeled)).toEqual(labeled);
 });
 
 test("a region without a model and a provider that does not transcribe list nothing, with the reason", () => {
@@ -206,6 +243,24 @@ test("a granted desktop reads its region's models", async () => {
   expect(response.status).toBe(200);
   expect(v.parse(desktopDictationModelsSchema, await response.json())).toEqual(
     listDictationModels({ orgAIConfig: null, managedAIResidency: "eu" }),
+  );
+});
+
+test("a desktop that asks for labels reads the labeled list", async () => {
+  const server = serveModels(
+    createDesktopDictationModelsEndpoint({ authorizeAccount, loadSettings }),
+  );
+  const response = await server.fetch(
+    new Request(
+      `http://localhost/models?${DESKTOP_DICTATION_MODELS_LABELED_QUERY}=1`,
+    ),
+  );
+  expect(response.status).toBe(200);
+  expect(v.parse(desktopDictationModelsSchema, await response.json())).toEqual(
+    listDictationModels(
+      { orgAIConfig: null, managedAIResidency: "eu" },
+      { labeled: true },
+    ),
   );
 });
 

@@ -79,7 +79,11 @@ describe("transcription request contract", () => {
     try {
       globalThis.fetch = transport;
       expect(globalThis.fetch.preconnect).toBeTypeOf("function");
-      for (const host of ["eu.openrouter.ai", "us.openrouter.ai"]) {
+      for (const host of [
+        "eu.openrouter.ai",
+        "us.openrouter.ai",
+        "openrouter.ai",
+      ]) {
         const target = `https://${host}/api/v1/audio/transcriptions`;
         await fetchManagedOpenRouterTranscription(target, init);
         expect(requests.at(-1)).toEqual({
@@ -93,7 +97,8 @@ describe("transcription request contract", () => {
       }
       requests.length = 0;
       for (const target of [
-        "https://openrouter.ai/api/v1/audio/transcriptions",
+        "https://openrouter.ai/api/v1/audio/transcriptions/extra",
+        "https://api.openrouter.ai/api/v1/audio/transcriptions",
         "https://eu.openrouter.ai/api/v1/audio/transcriptions/extra",
         "https://eu.openrouter.ai/api/v1/audio/transcriptions?region=us",
         "https://us.openrouter.ai/api/v1/chat/completions",
@@ -301,9 +306,9 @@ describe("transcription request contract", () => {
     });
   });
 
-  test("unavailable and unconfirmed regions never dispatch", async () => {
+  test("unavailable and unconfirmed endpoints never dispatch", async () => {
     for (const [modelId, model] of Object.entries(TRANSCRIPTION_MODELS)) {
-      for (const residency of ["eu", "us"] as const) {
+      for (const residency of ["eu", "us", "global"] as const) {
         if (model.residency[residency].status === "available") {
           continue;
         }
