@@ -245,6 +245,7 @@ const settleRestoredUndo = async (fixture: Fixture, messages: Messages) => {
     .select({ id: chatTurns.id })
     .from(chatTurns)
     .where(eq(chatTurns.threadId, messages.threadId));
+  const turnId = turn?.id ?? panic("the turn was not seeded");
   const desktopId = Bun.randomUUIDv7();
   const deviceJkt = `jkt-${desktopId}`;
   const owner = {
@@ -279,13 +280,14 @@ const settleRestoredUndo = async (fixture: Fixture, messages: Messages) => {
     outcome: "completed",
     leaseExpiresAt: settledAt,
     chatThreadId: messages.threadId,
+    chatTurnId: turnId,
   });
   const restoreId = Bun.randomUUIDv7();
   await fixture.db.insert(desktopRunnerFolderRestores).values({
     ...owner,
     id: restoreId,
     chatThreadId: messages.threadId,
-    chatTurnId: turn?.id ?? panic("the turn was not seeded"),
+    chatTurnId: turnId,
     runId,
     desktopId,
     deviceJkt,
