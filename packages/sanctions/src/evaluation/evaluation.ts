@@ -541,14 +541,16 @@ export const evaluate = (
     const ambiguous = ofKind("ambiguous");
     const truePositives = positives.filter(flagged).length;
     const falsePositives = negatives.filter(flagged).length;
-    const byCategory: Record<string, number> = {};
+    const byCategory = new Map<string, number>();
     for (const category of Object.keys(CATEGORY_KINDS)) {
       const inCategory = outcomes.filter(
         (outcome) => outcome.testCase.category === category,
       );
       if (inCategory.length > 0) {
-        byCategory[category] =
-          inCategory.filter(flagged).length / inCategory.length;
+        byCategory.set(
+          category,
+          inCategory.filter(flagged).length / inCategory.length,
+        );
       }
     }
     return {
@@ -561,7 +563,7 @@ export const evaluate = (
       alertsPerQuery:
         outcomes.reduce((sum, outcome) => sum + outcome.alerts, 0) /
         Math.max(1, outcomes.length),
-      byCategory,
+      byCategory: Object.fromEntries(byCategory),
     };
   });
   return {

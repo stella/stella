@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
+import { CHAT_LOCAL_RUN_HARNESSES } from "./chat-run-target";
 import {
   desktopAccountConnectUrl,
+  desktopAgentSettingsUrl,
   parseDesktopLinkStatus,
   signedDesktopLinkStatus,
 } from "./desktop-account-link";
@@ -53,6 +55,16 @@ describe("desktop account link contract", () => {
         desktopAccountConnectUrl({ apiBaseUrl, webOrigin, intent: typed }),
       ).toBe(url);
     }
+  });
+
+  test("the page opens exactly the settings links the app parses", () => {
+    expect(fixtures.settingsLinks.valid).toEqual([
+      ...CHAT_LOCAL_RUN_HARNESSES.map((harness) => ({
+        harness,
+        url: desktopAgentSettingsUrl(harness),
+      })),
+      { harness: null, url: desktopAgentSettingsUrl() },
+    ]);
   });
 
   test("every status the app can sign parses back with its signed line", () => {

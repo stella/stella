@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { and, asc, countDistinct, eq, inArray, sql } from "drizzle-orm";
 import fc from "fast-check";
 
+import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { assertProperty } from "@stll/property-testing";
 import { createTestClock } from "@stll/test-kit";
 
@@ -105,6 +106,15 @@ type Model = {
 const sendOf = (id: SafeId<"chatMessage">, text: string): QueuedChatSend => ({
   sendMode: "anonymized",
   message: { id, role: "user", parts: [{ type: "text", content: text }] },
+});
+
+/** A message queued to be sent raw: the only kind a steer hands a turn. */
+const rawSendOf = (
+  id: SafeId<"chatMessage">,
+  text: string,
+): QueuedChatSend => ({
+  ...sendOf(id, text),
+  sendMode: CHAT_SEND_MODE.rawOverride,
 });
 
 /** The model's answer to a member's new message on a thread no turn runs. */
@@ -866,7 +876,7 @@ const suite = (
         for (const id of [taken, refused, editedSince]) {
           await enqueueChatMessageOnTx({
             id,
-            send: sendOf(id, "steer me"),
+            send: rawSendOf(id, "steer me"),
             threadId,
             tx,
             uploadedFileIds: [],
@@ -914,7 +924,7 @@ const suite = (
         await replaceQueuedChatMessageOnTx({
           expectedRevision: 0,
           id: editedSince,
-          send: sendOf(editedSince, "edited after the steer"),
+          send: rawSendOf(editedSince, "edited after the steer"),
           threadId,
           tx,
         });
@@ -978,6 +988,70 @@ const suite = (
           .from(chatMessages)
           .where(eq(chatMessages.id, taken)),
       ).toEqual([]);
+    });
+
+    test("a steer is refused a message queued anonymized, or switched to it since", async () => {
+      const owner = await seedOwner();
+      const threadId = await seedThread(owner);
+      const anonymized = createSafeId<"chatMessage">();
+      const switched = createSafeId<"chatMessage">();
+      await withLock(threadId, owner, async (tx) => {
+        await enqueueChatMessageOnTx({
+          id: anonymized,
+          send: sendOf(anonymized, "keep me anonymized"),
+          threadId,
+          tx,
+          uploadedFileIds: [],
+        });
+        await enqueueChatMessageOnTx({
+          id: switched,
+          send: rawSendOf(switched, "switched on another device"),
+          threadId,
+          tx,
+          uploadedFileIds: [],
+        });
+        await acceptTurnOnTx({
+          messageId: createSafeId<"chatMessage">(),
+          owner,
+          threadId,
+          tx,
+        });
+        // Another device switches the raw message to anonymized.
+        await replaceQueuedChatMessageOnTx({
+          expectedRevision: 0,
+          id: switched,
+          send: sendOf(switched, "switched on another device"),
+          threadId,
+          tx,
+        });
+      });
+      await setTurnStatus({ owner, status: "running", threadId });
+      const mark = async (id: SafeId<"chatMessage">, revision: number) =>
+        await withLock(
+          threadId,
+          owner,
+          async (tx) =>
+            await markSteeredQueuedMessageOnTx({ id, revision, threadId, tx }),
+        );
+      // The revision the first device read is gone; the one it became, and
+      // a message queued anonymized from the start, never reach the turn raw.
+      expect(await mark(switched, 0)).toBe("changed");
+      expect(await mark(switched, 1)).toBe("not-raw");
+      expect(await mark(anonymized, 0)).toBe("not-raw");
+      expect(
+        await database
+          .select({
+            id: chatQueuedMessages.id,
+            revision: chatQueuedMessages.revision,
+            steeredRevision: chatQueuedMessages.steeredRevision,
+          })
+          .from(chatQueuedMessages)
+          .where(eq(chatQueuedMessages.threadId, threadId))
+          .orderBy(asc(chatQueuedMessages.position)),
+      ).toEqual([
+        { id: anonymized, revision: 0, steeredRevision: null },
+        { id: switched, revision: 1, steeredRevision: null },
+      ]);
     });
 
     test("a refusal the sender met outside the lock holds only a head still due", async () => {

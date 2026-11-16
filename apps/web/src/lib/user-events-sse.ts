@@ -19,12 +19,14 @@ import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { apiUrl } from "@/lib/api-url";
 import { firstNotificationsPageRefresh } from "@/lib/notification-queries";
 import { organizationEventQueryKeys } from "@/lib/organization/realtime.logic";
+import { organizationResourceQueryActions } from "@/lib/workspace-realtime";
 import { getRealtimeRefreshScheduler } from "@/lib/workspaces/realtime-refresh";
 
 /** A query the user stream refreshes, and what to trim before it does. */
 type UserEventRefresh = {
   queryKey: QueryKey;
   prepare?: () => void;
+  match?: "exact";
 };
 
 const USER_SSE_EVENT_SOURCE_INIT = {
@@ -68,7 +70,7 @@ const reconnectDelayMs = (failures: number): number =>
  * its own connection.
  */
 const useUserEventsSSE = (
-  organizationId: string,
+  { organizationId, userId }: { organizationId: string; userId: string },
   {
     onEvent,
     onResync,
@@ -94,6 +96,9 @@ const useUserEventsSSE = (
     let hasOpened = false;
 
     const connect = () => {
+      if (disposed) {
+        return;
+      }
       const stream = new EventSource(
         apiUrl("/notifications/events"),
         USER_SSE_EVENT_SOURCE_INIT,
@@ -101,23 +106,29 @@ const useUserEventsSSE = (
       source = stream;
 
       stream.addEventListener("open", () => {
+        if (disposed || source !== stream) {
+          return;
+        }
         consecutiveFailures = 0;
         // The browser's own retries and ours both land here; either way the
         // gap may have swallowed events. The first open re-reads nothing: the
         // queries were just fetched, and a second read would only double them.
         if (hasOpened) {
-          for (const { queryKey, prepare } of handleResync()) {
-            realtimeRefresh.refresh(queryKey, prepare);
+          for (const { queryKey, prepare, match } of handleResync()) {
+            realtimeRefresh.refresh(queryKey, prepare, match);
           }
         }
         hasOpened = true;
       });
       stream.addEventListener("message", (event: MessageEvent) => {
+        if (disposed || source !== stream) {
+          return;
+        }
         const payload = jsonOrNull(String(event.data));
         const parsed = parseUserRealtimeEvent(payload);
         if (parsed) {
-          for (const { queryKey, prepare } of handleEvent(parsed)) {
-            realtimeRefresh.refresh(queryKey, prepare);
+          for (const { queryKey, prepare, match } of handleEvent(parsed)) {
+            realtimeRefresh.refresh(queryKey, prepare, match);
           }
           return;
         }
@@ -131,11 +142,21 @@ const useUserEventsSSE = (
           )) {
             realtimeRefresh.refresh(queryKey);
           }
+          for (const { queryKey, match } of organizationResourceQueryActions({
+            queryClient,
+            organizationId,
+            resources: [organizationEvent.resourceType],
+          })) {
+            realtimeRefresh.refresh(queryKey, undefined, match);
+          }
         }
       });
       stream.addEventListener("error", () => {
+        if (disposed || source !== stream) {
+          return;
+        }
         // CONNECTING means the browser is retrying on its own.
-        if (stream.readyState !== EventSource.CLOSED || disposed) {
+        if (stream.readyState !== EventSource.CLOSED) {
           return;
         }
         stream.close();
@@ -156,7 +177,14 @@ const useUserEventsSSE = (
       }
       source?.close();
     };
-  }, [handleEvent, handleResync, organizationId, realtimeRefresh]);
+  }, [
+    handleEvent,
+    handleResync,
+    organizationId,
+    userId,
+    realtimeRefresh,
+    queryClient,
+  ]);
 };
 
 /**
@@ -208,21 +236,29 @@ export const useUserEventRefreshes = ({
     [USER_EVENT_READ.NOTIFICATIONS]: notifications,
   } satisfies Record<UserEventRead, () => UserEventRefresh>;
 
-  useUserEventsSSE(organizationId, {
-    onEvent: ({ type }) =>
-      USER_EVENT_READS[type].map((read) => refreshes[read]()),
-    onResync: () => [
-      notifications(),
-      activeChatRuns(),
-      chatThreadLists(),
-      backgroundTasks(),
-      chatQueues(),
-      ...organizationEventQueryKeys(
-        resourceSetUpdatedRealtimeEvent(RESOURCE_TYPE.CONTACT),
-        organizationId,
-      ).map((queryKey) => ({ queryKey })),
-    ],
-  });
+  useUserEventsSSE(
+    { organizationId, userId },
+    {
+      onEvent: ({ type }) =>
+        USER_EVENT_READS[type].map((read) => refreshes[read]()),
+      onResync: () => [
+        notifications(),
+        activeChatRuns(),
+        chatThreadLists(),
+        backgroundTasks(),
+        chatQueues(),
+        ...organizationResourceQueryActions({
+          queryClient,
+          organizationId,
+          resources: [RESOURCE_TYPE.USER],
+        }),
+        ...organizationEventQueryKeys(
+          resourceSetUpdatedRealtimeEvent(RESOURCE_TYPE.CONTACT),
+          organizationId,
+        ).map((queryKey) => ({ queryKey })),
+      ],
+    },
+  );
 };
 
 const jsonOrNull = (raw: string): unknown => {

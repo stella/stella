@@ -423,16 +423,18 @@ export const updateKanbanPlacementRequest = async ({
   status,
   fields,
 }: UpdateKanbanPlacementVars) => {
-  const response = await api
-    .fields({ workspaceId: toSafeId<"workspace">(workspaceId) })
-    ["kanban-placement"].patch({
-      entityId: toSafeId<"entity">(entityId),
-      ...(status !== undefined && { status }),
-      fields: fields.map(({ propertyId, content }) => ({
-        propertyId: toSafeId<"property">(propertyId),
-        content,
-      })),
-    });
+  const fieldsApi = api.fields({
+    workspaceId: toSafeId<"workspace">(workspaceId),
+  });
+
+  const response = await fieldsApi["kanban-placement"].patch({
+    entityId: toSafeId<"entity">(entityId),
+    ...(status !== undefined && { status }),
+    fields: fields.map(({ propertyId, content }) => ({
+      propertyId: toSafeId<"property">(propertyId),
+      content,
+    })),
+  });
 
   return unwrapApiResponse(response);
 };

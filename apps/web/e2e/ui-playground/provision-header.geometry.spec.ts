@@ -123,8 +123,8 @@ test("header measurements wait for a moving button inside a fixed section", asyn
   await expect(button).toBeVisible();
   const before = await readGeometry(page);
   expect(before.at(0)?.buttonInside).toBe(true);
-  const sectionBefore = await section.evaluate((element) =>
-    element.getBoundingClientRect().toJSON(),
+  const sectionBefore = await section.evaluate(
+    (element) => element.getBoundingClientRect().toJSON() as unknown,
   );
   const animationId = "geometry-header-button-motion";
   await button.evaluate(
@@ -163,8 +163,8 @@ test("header measurements wait for a moving button inside a fixed section", asyn
       ),
     ).toBe("finished");
     expect(
-      await section.evaluate((element) =>
-        element.getBoundingClientRect().toJSON(),
+      await section.evaluate(
+        (element) => element.getBoundingClientRect().toJSON() as unknown,
       ),
     ).toEqual(sectionBefore);
     expect(after.at(0)?.buttonInside).toBe(false);

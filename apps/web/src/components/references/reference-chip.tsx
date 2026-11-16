@@ -260,6 +260,7 @@ const ReferenceGlyphIcon = ({
 
 type ReferenceChipViewProps = {
   visual: ReferenceVisual;
+  interactive: boolean;
   /** Rendered label when the source's label is richer than plain text (a
    * restored anonymized name inside an answer's link). */
   labelContent?: ReactNode;
@@ -270,6 +271,7 @@ type ReferenceChipViewProps = {
 
 const ReferenceChipView = ({
   visual,
+  interactive,
   labelContent,
   onActivate,
   selected = false,
@@ -282,15 +284,18 @@ const ReferenceChipView = ({
   }
   return (
     <InlinePill
+      {...(labelContent === undefined ? { ariaLabel: visual.label } : {})}
       className={cn(selected && "ring-ring ring-1")}
       data-reference-type={referenceType}
       leadingIcon={
         <ReferenceGlyphIcon glyph={visual.glyph} matter={visual.matter} />
       }
       onActivate={onActivate}
-      // The label truncates, so the full name stays one hover away and is
-      // the chip's accessible name. A rich label carries no plain string.
-      title={labelContent === undefined ? visual.label : undefined}
+      // Static chips belong to an editor or containing control. Their
+      // truncated label keeps its own hint without adding a focus target.
+      title={
+        interactive && labelContent === undefined ? visual.label : undefined
+      }
       truncate
     >
       {label}
@@ -391,6 +396,7 @@ const StaticReferenceChip = ({
   const facts = useReferenceFacts(reference);
   return (
     <ReferenceChipView
+      interactive={false}
       labelContent={labelContent}
       referenceType={reference.type}
       selected={selected}
@@ -408,6 +414,7 @@ const InteractiveReferenceChip = ({
   const onActivate = useReferenceActivation(reference);
   return (
     <ReferenceChipView
+      interactive
       labelContent={labelContent}
       onActivate={onActivate}
       referenceType={reference.type}

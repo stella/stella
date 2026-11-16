@@ -29,6 +29,7 @@
     "allow-shortcut-set",
     "allow-dictation-get-snapshot",
     "allow-dictation-set-enabled",
+    "allow-dictation-set-cleanup",
     "allow-dictation-download-model",
     "core:window:allow-start-dragging"
   ]

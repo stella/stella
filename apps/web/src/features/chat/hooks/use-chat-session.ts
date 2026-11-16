@@ -140,10 +140,10 @@ import {
   isQueueInsteadRefusal,
   messagePartsOf,
   queuedSendNow,
+  queuedSteerOf,
   queueMoveTarget,
   snapshotChatRequestOptions,
   steerableMessageText,
-  steerableQueuedText,
   withQueuedMessageMoved,
   withQueuedMessageRemoved,
 } from "@/features/chat/chat-queue.logic";
@@ -1269,24 +1269,24 @@ export const useChatSession = ({
               const whole = await Result.tryPromise(
                 async () => await readQueuedChatMessage(threadRef.threadId, id),
               );
-              const read = Result.isOk(whole) ? whole.value : null;
-              const text =
-                read === null
-                  ? null
-                  : steerableQueuedText({ item, parts: read.message.parts });
+              // A read of another revision than the queue showed is a
+              // message changed since (switched to anonymized, say): it is
+              // sent next, as it now is.
+              const steer = Result.isOk(whole)
+                ? queuedSteerOf({ item, read: whole.value })
+                : null;
               // Taken, the server removes it from the queue at the revision
               // the turn was handed (one edited since stays queued).
               removedHereRef.current.add(id);
               const steered =
-                text !== null &&
-                read !== null &&
+                steer !== null &&
                 (
                   await chat.steerLocalTurn({
                     inputId: id,
-                    text,
+                    text: steer.text,
                     source: {
                       type: CHAT_LOCAL_RUN_STEER_SOURCE.queued,
-                      revision: read.revision,
+                      revision: steer.revision,
                     },
                   })
                 ).type === "steered";
@@ -2225,29 +2225,29 @@ export const useChatSession = ({
           type: DOCX_MIME,
         });
         const contentSha256Hex = await sha256Hex(draft.buffer);
-        const response = await api
-          .entities({ workspaceId: toSafeId<"workspace">(matterId) })
-          ["upload-generated-document"].post({
-            file,
-            contentSha256Hex,
-            messageId: toSafeId<"chatMessage">(draftMessageId),
-            name: draft.fileName,
-            propertyId: fileProperty.id,
-            ...(draftChatThreadId === null
-              ? {}
-              : {
-                  draftChatThreadId: toSafeId<"chatThread">(draftChatThreadId),
-                }),
-            threadId: toSafeId<"chatThread">(threadRef.threadId),
-            ...(threadRef.scope === "workspace"
-              ? {
-                  threadWorkspaceId: toSafeId<"workspace">(
-                    threadRef.workspaceId,
-                  ),
-                }
-              : {}),
-            toolCallId,
-          });
+        const entitiesApi = api.entities({
+          workspaceId: toSafeId<"workspace">(matterId),
+        });
+
+        const response = await entitiesApi["upload-generated-document"].post({
+          file,
+          contentSha256Hex,
+          messageId: toSafeId<"chatMessage">(draftMessageId),
+          name: draft.fileName,
+          propertyId: fileProperty.id,
+          ...(draftChatThreadId === null
+            ? {}
+            : {
+                draftChatThreadId: toSafeId<"chatThread">(draftChatThreadId),
+              }),
+          threadId: toSafeId<"chatThread">(threadRef.threadId),
+          ...(threadRef.scope === "workspace"
+            ? {
+                threadWorkspaceId: toSafeId<"workspace">(threadRef.workspaceId),
+              }
+            : {}),
+          toolCallId,
+        });
         if (response.error) {
           throw toAPIError(response.error);
         }

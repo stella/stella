@@ -123,8 +123,9 @@ if (!databaseUrl || !runPostgresTests) {
                   PERFORM set_config('stella_test.blocked', 'true', true);
                 END
               $probe$`;
-              const rows =
-                await client`SELECT current_setting('stella_test.blocked') = 'true' AS blocked`;
+              const rows = await client<
+                { blocked: boolean }[]
+              >`SELECT current_setting('stella_test.blocked') = 'true' AS blocked`;
               secondStarted.resolve(rows.at(0)?.blocked === true);
               await (firstOperation === "writer"
                 ? applyTransition(client)

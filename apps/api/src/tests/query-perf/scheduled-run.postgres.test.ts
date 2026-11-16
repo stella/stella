@@ -312,6 +312,31 @@ describe.skipIf(!enabled)("scheduled export measurement (postgres)", () => {
               JSON.stringify({
                 planCacheMode,
                 cohort,
+                queuedReadPlans: smaller.statements
+                  .flatMap((statement, index) => {
+                    const doubled = measured.statements.at(index);
+                    return statement.queuedReadPlan !== undefined &&
+                      doubled?.queuedReadPlan !== undefined
+                      ? [
+                          {
+                            statementIndex: index,
+                            growth:
+                              doubled.metrics.sharedBlocks -
+                              statement.metrics.sharedBlocks,
+                            queuedExportRead: [
+                              statement.queuedExportRead,
+                              doubled.queuedExportRead,
+                            ],
+                            plans: [
+                              statement.queuedReadPlan,
+                              doubled.queuedReadPlan,
+                            ],
+                          },
+                        ]
+                      : [];
+                  })
+                  .toSorted((a, b) => b.growth - a.growth)
+                  .slice(0, 3),
                 statementMetrics: [smaller, measured].map(({ statements }) =>
                   statements.map(({ statement, metrics }) => ({
                     statement,

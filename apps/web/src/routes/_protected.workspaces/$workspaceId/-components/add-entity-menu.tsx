@@ -176,10 +176,10 @@ export const AddEntityMenu = ({
               ...input,
               styleSetId: toSafeId<"styleSet">(style.styleSetId),
             },
-            send: async (body) =>
-              api
-                .entities({ workspaceId })
-                ["blank-document-from-style-set"].put(body),
+            send: async (body) => {
+              const entitiesApi = api.entities({ workspaceId });
+              return entitiesApi["blank-document-from-style-set"].put(body);
+            },
           });
     if (response.error) {
       notifyUserError(toAPIError(response.error), t("errors.actionFailed"));

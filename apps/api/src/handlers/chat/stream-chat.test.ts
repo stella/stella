@@ -6022,7 +6022,9 @@ describe("chat stream refs", () => {
       transformClientVisibleStream({
         deniedApprovals,
         resolveAssistantValueRefs: (value) =>
-          JSON.parse(JSON.stringify(value).replaceAll(ref, () => resolved)),
+          JSON.parse(
+            JSON.stringify(value).replaceAll(ref, () => resolved),
+          ) as unknown,
         source: streamChunks([buildEngineSnapshot(history)]),
         storedHistory: NOTHING_REWRITTEN,
       }),

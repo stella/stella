@@ -2,14 +2,15 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
-import { PanelRightIcon } from "@stll/ui/icons";
+import { MoveToSideIcon } from "@stll/ui/icons";
 
 import Tooltip from "@/components/tooltip";
 
 /**
  * The one header control that moves the main view into the side panel. The
- * panel glyph says where the view goes (the inspector at the inline end), and
- * mirrors under RTL where the panel sits at the other edge. `swaps` names the
+ * glyph is the panel with a chevron pointing into it, so it says where the view
+ * goes without matching the inspector rail's plain panel toggle, and mirrors
+ * under RTL where the panel sits at the other edge. `swaps` names the
  * case where the side panel already holds a view that comes back to the main
  * area in exchange.
  */
@@ -35,7 +36,7 @@ export const MoveToSideButton = ({
           size="icon-sm"
           variant="ghost"
         >
-          <DirectionalIcon className="size-4" icon={PanelRightIcon} />
+          <DirectionalIcon className="size-4" icon={MoveToSideIcon} />
         </Button>
       }
     />

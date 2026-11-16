@@ -255,10 +255,14 @@ describe("indexed reader search", () => {
     assertProperty(
       "indexed search marks exactly what a scan of the folded text marks",
       fc.property(piecesArb, queryArb, (pieces, query) => {
+        const piecesBefore = structuredClone(pieces);
         const index = createReaderSearchIndex(pieces);
-        expect(searchReaderIndex(index, query)).toEqual(
-          scanResults(index, query),
-        );
+        const indexBefore = structuredClone(index);
+        const result = searchReaderIndex(index, query);
+        expect(result).toEqual(scanResults(index, query));
+        expect(searchReaderIndex(index, query)).toEqual(result);
+        expect(pieces).toEqual(piecesBefore);
+        expect(index).toEqual(indexBefore);
       }),
     );
   });

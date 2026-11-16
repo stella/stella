@@ -50,7 +50,7 @@ type ProbeOptions = {
 
 // Implicit class constructors have no declaration at runtime, despite the
 // TypeScript API's non-optional return type. Their owner supplies the scope.
-const signatureDeclaration = (
+export const signatureDeclaration = (
   signature: ts.Signature,
 ): ts.SignatureDeclaration | undefined => signature.getDeclaration();
 
