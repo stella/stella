@@ -260,6 +260,17 @@ const serve = ({ waiting }: { waiting: boolean }) => {
       return Response.json({ message: "Not queued" }, { status: 404 });
     }
     const without = state.order.filter((queued) => queued !== id);
+    // The message whole, as Edit reads it before removing it.
+    if (method === "GET") {
+      return Response.json({
+        message: {
+          id,
+          role: "user",
+          parts: [{ type: "text", content: textOf(id) }],
+        },
+        revision: 0,
+      });
+    }
     if (method === "DELETE") {
       state.removedRevisions.push(url.searchParams.get("revision"));
       state.order = without;
@@ -496,7 +507,12 @@ test("Move, Remove and Edit change the server's queue, and Edit hands the messag
   await waitFor(() => {
     expect(shownOrder(page.view.container)).toEqual([textOf(SECOND)]);
   });
-  expect(server.requests.at(-1)).toBe(`DELETE ${QUEUE_PATH}/${FIRST}`);
+  // Read whole (and handed to the composer) before it is removed, so a lost
+  // answer to the removal cannot lose it.
+  expect(server.requests.slice(-2)).toEqual([
+    `GET ${QUEUE_PATH}/${FIRST}`,
+    `DELETE ${QUEUE_PATH}/${FIRST}`,
+  ]);
   expect(server.order).toEqual([SECOND]);
   // Each removal names the revision the page read, so one edited since stays.
   expect(server.removedRevisions).toEqual(["0", "0"]);

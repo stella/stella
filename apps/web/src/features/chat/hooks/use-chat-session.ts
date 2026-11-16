@@ -20,6 +20,7 @@ import type {
   ConnectConnectorOutput,
 } from "@stll/api-contract/chat-connector";
 import { buildCreateDocumentDownloadFileName } from "@stll/api-contract/chat-create-document";
+import { CHAT_QUEUE_ERROR_CODE } from "@stll/api-contract/chat-queue";
 import { requiresPerCallChatApproval } from "@stll/api-contract/chat-secret";
 import type { RequestSecretOutput } from "@stll/api-contract/chat-secret";
 import {
@@ -121,6 +122,7 @@ import {
   enqueueChatMessage,
   moveQueuedChatMessage,
   pauseChatQueue,
+  readQueuedChatMessage,
   removeQueuedChatMessage,
   resumeChatQueue,
   sendQueuedChatMessageNow,
@@ -137,6 +139,7 @@ import {
   queueMoveTarget,
   snapshotChatRequestOptions,
   steerableMessageText,
+  steerableQueuedText,
   withQueuedMessageMoved,
   withQueuedMessageRemoved,
 } from "@/features/chat/chat-queue.logic";
@@ -145,11 +148,12 @@ import {
   type ChatRuntime,
   type ChatSendMessageOptions,
   type ChatUserMessageInput,
+  hasChatErrorCode,
   queuedChatSendOf,
   sendThreadChatMessageUntilAccepted,
 } from "@/features/chat/chat-runtime";
 import {
-  resendLatestChatMessage,
+  settleRouteHandoff,
   showStoredChatThread,
 } from "@/features/chat/chat-runtime-registry";
 import {
@@ -915,6 +919,51 @@ export const useChatSession = ({
   );
 
   /**
+   * Say why a message the server refused before storing it was not sent,
+   * while the composer holds it again: in the words the thread used for a
+   * failed request.
+   */
+  const notifySendRefused = useCallback(
+    (refused: Error) => {
+      // The server's refusal is found beneath the transport's wrapping: its
+      // message, as the thread showed it, unless a notice of its own (an
+      // expired session, an admission refusal) says more.
+      const refusal = chatRefusal(refused);
+      const copy = chatErrorTranslationKey(refused);
+      if (refusal !== null) {
+        notifyUserError(refusal, refusal.message);
+      } else if (copy === "chat.sendError") {
+        notifyUserError(refused, t(copy));
+      } else {
+        notifyUserProblem(t(copy));
+      }
+    },
+    [t],
+  );
+
+  // A new chat's first message was sent before the page existed (the landing
+  // page, `/new`, Ask AI); this page takes it from the runtime. Refused before
+  // the server stored it, it goes back into this chat's composer, like any
+  // send the server refused.
+  useExternalSyncEffect(() => {
+    const handoff = chat.takeRouteHandoff();
+    if (handoff === null) {
+      return;
+    }
+    detached(
+      (async () => {
+        const settled = await settleRouteHandoff(chat, handoff);
+        if (settled.type === "sent") {
+          return;
+        }
+        notifySendRefused(settled.error);
+        restoreIntoComposer(handoff.message);
+      })(),
+      "use-chat-session.settle-route-handoff",
+    );
+  }, [chat, notifySendRefused, restoreIntoComposer]);
+
+  /**
    * Queue `message` at the end of the chat's queue, as it would be sent now
    * (its mode and document preferences snapshotted). `kept` when the server
    * did not take it: the composer gets it back.
@@ -1136,25 +1185,13 @@ export const useChatSession = ({
       if (isQueueInsteadRefusal(acceptance.error)) {
         return await enqueueMessage(message, options);
       }
-      // The composer holds the message again; the notice says why it was
-      // not sent in the words the thread used for a failed request.
-      // The server's refusal is found beneath the transport's wrapping.
-      const refusal = chatRefusal(acceptance.error);
-      const copy = chatErrorTranslationKey(acceptance.error);
-      if (refusal !== null) {
-        // Its message, as the thread showed it, unless a notice of its own
-        // (an expired session, an admission refusal) says more.
-        notifyUserError(refusal, refusal.message);
-      } else if (copy === "chat.sendError") {
-        notifyUserError(acceptance.error, t(copy));
-      } else {
-        notifyUserProblem(t(copy));
-      }
+      notifySendRefused(acceptance.error);
       return CHAT_SEND_KEPT;
     },
     [
       chat,
       enqueueMessage,
+      notifySendRefused,
       notifySteerRefused,
       readQueue,
       resolveToolApproval,
@@ -1205,13 +1242,25 @@ export const useChatSession = ({
         case "steer":
           detached(
             (async () => {
-              const outcome = await chat.steerLocalTurn({
-                inputId: id,
-                text: route.text,
-              });
+              // The queue's read shows only the message's beginning; the
+              // turn is handed it whole, or it is sent next as before.
+              const whole = await Result.tryPromise(
+                async () => await readQueuedChatMessage(threadRef.threadId, id),
+              );
+              const read = Result.isOk(whole) ? whole.value : null;
+              const text =
+                read === null
+                  ? null
+                  : steerableQueuedText({ item, parts: read.message.parts });
+              const steered =
+                text !== null &&
+                (await chat.steerLocalTurn({ inputId: id, text })).type ===
+                  "steered";
               await writeQueue(async () =>
-                outcome.type === "steered"
-                  ? await removeFromQueue(id, item.revision)
+                // Removed at the revision the turn was handed: one edited
+                // since stays queued.
+                steered && read !== null
+                  ? await removeFromQueue(id, read.revision)
                   : await sendQueuedChatMessageNow(threadRef.threadId, id),
               );
             })(),
@@ -1287,34 +1336,36 @@ export const useChatSession = ({
         stellaToast.info(t("chat.queue.editNeedsComposer"));
         return;
       }
-      const item = readQueue().items.find((queued) => queued.id === id);
-      if (item === undefined) {
-        return;
-      }
       detached(
         (async () => {
-          const removed = await Result.tryPromise(
-            async () => await removeFromQueue(id, item.revision),
+          // Read whole and put into the composer first, then removed: a
+          // removal whose answer is lost leaves the message in the composer
+          // (and at worst still queued), never in neither.
+          const whole = await Result.tryPromise(
+            async () => await readQueuedChatMessage(threadRef.threadId, id),
           );
-          await refreshQueue();
-          if (Result.isError(removed)) {
-            notifyUserError(removed.error, t("errors.actionFailed"));
-            return;
-          }
-          const { message } = removed.value;
-          if (message === null) {
-            stellaToast.info(t("chat.queue.noLongerQueued"));
+          if (Result.isError(whole)) {
+            await refreshQueue();
+            if (hasChatErrorCode(whole.error, CHAT_QUEUE_ERROR_CODE.notFound)) {
+              stellaToast.info(t("chat.queue.noLongerQueued"));
+              return;
+            }
+            notifyUserError(whole.error, t("errors.actionFailed"));
             return;
           }
           draftManager.restoreMessageDraftIntoThread(
             threadRef,
-            composerDraftOfParts(message.parts),
+            composerDraftOfParts(whole.value.message.parts),
+          );
+          // At the revision put into the composer: one edited since stays.
+          await writeQueue(
+            async () => await removeFromQueue(id, whole.value.revision),
           );
         })(),
         "use-chat-session.edit-queued-message",
       );
     },
-    [draftManager, readQueue, refreshQueue, removeFromQueue, t, threadRef],
+    [draftManager, refreshQueue, removeFromQueue, t, threadRef, writeQueue],
   );
 
   const moveQueuedMessage = useCallback(
@@ -1414,8 +1465,7 @@ export const useChatSession = ({
         return;
       }
 
-      await resendLatestChatMessage(
-        chat,
+      await chat.reload(
         sendMode === undefined ? undefined : { body: { sendMode } },
       );
     },

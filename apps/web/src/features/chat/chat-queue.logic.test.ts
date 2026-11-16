@@ -14,6 +14,7 @@ import {
   CHAT_TURN_STEERING,
   type ChatThreadSendState,
 } from "@stll/api-contract/chat-send-intent";
+import { DESKTOP_RUNNER_MAX_INPUT_TEXT_LENGTH } from "@stll/api-contract/desktop-runner";
 
 import type { ChatQueue, ChatQueueItem } from "@/features/chat/chat-queue";
 import {
@@ -25,6 +26,7 @@ import {
   queueMoveTarget,
   snapshotChatRequestOptions,
   steerableMessageText,
+  steerableQueuedText,
   withQueuedMessageMoved,
   withQueuedMessageRemoved,
 } from "@/features/chat/chat-queue.logic";
@@ -86,19 +88,23 @@ describe("Send now on a queued message", () => {
     }
   });
 
-  test("hands a turn that takes messages mid-turn the message's text", () => {
-    expect(queuedSendNow(STATES.workingSteerable, item("a"))).toEqual({
-      type: "steer",
-      text: "Message a",
-    });
+  test("hands a turn that takes messages mid-turn a message of raw text, however long its preview", () => {
+    for (const queued of [
+      item("a"),
+      // The preview is cut at its limit; the turn is handed the message read
+      // whole (`steerableQueuedText`).
+      item("long", { preview: "x".repeat(CHAT_QUEUE_PREVIEW_MAX_CHARS) }),
+    ]) {
+      expect(queuedSendNow(STATES.workingSteerable, queued)).toEqual({
+        type: "steer",
+      });
+    }
   });
 
   test("sends a message the turn cannot take as the next one, stopping the turn", () => {
     const notSteerable = [
       item("files", { attachmentCount: 1 }),
       item("anonymized", { sendMode: CHAT_SEND_MODE.anonymized }),
-      // A preview cut at its limit is not the whole message.
-      item("long", { preview: "x".repeat(CHAT_QUEUE_PREVIEW_MAX_CHARS) }),
       item("empty", { preview: "  " }),
     ];
     for (const queued of notSteerable) {
@@ -205,6 +211,53 @@ describe("what a message brings to the queue", () => {
         id,
       }),
     ).toBe(false);
+  });
+
+  test("a queued message read whole goes to a running turn whole, up to what a steer takes", () => {
+    const raw = { sendMode: CHAT_SEND_MODE.rawOverride };
+    const long = "Clause ".repeat(CHAT_QUEUE_PREVIEW_MAX_CHARS);
+    expect(long.length).toBeGreaterThan(CHAT_QUEUE_PREVIEW_MAX_CHARS);
+    expect(
+      steerableQueuedText({
+        item: raw,
+        parts: [{ type: "text", content: long }],
+      }),
+    ).toBe(long.trim());
+    const tooLong = "x".repeat(DESKTOP_RUNNER_MAX_INPUT_TEXT_LENGTH + 1);
+    expect(
+      steerableQueuedText({
+        item: raw,
+        parts: [{ type: "text", content: tooLong }],
+      }),
+    ).toBeNull();
+    expect(
+      steerableQueuedText({
+        item: raw,
+        parts: [
+          { type: "text", content: "Go" },
+          createChatPastedTextPart("pasted"),
+        ],
+      }),
+    ).toBeNull();
+    expect(
+      steerableQueuedText({
+        item: { sendMode: CHAT_SEND_MODE.anonymized },
+        parts: [{ type: "text", content: "Go" }],
+      }),
+    ).toBeNull();
+    expect(
+      steerableQueuedText({
+        item: raw,
+        parts: [
+          { type: "text", content: "Go" },
+          {
+            type: "file",
+            url: "stella-user-file://f",
+            mimeType: "application/pdf",
+          },
+        ],
+      }),
+    ).toBeNull();
   });
 
   test("a running turn takes raw text alone", () => {

@@ -145,7 +145,7 @@ const filterLogAttributes = ({
     return undefined;
   }
   let dropped = queryFieldsDropped;
-  const safeAttributes: LoggerAttributes = {};
+  const safeAttributes = new Map<string, LoggerAttributeValue>();
   for (const [key, value] of Object.entries(attributes)) {
     if (
       SENSITIVE_ATTRIBUTE_KEY_PATTERN.test(key) ||
@@ -159,12 +159,12 @@ const filterLogAttributes = ({
       dropped += 1;
       continue;
     }
-    safeAttributes[key] = safeValue;
+    safeAttributes.set(key, safeValue);
   }
   if (dropped > 0) {
-    safeAttributes["log.attributes_dropped"] = dropped;
+    safeAttributes.set("log.attributes_dropped", dropped);
   }
-  return safeAttributes;
+  return Object.fromEntries(safeAttributes);
 };
 
 const queryFieldCount = (
