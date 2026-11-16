@@ -276,7 +276,9 @@ export const toPublishedManifest = (manifest: unknown): PublishedManifest => {
         return [subpath, distAsset(target)] as const;
       }
       const base = distBase(target);
-      const native = nativeTargets[subpath];
+      const native = Object.hasOwn(nativeTargets, subpath)
+        ? nativeTargets[subpath]
+        : undefined;
       const nativeBase = native === undefined ? undefined : distBase(native);
       return [
         subpath,
