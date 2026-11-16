@@ -14,16 +14,6 @@ const RUNNER_DEFINITIONS = [
     description: "case-law source ingestion daemon",
   },
   {
-    name: "case-law-corpus-storage-backfill",
-    status: "implemented",
-    description: "copy existing case-law text payloads from Postgres to S3",
-  },
-  {
-    name: "legal-corpus-storage-backfill",
-    status: "implemented",
-    description: "copy existing case-law and legislation payloads to S3",
-  },
-  {
     name: "statute-ingest",
     status: "reserved",
     description: "statutory text source ingestion and normalization",

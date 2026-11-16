@@ -88,6 +88,15 @@ export const APP_RESOLVE_FIXTURE = {
       status: "readable",
       charCount: 1200,
     },
+    appealReviews: {
+      status: "none_found" as const,
+      reason: "no_link_in_corpus" as const,
+      basis: "available_corpus" as const,
+      reviewedBy: [],
+      reviews: [],
+      reviewedByTruncated: false,
+      reviewsTruncated: false,
+    },
   },
 } satisfies LegalResolveResponse;
 export const APP_RESOLVE_STATUS_FIXTURES = [

@@ -230,6 +230,25 @@ describe("what a thread shows of a stored message", () => {
     expect(answer(undefined)).toBeNull();
   });
 
+  test("names the model an answer ran on only when the harness rerouted it", () => {
+    const answer = (metadata: unknown) =>
+      toChatEntry({
+        id: "m6",
+        role: "assistant",
+        createdAt: "2026-10-20T10:00:00.000Z",
+        parts: [{ type: "text", content: "Done." }],
+        metadata,
+      })?.ranOnModel;
+    expect(
+      answer({ localRunModel: { requested: "gpt-5.5", ran: "gpt-5.4" } }),
+    ).toBe("gpt-5.4");
+    expect(
+      answer({ localRunModel: { requested: "gpt-5.5", ran: "gpt-5.5" } }),
+    ).toBeUndefined();
+    expect(answer({ localRunModel: { ran: "gpt-5.4" } })).toBeUndefined();
+    expect(answer(undefined)).toBeUndefined();
+  });
+
   test("leaves out system messages and messages with nothing to draw", () => {
     expect(
       toChatEntry({

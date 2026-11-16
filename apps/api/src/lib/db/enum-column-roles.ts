@@ -105,6 +105,11 @@ export const ENUM_COLUMN_ROLES = {
   case_law_decision_judges: {
     role: ATTRIBUTE,
   },
+  case_law_decision_reviews: {
+    evidence_classification: ATTRIBUTE,
+    outcome: ATTRIBUTE,
+    source: ATTRIBUTE,
+  },
   case_law_decisions: {
     case_number_type: ATTRIBUTE,
   },
@@ -219,6 +224,9 @@ export const ENUM_COLUMN_ROLES = {
     contract_version: ATTRIBUTE,
     family: ATTRIBUTE,
   },
+  corpus_index_generation_seeding_passes: {
+    family: ATTRIBUTE,
+  },
   corpus_index_group_withdrawals: {
     family: ATTRIBUTE,
   },
@@ -239,6 +247,17 @@ export const ENUM_COLUMN_ROLES = {
     desired_action: ATTRIBUTE,
     family: ATTRIBUTE,
     last_failure_kind: ATTRIBUTE,
+  },
+  // The expectation is a walk position (a pass moves present -> absent -> present,
+  // and a revocation restarts it at present) and the reason a fact about the
+  // last revocation: any value may follow any other.
+  corpus_index_route_proofs: {
+    family: ATTRIBUTE,
+    pass_expectation: ATTRIBUTE,
+    revoke_reason: ATTRIBUTE,
+  },
+  corpus_index_route_seedings: {
+    family: ATTRIBUTE,
   },
   correspondence: {
     channel: ATTRIBUTE,

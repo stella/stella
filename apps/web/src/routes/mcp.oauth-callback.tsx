@@ -1,18 +1,16 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
-import { OutcomeScreen } from "@stll/ui/outcome-screen";
-
-import { StellaWordmark } from "@/components/stella-wordmark";
 import { detached } from "@/lib/detached";
 import type { McpOAuthOutcome } from "@/lib/mcp-oauth-channel";
 import { broadcastMcpOAuthOutcome } from "@/lib/mcp-oauth-channel";
-import { pageTitle, pageTitleLiteral } from "@/lib/page-title";
+import { pageTitle } from "@/lib/page-title";
 import { routeSearchSchema } from "@/route-search-params";
 import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
-
-const KNOWLEDGE_MCP_PATH = "/knowledge/tools";
+import {
+  MCP_TOOLS_PATH,
+  McpOAuthOutcomeScreen,
+} from "@/routes/-mcp-oauth-outcome";
 
 const searchSchema = routeSearchSchema({
   // A callback that does not say it connected reports a failure, never a
@@ -34,41 +32,35 @@ export const Route = createFileRoute("/mcp/oauth-callback")({
 /**
  * Where an integration's sign-in ends, in the popup the integrations page
  * opened: tell that page what happened and close. A tab the member opened
- * themselves cannot be closed by script, so it goes back to the integrations.
+ * themselves cannot be closed by script: once connected it goes on to the
+ * integrations, and after a failure it stays on the outcome and its way on.
  */
 function McpOAuthCallbackPage() {
-  const t = useTranslations();
   const navigate = useNavigate();
   const status = Route.useSearch({ select: (search) => search.status });
   const reason = Route.useSearch({ select: (search) => search.reason });
+  const slug = Route.useSearch({ select: (search) => search.slug });
 
   const connected = status === "connected";
   const outcome: McpOAuthOutcome = connected
     ? { status: "connected" }
     : { status: "error", reason: reason ?? "unexpected" };
-  const title = connected
-    ? t("knowledge.mcp.callbackConnectedTitle")
-    : t("knowledge.mcp.callbackFailedTitle");
 
   return (
-    <OutcomeScreen
+    <McpOAuthOutcomeScreen
       closeTab={{
         onBeforeClose: () => broadcastMcpOAuthOutcome(outcome),
-        onStillOpen: () =>
-          detached(
-            navigate({ to: KNOWLEDGE_MCP_PATH }),
-            "mcp-oauth-callback.navigate",
-          ),
+        onStillOpen: () => {
+          if (connected) {
+            detached(
+              navigate({ to: MCP_TOOLS_PATH }),
+              "mcp-oauth-callback.navigate",
+            );
+          }
+        },
       }}
-      description={
-        connected
-          ? t("knowledge.mcp.callbackConnectedDescription")
-          : t("knowledge.mcp.callbackFailedDescription")
-      }
-      documentTitle={pageTitleLiteral(title)}
-      title={title}
-      tone={connected ? "success" : "error"}
-      wordmark={<StellaWordmark className="h-4 w-auto" />}
+      outcome={outcome}
+      slug={slug}
     />
   );
 }

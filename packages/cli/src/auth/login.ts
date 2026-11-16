@@ -422,7 +422,10 @@ export const login = async (
     }
 
     // Only now, with the credential on disk, may the browser say "Signed in".
-    await authorization.answerBrowser({ kind: "signed_in" });
+    await authorization.answerBrowser({
+      kind: "signed_in",
+      ...(credential.value.email ? { email: credential.value.email } : {}),
+    });
 
     return Result.ok({
       expiresAt: credential.value.expiresAt,

@@ -6924,6 +6924,10 @@ const config = defineConfig({
         // tool call as absent.
         "apps/api/evals/**/*.ts",
         "apps/api/scripts/**/*.ts",
+        // The runner daemons import the api's database schema and write the
+        // same canonical rows, so an owned write there must go through the
+        // owner too.
+        "apps/legal-atlas-runner/src/**/*.ts",
         "apps/web/src/**/*.{ts,tsx}",
         // An owner that lives in a package (`@stll/clipboard`) confines
         // nothing if the rule stops at the apps: a second package could reach

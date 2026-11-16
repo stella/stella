@@ -56,6 +56,10 @@ export const menuCommitBenches = {
 
 // Browser tests share the fixture census without importing the app graph.
 export const visualRegistry = {
+  "appeal-reviews": {
+    label: "Synthetic appeal review evidence",
+    layout: "plain",
+  },
   "mcp-reconnect": { label: "MCP reconnect notice", layout: "plain" },
   "task-metadata": { label: "Task metadata alignment", layout: "plain" },
   "overview-stat-cards": {
@@ -69,6 +73,7 @@ export const visualRegistry = {
   },
   "table-chart": { label: "Chat table chart", layout: "plain" },
   "oauth-consent": { label: "OAuth consent", layout: "plain" },
+  "outcome-screen": { label: "Outcome screens", layout: "plain" },
   "page-crop": { label: "PDF page crop", layout: "plain" },
   "upload-rejections": { label: "Upload rejection reasons", layout: "plain" },
   "chat-long-paste": { label: "Chat long paste", layout: "plain" },
