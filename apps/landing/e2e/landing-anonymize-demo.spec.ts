@@ -59,12 +59,12 @@ type DemoState = {
 };
 
 // Runs in the page. The demo has no root test id, so anchor on the textarea's
-// id and walk up to the component root (textarea → text-layer wrapper → root)
-// to keep the reads scoped to the island.
+// id and the shared editor owner to keep reads scoped to the island.
 const readDemoState = (selectors: typeof DEMO_SELECTORS): DemoState => {
   const root =
-    document.querySelector(selectors.textarea)?.parentElement?.parentElement ??
-    null;
+    document
+      .querySelector(selectors.textarea)
+      ?.closest('[data-slot="highlighted-textarea"]')?.parentElement ?? null;
   if (!root) {
     return { status: "demo island not mounted", highlighted: [], legend: [] };
   }
@@ -185,7 +185,9 @@ test.describe("before the engine loads", () => {
   }) => {
     await page.goto(DEMO_URL, { waitUntil: "domcontentloaded" });
 
-    const root = page.locator(DEMO_SELECTORS.textarea).locator("xpath=../..");
+    const root = page
+      .locator('[data-slot="highlighted-textarea"]')
+      .locator("..");
     await expect(root.locator(DEMO_SELECTORS.textarea)).toBeVisible();
 
     await expect(root.locator(DEMO_SELECTORS.entitySpan)).toHaveText(

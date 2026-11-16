@@ -960,9 +960,7 @@
     "apps/web/src/components/workspaces/table/workspace-table/workspace-table.tsx": 1,
     "packages/decision-reader/src/document-ast-text.tsx": 3
   },
-  "no-native-ui/no-native-textarea": {
-    "apps/landing/src/components/react/AnonymizeLiveDemo.tsx": 1
-  },
+  "no-native-ui/no-native-textarea": {},
   "no-native-ui/no-native-tooltip": {},
   "eslint/complexity": {
     ".oxlint-plugins/no-ambient-nondeterminism.ts": 5,
