@@ -841,6 +841,14 @@ const fetchRichDocument = async (
   return { type: "present", value: html };
 };
 
+type FetchDecisionContentOptions = {
+  documentId: string;
+  row: ParsedRow;
+  detail: CzNssDetailMetadata;
+  session: SessionState;
+  signal: AbortSignal;
+};
+
 /**
  * Fetch rich HTML from /DokumentOriginal/Html/{id} and parse it into a
  * DocumentAst. Falls back to /Text/{id} for plain fulltext where the portal
@@ -848,13 +856,13 @@ const fetchRichDocument = async (
  * read of either endpoint is reported unavailable, never replaced by the
  * other representation.
  */
-const fetchDecisionContent = async (
-  documentId: string,
-  row: ParsedRow,
-  detail: CzNssDetailMetadata,
-  session: SessionState,
-  signal: AbortSignal,
-): Promise<DecisionContentRead> => {
+const fetchDecisionContent = async ({
+  documentId,
+  row,
+  detail,
+  session,
+  signal,
+}: FetchDecisionContentOptions): Promise<DecisionContentRead> => {
   const rich = await fetchRichDocument(documentId, session, signal);
   switch (rich.type) {
     case "present":
@@ -2830,13 +2838,13 @@ export const buildCzNssDecision = async ({
     };
   }
   const { detail, html: detailHtml } = detailFetch;
-  const contentRead = await fetchDecisionContent(
+  const contentRead = await fetchDecisionContent({
     documentId,
     row,
     detail,
     session,
     signal,
-  );
+  });
   if (contentRead.type === "unavailable") {
     // A document read failed. The row is stored listing-only, exactly as for
     // a detail page that was not read, never built from another endpoint's

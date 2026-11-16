@@ -598,6 +598,14 @@ const parsedUrl = (value: string): URL | null =>
     catch: () => null,
   }).unwrapOr(null);
 
+type ListedDocumentUrlOptions = {
+  source: AtRisSourceDefinition;
+  item: RisListingItem;
+  sourceDocumentId: string;
+  dataType: "Html" | "Xml";
+  extension: "html" | "xml";
+};
+
 /**
  * The address the publisher lists for one format of this decision's document.
  *
@@ -608,13 +616,13 @@ const parsedUrl = (value: string): URL | null =>
  * document number implies, so a listed address can name a different host or a
  * different document and be refused rather than followed.
  */
-const listedDocumentUrl = (
-  source: AtRisSourceDefinition,
-  item: RisListingItem,
-  sourceDocumentId: string,
-  dataType: "Html" | "Xml",
-  extension: "html" | "xml",
-): string | undefined => {
+const listedDocumentUrl = ({
+  source,
+  item,
+  sourceDocumentId,
+  dataType,
+  extension,
+}: ListedDocumentUrlOptions): string | undefined => {
   const listed = mainDocumentFormats(item)[dataType];
   if (listed === undefined) {
     return undefined;
@@ -1057,13 +1065,13 @@ const buildListingOnly = ({
       decisionDate: data.decisionDate,
       decisionType: data.decisionType,
       sourceUrl: data.sourceUrl,
-      documentUrl: listedDocumentUrl(
+      documentUrl: listedDocumentUrl({
         source,
         item,
         sourceDocumentId,
-        "Html",
-        "html",
-      ),
+        dataType: "Html",
+        extension: "html",
+      }),
       // The listing states a text of its own for some applications, so a row
       // without its document is still not a row whose publisher wrote nothing.
       textFields: decisionTextFields(source, data, NO_SECTIONS),
@@ -1118,13 +1126,13 @@ const buildDecision = async ({
       source,
     });
   }
-  const xmlUrl = listedDocumentUrl(
+  const xmlUrl = listedDocumentUrl({
     source,
     item,
     sourceDocumentId,
-    "Xml",
-    "xml",
-  );
+    dataType: "Xml",
+    extension: "xml",
+  });
   if (xmlUrl === undefined) {
     return buildListingOnly({
       identity,
@@ -1284,13 +1292,13 @@ export const assembleAtRisDecision = (
       decisionType: data.decisionType,
       fulltext: parsed.fulltext,
       sourceUrl: data.sourceUrl,
-      documentUrl: listedDocumentUrl(
+      documentUrl: listedDocumentUrl({
         source,
         item,
         sourceDocumentId,
-        "Html",
-        "html",
-      ),
+        dataType: "Html",
+        extension: "html",
+      }),
       textFields: decisionTextFields(source, data, parsed.sections),
       metadata: checkedDecisionMetadata(
         {
