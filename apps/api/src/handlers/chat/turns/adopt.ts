@@ -14,6 +14,7 @@ import {
   chatTurnRunBoundOf,
   type ChatTurnStoredSettlement,
 } from "@/api/handlers/chat/chat-turn-run";
+import type { ChatTurnFailureCode } from "@/api/handlers/chat/chat-turn-state";
 import {
   knownDecisionPassageStamper,
   NO_DECISION_PASSAGE_NUMBERS,
@@ -87,6 +88,24 @@ type ChatTurnAdoptionOutcome =
   /** A step may pass on its own (admission, an outage): the sweep tries again. */
   | { type: "retry-later" };
 
+/** Store the turn as failed because its answer could not be stored. */
+const failInstead = async ({
+  context,
+  failure,
+  run,
+}: {
+  context: StreamedTurnSettlementContext;
+  failure: { code: ChatTurnFailureCode; error: unknown };
+  run: ChatTurnRun;
+}): Promise<ChatTurnStoredSettlement> => {
+  observeFailure(failure.error, {
+    sink: ADOPTED_TURN_NOT_STORED,
+    ctx: { threadId: context.turn.threadId },
+  });
+  await run.fail(failure.code, true);
+  return { type: "failed-instead" };
+};
+
 /**
  * Store an adopted turn's finished answer, as the member's turn. No response
  * waits on it, so nothing is thrown: a turn whose answer cannot be stored is
@@ -104,18 +123,18 @@ const settleAdoptedTurn = async ({
   const persisted = await Result.tryPromise(
     async () => await persistStreamedTurn({ context, event }),
   );
-  if (Result.isOk(persisted) && Result.isOk(persisted.value)) {
-    return persisted.value.value.settlement;
+  if (Result.isError(persisted)) {
+    return await failInstead({
+      context,
+      failure: { code: "internal", error: persisted.error },
+      run,
+    });
   }
-  const failure = Result.isError(persisted)
-    ? { code: "internal" as const, error: persisted.error }
-    : persisted.value.error;
-  observeFailure(failure.error, {
-    sink: ADOPTED_TURN_NOT_STORED,
-    ctx: { threadId: context.turn.threadId },
-  });
-  await run.fail(failure.code, true);
-  return { type: "failed-instead" };
+  const stored = persisted.value;
+  if (Result.isError(stored)) {
+    return await failInstead({ context, failure: stored.error, run });
+  }
+  return stored.value.settlement;
 };
 
 /**
@@ -210,9 +229,7 @@ const adoptChatTurn = async ({
     return await leaveToLease("load", loaded.value);
   }
   const { context } = loaded.value;
-  const checkpoint =
-    context.turn.owningAssistantMessage ??
-    panic("A loaded handed-over turn continues no stored answer");
+  const checkpoint = context.turn.owningAssistantMessage;
   const adoptedRun = await adoptChatLocalRun({
     chatThreadId: threadId,
     chatTurnId: turnId,
