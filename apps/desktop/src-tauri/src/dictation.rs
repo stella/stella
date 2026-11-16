@@ -760,6 +760,48 @@ pub fn dictation_download_model(
   Ok(read_snapshot(&app, &state))
 }
 
+/// Deletes the speech model from this computer, for someone who transcribes
+/// with stella AI or wants the disk space back. Refused while a dictation runs
+/// or the model downloads. A warm worker lets go of the model once it idles.
+#[tauri::command]
+pub fn dictation_remove_model(
+  app: AppHandle,
+  state: State<'_, DictationState>,
+) -> Result<DictationSnapshot, String> {
+  if !available(&app) {
+    return Err("dictation is not available on this computer".to_string());
+  }
+  let path = model_path().ok_or("app data directory is unavailable")?;
+  // Checked and marked missing under one lock, so no download or dictation
+  // starts on a model about to go.
+  let busy = change(&app, |inner| {
+    let busy = inner.phase != Phase::Idle
+      || matches!(inner.model, ModelState::Downloading { .. });
+    if !busy {
+      inner.model = ModelState::Missing;
+    }
+    busy
+  });
+  if busy {
+    return Err("the speech model is in use".to_string());
+  }
+  match std::fs::remove_file(&path) {
+    Ok(()) => {}
+    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+    Err(error) => {
+      // Still on disk, for example while Windows has it open.
+      let model = if installed_model().is_some() {
+        ModelState::Ready
+      } else {
+        ModelState::Missing
+      };
+      change(&app, |inner| inner.model = model);
+      return Err(format!("speech model removal failed: {error}"));
+    }
+  }
+  Ok(read_snapshot(&app, &state))
+}
+
 fn hex(bytes: &[u8]) -> String {
   bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
