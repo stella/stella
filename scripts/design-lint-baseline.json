@@ -1308,13 +1308,5 @@
   },
   "eslint/max-params": {},
   "react/no-children-prop": {},
-  "eslint/no-unexpected-multiline": {
-    "apps/web/src/components/docx/use-collaboration-version-publisher.ts": 2,
-    "apps/web/src/components/inspector/anonymization-facet.tsx": 4,
-    "apps/web/src/components/inspector/document-ai-source-bar.tsx": 1,
-    "apps/web/src/components/inspector/inspector-group-transfer.tsx": 1,
-    "apps/web/src/components/inspector/use-markdown-file-draft.ts": 1,
-    "apps/web/src/features/chat/hooks/use-chat-session.ts": 1,
-    "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx": 1
-  }
+  "eslint/no-unexpected-multiline": {}
 }

@@ -187,15 +187,17 @@ export const useInspectorGroupTransfer = (
     let copiedFile = pending.copiedFile;
     if (copiedFile === null) {
       const result = await Result.tryPromise(async () => {
-        const response = await api
-          .entities({ workspaceId: toSafeId<"workspace">(source.workspaceId) })
-          ["copy-to-workspace"].post({
-            entityId: toSafeId<"entity">(source.entityId),
-            targetWorkspaceId: toSafeId<"workspace">(pending.workspaceId),
-            targetParentId: null,
-            deleteSource: false,
-            sourceFieldId: toSafeId<"field">(source.id),
-          });
+        const entitiesApi = api.entities({
+          workspaceId: toSafeId<"workspace">(source.workspaceId),
+        });
+
+        const response = await entitiesApi["copy-to-workspace"].post({
+          entityId: toSafeId<"entity">(source.entityId),
+          targetWorkspaceId: toSafeId<"workspace">(pending.workspaceId),
+          targetParentId: null,
+          deleteSource: false,
+          sourceFieldId: toSafeId<"field">(source.id),
+        });
         return unwrapApiResponse(response);
       });
 

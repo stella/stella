@@ -90,12 +90,14 @@ export const useMarkdownFileDraft = ({
       // This path serializes editor text into a fixed Markdown file; it cannot
       // carry user-supplied DOCX bytes that require attached-template preflight.
       const file = new File([nextText], fileName, { type: MARKDOWN_MIME });
-      const response = await api
-        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        ["upload-version"].post({
-          entityId: toSafeId<"entity">(entityId),
-          file,
-        });
+      const entitiesApi = api.entities({
+        workspaceId: toSafeId<"workspace">(workspaceId),
+      });
+
+      const response = await entitiesApi["upload-version"].post({
+        entityId: toSafeId<"entity">(entityId),
+        file,
+      });
 
       return unwrapApiResponse(response);
     },
