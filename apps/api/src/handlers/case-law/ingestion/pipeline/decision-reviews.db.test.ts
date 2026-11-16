@@ -63,7 +63,8 @@ const prepare = async () => {
       content_hash text,
       text_s3_key text,
       normalized_s3_key text,
-      ast_s3_key text
+      ast_s3_key text,
+      updated_at timestamptz NOT NULL DEFAULT now()
     );
   `);
   await client.exec(`CREATE TABLE system_audit_runs (
@@ -121,9 +122,9 @@ const apply = async ({
   previousIdentity = null,
 }: ApplyOptions) =>
   await runCitationGraphTransaction(
-    (run) => db.transaction(run),
-    (tx) =>
-      writeDecisionReviews(
+    async (run) => await db.transaction(run),
+    async (tx) =>
+      await writeDecisionReviews(
         asTestRaw<Parameters<typeof writeDecisionReviews>[0]>(tx),
         {
           decisionId: id,

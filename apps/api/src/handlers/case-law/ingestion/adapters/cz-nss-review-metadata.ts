@@ -1,10 +1,9 @@
-import * as cheerio from "cheerio";
-
 import {
   decisionDocketGrammarForJurisdiction,
   foldDecisionIdentifierInput,
   parseDecisionDocket,
 } from "@stll/api-contract/decision-docket-grammar";
+import { load } from "@stll/html";
 
 import { detectCitationDecisionDate } from "@/api/handlers/case-law/citation-decision-date";
 import {
@@ -43,7 +42,7 @@ export type CzNssPublisherReviewMetadata =
 
 /** Each table row binds its court, reference, date and outcome together. */
 export const parseCzNssPublisherReviewMetadata = (html: string) => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   const publisherReviews: CzechAppealReview[] = [];
   const publisherReviewMetadata: CzNssPublisherReviewMetadata[] = [];
   const rows = $("table")

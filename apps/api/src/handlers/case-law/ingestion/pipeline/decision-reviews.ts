@@ -12,6 +12,7 @@ import { planCzechAppealReviews } from "@/api/handlers/case-law/ingestion/cz-app
 import { CASE_LAW_REVIEW_EXTRACTION_VERSION } from "@/api/handlers/case-law/ingestion/review-outcomes";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { replayRawWrite } from "@/api/lib/case-law/replay-write";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import type { SystemAuditCounts } from "@/api/lib/system-audit/actors";
@@ -112,10 +113,13 @@ export const writeDecisionReviews = async (
     ).length;
 
     counts.extractionVersions += executedRows(
-      await tx.execute(sql`UPDATE ${caseLawDecisions}
-      SET review_extraction_version = NULL WHERE id = ${decisionId}::uuid
-        AND review_extraction_version IS NOT NULL
-      RETURNING 1`),
+      await replayRawWrite({
+        table: caseLawDecisions,
+        values: { reviewExtractionVersion: null },
+        predicate: sql`${caseLawDecisions.id} = ${decisionId}::uuid`,
+        operation: { kind: "update" },
+        result: { kind: "rows", columns: sql`1` },
+      }).execute({ kind: "drizzle", connection: tx }),
     ).length;
   }
   if (country === "CZE" && reviews !== null) {
@@ -132,6 +136,39 @@ export const writeDecisionReviews = async (
       RETURNING 1`),
     ).length;
     if (reviews.length > 0) {
+      const incoming = sql`SELECT * FROM jsonb_to_recordset(${JSON.stringify(reviews)}::text::jsonb) AS incoming(
+          "reviewedCaseNumber" varchar(256), "reviewedCitationKey" varchar(128),
+          "reviewedDocketFamilyKey" text, "reviewedCourt" varchar(512),
+          "reviewedDecisionDate" date, "reviewedSheetNumber" varchar(32),
+          outcome text, source text, "evidenceStatus" text, "openingEvidence" jsonb, "parserVersion" smallint
+        )`;
+      // An edge already held under the same identity is rewritten only where
+      // its evidence changed; a new identity is inserted below.
+      counts.writtenReviews += executedRows(
+        await replayRawWrite({
+          table: caseLawDecisionReviews,
+          alias: "stored",
+          values: {
+            reviewedCitationKey: sql`incoming."reviewedCitationKey"`,
+            reviewedDocketFamilyKey: sql`incoming."reviewedDocketFamilyKey"`,
+            reviewedDecisionDate: sql`incoming."reviewedDecisionDate"`,
+            reviewedSheetNumber: sql`incoming."reviewedSheetNumber"`,
+            outcome: sql`incoming.outcome`,
+            source: sql`incoming.source`,
+            evidenceClassification: sql`incoming."evidenceStatus"`,
+            openingEvidence: sql`incoming."openingEvidence"`,
+            parserVersion: sql`incoming."parserVersion"`,
+          },
+          ctes: [{ name: "incoming", query: incoming }],
+          operation: { kind: "update", from: sql`incoming` },
+          predicate: sql`stored.reviewing_decision_id = ${decisionId}::uuid
+            AND stored.reviewed_court = incoming."reviewedCourt"
+            AND stored.reviewed_case_number = incoming."reviewedCaseNumber"
+            AND COALESCE(stored.reviewed_decision_date, '-infinity'::date)
+              = COALESCE(incoming."reviewedDecisionDate", '-infinity'::date)`,
+          result: { kind: "rows", columns: sql`1` },
+        }).execute({ kind: "drizzle", connection: tx }),
+      ).length;
       counts.writtenReviews += executedRows(
         await tx.execute(sql`
         INSERT INTO ${caseLawDecisionReviews} (
@@ -141,52 +178,33 @@ export const writeDecisionReviews = async (
         ) SELECT ${decisionId}::uuid, "reviewedCaseNumber", "reviewedCitationKey",
           "reviewedDocketFamilyKey", "reviewedCourt", "reviewedDecisionDate",
           "reviewedSheetNumber", outcome, source, "evidenceStatus", "openingEvidence", "parserVersion"
-        FROM jsonb_to_recordset(${JSON.stringify(reviews)}::text::jsonb) AS incoming(
-          "reviewedCaseNumber" varchar(256), "reviewedCitationKey" varchar(128),
-          "reviewedDocketFamilyKey" text, "reviewedCourt" varchar(512),
-          "reviewedDecisionDate" date, "reviewedSheetNumber" varchar(32),
-          outcome text, source text, "evidenceStatus" text, "openingEvidence" jsonb, "parserVersion" smallint
-        ) ON CONFLICT (reviewing_decision_id, reviewed_court, reviewed_case_number, (COALESCE(reviewed_decision_date, '-infinity'::date)))
-        DO UPDATE SET
-          reviewed_citation_key = EXCLUDED.reviewed_citation_key,
-          reviewed_docket_family_key = EXCLUDED.reviewed_docket_family_key,
-          reviewed_decision_date = EXCLUDED.reviewed_decision_date,
-          reviewed_sheet_number = EXCLUDED.reviewed_sheet_number,
-          outcome = EXCLUDED.outcome,
-          source = EXCLUDED.source,
-          evidence_classification = EXCLUDED.evidence_classification,
-          opening_evidence = EXCLUDED.opening_evidence,
-          parser_version = EXCLUDED.parser_version
-        WHERE (case_law_decision_reviews.reviewed_citation_key,
-          case_law_decision_reviews.reviewed_docket_family_key,
-          case_law_decision_reviews.reviewed_decision_date,
-          case_law_decision_reviews.reviewed_sheet_number,
-          case_law_decision_reviews.outcome,
-          case_law_decision_reviews.source,
-          case_law_decision_reviews.evidence_classification,
-          case_law_decision_reviews.opening_evidence,
-          case_law_decision_reviews.parser_version)
-          IS DISTINCT FROM (EXCLUDED.reviewed_citation_key,
-          EXCLUDED.reviewed_docket_family_key, EXCLUDED.reviewed_decision_date,
-          EXCLUDED.reviewed_sheet_number, EXCLUDED.outcome, EXCLUDED.source,
-          EXCLUDED.evidence_classification, EXCLUDED.opening_evidence, EXCLUDED.parser_version)
-
-      RETURNING 1`),
+        FROM (${incoming}) AS incoming
+        ON CONFLICT (reviewing_decision_id, reviewed_court, reviewed_case_number, (COALESCE(reviewed_decision_date, '-infinity'::date)))
+        DO NOTHING
+        RETURNING 1`),
       ).length;
     }
 
     counts.extractionVersions += executedRows(
-      await tx.execute(sql`UPDATE ${caseLawDecisions}
-      SET review_extraction_version = ${CASE_LAW_REVIEW_EXTRACTION_VERSION}
-      WHERE id = ${decisionId}::uuid AND country = 'CZE'
-        AND review_extraction_version IS DISTINCT FROM ${CASE_LAW_REVIEW_EXTRACTION_VERSION}
-      RETURNING 1`),
+      await replayRawWrite({
+        table: caseLawDecisions,
+        values: { reviewExtractionVersion: CASE_LAW_REVIEW_EXTRACTION_VERSION },
+        predicate: sql`${caseLawDecisions.id} = ${decisionId}::uuid AND ${caseLawDecisions.country} = 'CZE'`,
+        operation: { kind: "update" },
+        result: { kind: "rows", columns: sql`1` },
+      }).execute({ kind: "drizzle", connection: tx }),
     ).length;
   }
 
   counts.resolvedReviews += executedRows(
-    await tx.execute(sql`
-    WITH affected AS (
+    await replayRawWrite({
+      table: caseLawDecisionReviews,
+      alias: "review",
+      values: { reviewedDecisionId: sql`resolved.target` },
+      ctes: [
+        {
+          name: "affected",
+          query: sql`
       SELECT review.*
       FROM ${caseLawDecisionReviews} review
       WHERE review.reviewing_decision_id = ${decisionId}::uuid
@@ -206,8 +224,11 @@ export const writeDecisionReviews = async (
       FROM ${caseLawDecisionReviews} review
       WHERE ${previousIdentity?.country === "CZE"}::boolean
         AND review.reviewed_court = ${previousIdentity?.court ?? null}
-        AND review.reviewed_docket_family_key = ${previousIdentity?.docketFamilyKey ?? null}
-    ), resolved AS (
+        AND review.reviewed_docket_family_key = ${previousIdentity?.docketFamilyKey ?? null}`,
+        },
+        {
+          name: "resolved",
+          query: sql`
       SELECT review.reviewing_decision_id, review.reviewed_court,
         review.reviewed_case_number, review.reviewed_decision_date,
         CASE WHEN count(candidate.id) = 1 THEN min(candidate.id::text)::uuid END AS target
@@ -229,18 +250,16 @@ export const writeDecisionReviews = async (
         ORDER BY decision.id
         LIMIT 2
       ) candidate ON true
-      GROUP BY review.reviewing_decision_id, review.reviewed_court, review.reviewed_case_number, review.reviewed_decision_date
-    )
-    UPDATE ${caseLawDecisionReviews} review
-    SET reviewed_decision_id = resolved.target
-    FROM resolved
-    WHERE review.reviewing_decision_id = resolved.reviewing_decision_id
-      AND review.reviewed_court = resolved.reviewed_court
-      AND review.reviewed_case_number = resolved.reviewed_case_number
-      AND review.reviewed_decision_date IS NOT DISTINCT FROM resolved.reviewed_decision_date
-      AND review.reviewed_decision_id IS DISTINCT FROM resolved.target
-
-      RETURNING 1`),
+      GROUP BY review.reviewing_decision_id, review.reviewed_court, review.reviewed_case_number, review.reviewed_decision_date`,
+        },
+      ],
+      operation: { kind: "update", from: sql`resolved` },
+      predicate: sql`review.reviewing_decision_id = resolved.reviewing_decision_id
+        AND review.reviewed_court = resolved.reviewed_court
+        AND review.reviewed_case_number = resolved.reviewed_case_number
+        AND review.reviewed_decision_date IS NOT DISTINCT FROM resolved.reviewed_decision_date`,
+      result: { kind: "rows", columns: sql`1` },
+    }).execute({ kind: "drizzle", connection: tx }),
   ).length;
   await recordSystemAudit(tx, "system:case-law-review-reconcile", {
     subject: auditSubject,
