@@ -1,5 +1,6 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import type { QueryMeta } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import {
@@ -56,6 +57,8 @@ const { notificationsOptions } = await import("@/lib/notification-queries");
 const { useUserEventRefreshes } = await import("./user-events-sse");
 const { taskDetailOptions, taskKeys } =
   await import("@/lib/workspaces/queries/tasks");
+const { workspaceMemberPreviewsOptions } =
+  await import("@/lib/workspaces/queries/workspace-member-previews");
 const { resourceQueryOptions } = await import("@/lib/workspace-realtime");
 
 afterEach(() => {
@@ -346,6 +349,131 @@ test.each(["event", "reconnect"])(
         );
       });
       expect(own()).toBe("After");
+    } finally {
+      view.unmount();
+      for (const unsubscribe of subscriptions) {
+        unsubscribe();
+      }
+      client.clear();
+    }
+  },
+);
+
+test.each(["event", "reconnect"])(
+  "the existing user stream refreshes organization member previews on %s without fetching inactive identities",
+  async (delivery) => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { staleTime: Infinity, retry: false } },
+    });
+    const subscriptions: (() => void)[] = [];
+    let revision = 0;
+    const workspaceId = "00000000-0000-4000-8000-000000000001";
+    const observe = ({
+      organizationId,
+      userId,
+      workspaceIds,
+      active,
+    }: {
+      organizationId: string;
+      userId: string;
+      workspaceIds: readonly string[];
+      active: boolean;
+    }) => {
+      const options = workspaceMemberPreviewsOptions({
+        organizationId,
+        userId,
+        workspaceIds,
+      });
+      let reads = 0;
+      // Model the server's changing answer; the real option factory owns identity.
+      const read = async () => {
+        reads += 1;
+        return revision;
+      };
+      const owned = {
+        queryKey: options.queryKey,
+        meta: options.meta,
+        initialData: 0,
+        staleTime: Infinity,
+        queryFn: read,
+      };
+      if (active) {
+        const observer = new QueryObserver(client, owned);
+        subscriptions.push(observer.subscribe(() => undefined));
+      } else {
+        client.getQueryCache().build(client, owned);
+      }
+      return {
+        data: () => client.getQueryData(options.queryKey),
+        stale: () => client.getQueryState(options.queryKey)?.isInvalidated,
+        reads: () => reads,
+      };
+    };
+    const own = observe({
+      organizationId: ORGANIZATION,
+      userId: USER,
+      workspaceIds: [workspaceId],
+      active: true,
+    });
+    // Organization events intentionally have no workspace ID: every active batch refreshes.
+    const otherBatch = observe({
+      organizationId: ORGANIZATION,
+      userId: USER,
+      workspaceIds: ["00000000-0000-4000-8000-000000000002"],
+      active: true,
+    });
+    const oldUser = observe({
+      organizationId: ORGANIZATION,
+      userId: "previous-user",
+      workspaceIds: [workspaceId],
+      active: false,
+    });
+    const otherOrganization = observe({
+      organizationId: "organization-two",
+      userId: USER,
+      workspaceIds: [workspaceId],
+      active: true,
+    });
+    const view = renderHook(
+      () =>
+        useUserEventRefreshes({ organizationId: ORGANIZATION, userId: USER }),
+      {
+        wrapper: ({ children }) => (
+          <QueryClientProvider client={client}>{children}</QueryClientProvider>
+        ),
+      },
+    );
+    try {
+      expect(FakeEventSource.opened).toHaveLength(1);
+      const stream =
+        FakeEventSource.opened.at(0) ?? panic("Missing user stream");
+      expect(stream.url).toEndWith("/notifications/events");
+      revision = 1;
+      await act(async () => {
+        stream.open();
+        if (delivery === "event") {
+          stream.push(resourceSetUpdatedRealtimeEvent(RESOURCE_TYPE.WORKSPACE));
+        } else {
+          stream.drop();
+          stream.open();
+        }
+        await Promise.all(
+          client
+            .getQueryCache()
+            .findAll()
+            .map(async (query) => await query.promise),
+        );
+      });
+      expect(own.data()).toBe(1);
+      expect(own.reads()).toBe(1);
+      expect(otherBatch.data()).toBe(1);
+      expect(otherBatch.reads()).toBe(1);
+      expect(oldUser.data()).toBe(0);
+      expect(oldUser.stale()).toBe(true);
+      expect(oldUser.reads()).toBe(0);
+      expect(otherOrganization.data()).toBe(0);
+      expect(otherOrganization.stale()).toBe(false);
+      expect(otherOrganization.reads()).toBe(0);
     } finally {
       view.unmount();
       for (const unsubscribe of subscriptions) {

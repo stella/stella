@@ -13,7 +13,10 @@ import {
   contactsQueryRoot,
   workspaceMembersQueryRoot,
 } from "@/lib/resource-query-roots.logic";
-import { createWorkspaceQueryActionBatch } from "@/lib/workspace-sse";
+import {
+  applyWorkspaceRealtimeQueryActions,
+  createWorkspaceQueryActionBatch,
+} from "@/lib/workspace-sse";
 import { workspacesKeys } from "@/lib/workspaces/queries.logic";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities.logic";
 
@@ -22,6 +25,8 @@ import {
   getWorkspaceReconnectQueryActions,
   isWorkspaceQueryKey,
   parseWorkspaceRealtimeMessage,
+  resourceMutation,
+  resourceQueryOptions,
   WORKSPACE_REALTIME_QUERY_ACTION,
 } from "./workspace-realtime";
 
@@ -587,3 +592,65 @@ for (const rowCount of [10, 100]) {
     }
   });
 }
+
+test.each(["local", "event", "reconnect"])(
+  "workspace-set readers become stale only for a contained workspace on %s",
+  async (delivery) => {
+    const client = new QueryClient();
+    const batch = (name: string, workspaceIds: readonly string[]) => {
+      const options = resourceQueryOptions(
+        {
+          queryKey: ["workspace-set-reader", name],
+          initialData: 0,
+          queryFn: async () => 1,
+        },
+        {
+          resources: [RESOURCE_TYPE.ENTITY],
+          scope: { type: "workspace-set", workspaceIds },
+        },
+      );
+      client.getQueryCache().build(client, options);
+      return () => client.getQueryState(options.queryKey)?.isInvalidated;
+    };
+    const containing = batch("containing", [WORKSPACE_ID, "workspace-2"]);
+    const alsoContaining = batch("also-containing", [
+      "workspace-3",
+      WORKSPACE_ID,
+    ]);
+    const unrelated = batch("unrelated", ["workspace-2", "workspace-3"]);
+    const empty = batch("empty", []);
+    try {
+      if (delivery === "local") {
+        await resourceMutation({
+          mutation: "renameEntity",
+          queryClient: client,
+          mutationFn: async (_variables: {
+            workspaceId: string;
+            entityId: string;
+          }) => undefined,
+        })({ workspaceId: WORKSPACE_ID, entityId: "entity" });
+      } else {
+        const actions =
+          delivery === "reconnect"
+            ? getWorkspaceReconnectQueryActions({
+                workspaceId: WORKSPACE_ID,
+                queryClient: client,
+              })
+            : getWorkspaceRealtimeQueryActions(
+                {
+                  type: REALTIME_EVENT_TYPE.RESOURCE_SET_UPDATED,
+                  resourceType: RESOURCE_TYPE.ENTITY,
+                },
+                { workspaceId: WORKSPACE_ID, queryClient: client },
+              );
+        applyWorkspaceRealtimeQueryActions(client, actions);
+      }
+      expect(containing()).toBe(true);
+      expect(alsoContaining()).toBe(true);
+      expect(unrelated()).toBe(false);
+      expect(empty()).toBe(false);
+    } finally {
+      client.clear();
+    }
+  },
+);
