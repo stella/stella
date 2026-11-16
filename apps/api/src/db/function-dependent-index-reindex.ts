@@ -195,4 +195,8 @@ export const FUNCTION_DEPENDENT_INDEX_REINDEXES: readonly ReturnType<
     functionSignature: CASE_LAW_FILING_YEAR_FUNCTION_SIGNATURE,
     replacementRevision: "20261111150500_decision_docket_filing_year_bra",
   }),
+  createFunctionDependentIndexReindex({
+    functionSignature: CASE_LAW_FILING_YEAR_FUNCTION_SIGNATURE,
+    replacementRevision: "20261116140400_czech_docket_long_sheets",
+  }),
 ];
