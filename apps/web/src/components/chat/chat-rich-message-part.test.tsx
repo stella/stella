@@ -8,11 +8,14 @@ import { IntlProvider } from "use-intl";
 import { GENERATED_VISUAL_MIME_TYPE } from "@stll/api-contract/generated-visual";
 import { STELLA_MCP_APP_MIME_TYPE } from "@stll/api-contract/stella-mcp-app";
 import { assertProperty } from "@stll/property-testing";
+import { createTestState } from "@stll/test-state";
 
 import type { RichChatPart } from "@/components/chat/chat-rich-message-part";
 import messages from "@/i18n/langs/en.json";
 
-process.env["VITE_API_URL"] ??= "https://api.example.test";
+const testState = createTestState({ file: import.meta.path, config: {} });
+
+testState.setEnvIfAbsent("VITE_API_URL", "https://api.example.test");
 
 const unsafeScriptUrl = ["java", "script:alert(1)"].join("");
 
@@ -28,12 +31,9 @@ const { ChatRenderErrorBoundary } =
 
 const renderMediaPart = (part: RichChatPart) =>
   renderToStaticMarkup(
-    createElement(IntlProvider, {
-      children: createElement(ChatRichMessagePart, { part }),
-      locale: "en",
-      messages,
-      timeZone: "UTC",
-    }),
+    <IntlProvider locale="en" messages={messages} timeZone="UTC">
+      <ChatRichMessagePart part={part} />
+    </IntlProvider>,
   );
 
 describe("rich chat message parts", () => {

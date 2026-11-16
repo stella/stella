@@ -1,15 +1,8 @@
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  test,
-} from "bun:test";
+import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { and, count, eq } from "drizzle-orm";
 import * as v from "valibot";
 
+import { createTestState } from "@stll/test-state";
 import { DAY_IN_MS } from "@stll/time";
 
 import {
@@ -41,17 +34,14 @@ import {
 } from "@/api/tests/helpers/mock-agent-auth-db";
 import { serveRoutesForTest } from "@/api/tests/helpers/serve-routes";
 
+const testState = createTestState({ file: import.meta.path, config: env });
+
 // These tests drive the agent-auth slice end to end against the same
 // better-auth instance and database the API uses at runtime, so the token
 // mint exercises the real authorization-code + JWT path.
 
-let priorStorageSetting = false;
 beforeEach(() => {
-  priorStorageSetting = env.AGENT_CLIENT_STORAGE_V1_ENABLED;
-  env.AGENT_CLIENT_STORAGE_V1_ENABLED = true;
-});
-afterEach(() => {
-  env.AGENT_CLIENT_STORAGE_V1_ENABLED = priorStorageSetting;
+  testState.setConfig("AGENT_CLIENT_STORAGE_V1_ENABLED", true);
 });
 
 type Json = Record<string, unknown>;
@@ -116,7 +106,7 @@ const decodeJwt = (jwt: string): Json => {
   return JSON.parse(Buffer.from(segment, "base64url").toString());
 };
 
-beforeAll(async () => {
+testState.beforeAll(async () => {
   await initAgentAuthTestDb();
 });
 
@@ -226,7 +216,7 @@ describe("agent registration configuration", () => {
 
 describe("agent-auth service_auth flow", () => {
   test("registration retains the initial stored format before activation", async () => {
-    env.AGENT_CLIENT_STORAGE_V1_ENABLED = false;
+    testState.setConfig("AGENT_CLIENT_STORAGE_V1_ENABLED", false);
     const response = await postIdentity({
       type: "service_auth",
       login_hint: unclaimedHint(),

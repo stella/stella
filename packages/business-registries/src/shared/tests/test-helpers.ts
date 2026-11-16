@@ -1,9 +1,9 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { expect } from "bun:test";
 import fc from "fast-check";
 
-import { RegistryError } from "./errors.js";
-import { isRecord } from "./guards.js";
+import { RegistryError } from "../errors.js";
+import { isRecord } from "../guards.js";
 
 export const registryString: fc.Arbitrary<string> = fc.oneof(
   fc.string({ maxLength: 160 }),
@@ -69,8 +69,10 @@ export const expectRegistryResponses = async <T>(
   globalThis.fetch = Object.assign(
     async (url: string | URL | Request) => {
       requests += 1;
-      return Response.json(
-        responseOf(url instanceof Request ? url.url : String(url)),
+      return await Promise.resolve(
+        Response.json(
+          responseOf(url instanceof Request ? url.url : String(url)),
+        ),
       );
     },
     { preconnect: originalFetch.preconnect },
@@ -138,7 +140,8 @@ const registryMutationLocations = (
           case "array":
             return location.array[location.index] !== null;
           default:
-            return location satisfies never;
+            location satisfies never;
+            return panic("Unknown registry mutation location");
         }
       })
     : locations;
@@ -185,6 +188,7 @@ export const mutatedRegistryPayload = ({
     }
     default:
       location satisfies never;
+      return panic("Unknown registry mutation location");
   }
   expect(copy).not.toEqual(payload);
   return copy;

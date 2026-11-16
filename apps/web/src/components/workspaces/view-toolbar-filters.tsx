@@ -43,6 +43,7 @@ import {
 } from "@stll/ui/select";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { ViewFilterButton, ViewFilterChip } from "@stll/ui/view-toolbar";
+import { PropertyIcon } from "@stll/workspace-ui/property-icon";
 
 import type {
   ConditionOperator,
@@ -67,7 +68,6 @@ import {
   SingleSelectValue,
 } from "@/components/workspaces/conditions/condition-select-values";
 import { SelectColorIcon } from "@/components/workspaces/properties/shared";
-import { PropertyIcon } from "@/components/workspaces/property-helpers";
 import { WORK_TYPES } from "@/components/workspaces/tasks/task-detail-constants";
 import { filterFieldsByLabel } from "@/components/workspaces/view-toolbar-filters.logic";
 import type { TranslationKey } from "@/i18n/types";

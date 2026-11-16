@@ -74,8 +74,8 @@
       "version": 0
     },
     "cz-nss::decision": {
-      "fingerprint": "eb49cfd7d3ca90fa470ae32fb96758d1f8f3060ded2306492b4d6fc43691142c",
-      "storedInputIdentity": "438506c5ba05f3ef7d5f9bfdc3b1c923fdff085455c8f8b88872d1b4a0d14e27",
+      "fingerprint": "4d8a0fd1ef0461b58580edc4b7025988f8cd2280840542afd43f1d0ca37cc951",
+      "storedInputIdentity": "5ca650e04f28e0625643f44e8d2d48cd13c29e7cdfcb42d662aa4138a1204fc0",
       "version": 0
     },
     "cz-regional::decision": {
@@ -119,8 +119,8 @@
       "version": 0
     },
     "pl-kis::decision": {
-      "fingerprint": "f34cfafed407a4087a7cf44127414a78a02214fe58f2a46b231b935e65c92816",
-      "storedInputIdentity": "2089ccf0970fc4b4705cdf276b9a6c1faa6ab68c72249558838a70d5d792bc89",
+      "fingerprint": "87d9d4636b069c15cdb04b7b888643232e25e6d45c359ae1ecf11ec1004271d2",
+      "storedInputIdentity": "488506e8709155f196880e31d4b6a2e3e6fd10dff63fef47ed3d820e644cfe7a",
       "version": 0
     },
     "pl-ncourt::decision": {

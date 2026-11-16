@@ -469,7 +469,7 @@ const applyFilter = (draft: Draft, call: FilterCall): void => {
         );
         return;
       }
-      draft.meta[call.name] = text;
+      draft.meta = { ...draft.meta, [call.name]: text };
       return;
     }
     case "required":
@@ -558,7 +558,7 @@ const applyFilter = (draft: Draft, call: FilterCall): void => {
         );
         return;
       }
-      draft.meta[call.name] = expression;
+      draft.meta = { ...draft.meta, [call.name]: expression };
       return;
     }
     default:

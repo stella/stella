@@ -25,6 +25,8 @@ const UNPROJECTED_MEMBER_COLUMNS = [
   "lastActiveWorkspaceId",
   // When they joined is not shown in a picker.
   "createdAt",
+  // Whether a colleague may see billing amounts is not shown in a picker.
+  "billingAccess",
 ] as const satisfies readonly (keyof MemberRow)[];
 
 const MEMBER_CANDIDATE_COLUMNS = { userId: member.userId } as const;
