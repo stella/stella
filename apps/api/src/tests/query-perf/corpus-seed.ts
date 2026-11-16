@@ -60,8 +60,10 @@ import { withSeededTableMaintenance } from "./seeded-tables";
  *   table written over months.
  */
 const CORPUS_SCENARIO_ROWS = 60_000;
+// Outside the 00c2 coverage-source range and the provision (00c3) and replay
+// (00c4) sources, so no other scenario counts these rows as its own.
 const COMPLETION_SOURCE_ID = toSafeId<"caseLawSource">(
-  "01990000-00c3-7000-8000-000000000001",
+  "01990000-00c6-7000-8000-000000000001",
 );
 const COMPLETION_ROWS = 100_000;
 /**
