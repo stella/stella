@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
 import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
+import { compareCodeUnit } from "@stll/collation";
 import { withTimeout } from "@stll/concurrency/with-timeout";
 import { roleAllows } from "@stll/permissions";
 
@@ -359,12 +360,15 @@ if (!databaseUrl || !enabled) {
         )?.groups?.["roles"];
         expect(roles).toBeDefined();
         const installed = [...(roles ?? "").matchAll(/'(?<role>[^']+)'/gu)].map(
-          (match) => match.groups?.["role"],
+          (match) =>
+            match.groups?.["role"] ?? panic("Matched role capture must exist"),
         );
         const allowed = ORGANIZATION_ROLE_NAMES.filter((role) =>
           roleAllows(role, { workspace: ["update"] }),
         );
-        expect(installed.toSorted()).toEqual(allowed.toSorted());
+        expect(installed.toSorted(compareCodeUnit)).toEqual(
+          allowed.toSorted(compareCodeUnit),
+        );
       });
     });
 
