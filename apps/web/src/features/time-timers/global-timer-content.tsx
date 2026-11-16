@@ -43,16 +43,42 @@ class TimerSnapshotConflictError extends TaggedError(
   runningCount: number;
 }> {}
 
+/**
+ * A timer's elapsed time. The one-second clock lives here, not in the header
+ * control, so it ticks only while something shows a timer (a running timer in
+ * the trigger, or the open popover's list) and only for a running timer: an
+ * idle header never re-renders.
+ */
+const TimerElapsed = ({
+  className,
+  timer,
+}: {
+  className: string;
+  timer: TimeTimer;
+}) => {
+  const format = useFormatter();
+  const now = useNow({
+    updateInterval: timer.state === "running" ? 1000 : undefined,
+  }).getTime();
+  return (
+    <bdi className={className}>
+      {formatTimerSeconds({
+        seconds: elapsedTimerSeconds(timer, now),
+        formatNumber: (value) =>
+          format.number(value, { minimumIntegerDigits: 2, useGrouping: false }),
+      })}
+    </bdi>
+  );
+};
+
 export const GlobalTimerContent = ({
   workspaceId,
 }: {
   workspaceId?: string;
 }) => {
   const t = useTranslations();
-  const format = useFormatter();
   const user = useAuthenticatedUser();
   const analytics = useAnalytics();
-  const now = useNow({ updateInterval: 1000 }).getTime();
   const [open, setOpen] = useState(false);
   const [panel, setPanel] = useState<TimerPanelState>({ type: "list" });
   const timers = useInfiniteQuery(
@@ -90,12 +116,6 @@ export const GlobalTimerContent = ({
       );
     }
   }, [analytics, runningCount]);
-  const elapsed = (timer: TimeTimer) =>
-    formatTimerSeconds({
-      seconds: elapsedTimerSeconds(timer, now),
-      formatNumber: (value) =>
-        format.number(value, { minimumIntegerDigits: 2, useGrouping: false }),
-    });
   const selectedMatterId =
     panel.type === "confirm" ? panel.timer.matterId : workspaceId;
   const selectedMatter = matters.data?.workspaces.find(
@@ -125,7 +145,7 @@ export const GlobalTimerContent = ({
         >
           <ClockIcon className="size-4" />
           {active ? (
-            <bdi className="text-sm tabular-nums">{elapsed(active)}</bdi>
+            <TimerElapsed className="text-sm tabular-nums" timer={active} />
           ) : (
             <span className="sr-only">{t("billing.globalTimer.title")}</span>
           )}
@@ -183,9 +203,10 @@ export const GlobalTimerContent = ({
                           </BidiText>
                         )}
                       </div>
-                      <bdi className="shrink-0 text-sm tabular-nums">
-                        {elapsed(timer)}
-                      </bdi>
+                      <TimerElapsed
+                        className="shrink-0 text-sm tabular-nums"
+                        timer={timer}
+                      />
                     </div>
                     {(canUpdate || canDelete) && (
                       <div className="flex flex-wrap gap-1">
