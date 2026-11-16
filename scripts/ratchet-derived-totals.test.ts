@@ -36,6 +36,25 @@ const snapshot = (files: Record<string, number>) => ({
 });
 
 describe("derived ratchet budgets", () => {
+  for (const file of [
+    "__proto__",
+    "constructor",
+    "toString",
+    "hasOwnProperty",
+    "1",
+    "žluťoučký.ts",
+  ]) {
+    test(`configuration retains an own count for ${file}`, () => {
+      const files = { [file]: 2 };
+      expect(
+        inspectConfiguration([metric], { "test-metric": snapshot(files) }),
+      ).toEqual({
+        status: "valid",
+        baseline: { "test-metric": snapshot(files) },
+      });
+    });
+  }
+
   test("historical totals must agree with their file budgets", () => {
     expect(
       inspectConfiguration([metric], {
