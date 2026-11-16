@@ -478,7 +478,6 @@
     "apps/api/src/handlers/sharepoint/graph-oauth.ts": 1,
     "apps/api/src/lib/deepl/client.ts": 2,
     "apps/api/src/lib/files/gotenberg.ts": 1,
-    "apps/api/src/lib/hosted-usage-provider/client.ts": 1,
     "apps/api/src/lib/web-search/tavily.ts": 1
   },
   "no-computed-key-record-assignment/no-computed-key-record-assignment": {
@@ -812,14 +811,12 @@
     "apps/api/src/handlers/style-sets/storage.ts": 1,
     "apps/api/src/handlers/templates/update.ts": 1,
     "apps/api/src/handlers/time-entries/batch/delete.ts": 1,
-    "apps/api/src/handlers/time-entries/batch/update.ts": 1,
     "apps/api/src/handlers/time-entries/delete.ts": 1,
     "apps/api/src/handlers/time-entries/update.ts": 1,
     "apps/api/src/handlers/uploads/agent-skill.ts": 1,
     "apps/api/src/handlers/uploads/delete.ts": 1,
     "apps/api/src/handlers/uploads/entity-version.ts": 1,
     "apps/api/src/handlers/uploads/update.ts": 3,
-    "apps/api/src/handlers/work-obligations/update.ts": 1,
     "apps/api/src/handlers/workspaces/archive.ts": 1,
     "apps/api/src/handlers/workspaces/correspondence/update.ts": 1,
     "apps/api/src/handlers/workspaces/members/remove.ts": 2,
@@ -921,7 +918,6 @@
   },
   "no-native-ui/no-native-accordion": {
     "apps/desktop/src/activity/ActivityApp.tsx": 2,
-    "packages/decision-reader/src/decision-text.tsx": 2,
     "packages/decision-reader/src/headnote-block.tsx": 2
   },
   "no-native-ui/no-native-button": {
@@ -931,9 +927,7 @@
     "packages/decision-reader/src/cited-provision.tsx": 1
   },
   "no-native-ui/no-native-checkbox": {},
-  "no-native-ui/no-native-details-grid": {
-    "apps/landing/src/components/react/previews/RegistryLookupPreview.tsx": 3
-  },
+  "no-native-ui/no-native-details-grid": {},
   "no-native-ui/no-native-dialog": {
     "apps/web/src/components/ai-suggestions/host.tsx": 1,
     "apps/web/src/features/chat/answer-edit/answer-edit-panel.tsx": 1

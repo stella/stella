@@ -106,89 +106,103 @@ const decision = {
   },
 } satisfies ReaderDecision;
 
-test("publisher headings and caption information share one translated disclosure across analysis sections", () => {
-  for (const label of ["Case information", "معلومات القضية"]) {
-    for (const count of [1, 2, 10, 100]) {
-      const blocks = Array.from({ length: count }, (_, index) => [
-        {
-          type: "heading",
-          id: `publisher-heading-${index}`,
-          anchorId: `publisher-heading-${index}`,
-          role: "publisher-heading",
-          level: 2,
-          inlines: [{ type: "text", text: `Publisher heading ${index}.` }],
-          plainText: `Publisher heading ${index}.`,
-        } satisfies DocumentAst["blocks"][number],
-        {
-          type: "paragraph",
-          id: `summary-${index}`,
-          anchorId: `summary-${index}`,
-          role: index % 2 === 0 ? "syllabus" : "summary",
-          inlines: [{ type: "text", text: `Published summary ${index}.` }],
-          plainText: `Published summary ${index}.`,
-        } satisfies DocumentAst["blocks"][number],
-        {
-          type: "paragraph",
-          id: `caption-${index}`,
-          anchorId: `caption-${index}`,
-          role: "apparatus",
-          inlines: [{ type: "text", text: `Publisher information ${index}.` }],
-          plainText: `Publisher information ${index}.`,
-        } satisfies DocumentAst["blocks"][number],
-      ]).flat();
-      const sectionMap = new Map(
-        blocks.map((block) => [
-          block.anchorId,
-          { cssVar: "--muted", headingId: block.id },
-        ]),
-      );
-      const adapters = {
-        ...fakeReaderAdapters,
-        messages: {
-          ...fakeReaderAdapters.messages,
-          "caseLaw.reader.headMatter": label,
-        },
-      } satisfies DecisionReaderAdapters;
-      const markup = renderToStaticMarkup(
-        <DecisionReaderProvider adapters={adapters}>
-          <DecisionText
-            decision={{
-              ...decision,
-              documentAst: { ...ast, blocks: [...blocks, ...ast.blocks] },
-            }}
-            decisionId={decision.id}
-            placements={{
-              anchorsByPieceId: {},
-              provisionsByAnchorId: new Map(),
-              failures: [],
-            }}
-            sectionMap={sectionMap}
-          />
-        </DecisionReaderProvider>,
-      );
-      expect(markup.match(/<details class="reader-apparatus"/gu)).toHaveLength(
-        1,
-      );
-      expect(markup.match(/<details\b/gu)).toHaveLength(2);
-      expect(markup).toContain(
-        `class="reader-apparatus-summary">${label}</summary>`,
-      );
-      const disclosureStart = markup.indexOf(
-        '<details class="reader-apparatus"',
-      );
-      const disclosure = markup.slice(
-        disclosureStart,
-        markup.indexOf("</details>", disclosureStart),
-      );
-      for (const block of blocks) {
-        if (block.type === "heading" || block.role === "apparatus") {
-          expect(disclosure).toContain(block.plainText);
-        } else {
-          expect(disclosure).not.toContain(block.plainText);
+test("publisher headings and caption information share one translated disclosure across analysis sections", async () => {
+  const { GlobalRegistrator } = await import("@happy-dom/global-registrator");
+  GlobalRegistrator.register();
+  try {
+    for (const label of ["Case information", "معلومات القضية"]) {
+      for (const count of [1, 2, 10, 100]) {
+        const blocks = Array.from({ length: count }, (_, index) => [
+          {
+            type: "heading",
+            id: `publisher-heading-${index}`,
+            anchorId: `publisher-heading-${index}`,
+            role: "publisher-heading",
+            level: 2,
+            inlines: [{ type: "text", text: `Publisher heading ${index}.` }],
+            plainText: `Publisher heading ${index}.`,
+          } satisfies DocumentAst["blocks"][number],
+          {
+            type: "paragraph",
+            id: `summary-${index}`,
+            anchorId: `summary-${index}`,
+            role: index % 2 === 0 ? "syllabus" : "summary",
+            inlines: [{ type: "text", text: `Published summary ${index}.` }],
+            plainText: `Published summary ${index}.`,
+          } satisfies DocumentAst["blocks"][number],
+          {
+            type: "paragraph",
+            id: `caption-${index}`,
+            anchorId: `caption-${index}`,
+            role: "apparatus",
+            inlines: [
+              { type: "text", text: `Publisher information ${index}.` },
+            ],
+            plainText: `Publisher information ${index}.`,
+          } satisfies DocumentAst["blocks"][number],
+        ]).flat();
+        const sectionMap = new Map(
+          blocks.map((block) => [
+            block.anchorId,
+            { cssVar: "--muted", headingId: block.id },
+          ]),
+        );
+        const adapters = {
+          ...fakeReaderAdapters,
+          messages: {
+            ...fakeReaderAdapters.messages,
+            "caseLaw.reader.headMatter": label,
+          },
+        } satisfies DecisionReaderAdapters;
+        const markup = renderToStaticMarkup(
+          <DecisionReaderProvider adapters={adapters}>
+            <DecisionText
+              decision={{
+                ...decision,
+                documentAst: { ...ast, blocks: [...blocks, ...ast.blocks] },
+              }}
+              decisionId={decision.id}
+              placements={{
+                anchorsByPieceId: {},
+                provisionsByAnchorId: new Map(),
+                failures: [],
+              }}
+              sectionMap={sectionMap}
+            />
+          </DecisionReaderProvider>,
+        );
+        const document = new DOMParser().parseFromString(markup, "text/html");
+        const disclosures = document.querySelectorAll(".reader-apparatus");
+        expect(disclosures).toHaveLength(1);
+        // The court's separate top-matter disclosure is unchanged.
+        expect(document.querySelectorAll("details")).toHaveLength(1);
+        const disclosure = disclosures[0];
+        expect(
+          disclosure?.querySelector('[data-slot="collapsible-trigger"]')
+            ?.textContent,
+        ).toBe(label);
+        expect(
+          disclosure
+            ?.querySelector('[data-slot="collapsible-trigger"]')
+            ?.getAttribute("aria-expanded"),
+        ).toBe("false");
+        const body = disclosure?.querySelector(
+          '[data-slot="collapsible-panel"]',
+        );
+        expect(body?.hasAttribute("hidden")).toBe(true);
+        const disclosureText = body?.textContent ?? "";
+        for (const block of blocks) {
+          if (block.type === "heading" || block.role === "apparatus") {
+            expect(disclosureText).toContain(block.plainText);
+          } else {
+            expect(disclosureText).not.toContain(block.plainText);
+          }
+          expect(markup.split(block.plainText)).toHaveLength(2);
         }
-        expect(markup.split(block.plainText)).toHaveLength(2);
       }
     }
+  } finally {
+    await GlobalRegistrator.unregister();
   }
 });
 

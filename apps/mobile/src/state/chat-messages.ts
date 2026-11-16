@@ -13,6 +13,11 @@ import {
   type ChatRunTarget,
   chatRunTargetSchema,
 } from "@stll/api-contract/chat-run-target";
+import {
+  CHAT_TURN_STEERING,
+  type ChatTurnSteering,
+  chatTurnSteeringSchema,
+} from "@stll/api-contract/chat-send-intent";
 
 import type { Fetch } from "@/connection/http";
 import type { AccessTokenSource } from "@/connection/session";
@@ -64,6 +69,11 @@ const messagesPageSchema = v.object({
   messages: v.array(messageSchema),
   olderCursor: v.nullable(v.string()),
   activeTurnId: v.optional(v.nullable(v.string()), null),
+  /** Whether that turn takes a message mid-turn; unsaid, it takes none. */
+  activeTurnSteering: v.optional(
+    chatTurnSteeringSchema,
+    CHAT_TURN_STEERING.notSteerable,
+  ),
   usedAnonymization: v.optional(v.boolean(), false),
   /** Where the thread's turns run, read where a paused one is answered. */
   runTarget: v.optional(v.unknown()),
@@ -142,6 +152,8 @@ export type ChatMessagesPage = {
   readonly entries: readonly ChatEntry[];
   readonly olderCursor: string | null;
   readonly activeTurnId: string | null;
+  /** Whether the active turn takes a message mid-turn, as the server knows it. */
+  readonly activeTurnSteering: ChatTurnSteering;
   readonly usedAnonymization: boolean;
   readonly pendingInput: PendingInput | null;
   /** On the thread's latest page, when its latest answer failed. */
@@ -275,6 +287,7 @@ const toPage = (
   entries: page.messages.flatMap((message) => toChatEntry(message) ?? []),
   olderCursor: page.olderCursor,
   activeTurnId: page.activeTurnId,
+  activeTurnSteering: page.activeTurnSteering,
   usedAnonymization: page.usedAnonymization,
   // A thread that never chose where it runs runs on stella's model path.
   runTargetKind: v.is(chatRunTargetSchema, page.runTarget)
@@ -288,6 +301,21 @@ const toPage = (
     : null,
   retry: latest ? retryOf(page.messages, page.runTarget) : null,
 });
+
+/**
+ * Whether the turn takes a message mid-turn once the thread's page is read
+ * again: as the page says, unless a turn's stream is open, which says it for
+ * its own turn.
+ */
+export const steeringAfterPageRead = ({
+  page,
+  shown,
+  streamOpen,
+}: {
+  readonly page: ChatTurnSteering;
+  readonly shown: ChatTurnSteering;
+  readonly streamOpen: boolean;
+}): ChatTurnSteering => (streamOpen ? shown : page);
 
 /** An older page in front of what is loaded, without a message twice. */
 export const prependOlderPage = (

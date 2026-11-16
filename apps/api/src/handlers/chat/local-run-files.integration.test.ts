@@ -207,6 +207,8 @@ const localRunFor = ({
       options: Parameters<typeof readRunOutputFile>[1],
     ) => Result.ok(await readRunOutputFile(testDb, options)),
     recordChatReadSeq: async () => await Promise.resolve(Result.ok(undefined)),
+    readChatTurnSteering: async () =>
+      await Promise.resolve(Result.ok("not_steerable")),
     interruptRun: async () =>
       await Promise.resolve(Result.ok({ type: "queued" })),
   });

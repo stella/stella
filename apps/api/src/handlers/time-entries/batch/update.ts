@@ -357,27 +357,31 @@ const batchUpdate = createSafeHandler(
             if (violation) {
               return { type: "policy" as const, error: violation };
             }
-            const updated =
-              locked.ids.length === 0
-                ? []
-                : await tx
-                    .update(timeEntries)
-                    .set({
-                      status: BILLING_STATUS.DRAFT,
-                      approvedByUserId: null,
-                      approvedAt: null,
-                      updatedAt: now,
-                    })
-                    .where(
-                      locked.where(
-                        and(
-                          condition,
-                          eq(timeEntries.status, BILLING_STATUS.APPROVED),
-                        ),
-                      ),
-                    )
-                    .returning({ id: timeEntries.id });
-            await recordAuditEvent(tx, buildBatchEvents(updated, action));
+            const updated = await transitionBatch({
+              tx,
+              spec: TRANSITIONS.timeEntries,
+              ids: locked.ids,
+              options: {
+                from: [BILLING_STATUS.APPROVED],
+                to: BILLING_STATUS.DRAFT,
+                guard:
+                  and(
+                    condition,
+                    eq(timeEntries.status, BILLING_STATUS.APPROVED),
+                  ) ?? panic("Batch revert eligibility predicate must exist"),
+                set: {
+                  approvedByUserId: null,
+                  approvedAt: null,
+                  updatedAt: now,
+                },
+              },
+              recordTransitionAuditEvent: async (auditTx, changed) => {
+                await recordAuditEvent(
+                  auditTx,
+                  buildBatchEvents([...changed], action),
+                );
+              },
+            });
             await recordBillingCapCrossings(tx, {
               workspaceId,
               recordAuditEvent,

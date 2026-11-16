@@ -449,6 +449,16 @@ slot and content minimum; `control` uses 28px for a line inside an editable
 field. Consumers use the same entry's `slot` and `content` values rather
 than maintaining parallel geometry maps.
 
+### Disclosure Panels
+
+`CollapsiblePanel` changes layout directly and fades opening content from
+transparent to opaque for 200ms with ease-in-out timing. Closing hides the
+panel immediately; disclosure motion never animates height. Open content
+permits overflow throughout the reveal, so hanging document controls and
+focus rings remain reachable. Closed content stays hidden and searchable
+through the existing hidden-until-found owner. Reduced motion, an initially
+open panel, and find-in-page reveal do not replay the opening animation.
+
 ### Menu Rows & Sections
 
 One metric for every row of a menu list, whichever component draws
