@@ -9,8 +9,9 @@ import type { ComponentProps, JSXElementConstructor } from "react";
 
 import { expect, test } from "bun:test";
 
-import { type Button, BUTTON_SIZE_CONTENT } from "./button";
+import { type Button, BUTTON_CONTENT, BUTTON_SIZE_CONTENT } from "./button";
 import type { Button as NativeButton } from "./button.native";
+import { nativeButtonClassNames } from "./button.native-classes";
 import { BUTTON_SIZES, type ButtonContract } from "./button.shared";
 import type { DocumentMark } from "./document-mark";
 import type { DocumentMark as NativeDocumentMark } from "./document-mark.native";
@@ -110,4 +111,16 @@ test("the web button sizes exactly the shared sizes", () => {
   expect(Object.keys(BUTTON_SIZE_CONTENT).toSorted()).toEqual(
     [...BUTTON_SIZES].toSorted(),
   );
+});
+
+test("inspector rows carry text and need no additional native hit slop", () => {
+  expect(BUTTON_SIZE_CONTENT["inspector-row"]).toBe(BUTTON_CONTENT.text);
+  expect(
+    nativeButtonClassNames({
+      inactive: false,
+      selected: false,
+      size: "inspector-row",
+      variant: "ghost",
+    }).slop,
+  ).toBe(0);
 });

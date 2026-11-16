@@ -436,7 +436,8 @@ export const ChatMatterPicker = ({
       open={menuOpen}
     >
       <MenuTrigger
-        className={cn(COMPOSER_PICKER_TRIGGER_CLASS, "max-w-[220px] gap-0.5")}
+        appearance="caption"
+        className="max-w-[220px] gap-0.5"
         title={
           selected.length > 1
             ? selected.map((m) => m.name).join(", ")

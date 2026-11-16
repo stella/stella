@@ -73,10 +73,7 @@ import { filterFieldsByLabel } from "@/components/workspaces/view-toolbar-filter
 import type { TranslationKey } from "@/i18n/types";
 import type { WorkspaceProperty } from "@/lib/types";
 
-import {
-  ADVANCED_FILTER_POPUP_CLASS_NAME,
-  AdvancedFilterEditor,
-} from "./advanced-filter-editor";
+import { AdvancedFilterEditor } from "./advanced-filter-editor";
 
 /** A filter value's text as the number its field shows; empty or unreadable
  *  text shows an empty field. */
@@ -483,7 +480,7 @@ const AdvancedFilterChip = ({
       </PopoverTrigger>
       <PopoverPopup
         align="start"
-        className={ADVANCED_FILTER_POPUP_CLASS_NAME}
+        className="w-[44rem] max-w-[92vw]"
         padding="none"
       >
         <AdvancedFilterEditor

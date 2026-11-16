@@ -12,6 +12,7 @@ import { useRender } from "@base-ui/react/use-render";
 import { panic } from "better-result";
 import { cva } from "class-variance-authority";
 
+import { TOOLBAR_ROW_HEIGHT } from "../inspector/layout-tokens";
 import {
   blockDisabledActivation,
   blockDisabledKeyActivation,
@@ -98,6 +99,7 @@ const BUTTON_SIZE_CLASS_NAMES = {
   // reader text) is a `ButtonTextRun`.
   inline:
     "inline h-auto rounded-sm border-0 p-0 text-start text-[length:inherit] leading-[inherit] font-normal whitespace-normal select-text before:rounded-[calc(var(--radius-sm)-1px)] sm:text-[length:inherit] [&_svg]:mx-0 [&_svg]:inline [&_svg]:align-[-0.125em] [&_svg:not(:last-child)]:me-1",
+  "inspector-row": `${TOOLBAR_ROW_HEIGHT} justify-start rounded-none px-3`,
   lg: "h-10 px-[calc(--spacing(3.5)-1px)] sm:h-9",
   // One row of a menu list. The metric is shared with `CommandItem`; the
   // rest undoes the base button's centred content and its icon inset, so
@@ -245,6 +247,7 @@ const BUTTON_SIZE_CONTENT = {
   "icon-2xs": BUTTON_CONTENT.icon,
   "icon-xs": BUTTON_CONTENT.icon,
   inline: BUTTON_CONTENT.text,
+  "inspector-row": BUTTON_CONTENT.text,
   lg: BUTTON_CONTENT.text,
   row: BUTTON_CONTENT.text,
   sm: BUTTON_CONTENT.text,
