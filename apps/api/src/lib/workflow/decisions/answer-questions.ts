@@ -322,17 +322,21 @@ const integerCandidates = ({
 const candidateCriteria = (
   candidates: readonly Candidate[],
 ): Record<string, SystemOneEntry> => {
-  const criteria: Record<string, SystemOneEntry> = {};
-  for (const candidate of candidates) {
-    criteria[candidate.key] = {
-      value: candidate.verbatim,
-      in: candidate.sourceId,
-      context: candidate.snippet,
-    };
-  }
-  criteria[NOT_STATED] =
-    "None of the listed values is the one the question asks for, or the sources do not state it.";
-  return criteria;
+  const criteria = new Map<string, SystemOneEntry>(
+    candidates.map((candidate) => [
+      candidate.key,
+      {
+        value: candidate.verbatim,
+        in: candidate.sourceId,
+        context: candidate.snippet,
+      },
+    ]),
+  );
+  criteria.set(
+    NOT_STATED,
+    "None of the listed values is the one the question asks for, or the sources do not state it.",
+  );
+  return Object.fromEntries(criteria);
 };
 
 const whereQuestion = (
@@ -342,20 +346,19 @@ const whereQuestion = (
   if (sources.length === 0 || sources.length > LOCATOR_CHOICE_MAX_SOURCES) {
     return null;
   }
-  const criteria: Record<string, SystemOneEntry> = {};
-  for (const source of sources) {
-    criteria[source.id] = truncate(
-      collapseWhitespace(source.text),
-      LOCATOR_DESCRIPTION_CHARS,
-    );
-  }
-  criteria[NO_SOURCE] = "No source states the answer.";
+  const criteria = new Map(
+    sources.map((source) => [
+      source.id,
+      truncate(collapseWhitespace(source.text), LOCATOR_DESCRIPTION_CHARS),
+    ]),
+  );
+  criteria.set(NO_SOURCE, "No source states the answer.");
   return choice(
     {
       question,
       task: "Which entry of `sources` states the answer to `question`? Choose `__none` when no entry states it.",
     },
-    criteria,
+    Object.fromEntries(criteria),
   );
 };
 
@@ -373,51 +376,61 @@ const planSelect = (
   ) {
     return null;
   }
-  const questions: Record<string, SystemOneQuestion> = {};
+  const questions = new Map<string, SystemOneQuestion>();
   const where = whereQuestion(question.question, sources);
   const whereKey = where === null ? null : `${question.id}:where`;
   if (where !== null && whereKey !== null) {
-    questions[whereKey] = where;
+    questions.set(whereKey, where);
   }
   if (content.type === "single-select") {
-    const criteria: Record<string, SystemOneEntry> = {};
-    for (const [index, option] of content.options.entries()) {
-      criteria[selectOptionKey(index)] = option.value;
-    }
-    criteria[NOT_STATED] =
-      "The sources do not state this, or none of the listed options applies.";
+    const criteria = new Map(
+      content.options.map((option, index) => [
+        selectOptionKey(index),
+        option.value,
+      ]),
+    );
+    criteria.set(
+      NOT_STATED,
+      "The sources do not state this, or none of the listed options applies.",
+    );
     const valueKey = `${question.id}:value`;
-    questions[valueKey] = choice(
-      {
-        question: question.question,
-        task: "Which option answers `question` according to `sources`? Judge only what the sources state; do not use outside knowledge.",
-      },
-      criteria,
+    questions.set(
+      valueKey,
+      choice(
+        {
+          question: question.question,
+          task: "Which option answers `question` according to `sources`? Judge only what the sources state; do not use outside knowledge.",
+        },
+        Object.fromEntries(criteria),
+      ),
     );
     return {
       plan: { kind: "single-select", valueKey, whereKey },
-      questions,
+      questions: Object.fromEntries(questions),
     };
   }
   const optionKeys = content.options.map((option, index) => {
     const key = `${question.id}:${selectOptionKey(index)}`;
-    questions[key] = noul(
-      {
-        question: question.question,
-        option: option.value,
-        task: "According to `sources`, is `option` one of the answers to `question`?",
-      },
-      {
-        true: "The sources state that this option applies.",
-        false:
-          "The sources do not state it, or they state that it does not apply.",
-      },
+    questions.set(
+      key,
+      noul(
+        {
+          question: question.question,
+          option: option.value,
+          task: "According to `sources`, is `option` one of the answers to `question`?",
+        },
+        {
+          true: "The sources state that this option applies.",
+          false:
+            "The sources do not state it, or they state that it does not apply.",
+        },
+      ),
     );
     return key;
   });
   return {
     plan: { kind: "multi-select", optionKeys, whereKey },
-    questions,
+    questions: Object.fromEntries(questions),
   };
 };
 
@@ -429,18 +442,18 @@ const planCandidates = (
   if (candidates.length === 0) {
     return null;
   }
-  const questions: Record<string, SystemOneQuestion> = {};
   const valueKey = `${question.id}:value`;
-  questions[valueKey] = choice(
-    {
-      question: question.question,
-      task: `Which of the listed ${noun} is the one \`question\` asks for? Each option shows the value as written, the source it appears in, and its surrounding text. Choose \`__not_stated\` when none of them is.`,
-    },
-    candidateCriteria(candidates),
-  );
   return {
     plan: { kind: "candidates", valueKey, candidates },
-    questions,
+    questions: {
+      [valueKey]: choice(
+        {
+          question: question.question,
+          task: `Which of the listed ${noun} is the one \`question\` asks for? Each option shows the value as written, the source it appears in, and its surrounding text. Choose \`__not_stated\` when none of them is.`,
+        },
+        candidateCriteria(candidates),
+      ),
+    },
   };
 };
 
@@ -481,7 +494,7 @@ export const planSystemOneAnswers = ({
     document,
     sources: sources.map((source) => ({ id: source.id, text: source.text })),
   };
-  const questions: Record<string, SystemOneQuestion> = {};
+  let questions: Record<string, SystemOneQuestion> = {};
   const plans = new Map<string, Plan>();
   const unplanned: string[] = [];
   let dates: Candidate[] | undefined;
@@ -512,16 +525,14 @@ export const planSystemOneAnswers = ({
       continue;
     }
     const stagedEntries = Object.entries(staged.questions);
+    const acceptedQuestions = questions;
     const hasKeyCollision = stagedEntries.some(([key]) =>
-      Object.hasOwn(questions, key),
+      Object.hasOwn(acceptedQuestions, key),
     );
-    const nextQuestions: Record<string, SystemOneQuestion> = {};
-    for (const [key, plannedQuestion] of Object.entries(questions)) {
-      nextQuestions[key] = plannedQuestion;
-    }
-    for (const [key, plannedQuestion] of stagedEntries) {
-      nextQuestions[key] = plannedQuestion;
-    }
+    const nextQuestions = Object.fromEntries([
+      ...Object.entries(acceptedQuestions),
+      ...stagedEntries,
+    ]);
     if (
       hasKeyCollision ||
       Object.keys(nextQuestions).length >
@@ -532,9 +543,7 @@ export const planSystemOneAnswers = ({
       unplanned.push(question.id);
       continue;
     }
-    for (const [key, plannedQuestion] of stagedEntries) {
-      questions[key] = plannedQuestion;
-    }
+    questions = nextQuestions;
     plans.set(question.id, staged.plan);
   }
   return {
