@@ -131,7 +131,8 @@ describe.skipIf(!runPostgresTests)(
       const beforeAudit = await rootDb
         .select()
         .from(auditLogs)
-        .where(eq(auditLogs.organizationId, second.org.id));
+        .where(eq(auditLogs.organizationId, second.org.id))
+        .orderBy(auditLogs.id);
       const selectOtherOrganization = await getAuth().api.setActiveOrganization(
         {
           body: { organizationId: second.org.id },
@@ -171,7 +172,8 @@ describe.skipIf(!runPostgresTests)(
         await rootDb
           .select()
           .from(auditLogs)
-          .where(eq(auditLogs.organizationId, second.org.id)),
+          .where(eq(auditLogs.organizationId, second.org.id))
+          .orderBy(auditLogs.id),
       ).toEqual(beforeAudit);
       const permitted = await updateSlug(second.owner, {
         type: "explicit",
@@ -196,7 +198,8 @@ describe.skipIf(!runPostgresTests)(
       const beforeAudit = await rootDb
         .select()
         .from(auditLogs)
-        .where(eq(auditLogs.organizationId, org.id));
+        .where(eq(auditLogs.organizationId, org.id))
+        .orderBy(auditLogs.id);
       expect((await updateSlug(browser, { type: "opaque" })).status).toBe(403);
       expect(
         await rootDb
@@ -208,7 +211,8 @@ describe.skipIf(!runPostgresTests)(
         await rootDb
           .select()
           .from(auditLogs)
-          .where(eq(auditLogs.organizationId, org.id)),
+          .where(eq(auditLogs.organizationId, org.id))
+          .orderBy(auditLogs.id),
       ).toEqual(beforeAudit);
     });
 
