@@ -736,8 +736,8 @@
       "behaviour": "A stop that ends a turn waiting on the user stores the same outcome on the turn and on its message.",
       "status": "active",
       "file": "src/handlers/chat/chat-turn-persistence.ts",
-      "search": "      reason: planned.state.reason,",
-      "replace": "      reason: \"superseded\",",
+      "search": "      outcome: { reason: planned.state.reason, type: \"cancelled\" },",
+      "replace": "      outcome: { reason: \"superseded\", type: \"cancelled\" },",
       "scenario": {
         "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
         "test": "stops a client call the page still runs"

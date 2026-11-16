@@ -441,8 +441,9 @@ const settleInterruptedContinuationOnTx = async ({
 };
 
 /**
- * Under the thread lock, turn an abandoned provider owner into its durable
- * terminal outcome, `owner-lost`. A live owner renews its lease conditionally,
+ * Under the thread lock, turn an abandoned provider owner, or a handed-over
+ * turn nobody adopted by its lease, into its durable terminal outcome,
+ * `owner-lost`. A live owner renews its lease conditionally,
  * so it either wins that renewal before this write (and remains running), or
  * loses it after this write (and can no longer settle effects it no longer
  * owns). Clearing the execution id is the fence: every later write of the
@@ -460,7 +461,7 @@ const interruptExpiredRunningChatTurnOnTx = async ({
   const now = databaseNow();
   const expired = and(
     eq(chatTurns.threadId, threadId),
-    eq(chatTurns.status, "running"),
+    inArray(chatTurns.status, ["running", "handed-over"]),
     // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- cutoff read from the caller's clock, never round-tripped through the database
     lte(chatTurns.leaseExpiresAt, now),
   );
@@ -522,6 +523,12 @@ const interruptExpiredRunningChatTurnOnTx = async ({
     .where(and(expired, isNull(chatTurns.cancelRequestedAt)))
     .returning({
       ...CHAT_RUN_OWNER_COLUMNS,
+      // The answer so far a handed-over turn held. A subquery in RETURNING
+      // reads the statement's snapshot, so it sees the row before this write.
+      handedOverMessageId: sql<SafeId<"chatMessage"> | null>`(
+        SELECT held.assistant_message_id FROM chat_turns AS held
+        WHERE held.id = ${chatTurns.id} AND held.status = 'handed-over'
+      )`,
       id: chatTurns.id,
       runId: chatTurns.runId,
     });
@@ -534,6 +541,17 @@ const interruptExpiredRunningChatTurnOnTx = async ({
       turnId: interruptedTurn.id,
       tx,
     });
+    // A handed-over turn nobody adopted by its lease stored its answer so
+    // far as its own message: the outcome goes on it whether or not it has
+    // open calls.
+    if (interruptedTurn.handedOverMessageId !== null) {
+      await cutShortMessageOnTx({
+        messageId: interruptedTurn.handedOverMessageId,
+        outcome: OWNER_LOST_OUTCOME,
+        threadId,
+        tx,
+      });
+    }
     await settleInterruptedContinuationOnTx({
       outcome: OWNER_LOST_OUTCOME,
       threadId,
@@ -546,92 +564,6 @@ const interruptExpiredRunningChatTurnOnTx = async ({
       tx,
     });
   }
-};
-
-/**
- * Under the thread lock, end a handed-over turn nobody adopted by its lease
- * as `owner-lost`, as an expired running turn ends. Its stored answer so far
- * is the turn's own message, so the outcome goes on it whether or not it has
- * open calls; the gateway's sweep then cancels the run.
- */
-const interruptUnadoptedChatTurnOnTx = async ({
-  pings,
-  threadId,
-  tx,
-}: {
-  pings: ChatRunPings;
-  threadId: SafeId<"chatThread">;
-  tx: Transaction;
-}): Promise<void> => {
-  const now = databaseNow();
-  const unadopted = (
-    await tx
-      .select({ id: chatTurns.id })
-      .from(chatTurns)
-      .where(
-        and(
-          eq(chatTurns.threadId, threadId),
-          eq(chatTurns.status, "handed-over"),
-          // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- cutoff read from the database clock, never round-tripped through the application
-          lte(chatTurns.leaseExpiresAt, now),
-        ),
-      )
-      .limit(1)
-  ).at(0);
-  if (unadopted === undefined) {
-    return;
-  }
-  await cutShortHeldMessageOnTx({
-    outcome: OWNER_LOST_OUTCOME,
-    status: "handed-over",
-    threadId,
-    turnId: unadopted.id,
-    tx,
-  });
-  // audit: skip — owner-lost terminalization records that nobody adopted a released turn; no user-authored content changes
-  const interrupted = await tx
-    .update(chatTurns)
-    .set({
-      // Nobody ran the turn since its release; do not invent active time.
-      activeDurationMs: null,
-      activeStartedAt: null,
-      assistantMessageId: null,
-      cancellationReason: null,
-      executionId: null,
-      failureCode: null,
-      failureRetryable: null,
-      interactionToolCallId: null,
-      interactionType: null,
-      interruptionReason: OWNER_LOST_OUTCOME.reason,
-      leaseExpiresAt: null,
-      settledAt: now,
-      status: "interrupted",
-    })
-    .where(
-      and(eq(chatTurns.id, unadopted.id), eq(chatTurns.status, "handed-over")),
-    )
-    .returning({
-      ...CHAT_RUN_OWNER_COLUMNS,
-      id: chatTurns.id,
-      runId: chatTurns.runId,
-    });
-  recordChatRunOwners(pings, interrupted);
-  const [interruptedTurn] = interrupted;
-  if (interruptedTurn === undefined) {
-    return panic("A handed-over chat turn changed under its thread lock");
-  }
-  await closeChatRunLogOnTx({
-    organizationId: interruptedTurn.organizationId,
-    runId: interruptedTurn.runId,
-    turnId: interruptedTurn.id,
-    tx,
-  });
-  await holdChatQueueAfterTurnOnTx({
-    outcome: OWNER_LOST_OUTCOME.type,
-    threadId,
-    turnId: interruptedTurn.id,
-    tx,
-  });
 };
 
 /**
@@ -653,7 +585,6 @@ export const reapOwnerlessChatTurnOnTx = async ({
     return;
   }
   await interruptExpiredRunningChatTurnOnTx({ pings, threadId, tx });
-  await interruptUnadoptedChatTurnOnTx({ pings, threadId, tx });
 };
 
 /**
@@ -676,7 +607,6 @@ export const canAcceptChatTurnOnTx = async ({
     return false;
   }
   await interruptExpiredRunningChatTurnOnTx({ pings, threadId, tx });
-  await interruptUnadoptedChatTurnOnTx({ pings, threadId, tx });
   const live = await tx.query.chatTurns.findFirst({
     where: {
       status: { in: ["running", "handed-over"] },
@@ -747,6 +677,48 @@ export const cutShortAssistantMessage = ({
     message: closeCutShortCalls(message),
     turnOutcome: outcome,
   });
+
+/** Store `cutShortAssistantMessage` for the assistant message `messageId`. */
+const cutShortMessageOnTx = async ({
+  messageId,
+  outcome,
+  threadId,
+  tx,
+}: {
+  messageId: SafeId<"chatMessage">;
+  outcome: CutShortOutcome;
+  threadId: SafeId<"chatThread">;
+  tx: Transaction;
+}): Promise<void> => {
+  const stored =
+    (
+      await tx
+        .select({
+          content: chatMessages.content,
+          id: chatMessages.id,
+          role: chatMessages.role,
+        })
+        .from(chatMessages)
+        .where(
+          and(
+            eq(chatMessages.id, messageId),
+            eq(chatMessages.threadId, threadId),
+          ),
+        )
+        .limit(1)
+    ).at(0) ?? panic("A chat turn's message vanished under its thread lock");
+  if (stored.role !== "assistant") {
+    panic("A chat turn's held message is not an assistant message");
+  }
+  await storeServerEndedMessageOnTx({
+    message: cutShortAssistantMessage({
+      message: chatMessageFromPersisted(stored),
+      outcome,
+    }),
+    threadId,
+    tx,
+  });
+};
 
 /**
  * Store `cutShortAssistantMessage` for the message an unowned turn `turnId`
