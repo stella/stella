@@ -103,6 +103,8 @@
     "pickFailed": "Failivalijat ei õnnestunud avada. Proovi uuesti.",
     "sendFileRefused": "Üht faili ei saanud saata, seega sõnumit ei saadetud. Eemalda fail ja proovi uuesti.",
     "sendFileNotAnonymizable": "See vestlus on anonüümitud ja stella ei saanud üht faili anonüümida, seega midagi ei saadetud. Eemalda fail ja proovi uuesti.",
+    "sendLocalRunNotAnonymizable": "See vestlus on anonüümitud ja sinu arvutis töötav programmeerimisagent loeb sinu dokumente sellisena, nagu need on, seega talle midagi ei saadetud.",
+    "sendWithoutAnonymization": "Saada anonüümimiseta",
     "pickTitle": "Vali vestlus",
     "pickDescription": "Vali loendist lõim või alusta uut nupuga +.",
     "runBanner": {

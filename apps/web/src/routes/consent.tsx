@@ -258,7 +258,9 @@ function ConsentPage() {
     return (
       <ConsentSuccess
         identity={identity}
+        organizationName={organizationName}
         redirectUrl={submission.redirectUrl}
+        scopes={scopes}
       />
     );
   }

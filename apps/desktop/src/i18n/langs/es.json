@@ -835,9 +835,11 @@
       "storage": "No se pudo leer ni guardar la conexión en este ordenador."
     },
     "callbackConnectedTitle": "ChatGPT está conectado",
-    "callbackConnectedBody": "Vuelve a stella. Las solicitudes de IA ya usan tu plan de ChatGPT.",
+    "callbackConnectedBody": "Las solicitudes de IA en stella ya usan tu plan de ChatGPT.",
     "callbackNotConnectedTitle": "ChatGPT no se ha conectado",
-    "callbackNotConnectedBody": "Vuelve a stella para ver qué ha pasado e inténtalo de nuevo.",
+    "callbackNotConnectedBody": "El motivo se muestra en la app de stella. Para intentarlo de nuevo, abre {section} › {group} y haz clic en «{button}».",
+    "callbackAccount": "Cuenta",
+    "callbackPlan": "Plan",
     "callbackCloseTab": "Puedes cerrar esta pestaña.",
     "claudeCode": {
       "title": "Claude Code",

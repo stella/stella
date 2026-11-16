@@ -83,6 +83,12 @@ pub(crate) fn locales_missing(key: &str) -> Vec<&'static str> {
     .collect()
 }
 
+/// `key` as `locale`'s own file has it, without the English fallback.
+#[cfg(test)]
+pub(crate) fn message_in(locale: &str, key: &str) -> Option<String> {
+  locale_source(locale).and_then(|(_, source)| parse_locale(source).remove(key))
+}
+
 #[cfg(test)]
 pub(crate) fn shipped_locales() -> impl Iterator<Item = &'static str> {
   LOCALES.iter().map(|(locale, _)| *locale)

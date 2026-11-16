@@ -103,6 +103,8 @@
     "pickFailed": "Nie udało się otworzyć wyboru plików. Spróbuj ponownie.",
     "sendFileRefused": "Nie udało się wysłać pliku, więc wiadomość nie została wysłana. Usuń plik i spróbuj ponownie.",
     "sendFileNotAnonymizable": "Ta rozmowa jest anonimizowana, a stella nie mogła zanonimizować jednego z plików, więc nic nie wysłano. Usuń plik i spróbuj ponownie.",
+    "sendLocalRunNotAnonymizable": "Ta rozmowa jest anonimizowana, a agent programistyczny na Twoim komputerze odczytuje Twoje dokumenty w oryginalnej postaci, więc nic do niego nie wysłano.",
+    "sendWithoutAnonymization": "Wyślij bez anonimizacji",
     "pickTitle": "Wybierz rozmowę",
     "pickDescription": "Wybierz wątek z listy lub rozpocznij nowy przyciskiem +.",
     "runBanner": {
