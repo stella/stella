@@ -2077,6 +2077,7 @@
       "inline-end",
       "inline-start"
     ],
+    "InputGroupTextarea.appearance": ["composer", "default"],
     "InputGroupTextarea.fieldSizing": ["content", "fixed"],
     "InspectorDock.mount": ["content", "shell-end"],
     "InspectorEntityTab.inactiveIcon": ["dim", "legible"],
@@ -2228,6 +2229,7 @@
     ],
     "TextMark.variant": ["dotted", "fill", "strike", "underline", "wavy"],
     "TextMark.weight": ["inherit", "medium"],
+    "Textarea.appearance": ["composer", "default"],
     "Textarea.fieldSizing": ["content", "fixed"],
     "ToastProvider.position": [
       "bottom-center",
