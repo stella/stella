@@ -834,7 +834,6 @@ export const ChatThreadPage = ({
                           stickyUserMessages
                           streamdownComponents={streamdownComponents}
                           computerWait={computerWait}
-                          newestLocalTurn={data.newestLocalTurn}
                           threadRef={threadRef}
                           turnSentAt={turnSentAt}
                           userMessageEdit={userMessageEdit}

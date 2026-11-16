@@ -1887,23 +1887,24 @@
     "loadEarlierMessagesError": "Nepavyko įkelti ankstesnių žinučių",
     "loadingEarlierMessages": "Kraunamos ankstesnės žinutės…",
     "localFilesUndo": {
-      "action": "Atšaukti failų pakeitimus",
       "computer": {
         "failed": "Atšaukimas jūsų kompiuteryje nebuvo baigtas. Kai kurie failai jau galėjo pasikeisti, todėl patikrinkite pokalbio aplanką.",
         "folderBusy": "Šį aplanką jūsų kompiuteryje naudoja kitas vykdymas. Bandykite dar kartą, kai jis baigsis.",
         "noCheckpoint": "Jūsų kompiuteryje nėra išsaugotos failų kopijos iš laiko prieš šį žingsnį, todėl niekas neatšaukta.",
-        "notNewest": "Jūsų kompiuteryje šiame aplanke yra naujesnių pakeitimų, todėl niekas neatšaukta."
+        "updateForEarlier": "Atnaujinkite stella desktop, kad galėtumėte atšaukti ankstesnių žinučių pakeitimus."
       },
-      "confirm": "Atšaukti pakeitimus",
-      "confirmDescription": "Failai, kuriuos šis žingsnis pakeitė savo aplanke jūsų kompiuteryje, grįš į būseną prieš šį žingsnį. Atšaukiami tik šio žingsnio pakeitimai; ankstesnių žingsnių pakeitimai lieka.",
-      "confirmTitle": "Atšaukti šio žingsnio failų pakeitimus?",
+      "conversationRestarts": "Agentas pradės iš naujo nuo šio pokalbio teksto, nes atsakymas prieš šią žinutę nebuvo baigtas.",
       "expired": "Jūsų kompiuteris laiku neatsakė. Bandykite dar kartą.",
+      "option": "Taip pat atšaukti failų pakeitimus nuo šios žinutės",
+      "optionHint": "Bus atšaukti ir pakeitimai, kuriuos aplanke atlikote patys.",
       "pending": "Atšaukiami failų pakeitimai jūsų kompiuteryje",
       "refused": {
+        "alreadyUndone": "Šie failų pakeitimai jau atšaukti.",
         "desktopOffline": "Jūsų kompiuteris neprisijungęs. Atidarykite stella darbalaukio programą ir bandykite dar kartą.",
         "desktopUpdateRequired": "Jūsų kompiuteryje esanti stella darbalaukio programa per sena pakeitimams atšaukti. Atnaujinkite ją ir bandykite dar kartą.",
-        "noCheckpoint": "Šis žingsnis neturi išsaugotos failų kopijos, į kurią būtų galima grįžti.",
-        "notNewest": "Atšaukti galima tik naujausio žingsnio failų pakeitimus.",
+        "folderShared": "Nuo šios žinutės šiame aplanke dirbo kitas pokalbis.",
+        "noSavedCopy": "Jūsų kompiuteris neišsaugojo aplanko kopijos iš laiko prieš šią žinutę: jis buvo per didelis arba per lėtai išsisaugojo, arba ją pakeitė naujesnės kopijos.",
+        "severalFolders": "Vėlesnės žinutės buvo vykdomos kitame kompiuteryje arba kitame aplanke.",
         "threadBusy": "Šis pokalbis dar vyksta. Bandykite dar kartą, kai jis baigsis."
       },
       "restored": "Failų pakeitimai atšaukti"

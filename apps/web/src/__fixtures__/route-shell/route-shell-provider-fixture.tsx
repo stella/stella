@@ -383,7 +383,6 @@ const installFixtureNetwork = () => {
           return Response.json({
             activeSkill: null,
             activeTurnId: null,
-            newestLocalTurn: null,
             attachedFiles: { fileCount: 0, files: [] },
             context: {
               estimatedTokens: 0,

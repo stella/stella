@@ -1,26 +1,34 @@
 import { panic } from "better-result";
 import {
   and,
+  asc,
   desc,
   eq,
+  exists,
   gte,
   inArray,
   isNull,
+  ne,
   notInArray,
   or,
   type SQL,
   sql,
+  type SQLWrapper,
 } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
 import {
   CHAT_LOCAL_FILES_UNDONE_METADATA_KEY,
   type ChatLocalFilesUndoComputerRefusal,
+  type ChatLocalFilesUndoConversation,
+  type ChatLocalFilesUndoFiles,
   type ChatLocalFilesUndone,
   type ChatLocalFilesUndoRefusal,
   type ChatLocalFilesUndoState,
 } from "@stll/api-contract/chat-local-files-undo";
 import {
   DESKTOP_RUNNER_CHECKPOINT_EVENT,
+  DESKTOP_RUNNER_CHECKPOINTS_KEPT,
   DESKTOP_RUNNER_FOLDER_RESTORE_PROTOCOL,
   type DesktopRunnerFolderRestoreOutcome,
 } from "@stll/api-contract/desktop-runner";
@@ -120,29 +128,23 @@ const pending = (now: Date) =>
     eq(restores.state, "sent"),
   );
 
-/** Whether the run's stored messages include the checkpoint it took before its turn. */
-const readTookCheckpoint = async (
-  db: Pick<DesktopRunnerDb, "select">,
-  runId: string,
-) => {
-  const [taken] = await db
-    .select({ seq: events.seq })
-    .from(events)
-    .where(
-      and(
-        eq(events.runId, runId),
-        eq(events.type, "run.event"),
-        sql`${events.message} -> 'chunk' ->> 'type' = 'CUSTOM'`,
-        sql`${events.message} -> 'chunk' ->> 'name' = ${DESKTOP_RUNNER_CHECKPOINT_EVENT}`,
-        sql`${events.message} -> 'chunk' -> 'value' ->> 'status' = 'taken'`,
-      ),
-    )
-    .limit(1);
-  return taken !== undefined;
-};
+/** Runs that took the checkpoint they were asked for before their turn. */
+const tookCheckpoint = (runId: SQLWrapper) =>
+  exists(
+    sql`select 1 from ${events} where ${events.runId} = ${runId} and ${events.type} = 'run.event' and ${events.message} -> 'chunk' ->> 'type' = 'CUSTOM' and ${events.message} -> 'chunk' ->> 'name' = ${DESKTOP_RUNNER_CHECKPOINT_EVENT} and ${events.message} -> 'chunk' -> 'value' ->> 'status' = 'taken'`,
+  );
+
+/**
+ * A run that may have worked in its folder: one the computer refused, or
+ * lost before it reached the computer, never touched it.
+ */
+const mayHaveTouchedFolder = and(
+  ne(runs.state, "rejected"),
+  or(isNull(runs.lostReason), ne(runs.lostReason, "not_reached")),
+);
 
 type ThreadOf = { owner: RunOwner; threadId: SafeId<"chatThread"> };
-type TurnOptions = ThreadOf & { turnId: SafeId<"chatTurn"> };
+type MessageOptions = ThreadOf & { messageId: SafeId<"chatMessage"> };
 
 const ownedBy = (owner: RunOwner) =>
   and(
@@ -150,115 +152,60 @@ const ownedBy = (owner: RunOwner) =>
     eq(restores.organizationId, owner.organizationId),
   );
 
-/** The newest run the owner's turn started, and whether it took a checkpoint. */
-const readTurnRun = async (
-  db: Pick<DesktopRunnerDb, "select">,
-  { owner, threadId, turnId }: TurnOptions,
-) => {
-  const [run] = await db
-    .select({
-      runId: runs.runId,
-      state: runs.state,
-      desktopId: runs.desktopId,
-    })
-    .from(runs)
-    .where(
-      and(
-        eq(runs.userId, owner.userId),
-        eq(runs.organizationId, owner.organizationId),
-        eq(runs.chatThreadId, threadId),
-        eq(runs.chatTurnId, turnId),
-      ),
-    )
-    .orderBy(desc(runs.createdAt), desc(runs.runId))
-    .limit(1);
-  if (run === undefined) {
-    return null;
-  }
-  return { ...run, tookCheckpoint: await readTookCheckpoint(db, run.runId) };
-};
+type MessageTurn = { id: SafeId<"chatTurn"> };
 
-/** The turn's newest restore, if any. */
-const readTurnRestore = async (
+/**
+ * The owner's current turn of message `messageId`: the newest turn that asked
+ * it (an edit keeps the message id and asks it again). `null` when the
+ * message is not one of the owner's in the thread.
+ */
+const readMessageTurn = async (
   db: Pick<DesktopRunnerDb, "select">,
-  { owner, threadId, turnId }: TurnOptions,
-): Promise<StoredRestore | null> => {
-  const [row] = await db
-    .select(restoreColumns)
-    .from(restores)
-    .where(
-      and(
-        ownedBy(owner),
-        eq(restores.chatThreadId, threadId),
-        eq(restores.chatTurnId, turnId),
-      ),
-    )
-    .orderBy(desc(restores.createdAt), desc(restores.id))
-    .limit(1);
-  return row ?? null;
-};
-
-const readOwnedTurn = async (
-  db: Pick<DesktopRunnerDb, "select">,
-  { owner, threadId, turnId }: TurnOptions,
-) => {
+  { owner, threadId, messageId }: MessageOptions,
+): Promise<MessageTurn | null> => {
   const [turn] = await db
     .select({ id: chatTurns.id })
     .from(chatTurns)
     .where(
       and(
-        eq(chatTurns.id, turnId),
         eq(chatTurns.threadId, threadId),
+        eq(chatTurns.userMessageId, messageId),
         eq(chatTurns.userId, owner.userId),
         eq(chatTurns.organizationId, owner.organizationId),
       ),
     )
+    .orderBy(...NEWEST_CHAT_TURN_FIRST)
     .limit(1);
   return turn ?? null;
 };
 
-export type TurnFolderRestore = {
-  /** Whether the turn's run finished after taking a checkpoint. */
-  readonly undoable: boolean;
-  /** The turn's newest restore; `null` when none was asked for. */
-  readonly restore: FolderRestoreView | null;
+/**
+ * The thread's turns from `turn` on, by the order they were accepted (their
+ * ordinal, read in the database). A turn stored before ordinals has none
+ * until the ordinal repair numbers it, and matches nothing here: no run on
+ * a computer is that old.
+ */
+const fromTurnOn = (turn: MessageTurn): SQL =>
+  sql`${chatTurns.ordinal} >= (select t.ordinal from chat_turns t where t.id = ${turn.id})`;
+
+type UndoTarget = {
+  runId: string;
+  desktopId: string;
+  linkedFolderId: string | null;
 };
 
-/** Where a turn's undo stands; `null` for a turn that is not the owner's. */
-export const readTurnFolderRestore = async (
-  db: Pick<DesktopRunnerDb, "select">,
-  options: TurnOptions & { now: Date },
-): Promise<TurnFolderRestore | null> => {
-  const turn = await readOwnedTurn(db, options);
-  if (turn === null) {
-    return null;
-  }
-  const run = await readTurnRun(db, options);
-  const restore = await readTurnRestore(db, options);
-  // As the undo itself decides: only the thread's newest turn is undone.
-  const newest = await readIsNewestTurn(db, options);
-  return {
-    undoable: newest && run?.state === "finished" && run.tookCheckpoint,
-    restore: restore === null ? null : viewOf(restore, options.now),
-  };
-};
+/** The target run's own start, read in the database at full precision. */
+const startOf = (target: UndoTarget) =>
+  sql`(select r.created_at from desktop_runner_runs r where r.run_id = ${target.runId})`;
 
-export type RequestedFolderRestore =
-  /** Queued now; its computer's socket is rung. */
-  | { type: "queued"; restore: FolderRestoreView; holder: RunHolder }
-  /** The turn's restore that is still going or done, answered again. */
-  | { type: "existing"; restore: FolderRestoreView }
-  /** The endpoint's refusals, or no such turn of the member. */
-  | { type: "refused"; reason: "not_found" | ChatLocalFilesUndoRefusal };
-
-type RequestOptions = TurnOptions & {
-  restoreId: string;
-  now: Date;
-  /** Only a computer seen since then counts as connected. */
-  seenSince: Date;
-  /** How long a queued request waits for the computer's socket. */
-  expiresInMs: number;
-};
+/** The same folder on the same computer as `target`'s. */
+const sameFolder = (target: UndoTarget, threadId: SafeId<"chatThread">) =>
+  and(
+    eq(runs.desktopId, target.desktopId),
+    target.linkedFolderId === null
+      ? and(isNull(runs.linkedFolderId), eq(runs.chatThreadId, threadId))
+      : eq(runs.linkedFolderId, target.linkedFolderId),
+  );
 
 /** Whether a turn or run of the thread is still going. */
 const readThreadBusy = async (
@@ -293,36 +240,356 @@ const readThreadBusy = async (
   return run !== undefined;
 };
 
-/**
- * Whether the turn is the newest of the owner's in the thread, in the order
- * turns were accepted (`NEWEST_CHAT_TURN_FIRST`).
- */
-const readIsNewestTurn = async (
-  db: Pick<DesktopRunnerDb, "select">,
-  { owner, threadId, turnId }: TurnOptions,
-) => {
-  const [newest] = await db
-    .select({ id: chatTurns.id })
-    .from(chatTurns)
-    .where(
-      and(
-        eq(chatTurns.organizationId, owner.organizationId),
-        eq(chatTurns.userId, owner.userId),
-        eq(chatTurns.threadId, threadId),
-      ),
-    )
-    .orderBy(...NEWEST_CHAT_TURN_FIRST)
-    .limit(1);
-  return newest?.id === turnId;
+type Assessment =
+  /** No turn from the message on worked in a folder on a computer. */
+  | { type: "none" }
+  /** The run whose checkpoint an undo restores, and why it cannot now. */
+  | {
+      type: "refused";
+      targetRunId: string;
+      reason: ChatLocalFilesUndoRefusal;
+    }
+  /** The run whose checkpoint is restored, and its computer's socket. */
+  | {
+      type: "ready";
+      target: UndoTarget;
+      online: {
+        deviceJkt: string;
+        sessionId: string;
+        instanceId: string;
+      };
+    };
+
+type AssessOptions = ThreadOf & {
+  turn: MessageTurn;
+  /** Only a computer seen since then counts as connected. */
+  seenSince: Date;
 };
 
 /**
- * Queue an undo of the turn's file changes, or answer why not. Only the newest
- * turn of the thread is undone, only once its run finished after taking a
- * checkpoint, only while nothing else runs in the thread, and only while the
- * run's computer is connected: a request never waits for a computer that is
- * away. Asking again while one is queued, sent or done answers that one.
- * Serialized per member with the runner capacity lock.
+ * Whether the files changed since the message's turn can be undone, and
+ * from which checkpoint: the one the first run from that turn on took before
+ * it worked in its folder. Restoring it undoes that run and every later one.
+ */
+const assessUndo = async (
+  db: Pick<DesktopRunnerDb, "select">,
+  { owner, threadId, turn, seenSince }: AssessOptions,
+): Promise<Assessment> => {
+  const ofThread = and(
+    eq(runs.userId, owner.userId),
+    eq(runs.organizationId, owner.organizationId),
+    eq(runs.chatThreadId, threadId),
+  );
+  const fromTurn = and(ofThread, mayHaveTouchedFolder, fromTurnOn(turn));
+  const [target] = await db
+    .select({
+      runId: runs.runId,
+      desktopId: runs.desktopId,
+      linkedFolderId: runs.linkedFolderId,
+      tookCheckpoint: tookCheckpoint(runs.runId),
+    })
+    .from(runs)
+    .innerJoin(chatTurns, eq(chatTurns.id, runs.chatTurnId))
+    .where(fromTurn)
+    .orderBy(asc(runs.createdAt), asc(runs.runId))
+    .limit(1);
+  if (target === undefined) {
+    return { type: "none" };
+  }
+  if (await readThreadBusy(db, { owner, threadId })) {
+    return {
+      type: "refused",
+      targetRunId: target.runId,
+      reason: "thread_busy",
+    };
+  }
+  const [elsewhere] = await db
+    .select({ runId: runs.runId })
+    .from(runs)
+    .innerJoin(chatTurns, eq(chatTurns.id, runs.chatTurnId))
+    .where(
+      and(
+        fromTurn,
+        or(
+          ne(runs.desktopId, target.desktopId),
+          sql`${runs.linkedFolderId} IS DISTINCT FROM ${target.linkedFolderId}::uuid`,
+        ),
+      ),
+    )
+    .limit(1);
+  if (elsewhere !== undefined) {
+    return {
+      type: "refused",
+      targetRunId: target.runId,
+      reason: "several_folders",
+    };
+  }
+  if (target.linkedFolderId !== null) {
+    // A linked folder is the member's own: another chat that worked in it
+    // since would lose its changes too.
+    const [shared] = await db
+      .select({ runId: runs.runId })
+      .from(runs)
+      .where(
+        and(
+          eq(runs.userId, owner.userId),
+          eq(runs.organizationId, owner.organizationId),
+          sameFolder(target, threadId),
+          sql`${runs.chatThreadId} IS DISTINCT FROM ${threadId}::uuid`,
+          // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- both sides are read in the database at full precision; nothing round-trips through a Date
+          sql`${runs.createdAt} > ${startOf(target)}`,
+          mayHaveTouchedFolder,
+        ),
+      )
+      .limit(1);
+    if (shared !== undefined) {
+      return {
+        type: "refused",
+        targetRunId: target.runId,
+        reason: "folder_shared",
+      };
+    }
+  }
+  // An earlier undo restored a checkpoint taken at or before this one, after
+  // this run: these changes are gone, and restoring this checkpoint now would
+  // bring back what that undo took away.
+  const [undoneBefore] = await db
+    .select({ id: restores.id })
+    .from(restores)
+    .innerJoin(runs, eq(runs.runId, restores.runId))
+    .where(
+      and(
+        ownedBy(owner),
+        eq(restores.state, "restored"),
+        sameFolder(target, threadId),
+        ne(runs.runId, target.runId),
+        // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- both sides are read in the database at full precision; nothing round-trips through a Date
+        sql`${runs.createdAt} <= ${startOf(target)}`,
+        // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- both sides are read in the database at full precision; nothing round-trips through a Date
+        sql`${restores.createdAt} > ${startOf(target)}`,
+      ),
+    )
+    .limit(1);
+  if (undoneBefore !== undefined) {
+    return {
+      type: "refused",
+      targetRunId: target.runId,
+      reason: "already_undone",
+    };
+  }
+  if (!target.tookCheckpoint) {
+    return {
+      type: "refused",
+      targetRunId: target.runId,
+      reason: "no_checkpoint",
+    };
+  }
+  // The computer keeps the newest checkpoints of a folder only.
+  const later = await db
+    .select({ runId: runs.runId })
+    .from(runs)
+    .where(
+      and(
+        eq(runs.userId, owner.userId),
+        eq(runs.organizationId, owner.organizationId),
+        sameFolder(target, threadId),
+        // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- both sides are read in the database at full precision; nothing round-trips through a Date
+        sql`${runs.createdAt} > ${startOf(target)}`,
+        tookCheckpoint(runs.runId),
+      ),
+    )
+    .limit(DESKTOP_RUNNER_CHECKPOINTS_KEPT);
+  if (later.length >= DESKTOP_RUNNER_CHECKPOINTS_KEPT) {
+    return {
+      type: "refused",
+      targetRunId: target.runId,
+      reason: "no_checkpoint",
+    };
+  }
+  const [online] = await db
+    .select({
+      deviceJkt: runner.deviceJkt,
+      sessionId: runner.sessionId,
+      instanceId: runner.instanceId,
+      protocol: runner.protocol,
+    })
+    .from(runner)
+    .where(
+      and(
+        eq(runner.userId, owner.userId),
+        eq(runner.organizationId, owner.organizationId),
+        eq(runner.desktopId, target.desktopId),
+        eq(runner.connection, "connected"),
+        sql`${runner.lastSeenAt} >= ${seenSince}::timestamptz`,
+      ),
+    )
+    // Another device key may name the same installation; the newest wins,
+    // as when a run is assigned.
+    .orderBy(desc(runner.lastSeenAt))
+    .limit(1);
+  if (online === undefined) {
+    return {
+      type: "refused",
+      targetRunId: target.runId,
+      reason: "desktop_offline",
+    };
+  }
+  // A desktop app from before restores runs turns, but is never sent one.
+  if (online.protocol < DESKTOP_RUNNER_FOLDER_RESTORE_PROTOCOL) {
+    return {
+      type: "refused",
+      targetRunId: target.runId,
+      reason: "desktop_update_required",
+    };
+  }
+  return {
+    type: "ready",
+    target: {
+      runId: target.runId,
+      desktopId: target.desktopId,
+      linkedFolderId: target.linkedFolderId,
+    },
+    online: {
+      deviceJkt: online.deviceJkt,
+      sessionId: online.sessionId,
+      instanceId: online.instanceId,
+    },
+  };
+};
+
+/** The newest restore of the run's checkpoint, if any. */
+const readRunRestore = async (
+  db: Pick<DesktopRunnerDb, "select">,
+  { owner, runId }: { owner: RunOwner; runId: string },
+): Promise<StoredRestore | null> => {
+  const [row] = await db
+    .select(restoreColumns)
+    .from(restores)
+    .where(and(ownedBy(owner), eq(restores.runId, runId)))
+    .orderBy(desc(restores.createdAt), desc(restores.id))
+    .limit(1);
+  return row ?? null;
+};
+
+/**
+ * Whether the answer right before the message ended a turn whose run did not
+ * finish its work: a session does not continue from such a turn, so an edit
+ * of the message starts the agent over from the chat's text.
+ */
+const readPreviousNotFinished = async (
+  db: Pick<DesktopRunnerDb, "select">,
+  { owner, threadId, messageId }: MessageOptions,
+) => {
+  const previous = db
+    .select({ id: chatMessages.id })
+    .from(chatMessages)
+    .where(
+      and(
+        eq(chatMessages.threadId, threadId),
+        sql`(${chatMessages.createdAt}, ${chatMessages.id}) < (select m.created_at, m.id from chat_messages m where m.id = ${messageId} and m.thread_id = ${threadId})`,
+      ),
+    )
+    .orderBy(desc(chatMessages.createdAt), desc(chatMessages.id))
+    .limit(1);
+  const [run] = await db
+    .select({ state: runs.state, outcome: runs.outcome })
+    .from(runs)
+    .innerJoin(chatTurns, eq(chatTurns.id, runs.chatTurnId))
+    .where(
+      and(
+        eq(runs.userId, owner.userId),
+        eq(runs.organizationId, owner.organizationId),
+        eq(runs.chatThreadId, threadId),
+        eq(chatTurns.assistantMessageId, sql`(${previous})`),
+        mayHaveTouchedFolder,
+      ),
+    )
+    .orderBy(desc(runs.createdAt), desc(runs.runId))
+    .limit(1);
+  return (
+    run !== undefined &&
+    (run.state !== "finished" || run.outcome !== "completed")
+  );
+};
+
+export type MessageFolderRestore = {
+  readonly files: ChatLocalFilesUndoFiles;
+  readonly conversation: ChatLocalFilesUndoConversation;
+  /** The restore of the checkpoint the undo would restore; `null` when none was asked for. */
+  readonly restore: FolderRestoreView | null;
+};
+
+type ReadOptions = MessageOptions & { now: Date; seenSince: Date };
+
+/**
+ * What editing the chat from message `messageId` does on the member's
+ * computer; `null` for a message that is not the owner's.
+ */
+export const readMessageFolderRestore = async (
+  db: Pick<DesktopRunnerDb, "select">,
+  options: ReadOptions,
+): Promise<MessageFolderRestore | null> => {
+  const turn = await readMessageTurn(db, options);
+  if (turn === null) {
+    return null;
+  }
+  const conversation: ChatLocalFilesUndoConversation =
+    (await readPreviousNotFinished(db, options))
+      ? { type: "restarts", reason: "previous_not_finished" }
+      : { type: "continues" };
+  const assessed = await assessUndo(db, { ...options, turn });
+  switch (assessed.type) {
+    case "none":
+      return { files: { type: "none" }, conversation, restore: null };
+    case "refused": {
+      // An undo asked before still answers for itself: one that restored
+      // the folder stays done while the computer is away.
+      const restore = await readRunRestore(db, {
+        owner: options.owner,
+        runId: assessed.targetRunId,
+      });
+      return {
+        files: { type: "unavailable", reason: assessed.reason },
+        conversation,
+        restore: restore === null ? null : viewOf(restore, options.now),
+      };
+    }
+    case "ready": {
+      const restore = await readRunRestore(db, {
+        owner: options.owner,
+        runId: assessed.target.runId,
+      });
+      return {
+        files: { type: "available" },
+        conversation,
+        restore: restore === null ? null : viewOf(restore, options.now),
+      };
+    }
+    default:
+      assessed satisfies never;
+      return panic("Unknown local files undo assessment");
+  }
+};
+
+export type RequestedFolderRestore =
+  /** Queued now; its computer's socket is rung. */
+  | { type: "queued"; restore: FolderRestoreView; holder: RunHolder }
+  /** The restore of the same checkpoint that is still going or done, answered again. */
+  | { type: "existing"; restore: FolderRestoreView }
+  /** The endpoint's refusals, or no such message of the member. */
+  | { type: "refused"; reason: "not_found" | ChatLocalFilesUndoRefusal };
+
+type RequestOptions = ReadOptions & {
+  restoreId: string;
+  /** How long a queued request waits for the computer's socket. */
+  expiresInMs: number;
+};
+
+/**
+ * Queue an undo of the file changes made since message `messageId`, or answer
+ * why not (`assessUndo`). A request never waits for a computer that is away.
+ * Asking again while the same checkpoint's restore is queued, sent or done
+ * answers that one. Serialized per member with the runner capacity lock.
  */
 export const requestFolderRestore = async (
   db: DesktopRunnerDb,
@@ -331,19 +598,35 @@ export const requestFolderRestore = async (
   await withAggregateTransaction(
     db,
     async (tx): Promise<RequestedFolderRestore> => {
-      const { owner, threadId, turnId, now } = options;
+      const { owner, threadId, now } = options;
       await withAggregateLock({
         aggregate: "desktopRunnerCapacity",
         id: { organizationId: owner.organizationId, userId: owner.userId },
         tx,
       });
-      const turn = await readOwnedTurn(tx, options);
+      const turn = await readMessageTurn(tx, options);
       if (turn === null) {
         return { type: "refused", reason: "not_found" };
       }
-      const existing = await readTurnRestore(tx, options);
+      const assessed = await assessUndo(tx, { ...options, turn });
+      switch (assessed.type) {
+        case "none":
+          return { type: "refused", reason: "no_checkpoint" };
+        case "refused":
+          return { type: "refused", reason: assessed.reason };
+        case "ready":
+          break;
+        default:
+          assessed satisfies never;
+          return panic("Unknown local files undo assessment");
+      }
+      const { target, online } = assessed;
+      const existing = await readRunRestore(tx, {
+        owner,
+        runId: target.runId,
+      });
       if (existing !== null && lapsed(existing, now)) {
-        // Past its time: expire it, so the turn may be asked again.
+        // Past its time: expire it, so the checkpoint may be asked again.
         await transitionLifecycle({
           tx,
           spec: DESKTOP_RUNNER_FOLDER_RESTORE_TRANSITIONS,
@@ -361,53 +644,15 @@ export const requestFolderRestore = async (
       ) {
         return { type: "existing", restore: viewOf(existing, now) };
       }
-      if (!(await readIsNewestTurn(tx, options))) {
-        return { type: "refused", reason: "not_newest" };
-      }
-      if (await readThreadBusy(tx, options)) {
-        return { type: "refused", reason: "thread_busy" };
-      }
-      const run = await readTurnRun(tx, options);
-      if (run?.state !== "finished" || !run.tookCheckpoint) {
-        return { type: "refused", reason: "no_checkpoint" };
-      }
-      const [online] = await tx
-        .select({
-          deviceJkt: runner.deviceJkt,
-          sessionId: runner.sessionId,
-          instanceId: runner.instanceId,
-          protocol: runner.protocol,
-        })
-        .from(runner)
-        .where(
-          and(
-            eq(runner.userId, owner.userId),
-            eq(runner.organizationId, owner.organizationId),
-            eq(runner.desktopId, run.desktopId),
-            eq(runner.connection, "connected"),
-            sql`${runner.lastSeenAt} >= ${options.seenSince}::timestamptz`,
-          ),
-        )
-        // Another device key may name the same installation; the newest wins,
-        // as when a run is assigned.
-        .orderBy(desc(runner.lastSeenAt))
-        .limit(1);
-      if (online === undefined) {
-        return { type: "refused", reason: "desktop_offline" };
-      }
-      // A desktop app from before restores runs turns, but is never sent one.
-      if (online.protocol < DESKTOP_RUNNER_FOLDER_RESTORE_PROTOCOL) {
-        return { type: "refused", reason: "desktop_update_required" };
-      }
       // audit: skip - the endpoint that asks for the restore audits it
       await tx.insert(restores).values({
         id: options.restoreId,
         userId: owner.userId,
         organizationId: owner.organizationId,
         chatThreadId: threadId,
-        chatTurnId: turnId,
-        runId: run.runId,
-        desktopId: run.desktopId,
+        chatTurnId: turn.id,
+        runId: target.runId,
+        desktopId: target.desktopId,
         deviceJkt: online.deviceJkt,
         state: "queued",
         createdAt: now,
@@ -633,7 +878,7 @@ export const settleFolderRestore = async (
       return "unknown";
     }
     if (to === "restored") {
-      // The lasting marker rides on the turn's answer, in the same
+      // The lasting marker rides on the undone answers, in the same
       // transaction: the page renders it from the message it already reads,
       // after newer turns and a move to the cloud alike. Only the server
       // writes this key; incoming client metadata never carries it.
@@ -642,31 +887,46 @@ export const settleFolderRestore = async (
           at: now.toISOString(),
         } satisfies ChatLocalFilesUndone,
       };
-      // At most one row: the turn's answer.
-      const [answer] = await tx
+      // The answers of the turns whose runs the restore undid: the target
+      // run's and every later run's in the same folder, up to the request.
+      const target = alias(runs, "target_run");
+      const undoneAnswers = tx
+        .select({ id: chatTurns.assistantMessageId })
+        .from(restores)
+        .innerJoin(target, eq(target.runId, restores.runId))
+        .innerJoin(
+          runs,
+          and(
+            eq(runs.chatThreadId, restores.chatThreadId),
+            eq(runs.desktopId, target.desktopId),
+            sql`${runs.linkedFolderId} IS NOT DISTINCT FROM ${target.linkedFolderId}`,
+            // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- both sides are read in the database at full precision; nothing round-trips through a Date
+            sql`${runs.createdAt} >= ${target.createdAt}`,
+            // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- both sides are read in the database at full precision; nothing round-trips through a Date
+            sql`${runs.createdAt} <= ${restores.createdAt}`,
+          ),
+        )
+        .innerJoin(chatTurns, eq(chatTurns.id, runs.chatTurnId))
+        .where(eq(restores.id, restoreId));
+      const answers = await tx
         .update(chatMessages)
         .set({
           content: sql`jsonb_set(${chatMessages.content}, '{metadata}', coalesce(${chatMessages.content} -> 'metadata', '{}'::jsonb) || ${JSON.stringify(marker)}::text::jsonb)`,
         })
-        .where(
-          eq(
-            chatMessages.id,
-            sql`(select ${chatTurns.assistantMessageId} from ${chatTurns} join ${restores} on ${restores.chatTurnId} = ${chatTurns.id} where ${restores.id} = ${restoreId})`,
-          ),
-        )
+        .where(inArray(chatMessages.id, undoneAnswers))
         .returning({
           id: chatMessages.id,
           workspaceId: chatMessages.workspaceId,
         });
-      if (answer === undefined) {
-        // A turn stopped before it answered keeps no answer to mark; the
+      if (answers.length === 0) {
+        // Turns stopped before they answered keep no answer to mark; the
         // restore still settles, and the folder is back as it was.
         logger.info("desktop_runner.folder_restore.no_answer_to_mark", {
           "desktop_runner.restore_id": restoreId,
         });
         return "settled";
       }
-      // The computer, not the member, changed the answer: the desktop
+      // The computer, not the member, changed the answers: the desktop
       // runner records it on the member's behalf.
       const recordAuditEvent = createBackgroundAuditRecorder({
         execution: {
@@ -685,13 +945,16 @@ export const settleFolderRestore = async (
         userId: binding.userId,
         workspaceId: null,
       });
-      await recordAuditEvent(tx, {
-        action: AUDIT_ACTION.UPDATE,
-        resourceType: AUDIT_RESOURCE_TYPE.CHAT_MESSAGE,
-        resourceId: answer.id,
-        workspaceId: answer.workspaceId,
-        metadata: { reason: "local_files_undone", undoId: restoreId },
-      });
+      for (const answer of answers) {
+        // await-in-loop: one audit row per marked answer, in this transaction.
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.CHAT_MESSAGE,
+          resourceId: answer.id,
+          workspaceId: answer.workspaceId,
+          metadata: { reason: "local_files_undone", undoId: restoreId },
+        });
+      }
     }
     return "settled";
   });

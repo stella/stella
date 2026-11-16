@@ -1,19 +1,25 @@
-import { useRef, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 import type { ReactElement, ReactNode } from "react";
 
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Extension } from "@tiptap/core";
 import type { Editor } from "@tiptap/core";
 import { UndoRedo } from "@tiptap/extensions";
 import type { EditorProps } from "@tiptap/pm/view";
 import { EditorContent, useEditor, useEditorState } from "@tiptap/react";
+import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import {
   createChatPastedTextPart,
   isChatPastedTextPart,
 } from "@stll/api-contract/chat";
+import { sleep } from "@stll/concurrency/sleep";
 import { Button } from "@stll/ui/button";
-import { PencilIcon, TextIcon, XIcon } from "@stll/ui/icons";
+import { Checkbox } from "@stll/ui/checkbox";
+import { CheckIcon, PencilIcon, TextIcon, XIcon } from "@stll/ui/icons";
+import { Label } from "@stll/ui/label";
+import { StatusMark } from "@stll/ui/status-mark";
 import { stellaToast } from "@stll/ui/toast";
 
 import {
@@ -45,16 +51,37 @@ import type {
   UserMessageEditSession,
 } from "@/components/chat/user-message-edit.logic";
 import { DocumentIcon } from "@/components/document-icon";
+import {
+  type LocalFilesUndoMessage,
+  localFilesUndoOptions,
+  requestLocalFilesUndo,
+} from "@/features/chat/local-files-undo";
+import {
+  type EditLocalFilesChoice,
+  editLocalFilesChoice,
+  editRestartsConversation,
+  editUndoesFilesFirst,
+  followLocalFilesUndo,
+  type LocalFilesUndoProblem,
+} from "@/features/chat/local-files-undo.logic";
+import { readClientClockMs } from "@/hooks/client-clock";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useUnsavedWork } from "@/hooks/use-unsaved-work";
 import { useFormatter } from "@/i18n/formatting-context";
+import { getAnalytics } from "@/lib/analytics/provider";
+import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { createUuid } from "@/lib/uuid";
 
 /** What a transcript does when the user edits one of their sent messages. */
 export type UserMessageEditActions = {
+  /** The thread the edited messages belong to. */
+  threadId: string;
   /** The editor opened; a running turn is stopped first. */
   onStart: () => void;
   /** Open an edit session for `messageId`, the message's current one from
@@ -172,13 +199,14 @@ export const useUserMessageEditActions = ({
       return outcome;
     },
   );
-  const [actions] = useState<UserMessageEditActions>(() => ({
+  const [handlers] = useState(() => ({
     holdQueue,
     onStart,
     onSubmit,
     openSession,
   }));
-  return actions;
+  const { threadId } = threadRef;
+  return useMemo(() => ({ ...handlers, threadId }), [handlers, threadId]);
 };
 
 const attachmentTitle = (
@@ -228,8 +256,105 @@ const UserMessageEditKeys = Extension.create<{
   },
 });
 
+/** A message nobody can read the undo of here: its read never runs. */
+const NO_UNDO_TARGET: LocalFilesUndoMessage = {
+  activeOrganizationId: "",
+  userId: "",
+  threadId: "",
+  messageId: "",
+};
+
+/**
+ * The edit form's file choice: the box with its hint, disabled with the
+ * reason when the changes cannot be undone, or where an undo stands.
+ */
+const EditLocalFilesChoiceView = ({
+  choice,
+  disabled,
+  hintId,
+  onCheckedChange,
+  undoing,
+}: {
+  choice: EditLocalFilesChoice;
+  /** A send is out: the choice it made stays as it is. */
+  disabled: boolean;
+  hintId: string;
+  onCheckedChange: (checked: boolean) => void;
+  /** This form's send is undoing the files now. */
+  undoing: boolean;
+}) => {
+  const t = useTranslations();
+  if (undoing) {
+    return <LocalFilesUndoPending />;
+  }
+  switch (choice.type) {
+    case "hidden":
+      return null;
+    case "pending":
+      return <LocalFilesUndoPending />;
+    case "restored":
+      return (
+        <p
+          className="text-muted-foreground flex items-center gap-1.5 text-xs"
+          role="status"
+        >
+          <CheckIcon aria-hidden="true" className="size-3.5" />
+          {t("chat.localFilesUndo.restored")}
+        </p>
+      );
+    case "offered":
+    case "unavailable":
+      return (
+        <div className="flex flex-col">
+          <Label variant="choice">
+            <Checkbox
+              aria-describedby={hintId}
+              checked={choice.type === "offered" && choice.checked}
+              disabled={disabled || choice.type === "unavailable"}
+              onCheckedChange={onCheckedChange}
+            />
+            {t("chat.localFilesUndo.option")}
+          </Label>
+          <p className="text-muted-foreground ps-7 text-xs" id={hintId}>
+            {choice.type === "unavailable"
+              ? t(choice.reasonKey)
+              : t("chat.localFilesUndo.optionHint")}
+          </p>
+          {choice.type === "offered" && choice.problemKey !== null && (
+            <p className="text-destructive ps-7 pt-1 text-xs" role="alert">
+              {t(choice.problemKey)}
+            </p>
+          )}
+        </div>
+      );
+    default:
+      choice satisfies never;
+      return panic("Unhandled edit file choice");
+  }
+};
+
+/** An undo on its way to the member's computer. */
+const LocalFilesUndoPending = () => {
+  const t = useTranslations();
+  return (
+    <p
+      className="text-muted-foreground flex items-center gap-1.5 text-xs"
+      role="status"
+    >
+      {/* A settled mark beside the text: the undo waits on the computer,
+          and the turn status owner is the chat's only live indicator. */}
+      <StatusMark status="pending" />
+      {t("chat.localFilesUndo.pending")}
+    </p>
+  );
+};
+
 type UserMessageEditFormProps = {
   draft: UserMessageEditDraft;
+  /** The edited message and its thread: an edit from it may first undo the
+   *  file changes made on the member's computer since. */
+  messageId: string;
+  threadId: string;
   isGenerating: boolean;
   onCancel: () => void;
   /** Runs once the form is open; the release it returns runs when it
@@ -249,13 +374,74 @@ type UserMessageEditFormProps = {
 const UserMessageEditForm = ({
   draft,
   isGenerating,
+  messageId,
   onCancel,
   onHold,
   onSubmit,
   session,
+  threadId,
 }: UserMessageEditFormProps) => {
   const t = useTranslations();
+  const queryClient = useQueryClient();
+  const user = useMaybeAuthenticatedUser();
+  const optionHintId = useId();
   const [attachments, setAttachments] = useState(draft.attachments);
+  // The file undo an edit may ask first. The box starts unchecked: undoing
+  // also takes away the member's own changes in the folder.
+  const [undoFiles, setUndoFiles] = useState(false);
+  const [undoProblem, setUndoProblem] = useState<LocalFilesUndoProblem | null>(
+    null,
+  );
+  // While a send follows its undo, the form's own reads do; the query's poll
+  // waits.
+  const [undoing, setUndoing] = useState(false);
+  const [openedAt] = useState(readClientClockMs);
+  const undoTarget: LocalFilesUndoMessage | null =
+    user === null
+      ? null
+      : {
+          activeOrganizationId: user.activeOrganizationId,
+          userId: user.id,
+          threadId,
+          messageId,
+        };
+  const undoOptions = localFilesUndoOptions(undoTarget ?? NO_UNDO_TARGET, {
+    followedSince: openedAt,
+    follow: !undoing,
+  });
+  const undoRead = queryView(
+    useQuery({ ...undoOptions, enabled: undoTarget !== null }),
+  );
+  useQueryViewError(undoRead, "UserMessageEdit:localFilesUndo");
+  // A read that failed or has not arrived offers nothing: the edit alone.
+  const read = undoRead.type === "items" ? undoRead.items : undefined;
+  const filesChoice = editLocalFilesChoice({
+    read,
+    checked: undoFiles,
+    problem: undoProblem,
+  });
+  /** Ask for the undo and follow it while this form's session is open. */
+  const undoFilesFirst = async (target: LocalFilesUndoMessage) =>
+    await Result.tryPromise(
+      async () =>
+        await followLocalFilesUndo({
+          request: async () => await requestLocalFilesUndo(target),
+          read: async () =>
+            await Result.tryPromise(
+              async () =>
+                await queryClient.fetchQuery({ ...undoOptions, staleTime: 0 }),
+            ),
+          wait: async (ms) => {
+            await sleep(ms);
+            let open = false;
+            session.run(() => {
+              open = true;
+            });
+            return open;
+          },
+          now: readClientClockMs,
+        }),
+    );
   // Sending stays in this form until the server answers: an accepted edit
   // closes it, any other outcome leaves the draft here with its notice.
   const [sending, setSending] = useState(false);
@@ -274,11 +460,52 @@ const UserMessageEditForm = ({
     if (!hasUserMessageEditContent(edit) || isGenerating || inFlight.current) {
       return;
     }
+    const undoFirst = editUndoesFilesFirst(filesChoice) ? undoTarget : null;
     inFlight.current = true;
     setSending(true);
     setFailure(null);
+    setUndoProblem(null);
+    setUndoing(undoFirst !== null);
     detached(
       (async () => {
+        // The folder goes back first: the computer refuses a turn in a
+        // folder it is still restoring. An undo that did not restore it
+        // sends nothing and leaves the draft here, the box unchecked.
+        if (undoFirst !== null) {
+          const followed = await undoFilesFirst(undoFirst);
+          if (followed.isErr()) {
+            getAnalytics().captureError(followed.error, {
+              fingerprintKey: "UserMessageEdit:undoLocalFiles",
+              scope: {
+                type: "handler",
+                handlerId: "UserMessageEdit:undoLocalFiles",
+              },
+            });
+            session.run(() => {
+              inFlight.current = false;
+              setSending(false);
+              setUndoing(false);
+              notifyUserError(followed.error, t("errors.actionFailed"));
+            });
+            return;
+          }
+          const end = followed.value;
+          if (end.type !== "restored") {
+            session.run(() => {
+              inFlight.current = false;
+              setSending(false);
+              setUndoing(false);
+              setUndoFiles(false);
+              if (end.type !== "abandoned") {
+                setUndoProblem(end);
+              }
+            });
+            return;
+          }
+          session.run(() => {
+            setUndoing(false);
+          });
+        }
         const outcome = await onSubmit(edit);
         if (outcome.type !== "accepted") {
           session.run(() => {
@@ -432,6 +659,21 @@ const UserMessageEditForm = ({
       <p className="text-muted-foreground text-xs">
         {t("chat.editMessageNotice")}
       </p>
+      {editRestartsConversation(read) && (
+        <p className="text-muted-foreground text-xs">
+          {t("chat.localFilesUndo.conversationRestarts")}
+        </p>
+      )}
+      <EditLocalFilesChoiceView
+        choice={filesChoice}
+        disabled={sending}
+        hintId={optionHintId}
+        onCheckedChange={(checked) => {
+          setUndoFiles(checked);
+          setUndoProblem(null);
+        }}
+        undoing={undoing}
+      />
       {failure !== null && (
         <p className="text-destructive text-xs" role="alert">
           {t(userMessageEditNoticeKey(failure))}
@@ -516,9 +758,11 @@ export const useUserMessageEdit = ({
           isGenerating={isGenerating}
           key={session.id}
           onCancel={close}
+          messageId={message.id}
           onHold={() => actions.holdQueue(session.id)}
           onSubmit={submitEdit}
           session={session}
+          threadId={actions.threadId}
         />
       ),
     };

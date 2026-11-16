@@ -1887,23 +1887,24 @@
     "loadEarlierMessagesError": "Starší zprávy se nepodařilo načíst",
     "loadingEarlierMessages": "Načítání starších zpráv…",
     "localFilesUndo": {
-      "action": "Vrátit změny souborů",
       "computer": {
         "failed": "Vrácení změn se ve vašem počítači nedokončilo. Některé soubory už mohly být změněny, proto zkontrolujte složku chatu.",
         "folderBusy": "Tuto složku ve vašem počítači právě používá jiný běh. Zkuste to znovu, až skončí.",
         "noCheckpoint": "Váš počítač nemá uloženou kopii souborů z doby před tímto krokem, takže se nic nevrátilo.",
-        "notNewest": "Váš počítač má v této složce novější změny, takže se nic nevrátilo."
+        "updateForEarlier": "Aktualizujte stella desktop, abyste mohli vracet změny z dřívějších zpráv."
       },
-      "confirm": "Vrátit změny",
-      "confirmDescription": "Soubory, které tento krok změnil ve své složce ve vašem počítači, se vrátí do stavu před tímto krokem. Vrátí se jen změny tohoto kroku; změny dřívějších kroků zůstanou.",
-      "confirmTitle": "Vrátit změny souborů z tohoto kroku?",
+      "conversationRestarts": "Agent začne znovu z textu tohoto chatu, protože odpověď před touto zprávou nebyla dokončena.",
       "expired": "Váš počítač neodpověděl včas. Zkuste to znovu.",
+      "option": "Vrátit také změny souborů od této zprávy",
+      "optionHint": "Vrátí se i změny, které jste ve složce provedli sami.",
       "pending": "Vracení změn souborů ve vašem počítači",
       "refused": {
+        "alreadyUndone": "Tyto změny souborů už byly vráceny.",
         "desktopOffline": "Váš počítač je offline. Otevřete desktopovou aplikaci stella a zkuste to znovu.",
         "desktopUpdateRequired": "Desktopová aplikace stella ve vašem počítači je příliš stará na vrácení změn. Aktualizujte ji a zkuste to znovu.",
-        "noCheckpoint": "Tento krok nemá uloženou kopii souborů, ke které by se dalo vrátit.",
-        "notNewest": "Vrátit lze jen změny souborů z nejnovějšího kroku.",
+        "folderShared": "V této složce od této zprávy pracoval jiný chat.",
+        "noSavedCopy": "Váš počítač neuchoval kopii složky z doby před touto zprávou: byla příliš velká nebo se ukládala příliš pomalu, nebo ji nahradily novější kopie.",
+        "severalFolders": "Pozdější zprávy běžely na jiném počítači nebo v jiné složce.",
         "threadBusy": "Tento chat ještě pracuje. Zkuste to znovu, až skončí."
       },
       "restored": "Změny souborů vráceny"

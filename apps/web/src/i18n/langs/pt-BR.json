@@ -1887,23 +1887,24 @@
     "loadEarlierMessagesError": "Não foi possível carregar as mensagens anteriores",
     "loadingEarlierMessages": "Carregando mensagens anteriores…",
     "localFilesUndo": {
-      "action": "Desfazer alterações nos arquivos",
       "computer": {
         "failed": "A ação de desfazer não terminou no seu computador. Alguns arquivos podem já ter sido alterados, então verifique a pasta do chat.",
         "folderBusy": "Uma execução no seu computador está usando esta pasta. Tente novamente quando ela terminar.",
         "noCheckpoint": "Seu computador não tem uma cópia salva dos arquivos de antes desta etapa, então nada foi desfeito.",
-        "notNewest": "Seu computador tem alterações mais recentes nesta pasta, então nada foi desfeito."
+        "updateForEarlier": "Atualize o stella desktop para desfazer alterações de mensagens anteriores."
       },
-      "confirm": "Desfazer alterações",
-      "confirmDescription": "Os arquivos que esta etapa alterou na pasta dela no seu computador voltam a ficar como estavam antes da etapa. Só as alterações desta etapa são desfeitas; as de etapas anteriores permanecem.",
-      "confirmTitle": "Desfazer as alterações nos arquivos desta etapa?",
+      "conversationRestarts": "O agente recomeça a partir do texto deste chat, porque a resposta anterior a esta mensagem não terminou.",
       "expired": "Seu computador não respondeu a tempo. Tente novamente.",
+      "option": "Desfazer também as alterações nos arquivos desde esta mensagem",
+      "optionHint": "Isso também desfaz as alterações que você mesmo fez na pasta.",
       "pending": "Desfazendo alterações nos arquivos do seu computador",
       "refused": {
+        "alreadyUndone": "Essas alterações nos arquivos já foram desfeitas.",
         "desktopOffline": "Seu computador está offline. Abra o aplicativo de desktop do stella e tente novamente.",
         "desktopUpdateRequired": "O aplicativo de desktop do stella no seu computador é antigo demais para desfazer alterações. Atualize-o e tente novamente.",
-        "noCheckpoint": "Esta etapa não tem uma cópia salva dos arquivos para a qual voltar.",
-        "notNewest": "Só é possível desfazer as alterações nos arquivos da etapa mais recente.",
+        "folderShared": "Outro chat trabalhou nesta pasta desde esta mensagem.",
+        "noSavedCopy": "Seu computador não guardou uma cópia da pasta de antes desta mensagem: ela era grande ou lenta demais para salvar, ou cópias mais novas a substituíram.",
+        "severalFolders": "Mensagens posteriores rodaram em outro computador ou em outra pasta.",
         "threadBusy": "Este chat ainda está trabalhando. Tente novamente quando ele terminar."
       },
       "restored": "Alterações nos arquivos desfeitas"
