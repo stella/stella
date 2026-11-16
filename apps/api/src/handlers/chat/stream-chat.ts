@@ -2866,12 +2866,12 @@ type StreamSettlementOptions = Pick<
   deferredRunFinishedChunks: PublicStreamChunk[];
   rawArgumentsByIncompleteToolCallId: Map<string, string>;
   toolCallsWithCompleteInput: Set<string>;
-  getUsage: () => TokenUsage | undefined;
+  /**
+   * What the run reported so far (usage, and for a turn on the member's
+   * computer its context and models), read when the turn settles.
+   */
+  runState: Readonly<PersistenceRunState>;
   getTurnSpend: () => ChatTurnSpend | undefined;
-  /** How full the context of a turn run on the member's computer was. */
-  getLocalRunContext: () => ChatLocalRunContext | undefined;
-  /** The models a turn run on the member's computer asked for and ran on. */
-  getLocalRunModel: () => ChatLocalRunModel | undefined;
   announceBeforeFailure: () => StreamChunk[];
   /** Whether the run streamed an answer (see `processServerChatStream`). */
   getProducedAnswer: () => boolean;
@@ -2891,10 +2891,8 @@ const createStreamSettlement = ({
   deferredRunFinishedChunks,
   rawArgumentsByIncompleteToolCallId,
   toolCallsWithCompleteInput,
-  getUsage,
+  runState,
   getTurnSpend,
-  getLocalRunContext,
-  getLocalRunModel,
   getProducedAnswer,
   announceBeforeFailure,
   terminal,
@@ -2983,9 +2981,9 @@ const createStreamSettlement = ({
             producedAnswer: getProducedAnswer(),
             responseMessage,
             turnSpend: getTurnSpend(),
-            usage: getUsage(),
-            localRunContext: getLocalRunContext(),
-            localRunModel: getLocalRunModel(),
+            usage: runState.usage,
+            localRunContext: runState.localRunContext,
+            localRunModel: runState.localRunModel,
           })
         : attachTerminalTurnOutcome({
             message: checkpoint,
@@ -3743,9 +3741,7 @@ export const processServerChatStream = async function* ({
     deferredRunFinishedChunks,
     rawArgumentsByIncompleteToolCallId,
     toolCallsWithCompleteInput,
-    getUsage: () => runState.usage,
-    getLocalRunContext: () => runState.localRunContext,
-    getLocalRunModel: () => runState.localRunModel,
+    runState,
     getTurnSpend: () => turnBudget?.spend(),
     getProducedAnswer: () => producedAnswer,
     announceBeforeFailure: clientAssistantOwner.announceBeforeFailure,
