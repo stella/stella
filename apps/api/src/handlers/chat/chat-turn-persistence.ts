@@ -2037,7 +2037,7 @@ export const settleChatTurnOnTx = async ({
  * reaper ends it as `owner-lost`: past a restart of a single-task
  * deployment, and under the page's 180 s reconnect window.
  */
-export const CHAT_TURN_ADOPT_BY_MS = 90_000;
+const CHAT_TURN_ADOPT_BY_MS = 90_000;
 
 /** How a release went; see `ChatTurnSettlementResult` for the refusals. */
 type ChatTurnReleaseResult =

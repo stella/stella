@@ -217,7 +217,7 @@ type LocalRunStreamInput = {
  * stores the answer so far for the adopter instead of settling the turn, and
  * the chunk reaches no log and no viewer.
  */
-export const CHAT_TURN_RELEASED_EVENT = "stella.chat-turn.released";
+const CHAT_TURN_RELEASED_EVENT = "stella.chat-turn.released";
 
 /** Whether `chunk` ends a read released to another task. */
 export const isChatTurnReleasedChunk = (chunk: StreamChunk): boolean =>
