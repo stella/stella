@@ -646,7 +646,6 @@
     "packages/ui/src/data-table/schema.ts": 1,
     "packages/ui/src/lib/slot.tsx": 1,
     "scripts/check-cli-release-coupling.ts": 1,
-    "scripts/codemod-icons.ts": 2,
     "scripts/migration-catalog.ts": 2,
     "scripts/network-baseline-scope.ts": 1,
     "scripts/oxlint-rule-ids.ts": 1,
