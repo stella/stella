@@ -20,7 +20,6 @@ import {
   CHAT_TURN_NOT_OWNED_ERROR_CODE,
 } from "@stll/api-contract";
 import type { ChatSendRequest, ChatTurnIntent } from "@stll/api-contract";
-import { CHAT_COMMAND_MAX_RETRIES } from "@stll/api-contract/chat-command";
 import {
   isSameLocalRunQuestionPause,
   type LocalRunQuestionPause,
@@ -43,7 +42,6 @@ import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import {
   ChatReconnectError,
   createDurableChatTransport,
-  finishedChatRunResponse,
 } from "@stll/chat/durable-transport";
 import {
   chatResumeSnapshotSchema,
@@ -110,12 +108,7 @@ import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
 import { LifecycleRegistry } from "@/stores/lifecycle-registry";
 
-import {
-  chatCommandFetchClient,
-  ChatCommandReplayedError,
-  chatFetchClient,
-  chatResponseError,
-} from "./chat-fetch";
+import { chatFetchClient, chatResponseError } from "./chat-fetch";
 import {
   localRunLimitResetsAtFromThrown,
   withLocalRunLimitResetsAt,
@@ -508,23 +501,16 @@ const STOP_REQUEST_TIMEOUT_MS = 20_000;
  *  settled. */
 type StopAnswer = "running" | "settled";
 
-/**
- * Ask the server to stop `turnId`: its answer is the turn as it stands. An
- * answer that never arrived (the connection failed, or it timed out) is asked
- * for again up to `retries` times: a stop names its turn, so asking again can
- * stop only that turn, and the server answers each ask the same way.
- */
+/** Ask the server to stop `turnId`: its answer is the turn as it stands. */
 const requestChatTurnStop = async ({
-  retries = 0,
   threadId,
   turnId,
 }: {
-  retries?: number | undefined;
   threadId: string;
   turnId: SafeId<"chatTurn">;
 }): Promise<Result<StopAnswer, Error>> => {
-  const ask = async () =>
-    await Result.tryPromise(async (): Promise<Result<StopAnswer, APIError>> => {
+  const sent = await Result.tryPromise(
+    async (): Promise<Result<StopAnswer, APIError>> => {
       const { data, error } = await api.chat
         .threads({ threadId: toSafeId<"chatThread">(threadId) })
         .turns({ turnId })
@@ -535,17 +521,8 @@ const requestChatTurnStop = async ({
         return Result.err(toAPIError(error));
       }
       return Result.ok(data.turn.status === "running" ? "running" : "settled");
-    });
-  /** No answer arrived: the request failed before any status came back. */
-  const lost = (asked: Awaited<ReturnType<typeof ask>>) =>
-    Result.isError(asked) ||
-    (Result.isError(asked.value) &&
-      (asked.value.error.transportKind === "network" ||
-        asked.value.error.transportKind === "timeout"));
-  let sent = await ask();
-  for (let retry = 0; retry < retries && lost(sent); retry += 1) {
-    sent = await ask();
-  }
+    },
+  );
   return Result.isError(sent)
     ? Result.err(toError(sent.error.cause))
     : sent.value;
@@ -658,10 +635,6 @@ export const createChatRuntime = ({
    *  request the send posts answers it (see `turnObservingFetchClient`). */
   let awaitedSendAcceptance:
     PromiseWithResolvers<ChatSendAcceptance> | undefined;
-  /** The run of the member's command (a send, an answer) the next request
-   *  posts, sent under a command id and again when its response is lost;
-   *  an edit or a regeneration is no command. */
-  let postedCommandRunId: string | undefined;
   /** TanStack's delivery of the page's latest send, until it has finished. */
   let clientDelivery: Promise<void> | undefined;
   /** A new message starts a new turn. Stop waits for its response headers
@@ -810,42 +783,18 @@ export const createChatRuntime = ({
       if (acceptance !== undefined) {
         awaitedSendAcceptance = undefined;
       }
-      const commandRunId =
-        init?.method === "GET" ? undefined : postedCommandRunId;
-      postedCommandRunId = undefined;
       const received = await Result.tryPromise({
-        try: async () =>
-          commandRunId === undefined
-            ? await chatFetchClient(input, init)
-            : await chatCommandFetchClient(input, init),
+        try: async () => await chatFetchClient(input, init),
         catch: toError,
       });
       requestAnswered.resolve(undefined);
-      const replayed =
-        Result.isError(received) &&
-        ChatCommandReplayedError.is(received.error) &&
-        commandRunId !== undefined
-          ? { runId: commandRunId, turnId: received.error.turnId }
-          : undefined;
-      if (Result.isError(received) && replayed === undefined) {
+      if (Result.isError(received)) {
         acceptance?.resolve({ status: "failed", error: received.error });
         return readQueryResult(received);
       }
       acceptance?.resolve({ status: "accepted" });
-      // An earlier attempt of this command was accepted and its response
-      // lost: its turn is this request's. The page follows it in the thread
-      // as stored, which rejoins the turn while it runs, as after a stream
-      // whose run log is gone.
-      const response =
-        replayed === undefined
-          ? readQueryResult(received)
-          : finishedChatRunResponse(replayed.runId);
-      if (replayed !== undefined) {
-        setSnapshot({ turnAbandoned: true });
-        reloadThread();
-      }
-      const servedTurnId =
-        replayed?.turnId ?? response.headers.get(CHAT_TURN_ID_HEADER);
+      const response = received.value;
+      const servedTurnId = response.headers.get(CHAT_TURN_ID_HEADER);
       if (servedTurnId !== null) {
         turnId = toSafeId<"chatTurn">(servedTurnId);
         if (stopBeforeHeaders === "requested") {
@@ -1016,10 +965,8 @@ export const createChatRuntime = ({
           }),
       });
       const requestBody = readQueryResult(prepared);
-      const send = () => {
-        postedCommandRunId =
-          requestBody.turnIntent === undefined ? runContext.runId : undefined;
-        return observeChatProviderDiagnostic(
+      const send = () =>
+        observeChatProviderDiagnostic(
           keepPostedMessagesInSnapshots(
             messages,
             upstreamConnection.connect(
@@ -1054,7 +1001,6 @@ export const createChatRuntime = ({
             },
           },
         );
-      };
       // A new message for the member's computer while stella desktop opens
       // (the member's own send or Run on pick started it) waits for the
       // launch, shown as such, and goes out once it ends. A continuation of
@@ -1854,9 +1800,6 @@ export const createChatRuntime = ({
    */
   const settleStop = async (stoppedTurn: SafeId<"chatTurn">) => {
     let answer = await requestChatTurnStop({
-      // The member's Stop is a command like a send: a lost answer is asked
-      // for again before Stop is shown as failed.
-      retries: CHAT_COMMAND_MAX_RETRIES,
       threadId: key.threadId,
       turnId: stoppedTurn,
     });
