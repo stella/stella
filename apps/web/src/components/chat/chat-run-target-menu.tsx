@@ -300,7 +300,7 @@ const useDesktopSetupSteps = () => {
       case "unavailable":
         return t("chat.runOn.stepsCheck", { harness });
       default:
-        option satisfies never;
+        option.state satisfies never;
         return panic("Unknown harness setup state");
     }
   };
