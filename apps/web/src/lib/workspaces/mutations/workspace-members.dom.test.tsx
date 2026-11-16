@@ -106,8 +106,8 @@ const prepare = async () => {
   });
   const own = workspaceMembersOptions(workspaceId);
   const other = workspaceMembersOptions(otherWorkspaceId);
-  await client.fetchQuery(own);
-  await client.fetchQuery(other);
+  await client.query(own);
+  await client.query(other);
   client.setQueryData(workspacesKeys.all, [workspaceId]);
   const wrapper = ({ children }: { children: ReactNode }) => (
     <IntlProvider locale="en" messages={englishMessages} timeZone="UTC">

@@ -8,7 +8,7 @@ import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { workspaceMembersQueryRoot } from "@/lib/resource-query-roots.logic";
 import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
-export const workspaceMembersKeys = {
+const workspaceMembersKeys = {
   all: workspaceMembersQueryRoot,
 };
 
