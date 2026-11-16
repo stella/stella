@@ -6,6 +6,7 @@ import { createTestClock } from "@stll/test-kit";
 
 import { envBase } from "@/api/env-base";
 import { runWithQueryCounter } from "@/api/lib/db-query-counter";
+import { runWithPublicReadScope } from "@/api/lib/legal-search/public-read-timeout-context";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { currentReadWork } from "@/api/lib/observability/request-work";
 import { OBJECT_READ_TIMEOUT_MS, S3ObjectBudgetError } from "@/api/lib/s3";
@@ -217,7 +218,9 @@ describe("stored file default signal ownership", () => {
         } else {
           expect(Result.isError(result)).toBe(true);
           if (Result.isError(result)) {
-            expect(result.error.cause).toMatchObject({ name: "AbortError" });
+            expect(result.error.cause).toMatchObject({
+              name: mode === "default" ? "TimeoutError" : "AbortError",
+            });
           }
         }
       } finally {
@@ -228,4 +231,49 @@ describe("stored file default signal ownership", () => {
       }
     },
   );
+});
+
+describe("stored file default transport ownership", () => {
+  test("a transient storage refusal is surfaced without an SDK retry", async () => {
+    const store = startFakeS3();
+    const key = testFileKey("user-files/default-no-retry");
+    store.put(envBase.S3_BUCKET, key, "document", "text/plain");
+    store.failNext({ method: "GET", key, code: "InternalError", status: 500 });
+    try {
+      expect(
+        await rejectionOf(readStoredFile({ key, mimeType: "text/plain" })),
+      ).toMatchObject({ _tag: "S3ObjectReadError", status: 500 });
+      expect(
+        store.requests.filter(({ method }) => method === "GET"),
+      ).toHaveLength(1);
+    } finally {
+      store.stop();
+    }
+  });
+
+  test("an ambient public-read abort cancels the default storage request", async () => {
+    const store = startFakeS3();
+    const key = testFileKey("user-files/default-public-scope");
+    store.put(envBase.S3_BUCKET, key, "document", "text/plain");
+    const hold = store.holdNext({ method: "GET", keyIncludes: key });
+    const controller = new AbortController();
+    const reason = new DOMException("Request ended", "AbortError");
+    const reading = runWithPublicReadScope(
+      { budgetMs: 1000, signal: controller.signal },
+      async () => await readStoredFile({ key, mimeType: "text/plain" }),
+    );
+    try {
+      await hold.reached;
+      controller.abort(reason);
+      const result = await reading;
+      expect(Result.isError(result)).toBe(true);
+      if (Result.isError(result)) {
+        expect(result.error).toBe(reason);
+      }
+    } finally {
+      hold.release();
+      await reading;
+      store.stop();
+    }
+  });
 });

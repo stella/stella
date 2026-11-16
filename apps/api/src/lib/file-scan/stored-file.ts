@@ -3,7 +3,7 @@ import type { FileKey } from "@/api/lib/file-key";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { mintScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
-import { OBJECT_READ_TIMEOUT_MS, readS3ObjectBounded } from "@/api/lib/s3";
+import { readS3BytesBounded, readS3ObjectBounded } from "@/api/lib/s3";
 import type { S3SigningScope } from "@/api/lib/s3-presign";
 import { readTenantS3ArrayBuffer } from "@/api/lib/s3-presign";
 
@@ -26,16 +26,27 @@ const readBytes = async (input: ReadStoredFileInput): Promise<ArrayBuffer> => {
       signal: input.signal,
     });
   }
-  const bytes = await readS3ObjectBounded({
-    bucket: envBase.S3_BUCKET,
-    key: input.key,
-    maxBytes: input.maxBytes ?? FILE_SIZE_LIMIT_BYTES.document,
-    // Only the legacy unconfigured path supplied its own five-minute deadline.
-    signal:
-      input.maxBytes === undefined
-        ? (input.signal ?? AbortSignal.timeout(OBJECT_READ_TIMEOUT_MS))
-        : input.signal,
-  });
+  let bytes: Uint8Array;
+  if (input.maxBytes !== undefined) {
+    bytes = await readS3ObjectBounded({
+      bucket: envBase.S3_BUCKET,
+      key: input.key,
+      maxBytes: input.maxBytes,
+      signal: input.signal,
+    });
+  } else if (input.signal === undefined) {
+    bytes = await readS3BytesBounded({
+      key: input.key,
+      maxBytes: FILE_SIZE_LIMIT_BYTES.document,
+    });
+  } else {
+    bytes = await readS3ObjectBounded({
+      bucket: envBase.S3_BUCKET,
+      key: input.key,
+      maxBytes: FILE_SIZE_LIMIT_BYTES.document,
+      signal: input.signal,
+    });
+  }
   // The read is the only holder of `bytes`, so an exact-fit buffer is
   // handed on as-is rather than copied a second time.
   return bytes.buffer instanceof ArrayBuffer &&
