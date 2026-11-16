@@ -508,7 +508,9 @@ const adoptChatTurn = async ({
  * (another task adopting the same turn loses the claim), and sweeps for
  * turns whose ring was lost.
  */
-const createChatTurnAdopter = (dependencies: ChatTurnAdoptionDependencies) => {
+export const createChatTurnAdopter = (
+  dependencies: ChatTurnAdoptionDependencies,
+) => {
   const adopting = new Set<string>();
   const adopt = async (turn: HandedOverChatTurn): Promise<void> => {
     if (adopting.has(turn.turnId)) {
