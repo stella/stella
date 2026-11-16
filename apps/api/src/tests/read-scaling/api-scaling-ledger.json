@@ -41,6 +41,14 @@
       "reason": "Requires a case fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
     },
     {
+      "id": "GET /v1/case/browse/calendar",
+      "reason": "Bounded by construction: one index descent per year, or per-month/per-day counts capped at one past the listing depth; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/case/browse/courts",
+      "reason": "Bounded by construction: one keyset page of folded court counts under a fixed cap; pending read harness coverage."
+    },
+    {
       "id": "GET /v1/case/coverage",
       "reason": "Requires a case fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
     },

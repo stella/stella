@@ -87,6 +87,14 @@ const ROUTE_PRESENTATION_EXEMPTIONS: Readonly<Record<string, RouteExemption>> =
       reason: "The public law reader owns its document breadcrumb.",
     },
     "/law/": { reason: "The public law shell owns its breadcrumb." },
+    "/law/$country/": {
+      reason: "The public law hub renders its own heading.",
+      fields: ["breadcrumb"],
+    },
+    "/law/$country/courts/$": {
+      reason: "The public law hub renders its own heading and crumb trail.",
+      fields: ["breadcrumb"],
+    },
     "/law/$country/statutes/": {
       reason: "The public law shell owns its statutes breadcrumb.",
       fields: ["breadcrumb"],

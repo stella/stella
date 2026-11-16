@@ -20,6 +20,7 @@ import {
   publicLawPageSearchValue,
   publicLawPageSize,
 } from "@/components/public-law-table/public-law-route-pagination.logic";
+import { publicCaseLawHubPathFor } from "@/features/case-law/browse-path";
 import {
   createCaseLawIndexPath,
   decisionDateRange,
@@ -42,7 +43,6 @@ import {
   decisionsPageOptions,
 } from "@/features/case-law/queries/decisions";
 import { getMessageLocale, getTranslator } from "@/i18n/i18n-store";
-import { publicCaseLawHubPathFor } from "@/lib/case-law-browse-path";
 import { resolveCaseLawRouteCountry } from "@/lib/case-law-route";
 import { readQueryResult } from "@/lib/errors/query-result";
 import { pageTitle } from "@/lib/page-title";

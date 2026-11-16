@@ -14,6 +14,13 @@ import {
 import { Temporal } from "@stll/time";
 
 import {
+  caseLawBrowseCourtSegment,
+  type CaseLawBrowseListing,
+  type CaseLawBrowseTarget,
+  createCaseLawBrowsePath,
+  parseCaseLawBrowseSplat,
+} from "@/features/case-law/browse-path";
+import {
   publicCaseLawPageCountryFromParam,
   toCaseLawCountryParam,
 } from "@/features/case-law/case-law-jurisdiction";
@@ -30,13 +37,6 @@ import {
 import { useFormatter } from "@/i18n/formatting-context";
 import { getFormatter, getTranslator } from "@/i18n/i18n-store";
 import type { TranslationKey } from "@/i18n/types";
-import {
-  caseLawBrowseCourtSegment,
-  type CaseLawBrowseListing,
-  type CaseLawBrowseTarget,
-  createCaseLawBrowsePath,
-  parseCaseLawBrowseSplat,
-} from "@/lib/case-law-browse-path";
 import { caseLawCountryName } from "@/lib/case-law-route";
 import { pageTitleLiteral } from "@/lib/page-title";
 import {
@@ -53,6 +53,12 @@ import {
   PublicLawHubLayout,
   PublicLawHubSection,
 } from "@/routes/law/-components/public-law-hub";
+
+/** Answers the route's not-found page; never returns. */
+const missing: () => never = () => {
+  notFound({ throw: true });
+  return panic("notFound({ throw: true }) returned");
+};
 
 type Period = { value: number; count: number };
 
@@ -82,7 +88,7 @@ const readPage = async (
       }),
     );
     if (page.items.length === 0) {
-      throw notFound();
+      missing();
     }
     return {
       kind: "decisions",
@@ -102,7 +108,7 @@ const readPage = async (
       }),
     );
     if (calendar.periods.length === 0) {
-      throw notFound();
+      missing();
     }
     return calendar.periods;
   };
@@ -116,14 +122,14 @@ const readPage = async (
       const months = await periods(target.year);
       const month = months.find(({ value }) => value === target.month);
       if (month === undefined) {
-        throw notFound();
+        missing();
       }
       if (!isCaseLawBrowsePeriodSplit(month.count)) {
         return await listing(target);
       }
       // Too many for one listing: the month lists its days, and has no pages.
       if (target.page > 1) {
-        throw notFound();
+        missing();
       }
       return {
         kind: "periods",
@@ -136,13 +142,13 @@ const readPage = async (
       const month = months.find(({ value }) => value === target.month);
       // A day page exists only below a month that lists its days.
       if (month === undefined || !isCaseLawBrowsePeriodSplit(month.count)) {
-        throw notFound();
+        missing();
       }
       return await listing(target);
     }
     default:
       target satisfies never;
-      throw notFound();
+      return panic("Unhandled browse level");
   }
 };
 
@@ -155,7 +161,7 @@ export const Route = createFileRoute("/law/$country/courts/$")({
       toCaseLawCountryParam(scope) !== params.country ||
       target === null
     ) {
-      throw notFound();
+      missing();
     }
     const { courts } = await ensureRouteQueryData(
       queryClient,
@@ -165,7 +171,7 @@ export const Route = createFileRoute("/law/$country/courts/$")({
       (name) => caseLawBrowseCourtSegment(name) === target.court,
     );
     if (court === undefined) {
-      throw notFound();
+      missing();
     }
     return {
       scope,

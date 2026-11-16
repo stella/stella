@@ -2,9 +2,9 @@ import { queryOptions } from "@tanstack/react-query";
 
 import { CASE_LAW_BROWSE_PAGE_SIZE } from "@stll/api-contract/case-law-browse-hubs";
 
+import type { CaseLawBrowseListing } from "@/features/case-law/browse-path";
+import { caseLawBrowseDateRange } from "@/features/case-law/browse-path";
 import { api } from "@/lib/api";
-import type { CaseLawBrowseListing } from "@/lib/case-law-browse-path";
-import { caseLawBrowseDateRange } from "@/lib/case-law-browse-path";
 import {
   PUBLIC_LAW_READ_TIMEOUT_MS,
   unwrapPublicLawResponse,
@@ -78,8 +78,8 @@ export const caseLawBrowseCalendarOptions = ({
           query: {
             country,
             court,
-            ...(year !== undefined && { year: String(year) }),
-            ...(month !== undefined && { month: String(month) }),
+            ...(year !== undefined && { year }),
+            ...(month !== undefined && { month }),
           },
           fetch: { signal: timeout(signal) },
         }),

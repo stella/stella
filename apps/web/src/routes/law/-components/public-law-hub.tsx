@@ -5,8 +5,8 @@ import { useTranslations } from "use-intl";
 
 import { ScrollArea } from "@stll/ui/scroll-area";
 
-import type { CaseLawBrowseTarget } from "@/lib/case-law-browse-path";
-import { createCaseLawBrowsePath } from "@/lib/case-law-browse-path";
+import type { CaseLawBrowseTarget } from "@/features/case-law/browse-path";
+import { createCaseLawBrowsePath } from "@/features/case-law/browse-path";
 
 /**
  * The crawlable hubs of the public law database: a heading, one sentence,

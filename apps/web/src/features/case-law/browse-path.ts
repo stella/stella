@@ -8,7 +8,7 @@ import { Temporal } from "@stll/time";
 import {
   publicCaseLawPageCountryFromParam,
   toCaseLawCountryParam,
-} from "@/features/case-law/case-law-jurisdiction";
+} from "./case-law-jurisdiction";
 
 /**
  * The crawlable browse tree of a jurisdiction's decisions, as query-free

@@ -7,7 +7,7 @@ import {
   type CaseLawBrowseTarget,
   createCaseLawBrowsePath,
   parseCaseLawBrowseSplat,
-} from "./case-law-browse-path";
+} from "./browse-path";
 
 const court = "nejvyssi-soud";
 

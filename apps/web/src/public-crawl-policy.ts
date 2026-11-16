@@ -1,14 +1,12 @@
+import { isPublicLegislationPageCountry } from "@stll/api-contract/legislation-publication";
+import { STATUTE_QUERY_CAPABILITIES } from "@stll/api-contract/statute-query-capability";
 import { loadCatalogue } from "@stll/catalogue";
 
+import { createCaseLawJurisdictionHubPath } from "./features/case-law/browse-path";
 import {
   PUBLIC_CASE_LAW_PAGE_COUNTRIES,
   toCaseLawCountryParam,
 } from "./features/case-law/case-law-jurisdiction";
-import { createCaseLawJurisdictionHubPath } from "./lib/case-law-browse-path";
-import {
-  isPublicStatutePageCountry,
-  STATUTE_COUNTRIES,
-} from "./lib/statutes/statute-route";
 
 type PublicCrawlRoute = {
   path: `/${string}`;
@@ -223,7 +221,13 @@ export const publicLawHubSitemapPaths = (): readonly `/law/${string}`[] =>
     ...PUBLIC_CASE_LAW_PAGE_COUNTRIES.map((country) =>
       createCaseLawJurisdictionHubPath(toCaseLawCountryParam(country)),
     ),
-    ...Object.keys(STATUTE_COUNTRIES)
-      .filter(isPublicStatutePageCountry)
+    // Jurisdictions with a statute browser whose statute pages are public.
+    ...Object.entries(STATUTE_QUERY_CAPABILITIES)
+      .filter(
+        ([country, capability]) =>
+          capability.type === "supported" &&
+          isPublicLegislationPageCountry(country.toUpperCase()),
+      )
+      .map(([country]) => country)
       .map((country): `/law/${string}` => `/law/${country}/statutes`),
   ].filter((path) => isPublicLawUrlIndexable(path, true));

@@ -39,6 +39,7 @@ import {
 import { Skeleton } from "@stll/ui/skeleton";
 
 import { publicLawAskScope } from "@/components/public-law-search";
+import { publicCaseLawHubPathFor } from "@/features/case-law/browse-path";
 import {
   publicCaseLawCountryFromParam,
   toCaseLawCountryParam,
@@ -58,7 +59,6 @@ import { legislationShelfOptions } from "@/features/statutes/queries/statutes";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import { getMessageLocale, getTranslator } from "@/i18n/i18n-store";
-import { publicCaseLawHubPathFor } from "@/lib/case-law-browse-path";
 import {
   caseLawCountryName,
   resolveCaseLawRouteCountry,

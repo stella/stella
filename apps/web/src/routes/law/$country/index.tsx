@@ -1,6 +1,11 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import {
+  caseLawBrowseCourtSegment,
+  createCaseLawJurisdictionHubPath,
+} from "@/features/case-law/browse-path";
 import {
   publicCaseLawPageCountryFromParam,
   toCaseLawCountryParam,
@@ -8,10 +13,6 @@ import {
 import { caseLawBrowseCourtsOptions } from "@/features/case-law/queries/browse-hubs";
 import { useFormatter } from "@/i18n/formatting-context";
 import { getFormatter, getTranslator } from "@/i18n/i18n-store";
-import {
-  caseLawBrowseCourtSegment,
-  createCaseLawJurisdictionHubPath,
-} from "@/lib/case-law-browse-path";
 import { caseLawCountryName } from "@/lib/case-law-route";
 import { pageTitleLiteral } from "@/lib/page-title";
 import {
@@ -28,6 +29,12 @@ import {
   PublicLawHubSection,
 } from "@/routes/law/-components/public-law-hub";
 
+/** Answers the route's not-found page; never returns. */
+const missing: () => never = () => {
+  notFound({ throw: true });
+  return panic("notFound({ throw: true }) returned");
+};
+
 /**
  * A jurisdiction's crawlable hub: every court that holds public decisions,
  * each linking down its browse tree, plus the jurisdiction's statutes. The
@@ -38,7 +45,7 @@ export const Route = createFileRoute("/law/$country/")({
   loader: async ({ context: { queryClient }, params }) => {
     const scope = publicCaseLawPageCountryFromParam(params.country);
     if (scope === null || toCaseLawCountryParam(scope) !== params.country) {
-      throw notFound();
+      missing();
     }
     const { courts } = await ensureRouteQueryData(
       queryClient,

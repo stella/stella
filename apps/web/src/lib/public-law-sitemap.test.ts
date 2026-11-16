@@ -533,7 +533,11 @@ describe("public law sitemap", () => {
       publicLawIndexingEnabled: true,
     });
 
-    expect(xml).toContain("<loc>http://localhost:3000/law</loc>");
+    // The jurisdiction hubs, not the search home that redirects.
+    expect(xml).toContain("<loc>http://localhost:3000/law/cze</loc>");
+    expect(xml).toContain("<loc>http://localhost:3000/law/cze/statutes</loc>");
+    expect(xml).not.toContain("<loc>http://localhost:3000/law</loc>");
+    expect(xml).not.toContain("/law/usa");
     expect(xml).not.toContain("http://localhost:3000/law/cases");
     expect(xml).not.toContain("workspace");
     expect(xml).not.toContain("organization");
