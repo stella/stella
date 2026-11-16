@@ -163,10 +163,17 @@ export const refreshAuthQueries = async (queryClient: QueryClient) => {
       queryKey: sessionOptions.queryKey,
       exact: true,
     });
-    const session = await queryClient.query({
-      ...sessionOptions,
-      staleTime: 0,
-    });
+    // Authentication transitions are refreshed by this owner and session signals,
+    // independently of domain-resource fan-out.
+    const session = await queryClient.query(
+      resourceQueryOptions(
+        {
+          ...sessionOptions,
+          staleTime: 0,
+        },
+        { type: "independent" },
+      ),
+    );
     await settleAuthTransition(queryClient);
     if (
       hadRole &&
