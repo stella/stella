@@ -654,7 +654,8 @@ test("a form repair skips a citation when its decision text changes before writi
       const changingTx = new Proxy(tx, {
         get: (target, property, receiver) => {
           if (property !== "execute") {
-            return Reflect.get(target, property, receiver);
+            const value: unknown = Reflect.get(target, property, receiver);
+            return value;
           }
           return async (...args: Parameters<typeof tx.execute>) => {
             if (!changed) {
