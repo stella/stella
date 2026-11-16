@@ -192,7 +192,9 @@ const mountEditor = async (
       state.minimized ? undefined : state.tabs.find((tab) => tab.id === tabId),
     );
     const payload =
-      selected?.type === "view" && isPlaybookDraftViewPayload(selected.payload)
+      selected?.type === "view" &&
+      isPlaybookDraftViewPayload(selected.payload) &&
+      selected.payload.type === "playbook"
         ? selected.payload
         : null;
     return (
@@ -1083,12 +1085,11 @@ const otherPlaybookLifecycle = async (
   await act(async () => {
     await followReconciledPlaybookSave({
       reconciliation: {
-        playbookId: OTHER_PLAYBOOK_ID,
-        source: "live",
+        target: { playbookId: OTHER_PLAYBOOK_ID, source: "live" },
         refetched: Promise.resolve(),
       },
       isCurrent: () => true,
-      follow: (playbookId) =>
+      follow: ({ playbookId }) =>
         real.store.getState().updateView({
           id: real.tabId,
           label: other.name,

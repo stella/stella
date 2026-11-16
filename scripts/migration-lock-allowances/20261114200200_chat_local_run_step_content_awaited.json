@@ -1,0 +1,4 @@
+{
+  "add-constraint": "The checks are added NOT VALID, so no existing row is scanned; every existing row holds a kind and a settled outcome, so both hold for all of them, under 1s lock_timeout and 10s statement_timeout.",
+  "alter-column": "Dropping NOT NULL on kind changes only the catalog and scans no row, under 1s lock_timeout and 10s statement_timeout."
+}

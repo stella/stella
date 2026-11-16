@@ -14,7 +14,7 @@ import {
   forEachRegistryMutation,
   registryExtras,
   registryString,
-} from "../shared/property-test-helpers.test.js";
+} from "../shared/tests/test-helpers.js";
 import { lookupByOrgnr, searchByName } from "./client.js";
 import { parseAddress, parseEnhet, parseSearchEntry } from "./parse.js";
 import type { BrregRawAddress, BrregRawEnhet } from "./types.js";

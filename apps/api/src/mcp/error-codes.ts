@@ -1,5 +1,9 @@
 import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
-import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
+import {
+  LEGAL_HOLD_ACTIVE,
+  LEGAL_HOLD_ACTIVE_HINT,
+} from "@stll/api-contract/legal-holds";
+import { MODEL_RUN_CAP_CODES } from "@stll/api-contract/model-run-caps";
 
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
@@ -13,7 +17,7 @@ import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
  */
 export const MCP_ERROR_CODES = [
   ...Object.values(ACTION_ADMISSION_CODES),
-  ...Object.values(VERIFICATION_RUN_CAP_CODES),
+  ...Object.values(MODEL_RUN_CAP_CODES),
   /** Input failed validation at the tool boundary (shape, type, range). */
   "validation_error",
   /** The read result needs a smaller selection or page. */
@@ -48,6 +52,8 @@ export const MCP_ERROR_CODES = [
    * 10 off it.
    */
   "conflict",
+  /** Active legal holds retain evidence until an authorized human releases them. */
+  LEGAL_HOLD_ACTIVE,
   /** The caller exceeded a rate limit; retry after the window. */
   "rate_limited",
   /** A named external dependency is temporarily unavailable; retry is safe. */
@@ -156,6 +162,9 @@ export const projectMcpRefusal = ({
   retryable,
   retryAfterMs,
 }: McpRefusalOptions): McpRefusal => {
+  const resolvedHint =
+    hint ?? (code === LEGAL_HOLD_ACTIVE ? LEGAL_HOLD_ACTIVE_HINT : undefined);
+  const resolvedRetryable = code === LEGAL_HOLD_ACTIVE ? false : retryable;
   const detailedIssues = isUnknownArray(issues)
     ? issues.flatMap((issue) => {
         if (
@@ -183,8 +192,10 @@ export const projectMcpRefusal = ({
       code !== undefined && !isMcpErrorCode(code)
         ? [{ path: "", code, message }, ...detailedIssues]
         : detailedIssues,
-    ...(hint === undefined ? {} : { hint }),
-    ...(retryable === undefined ? {} : { retryable }),
+    ...(resolvedHint === undefined ? {} : { hint: resolvedHint }),
+    ...(resolvedRetryable === undefined
+      ? {}
+      : { retryable: resolvedRetryable }),
     ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
   };
 };

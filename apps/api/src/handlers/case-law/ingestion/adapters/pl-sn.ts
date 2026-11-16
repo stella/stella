@@ -1,3 +1,4 @@
+// parser-output-unchanged: Bounded publisher envelope reads preserve valid response text, parsed decisions and cursor values.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 import { panic, Result } from "better-result";
@@ -66,6 +67,10 @@ import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/ad
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { plSupremeCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-sn-ruling-keys";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
+import {
+  readBodyText,
+  unreadPublisherError,
+} from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parsePlSnDecisionPdf } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
@@ -74,6 +79,7 @@ import {
   checkedDecisionMetadata,
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
+import { readPresent } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
@@ -410,7 +416,23 @@ const requestProxy = async ({
     );
   }
 
-  const raw = await response.text();
+  const body = await readBodyText(readPresent(response), signal);
+  if (body.type !== "present") {
+    const error = unreadPublisherError({
+      outcome: body,
+      adapterKey: ADAPTER_KEYS.PL_SN,
+      cursor,
+      message: "sn.pl proxy body unread",
+    });
+    // Transport failures retain their rejection path and Error identity.
+    if (body.type === "unavailable" && body.cause.kind === "thrown") {
+      return await Promise.reject(
+        body.cause.error instanceof Error ? body.cause.error : error,
+      );
+    }
+    return Result.err(error);
+  }
+  const raw = body.value;
   const parsed = Result.try({
     try: (): unknown => JSON.parse(raw),
     catch: () => null,

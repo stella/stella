@@ -15,6 +15,7 @@ import {
   CollapsibleTrigger,
 } from "@stll/ui/collapsible";
 import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
+import { formatFileSize } from "@stll/ui/file-size";
 import { AlertTriangleIcon, PaperclipIcon } from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
 import { textMarkClass } from "@stll/ui/text-mark";
@@ -42,7 +43,6 @@ import {
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
-import { formatFileSize } from "@/lib/file-size";
 import {
   EMAIL_CITATION_SCROLL_EVENT,
   isEmailCitationTargetDetail,

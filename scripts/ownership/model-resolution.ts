@@ -18,6 +18,11 @@ export default {
     ],
     allowed: [
       {
+        path: "apps/api/src/lib/chat/ai-data-policy.contract.type-test.ts",
+        reason:
+          "Checks adapter entry-point request policy types; resolves no model adapter.",
+      },
+      {
         path: "apps/api/src/lib/tanstack-ai-generate.ts",
         reason: "The dispatch seam: resolves after checking the admission.",
       },

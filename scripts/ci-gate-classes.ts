@@ -113,6 +113,8 @@ export const CI_GATES: Readonly<Record<string, JobGate>> = {
       },
       "SQL performance baseline": { class: "budget", owner: "api-performance" },
       "Failure-as-empty baseline": { class: "budget", owner: "code-health" },
+      // Warns only; the release gate runs the same script with --require.
+      "Release queue history guard": { class: "advisory", owner: "release" },
     },
   },
   "generated-sources": {

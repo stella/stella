@@ -8,6 +8,7 @@ import {
 } from "../helpers/docked-chat-legal-fixtures";
 import { dockedChatLegalPayloads } from "../helpers/docked-chat-legal-payloads";
 import { createUploadedDocumentRoute } from "../helpers/document";
+import { respond, staticBody } from "../helpers/route-mock";
 import { expect, test } from "../helpers/test";
 import { createTestWorkspace, deleteTestWorkspace } from "../helpers/workspace";
 
@@ -109,11 +110,14 @@ test("CSP assertions await violation delivery from the document", async ({
 }) => {
   const policy = await installContentSecurityPolicyCollector(page);
   await page.route("**/__csp-collector", async (route) => {
-    await route.fulfill({
-      contentType: "text/html",
-      headers: { "content-security-policy": "script-src 'nonce-collector'" },
-      body: '<script nonce="collector">window.collectorReady = true;</script>',
-    });
+    await respond(
+      route,
+      staticBody({
+        contentType: "text/html",
+        headers: { "content-security-policy": "script-src 'nonce-collector'" },
+        body: '<script nonce="collector">window.collectorReady = true;</script>',
+      }),
+    );
   });
   await page.goto("/__csp-collector", { waitUntil: "domcontentloaded" });
   await policy.assertClean();

@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import { Temporal } from "temporal-polyfill/full";
 
-import { classifyTurnFailure } from "./errors";
+import { classifyTurnFailure, usageLimitResetsAt } from "./errors";
+
+/** 2026-10-01T00:00:00Z, before every reset below but the stale one. */
+const NOW = Temporal.Instant.from("2026-10-01T00:00:00Z");
 
 const usageLimit = {
   message: "You've hit your usage limit.",
@@ -20,6 +24,7 @@ describe("Codex turn failures", () => {
       classifyTurnFailure({
         error: usageLimit,
         rateLimits: exhaustedUntil(1_793_196_000),
+        now: NOW,
       }),
     ).toEqual({
       type: "usage_limit",
@@ -33,6 +38,7 @@ describe("Codex turn failures", () => {
       classifyTurnFailure({
         error: usageLimit,
         rateLimits: exhaustedUntil(1e300),
+        now: NOW,
       }),
     ).toEqual({
       type: "usage_limit",
@@ -53,6 +59,7 @@ describe("Codex turn failures", () => {
           },
         },
         rateLimits: exhaustedUntil(1_793_196_000),
+        now: NOW,
       }),
     ).toEqual({ type: "usage_limit", message, resetsAt: null });
   });
@@ -65,6 +72,7 @@ describe("Codex turn failures", () => {
         error: { message, codexErrorInfo: "serverOverloaded" },
         // An exhausted allowance does not make capacity a usage limit.
         rateLimits: exhaustedUntil(1_793_196_000),
+        now: NOW,
       }),
     ).toEqual({ type: "model_at_capacity", message });
   });
@@ -80,11 +88,49 @@ describe("Codex turn failures", () => {
           },
         },
         rateLimits: null,
+        now: NOW,
       }),
     ).toEqual({
       type: "provider_error",
       message,
       code: "responseStreamDisconnected",
     });
+  });
+
+  test("a window whose reset has passed limits nothing, so the reset is unknown", () => {
+    expect(
+      classifyTurnFailure({
+        error: usageLimit,
+        rateLimits: exhaustedUntil(1_793_196_000),
+        now: Temporal.Instant.from("2026-11-01T00:00:00Z"),
+      }),
+    ).toEqual({
+      type: "usage_limit",
+      message: usageLimit.message,
+      resetsAt: null,
+    });
+  });
+
+  test("the latest reset of the exhausted windows wins; a window in use does not count", () => {
+    expect(
+      usageLimitResetsAt(
+        {
+          limitId: "codex",
+          primary: { usedPercent: 100, resetsAt: 1_793_196_000 },
+          secondary: { usedPercent: 100, resetsAt: 1_793_700_000 },
+        },
+        NOW,
+      ),
+    ).toBe(new Date(1_793_700_000 * 1000).toISOString());
+    expect(
+      usageLimitResetsAt(
+        {
+          limitId: "codex",
+          primary: { usedPercent: 99, resetsAt: 1_793_196_000 },
+          secondary: null,
+        },
+        NOW,
+      ),
+    ).toBeNull();
   });
 });

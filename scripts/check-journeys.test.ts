@@ -4,11 +4,13 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import type * as v from "valibot";
 
+import { CASE_LAW_COVERAGE_CURRENT_WITHIN_MS } from "../apps/api/src/lib/case-law/coverage-freshness";
 import type {
   READ_CASE_LAW_DECISION_PROJECTION,
   SEARCH_CASE_LAW_PROJECTION,
   SEARCH_LEGISLATION_PROJECTION,
 } from "../apps/api/src/lib/chat/projections";
+import defaultBusyWindows from "../packages/db-load-gate/src/default-busy-windows.json" with { type: "json" };
 import { DAY_SECONDS } from "./check-npm-publish-lag";
 
 type FoundDecision = Extract<
@@ -50,6 +52,39 @@ const statuteHit = {
 } satisfies Pick<StatuteHit, "documentId" | "eli" | "title">;
 
 const ROOT = new URL("../", import.meta.url).pathname;
+
+const HOUR_SECONDS = 3600;
+const MINUTE_SECONDS = 60;
+const busyHoldMarginSeconds = CASE_LAW_COVERAGE_CURRENT_WITHIN_MS / 1000;
+// The first default busy window on a winter weekday, as epoch seconds.
+const [busyWindow] = defaultBusyWindows;
+if (!busyWindow) {
+  throw new Error("expected a default busy window");
+}
+const zonedEpoch = (date: string, time: string, timeZone: string) => {
+  const [year, month, day] = date.split("-").map(Number);
+  const [hour, minute] = time.split(":").map(Number);
+  const wall = Date.UTC(year ?? 0, (month ?? 1) - 1, day, hour, minute);
+  const offset =
+    new Intl.DateTimeFormat("en-US", { timeZone, timeZoneName: "longOffset" })
+      .formatToParts(wall)
+      .find(({ type }) => type === "timeZoneName")?.value ?? "GMT";
+  const match = /^GMT(?:([+-])(\d{2}):(\d{2}))?$/u.exec(offset);
+  const offsetMinutes = match?.[1]
+    ? (match[1] === "-" ? -1 : 1) * (Number(match[2]) * 60 + Number(match[3]))
+    : 0;
+  return (wall - offsetMinutes * 60_000) / 1000;
+};
+const busyWindowStart = zonedEpoch(
+  "2026-11-04",
+  busyWindow.start,
+  busyWindow.timeZone,
+);
+const busyWindowEnd = zonedEpoch(
+  "2026-11-04",
+  busyWindow.end,
+  busyWindow.timeZone,
+);
 const SENTINEL = "private-body-sentinel";
 const WEB_HTML =
   '<h1>Fixture</h1><a href="/law/cze/cases/fixture">case</a><a href="/law/cze/statutes/fixture">statute</a><article>text</article>';
@@ -102,6 +137,12 @@ type Scenario = {
   probeError?: string;
   probeRunning?: "once" | "always";
   probeRunSeconds?: string;
+  coverage?: { status: string; ageSeconds: number };
+  nowEpoch?: number;
+  /** The clock once the coverage call has been answered; `nowEpoch` is the
+   *  clock before it. */
+  nowEpochAfterCoverage?: number;
+  busyWindowsFile?: string;
 };
 
 type WorkflowRun = {
@@ -111,9 +152,9 @@ type WorkflowRun = {
   display_title?: string;
 };
 
-const coverageFixture = (status: string) => ({
+const coverageFixture = (status: string, ageSeconds = 60) => ({
   asOf: "2026-11-01T10:00:00.000Z",
-  freshness: { status, ageSeconds: 60 },
+  freshness: { status, ageSeconds },
   countries: [
     {
       country: "CZE",
@@ -124,11 +165,18 @@ const coverageFixture = (status: string) => ({
   ],
 });
 
-type McpPayloadOptions = { name: string; rpc: Scenario["rpc"] };
-const mcpPayload = ({ name, rpc }: McpPayloadOptions) => {
+type McpPayloadOptions = {
+  name: string;
+  rpc: Scenario["rpc"];
+  coverage: Scenario["coverage"];
+};
+const mcpPayload = ({ name, rpc, coverage }: McpPayloadOptions) => {
   if (name === "case_law_coverage") {
     if (rpc === "empty") {
       return { ...coverageFixture("current"), countries: [] };
+    }
+    if (coverage) {
+      return coverageFixture(coverage.status, coverage.ageSeconds);
     }
     return coverageFixture(
       rpc === "stale-coverage" ? "refresh_pending" : "current",
@@ -442,12 +490,19 @@ const run = async ({
           return new Response(null, { status: 400 });
         }
         calls.push({ name: body.params.name, args: body.params.arguments });
+        if (
+          body.params.name === "case_law_coverage" &&
+          scenario.nowEpochAfterCoverage !== undefined
+        ) {
+          await Bun.write(path.join(work, "coverage-served"), "");
+        }
         result = toolResult({
           scenario,
           args: body.params.arguments,
           payload: mcpPayload({
             name: body.params.name,
             rpc: scenario.rpc,
+            coverage: scenario.coverage,
           }),
         });
       }
@@ -507,6 +562,14 @@ cat "$response"
 rm -f "$response"
 `,
     );
+    // A clock that moves once the coverage call has been answered.
+    if (scenario.nowEpochAfterCoverage !== undefined) {
+      await Bun.write(
+        path.join(work, "date"),
+        `#!/usr/bin/env bash\nif [[ "$*" == "+%s" ]]; then if [[ -e "$JOURNEY_TEST_COVERAGE_SERVED" ]]; then printf '%s\\n' "$JOURNEY_TEST_CLOCK_AFTER"; else printf '%s\\n' "$JOURNEY_TEST_CLOCK_BEFORE"; fi; exit 0; fi\nexec /bin/date "$@"\n`,
+      );
+      await chmod(path.join(work, "date"), 0o755);
+    }
     await Promise.all(
       ["npm", "stella", "gh", "git"].map(async (file) => {
         await chmod(path.join(work, file), 0o755);
@@ -535,6 +598,28 @@ rm -f "$response"
           JOURNEY_PROBE_SLOT: scenario.probeSlot ?? "0",
           JOURNEY_PROBE_TIMEOUT_SECONDS: scenario.delay ? "0.1" : "3",
           JOURNEY_PROBE_RUN_SECONDS: scenario.probeRunSeconds ?? "240",
+          // Outside the busy window unless a test moves the clock into it.
+          ...(scenario.nowEpochAfterCoverage === undefined
+            ? {
+                JOURNEY_NOW_EPOCH: String(
+                  scenario.nowEpoch ?? busyWindowStart - 3 * HOUR_SECONDS,
+                ),
+              }
+            : {
+                // Unpinned, so the canary reads the moving clock above.
+                JOURNEY_NOW_EPOCH: "",
+                JOURNEY_TEST_CLOCK_BEFORE: String(scenario.nowEpoch),
+                JOURNEY_TEST_CLOCK_AFTER: String(
+                  scenario.nowEpochAfterCoverage,
+                ),
+                JOURNEY_TEST_COVERAGE_SERVED: path.join(
+                  work,
+                  "coverage-served",
+                ),
+              }),
+          ...(scenario.busyWindowsFile
+            ? { JOURNEY_BUSY_WINDOWS_FILE: scenario.busyWindowsFile }
+            : {}),
           STELLA_DESKTOP_RETRY_PAUSE_SECONDS: "0",
           STELLA_DESKTOP_NOW_EPOCH: "1791536400",
           JOURNEY_TIMEOUT_SECONDS: scenario.delay ? "0.1" : "3",
@@ -746,6 +831,179 @@ describe("scheduled read journeys", () => {
     expect(result.exit).toBe(1);
     expect(result.stdout).toContain("journey mcp_coverage failed stale_result");
     expect(result.stdout).toContain("journey mcp_search passed ok");
+  });
+  describe("coverage held by the database busy window", () => {
+    const passes = (stdout: string) =>
+      expect(stdout).toContain("journey mcp_coverage passed ok");
+    const fails = (stdout: string) =>
+      expect(stdout).toContain("journey mcp_coverage failed stale_result");
+    test("accepts a pending refresh while the window is open", async () => {
+      expect(busyWindowEnd).toBeGreaterThan(busyWindowStart);
+      const elapsed = 45 * MINUTE_SECONDS;
+      const result = await run({
+        scenario: {
+          nowEpoch: busyWindowStart + elapsed,
+          // The last refresh landed a minute before the window opened.
+          coverage: {
+            status: "refresh_pending",
+            ageSeconds: elapsed + MINUTE_SECONDS,
+          },
+        },
+      });
+      expect(result.exit).toBe(0);
+      passes(result.stdout);
+    });
+    test("accepts figures exactly at the margin before the window", async () => {
+      const elapsed = 10 * MINUTE_SECONDS;
+      const result = await run({
+        scenario: {
+          nowEpoch: busyWindowStart + elapsed,
+          coverage: {
+            status: "refresh_pending",
+            ageSeconds: elapsed + busyHoldMarginSeconds,
+          },
+        },
+      });
+      expect(result.exit).toBe(0);
+      passes(result.stdout);
+    });
+    test("fails a pending refresh outside the window", async () => {
+      const result = await run({
+        scenario: {
+          nowEpoch: busyWindowEnd + 30 * MINUTE_SECONDS,
+          coverage: {
+            status: "refresh_pending",
+            ageSeconds: 20 * MINUTE_SECONDS,
+          },
+        },
+      });
+      expect(result.exit).toBe(1);
+      fails(result.stdout);
+    });
+    test("fails a pending refresh once the window has closed", async () => {
+      const result = await run({
+        scenario: {
+          nowEpoch: busyWindowEnd,
+          coverage: {
+            status: "refresh_pending",
+            ageSeconds: busyWindowEnd - busyWindowStart,
+          },
+        },
+      });
+      expect(result.exit).toBe(1);
+      fails(result.stdout);
+    });
+    test("fails figures in another state than pending inside the window", async () => {
+      const result = await run({
+        scenario: {
+          nowEpoch: busyWindowStart + 45 * MINUTE_SECONDS,
+          coverage: { status: "stale", ageSeconds: 60 },
+        },
+      });
+      expect(result.exit).toBe(1);
+      fails(result.stdout);
+    });
+    test("fails a refresh pending longer than the window plus the margin", async () => {
+      const result = await run({
+        scenario: {
+          nowEpoch: busyWindowEnd - MINUTE_SECONDS,
+          coverage: {
+            status: "refresh_pending",
+            ageSeconds:
+              busyWindowEnd - busyWindowStart + busyHoldMarginSeconds + 1,
+          },
+        },
+      });
+      expect(result.exit).toBe(1);
+      fails(result.stdout);
+    });
+    test("fails figures that were already stale when the window opened", async () => {
+      const elapsed = 10 * MINUTE_SECONDS;
+      const result = await run({
+        scenario: {
+          nowEpoch: busyWindowStart + elapsed,
+          coverage: {
+            status: "refresh_pending",
+            ageSeconds: elapsed + busyHoldMarginSeconds + 1,
+          },
+        },
+      });
+      expect(result.exit).toBe(1);
+      fails(result.stdout);
+    });
+    test("grants no hold without the busy windows file", async () => {
+      const elapsed = 45 * MINUTE_SECONDS;
+      const result = await run({
+        scenario: {
+          nowEpoch: busyWindowStart + elapsed,
+          busyWindowsFile: path.join(ROOT, "missing-busy-windows.json"),
+          coverage: {
+            status: "refresh_pending",
+            ageSeconds: elapsed + MINUTE_SECONDS,
+          },
+        },
+      });
+      expect(result.exit).toBe(1);
+      fails(result.stdout);
+    });
+    test("grants no hold for a time zone the tz database lacks", async () => {
+      // Read as UTC, this window would be open at any hour of the run.
+      const dir = await mkdtemp(path.join(tmpdir(), "journey-windows-"));
+      const busyWindowsFile = path.join(dir, "busy-windows.json");
+      await Bun.write(
+        busyWindowsFile,
+        JSON.stringify([
+          { start: "00:00", end: "23:59", timeZone: "Invalid/Zone" },
+        ]),
+      );
+      const elapsed = 45 * MINUTE_SECONDS;
+      try {
+        const result = await run({
+          scenario: {
+            nowEpoch: busyWindowStart + elapsed,
+            busyWindowsFile,
+            coverage: {
+              status: "refresh_pending",
+              ageSeconds: elapsed + MINUTE_SECONDS,
+            },
+          },
+        });
+        expect(result.exit).toBe(1);
+        fails(result.stdout);
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
+    test("reads the window when the response arrives, not before the request", async () => {
+      // Before the call the hold is 25 minutes; when the answer arrives 30
+      // minutes later it is 55, so the 30-minute-old figures pass.
+      const result = await run({
+        scenario: {
+          nowEpoch: busyWindowStart + 10 * MINUTE_SECONDS,
+          nowEpochAfterCoverage: busyWindowStart + 40 * MINUTE_SECONDS,
+          coverage: {
+            status: "refresh_pending",
+            ageSeconds: 30 * MINUTE_SECONDS,
+          },
+        },
+      });
+      expect(result.exit).toBe(0);
+      passes(result.stdout);
+    });
+    test("fails a pending refresh whose answer arrives after the window closed", async () => {
+      const result = await run({
+        scenario: {
+          nowEpoch: busyWindowEnd - MINUTE_SECONDS,
+          nowEpochAfterCoverage: busyWindowEnd + MINUTE_SECONDS,
+          coverage: {
+            status: "refresh_pending",
+            ageSeconds: busyWindowEnd - busyWindowStart,
+          },
+        },
+      });
+      expect(result.exit).toBe(1);
+      fails(result.stdout);
+    });
   });
   test("rotates the searched country by slot on the web and MCP", async () => {
     const result = await run({

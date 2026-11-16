@@ -3,11 +3,12 @@
  * one against the view's list, and whether the list reads it as testimony.
  */
 
-import { useId } from "react";
+import { useId, useState } from "react";
 
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
+import type { VerificationScopeRefusal } from "@stll/api-contract/verification-scope";
 import { Button } from "@stll/ui/button";
 import { FileCheckIcon, InfoIcon, PlayIcon } from "@stll/ui/icons";
 import { Label } from "@stll/ui/label";
@@ -16,6 +17,11 @@ import { Switch } from "@stll/ui/switch";
 import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { RunSizeConfirmDialog } from "@/components/usage/run-size-confirm-dialog";
+import {
+  ParagraphRangeStart,
+  ScopeMark,
+  ScopeRefusalMessage,
+} from "@/features/avt/paragraph-scope";
 import {
   documentFileKey,
   latestVerificationsOptions,
@@ -159,6 +165,13 @@ export const DocumentVerifications = ({
             onVerify={(target) => {
               detached(verification.start(target), "avt.start-verification");
             }}
+            scopeRefusal={
+              verification.scopeRefusal?.target.entityId === file.entityId &&
+              verification.scopeRefusal.target.fileFieldId === file.fieldId
+                ? verification.scopeRefusal.code
+                : null
+            }
+            onRangeEdit={verification.clearScopeRefusal}
             starting={
               verification.startingFor?.entityId === file.entityId &&
               verification.startingFor.fileFieldId === file.fieldId
@@ -217,6 +230,9 @@ type DocumentRowProps = {
   file: WorkspaceFile;
   starting: boolean;
   onVerify: (target: VerificationTarget) => void;
+  /** Why the server refused this document's last paragraph range. */
+  scopeRefusal: VerificationScopeRefusal | null;
+  onRangeEdit: () => void;
   onOpenRun: (runId: string) => void;
 };
 
@@ -231,13 +247,19 @@ const DocumentRow = ({
   file,
   starting,
   onVerify,
+  scopeRefusal,
+  onRangeEdit,
   onOpenRun,
 }: DocumentRowProps) => {
   const t = useTranslations();
   const canVerify = usePermissions({ entity: ["update"] });
   // Every row's switch is called Testimony; the document's name says which.
   const nameId = useId();
+  const [rangeOpen, setRangeOpen] = useState(false);
   const active = latest?.status === "queued" || latest?.status === "running";
+  const verifyDisabled =
+    !canVerify || statusLoad !== "loaded" || active || starting;
+  const target = { entityId: file.entityId, fileFieldId: file.fieldId };
 
   return (
     <li className="flex flex-col gap-2 p-3 md:flex-row md:items-center">
@@ -252,6 +274,11 @@ const DocumentRow = ({
         </TruncatedText>
         {statusLoad === "loaded" && (
           <LatestRunSummary latest={latest} listId={listId} />
+        )}
+        {/* A refusal that arrives after the range field closed is said
+            here; while the field is open, it says so beside the input. */}
+        {scopeRefusal !== null && !rangeOpen && (
+          <ScopeRefusalMessage refusal={scopeRefusal} />
         )}
       </div>
       <div className="flex shrink-0 flex-wrap items-center gap-2">
@@ -293,20 +320,29 @@ const DocumentRow = ({
             {t("common.open")}
           </Button>
         )}
-        <Button
-          disabled={!canVerify || statusLoad !== "loaded" || active || starting}
-          loading={starting}
-          onClick={() =>
-            onVerify({ entityId: file.entityId, fileFieldId: file.fieldId })
-          }
-          size="sm"
-          variant="outline"
-        >
-          <PlayIcon />
-          {latest === null
-            ? t("common.verify")
-            : t("avt.documents.verifyAgain")}
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            disabled={verifyDisabled}
+            loading={starting}
+            onClick={() => onVerify(target)}
+            size="sm"
+            variant="outline"
+          >
+            <PlayIcon />
+            {latest === null
+              ? t("common.verify")
+              : t("avt.documents.verifyAgain")}
+          </Button>
+          <ParagraphRangeStart
+            disabled={verifyDisabled}
+            onEdit={onRangeEdit}
+            onOpenChange={setRangeOpen}
+            onVerify={(paragraphs) => onVerify({ ...target, paragraphs })}
+            open={rangeOpen}
+            refusal={scopeRefusal}
+            starting={starting}
+          />
+        </div>
       </div>
     </li>
   );
@@ -334,6 +370,7 @@ const LatestRunSummary = ({
       <ReviewStatusBadge tone={RUN_STATUS_TONES[latest.status]}>
         {t(RUN_STATUS_LABEL_KEYS[latest.status])}
       </ReviewStatusBadge>
+      <ScopeMark scope={latest.scope} />
       {latest.status === "completed" && (
         <span className="tabular-nums">
           {t("avt.documents.claimSummary", {

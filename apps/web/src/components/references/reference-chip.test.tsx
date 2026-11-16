@@ -2,14 +2,16 @@ import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { afterAll, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
+
+import { createTestState } from "@stll/test-state";
 
 import messages from "@/i18n/langs/en.json";
 import { ChatThreadTestRouter } from "@/lib/chat-thread-test-router";
 
-const previousApiUrl = process.env["VITE_API_URL"];
-process.env["VITE_API_URL"] = previousApiUrl ?? "https://api.example.test";
+const state = createTestState({ file: import.meta.path, config: {} });
+state.setEnvIfAbsent("VITE_API_URL", "https://api.example.test");
 
 const { StreamdownMentionLink } =
   await import("@/components/chat/streamdown-mention-link");
@@ -19,14 +21,6 @@ const { seedReferenceHints } =
   await import("@/components/references/reference-hints");
 const { mentionAttrsToHref, mentionTagAttrs, referenceFromMentionAttrs } =
   await import("@/components/references/reference.logic");
-
-afterAll(() => {
-  if (previousApiUrl === undefined) {
-    delete process.env["VITE_API_URL"];
-    return;
-  }
-  process.env["VITE_API_URL"] = previousApiUrl;
-});
 
 const MATTER_ID = "0dc54d0c-10d7-501d-897e-e801dbd0998c";
 const TASK_ID = "c09ec856-d945-5ecc-82e3-bb5382165f34";

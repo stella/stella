@@ -19,6 +19,7 @@ import {
   parseApiErrorValue,
   parseApiValidationIssues,
   PREVIEW_UNAVAILABLE_ERROR_CODE,
+  SKILL_FROM_CHAT_REFUSAL_CODE,
   SKILL_SOURCE_UNREACHABLE_CODE,
 } from "@stll/api-contract";
 import {
@@ -33,6 +34,9 @@ import {
 import { CORRESPONDENCE_SOURCE_CHANGED_CODE } from "@stll/api-contract/correspondence";
 import { ORGANIZATION_DATA_BOX_REFUSAL_CODE } from "@stll/api-contract/data-box";
 import { HOSTED_CHECKOUT_REFUSAL_CODE } from "@stll/api-contract/hosted-checkout";
+import { LEGAL_HOLD_ACTIVE } from "@stll/api-contract/legal-holds";
+import { MODEL_RUN_CAP_CODES } from "@stll/api-contract/model-run-caps";
+import type { ModelRunCapCode } from "@stll/api-contract/model-run-caps";
 import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-policy";
 import { providerDiagnosticSchema } from "@stll/api-contract/provider-setup";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
@@ -42,9 +46,11 @@ import {
   publicCountryUnavailableSchema,
   type PublicLawDomain,
 } from "@stll/api-contract/public-country-capability";
+import {
+  SHAREPOINT_REFUSAL_CODE,
+  type SharepointRefusalCode,
+} from "@stll/api-contract/sharepoint";
 import { TIME_ENTRY_RATE_REQUIRED_CODE } from "@stll/api-contract/time-entries";
-import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
-import type { VerificationRunCapCode } from "@stll/api-contract/verification-run-caps";
 import { MATTER_CONTACT_CAPACITY_CODE } from "@stll/api-contract/workspace-contacts";
 
 import { getTranslator } from "@/i18n/translator";
@@ -257,28 +263,21 @@ const RAW_INTERNAL_TOOL_ERROR_CODE = {
     "legal_source_structural_repair_required",
 } as const;
 
-const VERIFICATION_RUN_CAP_ERROR_KEYS = {
-  [VERIFICATION_RUN_CAP_CODES.active]:
-    "errors.apiCodes.verificationActiveLimitReached",
-  [VERIFICATION_RUN_CAP_CODES.daily]:
-    "errors.apiCodes.verificationDailyLimitReached",
-} as const satisfies Record<VerificationRunCapCode, TranslationKey>;
+/** An organization's run caps, whichever feature's run was refused. */
+const MODEL_RUN_CAP_ERROR_KEYS = {
+  [MODEL_RUN_CAP_CODES.active]: "errors.apiCodes.runActiveLimitReached",
+  [MODEL_RUN_CAP_CODES.daily]: "errors.apiCodes.runDailyLimitReached",
+} as const satisfies Record<ModelRunCapCode, TranslationKey>;
 
 /** Why a chat turn bound for the member's computer was refused. */
 const CHAT_LOCAL_RUN_REFUSAL_ERROR_KEYS = {
   [CHAT_LOCAL_RUN_REFUSAL.unavailable]: "chat.localRun.refusalUnavailable",
-  [CHAT_LOCAL_RUN_REFUSAL.noComputer]: "chat.localRun.refusalNoComputer",
-  [CHAT_LOCAL_RUN_REFUSAL.harnessUnavailable]:
-    "chat.localRun.refusalHarnessUnavailable",
-  [CHAT_LOCAL_RUN_REFUSAL.modelUnavailable]:
-    "chat.localRun.refusalModelUnavailable",
-  [CHAT_LOCAL_RUN_REFUSAL.approvalsUnavailable]:
-    "chat.localRun.refusalPermissionUnavailable",
   [CHAT_LOCAL_RUN_REFUSAL.approvalsAboveLimit]:
     "chat.localRun.refusalPermissionAboveLimit",
-  [CHAT_LOCAL_RUN_REFUSAL.tooLarge]: "chat.localRun.refusalTooLarge",
   [CHAT_LOCAL_RUN_REFUSAL.conflictingRunMode]:
     "chat.localRun.refusalConflictingRunMode",
+  [CHAT_LOCAL_RUN_REFUSAL.folderUnavailable]:
+    "chat.localRun.refusalFolderUnavailable",
 } as const satisfies Record<ChatLocalRunRefusal, TranslationKey>;
 
 /** Why a chat turn was refused before it started, with what the person can do. */
@@ -298,6 +297,23 @@ const CHAT_INPUT_REFUSAL_ERROR_KEYS = {
   [CHAT_INPUT_REFUSAL_CODE.toolsUnsupported]: "chat.sendErrorToolsUnsupported",
 } as const satisfies Record<ChatInputRefusalCode, TranslationKey>;
 
+/** Why a SharePoint or OneDrive read or import was refused. */
+const SHAREPOINT_REFUSAL_ERROR_KEYS = {
+  [SHAREPOINT_REFUSAL_CODE.notConnected]:
+    "errors.apiCodes.sharepointNotConnected",
+  [SHAREPOINT_REFUSAL_CODE.reconnectRequired]:
+    "errors.apiCodes.sharepointReconnectRequired",
+  [SHAREPOINT_REFUSAL_CODE.accessDenied]:
+    "errors.apiCodes.sharepointAccessDenied",
+  [SHAREPOINT_REFUSAL_CODE.notFound]: "errors.apiCodes.sharepointNotFound",
+  [SHAREPOINT_REFUSAL_CODE.throttled]: "errors.apiCodes.sharepointThrottled",
+  [SHAREPOINT_REFUSAL_CODE.invalidCursor]:
+    "errors.apiCodes.sharepointInvalidCursor",
+  [SHAREPOINT_REFUSAL_CODE.notAFile]: "errors.apiCodes.sharepointNotAFile",
+  [SHAREPOINT_REFUSAL_CODE.fileTooLarge]:
+    "errors.apiCodes.sharepointFileTooLarge",
+} as const satisfies Record<SharepointRefusalCode, TranslationKey>;
+
 const CODE_ERROR_KEYS = {
   [TIME_ENTRY_RATE_REQUIRED_CODE]: "billing.rates.effectiveRateRequired",
   [IDEMPOTENCY_IN_PROGRESS_CODE]: "errors.apiCodes.idempotencyInProgress",
@@ -305,8 +321,9 @@ const CODE_ERROR_KEYS = {
   ...AI_FAILURE_ERROR_KEYS,
   ...CHAT_LOCAL_RUN_REFUSAL_ERROR_KEYS,
   ...CHAT_INPUT_REFUSAL_ERROR_KEYS,
-  ...VERIFICATION_RUN_CAP_ERROR_KEYS,
+  ...MODEL_RUN_CAP_ERROR_KEYS,
   ...INVOICE_ISSUE_ERROR_KEYS,
+  ...SHAREPOINT_REFUSAL_ERROR_KEYS,
   [FILE_PROPERTY_TYPE_IMMUTABLE_CODE]:
     "errors.apiCodes.filePropertyTypeImmutable",
   [MATTER_CONTACT_CAPACITY_CODE.reached]:
@@ -328,6 +345,7 @@ const CODE_ERROR_KEYS = {
   access_denied: "errors.apiCodes.accessDenied",
   account_deletion_otp_expired: "errors.apiCodes.accountDeletionOtpExpired",
   account_deletion_otp_invalid: "errors.apiCodes.accountDeletionOtpInvalid",
+  [LEGAL_HOLD_ACTIVE]: "errors.apiCodes.legalHoldActive",
   account_deletion_sole_owner: "errors.apiCodes.accountDeletionSoleOwner",
   account_deletion_task_reassignment_invalid:
     "errors.apiCodes.accountDeletionTaskReassignmentInvalid",
@@ -361,6 +379,16 @@ const CODE_ERROR_KEYS = {
     "errors.apiCodes.mcpAuthorizationApprovalRequired",
   provider_key_rejected: "errors.apiCodes.providerKeyRejected",
   provider_rate_limited: "errors.apiCodes.providerRateLimited",
+  [SKILL_FROM_CHAT_REFUSAL_CODE.anonymizedThread]:
+    "errors.apiCodes.skillFromChatAnonymizedThread",
+  [SKILL_FROM_CHAT_REFUSAL_CODE.emptyThread]:
+    "errors.apiCodes.skillFromChatEmptyThread",
+  [SKILL_FROM_CHAT_REFUSAL_CODE.localRunThread]:
+    "errors.apiCodes.skillFromChatLocalRunThread",
+  [SKILL_FROM_CHAT_REFUSAL_CODE.threadNotFound]:
+    "errors.apiCodes.skillFromChatThreadNotFound",
+  [SKILL_FROM_CHAT_REFUSAL_CODE.withdrawn]:
+    "errors.apiCodes.skillFromChatWithdrawn",
   [SKILL_SOURCE_UNREACHABLE_CODE]: "errors.apiCodes.skillSourceUnreachable",
   third_party_boundary_refusal: "errors.apiCodes.thirdPartyBoundaryRefusal",
   usage_limit_exceeded: "errors.apiCodes.usageLimitExceeded",
@@ -380,6 +408,15 @@ const isUsageRejectionReason = (
   reason: string,
 ): reason is keyof typeof USAGE_REJECTION_REASON_KEYS =>
   Object.hasOwn(USAGE_REJECTION_REASON_KEYS, reason);
+
+/**
+ * The localized message for a refusal code carried outside an HTTP error (a
+ * per-item result of a batch), or `undefined` when the code has no message.
+ */
+export const apiCodeMessage = (code: string): string | undefined =>
+  Object.hasOwn(CODE_ERROR_KEYS, code) && isKnownErrorCode(code)
+    ? translateError(CODE_ERROR_KEYS[code])
+    : undefined;
 
 /** The message for the first field a rejected request named. */
 const validationIssueMessage = (issue: ApiValidationIssue): string => {

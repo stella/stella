@@ -159,8 +159,10 @@ describe("encrypted files on raw-byte paths", () => {
       for (const entry of CASES) {
         const result = await uploadUserFile({
           dependencies: {
-            reserveChatObjectCleanupIntent: async () =>
-              await Promise.resolve(Result.ok([])),
+            reserveChatObjectCleanupIntents: async ({ objectKeys }) =>
+              await Promise.resolve(
+                Result.ok(new Map(objectKeys.map((key) => [key, []]))),
+              ),
           },
           file: {
             bytes: await entry.bytes(),

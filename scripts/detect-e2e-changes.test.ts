@@ -595,15 +595,18 @@ describe("detect-e2e-changes", () => {
         workflowStepValue(production, "Check route network baseline")["if"],
       ),
     ).toContain("matrix.shard == 'network-baseline'");
-    for (const stepName of [
-      "Run Playwright shard",
-      "Run route-smoke Playwright shard",
-    ]) {
-      expect(
-        requiredExpression(workflowStepValue(production, stepName)["if"]),
-        stepName,
-      ).toContain("matrix.shard != 'network-baseline'");
-    }
+    expect(
+      requiredExpression(
+        workflowStepValue(production, "Run Playwright shard")["if"],
+      ),
+    ).toContain("matrix.shard != 'network-baseline'");
+    const routeRun = workflowStepRun(
+      production,
+      "Check route network baseline",
+    );
+    expect(routeRun).toContain("test:e2e -- route-smoke.spec.ts");
+    expect(routeRun).not.toContain("--grep-invert");
+    expect(routeRun).not.toContain("--shard");
   });
 
   test("plans e2e outputs from selection and fallback semantics", () => {
@@ -1887,27 +1890,23 @@ describe("detect-e2e-changes", () => {
     const uploads = workflow
       .split(/^ {6}- /mu)
       .filter((step) => /name: playwright-blob-/u.test(step));
-    const defaultOutputUploads = uploads.filter(
-      (step) => !/name: playwright-blob-route-smoke-/u.test(step),
-    );
-    const routeSmokeUploads = uploads.filter((step) =>
-      /name: playwright-blob-route-smoke-/u.test(step),
-    );
-
-    expect(defaultOutputUploads.length).toBeGreaterThan(0);
-    for (const upload of defaultOutputUploads) {
+    expect(uploads.length).toBeGreaterThan(0);
+    for (const upload of uploads) {
       expect(upload).toContain("uses: actions/upload-artifact@");
       expect(upload).toContain("path: apps/web/e2e/test-results/blob-report/");
     }
-    expect(routeSmokeUploads).toHaveLength(1);
-    for (const upload of routeSmokeUploads) {
-      expect(upload).toContain("uses: actions/upload-artifact@");
-      expect(upload).toContain(
-        `path: apps/web/e2e/test-results/route-smoke-\${{ matrix.shard }}/blob-report/`,
-      );
-    }
-    expect(workflow).toContain(
-      `E2E_OUTPUT_DIR: test-results/route-smoke-\${{ matrix.shard }}`,
+    const networkUpload = workflowStepValue(
+      workflowJob("e2e-production-shard"),
+      "Upload network baseline blob report",
+    );
+    expect(networkUpload).toMatchObject({
+      with: {
+        name: "network-baseline-blob",
+        path: "apps/web/e2e/test-results/blob-report/",
+      },
+    });
+    expect(requiredExpression(networkUpload["if"])).toContain(
+      "matrix.shard == 'network-baseline'",
     );
     expect(workflow).not.toContain("path: apps/web/test-results/blob-report/");
   });

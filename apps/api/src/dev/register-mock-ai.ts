@@ -442,7 +442,7 @@ export const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
     const { model, runId, threadId, messages } = options;
     logger.debug("mock_ai.turn_answered", { "ai.model": model });
     const resolvedRunId = runId ?? "mock-run";
-    const resolvedThreadId = threadId ?? "mock-thread";
+    const resolvedThreadId = threadId;
     const messageId = "mock-message";
     const timestamp = Temporal.Now.instant().epochMilliseconds;
     const latestUserText = getLatestUserText(messages);

@@ -8,10 +8,10 @@ import {
   parseChatSourceScopeHref,
   SKILL_REF_HREF_PREFIX,
 } from "@stll/api-contract";
+import { referenceFromHref } from "@stll/api-contract/chat-reference-href";
+import type { ChatReference } from "@stll/api-contract/chat-reference-href";
 
 import { PASTED_TEXT_NODE_NAME } from "@/components/chat-pasted-text-extension";
-import { referenceFromHref } from "@/components/references/reference.logic";
-import type { ChatReference } from "@/components/references/reference.logic";
 
 type InlineNode = NonNullable<JSONContent["content"]>[number];
 

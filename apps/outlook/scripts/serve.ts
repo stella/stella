@@ -26,6 +26,7 @@ const CONTENT_TYPES: Record<string, string> = {
   ".json": "application/json; charset=utf-8",
   ".png": "image/png",
   ".txt": "text/plain; charset=utf-8",
+  ".woff2": "font/woff2",
   ".xml": "application/xml; charset=utf-8",
 };
 

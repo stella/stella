@@ -154,7 +154,7 @@ test("a member's session read clears the notice and saving is left to the person
   });
 
   await waitFor(() => {
-    expect(view.queryByText(englishMessages.auth.signIn)).toBeNull();
+    expect(view.queryByText(englishMessages.auth.signIn) === null).toBe(true);
   });
   expect(requests).toBe(1);
   stopNotice();

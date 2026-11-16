@@ -14,29 +14,25 @@ import { cn } from "@stll/ui/utils";
 import type { GlobalSearchHit } from "@/lib/api-contract";
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { searchInfiniteOptions } from "@/lib/search";
-import type { SearchParams } from "@/lib/search";
+import { caseLawSectionInfiniteOptions } from "@/lib/search";
 
-type SearchCaseLawGroupProps = {
-  expanded: boolean;
-  onExpandedChange: (expanded: boolean) => void;
+type SearchCaseLawResultsProps = {
   query: string;
   debouncedQuery: string;
   organizationId: string;
   userId: string;
-  searchFilters: Pick<
-    SearchParams,
-    | "workspaceIds"
-    | "kinds"
-    | "editedByUserIds"
-    | "mimeTypes"
-    | "updatedFrom"
-    | "updatedTo"
-  >;
   selectedHitId?: string | undefined;
   onPreview: (hit: GlobalSearchHit) => void;
   onOpen: (hit: GlobalSearchHit) => void;
 };
+
+type SearchCaseLawGroupProps = SearchCaseLawResultsProps & {
+  expanded: boolean;
+  onExpandedChange: (expanded: boolean) => void;
+};
+
+/** One page of the section, as the palette asks for it. */
+const CASE_LAW_SECTION_PAGE_SIZE = 10;
 
 export const SearchCaseLawGroup = ({
   expanded,
@@ -69,27 +65,28 @@ export const SearchCaseLawGroup = ({
   );
 };
 
-const SearchCaseLawResults = ({
+/**
+ * Case-law hits for the typed query, from the corpus search engine. The
+ * collapsible group in the All scope and the Case law scope both render it.
+ */
+export const SearchCaseLawResults = ({
   query,
   debouncedQuery,
   organizationId,
   userId,
-  searchFilters,
   selectedHitId,
   onPreview,
   onOpen,
-}: Omit<SearchCaseLawGroupProps, "expanded" | "onExpandedChange">) => {
+}: SearchCaseLawResultsProps) => {
   const t = useTranslations();
   const ready = query.trim().length > 0 && query === debouncedQuery;
   const result = useInfiniteQuery(
-    searchInfiniteOptions({
+    caseLawSectionInfiniteOptions({
       enabled: ready,
       organizationId,
       userId,
       query: debouncedQuery,
-      ...searchFilters,
-      types: ["case-law"],
-      limit: 10,
+      limit: CASE_LAW_SECTION_PAGE_SIZE,
     }),
   );
   const hits =
@@ -152,7 +149,7 @@ const SearchCaseLawResults = ({
               {hit.headline && (
                 <TruncatedText
                   dangerouslySetInnerHTML={{
-                    // safe-html: server-escaped + <mark>-highlighted by global search mappers
+                    // safe-html: server-escaped + <mark>-highlighted by the case-law search response
                     __html: hit.headline,
                   }}
                   dir="auto"

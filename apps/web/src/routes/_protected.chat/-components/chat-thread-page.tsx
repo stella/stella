@@ -12,8 +12,20 @@ import { useTranslations } from "use-intl";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
+import {
+  CHAT_RUN_TARGET_KIND,
+  type ChatRunTarget,
+} from "@stll/api-contract/chat-run-target";
+import {
+  CHAT_MEMBER_SEND_ACTION,
+  type ChatMemberSendAction,
+  type ChatThreadSendState,
+  type ChatTurnSteering,
+  chatTurnSteering,
+  isChatQueueOffered,
+} from "@stll/api-contract/chat-send-intent";
 import { Button, buttonVariants } from "@stll/ui/button";
-import { Minimize2Icon, NewChatIcon } from "@stll/ui/icons";
+import { NewChatIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
@@ -44,18 +56,20 @@ import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
 import { getUserMessageHistory } from "@/components/chat/chat-ui-tools";
 import { ComposerVeil } from "@/components/chat/composer-veil";
+import { continuePausedTurnWhenReady } from "@/components/chat/continue-paused-turn.logic";
 import { McpReconnectNotice } from "@/components/chat/mcp-reconnect-notice";
 import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
 import { useChatComposerModels } from "@/components/chat/use-chat-composer-models";
 import { useUserMessageEditActions } from "@/components/chat/user-message-edit";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { MoveToSideButton } from "@/components/inspector/move-to-side-button";
 import { RenderStormRegion } from "@/components/render-storm-canary";
 import { useAIKeyGate } from "@/components/require-ai-key";
-import Tooltip from "@/components/tooltip";
 import { UsageFallbackNotice } from "@/components/usage/usage-fallback-notice";
 import { UsageLimitModal } from "@/components/usage/usage-limit-modal";
 import { useUsageLimit } from "@/components/usage/use-usage-limit";
 import { env } from "@/env";
+import { ChatActiveSkillIntro } from "@/features/chat/components/chat-active-skill-intro";
 import { ChatActiveSkillLabel } from "@/features/chat/components/chat-active-skill-label";
 import { SuggestedFollowupChips } from "@/features/chat/components/suggested-followup-chips";
 import { useChatSession } from "@/features/chat/hooks/use-chat-session";
@@ -68,12 +82,17 @@ import { startNewThreadCommandHandoff } from "@/features/chat/lib/start-new-thre
 import {
   chatThreadOptions,
   invalidateChatThreadAcrossScopes,
+  localRunnersOptions,
 } from "@/features/chat/queries";
 import {
   resolveThreadActiveSkill,
   useThreadActiveSkill,
 } from "@/features/chat/thread-active-skill-store";
 import { useMarkChatThreadReadWhileOpen } from "@/features/chat/thread-reader-state";
+import {
+  useMakeSkillFromChat,
+  useSaveDraftedSkill,
+} from "@/features/chat/use-make-skill-from-chat";
 import { GuideNudge } from "@/features/guides/guide-nudge";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -106,10 +125,12 @@ import { runReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
 import { usageEntitlementOptions } from "@/lib/usage-queries";
 import { useQueryViewError } from "@/lib/use-query-view";
+import { ChatBackgroundTasks } from "@/routes/_protected.chat/-components/chat-background-tasks";
 import { ChatThreadFilesButton } from "@/routes/_protected.chat/-components/chat-file-stack";
 import { ChatForkedFromBanner } from "@/routes/_protected.chat/-components/chat-forked-from-banner";
 import { ChatHistoryLink } from "@/routes/_protected.chat/-components/chat-history-link";
 import { ChatThreadRecap } from "@/routes/_protected.chat/-components/chat-thread-recap";
+import { ChatTurnAnnouncer } from "@/routes/_protected.chat/-components/chat-turn-announcer";
 import { ChatTurnNavigator } from "@/routes/_protected.chat/-components/chat-turn-navigator";
 
 // The composer block publishes its live height on this element, the
@@ -139,6 +160,8 @@ export const ChatThreadPage = ({
   workspaceId,
 }: ChatThreadPageProps) => {
   const t = useTranslations();
+  const saveDraftedSkill = useSaveDraftedSkill();
+  const makeSkillFromChat = useMakeSkillFromChat(saveDraftedSkill);
   const { availability, ensureAIAvailable } = useAIKeyGate();
   const userContext = useChatUserContext();
   const getUserContext = useLatestCallback(() => userContext);
@@ -212,6 +235,11 @@ export const ChatThreadPage = ({
     queryKey: threadQueryOptions.queryKey,
   });
   const { getRunTarget } = composerModels;
+  const turnSteering = useChatTurnSteering(
+    activeOrganizationId,
+    composerModels.runTarget,
+  );
+  const getTurnSteering = useLatestCallback(() => turnSteering);
   const chatThreadContext = {
     allowMissingThread: true,
     getUserContext,
@@ -271,17 +299,21 @@ export const ChatThreadPage = ({
     olderCursor,
     isLoadingOlder,
     loadOlderError,
+    approvalIdsAwaitedAtOpen,
+    continuePausedTurn,
     resendLatestMessage,
     sendMessage,
-    queuedMessages,
-    removeQueuedMessage,
-    sendQueuedMessageNow,
+    queueMessage,
+    queue,
     stop,
+    stopPending,
     leave,
     isGenerating,
     reconnecting,
     turnAbandoned,
     computerWait,
+    turnSentAt,
+    turnsStarted,
     alwaysApprovedTools,
     conversationApprovedTools,
     confirmStoredApprovalGrant,
@@ -309,6 +341,7 @@ export const ChatThreadPage = ({
     approvalPendingMessageId,
     localRunQuestion,
     answerLocalRunQuestion,
+    turnAwaitsMember,
   } = useChatSession({
     exceptionScope: { type: "handler", handlerId: "chat-session.thread-page" },
     chat,
@@ -316,6 +349,7 @@ export const ChatThreadPage = ({
     conversationId: threadRef.threadId,
     getContextMatterIds,
     getSendMode,
+    getTurnSteering,
     initialOlderCursor: data.olderCursor,
     playbookPane: "auto-open",
     onError: (nextError) => {
@@ -453,6 +487,13 @@ export const ChatThreadPage = ({
     controller.setContent(composerStoredMarkdown(prompt.body));
     controller.focus();
   };
+  const handleContinuePausedTurn = useLatestCallback(async () => {
+    await continuePausedTurnWhenReady({
+      ensureAIAvailable,
+      awaitPendingSelection: composerModels.awaitPendingSelection,
+      continueTurn: continuePausedTurn,
+    });
+  });
   const sendWithoutAnonymization = useLatestCallback(async () => {
     await resendLatestMessage({ sendMode: CHAT_SEND_MODE.rawOverride });
   });
@@ -507,7 +548,10 @@ export const ChatThreadPage = ({
   // Stable across stream chunks: the composer takes this as a prop, and a
   // closure over `messages` would re-render it once per chunk.
   const handleSubmit = useLatestCallback(
-    async (draft: ChatInputDraft): Promise<ChatSendOutcome> => {
+    async (
+      action: ChatMemberSendAction,
+      draft: ChatInputDraft,
+    ): Promise<ChatSendOutcome> => {
       const newThreadMessages: string[] = [];
       const handledReserved = runReservedChatCommand(draft.html, {
         new: (args) => {
@@ -556,7 +600,23 @@ export const ChatThreadPage = ({
             title: args.length > 0 ? args : null,
           });
         },
+        "make-skill": (args) => {
+          controller.setContent(composerText(""));
+          if (messages.length === 0) {
+            stellaToast.add({
+              title: t("chat.makeSkill.emptyThread"),
+              type: "info",
+            });
+            return;
+          }
+          makeSkillFromChat({ intent: args, threadRef });
+        },
       });
+      // Inside the member's send gesture, before any await: a turn for
+      // their computer opens stella desktop when none is connected.
+      if (!handledReserved || newThreadMessages.length > 0) {
+        composerModels.openDesktopForSend();
+      }
       if (handledReserved) {
         const newThreadMessage = newThreadMessages.at(0);
         if (newThreadMessage === undefined) {
@@ -628,9 +688,20 @@ export const ChatThreadPage = ({
         notifyUserError(message.error, t("chat.sendErrorMessageEmpty"));
         return CHAT_SEND_KEPT;
       }
-      await sendMessage(message.value);
-      return CHAT_SEND_SENT;
+      const send = {
+        [CHAT_MEMBER_SEND_ACTION.send]: sendMessage,
+        [CHAT_MEMBER_SEND_ACTION.queue]: queueMessage,
+      } satisfies Record<ChatMemberSendAction, typeof sendMessage>;
+      return await send[action](message.value);
     },
+  );
+  const handleSend = useLatestCallback(
+    async (draft: ChatInputDraft) =>
+      await handleSubmit(CHAT_MEMBER_SEND_ACTION.send, draft),
+  );
+  const handleQueue = useLatestCallback(
+    async (draft: ChatInputDraft) =>
+      await handleSubmit(CHAT_MEMBER_SEND_ACTION.queue, draft),
   );
 
   return (
@@ -645,6 +716,7 @@ export const ChatThreadPage = ({
         <ChatApprovalContext
           value={{
             activeOrganizationId,
+            approvalIdsAwaitedAtOpen,
             alwaysApprovedTools,
             conversationApprovedTools,
             confirmStoredApprovalGrant,
@@ -663,18 +735,9 @@ export const ChatThreadPage = ({
           <div className="relative flex w-full flex-1 flex-col overflow-hidden">
             <ChromeHeaderActions>
               <ChatThreadFilesButton attachedFiles={data.attachedFiles} />
-              <Tooltip
-                content={t("inspector.moveToSide")}
-                render={
-                  <Button
-                    className="hidden md:inline-flex"
-                    onClick={moveToSide}
-                    size="icon-sm"
-                    variant="ghost"
-                  >
-                    <Minimize2Icon className="size-4" />
-                  </Button>
-                }
+              <MoveToSideButton
+                className="hidden md:inline-flex"
+                onClick={moveToSide}
               />
               <ChatHistoryLink />
               <NewChatButton
@@ -707,10 +770,17 @@ export const ChatThreadPage = ({
                 <ConversationContent className="mx-auto w-full max-w-5xl gap-3 px-4 pb-[max(var(--chat-bottom-fade-h),calc(var(--composer-block-h,7rem)+1.5rem))]">
                   {messages.length === 0 && !isGenerating && !error ? (
                     <div className="m-auto flex w-full max-w-md flex-col gap-6 px-4">
-                      <PromptSuggestions
-                        onSelect={selectPrompt}
-                        prompts={suggestedSkills}
-                      />
+                      {activeSkill ? (
+                        <ChatActiveSkillIntro
+                          onSelectPrompt={selectPrompt}
+                          skill={activeSkill}
+                        />
+                      ) : (
+                        <PromptSuggestions
+                          onSelect={selectPrompt}
+                          prompts={suggestedSkills}
+                        />
+                      )}
                       <GuideNudge />
                     </div>
                   ) : (
@@ -727,6 +797,7 @@ export const ChatThreadPage = ({
                         value={{
                           pause: localRunQuestion,
                           answer: answerLocalRunQuestion,
+                          threadRef,
                         }}
                       >
                         <ChatThreadMessages
@@ -756,22 +827,24 @@ export const ChatThreadPage = ({
                           }
                           onOpenCreatedDocument={handleOpenCreatedDocument}
                           onOpenPlaybook={handleOpenPlaybook}
+                          onContinuePausedTurn={handleContinuePausedTurn}
                           onResend={resendLatestMessage}
                           onSendWithoutAnonymization={sendWithoutAnonymization}
-                          queuedMessageActions={{
-                            remove: removeQueuedMessage,
-                            sendNow: sendQueuedMessageNow,
-                          }}
-                          queuedMessages={queuedMessages}
+                          queue={queue}
                           stickyUserMessages
                           streamdownComponents={streamdownComponents}
                           computerWait={computerWait}
                           newestLocalTurn={data.newestLocalTurn}
                           threadRef={threadRef}
+                          turnSentAt={turnSentAt}
                           userMessageEdit={userMessageEdit}
                           workspaceId={workspaceId}
                         />
                       </ChatLocalRunQuestionContext>
+                      <ChatBackgroundTasks
+                        generationActive={isGenerating}
+                        threadId={threadRef.threadId}
+                      />
                       <ChatThreadRecap
                         activeOrganizationId={activeOrganizationId}
                         isGenerating={isGenerating}
@@ -786,6 +859,15 @@ export const ChatThreadPage = ({
                 </ConversationContent>
                 <ChatTurnNavigator messages={messages} />
               </Conversation>
+              {/* Outside the transcript's log, whose additions it would
+                  otherwise be read among. */}
+              <ChatTurnAnnouncer
+                hasError={error !== undefined}
+                isGenerating={isGenerating}
+                key={`turn-announcer-${threadRef.threadId}`}
+                messages={messages}
+                turnsStarted={turnsStarted}
+              />
 
               <ChatAnonymizationLayer
                 editor={controller.editor}
@@ -832,6 +914,7 @@ export const ChatThreadPage = ({
                     controller.setContent(composerStoredMarkdown(prompt));
                     detached(
                       controller.submit(async (draft) => {
+                        composerModels.openDesktopForSend();
                         if (!(await ensureAIAvailable())) {
                           return CHAT_SEND_KEPT;
                         }
@@ -843,8 +926,7 @@ export const ChatThreadPage = ({
                           );
                           return CHAT_SEND_KEPT;
                         }
-                        await sendMessage(message.value);
-                        return CHAT_SEND_SENT;
+                        return await sendMessage(message.value);
                       }),
                       "chat-thread-page.submit",
                     );
@@ -921,8 +1003,17 @@ export const ChatThreadPage = ({
                     onStop={() => {
                       stop();
                     }}
+                    stopping={stopPending}
                     onFocusChange={setComposerFocused}
-                    onSubmit={handleSubmit}
+                    onSubmit={handleSend}
+                    onQueue={handleQueue}
+                    queueOffered={isChatQueueOffered(
+                      composerSendState({
+                        isGenerating,
+                        turnAwaitsMember,
+                        steering: turnSteering,
+                      }),
+                    )}
                   />
                 </div>
               </div>
@@ -936,6 +1027,47 @@ export const ChatThreadPage = ({
       </ChatMattersContext>
     </RenderStormRegion>
   );
+};
+
+/**
+ * Whether the thread's turns take a message mid-turn, from what the member's
+ * computers report; read only for a turn bound for one, from the list the
+ * Run on menu reads too.
+ */
+const useChatTurnSteering = (
+  activeOrganizationId: string,
+  runTarget: ChatRunTarget,
+): ChatTurnSteering => {
+  const localRunnersView = queryView(
+    useQuery({
+      ...localRunnersOptions(activeOrganizationId),
+      enabled: runTarget.kind === CHAT_RUN_TARGET_KIND.local,
+    }),
+  );
+  return chatTurnSteering(
+    runTarget,
+    localRunnersView.type === "items" ? localRunnersView.items : undefined,
+  );
+};
+
+/**
+ * What the composer knows of the thread when it offers the queue action: a
+ * turn works or waits on the member, with whether it takes a message
+ * mid-turn, or none does.
+ */
+const composerSendState = ({
+  isGenerating,
+  turnAwaitsMember,
+  steering,
+}: {
+  isGenerating: boolean;
+  turnAwaitsMember: boolean;
+  steering: ChatTurnSteering;
+}): ChatThreadSendState => {
+  if (turnAwaitsMember) {
+    return { type: "waiting_on_member", steering };
+  }
+  return isGenerating ? { type: "working", steering } : { type: "idle" };
 };
 
 const ChatThreadScrollSurface = ({ children }: { children: ReactNode }) => (

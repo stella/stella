@@ -24,7 +24,7 @@ import {
   legalListGenerationRuns,
   legalListGenerationSources,
   legalLists,
-  legalListVerificationBudgets,
+  modelRunBudgets,
   organizationSettings,
   properties,
   workspaceMembers,
@@ -312,13 +312,11 @@ test("a queued run stella produces leaves its facts as candidates with located s
       (
         await db
           .select({
-            active: legalListVerificationBudgets.activeRuns,
-            starts: legalListVerificationBudgets.startsToday,
+            active: modelRunBudgets.activeRuns,
+            starts: modelRunBudgets.startsToday,
           })
-          .from(legalListVerificationBudgets)
-          .where(
-            eq(legalListVerificationBudgets.organizationId, organizationId),
-          )
+          .from(modelRunBudgets)
+          .where(eq(modelRunBudgets.organizationId, organizationId))
       ).at(0),
     ).toEqual({ active: 0, starts: 1 });
     const candidates = await db

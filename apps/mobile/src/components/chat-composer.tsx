@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { useTranslations } from "use-intl";
 
+import type { ChatLocalRunSteerRefusal } from "@stll/api-contract/chat-run-target";
 import { CHAT_CONTEXT_FILE_MAX_MEGABYTES } from "@stll/chat-limits";
 import { COMPOSER_BOX_CLASS } from "@stll/ui/composer-tokens";
 import { Text } from "@stll/ui/text";
@@ -26,6 +27,7 @@ import {
   ArrowUpIcon,
   CheckIcon,
   DictateIcon,
+  SendIcon,
   SquareIcon,
   XIcon,
 } from "@/icons.gen";
@@ -67,17 +69,27 @@ export const ChatComposer = ({
   busy,
   canStop,
   onSend,
+  onSteer,
   onStop,
   sendError,
   shareId,
+  steerRefusal,
 }: {
   busy: boolean;
   canStop: boolean;
   /** Sends the draft; returns false when it was not taken, so it stays in the box. */
   onSend: (draft: ChatDraft, onRefused: () => void) => boolean;
+  /**
+   * Hands the draft to the turn answering now, while one that can take it
+   * runs (where a plain send steers, `chatSendIntent`); returns false when
+   * it was not taken.
+   */
+  onSteer: ((draft: ChatDraft, onRefused: () => void) => boolean) | undefined;
   onStop: () => void;
   /** Why the last message was not sent, if it was not. */
   sendError: SendRefusal | undefined;
+  /** Why the agent did not take the last steered message, if it did not. */
+  steerRefusal: ChatLocalRunSteerRefusal | undefined;
   /** A share from another app the conversation starts with (`src/app/share`). */
   shareId: string | undefined;
 }) => {
@@ -96,7 +108,12 @@ export const ChatComposer = ({
     setDraft((typed) => appendDictation(typed, text));
   });
   const message = draft.trim();
-  const notice = useNoticeText(files.notice, dictation.notice, sendError);
+  const notice = useNoticeText({
+    notice: files.notice,
+    dictationNotice: dictation.notice,
+    sendError,
+    steerRefusal,
+  });
   const hasDraft = message !== "" || files.attachments.length > 0;
   const canSend = hasDraft && attachmentsSendable(files.attachments);
 
@@ -117,6 +134,26 @@ export const ChatComposer = ({
     if (accepted) {
       setDraft("");
       files.clear();
+    }
+  };
+
+  // Only text goes to an agent while it works.
+  const canSteer =
+    onSteer !== undefined && message !== "" && files.attachments.length === 0;
+  const steer = () => {
+    if (onSteer === undefined || !canSteer) {
+      return;
+    }
+    if (
+      onSteer({ text: message, files: [] }, () => {
+        // A steer is settled later than a send, often after the member typed
+        // on: what comes back goes before what is in the box, never instead.
+        setDraft((typed) =>
+          typed === "" ? message : `${message}\n\n${typed}`,
+        );
+      })
+    ) {
+      setDraft("");
     }
   };
 
@@ -226,6 +263,15 @@ export const ChatComposer = ({
               </Text>
             )}
           </View>
+          {busy && canSteer ? (
+            <RoundButton
+              enabled
+              filled={false}
+              Icon={SendIcon}
+              label={t("steerPrompt")}
+              onPress={steer}
+            />
+          ) : null}
           <RoundButton {...action} />
         </View>
       </Box>
@@ -294,12 +340,21 @@ const GlassBox = ({ children }: React.PropsWithChildren) => (
   </GlassView>
 );
 
-/** What the composer says went wrong: with a dictation, a file just added, else the last send. */
-function useNoticeText(
-  notice: AttachmentNotice | undefined,
-  dictationNotice: DictationNotice | undefined,
-  sendError: SendRefusal | undefined,
-): string | undefined {
+/**
+ * What the composer says went wrong: with a dictation, a file just added,
+ * the last send, else the last steer.
+ */
+function useNoticeText({
+  notice,
+  dictationNotice,
+  sendError,
+  steerRefusal,
+}: {
+  notice: AttachmentNotice | undefined;
+  dictationNotice: DictationNotice | undefined;
+  sendError: SendRefusal | undefined;
+  steerRefusal: ChatLocalRunSteerRefusal | undefined;
+}): string | undefined {
   const t = useTranslations("chat");
   const scanT = useTranslations("scan");
   const shareT = useTranslations("share");
@@ -333,6 +388,17 @@ function useNoticeText(
       "file-not-anonymizable": t("sendFileNotAnonymizable"),
     } as const satisfies Record<SendRefusal, string>;
     return sendErrorText[sendError];
+  }
+  if (steerRefusal !== undefined) {
+    const steerRefusalText = {
+      turn_not_running: t("steerRefused.turnNotRunning"),
+      no_run: t("steerRefused.noRun"),
+      harness_cannot_steer: t("steerRefused.cannotSteer"),
+      run_full: t("steerRefused.runFull"),
+      queued_message_changed: t("steerRefused.queuedMessageChanged"),
+      not_taken: t("steerRefused.notTaken"),
+    } as const satisfies Record<ChatLocalRunSteerRefusal, string>;
+    return steerRefusalText[steerRefusal];
   }
   return undefined;
 }

@@ -218,6 +218,7 @@ export const NO_NATIVE_UI_REGISTRY = {
   "file-picker": notComponent(
     "an imperative file chooser; native file inputs are no-raw-file-input's",
   ),
+  "file-size": notComponent("byte size formatting"),
   form: native("Form from @stll/ui/form", { elements: ["form"] }),
   frame: noNative("a layout surface with header and footer slots"),
   "hex-color-picker": owned(

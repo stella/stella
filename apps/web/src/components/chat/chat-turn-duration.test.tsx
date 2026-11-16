@@ -56,7 +56,12 @@ const renderLiveStatus = (
     <IntlProvider locale="en" messages={messages} now={NOW} timeZone="UTC">
       <FormattingProvider locale="en" timeZone="UTC">
         <ChatTurnStatus
-          turn={{ state: "streaming", phase: { type: "writing" }, timing }}
+          turn={{
+            state: "streaming",
+            phase: { type: "writing" },
+            timing,
+            sentAt: null,
+          }}
         />
       </FormattingProvider>
     </IntlProvider>,

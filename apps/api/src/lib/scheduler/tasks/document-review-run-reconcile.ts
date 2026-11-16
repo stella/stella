@@ -1,25 +1,20 @@
-import { panic } from "better-result";
-
-import { reconcileQueuedDocumentReviewRuns } from "@/api/lib/document-review/run-queue";
-import type { SchedulerTask } from "@/api/lib/scheduler/types";
+import { documentReviewRunQueue } from "@/api/lib/document-review/run-queue";
+import {
+  documentRunReconciler,
+  documentRunReconcileTask,
+  sweepDocumentRuns,
+} from "@/api/lib/queue/document-run-reconcile";
 
 export const RECONCILE_DOCUMENT_REVIEW_RUNS_TASK =
   "documentReviews.reconcileQueuedRuns" as const;
 
-/** Re-drive review runs the queue is not holding a job for anymore. */
-export const reconcileDocumentReviewRuns: SchedulerTask = async ({
-  db,
-  logger,
-  signal,
-}) => {
-  if (signal.aborted) {
-    panic("SchedulerAborted");
-  }
-  const { handedOff, scanned, unattributed } =
-    await reconcileQueuedDocumentReviewRuns({ db });
-  logger.info("scheduler.document_review_runs_reconciled", {
-    "documentReviewRuns.requeued": handedOff,
-    "documentReviewRuns.scanned": scanned,
-    "documentReviewRuns.unattributed": unattributed,
-  });
-};
+/** Fail stuck document reviews and re-drive the ones no job owns anymore. */
+export const reconcileDocumentReviewRuns = documentRunReconcileTask(
+  "scheduler.document_review_runs_reconciled",
+  async (db) => [
+    await sweepDocumentRuns(
+      db,
+      documentRunReconciler("documentReviewRuns", documentReviewRunQueue),
+    ),
+  ],
+);

@@ -717,9 +717,17 @@ describe("parseNsDecisionHtml", () => {
           role: "case-number",
           plainText: "21 Cdo 4994/2007",
         },
-        { type: "paragraph", role: "intro", plainText: "ČESKÁ REPUBLIKA" },
+        {
+          type: "paragraph",
+          role: "opening-formula",
+          plainText: "ČESKÁ REPUBLIKA",
+        },
         { type: "heading", role: "decision-title", plainText: "ROZSUDEK" },
-        { type: "paragraph", role: "intro", plainText: "JMÉNEM REPUBLIKY" },
+        {
+          type: "paragraph",
+          role: "opening-formula",
+          plainText: "JMÉNEM REPUBLIKY",
+        },
       ]);
       expect(fulltext).toContain("ČESKÁ REPUBLIKA");
     });
@@ -781,7 +789,7 @@ test("a centred letter-spaced state line is an opening formula, not a title", ()
   const state = documentAst.blocks.find(
     (block) => block.plainText.replaceAll(" ", "") === "ČESKÁREPUBLIKA",
   );
-  expect(state).toMatchObject({ type: "paragraph", role: "intro" });
+  expect(state).toMatchObject({ type: "paragraph", role: "opening-formula" });
 });
 
 describe("source table text retention", () => {

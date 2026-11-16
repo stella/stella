@@ -732,11 +732,19 @@ describe("time entry suggestions integration", () => {
     expect(visible.isOk() && visible.value).toEqual([]);
   });
   test("an accepted suggestion's tail past midnight covers the next day's first minutes", async () => {
-    const nextDay = Temporal.PlainDate.from(DAY).add({ days: 1 }).toString();
+    const workDay = Temporal.PlainDate.from(DAY)
+      .subtract({ days: 3 })
+      .toString();
+    const nextDay = Temporal.PlainDate.from(workDay)
+      .add({ days: 1 })
+      .toString();
+    const currentDay = Temporal.PlainDate.from(DAY).add({ days: 1 }).toString();
     const lateId = createSafeId<"chatMessage">();
     const laterId = createSafeId<"chatMessage">();
     const nextDayId = createSafeId<"chatMessage">();
-    messageIds.push(lateId, laterId, nextDayId);
+    const unrelatedCurrentDayId = createSafeId<"chatMessage">();
+    messageIds.push(lateId, laterId, nextDayId, unrelatedCurrentDayId);
+    const atWorkDay = (time: string) => new Date(`${workDay}T${time}Z`);
     const message = (
       id: SafeId<"chatMessage">,
       createdAt: Date,
@@ -752,15 +760,22 @@ describe("time entry suggestions integration", () => {
       }),
       createdAt,
     });
+    // Both queried days precede DAY. This current-day row models the shared
+    // fixture noise that the original next-day query would have included.
     // 23:50 to 23:57 plus the five-minute tail runs to 00:02 the next day.
     await testDb
       .insert(chatMessages)
       .values([
-        message(lateId, at("23:50:00"), "late"),
-        message(laterId, at("23:57:00"), "later"),
+        message(lateId, atWorkDay("23:50:00"), "late"),
+        message(laterId, atWorkDay("23:57:00"), "later"),
+        message(
+          unrelatedCurrentDayId,
+          new Date(`${currentDay}T00:03:00Z`),
+          "unrelated current-day activity",
+        ),
       ]);
     try {
-      const listed = await listFor(ids.userA1);
+      const listed = await listFor(ids.userA1, workDay);
       if (!isListResponse(listed)) {
         throw new Error(`unexpected list response: ${JSON.stringify(listed)}`);
       }
@@ -771,11 +786,15 @@ describe("time entry suggestions integration", () => {
         throw new Error("expected the late suggestion");
       }
       expect(
-        await decide(late.fingerprint, {
-          type: "accept",
-          durationMinutes: late.durationMinutes,
-          narrative: "late work",
-        }),
+        await decide(
+          late.fingerprint,
+          {
+            type: "accept",
+            durationMinutes: late.durationMinutes,
+            narrative: "late work",
+          },
+          workDay,
+        ),
       ).toMatchObject({ status: "accepted" });
 
       await testDb
@@ -797,7 +816,14 @@ describe("time entry suggestions integration", () => {
       // The decision and its entry go with the suite's own cleanup.
       await testDb
         .delete(chatMessages)
-        .where(inArray(chatMessages.id, [lateId, laterId, nextDayId]));
+        .where(
+          inArray(chatMessages.id, [
+            lateId,
+            laterId,
+            nextDayId,
+            unrelatedCurrentDayId,
+          ]),
+        );
     }
   });
 });

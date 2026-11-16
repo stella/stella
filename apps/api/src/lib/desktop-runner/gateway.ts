@@ -37,6 +37,7 @@ import {
   expireRunLeases,
   pruneEndedRuns,
   readNewestQueuedCommands,
+  type RunnerBinding,
 } from "@/api/lib/desktop-runner/store";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { failureSink } from "@/api/lib/observability/failure";
@@ -114,6 +115,11 @@ export type DesktopRunnerGatewayOptions = {
   doorbell: DesktopRunnerDoorbell;
   /** Wakes readers of a run once its messages are stored; none by default. */
   runBell?: DesktopRunnerRunBell;
+  /**
+   * Tells an account its chats' background work on a computer changed, so
+   * an open chat reads it again; nobody by default.
+   */
+  announceBackgroundTasks?: (owner: RunnerBinding) => void;
   /** This API task, the address other tasks ring. */
   instanceId: string;
   authorize: AuthorizeDesktopRunner;
@@ -304,6 +310,9 @@ export const createDesktopRunnerGateway = (
     ringPrevious: options.doorbell.ring,
     ringRun: (runId: string) => {
       options.runBell?.ring(runId);
+    },
+    announceBackgroundTasks: (owner: RunnerBinding) => {
+      options.announceBackgroundTasks?.(owner);
     },
   };
 

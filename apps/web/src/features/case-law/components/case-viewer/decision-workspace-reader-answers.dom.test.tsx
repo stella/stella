@@ -446,7 +446,7 @@ const installDisplacedLayout = () => {
   };
   Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
     configurable: true,
-    get() {
+    get(this: HTMLElement) {
       return this.closest('[data-margin-note="card"]') ? 250 : 100;
     },
   });
@@ -615,8 +615,8 @@ for (const activation of ["create", "regenerate", "follow-up"]) {
     const view = await renderWorkspace(client, "enabled");
     await waitFor(() =>
       expect(
-        view.container.querySelectorAll('[data-margin-note="card"]'),
-      ).toHaveLength(3),
+        view.container.querySelectorAll('[data-margin-note="card"]').length,
+      ).toBe(3),
     );
     if (activation === "create") {
       const paragraph = view.container.querySelector('[data-anchor="p-2"]');

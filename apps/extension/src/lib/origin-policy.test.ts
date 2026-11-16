@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  isControllableFrame,
   isPublicHostname,
   NON_PUBLIC_SECURE_URL_PATTERNS,
-  parseControllableUrl,
-} from "./origin-policy";
+} from "@stll/browser-page/origin-policy";
+
+import { isControllableFrame, parseControllableUrl } from "./origin-policy";
 
 const REFUSED_HOSTNAMES = [
   "localhost",

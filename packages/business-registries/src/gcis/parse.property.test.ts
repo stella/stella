@@ -12,7 +12,7 @@ import {
   mutatedRegistryPayload,
   registryMutation,
   registryString,
-} from "../shared/property-test-helpers.test.js";
+} from "../shared/tests/test-helpers.js";
 import { lookupByTaxId } from "./client.js";
 import { parseCompany, parseSearchEntry } from "./parse.js";
 import type { GcisCompany, GcisRawCompany } from "./types.js";

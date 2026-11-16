@@ -274,6 +274,7 @@ const seedAwaitingTurn = async (bindingStore: BindingStore) => {
   } satisfies ChatRefContext;
 
   const acceptance = createChatTurnAcceptance({
+    source: { type: "member" },
     organizationId: ids.orgA,
     threadId,
     userId: ids.userA1,
@@ -430,6 +431,7 @@ const createContext = ({
     route: "/v1/chat" satisfies ApiRoutePath,
     safeDb,
     scopedDb,
+    set: { headers: {}, status: 200 },
     session: { activeOrganizationId: ids.orgA },
     user: { id: ids.userA1 },
   });

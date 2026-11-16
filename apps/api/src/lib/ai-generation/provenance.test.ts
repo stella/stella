@@ -24,6 +24,7 @@ import {
   generateArtefact,
   projectArtefactText,
   readArtefactText,
+  readUnsourcedArtefact,
 } from "./provenance";
 
 const first = toSafeId<"caseLawDecision">(
@@ -85,6 +86,25 @@ test("authored, recorded empty and legacy values remain readable", async () => {
     }
     expect(readArtefactText({ value: text, origin, projection })).toBe(text);
   }
+});
+
+test("an answer generated from no stored source reads back as generated, and a sourced one does not", async () => {
+  const segments = { segments: [{ type: "lineBreak" }] };
+  const unsourced = await generateArtefact({
+    generator,
+    sources: { decisionIds: [], inputs: [] },
+    generate: () => segments,
+  });
+  expect(readUnsourcedArtefact(unsourced.unwrap())).toBe(segments);
+  expect(readUnsourcedArtefact(authorArtefact(segments))).toBe(segments);
+  const sourced = await generateArtefact({
+    generator,
+    sources: { decisionIds: [first], inputs: [] },
+    generate: () => segments,
+  });
+  expect(() => readUnsourcedArtefact(sourced.unwrap())).toThrow(
+    "A sourced artefact is read through its withdrawal projection",
+  );
 });
 
 test("source unions are invariant under duplicates and input order", async () => {

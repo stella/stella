@@ -22,6 +22,7 @@ import { Text } from "@stll/ui/text";
 
 import { useActiveChatRuns } from "@/components/active-chat-runs";
 import { useOpenThread, useThreadOnScreen } from "@/components/open-thread";
+import { WindowOverlay } from "@/components/window-overlay";
 import { RUN_BANNER_TYPE } from "@/state/run-banners";
 import type { RunBanner } from "@/state/run-banners";
 
@@ -68,23 +69,25 @@ export const RunBanners = () => {
   }
   const title = shown.threadTitle.trim() === "" ? untitled : shown.threadTitle;
   return (
-    <Banner
-      bannerType={shown.type}
-      // A new banner comes in afresh, never in the place of the last one.
-      key={`${shown.type}:${shown.threadId}`}
-      onDismiss={() => {
-        dismissBanner(shown.threadId);
-      }}
-      onOpen={() => {
-        dismissBanner(shown.threadId);
-        openThread({
-          matterId: shown.matterId,
-          threadId: shown.threadId,
-          title,
-        });
-      }}
-      title={title}
-    />
+    <WindowOverlay>
+      <Banner
+        bannerType={shown.type}
+        // A new banner comes in afresh, never in the place of the last one.
+        key={`${shown.type}:${shown.threadId}`}
+        onDismiss={() => {
+          dismissBanner(shown.threadId);
+        }}
+        onOpen={() => {
+          dismissBanner(shown.threadId);
+          openThread({
+            matterId: shown.matterId,
+            threadId: shown.threadId,
+            title,
+          });
+        }}
+        title={title}
+      />
+    </WindowOverlay>
   );
 };
 

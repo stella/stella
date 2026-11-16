@@ -2,7 +2,7 @@
   "type": "parser",
   "name": "PL_NSA",
   "key": "pl-nsa",
-  "parserVersion": 12,
+  "parserVersion": 13,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",

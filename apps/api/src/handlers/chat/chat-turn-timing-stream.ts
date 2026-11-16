@@ -116,8 +116,6 @@ export const withChatTurnTiming = async function* ({
         messageId = chunk.messageId;
       } else if (chunk.type === EventType.TOOL_CALL_START) {
         messageId = chunk.parentMessageId;
-      } else if (chunk.type === EventType.REASONING_MESSAGE_START) {
-        messageId = chunk.messageId;
       }
       if (messageId !== undefined) {
         if (

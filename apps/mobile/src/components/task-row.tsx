@@ -5,6 +5,7 @@ import { useFormatter, useTranslations } from "use-intl";
 import { TASK_STATUS } from "@stll/api-contract/entity-options";
 import { Text } from "@stll/ui/text";
 
+import { useCan } from "@/components/role";
 import { useLayout, useSelection } from "@/components/selection";
 import { SwipeRow } from "@/components/swipe-row";
 import { useTaskStatus } from "@/components/use-task-status";
@@ -15,7 +16,7 @@ import type { TaskSummary } from "@/state/tasks";
 import { useUiColors } from "@/theme";
 
 /**
- * One open task: its name, then its matter and the day it is due, the day
+ * One task: its name, then its matter and the day it is due, the day
  * in the destructive colour once it has passed. Tapping it opens the task
  * over its matter, as a matter's own list does, or beside the list where
  * the window has two columns. Swiping it marks it done, or open again once
@@ -23,10 +24,13 @@ import { useUiColors } from "@/theme";
  */
 export const TaskRow = ({
   overdue,
+  showMatter,
   source,
   task,
 }: {
   overdue: boolean;
+  /** Whether it names its matter: not in the matter's own list. */
+  showMatter: boolean;
   source: AccessTokenSource;
   task: TaskSummary;
 }) => {
@@ -43,6 +47,8 @@ export const TaskRow = ({
     taskId: task.id,
   });
   const statusLabel = closed ? t("reopen") : t("markDone");
+  // A role that cannot edit tasks sees them, without the change.
+  const canEdit = useCan({ entity: ["update"] });
   const selection = useSelection();
   const open = layout.usesSplitView && selection.task?.entityId === task.id;
   const ui = useUiColors();
@@ -60,14 +66,15 @@ export const TaskRow = ({
   return (
     <SwipeRow
       actions={{
-        leading: saving
-          ? null
-          : {
-              icon: closed ? RotateCcwIcon : CircleCheckIcon,
-              label: statusLabel,
-              name: "changeStatus",
-              run: change,
-            },
+        leading:
+          saving || !canEdit
+            ? null
+            : {
+                icon: closed ? RotateCcwIcon : CircleCheckIcon,
+                label: statusLabel,
+                name: "changeStatus",
+                run: change,
+              },
         trailing: null,
       }}
     >
@@ -111,10 +118,10 @@ export const TaskRow = ({
                     : task.name}
                 </Text>
                 <Text numberOfLines={1} variant="caption">
-                  {task.matterName}
+                  {showMatter ? task.matterName : null}
                   {due === undefined ? null : (
                     <>
-                      {" · "}
+                      {showMatter ? " · " : null}
                       <Text
                         style={
                           overdue
@@ -136,13 +143,17 @@ export const TaskRow = ({
             </Pressable>
           </Link.Trigger>
           <Link.Menu>
-            <Link.MenuAction
-              disabled={saving}
-              icon={closed ? "arrow.uturn.backward.circle" : "checkmark.circle"}
-              onPress={change}
-            >
-              {statusLabel}
-            </Link.MenuAction>
+            {canEdit ? (
+              <Link.MenuAction
+                disabled={saving}
+                icon={
+                  closed ? "arrow.uturn.backward.circle" : "checkmark.circle"
+                }
+                onPress={change}
+              >
+                {statusLabel}
+              </Link.MenuAction>
+            ) : null}
             <Link.MenuAction
               icon="folder"
               onPress={() => {

@@ -4,6 +4,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "repairs-local-run-approval-ceiling-constraint-validations",
   revision: 1423,
+  lifecycle: "finalized",
   type: "repairs",
   values: [...LOCAL_RUN_APPROVAL_CEILING_CONSTRAINT_VALIDATIONS],
 } satisfies OnlineMigrationEntry;

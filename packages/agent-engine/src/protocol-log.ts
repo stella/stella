@@ -2,7 +2,10 @@ import { EventType } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import { Temporal } from "temporal-polyfill/full";
 
-import { AGENT_HARNESSES } from "@stll/api-contract/agent-harness";
+import {
+  AGENT_HARNESSES,
+  harnessSessionIdEvent,
+} from "@stll/api-contract/agent-harness";
 import { CHAT_LOCAL_RUN_TOOL_NAMES } from "@stll/api-contract/chat-local-run-tool";
 import {
   DESKTOP_RUNNER_APPROVAL_DECISIONS,
@@ -10,8 +13,10 @@ import {
   DESKTOP_RUNNER_APPROVAL_MODES,
   DESKTOP_RUNNER_CHECKPOINT_EVENT,
   DESKTOP_RUNNER_FS_POLICIES,
+  DESKTOP_RUNNER_INPUT_EVENT,
   DESKTOP_RUNNER_NETWORK_POLICIES,
   DESKTOP_RUNNER_OUTPUT_EVENT,
+  DESKTOP_RUNNER_REASONING_EFFORTS,
   DESKTOP_RUNNER_RUN_OUTCOMES,
 } from "@stll/api-contract/desktop-runner";
 import { hmacSha256Hex } from "@stll/sha256/node";
@@ -33,16 +38,14 @@ import {
   type CodexNotificationMethod,
   type CodexServerRequestMethod,
 } from "./harness/codex/protocol";
-import {
-  HARNESS_CONTINUATION_EVENT,
-  harnessSessionIdEvent,
-} from "./harness/stream-chunks";
+import { HARNESS_CONTINUATION_EVENT } from "./harness/stream-chunks";
 import {
   SIDECAR_HOLDER_MODES,
   SIDECAR_HOST_MESSAGE,
   SIDECAR_PROBE_FAILURES,
   SIDECAR_REJECTIONS,
   SIDECAR_RESTORE_OUTCOMES,
+  SIDECAR_RUN_SESSION,
   type SidecarHostMessage,
   type SidecarMessage,
   type SidecarProbeOutcome,
@@ -334,8 +337,20 @@ const CLAUDE_SYSTEM_FIELDS: Readonly<Record<ClaudeSystemSubtype, Fields>> = {
     }),
   },
   control_request_progress: { request_id: IDENTIFIER },
-  model_refusal_fallback: { model: OPAQUE },
-  model_refusal_no_fallback: { model: OPAQUE },
+  model_refusal_fallback: {
+    trigger: vocabulary(["refusal"]),
+    direction: vocabulary(["retry", "revert", "sticky"]),
+    scope: vocabulary(["session", "local"]),
+    original_model: OPAQUE,
+    fallback_model: OPAQUE,
+    request_id: IDENTIFIER,
+    api_refusal_category: OPAQUE,
+  },
+  model_refusal_no_fallback: {
+    original_model: OPAQUE,
+    request_id: IDENTIFIER,
+    api_refusal_category: OPAQUE,
+  },
   local_command_output: { content: SIZE },
   hook_started: CLAUDE_HOOK_FIELDS,
   hook_progress: CLAUDE_HOOK_FIELDS,
@@ -397,6 +412,17 @@ const CLAUDE_CONTROL_REQUEST_FIELDS: Readonly<
   interrupt: {},
   get_usage: { skip_behaviors: BOOLEAN },
   mcp_set_servers: { servers: SIZE },
+  set_permission_mode: {
+    mode: vocabulary([
+      "default",
+      "acceptEdits",
+      "bypassPermissions",
+      "plan",
+      "dontAsk",
+      "auto",
+    ]),
+  },
+  stop_task: { task_id: IDENTIFIER },
 };
 
 const CLAUDE_USAGE_WINDOW = object({ utilization: NUMBER, resets_at: INSTANT });
@@ -492,6 +518,7 @@ const CLAUDE_LINE_FIELDS: Readonly<Record<ClaudeLineType, MessageShape>> = {
       usage: CLAUDE_USAGE,
     }),
     error: CLAUDE_ASSISTANT_ERRORS,
+    uuid: IDENTIFIER,
   }),
   // `content` is a list of blocks or, written by Stella, one string.
   user: shape({ message: object({ content: list(CLAUDE_CONTENT_BLOCK) }) }),
@@ -643,6 +670,15 @@ const CODEX_RATE_LIMIT_WINDOW = object({
   resetsAt: NUMBER,
 });
 
+/** One allowance, as an update or a read reports it. */
+const CODEX_RATE_LIMITS = object({
+  limitId: vocabulary(["codex"]),
+  planType: CODEX_PLAN_TYPES,
+  primary: CODEX_RATE_LIMIT_WINDOW,
+  secondary: CODEX_RATE_LIMIT_WINDOW,
+  credits: SIZE,
+});
+
 const CODEX_IN_TURN = { threadId: IDENTIFIER, turnId: IDENTIFIER } as const;
 const CODEX_ON_ITEM = { ...CODEX_IN_TURN, itemId: IDENTIFIER } as const;
 const CODEX_DELTA = { ...CODEX_ON_ITEM, delta: SIZE } as const;
@@ -720,6 +756,8 @@ const CODEX_PARAMS: Readonly<Record<CodexMethod, Fields>> = {
   },
   initialized: {},
   "account/read": { refreshToken: BOOLEAN },
+  // Sent without params.
+  "account/rateLimits/read": {},
   "model/list": { limit: NUMBER, cursor: SIZE },
   "skills/extraRoots/set": { extraRoots: SIZE },
   "skills/list": { forceReload: BOOLEAN, cwds: SIZE },
@@ -729,17 +767,36 @@ const CODEX_PARAMS: Readonly<Record<CodexMethod, Fields>> = {
     threadId: IDENTIFIER,
     excludeTurns: BOOLEAN,
   },
+  "thread/fork": {
+    ...CODEX_THREAD_PARAMS,
+    threadId: IDENTIFIER,
+    lastTurnId: IDENTIFIER,
+    excludeTurns: BOOLEAN,
+  },
   "thread/unarchive": { threadId: IDENTIFIER },
+  "thread/backgroundTerminals/list": {
+    threadId: IDENTIFIER,
+    cursor: IDENTIFIER,
+    data: list({ itemId: IDENTIFIER }),
+    nextCursor: IDENTIFIER,
+  },
+  "thread/backgroundTerminals/clean": { threadId: IDENTIFIER },
   "turn/start": {
     threadId: IDENTIFIER,
     model: OPAQUE,
-    effort: vocabulary(["none", "minimal", "low", "medium", "high", "xhigh"]),
+    effort: vocabulary(DESKTOP_RUNNER_REASONING_EFFORTS),
     input: list({
       type: vocabulary(["text", "image", "localImage", "skill", "mention"]),
       text: SIZE,
       url: SIZE,
       path: SIZE,
     }),
+  },
+  // A steer's text is the member's words: logged as its size only.
+  "turn/steer": {
+    threadId: IDENTIFIER,
+    expectedTurnId: IDENTIFIER,
+    input: list({ type: vocabulary(["text"]), text: SIZE }),
   },
   "turn/interrupt": CODEX_IN_TURN,
   "turn/started": { threadId: IDENTIFIER, turn: CODEX_TURN },
@@ -757,16 +814,14 @@ const CODEX_PARAMS: Readonly<Record<CodexMethod, Fields>> = {
     }),
   },
   "turn/plan/updated": { ...CODEX_IN_TURN, explanation: SIZE, plan: SIZE },
-  "serverRequest/resolved": { threadId: IDENTIFIER, requestId: IDENTIFIER },
-  "account/rateLimits/updated": {
-    rateLimits: object({
-      limitId: vocabulary(["codex"]),
-      planType: CODEX_PLAN_TYPES,
-      primary: CODEX_RATE_LIMIT_WINDOW,
-      secondary: CODEX_RATE_LIMIT_WINDOW,
-      credits: SIZE,
-    }),
+  "model/rerouted": {
+    ...CODEX_IN_TURN,
+    fromModel: OPAQUE,
+    toModel: OPAQUE,
+    reason: vocabulary(["highRiskCyberActivity"]),
   },
+  "serverRequest/resolved": { threadId: IDENTIFIER, requestId: IDENTIFIER },
+  "account/rateLimits/updated": { rateLimits: CODEX_RATE_LIMITS },
   "item/commandExecution/requestApproval": {
     ...CODEX_APPROVAL,
     command: SIZE,
@@ -829,6 +884,8 @@ const CODEX_RESULT = object({
     planType: CODEX_PLAN_TYPES,
   }),
   requiresOpenaiAuth: BOOLEAN,
+  rateLimits: CODEX_RATE_LIMITS,
+  rateLimitsByLimitId: SIZE,
   // Stella's answers to approvals, questions and declined requests.
   decision: vocabulary([
     "accept",
@@ -897,9 +954,14 @@ const SIDECAR_HOST_FIELDS: Readonly<
   "run.start": {
     runId: IDENTIFIER,
     threadId: IDENTIFIER,
-    harnessSessionId: IDENTIFIER,
+    session: object({
+      type: vocabulary(Object.values(SIDECAR_RUN_SESSION)),
+      sessionId: IDENTIFIER,
+      boundary: IDENTIFIER,
+    }),
     ...SIDECAR_LAUNCH,
     model: OPAQUE,
+    reasoningEffort: vocabulary(DESKTOP_RUNNER_REASONING_EFFORTS),
     policy: object({
       network: vocabulary(DESKTOP_RUNNER_NETWORK_POLICIES),
       fs: vocabulary(DESKTOP_RUNNER_FS_POLICIES),
@@ -908,6 +970,8 @@ const SIDECAR_HOST_FIELDS: Readonly<
     mcp: object({ serverName: OPAQUE, expiresAt: INSTANT, url: SIZE }),
     workspaceDir: SIZE,
     cacheDir: SIZE,
+    unreadablePaths: SIZE,
+    stepOutputDir: SIZE,
     instructions: SIZE,
     messages: SIZE,
     attachments: SIZE,
@@ -920,6 +984,12 @@ const SIDECAR_HOST_FIELDS: Readonly<
     decision: vocabulary(DESKTOP_RUNNER_APPROVAL_DECISIONS),
   },
   "run.answer": { runId: IDENTIFIER, requestId: IDENTIFIER, answers: SIZE },
+  // A steer's text is the member's words: logged as its size only.
+  "run.input": {
+    runId: IDENTIFIER,
+    inputId: IDENTIFIER,
+    message: object({ role: vocabulary(["user"]), content: SIZE }),
+  },
   "run.interrupt": { runId: IDENTIFIER },
   "run.cancel": { runId: IDENTIFIER },
   "run.token": { runId: IDENTIFIER, expiresAt: INSTANT },
@@ -960,6 +1030,7 @@ const SIDECAR_CHUNK = object({
   name: vocabulary([
     DESKTOP_RUNNER_CHECKPOINT_EVENT,
     DESKTOP_RUNNER_OUTPUT_EVENT,
+    DESKTOP_RUNNER_INPUT_EVENT,
     HARNESS_CONTINUATION_EVENT,
     ...AGENT_HARNESSES.map(harnessSessionIdEvent),
   ]),
@@ -1018,11 +1089,13 @@ const SIDECAR_FIELDS: Readonly<Record<SidecarMessage["type"], Fields>> = {
     seq: NUMBER,
     outcome: vocabulary(DESKTOP_RUNNER_RUN_OUTCOMES),
     harnessSessionId: IDENTIFIER,
+    harnessBoundary: IDENTIFIER,
   },
   "folder.restored": {
     requestId: IDENTIFIER,
     outcome: vocabulary(SIDECAR_RESTORE_OUTCOMES),
   },
+  "background.tasks": { runId: IDENTIFIER, count: NUMBER },
   rejected: {
     reason: vocabulary(SIDECAR_REJECTIONS),
     messageType: vocabulary(Object.values(SIDECAR_HOST_MESSAGE)),

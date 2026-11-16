@@ -4,6 +4,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "repairs-case-law-identifier-retry-constraint-validation",
   revision: 1000,
+  lifecycle: "finalized",
   type: "repairs",
   values: [CASE_LAW_IDENTIFIER_RETRY_CONSTRAINT_VALIDATION],
 } satisfies OnlineMigrationEntry;

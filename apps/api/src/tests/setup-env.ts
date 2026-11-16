@@ -84,8 +84,6 @@ delete process.env["LEGAL_SEARCH_PROVIDER"];
 // require that endpoint only to build request URLs, so keep both sides local.
 delete process.env["PUBLIC_LAW_DATABASE_URL"];
 delete process.env["PUBLIC_LAW_DATABASE_POOL_MAX"];
-delete process.env["CASE_LAW_DATABASE_URL"];
-delete process.env["CASE_LAW_DATABASE_POOL_MAX"];
 
 // A fixed key so suites run the real AES-GCM content encryption instead of a
 // module mock; the value is test-only and derives per-organization keys the

@@ -12,7 +12,7 @@ import path from "node:path";
 
 // The receipt coverage check, run against a real repository: the queue
 // history it requires starts at the newest earlier commit whose main/heavy
-// and main/pr-depth both passed, else at the previous release tag.
+// and main/pr-depth both passed, else where the previous release left main.
 
 const SCRIPT = path.resolve(
   import.meta.dir,
@@ -47,10 +47,14 @@ type Statuses = Record<
   { context: string; state: string; creator?: string }[]
 >;
 
-// Release history: v1.0.0, then three main commits, then the version commit.
+// Release history: the previous release v1.0.0, then three main commits, then
+// the version commit. With releaseBranch, v1.0.0 sits on its own release
+// branch, squash-merged into main as release pull requests are, so main never
+// reaches the tag; the history then starts where that branch left main.
 const fixture = (
   statusesFor: (commits: string[]) => Statuses,
   history = true,
+  releaseBranch = false,
 ) => {
   const root = mkdtempSync(path.join(tmpdir(), "receipt-coverage-"));
   directories.push(root);
@@ -68,14 +72,28 @@ const fixture = (
     return result.stdout.toString().trim();
   };
   git("init", "--quiet", "--initial-branch=main");
-  const commit = (message: string) => {
+  const commit = (message: string, version?: string) => {
+    if (version !== undefined) {
+      writeFileSync(path.join(repo, "VERSION"), `${version}\n`);
+      git("add", "VERSION");
+    }
     git("commit", "--quiet", "--allow-empty", "--no-verify", "-m", message);
     return git("rev-parse", "HEAD");
   };
-  commit("previous release");
-  git("tag", "v1.0.0");
-  const main = ["first", "second", "third"].map(commit);
-  const release = commit("chore: release v1.1.0");
+  let previousRelease: string;
+  if (releaseBranch) {
+    previousRelease = commit("previous cut base", "0.9.0");
+    git("switch", "--quiet", "--create", "release/v1.0.0");
+    commit("chore: release v1.0.0", "1.0.0");
+    git("tag", "v1.0.0");
+    git("switch", "--quiet", "main");
+    commit("chore: release v1.0.0 (#1)", "1.0.0");
+  } else {
+    previousRelease = commit("previous release", "1.0.0");
+    git("tag", "v1.0.0");
+  }
+  const main = ["first", "second", "third"].map((message) => commit(message));
+  const release = commit("chore: release v1.1.0", "1.1.0");
   const statuses = statusesFor(main);
   writeFileSync(path.join(root, "statuses.json"), JSON.stringify(statuses));
   // Answers the statuses API like gh with --jq; logs every request.
@@ -95,10 +113,15 @@ jq --arg sha "$sha" '[(.[$sha] // [])[] | {context, state, creator: {login: (.cr
 `,
   );
   writeFileSync(path.join(root, "verify.sh"), "exit 0\n");
-  // Records the history range the coverage check asks for.
+  // Records the history range the coverage check asks for; the previous
+  // release comes from the real script.
   writeFileSync(
     path.join(bin, "bun"),
-    `#!/usr/bin/env bash\necho "$*" > "${root}/history"\nexit ${history ? 0 : 1}\n`,
+    `#!/usr/bin/env bash
+if [[ " $* " == *" --previous-release "* ]]; then exec "${process.execPath}" "$@"; fi
+echo "$*" > "${root}/history"
+exit ${history ? 0 : 1}
+`,
   );
   chmodSync(path.join(bin, "bun"), 0o755);
   const result = Bun.spawnSync(["bash", SCRIPT, "stella/stella", release], {
@@ -119,6 +142,7 @@ jq --arg sha "$sha" '[(.[$sha] // [])[] | {context, state, creator: {login: (.cr
     stderr: result.stderr.toString(),
     from,
     main,
+    previousRelease,
   };
 };
 
@@ -168,8 +192,22 @@ test(
     ]) {
       const run = fixture(statuses);
       expect(run.exitCode, run.stderr).toBe(0);
-      expect(run.from).toBe("v1.0.0");
+      expect(run.from).toBe(run.previousRelease);
     }
+  },
+  CASE_TIMEOUT_MS,
+);
+
+// timeout: builds a Git repository and runs the gate, which starts Bun for the previous release.
+test(
+  "a previous release tagged on its own release branch starts the history where that branch left main",
+  () => {
+    const run = fixture(() => ({}), true, true);
+    expect(run.exitCode, run.stderr).toBe(0);
+    expect(run.from).toBe(run.previousRelease);
+    expect(run.stderr).toContain(
+      `validated queue history since ${run.previousRelease}`,
+    );
   },
   CASE_TIMEOUT_MS,
 );

@@ -14,6 +14,47 @@ import type {
 } from "@/features/avt/types";
 import type { TranslationKey } from "@/i18n/types";
 
+type GroupedEntry = {
+  id: string;
+  carriedFrom: { runId: string; runCreatedAt: string | null } | null;
+};
+
+export type HistoryGroup<Entry extends GroupedEntry> = {
+  key: string;
+  /** The earlier run these actions were carried from; null for actions
+   *  taken on this run. */
+  carriedFrom: Entry["carriedFrom"];
+  entries: Entry[];
+};
+
+/**
+ * Entries in the order given, split where their origin changes: each stretch
+ * carried from one earlier run is one group under one divider, and actions
+ * taken on this run stay plain. History is time ordered and carried actions
+ * predate this run's own, so a run's history is at most two groups.
+ */
+export const groupHistoryByOrigin = <Entry extends GroupedEntry>(
+  entries: readonly Entry[],
+): HistoryGroup<Entry>[] => {
+  const groups: HistoryGroup<Entry>[] = [];
+  for (const entry of entries) {
+    const last = groups.at(-1);
+    if (
+      last !== undefined &&
+      (last.carriedFrom?.runId ?? null) === (entry.carriedFrom?.runId ?? null)
+    ) {
+      last.entries.push(entry);
+    } else {
+      groups.push({
+        key: entry.id,
+        carriedFrom: entry.carriedFrom,
+        entries: [entry],
+      });
+    }
+  }
+  return groups;
+};
+
 /** The verdict a reviewer reads: their override when they gave one, else the
  *  verdict their decisions lead to. */
 const shownVerdict = ({ verdict, override }: ClaimDisposition): ClaimState =>
@@ -67,6 +108,9 @@ const ACTION_KEYS = {
   governed: "avt.history.actions.governed",
   escalated: "avt.history.actions.escalated",
   conflictReopened: "avt.history.actions.conflictReopened",
+  factLinked: "avt.history.actions.factLinked",
+  factUnlinked: "avt.history.actions.factUnlinked",
+  rechecked: "avt.history.actions.rechecked",
 } as const satisfies Record<string, TranslationKey>;
 
 type HistoryActionKey = (typeof ACTION_KEYS)[keyof typeof ACTION_KEYS];
@@ -120,6 +164,14 @@ export const historyActionKey = ({
           return panic(`Unhandled resolution: ${String(resolution)}`);
         }
       }
+    }
+    case "fact-link": {
+      return action.change === "link"
+        ? ACTION_KEYS.factLinked
+        : ACTION_KEYS.factUnlinked;
+    }
+    case "recheck": {
+      return ACTION_KEYS.rechecked;
     }
     default: {
       action satisfies never;

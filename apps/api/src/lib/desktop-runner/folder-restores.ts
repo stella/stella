@@ -39,6 +39,7 @@ import {
   createBackgroundAuditRecorder,
 } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { NEWEST_CHAT_TURN_FIRST } from "@/api/lib/chat/turn-order";
 import { CHAT_TURN_RUN_ENDING_STATUSES } from "@/api/lib/chat/turn-status";
 import {
   withAggregateLock,
@@ -202,7 +203,7 @@ const readOwnedTurn = async (
   { owner, threadId, turnId }: TurnOptions,
 ) => {
   const [turn] = await db
-    .select({ id: chatTurns.id, createdAt: chatTurns.createdAt })
+    .select({ id: chatTurns.id })
     .from(chatTurns)
     .where(
       and(
@@ -235,11 +236,7 @@ export const readTurnFolderRestore = async (
   const run = await readTurnRun(db, options);
   const restore = await readTurnRestore(db, options);
   // As the undo itself decides: only the thread's newest turn is undone.
-  const newest = !(await readNewerTurn(db, {
-    owner: options.owner,
-    threadId: options.threadId,
-    turn,
-  }));
+  const newest = await readIsNewestTurn(db, options);
   return {
     undoable: newest && run?.state === "finished" && run.tookCheckpoint,
     restore: restore === null ? null : viewOf(restore, options.now),
@@ -296,16 +293,15 @@ const readThreadBusy = async (
   return run !== undefined;
 };
 
-/** A later turn of the owner's in the thread. */
-const readNewerTurn = async (
+/**
+ * Whether the turn is the newest of the owner's in the thread, in the order
+ * turns were accepted (`NEWEST_CHAT_TURN_FIRST`).
+ */
+const readIsNewestTurn = async (
   db: Pick<DesktopRunnerDb, "select">,
-  {
-    owner,
-    threadId,
-    turn,
-  }: ThreadOf & { turn: { id: string; createdAt: Date } },
+  { owner, threadId, turnId }: TurnOptions,
 ) => {
-  const [newer] = await db
+  const [newest] = await db
     .select({ id: chatTurns.id })
     .from(chatTurns)
     .where(
@@ -313,11 +309,11 @@ const readNewerTurn = async (
         eq(chatTurns.organizationId, owner.organizationId),
         eq(chatTurns.userId, owner.userId),
         eq(chatTurns.threadId, threadId),
-        sql`(${chatTurns.createdAt}, ${chatTurns.id}) > (${turn.createdAt}::timestamptz, ${turn.id}::uuid)`,
       ),
     )
+    .orderBy(...NEWEST_CHAT_TURN_FIRST)
     .limit(1);
-  return newer !== undefined;
+  return newest?.id === turnId;
 };
 
 /**
@@ -365,7 +361,7 @@ export const requestFolderRestore = async (
       ) {
         return { type: "existing", restore: viewOf(existing, now) };
       }
-      if (await readNewerTurn(tx, { owner, threadId, turn })) {
+      if (!(await readIsNewestTurn(tx, options))) {
         return { type: "refused", reason: "not_newest" };
       }
       if (await readThreadBusy(tx, options)) {
@@ -433,6 +429,8 @@ export const requestFolderRestore = async (
 export type FolderRestoreToSend = {
   readonly restoreId: string;
   readonly folderId: string;
+  /** The folder linked on the computer the run worked in, if any. */
+  readonly linkedFolderId: string | null;
   readonly runId: string;
 };
 
@@ -554,8 +552,13 @@ export const claimFolderRestores = async (
           state: restores.state,
           folderId: restores.chatThreadId,
           runId: restores.runId,
+          linkedFolderId: desktopRunnerRuns.linkedFolderId,
         })
         .from(restores)
+        .innerJoin(
+          desktopRunnerRuns,
+          eq(desktopRunnerRuns.runId, restores.runId),
+        )
         .where(
           and(
             ofComputer(binding),
@@ -583,7 +586,12 @@ export const claimFolderRestores = async (
             });
       return due
         .filter(({ id, state }) => state === "sent" || sent.includes(id))
-        .map(({ id, folderId, runId }) => ({ restoreId: id, folderId, runId }));
+        .map(({ id, folderId, linkedFolderId, runId }) => ({
+          restoreId: id,
+          folderId,
+          linkedFolderId,
+          runId,
+        }));
     },
   );
 

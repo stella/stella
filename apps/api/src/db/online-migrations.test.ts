@@ -45,13 +45,18 @@ import {
   ONLINE_MIGRATION_REPAIRS,
   type OnlineMigrationStartupReport,
   type OnlineRepairOptions,
+  pendingOnlineUnitKey,
   type RegressedOnlineRepair,
   reportOnlineMigrations as reportOnlineMigrationsWithOwnership,
+  runNextPendingOnlineUnit,
   runOnlineMigrations as runOnlineMigrationsWithGate,
 } from "./online-migrations";
+import { ONLINE_SCOPE, onlineStepLifecycle } from "./online-step-lifecycle";
 import {
   EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES,
   type ExecutableOnlineUniqueIndexName,
+  FALLBACK_DECISION_UNIQUE_INDEXES,
+  ONLINE_UNIQUE_INDEX_NAMES,
   ONLINE_UNIQUE_INDEX_VALIDATION_DEFINITIONS,
   onlineUniqueIndexDefinition,
 } from "./online-unique-indexes";
@@ -160,7 +165,10 @@ const REPORT_EXPORT_INDEX = "report_exports_workspace_requester_created_idx";
 const CREDENTIAL_INDEX = "account_credential_singleton_uidx";
 const CHAT_RUN_INDEX = "chat_turns_org_run_id_uidx";
 const SOURCE_DOCUMENT_INDEX = "case_law_decisions_source_document_idx";
-const SOURCE_CASE_INDEX = "case_law_decisions_source_case_lang_null_idx";
+const [{ name: FALLBACK_IDENTITY_INDEX_NAME }] =
+  FALLBACK_DECISION_UNIQUE_INDEXES;
+const PREVIOUS_FALLBACK_DECISION_INDEX =
+  ONLINE_UNIQUE_INDEX_NAMES.CASE_LAW_DECISIONS_SOURCE_CASE_LANG_NULL_IDX;
 const LEGACY_SOURCE_CASE_INDEX = "case_law_decisions_source_case_lang_idx";
 const DOCUMENT_DATE_INDEX = "case_law_decisions_document_outstanding_date_idx";
 const LEGACY_DOCUMENT_DATE_INDEX =
@@ -181,6 +189,7 @@ const VALIDATE_DELETE_RECEIPT_FRAGMENT = `VALIDATE CONSTRAINT "${DELETE_RECEIPT_
 const POLARITY_RULE_TABLE = getTableName(caseLawPolarityRules);
 /** A pooled session's own timeout, not the role default. */
 const SESSION_STATEMENT_TIMEOUT = "30s";
+const SESSION_LOCK_TIMEOUT = "5s";
 const RESTORED_SESSION_TIMEOUT = `SELECT set_config('statement_timeout', $1, false)\n-- params ${JSON.stringify([SESSION_STATEMENT_TIMEOUT])}`;
 const CLEANUP_STALL_CONSTRAINTS = [
   "corpus_index_projection_intents_status_values",
@@ -200,6 +209,21 @@ describe("online migrations", () => {
       connection.release();
     },
   );
+
+  test("the expansion keeps the docket-only fallback index until its contract release", () => {
+    // The contract release retires it through an index replacement; until
+    // then the schema still declares it, so the runner keeps it valid.
+    expect(
+      ONLINE_MIGRATION_INDEXES.some(
+        ({ name }) => name === PREVIOUS_FALLBACK_DECISION_INDEX,
+      ),
+    ).toBe(true);
+    expect(
+      ONLINE_INDEX_REPLACEMENTS.flatMap(
+        ({ replacementNames }) => replacementNames,
+      ),
+    ).not.toContain(PREVIOUS_FALLBACK_DECISION_INDEX);
+  });
 
   test("registers the identifier retry shape for bounded online validation", () => {
     expect(ONLINE_MIGRATION_REPAIRS).toContain(
@@ -981,6 +1005,306 @@ describe("online migrations", () => {
     expect(harness.released()).toBe(true);
   });
 
+  test.each([ONLINE_SCOPE.all, ONLINE_SCOPE.finalized])(
+    "a %s run walks exactly the steps of its scope",
+    async (scope) => {
+      const harness = createHarness();
+      const records: MigrationTimingRecord[] = [];
+      let now = 0;
+
+      await runOnlineMigrations(harness.pool, {
+        scope,
+        repairs: ONLINE_MIGRATION_REPAIRS,
+        timing: {
+          clock: () => (now += 5),
+          emit: (record) => {
+            records.push(record);
+          },
+        },
+      });
+
+      const walked = records.flatMap((record) =>
+        record.event === "migrate.online_step_duration"
+          ? [`${record.kind}:${record.name}`]
+          : [],
+      );
+      const inScope = (kind: "index" | "cutover", name: string) =>
+        scope === ONLINE_SCOPE.all ||
+        onlineStepLifecycle(kind, name) === ONLINE_SCOPE.finalized;
+      const expected = [
+        ...ONLINE_MIGRATION_INDEXES.filter(({ name }) =>
+          inScope("index", name),
+        ).map(({ name }) => `index:${name}`),
+        ...ONLINE_MIGRATION_INDEX_CUTOVERS.filter(({ final }) =>
+          inScope("cutover", final.name),
+        ).map(({ final }) => `cutover:${final.name}`),
+      ];
+      expect(
+        walked.filter((step) => !step.startsWith("replacement_drop:")),
+      ).toEqual(expected);
+      const pendingDrops = walked.filter(
+        (step) =>
+          step.startsWith("replacement_drop:") &&
+          onlineStepLifecycle(
+            "replacement_drop",
+            step.slice("replacement_drop:".length),
+          ) === ONLINE_SCOPE.pending,
+      );
+      expect(pendingDrops.length > 0).toBe(scope === ONLINE_SCOPE.all);
+      // The registry holds pending indexes, so the finalized walk is smaller.
+      expect(
+        expected.length <
+          ONLINE_MIGRATION_INDEXES.length +
+            ONLINE_MIGRATION_INDEX_CUTOVERS.length,
+      ).toBe(scope === ONLINE_SCOPE.finalized);
+    },
+  );
+
+  test("a finalized run neither reads nor runs a pending repair", async () => {
+    const pendingRepair = ONLINE_MIGRATION_REPAIRS.find(
+      ({ name }) =>
+        onlineStepLifecycle("repair", name) === ONLINE_SCOPE.pending,
+    );
+    if (!pendingRepair) {
+      throw new TypeError("Expected a pending repair fixture");
+    }
+    const touched: string[] = [];
+    const watched = {
+      ...pendingRepair,
+      readCompletion: async () => {
+        touched.push("read");
+        return await Promise.resolve({
+          type: "incomplete",
+          reason: "fixture postcondition",
+        } as const);
+      },
+      repair: async () => {
+        touched.push("repair");
+        return await Promise.resolve({ type: "complete" } as const);
+      },
+    } satisfies OnlineRepair;
+
+    await runOnlineMigrations(createHarness().pool, {
+      scope: ONLINE_SCOPE.finalized,
+      repairs: [watched],
+    });
+
+    expect(touched).toEqual([]);
+  });
+
+  test("startup records a pending entry's missing index whatever migration is newest", async () => {
+    const pendingIndex = ONLINE_MIGRATION_INDEXES.find(
+      ({ name, introducedBy }) =>
+        typeof introducedBy === "string" &&
+        onlineStepLifecycle("index", name) === ONLINE_SCOPE.pending,
+    );
+    if (!pendingIndex || typeof pendingIndex.introducedBy !== "string") {
+      throw new TypeError("Expected a pending migration-owned index fixture");
+    }
+    const newestAppliedMigration = "99991231000000_later_fixture";
+    const harness = createHarness({
+      newestAppliedMigration,
+      missingIndexes: [pendingIndex.name],
+    });
+    expect(await reportOnlineMigrations(harness.pool, { repairs: [] })).toEqual(
+      {
+        newestAppliedMigration,
+        pending: [
+          {
+            kind: "index",
+            name: pendingIndex.name,
+            introducedBy: pendingIndex.introducedBy,
+          },
+        ],
+      },
+    );
+    const finalizedIndex = ONLINE_MIGRATION_INDEXES.find(
+      ({ name, introducedBy }) =>
+        typeof introducedBy === "string" &&
+        onlineStepLifecycle("index", name) === ONLINE_SCOPE.finalized,
+    );
+    if (!finalizedIndex) {
+      throw new TypeError("Expected a finalized migration-owned index fixture");
+    }
+    expect(
+      await rejectionOf(
+        reportOnlineMigrations(
+          createHarness({
+            newestAppliedMigration,
+            missingIndexes: [finalizedIndex.name],
+          }).pool,
+          { repairs: [] },
+        ),
+      ),
+    ).toMatchObject({
+      message: expect.stringContaining(
+        `Online index ${finalizedIndex.name} introduced by`,
+      ),
+    });
+  });
+
+  describe("pending runner", () => {
+    const runPending = async (
+      pool: Parameters<typeof runNextPendingOnlineUnit>[0],
+    ) =>
+      await runNextPendingOnlineUnit(pool, {
+        indexGate: healthyIndexGate,
+        timing: { clock: () => 0, emit: () => undefined },
+        repairs: ONLINE_MIGRATION_REPAIRS,
+        reserveObserver: reserveHealthyObserver,
+      });
+    const pendingIndexes = ONLINE_MIGRATION_INDEXES.filter(
+      ({ name }) => onlineStepLifecycle("index", name) === ONLINE_SCOPE.pending,
+    );
+    const finalizedIndex = ONLINE_MIGRATION_INDEXES.find(
+      ({ name }) =>
+        onlineStepLifecycle("index", name) === ONLINE_SCOPE.finalized,
+    );
+    const builds = (statements: readonly string[]) =>
+      statements.filter((statement) =>
+        statement.includes("INDEX CONCURRENTLY"),
+      );
+
+    test("reports busy and reads nothing while the online lock is held", async () => {
+      const harness = createHarness({
+        missingIndexes: pendingIndexes.map(({ name }) => name),
+        onlineLockHeld: true,
+      });
+      expect(await runPending(harness.pool)).toEqual({ type: "busy" });
+      expect(
+        harness.statements.filter((statement) =>
+          statement.includes("pg_catalog"),
+        ),
+      ).toEqual([]);
+      expect(harness.released()).toBe(true);
+    });
+
+    test("is idle once every pending unit is complete", async () => {
+      const harness = createHarness();
+      expect(await runPending(harness.pool)).toEqual({ type: "idle" });
+      expect(builds(harness.statements)).toEqual([]);
+      expect(harness.released()).toBe(true);
+    });
+
+    test("builds the first missing pending index and nothing else", async () => {
+      const [first, second] = pendingIndexes.filter(declaresOnlineBuild);
+      if (!first || !second || !finalizedIndex) {
+        throw new TypeError("Expected two pending and a finalized index");
+      }
+      const harness = createHarness({
+        missingIndexes: [second.name, first.name, finalizedIndex.name],
+      });
+      expect(await runPending(harness.pool)).toEqual({
+        type: "ran",
+        step: {
+          kind: "index",
+          name: first.name,
+          introducedBy: first.introducedBy,
+        },
+        outcome: { type: "complete" },
+      });
+      const built = builds(harness.statements);
+      expect(built.length).toBeGreaterThan(0);
+      for (const statement of built) {
+        expect(statement).toContain(`INDEX CONCURRENTLY "${first.name}"`);
+      }
+      // The session goes back to the pool with the timeouts it came with.
+      expect(harness.statements).toContain(RESTORED_SESSION_TIMEOUT);
+      expect(harness.statements).toContain(
+        `SELECT set_config('lock_timeout', $1, false)\n-- params ${JSON.stringify([SESSION_LOCK_TIMEOUT])}`,
+      );
+      expect(harness.released()).toBe(true);
+    });
+
+    test("passes over a unit the caller set aside", async () => {
+      const [first, second] = pendingIndexes.filter(declaresOnlineBuild);
+      if (!first || !second) {
+        throw new TypeError("Expected two pending indexes");
+      }
+      const harness = createHarness({
+        missingIndexes: [first.name, second.name],
+      });
+      const outcome = await runNextPendingOnlineUnit(harness.pool, {
+        indexGate: healthyIndexGate,
+        timing: { clock: () => 0, emit: () => undefined },
+        repairs: [],
+        reserveObserver: reserveHealthyObserver,
+        skip: new Set([
+          pendingOnlineUnitKey({ kind: "index", name: first.name }),
+        ]),
+      });
+      expect(outcome).toMatchObject({
+        type: "ran",
+        step: { kind: "index", name: second.name },
+      });
+    });
+
+    test("reports a repair its health verdict holds as held, not complete", async () => {
+      const pendingRepair = ONLINE_MIGRATION_REPAIRS.find(
+        ({ name }) =>
+          onlineStepLifecycle("repair", name) === ONLINE_SCOPE.pending,
+      );
+      if (!pendingRepair || typeof pendingRepair.introducedBy !== "string") {
+        throw new TypeError("Expected a pending migration-owned repair");
+      }
+      const incomplete = {
+        type: "incomplete",
+        reason: "fixture rows remain",
+      } as const;
+      const completions: OnlineRepairCompletion[] = [
+        incomplete,
+        incomplete,
+        {
+          type: "pending",
+          reason: "fixture hold",
+          cursor: null,
+          holdUntil: null,
+          heldSince: null,
+        },
+      ];
+      const held = {
+        ...pendingRepair,
+        readCompletion: async () => {
+          const next = completions.shift();
+          if (next === undefined) {
+            throw new TypeError("Read past the fixture's completions");
+          }
+          return await Promise.resolve(next);
+        },
+        repair: async () =>
+          await Promise.resolve({ type: "complete" } as const),
+      } satisfies OnlineRepair;
+      const outcome = await runNextPendingOnlineUnit(createHarness().pool, {
+        indexGate: healthyIndexGate,
+        timing: { clock: () => 0, emit: () => undefined },
+        repairs: [held],
+        reserveObserver: reserveHealthyObserver,
+        log: () => undefined,
+      });
+      expect(outcome).toEqual({
+        type: "ran",
+        step: {
+          kind: "repair",
+          name: pendingRepair.name,
+          introducedBy: pendingRepair.introducedBy,
+        },
+        outcome: { type: "held", reason: "fixture hold" },
+      });
+      expect(completions).toEqual([]);
+    });
+
+    test("leaves a missing finalized index to migrate", async () => {
+      if (!finalizedIndex) {
+        throw new TypeError("Expected a finalized index");
+      }
+      const harness = createHarness({
+        missingIndexes: [finalizedIndex.name],
+      });
+      expect(await runPending(harness.pool)).toEqual({ type: "idle" });
+      expect(builds(harness.statements)).toEqual([]);
+    });
+  });
+
   test("every online step reports its duration, in the order the phase runs them", async () => {
     const harness = createHarness();
     const records: MigrationTimingRecord[] = [];
@@ -1458,7 +1782,7 @@ describe("online migrations", () => {
     });
   });
 
-  test("retires a legacy index only after both replacements validate", async () => {
+  test("retires a legacy index only after publisher and fallback replacements validate", async () => {
     const harness = createHarness({ retiredIndexes: [] });
 
     await runOnlineMigrations(harness.pool, { repairs: [] });
@@ -1471,7 +1795,7 @@ describe("online migrations", () => {
       indexOfStatement(harness.statements, SOURCE_DOCUMENT_INDEX),
     );
     expect(dropOffset).toBeGreaterThan(
-      indexOfStatement(harness.statements, SOURCE_CASE_INDEX),
+      indexOfStatement(harness.statements, FALLBACK_IDENTITY_INDEX_NAME),
     );
   });
 
@@ -1566,7 +1890,7 @@ describe("online migrations", () => {
     // phase instead and never reach the gate this test is about.
     const harness = createHarness({
       retiredIndexes: [],
-      indexStates: { [SOURCE_CASE_INDEX]: [true, false] },
+      indexStates: { [FALLBACK_IDENTITY_INDEX_NAME]: [true, false] },
     });
 
     const rejection: unknown = await runOnlineMigrations(harness.pool, {
@@ -1576,7 +1900,7 @@ describe("online migrations", () => {
       (error: unknown) => error,
     );
     expect(rejection).toMatchObject({
-      message: `Required migration index ${SOURCE_CASE_INDEX} is not ready`,
+      message: `Required migration index ${FALLBACK_IDENTITY_INDEX_NAME} is not ready`,
     });
     // The phase found both replacements valid, so it neither rebuilt nor
     // reindexed either one.
@@ -2519,6 +2843,9 @@ const createHarness = ({
           if (query.includes("current_setting('statement_timeout')")) {
             return [{ timeout: SESSION_STATEMENT_TIMEOUT }];
           }
+          if (query.includes("current_setting('lock_timeout')")) {
+            return [{ timeout: SESSION_LOCK_TIMEOUT }];
+          }
           if (
             query.includes(" AS acquired") ||
             query.includes("pg_try_advisory_lock") ||
@@ -2551,7 +2878,14 @@ const createHarness = ({
           ) {
             return [];
           }
-          if (query.startsWith("SELECT 1 FROM public.chat_run_log_entries")) {
+          if (
+            query.startsWith("SELECT 1 FROM public.search_history_entries") ||
+            query.startsWith("SELECT 1 FROM public.chat_run_log_entries") ||
+            // No claim written before asserted dates is left to read.
+            query.startsWith("SELECT 1 FROM public.legal_list_claims") ||
+            // No chat turn stored before positions is left to number.
+            query.startsWith("SELECT 1 FROM public.chat_turns")
+          ) {
             return [];
           }
           if (query.startsWith("SELECT 1 FROM public.")) {
@@ -2650,6 +2984,11 @@ const createHarness = ({
           }
           if (query.includes("starts_with")) {
             return queryIndexArtifacts(params);
+          }
+          // The graph edge backfill's matter walk: no matter holds a
+          // verification run or a Spot, so there is nothing to derive.
+          if (query.includes('FROM "workspaces" workspace')) {
+            return [];
           }
 
           return queryIndexState(params);

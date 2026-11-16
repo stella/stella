@@ -1,8 +1,8 @@
 import * as v from "valibot";
 
 import { numberFromString } from "@stll/api-contract/http-input";
+import { SHAREPOINT_ROOT_ITEM_ID } from "@stll/api-contract/sharepoint";
 
-import { SHAREPOINT_ROOT_ITEM_ID } from "@/api/handlers/sharepoint/graph-client";
 import { paginationCursorSchema } from "@/api/lib/custom-schema";
 
 // Microsoft Graph ids are opaque: site ids join a host name and two GUIDs
@@ -33,6 +33,10 @@ export const sharepointDriveIdSchema = graphIdSchema(
 
 export const sharepointFolderIdSchema = graphIdSchema(
   `Folder item id from a previous listing, or "${SHAREPOINT_ROOT_ITEM_ID}" for the top of the drive`,
+);
+
+export const sharepointFileIdSchema = graphIdSchema(
+  "File item id from a folder listing",
 );
 
 /** A Graph next-page query string can run long; the bound is still finite. */

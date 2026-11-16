@@ -6,7 +6,7 @@
  */
 
 import { panic, Result } from "better-result";
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import * as v from "valibot";
 
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
@@ -41,12 +41,13 @@ import { LIST_OR_DOCUMENT_NOT_FOUND } from "@/api/lib/lists/fact-tiers";
 import { failGenerationRun } from "@/api/lib/lists/generation/run-persistence";
 import { enqueueFactExtractionRun } from "@/api/lib/lists/generation/run-queue";
 import { VERIFICATION_MODEL_TASK } from "@/api/lib/lists/verification/model-call";
-import {
-  getVerificationRunCaps,
-  verificationCapErrorFromDatabase,
-} from "@/api/lib/lists/verification/run-caps";
 import { findExtractionFileFieldRow } from "@/api/lib/search/types";
 import { getTanStackTextModelInfoForTask } from "@/api/lib/tanstack-ai-models";
+import {
+  ModelRunCapError,
+  modelRunCapRefusal,
+  startModelRun,
+} from "@/api/lib/usage/model-run-caps/caps";
 import { estimateDocumentRunUnits } from "@/api/lib/usage/run-estimate";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
@@ -224,9 +225,10 @@ type StartRunArgs = {
 };
 
 /**
- * Insert the queued run and its pinned sources. The run counts against the
- * organization's list AI run budget, shared with verifications: the insert
- * trigger charges it and refuses a run over either cap, rolling back both.
+ * Insert the queued run and its pinned sources. A fact extraction is a
+ * `list-run`, sharing the organization's counter with verifications: the
+ * insert trigger charges it and refuses a run over either cap, rolling back
+ * both.
  */
 const startRun = async ({
   safeDb,
@@ -234,56 +236,42 @@ const startRun = async ({
   run,
   documents,
 }: StartRunArgs) => {
-  const caps = getVerificationRunCaps();
-  const inserted = await safeDb(async (tx) => {
-    await tx.execute(sql`SELECT
-      set_config('app.list_verification_active_limit', ${String(caps.active)}, true),
-      set_config('app.list_verification_daily_limit', ${String(caps.startsPerDay)}, true)`);
-    await tx.insert(legalListGenerationRuns).values({
-      ...run,
-      status: "queued",
-      producer: "stella",
-      itemType: LIST_ITEM_TYPE.FACT,
-    });
-    await tx.insert(legalListGenerationSources).values(
-      documents.map((document) => ({
-        id: createSafeId<"legalListGenerationSource">(),
-        workspaceId: run.workspaceId,
-        listId: run.listId,
-        runId: run.id,
-        sourceEntityId: document.entityId,
-        sourceEntityVersionId: document.versionId,
-      })),
-    );
-    await recordAuditEvent(tx, {
-      action: AUDIT_ACTION.EXECUTE,
-      resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_GENERATION,
-      resourceId: run.id,
-      metadata: {
-        operation: "fact_extraction_started",
-        listId: run.listId,
-        sourceCount: documents.length,
-      },
-    });
+  const inserted = await startModelRun({
+    safeDb,
+    kind: "list-run",
+    operation: "lists.fact-extractions.create",
+    start: async (tx) => {
+      await tx.insert(legalListGenerationRuns).values({
+        ...run,
+        status: "queued",
+        producer: "stella",
+        itemType: LIST_ITEM_TYPE.FACT,
+      });
+      await tx.insert(legalListGenerationSources).values(
+        documents.map((document) => ({
+          id: createSafeId<"legalListGenerationSource">(),
+          workspaceId: run.workspaceId,
+          listId: run.listId,
+          runId: run.id,
+          sourceEntityId: document.entityId,
+          sourceEntityVersionId: document.versionId,
+        })),
+      );
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.EXECUTE,
+        resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_GENERATION,
+        resourceId: run.id,
+        metadata: {
+          operation: "fact_extraction_started",
+          listId: run.listId,
+          sourceCount: documents.length,
+        },
+      });
+    },
   });
-  return inserted.mapError((error) => {
-    const cap = verificationCapErrorFromDatabase(error);
-    return cap === null
-      ? error
-      : new HandlerError({
-          status: 429,
-          code: cap.code,
-          message:
-            cap.reason === "active"
-              ? "This organization has reached its limit of list AI runs in progress (fact extractions and verifications)."
-              : "This organization has reached its daily limit of list AI runs (fact extractions and verifications).",
-          hint:
-            cap.reason === "active"
-              ? "Wait for a fact extraction or verification to finish, then retry lists.fact-extractions.create."
-              : "Retry lists.fact-extractions.create after midnight in Europe/Prague.",
-          retryable: true,
-        });
-  });
+  return inserted.mapError((error) =>
+    ModelRunCapError.is(error) ? modelRunCapRefusal(error) : error,
+  );
 };
 
 const createFactExtraction = createSafeHandler(

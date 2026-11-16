@@ -4,6 +4,7 @@ import { generateClassification } from "./ci-job-classification/generate";
 import type { DerivedJob } from "./ci-job-classification/generate";
 import { expectedJobDigest } from "./ci-job-classification/job-digests";
 import { verifyPublicMetadata } from "./ci-job-classification/public-metadata";
+import { ReviewRequiredError } from "./ci-job-classification/review";
 import { parseDocument } from "./ci-job-classification/yaml";
 
 const CALLER = "candidate:.github/workflows/caller.yml/call";
@@ -72,17 +73,20 @@ const readerFor = (documents: Record<string, string>) => ({
   },
 });
 
+// Approves each privileged job at its digest; no other job keeps a decision.
 const generateApproved = (documents: Record<string, string>) => {
   const jobs = jobsFor(documents);
   const decisions = Object.fromEntries(
-    [...jobs].map(([key, job]) => [
-      key,
-      {
-        kind: "ordinary" as const,
-        qualifier: "fixture",
-        approvedDigests: [job.digest],
-      },
-    ]),
+    [...jobs]
+      .filter(([, job]) => job.privileged)
+      .map(([key, job]) => [
+        key,
+        {
+          kind: "ordinary" as const,
+          qualifier: "fixture",
+          approvedDigests: [job.digest],
+        },
+      ]),
   );
   const reader = readerFor(documents);
   const generated = generateClassification({
@@ -439,6 +443,88 @@ test.each([
   expect(verifyPublicMetadata({ manifest: generated, reader }).isOk()).toBe(
     true,
   );
+});
+
+const generationFor = (
+  documents: Record<string, string>,
+  decisions: Parameters<typeof generateClassification>[0]["decisions"],
+) =>
+  generateClassification({
+    decisions,
+    snapshots: {},
+    reader: readerFor(documents),
+    localActionPath: (directory) => `${directory}/action.yml`,
+  });
+
+test("a job that is not privileged needs no decision", () => {
+  const documents = workflow(BASE_CALL, "run: echo ordinary");
+  expect([...jobsFor(documents).values()].map((job) => job.privileged)).toEqual(
+    [false, false],
+  );
+  expect(generationFor(documents, {}).isOk()).toBe(true);
+});
+
+test("a decision for a job that is not privileged is stale", () => {
+  const documents = workflow(BASE_CALL, "run: echo ordinary");
+  const stale = generationFor(documents, {
+    [CALLEE]: {
+      kind: "ordinary",
+      qualifier: "fixture",
+      approvedDigests: [digest(jobsFor(documents), CALLEE)],
+    },
+  });
+  if (!stale.isErr() || !(stale.error instanceof ReviewRequiredError)) {
+    throw new Error("Expected a stale decision");
+  }
+  expect(stale.error.staleDecisions).toEqual([CALLEE]);
+  expect(stale.error.staleJobs).toEqual([]);
+  expect(stale.error.message).toContain(
+    `.github/ci-job-classification-decisions/${encodeURIComponent(CALLEE)}`,
+  );
+});
+
+test("a job that turns privileged fails although it never had a decision", () => {
+  const before = workflow(BASE_CALL, "run: echo unchanged");
+  expect(generationFor(before, {}).isOk()).toBe(true);
+  // The callee starts reading a secret, which also reaches its caller.
+  const after = workflow(
+    BASE_CALL,
+    `env: {TOKEN: '${SECRET_REFERENCE}'}\n        run: echo unchanged`,
+  );
+  const unreviewed = generationFor(after, {});
+  if (
+    !unreviewed.isErr() ||
+    !(unreviewed.error instanceof ReviewRequiredError)
+  ) {
+    throw new Error("Expected a required review");
+  }
+  expect(unreviewed.error.staleJobs).toEqual([CALLER, CALLEE]);
+  expect(unreviewed.error.staleDecisions).toEqual([]);
+  expect(generateApproved(after).generated.workflows).toHaveLength(1);
+});
+
+test("a manifest cannot leave a privileged job without its decision", () => {
+  const documents = workflow(
+    BASE_CALL,
+    `env: {TOKEN: '${SECRET_REFERENCE}'}\n        run: echo privileged`,
+  );
+  const { generated, reader } = generateApproved(documents);
+  const undecided = structuredClone(generated);
+  for (const node of undecided.nodes) {
+    if (node.type === "metadata" && node.path.endsWith("shared.yml")) {
+      node.jobs = node.jobs.map(({ id, digest: jobDigest }) => ({
+        id,
+        digest: jobDigest,
+      }));
+    }
+  }
+  const rejected = verifyPublicMetadata({ manifest: undecided, reader });
+  expect(rejected.isErr()).toBe(true);
+  if (rejected.isErr()) {
+    expect(rejected.error.message).toContain(
+      "Privileged jobs without a decision: .github/workflows/shared.yml/check",
+    );
+  }
 });
 
 test("changing workflow permissions changes a caller call-surface digest", () => {

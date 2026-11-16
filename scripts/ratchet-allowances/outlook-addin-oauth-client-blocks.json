@@ -1,5 +1,0 @@
-{
-  "metric": "duplicate-token-blocks",
-  "delta": 4,
-  "reason": "The Outlook add-in's OAuth public client repeats the mobile app's RFC 8414 metadata schema and token grant helpers (apps/mobile/src/connection); each copy is counted on both sides. The two clients read the network differently (a React Native fetch wrapper and an idle-bounded browser reader), so moving both onto one shared OAuth client package is a separate change to the mobile sign-in flow."
-}

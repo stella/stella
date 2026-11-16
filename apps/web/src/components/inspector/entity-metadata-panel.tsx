@@ -12,16 +12,15 @@ import {
   useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query";
-import { panic, Result } from "better-result";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { copyToClipboard } from "@stll/clipboard";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { useCopyConfirmation } from "@stll/ui/copy-button";
 import { CheckIcon, SparklesIcon as Sparkles } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
+import { useCopyControl } from "@/components/copy-control";
 import { DocumentPropertiesSection } from "@/components/inspector/document-properties-section";
 import { MetadataPanelSkeleton } from "@/components/inspector/file-facets";
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
@@ -33,10 +32,8 @@ import { EditableField } from "@/components/workspaces/editable-field";
 import { Justification } from "@/components/workspaces/justification";
 import { WorkflowQueryFeedback } from "@/components/workspaces/workflow-query-feedback";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { getAnalytics } from "@/lib/analytics/provider";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
-import { notifyUserError } from "@/lib/errors/user-toast";
 import { queryView } from "@/lib/query-view.logic";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import type {
@@ -672,21 +669,7 @@ const CHIP_SWAP_CLASS =
  */
 const DocumentReferenceChip = ({ reference }: { reference: string }) => {
   const t = useTranslations();
-  const { copied, copy } = useCopyConfirmation(async () => {
-    const result = await copyToClipboard(reference);
-    if (Result.isError(result)) {
-      getAnalytics().captureError(result.error, {
-        fingerprintKey: "DocumentReferenceChip.copy:failure",
-        scope: {
-          type: "handler",
-          handlerId: "DocumentReferenceChip.copy:failure",
-        },
-      });
-      notifyUserError(result.error, t("errors.actionFailed"));
-      return false;
-    }
-    return true;
-  });
+  const { copied, copy } = useCopyControl({ payload: reference });
   const label = copied ? t("common.copied") : t("common.copyDocumentReference");
 
   return (
@@ -694,7 +677,10 @@ const DocumentReferenceChip = ({ reference }: { reference: string }) => {
       aria-label={label}
       data-copied={copied ? "" : undefined}
       onClick={() => {
-        detached(copy(), "entity-metadata-panel.copy-document-reference");
+        detached(
+          copy(reference),
+          "entity-metadata-panel.copy-document-reference",
+        );
       }}
       tooltip={label}
       variant="plain"

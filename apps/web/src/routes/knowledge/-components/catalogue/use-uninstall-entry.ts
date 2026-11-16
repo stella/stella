@@ -15,6 +15,7 @@ import {
   mcpQueryRoot,
 } from "@/lib/resource-query-roots.logic";
 import { toSafeId } from "@/lib/safe-id";
+import { resourceMutation } from "@/lib/workspace-realtime";
 
 /**
  * Uninstalls a catalogue entry by routing to the right backend
@@ -29,38 +30,43 @@ export const useUninstallEntry = (
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async () => {
-      if (entry.kind === "native-tool") {
-        const response = await api.mcp["native-tools"]({
-          slug: entry.backendSlug,
-        }).patch({ enabled: false });
-        if (response.error) {
-          throw toAPIError(response.error);
-        }
-        return;
-      }
-      if (entry.kind === "mcp") {
-        if (!entry.installedConnectorSlug) {
+    mutationFn: resourceMutation({
+      mutation: "uninstallCatalogueEntry",
+      queryClient,
+      scope: { type: "organization" },
+      mutationFn: async () => {
+        if (entry.kind === "native-tool") {
+          const response = await api.mcp["native-tools"]({
+            slug: entry.backendSlug,
+          }).patch({ enabled: false });
+          if (response.error) {
+            throw toAPIError(response.error);
+          }
           return;
         }
-        const response = await api.mcp
-          .connectors({ slug: entry.installedConnectorSlug })
+        if (entry.kind === "mcp") {
+          if (!entry.installedConnectorSlug) {
+            return;
+          }
+          const response = await api.mcp
+            .connectors({ slug: entry.installedConnectorSlug })
+            .delete({});
+          if (response.error) {
+            throw toAPIError(response.error);
+          }
+          return;
+        }
+        if (!entry.installedSkillId) {
+          return;
+        }
+        const response = await api
+          .skills({ skillId: toSafeId<"agentSkill">(entry.installedSkillId) })
           .delete({});
         if (response.error) {
           throw toAPIError(response.error);
         }
-        return;
-      }
-      if (!entry.installedSkillId) {
-        return;
-      }
-      const response = await api
-        .skills({ skillId: toSafeId<"agentSkill">(entry.installedSkillId) })
-        .delete({});
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-    },
+      },
+    }),
     onSuccess: () => {
       detached(
         queryClient.invalidateQueries({

@@ -121,17 +121,28 @@ describe.serial("replay revision column plans", () => {
     ).toEqual([]);
   });
   test("forbidden revision fields and explicit timestamps stay forbidden through plans", async () => {
+    // The projection owners declare `updatedAt` (they write it back to
+    // itself); an owner that does not declare it stays refused.
+    const undeclaredTimestampOwner =
+      "apps/api/src/handlers/legislation/withdrawal.ts";
     await Promise.all(
       [
-        "{fulltext: text}",
-        "{metadata: value}",
-        "{projectionEpoch: value, updatedAt: now}",
-        "{projectionEpoch: value}, {modifiedAt: {column: versions.updatedAt, value}}",
-      ].map(async (payload) => {
+        { payload: "{fulltext: text}", lintedAs: owner },
+        { payload: "{metadata: value}", lintedAs: owner },
+        {
+          payload: "{windowDisposition: value, updatedAt: now}",
+          lintedAs: undeclaredTimestampOwner,
+        },
+        {
+          payload:
+            "{windowDisposition: value}, {modifiedAt: {column: versions.updatedAt, value}}",
+          lintedAs: undeclaredTimestampOwner,
+        },
+      ].map(async ({ payload, lintedAs }) => {
         expect(
           await lint(
             [declaration, `const write = plan(versions, ${payload});`, update],
-            owner,
+            lintedAs,
           ),
         ).toEqual([4]);
       }),

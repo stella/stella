@@ -1,12 +1,13 @@
-//! Bounded Accessibility reads for explicitly enabled local activity capture.
+//! Bounded Accessibility reads for explicitly enabled local activity capture
+//! and for the dictation context a speaker chose to share with cleanup.
 
 use core_foundation::{
-  base::{CFType, CFTypeRef, TCFType},
+  base::{CFIndex, CFRange, CFType, CFTypeRef, TCFType},
   boolean::CFBoolean,
   dictionary::{CFDictionary, CFDictionaryRef},
-  string::{CFString, CFStringRef},
+  string::{CFString, CFStringGetCharacters, CFStringRef},
 };
-use std::ptr;
+use std::{ffi::c_void, ptr};
 
 const AX_SUCCESS: i32 = 0;
 const AX_TIMEOUT_SECONDS: f32 = 0.15;
@@ -26,7 +27,14 @@ unsafe extern "C" {
     value: *mut CFTypeRef,
   ) -> i32;
   fn AXUIElementSetMessagingTimeout(element: CFTypeRef, timeout: f32) -> i32;
+  fn AXValueGetTypeID() -> usize;
+  fn AXValueGetType(value: CFTypeRef) -> u32;
+  fn AXValueGetValue(value: CFTypeRef, the_type: u32, value_ptr: *mut c_void) -> u8;
 }
+
+/// `kAXValueTypeCFRange` in `AXValue.h`.
+const AX_VALUE_TYPE_CF_RANGE: u32 = 4;
+const SECURE_TEXT_FIELD: &str = "AXSecureTextField";
 
 pub struct FocusedWindowDetails {
   pub window_title: Option<String>,
@@ -155,6 +163,92 @@ pub fn focused_window_details(pid: i32) -> Option<FocusedWindowDetails> {
     window_title,
     document,
   })
+}
+
+/// Where the insertion point of a text element is: the start of its
+/// selection, in UTF-16 units, as Accessibility reports it.
+fn selection_start(element: &CFType) -> Option<CFIndex> {
+  let value = attribute(element, "AXSelectedTextRange")?;
+  // SAFETY: The framework's type-ID query has no arguments or ownership effects.
+  if value.type_of() != unsafe { AXValueGetTypeID() } {
+    return None;
+  }
+  // SAFETY: `value` is a live AXValue, checked above; the query only reads it.
+  if unsafe { AXValueGetType(value.as_CFTypeRef()) } != AX_VALUE_TYPE_CF_RANGE {
+    return None;
+  }
+  let mut range = CFRange {
+    location: 0,
+    length: 0,
+  };
+  // SAFETY: A CFRange AXValue, checked above, copies exactly one CFRange into
+  // the stack value the pointer names, which outlives the call.
+  let copied = unsafe {
+    AXValueGetValue(
+      value.as_CFTypeRef(),
+      AX_VALUE_TYPE_CF_RANGE,
+      ptr::from_mut(&mut range).cast(),
+    )
+  };
+  (copied != 0 && range.location >= 0).then_some(range.location)
+}
+
+/// Up to `max_characters` characters right before the insertion point of the
+/// focused text element of process `pid`, read without prompting or logging.
+/// `None` for a password field, an element without text or an insertion
+/// point, and whenever a read fails: the caller then goes on without it.
+pub fn text_before_cursor(pid: i32, max_characters: usize) -> Option<String> {
+  if pid <= 0 || max_characters == 0 || !accessibility_trusted() {
+    return None;
+  }
+  // SAFETY: A positive process ID is accepted by AX; its Create result is owned
+  // below. A process exit yields failed attribute reads, not pointer misuse.
+  let application = owned_type(unsafe { AXUIElementCreateApplication(pid) })?;
+  if !set_timeout(&application) {
+    return None;
+  }
+  let element = attribute(&application, "AXFocusedUIElement")?;
+  // SAFETY: The framework's type-ID query has no arguments or ownership effects.
+  if element.type_of() != unsafe { AXUIElementGetTypeID() } || !set_timeout(&element) {
+    return None;
+  }
+  // A password field never gives its text away, whatever else it reports.
+  for name in ["AXRole", "AXSubrole"] {
+    if string_attribute(&element, name).ok()?.as_deref() == Some(SECURE_TEXT_FIELD) {
+      return None;
+    }
+  }
+  let end = selection_start(&element)?;
+  let value = attribute(&element, "AXValue")?.downcast::<CFString>()?;
+  if end == 0 || end > value.char_len() {
+    return None;
+  }
+  // A character takes at most two UTF-16 units.
+  let wanted = CFIndex::try_from(max_characters.saturating_mul(2))
+    .ok()?
+    .min(end);
+  let mut units = vec![0_u16; usize::try_from(wanted).ok()?];
+  // SAFETY: The range lies inside the string (0 <= end - wanted < end <=
+  // length) and the buffer holds exactly `wanted` units for the copy.
+  unsafe {
+    CFStringGetCharacters(
+      value.as_concrete_TypeRef(),
+      CFRange {
+        location: end - wanted,
+        length: wanted,
+      },
+      units.as_mut_ptr(),
+    );
+  }
+  // A surrogate pair the cut splits decodes to nothing, not a replacement.
+  let text: String = char::decode_utf16(units).filter_map(Result::ok).collect();
+  let count = text.chars().count();
+  Some(
+    text
+      .chars()
+      .skip(count.saturating_sub(max_characters))
+      .collect(),
+  )
 }
 
 #[cfg(test)]

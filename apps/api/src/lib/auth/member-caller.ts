@@ -39,6 +39,15 @@ export type MemberCaller = Readonly<OrgSettingsForAuth> & {
      * session, which acts as the person directly.
      */
     readonly grantedScopes?: readonly string[];
+    /**
+     * Set only when the server sends a message the member queued, as the
+     * member (`handlers/chat/queue/chat-queue-drain.ts`): the queued message and the
+     * revision the sender read. No request can carry it.
+     */
+    readonly startedFromQueue?: {
+      readonly queuedMessageId: SafeId<"chatMessage">;
+      readonly revision: number;
+    };
   };
   readonly featureAccessSnapshot?: FeatureAccessSnapshot;
   readonly scopedDb: ScopedDb;

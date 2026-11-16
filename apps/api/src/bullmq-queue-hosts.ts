@@ -20,6 +20,7 @@ export const BULLMQ_QUEUE_HOSTS = {
   "flow-run": "api",
   "legal-list-generation-runs": "api",
   "legal-list-verification-runs": "api",
+  "organization-data-exports": "api",
   "push-notifications": "api",
   "report-exports": "api",
   "style-set-package-cleanup": "api",

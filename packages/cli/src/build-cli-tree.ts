@@ -140,44 +140,59 @@ const hasLimitProp = (spec: LeafCommandSpec): boolean => {
 const buildLeafFlags = (
   spec: LeafCommandSpec,
 ): Record<string, OptionalStricliFlag> => {
-  const flags: Record<string, OptionalStricliFlag> = buildCommonFlags();
+  const flags = new Map<string, OptionalStricliFlag>(
+    Object.entries(buildCommonFlags()),
+  );
 
   for (const flagSpec of spec.flags) {
-    flags[flagKey(flagSpec)] = buildFlag(flagSpec);
+    flags.set(flagKey(flagSpec), buildFlag(flagSpec));
   }
 
   // Reserved global flags every command carries (spec S1/S3).
-  flags[RESERVED_FLAG_KEYS.input] = parsedStringFlag(
-    "Full tool-args JSON ('<json>' | - stdin | @file); explicit value flags override matching paths in the JSON",
+  flags.set(
+    RESERVED_FLAG_KEYS.input,
+    parsedStringFlag(
+      "Full tool-args JSON ('<json>' | - stdin | @file); explicit value flags override matching paths in the JSON",
+    ),
   );
-  flags[RESERVED_FLAG_KEYS.noInput] = booleanFlag(
-    "Never prompt; fail closed (exit 7) where a confirmation is required",
-    false,
+  flags.set(
+    RESERVED_FLAG_KEYS.noInput,
+    booleanFlag(
+      "Never prompt; fail closed (exit 7) where a confirmation is required",
+      false,
+    ),
   );
-  flags[RESERVED_FLAG_KEYS.schema] = booleanFlag(
-    "Print this command's input JSON schema and exit",
-    false,
+  flags.set(
+    RESERVED_FLAG_KEYS.schema,
+    booleanFlag("Print this command's input JSON schema and exit", false),
   );
   if (spec.localFileBase64Prop !== undefined) {
-    flags[LOCAL_FILE_FLAG_KEY] = parsedStringFlag(
-      localFileFlagBrief(spec.localFileBase64Prop, spec.inputSchema),
+    flags.set(
+      LOCAL_FILE_FLAG_KEY,
+      parsedStringFlag(
+        localFileFlagBrief(spec.localFileBase64Prop, spec.inputSchema),
+      ),
     );
   }
 
   if (spec.paginated) {
-    flags[RESERVED_FLAG_KEYS.cursor] = parsedStringFlag(
-      "Opaque pagination cursor from a previous page",
+    flags.set(
+      RESERVED_FLAG_KEYS.cursor,
+      parsedStringFlag("Opaque pagination cursor from a previous page"),
     );
     // A per-entry cursor has no single page to follow, so the leaf that
     // carries one does not offer `--all`; see `LeafCommandSpec.followable`.
     if (spec.followable) {
-      flags[RESERVED_FLAG_KEYS.all] = booleanFlag(
-        "Follow cursors and return every page (bounded)",
-        false,
+      flags.set(
+        RESERVED_FLAG_KEYS.all,
+        booleanFlag("Follow cursors and return every page (bounded)", false),
       );
     }
     if (hasLimitProp(spec)) {
-      flags[RESERVED_FLAG_KEYS.limit] = parsedStringFlag("Max items per page");
+      flags.set(
+        RESERVED_FLAG_KEYS.limit,
+        parsedStringFlag("Max items per page"),
+      );
     }
   }
 
@@ -185,13 +200,13 @@ const buildLeafFlags = (
   // leaf (per-target destructiveness, e.g. `capability write`) gets it so the
   // caller can pre-approve the server's confirmation_required gate.
   if (spec.destructive || spec.confirmPassthrough === true) {
-    flags[RESERVED_FLAG_KEYS.yes] = booleanFlag(
-      "Skip the destructive-op confirmation prompt",
-      false,
+    flags.set(
+      RESERVED_FLAG_KEYS.yes,
+      booleanFlag("Skip the destructive-op confirmation prompt", false),
     );
   }
 
-  return flags;
+  return Object.fromEntries(flags);
 };
 
 const leafBrief = (spec: LeafCommandSpec): string => {
@@ -331,9 +346,9 @@ const capabilityInputHint = (spec: CapabilityLeafSpec): string => {
 /**
  * The command's `--help` brief. The catalog's authored description is the whole
  * point of the single-registry design, so it wins outright; the id-derived line
- * survives only as the fallback for a capability that has not been given a
- * description yet (a shrinking set, listed by id in
- * apps/api/capability-description-ledger.json).
+ * survives only as the fallback for a catalog entry without one, which
+ * apps/api/scripts/capability-description-guard.ts rejects in the committed
+ * catalog.
  */
 const capabilityLeafBrief = (spec: CapabilityLeafSpec): string => {
   const hint = capabilityInputHint(spec);
@@ -346,38 +361,50 @@ const capabilityLeafBrief = (spec: CapabilityLeafSpec): string => {
 const buildCapabilityLeafFlags = (
   spec: CapabilityLeafSpec,
 ): Record<string, OptionalStricliFlag> => {
-  const flags: Record<string, OptionalStricliFlag> = buildCommonFlags();
+  const flags = new Map<string, OptionalStricliFlag>(
+    Object.entries(buildCommonFlags()),
+  );
 
   for (const flagSpec of spec.flags) {
-    flags[flagKey(flagSpec)] = buildFlag(flagSpec);
+    flags.set(flagKey(flagSpec), buildFlag(flagSpec));
   }
 
-  flags[RESERVED_FLAG_KEYS.input] = parsedStringFlag(
-    "Full capability input JSON ({ body?, params?, query? }: '<json>' | - stdin | @file); explicit value flags override matching paths in the JSON",
+  flags.set(
+    RESERVED_FLAG_KEYS.input,
+    parsedStringFlag(
+      "Full capability input JSON ({ body?, params?, query? }: '<json>' | - stdin | @file); explicit value flags override matching paths in the JSON",
+    ),
   );
-  flags[RESERVED_FLAG_KEYS.noInput] = booleanFlag(
-    "Never prompt; fail closed (exit 7) where a confirmation is required",
-    false,
+  flags.set(
+    RESERVED_FLAG_KEYS.noInput,
+    booleanFlag(
+      "Never prompt; fail closed (exit 7) where a confirmation is required",
+      false,
+    ),
   );
-  flags[RESERVED_FLAG_KEYS.schema] = booleanFlag(
-    "Print this command's input JSON schema and exit",
-    false,
+  flags.set(
+    RESERVED_FLAG_KEYS.schema,
+    booleanFlag("Print this command's input JSON schema and exit", false),
   );
   if (spec.access === "write") {
-    flags[RESERVED_FLAG_KEYS.dryRun] = booleanFlag(
-      "Validate the input server-side and return without executing (validate_only)",
-      false,
+    flags.set(
+      RESERVED_FLAG_KEYS.dryRun,
+      booleanFlag(
+        "Validate the input server-side and return without executing (validate_only)",
+        false,
+      ),
     );
   }
 
   if (spec.paginated) {
-    flags[RESERVED_FLAG_KEYS.cursor] = parsedStringFlag(
-      "Opaque pagination cursor from a previous page",
+    flags.set(
+      RESERVED_FLAG_KEYS.cursor,
+      parsedStringFlag("Opaque pagination cursor from a previous page"),
     );
-    flags[RESERVED_FLAG_KEYS.limit] = parsedStringFlag("Max items per page");
-    flags[RESERVED_FLAG_KEYS.all] = booleanFlag(
-      "Follow cursors and return every page (bounded)",
-      false,
+    flags.set(RESERVED_FLAG_KEYS.limit, parsedStringFlag("Max items per page"));
+    flags.set(
+      RESERVED_FLAG_KEYS.all,
+      booleanFlag("Follow cursors and return every page (bounded)", false),
     );
   }
 
@@ -385,13 +412,13 @@ const buildCapabilityLeafFlags = (
   // accepts --yes (pre-approve) alongside the TTY prompt/retry flow; a read has
   // nothing to confirm.
   if (spec.access === "write") {
-    flags[RESERVED_FLAG_KEYS.yes] = booleanFlag(
-      "Skip the destructive-op confirmation prompt",
-      false,
+    flags.set(
+      RESERVED_FLAG_KEYS.yes,
+      booleanFlag("Skip the destructive-op confirmation prompt", false),
     );
   }
 
-  return flags;
+  return Object.fromEntries(flags);
 };
 
 const buildCapabilityLeafCommand = (
@@ -475,10 +502,12 @@ const buildGeneratedRoutes = (
   if (node.kind !== "route") {
     return {};
   }
-  const routes: Record<string, RoutingTarget> = {};
-  for (const [name, child] of Object.entries(node.children)) {
-    routes[name] = buildRouteNode(child, routeBrief({ name, node: child }));
-  }
+  const routes = Object.fromEntries(
+    Object.entries(node.children).map(([name, child]) => [
+      name,
+      buildRouteNode(child, routeBrief({ name, node: child })),
+    ]),
+  );
   return routes;
 };
 
@@ -508,10 +537,12 @@ const buildResourceNode = (
   if (node.kind === "leaf") {
     return buildResourceLeaf(node.spec);
   }
-  const routes: Record<string, RoutingTarget> = {};
-  for (const [name, child] of Object.entries(node.children)) {
-    routes[name] = buildResourceNode(child, resourceBrief(name, child));
-  }
+  const routes = Object.fromEntries(
+    Object.entries(node.children).map(([name, child]) => [
+      name,
+      buildResourceNode(child, resourceBrief(name, child)),
+    ]),
+  );
   return buildRouteMap({ docs: { brief }, routes });
 };
 
@@ -523,12 +554,14 @@ const resourceBrief = (name: string, node: ResourceNode): string =>
  * `RouteMap` for the reserved `reference` top-level command (spec S5.4).
  */
 const buildResourceRoutes = (node: ResourceNode): RouteMap<Context> => {
-  const routes: Record<string, RoutingTarget> = {};
-  if (node.kind === "route") {
-    for (const [name, child] of Object.entries(node.children)) {
-      routes[name] = buildResourceNode(child, resourceBrief(name, child));
-    }
-  }
+  const routes = Object.fromEntries(
+    node.kind === "route"
+      ? Object.entries(node.children).map(([name, child]) => [
+          name,
+          buildResourceNode(child, resourceBrief(name, child)),
+        ])
+      : [],
+  );
   return buildRouteMap({
     docs: { brief: "Read the server's static reference resources" },
     routes,

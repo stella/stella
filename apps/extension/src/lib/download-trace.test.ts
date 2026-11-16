@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { downloadAction } from "./download-guard";
+import { downloadAction, NO_DOWNLOAD_RECEIVER } from "./download-guard";
 import {
   type DownloadEvidence,
   type DownloadOwner,
@@ -289,10 +289,19 @@ describe("what happens to each owner while stella controls a tab", () => {
     }
   });
 
+  const desktopTakes = {
+    chatId: "thread-1",
+    type: "desktop",
+    verdict: { type: "deliver" },
+  } as const;
+
   test("what may be the user's goes through", () => {
     for (const owner of [owners.ambiguous, owners.user]) {
       for (const state of ["in_progress", "interrupted", "complete"] as const) {
-        expect(downloadAction(owner, state)).toBe("allow");
+        expect(downloadAction(owner, state, NO_DOWNLOAD_RECEIVER)).toBe(
+          "allow",
+        );
+        expect(downloadAction(owner, state, desktopTakes)).toBe("allow");
       }
     }
   });
@@ -303,9 +312,34 @@ describe("what happens to each owner while stella controls a tab", () => {
       owners.unexplained,
       owners.untraceable,
     ]) {
-      expect(downloadAction(owner, "in_progress")).toBe("cancel");
-      expect(downloadAction(owner, "interrupted")).toBe("cancel");
-      expect(downloadAction(owner, "complete")).toBe("keep-and-flag");
+      expect(downloadAction(owner, "in_progress", NO_DOWNLOAD_RECEIVER)).toBe(
+        "cancel",
+      );
+      expect(downloadAction(owner, "interrupted", NO_DOWNLOAD_RECEIVER)).toBe(
+        "cancel",
+      );
+      expect(downloadAction(owner, "complete", NO_DOWNLOAD_RECEIVER)).toBe(
+        "keep-and-flag",
+      );
+    }
+  });
+
+  test("only a download traced to chat's tabs reaches a desktop chat", () => {
+    expect(downloadAction(owners.contained, "in_progress", desktopTakes)).toBe(
+      "deliver",
+    );
+    expect(
+      downloadAction(owners.contained, "in_progress", {
+        ...desktopTakes,
+        verdict: { reason: "not-pdf", type: "stop" },
+      }),
+    ).toBe("refuse");
+    // Chrome skipped the hold: the file is already where Chrome put it.
+    expect(downloadAction(owners.contained, "complete", desktopTakes)).toBe(
+      "keep-and-flag",
+    );
+    for (const owner of [owners.unexplained, owners.untraceable]) {
+      expect(downloadAction(owner, "in_progress", desktopTakes)).toBe("cancel");
     }
   });
 });
@@ -433,5 +467,64 @@ describe("the navigation window", () => {
       url: FILE_URL,
     });
     expect(session["browserRecentNavigations"]).toBe(undefined);
+  });
+});
+
+describe("frames of tabs that close", () => {
+  const CLOSING_TAB = 5;
+
+  /**
+   * Chrome lists the closing tab, then answers its frame lookup with null,
+   * as it does for a tab id that is no longer valid. `stillOpen` says
+   * whether the tab is in fact still there when asked again.
+   */
+  const installClosingTab = ({ stillOpen }: { stillOpen: boolean }): void => {
+    Object.defineProperty(globalThis, "chrome", {
+      configurable: true,
+      value: {
+        runtime: { id: "stella-extension" },
+        storage: { session: { get: async () => ({}) } },
+        tabs: {
+          query: async () => [
+            { id: USER_TAB },
+            { id: CONTROLLED_TAB },
+            { id: CLOSING_TAB },
+          ],
+          get: async (tabId: number) => {
+            if (tabId === CLOSING_TAB && !stillOpen) {
+              throw new Error(`No tab with id: ${String(tabId)}.`);
+            }
+            return { id: tabId };
+          },
+        },
+        webNavigation: {
+          getAllFrames: async ({ tabId }: { tabId: number }) => {
+            if (tabId === CLOSING_TAB) {
+              return null;
+            }
+            return [
+              {
+                frameId: 0,
+                url:
+                  tabId === CONTROLLED_TAB
+                    ? "https://portal.example.com/"
+                    : "https://drive.google.com/",
+              },
+            ];
+          },
+        },
+      },
+    });
+  };
+
+  const userBlob = download("blob:https://drive.google.com/7f3c");
+  test("a tab closed while a download starts leaves the user's own download theirs", async () => {
+    installClosingTab({ stillOpen: false });
+    expect(await tracedOwnerOf(userBlob, owners, clock)).toBe("user");
+  });
+
+  test("an open tab whose frames Chrome cannot list still leaves the download unexplained", async () => {
+    installClosingTab({ stillOpen: true });
+    expect(await tracedOwnerOf(userBlob, owners, clock)).toBe("unexplained");
   });
 });

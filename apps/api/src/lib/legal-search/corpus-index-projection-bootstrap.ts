@@ -22,6 +22,7 @@ import {
 import { deriveCorpusIndexProjectionDescriptor } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import {
   buildCorpusIndexProjectionDesiredStateValues,
+  CANONICAL_PROJECTION_EPOCH_KEEPS_FRESHNESS,
   caseLawProjectionInputFromCanonical,
   type CorpusIndexProjectionSubject,
   LEGISLATION_PROJECTION_CANONICAL_COLUMNS,
@@ -139,7 +140,10 @@ const setZeroCaseLawProjectionEpochs = async (
   }
   await tx
     .update(caseLawDecisions)
-    .set({ projectionEpoch: 1n })
+    .set({
+      projectionEpoch: 1n,
+      updatedAt: CANONICAL_PROJECTION_EPOCH_KEEPS_FRESHNESS.case_law,
+    })
     .where(
       and(
         inArray(caseLawDecisions.id, entityIds),
@@ -157,7 +161,10 @@ const setZeroLegislationProjectionEpochs = async (
   }
   await tx
     .update(legislationDocuments)
-    .set({ projectionEpoch: 1n })
+    .set({
+      projectionEpoch: 1n,
+      updatedAt: CANONICAL_PROJECTION_EPOCH_KEEPS_FRESHNESS.legislation,
+    })
     .where(
       and(
         inArray(legislationDocuments.id, entityIds),

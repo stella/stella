@@ -3,6 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "indexes-report-exports-workspace-requester-created-idx",
   revision: 650,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     {

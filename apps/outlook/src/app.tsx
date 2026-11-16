@@ -1,29 +1,20 @@
-import { useState } from "react";
-
 import { useTranslations } from "use-intl";
 
-import { toSafeId } from "@stll/api-contract/safe-id";
-import { Button } from "@stll/ui/components/button";
-import { LogOutIcon, RefreshCcwIcon } from "@stll/ui/icons";
+import { Skeleton } from "@stll/ui/components/skeleton";
 
-import { runDraftChecks } from "@/checks";
-import { ActionPanel } from "@/components/action-panel";
 import { AppHeader } from "@/components/app-header";
-import { EmailSnapshotPanel } from "@/components/email-snapshot-panel";
-import { MatterPanel } from "@/components/matter-panel";
+import { AssistSection } from "@/components/assist-section";
+import { FilingSection } from "@/components/filing-section";
+import { MailContext } from "@/components/mail-context";
 import { Notice } from "@/components/notice";
 import type { Translate } from "@/components/panel";
-import { SavePanel } from "@/components/save-panel";
 import { SignInPanel } from "@/components/sign-in-panel";
-import { useAIDraft } from "@/hooks/use-ai-draft";
-import { useAISummary } from "@/hooks/use-ai-summary";
+import { useAssist } from "@/hooks/use-assist";
 import { useFileEmail } from "@/hooks/use-file-email";
 import { useMailSnapshot } from "@/hooks/use-mail-snapshot";
 import { useOutlookAuth } from "@/hooks/use-outlook-auth";
 import { useWorkspaceSelection } from "@/hooks/use-workspace-selection";
 import { useWorkspaces } from "@/hooks/use-workspaces";
-import { placeDraft } from "@/outlook";
-import type { DraftPlacement } from "@/outlook";
 import type { MailSnapshot } from "@/types";
 
 export const App = () => {
@@ -36,15 +27,6 @@ export const App = () => {
 
   return <AuthedApp onSignOut={signOut} t={t} />;
 };
-
-type DraftEdit = {
-  source: ReturnType<typeof useAIDraft>["state"] | null;
-  value: string;
-};
-
-type DraftPlacementState =
-  | { source: string; type: "placed"; value: DraftPlacement }
-  | { message: string; source: string; type: "error" };
 
 const AuthedApp = ({
   onSignOut,
@@ -70,38 +52,9 @@ const AuthedApp = ({
 
   return (
     <div className="min-h-dvh">
-      <AppHeader
-        action={
-          <div className="flex items-center gap-1">
-            <Button
-              aria-label={t("refresh")}
-              onClick={refresh}
-              size="icon"
-              variant="ghost"
-            >
-              <RefreshCcwIcon />
-            </Button>
-            <Button
-              aria-label={t("signOut")}
-              onClick={onSignOut}
-              size="icon"
-              variant="ghost"
-            >
-              <LogOutIcon />
-            </Button>
-          </div>
-        }
-        subtitle={snapshot ? modeLabel(snapshot.mode, t) : undefined}
-        title={t("stellaForOutlook")}
-      />
-
-      <div className="flex flex-col gap-4 p-4">
-        {loadState.type === "loading" ? (
-          <div className="bg-muted/40 border-border flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm">
-            <RefreshCcwIcon className="size-4 animate-spin" />
-            {t("loading")}
-          </div>
-        ) : null}
+      <AppHeader onRefresh={refresh} onSignOut={onSignOut} />
+      <div className="flex flex-col gap-6 px-3 pt-1 pb-6">
+        {loadState.type === "loading" ? <PaneSkeleton t={t} /> : null}
         {loadState.type === "error" ? (
           <Notice role="alert" title={t("loadError")} tone="risk">
             {loadState.message}
@@ -110,7 +63,7 @@ const AuthedApp = ({
         {snapshot ? (
           <MessageApp
             isCurrent={isCurrent}
-            key={snapshotKey(snapshot)}
+            key={snapshot.itemInstanceKey}
             loadLatest={loadLatest}
             snapshot={snapshot}
             t={t}
@@ -122,6 +75,21 @@ const AuthedApp = ({
     </div>
   );
 };
+
+/** The signed-in pane's shape while the email loads: context, then a matter row. */
+const PaneSkeleton = ({ t }: { t: Translate }) => (
+  <div aria-label={t("loading")} className="flex flex-col gap-6" role="status">
+    <div className="flex flex-col gap-1.5 px-1">
+      <Skeleton className="h-4 w-4/5" />
+      <Skeleton className="h-3 w-1/2" />
+    </div>
+    <div className="flex flex-col gap-2">
+      <Skeleton className="mx-1 h-3.5 w-16" />
+      <Skeleton className="h-15 w-full rounded-xl" />
+      <Skeleton className="h-10 w-full rounded-lg" />
+    </div>
+  </div>
+);
 
 const MessageApp = ({
   isCurrent,
@@ -142,14 +110,18 @@ const MessageApp = ({
     filteredWorkspaces,
     query,
     selectedWorkspace,
-    selectedWorkspaceId,
     setQuery,
     setSelectedWorkspaceId,
     suggestedWorkspaceId,
   } = useWorkspaceSelection({ snapshot, workspaces });
+  const suggestedWorkspace =
+    workspaces.find((workspace) => workspace.id === suggestedWorkspaceId) ??
+    null;
+  // The matter in view: the one chosen, else the one the email points to.
+  // Filing still waits for the user's click on it.
+  const target = selectedWorkspace ?? suggestedWorkspace;
 
-  const summary = useAISummary(t("saveErrorFallback"));
-  const aiDraft = useAIDraft(t("saveErrorFallback"));
+  const assist = useAssist(t("aiErrorFallback"));
   const fileEmail = useFileEmail({
     attachmentError: t("attachmentReadError"),
     errorFallback: t("saveErrorFallback"),
@@ -159,109 +131,49 @@ const MessageApp = ({
     tooLarge: t("emailTooLarge"),
   });
 
-  const [draftIntent, setDraftIntent] = useState("");
-  const [draftEdit, setDraftEdit] = useState<DraftEdit | null>(null);
-  const [placementState, setPlacementState] =
-    useState<DraftPlacementState | null>(null);
-
-  const draftSource = aiDraft.state.type === "ready" ? aiDraft.state : null;
-  const draft =
-    draftEdit?.source === draftSource
-      ? draftEdit.value
-      : (draftSource?.draft ?? "");
-  const draftPlacement =
-    placementState?.source === draft && placementState.type === "placed"
-      ? placementState.value
-      : null;
-  const draftPlacementError =
-    placementState?.source === draft && placementState.type === "error"
-      ? placementState.message
-      : null;
-  const checks = runDraftChecks({ selectedWorkspaceId, snapshot, t });
-
-  const handlePlaceDraft = () => {
-    if (!draft) {
-      return;
-    }
-    placeDraft(draft)
-      .then((value) =>
-        setPlacementState({ source: draft, type: "placed", value }),
-      )
-      .catch((error: unknown) => {
-        setPlacementState({
-          message:
-            error instanceof Error ? error.message : t("draftPlacementError"),
-          source: draft,
-          type: "error",
-        });
-      });
-  };
-
-  const handleSave = () => {
-    if (!selectedWorkspaceId) {
-      return;
-    }
-    fileEmail.save({
-      isCurrent,
-      loadLatest,
-      snapshot,
-      workspaceId: toSafeId<"workspace">(selectedWorkspaceId),
-    });
-  };
-
   return (
     <>
-      <EmailSnapshotPanel snapshot={snapshot} t={t} />
-      <MatterPanel
-        onQueryChange={setQuery}
-        onSelect={setSelectedWorkspaceId}
-        query={query}
-        selectedWorkspaceId={selectedWorkspaceId}
-        suggestedWorkspaceId={suggestedWorkspaceId}
-        t={t}
-        workspaceError={workspaceError}
-        workspaces={filteredWorkspaces}
-      />
-      <ActionPanel
-        canSummarize={snapshot.bodyText.trim().length > 0}
-        checks={checks}
-        draft={draft}
-        draftIntent={draftIntent}
-        draftPlacement={draftPlacement}
-        draftPlacementError={draftPlacementError}
-        draftState={aiDraft.state}
-        onDraftChange={(value) => setDraftEdit({ source: draftSource, value })}
-        onDraftReply={() =>
-          aiDraft.draftReply({ intent: draftIntent, snapshot })
+      <MailContext snapshot={snapshot} t={t} />
+      <FilingSection
+        matches={filteredWorkspaces}
+        onChoose={setSelectedWorkspaceId}
+        onFile={(workspace) =>
+          fileEmail.save({
+            isCurrent,
+            loadLatest,
+            snapshot,
+            workspace,
+          })
         }
-        onIntentChange={setDraftIntent}
-        onPlaceDraft={handlePlaceDraft}
-        onSummarize={() => summary.summarize({ text: snapshot.bodyText })}
-        summaryState={summary.state}
-        t={t}
-      />
-      <SavePanel
-        onSave={handleSave}
+        onQueryChange={setQuery}
+        query={query}
         saveState={fileEmail.state}
-        selectedWorkspace={selectedWorkspace}
         t={t}
+        target={target}
+        targetIsSuggestion={
+          selectedWorkspace === null && suggestedWorkspace !== null
+        }
+        workspaceError={workspaceError}
+      />
+      <AssistSection
+        isBusy={assist.isBusy}
+        matter={target}
+        onAsk={({ instruction, kind, prompt }) =>
+          assist.ask({
+            instruction,
+            kind,
+            prompt,
+            snapshot,
+            workspaceId: target?.id ?? null,
+          })
+        }
+        onRetry={(turnId) =>
+          assist.retry(turnId, { snapshot, workspaceId: target?.id ?? null })
+        }
+        snapshot={snapshot}
+        t={t}
+        turns={assist.turns}
       />
     </>
   );
-};
-
-const snapshotKey = (snapshot: MailSnapshot): string =>
-  snapshot.itemInstanceKey;
-
-const modeLabel = (
-  mode: "browser" | "compose" | "read",
-  t: Translate,
-): string => {
-  if (mode === "compose") {
-    return t("composeMode");
-  }
-  if (mode === "read") {
-    return t("readMode");
-  }
-  return t("browserMode");
 };

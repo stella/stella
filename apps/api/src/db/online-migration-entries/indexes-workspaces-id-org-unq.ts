@@ -7,6 +7,7 @@ import {
 export default {
   id: "indexes-workspaces-id-org-unq",
   revision: 550,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     onlineUniqueIndexDefinition(

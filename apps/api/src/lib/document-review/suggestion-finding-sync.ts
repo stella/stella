@@ -15,20 +15,14 @@ import { panic } from "better-result";
 import { and, asc, eq, inArray } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
-import {
-  documentReviewFindingDecisions,
-  documentReviewFindings,
-} from "@/api/db/schema";
+import { documentReviewFindings } from "@/api/db/schema";
 import type { DocxSuggestionStatus } from "@/api/db/schema";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { appendMissingBaselineDecisions } from "@/api/lib/document-review/finding-decision-history";
 import {
   DOCUMENT_REVIEW_APPLICATION_STATUS,
   DOCUMENT_REVIEW_DECISION,
-  DOCUMENT_REVIEW_FINDING_DECISION,
 } from "@/api/lib/document-review/run-contract";
 import type {
   DocumentReviewApplicationStatus,
@@ -151,16 +145,7 @@ export const syncReviewFindingsForSuggestions = async ({
     return;
   }
 
-  const now = new Date();
-  const update = findingDecisionUpdate({ status, userId, now });
-  // The same history `PATCH /findings/:id` appends: a decision taken on the
-  // suggestion surface is the same decision. A finding decided before its
-  // history began gets that earlier decision as its baseline first, from the
-  // row as the lock read it, then the change itself.
-  const changed = findings
-    .filter((finding) => finding.decision !== update.decision)
-    .map((finding) => finding.id);
-  await appendMissingBaselineDecisions(tx, workspaceId, changed);
+  const update = findingDecisionUpdate({ status, userId, now: new Date() });
   await tx
     .update(documentReviewFindings)
     .set(update)
@@ -173,19 +158,6 @@ export const syncReviewFindingsForSuggestions = async ({
         eq(documentReviewFindings.workspaceId, workspaceId),
       ),
     );
-  if (changed.length > 0) {
-    await tx.insert(documentReviewFindingDecisions).values(
-      changed.map((findingId) => ({
-        id: createSafeId<"documentReviewFindingDecision">(),
-        workspaceId,
-        findingId,
-        decision: DOCUMENT_REVIEW_FINDING_DECISION[update.decision],
-        reason: null,
-        actorId: userId,
-        createdAt: now,
-      })),
-    );
-  }
 
   // The same audit shape `PATCH /findings/:id` writes, one event per finding:
   // one reviewer decision must read the same way in the log whichever surface

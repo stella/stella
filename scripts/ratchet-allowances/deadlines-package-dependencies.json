@@ -1,5 +1,0 @@
-{
-  "metric": "direct-third-party-declarations",
-  "delta": 5,
-  "reason": "The new deadlines package declares @stll/time for Temporal date arithmetic, better-result for typed failures, date-holidays for maintained public holiday data, bun-types for its Bun tests, and fast-check for property tests. @stll/time is a published dependency because this repository no longer contains a time workspace. Only date-holidays introduces a new runtime library to the repository; the other dependencies are already used."
-}

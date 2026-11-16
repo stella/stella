@@ -51,16 +51,29 @@ export type RetainableToolResult = {
   toolName: string;
 };
 
+export type SupersededToolResultsOptions = {
+  /**
+   * Whether the newest result of each tool stays whole. A conversation that
+   * can still continue keeps it, since its next step reads it; a finished
+   * one (a sub-agent run that returned its answer) has no next step, so
+   * every result is kept as its projection.
+   */
+  keepNewest: boolean;
+};
+
 /**
  * The results a newer result of the same tool supersedes, each with the
  * projection to keep in its place. `results` are in turn order; `read`
  * returns `null` for an item that is not a tool result. The newest result of
- * each tool that its policy projects stays whole.
+ * each tool that its policy projects stays whole unless `keepNewest` is
+ * false.
  */
 export const supersededToolResults = <T>(
   results: readonly T[],
   read: (item: T) => RetainableToolResult | null,
+  options?: SupersededToolResultsOptions,
 ): Map<T, unknown> => {
+  const keepNewest = options?.keepNewest ?? true;
   const projected: { item: T; projection: unknown; toolName: string }[] = [];
   for (const item of results) {
     const result = read(item);
@@ -82,7 +95,10 @@ export const supersededToolResults = <T>(
   }
   return new Map(
     projected
-      .filter(({ item, toolName }) => newestByTool.get(toolName) !== item)
+      .filter(
+        ({ item, toolName }) =>
+          !keepNewest || newestByTool.get(toolName) !== item,
+      )
       .map(({ item, projection }) => [item, projection] as const),
   );
 };

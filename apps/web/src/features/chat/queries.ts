@@ -8,6 +8,7 @@ import type {
 import { panic } from "better-result";
 
 import type { ReasoningEffort } from "@stll/ai-catalog";
+import { RESOURCE_TYPE } from "@stll/api-contract";
 import type { ChatThreadPinState } from "@stll/api-contract/chat";
 import {
   DOCX_SUGGESTION_SURFACE,
@@ -31,6 +32,7 @@ import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 import { invalidateWorkspaceActivity } from "@/lib/workspaces/queries";
 
 import { chatKeys, getChatRuntimeContextKind } from "./chat-query-contract";
@@ -55,11 +57,62 @@ const readChatTimestamp = (value: string): Date =>
   parseDeterministicDate(value) ??
   panic("The chat API returned an invalid timestamp");
 
+type SerializedSubagentPart = Extract<
+  SerializedChatMessage["parts"][number],
+  { type: "subagent" }
+>;
+type SubagentChatPart = Extract<
+  PersistedChatMessage["parts"][number],
+  { type: "subagent" }
+>;
+type SerializedChildMessage =
+  SerializedSubagentPart["subagent"]["messages"][number];
+type ChildMessage = SubagentChatPart["subagent"]["messages"][number];
+
+/** A sub-agent part as the page holds it: each of its child's messages and
+ *  parts read back as a message's own are. */
+const deserializeSubagentPart = (
+  part: SerializedSubagentPart,
+): SubagentChatPart => ({
+  ...part,
+  subagent: {
+    ...part.subagent,
+    messages: part.subagent.messages.map(deserializeChildMessage),
+  },
+});
+
+const deserializeChildMessage = ({
+  createdAt,
+  parts,
+  ...message
+}: SerializedChildMessage): ChildMessage => ({
+  ...message,
+  ...(createdAt === undefined
+    ? {}
+    : { createdAt: readChatTimestamp(createdAt) }),
+  parts: parts.map(deserializeChildPart),
+});
+
+const deserializeChildPart = (
+  part: SerializedChildMessage["parts"][number],
+): ChildMessage["parts"][number] => {
+  if (part.type === "subagent") {
+    return deserializeSubagentPart(part);
+  }
+  if (part.type !== "tool-result") {
+    return part;
+  }
+  const { createdAt, ...rest } = part;
+  return createdAt === undefined
+    ? rest
+    : { ...rest, createdAt: readChatTimestamp(createdAt) };
+};
+
 const deserializeChatPart = (
   part: SerializedChatMessage["parts"][number],
 ): PersistedChatMessage["parts"][number] => {
   if (part.type === "subagent") {
-    return panic("A persisted chat message contains a subagent part");
+    return deserializeSubagentPart(part);
   }
   if (part.type !== "tool-result") {
     return part;
@@ -354,14 +407,16 @@ const fetchFileChatThread = async ({
   fieldId,
   workspaceId,
 }: FileChatThreadKey): Promise<FileChatThreadFetchResult> => {
-  const response = await api.chat
-    .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-    ["file-thread"].get({
-      query: {
-        entityId: toSafeId<"entity">(entityId),
-        fieldId: toSafeId<"field">(fieldId),
-      },
-    });
+  const workspaceApi = api.chat.workspaces({
+    workspaceId: toSafeId<"workspace">(workspaceId),
+  });
+
+  const response = await workspaceApi["file-thread"].get({
+    query: {
+      entityId: toSafeId<"entity">(entityId),
+      fieldId: toSafeId<"field">(fieldId),
+    },
+  });
 
   const data = unwrapApiResponse(response);
 
@@ -751,13 +806,15 @@ export const materializeFileChatThread = async ({
   hasDocxEditSurface,
   key,
 }: MaterializeFileChatThreadArgs): Promise<FileChatThreadBinding> => {
-  const response = await api.chat
-    .workspaces({ workspaceId: toSafeId<"workspace">(key.workspaceId) })
-    ["file-thread"].post({
-      entityId: toSafeId<"entity">(key.entityId),
-      fieldId: toSafeId<"field">(key.fieldId),
-      threadId: toSafeId<"chatThread">(draftThreadId),
-    });
+  const workspaceApi = api.chat.workspaces({
+    workspaceId: toSafeId<"workspace">(key.workspaceId),
+  });
+
+  const response = await workspaceApi["file-thread"].post({
+    entityId: toSafeId<"entity">(key.entityId),
+    fieldId: toSafeId<"field">(key.fieldId),
+    threadId: toSafeId<"chatThread">(draftThreadId),
+  });
 
   const data = unwrapApiResponse(response);
   const threadId = toChatThreadId(data.threadId);
@@ -1021,14 +1078,16 @@ type ChatThreadSuggestedPromptsFetched = {
 const fetchThreadSuggestedPrompts = async (
   threadRef: ChatThreadRef,
 ): Promise<ChatThreadSuggestedPromptsFetched> => {
-  const response = await api.chat
-    .threads({ threadId: toSafeId<"chatThread">(threadRef.threadId) })
-    ["suggested-prompts"].post(undefined, {
-      query:
-        threadRef.scope === "workspace"
-          ? { workspaceId: toSafeId<"workspace">(threadRef.workspaceId) }
-          : {},
-    });
+  const threadApi = api.chat.threads({
+    threadId: toSafeId<"chatThread">(threadRef.threadId),
+  });
+
+  const response = await threadApi["suggested-prompts"].post(undefined, {
+    query:
+      threadRef.scope === "workspace"
+        ? { workspaceId: toSafeId<"workspace">(threadRef.workspaceId) }
+        : {},
+  });
 
   if (response.error) {
     getAnalytics().captureError(toAPIError(response.error), {
@@ -1093,16 +1152,21 @@ const fetchChatLocalRunners = async (signal: AbortSignal) =>
   unwrapApiResponse(await api.chat["local-runners"].get({ fetch: { signal } }));
 
 /**
- * The member's computers and the harnesses a turn can run on. Read when the
- * Models submenu opens, like the model options, and kept briefly: a computer
- * signing in or reaching a limit shows on the next open.
+ * The member's computers, what each can run and the folders linked on them.
+ * Read when the Models submenu opens, like the model options, and kept
+ * briefly: a computer signing in or reaching a limit shows on the next open.
+ * The computers report themselves over their own sockets; the member's one
+ * write here, allowing a linked folder, refreshes the read.
  */
 export const localRunnersOptions = (activeOrganizationId: string) =>
-  queryOptions({
-    queryKey: chatKeys.localRunners(activeOrganizationId),
-    staleTime: 30_000,
-    queryFn: async ({ signal }) => await fetchChatLocalRunners(signal),
-  });
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: chatKeys.localRunners(activeOrganizationId),
+      staleTime: 30_000,
+      queryFn: async ({ signal }) => await fetchChatLocalRunners(signal),
+    }),
+    { resources: [RESOURCE_TYPE.USER], scope: { type: "organization" } },
+  );
 
 export const groupedChatThreadsOptions = ({
   activeOrganizationId,

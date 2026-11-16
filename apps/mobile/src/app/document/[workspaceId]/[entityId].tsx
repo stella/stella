@@ -293,6 +293,7 @@ const OpenedDocument = ({
           dom={{ style: { flex: 1 } }}
           editable={editing.canEdit}
           // A new file, or a reload that drops what was typed, remounts it.
+          fileName={file.fileName}
           key={`${opened.uri}#${String(editing.revision)}`}
           kind={file.viewer}
           locale={locale}

@@ -212,6 +212,8 @@ export const AssistantMessageSchema = v.object({
   parent_tool_use_id: ParentToolUseId,
   /** Set on the synthetic message an API failure produces. */
   error: v.optional(v.string()),
+  /** The message's entry in the session's transcript. */
+  uuid: v.optional(v.string()),
 });
 
 const TextBlockSchema = v.object({
@@ -236,7 +238,34 @@ export const UserMessageSchema = v.object({
     ]),
   }),
   parent_tool_use_id: ParentToolUseId,
+  /** The id a message written to stdin carried, on its echo. */
+  uuid: v.optional(v.string()),
+  /**
+   * Set on the echo of a message written to stdin
+   * (`--replay-user-messages`), once the CLI took it into the conversation.
+   */
+  isReplay: v.optional(v.boolean()),
+  /**
+   * Why a tool call in this message did not run, by tool use id: a call cut
+   * off by an interrupt or a new message is `cancelled` or `interrupted`,
+   * which is not the tool failing.
+   */
+  tool_result_meta: v.optional(
+    v.array(
+      v.object({
+        id: v.string(),
+        non_execution_kind: v.nullish(v.string()),
+      }),
+    ),
+  ),
 });
+
+/** The kinds of a call the harness did not run that a stop or a new message
+ *  caused. */
+export const CLAUDE_STOPPED_TOOL_KINDS: ReadonlySet<string> = new Set([
+  "cancelled",
+  "interrupted",
+]);
 
 export const ResultMessageSchema = v.object({
   type: v.literal("result"),
@@ -262,6 +291,17 @@ export const ApiRetryMessageSchema = v.object({
   attempt: v.number(),
   max_retries: v.number(),
   error: v.string(),
+});
+
+/**
+ * The turn was retried once on the fallback model after the asked one
+ * refused. `local`: only a subagent's response came from the fallback, and
+ * the main thread's model is unchanged; an older CLI leaves `scope` out,
+ * which is the main thread.
+ */
+export const ModelRefusalFallbackSchema = v.object({
+  fallback_model: v.string(),
+  scope: v.optional(v.picklist(["session", "local"])),
 });
 
 export const StreamEventMessageSchema = v.object({
@@ -327,9 +367,38 @@ export const CLAUDE_CONTROL_REQUESTS = {
 } as const;
 export type ClaudeControlRequestSubtype = keyof typeof CLAUDE_CONTROL_REQUESTS;
 
+/**
+ * When the CLI takes a message written while a turn runs. `next`: at the
+ * agent's next step, after the tool call that runs ends, the way a Codex
+ * steer is taken, so a steer behaves the same on both harnesses. Not `now`,
+ * which takes it at once by cancelling the running tool call (and, unless
+ * they are moved to the background first, running subagents), leaving a
+ * command or a write half done; a member who wants the step cut presses
+ * Stop. Not omitted: without it the CLI defaults to `later`, which holds the
+ * message until the turn ends, so the turn would never take it.
+ */
+export const CLAUDE_STEER_PRIORITY = "next";
+
 /** The control requests Stella sends the CLI. */
 export type ClaudeHostControlRequest =
-  "initialize" | "interrupt" | "get_usage" | "mcp_set_servers";
+  | "initialize"
+  | "interrupt"
+  | "get_usage"
+  | "mcp_set_servers"
+  | "set_permission_mode"
+  | "stop_task";
+
+/**
+ * The CLI's whole set of live background tasks, sent whenever it changes; it
+ * replaces the set held before. Per process: a new process starts empty.
+ */
+export const BackgroundTasksChangedSchema = v.object({
+  subtype: v.literal("background_tasks_changed"),
+  tasks: v.array(v.object({ task_id: v.string(), task_type: v.string() })),
+});
+
+/** A background shell command (the Bash tool's `run_in_background`). */
+export const CLAUDE_BACKGROUND_COMMAND_TASK = "local_bash";
 
 export const isClaudeControlRequestSubtype = (
   subtype: string,

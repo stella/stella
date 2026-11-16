@@ -44,6 +44,7 @@ describe("Outlook add-in OAuth client", () => {
       "openid",
       "offline_access",
       "stella:read",
+      "stella:matters_write",
       "stella:documents_write",
       "stella:chat",
     ]);

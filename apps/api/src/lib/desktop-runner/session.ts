@@ -41,7 +41,9 @@ import {
   type PendingCommand,
   persistRunMessage,
   readPendingCommands,
+  recordBackgroundTasks,
   recordHarnessStatus,
+  recordLinkedFolders,
   recordRunAccepted,
   recordRunRejected,
   releaseRunnerSession,
@@ -108,6 +110,8 @@ type RunnerSessionContext = {
   readonly ringPrevious: (holder: RunHolder) => void;
   /** Wake the readers of a run whose stored messages or state changed. */
   readonly ringRun: (runId: string) => void;
+  /** Tell the account its chats' background work here changed. */
+  readonly announceBackgroundTasks: (owner: RunnerBinding) => void;
 };
 
 type RunnerSessionOptions = {
@@ -432,11 +436,12 @@ const deliverRestores = async (state: SessionState, resendSent: boolean) => {
     resendSent,
     limit: RESTORE_PAGE_SIZE,
   });
-  for (const { restoreId, folderId, runId } of due) {
+  for (const { restoreId, folderId, linkedFolderId, runId } of due) {
     const sent = send(state, {
       type: DESKTOP_RUNNER_SERVER_MESSAGE.folderRestore,
       restoreId,
       folderId,
+      linkedFolderId,
       runId,
     });
     if (sent === "closed") {
@@ -744,6 +749,11 @@ const onHello = async (
   }
   // Claimed, so the closing socket's release marks the runner disconnected.
   state.claimed = true;
+  // The claim cleared what ran in the background before this socket; the
+  // computer reports what still runs after `welcome`.
+  if (claim.clearedBackgroundTasks) {
+    context.announceBackgroundTasks(state.binding);
+  }
   if (claim.previous !== null) {
     context.ringPrevious(claim.previous);
   }
@@ -792,6 +802,38 @@ const onHello = async (
   await deliverPending(state, { resendSent: true });
 };
 
+/** Store a run's background count and tell the member's clients. */
+const storeBackgroundTasks = async (
+  state: SessionState,
+  message: Extract<DesktopRunnerDesktopMessage, { type: "run.background" }>,
+) => {
+  const { binding, context } = state;
+  const recorded = await recordBackgroundTasks(context.db, {
+    binding,
+    sessionId: state.sessionId,
+    runId: message.runId,
+    count: message.count,
+  });
+  switch (recorded) {
+    case "applied":
+      context.announceBackgroundTasks(binding);
+      return;
+    case "not_current":
+      close(state, DESKTOP_RUNNER_CLOSE.superseded);
+      return;
+    case "unknown_run":
+      // A run the API already forgot, or never routed here: its chat shows
+      // nothing for it.
+      return;
+    case "too_many":
+      close(state, policyViolation("run_limit"));
+      return;
+    default:
+      recorded satisfies never;
+      panic("Unhandled background count outcome");
+  }
+};
+
 const handleMessage = async (
   state: SessionState,
   message: DesktopRunnerDesktopMessage,
@@ -815,6 +857,17 @@ const handleMessage = async (
         binding,
         sessionId: state.sessionId,
         report: message.harness,
+      });
+      if (!current) {
+        close(state, DESKTOP_RUNNER_CLOSE.superseded);
+      }
+      return;
+    }
+    case DESKTOP_RUNNER_DESKTOP_MESSAGE.linkedFoldersStatus: {
+      const current = await recordLinkedFolders(db, {
+        binding,
+        sessionId: state.sessionId,
+        folders: message.folders,
       });
       if (!current) {
         close(state, DESKTOP_RUNNER_CLOSE.superseded);
@@ -860,6 +913,9 @@ const handleMessage = async (
         outcome: message.outcome,
         now: now(),
       });
+      return;
+    case DESKTOP_RUNNER_DESKTOP_MESSAGE.runBackground:
+      await storeBackgroundTasks(state, message);
       return;
     default: {
       message satisfies never;
@@ -930,6 +986,8 @@ const onSocketClosed = (state: SessionState) => {
       // Routing ignores the runner once its heartbeat goes stale.
       observeFailure(released.error, { sink: RELEASE_SINK });
     }
+    // An open chat stops showing what this computer runs while it is away.
+    state.context.announceBackgroundTasks(state.binding);
   }, "desktop-runner.release");
 };
 

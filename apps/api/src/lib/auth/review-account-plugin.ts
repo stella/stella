@@ -10,10 +10,13 @@ import {
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { AUTH_SIGN_IN_CODE_UNAVAILABLE_ERROR_CODE } from "@stll/auth-model";
+
 import {
   checkReviewAccountAccess,
   isReviewAccountBodyEmailPath,
   isReviewAccountEmail,
+  isSignInCodeRequest,
   readReviewAccountOrganizationTargets,
   resolveReviewAccountBodyEmailOperation,
   resolveReviewAccountSessionOperation,
@@ -135,6 +138,45 @@ const requireNamedOrganizations = async ({
     );
   }
 };
+
+/** Checks endpoints that name the account by an `email` in the body. */
+const createBodyEmailHook = ({
+  config,
+  checkAccess,
+  localPasswordEnabled,
+}: {
+  config: ReviewAccountConfig;
+  checkAccess: typeof checkReviewAccountAccess;
+  localPasswordEnabled: boolean;
+}) =>
+  createAuthMiddleware(async (ctx) => {
+    const body: unknown = ctx.body;
+    const email = isRecord(body) ? body["email"] : undefined;
+    const otpType = isRecord(body) ? body["type"] : undefined;
+    // The account's mailbox is not its holder's: a code sent there strands
+    // whoever asked, so the page is told to ask for the password. With local
+    // passwords on, that form is already shown.
+    if (
+      !localPasswordEnabled &&
+      typeof email === "string" &&
+      isSignInCodeRequest({ path: ctx.path, otpType }) &&
+      isReviewAccountEmail({ email, config })
+    ) {
+      throw new APIError("CONFLICT", {
+        code: AUTH_SIGN_IN_CODE_UNAVAILABLE_ERROR_CODE,
+        message: "This account signs in with a password.",
+      });
+    }
+    const operation = resolveReviewAccountBodyEmailOperation({
+      path: ctx.path,
+      otpType,
+    });
+    if (typeof email === "string" && operation !== null) {
+      requireReviewAccountAccess(checkAccess({ email, config, operation }));
+    }
+    await Promise.resolve();
+    return undefined;
+  });
 
 const CREDENTIAL_PROVIDER_ID = "credential";
 
@@ -428,20 +470,10 @@ export const createReviewAccountPlugin = ({
             configured &&
             path !== undefined &&
             isReviewAccountBodyEmailPath(path),
-          handler: createAuthMiddleware(async (ctx) => {
-            const body: unknown = ctx.body;
-            const email = isRecord(body) ? body["email"] : undefined;
-            const operation = resolveReviewAccountBodyEmailOperation({
-              path: ctx.path,
-              otpType: isRecord(body) ? body["type"] : undefined,
-            });
-            if (typeof email === "string" && operation !== null) {
-              requireReviewAccountAccess(
-                checkAccess({ email, config, operation }),
-              );
-            }
-            await Promise.resolve();
-            return undefined;
+          handler: createBodyEmailHook({
+            config,
+            checkAccess,
+            localPasswordEnabled,
           }),
         },
         {

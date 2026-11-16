@@ -119,7 +119,11 @@ describe("browser extension capability policy", () => {
     }
   });
 
-  test.each(ALL_ROWS.filter(([, row]) => !row.toolOffered))(
+  test.each(
+    ALL_ROWS.flatMap(([key, row]) =>
+      "recoveryStep" in row ? [[key, row] as const] : [],
+    ),
+  )(
     "%s composes a line that stays silent unless the user asks for a website",
     (_key, row) => {
       const line = composeBrowserExtensionPromptLine(row);
@@ -136,10 +140,14 @@ describe("browser extension capability policy", () => {
   test.each(ALL_ROWS)(
     "%s carries no unconditional instruction to the user in its raw text",
     (_key, row) => {
-      const rawTexts =
-        "recoveryStep" in row
+      const rawTexts = (() => {
+        if ("statedByRun" in row) {
+          return [];
+        }
+        return "recoveryStep" in row
           ? [row.availability, row.recoveryStep]
           : [row.availability];
+      })();
       for (const text of rawTexts) {
         expect(text).not.toMatch(IMPERATIVE_TO_THE_USER);
         expect(text).not.toMatch(/\btell the user\b/iu);
@@ -151,7 +159,7 @@ describe("browser extension capability policy", () => {
     },
   );
 
-  test("a turn on the member's computer never offers the browser, whatever the tab reports", () => {
+  test("a turn on the member's computer leaves the browser to the run, whatever the tab reports", () => {
     const connected = {
       protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
       status: BROWSER_EXTENSION_STATUS.connected,
@@ -168,9 +176,10 @@ describe("browser extension capability policy", () => {
     const policy = browserExtensionPolicy(
       resolveTurnBrowserExtension({ reported: connected, runsLocally: true }),
     );
-    expect(policy.toolOffered).toBe(false);
-    expect(policy.promptLine).not.toContain("Browser tools are available");
-    expect(policy.promptLine).toContain("runs on the user's computer");
+    // stella's own browser tool is never offered there, and the chat prompt
+    // claims nothing about a browser: stella desktop tells the run whether
+    // it has browser tools.
+    expect(policy).toEqual({ promptLine: "", toolOffered: false });
   });
 
   test("the connected row keeps its availability line", () => {

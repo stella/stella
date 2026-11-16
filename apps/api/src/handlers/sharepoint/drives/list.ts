@@ -23,7 +23,14 @@ const config = {
   contract: "patch",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
-  mcp: { type: "internal", reason: "provider_secret" },
+  description:
+    "List the document libraries of a SharePoint site (siteId from sharepoint.sites.list), or the caller's own OneDrive when siteId is omitted. Pass a drive id to sharepoint.drives.items.list to browse it.",
+  mcp: {
+    type: "capability",
+    reason: "document_processing",
+    readClass: "tenant",
+    consumesServices: false,
+  },
   access: "read",
   query: requestQuery,
 } satisfies HandlerConfig;

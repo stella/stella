@@ -15,6 +15,7 @@ import {
   reopenCitationsForKeys,
   reopenCitationsFrom,
   reopenCitationsResolvedTo,
+  settleReopenedCitations,
 } from "@/api/handlers/case-law/citation-resolution";
 import {
   CITATION_SCOPE_METADATA_KEY,
@@ -44,6 +45,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { writeDecisionAnchorRedirectsTx } from "@/api/lib/case-law/decision-anchor-redirects";
 import { preserveStoredTextAfterParseFailure } from "@/api/lib/case-law/decision-text";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
+import { decisionFallbackState } from "@/api/lib/case-law/fallback-decision-identity";
 import { rowHoldsDocumentFor } from "@/api/lib/case-law/stored-payload";
 import { corpusContentHash } from "@/api/lib/legal-search/corpus-content-hash";
 import type { ActiveCorpusProjectionSourceLock } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
@@ -363,6 +365,11 @@ export const describeRowUpdateTx = async (
     : {
         ...statedDocketColumns,
         sourceDocumentId: persistedSourceDocumentId,
+        ...decisionFallbackState({
+          storage: write.storageIdentity,
+          previous: existing,
+          persistedSourceDocumentId,
+        }).columns,
         ecli: result.ecli,
         court: result.court,
         courtId: result.courtId ?? null,
@@ -516,6 +523,9 @@ export const readDocumentlessPayloadStateTx = async (
 /**
  * Reopen the citations this decision's identity change affects: those
  * pointing here, those it makes, and those keyed on its old or new key.
+ * The ones other decisions make are then settled against the identity the
+ * row write has already stored; the ones this decision makes are settled
+ * when its citations are written.
  */
 const reopenMovedIdentityTx = async (
   tx: CitationGraphTransaction<Transaction>,
@@ -530,7 +540,7 @@ const reopenMovedIdentityTx = async (
   // against the identity this decision no longer has, and the announce
   // path deliberately excludes its own links, so nothing else would
   // ever ask about them again.
-  await reopenCitationsResolvedTo(tx, existing.id);
+  const incoming = await reopenCitationsResolvedTo(tx, existing.id);
   // And, when this source writes graph rows, the edges this decision
   // *makes*. Its jurisdiction and date are the resolver's policy and time
   // filters, so moving either changes what those citations may match.
@@ -541,7 +551,7 @@ const reopenMovedIdentityTx = async (
   // no target, so nothing that searches by target can reach it — and
   // this decision leaving its old key is exactly what can make the
   // remaining holder unique.
-  await reopenCitationsForKeys(
+  const keyed = await reopenCitationsForKeys(
     tx,
     [replacedState.citationKey, incomingCitationKey].filter(
       (key) => key !== null,
@@ -558,12 +568,21 @@ const reopenMovedIdentityTx = async (
           candidate.normalizedValue === identifier.normalizedValue,
       ) === index,
   );
-  await announceDecisionIdentifiers(
+  const announced = await announceDecisionIdentifiers(
     tx,
     write,
     existing.id,
     affectedIdentifiers,
   );
+  await settleReopenedCitations(tx, [incoming, keyed, announced]);
+};
+
+type FinishRefreshedRowOptions = {
+  tx: CitationGraphTransaction<Transaction>;
+  write: DecisionRowWrite;
+  existing: ExistingDecision;
+  replacedState: ReplacedDecisionState | null;
+  projectionLock: ActiveCorpusProjectionSourceLock | null;
 };
 
 /**
@@ -571,13 +590,13 @@ const reopenMovedIdentityTx = async (
  * and identifiers are written: reopen what its identity change affects,
  * then rewrite its citations under the citation-graph lock.
  */
-export const finishRefreshedRowTx = async (
-  tx: CitationGraphTransaction<Transaction>,
-  write: DecisionRowWrite,
-  existing: ExistingDecision,
-  replacedState: ReplacedDecisionState | null,
-  projectionLock: ActiveCorpusProjectionSourceLock | null,
-): Promise<DecisionRowWriteStatus> => {
+export const finishRefreshedRowTx = async ({
+  tx,
+  write,
+  existing,
+  replacedState,
+  projectionLock,
+}: FinishRefreshedRowOptions): Promise<DecisionRowWriteStatus> => {
   const {
     observedAt,
     shape: { incomingCarriesDocument },

@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
+import type { ChatReference } from "@stll/api-contract/chat-reference-href";
 import { BidiText } from "@stll/ui/bidi-text";
 import { TruncatedText } from "@stll/ui/truncated-text";
 
@@ -10,7 +11,6 @@ import {
   ReferenceChip,
   ReferenceIcon,
 } from "@/components/references/reference-chip";
-import type { ChatReference } from "@/components/references/reference.logic";
 import type { ChatHistoryItem } from "@/features/chat/queries";
 import { useFormatter } from "@/i18n/formatting-context";
 import { formatListWithMore } from "@/i18n/list-format";

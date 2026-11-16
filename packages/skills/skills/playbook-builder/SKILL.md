@@ -88,16 +88,19 @@ before it is read, and a subagent cannot ask them.
 - **Look for them:** only when the user asks, whether at the open or once
   positions are saved, and always in this order:
   1. Call `list_matters` once, then ask which matters to search: one
-     question, each matter an option by name, plus one to search all they
-     can access. With many matters, offer the most recently active; the
-     user can still name another. Never call `list_documents` or search
+     multiple-choice question (with `ask-user`, `selection: "multiple"`),
+     each matter an option by name. Add no option for all of them: the user
+     can tick every matter listed. With many matters, offer the most
+     recently active and say so in the question; the user can still name
+     others in their own words. Never call `list_documents` or search
      before this answer.
   2. For the chosen matters, list their documents with `list_documents`.
      `search_across_matters` spans every matter the user can access, so use
-     it only when they chose all.
-  3. Ask the user to pick from the candidates: one question, each document an
-     option named with its matter, plus one option to use every candidate
-     listed.
+     it only when they chose every one: all of them when every matter was
+     listed, or in their own words.
+  3. Ask the user to pick from the candidates: one multiple-choice question,
+     each document an option named with its matter. Add no option for every
+     candidate: the user can tick them all.
   4. Read only the documents the user picked, at most eight. Never read one
      they did not pick, however relevant it looks: a search also returns
      drafts and the counterparty's paper, and a playbook is visible to the

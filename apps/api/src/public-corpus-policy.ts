@@ -42,6 +42,8 @@ export const PUBLIC_CORPUS_ROUTE_POLICY = {
   "GET /case/provisions/citing-decisions": "aggregate",
   "GET /case/provisions/citation-counts": "aggregate",
   "POST /case/decisions/search": "search",
+  // One decision, then a token comparison over its whole text on this process.
+  "POST /case/decisions/quotes/verify": "search",
   "GET /case/sitemap/shards": "sitemap",
   "GET /case/sitemap/decisions/shard": "sitemap",
 } as const satisfies Record<string, PublicCorpusClass>;

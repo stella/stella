@@ -2,7 +2,7 @@
   "type": "parser",
   "name": "AT_FINDOK",
   "key": "at-findok",
-  "parserVersion": 15,
+  "parserVersion": 16,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",

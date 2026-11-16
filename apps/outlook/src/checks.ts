@@ -41,10 +41,14 @@ const getExternalRecipients = ({
   });
 };
 
-export const hasAttachmentMention = (snapshot: MailSnapshot): boolean => {
-  const haystack = `${snapshot.subject}\n${snapshot.bodyText}`.toLowerCase();
+/** Whether the text names an attachment ("attached", "enclosed", "v příloze"). */
+const mentionsAttachment = (text: string): boolean => {
+  const haystack = text.toLowerCase();
   return ATTACHMENT_WORDS.some((word) => haystack.includes(word));
 };
+
+export const hasAttachmentMention = (snapshot: MailSnapshot): boolean =>
+  mentionsAttachment(`${snapshot.subject}\n${snapshot.bodyText}`);
 
 export const extractQuestions = (snapshot: MailSnapshot): string[] =>
   snapshot.bodyText
@@ -53,75 +57,73 @@ export const extractQuestions = (snapshot: MailSnapshot): string[] =>
     .filter((sentence) => sentence.endsWith("?"))
     .slice(0, 5);
 
-export const extractPotentialDates = (snapshot: MailSnapshot): string[] => {
+/** Weekday, month and numeric date words in the text, first eight. */
+const extractDates = (text: string): string[] => {
   const matches = [
-    ...(snapshot.bodyText.match(DATE_WORD_PATTERN) ?? []),
-    ...(snapshot.bodyText.match(NUMERIC_DATE_PATTERN) ?? []),
+    ...(text.match(DATE_WORD_PATTERN) ?? []),
+    ...(text.match(NUMERIC_DATE_PATTERN) ?? []),
   ];
   return unique(matches.map((match) => match.trim())).slice(0, 8);
 };
 
-const draftRecipients = (snapshot: MailSnapshot): MailAddress[] => {
-  if (snapshot.mode === "read") {
-    return snapshot.from ? [snapshot.from] : [];
-  }
-  return [...snapshot.to, ...snapshot.cc, ...snapshot.bcc];
-};
+export const extractPotentialDates = (snapshot: MailSnapshot): string[] =>
+  extractDates(snapshot.bodyText);
 
-export const runDraftChecks = ({
-  selectedWorkspaceId,
+/**
+ * What to look at before sending a drafted reply. The checks read the draft,
+ * not the email it answers, and say nothing when nothing needs a look.
+ *
+ * - Recipients outside the user's domain are flagged only while composing,
+ *   where the user chose them; a reply goes back to the person who wrote.
+ * - A draft that names an attachment is flagged when the reply will carry
+ *   no attached file: a reply from read mode never does, and an inline
+ *   image does not count.
+ * - Dates in the draft are listed so the user confirms them.
+ */
+export const runReplyChecks = ({
+  draft,
   snapshot,
   t,
 }: {
-  selectedWorkspaceId: string | null;
+  draft: string;
   snapshot: MailSnapshot;
   t: Translate;
 }): DraftCheck[] => {
   const checks: DraftCheck[] = [];
-  const externalRecipients = getExternalRecipients({
-    recipients: draftRecipients(snapshot),
-    userEmail: snapshot.userEmail,
-  });
 
-  if (!selectedWorkspaceId) {
+  if (snapshot.mode === "compose") {
+    const externalRecipients = getExternalRecipients({
+      recipients: [...snapshot.to, ...snapshot.cc, ...snapshot.bcc],
+      userEmail: snapshot.userEmail,
+    });
+    if (externalRecipients.length > 0) {
+      checks.push({
+        description: externalRecipients
+          .map((recipient) => recipient.email)
+          .join(", "),
+        title: t("externalRecipients"),
+        type: "warning",
+      });
+    }
+  }
+
+  // An inline image is part of the body, not the file the draft names.
+  const replyHasAttachments =
+    snapshot.mode === "compose" &&
+    snapshot.attachments.some((attachment) => !attachment.isInline);
+  if (mentionsAttachment(draft) && !replyHasAttachments) {
     checks.push({
-      description: t("noMatterSelectedDescription"),
-      title: t("noMatterSelected"),
+      description: t("draftMentionsAttachmentDescription"),
+      title: t("draftMentionsAttachment"),
       type: "warning",
     });
   }
 
-  if (externalRecipients.length > 0) {
-    checks.push({
-      description: externalRecipients
-        .map((recipient) => recipient.email)
-        .join(", "),
-      title: t("externalRecipients"),
-      type: "risk",
-    });
-  }
-
-  if (hasAttachmentMention(snapshot) && snapshot.attachments.length === 0) {
-    checks.push({
-      description: t("possibleMissingAttachmentDescription"),
-      title: t("possibleMissingAttachment"),
-      type: "risk",
-    });
-  }
-
-  const dates = extractPotentialDates(snapshot);
+  const dates = extractDates(draft);
   if (dates.length > 0) {
     checks.push({
       description: dates.join(", "),
-      title: t("dateOrDeadlineLanguage"),
-      type: "info",
-    });
-  }
-
-  if (checks.length === 0) {
-    checks.push({
-      description: t("noIssuesDescription"),
-      title: t("noIssuesFound"),
+      title: t("draftDates"),
       type: "info",
     });
   }

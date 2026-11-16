@@ -17,7 +17,8 @@ const PART_REFS = {
   document: "none",
   image: "none",
   "structured-output": "whole",
-  // Stella drops TanStack subagent parts at the persistence boundary.
+  // A tool-mode sub-agent's child runs its own conversation; the parent model
+  // reads only the result of the call that started it, which is read there.
   subagent: "none",
   text: "whole",
   thinking: "whole",

@@ -2,7 +2,8 @@
  * The review history of a verification run: every reviewer action, newest
  * first, each with who took it, when, why, and where the claim stood just
  * before and just after. Before and after are folded from the append-only
- * events (`claimReviewSteps`), never stored beside them.
+ * events (`claimReviewSteps`), never stored beside them. An action carried
+ * from the previous run of the document names the run it was taken on.
  *
  * Bounded by construction: a page names at most `HISTORY_PAGE_MAX` events,
  * and the fold behind it reads only the claims on that page, each capped at
@@ -82,6 +83,20 @@ const historyActor = (row: {
         id: row.actorId,
         name: row.actorName,
         image: row.actorImage,
+      };
+
+/** The run a carried action was first taken on, and when that run was
+ *  made; null for an action taken on this run. */
+const carriedFromOf = (row: {
+  carriedFromRunId: SafeId<"legalListVerificationRun"> | null;
+  carriedFromRunCreatedAt: Date | null;
+}) =>
+  row.carriedFromRunId === null
+    ? null
+    : {
+        runId: row.carriedFromRunId,
+        // Null only once that run is gone with its document.
+        runCreatedAt: row.carriedFromRunCreatedAt?.toISOString() ?? null,
       };
 
 /** The action itself without its reason, which the entry states apart. */
@@ -169,10 +184,19 @@ export const readReviewHistory = async ({
       actorImage: user.image,
       createdAt: events.createdAt,
       createdAtCursor: reviewHistoryCursor.cursorValue.as("created_at_cursor"),
+      carriedFromRunId: events.carriedFromRunId,
+      carriedFromRunCreatedAt: legalListVerificationRuns.createdAt,
     })
     .from(events)
     .leftJoin(member, actorJoin)
     .leftJoin(user, eq(user.id, member.userId))
+    .leftJoin(
+      legalListVerificationRuns,
+      and(
+        eq(legalListVerificationRuns.id, events.carriedFromRunId),
+        eq(legalListVerificationRuns.workspaceId, workspaceId),
+      ),
+    )
     .where(
       and(
         eq(events.workspaceId, workspaceId),
@@ -236,6 +260,7 @@ export const readReviewHistory = async ({
         reason: reviewReasonOf(step.payload),
         before: step.before,
         after: step.after,
+        carriedFrom: carriedFromOf(row),
       };
     }),
     nextCursor: page.nextCursor,

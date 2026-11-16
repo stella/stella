@@ -59,6 +59,9 @@ const withoutStaticReceipts = (steps: Record<string, unknown>[]) => {
                 "CI_CHECK_KIND",
                 "CI_CHECK_INPUTS",
                 "CI_CHECK_CONTEXT",
+                // The pool supplies this to every child; it does not alter a
+                // check's command or classification.
+                "CI_COMPARISON_BASE",
                 // Matrix metadata selects a disjoint slice of the same pool;
                 // it does not change the check represented by this step.
                 "CI_CHECK_POOL_PARTITION",
@@ -1211,6 +1214,16 @@ const stepFields = (step: Step | undefined) =>
 // Brings each recorded baseline step up to the current workflow shape.
 const currentBaselineStep = (step: ReturnType<typeof legSteps>[number]) => {
   const fields = stepFields(step);
+  if (
+    step.name === "Test remaining repository scripts" &&
+    isDeepStrictEqual(fields.env, {
+      BASE_SHA: `\${{ needs.ci-plan.outputs.target_base_sha }}`,
+    })
+  ) {
+    const migrated = { ...step };
+    delete migrated["env"];
+    return migrated;
+  }
   if (
     step.name === "Bridge-version guard" &&
     fields.if?.includes("github.event_name == 'pull_request'") &&

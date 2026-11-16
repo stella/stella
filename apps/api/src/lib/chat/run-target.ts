@@ -40,7 +40,7 @@ export const chatRunTargetOf = (stored: unknown): ChatRunTarget => {
   return parsed.success ? parsed.output : CHAT_CLOUD_RUN_TARGET;
 };
 
-/** Whether two run targets send turns to the same place in the same mode. */
+/** Whether two run targets send turns to the same place in the same way. */
 export const sameChatRunTarget = (
   left: ChatRunTarget,
   right: ChatRunTarget,
@@ -49,7 +49,10 @@ export const sameChatRunTarget = (
     ? right.kind === "local" &&
       left.harness === right.harness &&
       left.model === right.model &&
-      left.approvals === right.approvals
+      left.approvals === right.approvals &&
+      left.folder?.desktopId === right.folder?.desktopId &&
+      left.folder?.linkId === right.folder?.linkId &&
+      left.reasoningEffort === right.reasoningEffort
     : right.kind === left.kind;
 
 /**

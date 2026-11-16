@@ -1,3 +1,4 @@
+import { apiJson, respond } from "../helpers/route-mock";
 import { expect, test } from "../helpers/test";
 import { PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS } from "../helpers/wait-budgets";
 
@@ -49,11 +50,12 @@ test("breadcrumb rename with suggestion propagates to the chat history", async (
   // deterministic regardless of mock-model output.
   const suggestedTitle = "Suggested title from the e2e endpoint";
   await page.route("**/chat/threads/*/title/suggest*", async (route) => {
-    await route.fulfill({
-      body: JSON.stringify({ title: suggestedTitle }),
-      contentType: "application/json",
-      status: 200,
-    });
+    await respond(
+      route,
+      apiJson("v1/chat/threads/:threadId/title/suggest", "post", {
+        title: suggestedTitle,
+      }),
+    );
   });
   const wand = breadcrumb.getByRole("button", { name: "Suggest a title" });
   await expect(wand).toBeEnabled();

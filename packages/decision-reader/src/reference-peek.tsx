@@ -5,10 +5,11 @@ import { panic } from "better-result";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   ExternalLinkIcon,
   Maximize2Icon,
-  PanelRightIcon,
+  MoveToSideIcon,
 } from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { ScrollArea } from "@stll/ui/scroll-area";
@@ -118,7 +119,7 @@ const PeekActionButton = ({
           tooltip={label}
           variant="ghost"
         >
-          <PanelRightIcon aria-hidden="true" className="size-3.5" />
+          <DirectionalIcon className="size-3.5" icon={MoveToSideIcon} />
         </Button>
       );
     }

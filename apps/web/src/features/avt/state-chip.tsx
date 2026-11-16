@@ -18,7 +18,6 @@ import {
   ChevronUpIcon,
   CircleAlertIcon,
   CircleDashedIcon,
-  PenIcon,
   SplitIcon,
   XCircleIcon,
 } from "@stll/ui/icons";
@@ -180,27 +179,6 @@ export const ConfBadge = ({ level }: { level: FactConfidence | null }) => {
         </ReviewStatusBadge>
       </TooltipTrigger>
       <TooltipPopup>{t("avt.confidence.tooltip")}</TooltipPopup>
-    </Tooltip>
-  );
-};
-
-/** Neutral descriptor of the source carrier (handwritten, scanned). */
-export const MediumChip = ({ medium }: { medium: string | null }) => {
-  const t = useTranslations();
-  if (medium === null) {
-    return null;
-  }
-  return (
-    <Tooltip>
-      <TooltipTrigger render={<span />}>
-        <ReviewStatusBadge
-          icon={<PenIcon aria-hidden="true" className="size-3" />}
-          tone="neutral"
-        >
-          {medium}
-        </ReviewStatusBadge>
-      </TooltipTrigger>
-      <TooltipPopup>{t("avt.sourceMediumTooltip")}</TooltipPopup>
     </Tooltip>
   );
 };

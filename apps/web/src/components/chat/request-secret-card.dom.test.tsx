@@ -95,6 +95,7 @@ const mountCard = ({
         <ChatApprovalContext
           value={{
             activeOrganizationId: "sample-organization",
+            approvalIdsAwaitedAtOpen: new Set(),
             alwaysApprovedTools: new Set(),
             conversationApprovedTools: new Set(),
             confirmStoredApprovalGrant: async () =>

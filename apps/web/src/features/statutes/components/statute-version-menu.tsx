@@ -12,6 +12,7 @@ import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { StatuteStatusDot } from "@/features/statutes/components/statute-validity-indicator";
+import { StatuteVersionChanges } from "@/features/statutes/components/statute-version-changes";
 import type { PublicStatuteVersion } from "@/features/statutes/queries/statutes";
 import { ineligibleExpressionLabelKey } from "@/features/statutes/statute-expression";
 import {
@@ -213,7 +214,19 @@ export const StatuteVersionMenu = ({
                           )}
                         >
                           {rowLabel}
+                          {version.changes === null ? null : (
+                            <StatuteVersionChanges
+                              changes={version.changes}
+                              className="mt-0.5"
+                            />
+                          )}
                         </span>
+                      )}
+                      {version.changes === null ? null : (
+                        <StatuteVersionChanges
+                          changes={version.changes}
+                          className="mt-0.5"
+                        />
                       )}
                     </span>
                   </span>

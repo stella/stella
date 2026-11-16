@@ -4,10 +4,7 @@ import type { ReactNode } from "react";
 
 import { ChevronDownIcon } from "../icons";
 import { cn } from "../lib/utils";
-import {
-  COMPOSER_PICKER_TRIGGER_CLASS,
-  COMPOSER_PLACEHOLDER_CLASS,
-} from "./composer-tokens";
+import { COMPOSER_PLACEHOLDER_CLASS } from "./composer-tokens";
 import {
   Menu,
   MenuPopup,
@@ -155,10 +152,7 @@ export const ComposerPicker = <Value extends string>({
 
   return (
     <Menu>
-      <MenuTrigger
-        aria-label={ariaLabel}
-        className={COMPOSER_PICKER_TRIGGER_CLASS}
-      >
+      <MenuTrigger appearance="caption" aria-label={ariaLabel}>
         <span className="flex size-3 shrink-0 items-center justify-center [&>svg]:size-3">
           {icon}
         </span>

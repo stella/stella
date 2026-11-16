@@ -281,6 +281,7 @@ const suite = (
           requester.userId,
         ),
       ),
+      set: { headers: {}, status: 200 },
       session: { activeOrganizationId: requester.organizationId },
       user: { id: requester.userId },
     });
@@ -321,6 +322,7 @@ const suite = (
         request: new Request("http://localhost/v1/chat/threads/messages"),
         route: "/v1/chat/threads/:threadId/messages" satisfies ApiRoutePath,
         safeDb: rlsSafeDb(requester),
+        set: { headers: {}, status: 200 },
         session: { activeOrganizationId: requester.organizationId },
         user: { id: requester.userId },
       }),

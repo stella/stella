@@ -68,6 +68,7 @@ afterEach(async () => {
           providerDefaultModels: [],
           instanceProvisioned: false,
           decisionInstanceProvisioned: false,
+          verificationDecisionModel: { enabled: false, available: false },
         } satisfies OrganizationAIConfig),
       );
     }

@@ -9,11 +9,6 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/env-feature-access.test.ts": {
-    "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/api/src/handlers/case-law/ingestion/source-total-maintenance.db.test.ts": {
     "count": 2,
     "owner": "api",
@@ -157,11 +152,6 @@
   "packages/mcp-kit/src/envelope.test.ts": {
     "count": 2,
     "owner": "mcp-kit",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "packages/parameter-store/src/read-parameter.test.ts": {
-    "count": 1,
-    "owner": "parameter-store",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "packages/scripts/src/process-stderr.test.ts": {

@@ -3,6 +3,7 @@ import { useDeferredValue, useMemo, useState } from "react";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { buildCreateDocumentDownloadFileName } from "@stll/api-contract/chat-create-document";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
@@ -25,10 +26,7 @@ import type {
   ChatUITools,
   RegisteredChatUIToolCallPart,
 } from "@/components/chat/chat-ui-tools";
-import {
-  buildCreateDocumentDownloadFileName,
-  normalizeCreateDocumentInput,
-} from "@/components/chat/create-document-draft.logic";
+import { normalizeCreateDocumentInput } from "@/components/chat/create-document-draft.logic";
 import { DocumentIcon } from "@/components/document-icon";
 import { MarkdownPreview } from "@/components/markdown-preview";
 import { filterMatterPickerItems } from "@/components/matter-picker-search.logic";

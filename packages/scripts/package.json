@@ -22,7 +22,7 @@
     "lint:fix": "cd ../.. && bun scripts/lint.ts --fix packages/scripts"
   },
   "dependencies": {
-    "@formatjs/icu-messageformat-parser": "3.5.22",
+    "@formatjs/icu-messageformat-parser": "3.5.23",
     "@stll/ai-catalog": "workspace:*",
     "@stll/api-contract": "workspace:*",
     "@stll/fetch": "workspace:*",

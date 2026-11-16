@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/observability/corpus-index-projection-unserved-report.ts",
+  "delta": 2,
+  "reason": "The unserved gauge reads the served generations of the two corpus families, then two capped index walks per served generation. Each walk is bounded by CORPUS_PROJECTION_UNSERVED_COUNT_CAP and a family serves a handful of generations, so the reads stay sequential inside one transaction rather than merging every generation's walk into one statement."
+}

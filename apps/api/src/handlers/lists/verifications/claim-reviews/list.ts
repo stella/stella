@@ -42,7 +42,10 @@ const config = {
     "reason (`given`, `none`, or `unrecorded` for an action that requires " +
     "one but was recorded before reasons were required), and the claim's " +
     "disposition just before and just after (verdict as reviewers see it, " +
-    "override, status). `reviewers` lists everyone who acted on the run " +
+    "override, status). `carriedFrom` names the earlier run of the " +
+    "document an action was first taken on, when it was carried to this " +
+    "run's matching claim; null otherwise. `reviewers` lists everyone who " +
+    "acted on the run " +
     "(`complete`), or says there are more than it names (`overflow`).",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,

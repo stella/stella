@@ -331,10 +331,10 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
             listSectionId: toSafeId<"legalListSection">(selectedSectionId),
           }),
         },
-        send: async (body) =>
+        send: async (body, request) =>
           api
             .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
-            .put(body),
+            .put(body, request),
       });
       if (response.error) {
         throw toAPIError(response.error);
@@ -359,13 +359,15 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
   };
 
   const verifyItem = async (itemEntityId: string) => {
-    const response = await api
-      .lists({ workspaceId: toSafeId<"workspace">(workspaceId) })
-      ["item-reviews"].post({
-        listId: toSafeId<"legalList">(listId),
-        itemEntityId: toSafeId<"entity">(itemEntityId),
-        decision: "verified",
-      });
+    const listsApi = api.lists({
+      workspaceId: toSafeId<"workspace">(workspaceId),
+    });
+
+    const response = await listsApi["item-reviews"].post({
+      listId: toSafeId<"legalList">(listId),
+      itemEntityId: toSafeId<"entity">(itemEntityId),
+      decision: "verified",
+    });
     if (response.error) {
       notifyUserError(toAPIError(response.error), t("errors.actionFailed"));
       return;

@@ -68,6 +68,9 @@
   "connectStella": {
     "message": "A stella csatlakoztatása"
   },
+  "openStella": {
+    "message": "A stella megnyitása"
+  },
   "adoptTab": {
     "message": "A lap használata a stellával"
   },
@@ -85,5 +88,17 @@
   },
   "connectStellaInstead": {
     "message": "Inkább itt csatlakoztasd a stellát"
+  },
+  "allowDesktop": {
+    "message": "Használat a stella desktoppal"
+  },
+  "desktopConnected": {
+    "message": "stella desktop csatlakoztatva"
+  },
+  "desktopNotRunning": {
+    "message": "stella desktop nem fut"
+  },
+  "desktopUpdateNeeded": {
+    "message": "Frissítse a stella desktopot és ezt a bővítményt"
   }
 }

@@ -437,6 +437,7 @@ describe.skipIf(!enabled)("generated artefact storage (postgres)", () => {
       ) ?? panic("Missing provenance constraint");
     const schema = await db.execute(
       sql`SELECT ${constraint.value} AS accepted FROM (SELECT ${JSON.stringify(value)}::text::jsonb AS generation_provenance) chat_threads`,
+      "objects",
     );
     expect(schema.at(0)?.["accepted"]).toBe(decoded.isOk());
     const stored = await Result.tryPromise(

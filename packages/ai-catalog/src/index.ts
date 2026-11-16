@@ -300,6 +300,7 @@ export const BYOK_DEFAULT_MODELS = {
  */
 export const BYOK_MODEL_OPTIONS = {
   google: [
+    "gemini-4-hydrogen",
     "gemini-4-carbon",
     "gemini-4-argon",
     "gemini-3.8-flash",
@@ -339,6 +340,7 @@ export const BYOK_MODEL_OPTIONS = {
     ...GPT_61_OPENROUTER_MODEL_IDS,
     ...GPT_6_OPENROUTER_MODEL_IDS,
     ...GPT_56_OPENROUTER_MODEL_IDS,
+    "google/gemini-4-hydrogen",
     "google/gemini-4-carbon",
     "google/gemini-4-argon",
     "google/gemini-3.8-flash",
@@ -428,6 +430,10 @@ export const RECOMMENDED_CHAT_MODELS = [
  * creator's icon while their routing provider remains available separately.
  */
 export const MODEL_DISPLAY_METADATA = {
+  "gemini-4-hydrogen": {
+    displayName: "Gemini 4 Hydrogen",
+    iconProvider: "google",
+  },
   "gemini-4-carbon": {
     displayName: "Gemini 4 Carbon",
     iconProvider: "google",
@@ -621,6 +627,10 @@ export const MODEL_DISPLAY_METADATA = {
     displayName: "GPT-5.6 Terra",
     iconProvider: "openai",
     supersededBy: GPT_61_MODEL_IDS.terra.openrouter,
+  },
+  "google/gemini-4-hydrogen": {
+    displayName: "Gemini 4 Hydrogen",
+    iconProvider: "google",
   },
   "google/gemini-4-carbon": {
     displayName: "Gemini 4 Carbon",
@@ -1058,6 +1068,7 @@ export const MODEL_STREAMING_TOOL_USE = {
   "anthropic/claude-haiku-5.5": "supported",
   "us.anthropic.claude-haiku-5-5": "supported",
   "claude-haiku-5-5": "supported",
+  "gemini-4-hydrogen": "supported",
   "gemini-4-carbon": "supported",
   "gemini-4-argon": "supported",
   "gemini-3.8-flash": "supported",
@@ -1075,6 +1086,7 @@ export const MODEL_STREAMING_TOOL_USE = {
   "openai/gpt-5.6-sol": "supported",
   "openai/gpt-5.6-terra": "supported",
   "openai/gpt-5.6-luna": "supported",
+  "google/gemini-4-hydrogen": "supported",
   "google/gemini-4-carbon": "supported",
   "google/gemini-4-argon": "supported",
   "google/gemini-3.8-flash": "supported",
@@ -1301,6 +1313,7 @@ export const CONTEXT_WINDOW_TOKENS = {
   "gemini-3.6-flash": 1_048_576,
   "gemini-3.7-flash": 1_048_576,
   "gemini-3.8-flash": 1_048_576,
+  "gemini-4-hydrogen": 1_048_576,
   "gemini-4-carbon": 1_048_576,
   "gemini-4-argon": 1_048_576,
   "gemini-3.1-pro-preview": 1_048_576,
@@ -1342,6 +1355,7 @@ export const CONTEXT_WINDOW_TOKENS = {
   "mistral-medium-3-5": 128_000,
   "magistral-small-latest": 128_000,
   // OpenRouter provider-prefixed slugs mirror their upstream windows.
+  "google/gemini-4-hydrogen": 1_048_576,
   "google/gemini-4-carbon": 1_048_576,
   "google/gemini-4-argon": 1_048_576,
   "google/gemini-3.8-flash": 1_048_576,

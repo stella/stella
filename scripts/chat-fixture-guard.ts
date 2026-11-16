@@ -15,19 +15,10 @@
 // or element access, and any of these behind `as const`, `satisfies`, a type
 // assertion, parentheses or `!`.
 //
-// Test files that predate the builders are listed in
-// scripts/chat-fixture-guard-ledger.json with how many snapshots each builds
-// by hand. The ledger only shrinks: a file with more literals than its entry
-// (or with none listed) fails, and a file with fewer fails until its entry is
-// lowered or removed.
-//
 // Modes:
 //   bun scripts/chat-fixture-guard.ts              check the tree (CI gate)
 //   bun scripts/chat-fixture-guard.ts --self-test  prove the detector fires
-//   bun scripts/chat-fixture-guard.ts --write      rewrite the ledger from the tree
 
-import { panic } from "better-result";
-import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { compareCodeUnit } from "@stll/collation";
@@ -42,7 +33,6 @@ import {
 } from "../packages/scripts/src/syntax-tree";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
-const LEDGER_REL = "scripts/chat-fixture-guard-ledger.json";
 const OWNER_RELS = [
   "apps/api/src/tests/helpers/chat-fixtures.ts",
   "apps/web/src/features/chat/chat-test-fixtures.ts",
@@ -209,45 +199,6 @@ export const findSnapshotLiterals = (
   return found;
 };
 
-/** Hand-built snapshot literals per grandfathered file. */
-type Ledger = Readonly<Record<string, number>>;
-
-export type GuardReport = {
-  /** Files whose literal count fell below their entry. */
-  stale: string[];
-  /** Literals in files over their entry (all of a file's, if it has none). */
-  unlisted: SnapshotLiteral[];
-};
-
-const countByFile = (
-  found: readonly SnapshotLiteral[],
-): Map<string, number> => {
-  const counts = new Map<string, number>();
-  for (const { path: file } of found) {
-    counts.set(file, (counts.get(file) ?? 0) + 1);
-  }
-  return counts;
-};
-
-/** Compares what the tree builds by hand with the ledger. */
-export const compareWithLedger = ({
-  found,
-  ledger,
-}: {
-  found: readonly SnapshotLiteral[];
-  ledger: Ledger;
-}): GuardReport => {
-  const counts = countByFile(found);
-  return {
-    stale: Object.entries(ledger).flatMap(([file, allowed]) =>
-      (counts.get(file) ?? 0) < allowed ? [file] : [],
-    ),
-    unlisted: found.filter(
-      ({ path: file }) => (counts.get(file) ?? 0) > (ledger[file] ?? 0),
-    ),
-  };
-};
-
 const scanTree = async (): Promise<SnapshotLiteral[]> => {
   const found: SnapshotLiteral[] = [];
   const seen = new Set<string>();
@@ -275,56 +226,20 @@ const scanTree = async (): Promise<SnapshotLiteral[]> => {
   );
 };
 
-const readLedger = (): Ledger => {
-  const parsed: unknown = JSON.parse(
-    readFileSync(path.join(REPO_ROOT, LEDGER_REL), "utf-8"),
-  );
-  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-    return panic(`${LEDGER_REL} must map file paths to literal counts`);
-  }
-  const ledger: Record<string, number> = {};
-  for (const [file, count] of Object.entries(parsed)) {
-    if (typeof count !== "number" || !Number.isInteger(count)) {
-      return panic(`${LEDGER_REL}: ${file} needs an integer literal count`);
-    }
-    ledger[file] = count;
-  }
-  return ledger;
-};
-
 const check = async (): Promise<number> => {
   const found = await scanTree();
-  const ledger = readLedger();
-  const { stale, unlisted } = compareWithLedger({ found, ledger });
-  if (stale.length === 0 && unlisted.length === 0) {
+  if (found.length === 0) {
     console.log(
-      `chat fixture guard: OK. ${String(Object.keys(ledger).length)} listed files still build snapshots by hand; no new ones.`,
+      "chat fixture guard: OK. No test builds a messages snapshot by hand.",
     );
     return 0;
   }
-  for (const { line, path: file } of unlisted) {
+  for (const { line, path: file } of found) {
     console.error(
-      `  ${file}:${String(line)}: a hand-built messages snapshot beyond the file's ledger entry. Build it with an owning fixture builder (${OWNER_RELS.join(", ")}), or wrap malformed input in ${ESCAPE_CALL}(reason, ...).`,
-    );
-  }
-  for (const file of stale) {
-    console.error(
-      `  ${file}: builds fewer snapshots by hand than ${LEDGER_REL} allows; lower or remove its entry.`,
+      `  ${file}:${String(line)}: a hand-built messages snapshot. Build it with an owning fixture builder (${OWNER_RELS.join(", ")}), or wrap malformed input in ${ESCAPE_CALL}(reason, ...).`,
     );
   }
   return 1;
-};
-
-const write = async (): Promise<number> => {
-  const counts = Object.fromEntries(countByFile(await scanTree()));
-  writeFileSync(
-    path.join(REPO_ROOT, LEDGER_REL),
-    `${JSON.stringify(counts, null, 2)}\n`,
-  );
-  console.log(
-    `chat fixture guard: wrote ${String(Object.keys(counts).length)} files.`,
-  );
-  return 0;
 };
 
 const selfTest = (): number => {
@@ -433,25 +348,6 @@ const selfTest = (): number => {
     "const s = { type: EventType.RUN_FINISHED, runId: 'r' };",
     0,
   );
-  const report = compareWithLedger({
-    found: [
-      { line: 1, path: "listed.test.ts" },
-      { line: 2, path: "grown.test.ts" },
-      { line: 3, path: "grown.test.ts" },
-      { line: 4, path: "new.test.ts" },
-    ],
-    ledger: { "grown.test.ts": 1, "listed.test.ts": 1, "migrated.test.ts": 2 },
-  });
-  if (
-    JSON.stringify(report.stale) !== JSON.stringify(["migrated.test.ts"]) ||
-    JSON.stringify([
-      ...new Set(report.unlisted.map(({ path: file }) => file)),
-    ]) !== JSON.stringify(["grown.test.ts", "new.test.ts"])
-  ) {
-    failures.push(
-      `ledger comparison must report the migrated, the grown and the new file: ${JSON.stringify(report)}`,
-    );
-  }
   if (failures.length === 0) {
     console.log("chat-fixture-guard --self-test: PASS");
     return 0;
@@ -463,9 +359,5 @@ const selfTest = (): number => {
 };
 
 if (import.meta.main) {
-  const mode = process.argv[2];
-  if (mode === "--self-test") {
-    process.exit(selfTest());
-  }
-  process.exit(mode === "--write" ? await write() : await check());
+  process.exit(process.argv[2] === "--self-test" ? selfTest() : await check());
 }

@@ -10,6 +10,8 @@ import {
 } from "bun:test";
 
 import {
+  chatBackgroundTasksChangedRealtimeEvent,
+  chatQueueChangedRealtimeEvent,
   chatRunsChangedRealtimeEvent,
   chatThreadsChangedRealtimeEvent,
   type DesktopEditSessionRealtimeEvent,
@@ -132,6 +134,8 @@ const FANOUT_CASES: { [C in RealtimeChannel]: readonly ChannelEvent[C][] } = {
   organization: [resourceSetUpdatedRealtimeEvent(RESOURCE_TYPE.ENTITY)],
   user: [
     newNotificationRealtimeEvent(),
+    chatBackgroundTasksChangedRealtimeEvent(),
+    chatQueueChangedRealtimeEvent(),
     chatRunsChangedRealtimeEvent(),
     chatThreadsChangedRealtimeEvent(),
   ],

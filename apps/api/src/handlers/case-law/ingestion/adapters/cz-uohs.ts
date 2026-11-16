@@ -14,7 +14,10 @@ import {
   isCzechInstructionHeading,
   isCzechReasonsHeading,
 } from "@stll/legal-ast/czech-document-roles";
-import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import {
+  DECISION_IDENTIFIER_TYPES,
+  isDecisionIdentifier,
+} from "@stll/legal-ast/decision-identifier";
 import type {
   Block,
   DocumentAst,
@@ -95,8 +98,20 @@ import { isRecord } from "@/api/lib/type-guards";
 const LISTING_URL = "https://uohs.gov.cz/opendata/rozhodnuti.jsonld";
 const ORIGIN = "https://uohs.gov.cz";
 const HOST_POLICY = { type: "exact-origin", origins: [ORIGIN] } as const;
-const PAGE_SIZE = 20;
+// parser-output-unchanged: request deadlines only; no parsed record changes.
+export const CZ_UOHS_PAGE_SIZE = 20;
+const PAGE_SIZE = CZ_UOHS_PAGE_SIZE;
 const CURSOR_VERSION = 1;
+
+/** Ceiling for one decision document read. */
+export const CZ_UOHS_DOCUMENT_TIMEOUT_MS = 120_000;
+
+/**
+ * The pipeline's deadline for one crawl page. A page reads every document of
+ * its records inline, one gated request at a time, so the deadline leaves room
+ * for a full page of documents at the publisher's pace plus one slow read.
+ */
+const CZ_UOHS_PAGE_TIMEOUT_MS = 300_000;
 
 export const CZ_UOHS_COLLECTIONS = [
   "hospodarska-soutez",
@@ -166,7 +181,8 @@ const publisherReadOptions = (
 ) => ({
   adapterKey: ADAPTER_KEYS.CZ_UOHS,
   fetchStage: stage,
-  timeoutMs: stage === "document" ? 120_000 : ADAPTER_TIMEOUT.LIST,
+  timeoutMs:
+    stage === "document" ? CZ_UOHS_DOCUMENT_TIMEOUT_MS : ADAPTER_TIMEOUT.LIST,
   signal,
   redirect: "error" as const,
 });
@@ -222,6 +238,11 @@ const FILE_NUMBER_TAIL = /^\/\d{4}(?:\/\p{Lu}+)?/u;
  * The decision's citable identifiers: the file number, then the reference
  * number of this one decision. Both are lookup keys, never display text; the
  * displayed docket is `czUohsFileNumber`.
+ *
+ * The reference number of a joined proceeding lists every joined file and
+ * can run past the identifier storage bound. It is a secondary lookup key,
+ * so one the corpus cannot hold is left out rather than truncated; the file
+ * number stays the decision's identity.
  */
 export const czUohsDecisionIdentifiers = (
   record: Pick<CzUohsRecord, "spisová_značka" | "číslo_jednací">,
@@ -234,9 +255,12 @@ export const czUohsDecisionIdentifiers = (
         printed,
       ),
     }) as const;
+  const reference = identifier(
+    `ÚOHS-${record.číslo_jednací.replace(/^ÚOHS-/u, "")}`,
+  );
   return [
     identifier(czUohsFileNumber(record)),
-    identifier(`ÚOHS-${record.číslo_jednací.replace(/^ÚOHS-/u, "")}`),
+    ...(isDecisionIdentifier(reference) ? [reference] : []),
   ] as const;
 };
 
@@ -988,6 +1012,7 @@ export const czUohsAdapter = defineSourceAdapter({
   key: ADAPTER_KEYS.CZ_UOHS,
   reparseStoredRaw: reparseCzUohsStoredRaw,
   documentStage: "inline",
+  pageTimeoutMs: CZ_UOHS_PAGE_TIMEOUT_MS,
   language: "cs",
   minRequestIntervalMs: publisherRequestIntervalMs(ADAPTER_KEYS.CZ_UOHS),
   sourceSurfaces: {

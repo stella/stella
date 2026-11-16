@@ -1,7 +1,7 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { EventType } from "@tanstack/ai";
 import { plugin } from "bun";
-import { afterAll, afterEach, expect, test } from "bun:test";
+import { afterAll, afterEach, expect, mock, spyOn, test } from "bun:test";
 import * as v from "valibot";
 
 import {
@@ -55,6 +55,9 @@ const { workspacesNavigationOptions } =
 const { __resetChatRequestStateForTests } =
   await import("@/features/chat/chat-runtime-registry");
 const { Route: ChatIndexRoute } = await import("../index");
+const desktopBridge = await import("@/lib/desktop-bridge");
+const { DESKTOP_PING_URL } =
+  await import("@/features/chat/desktop-launch.logic");
 
 const user = {
   activeOrganizationId: "00000000-0000-7000-8000-00000000ffff",
@@ -72,6 +75,7 @@ const CODEX: ChatLocalRunTarget = {
   harness: "codex",
   model: "gpt-5-codex",
   approvals: "ask",
+  reasoningEffort: null,
 };
 
 /** One connected computer whose Codex is ready. */
@@ -82,6 +86,7 @@ const READINESS: ChatLocalRunReadiness = {
       desktopId: "0192f3a0-6b1c-7d2e-8f30-000000000001",
       connected: true,
       lastSeenAt: "2026-11-03T10:00:00.000Z",
+      linkedFolders: [],
       harnesses: [
         {
           id: "codex",
@@ -89,7 +94,9 @@ const READINESS: ChatLocalRunReadiness = {
           version: "0.50.0",
           capabilities: ["approvals"],
           approvalModes: ["ask"],
-          models: [{ id: CODEX.model, label: "GPT-5 Codex" }],
+          models: [
+            { id: CODEX.model, label: "GPT-5 Codex", reasoningEfforts: [] },
+          ],
         },
       ],
     },
@@ -161,7 +168,8 @@ const serve = ({
   webSearchAvailable = false,
   holdTurns = false,
 }: {
-  readiness?: ChatLocalRunReadiness;
+  /** The member's computers as the API reads them at each read. */
+  readiness?: ChatLocalRunReadiness | (() => ChatLocalRunReadiness);
   webSearchAvailable?: boolean;
   /** Keep each turn's stream open after it starts until `finishTurns`. */
   holdTurns?: boolean;
@@ -235,7 +243,9 @@ const serve = ({
         return Response.json(body);
       }
       if (pathname.endsWith("/chat/local-runners")) {
-        return Response.json(readiness);
+        return Response.json(
+          typeof readiness === "function" ? readiness() : readiness,
+        );
       }
       if (pathname.endsWith("/chat") && request.method === "POST") {
         const body: unknown = await request.json();
@@ -367,6 +377,7 @@ afterEach(() => {
   useChatRunOnPreferenceStore.setState({ byOrganization: {} });
   useChatWebSearchPreferenceStore.setState({ enabledPreference: false });
   globalThis.fetch = previousFetch;
+  mock.restore();
 });
 afterAll(async () => {
   await unregisterDomEnvironment();
@@ -458,26 +469,26 @@ const typeDraft = (server: ReturnType<typeof serve>, text: string) => {
 };
 
 const AUTO_LABEL = messages.chat.modelSelector.autoLabel;
-const CODEX_LABEL = "Codex · GPT-5 Codex";
+/** The where chip of a chat on the member's computer, by its full name. */
+const CODEX_LABEL = "Runs on: Your computer, Codex";
+const CLOUD_LABEL = "Runs on: Cloud";
 
 test("a new chat runs on the member's computer when they choose it, and its first send goes there", async () => {
   const server = serve();
   const client = createClient();
   const { ui, appRouter } = await openNewChat(client);
 
-  // The dock's model menu offers Run on before the chat has a thread.
-  const trigger = await ui.findByRole("button", { name: AUTO_LABEL });
+  // The dock's where chip offers the computer before the chat has a thread;
+  // its coding agent starts on its recommended model.
+  expect(await ui.findByRole("button", { name: AUTO_LABEL })).toBeTruthy();
+  const trigger = await ui.findByRole("button", { name: CLOUD_LABEL });
   await testing.act(async () => {
     testing.fireEvent.click(trigger);
   });
-  expect(await ui.findByText(messages.chat.localRun.runOn)).toBeTruthy();
-  const codex = await ui.findByText("Codex on this computer");
+  expect(await ui.findByText(messages.chat.runOn.yourComputer)).toBeTruthy();
+  const codex = await ui.findByText("Codex");
   await testing.act(async () => {
     testing.fireEvent.click(codex);
-  });
-  const model = await ui.findByText("GPT-5 Codex");
-  await testing.act(async () => {
-    testing.fireEvent.click(model);
   });
 
   // The choice is stored on the draft's row and reads back on the dock.
@@ -487,6 +498,8 @@ test("a new chat runs on the member's computer when they choose it, and its firs
     ]),
   );
   expect(await ui.findByRole("button", { name: CODEX_LABEL })).toBeTruthy();
+  // The model chip names the agent's model.
+  expect(await ui.findByRole("button", { name: "GPT-5 Codex" })).toBeTruthy();
 
   typeDraft(server, "Run the tests");
   const send = await ui.findByRole("button", {
@@ -548,20 +561,30 @@ test("a new chat opens on the member's last Run on choice, and its first send go
   expect(server.unexpected).toEqual([]);
 });
 
-test("a new chat whose remembered computer is offline says so in the bar and does not move to stella cloud", async () => {
+test("a new chat whose remembered computer is offline says so in the bar, opens stella desktop on the send, and does not move to stella cloud", async () => {
   rememberRunTarget(user.activeOrganizationId, CODEX);
-  const server = serve({ readiness: OFFLINE });
+  // Opening stella desktop is what connects the computer, as on a real
+  // machine.
+  let opened = false;
+  const open = spyOn(desktopBridge, "openDesktopUrl").mockImplementation(() => {
+    opened = true;
+  });
+  const server = serve({ readiness: () => (opened ? READINESS : OFFLINE) });
   const client = createClient();
   const { ui } = await openNewChat(client);
 
-  const offline = `${CODEX_LABEL} · ${messages.chat.localRun.stateOffline}`;
+  const offline = `${CODEX_LABEL}. ${messages.chat.localRun.stateOffline}`;
   expect(await ui.findByRole("button", { name: offline })).toBeTruthy();
   expect(ui.queryByRole("button", { name: AUTO_LABEL })).toBeNull();
-  // A send goes to the computer, which the API refuses with its reason, and
-  // never to stella's models in its place.
+  // The remembered choice is no gesture: nothing opened before the send.
+  expect(open).not.toHaveBeenCalled();
+  // The send opens stella desktop once and goes to the computer once it
+  // connects, never to stella's models in its place.
   expect(await sendFirstTurn(server, ui)).toMatchObject({
     forwardedProps: { runTarget: CODEX },
   });
+  expect(open).toHaveBeenCalledTimes(1);
+  expect(open).toHaveBeenCalledWith(DESKTOP_PING_URL);
   expect(server.unexpected).toEqual([]);
 });
 
@@ -615,8 +638,10 @@ test("a remembered model the computer no longer offers says so in the bar", asyn
   const client = createClient();
   const { ui } = await openNewChat(client);
 
-  const label = `Codex · gpt-4-codex · ${messages.chat.localRun.stateModelUnavailable}`;
+  // The model chip says it; the where chip still names the computer.
+  const label = `gpt-4-codex · ${messages.chat.localRun.stateModelUnavailable}`;
   expect(await ui.findByRole("button", { name: label })).toBeTruthy();
+  expect(await ui.findByRole("button", { name: CODEX_LABEL })).toBeTruthy();
   expect(server.unexpected).toEqual([]);
 });
 

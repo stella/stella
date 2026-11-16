@@ -1,5 +1,0 @@
-{
-  "metric": "direct-third-party-declarations",
-  "delta": 14,
-  "reason": "The new Outlook add-in workspace declares what its task pane and build need: React, React DOM, use-intl, valibot, better-result and @stll/time as the other apps do, mimetext to assemble an .eml file from a mail item, the Office.js, React and Bun type declarations, Tailwind and its CLI for the stylesheet, and libxml2-wasm to validate the manifest against the Office XML schemas."
-}

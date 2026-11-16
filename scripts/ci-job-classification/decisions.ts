@@ -3,6 +3,7 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
@@ -12,8 +13,8 @@ import {
   approvalPathForKey,
   CLASSIFICATION_DECISIONS_PATH,
   type ClassificationDecision,
+  decisionDirectoryForKey,
   decisionPathForKey,
-  LEGACY_CLASSIFICATION_DECISIONS_PATH,
 } from "./inputs";
 import { readFilesAtRevision } from "./revision-files";
 import { AdmissionError } from "./yaml";
@@ -47,135 +48,128 @@ type ReadDecisionsOptions = {
   observeRead?: ((file: string) => void) | undefined;
 };
 
+const DECISION_FILE = "decision.json";
+const APPROVAL_FILE = /^[0-9a-f]{64}\.json$/u;
+
 const git = (root: string, args: string[]) => {
   const result = Bun.spawnSync(["git", "-C", root, ...args], {
     stdout: "pipe",
     stderr: "pipe",
   });
+  if (result.exitCode !== 0) {
+    throw new AdmissionError({
+      message:
+        new TextDecoder().decode(result.stderr).trim() ||
+        `git ${args.join(" ")} failed`,
+    });
+  }
+  return new TextDecoder().decode(result.stdout);
+};
+
+type DecisionFiles = { files: string[]; read: (file: string) => string };
+
+const workingTreeFiles = (root: string): DecisionFiles => {
+  const directory = path.resolve(root, CLASSIFICATION_DECISIONS_PATH);
+  // Git tracks no empty directory, so a tree without a privileged job has
+  // none; that is "no decisions", not a failed read.
+  const entries = existsSync(directory)
+    ? readdirSync(directory, { withFileTypes: true })
+    : [];
   return {
-    exitCode: result.exitCode,
-    stdout: new TextDecoder().decode(result.stdout),
-    stderr: new TextDecoder().decode(result.stderr),
+    files: entries.flatMap((entry) =>
+      entry.isDirectory()
+        ? readdirSync(path.resolve(directory, entry.name)).map(
+            (name) => `${CLASSIFICATION_DECISIONS_PATH}/${entry.name}/${name}`,
+          )
+        : [`${CLASSIFICATION_DECISIONS_PATH}/${entry.name}`],
+    ),
+    read: (file) => readFileSync(path.resolve(root, file), "utf-8"),
   };
+};
+
+const revisionFiles = (root: string, revision: string): DecisionFiles => {
+  const files = git(root, [
+    "ls-tree",
+    "-r",
+    "--name-only",
+    revision,
+    "--",
+    CLASSIFICATION_DECISIONS_PATH,
+  ])
+    .split("\n")
+    .filter((file) => file.length > 0);
+  // Every decision file at the revision in one read, not one git per file.
+  const contents = readFilesAtRevision(root, revision, files);
+  return {
+    files,
+    read: (file) =>
+      contents.get(file) ?? git(root, ["show", `${revision}:${file}`]),
+  };
+};
+
+const parseRecord = (text: string) => {
+  const value: unknown = JSON.parse(text);
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new AdmissionError({
+      message: "Classification decision must be an object",
+    });
+  }
+  return Object.fromEntries(Object.entries(value));
+};
+
+// The file names of each job directory. Anything else under the decisions
+// path fails: a file this reader skipped would stay in the tree unreviewed.
+const jobDirectories = (files: readonly string[]) => {
+  const prefix = `${CLASSIFICATION_DECISIONS_PATH}/`;
+  const directories = new Map<string, string[]>();
+  for (const file of files.toSorted(compareCodeUnit)) {
+    // Desktop tools drop untracked dotfiles into directories they browse.
+    if (path.basename(file).startsWith(".")) {
+      continue;
+    }
+    const [directory, name, ...nested] = file.slice(prefix.length).split("/");
+    if (
+      directory === undefined ||
+      name === undefined ||
+      nested.length > 0 ||
+      (name !== DECISION_FILE && !APPROVAL_FILE.test(name))
+    ) {
+      throw new AdmissionError({
+        message: `Unexpected classification decision file: ${file}. Each job has one directory holding decision.json and its <digest>.json approvals`,
+      });
+    }
+    directories.set(directory, [...(directories.get(directory) ?? []), name]);
+  }
+  return directories;
 };
 
 export const readDecisions = (
   source: DecisionSource,
   { observeRead }: ReadDecisionsOptions = {},
 ): Record<string, unknown> => {
-  const collect = (entries: [string, unknown][]) => {
-    const decisions: Record<string, unknown> = {};
-    for (const [key, value] of entries) {
-      if (decisions[key] !== undefined) {
-        throw new AdmissionError({
-          message: `Duplicate classification decision key: ${key}`,
-        });
-      }
-      decisions[key] = value;
-    }
-    return decisions;
-  };
-  const parseJson = (text: string): unknown => JSON.parse(text);
-  const parseRecord = (text: string) => {
-    const value = parseJson(text);
-    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+  const { files, read } =
+    source.type === "working-tree"
+      ? workingTreeFiles(source.root)
+      : revisionFiles(source.root, source.revision);
+  const decisions: Record<string, unknown> = {};
+  for (const [directory, names] of jobDirectories(files)) {
+    const directoryPath = `${CLASSIFICATION_DECISIONS_PATH}/${directory}`;
+    if (!names.includes(DECISION_FILE)) {
       throw new AdmissionError({
-        message: "Classification decision must be an object",
+        message: `Approvals without a decision: ${directoryPath}. Add decision.json or remove the directory`,
       });
     }
-    return Object.fromEntries(Object.entries(value));
-  };
-  if (source.type === "working-tree") {
-    const directory = path.resolve(source.root, CLASSIFICATION_DECISIONS_PATH);
-    const entries = readdirSync(directory, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .toSorted((left, right) => compareCodeUnit(left.name, right.name))
-      .map((entry) => {
-        const name = entry.name;
-        const file = `${CLASSIFICATION_DECISIONS_PATH}/${name}/decision.json`;
-        observeRead?.(file);
-        const decision = parseRecord(
-          readFileSync(path.resolve(source.root, file), "utf-8"),
-        );
-        const approvalNames = readdirSync(path.resolve(directory, name)).filter(
-          (approval) => /^[0-9a-f]{64}\.json$/u.test(approval),
-        );
-        const approvedDigests = approvalNames.map((approval) => {
-          observeRead?.(`${CLASSIFICATION_DECISIONS_PATH}/${name}/${approval}`);
-          const record = parseRecord(
-            readFileSync(path.resolve(directory, name, approval), "utf-8"),
-          );
-          if (
-            record["kind"] !== decision["kind"] ||
-            record["qualifier"] !== decision["qualifier"] ||
-            record["reviewedDigest"] !== approval.slice(0, -5)
-          ) {
-            throw new AdmissionError({
-              message: `Approval does not match decision: ${name}/${approval}`,
-            });
-          }
-          return approval.slice(0, -5);
-        });
-        return [
-          decisionKeyFromPath(file),
-          {
-            kind: decision["kind"],
-            qualifier: decision["qualifier"],
-            approvedDigests:
-              typeof decision["reviewedDigest"] === "string"
-                ? [...approvedDigests, decision["reviewedDigest"]]
-                : approvedDigests,
-          },
-        ] satisfies [string, unknown];
-      });
-    return collect(entries);
-  }
-
-  const listed = git(source.root, [
-    "ls-tree",
-    "-r",
-    "--name-only",
-    source.revision,
-    "--",
-    CLASSIFICATION_DECISIONS_PATH,
-  ]);
-  const listedFiles = listed.stdout
-    .split("\n")
-    .filter((file) => file.length > 0);
-  // Every decision file at the revision in one read, not one git per file.
-  const contents = readFilesAtRevision(
-    source.root,
-    source.revision,
-    listedFiles,
-  );
-  const contentAt = (file: string) => {
-    const content = contents.get(file);
-    if (content !== undefined) {
-      return content;
-    }
-    const shown = git(source.root, ["show", `${source.revision}:${file}`]);
-    if (shown.exitCode !== 0) {
-      throw new AdmissionError({ message: shown.stderr.trim() });
-    }
-    return shown.stdout;
-  };
-  const files = listedFiles
-    .filter((file) => file.endsWith("/decision.json"))
-    .toSorted();
-  if (files.length > 0) {
-    const entries = files.map((file) => {
-      observeRead?.(file);
-      const directory = file.slice(0, -"decision.json".length);
-      const approvalFiles = listedFiles.filter(
-        (candidate) =>
-          candidate.startsWith(directory) &&
-          /\/[0-9a-f]{64}\.json$/u.test(candidate),
-      );
-      const decision = parseRecord(contentAt(file));
-      const approvedDigests = approvalFiles.map((approvalFile) => {
+    const decisionFile = `${directoryPath}/${DECISION_FILE}`;
+    const key = decisionKeyFromPath(decisionFile);
+    observeRead?.(decisionFile);
+    const decision = parseRecord(read(decisionFile));
+    const approvedDigests = names
+      .filter((name) => name !== DECISION_FILE)
+      .map((name) => {
+        const approvalFile = `${directoryPath}/${name}`;
         observeRead?.(approvalFile);
-        const record = parseRecord(contentAt(approvalFile));
-        const digest = path.basename(approvalFile, ".json");
+        const record = parseRecord(read(approvalFile));
+        const digest = name.slice(0, -".json".length);
         if (
           record["kind"] !== decision["kind"] ||
           record["qualifier"] !== decision["qualifier"] ||
@@ -187,61 +181,13 @@ export const readDecisions = (
         }
         return digest;
       });
-      return [
-        decisionKeyFromPath(file),
-        {
-          kind: decision["kind"],
-          qualifier: decision["qualifier"],
-          approvedDigests:
-            typeof decision["reviewedDigest"] === "string"
-              ? [...approvedDigests, decision["reviewedDigest"]]
-              : approvedDigests,
-        },
-      ] satisfies [string, unknown];
-    });
-    return collect(entries);
+    decisions[key] = {
+      kind: decision["kind"],
+      qualifier: decision["qualifier"],
+      approvedDigests,
+    };
   }
-
-  const flatFiles = listed.stdout
-    .split("\n")
-    .filter(
-      (file) =>
-        file.startsWith(`${CLASSIFICATION_DECISIONS_PATH}/`) &&
-        file.endsWith(".json") &&
-        !file.slice(`${CLASSIFICATION_DECISIONS_PATH}/`.length).includes("/"),
-    );
-  if (flatFiles.length > 0) {
-    return collect(
-      flatFiles.map((file) => {
-        const value = parseRecord(contentAt(file));
-        const key = decodeURIComponent(path.basename(file, ".json"));
-        return [
-          key,
-          {
-            kind: value["kind"],
-            qualifier: value["qualifier"],
-            approvedDigests:
-              typeof value["reviewedDigest"] === "string"
-                ? [value["reviewedDigest"]]
-                : [],
-          },
-        ] satisfies [string, unknown];
-      }),
-    );
-  }
-
-  const legacy = git(source.root, [
-    "show",
-    `${source.revision}:${LEGACY_CLASSIFICATION_DECISIONS_PATH}`,
-  ]);
-  if (legacy.exitCode !== 0) {
-    throw new AdmissionError({ message: legacy.stderr.trim() });
-  }
-  const parsed = parseJson(legacy.stdout);
-  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-    throw new AdmissionError({ message: "Invalid legacy decision record" });
-  }
-  return Object.fromEntries(Object.entries(parsed));
+  return decisions;
 };
 
 export const writeDecision = (
@@ -257,27 +203,23 @@ export const writeDecision = (
     ...decision
   } = value;
   writeFileSync(file, `${JSON.stringify(decision, null, 2)}\n`);
-  if (typeof reviewedDigest === "string") {
-    writeApproval(root, key, reviewedDigest, {
-      ...decision,
-      approvedDigests: [],
-    });
+  if (typeof reviewedDigest !== "string") {
+    return;
   }
-};
-
-export const writeApproval = (
-  root: string,
-  key: string,
-  digest: string,
-  decision: ClassificationDecision,
-) => {
-  const file = path.resolve(root, approvalPathForKey(key, digest));
-  mkdirSync(path.dirname(file), { recursive: true });
-  if (!existsSync(file)) {
+  // An approval is add-only: two branches that approve the same job add two
+  // files and merge without a conflict.
+  const approval = path.resolve(root, approvalPathForKey(key, reviewedDigest));
+  if (!existsSync(approval)) {
     writeFileSync(
-      file,
-      `${JSON.stringify({ kind: decision.kind, qualifier: decision.qualifier, reviewedDigest: digest }, null, 2)}\n`,
+      approval,
+      `${JSON.stringify({ kind: decision.kind, qualifier: decision.qualifier, reviewedDigest }, null, 2)}\n`,
       { flag: "wx" },
     );
   }
+};
+
+export const removeDecision = (root: string, key: string) => {
+  rmSync(path.resolve(root, decisionDirectoryForKey(key)), {
+    recursive: true,
+  });
 };

@@ -40,6 +40,19 @@ header {
 button {
   flex: none;
 }
+[data-title-container]:has([data-sibling-row]) {
+  display: flex;
+}
+[data-sibling-row] {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: 6px;
+}
+[data-sibling] {
+  min-inline-size: 0;
+  overflow: hidden;
+  white-space: pre;
+}
 
 [data-fallback="true"] [data-slot="inline-rename-input"] {
   position: absolute;

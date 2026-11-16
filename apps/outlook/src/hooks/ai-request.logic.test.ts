@@ -3,10 +3,12 @@ import { describe, expect, test } from "bun:test";
 import {
   OUTLOOK_AI_FROM_MAX_CHARS,
   OUTLOOK_AI_INPUT_MAX_CHARS,
+  OUTLOOK_AI_INTENT_MAX_CHARS,
   OUTLOOK_AI_SUBJECT_MAX_CHARS,
 } from "@stll/api-contract/outlook-ai";
 
 import {
+  buildAIAskRequest,
   buildAIDraftRequest,
   buildAISummaryRequest,
 } from "@/hooks/ai-request.logic";
@@ -70,5 +72,28 @@ describe("Outlook AI request bodies", () => {
     });
     expect(request.originalSubject).toHaveLength(OUTLOOK_AI_SUBJECT_MAX_CHARS);
     expect(request).not.toHaveProperty("originalFrom");
+  });
+});
+
+describe("buildAIAskRequest", () => {
+  test("sends the question with the email and the matter when one is known", () => {
+    const body = buildAIAskRequest({
+      question: "q".repeat(OUTLOOK_AI_INTENT_MAX_CHARS + 10),
+      snapshot,
+      workspaceId: "workspace-1",
+    });
+    expect(body.question).toHaveLength(OUTLOOK_AI_INTENT_MAX_CHARS);
+    expect(body.originalBody).toHaveLength(OUTLOOK_AI_INPUT_MAX_CHARS);
+    expect(body.originalSubject).toBe("Subject");
+    expect(body).toMatchObject({ workspaceId: "workspace-1" });
+  });
+
+  test("leaves the matter out when none is known", () => {
+    const body = buildAIAskRequest({
+      question: "When?",
+      snapshot,
+      workspaceId: null,
+    });
+    expect("workspaceId" in body).toBe(false);
   });
 });

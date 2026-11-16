@@ -11,7 +11,10 @@ import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { SafeId } from "@stll/api-contract/safe-id";
-import { searchHistoryEntryMatch } from "@stll/api-contract/search-history-identity";
+import {
+  searchHistoryEntryMatch,
+  searchHistoryPathCountry,
+} from "@stll/api-contract/search-history-identity";
 import { buildSearchHistoryTitle } from "@stll/api-contract/search-history-title";
 import type { SearchHistoryTitleParts } from "@stll/api-contract/search-history-title";
 import { Temporal } from "@stll/time";
@@ -198,7 +201,7 @@ type HistoryWrite = { scope: LawHistoryOwner } & (
         id: SafeId<"searchHistoryEntry">;
       };
     }
-  | { type: "clear" }
+  | { type: "clear"; country: LawHistoryCountry }
 );
 
 type CoordinateHistoryWriteOptions = {
@@ -234,6 +237,12 @@ const coordinateHistoryWrite = async ({
       ? []
       : snapshots.flatMap(({ entries }) =>
           entries
+            .filter(
+              (entry) =>
+                write.type !== "clear" ||
+                entry.kind === "search" ||
+                searchHistoryPathCountry(entry.path) === write.country,
+            )
             .map(localIdentity)
             .filter((key) => target === null || key === target),
         ),
@@ -293,7 +302,12 @@ const sendHistoryWrite = async (write: HistoryWrite) => {
       );
       return;
     case "clear":
-      unwrapApiResponse(await api["search-history"].delete({}, request));
+      unwrapApiResponse(
+        await api["search-history"].delete(
+          {},
+          { ...request, query: { ...request.query, country: write.country } },
+        ),
+      );
       return;
     default:
       write satisfies never;
@@ -436,7 +450,14 @@ const useLawHistoryState = ({ filter, country }: LawHistoryList) => {
   );
   const clearEntries = useLatestCallback(
     (capturedScope: LawHistoryOwner, options: { onSuccess: () => void }) => {
-      mutation.mutate({ type: "clear", scope: capturedScope }, options);
+      mutation.mutate(
+        {
+          type: "clear",
+          scope: capturedScope,
+          country: country ?? panic("Country is required to clear history"),
+        },
+        options,
+      );
     },
   );
   const list = (() => {

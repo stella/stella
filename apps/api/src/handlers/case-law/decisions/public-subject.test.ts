@@ -93,6 +93,7 @@ describe("public decision routes are gated by construction", () => {
       "GET /case/decisions/:decisionId/provisions",
       "GET /case/decisions/:decisionId/summary",
       "GET /case/decisions/by-slug/:slug",
+      "POST /case/decisions/quotes/verify",
     ]);
   });
 });

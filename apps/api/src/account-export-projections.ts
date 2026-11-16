@@ -2,6 +2,7 @@ import {
   toPersonalChatMessageResponse,
   toPersonalChatMessageRevisionResponse,
   toPersonalChatThreadResponse,
+  toPersonalQueuedChatMessageResponse,
 } from "@/api/handlers/chat/personal-data-response";
 import { toBillingDraftSettingsAccountExport } from "@/api/handlers/desktop-time-entries/billing-draft-settings-export";
 import { projectPrivateAnnotationForAccountExport } from "@/api/handlers/legal-reader/annotations/personal-data-response";
@@ -43,6 +44,7 @@ export const ACCOUNT_EXPORT_PROJECTIONS = {
   chat_threads: toPersonalChatThreadResponse,
   chat_messages: toPersonalChatMessageResponse,
   chat_message_revisions: toPersonalChatMessageRevisionResponse,
+  chat_queued_messages: toPersonalQueuedChatMessageResponse,
   ai_memories: toMemoryResponse,
   agent_skills: toAgentSkillResponse,
   agent_skill_revisions: toAgentSkillRevisionResponse,

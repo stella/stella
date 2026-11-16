@@ -2,6 +2,10 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import {
+  ASK_USER_SELECTION,
+  type AskUserSelection,
+} from "@stll/api-contract/chat-ask-user";
 import { loadSkill } from "@stll/skills";
 
 import { isRecord } from "@/api/lib/type-guards";
@@ -32,19 +36,16 @@ const listedRows = (result: InternalToolResult, key: string) => {
   const rows = isRecord(result.data) ? result.data[key] : undefined;
   return v.parse(v.array(v.object({ id: v.string(), name: v.string() })), rows);
 };
-const listedIds = (result: InternalToolResult, key: string): string[] =>
-  listedRows(result, key).map(({ id }) => id);
 
 const matters = listedRows(answerMatterTool("list_matters", {}), "matters");
 const [supplyMatterId] = matters.map(({ id }) => id);
-const MATTER_OPTIONS = [
-  ...matters.map(({ name }) => name),
-  "All matters I can access",
-];
-const [keller, brandt, vogel] = listedIds(
+const MATTER_OPTIONS = matters.map(({ name }) => name);
+const supplyDocuments = listedRows(
   answerMatterTool("list_documents", { matter_id: supplyMatterId }),
   "documents",
 );
+const DOCUMENT_OPTIONS = supplyDocuments.map(({ name }) => name);
+const [keller, brandt, vogel] = supplyDocuments.map(({ id }) => id);
 if (
   supplyMatterId === undefined ||
   keller === undefined ||
@@ -111,20 +112,36 @@ const event = (
   turn: number,
   name: string,
   input: unknown = {},
-  questions: readonly string[] = [],
-  options: readonly string[] = [],
 ): BuilderEvent => ({
   turn,
   name,
   input,
+  questions: [],
+  resentUnchanged: [],
+  error: null,
+});
+
+type AskEventOptions = {
+  turn: number;
+  questions: readonly string[];
+  options?: readonly string[];
+  selection?: AskUserSelection;
+};
+
+const askEvent = ({
+  turn,
+  questions,
+  options = [],
+  selection = ASK_USER_SELECTION.single,
+}: AskEventOptions): BuilderEvent => ({
+  ...event(turn, "ask-user"),
   questions: questions.map((question) => ({
     question,
     reason: "",
     options,
+    selection,
     default: undefined,
   })),
-  resentUnchanged: [],
-  error: null,
 });
 
 const positionsNamed = (count: number) =>
@@ -136,11 +153,24 @@ const saveOnePosition = (turn: number) =>
   event(turn, "save_playbook", { positions: positionsNamed(1) });
 
 const ask = (turn: number, ...questions: string[]) =>
-  event(turn, "ask-user", {}, questions);
+  askEvent({ turn, questions });
 /** One question answered by picking from `options`. */
 const askWith = (turn: number, question: string, options: readonly string[]) =>
-  event(turn, "ask-user", {}, [question], options);
-const WHICH_MATTERS = "Which matters should I search, or all you can access?";
+  askEvent({ turn, questions: [question], options });
+/** One question answered by ticking any of `options`. */
+const askSeveral = (
+  turn: number,
+  question: string,
+  options: readonly string[],
+) =>
+  askEvent({
+    turn,
+    questions: [question],
+    options,
+    selection: ASK_USER_SELECTION.multiple,
+  });
+const WHICH_MATTERS = "Which matters should I search?";
+const WHICH_DOCUMENTS = "Which of these should I read?";
 const read = (turn: number, entityId: string) =>
   event(turn, "read_content_across_matters", { entity_id: entityId });
 
@@ -153,10 +183,7 @@ const OPENING_QUESTIONS = [
 /** Steps 2 to 4 of "Look for them" on the chosen matter, then a save. */
 const readChosenMatter = (turn: number): BuilderEvent[] => [
   event(turn, "list_documents", { matter_id: supplyMatterId }),
-  ask(
-    turn,
-    "Which of these should I read? Keller GmbH, Brandt AG, Vogel (draft)",
-  ),
+  askSeveral(turn, WHICH_DOCUMENTS, DOCUMENT_OPTIONS),
   read(turn, keller),
   read(turn, brandt),
   saveOnePosition(turn),
@@ -167,7 +194,7 @@ const contractsLaterRun = (): BuilderEvent[] => [
   ask(1, ...OPENING_QUESTIONS),
   saveOnePosition(1),
   event(2, "list_matters"),
-  askWith(2, WHICH_MATTERS, MATTER_OPTIONS),
+  askSeveral(2, WHICH_MATTERS, MATTER_OPTIONS),
   ...readChosenMatter(2),
 ];
 
@@ -235,9 +262,44 @@ describe("contracts-later scoring", () => {
 
   test("asking which matters without offering them is a defect", () => {
     const events = contractsLaterRun();
-    events[3] = ask(2, WHICH_MATTERS);
+    events[3] = askSeveral(2, WHICH_MATTERS, []);
     expect(score("contracts-later", events)).toEqual([
       `asked which matters without offering ${matters.map(({ name }) => name).join(", ")} as an option`,
+    ]);
+  });
+
+  test("asking which matters or documents as a single choice is a defect", () => {
+    const events = contractsLaterRun();
+    events[3] = askWith(2, WHICH_MATTERS, MATTER_OPTIONS);
+    events[5] = askWith(2, WHICH_DOCUMENTS, DOCUMENT_OPTIONS);
+    expect(score("contracts-later", events)).toEqual([
+      "asked which matters as a single-choice question",
+      "asked which documents as a single-choice question",
+    ]);
+  });
+
+  test("offering an option for all of them is a defect", () => {
+    const events = contractsLaterRun();
+    events[3] = askSeveral(2, WHICH_MATTERS, [
+      ...MATTER_OPTIONS,
+      "All matters I can access",
+    ]);
+    events[5] = askSeveral(2, WHICH_DOCUMENTS, [
+      ...DOCUMENT_OPTIONS,
+      "Every candidate listed",
+    ]);
+    expect(score("contracts-later", events)).toEqual([
+      "offered an option for all matters",
+      "offered an option for all documents",
+    ]);
+    // Naming a real matter does not hide an option for all of them.
+    events[3] = askSeveral(2, WHICH_MATTERS, [
+      ...MATTER_OPTIONS,
+      `All matters, including ${MATTER_OPTIONS.join(" and ")}`,
+    ]);
+    events[5] = askSeveral(2, WHICH_DOCUMENTS, DOCUMENT_OPTIONS);
+    expect(score("contracts-later", events)).toEqual([
+      "offered an option for all matters",
     ]);
   });
 
@@ -339,6 +401,25 @@ describe("scripted answers", () => {
       ),
     ).toBe(`The "${matters.at(0)?.name ?? ""}" matter.`);
   });
+
+  test("a multiple-choice question is answered by ticking options", () => {
+    const answer = (question: BuilderEvent) =>
+      scenario("discovery").answer(
+        question.questions.at(0) ?? panic("the helper builds one question"),
+        [],
+      );
+    expect(answer(askSeveral(1, WHICH_MATTERS, MATTER_OPTIONS))).toEqual([
+      matters.at(0)?.name ?? panic("the fixture lists a matter"),
+    ]);
+    const executed = DOCUMENT_OPTIONS.filter((name) => !name.includes("DRAFT"));
+    expect(answer(askSeveral(1, WHICH_DOCUMENTS, DOCUMENT_OPTIONS))).toEqual(
+      executed,
+    );
+    // Asked as a single choice, the user types the names out instead.
+    expect(answer(askWith(1, WHICH_DOCUMENTS, DOCUMENT_OPTIONS))).toBe(
+      executed.join(", "),
+    );
+  });
 });
 
 describe("chat-surface discovery scoring", () => {
@@ -423,7 +504,7 @@ const groundingLaterRun = (): BuilderEvent[] => [
   event(1, "save_playbook"),
   askWith(1, GROUNDING_QUESTION, GROUNDING_OPTIONS),
   event(1, "list_matters"),
-  askWith(1, WHICH_MATTERS, MATTER_OPTIONS),
+  askSeveral(1, WHICH_MATTERS, MATTER_OPTIONS),
   ...readChosenMatter(1),
 ];
 

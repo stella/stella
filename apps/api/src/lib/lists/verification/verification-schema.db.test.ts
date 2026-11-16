@@ -303,7 +303,21 @@ describe("claim review events", () => {
         kind: "record-conflict",
         resolution: { kind: "escalated" },
       },
-    } as const satisfies {
+      "fact-link": { kind: "fact-link", factEntityId: FACT, change: "link" },
+      recheck: {
+        kind: "recheck",
+        requestKey: "recheck-1",
+        grade: {
+          state: "nocover",
+          score: null,
+          recordConflict: null,
+          refs: [],
+          qualifiers: [],
+        },
+        facts: { changed: [], removed: [] },
+        modelRef: null,
+      },
+    } satisfies {
       [Kind in ClaimReviewEventKind]: Extract<
         ClaimReviewAction,
         { kind: Kind }

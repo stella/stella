@@ -25,6 +25,7 @@ const CODEX: ChatLocalRunTarget = {
   harness: "codex",
   model: "gpt-5-codex",
   approvals: "ask",
+  reasoningEffort: null,
 };
 
 type ThreadResponse =

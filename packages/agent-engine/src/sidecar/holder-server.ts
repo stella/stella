@@ -20,6 +20,10 @@ import {
   type ProtocolLog,
   protocolTap,
 } from "../protocol-log";
+import {
+  type HolderBrowserOptions,
+  startHolderBrowser,
+} from "./browser/holder-browser";
 import type { ProtocolLogSettingRead } from "./env";
 import { Holder, type HolderOptions, type HolderPeer } from "./holder";
 import { SIDECAR_MAX_LINE_BYTES } from "./protocol";
@@ -66,8 +70,10 @@ export type HolderStartError =
 
 export type HolderServerOptions = Omit<
   HolderOptions,
-  "secret" | "log" | "exit" | "protocolLog"
+  "secret" | "log" | "exit" | "protocolLog" | "browser"
 > & {
+  /** The member's Chrome, through the extension; `null` starts no bridge. */
+  browser: HolderBrowserOptions | null;
   /** The version's folder, `<app data>/agent-holder/<version>`. */
   dir: string;
   /** The socket path, or the named pipe on Windows, as the desktop chose. */
@@ -288,6 +294,7 @@ export const startHolderServer = async (
   options: HolderServerOptions,
 ): Promise<Result<HolderServer, HolderStartError>> => {
   const {
+    browser: browserOptions,
     dir,
     endpoint,
     protocolLog: protocolLogSetting,
@@ -312,9 +319,6 @@ export const startHolderServer = async (
     return owned;
   }
   const secret = randomBytes(SECRET_BYTES).toString("hex");
-  // The secret last: once it exists, so does the endpoint record.
-  writePrivate(dir, HOLDER_ENDPOINT_FILE, endpoint);
-  writePrivate(dir, HOLDER_SECRET_FILE, secret);
   const { promise: exited, resolve } = Promise.withResolvers<null>();
   const sockets = new Set<net.Socket>();
   /** Flush what was written, then drop the connection. */
@@ -324,23 +328,52 @@ export const startHolderServer = async (
     });
   };
   const protocolLog = openProtocolLog(protocolLogSetting, log);
+  const started =
+    browserOptions === null
+      ? null
+      : await startHolderBrowser({
+          ...browserOptions,
+          dir,
+          endpoint,
+          log,
+          version: holderOptions.sidecarVersion,
+        });
+  if (started?.type === "unavailable") {
+    log(`no browser bridge: ${started.reason}`);
+  }
+  const browser = started?.type === "started" ? started.browser : null;
   let connections = 0;
   const holder = new Holder({
     ...holderOptions,
     secret,
     log,
     protocolLog,
+    browser: browser?.mcp ?? null,
     exit: () => {
       for (const socket of sockets) {
         end(socket);
       }
+      // The holder exits once its browser has: a stella browser it started
+      // is closed, not left running.
+      const browserStopped = (async () => {
+        if (browser === null) {
+          return null;
+        }
+        const stopped = await Result.tryPromise(
+          async () => await browser.stop(),
+        );
+        if (Result.isError(stopped)) {
+          log(`the browser bridge did not stop cleanly: ${stopped.error.name}`);
+        }
+        return null;
+      })();
       server.close(() => {
         rmSync(path.join(dir, HOLDER_SECRET_FILE), { force: true });
         rmSync(path.join(dir, HOLDER_ENDPOINT_FILE), { force: true });
         if (!IS_WINDOWS) {
           rmSync(endpoint, { force: true });
         }
-        resolve(null);
+        resolve(browserStopped);
       });
     },
   });
@@ -376,6 +409,11 @@ export const startHolderServer = async (
       peer.closed();
     });
   });
+  // Published only once a connection is answered: a desktop that finds the
+  // secret connects at once. The secret last: once it exists, so does the
+  // endpoint record.
+  writePrivate(dir, HOLDER_ENDPOINT_FILE, endpoint);
+  writePrivate(dir, HOLDER_SECRET_FILE, secret);
   log(`listening as ${holderOptions.sidecarVersion}`);
   return Result.ok({ holder, exited });
 };

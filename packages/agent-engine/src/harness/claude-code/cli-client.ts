@@ -60,6 +60,17 @@ type StartClaudeCliOptions = {
   handlers: ClaudeCliHandlers;
 };
 
+/**
+ * Startup requests, which wait on the startup deadline: initialize covers
+ * the CLI's first launch (an antivirus scan, a busy computer); registering
+ * stella's MCP server waits on the CLI's own connect, itself up to 30
+ * seconds a server.
+ */
+const STARTUP_REQUESTS: ReadonlySet<ClaudeHostControlRequest> = new Set([
+  "initialize",
+  "mcp_set_servers",
+]);
+
 export type ClaudeCliClient = {
   /** Sends a control request and settles with its response payload. */
   request: (
@@ -173,11 +184,16 @@ export const startClaudeCli = ({
     request: async (subtype, fields = {}) => {
       const requestId = `stella-${String(state.nextId)}`;
       state.nextId += 1;
-      return await cli.request(requestId, subtype, {
-        type: "control_request",
-        request_id: requestId,
-        request: { ...fields, subtype },
-      });
+      return await cli.request(
+        requestId,
+        subtype,
+        {
+          type: "control_request",
+          request_id: requestId,
+          request: { ...fields, subtype },
+        },
+        STARTUP_REQUESTS.has(subtype) ? deadlines.startupRequestMs : undefined,
+      );
     },
     send: cli.write,
     respond: (requestId, response) => {

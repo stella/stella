@@ -38,6 +38,47 @@ pub fn type_text(text: &str) -> Result<(), TypeTextError> {
   Ok(())
 }
 
+/// A key a formatted dictation presses, never one that carries text.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FormattingKey {
+  Return,
+  B,
+}
+
+impl FormattingKey {
+  /// The virtual key code (`kVK_Return`, `kVK_ANSI_B`).
+  const fn code(self) -> u16 {
+    match self {
+      Self::Return => 0x24,
+      Self::B => 0x0B,
+    }
+  }
+}
+
+/// Presses and releases `key` with exactly the given modifiers held, so a
+/// modifier still down from a shortcut cannot change what the app receives.
+pub fn press_key(
+  key: FormattingKey,
+  command: bool,
+  shift: bool,
+) -> Result<(), TypeTextError> {
+  let mut flags = CGEventFlags::empty();
+  if command {
+    flags |= CGEventFlags::MaskCommand;
+  }
+  if shift {
+    flags |= CGEventFlags::MaskShift;
+  }
+  for key_down in [true, false] {
+    let event =
+      CGEvent::new_keyboard_event(None, key.code(), key_down).ok_or(TypeTextError)?;
+    CGEvent::set_flags(Some(&event), flags);
+    CGEvent::post(CGEventTapLocation::HIDEventTap, Some(&event));
+  }
+  thread::sleep(CHUNK_PAUSE);
+  Ok(())
+}
+
 /// Splits UTF-16 into event-sized chunks without separating a surrogate pair.
 fn chunks(units: &[u16]) -> Vec<&[u16]> {
   let mut parts = Vec::new();

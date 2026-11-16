@@ -14,6 +14,7 @@ import {
   makeM4aAudioBytes,
   makeWavAudioBytes,
 } from "@/api/handlers/dictation/audio-fixtures.test-helper";
+import { listDictationModels } from "@/api/handlers/dictation/desktop-transcription";
 import { transcribeAudio } from "@/api/handlers/dictation/provider";
 import type { TranscriptionResult } from "@/api/handlers/dictation/provider";
 import { createDictationTranscribeEndpoint } from "@/api/handlers/dictation/transcribe";
@@ -24,8 +25,13 @@ import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 
-import { dictationScalingScenario, seedDictationScaling } from "./dictation";
-import { writeScalingViolations } from "./measurement";
+import {
+  desktopDictationModelsScalingScenario,
+  dictationScalingScenario,
+  seedDesktopDictationModelsScaling,
+  seedDictationScaling,
+} from "./dictation";
+import { readScalingViolations, writeScalingViolations } from "./measurement";
 
 const testState = createTestState({ file: import.meta.path, config: env });
 
@@ -506,5 +512,70 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
         );
       });
     }, 120_000); // timeout: seeds and exercises real PostgreSQL accounting at two populations
+
+    test("a linked desktop's model list reads the same among 10 and 200 other organizations", async () => {
+      const databaseUrl =
+        process.env["DATABASE_URL"] ?? panic("DATABASE_URL required");
+      expect(
+        apiApp.routes.some(
+          ({ definition }) =>
+            definition === desktopDictationModelsScalingScenario.definition,
+        ),
+      ).toBe(true);
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db } = openClient({ max: 1 });
+        const measureModelsAt = async (size: number) => {
+          const fixture = await seedDesktopDictationModelsScaling(db, size);
+          try {
+            testState.patchConfig({
+              AI_PROVIDER: "openrouter",
+              OPENROUTER_API_KEY: "test-instance-key",
+              REQUIRE_PERSONAL_AI_KEY: false,
+              FEATURE_ORG_ACCESS_STATE: true,
+              FEATURE_CONFIGURED_ACCESS: false,
+              FEATURE_FREE_TIER: false,
+              API_FEATURE_ACCESS_GRANTS: {
+                ...env.API_FEATURE_ACCESS_GRANTS,
+                "desktop-dictation": [
+                  {
+                    type: "organization",
+                    organizationId: fixture.organizationId,
+                  },
+                ],
+                "desktop-dictation-cloud": [
+                  {
+                    type: "organization",
+                    organizationId: fixture.organizationId,
+                  },
+                ],
+              },
+            });
+            return await desktopDictationModelsScalingScenario.measure(fixture);
+          } finally {
+            await fixture.cleanup();
+          }
+        };
+        const small = await measureModelsAt(10);
+        const large = await measureModelsAt(200);
+        // The other organizations sit in another region: only this one's
+        // settings decide the list.
+        const expected = listDictationModels({
+          orgAIConfig: null,
+          managedAIResidency: "eu",
+        });
+        expect(small.response).toEqual(expected);
+        expect(large.response).toEqual(expected);
+        expect(small.statements).toBeGreaterThan(0);
+        expect(readScalingViolations({ small, large })).toEqual([]);
+        console.info(
+          "handler-scaling",
+          JSON.stringify({
+            name: desktopDictationModelsScalingScenario.name,
+            small,
+            large,
+          }),
+        );
+      });
+    }, 120_000); // timeout: seeds and reads real PostgreSQL settings at two populations
   },
 );

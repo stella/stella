@@ -1,31 +1,59 @@
-import type { ReactNode } from "react";
+import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/components/button";
 import { StellaMark } from "@stll/ui/components/stella-mark";
+import { EllipsisIcon, LogOutIcon, RefreshCcwIcon } from "@stll/ui/icons";
+import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 
+/**
+ * The pane's top bar: the stella mark and name, and a quiet menu for the
+ * two things people rarely need (reload the email, sign out).
+ */
 export const AppHeader = ({
-  action,
-  subtitle,
-  title,
+  onRefresh,
+  onSignOut,
 }: {
-  action?: ReactNode;
-  subtitle?: string | undefined;
-  title: string;
-}) => (
-  <header className="bg-card/95 border-border sticky top-0 z-10 flex items-center justify-between gap-3 border-b px-4 py-3">
-    <div className="flex min-w-0 items-start gap-2.5">
-      <span
-        aria-hidden="true"
-        className="bg-primary text-primary-foreground inline-flex size-7 shrink-0 items-center justify-center rounded-md"
-      >
-        <StellaMark className="size-4.5" />
-      </span>
-      <div className="min-w-0">
-        <h1 className="truncate text-sm/5 font-medium">{title}</h1>
-        {subtitle ? (
-          <p className="text-muted-foreground text-xs/4.5">{subtitle}</p>
-        ) : null}
+  onRefresh?: (() => void) | undefined;
+  onSignOut?: (() => void) | undefined;
+}) => {
+  const t = useTranslations("outlook");
+  const hasMenu = onRefresh !== undefined || onSignOut !== undefined;
+
+  return (
+    <header className="bg-background/95 sticky top-0 z-10 flex h-11 items-center justify-between gap-3 px-3 backdrop-blur-sm">
+      <div className="flex min-w-0 items-center gap-2">
+        <StellaMark className="text-foreground size-4.5 shrink-0" />
+        <span className="truncate text-sm font-medium">stella</span>
       </div>
-    </div>
-    {action}
-  </header>
-);
+      {hasMenu ? (
+        <Menu>
+          <MenuTrigger
+            render={
+              <Button
+                aria-label={t("moreActions")}
+                size="icon-sm"
+                variant="ghost"
+              />
+            }
+          >
+            <EllipsisIcon />
+          </MenuTrigger>
+          <MenuPopup align="end">
+            {onRefresh === undefined ? null : (
+              <MenuItem onClick={onRefresh}>
+                <RefreshCcwIcon />
+                {t("refresh")}
+              </MenuItem>
+            )}
+            {onSignOut === undefined ? null : (
+              <MenuItem onClick={onSignOut}>
+                <LogOutIcon />
+                {t("signOut")}
+              </MenuItem>
+            )}
+          </MenuPopup>
+        </Menu>
+      ) : null}
+    </header>
+  );
+};

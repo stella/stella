@@ -17,7 +17,14 @@ import {
   switchContainedTab,
 } from "./tab-containment";
 
-type Rule = { condition: { excludedTabIds?: number[]; tabIds?: number[] } };
+type Rule = {
+  condition: {
+    excludedResponseHeaders?: { header: string; values?: string[] }[];
+    excludedTabIds?: number[];
+    responseHeaders?: { header: string }[];
+    tabIds?: number[];
+  };
+};
 
 const originalChrome = Object.getOwnPropertyDescriptor(globalThis, "chrome");
 
@@ -92,6 +99,35 @@ const startControl = async () => {
   await containControlledTab(CONTROLLED);
   return fake;
 };
+
+describe("downloads in chat's tabs", () => {
+  /** What the rules that stop downloads let through, by holder. */
+  const exemptions = async (owner: string | null) => {
+    const fake = installFakeChrome();
+    if (owner !== null) {
+      fake.session["browserControlOwner"] = owner;
+    }
+    fake.openTabIds.push(CONTROLLED);
+    await containControlledTab(CONTROLLED);
+    return fake.state.rules
+      .filter(({ condition }) => condition.responseHeaders !== undefined)
+      .map(({ condition }) => condition.excludedResponseHeaders ?? []);
+  };
+
+  test("under the web connection no download response gets through", async () => {
+    const rules = await exemptions(null);
+    expect(rules).toHaveLength(2);
+    expect(rules).toEqual([[], []]);
+  });
+
+  test("a desktop chat's tab may receive a response that says it is a PDF", async () => {
+    const pdf = [
+      { header: "content-type", values: ["application/pdf*"] },
+      { header: "content-disposition", values: ["*.pdf*"] },
+    ];
+    expect(await exemptions("desktop:thread-1")).toEqual([pdf, pdf]);
+  });
+});
 
 describe("controlled tab containment", () => {
   test("a tab Chrome has only just created is confined before anyone sorts it", async () => {

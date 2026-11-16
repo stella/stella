@@ -1,30 +1,14 @@
 import { describe, expect, test } from "bun:test";
 
-import type { ReviewDecision } from "@stll/api-contract/review-decision";
-
+import { toSafeId } from "@/api/lib/branded-types";
 import {
-  AVT_CLAIM_REVIEW_DECISION,
   CLAIM_REVIEW_EVENT_KINDS,
   CLAIM_REVIEW_REASON_RULE,
   type ClaimReviewAction,
   type ClaimReviewEventKind,
-  type ClaimReviewStatus,
   reviewReasonOf,
   type StoredClaimReviewEventPayload,
 } from "@/api/lib/lists/verification/contract";
-
-AVT_CLAIM_REVIEW_DECISION satisfies Record<
-  ClaimReviewStatus,
-  ReviewDecision | null
->;
-
-test("claim review statuses translate to shared decisions", () => {
-  expect(AVT_CLAIM_REVIEW_DECISION).toEqual({
-    reviewed: "accepted",
-    disputed: "rejected",
-    "needs-evidence": null,
-  });
-});
 
 /** One stored action of every kind, with no reason. */
 const STORED = {
@@ -36,7 +20,25 @@ const STORED = {
     kind: "record-conflict",
     resolution: { kind: "escalated" },
   },
-} as const satisfies {
+  "fact-link": {
+    kind: "fact-link",
+    factEntityId: toSafeId<"entity">("11111111-1111-4111-8111-111111111111"),
+    change: "link",
+  },
+  recheck: {
+    kind: "recheck",
+    requestKey: "key-1",
+    grade: {
+      state: "nocover",
+      score: null,
+      recordConflict: null,
+      refs: [],
+      qualifiers: [],
+    },
+    facts: { changed: [], removed: [] },
+    modelRef: null,
+  },
+} satisfies {
   [Kind in ClaimReviewEventKind]: Extract<ClaimReviewAction, { kind: Kind }>;
 };
 

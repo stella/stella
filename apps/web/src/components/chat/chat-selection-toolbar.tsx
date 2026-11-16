@@ -21,8 +21,8 @@ import {
 } from "@/components/chat/side-panel-chat-status";
 import { SIDE_PANEL_CHAT_STATUS } from "@/components/chat/side-panel-chat-status.logic";
 import { useSidePanelChat } from "@/components/chat/use-request-chat-about";
+import { useSelectionCopyControl } from "@/components/copy-control";
 import { SelectionToolbar } from "@/components/selection-toolbar";
-import { useSelectionCopy } from "@/components/selection-toolbar-actions";
 import { selectionToolbarAnchor } from "@/components/selection-toolbar.logic";
 import type { SelectionToolbarAnchor } from "@/components/selection-toolbar.logic";
 import type { AnswerEditAnchor } from "@/features/chat/answer-edit/answer-edit-api";
@@ -118,7 +118,7 @@ export const ChatSelectionToolbar = ({
 
   // The bar copies the words selected across this transcript's messages
   // while it offers its actions.
-  const selectionCopy = useSelectionCopy({
+  const selectionCopy = useSelectionCopyControl({
     ownsSelection: (selection, root) =>
       selected !== null &&
       editing === null &&

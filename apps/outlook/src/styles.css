@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "@stll/ui/theme.css";
+@import "./fonts.css";
 
 @source "../../../packages/ui/src/**/*.{ts,tsx}";
 @source "../**/*.{ts,tsx}";

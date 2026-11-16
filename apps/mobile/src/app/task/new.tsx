@@ -2,19 +2,14 @@ import { Suspense, useState, useTransition } from "react";
 
 import { Result } from "better-result";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import {
-  ActivityIndicator,
-  Platform,
-  Pressable,
-  ScrollView,
-  View,
-} from "react-native";
+import { ActivityIndicator, Platform, ScrollView, View } from "react-native";
 import { useFormatter, useTimeZone, useTranslations } from "use-intl";
 
 import { Input } from "@stll/ui/input";
 import { Text } from "@stll/ui/text";
 
 import { useChanged } from "@/components/changes";
+import { ChoiceChip } from "@/components/choice-chip";
 import { DueDatePicker } from "@/components/due-date-picker";
 import { screenStyles } from "@/components/empty-state-screen";
 import { MatterPicker } from "@/components/matter-picker";
@@ -30,21 +25,12 @@ import {
   chosenDueDate,
   createTask,
   dayAt,
+  DUE_CHOICES,
   listMatterMembers,
   newTaskAssignees,
 } from "@/state/tasks";
-import { useAppColors, useUiColors } from "@/theme";
-
-/** The due dates the sheet offers, as days from today; null leaves it undated. */
-const DUE_CHOICES = [
-  { key: "none", days: null },
-  { key: "today", days: 0 },
-  { key: "tomorrow", days: 1 },
-  { key: "nextWeek", days: 7 },
-] as const;
-
-/** A preset, or "pick": the day chosen in the calendar. */
-type DueChoice = (typeof DUE_CHOICES)[number]["key"] | "pick";
+import type { DueChoice } from "@/state/tasks";
+import { useAppColors } from "@/theme";
 
 /**
  * A new task, presented as a sheet over the tasks: its name, when it is due
@@ -183,7 +169,7 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
           </View>
           <View className="flex-row flex-wrap gap-2">
             {DUE_CHOICES.map((choice) => (
-              <DueChip
+              <ChoiceChip
                 key={choice.key}
                 label={t(`dueChoice.${choice.key}`)}
                 onPress={() => {
@@ -194,7 +180,7 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
             ))}
             {/* The web build has no calendar to pick a day from. */}
             {Platform.OS === "web" ? null : (
-              <DueChip
+              <ChoiceChip
                 label={
                   due === "pick"
                     ? format.dateTime(
@@ -266,36 +252,6 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
         )}
       </ScrollView>
     </>
-  );
-};
-
-/** One of the due choices, filled while it is the chosen one. */
-const DueChip = ({
-  label,
-  onPress,
-  selected,
-}: {
-  label: string;
-  onPress: () => void;
-  selected: boolean;
-}) => {
-  const ui = useUiColors();
-  return (
-    <Pressable
-      accessibilityRole="radio"
-      accessibilityState={{ selected }}
-      className={`rounded-full border px-3 py-1.5 active:opacity-60 ${
-        selected ? "border-foreground bg-foreground" : "border-border bg-card"
-      }`}
-      onPress={onPress}
-    >
-      <Text
-        style={selected ? { color: ui.background } : undefined}
-        variant="label"
-      >
-        {label}
-      </Text>
-    </Pressable>
   );
 };
 

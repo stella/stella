@@ -1,5 +1,15 @@
 # @stll/ai-catalog
 
+## 0.13.0
+
+### Minor Changes
+
+- [#8463](https://github.com/stella/stella/pull/8463) [`e87f7e2`](https://github.com/stella/stella/commit/e87f7e2f6e0607577e1a07f984151c1787cac989) Thanks [@stella-provenance-updater](https://github.com/apps/stella-provenance-updater)! - Offer Gemini 4 Hydrogen on the Google and OpenRouter routes with its upstream rates, context window and generated capabilities. The offered model id types and option lists change with it, so code that matches them exhaustively has to handle the new id.
+
+### Patch Changes
+
+- [#8537](https://github.com/stella/stella/pull/8537) [`001c640`](https://github.com/stella/stella/commit/001c640e64cb00e3948bdf68a18a40347c65a40f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Build declarations through the native tsrs API supported by tsdown 0.23.7, resolving the compiler from each package.
+
 ## 0.12.0
 
 ### Minor Changes

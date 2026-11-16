@@ -12,6 +12,7 @@ import { caseLawRefineOutputSchema } from "@/api/handlers/case-law/decisions/sea
 import { outputSchema as spanEditOutputSchema } from "@/api/handlers/chat/messages/revisions/span-edit";
 import { rewriteOutputSchema } from "@/api/handlers/clauses/rewrite";
 import { extractProcuracaoOutputSchema } from "@/api/handlers/contacts/extract-procuracao";
+import { dictationCleanupModelOutputSchema } from "@/api/handlers/dictation/cleanup-model";
 import { proposedPositionsSchema } from "@/api/handlers/document-reviews/reference-position-normalizer";
 import {
   generatedSummariesAISchema,
@@ -22,9 +23,9 @@ import {
   refineSearchOutputSchema,
   searchSummaryOutputSchema,
 } from "@/api/handlers/search/ai";
-import { aiGenerationSchema } from "@/api/handlers/skills/drafts/generate";
 import { aiRevisionSchema } from "@/api/handlers/skills/proposals/from-comments/create";
 import { prefillOutputSchema } from "@/api/handlers/templates/prefill";
+import { aiGenerationSchema } from "@/api/lib/agent-skills/draft-prompt";
 import { changeSummarySchema } from "@/api/lib/ai-change-summary";
 import { bboxOutputSchema } from "@/api/lib/bbox/ai-prompts";
 import {
@@ -158,6 +159,13 @@ export const STRUCTURED_OUTPUT_ROLE_FIXTURES: readonly StructuredOutputRoleFixtu
         '{"drafts":[{"entryId":"entry_1","narrative":"Reviewed the supplied agreement.","matchedEarlierEntryIds":[]}]}',
     },
     {
+      file: "handlers/dictation/cleanup.ts",
+      outputSchema: "dictationCleanupModelOutputSchema",
+      schema: dictationCleanupModelOutputSchema,
+      answer:
+        '{"segments":[{"type":"lineBreak","text":"","bold":false},{"type":"text","text":"Smlouva se prodlužuje o ","bold":false},{"type":"text","text":"24","bold":true},{"type":"text","text":" dní.","bold":false},{"type":"paragraphBreak","text":"","bold":false},{"type":"text","text":"Hotovo?","bold":false}]}',
+    },
+    {
       file: "handlers/case-law/decisions/search-expand.ts",
       outputSchema: "expansionOutputSchema",
       schema: expansionOutputSchema,
@@ -252,6 +260,13 @@ export const STRUCTURED_OUTPUT_ROLE_FIXTURES: readonly StructuredOutputRoleFixtu
       schema: aiGenerationSchema,
       answer:
         '{"markdown":"---\\nname: nda-review\\ndescription: Review a mutual NDA against the firm\'s standard positions.\\n---\\n\\n# NDA review\\n\\nCheck the term, the definition of confidential information and the carve-outs.","resources":[{"path":"references/nda-positions.md","content":"# Standard positions\\n\\n- Term: at most three years."}]}',
+    },
+    {
+      file: "handlers/skills/from-chat/draft.ts",
+      outputSchema: "aiGenerationSchema",
+      schema: aiGenerationSchema,
+      answer:
+        '{"markdown":"---\\nname: delay-claim-reply\\ndescription: Reply to a passenger\'s delay claim the way this firm does.\\n---\\n\\n# Delay claim reply\\n\\nCheck <flight number> against the delay records before answering <passenger name>.","resources":[{"path":"references/defences.md","content":"# Defences\\n\\n- Extraordinary circumstances need evidence."}]}',
     },
     {
       file: "handlers/skills/proposals/from-comments/create.ts",
@@ -374,7 +389,7 @@ export const STRUCTURED_OUTPUT_ROLE_FIXTURES: readonly StructuredOutputRoleFixtu
       outputSchema: "gradingSchema",
       schema: gradingSchema,
       answer:
-        '{"grades":[{"claimId":"c1","verdict":"supported","score":86,"refs":[{"factId":"f3","rel":"supports"}],"conflict":null,"qualifiers":[]},{"claimId":"c2","verdict":"nocover","score":null,"refs":[],"conflict":null,"qualifiers":[{"kind":"record-silent","explanation":"The witness describes her own expectation, which no document would record."}]}]}',
+        '{"grades":[{"claimId":"c1","verdict":"supported","score":86,"refs":[{"factId":"f3","rel":"supports"}],"conflict":null,"qualifiers":[],"statedDate":"2025-03-03"},{"claimId":"c2","verdict":"nocover","score":null,"refs":[],"conflict":null,"qualifiers":[{"kind":"record-silent","explanation":"The witness describes her own expectation, which no document would record."}],"statedDate":null}]}',
     },
     {
       file: "lib/scheduler/tasks/memory-extractor.ts",

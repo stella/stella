@@ -104,7 +104,7 @@ test.each([
   {
     name: "a file over the limit",
     size: UPLOAD_DOCUMENT_MAX_BYTES + 1,
-    message: "The file is larger than 50 MB.",
+    message: `The file is larger than ${String(UPLOAD_DOCUMENT_MAX_BYTES / (1024 * 1024))} MB.`,
   },
 ])(
   "$name is refused by size without reading a byte",

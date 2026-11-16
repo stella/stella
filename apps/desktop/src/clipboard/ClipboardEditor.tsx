@@ -1049,6 +1049,7 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
               }
             }}
             placeholder={clipboardUntitledName(item, {
+              dictation: t("dictation"),
               image: t("image"),
               text: t("unnamedClip"),
             })}

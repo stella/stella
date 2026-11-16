@@ -95,6 +95,9 @@ type InstallNativeBoundaryOptions = {
   /** The firm's AI drafting mode, the user's consent on the server, and how
    * a drafting request settles. */
   drafting?: DraftingFixture;
+  /** Whether the matters a day is matched against answer at once, or wait
+   * until the test calls `releaseCandidates`. */
+  candidates?: "answer" | "held";
 };
 
 type DraftingFixture = {
@@ -112,6 +115,28 @@ type DraftingFixture = {
 };
 
 const RELEASE_DRAFT = "__STELLA_TEST_RELEASE_DRAFT__";
+const RELEASE_CANDIDATES = "__STELLA_TEST_RELEASE_CANDIDATES__";
+
+/** Lets the held read of the matters a day is matched against answer. */
+const releaseCandidates = async (page: Page) => {
+  await expect
+    .poll(async () =>
+      page.evaluate(
+        (key) => typeof Reflect.get(window, key) === "function",
+        RELEASE_CANDIDATES,
+      ),
+    )
+    .toBe(true);
+  await page.evaluate((key) => {
+    const release: unknown = Reflect.get(window, key);
+    const isRelease = (value: unknown): value is () => void =>
+      typeof value === "function";
+    if (!isRelease(release)) {
+      throw new TypeError("No matters read is held");
+    }
+    release();
+  }, RELEASE_CANDIDATES);
+};
 
 const heldDrafts = async (page: Page) =>
   page.evaluate((key) => {
@@ -123,7 +148,7 @@ const heldDrafts = async (page: Page) =>
 const releaseDraft = async (page: Page) => {
   await expect.poll(async () => heldDrafts(page)).toBeGreaterThan(0);
   await page.evaluate((key) => {
-    const held: unknown = Reflect.get(window, key);
+    const held: (() => void)[] | undefined = Reflect.get(window, key);
     if (!Array.isArray(held)) {
       throw new TypeError("No drafting request is held");
     }
@@ -166,6 +191,7 @@ const installNativeBoundary = async ({
   view = "activity",
   activityEnabled = true,
   drafting = DRAFTING,
+  candidates = "answer",
 }: InstallNativeBoundaryOptions) => {
   expect(isActivityDaySnapshot(snapshot)).toBe(true);
   await setFixedBrowserTime(page, new Date(`${snapshot.today}T10:00:00Z`));
@@ -185,6 +211,8 @@ const installNativeBoundary = async ({
       refinedNarrative: REFINED_NARRATIVE,
       earlierEntry: EARLIER_ENTRY,
       releaseDraftKey: RELEASE_DRAFT,
+      candidates,
+      releaseCandidatesKey: RELEASE_CANDIDATES,
       settingsWindow: {
         account: ACCOUNT,
         activityEnabled,
@@ -207,6 +235,8 @@ const installNativeBoundary = async ({
         refinedNarrative,
         earlierEntry,
         releaseDraftKey,
+        candidates: candidatesFixture,
+        releaseCandidatesKey,
         settingsWindow,
       },
       { emit },
@@ -311,6 +341,8 @@ const installNativeBoundary = async ({
         // No install status either, read the same as the refusal with local agents off.
         harness_get_status: () => null,
         local_skill_folders_get: () => null,
+        signing_driver_get: () => null,
+        local_linked_folders_get: () => null,
         activity_delete_all: (args) => {
           if (
             args["recovery"] === "discardUnreadable" &&
@@ -565,8 +597,15 @@ const installNativeBoundary = async ({
               color: "--option-emerald",
             },
           ] satisfies DesktopMatter[],
-        time_entry_candidates: () =>
-          [
+        time_entry_candidates: async () => {
+          if (candidatesFixture === "held") {
+            const held = Promise.withResolvers<undefined>();
+            Reflect.set(window, releaseCandidatesKey, () => {
+              held.resolve(undefined);
+            });
+            await held.promise;
+          }
+          return [
             {
               id: "matter-1",
               name: "Example matter",
@@ -589,7 +628,8 @@ const installNativeBoundary = async ({
                   upcomingDeadline: null,
                 },
               }) satisfies DesktopTimeEntryMatterCandidate,
-          ),
+          );
+        },
         time_entry_submit_batch_confirmed: async (args) => {
           batchAttempts += 1;
           if (validation === "hold-first" && batchAttempts === 1) {
@@ -709,6 +749,49 @@ const rejectName = (messages: Messages) =>
 
 const suggestionCard = (page: Page, matter: string) =>
   page.getByRole("region", { name: matter, exact: true });
+
+/**
+ * Chooses a matter in the open matter picker. The picker opens with a
+ * transition and follows its trigger as the card scrolls, so the option is
+ * brought into view first and clicked only once the popup's animations have
+ * finished and the option holds still across two frames: a click aimed
+ * while it moves can land beside it. The picker closes on a choice, which
+ * proves the click reached the option.
+ */
+const chooseMatter = async (page: Page, matter: RegExp) => {
+  const picker = page.getByRole("dialog");
+  const option = picker.getByRole("button", { name: matter });
+  await option.scrollIntoViewIfNeeded();
+  await picker.evaluate(
+    async (popup) =>
+      await Promise.all(
+        popup
+          .getAnimations({ subtree: true })
+          .map(async (animation) => await animation.finished),
+      ),
+  );
+  await expect
+    .poll(async () =>
+      option.evaluate(async (element) => {
+        const before = element.getBoundingClientRect();
+        await new Promise((resolve) => {
+          requestAnimationFrame(() => {
+            requestAnimationFrame(resolve);
+          });
+        });
+        const after = element.getBoundingClientRect();
+        return (
+          before.x === after.x &&
+          before.y === after.y &&
+          before.width === after.width &&
+          before.height === after.height
+        );
+      }),
+    )
+    .toBe(true);
+  await option.click();
+  await expect(picker).toHaveCount(0);
+};
 
 /** Presses a card shortcut with the primary modifier the window reads from
  * its own user agent; Playwright's WebKit reports macOS on every host. */
@@ -961,8 +1044,14 @@ test("unresolved draft creation offers no deletion and retains its batch key", a
     page.getByRole("button", { name: enMessages.activity.previousDay }),
   ).toBeDisabled();
   await page.evaluate(() => {
-    const changed = Reflect.get(window, "__STELLA_TEST_ACTIVITY_CHANGED__");
-    const reject = Reflect.get(window, "__STELLA_TEST_REJECT_BATCH__");
+    const changed: (() => void) | undefined = Reflect.get(
+      window,
+      "__STELLA_TEST_ACTIVITY_CHANGED__",
+    );
+    const reject: (() => void) | undefined = Reflect.get(
+      window,
+      "__STELLA_TEST_REJECT_BATCH__",
+    );
     if (typeof changed !== "function" || typeof reject !== "function") {
       throw new TypeError("Native recovery controls are missing");
     }
@@ -1137,7 +1226,10 @@ test("stored pending drafts stay immutable after a rejected retry until cancella
   const accept = page.getByRole("button", { name: acceptName(enMessages) });
   await expect(accept).toBeDisabled();
   await page.evaluate((next) => {
-    const update = Reflect.get(window, "__STELLA_TEST_SET_SNAPSHOT__");
+    const update: ((snapshot: typeof next) => void) | undefined = Reflect.get(
+      window,
+      "__STELLA_TEST_SET_SNAPSHOT__",
+    );
     if (typeof update !== "function") {
       throw new TypeError("Snapshot control is missing");
     }
@@ -1709,7 +1801,10 @@ test("an open erase dialog disappears safely when saved history becomes incompat
   await expect(page.getByRole("dialog")).toBeVisible();
   await page.evaluate(
     (next) => {
-      const update = Reflect.get(window, "__STELLA_TEST_SET_SNAPSHOT__");
+      const update: ((snapshot: typeof next) => void) | undefined = Reflect.get(
+        window,
+        "__STELLA_TEST_SET_SNAPSHOT__",
+      );
       if (typeof update !== "function") {
         throw new TypeError("Snapshot control is missing");
       }
@@ -2250,10 +2345,8 @@ test("the browser question waits for detail recording", async ({ page }) => {
   });
   await expect(page.locator("[data-activity-browser-question]")).toHaveCount(0);
   await page.evaluate((next) => {
-    const setSnapshot: unknown = Reflect.get(
-      window,
-      "__STELLA_TEST_SET_SNAPSHOT__",
-    );
+    const setSnapshot: ((snapshot: typeof next) => void) | undefined =
+      Reflect.get(window, "__STELLA_TEST_SET_SNAPSHOT__");
     if (typeof setSnapshot === "function") {
       setSnapshot(next);
     }
@@ -2957,6 +3050,53 @@ for (const language of ["en", "ar"] as const) {
   });
 }
 
+const DRAWN_BLOCKS = "__STELLA_TEST_DRAWN_BLOCKS__";
+
+test("the day's blocks wait for its matters and are drawn once", async ({
+  page,
+}) => {
+  // Every Activity block the page ever puts in the document, by its name.
+  await page.addInitScript((key) => {
+    const drawn: string[] = [];
+    Reflect.set(window, key, drawn);
+    const record = (node: Node) => {
+      if (!(node instanceof Element)) {
+        return;
+      }
+      for (const block of [node, ...node.querySelectorAll("*")]) {
+        if (
+          block.matches('[data-slot="day-calendar-block"]') &&
+          block.closest('[data-column-id="activity"]') !== null
+        ) {
+          drawn.push(block.getAttribute("aria-label") ?? "");
+        }
+      }
+    };
+    new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        for (const node of mutation.addedNodes) {
+          record(node);
+        }
+      }
+    }).observe(document, { childList: true, subtree: true });
+  }, DRAWN_BLOCKS);
+  await installNativeBoundary({ page, candidates: "held" });
+  await expect(page.locator('[data-slot="day-calendar"]')).toBeVisible();
+  const blocks = page.locator(ACTIVITY_BLOCKS);
+  await expect(blocks).toHaveCount(0);
+
+  await releaseCandidates(page);
+  await expect(blocks).toHaveCount(1);
+  await expect(blocks).toHaveAccessibleName(
+    /^Example matter · Example Editor/u,
+  );
+  const drawn: unknown = await page.evaluate(
+    (key): unknown => Reflect.get(window, key),
+    DRAWN_BLOCKS,
+  );
+  expect(drawn).toEqual([expect.stringMatching(/^Example matter · /u)]);
+});
+
 /** An hour mostly spent on mail no matter claimed, ending on a matter's
  * document. */
 const MINORITY_SNAPSHOT = {
@@ -3031,10 +3171,7 @@ test("a range a matter holds only a minority of starts on no matter, non-billabl
   await card
     .getByRole("button", { name: enMessages.activity.chooseMatter })
     .click();
-  await page
-    .getByRole("dialog")
-    .getByRole("button", { name: /Second matter/u })
-    .click();
+  await chooseMatter(page, /Second matter/u);
   const chosen = suggestionCard(page, "Second matter");
   await expect(
     chosen.getByRole("switch", { name: enMessages.activity.entryBillable }),
@@ -3506,10 +3643,7 @@ test("a split proposed for one matter is not offered once the card's matter chan
   });
   await expect(proposal).toBeVisible();
   await card.getByRole("button", { name: "Example matter" }).click();
-  await page
-    .getByRole("dialog")
-    .getByRole("button", { name: /Second matter/u })
-    .click();
+  await chooseMatter(page, /Second matter/u);
   await expect(proposal).toHaveCount(0);
 });
 
@@ -3525,10 +3659,7 @@ test("choosing another matter drops a guided draft's codes", async ({
   const card = suggestionCard(page, "Example matter");
   await expect(card.getByText("Task L120 · Activity A104")).toBeVisible();
   await card.getByRole("button", { name: "Example matter" }).click();
-  await page
-    .getByRole("dialog")
-    .getByRole("button", { name: /Second matter/u })
-    .click();
+  await chooseMatter(page, /Second matter/u);
   await expect(page.getByText("Task L120 · Activity A104")).toHaveCount(0);
 });
 

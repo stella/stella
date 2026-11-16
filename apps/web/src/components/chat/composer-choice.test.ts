@@ -19,6 +19,7 @@ const CODEX: ChatLocalRunTarget = {
   harness: "codex",
   model: "gpt-5-codex",
   approvals: "ask",
+  reasoningEffort: null,
 };
 const CLOUD_MODEL = "openai::gpt-5";
 const STORED: ComposerChoice = {

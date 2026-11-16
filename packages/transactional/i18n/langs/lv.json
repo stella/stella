@@ -36,6 +36,7 @@
     "flowRunAwaitingApproval": "Darbplūsma gaida jūsu apstiprinājumu",
     "flowRunCompleted": "Darbplūsma ir pabeigta",
     "flowRunFailed": "Darbplūsma neizdevās",
+    "localRunLimitReset": "Programmēšanas aģents jūsu datorā var turpināt jūsu tērzēšanu",
     "mention": "Jūs tikāt pieminēts komentārā",
     "taskAssigned": "Jums piešķirts uzdevums"
   },

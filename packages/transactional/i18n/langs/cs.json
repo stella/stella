@@ -36,6 +36,7 @@
     "flowRunAwaitingApproval": "Pracovní postup čeká na vaše schválení",
     "flowRunCompleted": "Pracovní postup byl dokončen",
     "flowRunFailed": "Pracovní postup selhal",
+    "localRunLimitReset": "Programovací agent ve vašem počítači může pokračovat ve vašem chatu",
     "mention": "Někdo vás zmínil v komentáři",
     "taskAssigned": "Byl vám přidělen úkol"
   },

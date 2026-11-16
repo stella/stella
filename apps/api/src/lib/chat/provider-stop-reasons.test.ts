@@ -1,3 +1,4 @@
+import { FinishReason as GeminiFinishReason } from "@google/genai";
 import { EventType } from "@tanstack/ai";
 import type { AnyTextAdapter, StreamChunk } from "@tanstack/ai";
 import {
@@ -59,7 +60,6 @@ const toolCall: StreamChunk = {
   type: EventType.TOOL_CALL_START,
   toolCallId: "call",
   toolCallName: "mcp__external__delete",
-  toolName: "mcp__external__delete",
   timestamp: 1,
 };
 const usage = { completionTokens: 3, promptTokens: 31, totalTokens: 34 };
@@ -193,6 +193,35 @@ describe("a provider stop reason", () => {
     }
     expect(endings).toEqual(expected);
   });
+
+  test("malformed Google output fails even after streaming visible text", async () => {
+    for (const reason of [
+      GeminiFinishReason.MALFORMED_FUNCTION_CALL,
+      GeminiFinishReason.MALFORMED_RESPONSE,
+    ]) {
+      const chunks = await decide("google", [
+        started,
+        delta,
+        finishedWith(reason),
+      ]);
+      expect(chunks.at(-1)).toMatchObject({
+        type: EventType.RUN_ERROR,
+        code: PROVIDER_STOPPED_CODE,
+        metadata: { stopReason: reason },
+      });
+    }
+  });
+
+  test.each(["max_messages", "steered"])(
+    "an OpenAI %s response remains unfinished after visible text",
+    async (reason) => {
+      expect(
+        endingOf(
+          await decide("openai", [started, delta, finishedWith(reason)]),
+        ),
+      ).toBe("error:provider_stream_incomplete");
+    },
+  );
 
   test("a Google continuation leaves a partial answer unfinished", async () => {
     for (const chunks of [
@@ -442,6 +471,7 @@ describe("a stop reason no table lists", () => {
 describe("an Anthropic request whose turn could pause", () => {
   type Request = Parameters<AnyTextAdapter["chatStream"]>[0];
   const request = (overrides: Partial<Request>): Request => ({
+    threadId: "provider-stop-reasons-thread",
     logger: resolveDebugOption(false),
     messages: [],
     model: "model",
