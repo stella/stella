@@ -1424,6 +1424,15 @@ const runSeed = async (
         );
       case "complete":
       case "completed":
+        // A completed pass covers the routes it captured as it began; a
+        // route that appeared since needs another pass.
+        if (
+          seedings === null ||
+          seedings.routes.some(({ state }) => state === "unseeded")
+        ) {
+          write("a route appeared after the pass began; rerun to walk it");
+          return Result.ok(SEED_BUDGET_SPENT_EXIT_CODE);
+        }
         write("every route of the generation is seeded");
         return Result.ok(0);
       case "busy":
