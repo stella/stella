@@ -1,3 +1,4 @@
+// parser-output-unchanged: pushHeading now takes named options; call values, evaluation order, parameter bindings, and emitted heading logic are unchanged.
 // parser-output-unchanged: [pl-kio] only adds the common-court reader with its paragraph numbering, which the procurement chamber's reader does not call.
 // parser-output-unchanged: [pl-kis] only adds the common-court reader with its paragraph numbering, which the tax-ruling reader does not call.
 // parser-output-unchanged: [pl-sn] only adds the common-court reader with its paragraph numbering, which the Supreme Court's reader does not call.
