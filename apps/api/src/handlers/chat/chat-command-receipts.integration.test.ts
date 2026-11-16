@@ -15,7 +15,7 @@ import {
   chatThreads,
   chatTurns,
 } from "@/api/db/schema";
-import { createScopedDb } from "@/api/db/scoped";
+import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
@@ -29,7 +29,6 @@ import {
 } from "@/api/tests/helpers/chat-approval-harness";
 import type { ChatHarness } from "@/api/tests/helpers/chat-approval-harness";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
   getRlsFixture,
   releaseRlsFixture,
@@ -54,7 +53,9 @@ beforeAll(async () => {
   scopedDb = asTestRaw<ScopedDb>(
     createScopedDb(testDb, [ids.wsA1, ids.wsA2], ids.orgA, ids.userA1),
   );
-  safeDb = toSafeDbMock(scopedDb);
+  // Classifies database failures as a request's handle does: the losing
+  // first send of a new thread recovers from the thread's key conflict.
+  safeDb = createSafeDb(testDb, [ids.wsA1, ids.wsA2], ids.orgA, ids.userA1);
 });
 
 afterAll(async () => {
@@ -152,6 +153,35 @@ describe("a send retried under its command id", () => {
       expect(await harness.send(retry)).toEqual(replayed);
       expect(retry.set.headers[CHAT_TURN_ID_HEADER]).toBe(turnId);
       expect(await turnsOf(threadId)).toHaveLength(1);
+      expect(await messagesOf(threadId)).toHaveLength(2);
+    } finally {
+      await harness.close();
+    }
+  });
+
+  test("racing its first attempt on a new thread, exactly one runs and the other is answered with its turn", async () => {
+    const harness = createApprovalHarness({ ids, safeDb, scopedDb, testDb });
+    const threadId = newThreadId();
+    const commandId = Bun.randomUUIDv7();
+    const messageId = toSafeId<"chatMessage">(Bun.randomUUIDv7());
+    try {
+      harness.script(threadId, [
+        { finishReason: "stop", text: "It runs for a year.", type: "text" },
+      ]);
+      const attempts = [
+        commandSend({ commandId, harness, messageId, threadId }),
+        commandSend({ commandId, harness, messageId, threadId }),
+      ];
+      const outcomes = await Promise.all(
+        attempts.map(async (ctx) => await harness.send(ctx)),
+      );
+      expect(outcomes).toContainEqual({ status: "streamed" });
+      expect(outcomes).toContainEqual(replayed);
+      const turns = await turnsOf(threadId);
+      expect(turns).toHaveLength(1);
+      for (const ctx of attempts) {
+        expect(ctx.set.headers[CHAT_TURN_ID_HEADER]).toBe(turns[0]?.id);
+      }
       expect(await messagesOf(threadId)).toHaveLength(2);
     } finally {
       await harness.close();
