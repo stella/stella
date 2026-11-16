@@ -61,6 +61,7 @@ test("landing compiler tasks consume committed documentation without API generat
     "@stll/landing#dev",
     "@stll/landing#lint",
     "@stll/landing#lint:fix",
+    "@stll/landing#tailwind-cache",
     "@stll/landing#transit",
     "@stll/landing#typecheck",
   ]);
