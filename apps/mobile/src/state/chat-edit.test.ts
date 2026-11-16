@@ -87,7 +87,7 @@ const PASTED = {
 const entry = (
   id: string,
   role: ChatEntry["role"] = "user",
-  parts: readonly unknown[] | undefined = undefined,
+  parts?: readonly unknown[],
 ): ChatEntry => ({
   id,
   role,
