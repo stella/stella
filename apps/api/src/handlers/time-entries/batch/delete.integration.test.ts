@@ -135,7 +135,7 @@ const runBatch = async (
 const runSingle = async (
   id: SingleContext["body"]["id"],
   events: AuditEvent[],
-  safeDb?: SingleContext["safeDb"],
+  safeDb?: ReturnType<typeof context>["safeDb"],
 ) => {
   const recordAuditEvent: SingleContext["recordAuditEvent"] = async (
     _tx,
