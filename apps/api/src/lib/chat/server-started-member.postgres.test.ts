@@ -9,7 +9,7 @@ import { PROFESSIONAL_USE_ACCEPTANCE_SOURCE } from "@/api/db/schema";
 import { recordAccountProfessionalUse } from "@/api/lib/auth/professional-use";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { resolveQueuedTurnMember } from "@/api/lib/chat/queued-turn-member";
+import { resolveServerStartedMember } from "@/api/lib/chat/server-started-member";
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import {
   mintAuthProviderId,
@@ -71,7 +71,7 @@ const resolve = async (owner: {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
 }) =>
-  await resolveQueuedTurnMember({
+  await resolveServerStartedMember({
     ...owner,
     threadId: createSafeId<"chatThread">(),
     queuedMessageId: createSafeId<"chatMessage">(),
@@ -79,11 +79,11 @@ const resolve = async (owner: {
   });
 
 if (!databaseUrl || !enabled) {
-  describe.skip("queued turn member (postgres)", () => {
+  describe.skip("server-started member (postgres)", () => {
     test("requires STELLA_RUN_POSTGRES_TESTS=true and DATABASE_URL", () => {});
   });
 } else {
-  describe("queued turn member (postgres)", () => {
+  describe("server-started member (postgres)", () => {
     test("a current member is proved again from their membership", async () => {
       const owner = await seedMember({ accepted: true });
       try {

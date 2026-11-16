@@ -1199,8 +1199,8 @@
       "behaviour": "A completed turn's follow-ups run after its settlement, so one that throws is reported and never marks the stored turn failed.",
       "status": "active",
       "file": "src/handlers/chat/send-message.ts",
-      "search": "                      persist: async () =>\n                        await persistStreamedAssistantTurn(event),",
-      "replace": "                      persist: async () =>\n                        await persistStreamedAssistantTurn(event).then(async (settled) => { if (Result.isOk(settled) && settled.value.followUps !== null) { await runCompletedTurnFollowUps(run, settled.value.followUps); } return settled; }),",
+      "search": "                        await persistStreamedTurn({\n                          context: settlementContext,\n                          event,\n                        }),",
+      "replace": "                        await persistStreamedTurn({\n                          context: settlementContext,\n                          event,\n                        }).then(async (settled) => { if (Result.isOk(settled) && settled.value.followUps !== null) { await runCompletedTurnFollowUps(run, settled.value.followUps); } return settled; }),",
       "scenario": {
         "file": "src/handlers/chat/send-message.test.ts",
         "test": "keeps a completed turn completed when a follow-up throws"

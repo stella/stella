@@ -14,7 +14,7 @@ import { isMemberRole } from "@/api/lib/member-roles";
 import { isSyntheticPrincipal } from "@/api/lib/synthetic-principal/constants";
 
 /** The queued message the server is about to send, and who queued it. */
-export type QueuedTurnRequest = {
+export type ServerStartedMemberRequest = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   threadId: SafeId<"chatThread">;
@@ -23,7 +23,7 @@ export type QueuedTurnRequest = {
   signal: AbortSignal;
 };
 
-type QueuedTurnMember =
+type ServerStartedMember =
   | {
       type: "member";
       caller: SessionMemberCaller;
@@ -47,17 +47,17 @@ type QueuedTurnMember =
  *
  * This module is the only place besides the request resolvers in
  * `lib/auth.ts` that builds a `ResolvedIdentity` or calls
- * `resolveValidateAuth` (ownership row `queued-turn-member`). Every audit
+ * `resolveValidateAuth` (ownership row `server-started-member`). Every audit
  * event of the turn names the member as performer and says it started from
  * the queue, with the queued message as its source.
  */
-export const resolveQueuedTurnMember = async ({
+export const resolveServerStartedMember = async ({
   organizationId,
   queuedMessageId,
   signal,
   threadId,
   userId,
-}: QueuedTurnRequest) =>
+}: ServerStartedMemberRequest) =>
   await Result.tryPromise(async () => {
     const authorization = await resolveCredentialMemberAuthorization({
       organizationId,
@@ -82,7 +82,7 @@ export const resolveQueuedTurnMember = async ({
         ),
       )
     ) {
-      return { type: "unavailable" } satisfies QueuedTurnMember;
+      return { type: "unavailable" } satisfies ServerStartedMember;
     }
     const { memberId } = authorization;
     const identity: ResolvedIdentity = {
@@ -127,11 +127,11 @@ export const resolveQueuedTurnMember = async ({
       },
     });
     if (!built.ok) {
-      return { type: "unavailable" } satisfies QueuedTurnMember;
+      return { type: "unavailable" } satisfies ServerStartedMember;
     }
     return {
       type: "member",
       request,
       caller: built.value,
-    } satisfies QueuedTurnMember;
+    } satisfies ServerStartedMember;
   });
