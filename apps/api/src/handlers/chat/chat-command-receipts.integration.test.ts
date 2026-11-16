@@ -158,29 +158,48 @@ describe("a send retried under its command id", () => {
     }
   });
 
-  test("racing its first attempt, exactly one runs and the other is answered with its turn", async () => {
+  test("racing its first attempt, which takes the turn between its read and its claim, is answered with that turn", async () => {
     const harness = createApprovalHarness({ ids, safeDb, scopedDb, testDb });
     const threadId = newThreadId();
     const commandId = Bun.randomUUIDv7();
     const messageId = toSafeId<"chatMessage">(Bun.randomUUIDv7());
     try {
+      // The thread exists: a retry follows its first attempt by a while.
       harness.script(threadId, [
-        { finishReason: "stop", text: "It runs for a year.", type: "text" },
+        { finishReason: "stop", text: "Hello.", type: "text" },
       ]);
-      const attempts = [
-        commandSend({ commandId, harness, messageId, threadId }),
-        commandSend({ commandId, harness, messageId, threadId }),
-      ];
-      const outcomes = await Promise.all(
-        attempts.map(async (ctx) => await harness.send(ctx)),
+      const opening = commandSend({
+        commandId: Bun.randomUUIDv7(),
+        harness,
+        messageId: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
+        threadId,
+      });
+      expect(await harness.send(opening)).toEqual({ status: "streamed" });
+
+      let raceRan = false;
+      harness.raceNextAcceptance(async () => {
+        harness.script(threadId, [
+          { finishReason: "stop", text: "It runs for a year.", type: "text" },
+        ]);
+        expect(
+          await harness.send(
+            commandSend({ commandId, harness, messageId, threadId }),
+          ),
+        ).toEqual({ status: "streamed" });
+        raceRan = true;
+      });
+      const retry = commandSend({ commandId, harness, messageId, threadId });
+      const outcome = await harness.send(retry);
+
+      // The fixture must reach the race: the first attempt won in between.
+      expect(raceRan).toBe(true);
+      expect(outcome).toEqual(replayed);
+      const receipt = (await receiptOf(commandId)).at(0);
+      expect(retry.set.headers[CHAT_TURN_ID_HEADER]).toBe(
+        receipt?.turnId ?? "",
       );
-      expect(outcomes).toContainEqual({ status: "streamed" });
-      expect(outcomes).toContainEqual(replayed);
-      const turns = await turnsOf(threadId);
-      expect(turns).toHaveLength(1);
-      for (const ctx of attempts) {
-        expect(ctx.set.headers[CHAT_TURN_ID_HEADER]).toBe(turns[0]?.id);
-      }
+      expect(await turnsOf(threadId)).toHaveLength(2);
+      expect(await messagesOf(threadId)).toHaveLength(4);
     } finally {
       await harness.close();
     }

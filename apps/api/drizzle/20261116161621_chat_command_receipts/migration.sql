@@ -38,7 +38,7 @@ CREATE INDEX "chat_command_receipts_thread_id_idx"
 CREATE INDEX "chat_command_receipts_turn_id_idx"
   ON "chat_command_receipts" ("turn_id");--> statement-breakpoint
 
-GRANT SELECT, INSERT, DELETE ON TABLE "chat_command_receipts" TO stella;--> statement-breakpoint
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "chat_command_receipts" TO stella;--> statement-breakpoint
 
 CREATE POLICY "chat_command_receipt_select" ON "chat_command_receipts" AS PERMISSIVE FOR SELECT TO "stella"
   USING (
@@ -104,6 +104,131 @@ END) AND
   )
 );--> statement-breakpoint
 CREATE POLICY "chat_command_receipt_insert" ON "chat_command_receipts" AS PERMISSIVE FOR INSERT TO "stella"
+  WITH CHECK (
+  user_id =
+  (SELECT current_setting(
+    'app.user_id', true
+  )) AND
+  organization_id =
+  (SELECT current_setting(
+    'app.organization_id', true
+  )) AND
+  (workspace_id IS NULL OR CASE
+  WHEN workspace_id = ANY(
+    COALESCE(
+      NULLIF(
+        (SELECT pg_catalog.current_setting(
+          'app.workspace_ids', true
+        )),
+        ''
+      )::uuid[],
+      ARRAY[]::uuid[]
+    )
+  )
+  THEN true
+  ELSE workspace_id IN (
+    SELECT aw.authorized_workspace_id
+    FROM public.stella_authorized_workspaces aw
+  )
+END) AND
+  EXISTS (
+    SELECT 1 FROM chat_threads ct
+    WHERE ct.id = chat_command_receipts.thread_id
+      AND ct.user_id = chat_command_receipts.user_id
+      AND ct.organization_id = chat_command_receipts.organization_id
+      AND ct.workspace_id IS NOT DISTINCT FROM chat_command_receipts.workspace_id
+      AND (
+        cardinality(ct.data_workspace_ids) = 0
+        OR NOT EXISTS (
+  SELECT 1
+  FROM pg_catalog.unnest(ct.data_workspace_ids) AS scoped_workspace(workspace_id)
+  WHERE scoped_workspace.workspace_id IS NULL
+    OR NOT (
+      scoped_workspace.workspace_id = ANY(
+        COALESCE(
+          NULLIF(
+            (SELECT pg_catalog.current_setting(
+              'app.workspace_ids', true
+            )),
+            ''
+          )::uuid[],
+          ARRAY[]::uuid[]
+        )
+      )
+      OR EXISTS (
+        SELECT 1
+        FROM public.stella_authorized_workspaces aw
+        WHERE aw.authorized_workspace_id = scoped_workspace.workspace_id
+          AND aw.workspace_status <> 'deleting'
+      )
+    )
+)
+      )
+  )
+);--> statement-breakpoint
+CREATE POLICY "chat_command_receipt_update" ON "chat_command_receipts" AS PERMISSIVE FOR UPDATE TO "stella"
+  USING (
+  user_id =
+  (SELECT current_setting(
+    'app.user_id', true
+  )) AND
+  organization_id =
+  (SELECT current_setting(
+    'app.organization_id', true
+  )) AND
+  (workspace_id IS NULL OR CASE
+  WHEN workspace_id = ANY(
+    COALESCE(
+      NULLIF(
+        (SELECT pg_catalog.current_setting(
+          'app.workspace_ids', true
+        )),
+        ''
+      )::uuid[],
+      ARRAY[]::uuid[]
+    )
+  )
+  THEN true
+  ELSE workspace_id IN (
+    SELECT aw.authorized_workspace_id
+    FROM public.stella_authorized_workspaces aw
+  )
+END) AND
+  EXISTS (
+    SELECT 1 FROM chat_threads ct
+    WHERE ct.id = chat_command_receipts.thread_id
+      AND ct.user_id = chat_command_receipts.user_id
+      AND ct.organization_id = chat_command_receipts.organization_id
+      AND ct.workspace_id IS NOT DISTINCT FROM chat_command_receipts.workspace_id
+      AND (
+        cardinality(ct.data_workspace_ids) = 0
+        OR NOT EXISTS (
+  SELECT 1
+  FROM pg_catalog.unnest(ct.data_workspace_ids) AS scoped_workspace(workspace_id)
+  WHERE scoped_workspace.workspace_id IS NULL
+    OR NOT (
+      scoped_workspace.workspace_id = ANY(
+        COALESCE(
+          NULLIF(
+            (SELECT pg_catalog.current_setting(
+              'app.workspace_ids', true
+            )),
+            ''
+          )::uuid[],
+          ARRAY[]::uuid[]
+        )
+      )
+      OR EXISTS (
+        SELECT 1
+        FROM public.stella_authorized_workspaces aw
+        WHERE aw.authorized_workspace_id = scoped_workspace.workspace_id
+          AND aw.workspace_status <> 'deleting'
+      )
+    )
+)
+      )
+  )
+)
   WITH CHECK (
   user_id =
   (SELECT current_setting(

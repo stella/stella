@@ -1905,7 +1905,10 @@ export const chatQueueHoldPolicies = () => [
 
 const commandReceiptScopeCheck = chatQueueScopeCheck("chat_command_receipts");
 
-/** A receipt is written once and never changed, so it has no update policy. */
+/**
+ * A receipt is written once and never changed; its update policy holds a
+ * changed row to the same scope as every other request-role table.
+ */
 export const chatCommandReceiptPolicies = () => [
   p.pgPolicy("chat_command_receipt_select", {
     for: "select",
@@ -1915,6 +1918,12 @@ export const chatCommandReceiptPolicies = () => [
   p.pgPolicy("chat_command_receipt_insert", {
     for: "insert",
     to: stella,
+    withCheck: commandReceiptScopeCheck,
+  }),
+  p.pgPolicy("chat_command_receipt_update", {
+    for: "update",
+    to: stella,
+    using: commandReceiptScopeCheck,
     withCheck: commandReceiptScopeCheck,
   }),
   p.pgPolicy("chat_command_receipt_delete", {
