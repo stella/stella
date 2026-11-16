@@ -211,9 +211,6 @@ export const getMcpResourceUrl = (mode: McpMode = "default") =>
     `${getMcpBaseUrl().replace(/\/$/u, "")}/`,
   ).toString();
 
-export const getMcpResourceUrls = () =>
-  MCP_MODES.map((mode) => getMcpResourceUrl(mode));
-
 export const getMcpProtectedResourceMetadataUrl = (mode: McpMode = "default") =>
   new URL(
     getMcpResourceModeConfig(mode).discoveryPath,

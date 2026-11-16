@@ -690,8 +690,6 @@ export type HandlerOutputsMatchByName<
   ? false
   : true;
 
-export type AssertTrue<TValue extends true> = TValue;
-
 type McpToolHandlerMap<TDefinitions extends readonly McpToolDefinition[]> =
   Readonly<Record<TDefinitions[number]["name"], McpToolHandler>>;
 

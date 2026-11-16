@@ -1584,10 +1584,6 @@
     "reason": "Existing CreateCodeForm UI validation or presentation bound; contract migration pending."
   },
   {
-    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/split-entry-dialog.tsx::SplitEntryDialog::max:100::1",
-    "reason": "Existing SplitEntryDialog UI validation or presentation bound; contract migration pending."
-  },
-  {
     "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-utils.ts::INTERNAL_DATE_IDS::domain:[\"_created-at\",\"_updated-at\"]::1",
     "reason": "Existing INTERNAL_DATE_IDS domain; contract ownership pending migration."
   },
