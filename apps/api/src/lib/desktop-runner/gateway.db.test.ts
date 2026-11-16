@@ -7766,7 +7766,11 @@ describe("undoing the file changes made since a message", () => {
     const { turnId } = await finishedTurn(desktop, desktopId, { threadId });
     const undo = await accepted(threadId, turnId);
     await desktop.receive("folder.restore");
-    const sent = { restoreId: undo.restoreId, state: "sent", reason: null };
+    const sent = {
+      restoreId: undo.restoreId,
+      state: "sent" as const,
+      reason: null,
+    };
 
     const running = await newTurn(threadId);
     expect(await accepted(threadId, turnId)).toEqual(sent);
