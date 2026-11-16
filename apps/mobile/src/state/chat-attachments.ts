@@ -246,6 +246,28 @@ export const sendsAnonymized = ({
   readonly threadAnonymized: boolean;
 }): boolean => mode === "as-thread" && threadAnonymized;
 
+/**
+ * Whether a turn can take the draft mid-turn: a steer carries text only, so
+ * a draft with files waits in the queue instead.
+ */
+export const steersDraft = (draft: ChatDraft): boolean =>
+  draft.files.length === 0;
+
+/**
+ * How a draft sent while a turn waits on the member goes: declining what the
+ * turn waits for and steering it with the draft, where the send routing
+ * offers that and the draft is one a turn takes; otherwise the ordinary send,
+ * which the server queues behind the wait.
+ */
+export const waitSendRoute = ({
+  declineOffered,
+  draft,
+}: {
+  readonly declineOffered: boolean;
+  readonly draft: ChatDraft;
+}): "decline-and-steer" | "send" =>
+  declineOffered && steersDraft(draft) ? "decline-and-steer" : "send";
+
 export const sendRefusal = (
   error: ApiError,
   withFiles: boolean,

@@ -43,6 +43,10 @@ import {
   chatLocalRunSteerCallId,
 } from "@stll/api-contract/chat-run-target";
 import {
+  CHAT_TURN_STEERING,
+  CHAT_TURN_STEERING_EVENT,
+} from "@stll/api-contract/chat-send-intent";
+import {
   DESKTOP_RUNNER_APPROVAL_MODES,
   DESKTOP_RUNNER_CHECKPOINT_EVENT,
   DESKTOP_RUNNER_CLOSE,
@@ -2981,9 +2985,17 @@ describe("chat turns on a computer", () => {
       isRecord(chunk) ? chunk["value"] : undefined,
     ).status;
 
+  const isSteeringEvent = (chunk: unknown) =>
+    isRecord(chunk) &&
+    chunk["type"] === EventType.CUSTOM &&
+    chunk["name"] === CHAT_TURN_STEERING_EVENT;
+
+  /** Without what a read tells with the run's start: the start, its steering. */
   const withoutRunStarts = (chunks: readonly unknown[]) =>
     chunks.filter(
-      (chunk) => !isRecord(chunk) || chunk["type"] !== EventType.RUN_STARTED,
+      (chunk) =>
+        !isRecord(chunk) ||
+        (chunk["type"] !== EventType.RUN_STARTED && !isSteeringEvent(chunk)),
     );
 
   const toolCallIdsOf = (chunks: readonly unknown[]) =>
@@ -3077,6 +3089,13 @@ describe("chat turns on a computer", () => {
     expect(
       chunks.filter(({ type }) => type === EventType.RUN_STARTED),
     ).toHaveLength(1);
+    // Told once, with the start: this computer's harness reports no `steer`.
+    expect(chunks.filter(isSteeringEvent)).toEqual([
+      expect.objectContaining({
+        value: { steering: CHAT_TURN_STEERING.notSteerable },
+      }),
+    ]);
+    expect(chunks.at(1)).toMatchObject({ name: CHAT_TURN_STEERING_EVENT });
     // The chat is told the run waits for the computer until it has it.
     expect(chunks.filter(isComputerEvent).map(computerStatus)).toEqual([
       "delivering",
@@ -5958,7 +5977,21 @@ describe("chat turns on a computer", () => {
         })
       ).unwrap(),
     ).toEqual({ type: "refused", reason: "no_run" });
+    expect(
+      (
+        await control.readChatTurnSteering({
+          owner: { ...owner, userId: ids.userA2 },
+          chat: steer.chat,
+        })
+      ).unwrap(),
+    ).toBe(CHAT_TURN_STEERING.notSteerable);
     expect(await commandsOf(start.runId, "run.input")).toEqual([]);
+    // The turn's own member reads it as one that takes a message.
+    expect(
+      (
+        await control.readChatTurnSteering({ owner, chat: steer.chat })
+      ).unwrap(),
+    ).toBe(CHAT_TURN_STEERING.steerable);
     expect((await control.steerChatTurn(steer)).unwrap()).toEqual({
       type: "queued",
     });

@@ -1,6 +1,14 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
+import {
+  CHAT_RUN_TARGET_KIND,
+  type ChatRunTarget,
+} from "@stll/api-contract/chat-run-target";
+import {
+  CHAT_TURN_STEERING,
+  type ChatTurnSteering,
+} from "@stll/api-contract/chat-send-intent";
 import { booleanFromString } from "@stll/api-contract/http-input";
 
 import type { SafeDbError } from "@/api/db/safe-db";
@@ -42,8 +50,11 @@ import {
 } from "@/api/lib/chat/run-target";
 import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { getDesktopRunnerControl } from "@/api/lib/desktop-runner/runtime";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getDisabledNativeToolSlugsFromSettingsRow } from "@/api/lib/mcp-connectors/catalog-metadata";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import type { ManagedModelTier } from "@/api/lib/usage/managed-model-tier";
 import { readManagedModelTierOnTx } from "@/api/lib/usage/organization-access-state";
 import { resolveWebSearchProvidersFromOrgSettingsRow } from "@/api/lib/web-search/load-org-keys";
@@ -141,6 +152,45 @@ const config = {
     workspaceId: v.optional(resourceIdSchema("workspace")),
   }),
 } satisfies HandlerConfig;
+
+const ACTIVE_TURN_STEERING_SINK = failureSink({
+  event: "chat.active_turn_steering_read_failed",
+  expected: [],
+});
+
+/**
+ * Whether the thread's unsettled turn takes a message mid-turn, for a page
+ * opened while it runs or waits on the member; a read of the turn's run tells
+ * it again on the stream. A failed read tells `not_steerable`: a message then
+ * waits for the turn's end, and nothing the turn shows is declined.
+ */
+const readActiveTurnSteering = async ({
+  activeTurnId,
+  organizationId,
+  runTarget,
+  threadId,
+  userId,
+}: {
+  activeTurnId: SafeId<"chatTurn"> | null;
+  organizationId: SafeId<"organization">;
+  runTarget: ChatRunTarget;
+  threadId: SafeId<"chatThread">;
+  userId: SafeId<"user">;
+}): Promise<ChatTurnSteering> => {
+  // Only a turn on a computer has a run that can take a message.
+  if (activeTurnId === null || runTarget.kind !== CHAT_RUN_TARGET_KIND.local) {
+    return CHAT_TURN_STEERING.notSteerable;
+  }
+  const read = await getDesktopRunnerControl().control.readChatTurnSteering({
+    owner: { organizationId, userId },
+    chat: { threadId, turnId: activeTurnId },
+  });
+  if (Result.isError(read)) {
+    observeFailure(read.error, { sink: ACTIVE_TURN_STEERING_SINK });
+    return CHAT_TURN_STEERING.notSteerable;
+  }
+  return read.value;
+};
 
 const getMessages = createSafeRootHandler(
   config,
@@ -400,6 +450,7 @@ const getMessages = createSafeRootHandler(
         return Result.ok({
           activeSkill: null,
           activeTurnId: null,
+          activeTurnSteering: CHAT_TURN_STEERING.notSteerable,
           attachedFiles: EMPTY_CHAT_THREAD_ATTACHED_FILES,
           forkProvenance: { type: "none" } as const,
           messages: [],
@@ -498,9 +549,19 @@ const getMessages = createSafeRootHandler(
     const context: ThreadContextUsage =
       reported === undefined ? estimate : { ...estimate, reported };
 
+    const activeTurnSteering = await readActiveTurnSteering({
+      activeTurnId: page.activeTurnId,
+      organizationId: session.activeOrganizationId,
+      runTarget: chatRunTargetOf(thread.chatLocalRunTarget),
+      threadId,
+      userId: user.id,
+    });
+
     return Result.ok({
       activeSkill: thread.activeSkill,
       activeTurnId: page.activeTurnId,
+      /** Whether the active turn takes a message mid-turn (`ChatTurnSteering`). */
+      activeTurnSteering,
       attachedFiles,
       forkProvenance: resolveForkProvenance({
         forkedFromMessageId: thread.forkedFromMessageId,

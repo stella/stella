@@ -4,6 +4,10 @@ import * as v from "valibot";
 import type { AgentHarness } from "@stll/api-contract/agent-harness";
 import type { ChatLocalRunSteerOutcome } from "@stll/api-contract/chat-run-target";
 import {
+  CHAT_TURN_STEERING,
+  type ChatTurnSteering,
+} from "@stll/api-contract/chat-send-intent";
+import {
   DESKTOP_RUNNER_ATTACHMENT_LINK_MAX_LENGTH,
   DESKTOP_RUNNER_DESKTOP_MESSAGE,
   DESKTOP_RUNNER_HARNESS_STATE,
@@ -51,6 +55,7 @@ import {
   type ChatRunBinding,
   type ChatRunForRequest,
   type ChatRunSession,
+  type ChatTurnRunOptions,
   type DesktopRunnerDb,
   type DesktopRunnerRunView,
   type HandedOverChatRun,
@@ -689,6 +694,26 @@ const steerChatTurn = async (
   return queued.map(steerOutcomeOf);
 };
 
+/**
+ * Whether chat turn `chat` takes a message mid-turn: its open run's harness,
+ * on the computer running it, last reported `steer`. A turn with no open run
+ * for this member takes none.
+ */
+const readChatTurnSteering = async (
+  deps: ControlDeps,
+  options: ChatTurnRunOptions,
+): Promise<Result<ChatTurnSteering, DesktopRunnerControlError>> => {
+  const run = await Result.tryPromise({
+    try: async () => await readSteerableChatRun(deps.db, options),
+    catch: toDatabaseError,
+  });
+  return run.map((found) =>
+    found?.steerable === true
+      ? CHAT_TURN_STEERING.steerable
+      : CHAT_TURN_STEERING.notSteerable,
+  );
+};
+
 /** What a steer's `run.input` command became, as the chat is told. */
 const steerOutcomeOf = (
   outcome: QueueCommandOutcome,
@@ -800,6 +825,9 @@ export const createDesktopRunnerControl = ({
      */
     steerChatTurn: async (options: SteerChatTurnOptions) =>
       await steerChatTurn(deps, options),
+    /** Whether the chat turn takes a message mid-turn (`ChatTurnSteering`). */
+    readChatTurnSteering: async (options: ChatTurnRunOptions) =>
+      await readChatTurnSteering(deps, options),
     /** The text the owner's run was steered with under `inputId`. */
     readRunInputText: async (options: RunInputTextOptions) =>
       await readSteeredText(deps, options),
