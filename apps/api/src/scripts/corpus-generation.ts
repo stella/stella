@@ -167,7 +167,9 @@ Options (seed):
                          ${String(SEED_DEFAULT_PAGES)}, at most ${String(SEED_MAX_PAGES)}); the next run resumes.
 
 Exit codes (parity): 0 no regression, 3 regressions, 4 undecided, 1 refused.
-Exit codes (seed): 0 every route seeded, 5 budget spent, 1 refused.
+Exit codes (seed): 0 every route seeded, 5 page budget spent, 6 paused by
+the database-load brake, 7 next row held by a writer, 8 a route appeared
+after the pass began, 1 refused.
 `;
 
 /** Rows `status` and the planners read; the registry holds a handful per family. */
@@ -1317,8 +1319,21 @@ const runParity = async (
   return Result.ok(parityExitCode(read.value.value));
 };
 
-/** Exit code of a seeding run whose page budget ran out before the pass did. */
-const SEED_BUDGET_SPENT_EXIT_CODE = 5;
+/**
+ * Exit codes of `seed`, one per reason a run stops short, so a wrapper can
+ * tell a run to repeat from one to wait or to look at.
+ */
+const SEED_EXIT = {
+  seeded: 0,
+  /** The page budget ran out before the pass did; rerun to resume. */
+  budgetSpent: 5,
+  /** The database-load brake paused the run; rerun later. */
+  braked: 6,
+  /** A writer holds the next row; rerun once it commits. */
+  busy: 7,
+  /** A route appeared after the pass began; rerun to walk a new pass. */
+  routeAppeared: 8,
+} as const;
 
 const CANONICAL_TABLES = {
   case_law: "case_law_decisions",
@@ -1411,7 +1426,7 @@ const runSeed = async (
     }
     if (outcome === null) {
       write("paused by the database-load brake; rerun to resume");
-      return Result.ok(SEED_BUDGET_SPENT_EXIT_CODE);
+      return Result.ok(SEED_EXIT.braked);
     }
     switch (outcome.type) {
       case "inactive":
@@ -1431,16 +1446,16 @@ const runSeed = async (
           seedings.routes.some(({ state }) => state === "unseeded")
         ) {
           write("a route appeared after the pass began; rerun to walk it");
-          return Result.ok(SEED_BUDGET_SPENT_EXIT_CODE);
+          return Result.ok(SEED_EXIT.routeAppeared);
         }
         write("every route of the generation is seeded");
-        return Result.ok(0);
+        return Result.ok(SEED_EXIT.seeded);
       case "busy":
         write("the next row is held by a writer; rerun to resume");
-        return Result.ok(SEED_BUDGET_SPENT_EXIT_CODE);
+        return Result.ok(SEED_EXIT.busy);
       case "advanced":
         write("page budget spent; rerun to resume from the stored cursor");
-        return Result.ok(SEED_BUDGET_SPENT_EXIT_CODE);
+        return Result.ok(SEED_EXIT.budgetSpent);
       default:
         outcome satisfies never;
         return panic(`Unhandled seeding outcome: ${String(outcome)}`);
