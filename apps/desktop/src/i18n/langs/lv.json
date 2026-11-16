@@ -602,8 +602,8 @@
     "descriptionCloud": "Turiet {shortcut} un runājiet. Teksts parādās lietotnē, kuru izmantojat. Runu tekstā pārvērš stella AI, un stella to nesaglabā.",
     "cleanup": {
       "title": "Labot ar MI",
-      "description": "Izlabo atpazīšanas kļūdas un diktēto formatējumu, piemēram, “jauna rinda”, un pielāgo tekstu lietotnei, piemēram, e-pastam. Caur stella jūsu organizācijas MI pakalpojumu sniedzējam tiek nosūtīts tikai teksts, ne audio; stella to nesaglabā.",
-      "descriptionCloud": "stella AI arī izlabo atpazīšanas kļūdas un diktēto formatējumu, piemēram, “jauna rinda”, un pielāgo tekstu lietotnei, piemēram, e-pastam."
+      "description": "Izlabo atpazīšanas kļūdas un diktēto formatējumu, piemēram, “jauna rinda” vai “treknraksts”, un pielāgo tekstu lietotnei, piemēram, e-pastam. Caur stella jūsu organizācijas MI pakalpojumu sniedzējam tiek nosūtīts tikai teksts, ne audio; stella to nesaglabā.",
+      "descriptionCloud": "stella AI arī izlabo atpazīšanas kļūdas un diktēto formatējumu, piemēram, “jauna rinda” vai “treknraksts”, un pielāgo tekstu lietotnei, piemēram, e-pastam."
     },
     "context": {
       "windowTitle": {

@@ -602,8 +602,8 @@
     "descriptionCloud": "Hoidke all klahvi {shortcut} ja rääkige. Tekst ilmub rakendusse, mida kasutate. Kõne teisendab stella AI ja stella seda ei salvesta.",
     "cleanup": {
       "title": "Paranda tehisintellektiga",
-      "description": "Parandab tuvastusvead ja dikteeritud vormingu, näiteks „uus rida“, ning sobitab teksti rakendusega, näiteks e-postiga. stella kaudu saadetakse teie organisatsiooni tehisintellekti teenusepakkujale ainult tekst, mitte heli; stella seda ei salvesta.",
-      "descriptionCloud": "stella AI parandab ka tuvastusvead ja dikteeritud vormingu, näiteks „uus rida“, ning sobitab teksti rakendusega, näiteks e-postiga."
+      "description": "Parandab tuvastusvead ja dikteeritud vormingu, näiteks „uus rida“ või „paks“, ning sobitab teksti rakendusega, näiteks e-postiga. stella kaudu saadetakse teie organisatsiooni tehisintellekti teenusepakkujale ainult tekst, mitte heli; stella seda ei salvesta.",
+      "descriptionCloud": "stella AI parandab ka tuvastusvead ja dikteeritud vormingu, näiteks „uus rida“ või „paks“, ning sobitab teksti rakendusega, näiteks e-postiga."
     },
     "context": {
       "windowTitle": {

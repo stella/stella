@@ -602,8 +602,8 @@
     "descriptionCloud": "Tartsa lenyomva a(z) {shortcut} billentyűt, és beszéljen. A szöveg abban az alkalmazásban jelenik meg, amelyet éppen használ. A beszédet a stella AI írja át, és a stella nem tárolja.",
     "cleanup": {
       "title": "Javítás AI-jal",
-      "description": "Kijavítja a felismerési hibákat és a kimondott formázást, például „új sor”, és az alkalmazáshoz igazítja a szöveget, például e-mailhez. Csak a szöveg – nem a hang – kerül a stellán keresztül a szervezete AI-szolgáltatójához; a stella nem tárolja.",
-      "descriptionCloud": "A stella AI emellett kijavítja a felismerési hibákat és a kimondott formázást, például „új sor”, és az alkalmazáshoz igazítja a szöveget, például e-mailhez."
+      "description": "Kijavítja a felismerési hibákat és a kimondott formázást, például „új sor” vagy „félkövér”, és az alkalmazáshoz igazítja a szöveget, például e-mailhez. Csak a szöveg – nem a hang – kerül a stellán keresztül a szervezete AI-szolgáltatójához; a stella nem tárolja.",
+      "descriptionCloud": "A stella AI emellett kijavítja a felismerési hibákat és a kimondott formázást, például „új sor” vagy „félkövér”, és az alkalmazáshoz igazítja a szöveget, például e-mailhez."
     },
     "context": {
       "windowTitle": {

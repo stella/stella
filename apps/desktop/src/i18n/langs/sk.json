@@ -602,8 +602,8 @@
     "descriptionCloud": "Podržte {shortcut} a hovorte. Text sa zobrazí v aplikácii, ktorú práve používate. Reč prevádza stella AI a stella ju neukladá.",
     "cleanup": {
       "title": "Upraviť pomocou AI",
-      "description": "Opraví chyby rozpoznávania a vyslovené formátovanie, napríklad „nový riadok“, a prispôsobí text aplikácii, napríklad e-mailu. Cez stellu sa poskytovateľovi AI vašej organizácie odošle len text, nie zvuk; stella ho neukladá.",
-      "descriptionCloud": "stella AI navyše opraví chyby rozpoznávania a vyslovené formátovanie, napríklad „nový riadok“, a prispôsobí text aplikácii, napríklad e-mailu."
+      "description": "Opraví chyby rozpoznávania a vyslovené formátovanie, napríklad „nový riadok“ alebo „tučne“, a prispôsobí text aplikácii, napríklad e-mailu. Cez stellu sa poskytovateľovi AI vašej organizácie odošle len text, nie zvuk; stella ho neukladá.",
+      "descriptionCloud": "stella AI navyše opraví chyby rozpoznávania a vyslovené formátovanie, napríklad „nový riadok“ alebo „tučne“, a prispôsobí text aplikácii, napríklad e-mailu."
     },
     "context": {
       "windowTitle": {

@@ -602,8 +602,8 @@
     "descriptionCloud": "Przytrzymaj {shortcut} i mów. Tekst pojawi się w aplikacji, której używasz. Mowę przetwarza stella AI, a stella jej nie przechowuje.",
     "cleanup": {
       "title": "Popraw za pomocą AI",
-      "description": "Poprawia błędy rozpoznawania i podyktowane formatowanie, na przykład „nowa linia”, oraz dopasowuje tekst do aplikacji, na przykład poczty e-mail. Za pośrednictwem stelli do dostawcy AI Twojej organizacji trafia tylko tekst, nie dźwięk; stella go nie zapisuje.",
-      "descriptionCloud": "stella AI dodatkowo poprawia błędy rozpoznawania i podyktowane formatowanie, na przykład „nowa linia”, oraz dopasowuje tekst do aplikacji, na przykład poczty e-mail."
+      "description": "Poprawia błędy rozpoznawania i podyktowane formatowanie, na przykład „nowa linia” lub „pogrubienie”, oraz dopasowuje tekst do aplikacji, na przykład poczty e-mail. Za pośrednictwem stelli do dostawcy AI Twojej organizacji trafia tylko tekst, nie dźwięk; stella go nie zapisuje.",
+      "descriptionCloud": "stella AI dodatkowo poprawia błędy rozpoznawania i podyktowane formatowanie, na przykład „nowa linia” lub „pogrubienie”, oraz dopasowuje tekst do aplikacji, na przykład poczty e-mail."
     },
     "context": {
       "windowTitle": {

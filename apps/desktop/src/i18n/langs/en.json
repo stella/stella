@@ -602,8 +602,8 @@
     "descriptionCloud": "Hold {shortcut} and speak. The text appears in the app you are using. Speech is transcribed by stella AI and is not stored by stella.",
     "cleanup": {
       "title": "Clean up with AI",
-      "description": "Fixes recognition mistakes and spoken formatting such as “new line”, and fits the text to the app, such as email. Only the text, not the audio, is sent through stella to your organization’s AI provider; stella does not store it.",
-      "descriptionCloud": "stella AI also fixes recognition mistakes and spoken formatting such as “new line”, and fits the text to the app, such as email."
+      "description": "Fixes recognition mistakes and spoken formatting such as “new line” or “bold”, and fits the text to the app, such as email. Only the text, not the audio, is sent through stella to your organization’s AI provider; stella does not store it.",
+      "descriptionCloud": "stella AI also fixes recognition mistakes and spoken formatting such as “new line” or “bold”, and fits the text to the app, such as email."
     },
     "context": {
       "windowTitle": {

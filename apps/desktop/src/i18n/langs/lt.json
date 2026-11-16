@@ -602,8 +602,8 @@
     "descriptionCloud": "Laikykite {shortcut} ir kalbėkite. Tekstas atsiras programoje, kurią naudojate. Kalbą paverčia tekstu stella AI, o stella jos nesaugo.",
     "cleanup": {
       "title": "Taisyti su DI",
-      "description": "Ištaiso atpažinimo klaidas ir padiktuotą formatavimą, pavyzdžiui, „nauja eilutė“, ir pritaiko tekstą programai, pavyzdžiui, el. paštui. Per stella jūsų organizacijos DI teikėjui siunčiamas tik tekstas, ne garsas; stella jo nesaugo.",
-      "descriptionCloud": "stella AI taip pat ištaiso atpažinimo klaidas ir padiktuotą formatavimą, pavyzdžiui, „nauja eilutė“, ir pritaiko tekstą programai, pavyzdžiui, el. paštui."
+      "description": "Ištaiso atpažinimo klaidas ir padiktuotą formatavimą, pavyzdžiui, „nauja eilutė“ arba „paryškinti“, ir pritaiko tekstą programai, pavyzdžiui, el. paštui. Per stella jūsų organizacijos DI teikėjui siunčiamas tik tekstas, ne garsas; stella jo nesaugo.",
+      "descriptionCloud": "stella AI taip pat ištaiso atpažinimo klaidas ir padiktuotą formatavimą, pavyzdžiui, „nauja eilutė“ arba „paryškinti“, ir pritaiko tekstą programai, pavyzdžiui, el. paštui."
     },
     "context": {
       "windowTitle": {

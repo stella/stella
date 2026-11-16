@@ -602,8 +602,8 @@
     "descriptionCloud": "Halten Sie {shortcut} gedrückt und sprechen Sie. Der Text erscheint in der App, die Sie gerade verwenden. Die Sprache wird von stella AI umgewandelt und von stella nicht gespeichert.",
     "cleanup": {
       "title": "Mit KI überarbeiten",
-      "description": "Korrigiert Erkennungsfehler und gesprochene Formatierungen wie „neue Zeile“ und passt den Text an die App an, etwa an E-Mail. Nur der Text, nicht der Ton, wird über stella an den KI-Anbieter Ihrer Organisation gesendet; stella speichert ihn nicht.",
-      "descriptionCloud": "stella AI korrigiert außerdem Erkennungsfehler und gesprochene Formatierungen wie „neue Zeile“ und passt den Text an die App an, etwa an E-Mail."
+      "description": "Korrigiert Erkennungsfehler und gesprochene Formatierungen wie „neue Zeile“ oder „fett“ und passt den Text an die App an, etwa an E-Mail. Nur der Text, nicht der Ton, wird über stella an den KI-Anbieter Ihrer Organisation gesendet; stella speichert ihn nicht.",
+      "descriptionCloud": "stella AI korrigiert außerdem Erkennungsfehler und gesprochene Formatierungen wie „neue Zeile“ oder „fett“ und passt den Text an die App an, etwa an E-Mail."
     },
     "context": {
       "windowTitle": {

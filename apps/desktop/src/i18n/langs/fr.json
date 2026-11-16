@@ -602,8 +602,8 @@
     "descriptionCloud": "Maintenez {shortcut} et parlez. Le texte apparaît dans l’application que vous utilisez. La parole est transcrite par stella AI et n’est pas conservée par stella.",
     "cleanup": {
       "title": "Corriger avec l’IA",
-      "description": "Corrige les erreurs de reconnaissance et la mise en forme dictée, comme « nouvelle ligne », et adapte le texte à l’application, comme un e-mail. Seul le texte, et non l’audio, est envoyé via stella au fournisseur d’IA de votre organisation ; stella ne le conserve pas.",
-      "descriptionCloud": "stella AI corrige aussi les erreurs de reconnaissance et la mise en forme dictée, comme « nouvelle ligne », et adapte le texte à l’application, comme un e-mail."
+      "description": "Corrige les erreurs de reconnaissance et la mise en forme dictée, comme « nouvelle ligne » ou « gras », et adapte le texte à l’application, comme un e-mail. Seul le texte, et non l’audio, est envoyé via stella au fournisseur d’IA de votre organisation ; stella ne le conserve pas.",
+      "descriptionCloud": "stella AI corrige aussi les erreurs de reconnaissance et la mise en forme dictée, comme « nouvelle ligne » ou « gras », et adapte le texte à l’application, comme un e-mail."
     },
     "context": {
       "windowTitle": {

@@ -602,8 +602,8 @@
     "descriptionCloud": "Mantenha {shortcut} pressionado e fale. O texto aparece no aplicativo que você está usando. A fala é transcrita pela stella AI e não é armazenada pela stella.",
     "cleanup": {
       "title": "Revisar com IA",
-      "description": "Corrige erros de reconhecimento e a formatação ditada, como “nova linha”, e adapta o texto ao aplicativo, como e-mail. Só o texto, não o áudio, é enviado pela stella ao provedor de IA da sua organização; a stella não o armazena.",
-      "descriptionCloud": "A stella AI também corrige erros de reconhecimento e a formatação ditada, como “nova linha”, e adapta o texto ao aplicativo, como e-mail."
+      "description": "Corrige erros de reconhecimento e a formatação ditada, como “nova linha” ou “negrito”, e adapta o texto ao aplicativo, como e-mail. Só o texto, não o áudio, é enviado pela stella ao provedor de IA da sua organização; a stella não o armazena.",
+      "descriptionCloud": "A stella AI também corrige erros de reconhecimento e a formatação ditada, como “nova linha” ou “negrito”, e adapta o texto ao aplicativo, como e-mail."
     },
     "context": {
       "windowTitle": {

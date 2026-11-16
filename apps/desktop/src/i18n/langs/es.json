@@ -602,8 +602,8 @@
     "descriptionCloud": "Mantenga pulsado {shortcut} y hable. El texto aparece en la aplicación que está usando. stella AI transcribe la voz y stella no la guarda.",
     "cleanup": {
       "title": "Corregir con IA",
-      "description": "Corrige errores de reconocimiento y el formato dictado, como «nueva línea», y adapta el texto a la aplicación, como el correo. Solo el texto, no el audio, se envía a través de stella al proveedor de IA de tu organización; stella no lo guarda.",
-      "descriptionCloud": "stella AI también corrige errores de reconocimiento y el formato dictado, como «nueva línea», y adapta el texto a la aplicación, como el correo."
+      "description": "Corrige errores de reconocimiento y el formato dictado, como «nueva línea» o «negrita», y adapta el texto a la aplicación, como el correo. Solo el texto, no el audio, se envía a través de stella al proveedor de IA de tu organización; stella no lo guarda.",
+      "descriptionCloud": "stella AI también corrige errores de reconocimiento y el formato dictado, como «nueva línea» o «negrita», y adapta el texto a la aplicación, como el correo."
     },
     "context": {
       "windowTitle": {
