@@ -64,15 +64,19 @@ afterEach(() => {
 });
 afterAll(unregisterDomEnvironment);
 
-const mountActions = () => {
+const mountActions = (existingClient?: InstanceType<typeof QueryClient>) => {
   spies.push(spyOn(stellaToast, "add").mockReturnValue("claim-gap-toast"));
-  const client = new QueryClient({
-    defaultOptions: {
-      queries: { retry: false, gcTime: Infinity },
-      mutations: { retry: false, gcTime: 0 },
-    },
-  });
-  clients.push(client);
+  const client =
+    existingClient ??
+    new QueryClient({
+      defaultOptions: {
+        queries: { retry: false, gcTime: Infinity },
+        mutations: { retry: false, gcTime: 0 },
+      },
+    });
+  if (existingClient === undefined) {
+    clients.push(client);
+  }
   const hook = renderHook(() => useClaimGapActions(scope), {
     wrapper: ({ children }) => (
       <IntlProvider locale="en" messages={messages} timeZone="UTC">
@@ -119,9 +123,11 @@ type RequestRecord = {
 const serve = ({
   refusedPath,
   sourceOutcome = "success",
+  beforeDocumentRead,
 }: {
   refusedPath?: string;
   sourceOutcome?: "success" | "response-lost";
+  beforeDocumentRead?: () => Promise<void>;
 } = {}) => {
   const requests: RequestRecord[] = [];
   const sourceWrites = new Map<string, unknown>();
@@ -146,6 +152,7 @@ const serve = ({
           return Response.json({ message: "Attempt refused" }, { status: 400 });
         }
         if (request.method === "GET") {
+          await beforeDocumentRead?.();
           expect(path).toBe(`/v1/entities/${workspaceId}/entity/${documentId}`);
           return Response.json({
             entityId: documentId,
@@ -352,5 +359,130 @@ test("a lost source response replays the pinned version after the claim panel re
   expect(requests.filter(({ path }) => path === WRITE_PATHS[0])).toHaveLength(
     1,
   );
+  expect(useAddFactProgress.getState().progress[progressKey]).toBeUndefined();
+});
+
+test("remounting during source preparation joins the addition instead of queuing another intent", async () => {
+  const documentRead = Promise.withResolvers<undefined>();
+  const { requests, sourceWrites } = serve({
+    beforeDocumentRead: async () => await documentRead.promise,
+  });
+  const first = mountActions();
+  let firstAttempt: Promise<void>;
+  act(() => {
+    firstAttempt = first.result.current.addFact.mutateAsync(input);
+  });
+  await waitFor(() => {
+    expect(requests.filter(({ method }) => method === "GET")).toHaveLength(1);
+    expect(useAddFactProgress.getState().progress[progressKey]?.step).toBe(
+      "added",
+    );
+  });
+  first.unmount();
+  const resumed = mountActions(first.client);
+  let overlappingAttempt: Promise<void>;
+  act(() => {
+    overlappingAttempt = resumed.result.current.addFact.mutateAsync(input);
+  });
+  await waitFor(() =>
+    expect(resumed.result.current.addFact.isPending).toBe(true),
+  );
+  await act(async () => {
+    documentRead.resolve(undefined);
+    await Promise.all([firstAttempt, overlappingAttempt]);
+  });
+  await waitFor(() =>
+    expect(resumed.result.current.addFact.isSuccess).toBe(true),
+  );
+  expect(requests.filter(({ method }) => method === "GET")).toHaveLength(1);
+  for (const path of WRITE_PATHS) {
+    expect(requests.filter((request) => request.path === path)).toHaveLength(1);
+  }
+  const firstSource = requests.find(({ path }) => path === WRITE_PATHS[1]);
+  expect(firstSource?.key).toBeTruthy();
+  expect(firstSource?.body).toMatchObject({ sourceEntityVersionId: versionId });
+  expect(sourceWrites.size).toBe(1);
+  expect(useAddFactProgress.getState().progress[progressKey]).toBeUndefined();
+
+  await act(async () => {
+    await resumed.result.current.addFact.mutateAsync({
+      ...input,
+      statement: "A later deliberate addition.",
+    });
+  });
+  for (const path of WRITE_PATHS) {
+    expect(requests.filter((request) => request.path === path)).toHaveLength(2);
+  }
+  const secondSource = requests
+    .filter(({ path }) => path === WRITE_PATHS[1])
+    .at(1);
+  expect(secondSource?.key).toBeTruthy();
+  expect(secondSource?.key).not.toBe(firstSource?.key);
+  expect(sourceWrites.size).toBe(2);
+});
+
+test("overlapping remounts share a source rejection and a later retry replays the same intent", async () => {
+  const documentRead = Promise.withResolvers<undefined>();
+  const { requests, sourceWrites } = serve({
+    sourceOutcome: "response-lost",
+    beforeDocumentRead: async () => await documentRead.promise,
+  });
+  const first = mountActions();
+  let firstFailure: Promise<unknown>;
+  act(() => {
+    firstFailure = rejectionOf(first.result.current.addFact.mutateAsync(input));
+  });
+  await waitFor(() => {
+    expect(requests.filter(({ method }) => method === "GET")).toHaveLength(1);
+    expect(useAddFactProgress.getState().progress[progressKey]?.step).toBe(
+      "added",
+    );
+  });
+  first.unmount();
+  const resumed = mountActions(first.client);
+  let overlappingFailure: Promise<unknown>;
+  act(() => {
+    overlappingFailure = rejectionOf(
+      resumed.result.current.addFact.mutateAsync(input),
+    );
+  });
+  await waitFor(() =>
+    expect(resumed.result.current.addFact.isPending).toBe(true),
+  );
+  await act(async () => {
+    documentRead.resolve(undefined);
+    const [firstError, overlappingError] = await Promise.all([
+      firstFailure,
+      overlappingFailure,
+    ]);
+    expect(firstError).toBeDefined();
+    expect(overlappingError).toBe(firstError);
+  });
+  expect(requests.filter(({ path }) => path === WRITE_PATHS[0])).toHaveLength(
+    1,
+  );
+  const sourceAttempts = () =>
+    requests.filter(({ path }) => path === WRITE_PATHS[1]);
+  expect(sourceAttempts()).toHaveLength(1);
+  expect(sourceWrites.size).toBe(1);
+  expect(useAddFactProgress.getState().progress[progressKey]?.step).toBe(
+    "sourcing",
+  );
+
+  await act(async () => {
+    await resumed.result.current.addFact.mutateAsync(input);
+  });
+  await waitFor(() =>
+    expect(resumed.result.current.addFact.isSuccess).toBe(true),
+  );
+  expect(requests.filter(({ path }) => path === WRITE_PATHS[0])).toHaveLength(
+    1,
+  );
+  expect(requests.filter(({ method }) => method === "GET")).toHaveLength(1);
+  expect(sourceAttempts()).toHaveLength(2);
+  expect(sourceAttempts().at(0)?.key).toBeTruthy();
+  expect(sourceAttempts().at(1)?.key).toBe(sourceAttempts().at(0)?.key);
+  expect(sourceAttempts().at(1)?.body).toEqual(sourceAttempts().at(0)?.body);
+  expect(sourceWrites.size).toBe(1);
   expect(useAddFactProgress.getState().progress[progressKey]).toBeUndefined();
 });

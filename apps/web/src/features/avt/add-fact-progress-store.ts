@@ -37,6 +37,7 @@ type AddFactProgressStore = {
   /** Unfinished additions by claim (`addFactProgressKey`). */
   progress: Readonly<Record<string, AddedFact>>;
   record: (key: string, added: AddedFact | null) => void;
+  runAttempt: (key: string, write: () => Promise<void>) => Promise<void>;
 };
 
 /**
@@ -44,17 +45,38 @@ type AddFactProgressStore = {
  * session, outside the claim's panel: switching claims and coming back
  * resumes the same fact instead of adding a second one.
  */
-export const useAddFactProgress = create<AddFactProgressStore>()((set) => ({
-  progress: {},
-  record: (key, added) => {
-    set(({ progress }) => {
-      const next = Object.fromEntries(
-        Object.entries(progress).filter(([entry]) => entry !== key),
-      );
-      return { progress: added === null ? next : { ...next, [key]: added } };
-    });
-  },
-}));
+export const useAddFactProgress = create<AddFactProgressStore>()((set) => {
+  const attempts = new Map<string, Promise<void>>();
+  return {
+    progress: {},
+    record: (key, added) => {
+      set(({ progress }) => {
+        const next = Object.fromEntries(
+          Object.entries(progress).filter(([entry]) => entry !== key),
+        );
+        return { progress: added === null ? next : { ...next, [key]: added } };
+      });
+    },
+    runAttempt: async (key, write) => {
+      const active = attempts.get(key);
+      if (active !== undefined) {
+        await active;
+        return;
+      }
+      // Store ownership before work starts. A remount joins this exact attempt;
+      // queuing another write would create a new fact after success clears progress.
+      const pending = Promise.resolve()
+        .then(write)
+        .finally(() => {
+          if (attempts.get(key) === pending) {
+            attempts.delete(key);
+          }
+        });
+      attempts.set(key, pending);
+      await pending;
+    },
+  };
+});
 
 export const addFactProgressKey = (scope: {
   workspaceId: string;

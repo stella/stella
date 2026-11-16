@@ -184,85 +184,86 @@ export const useClaimGapActions = ({
     }: {
       workspaceId: string;
       input: AddFactInput;
-    }) => {
-      const previous: AddedFact | undefined =
-        useAddFactProgress.getState().progress[progressKey];
-      const { statement, source } = previous?.input ?? submitted;
-      const createBody = {
-        name: statement,
-        listId: toSafeId<"legalList">(listId),
-        listItemType: LIST_ITEM_TYPE.FACT,
-      };
-      const createOperation = `claim-add-fact:${runId}:${claimId}`;
-      let pending: AddedFact = previous ?? {
-        input: { statement, source },
-        step: "creating",
-        // Recorded before the create is sent: a retry whose response was
-        // lost replays the first create instead of adding the fact twice.
-        createRequest: submit.prepare({
-          body: createBody,
-          operation: createOperation,
-        }),
-        recheckKey: createUuid(),
-      };
-      const { input, createRequest, recheckKey: retryKey } = pending;
-      const intent = { input, createRequest, recheckKey: retryKey };
-      if (pending.step === "creating") {
-        record(pending);
-        const created = unwrapApiResponse(
-          await submit.run({
-            operation: createOperation,
+    }) =>
+      await useAddFactProgress.getState().runAttempt(progressKey, async () => {
+        const previous: AddedFact | undefined =
+          useAddFactProgress.getState().progress[progressKey];
+        const { statement, source } = previous?.input ?? submitted;
+        const createBody = {
+          name: statement,
+          listId: toSafeId<"legalList">(listId),
+          listItemType: LIST_ITEM_TYPE.FACT,
+        };
+        const createOperation = `claim-add-fact:${runId}:${claimId}`;
+        let pending: AddedFact = previous ?? {
+          input: { statement, source },
+          step: "creating",
+          // Recorded before the create is sent: a retry whose response was
+          // lost replays the first create instead of adding the fact twice.
+          createRequest: submit.prepare({
             body: createBody,
-            request: pending.createRequest,
-            send: async (body, replay) =>
-              await invokeCapability("tasks.create", async (request) =>
-                api
-                  .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
-                  .put(body, {
-                    ...request,
-                    headers: {
-                      "Idempotency-Key": replay.headers["Idempotency-Key"],
-                      ...request.headers,
-                    },
-                  }),
-              ),
+            operation: createOperation,
           }),
-        );
-        pending = { ...intent, step: "added", entityId: created.entityId };
-      }
-      let added = pending;
-      const { entityId } = added;
-      record(added);
-      if (added.step === "added") {
-        const sourceRequest = await prepareFactSource({
-          queryClient,
-          submit,
-          workspaceId,
-          listId,
-          entityId,
-          source,
-        });
-        added = { ...intent, step: "sourcing", entityId, sourceRequest };
+          recheckKey: createUuid(),
+        };
+        const { input, createRequest, recheckKey: retryKey } = pending;
+        const intent = { input, createRequest, recheckKey: retryKey };
+        if (pending.step === "creating") {
+          record(pending);
+          const created = unwrapApiResponse(
+            await submit.run({
+              operation: createOperation,
+              body: createBody,
+              request: pending.createRequest,
+              send: async (body, replay) =>
+                await invokeCapability("tasks.create", async (request) =>
+                  api
+                    .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
+                    .put(body, {
+                      ...request,
+                      headers: {
+                        "Idempotency-Key": replay.headers["Idempotency-Key"],
+                        ...request.headers,
+                      },
+                    }),
+                ),
+            }),
+          );
+          pending = { ...intent, step: "added", entityId: created.entityId };
+        }
+        let added = pending;
+        const { entityId } = added;
         record(added);
-      }
-      if (added.step === "sourcing") {
-        await submitFactSource({
-          workspaceId,
-          submit,
-          sourceRequest: added.sourceRequest,
-        });
-        added = { ...intent, step: "sourced", entityId };
-        record(added);
-      }
-      if (added.step === "sourced") {
-        await changeLink({ factEntityId: entityId, change: "link" });
-        added = { ...intent, step: "linked", entityId };
-        record(added);
-      }
-      // The addition's own key, kept with it across claims and retries.
-      unwrapApiResponse(await postRecheck(added.recheckKey));
-      record(null);
-    },
+        if (added.step === "added") {
+          const sourceRequest = await prepareFactSource({
+            queryClient,
+            submit,
+            workspaceId,
+            listId,
+            entityId,
+            source,
+          });
+          added = { ...intent, step: "sourcing", entityId, sourceRequest };
+          record(added);
+        }
+        if (added.step === "sourcing") {
+          await submitFactSource({
+            workspaceId,
+            submit,
+            sourceRequest: added.sourceRequest,
+          });
+          added = { ...intent, step: "sourced", entityId };
+          record(added);
+        }
+        if (added.step === "sourced") {
+          await changeLink({ factEntityId: entityId, change: "link" });
+          added = { ...intent, step: "linked", entityId };
+          record(added);
+        }
+        // The addition's own key, kept with it across claims and retries.
+        unwrapApiResponse(await postRecheck(added.recheckKey));
+        record(null);
+      }),
   });
   const addFact = useMutation({
     mutationKey: ["avt", workspaceId, "claim-add-fact", runId, claimId],
