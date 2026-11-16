@@ -12,6 +12,7 @@ import { PUBLIC_COUNTRIES } from "@stll/api-contract/public-country-capability";
 import { DECISION_LIST_SORTS } from "@stll/api-contract/search";
 import { assertProperty } from "@stll/property-testing";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions } from "@/api/db/schema";
@@ -89,6 +90,8 @@ import {
 import { encodeCursor } from "@/api/lib/search/cursor";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { serveForTest } from "@/api/tests/helpers/test-server";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 type ScopedDbIsPublicReadDb = ScopedDb extends CaseLawPublicReadDb
   ? true
@@ -378,7 +381,7 @@ const publicRouteBlock = (source: string): string => {
 describe("public case-law route boundary", () => {
   test("public law APIs are dark-launched outside local development", async () => {
     const previousFeature = env.FEATURE_PUBLIC_LAW;
-    env.FEATURE_PUBLIC_LAW = false;
+    testState.setConfig("FEATURE_PUBLIC_LAW", false);
     const restoreRuntimeMode = setRuntimeModeForTesting({
       mode: RUNTIME_MODE.strict,
     });
@@ -401,7 +404,7 @@ describe("public case-law route boundary", () => {
       }
     } finally {
       restoreRuntimeMode();
-      env.FEATURE_PUBLIC_LAW = previousFeature;
+      testState.setConfig("FEATURE_PUBLIC_LAW", previousFeature);
     }
   });
 

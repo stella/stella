@@ -71,6 +71,7 @@
     "chooseRewriteInstruction": "Options de réécriture",
     "editWithAI": "Modifier avec l’IA",
     "keyRequired": {
+      "accountFeaturesUnavailable": "Les fonctionnalités d’IA ne sont pas disponibles pour ce compte.",
       "accountRestricted": "Les paramètres du fournisseur d’IA ne sont pas disponibles pour ce compte.",
       "configUnreadable": "La configuration du fournisseur d’IA ne peut pas être lue. Demandez à un administrateur de l’organisation de le reconnecter.",
       "cta": "Ouvrir les paramètres IA",
@@ -5385,6 +5386,7 @@
       "tokenHelp": "Jetons disponibles : '{'SEQ'}' (séquence), '{'YYYY'}' (année), '{'YY'}' (année à 2 chiffres), '{'MM'}' (mois)"
     },
     "members": {
+      "billingAccess": "Accès aux données de facturation",
       "changeRole": "Modifier le rôle",
       "changeRoleDescription": "Modifier le rôle de {email}",
       "confirmRoleChangeDescription": "Le rôle de {email} passera de {oldRole} à {newRole}.",

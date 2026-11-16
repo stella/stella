@@ -57,6 +57,7 @@ import {
   toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
 import {
+  CHAT_MEMBER_MESSAGE_PLACEMENT,
   finalizeAssistantTurn,
   persistAcceptedMessageWithClaim,
   persistClaimedReplayMessage,
@@ -1734,6 +1735,10 @@ const acceptIncomingTurn = async ({
     } else {
       const persistenceResult = await persistAcceptedMessageWithClaim({
         ...persistenceProps,
+        placement:
+          isEdit || isExplicitRegeneration
+            ? CHAT_MEMBER_MESSAGE_PLACEMENT.rewrite
+            : CHAT_MEMBER_MESSAGE_PLACEMENT.append,
         plannedOnHistory,
         ...(isEdit ? { refuseTurn: refuseChatUserMessageEditTurn } : {}),
         turnAcceptance,

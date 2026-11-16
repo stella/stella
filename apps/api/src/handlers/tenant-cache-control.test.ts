@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { createTestState } from "@stll/test-state";
+
 import { apiPipeline } from "@/api/api-pipeline";
 import { env } from "@/api/env";
 import type { ApiRouteKey } from "@/api/http/api-route-types";
@@ -16,6 +18,8 @@ import {
 } from "@/api/mcp/resource-policy-contract";
 import { apiApp } from "@/api/server";
 import { serveForTest } from "@/api/tests/helpers/test-server";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 // TTL changes and new shared-cache routes require an explicit review decision.
 const DISCOVERY_CACHE_HEADER =
@@ -176,7 +180,7 @@ describe("composed API cache policy", () => {
 
   test("validation errors on a shared-cache route stay private", async () => {
     const previous = env.FEATURE_PUBLIC_KNOWLEDGE;
-    env.FEATURE_PUBLIC_KNOWLEDGE = true;
+    testState.setConfig("FEATURE_PUBLIC_KNOWLEDGE", true);
     try {
       await using server = serveForTest(apiApp);
       const response = await server.fetch(
@@ -187,13 +191,13 @@ describe("composed API cache policy", () => {
       expect(response.status).toBe(422);
       expect(response.headers.get("Cache-Control")).toBe("private, no-store");
     } finally {
-      env.FEATURE_PUBLIC_KNOWLEDGE = previous;
+      testState.setConfig("FEATURE_PUBLIC_KNOWLEDGE", previous);
     }
   });
 
   test("successful public knowledge keeps exactly its approved cache header", async () => {
     const previous = env.FEATURE_PUBLIC_KNOWLEDGE;
-    env.FEATURE_PUBLIC_KNOWLEDGE = true;
+    testState.setConfig("FEATURE_PUBLIC_KNOWLEDGE", true);
     try {
       await using server = serveForTest(apiApp);
       const response = await server.fetch(
@@ -206,13 +210,13 @@ describe("composed API cache policy", () => {
         ) ?? panic("Public playbook starters must declare their cache header"),
       );
     } finally {
-      env.FEATURE_PUBLIC_KNOWLEDGE = previous;
+      testState.setConfig("FEATURE_PUBLIC_KNOWLEDGE", previous);
     }
   });
 
   test("disabled public knowledge stays private before the handler runs", async () => {
     const previous = env.FEATURE_PUBLIC_KNOWLEDGE;
-    env.FEATURE_PUBLIC_KNOWLEDGE = false;
+    testState.setConfig("FEATURE_PUBLIC_KNOWLEDGE", false);
     try {
       await using server = serveForTest(apiApp);
       const response = await server.fetch(
@@ -221,7 +225,7 @@ describe("composed API cache policy", () => {
       expect(response.status).toBe(404);
       expect(response.headers.get("Cache-Control")).toBe("private, no-store");
     } finally {
-      env.FEATURE_PUBLIC_KNOWLEDGE = previous;
+      testState.setConfig("FEATURE_PUBLIC_KNOWLEDGE", previous);
     }
   });
 });

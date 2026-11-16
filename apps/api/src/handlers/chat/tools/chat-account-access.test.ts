@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { createTestState } from "@stll/test-state";
+
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { env } from "@/api/env";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
@@ -11,6 +13,8 @@ import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const DEMO_EMAIL = "limited@example.test";
 
@@ -76,19 +80,13 @@ describe("chat account access", () => {
   // Hand-written chat tools share names with MCP definitions; each must honour
   // the declared account access, not only its own registration gate.
   test("the demo account is offered no tool its MCP definition declares standard", () => {
-    const previousEmail = env.DEMO_ACCOUNT_EMAIL;
-    env.DEMO_ACCOUNT_EMAIL = DEMO_EMAIL;
-    try {
-      const demo = registeredToolNames(DEMO_EMAIL);
-      expect(demo.filter((name) => standardWriteToolNames.has(name))).toEqual(
-        [],
-      );
-      expect(demo).toContain("list_templates");
-      expect(registeredToolNames("member@example.test")).toContain(
-        "fill_template",
-      );
-    } finally {
-      env.DEMO_ACCOUNT_EMAIL = previousEmail;
-    }
+    testState.setConfig("DEMO_ACCOUNT_EMAIL", DEMO_EMAIL);
+
+    const demo = registeredToolNames(DEMO_EMAIL);
+    expect(demo.filter((name) => standardWriteToolNames.has(name))).toEqual([]);
+    expect(demo).toContain("list_templates");
+    expect(registeredToolNames("member@example.test")).toContain(
+      "fill_template",
+    );
   });
 });

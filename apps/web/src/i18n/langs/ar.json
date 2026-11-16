@@ -71,6 +71,7 @@
     "chooseRewriteInstruction": "خيارات إعادة الصياغة",
     "editWithAI": "التعديل بالذكاء الاصطناعي",
     "keyRequired": {
+      "accountFeaturesUnavailable": "ميزات الذكاء الاصطناعي غير متاحة لهذا الحساب.",
       "accountRestricted": "إعدادات موفر الذكاء الاصطناعي غير متاحة لهذا الحساب.",
       "configUnreadable": "تعذرت قراءة إعدادات موفر الذكاء الاصطناعي. اطلب من مسؤول المؤسسة إعادة توصيله.",
       "cta": "فتح إعدادات الذكاء الاصطناعي",
@@ -5385,6 +5386,7 @@
       "tokenHelp": "الرموز المتاحة: '{'SEQ'}' (التسلسل)، '{'YYYY'}' (السنة)، '{'YY'}' (السنة بخانتين)، '{'MM'}' (الشهر)"
     },
     "members": {
+      "billingAccess": "الاطلاع على بيانات الفوترة",
       "changeRole": "تغيير الدور",
       "changeRoleDescription": "تحديث دور {email}",
       "confirmRoleChangeDescription": "سيتغير دور {email} من {oldRole} إلى {newRole}.",

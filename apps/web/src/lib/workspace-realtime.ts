@@ -225,6 +225,18 @@ export const RESOURCE_MUTATION_CONTRACTS = {
       RESOURCE_TYPE.MCP_CONNECTOR,
     ],
   },
+  // An owner or admin sets a member's additional billing visibility; the
+  // member list and every member's permission reads refresh.
+  updateMemberBillingAccess: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "PUT",
+        route: "/organization-settings/members/:memberId/billing",
+      },
+    ],
+    resources: [RESOURCE_TYPE.ORGANIZATION, RESOURCE_TYPE.USER],
+  },
   // An administrator turns the decision model on or off for verification
   // verdicts; the organization's AI configuration read shows the switch.
   updateVerificationDecisionModel: {

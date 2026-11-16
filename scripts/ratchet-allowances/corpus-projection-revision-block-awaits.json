@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/legal-search/corpus-index-projection-revision-block.ts",
+  "delta": 1,
+  "reason": "Reservation cancels moved from one statement per row to one bounded statement per store batch; the batches run one after another because each takes the generation's mutation lock and then its intent rows in id order."
+}

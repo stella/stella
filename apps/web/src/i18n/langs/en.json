@@ -71,6 +71,7 @@
     "chooseRewriteInstruction": "Rewrite options",
     "editWithAI": "Edit with AI",
     "keyRequired": {
+      "accountFeaturesUnavailable": "AI features are not available for this account.",
       "accountRestricted": "AI provider settings are unavailable for this account.",
       "configUnreadable": "The AI provider configuration cannot be read. Ask an organization admin to reconnect it.",
       "cta": "Open AI settings",
@@ -5385,6 +5386,7 @@
       "tokenHelp": "Available tokens: '{'SEQ'}' (sequence), '{'YYYY'}' (year), '{'YY'}' (2-digit year), '{'MM'}' (month)"
     },
     "members": {
+      "billingAccess": "Billing visibility",
       "changeRole": "Change role",
       "changeRoleDescription": "Update the role for {email}",
       "confirmRoleChangeDescription": "{email}'s role will change from {oldRole} to {newRole}.",

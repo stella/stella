@@ -71,6 +71,7 @@
     "chooseRewriteInstruction": "Átírási lehetőségek",
     "editWithAI": "Szerkesztés AI-val",
     "keyRequired": {
+      "accountFeaturesUnavailable": "Az AI-funkciók nem érhetők el ehhez a fiókhoz.",
       "accountRestricted": "Az AI-szolgáltató beállításai nem érhetők el ehhez a fiókhoz.",
       "configUnreadable": "Az AI-szolgáltató konfigurációja nem olvasható. Kérje meg a szervezet egyik rendszergazdáját, hogy csatlakoztassa újra.",
       "cta": "AI-beállítások megnyitása",
@@ -5385,6 +5386,7 @@
       "tokenHelp": "Elérhető tokenek: '{'SEQ'}' (sorszám), '{'YYYY'}' (év), '{'YY'}' (kétjegyű év), '{'MM'}' (hónap)"
     },
     "members": {
+      "billingAccess": "Számlázási adatok megtekintése",
       "changeRole": "Szerepkör módosítása",
       "changeRoleDescription": "Szerepkör frissítése: {email}",
       "confirmRoleChangeDescription": "{email} szerepköre erről: {oldRole} erre módosul: {newRole}.",

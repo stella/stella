@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-import { forEachRegistryMutation } from "./property-test-helpers.test.js";
+import { forEachRegistryMutation } from "./test-helpers.js";
 
 test.each([
   { payload: { absent: null, nested: [null, "value"] }, count: 10 },

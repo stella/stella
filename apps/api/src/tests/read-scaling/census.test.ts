@@ -54,6 +54,7 @@ import { exactIconScalingScenario } from "./link-icons";
 import { matterVocabularyScalingScenario } from "./matter-vocabulary";
 import mcpLedger from "./mcp-scaling-ledger.json";
 import { mcpScalingScenarios } from "./mcp-scenarios";
+import { memberBillingScalingScenario } from "./member-billing-access";
 import { memberCandidatesScalingScenario } from "./member-candidates";
 import { memberRoleScalingScenario } from "./member-role";
 import { mobileClientMetadataScalingScenario } from "./mobile-client-metadata";
@@ -97,6 +98,7 @@ const measuredApiScenarios = [
   verifyQuoteApiScalingScenario,
   ...readScalingScenarios,
   ...writeScalingScenarios,
+  memberBillingScalingScenario,
   exactIconScalingScenario,
   decisionSummaryScalingScenario,
   decisionAnchorRedirectsScalingScenario,

@@ -81,7 +81,7 @@ const wrappedRunError = (code: number) =>
     status: 502,
   });
 
-const providerErrorBody = (code: number, status: string) =>
+const providerErrorEnvelopeFixture = (code: number, status: string) =>
   ({
     error: {
       code,
@@ -245,9 +245,9 @@ describe("classifyAIError", () => {
         type: "error",
       }),
     ).toBe("provider_credentials_rejected");
-    expect(classifyAIError(providerErrorBody(401, "UNAUTHENTICATED"))).toBe(
-      "provider_credentials_rejected",
-    );
+    expect(
+      classifyAIError(providerErrorEnvelopeFixture(401, "UNAUTHENTICATED")),
+    ).toBe("provider_credentials_rejected");
   });
 
   test("finds a rejected-credentials 401 through wrapped causes", () => {
@@ -327,23 +327,23 @@ describe("classifyAIError", () => {
   });
 
   test("reads the status from a nested provider error body", () => {
-    expect(classifyAIError(providerErrorBody(503, "UNAVAILABLE"))).toBe(
-      "provider_unavailable",
-    );
-    expect(classifyAIError(providerErrorBody(429, "RESOURCE_EXHAUSTED"))).toBe(
-      "quota_exhausted",
-    );
-    expect(classifyAIError(providerErrorBody(402, "PAYMENT_REQUIRED"))).toBe(
-      "provider_billing",
-    );
-    expect(classifyAIError(providerErrorBody(404, "NOT_FOUND"))).toBe(
-      "model_unavailable",
-    );
+    expect(
+      classifyAIError(providerErrorEnvelopeFixture(503, "UNAVAILABLE")),
+    ).toBe("provider_unavailable");
+    expect(
+      classifyAIError(providerErrorEnvelopeFixture(429, "RESOURCE_EXHAUSTED")),
+    ).toBe("quota_exhausted");
+    expect(
+      classifyAIError(providerErrorEnvelopeFixture(402, "PAYMENT_REQUIRED")),
+    ).toBe("provider_billing");
+    expect(
+      classifyAIError(providerErrorEnvelopeFixture(404, "NOT_FOUND")),
+    ).toBe("model_unavailable");
   });
 
   test("finds a nested provider error body through wrapped causes", () => {
     const error = new Error("stream failed", {
-      cause: providerErrorBody(503, "UNAVAILABLE"),
+      cause: providerErrorEnvelopeFixture(503, "UNAVAILABLE"),
     });
 
     expect(classifyAIError(error)).toBe("provider_unavailable");
@@ -564,7 +564,7 @@ describe("providerStatusFields", () => {
     // object, which `errorFingerprint` reduces to a bare `UnknownError`, so
     // this status is the only thing separating it from a failure that carried
     // no status at all.
-    const error = providerErrorBody(403, "PERMISSION_DENIED");
+    const error = providerErrorEnvelopeFixture(403, "PERMISSION_DENIED");
 
     expect(classifyAIError(error)).toBe("unknown");
     expect(providerStatusFields(error)).toEqual({
@@ -579,7 +579,7 @@ describe("providerStatusFields", () => {
     // error would report no status for it, which is the shape this field
     // exists to tell apart from a failure that carried none.
     const wrapped = new Error("adapter call failed", {
-      cause: providerErrorBody(403, "PERMISSION_DENIED"),
+      cause: providerErrorEnvelopeFixture(403, "PERMISSION_DENIED"),
     });
 
     expect(classifyAIError(wrapped)).toBe("unknown");
@@ -619,7 +619,7 @@ describe("providerStatusFields", () => {
     for (const [error, status, reason] of [
       [apiCallError(503), "503", "unclassified"],
       [tanStackProviderError(429), "429", "unclassified"],
-      [providerErrorBody(404, "NOT_FOUND"), "404", "unclassified"],
+      [providerErrorEnvelopeFixture(404, "NOT_FOUND"), "404", "unclassified"],
       // The wrapper's fixed 502 would report an outage for an unmapped
       // provider status; the code it carries is the one the classifier read.
       [wrappedRunError(403), "403", "tagged_failure"],

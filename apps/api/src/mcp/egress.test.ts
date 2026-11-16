@@ -107,16 +107,19 @@ const givenWorkspaceScopedTerm = (): void => {
 };
 
 const finalizeMcpEgress = async (
-  options: Parameters<typeof finalizeToolEgress>[0],
+  options: Omit<Parameters<typeof finalizeToolEgress>[0], "outputSchema">,
 ) =>
   serializeToolResult(
-    await finalizeToolEgress(options, {
-      anonymizeTextFields: anonymizeTextFieldsForTest,
-      loadAnonymizationAllowlistCanonicalsByWorkspace:
-        loadAllowlistByWorkspaceMock,
-      loadAnonymizationGazetteerEntriesByWorkspace:
-        loadGazetteerByWorkspaceMock,
-    }),
+    await finalizeToolEgress(
+      { ...options, outputSchema: undefined },
+      {
+        anonymizeTextFields: anonymizeTextFieldsForTest,
+        loadAnonymizationAllowlistCanonicalsByWorkspace:
+          loadAllowlistByWorkspaceMock,
+        loadAnonymizationGazetteerEntriesByWorkspace:
+          loadGazetteerByWorkspaceMock,
+      },
+    ),
   );
 
 const createContext = (): AuthorizedMcpRequestContext => {
@@ -238,6 +241,7 @@ describe("finalizeMcpEgress", () => {
     };
     expect(
       await finalizeToolEgress({
+        outputSchema: undefined,
         context: createContext(),
         mode: "anonymized",
         response: finished,
@@ -836,7 +840,12 @@ describe("egress whose anonymization output lost its field structure", () => {
     });
     const result = serializeToolResult(
       await finalizeToolEgress(
-        { context: createContext(), mode: "anonymized", response },
+        {
+          outputSchema: undefined,
+          context: createContext(),
+          mode: "anonymized",
+          response,
+        },
         {
           anonymizeTextFields: async (input) => {
             anonymizeCalls += 1;

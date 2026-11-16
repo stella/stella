@@ -175,12 +175,12 @@ jobs:
           STELLA_VERIFY: prepare
         run: bun scripts/ci-generated-sources.ts prepare
 
+      # No registry secret reaches this job, which runs pull-request code:
+      # images come through the CI image mirror (the workflow token) or
+      # anonymously.
       - name: Start docker stack and API server
         id: e2e-stack
         uses: ./.github/actions/setup-e2e-stack
-        with:
-          dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
-          dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Start web dev server
         if: steps.e2e-stack.outcome == 'success'

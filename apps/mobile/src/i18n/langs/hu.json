@@ -246,7 +246,8 @@
         "loadFailed": "Nem sikerült betölteni.",
         "showMore": "Több megjelenítése"
       },
-      "sessionNotResumed": "A számítógépén futó kódoló ügynök nem tudta onnan folytatni, ahol abbahagyta, ezért a csevegés üzeneteiből dolgozott tovább."
+      "sessionNotResumed": "A számítógépén futó kódoló ügynök nem tudta onnan folytatni, ahol abbahagyta, ezért a csevegés üzeneteiből dolgozott tovább.",
+      "steered": "Az ügynök munkája közben elküldve"
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# ellenőrzött forrás} other {# ellenőrzött forrás}}",
@@ -285,6 +286,14 @@
       "sendErrorQuotaExhausted": "Az AI-szolgáltató kvótája kimerült. Próbálja újra egy perc múlva, vagy forduljon a munkaterület adminisztrátorához.",
       "sendErrorStreamIncomplete": "Az AI válasza megszakadt, mielőtt elkészült volna. Próbálja újra.",
       "sendErrorTurnTooLarge": "Ez a válasz túl nagyra nőtt ahhoz, hogy teljes egészében megérkezzen. A folytatáshoz küldjön új üzenetet."
+    },
+    "steerPrompt": "Küldés az ügynöknek munka közben",
+    "steerRefused": {
+      "turnNotRunning": "Az ügynök jelenleg nem dolgozik.",
+      "noRun": "Az ügynök most nem fut a számítógépén.",
+      "cannotSteer": "Ez az ügynök munka közben nem fogad üzeneteket.",
+      "runFull": "Az ügynök most nem fogad több üzenetet.",
+      "notTaken": "Az ügynök most nem tudta fogadni az üzenetét."
     }
   },
   "tasks": {
