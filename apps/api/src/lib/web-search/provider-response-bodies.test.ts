@@ -178,7 +178,7 @@ describe("provider response body ownership", () => {
         async () =>
           new Response(
             new ReadableStream<Uint8Array>({
-              cancel: () => cancellation.promise,
+              cancel: async () => await cancellation.promise,
             }),
             { status: 403 },
           ),
@@ -249,9 +249,9 @@ describe("provider response body ownership", () => {
               async () =>
                 new Response(
                   new ReadableStream<Uint8Array>({
-                    cancel() {
+                    async cancel() {
                       cancelled = true;
-                      return cancellation.promise;
+                      await cancellation.promise;
                     },
                   }),
                   { status },
