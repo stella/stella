@@ -906,9 +906,7 @@
     "scripts/sync-railway-template-source.ts": 1,
     "scripts/tanstack-drift.ts": 3
   },
-  "no-native-ui/no-native-accordion": {
-    "apps/desktop/src/activity/ActivityApp.tsx": 2
-  },
+  "no-native-ui/no-native-accordion": {},
   "no-native-ui/no-native-button": {
     "apps/web/src/components/catalogue/catalogue-row.tsx": 1,
     "apps/web/src/components/file-tree/file-tree.tsx": 1,
