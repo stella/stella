@@ -1,6 +1,6 @@
 // Bun Snapshot v1, https://bun.sh/docs/test/snapshots
 
-exports[`every exclusion is visible and legacy exclusions match the migration census exactly 1`] = `
+exports[`every registered source has a reviewable exclusion census 1`] = `
 {
   "at-asylgh": [],
   "at-bks": [],
@@ -39,9 +39,22 @@ exports[`every exclusion is visible and legacy exclusions match the migration ce
     },
   ],
   "cz-regional": [],
+  "cz-suip": [],
   "cz-uohs": [],
+  "cz-uoou": [
+    {
+      "field": "section-card",
+      "justification": "Navigation to the sections the walk reaches through the sitemap.",
+      "pointer": "main#mainblock a.u-sections-card",
+      "policy": "justified",
+      "reason": "publisher_noise",
+    },
+  ],
   "cz-us": [],
+  "de-bfdi": [],
   "eu-ecj": [],
+  "eu-edpb": [],
+  "eu-wp29": [],
   "hu-bhgy": [],
   "pl-courts": [],
   "pl-kio": [],
@@ -53,6 +66,7 @@ exports[`every exclusion is visible and legacy exclusions match the migration ce
   "pl-uodo": [],
   "pl-uokik": [],
   "sk-courts": [],
+  "sk-uoou": [],
   "sk-us": [],
   "uk-fcl": [],
   "us-courtlistener": [],
