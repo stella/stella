@@ -11,8 +11,14 @@ import {
   ONLINE_UNIQUE_INDEX_VALIDATION_DEFINITIONS,
   onlineIndexColumnTarget,
 } from "../apps/api/src/db/online-unique-indexes";
+import { guardEnforcesLine } from "./guard-rollouts";
 
 const ROOT = path.resolve(import.meta.dir, "..");
+
+/** The rollout the pending-index rule enforces changed lines under first. */
+const PENDING_DEPENDENCY_GUARD = "online-index-pending-dependency";
+export const PENDING_INDEX_DEPENDENCY_REASON =
+  "depends on a pending online index; finalize its entry first";
 const OWNER = "apps/api/src/db/online-unique-indexes.ts";
 
 type UniqueIndex = {
@@ -323,11 +329,7 @@ export const checkOnlineIndexDependencySource = ({
       add(node, index, `depends on newest migration ${newestMigration}`);
     }
     if (index !== undefined && pendingIndexes.has(index.name)) {
-      add(
-        node,
-        index,
-        "depends on a pending online index; finalize its entry first",
-      );
+      add(node, index, PENDING_INDEX_DEPENDENCY_REASON);
     }
   };
   const visit = (node: ts.Node): void => {
@@ -425,15 +427,22 @@ if (import.meta.main) {
         : [],
     ),
   );
-  const findings = sourceFiles("apps/api/src").flatMap((file) =>
-    checkOnlineIndexDependencySource({
-      file,
-      source: readFileSync(path.resolve(ROOT, file), "utf-8"),
-      indexes: ONLINE_UNIQUE_INDEX_VALIDATION_DEFINITIONS,
-      newestMigration,
-      pendingIndexes,
-    }),
-  );
+  const findings = sourceFiles("apps/api/src")
+    .flatMap((file) =>
+      checkOnlineIndexDependencySource({
+        file,
+        source: readFileSync(path.resolve(ROOT, file), "utf-8"),
+        indexes: ONLINE_UNIQUE_INDEX_VALIDATION_DEFINITIONS,
+        newestMigration,
+        pendingIndexes,
+      }),
+    )
+    // The pending-index rule enforces changed lines only during its rollout.
+    .filter(
+      ({ file, line, reason }) =>
+        reason !== PENDING_INDEX_DEPENDENCY_REASON ||
+        guardEnforcesLine({ guard: PENDING_DEPENDENCY_GUARD, file, line }),
+    );
   for (const finding of findings) {
     console.error(
       `${finding.file}:${finding.line}: ${finding.name}: ${finding.reason}`,

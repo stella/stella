@@ -7,7 +7,10 @@ import {
   onlineIndexColumnTarget,
   onlineUniqueIndexTarget,
 } from "../apps/api/src/db/online-unique-indexes";
-import { checkOnlineIndexDependencySource } from "./check-online-index-dependencies";
+import {
+  checkOnlineIndexDependencySource,
+  PENDING_INDEX_DEPENDENCY_REASON,
+} from "./check-online-index-dependencies";
 
 const index = {
   name: "chat_turns_org_run_id_uidx",
@@ -82,14 +85,14 @@ test("refuses a dependency on an index its entry still leaves pending", () => {
   const findings = checkOnlineIndexDependencySource({
     file: "apps/api/src/handlers/example.ts",
     source:
-      "query.onConflictDoNothing({ target: onlineUniqueIndexTarget(names.CHAT_TURNS_ORG_RUN_ID_UIDX) });",
-    indexes: [index],
+      'import { CHAT_TURNS_ORG_RUN_ID_UIDX } from "../db/online-unique-indexes"; query.onConflictDoNothing({ target: onlineUniqueIndexTarget(CHAT_TURNS_ORG_RUN_ID_UIDX) });',
+    indexes: [{ ...index, introducedBy: "20261001000000_older" }],
     newestMigration: "20261017000000_latest",
     pendingIndexes: new Set([index.name]),
   });
-  expect(findings.map(({ reason }) => reason)).toContain(
-    "depends on a pending online index; finalize its entry first",
-  );
+  expect(findings.map(({ reason }) => reason)).toEqual([
+    PENDING_INDEX_DEPENDENCY_REASON,
+  ]);
 });
 
 test("detects nested expression conflict targets", () => {
