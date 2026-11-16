@@ -2225,29 +2225,29 @@ export const useChatSession = ({
           type: DOCX_MIME,
         });
         const contentSha256Hex = await sha256Hex(draft.buffer);
-        const response = await api
-          .entities({ workspaceId: toSafeId<"workspace">(matterId) })
-          ["upload-generated-document"].post({
-            file,
-            contentSha256Hex,
-            messageId: toSafeId<"chatMessage">(draftMessageId),
-            name: draft.fileName,
-            propertyId: fileProperty.id,
-            ...(draftChatThreadId === null
-              ? {}
-              : {
-                  draftChatThreadId: toSafeId<"chatThread">(draftChatThreadId),
-                }),
-            threadId: toSafeId<"chatThread">(threadRef.threadId),
-            ...(threadRef.scope === "workspace"
-              ? {
-                  threadWorkspaceId: toSafeId<"workspace">(
-                    threadRef.workspaceId,
-                  ),
-                }
-              : {}),
-            toolCallId,
-          });
+        const entitiesApi = api.entities({
+          workspaceId: toSafeId<"workspace">(matterId),
+        });
+
+        const response = await entitiesApi["upload-generated-document"].post({
+          file,
+          contentSha256Hex,
+          messageId: toSafeId<"chatMessage">(draftMessageId),
+          name: draft.fileName,
+          propertyId: fileProperty.id,
+          ...(draftChatThreadId === null
+            ? {}
+            : {
+                draftChatThreadId: toSafeId<"chatThread">(draftChatThreadId),
+              }),
+          threadId: toSafeId<"chatThread">(threadRef.threadId),
+          ...(threadRef.scope === "workspace"
+            ? {
+                threadWorkspaceId: toSafeId<"workspace">(threadRef.workspaceId),
+              }
+            : {}),
+          toolCallId,
+        });
         if (response.error) {
           throw toAPIError(response.error);
         }
