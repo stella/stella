@@ -1,9 +1,10 @@
 import { Result } from "better-result";
-import { afterAll, beforeAll, expect, spyOn, test } from "bun:test";
+import { afterAll, expect, spyOn, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { SEARCH_TOTAL_NOT_COUNTED } from "@stll/api-contract/search";
+import { createTestState } from "@stll/test-state";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -31,10 +32,12 @@ import { logger } from "@/api/lib/observability/logger";
 import { brandPersistedLegislationDocumentId } from "@/api/lib/safe-id-boundaries";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
-process.env["REDIS_URL"] ??= "redis://localhost:6379";
-process.env["GOTENBERG_URL"] ??= "http://localhost:3003";
-process.env["GOTENBERG_USERNAME"] ??= "test";
-process.env["GOTENBERG_PASSWORD"] ??= "test";
+const testState = createTestState({ file: import.meta.path, config: {} });
+
+testState.setEnvIfAbsent("REDIS_URL", "redis://localhost:6379");
+testState.setEnvIfAbsent("GOTENBERG_URL", "http://localhost:3003");
+testState.setEnvIfAbsent("GOTENBERG_USERNAME", "test");
+testState.setEnvIfAbsent("GOTENBERG_PASSWORD", "test");
 
 const { searchLegislationHandler } =
   await import("@/api/handlers/legislation/search");
@@ -146,65 +149,62 @@ const seedDocument = ({
   updatedAt,
 });
 
-beforeAll(
-  async () => {
-    client = await createTestPglite();
-    db = drizzle({ client });
-    await db.execute(
-      sql`CREATE TEXT SEARCH CONFIGURATION public.stella_unaccent (COPY = pg_catalog.simple)`,
-    );
+testState.beforeAll(async () => {
+  client = await createTestPglite();
+  db = drizzle({ client });
+  await db.execute(
+    sql`CREATE TEXT SEARCH CONFIGURATION public.stella_unaccent (COPY = pg_catalog.simple)`,
+  );
 
-    await db.insert(legislationSources).values({
-      id: sourceId,
-      adapterKey: "fts-canonical-corpus",
-      name: "FTS canonical corpus fixture",
-    });
-    await db.insert(legislationDocuments).values([
-      seedDocument({
-        id: fulltextId,
-        fulltext: "inline fulltext sentinel",
-        sections: null,
-        textS3Key: "legal-corpus/documents/fulltext/text.zst",
-      }),
-      seedDocument({
-        id: sectionsId,
-        fulltext: null,
-        sections: [
-          {
-            index: 0,
-            type: "unknown",
-            title: null,
-            text: "inline sections sentinel",
-          },
-        ],
-        textS3Key: "legal-corpus/documents/sections/text.zst",
-      }),
-      seedDocument({
-        id: corpusId,
-        fulltext: null,
-        sections: null,
-        textS3Key: corpusKey,
-      }),
-      seedDocument({
-        id: laterCorpusId,
-        fulltext: null,
-        sections: null,
-        textS3Key: "legal-corpus/documents/later/text.zst",
-        createdAt: new Date("2026-01-01T00:00:00.000Z"),
-        updatedAt: new Date("2026-01-01T00:00:00.000Z"),
-      }),
-      seedDocument({
-        id: unavailableCorpusId,
-        fulltext: null,
-        sections: null,
-        textS3Key: "legal-corpus/documents/unavailable/text.zst",
-        createdAt: new Date("2026-01-02T00:00:00.000Z"),
-        updatedAt: new Date("2026-01-01T00:00:00.000Z"),
-      }),
-    ]);
-  },
-  { timeout: 30_000 },
-);
+  await db.insert(legislationSources).values({
+    id: sourceId,
+    adapterKey: "fts-canonical-corpus",
+    name: "FTS canonical corpus fixture",
+  });
+  await db.insert(legislationDocuments).values([
+    seedDocument({
+      id: fulltextId,
+      fulltext: "inline fulltext sentinel",
+      sections: null,
+      textS3Key: "legal-corpus/documents/fulltext/text.zst",
+    }),
+    seedDocument({
+      id: sectionsId,
+      fulltext: null,
+      sections: [
+        {
+          index: 0,
+          type: "unknown",
+          title: null,
+          text: "inline sections sentinel",
+        },
+      ],
+      textS3Key: "legal-corpus/documents/sections/text.zst",
+    }),
+    seedDocument({
+      id: corpusId,
+      fulltext: null,
+      sections: null,
+      textS3Key: corpusKey,
+    }),
+    seedDocument({
+      id: laterCorpusId,
+      fulltext: null,
+      sections: null,
+      textS3Key: "legal-corpus/documents/later/text.zst",
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+    }),
+    seedDocument({
+      id: unavailableCorpusId,
+      fulltext: null,
+      sections: null,
+      textS3Key: "legal-corpus/documents/unavailable/text.zst",
+      createdAt: new Date("2026-01-02T00:00:00.000Z"),
+      updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+    }),
+  ]);
+}, 30_000);
 
 afterAll(async () => {
   if (client !== undefined) {

@@ -74,7 +74,10 @@ without all three:
   page-opened tab stays confined and a download is traced to its frame.
 
 `activeTab` lets the popup read the URL of the stella tab it was opened on
-when connecting.
+when connecting. `offscreen` lets a stella desktop chat save a PDF its tab
+shows: an offscreen document fetches the PDF's own address once, never
+following a redirect, and keeps the bytes as a `blob:` address of the
+extension's that Chrome then saves.
 
 Chat reads the controlled tab. That tab is either one stella opened through
 `open`, or a tab the user already has open: open the popup on that page and
@@ -236,8 +239,9 @@ canonical link and standard meta entries. Without a cursor it starts at the
 section in view, else at the top; `next` and `previous` cursors move on from
 there, and `find` searches the same text or lists the headings. Frames are
 read in order after the top document. The reading rules live in
-`src/lib/page-script.ts` (in the page) and `src/lib/page-window.ts` (cursors
-and frames).
+`packages/browser-page/src/page-script.ts` (in the page) and
+`packages/browser-page/src/page-window.ts` (cursors and frames), shared with
+every browser host.
 
 Each browser command is approved in stella chat. The user may choose, per web
 session, to auto-approve page reads; every other command always asks.

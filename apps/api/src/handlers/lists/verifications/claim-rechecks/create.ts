@@ -8,6 +8,7 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { legalListVerificationRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import {
   orgAIConfigStatusError,
@@ -46,6 +47,7 @@ const bodySchema = v.object({
 
 const config = {
   contract: "patch",
+  realtime: legalListVerificationRealtimeUpdates,
   actionAdmission: {
     type: "handler",
     actionKind: "list-verification.recheck",

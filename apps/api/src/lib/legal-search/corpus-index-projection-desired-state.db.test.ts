@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
@@ -7,6 +8,7 @@ import {
   caseLawDecisions,
   caseLawSources,
   corpusIndexGenerations,
+  corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
   legislationDocuments,
   legislationSources,
@@ -24,6 +26,7 @@ import {
   reconcileCorpusProjectionDesiredStateTx,
   synchronizeLockedCaseLawProjectionBatchTx,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
+import { advanceCorpusProjectionErasuresTx } from "@/api/lib/legal-search/corpus-index-projection-erasure-store";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -59,6 +62,7 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   await db.delete(corpusIndexProjectionStates).where(sql`true`);
+  await db.delete(corpusIndexProjectionIntents).where(sql`true`);
   await db.delete(caseLawDecisions).where(sql`true`);
   await db.delete(legislationDocuments).where(sql`true`);
   await db.delete(caseLawSources).where(sql`true`);
@@ -216,6 +220,76 @@ test("one canonical mutation advances every active family generation once", asyn
   expect(after.at(0)?.fingerprint).not.toBe(before.at(0)?.fingerprint);
 });
 
+test("every active generation's desired epoch is a reading of the one canonical projection epoch", async () => {
+  // The flip parity read compares two generations' applied epochs
+  // (`corpus-index-flip-parity.ts`): sound only while no generation numbers
+  // epochs of its own. A writer that bumps one generation by itself fails here.
+  await db.insert(corpusIndexGenerations).values({
+    family: "case_law",
+    generation: "case_law_v7",
+    cluster: "q09",
+    manifestDigest: corpusIndexManifestDigest(
+      CORPUS_INDEX_MANIFESTS.case_law_v7,
+    ),
+    status: "building",
+  });
+  const subject = {
+    family: "case_law",
+    entityId: CASE_LAW_DECISION_ID,
+  } as const;
+  for (const generation of ["case_law_v5", "case_law_v7"] as const) {
+    // db-await-in-loop: two generations, each seeded the way bootstrap seeds it
+    await db.transaction(
+      async (tx) =>
+        await ensureCorpusProjectionDesiredStateTx(
+          asTestRaw<Transaction>(tx),
+          subject,
+          generation,
+        ),
+    );
+  }
+  const epochsAgree = async () => {
+    const [decision] = await db
+      .select({ epoch: caseLawDecisions.projectionEpoch })
+      .from(caseLawDecisions)
+      .where(eq(caseLawDecisions.id, CASE_LAW_DECISION_ID));
+    const desired = await db
+      .select({
+        generation: corpusIndexProjectionStates.generation,
+        epoch: corpusIndexProjectionStates.desiredEpoch,
+      })
+      .from(corpusIndexProjectionStates)
+      .where(eq(corpusIndexProjectionStates.entityId, CASE_LAW_DECISION_ID))
+      .orderBy(corpusIndexProjectionStates.generation);
+    return {
+      canonical: decision?.epoch ?? panic("The decision has no epoch"),
+      desired,
+    };
+  };
+  const seeded = await epochsAgree();
+  expect(seeded.desired).toEqual([
+    { generation: "case_law_v5", epoch: seeded.canonical },
+    { generation: "case_law_v7", epoch: seeded.canonical },
+  ]);
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(caseLawDecisions)
+      .set({ court: "Ústavní soud" })
+      .where(eq(caseLawDecisions.id, CASE_LAW_DECISION_ID));
+    await advanceCorpusProjectionDesiredStateTx(
+      asTestRaw<Transaction>(tx),
+      subject,
+    );
+  });
+  const advanced = await epochsAgree();
+  expect(advanced.canonical).not.toBe(seeded.canonical);
+  expect(advanced.desired).toEqual([
+    { generation: "case_law_v5", epoch: advanced.canonical },
+    { generation: "case_law_v7", epoch: advanced.canonical },
+  ]);
+});
+
 test("redistribution revocation becomes an erase desired state", async () => {
   const subject = {
     family: "legislation",
@@ -259,6 +333,120 @@ test("redistribution revocation becomes an erase desired state", async () => {
       .where(eq(corpusIndexProjectionStates.entityId, LEGISLATION_DOCUMENT_ID)),
   ).toEqual([{ action: "erase", epoch: 2n, fingerprint: null, indexId: null }]);
 });
+
+const TAKEDOWNS = [
+  [
+    "a redaction",
+    { redactedAt: new Date("2026-08-25T00:00:00.000Z"), contentHash: null },
+  ],
+  ["a withdrawal", { contentHash: null }],
+] as const;
+
+test.each(TAKEDOWNS)(
+  "%s hides a served decision at once, and the erasure claim stops naming its copy",
+  async (_takedown, change) => {
+    const subject = {
+      family: "case_law",
+      entityId: CASE_LAW_DECISION_ID,
+    } as const;
+    await db.transaction(
+      async (tx) =>
+        await ensureCorpusProjectionDesiredStateTx(
+          asTestRaw<Transaction>(tx),
+          subject,
+          "case_law_v5",
+        ),
+    );
+    const desired =
+      (
+        await db
+          .select({
+            epoch: corpusIndexProjectionStates.desiredEpoch,
+            fingerprint: corpusIndexProjectionStates.desiredFingerprint,
+            indexId: corpusIndexProjectionStates.desiredIndexId,
+          })
+          .from(corpusIndexProjectionStates)
+          .where(eq(corpusIndexProjectionStates.entityId, CASE_LAW_DECISION_ID))
+      ).at(0) ?? panic("Expected a desired state");
+    if (desired.fingerprint === null || desired.indexId === null) {
+      panic("Expected an upsert desired state");
+    }
+    const revision = toSafeId<"corpusIndexProjectionIntent">(
+      "0198e331-e578-7000-8000-000000000105",
+    );
+    const appliedAt = new Date("2026-08-24T00:00:00.000Z");
+    await db.insert(corpusIndexProjectionIntents).values({
+      id: revision,
+      family: "case_law",
+      generation: "case_law_v5",
+      entityId: CASE_LAW_DECISION_ID,
+      epoch: desired.epoch,
+      fingerprint: desired.fingerprint,
+      indexId: desired.indexId,
+      status: "applied",
+      appendStartedAt: appliedAt,
+      appendCommittedAt: appliedAt,
+      expectedDocumentCount: 1,
+      appliedAt,
+    });
+    await db
+      .update(corpusIndexProjectionStates)
+      .set({
+        appliedAction: "upsert",
+        appliedEpoch: desired.epoch,
+        appliedRevision: revision,
+        appliedFingerprint: desired.fingerprint,
+        appliedIndexId: desired.indexId,
+        appliedAt,
+      })
+      .where(eq(corpusIndexProjectionStates.entityId, CASE_LAW_DECISION_ID));
+
+    await db.transaction(async (tx) => {
+      await tx
+        .update(caseLawDecisions)
+        .set(change)
+        .where(eq(caseLawDecisions.id, CASE_LAW_DECISION_ID));
+      await advanceCorpusProjectionDesiredStateTx(
+        asTestRaw<Transaction>(tx),
+        subject,
+      );
+    });
+    const served = async () =>
+      (
+        await db
+          .select({
+            desiredAction: corpusIndexProjectionStates.desiredAction,
+            appliedRevision: corpusIndexProjectionStates.appliedRevision,
+          })
+          .from(corpusIndexProjectionStates)
+          .where(eq(corpusIndexProjectionStates.entityId, CASE_LAW_DECISION_ID))
+      ).at(0);
+    // Readers accept only a state that desires an upsert: hidden from here on.
+    expect(await served()).toEqual({
+      desiredAction: "erase",
+      appliedRevision: revision,
+    });
+
+    await db.transaction(
+      async (tx) =>
+        await advanceCorpusProjectionErasuresTx(asTestRaw<Transaction>(tx), {
+          family: "case_law",
+          generation: "case_law_v5",
+          limit: 8,
+        }),
+    );
+    expect(await served()).toEqual({
+      desiredAction: "erase",
+      appliedRevision: null,
+    });
+    expect(
+      await db
+        .select({ status: corpusIndexProjectionIntents.status })
+        .from(corpusIndexProjectionIntents)
+        .where(eq(corpusIndexProjectionIntents.id, revision)),
+    ).toEqual([{ status: "cleanup_pending" }]);
+  },
+);
 
 test("bounded reconciliation repairs drift once and then reaches a fixed point", async () => {
   const subject = {

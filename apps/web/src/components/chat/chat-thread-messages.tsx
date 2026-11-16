@@ -15,7 +15,6 @@ import type { PluggableList } from "unified";
 import { useTranslations } from "use-intl";
 
 import { isThirdPartyBoundaryRefusalError } from "@stll/anonymize-chat";
-import { AI_FAILURE_CODES } from "@stll/api-contract";
 import {
   isChatPastedTextPart,
   UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE,
@@ -23,7 +22,7 @@ import {
 import type { ChatPastedTextPart } from "@stll/api-contract/chat";
 import { localRunSubagentGroups } from "@stll/api-contract/chat-local-run-steps";
 import { chatLocalRunParentCallId } from "@stll/api-contract/chat-local-run-tool";
-import { CHAT_LOCAL_RUN_REFUSAL } from "@stll/api-contract/chat-run-target";
+import { CHAT_LOCAL_RUN_STEER_TOOL } from "@stll/api-contract/chat-run-target";
 import {
   countProcessWork,
   groupProcessParts,
@@ -33,6 +32,15 @@ import {
 } from "@stll/api-contract/chat-tool-activity";
 import type { ProcessSummaryKind } from "@stll/api-contract/chat-tool-activity";
 import { Temporal } from "@stll/time";
+import {
+  AlertDialog,
+  AlertDialogClose,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogPopup,
+  AlertDialogTitle,
+} from "@stll/ui/alert-dialog";
 import { Button } from "@stll/ui/button";
 import {
   Collapsible,
@@ -41,12 +49,16 @@ import {
 } from "@stll/ui/collapsible";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
+  type EntityAction,
+  EntityActions,
+  EntityActionsButton,
+} from "@stll/ui/entity-actions";
+import {
   ArrowUpIcon,
   ChevronRightIcon,
   ClockIcon,
   PaperclipIcon,
   RotateCcwIcon,
-  XIcon,
 } from "@stll/ui/icons";
 import { StatusMark } from "@stll/ui/status-mark";
 import { SwapText } from "@stll/ui/swap-text";
@@ -81,6 +93,7 @@ import {
 import type { RichChatPart } from "@/components/chat/chat-rich-message-part";
 import type { ChatBranchSource } from "@/components/chat/chat-selection-branch.logic";
 import { ChatSelectionToolbar } from "@/components/chat/chat-selection-toolbar";
+import { ChatSteeredMessage } from "@/components/chat/chat-steered-message";
 import {
   assistantMessageFallbackText,
   buildMessageTurns,
@@ -112,6 +125,7 @@ import type {
 import {
   getAwaitedAssistantMessageId,
   getChatToolTitleKey,
+  getPausedChatTurn,
   isApprovalPart,
   isOpaquePersistedChatToolCallPart,
   isPendingApprovalPart,
@@ -133,10 +147,7 @@ import {
 import { LocalRunLimitReminder } from "@/components/chat/local-run-limit-reminder";
 import { LocalRunQuestionCard } from "@/components/chat/local-run-question-card";
 import { localRunQuestionCallId } from "@/components/chat/local-run-question.logic";
-import {
-  LocalRunStepOutputDetails,
-  localRunStepOutputKindOf,
-} from "@/components/chat/local-run-step-output";
+import { localRunSubagentConversation } from "@/components/chat/local-run-step-output";
 import { LocalRunSubagentGroup } from "@/components/chat/local-run-subagent-card";
 import { findCreateDocumentArtifactForMessage } from "@/components/chat/message-export-menu.logic";
 import { NeedsMatterCard } from "@/components/chat/needs-matter-card";
@@ -172,14 +183,14 @@ import {
 } from "@/components/references/reference.logic";
 import { AssistantAnswerMetadata } from "@/features/chat/answer-edit/assistant-answer-metadata";
 import { localRunLimitResetsAtFromThrown } from "@/features/chat/chat-local-run-limit";
+import type { ChatQueueView } from "@/features/chat/chat-queue";
 import {
-  CHAT_REQUEST_ERROR_TRANSLATION_KEYS,
-  type ChatRequestError,
-  findChatRequestError,
-} from "@/features/chat/chat-request-error";
+  CHAT_QUEUE_HOLD_NOTICE_KEYS,
+  queueMoveTarget,
+} from "@/features/chat/chat-queue.logic";
+import { chatErrorTranslationKey } from "@/features/chat/chat-request-error";
 import type { ChatActivitySession } from "@/features/chat/chat-runtime";
 import type { ChatComputerWait } from "@/features/chat/desktop-launch.logic";
-import type { QueuedChatMessage } from "@/features/chat/hooks/use-chat-session";
 import type { NewestLocalTurn } from "@/features/chat/queries";
 import { useDesktopLaunch } from "@/features/chat/use-desktop-launch";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -193,11 +204,7 @@ import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { dedupeById } from "@/lib/dedupe-by-id";
 import { detached } from "@/lib/detached";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
-import {
-  AI_FAILURE_ERROR_KEYS,
-  aiErrorKindFromMessage,
-} from "@/lib/errors/ai-failure";
-import type { AIFailureTranslationKey } from "@/lib/errors/ai-failure";
+import { aiErrorKindFromMessage } from "@/lib/errors/ai-failure";
 import { chatRefusal, isDisplayableAPIError } from "@/lib/errors/api";
 import { providerDiagnosticFromThrown } from "@/lib/errors/provider-diagnostic";
 import { ClientTelemetryError } from "@/lib/errors/telemetry";
@@ -217,6 +224,9 @@ type OlderMessagePagingOptions = {
   onLoadOlder: ChatThreadMessagesProps["onLoadOlder"];
   scrollRef: RefObject<HTMLDivElement | null> | null;
 };
+
+/** A steered message's tool call; its name is the API's, not a registered tool. */
+const isSteerToolName = (name: string) => name === CHAT_LOCAL_RUN_STEER_TOOL;
 
 // Pages older messages in from a top sentinel and keeps the viewport
 // anchored when they are prepended.
@@ -436,6 +446,7 @@ export const ChatThreadMessages = ({
   onAskUserSubmit,
   onAskUserEditAndRerun,
   onAskUserEditingChange,
+  onContinuePausedTurn,
   onCreateDocumentResolve,
   onOpenCreateDocumentDraft,
   onOpenCreatedDocument,
@@ -446,8 +457,7 @@ export const ChatThreadMessages = ({
   computerWait = null,
   turnSentAt,
   newestLocalTurn,
-  queuedMessages,
-  queuedMessageActions,
+  queue,
   streamdownComponents,
   threadRef,
   userMessageEdit,
@@ -469,11 +479,10 @@ export const ChatThreadMessages = ({
     () => getRetryableAssistantMessageId(messages),
     [messages],
   );
+  const continuePaused = generationActive ? undefined : onContinuePausedTurn;
   const shouldShowToolCalls = showToolCallDetails ?? showToolCalls ?? false;
   const turns = buildMessageTurns(messages);
-  const activeTurnMessageIds = new Set(
-    generationActive ? turns.at(-1)?.body.map(({ message }) => message.id) : [],
-  );
+  const activeTurnMessageIds = activeTurnMessageIdsOf(turns, generationActive);
   // Null when this list renders outside a `Conversation` (the file-chat
   // overlay uses its own scroll container and never wires load-older).
   const stick = useMaybeStickToBottomContext();
@@ -574,10 +583,10 @@ export const ChatThreadMessages = ({
                             workspaceId={workspaceId}
                             threadRef={threadRef}
                           />
-                          <div
-                            className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"
-                            data-chat-answer-footer
-                            data-chat-copy-exclude
+                          <AnswerFooter
+                            message={message}
+                            latestMessageId={retryableAssistantMessageId}
+                            onContinue={continuePaused}
                           >
                             <AssistantMessageActions
                               canFork={canFork}
@@ -605,7 +614,7 @@ export const ChatThreadMessages = ({
                               }
                               onAnswerEdited={onAnswerEdited}
                             />
-                          </div>
+                          </AnswerFooter>
                         </ChatAnswerDecisionProvider>
                       );
                     case "text":
@@ -716,14 +725,9 @@ export const ChatThreadMessages = ({
         {generationActive && computerWait !== null && (
           <ComputerWaitIndicator wait={computerWait} />
         )}
-        {queuedMessageActions &&
-          queuedMessages !== undefined &&
-          queuedMessages.length > 0 && (
-            <QueuedUserMessages
-              actions={queuedMessageActions}
-              messages={queuedMessages}
-            />
-          )}
+        {queue !== undefined && queue.items.length > 0 && (
+          <QueuedUserMessages queue={queue} />
+        )}
       </ReferenceRenderScope>
     </ChatActivitySessionContext>
   );
@@ -1327,28 +1331,6 @@ const ElapsedSince = ({ since }: { since: string }) => {
   );
 };
 
-type ChatErrorTranslationKey =
-  | AIFailureTranslationKey
-  | "chat.sendErrorAnonymizationBlocked"
-  | "chat.sendError"
-  | (typeof CHAT_REQUEST_ERROR_TRANSLATION_KEYS)[ChatRequestError["kind"]];
-
-const chatErrorTranslationKey = (error: Error): ChatErrorTranslationKey => {
-  const requestError = findChatRequestError(error);
-  if (requestError !== undefined) {
-    return CHAT_REQUEST_ERROR_TRANSLATION_KEYS[requestError.kind];
-  }
-  if (isThirdPartyBoundaryRefusalError(error)) {
-    return "chat.sendErrorAnonymizationBlocked";
-  }
-  // An unknown kind keeps the chat's own copy, which points to support.
-  const kind = aiErrorKindFromMessage(error.message);
-  if (kind !== undefined && kind !== "unknown") {
-    return AI_FAILURE_ERROR_KEYS[AI_FAILURE_CODES[kind]];
-  }
-  return "chat.sendError";
-};
-
 /**
  * A local run's usage limit with the time the harness said it resets, in the
  * member's own locale and time zone.
@@ -1362,11 +1344,12 @@ const LocalRunLimitResetMessage = ({ resetsAt }: { resetsAt: string }) => {
 };
 
 /**
- * For a turn refused because none of the member's computers is connected:
- * opens stella desktop on this click, waits for a computer to connect, and
- * then sends the turn again by itself, unless something superseded this
- * refusal meanwhile (`holdResend`'s signal). One click opens the desktop
- * once; while it opens the button says so and takes no other click.
+ * For a turn that failed because none of the member's computers was
+ * connected: opens stella desktop on this click, waits for a computer to
+ * connect, and then sends the turn again by itself, unless something
+ * superseded this failure meanwhile (`holdResend`'s signal). One click
+ * opens the desktop once; while it opens the button says so and takes no
+ * other click.
  */
 const OpenDesktopAndResendButton = ({
   disabled,
@@ -1450,10 +1433,14 @@ export const ChatErrorMessage = ({
   } else if (rejectedInput) {
     errorMessage = t("errors.api.validation");
   }
+  const failureKind = aiErrorKindFromMessage(error.message);
   const limitResetsAt =
-    aiErrorKindFromMessage(error.message) === "local_runner_limit_reached"
+    failureKind === "local_runner_limit_reached"
       ? localRunLimitResetsAtFromThrown(error)
       : null;
+  // The turn was stored and failed because none of the member's computers
+  // was connected: opening stella desktop is the fix, then a resend.
+  const noComputerConnected = failureKind === "local_runner_no_computer";
   // The resend an "Open stella desktop" click holds until a computer
   // connects belongs to this refusal: Resend, another refusal in its place,
   // or the card leaving the page (a new send, another thread) drops it.
@@ -1524,7 +1511,7 @@ export const ChatErrorMessage = ({
               threadRef={threadRef}
             />
           )}
-          {onResend && refusal?.code === CHAT_LOCAL_RUN_REFUSAL.noComputer && (
+          {onResend && noComputerConnected && (
             <OpenDesktopAndResendButton
               disabled={isGenerating}
               holdResend={holdDesktopResend}
@@ -1559,6 +1546,76 @@ const getMessageText = (message: PersistedChatMessage) => {
   }
 
   return textParts.join("\n\n").trim();
+};
+
+/**
+ * A turn that reached its budget says so where it stopped, live and after a
+ * reload alike (both read the stored outcome), and offers Continue on the
+ * latest answer: nothing runs until the user sends it.
+ */
+/** The messages of the turn being generated, none while nothing runs. */
+const activeTurnMessageIdsOf = (
+  turns: ReturnType<typeof buildMessageTurns>,
+  generationActive: boolean,
+) =>
+  new Set(
+    generationActive ? turns.at(-1)?.body.map(({ message }) => message.id) : [],
+  );
+
+type PausedTurnNoticeProps = {
+  message: PersistedChatMessage;
+  /** The answer Continue is offered on: the latest one only. */
+  latestMessageId: string | null | undefined;
+  /** Absent while a turn generates. */
+  onContinue: (() => void | PromiseLike<void>) | undefined;
+};
+
+/** The row under an answer: where a paused turn stopped, then `children`. */
+const AnswerFooter = ({
+  children,
+  ...notice
+}: PausedTurnNoticeProps & { children: ReactNode }) => (
+  <div
+    className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"
+    data-chat-answer-footer
+    data-chat-copy-exclude
+  >
+    <PausedTurnNotice {...notice} />
+    {children}
+  </div>
+);
+
+/** Where a paused answer stopped, with Continue on the latest answer. */
+const PausedTurnNotice = ({
+  message,
+  latestMessageId,
+  onContinue: continueTurn,
+}: PausedTurnNoticeProps) => {
+  const t = useTranslations();
+  const paused = getPausedChatTurn(message);
+  if (paused === null) {
+    return null;
+  }
+  const onContinue = message.id === latestMessageId ? continueTurn : undefined;
+
+  return (
+    <div className="flex items-center gap-1" data-chat-turn-paused>
+      <span className="text-muted-foreground px-1.5 text-xs" role="status">
+        {t("chat.turnPaused.status", { count: paused.toolCalls })}
+      </span>
+      {onContinue !== undefined && (
+        <Button
+          onClick={() => {
+            detached(onContinue(), "chat-thread-messages.continue-paused-turn");
+          }}
+          size="xs"
+          variant="outline"
+        >
+          {t("chat.turnPaused.continue")}
+        </Button>
+      )}
+    </div>
+  );
 };
 
 const AssistantMessageActions = ({
@@ -1681,6 +1738,11 @@ type ChatThreadMessagesProps = {
   onResend?:
     ((options?: ChatResendOptions) => void | PromiseLike<void>) | undefined;
   onSendWithoutAnonymization?: (() => void | PromiseLike<void>) | undefined;
+  /**
+   * Sends the message that continues a turn paused on its budget. Surfaces
+   * that omit it show the pause without the Continue action.
+   */
+  onContinuePausedTurn?: (() => void | PromiseLike<void>) | undefined;
   onAskUserSubmit: (
     toolCallId: string,
     output: AskUserOutput,
@@ -1734,14 +1796,11 @@ type ChatThreadMessagesProps = {
    */
   stickyUserMessages?: boolean | undefined;
   /**
-   * Messages the user composed while a response was streaming.
-   * Rendered as dimmed "pending" bubbles below the transcript;
-   * `useChatSession` dispatches them once the turn finishes.
+   * The messages the member queued in this chat, which the server sends in
+   * order once the turn has ended. Rendered as dimmed bubbles below the
+   * transcript, with what holds them; omitted on surfaces with no queue.
    */
-  queuedMessages?: readonly QueuedChatMessage[] | undefined;
-  /** What the user can do with a queued message: cancel it, or send it now
-   *  (stops the running turn and sends it next). */
-  queuedMessageActions?: QueuedMessageActions | undefined;
+  queue?: ChatQueueView | undefined;
   streamdownComponents: {
     a: (props: ComponentProps<"a">) => React.ReactNode;
     "stll-anon"?: (
@@ -1760,73 +1819,171 @@ type ChatResendOptions = {
   messageId?: string | undefined;
 };
 
-export type QueuedMessageActions = {
-  remove: (id: string) => void;
-  sendNow: (id: string) => void;
-};
-
-type QueuedUserMessagesProps = {
-  actions: QueuedMessageActions;
-  messages: readonly QueuedChatMessage[];
-};
-
 /**
- * Pending user messages — composed mid-stream and waiting their
- * turn. Rendered below the live transcript as dimmed bubbles so the
- * user can see what is queued and cancel any of it before it sends.
+ * The messages waiting in the chat's queue, below the live transcript as
+ * dimmed bubbles, each with its actions (the same list on its "…" button and
+ * on right-click), and the line that says what holds them.
  */
-const QueuedUserMessages = ({ actions, messages }: QueuedUserMessagesProps) => {
+const QueuedUserMessages = ({ queue }: { queue: ChatQueueView }) => {
   const t = useTranslations();
+  const { actions, hold, items } = queue;
+  // Send now over a turn that waits on the member ends what it waits on:
+  // the member confirms it first.
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const sendNow = (id: string) => {
+    if (actions.sendNow(id) === "confirm") {
+      setConfirming(id);
+    }
+  };
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-muted-foreground flex items-center gap-1 text-xs">
-        <ClockIcon aria-hidden="true" className="size-3" />
-        {t("chat.queuedNotice")}
-      </p>
-      {messages.map((queued) => {
-        const text = queued.text.trim()
-          ? normalizeUserMessageTextForDisplay(queued.text)
+      <AlertDialog
+        onOpenChange={(open) => {
+          if (!open) {
+            setConfirming(null);
+          }
+        }}
+        open={confirming !== null}
+      >
+        <AlertDialogPopup>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("chat.queue.replaceTitle")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("chat.queue.replaceDescription")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose render={<Button variant="ghost" />}>
+              {t("common.cancel")}
+            </AlertDialogClose>
+            <Button
+              onClick={() => {
+                if (confirming !== null) {
+                  actions.replaceWith(confirming);
+                }
+                setConfirming(null);
+              }}
+            >
+              {t("chat.sendQueuedMessageNow")}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
+      <div className="text-muted-foreground flex items-center gap-1 text-xs">
+        <ClockIcon aria-hidden="true" className="size-3 shrink-0" />
+        <p className="min-w-0 flex-1" role="status">
+          {hold === null
+            ? t("chat.queuedNotice")
+            : t(CHAT_QUEUE_HOLD_NOTICE_KEYS[hold.reason])}
+        </p>
+        <Button
+          className="shrink-0"
+          onClick={hold === null ? actions.pause : actions.resume}
+          size="xs"
+          variant="ghost"
+        >
+          {hold === null ? t("chat.queue.pause") : t("chat.queue.resume")}
+        </Button>
+      </div>
+      {items.map((queued) => {
+        const text = queued.preview.trim()
+          ? normalizeUserMessageTextForDisplay(queued.preview)
           : "";
+        const up = queueMoveTarget({ direction: "up", id: queued.id, items });
+        const down = queueMoveTarget({
+          direction: "down",
+          id: queued.id,
+          items,
+        });
+        const refused =
+          hold?.reason === "send-refused" && hold.queuedMessageId === queued.id;
+        const itemActions: EntityAction[] = [
+          {
+            label: t("chat.sendQueuedMessageNow"),
+            onClick: () => {
+              sendNow(queued.id);
+            },
+          },
+          {
+            label: t("common.edit"),
+            onClick: () => {
+              actions.edit(queued.id);
+            },
+          },
+          ...(up === undefined
+            ? []
+            : [
+                {
+                  label: t("common.moveUp"),
+                  onClick: () => {
+                    actions.move(queued.id, "up");
+                  },
+                },
+              ]),
+          ...(down === undefined
+            ? []
+            : [
+                {
+                  label: t("common.moveDown"),
+                  onClick: () => {
+                    actions.move(queued.id, "down");
+                  },
+                },
+              ]),
+          {
+            label: t("chat.cancelQueuedMessage"),
+            onClick: () => {
+              actions.remove(queued.id);
+            },
+            separatorBefore: true,
+            variant: "destructive",
+          },
+        ];
         return (
-          <Message from="user" key={queued.id}>
-            <div className="flex w-full items-start gap-1">
-              <MessageContent className="min-w-0 flex-1 opacity-60">
-                {text.length > 0 && (
-                  <UserMessageText
-                    restorationPairs={EMPTY_RESTORATION_PAIRS}
-                    text={text}
-                  />
-                )}
-                {queued.fileCount > 0 && (
-                  <span className="text-muted-foreground flex items-center gap-1 text-xs">
-                    <PaperclipIcon aria-hidden="true" className="size-3" />
-                    {t("chat.queuedAttachmentCount", {
-                      count: queued.fileCount,
-                    })}
-                  </span>
-                )}
-              </MessageContent>
-              <Button
-                aria-label={t("chat.sendQueuedMessageNow")}
-                className="mt-0.5 shrink-0"
-                onClick={() => actions.sendNow(queued.id)}
-                size="icon-xs"
-                title={t("chat.sendQueuedMessageNow")}
-                variant="ghost"
-              >
-                <ArrowUpIcon className="size-3.5" />
-              </Button>
-              <Button
-                aria-label={t("chat.cancelQueuedMessage")}
-                className="mt-0.5 shrink-0"
-                onClick={() => actions.remove(queued.id)}
-                size="icon-xs"
-                variant="ghost"
-              >
-                <XIcon className="size-3.5" />
-              </Button>
-            </div>
-          </Message>
+          <EntityActions
+            actions={itemActions}
+            key={queued.id}
+            label={t("chat.queue.actions")}
+          >
+            <Message from="user">
+              <div className="flex w-full items-start gap-1">
+                <MessageContent className="min-w-0 flex-1 opacity-60">
+                  {text.length > 0 && (
+                    <UserMessageText
+                      restorationPairs={EMPTY_RESTORATION_PAIRS}
+                      text={text}
+                    />
+                  )}
+                  {queued.attachmentCount > 0 && (
+                    <span className="text-muted-foreground flex items-center gap-1 text-xs">
+                      <PaperclipIcon aria-hidden="true" className="size-3" />
+                      {t("chat.queuedAttachmentCount", {
+                        count: queued.attachmentCount,
+                      })}
+                    </span>
+                  )}
+                  {refused && (
+                    <span className="text-destructive text-xs">
+                      {t("chat.queue.notSent")}
+                    </span>
+                  )}
+                </MessageContent>
+                <Button
+                  aria-label={t("chat.sendQueuedMessageNow")}
+                  className="mt-0.5 shrink-0"
+                  onClick={() => {
+                    sendNow(queued.id);
+                  }}
+                  size="icon-xs"
+                  title={t("chat.sendQueuedMessageNow")}
+                  variant="ghost"
+                >
+                  <ArrowUpIcon className="size-3.5" />
+                </Button>
+                <EntityActionsButton />
+              </div>
+            </Message>
+          </EntityActions>
         );
       })}
     </div>
@@ -2178,6 +2335,57 @@ const openPlaybookAction = ({
   return { label, onClick: () => onOpenPlaybook(playbookId) };
 };
 
+/**
+ * The paused question shows in place of its call while the turn waits on it,
+ * live and after a reload alike: both read the pause from the turn's pending
+ * interrupts.
+ */
+const useLocalRunQuestionPause = (
+  isAwaitingUser: boolean,
+  message: ChatUIMessage,
+) => {
+  const localRunQuestion = use(ChatLocalRunQuestionContext);
+  const localRunQuestionPause =
+    isAwaitingUser && localRunQuestion !== null ? localRunQuestion.pause : null;
+  const localRunQuestionCall =
+    localRunQuestionPause === null
+      ? null
+      : localRunQuestionCallId(message.parts);
+  return { localRunQuestion, localRunQuestionPause, localRunQuestionCall };
+};
+
+/**
+ * A coding agent's own calls the member answers or wrote: its question while
+ * the turn waits on it, and a message the member steered it with. `null` for
+ * any other call.
+ */
+const renderLocalRunCall = (
+  part: Extract<ChatPart, { type: "tool-call" }>,
+  {
+    localRunQuestion,
+    localRunQuestionPause,
+    localRunQuestionCall,
+  }: ReturnType<typeof useLocalRunQuestionPause>,
+) => {
+  if (
+    part.id === localRunQuestionCall &&
+    localRunQuestion !== null &&
+    localRunQuestionPause !== null
+  ) {
+    return (
+      <LocalRunQuestionCard
+        threadRef={localRunQuestion.threadRef}
+        key={localRunQuestionPause.interruptId}
+        onAnswer={localRunQuestion.answer}
+        pause={localRunQuestionPause}
+      />
+    );
+  }
+  return isSteerToolName(part.name) ? (
+    <ChatSteeredMessage arguments={part.arguments} key={part.id} />
+  ) : null;
+};
+
 const AssistantMessageParts = ({
   threadRef,
   activeFileName,
@@ -2200,16 +2408,7 @@ const AssistantMessageParts = ({
   workspaceId,
 }: AssistantMessagePartsProps) => {
   const label = useTranslations()("knowledge.playbooks.openInPane");
-  const localRunQuestion = use(ChatLocalRunQuestionContext);
-  // The paused question shows in place of its call while the turn waits on
-  // it, live and after a reload alike: both read the pause from the turn's
-  // pending interrupts.
-  const localRunQuestionPause =
-    isAwaitingUser && localRunQuestion !== null ? localRunQuestion.pause : null;
-  const localRunQuestionCall =
-    localRunQuestionPause === null
-      ? null
-      : localRunQuestionCallId(message.parts);
+  const questionPause = useLocalRunQuestionPause(isAwaitingUser, message);
   const restorationPairs = collectAnonRestorations(message);
   const firstThinkingPartIndex = getFirstThinkingPartIndex(message.parts);
   const reasoningTokenCount = getReasoningTokenCount(message);
@@ -2287,20 +2486,12 @@ const AssistantMessageParts = ({
       );
     }
 
-    if (
-      part.type === "tool-call" &&
-      part.id === localRunQuestionCall &&
-      localRunQuestion !== null &&
-      localRunQuestionPause !== null
-    ) {
-      return (
-        <LocalRunQuestionCard
-          threadRef={localRunQuestion.threadRef}
-          key={localRunQuestionPause.interruptId}
-          onAnswer={localRunQuestion.answer}
-          pause={localRunQuestionPause}
-        />
-      );
+    const localRunCall =
+      part.type === "tool-call"
+        ? renderLocalRunCall(part, questionPause)
+        : null;
+    if (localRunCall !== null) {
+      return localRunCall;
     }
 
     if (part.type === "tool-call" && isOpaquePersistedChatToolCallPart(part)) {
@@ -2311,6 +2502,7 @@ const AssistantMessageParts = ({
           part={part}
           turnStatus={turnStatus}
           showDetails={shouldShowToolCalls}
+          threadId={threadRef?.threadId}
         />
       );
     }
@@ -2417,6 +2609,7 @@ const AssistantMessageParts = ({
           part={part}
           turnStatus={turnStatus}
           showDetails={shouldShowToolCalls}
+          threadId={threadRef?.threadId}
         />
       );
     }
@@ -2453,14 +2646,11 @@ const AssistantMessageParts = ({
           );
           return (
             <LocalRunSubagentGroup
-              conversation={
-                localRunStepOutputKindOf(subagent.part) === null ? null : (
-                  <LocalRunStepOutputDetails
-                    activeOrganizationId={activeOrganizationId}
-                    part={subagent.part}
-                  />
-                )
-              }
+              conversation={localRunSubagentConversation({
+                activeOrganizationId,
+                part: subagent.part,
+                threadId: threadRef?.threadId,
+              })}
               key={subagent.part.id}
               part={subagent.part}
               rows={steps

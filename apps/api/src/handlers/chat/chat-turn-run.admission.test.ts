@@ -36,11 +36,8 @@ import {
   chatMessageContentFromMessage,
   toPersistableChatMessage,
 } from "./chat-message-parts";
-import {
-  CHAT_TURN_OWNER_LOST_REASON,
-  ChatTurnOwnership,
-  ChatTurnRun,
-} from "./chat-turn-run";
+import { ChatTurnOwnership, ChatTurnRun } from "./chat-turn-run";
+import { CHAT_TURN_OWNER_LOST_REASON } from "./chat-turn-run-cut";
 import { processServerChatStream, toChatMessage } from "./stream-chat";
 import { createChatMessageIdMapper } from "./stream-message-identity";
 
@@ -180,7 +177,10 @@ describe("chat run admission follows owned settlement", () => {
             }
           : {}),
         connectors: undefined,
-        deadlineMs: cut === "ownership-loss" ? 60_000 : 100,
+        bound: {
+          type: "provider-deadline",
+          deadlineMs: cut === "ownership-loss" ? 60_000 : 100,
+        },
         mode: "raw",
         heartbeat: { intervalMs: 60_000, renewEvery: 1000 },
         ownership,
@@ -348,7 +348,7 @@ describe("chat run admission follows owned settlement", () => {
           connectorCloses += 1;
         },
       },
-      deadlineMs: 60_000,
+      bound: { type: "provider-deadline", deadlineMs: 60_000 },
       mode: "raw",
       heartbeat: { intervalMs: 60_000, renewEvery: 1000 },
       ownership: new ChatTurnOwnership(),
@@ -417,7 +417,7 @@ describe("chat run admission follows owned settlement", () => {
           },
         },
         connectors: undefined,
-        deadlineMs: 60_000,
+        bound: { type: "provider-deadline", deadlineMs: 60_000 },
         mode: "raw",
         heartbeat: { intervalMs: 60_000, renewEvery: 1000 },
         ownership: new ChatTurnOwnership(),
@@ -558,7 +558,7 @@ describe("chat run admission follows owned settlement", () => {
         },
       },
       connectors: undefined,
-      deadlineMs: 60_000,
+      bound: { type: "provider-deadline", deadlineMs: 60_000 },
       mode: "raw",
       heartbeat: { intervalMs: 1, renewEvery: 1000 },
       ownership: new ChatTurnOwnership(),
@@ -648,7 +648,7 @@ describe("chat run admission follows owned settlement", () => {
         },
       },
       connectors: undefined,
-      deadlineMs: 60_000,
+      bound: { type: "provider-deadline", deadlineMs: 60_000 },
       mode: "raw",
       heartbeat: { intervalMs: 60_000, renewEvery: 1000 },
       ownership: new ChatTurnOwnership(),
@@ -781,7 +781,7 @@ describe("chat run admission follows owned settlement", () => {
         },
         checkpoint,
         connectors: undefined,
-        deadlineMs: 60_000,
+        bound: { type: "provider-deadline", deadlineMs: 60_000 },
         mode: "raw",
         ownership: new ChatTurnOwnership(),
         owner: {
@@ -907,7 +907,7 @@ describe("chat run admission follows owned settlement", () => {
         },
         checkpoint,
         connectors: undefined,
-        deadlineMs: 60_000,
+        bound: { type: "provider-deadline", deadlineMs: 60_000 },
         mode: "raw",
         heartbeat: { intervalMs: 60_000, renewEvery: 1000 },
         ownership: new ChatTurnOwnership(),
@@ -1073,7 +1073,7 @@ describe("chat run admission follows owned settlement", () => {
     const run = new ChatTurnRun({
       admission,
       connectors: undefined,
-      deadlineMs,
+      bound: { type: "provider-deadline", deadlineMs },
       mode: "raw",
       heartbeat: { intervalMs: 60_000, renewEvery: 1000 },
       ownership: new ChatTurnOwnership(),

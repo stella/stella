@@ -260,7 +260,7 @@ describe("coalescing invariants", () => {
     let generated = 0;
     const source = (async function* () {
       yield* events;
-      yield { type: "turn.completed" as const, usage: null };
+      yield { type: "turn.completed" as const, usage: null, boundary: null };
     })();
     for await (const chunk of harnessEventsToChunks(source, {
       harness: "codex",

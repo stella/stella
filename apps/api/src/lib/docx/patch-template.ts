@@ -260,7 +260,9 @@ const preProcessTemplateDirectives = async (
 
     const paragraphCount = container.getElementsByTagNameNS(W_NS, "p").length;
     const paragraphOffset = paragraphOffsets[source];
-    paragraphOffsets[source] += paragraphCount;
+    Object.defineProperty(paragraphOffsets, source, {
+      value: paragraphOffset + paragraphCount,
+    });
     const prepared = inspection?.prepare(container);
     if (prepared !== undefined && Result.isError(prepared)) {
       return null;
@@ -278,7 +280,10 @@ const preProcessTemplateDirectives = async (
       templateData,
       { conditionValues, namedConditions, processingContext },
     );
-    Object.assign(expandedValues, patchValues);
+    Object.defineProperties(
+      expandedValues,
+      Object.getOwnPropertyDescriptors(patchValues),
+    );
     const inlineErrors = processInlineConditions(
       container,
       inlineData,

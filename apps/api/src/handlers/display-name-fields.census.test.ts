@@ -23,6 +23,17 @@ import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions"
 
 const NAME_KEY = /^(?:name|\w+Name|\w+_name)$/u;
 
+/**
+ * A field of the chat send, at every route that takes it: the send itself,
+ * and the queue, which keeps a send until the server makes it.
+ */
+const chatSendFields = (paths: readonly string[]): string[] =>
+  paths.flatMap((path) => [
+    `POST /v1/chat body.forwardedProps.${path}`,
+    `POST /v1/chat/threads/:threadId/queue body.send.${path}`,
+    `PUT /v1/chat/threads/:threadId/queue/:messageId body.send.${path}`,
+  ]);
+
 /** `entities.name` has its own stricter owner, `normalizeEntityName`. */
 const ENTITY_NAMES = [
   "POST /v1/uploads/:workspaceId/presign body.name",
@@ -45,9 +56,11 @@ const ENTITY_NAMES = [
 /** File names: `sanitizeFilename` owns them. */
 const FILE_NAMES = [
   "POST /v1/contacts/procuracao-upload body.name",
-  "POST /v1/chat body.forwardedProps.activeDraft.fileName",
-  "POST /v1/chat body.forwardedProps.activeFile.fileName",
-  "POST /v1/chat body.forwardedProps.activeTemplate.fileName",
+  ...chatSendFields([
+    "activeDraft.fileName",
+    "activeFile.fileName",
+    "activeTemplate.fileName",
+  ]),
   "POST /v1/desktop/billing-drafts body.previousResult.drafts[].flags[].ruleRef.fileName",
   "POST /v1/desktop/billing-drafts body.previousResult.checkedGuidelines[].fileName",
 ];
@@ -64,10 +77,12 @@ const TRANSIENT_VALUES = [
   "POST /v1/sanctions/search body.subject.firstName",
   "POST /v1/sanctions/search body.subject.lastName",
   "POST /v1/chat body.tools[].name",
-  "POST /v1/chat body.forwardedProps.userContext.userName",
-  "POST /v1/chat body.forwardedProps.userContext.wordEditAuthorName",
-  "POST /v1/chat body.forwardedProps.activeExternal.sourceToolName",
-  "POST /v1/chat body.forwardedProps.activeSkill.skillName",
+  ...chatSendFields([
+    "userContext.userName",
+    "userContext.wordEditAuthorName",
+    "activeExternal.sourceToolName",
+    "activeSkill.skillName",
+  ]),
   "POST /v1/desktop/billing-drafts body.previousResult.drafts[].operations[].targetMatterName",
 ];
 

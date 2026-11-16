@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { DelayedError } from "bullmq";
 import { describe, expect, test } from "bun:test";
 
+import { createTestState } from "@stll/test-state";
+
 import { env } from "@/api/env";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
@@ -16,6 +18,8 @@ import {
   runBackgroundJob,
   runQueuedKickoff,
 } from "./queued-action-admission";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const organizationId = toSafeId<"organization">("queued_org");
 const userId = toSafeId<"user">("queued_user");
@@ -259,21 +263,17 @@ describe("queued action admission", () => {
   });
 
   test("feature flag off runs a queued kickoff without opening admission storage", async () => {
-    const previous = env.FEATURE_ACTION_ADMISSION;
-    env.FEATURE_ACTION_ADMISSION = false;
-    try {
-      expect(
-        await runQueuedKickoff({
-          organizationId,
-          userId,
-          actionKind: QUEUED_ACTION_KIND.flow,
-          logicalPhaseId: "manual-run:request-1",
-          run: async () => "completed",
-        }),
-      ).toBe("completed");
-    } finally {
-      env.FEATURE_ACTION_ADMISSION = previous;
-    }
+    testState.setConfig("FEATURE_ACTION_ADMISSION", false);
+
+    expect(
+      await runQueuedKickoff({
+        organizationId,
+        userId,
+        actionKind: QUEUED_ACTION_KIND.flow,
+        logicalPhaseId: "manual-run:request-1",
+        run: async () => "completed",
+      }),
+    ).toBe("completed");
   });
 
   test("queued kickoff sends its stable phase identity to admission", async () => {
@@ -311,8 +311,7 @@ describe("queued action admission", () => {
   });
 
   test("a deferred period refusal rejects kickoff before enqueue", async () => {
-    const previous = env.FEATURE_ACTION_ADMISSION;
-    env.FEATURE_ACTION_ADMISSION = true;
+    testState.setConfig("FEATURE_ACTION_ADMISSION", true);
     let enqueued = false;
     const admission: typeof withActionAdmission = async (options) =>
       await withActionAdmission({
@@ -330,25 +329,22 @@ describe("queued action admission", () => {
           },
         },
       });
-    try {
-      expect(
-        await runQueuedKickoff({
-          organizationId,
-          userId,
-          actionKind: QUEUED_ACTION_KIND.flow,
-          logicalPhaseId: "refused-run",
-          periodReservation: "on-acceptance",
-          admission,
-          run: async (_signal, reservePeriod) => {
-            await reservePeriod();
-            enqueued = true;
-          },
-        }).catch((error: unknown) => error),
-      ).toBeInstanceOf(ActionAdmissionError);
-      expect(enqueued).toBe(false);
-    } finally {
-      env.FEATURE_ACTION_ADMISSION = previous;
-    }
+
+    expect(
+      await runQueuedKickoff({
+        organizationId,
+        userId,
+        actionKind: QUEUED_ACTION_KIND.flow,
+        logicalPhaseId: "refused-run",
+        periodReservation: "on-acceptance",
+        admission,
+        run: async (_signal, reservePeriod) => {
+          await reservePeriod();
+          enqueued = true;
+        },
+      }).catch((error: unknown) => error),
+    ).toBeInstanceOf(ActionAdmissionError);
+    expect(enqueued).toBe(false);
   });
 
   test("holds the admission lease until planning and enqueue work settles", async () => {

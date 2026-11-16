@@ -5,6 +5,7 @@ import fc from "fast-check";
 
 import { HOSTED_CHECKOUT_REFUSAL_CODE } from "@stll/api-contract/hosted-checkout";
 import { assertProperty, propertyConfig } from "@stll/property-testing";
+import { createTestState } from "@stll/test-state";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -41,6 +42,8 @@ import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-del
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 
 import createHostedSetup from "./create-hosted-setup";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const testFetchState = createTestFetch();
 
@@ -174,17 +177,20 @@ const withHostedEnv = async (fn: () => Promise<void>) => {
     HOSTED_USAGE_WEBHOOK_SECRET_PREVIOUS:
       env.HOSTED_USAGE_WEBHOOK_SECRET_PREVIOUS,
   };
-  env.FEATURE_USAGE = true;
-  env.HOSTED_USAGE_PROVIDER = "polar";
-  env.HOSTED_USAGE_PROVIDER_API_VERSION = DEFAULT_POLAR_API_VERSION;
-  env.HOSTED_USAGE_PROVIDER_API_KEY = "provider_fixture_key";
-  env.HOSTED_USAGE_PROVIDER_BASE_URL = PROVIDER_BASE_URL;
-  env.HOSTED_USAGE_WEBHOOK_SECRET = WEBHOOK_SECRET;
-  env.HOSTED_USAGE_WEBHOOK_SECRET_PREVIOUS = undefined;
+  testState.setConfig("FEATURE_USAGE", true);
+  testState.setConfig("HOSTED_USAGE_PROVIDER", "polar");
+  testState.setConfig(
+    "HOSTED_USAGE_PROVIDER_API_VERSION",
+    DEFAULT_POLAR_API_VERSION,
+  );
+  testState.setConfig("HOSTED_USAGE_PROVIDER_API_KEY", "provider_fixture_key");
+  testState.setConfig("HOSTED_USAGE_PROVIDER_BASE_URL", PROVIDER_BASE_URL);
+  testState.setConfig("HOSTED_USAGE_WEBHOOK_SECRET", WEBHOOK_SECRET);
+  testState.setConfig("HOSTED_USAGE_WEBHOOK_SECRET_PREVIOUS", undefined);
   try {
     await fn();
   } finally {
-    Object.assign(env, previous);
+    testState.patchConfig(previous);
   }
 };
 

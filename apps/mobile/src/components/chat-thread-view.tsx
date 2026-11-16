@@ -10,6 +10,16 @@ import {
 } from "react-native";
 import { useTranslations } from "use-intl";
 
+import {
+  CHAT_RUN_TARGET_KIND,
+  type ChatRunTarget,
+} from "@stll/api-contract/chat-run-target";
+import {
+  CHAT_MEMBER_SEND_ACTION,
+  CHAT_SEND_INTENT,
+  CHAT_TURN_STEERING,
+  chatSendIntent,
+} from "@stll/api-contract/chat-send-intent";
 import { StellaMark } from "@stll/ui/stella-mark";
 import { Text } from "@stll/ui/text";
 
@@ -22,6 +32,7 @@ import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
 import { PagingFooter, RetryButton } from "@/components/retry-button";
 import type { PagingState } from "@/components/retry-button";
 import { ThreadMatter } from "@/components/thread-matter";
+import { ThreadSteps } from "@/components/thread-steps";
 import { useChatTurn } from "@/components/use-chat-turn";
 import type { LiveTurn } from "@/components/use-chat-turn";
 import { useMarkChatReadWhileOpen } from "@/components/use-mark-chat-read";
@@ -30,6 +41,7 @@ import { epochMilliseconds } from "@/connection/clock";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
 import type { Load } from "@/state/api-request";
+import { CHAT_FAILURE_KEYS } from "@/state/chat-failure";
 import {
   prependOlderPage,
   readChatThread,
@@ -50,6 +62,8 @@ const EMPTY_PAGE: ChatMessagesPage = {
   activeTurnId: null,
   usedAnonymization: false,
   pendingInput: null,
+  retry: null,
+  runTargetKind: CHAT_RUN_TARGET_KIND.cloud,
 };
 
 /**
@@ -95,21 +109,23 @@ export const ChatThreadView = ({
 
   return (
     <ThreadMatter value={matterId}>
-      <Suspense
-        fallback={
-          <ActivityIndicator color={colors.accent} style={styles.fill} />
-        }
-      >
-        <LoadedThread
-          load={load}
-          matterId={matterId}
-          onReload={reload}
-          refreshing={refreshing}
-          shareId={shareId}
-          source={source}
-          threadId={threadId}
-        />
-      </Suspense>
+      <ThreadSteps value={{ source, threadId }}>
+        <Suspense
+          fallback={
+            <ActivityIndicator color={colors.accent} style={styles.fill} />
+          }
+        >
+          <LoadedThread
+            load={load}
+            matterId={matterId}
+            onReload={reload}
+            refreshing={refreshing}
+            shareId={shareId}
+            source={source}
+            threadId={threadId}
+          />
+        </Suspense>
+      </ThreadSteps>
     </ThreadMatter>
   );
 };
@@ -192,7 +208,9 @@ const ThreadMessages = ({
   const [cursor, setCursor] = useState(firstPage.olderCursor);
   const [older, setOlder] = useState<PagingState>("idle");
   const [anonymized, setAnonymized] = useState(firstPage.usedAnonymization);
+  const [runTargetKind, setRunTargetKind] = useState(firstPage.runTargetKind);
   const [pending, setPending] = useState(firstPage.pendingInput);
+  const [retry, setRetry] = useState(firstPage.retry);
   const [inputNotice, setInputNotice] = useState<InputNotice>();
   const turn = useChatTurn({
     activeTurnId: firstPage.activeTurnId,
@@ -208,7 +226,9 @@ const ThreadMessages = ({
       if (Result.isOk(latest)) {
         setEntries((loaded) => prependOlderPage(latest.value.entries, loaded));
         setAnonymized(latest.value.usedAnonymization);
+        setRunTargetKind(latest.value.runTargetKind);
         setPending(latest.value.pendingInput);
+        setRetry(latest.value.retry);
         setInputNotice(undefined);
         return true;
       }
@@ -230,12 +250,23 @@ const ThreadMessages = ({
     threadId,
   });
   // A turn that resumes a paused message adds to it, so the stored message
-  // stays; any other live turn stands in for its stored copy.
+  // stays; any other live turn stands in for its stored copy, and for the
+  // failed answer it replaces.
   const shown = entries.filter(
     (entry) =>
       entry.id === live?.continues ||
-      (entry.id !== live?.answer.messageId && entry.id !== live?.question?.id),
+      (entry.id !== live?.answer.messageId &&
+        entry.id !== live?.question?.id &&
+        entry.id !== live?.replaces),
   );
+  // Only the thread's latest answer is answered again, and only while no
+  // turn runs.
+  const retryFor = (entry: ChatEntry) =>
+    retry === null || live !== null || entry.id !== retry.answerId
+      ? undefined
+      : () => {
+          turn.regenerate(retry);
+        };
 
   /**
    * Answers what the paused turn waits for. When the server does not take
@@ -273,6 +304,7 @@ const ThreadMessages = ({
           setEntries((loaded) => prependOlderPage(stored, loaded));
           setAnonymized(latest.value.usedAnonymization);
           setPending(pendingInput);
+          setRetry(latest.value.retry);
           if (isSamePendingInput(asked, pendingInput)) {
             setInputNotice("failed");
             return;
@@ -334,9 +366,11 @@ const ThreadMessages = ({
             busy={turn.busy}
             canStop={turn.canStop}
             onSend={turn.send}
+            onSteer={undefined}
             onStop={turn.stop}
             sendError={turn.sendError}
             shareId={shareId}
+            steerRefusal={undefined}
           />
         </View>
       </View>
@@ -400,11 +434,11 @@ const ThreadMessages = ({
         }
         renderItem={({ item }) =>
           item.drafts.length === 0 ? (
-            <ChatMessage entry={item} />
+            <ChatMessage entry={item} onRetry={retryFor(item)} />
           ) : (
             // The drafts the answer wrote follow it, each opening its pages.
             <View style={styles.live}>
-              <ChatMessage entry={item} />
+              <ChatMessage entry={item} onRetry={retryFor(item)} />
               <ChatDraftDocuments drafts={item.drafts} />
             </View>
           )
@@ -423,14 +457,43 @@ const ThreadMessages = ({
           busy={turn.busy}
           canStop={turn.canStop}
           onSend={turn.send}
+          onSteer={
+            isSteerOfferedOnPhone(turn.busy, runTargetKind)
+              ? turn.steer
+              : undefined
+          }
           onStop={turn.stop}
           sendError={turn.sendError}
           shareId={undefined}
+          steerRefusal={turn.steerRefusal}
         />
       </View>
     </View>
   );
 };
+
+/**
+ * Whether the phone offers to hand a draft to the turn answering now: where
+ * a plain send steers it (`chatSendIntent`). The phone reads no runner list,
+ * so a turn on the member's computer counts as one that takes messages; a
+ * harness that does not is refused by the steer route, and the draft comes
+ * back with the reason.
+ */
+const isSteerOfferedOnPhone = (
+  busy: boolean,
+  runTargetKind: ChatRunTarget["kind"],
+): boolean =>
+  busy &&
+  chatSendIntent(
+    {
+      type: "working",
+      steering:
+        runTargetKind === CHAT_RUN_TARGET_KIND.local
+          ? CHAT_TURN_STEERING.steerable
+          : CHAT_TURN_STEERING.notSteerable,
+    },
+    CHAT_MEMBER_SEND_ACTION.send,
+  ) === CHAT_SEND_INTENT.steer;
 
 /**
  * The turn answering now: the message sent from here, and the answer as it
@@ -454,7 +517,10 @@ const LiveTurnView = ({
     stopped: t("answerStopped"),
     // The stored thread is read next, and says what the turn waits for.
     "needs-input": t("answerAwaitingInput"),
-    failed: t("answerFailed"),
+    failed:
+      turn.answer.failure === undefined
+        ? t("answerFailed")
+        : t(`failure.${CHAT_FAILURE_KEYS[turn.answer.failure]}`),
   }[status];
   const uploading =
     !accepted &&

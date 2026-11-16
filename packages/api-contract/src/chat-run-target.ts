@@ -6,6 +6,7 @@ import {
   DESKTOP_RUNNER_APPROVAL_MODES,
   DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE,
   DESKTOP_RUNNER_HARNESS_STATE,
+  DESKTOP_RUNNER_MAX_INPUT_TEXT_LENGTH,
   DESKTOP_RUNNER_REASONING_EFFORTS,
   type DesktopRunnerApprovalMode,
   type DesktopRunnerHarnessReport,
@@ -190,36 +191,26 @@ export const CHAT_CLOUD_RUN_TARGET = {
 } as const satisfies ChatRunTarget;
 
 /**
- * Why a turn bound for a computer was refused before it started. The send
- * answers with one of these as its error `code`; nothing falls back to cloud.
+ * Why a send bound for a computer was refused before anything of it was
+ * stored. The send answers with one of these as its error `code`; nothing
+ * falls back to cloud. Each depends on the request and the member alone. What
+ * depends on a computer's state (none connected, a harness not ready, a model
+ * it no longer offers) is found once the turn is stored and fails it with a
+ * `local_runner_*` kind (`ai-errors.ts`), which every client reads from the
+ * stored thread.
  */
 export const CHAT_LOCAL_RUN_REFUSAL = {
   /** Running chat turns on a computer is not enabled for this member. */
   unavailable: "local_run_unavailable",
-  /** None of the member's computers has a runner connected. */
-  noComputer: "local_run_no_computer",
-  /** The computer is connected but the harness cannot take a run now. */
-  harnessUnavailable: "local_run_harness_unavailable",
-  /** The harness no longer offers the chosen model. */
-  modelUnavailable: "local_run_model_unavailable",
-  /** The harness does not offer the chosen reasoning effort for the model. */
-  reasoningEffortUnavailable: "local_run_reasoning_effort_unavailable",
-  /** The computer cannot run the harness in the chosen approval mode. */
-  approvalsUnavailable: "local_run_approvals_unavailable",
   /** The organization does not let a run go that far without asking. */
   approvalsAboveLimit: "local_run_approvals_above_limit",
-  /** The turn does not fit what one run may carry. */
-  tooLarge: "local_run_too_large",
   /** A turn cannot both run in the agent sandbox and on a computer. */
   conflictingRunMode: "local_run_conflicting_run_mode",
   /**
-   * The chat's linked folder is not available: its computer is not
-   * connected, no longer lists it, or reports it offline, moved, protected
-   * or unreadable.
+   * The folder a member asked to allow is not one their computer lists. Only
+   * the folder approval endpoint answers it.
    */
   folderUnavailable: "local_run_folder_unavailable",
-  /** The member has not yet let runs work in the chat's linked folder. */
-  folderNotApproved: "local_run_folder_not_approved",
 } as const;
 export type ChatLocalRunRefusal =
   (typeof CHAT_LOCAL_RUN_REFUSAL)[keyof typeof CHAT_LOCAL_RUN_REFUSAL];
@@ -281,6 +272,125 @@ export type {
   ChatLocalRunQuestion,
   ChatLocalRunQuestionReply,
 } from "./chat-local-run-question";
+
+/**
+ * The tool call a message the member steered a running local turn with is
+ * persisted as, in that turn's answer where the harness took it: a call the
+ * harness ran, whose input is the member's text and whose result says it was
+ * delivered. The API mints it from its own record of what was sent; a
+ * desktop only reports that the harness took it.
+ */
+export const CHAT_LOCAL_RUN_STEER_TOOL = "user_message";
+
+export const chatLocalRunSteerInputSchema = v.strictObject({
+  text: v.pipe(v.string(), v.minLength(1)),
+});
+export type ChatLocalRunSteerInput = v.InferOutput<
+  typeof chatLocalRunSteerInputSchema
+>;
+
+/** The call id of the steer `inputId` delivered; one input, one call. */
+export const chatLocalRunSteerCallId = (inputId: string) => `steer_${inputId}`;
+
+/**
+ * The CUSTOM stream event that tells the chat what became of a message it
+ * steered a running local turn with: `steered` once the harness took it
+ * (the answer holds it from there on), `refused` when it did not. A turn
+ * that ends without either did not take it. A rejoined stream replays these
+ * from the run log, so a reload settles the same way.
+ */
+export const CHAT_LOCAL_RUN_STEER_EVENT = "stella.local-run.steer";
+
+export const CHAT_LOCAL_RUN_STEER_STATUSES = ["steered", "refused"] as const;
+
+export const chatLocalRunSteerEventSchema = v.strictObject({
+  inputId: v.pipe(v.string(), v.uuid()),
+  status: v.picklist(CHAT_LOCAL_RUN_STEER_STATUSES),
+});
+export type ChatLocalRunSteerEvent = v.InferOutput<
+  typeof chatLocalRunSteerEventSchema
+>;
+
+/**
+ * Where a steered message comes from: `composer`, a message the member just
+ * wrote, or `queued`, the queued message `inputId` at the `revision` the
+ * client read. A queued message the turn takes leaves the queue on the
+ * server, in the transaction that handles the run's report, so the queue
+ * never sends it again; one it does not take stays queued.
+ */
+export const CHAT_LOCAL_RUN_STEER_SOURCE = {
+  composer: "composer",
+  queued: "queued",
+} as const;
+
+const chatLocalRunSteerSourceSchema = v.variant("type", [
+  v.strictObject({ type: v.literal(CHAT_LOCAL_RUN_STEER_SOURCE.composer) }),
+  v.strictObject({
+    type: v.literal(CHAT_LOCAL_RUN_STEER_SOURCE.queued),
+    revision: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  }),
+]);
+export type ChatLocalRunSteerSource = v.InferOutput<
+  typeof chatLocalRunSteerSourceSchema
+>;
+
+/** What the chat asks to steer a running local turn with. */
+export const chatLocalRunSteerRequestSchema = v.strictObject({
+  /** The message's id (a queued one's own), so a repeat steers once. */
+  inputId: v.pipe(v.string(), v.uuid()),
+  text: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(DESKTOP_RUNNER_MAX_INPUT_TEXT_LENGTH),
+  ),
+  source: chatLocalRunSteerSourceSchema,
+});
+export type ChatLocalRunSteerRequest = v.InferOutput<
+  typeof chatLocalRunSteerRequestSchema
+>;
+
+/**
+ * Why a message was not steered into a turn:
+ * - `turn_not_running`: the turn is not running; it waits on the member or
+ *   it ended.
+ * - `no_run`: the turn has no run on a computer, before its computer took it
+ *   or after the run ended.
+ * - `harness_cannot_steer`: the turn's agent takes no message mid-turn.
+ * - `run_full`: the run holds as many commands as one run may.
+ * - `queued_message_changed`: the queued message was edited, sent or
+ *   removed since the revision the request names.
+ * - `not_taken`: the agent did not take it; its turn was ending or between
+ *   attempts. Only the turn's stream says this, as `refused`.
+ */
+const CHAT_LOCAL_RUN_STEER_ROUTE_REFUSALS = [
+  "turn_not_running",
+  "no_run",
+  "harness_cannot_steer",
+  "run_full",
+  "queued_message_changed",
+] as const;
+export const CHAT_LOCAL_RUN_STEER_REFUSALS = [
+  ...CHAT_LOCAL_RUN_STEER_ROUTE_REFUSALS,
+  "not_taken",
+] as const;
+export type ChatLocalRunSteerRefusal =
+  (typeof CHAT_LOCAL_RUN_STEER_REFUSALS)[number];
+
+/**
+ * Whether the running turn will be steered: `queued` once the computer was
+ * handed the message (the turn's stream then says whether it took it), or
+ * `refused` with why, before anything reached the computer.
+ */
+export const chatLocalRunSteerOutcomeSchema = v.variant("type", [
+  v.strictObject({ type: v.literal("queued") }),
+  v.strictObject({
+    type: v.literal("refused"),
+    reason: v.picklist(CHAT_LOCAL_RUN_STEER_ROUTE_REFUSALS),
+  }),
+]);
+export type ChatLocalRunSteerOutcome = v.InferOutput<
+  typeof chatLocalRunSteerOutcomeSchema
+>;
 
 /**
  * The CUSTOM stream event a turn running on a computer sends while its run

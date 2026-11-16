@@ -15,7 +15,7 @@ import setChatLimitReminder from "@/api/handlers/chat/limit-reminder/set";
 import getLinkIcon from "@/api/handlers/chat/link-icons/get";
 import getExactIcon from "@/api/handlers/chat/link-icons/get-exact";
 import approveLocalFolder from "@/api/handlers/chat/local-folder-approval";
-import getLocalRunStepOutputGrant from "@/api/handlers/chat/local-run-step-output-grant";
+import getLocalRunStepContent from "@/api/handlers/chat/local-run-step-content";
 import getLocalRunners from "@/api/handlers/chat/local-runners";
 import getMessage from "@/api/handlers/chat/messages/get";
 import getMessages from "@/api/handlers/chat/messages/list";
@@ -24,6 +24,15 @@ import getMessageRevisions from "@/api/handlers/chat/messages/revisions/list";
 import revertMessageRevision from "@/api/handlers/chat/messages/revisions/revert";
 import proposeMessageSpanEdit from "@/api/handlers/chat/messages/revisions/span-edit";
 import getOlderMessages from "@/api/handlers/chat/older-messages/list";
+import cancelQueuedChatMessage from "@/api/handlers/chat/queue/cancel";
+import enqueueChatMessage from "@/api/handlers/chat/queue/enqueue";
+import moveQueuedChatMessage from "@/api/handlers/chat/queue/move";
+import pauseChatQueue from "@/api/handlers/chat/queue/pause";
+import readChatQueue from "@/api/handlers/chat/queue/read";
+import readQueuedChatMessage from "@/api/handlers/chat/queue/read-message";
+import replaceQueuedChatMessage from "@/api/handlers/chat/queue/replace";
+import resumeChatQueue from "@/api/handlers/chat/queue/resume";
+import sendQueuedChatMessageNow from "@/api/handlers/chat/queue/send-now";
 import readFileThread from "@/api/handlers/chat/read-file-thread";
 import resolveFileThread from "@/api/handlers/chat/resolve-file-thread";
 import resolveTemplateThread from "@/api/handlers/chat/resolve-template-thread";
@@ -53,6 +62,7 @@ import {
   undoLocalFiles,
 } from "@/api/handlers/chat/turns/local-files-undo";
 import { joinChatTurn, probeChatTurn } from "@/api/handlers/chat/turns/resume";
+import steerTurn from "@/api/handlers/chat/turns/steer";
 import updateThreadModel from "@/api/handlers/chat/update-thread-model";
 import { routes } from "@/api/http/route";
 
@@ -83,9 +93,6 @@ export const chatRoute = routes(
     "/decision-threads/:decisionId": { GET: getDecisionChatThread },
     "/model-options": { GET: getModelOptions },
     "/local-runners": { GET: getLocalRunners },
-    "/local-runs/:runId/step-output-grant": {
-      GET: getLocalRunStepOutputGrant,
-    },
     "/local-runners/:desktopId/folders/:linkId/approval": {
       PUT: approveLocalFolder,
     },
@@ -93,6 +100,9 @@ export const chatRoute = routes(
     "/table-chart": { POST: tableChart },
     "/improve-prompt": { POST: improvePrompt },
     "/threads/:threadId": { DELETE: deleteThread, PATCH: updateThread },
+    "/threads/:threadId/local-run-steps/:callId/content": {
+      GET: getLocalRunStepContent,
+    },
     "/threads/:threadId/model": { PATCH: updateThreadModel },
     "/threads/:threadId/limit-reminder": {
       GET: getChatLimitReminder,
@@ -121,11 +131,31 @@ export const chatRoute = routes(
     "/threads/:threadId/turns/:turnId/resume": { GET: probeChatTurn },
     "/threads/:threadId/turns/:turnId/join": { GET: joinChatTurn },
     "/threads/:threadId/turns/:turnId/cancel": { POST: cancelTurn },
+    "/threads/:threadId/turns/:turnId/steer": { POST: steerTurn },
     "/threads/:threadId/turns/:turnId/local-files/undo": {
       GET: readLocalFilesUndo,
       POST: undoLocalFiles,
     },
     "/threads/:threadId/background-tasks": { GET: readBackgroundTasks },
+    "/threads/:threadId/queue": {
+      GET: readChatQueue,
+      POST: enqueueChatMessage,
+    },
+    "/threads/:threadId/queue/hold": {
+      PUT: pauseChatQueue,
+      DELETE: resumeChatQueue,
+    },
+    "/threads/:threadId/queue/:messageId": {
+      GET: readQueuedChatMessage,
+      PUT: replaceQueuedChatMessage,
+      DELETE: cancelQueuedChatMessage,
+    },
+    "/threads/:threadId/queue/:messageId/move": {
+      POST: moveQueuedChatMessage,
+    },
+    "/threads/:threadId/queue/:messageId/send-now": {
+      POST: sendQueuedChatMessageNow,
+    },
     "/threads/:threadId/fork": { POST: forkThread },
     "/threads/:threadId/export": { POST: createMessageExport },
   },

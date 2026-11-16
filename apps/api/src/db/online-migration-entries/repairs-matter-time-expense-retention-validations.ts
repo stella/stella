@@ -4,6 +4,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "repairs-matter-time-expense-retention-validations",
   revision: 980,
+  lifecycle: "finalized",
   type: "repairs",
   values: [...MATTER_TIME_EXPENSE_RETENTION_VALIDATIONS],
 } satisfies OnlineMigrationEntry;

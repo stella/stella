@@ -107,6 +107,7 @@ const runCycle = async (
     payloadReadConcurrency: 1,
     retryDelayMs: 5000,
     payloadRetryLimit: 3,
+    proofAfterIndexId: null,
   });
 };
 

@@ -17,6 +17,7 @@
     "loadFailed": "Ihre Unterhaltungen konnten nicht geladen werden.",
     "runsLoadFailed": "Es konnte nicht geprüft werden, welche Unterhaltungen auf Sie warten.",
     "retry": "Erneut versuchen",
+    "resend": "Erneut senden",
     "untitled": "Unbenannte Unterhaltung",
     "loadMoreFailed": "Mehr laden",
     "loadOlderFailed": "Ältere Nachrichten laden",
@@ -219,13 +220,34 @@
       },
       "patternInPath": "{pattern} unter {path}",
       "commandExited": "{command} (Exit-Code {code})",
-      "opensOnComputer": "Auf dem Computer öffnen, auf dem der Schritt lief",
+      "browserClick": "„{target}“ auf {url} anklicken",
+      "browserPressKey": "Taste {key} in „{target}“ auf {url} drücken",
+      "browserSelect": "„{option}“ in „{target}“ auf {url} auswählen",
+      "browserType": "Text in „{target}“ auf {url} eingeben",
       "status": {
         "needs_approval": "Warten auf Genehmigung",
         "running": "In Bearbeitung",
         "failed": "Fehlgeschlagen",
         "interrupted": "Gestoppt"
-      }
+      },
+      "output": {
+        "command": "Ausgabe",
+        "diff": "Dateiänderungen",
+        "conversation": "Unterhaltung des Subagenten",
+        "conversationPrompt": "Aufgabe",
+        "conversationReport": "Bericht",
+        "cut": "Die ersten {kept} von {total} werden angezeigt",
+        "empty": "Keine Ausgabe",
+        "arriving": "Wird noch vom Computer übertragen, auf dem der Schritt lief",
+        "notCopied": "Noch nicht in diesen Chat kopiert",
+        "notStored": "Von diesem Schritt wurde nichts gespeichert",
+        "runBudgetReached": "Nicht gespeichert: Dieser Lauf hatte bereits so viel gespeichert, wie ein Lauf darf",
+        "imageTooLargeToStore": "Dieses Bild ist {total} groß. Bilder über {kept} werden nicht gespeichert, daher kann es nicht angezeigt werden.",
+        "loadFailed": "Konnte nicht geladen werden.",
+        "showMore": "Mehr anzeigen"
+      },
+      "sessionNotResumed": "Der Coding-Agent auf Ihrem Computer konnte nicht dort weitermachen, wo er aufgehört hatte. Er hat daher anhand der Nachrichten in diesem Chat weitergearbeitet.",
+      "steered": "Während der Arbeit des Agenten gesendet"
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# Quelle geprüft} other {# Quellen geprüft}}",
@@ -234,7 +256,46 @@
       "analyses": "{count, plural, one {# Analyse} other {# Analysen}}"
     },
     "stepCount": "{count, plural, one {# Schritt} other {# Schritte}}",
-    "reasoning": "Argumentation"
+    "reasoning": "Argumentation",
+    "historyTrimmed": "Ältere Nachrichten konnten nicht zusammengefasst werden. Diese Antwort berücksichtigt daher nur den jüngsten Teil der Unterhaltung.",
+    "failure": {
+      "aiDeadlineExceeded": "Die KI hat nicht rechtzeitig geantwortet. Bitte versuchen Sie es gleich noch einmal.",
+      "aiOutputInvalid": "Die KI-Antwort hatte ein unerwartetes Format. Versuchen Sie es erneut.",
+      "aiOutputModerated": "Der KI-Anbieter hat die Ausgabe moderiert. Formulieren Sie die Anfrage um oder wählen Sie ein anderes Modell.",
+      "aiUnknown": "Die KI-Anfrage ist fehlgeschlagen. Versuchen Sie es erneut.",
+      "errorFolderUnavailable": "Der mit diesem Chat verknüpfte Ordner ist auf Ihrem Computer nicht verfügbar. Prüfen Sie ihn in stella desktop und senden Sie dies dann erneut.",
+      "errorLimitReached": "Der Coding-Agent auf Ihrem Computer hat sein Nutzungslimit erreicht. Versuchen Sie es erneut, sobald das Limit zurückgesetzt ist.",
+      "errorNeedsLogin": "Der Coding-Agent auf Ihrem Computer verlangt eine erneute Anmeldung. Melden Sie sich über stella desktop an und versuchen Sie es dann erneut.",
+      "errorNotReached": "Ihr Computer hat diese Antwort nicht übernommen. Stellen Sie sicher, dass stella desktop geöffnet und verbunden ist, und versuchen Sie es erneut.",
+      "errorRelinked": "stella desktop wurde auf Ihrem Computer neu verknüpft, daher wurde diese Antwort angehalten. Senden Sie sie erneut.",
+      "errorRestoring": "Ihr Computer macht noch Dateiänderungen rückgängig. Senden Sie dies gleich noch einmal.",
+      "errorUnavailable": "Ihr Computer hat die Bearbeitung dieser Antwort beendet. Stellen Sie sicher, dass stella desktop geöffnet und verbunden ist, und versuchen Sie es erneut.",
+      "refusalFolderNotApproved": "Erlauben Sie dem Coding-Agent zuerst, im mit diesem Chat verknüpften Ordner zu arbeiten.",
+      "refusalHarnessUnavailable": "Der Coding-Agent auf Ihrem Computer kann diese Anfrage gerade nicht übernehmen. Prüfen Sie ihn in stella desktop.",
+      "refusalModelUnavailable": "Der Coding-Agent auf Ihrem Computer bietet dieses Modell nicht mehr an. Wählen Sie unter „Ausführen auf“ ein anderes.",
+      "refusalNoComputer": "Keiner Ihrer Computer ist verbunden.",
+      "refusalPermissionUnavailable": "Der Coding-Agent auf Ihrem Computer kann mit diesen Berechtigungen nicht laufen. Wählen Sie unter „Berechtigungen“ eine andere Option.",
+      "refusalReasoningEffortUnavailable": "Der Coding-Agent auf Ihrem Computer bietet diesen Denkaufwand für das Modell nicht an. Wählen Sie unter „Denkaufwand“ einen anderen.",
+      "refusalTooLarge": "Diese Unterhaltung ist zu lang, um sie an Ihren Computer zu übergeben. Starten Sie einen neuen Chat, um sie dort auszuführen.",
+      "sendErrorEmptyCompletion": "Die KI hat eine leere Antwort zurückgegeben. Versuchen Sie es erneut oder formulieren Sie Ihre Nachricht um.",
+      "sendErrorLoopDetected": "Die KI-Antwort hat sich zu oft wiederholt. Versuchen Sie es mit einer enger gefassten Anfrage erneut.",
+      "sendErrorModelUnavailable": "Das konfigurierte KI-Modell ist nicht mehr verfügbar. Bitten Sie Ihren Arbeitsbereichs-Admin, das Modell in den Organisationseinstellungen zu aktualisieren.",
+      "sendErrorProviderBilling": "Der KI-Anbieter hat ein Abrechnungsproblem gemeldet. Wenden Sie sich an Ihren Arbeitsbereichs-Admin.",
+      "sendErrorProviderCredentialsRejected": "Der KI-Anbieter hat die hinterlegten Zugangsdaten abgelehnt. Bitten Sie Ihren Arbeitsbereichs-Admin, den API-Schlüssel in den Organisationseinstellungen zu prüfen.",
+      "sendErrorProviderUnavailable": "Der KI-Anbieter ist vorübergehend nicht verfügbar. Bitte versuchen Sie es gleich noch einmal.",
+      "sendErrorQuotaExhausted": "Das Kontingent des KI-Anbieters ist ausgeschöpft. Versuchen Sie es in einer Minute erneut, oder wenden Sie sich an Ihren Arbeitsbereichs-Admin.",
+      "sendErrorStreamIncomplete": "Die Antwort der KI wurde abgebrochen, bevor sie fertig war. Versuchen Sie es erneut.",
+      "sendErrorTurnTooLarge": "Diese Antwort ist zu umfangreich geworden, um vollständig übermittelt zu werden. Senden Sie eine neue Nachricht, um fortzufahren."
+    },
+    "steerPrompt": "An den Agenten senden, während er arbeitet",
+    "steerRefused": {
+      "turnNotRunning": "Der Agent arbeitet gerade nicht.",
+      "noRun": "Der Agent läuft gerade nicht auf Ihrem Computer.",
+      "cannotSteer": "Dieser Agent nimmt während der Arbeit keine Nachrichten an.",
+      "runFull": "Der Agent nimmt gerade keine weiteren Nachrichten an.",
+      "notTaken": "Der Agent konnte Ihre Nachricht gerade nicht annehmen.",
+      "queuedMessageChanged": "Die Nachricht wurde inzwischen geändert oder ist nicht mehr in der Warteschlange, daher hat der Agent sie nicht erhalten."
+    }
   },
   "tasks": {
     "emptyTitle": "Keine offenen Aufgaben",
@@ -263,7 +324,8 @@
       "tomorrow": "Morgen",
       "week": "Diese Woche",
       "later": "Später",
-      "none": "Ohne Fälligkeit"
+      "none": "Ohne Fälligkeit",
+      "closed": "Erledigt oder abgebrochen"
     },
     "markDone": "Als erledigt markieren",
     "reopen": "Wieder öffnen",
@@ -277,7 +339,43 @@
     "doneAssigning": "Fertig",
     "someone": "Jemand",
     "membersFailed": "Die Mitglieder der Akte konnten nicht geladen werden.",
-    "assignFailed": "Die Aufgabe konnte nicht zugewiesen werden. Versuchen Sie es erneut."
+    "assignFailed": "Die Aufgabe konnte nicht zugewiesen werden. Versuchen Sie es erneut.",
+    "statusTitle": "Status",
+    "priorityTitle": "Priorität",
+    "priority": {
+      "none": "Keine",
+      "urgent": "Dringend",
+      "high": "Hoch",
+      "medium": "Mittel",
+      "low": "Niedrig"
+    },
+    "subtasks": "Unteraufgaben",
+    "linked": "Verknüpfte Elemente",
+    "delete": "Aufgabe löschen",
+    "deleteTitle": "Aufgabe löschen?",
+    "deleteMessage": "Möchten Sie „{name}“ wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
+    "cancel": "Abbrechen",
+    "saveFailed": "Die Änderung konnte nicht gespeichert werden. Versuchen Sie es erneut.",
+    "readOnly": "Diese Aufgabe stammt aus einem verbundenen Kalender und kann hier nicht geändert werden.",
+    "untitled": "Aufgabe ohne Titel",
+    "loadOneFailed": "Diese Aufgabe konnte nicht geladen werden.",
+    "filter": "Filter",
+    "whoseTitle": "Zugewiesen an",
+    "whose": {
+      "mine": "Mich",
+      "everyone": "Beliebige Person",
+      "unassigned": "Niemanden"
+    },
+    "showTitle": "Anzeigen",
+    "show": {
+      "open": "Offen",
+      "overdue": "Überfällig",
+      "all": "Alle, auch erledigte"
+    },
+    "emptyFilteredTitle": "Keine Aufgaben",
+    "emptyFilteredDescription": "Aufgaben, die zu diesem Filter passen, erscheinen hier.",
+    "loadMore": "Mehr laden",
+    "loadMoreFailed": "Weitere Aufgaben konnten nicht geladen werden."
   },
   "matters": {
     "emptyTitle": "Noch keine Akten",

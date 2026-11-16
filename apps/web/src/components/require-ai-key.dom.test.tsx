@@ -93,6 +93,7 @@ globalThis.fetch = Object.assign(
             configured: false,
             instanceProvisioned: false,
             decisionInstanceProvisioned: false,
+            verificationDecisionModel: { enabled: false, available: false },
             providerDefaultModels: [],
             defaultModels: {
               chat: null,
@@ -108,7 +109,7 @@ globalThis.fetch = Object.assign(
   { preconnect: originalFetch.preconnect },
 );
 
-const { act, cleanup, render, screen, waitFor, fireEvent } =
+const { act, cleanup, render, screen, waitFor, fireEvent, within } =
   await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
@@ -336,7 +337,7 @@ test("an AI action a member cannot unblock says why instead of doing nothing", a
     });
     expect(proceeded).toBe(false);
     expect(toast).toHaveBeenCalledWith({
-      title: messages.ai.keyRequired.description,
+      title: messages.ai.keyRequired.permissionRequired,
       type: "info",
     });
     expect(
@@ -484,6 +485,41 @@ test.each(roleSurfaceCases)(
     ).toBeNull();
     expect(await gates.get("gate")?.ensureAIAvailable()).toBe(true);
     expect(aiConfigRequests).toBe(0);
+    queryClient.clear();
+  },
+);
+
+const missingCredentialsCases = [
+  {
+    capability: "allowed",
+    message: messages.ai.keyRequired.description,
+    actions: [messages.ai.keyRequired.cta, messages.common.retry],
+  },
+  {
+    capability: "permission_required",
+    message: messages.ai.keyRequired.permissionRequired,
+    actions: [messages.common.retry],
+  },
+  {
+    capability: "account_restricted",
+    message: messages.ai.keyRequired.accountFeaturesUnavailable,
+    actions: [],
+  },
+] as const;
+
+test.each(missingCredentialsCases)(
+  "missing credentials tell a member with $capability configuration what they can do",
+  async ({ capability, message, actions }) => {
+    providerConfiguration = capability;
+    const { queryClient } = renderSurface(surfaceBoundaries.panel);
+
+    const status = await screen.findByRole("status");
+    expect(within(status).getByText(message)).toBeDefined();
+    expect(
+      within(status)
+        .queryAllByRole("button")
+        .map((button) => button.textContent),
+    ).toEqual([...actions]);
     queryClient.clear();
   },
 );

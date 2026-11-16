@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
+import { createFakeTimers } from "@stll/test-kit";
 
 import {
   createChatRuntime,
@@ -161,6 +162,7 @@ const readTurn = async (events: readonly StreamEvent[]): Promise<Turn> => {
   resetChatRequestStateForTests();
   serve(events);
   const errors: Error[] = [];
+  const timers = createFakeTimers();
   const runtime = createChatRuntime({
     activeTurnId: null,
     context: undefined,
@@ -172,10 +174,8 @@ const readTurn = async (events: readonly StreamEvent[]): Promise<Turn> => {
     onFinish: () => {},
     reloadThread: () => {},
     scheduleEmit: (callback) => {
-      const timer = setTimeout(callback, 0);
-      return () => {
-        clearTimeout(timer);
-      };
+      const timer = timers.setTimeout(callback, 0);
+      return () => timers.clearTimeout(timer);
     },
   });
   const sent = await Result.tryPromise(
@@ -185,8 +185,10 @@ const readTurn = async (events: readonly StreamEvent[]): Promise<Turn> => {
         id: toSafeId<"chatMessage">("018f0000-0000-7000-8000-000000000011"),
       }),
   );
+  await timers.advance(0);
   const snapshot = runtime.getSnapshot();
   runtime.leave();
+  expect(timers.pendingTimers()).toBe(0);
   return { errors, sent, snapshot };
 };
 

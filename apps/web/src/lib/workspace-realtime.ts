@@ -225,6 +225,30 @@ export const RESOURCE_MUTATION_CONTRACTS = {
       RESOURCE_TYPE.MCP_CONNECTOR,
     ],
   },
+  // An owner or admin sets a member's additional billing visibility; the
+  // member list and every member's permission reads refresh.
+  updateMemberBillingAccess: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "PUT",
+        route: "/organization-settings/members/:memberId/billing",
+      },
+    ],
+    resources: [RESOURCE_TYPE.ORGANIZATION, RESOURCE_TYPE.USER],
+  },
+  // An administrator turns the decision model on or off for verification
+  // verdicts; the organization's AI configuration read shows the switch.
+  updateVerificationDecisionModel: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/organization-settings/verification-decision-model",
+      },
+    ],
+    resources: [RESOURCE_TYPE.ORGANIZATION],
+  },
   // A skill drafted from a chat is stored as a new private, disabled skill;
   // the skills lists refresh. Drafting it is a read and stores nothing.
   saveSkillDraft: {
@@ -296,6 +320,18 @@ export const RESOURCE_MUTATION_CONTRACTS = {
     ],
     resources: [RESOURCE_TYPE.ORGANIZATION],
   },
+  updateOrganization: {
+    writes: [
+      {
+        type: "auth-plugin-endpoint",
+        plugin: "organization",
+        endpoint: "updateOrganization",
+        method: "POST",
+        route: "/organization/update",
+      } satisfies AuthPluginEndpointWrite<"updateOrganization">,
+    ],
+    resources: [RESOURCE_TYPE.ORGANIZATION],
+  },
   // A reviewer's decision on a claim changes the verification as reviewers
   // see it: the run read (kept current in place by the decision's own cache
   // write), its review history and the list's graph.
@@ -308,6 +344,58 @@ export const RESOURCE_MUTATION_CONTRACTS = {
       },
     ],
     resources: [RESOURCE_TYPE.LEGAL_LIST_VERIFICATION],
+  },
+  createTask: {
+    writes: [
+      { type: "handler-route", method: "PUT", route: "/tasks/:workspaceId" },
+    ],
+    resources: [RESOURCE_TYPE.ENTITY, RESOURCE_TYPE.LEGAL_LIST],
+  },
+  createListItemSource: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/lists/:workspaceId/item-sources",
+      },
+    ],
+    resources: [RESOURCE_TYPE.LEGAL_LIST],
+  },
+  recheckClaim: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/lists/:workspaceId/claim-rechecks",
+      },
+    ],
+    resources: [RESOURCE_TYPE.LEGAL_LIST_VERIFICATION],
+  },
+  // A resumed addition executes only the writes its progress has not committed.
+  addClaimFact: {
+    writes: [
+      { type: "handler-route", method: "PUT", route: "/tasks/:workspaceId" },
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/lists/:workspaceId/item-sources",
+      },
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/lists/:workspaceId/claim-reviews",
+      },
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/lists/:workspaceId/claim-rechecks",
+      },
+    ],
+    resources: [
+      RESOURCE_TYPE.ENTITY,
+      RESOURCE_TYPE.LEGAL_LIST,
+      RESOURCE_TYPE.LEGAL_LIST_VERIFICATION,
+    ],
   },
   acceptRoutineClaims: {
     writes: [

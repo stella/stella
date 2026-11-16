@@ -7,6 +7,8 @@
 // A coding agent's subagent is a row of its own holding the steps it took
 // (`@stll/api-contract/chat-local-run-steps`, which the web reads too).
 
+import * as v from "valibot";
+
 import {
   isLocalRunInterruptedOutput,
   type LocalRunStepCall,
@@ -22,6 +24,10 @@ import {
   localRunToolView,
 } from "@stll/api-contract/chat-local-run-steps";
 import { chatLocalRunParentCallId } from "@stll/api-contract/chat-local-run-tool";
+import {
+  CHAT_LOCAL_RUN_STEER_TOOL,
+  chatLocalRunSteerInputSchema,
+} from "@stll/api-contract/chat-run-target";
 import {
   chatToolLabel,
   countProcessWork,
@@ -68,11 +74,11 @@ export type AnswerStep =
       readonly subtitle: LocalRunToolSubtitle | null;
       readonly status: StepStatus;
       /**
-       * The step viewed an image, which stays on the computer that ran it:
-       * stella desktop serves it there to a page on that computer only, so
-       * the phone says where it opens instead of opening it.
+       * The call whose stored content (a command's output, a diff, an image
+       * it viewed) the step opens onto; null for a step still running, and
+       * for one that produced nothing to open.
        */
-      readonly opensOnComputer: boolean;
+      readonly contentCallId: string | null;
     }
   | { readonly type: "reasoning"; readonly text: string };
 
@@ -93,6 +99,15 @@ export type AnswerBlock =
       readonly work: ReadonlyMap<ProcessSummaryKind, number>;
     }
   | {
+      /**
+       * A message the person sent while a coding agent worked, which the
+       * agent took into its turn: their own words, where it took them.
+       */
+      readonly type: "steered";
+      readonly key: string;
+      readonly text: string;
+    }
+  | {
       /** A subagent a coding agent started, holding the steps it took. */
       readonly type: "subagent";
       /** The subagent's place in the message, stable while it streams. */
@@ -102,10 +117,10 @@ export type AnswerBlock =
       readonly agentType: string | null;
       readonly status: LocalRunSubagentStatus;
       /**
-       * The subagent ended with a result, so what it was told, wrote and
-       * reported is kept on the computer that ran it, which alone opens it.
+       * The call its own conversation (what it was told, wrote and reported)
+       * is read by, once it ended with a result; null while it works.
        */
-      readonly opensOnComputer: boolean;
+      readonly conversationCallId: string | null;
       /** Every step it took, one that waits on an approval included. */
       readonly stepCount: number;
       /**
@@ -138,11 +153,23 @@ const toStep = (part: AnswerPart): AnswerStep => {
         label,
         status,
         ...local,
-        opensOnComputer:
-          status !== "running" &&
-          localRunStepOutputKind({ name, input: part.input }) === "image",
+        contentCallId: contentCallId(part),
       };
 };
+
+/**
+ * The call a step's stored content is read by: only a call that ended with
+ * a result, as the web offers it, of a kind a coding agent's step stores.
+ */
+const contentCallId = (part: AnswerPart): string | null =>
+  typeof part.id === "string" &&
+  part.output !== undefined &&
+  localRunStepOutputKind({
+    name: typeof part.name === "string" ? part.name : "",
+    input: part.input,
+  }) !== null
+    ? part.id
+    : null;
 
 /** A call runs until it completes; it failed when it errored or said so. */
 const stepStatus = (part: AnswerPart): StepStatus => {
@@ -191,7 +218,21 @@ type Stretch =
       readonly type: "subagent";
       readonly id: string;
       readonly part: AnswerPart;
-    };
+    }
+  | { readonly type: "steered"; readonly key: string; readonly text: string };
+
+/**
+ * The words of a message the person steered a running turn with, stored as
+ * the API's own `user_message` call; `null` for any other part, and for one
+ * whose input is not readable yet (it streams in before the call ends).
+ */
+const steeredText = (part: AnswerPart): string | null => {
+  if (part.type !== "tool-call" || part.name !== CHAT_LOCAL_RUN_STEER_TOOL) {
+    return null;
+  }
+  const input = v.safeParse(chatLocalRunSteerInputSchema, part.input);
+  return input.success ? input.output.text : null;
+};
 
 /** A tool call the grouping can name: one with an id. */
 type IdentifiedCall = { readonly id: string; readonly part: AnswerPart };
@@ -260,9 +301,7 @@ export const answerBlocks = (parts: readonly AnswerPart[]): AnswerBlock[] => {
         own: ownStanding,
         steps: taken.map(({ part }) => stepStanding(part)),
       }),
-      opensOnComputer:
-        own.output !== undefined &&
-        (ownStanding === "done" || ownStanding === "failed"),
+      conversationCallId: contentCallId(own),
       stepCount: taken.length,
       steps: taken
         .filter((step) => groups.rowIn.has(step.id))
@@ -293,6 +332,17 @@ export const answerBlocks = (parts: readonly AnswerPart[]): AnswerBlock[] => {
     // The run's parts between its subagents, each stretch a run of its own.
     const stretches: Stretch[] = [];
     for (const [offset, part] of group.items.entries()) {
+      // A steered message splits the run: the steps before it, its words,
+      // then the steps after.
+      const steered = steeredText(part);
+      if (steered !== null) {
+        stretches.push({
+          type: "steered",
+          key: `steered:${String(group.startIndex + offset)}`,
+          text: steered,
+        });
+        continue;
+      }
       const id = typeof part.id === "string" && isStep(part) ? part.id : null;
       if (id !== null && groups.rowIn.has(id)) {
         continue;
@@ -311,6 +361,10 @@ export const answerBlocks = (parts: readonly AnswerPart[]): AnswerBlock[] => {
     for (const stretch of stretches) {
       if (stretch.type === "subagent") {
         blocks.push(subagentBlock(stretch.id, stretch.part));
+        continue;
+      }
+      if (stretch.type === "steered") {
+        blocks.push(stretch);
         continue;
       }
       const steps = stretch.items.filter(isStep).map(toStep);

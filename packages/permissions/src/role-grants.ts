@@ -19,6 +19,7 @@ import type { OrganizationRoleName } from "@stll/auth-model";
  */
 export const statements = {
   ...BETTER_AUTH_ORGANIZATION_STATEMENTS,
+  legalHold: ["place", "release"],
   workspace: ["read", "create", "update", "delete"],
   contact: ["create", "update", "delete"],
   invoice: ["create", "update", "delete"],
@@ -35,6 +36,9 @@ export const statements = {
   signal: ["create", "resolve", "triage"],
   billingCode: ["create", "update", "delete"],
   rate: ["read", "create", "update", "delete"],
+  // Seeing money: rates, amounts and invoice totals. Separate from matter
+  // access so a member can work a matter without seeing what it bills.
+  billing: ["read"],
   // todo: add better permissions for chat
   chat: ["create", "update", "delete"],
   organizationSettings: ["update"],
@@ -73,7 +77,7 @@ export const statements = {
   conflictCheck: ["run", "review"],
 } as const;
 
-type PermissionMap = {
+export type PermissionMap = {
   [K in keyof typeof statements]: (typeof statements)[K][number][];
 };
 
@@ -90,6 +94,7 @@ type RequireAtLeastOne<T> = Partial<T> &
 export type PermissionInput = RequireAtLeastOne<PermissionMap>;
 
 const externalStellaGrants = {
+  legalHold: [],
   workspace: ["read"],
   contact: [],
   invoice: [],
@@ -106,6 +111,7 @@ const externalStellaGrants = {
   signal: ["create"],
   billingCode: [],
   rate: [],
+  billing: [],
   chat: [],
   organizationSettings: [],
   auditLog: [],
@@ -136,6 +142,7 @@ const internStellaGrants = {
 } satisfies StellaPermissionMap;
 
 const memberStellaGrants = {
+  legalHold: [],
   workspace: ["read", "create", "update", "delete"],
   contact: ["create", "update", "delete"],
   invoice: ["create", "update", "delete"],
@@ -152,6 +159,7 @@ const memberStellaGrants = {
   signal: ["create", "resolve", "triage"],
   billingCode: ["create", "update", "delete"],
   rate: [],
+  billing: [],
   chat: ["create", "update", "delete"],
   organizationSettings: [],
   auditLog: [],
@@ -172,9 +180,11 @@ const memberStellaGrants = {
 
 const managementStellaGrants = {
   ...memberStellaGrants,
+  legalHold: ["place", "release"],
   timeEntry: ["read", "create", "update", "delete", "approve"],
   playbook: ["create", "update", "delete", "apply", "approve"],
   rate: ["read", "create", "update", "delete"],
+  billing: ["read"],
   organizationSettings: ["update"],
   auditLog: ["read"],
   dataExport: ["create", "read"],

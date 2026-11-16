@@ -2,6 +2,8 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, sql, TransactionRollbackError } from "drizzle-orm";
 
+import { createTestState } from "@stll/test-state";
+
 import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
@@ -30,7 +32,10 @@ import type { WebhookTransactionRunner } from "@/api/lib/hosted-usage-provider/w
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
+const testState = createTestState({ file: import.meta.path, config: env });
+
 const databaseUrl = process.env["DATABASE_URL"];
+
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const START = "2026-06-01T00:00:00Z";
 const END = "2026-07-01T00:00:00Z";
@@ -59,8 +64,8 @@ const withReplayFixture = async (
   }
   const previousRetentionDays = env.HOSTED_USAGE_WEBHOOK_RETENTION_DAYS;
   const previousFeatureUsage = env.FEATURE_USAGE;
-  env.HOSTED_USAGE_WEBHOOK_RETENTION_DAYS = undefined;
-  env.FEATURE_USAGE = true;
+  testState.setConfig("HOSTED_USAGE_WEBHOOK_RETENTION_DAYS", undefined);
+  testState.setConfig("FEATURE_USAGE", true);
   try {
     await withGatedTestClients(databaseUrl, async ({ openClient }) => {
       try {
@@ -148,8 +153,11 @@ const withReplayFixture = async (
       }
     });
   } finally {
-    env.HOSTED_USAGE_WEBHOOK_RETENTION_DAYS = previousRetentionDays;
-    env.FEATURE_USAGE = previousFeatureUsage;
+    testState.setConfig(
+      "HOSTED_USAGE_WEBHOOK_RETENTION_DAYS",
+      previousRetentionDays,
+    );
+    testState.setConfig("FEATURE_USAGE", previousFeatureUsage);
   }
 };
 
@@ -869,349 +877,327 @@ describe.skipIf(!runPostgresTests)("provider event replay on Postgres", () => {
     if (!databaseUrl) {
       panic("DATABASE_URL required");
     }
-    const previousFeatureUsage = env.FEATURE_USAGE;
-    const previousSecret = env.HOSTED_USAGE_WEBHOOK_SECRET;
-    const previousSecretPrevious = env.HOSTED_USAGE_WEBHOOK_SECRET_PREVIOUS;
+
     const testSecret = "test-replay-webhook-secret";
-    env.FEATURE_USAGE = true;
-    env.HOSTED_USAGE_WEBHOOK_SECRET = testSecret;
-    env.HOSTED_USAGE_WEBHOOK_SECRET_PREVIOUS = undefined;
-    try {
-      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
-        const owner = openClient({ max: 1 }).db;
-        const worker = openClient({ max: 1 }).db;
-        const schema = `provider_replay_${Bun.randomUUIDv7().replaceAll("-", "")}`;
-        const eventId = `replay-${Bun.randomUUIDv7()}`;
-        const liveId = `live-${Bun.randomUUIDv7()}`;
-        const organizationId = toSafeId<"organization">(
-          `org_${Bun.randomUUIDv7()}`,
-        );
-        const policyKey = `policy_${Bun.randomUUIDv7()}`;
-        const payload = {
-          id: `entitlement_${eventId}`,
-          status: "active",
-          account_ref: `account_${eventId}`,
-          policy_ref: policyKey,
-          current_period_start: START,
-          current_period_end: END,
-          metadata: { organization_id: organizationId },
-          quantity: 2,
-          occurred_at: START,
-          created_at: START,
-        };
-        try {
-          await owner.execute(sql`CREATE SCHEMA ${sql.identifier(schema)}`);
-          await owner.execute(sql`CREATE TABLE ${sql.identifier(schema)}.usage_provider_webhook_events
+    testState.setConfig("FEATURE_USAGE", true);
+    testState.setConfig("HOSTED_USAGE_WEBHOOK_SECRET", testSecret);
+    testState.setConfig("HOSTED_USAGE_WEBHOOK_SECRET_PREVIOUS", undefined);
+
+    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const owner = openClient({ max: 1 }).db;
+      const worker = openClient({ max: 1 }).db;
+      const schema = `provider_replay_${Bun.randomUUIDv7().replaceAll("-", "")}`;
+      const eventId = `replay-${Bun.randomUUIDv7()}`;
+      const liveId = `live-${Bun.randomUUIDv7()}`;
+      const organizationId = toSafeId<"organization">(
+        `org_${Bun.randomUUIDv7()}`,
+      );
+      const policyKey = `policy_${Bun.randomUUIDv7()}`;
+      const payload = {
+        id: `entitlement_${eventId}`,
+        status: "active",
+        account_ref: `account_${eventId}`,
+        policy_ref: policyKey,
+        current_period_start: START,
+        current_period_end: END,
+        metadata: { organization_id: organizationId },
+        quantity: 2,
+        occurred_at: START,
+        created_at: START,
+      };
+      try {
+        await owner.execute(sql`CREATE SCHEMA ${sql.identifier(schema)}`);
+        await owner.execute(sql`CREATE TABLE ${sql.identifier(schema)}.usage_provider_webhook_events
             (LIKE public.usage_provider_webhook_events INCLUDING ALL)`);
-          await owner.insert(organization).values({
-            id: organizationId,
-            name: "Replay race fixture",
-            slug: organizationId,
-            createdAt: new Date(START),
-          });
-          await owner.insert(usagePolicies).values({
-            policyKey,
-            displayName: "Replay race fixture",
-            monthlyUsageUnits: 17,
-            hostedPolicyRef: policyKey,
-          });
-          const runOnOwner: WebhookTransactionRunner = async (fn) =>
-            await owner.transaction(async (tx) => {
-              await tx.execute(
-                sql`SELECT set_config('search_path', ${`${schema},public`}, true)`,
-              );
-              return await fn(tx);
-            });
-          const runOnWorker: WebhookTransactionRunner = async (fn) =>
-            await worker.transaction(async (tx) => {
-              await tx.execute(
-                sql`SELECT set_config('search_path', ${`${schema},public`}, true)`,
-              );
-              return await fn(tx);
-            });
-          await runOnOwner(async (tx) => {
-            await tx.insert(hostedUsageWebhookEvents).values({
-              eventId,
-              eventType: "entitlement.created",
-              processedAt: new Date(START),
-              result: "ignored",
-              errorMessage: "Original ignored reason",
-              payload: {
-                type: "entitlement.created",
-                data: payload,
-                signatureVerified: true,
-                payloadDigest: "fixture",
-              },
-            });
-          });
-          const snapshot = async () => ({
-            receipts: await runOnOwner(
-              async (tx) => await tx.select().from(hostedUsageWebhookEvents),
-            ),
-            entitlements: await owner
-              .select()
-              .from(usageEntitlements)
-              .where(eq(usageEntitlements.organizationId, organizationId)),
-            allocations: await owner
-              .select()
-              .from(usageAllocations)
-              .where(eq(usageAllocations.organizationId, organizationId)),
-            audits: await owner
-              .select()
-              .from(auditLogs)
-              .where(eq(auditLogs.organizationId, organizationId)),
-          });
-          const before = await snapshot();
-          const replay = async (
-            mode: "dry_run" | "apply",
-            runTransaction = runOnOwner,
-          ) =>
-            (
-              await replayProviderEvent({
-                eventId,
-                selectedEventIds: [eventId],
-                mode,
-                performer: { type: "local", username: "fixture" },
-                requestedBy: "operator:fixture",
-                reason: "race fixture replay",
-                runTransaction,
-              })
-            ).unwrap();
-          if (delivery === "replay") {
-            expect((await replay("dry_run")).kind).toBe("applied");
-            expect(await snapshot()).toEqual(before);
-          }
-          const newest = "2026-06-03T00:00:00Z";
-          const newerPayload =
-            collision === "organization"
-              ? {
-                  ...payload,
-                  id: `entitlement_${liveId}`,
-                  account_ref: `account_${liveId}`,
-                  created_at: newest,
-                }
-              : payload;
-          const receive = async ({
-            id,
-            eventType,
-            quantity,
-            occurredAt,
-            runTransaction,
-            data = payload,
-          }: {
-            id: string;
-            eventType: "entitlement.created" | "entitlement.updated";
-            quantity: number;
-            occurredAt: string;
-            runTransaction: WebhookTransactionRunner;
-            data?: typeof payload;
-          }) => {
-            const body = JSON.stringify({
-              type: eventType,
-              data: { ...data, quantity, occurred_at: occurredAt },
-            });
-            const timestamp = `${Math.floor(Date.now() / 1000)}`;
-            const hasher = new Bun.CryptoHasher("sha256", testSecret);
-            hasher.update(`${id}.${timestamp}.${body}`);
-            const request = new Request(
-              "http://api.test/usage/hosted/webhook",
-              {
-                method: "POST",
-                headers: {
-                  [HOSTED_USAGE_WEBHOOK_HEADERS.id]: id,
-                  [HOSTED_USAGE_WEBHOOK_HEADERS.timestamp]: timestamp,
-                  [HOSTED_USAGE_WEBHOOK_HEADERS.signature]: `v1,${hasher.digest("base64")}`,
-                },
-              },
+        await owner.insert(organization).values({
+          id: organizationId,
+          name: "Replay race fixture",
+          slug: organizationId,
+          createdAt: new Date(START),
+        });
+        await owner.insert(usagePolicies).values({
+          policyKey,
+          displayName: "Replay race fixture",
+          monthlyUsageUnits: 17,
+          hostedPolicyRef: policyKey,
+        });
+        const runOnOwner: WebhookTransactionRunner = async (fn) =>
+          await owner.transaction(async (tx) => {
+            await tx.execute(
+              sql`SELECT set_config('search_path', ${`${schema},public`}, true)`,
             );
-            return await receiveHostedUsageWebhook({
-              request,
-              body,
-              runTransaction,
-            });
-          };
-          const insertBarrier = createEntitlementInsertBarrier();
-          const runRaceOnOwner: WebhookTransactionRunner = async (fn) =>
-            await runOnOwner(async (tx) => await fn(insertBarrier.wrap(tx)));
-          const runRaceOnWorker: WebhookTransactionRunner = async (fn) =>
-            await runOnWorker(async (tx) => await fn(insertBarrier.wrap(tx)));
-          const olderDelivery = async () => {
-            if (delivery === "replay") {
-              const replayed = await replay("apply", runRaceOnOwner);
-              expect(["applied", "ignored"]).toContain(replayed.kind);
-              return;
-            }
-            const received = await receive({
-              id: `live-created-${Bun.randomUUIDv7()}`,
-              eventType: "entitlement.created",
-              quantity: 2,
-              occurredAt: START,
-              runTransaction: runRaceOnOwner,
-            });
-            expect(received.status).toBe(200);
-          };
-          const [, received] = await Promise.all([
-            olderDelivery(),
-            receive({
-              id: liveId,
-              eventType: "entitlement.updated",
-              quantity: 3,
-              occurredAt: newest,
-              runTransaction: runRaceOnWorker,
-              data: newerPayload,
-            }),
-          ]);
-          expect(insertBarrier.arrivals()).toBe(2);
-          expect(received.status).toBe(200);
-          const entitlements = await owner
+            return await fn(tx);
+          });
+        const runOnWorker: WebhookTransactionRunner = async (fn) =>
+          await worker.transaction(async (tx) => {
+            await tx.execute(
+              sql`SELECT set_config('search_path', ${`${schema},public`}, true)`,
+            );
+            return await fn(tx);
+          });
+        await runOnOwner(async (tx) => {
+          await tx.insert(hostedUsageWebhookEvents).values({
+            eventId,
+            eventType: "entitlement.created",
+            processedAt: new Date(START),
+            result: "ignored",
+            errorMessage: "Original ignored reason",
+            payload: {
+              type: "entitlement.created",
+              data: payload,
+              signatureVerified: true,
+              payloadDigest: "fixture",
+            },
+          });
+        });
+        const snapshot = async () => ({
+          receipts: await runOnOwner(
+            async (tx) => await tx.select().from(hostedUsageWebhookEvents),
+          ),
+          entitlements: await owner
             .select()
             .from(usageEntitlements)
-            .where(eq(usageEntitlements.organizationId, organizationId));
-          expect(entitlements).toHaveLength(1);
-          expect(entitlements.at(0)?.hostedLastEventAt).toEqual(
-            new Date(newest),
-          );
-          expect(entitlements.at(0)?.seats).toBe(3);
-          expect(entitlements.at(0)?.hostedEntitlementExternalId).toBe(
-            newerPayload.id,
-          );
-          expect(entitlements.at(0)?.hostedAccountRef).toBe(
-            newerPayload.account_ref,
-          );
-          expect(entitlements.at(0)?.hostedEntitlementCreatedAt).toEqual(
-            new Date(newerPayload.created_at),
-          );
-          const audits = await owner
+            .where(eq(usageEntitlements.organizationId, organizationId)),
+          allocations: await owner
+            .select()
+            .from(usageAllocations)
+            .where(eq(usageAllocations.organizationId, organizationId)),
+          audits: await owner
             .select()
             .from(auditLogs)
-            .where(eq(auditLogs.organizationId, organizationId));
-          expect(
-            audits.filter(
-              ({ action, resourceType }) =>
-                action === AUDIT_ACTION.CREATE &&
-                resourceType === AUDIT_RESOURCE_TYPE.USAGE_ENTITLEMENT,
-            ),
-          ).toHaveLength(1);
-        } finally {
-          await deleteOrganizationsForTest(owner, [organizationId]);
-          await owner
-            .delete(usagePolicies)
-            .where(eq(usagePolicies.policyKey, policyKey));
-          await owner.execute(
-            sql`DROP SCHEMA ${sql.identifier(schema)} CASCADE`,
-          );
+            .where(eq(auditLogs.organizationId, organizationId)),
+        });
+        const before = await snapshot();
+        const replay = async (
+          mode: "dry_run" | "apply",
+          runTransaction = runOnOwner,
+        ) =>
+          (
+            await replayProviderEvent({
+              eventId,
+              selectedEventIds: [eventId],
+              mode,
+              performer: { type: "local", username: "fixture" },
+              requestedBy: "operator:fixture",
+              reason: "race fixture replay",
+              runTransaction,
+            })
+          ).unwrap();
+        if (delivery === "replay") {
+          expect((await replay("dry_run")).kind).toBe("applied");
+          expect(await snapshot()).toEqual(before);
         }
-      });
-    } finally {
-      env.FEATURE_USAGE = previousFeatureUsage;
-      env.HOSTED_USAGE_WEBHOOK_SECRET = previousSecret;
-      env.HOSTED_USAGE_WEBHOOK_SECRET_PREVIOUS = previousSecretPrevious;
-    }
+        const newest = "2026-06-03T00:00:00Z";
+        const newerPayload =
+          collision === "organization"
+            ? {
+                ...payload,
+                id: `entitlement_${liveId}`,
+                account_ref: `account_${liveId}`,
+                created_at: newest,
+              }
+            : payload;
+        const receive = async ({
+          id,
+          eventType,
+          quantity,
+          occurredAt,
+          runTransaction,
+          data = payload,
+        }: {
+          id: string;
+          eventType: "entitlement.created" | "entitlement.updated";
+          quantity: number;
+          occurredAt: string;
+          runTransaction: WebhookTransactionRunner;
+          data?: typeof payload;
+        }) => {
+          const body = JSON.stringify({
+            type: eventType,
+            data: { ...data, quantity, occurred_at: occurredAt },
+          });
+          const timestamp = `${Math.floor(Date.now() / 1000)}`;
+          const hasher = new Bun.CryptoHasher("sha256", testSecret);
+          hasher.update(`${id}.${timestamp}.${body}`);
+          const request = new Request("http://api.test/usage/hosted/webhook", {
+            method: "POST",
+            headers: {
+              [HOSTED_USAGE_WEBHOOK_HEADERS.id]: id,
+              [HOSTED_USAGE_WEBHOOK_HEADERS.timestamp]: timestamp,
+              [HOSTED_USAGE_WEBHOOK_HEADERS.signature]: `v1,${hasher.digest("base64")}`,
+            },
+          });
+          return await receiveHostedUsageWebhook({
+            request,
+            body,
+            runTransaction,
+          });
+        };
+        const insertBarrier = createEntitlementInsertBarrier();
+        const runRaceOnOwner: WebhookTransactionRunner = async (fn) =>
+          await runOnOwner(async (tx) => await fn(insertBarrier.wrap(tx)));
+        const runRaceOnWorker: WebhookTransactionRunner = async (fn) =>
+          await runOnWorker(async (tx) => await fn(insertBarrier.wrap(tx)));
+        const olderDelivery = async () => {
+          if (delivery === "replay") {
+            const replayed = await replay("apply", runRaceOnOwner);
+            expect(["applied", "ignored"]).toContain(replayed.kind);
+            return;
+          }
+          const received = await receive({
+            id: `live-created-${Bun.randomUUIDv7()}`,
+            eventType: "entitlement.created",
+            quantity: 2,
+            occurredAt: START,
+            runTransaction: runRaceOnOwner,
+          });
+          expect(received.status).toBe(200);
+        };
+        const [, received] = await Promise.all([
+          olderDelivery(),
+          receive({
+            id: liveId,
+            eventType: "entitlement.updated",
+            quantity: 3,
+            occurredAt: newest,
+            runTransaction: runRaceOnWorker,
+            data: newerPayload,
+          }),
+        ]);
+        expect(insertBarrier.arrivals()).toBe(2);
+        expect(received.status).toBe(200);
+        const entitlements = await owner
+          .select()
+          .from(usageEntitlements)
+          .where(eq(usageEntitlements.organizationId, organizationId));
+        expect(entitlements).toHaveLength(1);
+        expect(entitlements.at(0)?.hostedLastEventAt).toEqual(new Date(newest));
+        expect(entitlements.at(0)?.seats).toBe(3);
+        expect(entitlements.at(0)?.hostedEntitlementExternalId).toBe(
+          newerPayload.id,
+        );
+        expect(entitlements.at(0)?.hostedAccountRef).toBe(
+          newerPayload.account_ref,
+        );
+        expect(entitlements.at(0)?.hostedEntitlementCreatedAt).toEqual(
+          new Date(newerPayload.created_at),
+        );
+        const audits = await owner
+          .select()
+          .from(auditLogs)
+          .where(eq(auditLogs.organizationId, organizationId));
+        expect(
+          audits.filter(
+            ({ action, resourceType }) =>
+              action === AUDIT_ACTION.CREATE &&
+              resourceType === AUDIT_RESOURCE_TYPE.USAGE_ENTITLEMENT,
+          ),
+        ).toHaveLength(1);
+      } finally {
+        await deleteOrganizationsForTest(owner, [organizationId]);
+        await owner
+          .delete(usagePolicies)
+          .where(eq(usagePolicies.policyKey, policyKey));
+        await owner.execute(sql`DROP SCHEMA ${sql.identifier(schema)} CASCADE`);
+      }
+    });
   });
 
   test("concurrent ignored replay operators preserve both attempts", async () => {
     if (!databaseUrl) {
       panic("DATABASE_URL required");
     }
-    const previousFeatureUsage = env.FEATURE_USAGE;
-    env.FEATURE_USAGE = true;
-    try {
-      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
-        const owner = openClient({ max: 1 }).db;
-        const worker = openClient({ max: 1 }).db;
-        const schema = `provider_replay_${Bun.randomUUIDv7().replaceAll("-", "")}`;
-        const eventId = `replay-${Bun.randomUUIDv7()}`;
-        try {
-          await owner.execute(sql`CREATE SCHEMA ${sql.identifier(schema)}`);
-          await owner.execute(sql`
+
+    testState.setConfig("FEATURE_USAGE", true);
+
+    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const owner = openClient({ max: 1 }).db;
+      const worker = openClient({ max: 1 }).db;
+      const schema = `provider_replay_${Bun.randomUUIDv7().replaceAll("-", "")}`;
+      const eventId = `replay-${Bun.randomUUIDv7()}`;
+      try {
+        await owner.execute(sql`CREATE SCHEMA ${sql.identifier(schema)}`);
+        await owner.execute(sql`
           CREATE TABLE ${sql.identifier(schema)}.usage_provider_webhook_events
           (LIKE public.usage_provider_webhook_events INCLUDING ALL)
         `);
-          await owner.transaction(async (tx) => {
-            await tx.execute(
-              sql`SELECT set_config('search_path', ${`${schema},public`}, true)`,
-            );
-            await tx.insert(hostedUsageWebhookEvents).values({
-              eventId,
-              eventType: "entitlement.created",
-              processedAt: new Date(START),
-              result: "ignored",
-              errorMessage: "Original ignored reason",
-              payload: {
-                signatureVerified: true,
-                payloadDigest: "fixture-digest",
-                type: "entitlement.created",
-                data: {
-                  id: `entitlement_${eventId}`,
-                  status: "active",
-                  account_ref: `account_${eventId}`,
-                  policy_ref: `unconfigured_${eventId}`,
-                  current_period_start: START,
-                  current_period_end: END,
-                  metadata: { organization_id: "org_replay_fixture" },
-                  occurred_at: START,
-                },
-              },
-            });
-          });
-
-          const replayOn = async (db: typeof owner) =>
-            await replayProviderEvent({
-              eventId,
-              selectedEventIds: [eventId],
-              mode: "apply",
-              requestedBy: "operator:concurrent-fixture",
-              performer: { type: "local", username: "concurrent-fixture" },
-              reason: "concurrent fixture replay",
-              runTransaction: async (fn) =>
-                await db.transaction(async (tx) => {
-                  await tx.execute(
-                    sql`SELECT set_config('search_path', ${`${schema},public`}, true)`,
-                  );
-                  return await fn(tx);
-                }),
-            });
-
-          const outcomes = await Promise.all([
-            replayOn(owner),
-            replayOn(worker),
-          ]);
-          expect(
-            outcomes.map((outcome) => outcome.unwrap().kind).toSorted(),
-          ).toEqual(["ignored", "ignored"]);
-          const rows = await owner.transaction(async (tx) => {
-            await tx.execute(
-              sql`SELECT set_config('search_path', ${`${schema},public`}, true)`,
-            );
-            return await tx
-              .select()
-              .from(hostedUsageWebhookEvents)
-              .where(eq(hostedUsageWebhookEvents.eventId, eventId));
-          });
-          expect(rows).toHaveLength(1);
-          expect(rows.at(0)).toMatchObject({
-            result: "ignored",
-            replayAudit: [
-              {
-                requestedBy: "operator:concurrent-fixture",
-                execution: {
-                  performer: { type: "local", username: "concurrent-fixture" },
-                },
-                outcome: "ignored",
-                previousResult: "ignored",
-                previousReason: "Original ignored reason",
-              },
-              { outcome: "ignored" },
-            ],
-          });
-        } finally {
-          await owner.execute(
-            sql`DROP SCHEMA ${sql.identifier(schema)} CASCADE`,
+        await owner.transaction(async (tx) => {
+          await tx.execute(
+            sql`SELECT set_config('search_path', ${`${schema},public`}, true)`,
           );
-        }
-      });
-    } finally {
-      env.FEATURE_USAGE = previousFeatureUsage;
-    }
+          await tx.insert(hostedUsageWebhookEvents).values({
+            eventId,
+            eventType: "entitlement.created",
+            processedAt: new Date(START),
+            result: "ignored",
+            errorMessage: "Original ignored reason",
+            payload: {
+              signatureVerified: true,
+              payloadDigest: "fixture-digest",
+              type: "entitlement.created",
+              data: {
+                id: `entitlement_${eventId}`,
+                status: "active",
+                account_ref: `account_${eventId}`,
+                policy_ref: `unconfigured_${eventId}`,
+                current_period_start: START,
+                current_period_end: END,
+                metadata: { organization_id: "org_replay_fixture" },
+                occurred_at: START,
+              },
+            },
+          });
+        });
+
+        const replayOn = async (db: typeof owner) =>
+          await replayProviderEvent({
+            eventId,
+            selectedEventIds: [eventId],
+            mode: "apply",
+            requestedBy: "operator:concurrent-fixture",
+            performer: { type: "local", username: "concurrent-fixture" },
+            reason: "concurrent fixture replay",
+            runTransaction: async (fn) =>
+              await db.transaction(async (tx) => {
+                await tx.execute(
+                  sql`SELECT set_config('search_path', ${`${schema},public`}, true)`,
+                );
+                return await fn(tx);
+              }),
+          });
+
+        const outcomes = await Promise.all([replayOn(owner), replayOn(worker)]);
+        expect(
+          outcomes.map((outcome) => outcome.unwrap().kind).toSorted(),
+        ).toEqual(["ignored", "ignored"]);
+        const rows = await owner.transaction(async (tx) => {
+          await tx.execute(
+            sql`SELECT set_config('search_path', ${`${schema},public`}, true)`,
+          );
+          return await tx
+            .select()
+            .from(hostedUsageWebhookEvents)
+            .where(eq(hostedUsageWebhookEvents.eventId, eventId));
+        });
+        expect(rows).toHaveLength(1);
+        expect(rows.at(0)).toMatchObject({
+          result: "ignored",
+          replayAudit: [
+            {
+              requestedBy: "operator:concurrent-fixture",
+              execution: {
+                performer: { type: "local", username: "concurrent-fixture" },
+              },
+              outcome: "ignored",
+              previousResult: "ignored",
+              previousReason: "Original ignored reason",
+            },
+            { outcome: "ignored" },
+          ],
+        });
+      } finally {
+        await owner.execute(sql`DROP SCHEMA ${sql.identifier(schema)} CASCADE`);
+      }
+    });
   });
 });

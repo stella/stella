@@ -17,6 +17,7 @@
     "loadFailed": "Nie udało się wczytać Twoich rozmów.",
     "runsLoadFailed": "Nie udało się sprawdzić, które rozmowy czekają na Ciebie.",
     "retry": "Spróbuj ponownie",
+    "resend": "Wyślij ponownie",
     "untitled": "Rozmowa bez tytułu",
     "loadMoreFailed": "Wczytaj więcej",
     "loadOlderFailed": "Wczytaj wcześniejsze wiadomości",
@@ -219,13 +220,34 @@
       },
       "patternInPath": "{pattern} w {path}",
       "commandExited": "{command} (kod wyjścia {code})",
-      "opensOnComputer": "Otwórz na komputerze, na którym to uruchomiono",
+      "browserClick": "Kliknij „{target}” na stronie {url}",
+      "browserPressKey": "Naciśnij klawisz {key} w „{target}” na stronie {url}",
+      "browserSelect": "Wybierz „{option}” w „{target}” na stronie {url}",
+      "browserType": "Wprowadź tekst w „{target}” na stronie {url}",
       "status": {
         "needs_approval": "Oczekiwanie na zatwierdzenie",
         "running": "W toku",
         "failed": "Niepowodzenie",
         "interrupted": "Zatrzymano"
-      }
+      },
+      "output": {
+        "command": "Wynik",
+        "diff": "Zmiany w plikach",
+        "conversation": "Rozmowa subagenta",
+        "conversationPrompt": "Zadanie",
+        "conversationReport": "Raport",
+        "cut": "Wyświetlono pierwsze {kept} z {total}",
+        "empty": "Brak wyniku",
+        "arriving": "Wciąż napływa z komputera, na którym uruchomiono ten krok",
+        "notCopied": "Jeszcze nie skopiowano do tego czatu",
+        "notStored": "Z tego kroku nic nie zostało zapisane",
+        "runBudgetReached": "Nie zapisano: to uruchomienie zapisało już tyle, ile może zapisać jedno uruchomienie",
+        "imageTooLargeToStore": "Ten obraz ma {total}. Obrazy większe niż {kept} nie są zapisywane, dlatego nie można go wyświetlić.",
+        "loadFailed": "Nie udało się wczytać.",
+        "showMore": "Pokaż więcej"
+      },
+      "sessionNotResumed": "Agent programistyczny na Twoim komputerze nie mógł wznowić pracy tam, gdzie skończył, dlatego kontynuował na podstawie wiadomości z tego czatu.",
+      "steered": "Wysłano podczas pracy agenta"
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# sprawdzone źródło} few {# sprawdzone źródła} many {# sprawdzonych źródeł} other {# sprawdzonego źródła}}",
@@ -234,7 +256,46 @@
       "analyses": "{count, plural, one {# analiza} few {# analizy} many {# analiz} other {# analizy}}"
     },
     "stepCount": "{count, plural, one {# krok} few {# kroki} many {# kroków} other {# kroku}}",
-    "reasoning": "Rozumowanie"
+    "reasoning": "Rozumowanie",
+    "historyTrimmed": "Nie udało się podsumować wcześniejszych wiadomości, dlatego ta odpowiedź uwzględnia tylko najnowszą część rozmowy.",
+    "failure": {
+      "aiDeadlineExceeded": "AI nie odpowiedziała na czas. Spróbuj ponownie za chwilę.",
+      "aiOutputInvalid": "Odpowiedź AI miała nieoczekiwany format. Spróbuj ponownie.",
+      "aiOutputModerated": "Dostawca AI objął odpowiedź moderacją. Przeformułuj żądanie lub wybierz inny model.",
+      "aiUnknown": "Żądanie AI nie powiodło się. Spróbuj ponownie.",
+      "errorFolderUnavailable": "Folder powiązany z tym czatem jest niedostępny na Twoim komputerze. Sprawdź go w stella desktop, a potem wyślij to ponownie.",
+      "errorLimitReached": "Agent programistyczny na Twoim komputerze osiągnął limit użycia. Spróbuj ponownie po odnowieniu limitu.",
+      "errorNeedsLogin": "Agent programistyczny na Twoim komputerze wymaga ponownego zalogowania. Zaloguj się w stella desktop i spróbuj ponownie.",
+      "errorNotReached": "Twój komputer nie przejął tej odpowiedzi. Upewnij się, że stella desktop jest otwarty i połączony, i spróbuj ponownie.",
+      "errorRelinked": "stella desktop został ponownie połączony na Twoim komputerze, więc ta odpowiedź została zatrzymana. Wyślij ją ponownie.",
+      "errorRestoring": "Twój komputer wciąż cofa zmiany w plikach. Wyślij to ponownie za chwilę.",
+      "errorUnavailable": "Twój komputer przestał przetwarzać tę odpowiedź. Upewnij się, że stella desktop jest otwarty i połączony, i spróbuj ponownie.",
+      "refusalFolderNotApproved": "Najpierw pozwól agentowi programistycznemu pracować w folderze połączonym z tym czatem.",
+      "refusalHarnessUnavailable": "Agent programistyczny na Twoim komputerze nie może teraz przyjąć tego żądania. Sprawdź go w stella desktop.",
+      "refusalModelUnavailable": "Agent programistyczny na Twoim komputerze nie oferuje już tego modelu. Wybierz inny w menu Uruchom na.",
+      "refusalNoComputer": "Żaden z Twoich komputerów nie jest połączony.",
+      "refusalPermissionUnavailable": "Agent programistyczny na Twoim komputerze nie może działać z tymi uprawnieniami. Wybierz inną opcję w menu Uprawnienia.",
+      "refusalReasoningEffortUnavailable": "Agent programistyczny na Twoim komputerze nie oferuje tego poziomu rozumowania dla modelu. Wybierz inny w menu Poziom rozumowania.",
+      "refusalTooLarge": "Ta rozmowa jest zbyt długa, by przekazać ją do Twojego komputera. Rozpocznij nowy czat, aby uruchomić go tam.",
+      "sendErrorEmptyCompletion": "AI zwróciła pustą odpowiedź. Spróbuj ponownie lub przeformułuj wiadomość.",
+      "sendErrorLoopDetected": "Odpowiedź AI powtórzyła się zbyt wiele razy. Spróbuj ponownie z węższą prośbą.",
+      "sendErrorModelUnavailable": "Skonfigurowany model AI nie jest już dostępny. Poproś administratora obszaru roboczego o zaktualizowanie modelu w ustawieniach organizacji.",
+      "sendErrorProviderBilling": "Dostawca AI zgłosił problem z płatnością. Skontaktuj się z administratorem obszaru roboczego.",
+      "sendErrorProviderCredentialsRejected": "Dostawca AI odrzucił skonfigurowane dane uwierzytelniające. Poproś administratora obszaru roboczego o sprawdzenie klucza API w ustawieniach organizacji.",
+      "sendErrorProviderUnavailable": "Dostawca AI jest tymczasowo niedostępny. Spróbuj ponownie za chwilę.",
+      "sendErrorQuotaExhausted": "Limit dostawcy AI został wyczerpany. Spróbuj ponownie za minutę albo skontaktuj się z administratorem obszaru roboczego.",
+      "sendErrorStreamIncomplete": "Odpowiedź AI urwała się przed zakończeniem. Spróbuj ponownie.",
+      "sendErrorTurnTooLarge": "Ta odpowiedź stała się zbyt duża, aby dostarczyć ją w całości. Wyślij nową wiadomość, aby kontynuować."
+    },
+    "steerPrompt": "Wyślij do agenta w trakcie pracy",
+    "steerRefused": {
+      "turnNotRunning": "Agent w tej chwili nie pracuje.",
+      "noRun": "Agent nie działa teraz na Twoim komputerze.",
+      "cannotSteer": "Ten agent nie przyjmuje wiadomości w trakcie pracy.",
+      "runFull": "Agent nie przyjmie teraz kolejnych wiadomości.",
+      "notTaken": "Agent nie mógł teraz przyjąć twojej wiadomości.",
+      "queuedMessageChanged": "Wiadomość się zmieniła lub nie ma jej już w kolejce, więc agent jej nie otrzymał."
+    }
   },
   "tasks": {
     "emptyTitle": "Brak otwartych zadań",
@@ -263,7 +324,8 @@
       "tomorrow": "Jutro",
       "week": "W tym tygodniu",
       "later": "Później",
-      "none": "Bez terminu"
+      "none": "Bez terminu",
+      "closed": "Wykonane lub anulowane"
     },
     "markDone": "Oznacz jako wykonane",
     "reopen": "Otwórz ponownie",
@@ -277,7 +339,43 @@
     "doneAssigning": "Gotowe",
     "someone": "Ktoś",
     "membersFailed": "Nie udało się wczytać członków sprawy.",
-    "assignFailed": "Nie udało się przypisać zadania. Spróbuj ponownie."
+    "assignFailed": "Nie udało się przypisać zadania. Spróbuj ponownie.",
+    "statusTitle": "Status",
+    "priorityTitle": "Priorytet",
+    "priority": {
+      "none": "Brak",
+      "urgent": "Pilny",
+      "high": "Wysoki",
+      "medium": "Średni",
+      "low": "Niski"
+    },
+    "subtasks": "Podzadania",
+    "linked": "Powiązane elementy",
+    "delete": "Usuń zadanie",
+    "deleteTitle": "Usunąć zadanie?",
+    "deleteMessage": "Czy na pewno chcesz usunąć „{name}”? Tej operacji nie można cofnąć.",
+    "cancel": "Anuluj",
+    "saveFailed": "Nie udało się zapisać zmiany. Spróbuj ponownie.",
+    "readOnly": "To zadanie pochodzi z połączonego kalendarza i nie można go tu zmienić.",
+    "untitled": "Zadanie bez tytułu",
+    "loadOneFailed": "Nie udało się wczytać tego zadania.",
+    "filter": "Filtr",
+    "whoseTitle": "Przypisane do",
+    "whose": {
+      "mine": "Mnie",
+      "everyone": "Kogokolwiek",
+      "unassigned": "Nikogo"
+    },
+    "showTitle": "Pokaż",
+    "show": {
+      "open": "Otwarte",
+      "overdue": "Zaległe",
+      "all": "Wszystkie, także wykonane"
+    },
+    "emptyFilteredTitle": "Brak zadań",
+    "emptyFilteredDescription": "Zadania pasujące do tego filtra pojawią się tutaj.",
+    "loadMore": "Wczytaj więcej",
+    "loadMoreFailed": "Nie udało się wczytać kolejnych zadań."
   },
   "matters": {
     "emptyTitle": "Nie ma jeszcze spraw",

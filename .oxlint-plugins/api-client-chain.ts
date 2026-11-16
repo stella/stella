@@ -16,3 +16,10 @@ export const API_CLIENT_WRITE_METHODS = new Set([
 // Writes take `(body, options)`; request options travel second, even
 // for a body-less `delete(undefined, request)`.
 export const API_CLIENT_WRITE_OPTIONS_INDEX = 1;
+
+export const API_CLIENT_REQUEST_METHODS = new Set([
+  "get",
+  "head",
+  "options",
+  ...API_CLIENT_WRITE_METHODS,
+]);

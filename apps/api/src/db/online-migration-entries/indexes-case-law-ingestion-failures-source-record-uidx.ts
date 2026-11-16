@@ -7,6 +7,7 @@ import {
 export default {
   id: "indexes-case-law-ingestion-failures-source-record-uidx",
   revision: 700,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     onlineUniqueIndexDefinition(

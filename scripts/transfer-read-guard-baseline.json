@@ -203,13 +203,6 @@
     "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/hu-bhgy.ts",
-    "function": "module/search",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
-  },
-  {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/pagination.ts",
     "function": "module/createPagePaginatedFetch/readPage",
     "kind": "numeric-timeout",
@@ -339,13 +332,6 @@
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-sn.ts",
     "function": "module/requestProxy",
     "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-sn.ts",
-    "function": "module/requestProxy",
-    "kind": "total-timeout-body",
     "count": 1,
     "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
@@ -518,13 +504,6 @@
     "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
   },
   {
-    "file": "apps/api/src/handlers/chat/threads/delete.ts",
-    "function": "module/deleteThread/createSafeRootHandler[1]",
-    "kind": "constant-limit",
-    "count": 1,
-    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
-  },
-  {
     "file": "apps/api/src/handlers/clauses/export.ts",
     "function": "module/exportHandler",
     "kind": "constant-limit",
@@ -567,13 +546,6 @@
     "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
   },
   {
-    "file": "apps/api/src/handlers/entities/delete.ts",
-    "function": "module/deleteEntitiesHandler",
-    "kind": "constant-limit",
-    "count": 2,
-    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
-  },
-  {
     "file": "apps/api/src/handlers/entities/read-property-facets.ts",
     "function": "module/readPropertyFacets/createSafeHandler[1]",
     "kind": "constant-limit",
@@ -586,20 +558,6 @@
     "kind": "constant-limit",
     "count": 2,
     "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
-  },
-  {
-    "file": "apps/api/src/handlers/entities/zip/download.ts",
-    "function": "module/downloadZipHandler/fetchFile",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/entities/zip/download.ts",
-    "function": "module/downloadZipHandler/fetchFile",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/entity-views/create.ts",
@@ -647,13 +605,6 @@
     "file": "apps/api/src/handlers/files/get.ts",
     "function": "module/stampedDownloadHandler",
     "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Move the stamped-download source fetch to the @stll/fetch headers policy and an explicit idle-bounded reader before reading the full PDF for stamping."
-  },
-  {
-    "file": "apps/api/src/handlers/files/get.ts",
-    "function": "module/stampedDownloadHandler",
-    "kind": "total-timeout-body",
     "count": 1,
     "reason": "Move the stamped-download source fetch to the @stll/fetch headers policy and an explicit idle-bounded reader before reading the full PDF for stamping."
   },
@@ -1942,13 +1893,6 @@
     "file": "apps/web/src/features/case-law/queries/decision-analysis.ts",
     "function": "module/decisionAnalysisOptions",
     "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
-  },
-  {
-    "file": "apps/web/src/features/chat/chat-fetch.ts",
-    "function": "module/chatFetchClient/assign[0]",
-    "kind": "numeric-timeout",
     "count": 1,
     "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },

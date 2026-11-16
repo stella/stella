@@ -35,12 +35,13 @@ import type { ExtractedClaim } from "@/api/lib/lists/verification/claim-extract"
 import { gradeClaims } from "@/api/lib/lists/verification/claim-grade";
 import {
   gradedClaimType,
+  LLM_VERDICT,
   VERIFICATION_LIMITS,
   VERIFICATION_RUN_ACTIVE_STATUSES,
 } from "@/api/lib/lists/verification/contract";
 import type {
   ClaimAssertedDate,
-  ClaimGrade,
+  DecidedClaimGrade,
   VerificationEvidence,
   VerificationRunErrorCode,
   VerificationScope,
@@ -62,6 +63,7 @@ import {
   completeVerificationRun,
   failVerificationRun,
 } from "@/api/lib/lists/verification/run-persistence";
+import { readVerdictDecider } from "@/api/lib/lists/verification/verdict-decider-setting";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
@@ -93,6 +95,7 @@ import {
   checkModelRunCaps,
   ModelRunCapError,
 } from "@/api/lib/usage/model-run-caps/caps";
+import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 
 /** A verification's model calls re-check the list counter it was charged to. */
 const VERIFICATION_DISPATCH_CAPS = {
@@ -413,6 +416,7 @@ type ResolvedFile = {
   fileId: string;
   mimeType: string;
   pdfFileId: string | null;
+  sizeBytes: number;
 };
 
 /** The pinned file, or why it can no longer be read as pinned. Read under
@@ -448,13 +452,14 @@ const resolvePinnedFile = async (
     fileId: row.content.id,
     mimeType: row.content.mimeType,
     pdfFileId: row.content.pdfFileId,
+    sizeBytes: row.content.sizeBytes,
   });
 };
 
 type ClaimRow = typeof legalListClaims.$inferInsert;
 
 type GradedClaims = {
-  grades: ReadonlyMap<string, ClaimGrade>;
+  grades: ReadonlyMap<string, DecidedClaimGrade>;
   assertedDates: ReadonlyMap<string, ClaimAssertedDate>;
 };
 
@@ -493,6 +498,8 @@ const claimRows = (
         refs: [],
         recordConflict: null,
         qualifiers: [],
+        // Extraction set it aside; no verdict was asked of any model.
+        decider: LLM_VERDICT,
       };
     }
     const grade =
@@ -505,6 +512,7 @@ const claimRows = (
       refs: grade.refs,
       recordConflict: grade.recordConflict,
       qualifiers: grade.qualifiers,
+      decider: grade.decider,
     };
   });
 };
@@ -543,11 +551,53 @@ const runPassages = (
     : passages;
 };
 
+/** The claims a run grades: each extracted fact with its passage, keyed by
+ *  its position among the extracted claims. */
+const gradingInputs = (
+  claims: readonly ExtractedClaim[],
+  passages: NonNullable<ReturnType<typeof runPassages>>,
+) =>
+  claims.flatMap((claim, position) =>
+    claim.type === "fact"
+      ? [
+          {
+            key: String(position),
+            text: claim.text,
+            context: passageContext(
+              passages.at(claim.blockIndex) ??
+                panic("An extracted claim names a block outside the run"),
+              claim.anchor,
+            ),
+            // A new run's claims have no reviewer yet.
+            linkedFactIds: [],
+          },
+        ]
+      : [],
+  );
+
 /** Trusted process-local I/O boundaries; never sourced from queued data. */
 type VerificationExecutionBoundaries = {
   readDocument?: typeof readVerificationDocument;
   generateObjectForTask?: VerificationModelDeps["generateObjectForTask"];
+  /** The decision model the verdict decider asks, in place of the org's. */
+  decisionModel?: DecisionModel | null;
 };
+
+/** Who decides this run's verdicts: the organization's switch as it stands
+ *  when grading starts (`verdict-decider.ts`). */
+const runVerdictDecider = async (
+  actor: RunActor,
+  config: Pick<VerificationModelDeps, "orgAIConfig">,
+  execution: VerificationExecutionBoundaries,
+) =>
+  await actor.writeDb(
+    async (tx) =>
+      await readVerdictDecider(tx, {
+        organizationId: actor.organizationId,
+        orgAIConfig: config.orgAIConfig,
+        decisionModel: execution.decisionModel,
+      }),
+  );
 
 /** Null on success, else the code the run failed with. */
 type ExecuteRunArgs = {
@@ -559,6 +609,54 @@ type ExecuteRunArgs = {
   deadline: () => AbortSignal;
   grants?: FeatureAccessGrants | undefined;
   execution?: VerificationExecutionBoundaries;
+};
+
+/** The passages a run checks with the document blocks they come from (which
+ *  number the claims' paragraphs), or the code it fails with when the pinned
+ *  file yields none. */
+const readRunPassages = async ({
+  actor,
+  file,
+  scope,
+  readDocument,
+  signal,
+}: {
+  actor: RunActor;
+  file: ResolvedFile;
+  scope: Parameters<typeof runPassages>[1];
+  readDocument: typeof readVerificationDocument;
+  signal: AbortSignal;
+}): Promise<
+  Result<
+    {
+      blocks: readonly VerificationBlock[];
+      passages: NonNullable<ReturnType<typeof runPassages>>;
+    },
+    VerificationRunErrorCode
+  >
+> => {
+  const document = await readDocument({
+    organizationId: actor.organizationId,
+    workspaceId: actor.workspaceId,
+    file,
+    signal,
+    // A run may wait out its own timeout for the document byte budget.
+    admissionWaitMs: STANDARD_DOCUMENT_RUN_LIMITS.runTimeoutMs,
+  });
+  if (document.type === "unsupported-format") {
+    return Result.err("unsupported_format");
+  }
+  if (document.type === "no-text") {
+    return Result.err("no_text");
+  }
+  // Still waiting on the document byte budget when the run timed out.
+  if (document.type === "busy") {
+    return Result.err("extraction_failed");
+  }
+  const passages = runPassages(document.blocks, scope);
+  return passages === null || passages.length === 0
+    ? Result.err("extraction_failed")
+    : Result.ok({ blocks: document.blocks, passages });
 };
 
 /** The code a run fails with when a model call fails: a cap or revoked
@@ -593,23 +691,17 @@ const executeRun = async ({
     return "access_revoked";
   }
   const abortSignal = deadline();
-  const readDocument = execution.readDocument ?? readVerificationDocument;
-  const document = await readDocument({
-    organizationId: actor.organizationId,
-    workspaceId: actor.workspaceId,
+  const read = await readRunPassages({
+    actor,
     file: file.value,
+    scope: run.scope,
+    readDocument: execution.readDocument ?? readVerificationDocument,
     signal: abortSignal,
   });
-  if (document.type === "unsupported-format") {
-    return "unsupported_format";
+  if (Result.isError(read)) {
+    return read.error;
   }
-  if (document.type === "no-text") {
-    return "no_text";
-  }
-  const passages = runPassages(document.blocks, run.scope);
-  if (passages === null || passages.length === 0) {
-    return "extraction_failed";
-  }
+  const { blocks, passages } = read.value;
 
   const configResult = await Result.tryPromise({
     try: async () => {
@@ -708,25 +800,10 @@ const executeRun = async ({
   }
   const { claims, unread } = extracted.value;
   const graded = await gradeClaims({
-    claims: claims.flatMap((claim, position) =>
-      claim.type === "fact"
-        ? [
-            {
-              key: String(position),
-              text: claim.text,
-              context: passageContext(
-                passages.at(claim.blockIndex) ??
-                  panic("An extracted claim names a block outside the run"),
-                claim.anchor,
-              ),
-              // A new run's claims have no reviewer yet.
-              linkedFactIds: [],
-            },
-          ]
-        : [],
-    ),
+    claims: gradingInputs(claims, passages),
     facts: run.evidence.facts,
     deps,
+    verdictDecider: await runVerdictDecider(actor, config.value, execution),
   });
   if (Result.isError(graded)) {
     return modelCallFailure(graded.error.cause, "grading_failed");
@@ -735,7 +812,7 @@ const executeRun = async ({
     return "grading_failed";
   }
 
-  const rows = claimRows(actor, claims, graded.value, document.blocks);
+  const rows = claimRows(actor, claims, graded.value, blocks);
   await actor.writeDb(async (tx) => {
     const access = await resolveListVerificationRunAccess({
       tx,

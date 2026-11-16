@@ -17,6 +17,7 @@
     "loadFailed": "Teie vestlusi ei õnnestunud laadida.",
     "runsLoadFailed": "Ei õnnestunud kontrollida, millised vestlused teid ootavad.",
     "retry": "Proovi uuesti",
+    "resend": "Saada uuesti",
     "untitled": "Pealkirjata vestlus",
     "loadMoreFailed": "Laadi veel",
     "loadOlderFailed": "Laadi varasemad sõnumid",
@@ -219,13 +220,34 @@
       },
       "patternInPath": "{pattern} asukohas {path}",
       "commandExited": "{command} (väljumiskood {code})",
-      "opensOnComputer": "Avage arvutis, kus see käivitati",
+      "browserClick": "Klõpsa elemendil „{target}“ lehel {url}",
+      "browserPressKey": "Vajuta klahvi {key} elemendis „{target}“ lehel {url}",
+      "browserSelect": "Vali „{option}“ elemendis „{target}“ lehel {url}",
+      "browserType": "Sisesta tekst väljale „{target}“ lehel {url}",
       "status": {
         "needs_approval": "Kinnituse ootamine",
         "running": "Töös",
         "failed": "Ebaõnnestus",
         "interrupted": "Peatatud"
-      }
+      },
+      "output": {
+        "command": "Väljund",
+        "diff": "Failimuudatused",
+        "conversation": "Alamagendi vestlus",
+        "conversationPrompt": "Ülesanne",
+        "conversationReport": "Aruanne",
+        "cut": "Kuvatakse esimesed {kept} (kokku {total})",
+        "empty": "Väljund puudub",
+        "arriving": "Saabub endiselt arvutist, kus see samm käivitati",
+        "notCopied": "Sellesse vestlusesse pole veel kopeeritud",
+        "notStored": "Sellest sammust ei salvestatud midagi",
+        "runBudgetReached": "Ei salvestatud: see käivitus oli juba salvestanud nii palju, kui üks käivitus tohib",
+        "imageTooLargeToStore": "Selle pildi suurus on {total}. Üle {kept} suuruseid pilte ei salvestata, seega ei saa seda kuvada.",
+        "loadFailed": "Laadimine ebaõnnestus.",
+        "showMore": "Näita rohkem"
+      },
+      "sessionNotResumed": "Sinu arvutis töötav programmeerimisagent ei saanud pooleli jäänud kohast edasi minna, seega jätkas ta selle vestluse sõnumite põhjal.",
+      "steered": "Saadetud agendi töö ajal"
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# kontrollitud allikas} other {# kontrollitud allikat}}",
@@ -234,7 +256,46 @@
       "analyses": "{count, plural, one {# analüüs} other {# analüüsi}}"
     },
     "stepCount": "{count, plural, one {# samm} other {# sammu}}",
-    "reasoning": "Arutlus"
+    "reasoning": "Arutlus",
+    "historyTrimmed": "Varasemaid sõnumeid ei õnnestunud kokku võtta, seega arvestab see vastus ainult vestluse viimast osa.",
+    "failure": {
+      "aiDeadlineExceeded": "AI ei vastanud õigeaegselt. Proovi hetke pärast uuesti.",
+      "aiOutputInvalid": "Tehisintellekti vastus oli ootamatus vormingus. Proovige uuesti.",
+      "aiOutputModerated": "Tehisintellekti teenusepakkuja modereeris väljundit. Sõnastage taotlus ümber või valige teine mudel.",
+      "aiUnknown": "Tehisintellekti taotlus nurjus. Proovige uuesti.",
+      "errorFolderUnavailable": "Selle vestlusega seotud kaust pole sinu arvutis saadaval. Kontrolli seda stella desktopis ja saada see siis uuesti.",
+      "errorLimitReached": "Sinu arvutis töötav programmeerimisagent jõudis kasutuslimiidini. Proovi uuesti, kui limiit lähtestub.",
+      "errorNeedsLogin": "Sinu arvutis töötav programmeerimisagent vajab uuesti sisselogimist. Logi sisse stella desktopi kaudu ja proovi uuesti.",
+      "errorNotReached": "Sinu arvuti ei võtnud seda vastust vastu. Veendu, et stella desktop on avatud ja ühendatud, ning proovi uuesti.",
+      "errorRelinked": "stella desktop seoti sinu arvutis uuesti, seega see vastus peatus. Saada see uuesti.",
+      "errorRestoring": "Sinu arvuti võtab veel failimuudatusi tagasi. Saada see hetke pärast uuesti.",
+      "errorUnavailable": "Sinu arvuti lõpetas selle vastuse töötlemise. Veendu, et stella desktop on avatud ja ühendatud, ning proovi uuesti.",
+      "refusalFolderNotApproved": "Luba esmalt programmeerimisagendil töötada selle vestlusega seotud kaustas.",
+      "refusalHarnessUnavailable": "Sinu arvutis töötav programmeerimisagent ei saa seda päringut praegu vastu võtta. Kontrolli seda stella desktopis.",
+      "refusalModelUnavailable": "Sinu arvutis töötav programmeerimisagent seda mudelit enam ei paku. Vali menüüs Käivita mõni teine.",
+      "refusalNoComputer": "Ükski sinu arvuti pole ühendatud.",
+      "refusalPermissionUnavailable": "Sinu arvutis töötav programmeerimisagent ei saa nende õigustega töötada. Vali menüüs Õigused mõni muu valik.",
+      "refusalReasoningEffortUnavailable": "Sinu arvutis töötav programmeerimisagent ei paku selle mudeli jaoks seda arutlustaset. Vali menüüs Arutlustase mõni teine.",
+      "refusalTooLarge": "See vestlus on sinu arvutile üleandmiseks liiga pikk. Alusta uut vestlust, et seda seal käitada.",
+      "sendErrorEmptyCompletion": "AI tagastas tühja vastuse. Proovi uuesti või sõnasta oma sõnum ümber.",
+      "sendErrorLoopDetected": "AI vastus kordus liiga palju. Proovi uuesti kitsama päringuga.",
+      "sendErrorModelUnavailable": "Seadistatud AI-mudel pole enam saadaval. Palu töökoha administraatoril mudelit organisatsiooni seadetes uuendada.",
+      "sendErrorProviderBilling": "AI-teenusepakkuja teatas arveldusprobleemist. Võta ühendust tööruumi administraatoriga.",
+      "sendErrorProviderCredentialsRejected": "AI-teenusepakkuja lükkas seadistatud mandaadi tagasi. Palu töökoha administraatoril kontrollida API-võtit organisatsiooni seadetes.",
+      "sendErrorProviderUnavailable": "AI-teenusepakkuja pole hetkel saadaval. Proovi hetke pärast uuesti.",
+      "sendErrorQuotaExhausted": "AI teenusepakkuja kvoot on täis. Proovi minuti pärast uuesti või võta ühendust tööruumi administraatoriga.",
+      "sendErrorStreamIncomplete": "AI vastus katkes enne, kui see valmis sai. Proovi uuesti.",
+      "sendErrorTurnTooLarge": "See vastus läks liiga suureks, et seda tervikuna edastada. Jätkamiseks saada uus sõnum."
+    },
+    "steerPrompt": "Saada agendile töö ajal",
+    "steerRefused": {
+      "turnNotRunning": "Agent praegu ei tööta.",
+      "noRun": "Agent ei tööta praegu sinu arvutis.",
+      "cannotSteer": "See agent ei võta töö ajal sõnumeid vastu.",
+      "runFull": "Agent ei saa praegu rohkem sõnumeid vastu võtta.",
+      "notTaken": "Agent ei saanud sinu sõnumit praegu vastu võtta.",
+      "queuedMessageChanged": "Sõnum on vahepeal muutunud või pole enam järjekorras, seega agent seda ei saanud."
+    }
   },
   "tasks": {
     "emptyTitle": "Avatud ülesandeid pole",
@@ -263,7 +324,8 @@
       "tomorrow": "Homme",
       "week": "Sel nädalal",
       "later": "Hiljem",
-      "none": "Tähtajata"
+      "none": "Tähtajata",
+      "closed": "Tehtud või tühistatud"
     },
     "markDone": "Märgi tehtuks",
     "reopen": "Ava uuesti",
@@ -277,7 +339,43 @@
     "doneAssigning": "Valmis",
     "someone": "Keegi",
     "membersFailed": "Asja liikmeid ei õnnestunud laadida.",
-    "assignFailed": "Ülesannet ei õnnestunud määrata. Proovige uuesti."
+    "assignFailed": "Ülesannet ei õnnestunud määrata. Proovige uuesti.",
+    "statusTitle": "Staatus",
+    "priorityTitle": "Prioriteet",
+    "priority": {
+      "none": "Puudub",
+      "urgent": "Kiire",
+      "high": "Kõrge",
+      "medium": "Keskmine",
+      "low": "Madal"
+    },
+    "subtasks": "Alamülesanded",
+    "linked": "Seotud üksused",
+    "delete": "Kustuta ülesanne",
+    "deleteTitle": "Kas kustutada ülesanne?",
+    "deleteMessage": "Kas olete kindel, et soovite kustutada „{name}“? Seda toimingut ei saa tagasi võtta.",
+    "cancel": "Tühista",
+    "saveFailed": "Muudatust ei õnnestunud salvestada. Proovige uuesti.",
+    "readOnly": "See ülesanne pärineb ühendatud kalendrist ja seda ei saa siin muuta.",
+    "untitled": "Pealkirjata ülesanne",
+    "loadOneFailed": "Seda ülesannet ei õnnestunud laadida.",
+    "filter": "Filter",
+    "whoseTitle": "Määratud",
+    "whose": {
+      "mine": "Mulle",
+      "everyone": "Kellele tahes",
+      "unassigned": "Mitte kellelegi"
+    },
+    "showTitle": "Näita",
+    "show": {
+      "open": "Avatud",
+      "overdue": "Tähtaja ületanud",
+      "all": "Kõik, ka tehtud"
+    },
+    "emptyFilteredTitle": "Ülesandeid pole",
+    "emptyFilteredDescription": "Sellele filtrile vastavad ülesanded kuvatakse siin.",
+    "loadMore": "Laadi rohkem",
+    "loadMoreFailed": "Rohkem ülesandeid ei õnnestunud laadida."
   },
   "matters": {
     "emptyTitle": "Toimikuid veel pole",

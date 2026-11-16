@@ -22,6 +22,7 @@ import {
 } from "@stll/api-contract/browser-control";
 
 import type { BrowserBridge, BrowserBridgeDownload } from "./bridge";
+import { createHostRouter, extensionHost } from "./host-router";
 import { localBrowserResult } from "./local-result";
 import { startLocalBrowserMcp } from "./mcp-server";
 import { installNativeHost } from "./native-host-manifest";
@@ -85,8 +86,11 @@ const fakeBridge = () => {
 
 const start = (fake = fakeBridge(), home = "/unused-home") => {
   const mcp = startLocalBrowserMcp({
-    bridge: fake.bridge,
-    home,
+    browser: createHostRouter({
+      extension: extensionHost(fake.bridge),
+      stellaBrowser: null,
+    }),
+    downloads: { home, onDownload: fake.bridge.onDownload },
     version: "1.4.0",
   });
   cleanups.push(async () => {
@@ -115,6 +119,7 @@ describe("the local browser MCP endpoint", () => {
   test("serves the browser tools to the run it was registered for", async () => {
     const { mcp, requests } = start();
     const binding = mcp.register({
+      accountOrigin: "https://api.example-stella.com",
       approvals: "auto",
       approve,
       stopped: NEVER_STOPPED,
@@ -161,6 +166,10 @@ describe("the local browser MCP endpoint", () => {
       "find",
       "click",
       "type",
+      "press_key",
+      "select",
+      "go_back",
+      "switch_tab",
     ]);
 
     const called = await rpc(binding, {
@@ -191,6 +200,7 @@ describe("the local browser MCP endpoint", () => {
   test("refuses another run's secret, a browser page and an ended run", async () => {
     const { cancels, mcp } = start();
     const first = mcp.register({
+      accountOrigin: "https://api.example-stella.com",
       approvals: "auto",
       approve,
       stopped: NEVER_STOPPED,
@@ -199,6 +209,7 @@ describe("the local browser MCP endpoint", () => {
       workspaceDir: UNUSED_FOLDER,
     });
     const second = mcp.register({
+      accountOrigin: "https://api.example-stella.com",
       approvals: "auto",
       approve,
       stopped: NEVER_STOPPED,
@@ -224,6 +235,7 @@ describe("the local browser MCP endpoint", () => {
   test("a kept process's endpoint is parked between turns and serves the run that adopts it", async () => {
     const { cancels, mcp, requests } = start();
     const run = {
+      accountOrigin: "https://api.example-stella.com",
       approvals: "auto",
       approve,
       stopped: NEVER_STOPPED,
@@ -329,6 +341,7 @@ describe("downloads of a chat's tab", () => {
     // The temporary root stands in for the member's home folder.
     const { mcp, reportDownload } = start(fakeBridge(), root);
     const binding = mcp.register({
+      accountOrigin: "https://api.example-stella.com",
       approvals: "auto",
       approve,
       runId: "run-1",
@@ -338,6 +351,9 @@ describe("downloads of a chat's tab", () => {
     });
     reportDownload({
       controllerId: "thread-1",
+      deliveryId: crypto.randomUUID(),
+      shownDocument: null,
+      type: "settled",
       download: {
         bytes: 23,
         mime: "application/pdf",
@@ -350,6 +366,9 @@ describe("downloads of a chat's tab", () => {
     // Another chat's download never reaches this one.
     reportDownload({
       controllerId: "thread-2",
+      deliveryId: crypto.randomUUID(),
+      shownDocument: null,
+      type: "settled",
       download: {
         outcome: "stopped",
         reason: "not-pdf",
@@ -415,6 +434,7 @@ describe("a browser call in flight", () => {
     const { mcp } = start(holding);
     const stop = new AbortController();
     const binding = mcp.register({
+      accountOrigin: "https://api.example-stella.com",
       approvals: "auto",
       approve,
       runId: "run-1",
@@ -434,6 +454,7 @@ describe("a browser call in flight", () => {
     const { mcp } = start(holding);
     const stop = new AbortController();
     const binding = mcp.register({
+      accountOrigin: "https://api.example-stella.com",
       approvals: "auto",
       approve,
       runId: "run-1",

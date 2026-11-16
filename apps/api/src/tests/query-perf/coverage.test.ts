@@ -69,9 +69,12 @@ describe.skipIf(!enabled)("coverage refresh read budget", () => {
         const schemaName = `coverage_budget_${Bun.randomUUIDv7().replaceAll("-", "")}`;
         const schema = sql.identifier(schemaName);
         const metadataSourceId = Bun.randomUUIDv7();
-        const [rootQueue] = await db.execute(sql`SELECT EXISTS (
+        const [rootQueue] = await db.execute(
+          sql`SELECT EXISTS (
           SELECT 1 FROM public.case_law_population_deltas
-        ) AS pending`);
+        ) AS pending`,
+          "objects",
+        );
         expect(rootQueue?.["pending"]).toBe(false);
         await db.execute(
           sql`VACUUM (ANALYZE) public.case_law_population_deltas`,
@@ -121,7 +124,7 @@ describe.skipIf(!enabled)("coverage refresh read budget", () => {
             const config = getViewConfig(view);
             // db-await-in-loop: two production publication views over the cloned tables.
             await db.execute(
-              sql`CREATE VIEW ${schema}.${sql.identifier(config.name)} AS (${sql.raw(dialect.sqlToQuery(config.query).sql)})`,
+              sql`CREATE VIEW ${schema}.${sql.identifier(config.name)} AS (${sql.raw(dialect.sqlToQuery(config.query ?? panic("Declared view must include a query")).sql)})`,
             );
           }
           const [liveView] = await client`SELECT pg_get_viewdef(

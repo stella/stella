@@ -78,6 +78,7 @@ describe.skipIf(!enabled)("maintained coverage read plan (postgres)", () => {
             // db-await-in-loop: finish production seed in bounded batches so coverage readiness proves the complete population.
             const batch = await db.execute(
               sql`SELECT * FROM public.seed_case_law_population_counts(2048)`,
+              "objects",
             );
             seeded = batch.at(0)?.["done"] === true;
           }

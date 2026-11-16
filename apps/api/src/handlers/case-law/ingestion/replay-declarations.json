@@ -258,6 +258,12 @@
     "wave": "stored-document-objects-dry-run"
   },
   {
+    "source": "cz-uohs",
+    "parserVersion": 17,
+    "type": "pending-enrolment-wave",
+    "wave": "stored-document-objects-dry-run"
+  },
+  {
     "source": "pl-kis",
     "parserVersion": 33,
     "type": "pending-enrolment-wave",
@@ -284,6 +290,260 @@
   {
     "source": "pl-ncourt",
     "parserVersion": 37,
+    "type": "pending-enrolment-wave",
+    "wave": "stored-document-objects-dry-run"
+  },
+  {
+    "source": "cz-ns",
+    "parserVersion": 32,
+    "type": "no-stored-row-effect",
+    "reason": "unchanged-derived-output",
+    "explanation": "Dependency patch tracking advances for @tanstack/ai. The only value-import path reaches EventType in the desktop runner wire schema through the database schema and transaction timeout infrastructure; no parser invokes the patched chat, message, stream or error code. Parser content and derived fields are unchanged; no stored-row replay is needed."
+  },
+  {
+    "source": "cz-nss",
+    "parserVersion": 38,
+    "type": "no-stored-row-effect",
+    "reason": "unchanged-derived-output",
+    "explanation": "Dependency patch tracking advances for @tanstack/ai. The only value-import path reaches EventType in the desktop runner wire schema through the database schema and transaction timeout infrastructure; no parser invokes the patched chat, message, stream or error code. Parser content and derived fields are unchanged; no stored-row replay is needed."
+  },
+  {
+    "source": "cz-us",
+    "parserVersion": 44,
+    "type": "no-stored-row-effect",
+    "reason": "unchanged-derived-output",
+    "explanation": "Dependency patch tracking advances for @tanstack/ai. The only value-import path reaches EventType in the desktop runner wire schema through the database schema and transaction timeout infrastructure; no parser invokes the patched chat, message, stream or error code. Parser content and derived fields are unchanged; no stored-row replay is needed."
+  },
+  {
+    "source": "cz-regional",
+    "parserVersion": 27,
+    "type": "no-stored-row-effect",
+    "reason": "unchanged-derived-output",
+    "explanation": "Dependency patch tracking advances for @tanstack/ai. The only value-import path reaches EventType in the desktop runner wire schema through the database schema and transaction timeout infrastructure; no parser invokes the patched chat, message, stream or error code. Parser content and derived fields are unchanged; no stored-row replay is needed."
+  },
+  {
+    "source": "cz-uohs",
+    "parserVersion": 16,
+    "type": "no-stored-row-effect",
+    "reason": "unchanged-derived-output",
+    "explanation": "Dependency patch tracking advances for @tanstack/ai. The only value-import path reaches EventType in the desktop runner wire schema through the database schema and transaction timeout infrastructure; no parser invokes the patched chat, message, stream or error code. Parser content and derived fields are unchanged; no stored-row replay is needed."
+  },
+  {
+    "source": "sk-courts",
+    "parserVersion": 33,
+    "type": "no-stored-row-effect",
+    "reason": "unchanged-derived-output",
+    "explanation": "Dependency patch tracking advances for @tanstack/ai. The only value-import path reaches EventType in the desktop runner wire schema through the database schema and transaction timeout infrastructure; no parser invokes the patched chat, message, stream or error code. Parser content and derived fields are unchanged; no stored-row replay is needed."
+  },
+  {
+    "source": "sk-us",
+    "parserVersion": 29,
+    "type": "no-stored-row-effect",
+    "reason": "unchanged-derived-output",
+    "explanation": "Dependency patch tracking advances for @tanstack/ai. The only value-import path reaches EventType in the desktop runner wire schema through the database schema and transaction timeout infrastructure; no parser invokes the patched chat, message, stream or error code. Parser content and derived fields are unchanged; no stored-row replay is needed."
+  },
+  {
+    "source": "pl-courts",
+    "parserVersion": 38,
+    "type": "no-stored-row-effect",
+    "reason": "unchanged-derived-output",
+    "explanation": "Dependency patch tracking advances for @tanstack/ai. The only value-import path reaches EventType in the desktop runner wire schema through the database schema and transaction timeout infrastructure; no parser invokes the patched chat, message, stream or error code. Parser content and derived fields are unchanged; no stored-row replay is needed."
+  },
+  {
+    "source": "pl-sn",
+    "parserVersion": 32,
+    "type": "no-stored-row-effect",
+    "reason": "unchanged-derived-output",
+    "explanation": "Dependency patch tracking advances for @tanstack/ai. The only value-import path reaches EventType in the desktop runner wire schema through the database schema and transaction timeout infrastructure; no parser invokes the patched chat, message, stream or error code. Parser content and derived fields are unchanged; no stored-row replay is needed."
+  },
+  {
+    "source": "pl-kio",
+    "parserVersion": 32,
+    "type": "no-stored-row-effect",
+    "reason": "unchanged-derived-output",
+    "explanation": "Dependency patch tracking advances for @tanstack/ai. The only value-import path reaches EventType in the desktop runner wire schema through the database schema and transaction timeout infrastructure; no parser invokes the patched chat, message, stream or error code. Parser content and derived fields are unchanged; no stored-row replay is needed."
+  },
+  {
+    "source": "pl-tk",
+    "parserVersion": 14,
+    "type": "no-stored-row-effect",
+    "reason": "unchanged-derived-output",
+    "explanation": "Dependency patch tracking advances for @tanstack/ai. The only value-import path reaches EventType in the desktop runner wire schema through the database schema and transaction timeout infrastructure; no parser invokes the patched chat, message, stream or error code. Parser content and derived fields are unchanged; no stored-row replay is needed."
+  },
+  {
+    "source": "pl-nsa",
+    "parserVersion": 12,
+    "type": "no-stored-row-effect",
+    "reason": "unchanged-derived-output",
+    "explanation": "Dependency patch tracking advances for @tanstack/ai. The only value-import path reaches EventType in the desktop runner wire schema through the database schema and transaction timeout infrastructure; no parser invokes the patched chat, message, stream or error code. Parser content and derived fields are unchanged; no stored-row replay is needed."
+  },
+  {
+    "source": "pl-ncourt",
+    "parserVersion": 38,
+    "type": "no-stored-row-effect",
+    "reason": "unchanged-derived-output",
+    "explanation": "Dependency patch tracking advances for @tanstack/ai. The only value-import path reaches EventType in the desktop runner wire schema through the database schema and transaction timeout infrastructure; no parser invokes the patched chat, message, stream or error code. Parser content and derived fields are unchanged; no stored-row replay is needed."
+  },
+  {
+    "source": "at-courts",
+    "parserVersion": 13,
+    "type": "no-stored-row-effect",
+    "reason": "unchanged-derived-output",
+    "explanation": "Dependency patch tracking advances for @tanstack/ai. The only value-import path reaches EventType in the desktop runner wire schema through the database schema and transaction timeout infrastructure; no parser invokes the patched chat, message, stream or error code. Parser content and derived fields are unchanged; no stored-row replay is needed."
+  },
+  {
+    "source": "at-vfgh",
+    "parserVersion": 13,
+    "type": "no-stored-row-effect",
+    "reason": "unchanged-derived-output",
+    "explanation": "Dependency patch tracking advances for @tanstack/ai. The only value-import path reaches EventType in the desktop runner wire schema through the database schema and transaction timeout infrastructure; no parser invokes the patched chat, message, stream or error code. Parser content and derived fields are unchanged; no stored-row replay is needed."
+  },
+  {
+    "source": "at-vwgh",
+    "parserVersion": 13,
+    "type": "no-stored-row-effect",
+    "reason": "unchanged-derived-output",
+    "explanation": "Dependency patch tracking advances for @tanstack/ai. The only value-import path reaches EventType in the desktop runner wire schema through the database schema and transaction timeout infrastructure; no parser invokes the patched chat, message, stream or error code. Parser content and derived fields are unchanged; no stored-row replay is needed."
+  },
+  {
+    "source": "at-bvwg",
+    "parserVersion": 13,
+    "type": "no-stored-row-effect",
+    "reason": "unchanged-derived-output",
+    "explanation": "Dependency patch tracking advances for @tanstack/ai. The only value-import path reaches EventType in the desktop runner wire schema through the database schema and transaction timeout infrastructure; no parser invokes the patched chat, message, stream or error code. Parser content and derived fields are unchanged; no stored-row replay is needed."
+  },
+  {
+    "source": "at-lvwg",
+    "parserVersion": 13,
+    "type": "no-stored-row-effect",
+    "reason": "unchanged-derived-output",
+    "explanation": "Dependency patch tracking advances for @tanstack/ai. The only value-import path reaches EventType in the desktop runner wire schema through the database schema and transaction timeout infrastructure; no parser invokes the patched chat, message, stream or error code. Parser content and derived fields are unchanged; no stored-row replay is needed."
+  },
+  {
+    "source": "at-asylgh",
+    "parserVersion": 13,
+    "type": "no-stored-row-effect",
+    "reason": "unchanged-derived-output",
+    "explanation": "Dependency patch tracking advances for @tanstack/ai. The only value-import path reaches EventType in the desktop runner wire schema through the database schema and transaction timeout infrastructure; no parser invokes the patched chat, message, stream or error code. Parser content and derived fields are unchanged; no stored-row replay is needed."
+  },
+  {
+    "source": "at-ubas",
+    "parserVersion": 13,
+    "type": "no-stored-row-effect",
+    "reason": "unchanged-derived-output",
+    "explanation": "Dependency patch tracking advances for @tanstack/ai. The only value-import path reaches EventType in the desktop runner wire schema through the database schema and transaction timeout infrastructure; no parser invokes the patched chat, message, stream or error code. Parser content and derived fields are unchanged; no stored-row replay is needed."
+  },
+  {
+    "source": "at-uvs",
+    "parserVersion": 13,
+    "type": "no-stored-row-effect",
+    "reason": "unchanged-derived-output",
+    "explanation": "Dependency patch tracking advances for @tanstack/ai. The only value-import path reaches EventType in the desktop runner wire schema through the database schema and transaction timeout infrastructure; no parser invokes the patched chat, message, stream or error code. Parser content and derived fields are unchanged; no stored-row replay is needed."
+  },
+  {
+    "source": "at-verg",
+    "parserVersion": 13,
+    "type": "no-stored-row-effect",
+    "reason": "unchanged-derived-output",
+    "explanation": "Dependency patch tracking advances for @tanstack/ai. The only value-import path reaches EventType in the desktop runner wire schema through the database schema and transaction timeout infrastructure; no parser invokes the patched chat, message, stream or error code. Parser content and derived fields are unchanged; no stored-row replay is needed."
+  },
+  {
+    "source": "at-umse",
+    "parserVersion": 13,
+    "type": "no-stored-row-effect",
+    "reason": "unchanged-derived-output",
+    "explanation": "Dependency patch tracking advances for @tanstack/ai. The only value-import path reaches EventType in the desktop runner wire schema through the database schema and transaction timeout infrastructure; no parser invokes the patched chat, message, stream or error code. Parser content and derived fields are unchanged; no stored-row replay is needed."
+  },
+  {
+    "source": "at-bks",
+    "parserVersion": 13,
+    "type": "no-stored-row-effect",
+    "reason": "unchanged-derived-output",
+    "explanation": "Dependency patch tracking advances for @tanstack/ai. The only value-import path reaches EventType in the desktop runner wire schema through the database schema and transaction timeout infrastructure; no parser invokes the patched chat, message, stream or error code. Parser content and derived fields are unchanged; no stored-row replay is needed."
+  },
+  {
+    "source": "at-findok",
+    "parserVersion": 15,
+    "type": "no-stored-row-effect",
+    "reason": "unchanged-derived-output",
+    "explanation": "Dependency patch tracking advances for @tanstack/ai. The only value-import path reaches EventType in the desktop runner wire schema through the database schema and transaction timeout infrastructure; no parser invokes the patched chat, message, stream or error code. Parser content and derived fields are unchanged; no stored-row replay is needed."
+  },
+  {
+    "source": "eu-ecj",
+    "parserVersion": 27,
+    "type": "no-stored-row-effect",
+    "reason": "unchanged-derived-output",
+    "explanation": "Dependency patch tracking advances for @tanstack/ai. The only value-import path reaches EventType in the desktop runner wire schema through the database schema and transaction timeout infrastructure; no parser invokes the patched chat, message, stream or error code. Parser content and derived fields are unchanged; no stored-row replay is needed."
+  },
+  {
+    "source": "hu-bhgy",
+    "parserVersion": 31,
+    "type": "no-stored-row-effect",
+    "reason": "unchanged-derived-output",
+    "explanation": "Dependency patch tracking advances for @tanstack/ai. The only value-import path reaches EventType in the desktop runner wire schema through the database schema and transaction timeout infrastructure; no parser invokes the patched chat, message, stream or error code. Parser content and derived fields are unchanged; no stored-row replay is needed."
+  },
+  {
+    "source": "uk-fcl",
+    "parserVersion": 7,
+    "type": "no-stored-row-effect",
+    "reason": "unchanged-derived-output",
+    "explanation": "Dependency patch tracking advances for @tanstack/ai. The only value-import path reaches EventType in the desktop runner wire schema through the database schema and transaction timeout infrastructure; no parser invokes the patched chat, message, stream or error code. Parser content and derived fields are unchanged; no stored-row replay is needed."
+  },
+  {
+    "source": "pl-kis",
+    "parserVersion": 34,
+    "type": "no-stored-row-effect",
+    "reason": "unchanged-derived-output",
+    "explanation": "Dependency patch tracking advances for @tanstack/ai. The only value-import path reaches EventType in the desktop runner wire schema through the database schema and transaction timeout infrastructure; no parser invokes the patched chat, message, stream or error code. Parser content and derived fields are unchanged; no stored-row replay is needed."
+  },
+  {
+    "source": "pl-uodo",
+    "parserVersion": 20,
+    "type": "no-stored-row-effect",
+    "reason": "unchanged-derived-output",
+    "explanation": "Dependency patch tracking advances for @tanstack/ai. The only value-import path reaches EventType in the desktop runner wire schema through the database schema and transaction timeout infrastructure; no parser invokes the patched chat, message, stream or error code. Parser content and derived fields are unchanged; no stored-row replay is needed."
+  },
+  {
+    "source": "pl-uokik",
+    "parserVersion": 36,
+    "type": "no-stored-row-effect",
+    "reason": "unchanged-derived-output",
+    "explanation": "Dependency patch tracking advances for @tanstack/ai. The only value-import path reaches EventType in the desktop runner wire schema through the database schema and transaction timeout infrastructure; no parser invokes the patched chat, message, stream or error code. Parser content and derived fields are unchanged; no stored-row replay is needed."
+  },
+  {
+    "source": "us-courtlistener",
+    "parserVersion": 21,
+    "type": "no-stored-row-effect",
+    "reason": "unchanged-derived-output",
+    "explanation": "Dependency patch tracking advances for @tanstack/ai. The only value-import path reaches EventType in the desktop runner wire schema through the database schema and transaction timeout infrastructure; no parser invokes the patched chat, message, stream or error code. Parser content and derived fields are unchanged; no stored-row replay is needed."
+  },
+  {
+    "source": "pl-kis",
+    "parserVersion": 35,
+    "type": "pending-enrolment-wave",
+    "wave": "stored-document-objects-dry-run"
+  },
+  {
+    "source": "pl-ncourt",
+    "parserVersion": 39,
+    "type": "pending-enrolment-wave",
+    "wave": "stored-document-objects-dry-run"
+  },
+  {
+    "source": "pl-uodo",
+    "parserVersion": 21,
+    "type": "pending-enrolment-wave",
+    "wave": "stored-document-objects-dry-run"
+  },
+  {
+    "source": "pl-uokik",
+    "parserVersion": 37,
+    "type": "pending-enrolment-wave",
+    "wave": "stored-document-objects-dry-run"
+  },
+  {
+    "source": "cz-nss",
+    "parserVersion": 39,
     "type": "pending-enrolment-wave",
     "wave": "stored-document-objects-dry-run"
   }

@@ -63,12 +63,6 @@ const starts = [
     timestamp: 0,
   },
   {
-    type: EventType.REASONING_MESSAGE_START,
-    messageId: "answer",
-    role: "reasoning",
-    timestamp: 0,
-  },
-  {
     type: EventType.TOOL_CALL_START,
     parentMessageId: "answer",
     toolCallId: "call",
@@ -472,7 +466,7 @@ describe("active timing at iteration and snapshot boundaries", () => {
     for await (const chunk of withChatTurnTiming({
       source: chunksOf([
         runStart,
-        starts[2],
+        starts[1],
         {
           type: EventType.TOOL_CALL_ARGS,
           toolCallId: "call",
@@ -1068,3 +1062,34 @@ test.each(["running", "settled"] as const)(
     }
   },
 );
+
+test("reasoning block ids do not replace the announced assistant timing owner", async () => {
+  const reasoningStarts = ["thinking-first", "thinking-next"].map(
+    (messageId) =>
+      ({
+        type: EventType.REASONING_MESSAGE_START,
+        messageId,
+        role: "reasoning",
+      }) satisfies StreamChunk,
+  );
+  const events = await Array.fromAsync(
+    withChatTurnTiming({
+      source: chunksOf([runStart, starts[0], ...reasoningStarts, runEnd]),
+      getPhase: () => "settled",
+      readTiming: async () => readPresent(finished),
+    }),
+  );
+  expect(
+    events.filter((event) => event.type === EventType.REASONING_MESSAGE_START),
+  ).toEqual(reasoningStarts);
+  expect(
+    events.filter((event) => event.type === EventType.TEXT_MESSAGE_END),
+  ).toEqual([
+    {
+      type: EventType.TEXT_MESSAGE_END,
+      messageId: "answer",
+      timestamp: 9000,
+      metadata: { turnTiming: finished },
+    },
+  ]);
+});

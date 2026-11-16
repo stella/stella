@@ -1,10 +1,11 @@
 import { panic } from "better-result";
 
+import { STAGING_STELLA_ORIGINS } from "@stll/browser-page/stella-origins";
+
 import { rawStellaOrigins } from "../src/lib/env";
 import {
   createStellaOriginTrust,
   parseTrustedOriginList,
-  STAGING_STELLA_ORIGINS,
 } from "../src/lib/trusted-origin";
 
 // `production` checks the release build; `staging` checks the build for the
@@ -78,6 +79,7 @@ if (
     "activeTab",
     "alarms",
     "declarativeNetRequest",
+    "offscreen",
     "scripting",
     "storage",
   ])

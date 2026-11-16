@@ -253,7 +253,7 @@ export const snapshotOfCurrentVersion = ({
   versions: currentVersion ? [currentVersion] : [],
 });
 
-export type CopiedEntity = {
+type CopiedEntity = {
   sourceId: SafeId<"entity">;
   entityId: SafeId<"entity">;
   kind: EntityKind;
@@ -262,14 +262,14 @@ export type CopiedEntity = {
 };
 
 /** File field info needed for PDF derivative enqueueing. */
-export type CopiedFileField = {
+type CopiedFileField = {
   entityId: SafeId<"entity">;
   fieldId: SafeId<"field">;
   mimeType: string;
   encrypted: boolean;
 };
 
-export type CopiedField = {
+type CopiedField = {
   sourceEntityId: SafeId<"entity">;
   sourceFieldId: SafeId<"field">;
   entityId: SafeId<"entity">;
@@ -575,14 +575,13 @@ const remapFieldFileId = ({
  * Best-effort cleanup of S3 keys. A failure never fails the rollback, but
  * it is reported: the object stays in the bucket, billed and unreferenced.
  */
-export const rollbackS3Copies = async (keys: string[]): Promise<void> => {
+export const rollbackS3Copies = async (
+  keys: string[],
+  deleteObjects = deleteOrganizationFilesWithSignal,
+): Promise<void> => {
   const result = Result.flatten(
     await Result.tryPromise({
-      try: async () =>
-        await deleteOrganizationFilesWithSignal(
-          keys,
-          AbortSignal.timeout(10_000),
-        ),
+      try: async () => await deleteObjects(keys, AbortSignal.timeout(10_000)),
       catch: (error: unknown) => error,
     }),
   );

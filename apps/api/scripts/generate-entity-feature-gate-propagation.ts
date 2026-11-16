@@ -1,12 +1,10 @@
-import { is } from "drizzle-orm";
-import { PgTable } from "drizzle-orm/pg-core";
-
 import { entityFeatureGateMetadata } from "../src/db/entity-feature-gate-metadata";
 import { readEffectiveEntityFeatureGateDefinitions } from "../src/db/entity-feature-gate-migrations";
 import * as schema from "../src/db/schema";
+import { schemaTables } from "../src/db/schema-tables";
 import { entityFeatureGateTableSql } from "./entity-feature-gate-ddl";
 
-const tables = Object.values(schema).filter((table) => is(table, PgTable));
+const tables = schemaTables(schema);
 const descriptors = entityFeatureGateMetadata(tables);
 const effective = await readEffectiveEntityFeatureGateDefinitions();
 const changed = entityFeatureGateTableSql(tables, descriptors, effective);

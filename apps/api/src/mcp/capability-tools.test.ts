@@ -8,6 +8,7 @@ import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 import { MODEL_RUN_CAP_CODES } from "@stll/api-contract/model-run-caps";
 import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-policy";
+import { createTestState } from "@stll/test-state";
 
 import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -67,6 +68,8 @@ import {
   createSelectQueryMock,
   toSafeDbMock,
 } from "@/api/tests/scoped-db-mock";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const loadOrgSettingsMock = mock(async () => ({
   orgAIConfig: null,
@@ -468,38 +471,31 @@ describe("list verification access grants across MCP tools", () => {
       ? { confirm: true }
       : {};
 
-  let previousGrants = env.API_FEATURE_ACCESS_GRANTS;
-  let previousDeploymentFlag = env.FEATURE_LEGAL_LISTS;
-
   beforeEach(() => {
-    previousGrants = env.API_FEATURE_ACCESS_GRANTS;
-    previousDeploymentFlag = env.FEATURE_LEGAL_LISTS;
-    env.API_FEATURE_ACCESS_GRANTS = {};
-    env.FEATURE_LEGAL_LISTS = true;
-  });
-
-  afterEach(() => {
-    env.API_FEATURE_ACCESS_GRANTS = previousGrants;
-    env.FEATURE_LEGAL_LISTS = previousDeploymentFlag;
+    testState.setConfig("API_FEATURE_ACCESS_GRANTS", {});
+    testState.setConfig("FEATURE_LEGAL_LISTS", true);
   });
 
   const grantCurrentMember = () => {
-    env.API_FEATURE_ACCESS_GRANTS = Object.fromEntries(
-      [
-        ...featurePrerequisiteClosure(
-          FEATURE_REGISTRY,
-          LIST_VERIFICATION_FEATURE_ID,
-        ),
-      ].map((id) => [
-        id,
+    testState.setConfig(
+      "API_FEATURE_ACCESS_GRANTS",
+      Object.fromEntries(
         [
-          {
-            type: "member" as const,
-            organizationId: "org_1",
-            email: "standard@example.test",
-          },
-        ],
-      ]),
+          ...featurePrerequisiteClosure(
+            FEATURE_REGISTRY,
+            LIST_VERIFICATION_FEATURE_ID,
+          ),
+        ].map((id) => [
+          id,
+          [
+            {
+              type: "member" as const,
+              organizationId: "org_1",
+              email: "standard@example.test",
+            },
+          ],
+        ]),
+      ),
     );
   };
 
@@ -909,7 +905,7 @@ describe("list verification access grants across MCP tools", () => {
             ],
       );
     }
-    env.API_FEATURE_ACCESS_GRANTS = {};
+    testState.setConfig("API_FEATURE_ACCESS_GRANTS", {});
     const denied = await handleCapabilityCall({
       context: verificationContext({ viewRows: [view] }).context,
       args: { capability: "views.list", input: { params: { matterId } } },
@@ -2105,17 +2101,29 @@ describe("capability executor gates", () => {
         }),
       });
 
-    test("every destructive capability is unavailable, even with confirm", async () => {
+    test("every confirmation-gated capability is unavailable, even with confirm", async () => {
       // Derived from the catalog, not a list: a capability that later becomes
       // destructive is covered without touching this test.
       const destructiveIds = capabilityCatalog
         .filter(
-          (entry) => entry.destructive && !requiresVerificationGrant(entry),
+          (entry) =>
+            (entry.destructive || entry.confirmation === "required") &&
+            !requiresVerificationGrant(entry),
         )
         .map((entry) => entry.id);
       expect(destructiveIds.length).toBeGreaterThan(0);
 
       for (const capability of destructiveIds) {
+        const described = await handleMcpToolCall({
+          mode: "advanced",
+          toolName: "describe_capability",
+          args: { capability },
+          context: createContext({ grantedScopes: MCP_OAUTH_SCOPES }),
+        });
+        if (described.isError) {
+          expect(errorEnvelope(described).code).toBe("not_found");
+          continue;
+        }
         const result = await agentRunCall({
           capability,
           input: {},
@@ -2158,6 +2166,12 @@ describe("capability executor gates", () => {
 
       expect(listed.length).toBeGreaterThan(0);
       expect(listed.filter(({ destructive }) => destructive)).toEqual([]);
+      const approvalRequired = new Set(
+        capabilityCatalog
+          .filter((entry) => entry.confirmation === "required")
+          .map(({ id }) => id),
+      );
+      expect(listed.filter(({ id }) => approvalRequired.has(id))).toEqual([]);
     });
 
     test("a capability that needs no confirmation is unaffected", async () => {

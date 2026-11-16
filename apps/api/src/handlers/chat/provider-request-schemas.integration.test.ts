@@ -1,6 +1,6 @@
 import { toolDefinition } from "@tanstack/ai";
 import { panic, Result } from "better-result";
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 import fc from "fast-check";
 import * as v from "valibot";
@@ -17,6 +17,7 @@ import {
 } from "@stll/api-contract";
 import type { ChatToolPolicyKind } from "@stll/api-contract";
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
+import { createTestState } from "@stll/test-state";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
@@ -119,6 +120,8 @@ import type { TestIds } from "@/api/tests/security/rls-helpers";
 import { withQueryLogger } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
+const testState = createTestState({ file: import.meta.path, config: env });
+
 // Every chat request the send path sends a provider, held to what the
 // provider accepts. A conversation goes through the real send handler and
 // `streamChat`, which build the request (history, tools, model options, the
@@ -141,8 +144,10 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 //   fallback answers, whether it is anonymized, and whether it runs as a chat
 //   turn or an agent run (whose request the sandbox's harness builds, so it
 //   is excluded by that predicate). Pull requests run an all-pairs cover of
-//   them; every night runs the all-triples cover, and a rotation of rounds
-//   runs every combination (`nightly-property-test.yml`).
+//   them, plus each provider's own model continuing the reasoning it
+//   returned, whatever the cover picks from the catalog; every night runs
+//   the all-triples cover, and a rotation of rounds runs every combination
+//   (`nightly-property-test.yml`).
 // - Every request those conversations send (the chat turns, the thread
 //   compactor's summary and the side calls) holds to the request schema the
 //   provider publishes (`scripts/provider-request-schemas.ts`) and to the
@@ -153,7 +158,8 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 //   right after it, with no orphan result.
 // - The typed coverage records below give every provider, request option,
 //   message part kind and tool kind one of two states, each checked at run
-//   time; the paths the all-pairs requests carry are a committed inventory.
+//   time; the paths the pull-request run's requests carry are a committed
+//   inventory.
 // - Free-form user text is sampled with fast-check (a fixed seed on pull
 //   requests, fresh seeds nightly), not exhausted.
 //
@@ -193,7 +199,6 @@ const REQUEST_OPTION_COVERAGE = {
   adapter: { covered: "The organization's adapter, from the model factory." },
   agentLoopStrategy: { neverSent: "Bounds the engine's loop." },
   context: { neverSent: NOT_SET_BY_CHAT },
-  conversationId: { neverSent: NOT_SET_BY_CHAT },
   debug: { neverSent: NOT_SET_BY_CHAT },
   interrupts: { neverSent: NOT_SET_BY_CHAT },
   lazyToolsConfig: { neverSent: NOT_SET_BY_CHAT },
@@ -207,14 +212,23 @@ const REQUEST_OPTION_COVERAGE = {
     covered: "The chat role's generation options, with every effort.",
   },
   parentRunId: { covered: "The continuation after the approval." },
+  parentSubagentRunId: { neverSent: NOT_SET_BY_CHAT },
+  reasoning: {
+    neverSent: "Stella's capability owner sets native modelOptions instead.",
+  },
+  repairToolInput: { neverSent: NOT_SET_BY_CHAT },
+  retry: { neverSent: NOT_SET_BY_CHAT },
   resume: { covered: "The continuation after the approval." },
   runId: { neverSent: "The engine's own run identity." },
   state: { neverSent: NOT_SET_BY_CHAT },
+  subagentName: { neverSent: NOT_SET_BY_CHAT },
   subagentRunId: { neverSent: NOT_SET_BY_CHAT },
   subagents: { neverSent: NOT_SET_BY_CHAT },
   systemPrompts: { covered: "The chat system prompt on every request." },
   threadId: { neverSent: "The engine's own thread identity." },
+  toolChoice: { neverSent: NOT_SET_BY_CHAT },
   tools: { covered: "Every tool kind the tool tables give (below)." },
+  wrapFetch: { neverSent: NOT_SET_BY_CHAT },
 } as const satisfies Record<keyof StreamChatChunksOptions, Coverage>;
 
 const UI_ONLY = "Its part policy keeps it off the provider (`ui-only`).";
@@ -298,13 +312,39 @@ const baselineOf = (provider: TanStackAIProvider): ChatCombination => ({
   tools: "default",
 });
 
+/**
+ * Each provider's own model continuing its own history with the reasoning
+ * that model returned before the call: the replay of a provider's signed
+ * reasoning (OpenAI's encrypted reasoning and its summary, Anthropic's signed
+ * thinking, Gemini's thought signatures) runs in every mode, so it never
+ * depends on which combinations the all-pairs cover picks from the catalog.
+ */
+const reasoningContinuationOf = (
+  provider: TanStackAIProvider,
+): ChatCombination => ({ ...baselineOf(provider), history: "reasoning" });
+
+/** Where each provider that signs its reasoning carries it back to the
+ *  model that produced it. */
+const REASONING_REPLAY_PATHS: Partial<
+  Record<TanStackAIProvider, readonly string[]>
+> = {
+  anthropic: [
+    "messages[].content[].signature",
+    "messages[].content[].thinking",
+  ],
+  google: ["contents[].parts[].thought", "contents[].parts[].thoughtSignature"],
+  openai: ["input[].encrypted_content", "input[].summary"],
+};
+
 const selectedCombinations: readonly ChatCombination[] = (() => {
   const keys = new Set(runPlan.runs.map(combinationKey));
+  const pinned = TANSTACK_AI_PROVIDERS.flatMap((provider) => [
+    baselineOf(provider),
+    reasoningContinuationOf(provider),
+  ]);
   return [
     ...runPlan.runs,
-    ...TANSTACK_AI_PROVIDERS.map(baselineOf).filter(
-      (baseline) => !keys.has(combinationKey(baseline)),
-    ),
+    ...pinned.filter((combination) => !keys.has(combinationKey(combination))),
   ];
 })();
 
@@ -358,8 +398,7 @@ let safeDb: SafeDb;
 let scopedDb: ScopedDb;
 let replay: ProviderWireReplay;
 let fakeS3: FakeS3;
-let previousMockAI: typeof env.USE_MOCK_AI;
-let previousBedrockEndpoint: string | undefined;
+
 const seededThreadIds: SafeId<"chatThread">[] = [];
 
 registerProviderWireReplay({
@@ -372,7 +411,7 @@ registerProviderWireReplay({
   }),
 });
 
-beforeAll(
+testState.beforeAll(
   async () =>
     await profile.measure("fixture", async () => {
       const fixture = await getRlsFixture();
@@ -382,11 +421,13 @@ beforeAll(
         createScopedDb(testDb, [ids.wsA1, ids.wsA2], ids.orgA, ids.userA1),
       );
       safeDb = toSafeDbMock(scopedDb);
-      previousMockAI = env.USE_MOCK_AI;
-      env.USE_MOCK_AI = false;
-      previousBedrockEndpoint = process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"];
-      process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"] =
-        "https://bedrock-runtime.us-east-1.amazonaws.com.cassette.invalid";
+
+      testState.setConfig("USE_MOCK_AI", false);
+
+      testState.setEnv(
+        "AWS_ENDPOINT_URL_BEDROCK_RUNTIME",
+        "https://bedrock-runtime.us-east-1.amazonaws.com.cassette.invalid",
+      );
       fakeS3 = startFakeS3();
     }),
 );
@@ -395,13 +436,7 @@ afterAll(async () => {
   try {
     await profile.measure("close", async () => {
       fakeS3.stop();
-      env.USE_MOCK_AI = previousMockAI;
-      if (previousBedrockEndpoint === undefined) {
-        delete process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"];
-      } else {
-        process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"] =
-          previousBedrockEndpoint;
-      }
+
       if (seededThreadIds.length > 0) {
         // Uploaded attachments belong to their thread.
         await testDb
@@ -1267,7 +1302,35 @@ describe(`chat requests: ${String(combinations.included.length)} combinations th
     });
   }
 
-  // The inventory is the paths the all-pairs run sends, by target provider.
+  // Each provider that signs its reasoning gets it back on the same model:
+  // the pinned continuation sends the signed reasoning in every mode.
+  for (const provider of TANSTACK_AI_PROVIDERS) {
+    const replayPaths = REASONING_REPLAY_PATHS[provider];
+    if (replayPaths === undefined) {
+      continue;
+    }
+    test(
+      `${provider}: continuing its own reasoning sends the signed reasoning back`,
+      async () => {
+        const { targetRequests } = await conversationOf(
+          reasoningContinuationOf(provider),
+        );
+        const paths = new Set(
+          targetRequests.flatMap((request) => [
+            ...requestPathsOf(
+              parsedBody(request),
+              OPAQUE_REQUEST_PATHS[provider],
+            ),
+          ]),
+        );
+        expect(replayPaths.filter((entry) => !paths.has(entry))).toEqual([]);
+      },
+      propertyTestTimeout(CONVERSATION_TIMEOUT_MS),
+    );
+  }
+
+  // The inventory is the paths the pull-request run (the all-pairs cover and
+  // the pinned conversations) sends, by target provider.
   if (runPlan.mode === "all-pairs") {
     for (const provider of TANSTACK_AI_PROVIDERS) {
       test(

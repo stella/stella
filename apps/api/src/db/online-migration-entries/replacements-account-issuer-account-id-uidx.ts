@@ -4,6 +4,7 @@ import { ONLINE_UNIQUE_INDEX_NAMES } from "../online-unique-indexes";
 export default {
   id: "replacements-account-issuer-account-id-uidx",
   revision: 910,
+  lifecycle: "finalized",
   type: "replacements",
   // Better Auth 1.7.3 stopped writing `issuer`, so the account identity key is
   // (provider_id, account_id): the pair the library links accounts by. The

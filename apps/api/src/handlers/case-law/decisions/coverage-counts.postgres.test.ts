@@ -70,7 +70,8 @@ const assertFreshAggregation = async (
     WHERE ${inArray(unredactedCaseLawDecisions.sourceId, [...sourceIds])}
       AND ${unredactedCaseLawDecisions.fulltext} IS NULL
       AND ${storedObservationIsListingOnly(unredactedCaseLawDecisions.metadata)}`;
-  const expected = await db.execute(sql`
+  const expected = await db.execute(
+    sql`
     WITH published AS MATERIALIZED (${published}), pending AS MATERIALIZED (${pending}),
     expected AS (
       SELECT 'country' AS kind, country, source_id, country AS value, count(*)::integer AS total
@@ -92,7 +93,9 @@ const assertFreshAggregation = async (
       SELECT 'pending-text', country, source_id, '', count(*)::integer
       FROM pending GROUP BY country, source_id
     ) SELECT kind, country, source_id AS "sourceId", value, total FROM expected
-    ORDER BY kind, country, source_id, value`);
+    ORDER BY kind, country, source_id, value`,
+    "objects",
+  );
   const actual = await db
     .select()
     .from(caseLawPopulationCountsLive)
@@ -131,6 +134,7 @@ const foldPopulationCounts = async (db: GatedTestDb, namespace = "public") => {
     // db-await-in-loop: drain only bounded production delta-fold batches before checking the persisted owner.
     const rows = await db.execute(
       sql`SELECT * FROM ${sql.identifier(namespace)}.fold_case_law_population_counts(2048)`,
+      "objects",
     );
     done = rows.at(0)?.["done"] === true;
   }
@@ -171,7 +175,7 @@ const createPopulationFixture = async (db: GatedTestDb, schemaName: string) => {
     const config = getViewConfig(view);
     // db-await-in-loop: install both production publication views over the isolated input table.
     await db.execute(
-      sql`CREATE VIEW ${schema}.${sql.identifier(config.name)} AS (${sql.raw(dialect.sqlToQuery(config.query).sql)})`,
+      sql`CREATE VIEW ${schema}.${sql.identifier(config.name)} AS (${sql.raw(dialect.sqlToQuery(config.query ?? panic("Declared view must include a query")).sql)})`,
     );
   }
   const migration = await Bun.file(
@@ -209,6 +213,7 @@ describe.skipIf(!enabled)("incremental coverage counts (postgres)", () => {
         // db-await-in-loop: bounded production seed batches finish the isolated test database before coverage admission.
         const batch = await db.execute(
           sql`SELECT * FROM public.seed_case_law_population_counts(2048)`,
+          "objects",
         );
         seeded = batch.at(0)?.["done"] === true;
       }
@@ -344,6 +349,7 @@ describe.skipIf(!enabled)("incremental coverage counts (postgres)", () => {
             );
             const firstBatch = await tx.execute(
               sql`SELECT * FROM public.seed_case_law_population_counts(2)`,
+              "objects",
             );
             expect(firstBatch.at(0)?.["processed"]).toBe(2);
             expect(firstBatch.at(0)?.["done"]).toBe(false);
@@ -361,6 +367,7 @@ describe.skipIf(!enabled)("incremental coverage counts (postgres)", () => {
               // db-await-in-loop: exercise the production cursor one bounded batch at a time after interleaved writes.
               const batch = await tx.execute(
                 sql`SELECT * FROM public.seed_case_law_population_counts(2048)`,
+                "objects",
               );
               expect(Number(batch.at(0)?.["processed"])).toBeLessThanOrEqual(
                 2048,
@@ -370,6 +377,7 @@ describe.skipIf(!enabled)("incremental coverage counts (postgres)", () => {
             await assertFreshAggregation(asTestRaw<GatedTestDb>(tx), sourceIds);
             const replay = await tx.execute(
               sql`SELECT * FROM public.seed_case_law_population_counts(2)`,
+              "objects",
             );
             expect(replay.at(0)).toMatchObject({ processed: 0, done: true });
             await assertFreshAggregation(asTestRaw<GatedTestDb>(tx), sourceIds);
@@ -420,6 +428,7 @@ describe.skipIf(!enabled)("incremental coverage counts (postgres)", () => {
         await Promise.all([
           db.execute(
             sql`SELECT * FROM public.seed_case_law_population_counts(2048)`,
+            "objects",
           ),
           writer
             .update(caseLawDecisions)
@@ -435,6 +444,7 @@ describe.skipIf(!enabled)("incremental coverage counts (postgres)", () => {
           // db-await-in-loop: finish bounded seed batches after the competing transactions settle.
           const batch = await db.execute(
             sql`SELECT * FROM public.seed_case_law_population_counts(2048)`,
+            "objects",
           );
           done = batch.at(0)?.["done"] === true;
         }
@@ -475,6 +485,7 @@ describe.skipIf(!enabled)("incremental coverage counts (postgres)", () => {
         (
           await db.execute(
             sql`SELECT decision_id FROM public.case_law_population_projections WHERE source_id = ${sourceId} ORDER BY decision_id`,
+            "objects",
           )
         ).map((row) => row["decision_id"]);
       try {
@@ -514,6 +525,7 @@ describe.skipIf(!enabled)("incremental coverage counts (postgres)", () => {
         try {
           const batch = await db.execute(
             sql`SELECT * FROM public.seed_case_law_population_counts(2048)`,
+            "objects",
           );
           expect(batch.at(0)?.["cursor"]).toBe(firstId);
           expect(batch.at(0)?.["processed"]).toBe(1);
@@ -527,6 +539,7 @@ describe.skipIf(!enabled)("incremental coverage counts (postgres)", () => {
           // db-await-in-loop: finish bounded seed batches after the writer commits
           const batch = await db.execute(
             sql`SELECT * FROM public.seed_case_law_population_counts(2048)`,
+            "objects",
           );
           done = batch.at(0)?.["done"] === true;
         }
@@ -623,23 +636,31 @@ describe.skipIf(!enabled)("incremental coverage counts (postgres)", () => {
           decisionDate: "2020-01-01",
         });
         await foldPopulationCounts(db);
-        const pendingBefore =
-          await db.execute(sql`SELECT id, kind, country, value, delta, xmin::text, ctid::text
-          FROM public.case_law_population_deltas WHERE source_id = ${sourceId} ORDER BY id`);
-        const before =
-          await db.execute(sql`SELECT kind, country, value, total, xmin::text, ctid::text
-          FROM public.case_law_population_counts WHERE source_id = ${sourceId} ORDER BY kind, country, value`);
+        const pendingBefore = await db.execute(
+          sql`SELECT id, kind, country, value, delta, xmin::text, ctid::text
+          FROM public.case_law_population_deltas WHERE source_id = ${sourceId} ORDER BY id`,
+          "objects",
+        );
+        const before = await db.execute(
+          sql`SELECT kind, country, value, total, xmin::text, ctid::text
+          FROM public.case_law_population_counts WHERE source_id = ${sourceId} ORDER BY kind, country, value`,
+          "objects",
+        );
         expect(before.length).toBeGreaterThan(0);
         await db.execute(sql`UPDATE public.case_law_decisions SET source_id = source_id, country = country,
           court = court, decision_date = decision_date, case_number = case_number, metadata = metadata,
           redacted_at = redacted_at, fulltext = fulltext WHERE source_id = ${sourceId}`);
-        const after =
-          await db.execute(sql`SELECT kind, country, value, total, xmin::text, ctid::text
-          FROM public.case_law_population_counts WHERE source_id = ${sourceId} ORDER BY kind, country, value`);
+        const after = await db.execute(
+          sql`SELECT kind, country, value, total, xmin::text, ctid::text
+          FROM public.case_law_population_counts WHERE source_id = ${sourceId} ORDER BY kind, country, value`,
+          "objects",
+        );
         expect([...after]).toEqual([...before]);
-        const pendingAfter =
-          await db.execute(sql`SELECT id, kind, country, value, delta, xmin::text, ctid::text
-          FROM public.case_law_population_deltas WHERE source_id = ${sourceId} ORDER BY id`);
+        const pendingAfter = await db.execute(
+          sql`SELECT id, kind, country, value, delta, xmin::text, ctid::text
+          FROM public.case_law_population_deltas WHERE source_id = ${sourceId} ORDER BY id`,
+          "objects",
+        );
         expect([...pendingAfter]).toEqual([...pendingBefore]);
         await assertFreshAggregation(db, [sourceId]);
       } finally {
@@ -746,9 +767,11 @@ describe.skipIf(!enabled)("incremental coverage counts (postgres)", () => {
               description:
                 "both mixed upserts reached the projection update phase",
               read: async () => {
-                const waiting =
-                  await db.execute(sql`SELECT count(*)::integer AS waiting FROM pg_locks
-              WHERE locktype = 'advisory' AND classid = 19054 AND objid IN (1, 2) AND NOT granted`);
+                const waiting = await db.execute(
+                  sql`SELECT count(*)::integer AS waiting FROM pg_locks
+              WHERE locktype = 'advisory' AND classid = 19054 AND objid IN (1, 2) AND NOT granted`,
+                  "objects",
+                );
                 return waiting.at(0)?.["waiting"] === 2;
               },
             }),

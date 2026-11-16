@@ -45,6 +45,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { writeDecisionAnchorRedirectsTx } from "@/api/lib/case-law/decision-anchor-redirects";
 import { preserveStoredTextAfterParseFailure } from "@/api/lib/case-law/decision-text";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
+import { decisionFallbackState } from "@/api/lib/case-law/fallback-decision-identity";
 import { rowHoldsDocumentFor } from "@/api/lib/case-law/stored-payload";
 import { corpusContentHash } from "@/api/lib/legal-search/corpus-content-hash";
 import type { ActiveCorpusProjectionSourceLock } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
@@ -364,6 +365,11 @@ export const describeRowUpdateTx = async (
     : {
         ...statedDocketColumns,
         sourceDocumentId: persistedSourceDocumentId,
+        ...decisionFallbackState({
+          storage: write.storageIdentity,
+          previous: existing,
+          persistedSourceDocumentId,
+        }).columns,
         ecli: result.ecli,
         court: result.court,
         courtId: result.courtId ?? null,
@@ -571,18 +577,26 @@ const reopenMovedIdentityTx = async (
   await settleReopenedCitations(tx, [incoming, keyed, announced]);
 };
 
+type FinishRefreshedRowOptions = {
+  tx: CitationGraphTransaction<Transaction>;
+  write: DecisionRowWrite;
+  existing: ExistingDecision;
+  replacedState: ReplacedDecisionState | null;
+  projectionLock: ActiveCorpusProjectionSourceLock | null;
+};
+
 /**
  * Finish a refreshed row in the row write's transaction, after its columns
  * and identifiers are written: reopen what its identity change affects,
  * then rewrite its citations under the citation-graph lock.
  */
-export const finishRefreshedRowTx = async (
-  tx: CitationGraphTransaction<Transaction>,
-  write: DecisionRowWrite,
-  existing: ExistingDecision,
-  replacedState: ReplacedDecisionState | null,
-  projectionLock: ActiveCorpusProjectionSourceLock | null,
-): Promise<DecisionRowWriteStatus> => {
+export const finishRefreshedRowTx = async ({
+  tx,
+  write,
+  existing,
+  replacedState,
+  projectionLock,
+}: FinishRefreshedRowOptions): Promise<DecisionRowWriteStatus> => {
   const {
     observedAt,
     shape: { incomingCarriesDocument },

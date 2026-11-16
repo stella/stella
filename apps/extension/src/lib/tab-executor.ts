@@ -8,6 +8,7 @@ import {
   BROWSER_CONTROL_LIMITS,
   BROWSER_CONTROL_PROTOCOL_VERSION,
   BROWSER_CONTROL_TARGET_METADATA,
+  BROWSER_SHOWN_DOCUMENT_TYPE,
   type BrowserControlCommand,
   type BrowserControlElementCommand,
   type BrowserControlErrorCode,
@@ -18,18 +19,13 @@ import {
   parseBrowserControlResult,
   parseElementReference,
 } from "@stll/api-contract/browser-control";
-import { sleep } from "@stll/concurrency/sleep";
-
-import { browserControlError } from "./browser-control-result";
-import type { CommandBudget } from "./command-budget";
-import { readBrowserController } from "./controller";
-import { isControllableFrame, parseControllableUrl } from "./origin-policy";
+import { browserControlError } from "@stll/browser-page/browser-control-result";
 import {
   type FindRequest,
   type PageOperation,
   pageScript,
   SNAPSHOT_PURPOSE,
-} from "./page-script";
+} from "@stll/browser-page/page-script";
 import {
   findInPage,
   frameFoundSchema,
@@ -38,7 +34,7 @@ import {
   type PageReadFailure,
   type ReaderFrame,
   readPageWindow,
-} from "./page-window";
+} from "@stll/browser-page/page-window";
 import {
   IDENTITY_PROVIDER_HOSTS,
   isIdentityProviderUrl,
@@ -46,13 +42,19 @@ import {
   SIGN_IN_MESSAGE,
   SIGN_IN_POLICY,
   type SignInPolicy,
-} from "./sign-in-policy";
+} from "@stll/browser-page/sign-in-policy";
 import {
   checkCommandIdentity,
   type LiveTopDocument,
   type SnapshotState,
   type TopDocument,
-} from "./snapshot-guard";
+} from "@stll/browser-page/snapshot-guard";
+import { sleep } from "@stll/concurrency/sleep";
+
+import type { CommandBudget } from "./command-budget";
+import { readBrowserController } from "./controller";
+import { isControllableFrame, parseControllableUrl } from "./origin-policy";
+import { shownDocumentOf, type ShownPdf } from "./shown-document";
 import { readStellaTabs } from "./stella-tabs";
 import { BROWSER_CONTROLLED_TAB_STORAGE_KEY } from "./storage-keys";
 import {
@@ -840,10 +842,23 @@ const readPreflight = async (
   return frames;
 };
 
+/** Hears of a PDF a read found the tab showing; the transport decides what follows. */
+type PdfShownHandler = (shown: ShownPdf) => Promise<void>;
+
+const SAVE_NOTHING: PdfShownHandler = async () => await Promise.resolve();
+
+/**
+ * What the tab's top document is, asked of that very document: a read
+ * bound to the same document id describes the same document.
+ */
+const readShownDocument = async (tabId: number, top: ReaderFrame) =>
+  shownDocumentOf(await runInFrame(tabId, top, { kind: "document-type" }));
+
 type ReadSnapshotOptions = {
   controllerId: string;
   /** Where the window starts; absent reads from the first block in view. */
   cursor?: string;
+  onPdfShown: PdfShownHandler;
   /**
    * The only origin the page may be read on, and what to return otherwise.
    * The page refuses before reading anything, and nothing is stored.
@@ -856,6 +871,7 @@ type ReadSnapshotOptions = {
 const readSnapshot = async ({
   controllerId,
   cursor,
+  onPdfShown,
   requiredOrigin,
   signIn,
   tabId,
@@ -864,6 +880,11 @@ const readSnapshot = async ({
   if (!Array.isArray(frames)) {
     return frames;
   }
+  const topFrame = frames.at(0);
+  // A PDF is read like any page, for the address, the tab list and a
+  // cursor; Chrome's viewer page around it holds none of its text.
+  const shown =
+    topFrame === undefined ? null : await readShownDocument(tabId, topFrame);
   const outcome = await readPageWindow({
     cursor,
     frames,
@@ -894,10 +915,12 @@ const readSnapshot = async ({
     return refusal;
   }
   const url = window.top.url.slice(0, BROWSER_CONTROL_LIMITS.urlChars);
+  const isPdf = shown?.type === BROWSER_SHOWN_DOCUMENT_TYPE.pdf;
   const parsed = parseBrowserControlResult({
     protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
     snapshot: {
       contentTrust: BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent,
+      ...(isPdf ? { document: { type: BROWSER_SHOWN_DOCUMENT_TYPE.pdf } } : {}),
       elements: window.elements,
       elementsLeftOut: window.elementsLeftOut,
       facts: window.facts,
@@ -935,6 +958,9 @@ const readSnapshot = async ({
     },
     tabId,
   });
+  if (shown?.type === BROWSER_SHOWN_DOCUMENT_TYPE.pdf) {
+    await onPdfShown({ tabId, title: parsed.snapshot.title, url: shown.url });
+  }
   return parsed;
 };
 
@@ -1057,7 +1083,7 @@ const readTopPage = async (
 const readOutcome = async (
   navigation: TabNavigationObserver,
   tabId: number,
-  { controllerId, signal, signIn }: CommandRun,
+  { controllerId, onPdfShown, signal, signIn }: CommandRun,
 ): Promise<BrowserControlResult> => {
   for (let attempt = 0; attempt < OUTCOME_SNAPSHOT_ATTEMPTS; attempt += 1) {
     const settled = await navigation.waitForSettled(signal);
@@ -1074,6 +1100,7 @@ const readOutcome = async (
     try {
       result = await readSnapshot({
         controllerId,
+        onPdfShown,
         signIn,
         tabId,
       });
@@ -1250,6 +1277,11 @@ type ExecuteBrowserCommandOptions = {
   budget: CommandBudget;
   /** The tab and snapshot the web client last saw a result for. */
   observedTab: BrowserObservedTab | null;
+  /**
+   * Hears of a PDF a read of this command found the tab showing, before
+   * the command's result is returned.
+   */
+  onPdfShown: PdfShownHandler;
   /** Aborts when chat stops the command or control changes. */
   signal: AbortSignal;
   /** How a page that asks for a sign-in is treated; set by the transport. */
@@ -1320,7 +1352,7 @@ type CommandProgress = { dispatched: boolean };
 
 type CommandRun = Pick<
   ExecuteBrowserCommandOptions,
-  "budget" | "signal" | "signIn" | "takeOver"
+  "budget" | "onPdfShown" | "signal" | "signIn" | "takeOver"
 > & {
   controllerId: string;
   progress: CommandProgress;
@@ -1366,7 +1398,15 @@ const runOpen = async (
     BrowserControlCommand,
     { action: typeof BROWSER_CONTROL_ACTION.open }
   >,
-  { budget, controllerId, progress, signal, signIn, takeOver }: CommandRun,
+  {
+    budget,
+    controllerId,
+    onPdfShown,
+    progress,
+    signal,
+    signIn,
+    takeOver,
+  }: CommandRun,
 ): Promise<BrowserControlResult> => {
   const requested = parseControllableUrl(command.url);
   if (requested === null) {
@@ -1463,6 +1503,7 @@ const runOpen = async (
   await reclaimControlledTab(opened.tabId);
   return await readSnapshot({
     controllerId,
+    onPdfShown,
     signIn,
     tabId: opened.tabId,
   });
@@ -1487,7 +1528,12 @@ const runGoBack = async (
     }
     progress.dispatched = true;
     await navigateBack(tabId);
-    return await readOutcome(navigation, tabId, run);
+    // A page reached by going back is one the chat read there before, whose
+    // PDF that read saved, or one it never read, which nothing saves.
+    return await readOutcome(navigation, tabId, {
+      ...run,
+      onPdfShown: SAVE_NOTHING,
+    });
   } finally {
     navigation.dispose();
   }
@@ -1546,7 +1592,7 @@ const runSwitchTab = async (
     BrowserControlCommand,
     { action: typeof BROWSER_CONTROL_ACTION.switchTab }
   >,
-  { budget, controllerId, signal, signIn }: CommandRun,
+  { budget, controllerId, onPdfShown, signal, signIn }: CommandRun,
 ): Promise<BrowserControlResult> => {
   const { tabId } = command;
   const [owner, stellaTabs] = await Promise.all([
@@ -1645,6 +1691,7 @@ const runSwitchTab = async (
   // refuses before anything is read, and nothing is stored.
   return await readSnapshot({
     controllerId,
+    onPdfShown,
     requiredOrigin: { origin: approved.origin, refusal: leftApprovedOrigin() },
     signIn,
     tabId,
@@ -1754,6 +1801,7 @@ const runBrowserCommand = async (
   {
     budget,
     observedTab,
+    onPdfShown,
     signal,
     signIn,
     takeOver,
@@ -1763,6 +1811,7 @@ const runBrowserCommand = async (
   const run = {
     budget,
     controllerId,
+    onPdfShown,
     progress,
     signal,
     signIn,
@@ -1804,6 +1853,7 @@ const runBrowserCommand = async (
       return await readSnapshot({
         controllerId,
         ...(command.cursor === undefined ? {} : { cursor: command.cursor }),
+        onPdfShown,
         signIn,
         tabId,
       });

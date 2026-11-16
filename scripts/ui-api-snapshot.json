@@ -1124,6 +1124,7 @@
     "./field-trigger": ["FIELD_TRIGGER_CLASS_NAME"],
     "./file-input": ["FileInput"],
     "./file-picker": ["openFilePicker"],
+    "./file-size": ["formatFileSize", "getFileSizeDisplay"],
     "./form": ["Form", "formVariants"],
     "./frame": [
       "Frame",
@@ -1943,6 +1944,7 @@
       "icon",
       "icon-2xs",
       "icon-lg",
+      "icon-round",
       "icon-sm",
       "icon-xl",
       "icon-xs",
@@ -1955,6 +1957,7 @@
       "xs"
     ],
     "Button.variant": [
+      "composer",
       "default",
       "destructive",
       "destructive-ghost",
@@ -2232,6 +2235,7 @@
       "icon",
       "icon-2xs",
       "icon-lg",
+      "icon-round",
       "icon-sm",
       "icon-xl",
       "icon-xs",
@@ -2250,6 +2254,7 @@
       "icon",
       "icon-2xs",
       "icon-lg",
+      "icon-round",
       "icon-sm",
       "icon-xl",
       "icon-xs",
@@ -2267,6 +2272,7 @@
       "icon",
       "icon-2xs",
       "icon-lg",
+      "icon-round",
       "icon-sm",
       "icon-xl",
       "icon-xs",

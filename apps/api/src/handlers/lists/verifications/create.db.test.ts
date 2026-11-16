@@ -80,13 +80,13 @@ describe("verification creation requires complete AI admission", () => {
     async ({ status, expectedStatus, expectedCode }) => {
       const previous = env.API_FEATURE_ACCESS_GRANTS;
       const previousDeployment = env.FEATURE_LEGAL_LISTS;
-      env.FEATURE_LEGAL_LISTS = true;
-      env.API_FEATURE_ACCESS_GRANTS = {
+      state.setConfig("FEATURE_LEGAL_LISTS", true);
+      state.setConfig("API_FEATURE_ACCESS_GRANTS", {
         "legal-lists": [{ type: "organization", organizationId: ids.orgA }],
         "list-verification": [
           { type: "organization", organizationId: ids.orgA },
         ],
-      };
+      });
       const scoped = createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1);
       let transactions = 0;
       const safeDb: typeof scoped = async (operation) => {
@@ -123,8 +123,8 @@ describe("verification creation requires complete AI admission", () => {
         // Identity and resource preflight settle before document, run or queue work.
         expect(transactions).toBe(2);
       } finally {
-        env.API_FEATURE_ACCESS_GRANTS = previous;
-        env.FEATURE_LEGAL_LISTS = previousDeployment;
+        state.setConfig("API_FEATURE_ACCESS_GRANTS", previous);
+        state.setConfig("FEATURE_LEGAL_LISTS", previousDeployment);
       }
     },
   );
@@ -222,8 +222,10 @@ describe("a verification limited to a paragraph range", () => {
         fileId: ids.fileObjectA1,
         mimeType: DOCX_MIME_TYPE,
         pdfFileId: null,
+        sizeBytes: Bun.file(statementPath).size,
       },
       signal: AbortSignal.timeout(30_000),
+      admissionWaitMs: 30_000,
     });
     if (document.type !== "read") {
       throw new Error(`Expected the statement to read, got ${document.type}`);

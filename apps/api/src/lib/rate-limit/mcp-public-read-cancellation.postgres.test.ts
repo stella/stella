@@ -89,6 +89,7 @@ describe.skipIf(!enabled)(
                             await publicLawReadDb(async (tx) => {
                               const [row] = await tx.execute<{ pid: number }>(
                                 sql`SELECT pg_backend_pid() AS pid`,
+                                "objects",
                               );
                               if (row === undefined) {
                                 panic("Expected backend PID");
@@ -242,6 +243,7 @@ describe.skipIf(!enabled)(
                   await publicLawReadDb(async (tx) => {
                     const [row] = await tx.execute<{ pid: number }>(
                       sql`SELECT pg_backend_pid() AS pid`,
+                      "objects",
                     );
                     if (row === undefined) {
                       panic("Expected backend PID");
@@ -288,7 +290,7 @@ describe.skipIf(!enabled)(
 if (enabled) {
   // Other gated suites use the same process-owned root pool after this suite.
   afterAll(async () => {
-    const rows = await rootDb.execute(sql`SELECT 1 AS available`);
+    const rows = await rootDb.execute(sql`SELECT 1 AS available`, "objects");
     expect(rows.at(0)?.["available"]).toBe(1);
   });
 }

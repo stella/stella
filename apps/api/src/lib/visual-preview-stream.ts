@@ -9,6 +9,7 @@ import {
 } from "@stll/api-contract/visual-preview";
 
 import {
+  SNAPSHOT_OWNERS_METADATA_KEY,
   toolCallEndInputOf,
   toolCallEndOutputOf,
   toolCallNameOf,
@@ -282,9 +283,16 @@ export const projectVisualPreviewStream = async function* (
           ...(metadata !== undefined && { metadata }),
         };
       });
+      const snapshotOwners: unknown =
+        chunk.metadata?.[SNAPSHOT_OWNERS_METADATA_KEY];
       const projected = {
         type: chunk.type,
         messages,
+        // The snapshot metadata bag can contain the preview image itself.
+        // Only this internal evidence survives until the persistence remapper.
+        ...(snapshotOwners !== undefined && {
+          metadata: { [SNAPSHOT_OWNERS_METADATA_KEY]: snapshotOwners },
+        }),
       } satisfies PublicStreamChunk;
       if (chunk.timestamp !== undefined) {
         Object.assign(projected, { timestamp: chunk.timestamp });

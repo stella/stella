@@ -47,7 +47,11 @@ import {
   sumMetrics,
 } from "./measurement";
 import { QUERY_PERF_OWNER_DEADLINES } from "./owner-deadlines";
-import { analyzePlan, type PlanViolation } from "./plan-analyzer";
+import {
+  analyzePlan,
+  type PlanViolation,
+  relationRowsVisited,
+} from "./plan-analyzer";
 import {
   applyPlannerSettings,
   assertPlannerSettings,
@@ -65,11 +69,44 @@ type MeasuredStatement = {
   kind: "read" | "write";
   metrics: QueryPerfMetrics;
   planViolations: PlanViolation[];
+  queuedExportRead: ReturnType<typeof queuedExportReadWork>;
   statement: string;
   writtenRows: number;
 };
 
 type PlanNode = Record<string, unknown>;
+
+/** The captured query supplies its page bound, including readCursorPage's lookahead. */
+export const queuedExportReadWork = ({
+  text,
+  params,
+  plan,
+}: {
+  text: string;
+  params: readonly unknown[];
+  plan: PlanNode;
+}) => {
+  if (!text.includes('"queued_export_keys"')) {
+    return undefined;
+  }
+  const parameter = /\blimit\s+\$(\d+)\s*;?\s*$/iu.exec(text)?.at(1);
+  const parameterIndex = Number(parameter) - 1;
+  const lookaheadLimit =
+    Number.isSafeInteger(parameterIndex) && parameterIndex >= 0
+      ? params.at(parameterIndex)
+      : undefined;
+  if (
+    typeof lookaheadLimit !== "number" ||
+    !Number.isSafeInteger(lookaheadLimit) ||
+    lookaheadLimit <= 0
+  ) {
+    return panic("Queued export read has no positive bound parameter");
+  }
+  return {
+    lookaheadLimit,
+    rowsVisited: relationRowsVisited(plan, "organization_data_exports"),
+  };
+};
 
 const childPlans = (node: PlanNode): readonly PlanNode[] => {
   const plans = node["Plans"];
@@ -399,6 +436,10 @@ export const measureScheduledStatementsInOrder = async ({
           actualRows,
           ...classification,
           metrics: metricsFromPlan(plan),
+          queuedExportRead: queuedExportReadWork({
+            ...statement,
+            plan: plan.Plan,
+          }),
           planViolations: analyzePlan({
             document: plan,
             owner: jobId,
@@ -696,6 +737,7 @@ export const measureScheduledJobRun = async ({
     return {
       ...classifyMeasuredStatement({ statement: query.text, plan: plan.Plan }),
       metrics: metricsFromPlan(plan),
+      queuedExportRead: queuedExportReadWork({ ...query, plan: plan.Plan }),
       planViolations: analyzePlan({
         document: plan,
         owner: jobId,

@@ -1,6 +1,8 @@
 import { Result } from "better-result";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import { asc, eq, sql } from "drizzle-orm";
+
+import { createTestState } from "@stll/test-state";
 
 import {
   AGENT_CLIENT_BATCH_SIZE,
@@ -30,23 +32,22 @@ import {
   withGatedTestClients,
 } from "@/api/tests/gated-test-database";
 
-let priorStorageSetting = false;
+const testState = createTestState({ file: import.meta.path, config: env });
+
+const databaseUrl = process.env["DATABASE_URL"];
+
 beforeEach(() => {
-  priorStorageSetting = env.AGENT_CLIENT_STORAGE_V1_ENABLED;
-  env.AGENT_CLIENT_STORAGE_V1_ENABLED = true;
-});
-afterEach(() => {
-  env.AGENT_CLIENT_STORAGE_V1_ENABLED = priorStorageSetting;
+  testState.setConfig("AGENT_CLIENT_STORAGE_V1_ENABLED", true);
 });
 
 type Transaction = Parameters<Parameters<GatedTestDb["transaction"]>[0]>[0];
-const databaseUrl = process.env["DATABASE_URL"];
+
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const credential = Buffer.alloc(32, 0x2a).toHex();
 
 const withStoredValues = async (
   connectionUrl: string,
-  work: (db: GatedTestDb) => Promise<void>,
+  work: (db: GatedTestDb, schema: string) => Promise<void>,
 ) => {
   await withGatedTestClients(connectionUrl, async ({ openClient }) => {
     const { db } = openClient();
@@ -76,7 +77,7 @@ const withStoredValues = async (
           return Reflect.get(target, property, receiver) as unknown;
         },
       });
-      await work(isolated);
+      await work(isolated, schema);
     } finally {
       await db.execute(sql`DROP SCHEMA ${sql.identifier(schema)} CASCADE`);
     }
@@ -272,7 +273,7 @@ if (!databaseUrl || !enabled) {
         if (!job) {
           throw new Error("scheduler fixture missing");
         }
-        env.AGENT_CLIENT_STORAGE_V1_ENABLED = false;
+        testState.setConfig("AGENT_CLIENT_STORAGE_V1_ENABLED", false);
         const unusedDatabase = new Proxy(db, {
           get() {
             throw new Error("disabled task must not access storage");
@@ -399,6 +400,55 @@ if (!databaseUrl || !enabled) {
         ).toBe(credential);
       });
     });
+
+    test.each(["error", "no_change"] as const)(
+      "a deferred update preserves the caller transaction (%s)",
+      async (mode) => {
+        await withStoredValues(databaseUrl, async (db, schema) => {
+          await db.transaction(async (tx) => {
+            const seeded = (await seed(tx, 1)).at(0);
+            if (!seeded) {
+              throw new Error("registration fixture missing");
+            }
+            await tx
+              .update(agentRegistration)
+              .set({ authorizationCode: "pending-code" })
+              .where(eq(agentRegistration.id, seeded.id));
+            const body =
+              mode === "error"
+                ? sql`RAISE EXCEPTION 'Stored value update unavailable';`
+                : sql`RETURN NULL;`;
+            await tx.execute(
+              sql`CREATE FUNCTION ${sql.identifier(schema)}.defer_credential_update() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN ${body} END $$`,
+            );
+            await tx.execute(
+              sql`CREATE TRIGGER defer_credential_update BEFORE UPDATE OF client_secret_sink ON ${sql.identifier(schema)}.agent_registration FOR EACH ROW EXECUTE FUNCTION ${sql.identifier(schema)}.defer_credential_update()`,
+            );
+          });
+          await db.transaction(async (tx) => {
+            const original = (await tx.select().from(agentRegistration)).at(0);
+            if (!original) {
+              throw new Error("registration fixture missing");
+            }
+            expect(original.authorizationCode).toBe("pending-code");
+            await tx
+              .update(agentRegistration)
+              .set({ authorizationCode: null })
+              .where(eq(agentRegistration.id, original.id));
+            expect(
+              (await readStoredAgentClientCredential(tx, original)).unwrap(),
+            ).toBe(credential);
+            const rows = await tx.execute(sql`SELECT 1 AS healthy`, "objects");
+            expect(rows.at(0)?.["healthy"]).toBe(1);
+          });
+          const stored = await db.transaction(async (tx) =>
+            (await tx.select().from(agentRegistration)).at(0),
+          );
+          expect(stored?.authorizationCode).toBeNull();
+          expect<string | undefined>(stored?.clientSecretSink).toBe(credential);
+        });
+      },
+    );
 
     test("rejects a stale read after a different stored value wins", async () => {
       await withStoredValues(databaseUrl, async (db) => {

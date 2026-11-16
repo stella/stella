@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, test } from "bun:test";
 
 import type { Fetcher } from "@stll/fetch";
 import { listSkillMetadata, readSkillRequiredTools } from "@stll/skills";
+import { createTestState } from "@stll/test-state";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import type { agentSkills } from "@/api/db/schema";
@@ -30,6 +31,8 @@ import {
   createScopedDbMock,
   createSelectQueryMock,
 } from "@/api/tests/scoped-db-mock";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 // The real `chat()` engine runs here; only the provider boundary is faked, so
 // a fixture cannot invent chunk shapes the engine never emits. Each request the
@@ -990,36 +993,24 @@ describe("buildAiConditionDecider decision tier", () => {
   });
 
   test("keeps conditions unavailable without an eligible customer-content model", () => {
-    const previousMock = env.USE_MOCK_AI;
-    const previousApiKey = env.TYPESAFE_API_KEY;
-    const previousRequirePersonalKey = env.REQUIRE_PERSONAL_AI_KEY;
-    const previousProvider = env.AI_PROVIDER;
-    const previousAnthropicKey = env.ANTHROPIC_API_KEY;
-    env.USE_MOCK_AI = false;
-    env.TYPESAFE_API_KEY = "key-test";
-    env.REQUIRE_PERSONAL_AI_KEY = false;
-    env.AI_PROVIDER = "anthropic";
-    env.ANTHROPIC_API_KEY = "key-test";
-    try {
-      const customerDecisionModel = resolveDecisionModel(null, "customer");
-      expect(customerDecisionModel).toBeNull();
-      const decideCondition = buildAiConditionDecider({
-        decisionModel: customerDecisionModel,
-        orgAIConfig: null,
-        managedAIResidency: "eu",
-        organizationId,
-        admission: testModelAdmission(organizationId),
-        resolveTextModel,
-        tenantWorkspaceIds: [],
-      });
-      expect(decideCondition).toBeUndefined();
-      expect(capturedRequests).toEqual([]);
-    } finally {
-      env.USE_MOCK_AI = previousMock;
-      env.TYPESAFE_API_KEY = previousApiKey;
-      env.REQUIRE_PERSONAL_AI_KEY = previousRequirePersonalKey;
-      env.AI_PROVIDER = previousProvider;
-      env.ANTHROPIC_API_KEY = previousAnthropicKey;
-    }
+    testState.setConfig("USE_MOCK_AI", false);
+    testState.setConfig("TYPESAFE_API_KEY", "key-test");
+    testState.setConfig("REQUIRE_PERSONAL_AI_KEY", false);
+    testState.setConfig("AI_PROVIDER", "anthropic");
+    testState.setConfig("ANTHROPIC_API_KEY", "key-test");
+
+    const customerDecisionModel = resolveDecisionModel(null, "customer");
+    expect(customerDecisionModel).toBeNull();
+    const decideCondition = buildAiConditionDecider({
+      decisionModel: customerDecisionModel,
+      orgAIConfig: null,
+      managedAIResidency: "eu",
+      organizationId,
+      admission: testModelAdmission(organizationId),
+      resolveTextModel,
+      tenantWorkspaceIds: [],
+    });
+    expect(decideCondition).toBeUndefined();
+    expect(capturedRequests).toEqual([]);
   });
 });

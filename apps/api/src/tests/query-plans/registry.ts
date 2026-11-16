@@ -66,7 +66,15 @@ import { CASE_LAW_SURFACE_COUNTRIES } from "@/api/lib/case-law/public-subject";
 import { sitemapMonthCountSql } from "@/api/lib/case-law/sitemap-shard-refresh";
 import { SITEMAP_SHARD_BUCKET_COUNT } from "@/api/lib/case-law/sitemap-shard-sql";
 import { sourceArrivalsRefreshQuery } from "@/api/lib/case-law/source-arrivals-refresh";
+import {
+  corpusIndexFlipCoveragePageQuery,
+  corpusIndexFlipRegressionQuery,
+} from "@/api/lib/legal-search/corpus-index-flip-parity";
 import { corpusProjectionErasureClaimQuery } from "@/api/lib/legal-search/corpus-index-projection-erasure-store";
+import {
+  corpusProjectionUnservedCountQuery,
+  corpusProjectionUnservedPageQuery,
+} from "@/api/lib/legal-search/corpus-index-projection-unserved";
 import { rehydrateCorpusIndexProviderCandidatesStatement } from "@/api/lib/legal-search/corpus-index-provider";
 import { legislationFacetRefreshQuery } from "@/api/lib/legal-search/legislation-facet-refresh";
 import {
@@ -105,6 +113,9 @@ type QueryPlanEntry = {
     allowSeqScan?: string;
   };
 };
+
+/** A generation a flip could move the seeded one's readers to. */
+const FLIP_CANDIDATE_GENERATION = "case_law_v10";
 
 /**
  * A read that resolves a decision's language versions probes that one group,
@@ -813,6 +824,109 @@ export const QUERY_PLAN_REGISTRY = [
       }),
     seed: "case-law",
     contract: planContracts["case-law.freshness-pending-states"],
+  },
+  {
+    // Scheduler gauge: a bounded walk of the unproven-delete revision index,
+    // each joined to the state naming it by primary key.
+    id: "corpus-index.projection-unserved-at-risk-count",
+    class: "page",
+    role: "root",
+    build: () =>
+      corpusProjectionUnservedCountQuery("at_risk", {
+        family: "case_law",
+        generation: QUERY_PLAN_SAMPLE.caseLaw.generation,
+      }),
+    seed: "case-law",
+    contract: planContracts["corpus-index.projection-unserved-at-risk-count"],
+  },
+  {
+    // Scheduler gauge: a bounded walk of the absent-state index.
+    id: "corpus-index.projection-unserved-absent-count",
+    class: "page",
+    role: "root",
+    build: () =>
+      corpusProjectionUnservedCountQuery("absent", {
+        family: "case_law",
+        generation: QUERY_PLAN_SAMPLE.caseLaw.generation,
+      }),
+    seed: "case-law",
+    contract: planContracts["corpus-index.projection-unserved-absent-count"],
+  },
+  {
+    id: "corpus-index.projection-unserved-at-risk-page",
+    class: "page",
+    role: "root",
+    build: (tx) =>
+      corpusProjectionUnservedPageQuery(tx, {
+        family: "case_law",
+        generation: QUERY_PLAN_SAMPLE.caseLaw.generation,
+        kind: "at_risk",
+        limit: 100,
+        after: null,
+      }),
+    seed: "case-law",
+    contract: planContracts["corpus-index.projection-unserved-at-risk-page"],
+  },
+  {
+    id: "corpus-index.projection-unserved-absent-page",
+    class: "page",
+    role: "root",
+    build: (tx) =>
+      corpusProjectionUnservedPageQuery(tx, {
+        family: "case_law",
+        generation: QUERY_PLAN_SAMPLE.caseLaw.generation,
+        kind: "absent",
+        limit: 100,
+        after: null,
+      }),
+    seed: "case-law",
+    contract: planContracts["corpus-index.projection-unserved-absent-page"],
+  },
+  {
+    // Operator read and flip gate: four bounded walks of the candidate's
+    // partial queue indexes, each walked entity probed in both generations
+    // by primary key.
+    id: "corpus-index.flip-regressions",
+    class: "page",
+    role: "root",
+    build: () =>
+      corpusIndexFlipRegressionQuery(
+        {
+          family: "case_law",
+          serving: QUERY_PLAN_SAMPLE.caseLaw.generation,
+          candidate: FLIP_CANDIDATE_GENERATION,
+        },
+        Temporal.Instant.from("2026-01-01T00:00:00Z"),
+      ),
+    seed: "case-law",
+    contract: planContracts["corpus-index.flip-regressions"],
+  },
+  {
+    // One coverage page: the serving generation's applied-census index in
+    // entity order, each copy probed in the candidate by primary key.
+    id: "corpus-index.flip-coverage-page",
+    class: "page",
+    role: "root",
+    build: () =>
+      corpusIndexFlipCoveragePageQuery(
+        {
+          family: "case_law",
+          serving: QUERY_PLAN_SAMPLE.caseLaw.generation,
+          candidate: FLIP_CANDIDATE_GENERATION,
+        },
+        {
+          after: null,
+          limit: 1000,
+        },
+      ),
+    seed: "case-law",
+    heapFetchMitigation: {
+      type: "heapFetchBudget",
+      rows: 1000,
+      reason:
+        "Operator-only page: one candidate primary-key probe per serving copy the page walked, at most the page size, and heap visits are only for pages not yet all-visible.",
+    },
+    contract: planContracts["corpus-index.flip-coverage-page"],
   },
 ] as const satisfies readonly QueryPlanEntry[];
 

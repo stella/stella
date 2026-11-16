@@ -96,7 +96,8 @@ echo "Current tag $current_tag is on channel '$current_channel'" >&2
 #   - packages/ui/                           the settings UI's workspace
 #                                            dep (verified: no transitive
 #                                            runtime workspace deps)
-#   - packages/agent-engine/, packages/errors/, packages/fetch/ and the api-contract
+#   - packages/agent-engine/, packages/browser-page/, packages/errors/,
+#     packages/fetch/ and the api-contract
 #     modules listed below                   the bundled harness sidecar;
 #                                            build-sidecar.test.ts checks
 #                                            every workspace file the
@@ -126,6 +127,7 @@ rebuild_paths=(
   "apps/desktop/"
   "packages/ui/"
   "packages/agent-engine/"
+  "packages/browser-page/"
   "packages/errors/"
   "packages/fetch/"
   "packages/portable-path/"
@@ -138,6 +140,7 @@ rebuild_paths=(
   "packages/api-contract/src/api-version.ts"
   "packages/api-contract/src/browser-control.ts"
   "packages/api-contract/src/chat-local-run-question.ts"
+  "packages/api-contract/src/chat-local-run-step-content.ts"
   "packages/api-contract/src/chat-local-run-step-output.ts"
   "packages/api-contract/src/chat-local-run-tool.ts"
   "packages/api-contract/src/chat-run-target.ts"
@@ -146,6 +149,7 @@ rebuild_paths=(
   "packages/api-contract/src/desktop-runner-answers.ts"
   "packages/api-contract/src/desktop-runner.ts"
   "packages/api-contract/src/display-name.ts"
+  "packages/api-contract/src/document-version-upload.ts"
   "packages/api-contract/src/limits.ts"
   "packages/api-contract/src/mcp-chat-tool-policy.gen.ts"
   "packages/api-contract/src/mcp-tool-names.gen.ts"

@@ -13,7 +13,7 @@ import { lookupByVerificationCode } from "@/api/lib/entity-versions/document-ref
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 
 const checkStampBodySchema = v.object({
-  file: fileSchema({ maxBytes: FILE_SIZE_LIMIT_BYTES.document }),
+  file: fileSchema({ maxBytes: FILE_SIZE_LIMIT_BYTES.multipartDocument }),
 });
 
 type CheckStampHandlerProps = {

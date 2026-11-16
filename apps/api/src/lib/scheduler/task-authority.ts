@@ -133,6 +133,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "case-law-population-seed.ts",
     "Seeds public legal corpus population counts under the load governor.",
   ),
+  "caseLaw.foldSitemapTouches": platform(
+    "case-law-sitemap-touch-fold.ts",
+    "Folds public legal corpus sitemap touches under the load governor.",
+  ),
   "caseLaw.refreshSitemapShards": platform(
     "case-law-sitemap-shard-refresh.ts",
     "Public legal corpus sitemap.",
@@ -304,10 +308,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "Reports overdue scheduler operator pauses.",
   ),
   "scheduler.dispatchBullMq": {
-    authority: "unclassified",
+    authority: "org-automation",
     module: "apps/api/src/lib/scheduler/bullmq.ts",
     reason:
-      "Forwards to whichever queue a stored job names; the code does not fix the target queue, so the authority depends on data.",
+      "Dispatches only to registered org-automation queues; refuses member-run and unknown queues before enqueueing.",
   },
   "scheduler.noop": {
     authority: "org-automation",

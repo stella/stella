@@ -78,5 +78,15 @@
     "table": "usage_policies",
     "column": "storageBytesPerAssignment",
     "reason": "not app-code dead: read by the migration-owned organization_storage_capacity function in apps/api/drizzle/20261005090300_organization_effective_policy/migration.sql, which every storage reservation calls. Migrations are excluded by design."
+  },
+  {
+    "table": "desktop_runner_runs",
+    "column": "outputKeyEncrypted",
+    "reason": "retired, pending its drop: no longer written or read since run output keys were removed; the column stays until a release in which no running API task selects it (expand-only migrations). The release that drops output_key_encrypted and output_key_iv removes this entry with them."
+  },
+  {
+    "table": "desktop_runner_runs",
+    "column": "outputKeyIv",
+    "reason": "retired, pending its drop: the IV of outputKeyEncrypted; see desktop_runner_runs.outputKeyEncrypted. Removed with it."
   }
 ]

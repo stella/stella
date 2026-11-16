@@ -15,7 +15,7 @@ covered by one, or through `read_capability` or
 A capability id is its handler path under `apps/api/src/handlers/`, joined
 with `.`: `<domain>[.<resource>…].<action>`. The action is one word:
 a canonical verb (`list`, `get`, `create`, `update`, `delete`)
-or a domain verb (`add`, `approve`, `archive`, `cancel`, `check`, `clear`, `clip`, `clone`, `compare`, `confirm`, `convert`, `copy`, `count`, `diff`, `discover`, `discard`, `download`, `duplicate`, `export`, `fill`, `generate`, `import`, `install`, `link`, `lookup`, `move`, `pause`, `prefill`, `prepare`, `preview`, `remove`, `rename`, `reorder`, `replace`, `resolve`, `return`, `restore`, `resume`, `retry`, `revert`, `review`, `rewrite`, `run`, `search`, `split`, `start`, `stop`, `suggest`, `summarize`, `sync`, `transcribe`, `transition`, `unarchive`, `unlink`, `upload`, `upsert`, `void`).
+or a domain verb (`add`, `approve`, `archive`, `cancel`, `check`, `clear`, `clip`, `clone`, `compare`, `confirm`, `convert`, `copy`, `count`, `diff`, `discover`, `discard`, `download`, `duplicate`, `export`, `fill`, `generate`, `import`, `install`, `link`, `lookup`, `move`, `pause`, `place`, `prefill`, `prepare`, `preview`, `release`, `remove`, `rename`, `reorder`, `replace`, `resolve`, `return`, `restore`, `resume`, `retry`, `revert`, `review`, `rewrite`, `run`, `search`, `split`, `start`, `stop`, `suggest`, `summarize`, `sync`, `transcribe`, `transition`, `unarchive`, `unlink`, `upload`, `upsert`, `void`).
 A compound action is a nested resource: `clauses.categories.create`, not
 `clauses.categories-create`.
 
@@ -204,6 +204,8 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `entities.folders.list` | read | stella:read | — | covered by `list_documents` |
 | `entities.from-legal-source.create` | write | stella:documents_write | — | generic invoke → `stella capability entities from-legal-source-create` |
 | `entities.get` | read | stella:read | — | curated tool `read_document` |
+| `entities.legal-holds.place` | write | stella:matters_write | — | generic invoke → `stella capability entities legal-holds-place` |
+| `entities.legal-holds.release` | write | stella:matters_write | — | generic invoke → `stella capability entities legal-holds-release` |
 | `entities.list` | read | stella:read | — | curated tool `list_documents` |
 | `entities.move` | write | stella:documents_write | — | covered by `save_document` |
 | `entities.ocr.create` | write | stella:matters_write | — | generic invoke → `stella capability entities ocr-create` |
@@ -387,6 +389,8 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `matters.duplicate` | write | stella:matters_write | — | generic invoke → `stella capability matters duplicate` |
 | `matters.get` | read | stella:read | — | covered by `list_matters` |
 | `matters.justifications.list` | read | stella:read | — | generic invoke → `stella capability matters justifications-list` |
+| `matters.legal-holds.place` | write | stella:matters_write | — | generic invoke → `stella capability matters legal-holds-place` |
+| `matters.legal-holds.release` | write | stella:matters_write | — | generic invoke → `stella capability matters legal-holds-release` |
 | `matters.list` | read | stella:read | — | curated tool `list_matters` |
 | `matters.matter-numbering.get` | read | stella:read | — | generic invoke → `stella capability matters matter-numbering-get` |
 | `matters.member-candidates.list` | read | stella:read | — | generic invoke → `stella capability matters member-candidates-list` |
@@ -448,6 +452,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `organization-settings.deepl-availability.get` | read | stella:admin_read | — | generic invoke → `stella capability organization-settings deepl-availability-get` |
 | `organization-settings.document-ocr-availability.get` | read | stella:admin_read | — | generic invoke → `stella capability organization-settings document-ocr-availability-get` |
 | `organization-settings.get` | read | stella:admin_read | — | generic invoke → `stella capability organization-settings get` |
+| `organization-settings.members.billing-access.update` | write | stella:admin_write | FEATURE_TIME_BILLING | generic invoke → `stella capability organization-settings members-billing-access-update` |
 | `organization-settings.practice-jurisdictions.update` | write | stella:admin_write | — | curated tool `set_practice_jurisdictions` |
 | `organization-settings.preview` | read | stella:admin_read | — | generic invoke → `stella capability organization-settings preview` |
 | `organization-settings.sanctions-monitoring.update` | write | stella:admin_write | — | generic invoke → `stella capability organization-settings sanctions-monitoring-update` |
@@ -640,6 +645,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `tasks.assignees.remove` | write, destructive | stella:matters_write | — | covered by `save_task` |
 | `tasks.calendar.list` | read | stella:read | — | covered by `list_tasks` |
 | `tasks.create` | write | stella:matters_write | — | curated tool `save_task` |
+| `tasks.delete` | write, destructive | stella:matters_write | — | covered by `delete_task` |
 | `tasks.entity-links.create` | write | stella:matters_write | — | covered by `save_task` |
 | `tasks.entity-links.delete` | write, destructive | stella:matters_write | — | covered by `save_task` |
 | `tasks.entity-links.list` | read | stella:read | — | covered by `list_tasks` |
@@ -817,7 +823,7 @@ mechanics, and similar), not gaps in coverage.
 | --- | --- |
 | account_lifecycle | 6 |
 | agent_autonomy_ceiling | 1 |
-| assistant_chat | 19 |
+| assistant_chat | 28 |
 | auth_plumbing | 43 |
 | billing_ui | 1 |
 | chat_thread_ui | 31 |
@@ -830,11 +836,11 @@ mechanics, and similar), not gaps in coverage.
 | native_device | 5 |
 | native_tool_ui | 11 |
 | organization_export | 2 |
-| provider_secret | 33 |
-| public_indexing | 10 |
-| realtime_stream | 9 |
+| provider_secret | 34 |
+| public_indexing | 11 |
+| realtime_stream | 10 |
 | search_ui | 21 |
 | session_token_exchange | 21 |
 | ui_navigation_state | 14 |
-| upload_mechanics | 22 |
+| upload_mechanics | 24 |
 | url_preview | 2 |

@@ -220,6 +220,7 @@ test("a long commit window fills one request with every reserved revision", asyn
     payloadReadConcurrency: 2,
     retryDelayMs: 5000,
     payloadRetryLimit: 3,
+    proofAfterIndexId: null,
   });
 
   expect(result.reserved).toBe(REVISIONS);

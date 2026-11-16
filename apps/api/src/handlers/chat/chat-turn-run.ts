@@ -5,11 +5,15 @@ import { panic, Result, TaggedError } from "better-result";
 import type { AIProvider } from "@stll/ai-catalog";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
+import { memberWaitsOf } from "@stll/api-contract/chat-member-wait";
+import {
+  CHAT_RUN_TARGET_KIND,
+  type ChatRunTarget,
+} from "@stll/api-contract/chat-run-target";
 import { TimeoutError } from "@stll/concurrency/with-timeout";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { reportDeliveryFailuresByKind } from "@/api/handlers/chat/chat-delivery-failure";
-import { getAwaitingUserInteractions } from "@/api/handlers/chat/chat-message-parts";
 import {
   persistFailedChatTurn,
   persistTerminalAssistantTurn,
@@ -18,11 +22,17 @@ import type { PersistMessageProps } from "@/api/handlers/chat/chat-message-persi
 import {
   AI_ERROR_FAILURE_CODE,
   AI_ERROR_RETRYABLE,
+  CHAT_METERED_PROVIDER_TIMEOUT_MS,
   isChatTurnNotOwned,
   readChatTurnExecutionStanding,
   renewChatTurnExecutionLease,
 } from "@/api/handlers/chat/chat-turn-persistence";
 import type { ChatTurnExecution } from "@/api/handlers/chat/chat-turn-persistence";
+import {
+  CHAT_TURN_OWNER_LOST_REASON,
+  CHAT_TURN_PRODUCTION_FAILED_REASON,
+  isCutByStopOrOwnerLoss,
+} from "@/api/handlers/chat/chat-turn-run-cut";
 import type { ChatTurnFailureCode } from "@/api/handlers/chat/chat-turn-state";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import type {
@@ -215,13 +225,6 @@ const CHAT_TURN_RUN_HEARTBEAT = {
   renewEvery: 4,
 } as const satisfies ChatTurnRunHeartbeat;
 
-/**
- * The abort reason of a run that no longer owns its turn: its lease was lost,
- * or its process is shutting down. It ends the turn as `owner-lost`.
- */
-export const CHAT_TURN_OWNER_LOST_REASON = "stella.chat-turn.owner-lost";
-const CHAT_TURN_PRODUCTION_FAILED_REASON = "stella.chat-turn.production-failed";
-
 const DURABILITY_FAILED_SINK = failureSink({
   event: "chat.turn.durability_failed",
   expected: [],
@@ -238,6 +241,58 @@ const CONNECTOR_CLOSE_FAILED_SINK = failureSink({
   event: "chat.turn.connector_close_failed",
   expected: [],
 });
+
+/**
+ * What ends a run by elapsed time alone, by where its turn runs.
+ *
+ * A turn stella's own model answers makes a metered provider request from
+ * this process, and the deadline bounds that request. A turn a member's
+ * computer answers makes none: the harness there talks to its own provider,
+ * works for as long as its task takes and may wait on the member. Such a run
+ * ends by the member's stop or by its computer's liveness: the runner gateway
+ * ends a run whose computer did not take it, or stayed away, as lost
+ * (`expireAbandonedRuns`), and the turn reading it fails with that reason.
+ */
+type ChatTurnRunBound =
+  | { type: "provider-deadline"; deadlineMs: number }
+  | { type: "computer-liveness" };
+
+/** The bound of a turn that runs on `runsOn`; a new place must name its own. */
+export const chatTurnRunBoundOf = (
+  runsOn: ChatRunTarget["kind"],
+): ChatTurnRunBound => {
+  switch (runsOn) {
+    case CHAT_RUN_TARGET_KIND.cloud:
+      return {
+        type: "provider-deadline",
+        deadlineMs: CHAT_METERED_PROVIDER_TIMEOUT_MS,
+      };
+    case CHAT_RUN_TARGET_KIND.local:
+      return { type: "computer-liveness" };
+    default:
+      runsOn satisfies never;
+      return panic(`Unhandled run target: ${String(runsOn)}`);
+  }
+};
+
+/**
+ * How long a settled run's source may take to close before its admission is
+ * released anyway. A local run's source only stops reading its run's events.
+ */
+const LOCAL_RUN_SOURCE_CLOSE_TIMEOUT_MS = 60 * 1000;
+
+const sourceCloseTimeoutMs = (bound: ChatTurnRunBound): number => {
+  switch (bound.type) {
+    case "provider-deadline":
+      // Cleanup gets the provider request's own time budget.
+      return bound.deadlineMs;
+    case "computer-liveness":
+      return LOCAL_RUN_SOURCE_CLOSE_TIMEOUT_MS;
+    default:
+      bound satisfies never;
+      return panic("Unhandled chat turn run bound");
+  }
+};
 
 /** The boundary a turn's provider input crosses, by the mode it was sent in. */
 export const CHAT_TURN_BOUNDARY_MODE = {
@@ -271,12 +326,16 @@ export const countChatTurnSettlement = (
 
 /**
  * What a run's persistence left on the turn row: the outcome it stored, which
- * a stop that won the race may have turned into `cancelled`, or nothing,
- * because another execution or the reaper settled the turn first. Only a
- * stored outcome is counted, so the count matches the durable row.
+ * a stop that won the race may have turned into `cancelled`, nothing,
+ * because another execution or the reaper settled the turn first, or the
+ * failure the run stored instead (`fail`) because the outcome could not be.
+ * Only a stored outcome is counted here, so the count matches the durable
+ * row; `fail` counts its own.
  */
 export type ChatTurnStoredSettlement =
-  { type: "stored"; outcome: ChatTurnOutcome } | { type: "not-owned" };
+  | { type: "stored"; outcome: ChatTurnOutcome }
+  | { type: "not-owned" }
+  | { type: "failed-instead" };
 
 /** The turn a run produces for, and what storing its failure needs. */
 type ChatTurnRunOwner = {
@@ -295,11 +354,14 @@ type ChatTurnRunConnectors = { close: () => void | Promise<void> };
 
 /** What cuts a run's producer short. */
 type ChatTurnRunControl = {
-  /** The run's own abort: its deadline, a stop, or ownership loss. */
+  /** The run's own abort: its deadline if it has one, a stop, or ownership loss. */
   abortController: AbortController;
   /** The SDK provider also stops on admission loss without ending the transport. */
   providerAbortController: AbortController;
-  /** The deadline alone, which tells a timeout from the other causes. */
+  /**
+   * The deadline alone, which tells a timeout from the other causes. It never
+   * fires for a run its computer's liveness bounds.
+   */
   deadlineSignal: AbortSignal;
   /** Execution admission cancellation; durable ownership keeps its own fence. */
   admissionSignal?: AbortSignal;
@@ -312,9 +374,11 @@ type ChatTurnRunOptions = {
   /** Closed by the run when it never produces; a producing run's agent
    *  loop closes them when it ends. */
   connectors: ChatTurnRunConnectors | undefined;
-  /** The run's own deadline. It takes no signal, so nothing tied to the
-   *  claiming request can end it. */
-  deadlineMs: number;
+  /** What ends the run by time alone. It takes no signal, so nothing tied to
+   *  the claiming request can end it. */
+  bound: ChatTurnRunBound;
+  /** The clock of a deadline; a test fires its own signal instead of waiting. */
+  createDeadlineSignal?: ((deadlineMs: number) => AbortSignal) | undefined;
   /** Same cleanup deadline in production; injectable clock for settlement tests. */
   waitForUpstream?: typeof withTimeout | undefined;
   heartbeat?: ChatTurnRunHeartbeat | undefined;
@@ -334,8 +398,12 @@ type ChatTurnRunHeartbeatHandle = {
   stop: () => void;
 };
 
+/**
+ * Where a run stands: handed its turn and not yet producing (`ready`),
+ * producing under its heartbeat, or over.
+ */
 type ChatTurnRunState =
-  | { status: "handed-over" }
+  | { status: "ready" }
   | { status: "producing"; heartbeat: ChatTurnRunHeartbeatHandle }
   | { status: "settled" };
 
@@ -485,7 +553,7 @@ export class ChatTurnRun {
   private readonly options: ChatTurnRunOptions;
   private readonly ownership: ChatTurnOwnership;
   private readonly settledResolvers = Promise.withResolvers<ChatTurnRunEnd>();
-  private state: ChatTurnRunState = { status: "handed-over" };
+  private state: ChatTurnRunState = { status: "ready" };
   private stored = false;
   private continuationProduction: "not-started" | "started" = "not-started";
   private upstream:
@@ -500,7 +568,7 @@ export class ChatTurnRun {
 
   constructor(options: ChatTurnRunOptions) {
     this.options = options;
-    const deadlineSignal = AbortSignal.timeout(options.deadlineMs);
+    const deadlineSignal = this.deadlineSignalOf(options.bound);
     const abortController = abortControllerFromSignal(deadlineSignal);
     this.control = {
       abortController,
@@ -524,6 +592,22 @@ export class ChatTurnRun {
 
   get execution(): ChatTurnExecution {
     return this.options.owner.execution;
+  }
+
+  private deadlineSignalOf(bound: ChatTurnRunBound): AbortSignal {
+    switch (bound.type) {
+      case "provider-deadline":
+        return (
+          this.options.createDeadlineSignal?.(bound.deadlineMs) ??
+          AbortSignal.timeout(bound.deadlineMs)
+        );
+      case "computer-liveness":
+        // No clock of this process ends the run; see `ChatTurnRunBound`.
+        return new AbortController().signal;
+      default:
+        bound satisfies never;
+        return panic("Unhandled chat turn run bound");
+    }
   }
 
   /** Name the provider the run's model resolved to, for its settlement count. */
@@ -561,20 +645,18 @@ export class ChatTurnRun {
     if (
       this.continuationProduction !== "not-started" ||
       !this.control.admissionSignal?.aborted ||
-      this.control.abortController.signal.reason === RUN_CANCEL_REASON ||
-      this.control.abortController.signal.reason === CHAT_TURN_OWNER_LOST_REASON
+      isCutByStopOrOwnerLoss(this.control.abortController.signal)
     ) {
       return undefined;
     }
     const { checkpoint } = this.options;
-    return checkpoint !== undefined &&
-      getAwaitingUserInteractions(checkpoint).length > 0
+    return checkpoint !== undefined && memberWaitsOf(checkpoint).length > 0
       ? checkpoint
       : undefined;
   }
 
   private async restoreCheckpoint(checkpoint: PersistableChatMessage) {
-    const interaction = getAwaitingUserInteractions(checkpoint).at(0);
+    const interaction = memberWaitsOf(checkpoint).at(0);
     if (interaction === undefined) {
       return panic("A restorable chat checkpoint must await user input");
     }
@@ -624,40 +706,57 @@ export class ChatTurnRun {
     durability: StreamDurability,
     viewer: SseStreamBinding,
   ): Response {
-    if (this.state.status !== "handed-over") {
+    return eagerlyDeliverTurn(
+      withSseHeartbeat(this.startProducing(output, durability), viewer),
+      this.options.onDeliveryStalled,
+    );
+  }
+
+  /**
+   * Start producing `output` with nobody watching it: a turn this task took
+   * over from one that stopped. The producer drains into the log exactly as
+   * it does once a viewer of `produce` leaves, and pages join the log as they
+   * join any turn they did not start.
+   */
+  async pump(
+    output: AsyncIterable<StreamChunk>,
+    durability: StreamDurability,
+  ): Promise<void> {
+    await this.startProducing(output, durability).body?.cancel();
+  }
+
+  private startProducing(
+    output: AsyncIterable<StreamChunk>,
+    durability: StreamDurability,
+  ): Response {
+    if (this.state.status !== "ready") {
       return panic(`A chat turn run cannot produce once ${this.state.status}`);
     }
     this.state = { status: "producing", heartbeat: this.startHeartbeat() };
     // Building the response starts its pump, which pulls the stream first.
-    const response = eagerlyDeliverTurn(
-      withSseHeartbeat(
-        toServerSentEventsResponse(
-          this.options.admission === undefined
-            ? output
-            : this.trackUpstream(output),
-          {
-            // Run control cuts the provider; delivery drains its terminal events.
-            durability: {
-              adapter: reportDeliveryFailuresByKind(durability, (failure) => {
-                // The run log reports its own refusals; any other failure
-                // (the store's) reaches the stream only as its kind.
-                if (!ChatRunLogRefusedError.is(failure.cause)) {
-                  observeFailure(failure.cause, {
-                    sink: DURABILITY_FAILED_SINK,
-                    ctx: { threadId: this.options.owner.threadId },
-                  });
-                }
-                if (this.deliveryFailure === "unknown") {
-                  this.deliveryFailure = failure.kind;
-                }
-              }),
-            },
-            headers: { [CHAT_TURN_ID_HEADER]: this.execution.id },
-          },
-        ),
-        viewer,
-      ),
-      this.options.onDeliveryStalled,
+    const response = toServerSentEventsResponse(
+      this.options.admission === undefined
+        ? output
+        : this.trackUpstream(output),
+      {
+        // Run control cuts the provider; delivery drains its terminal events.
+        durability: {
+          adapter: reportDeliveryFailuresByKind(durability, (failure) => {
+            // The run log reports its own refusals; any other failure
+            // (the store's) reaches the stream only as its kind.
+            if (!ChatRunLogRefusedError.is(failure.cause)) {
+              observeFailure(failure.cause, {
+                sink: DURABILITY_FAILED_SINK,
+                ctx: { threadId: this.options.owner.threadId },
+              });
+            }
+            if (this.deliveryFailure === "unknown") {
+              this.deliveryFailure = failure.kind;
+            }
+          }),
+        },
+        headers: { [CHAT_TURN_ID_HEADER]: this.execution.id },
+      },
     );
     if (this.pendingAbort !== undefined) {
       this.abort(this.pendingAbort);
@@ -685,15 +784,27 @@ export class ChatTurnRun {
       const checkpoint = this.restorableCheckpoint;
       if (checkpoint === undefined) {
         const settlement = await persist();
-        this.stored = true;
-        if (settlement.type === "stored") {
-          const { outcome } = settlement;
-          this.countSettlement(
-            outcome.type,
-            outcome.type === "failed"
-              ? AI_ERROR_FAILURE_CODE[outcome.error]
-              : null,
-          );
+        switch (settlement.type) {
+          case "stored": {
+            this.stored = true;
+            const { outcome } = settlement;
+            this.countSettlement(
+              outcome.type,
+              outcome.type === "failed"
+                ? AI_ERROR_FAILURE_CODE[outcome.error]
+                : null,
+            );
+            break;
+          }
+          case "not-owned":
+            this.stored = true;
+            break;
+          case "failed-instead":
+            // `fail` recorded whether the failure was stored.
+            break;
+          default:
+            settlement satisfies never;
+            panic("Unhandled chat turn settlement");
         }
       } else {
         const restored = await this.restoreCheckpoint(checkpoint);
@@ -778,7 +889,7 @@ export class ChatTurnRun {
         ctx: { threadId: owner.threadId },
       });
     }
-    if (status !== "handed-over") {
+    if (status !== "ready") {
       return;
     }
     await this.closeConnectors();
@@ -862,7 +973,7 @@ export class ChatTurnRun {
    * controller is already aborted, so the run would never store its outcome.
    */
   private abort(reason: string): void {
-    if (this.state.status === "handed-over") {
+    if (this.state.status === "ready") {
       this.pendingAbort ??= reason;
       return;
     }
@@ -982,21 +1093,19 @@ export class ChatTurnRun {
     const completed = this.ownership.followUp(
       Promise.resolve(end).then(async (settled) => {
         // A stuck SDK finalizer must not renew capacity indefinitely after
-        // fenced persistence. Cleanup gets the existing provider time budget.
+        // fenced persistence.
+        const timeoutMs = sourceCloseTimeoutMs(this.options.bound);
         const closed = await Result.tryPromise(
           async () =>
             await (this.options.waitForUpstream ?? withTimeout)(
               async () => await upstreamClosed,
-              {
-                label: "chat-upstream-finalization",
-                timeoutMs: this.options.deadlineMs,
-              },
+              { label: "chat-upstream-finalization", timeoutMs },
             ),
         );
         if (Result.isError(closed)) {
           logger.warn("chat.turn.upstream_finalization_timeout", {
             executionId: this.execution.executionId,
-            timeoutMs: this.options.deadlineMs,
+            timeoutMs,
           });
         }
         await admission.release();

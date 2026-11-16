@@ -2680,6 +2680,7 @@ const handleLinkMatterContactTool: TypedMcpToolHandler<
     const removed = await Result.gen(() =>
       deleteWorkspaceContactHandler({
         safeDb: context.safeDb,
+        organizationId: context.organizationId,
         workspaceId,
         workspaceContactId,
         recordAuditEvent,
@@ -2729,7 +2730,7 @@ const handleLinkMatterContactTool: TypedMcpToolHandler<
 
 // --- tool definitions -----------------------------------------------------
 
-export const MATTER_TOOL_DEFINITIONS = [
+const MATTER_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
     consumesServices: false,
     description:

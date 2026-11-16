@@ -17,6 +17,7 @@
     "loadFailed": "Não foi possível carregar suas conversas.",
     "runsLoadFailed": "Não foi possível verificar quais conversas aguardam você.",
     "retry": "Tentar novamente",
+    "resend": "Reenviar",
     "untitled": "Conversa sem título",
     "loadMoreFailed": "Carregar mais",
     "loadOlderFailed": "Carregar mensagens anteriores",
@@ -219,13 +220,34 @@
       },
       "patternInPath": "{pattern} em {path}",
       "commandExited": "{command} (código de saída {code})",
-      "opensOnComputer": "Abra no computador que executou",
+      "browserClick": "Clicar em “{target}” em {url}",
+      "browserPressKey": "Pressionar a tecla {key} em “{target}” em {url}",
+      "browserSelect": "Selecionar “{option}” em “{target}” em {url}",
+      "browserType": "Inserir texto em “{target}” em {url}",
       "status": {
         "needs_approval": "Aguardando aprovação",
         "running": "Em andamento",
         "failed": "Falhou",
         "interrupted": "Interrompido"
-      }
+      },
+      "output": {
+        "command": "Saída",
+        "diff": "Alterações nos arquivos",
+        "conversation": "Conversa do subagente",
+        "conversationPrompt": "Tarefa",
+        "conversationReport": "Relatório",
+        "cut": "Mostrando os primeiros {kept} de {total}",
+        "empty": "Sem saída",
+        "arriving": "Ainda chegando do computador que executou esta etapa",
+        "notCopied": "Ainda não copiado para este chat",
+        "notStored": "Nada desta etapa foi guardado",
+        "runBudgetReached": "Não guardado: esta execução já tinha guardado o máximo permitido para uma execução",
+        "imageTooLargeToStore": "Esta imagem tem {total}. Imagens com mais de {kept} não são guardadas, por isso ela não pode ser exibida.",
+        "loadFailed": "Não foi possível carregar.",
+        "showMore": "Mostrar mais"
+      },
+      "sessionNotResumed": "O agente de programação do seu computador não conseguiu retomar de onde parou, então continuou a partir das mensagens deste chat.",
+      "steered": "Enviado enquanto o agente trabalhava"
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# fonte consultada} other {# fontes consultadas} many {# fontes consultadas}}",
@@ -234,7 +256,46 @@
       "analyses": "{count, plural, one {# análise} other {# análises} many {# análises}}"
     },
     "stepCount": "{count, plural, one {# etapa} other {# etapas} many {# etapas}}",
-    "reasoning": "Raciocínio"
+    "reasoning": "Raciocínio",
+    "historyTrimmed": "Não foi possível resumir as mensagens anteriores, então esta resposta considera apenas a parte mais recente da conversa.",
+    "failure": {
+      "aiDeadlineExceeded": "A IA não respondeu a tempo. Tente novamente em instantes.",
+      "aiOutputInvalid": "A resposta da IA tinha um formato inesperado. Tente novamente.",
+      "aiOutputModerated": "O provedor de IA moderou a resposta. Reformule a solicitação ou escolha outro modelo.",
+      "aiUnknown": "A solicitação de IA falhou. Tente novamente.",
+      "errorFolderUnavailable": "A pasta vinculada a este chat não está disponível no seu computador. Verifique-a no stella desktop e envie isto de novo.",
+      "errorLimitReached": "O agente de programação do seu computador atingiu o limite de uso. Tente de novo quando o limite for renovado.",
+      "errorNeedsLogin": "O agente de programação do seu computador precisa que você entre novamente. Entre pelo stella desktop e tente de novo.",
+      "errorNotReached": "Seu computador não assumiu esta resposta. Verifique se o stella desktop está aberto e conectado e tente de novo.",
+      "errorRelinked": "O stella desktop foi vinculado de novo no seu computador, então esta resposta parou. Envie-a de novo.",
+      "errorRestoring": "Seu computador ainda está desfazendo alterações de arquivos. Envie isto de novo em instantes.",
+      "errorUnavailable": "Seu computador parou de processar esta resposta. Verifique se o stella desktop está aberto e conectado e tente de novo.",
+      "refusalFolderNotApproved": "Primeiro permita que o agente de programação trabalhe na pasta vinculada a este chat.",
+      "refusalHarnessUnavailable": "O agente de programação do seu computador não pode atender a esta solicitação agora. Verifique-o no stella desktop.",
+      "refusalModelUnavailable": "O agente de programação do seu computador não oferece mais este modelo. Escolha outro em Executar em.",
+      "refusalNoComputer": "Nenhum dos seus computadores está conectado.",
+      "refusalPermissionUnavailable": "O agente de programação do seu computador não pode ser executado com essas permissões. Escolha outra opção em Permissões.",
+      "refusalReasoningEffortUnavailable": "O agente de programação do seu computador não oferece este nível de raciocínio para o modelo. Escolha outro em Nível de raciocínio.",
+      "refusalTooLarge": "Esta conversa é longa demais para ser enviada ao seu computador. Comece um novo chat para executá-la lá.",
+      "sendErrorEmptyCompletion": "A IA retornou uma resposta vazia. Tente novamente ou reformule sua mensagem.",
+      "sendErrorLoopDetected": "A resposta da IA se repetiu muitas vezes. Tente novamente com uma solicitação mais específica.",
+      "sendErrorModelUnavailable": "O modelo de IA configurado não está mais disponível. Peça ao administrador do espaço de trabalho para atualizar o modelo nas configurações da organização.",
+      "sendErrorProviderBilling": "O provedor de IA relatou um problema de faturamento. Fale com o administrador do espaço de trabalho.",
+      "sendErrorProviderCredentialsRejected": "O provedor de IA rejeitou as credenciais configuradas. Peça ao administrador do espaço de trabalho para verificar a chave de API nas configurações da organização.",
+      "sendErrorProviderUnavailable": "O provedor de IA está temporariamente indisponível. Tente novamente em instantes.",
+      "sendErrorQuotaExhausted": "A cota do provedor de IA foi esgotada. Tente novamente em um minuto ou fale com o administrador do espaço de trabalho.",
+      "sendErrorStreamIncomplete": "A resposta da IA foi interrompida antes de terminar. Tente novamente.",
+      "sendErrorTurnTooLarge": "Esta resposta ficou grande demais para ser entregue por completo. Envie uma nova mensagem para continuar."
+    },
+    "steerPrompt": "Enviar ao agente enquanto ele trabalha",
+    "steerRefused": {
+      "turnNotRunning": "O agente não está trabalhando agora.",
+      "noRun": "O agente não está em execução no seu computador agora.",
+      "cannotSteer": "Este agente não aceita mensagens enquanto trabalha.",
+      "runFull": "O agente não pode aceitar mais mensagens agora.",
+      "notTaken": "O agente não conseguiu receber sua mensagem agora.",
+      "queuedMessageChanged": "A mensagem mudou ou saiu da fila, então o agente não a recebeu."
+    }
   },
   "tasks": {
     "emptyTitle": "Nenhuma tarefa em aberto",
@@ -263,7 +324,8 @@
       "tomorrow": "Amanhã",
       "week": "Esta semana",
       "later": "Mais tarde",
-      "none": "Sem prazo"
+      "none": "Sem prazo",
+      "closed": "Concluídas ou canceladas"
     },
     "markDone": "Marcar como concluída",
     "reopen": "Reabrir",
@@ -277,7 +339,43 @@
     "doneAssigning": "Concluído",
     "someone": "Alguém",
     "membersFailed": "Não foi possível carregar os membros do caso.",
-    "assignFailed": "Não foi possível atribuir a tarefa. Tente novamente."
+    "assignFailed": "Não foi possível atribuir a tarefa. Tente novamente.",
+    "statusTitle": "Status",
+    "priorityTitle": "Prioridade",
+    "priority": {
+      "none": "Nenhuma",
+      "urgent": "Urgente",
+      "high": "Alta",
+      "medium": "Média",
+      "low": "Baixa"
+    },
+    "subtasks": "Subtarefas",
+    "linked": "Itens vinculados",
+    "delete": "Excluir tarefa",
+    "deleteTitle": "Excluir a tarefa?",
+    "deleteMessage": "Tem certeza de que deseja excluir “{name}”? Esta ação não pode ser desfeita.",
+    "cancel": "Cancelar",
+    "saveFailed": "Não foi possível salvar a alteração. Tente novamente.",
+    "readOnly": "Esta tarefa vem de um calendário conectado e não pode ser alterada aqui.",
+    "untitled": "Tarefa sem título",
+    "loadOneFailed": "Não foi possível carregar esta tarefa.",
+    "filter": "Filtrar",
+    "whoseTitle": "Atribuídas a",
+    "whose": {
+      "mine": "Mim",
+      "everyone": "Qualquer pessoa",
+      "unassigned": "Ninguém"
+    },
+    "showTitle": "Mostrar",
+    "show": {
+      "open": "Abertas",
+      "overdue": "Atrasadas",
+      "all": "Todas, inclusive concluídas"
+    },
+    "emptyFilteredTitle": "Nenhuma tarefa",
+    "emptyFilteredDescription": "As tarefas que corresponderem a este filtro aparecerão aqui.",
+    "loadMore": "Carregar mais",
+    "loadMoreFailed": "Não foi possível carregar mais tarefas."
   },
   "matters": {
     "emptyTitle": "Ainda não há casos",

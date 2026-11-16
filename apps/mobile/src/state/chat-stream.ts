@@ -1,12 +1,23 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
-import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
+import { CHAT_TURN_ID_HEADER, CHAT_TURN_INTENT } from "@stll/api-contract";
+import type { AIErrorKind } from "@stll/api-contract/ai-errors";
+import type { ChatContextNotice } from "@stll/api-contract/chat-context-notice";
 import {
   CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY,
   chatLocalRunParentCallId,
   isChatLocalRunToolName,
 } from "@stll/api-contract/chat-local-run-tool";
+import {
+  CHAT_LOCAL_RUN_STEER_EVENT,
+  chatLocalRunSteerEventSchema,
+  type ChatLocalRunSteerOutcome,
+  chatLocalRunSteerOutcomeSchema,
+  type ChatLocalRunSteerRequest,
+  type ChatLocalRunSteerSource,
+} from "@stll/api-contract/chat-run-target";
+import { SSE_SILENCE_BOUND_MS } from "@stll/api-contract/sse-heartbeat";
 
 import { SignedOutError } from "@/connection/errors";
 import { fetchWithTimeout } from "@/connection/http";
@@ -21,7 +32,9 @@ import type { ApiError } from "@/state/api-request";
 import { answerBlocks, messageText } from "@/state/chat-answer";
 import { attachmentParts } from "@/state/chat-attachments";
 import type { ReadyFile } from "@/state/chat-attachments";
-import type { ChatEntry } from "@/state/chat-messages";
+import { streamedTurnFailure } from "@/state/chat-failure";
+import { contextNoticeIn } from "@/state/chat-messages";
+import type { ChatEntry, ChatRetry } from "@/state/chat-messages";
 import type { LocalRunTarget } from "@/state/chat-pending-input";
 
 /** One server-sent event: the id it carried, if any, and its data lines joined. */
@@ -79,18 +92,30 @@ export const createSseParser = () => {
 /**
  * The AG-UI events an answer is drawn from. Everything else the run sends
  * (snapshots, custom progress) passes as `ignored`, so an event this build
- * has never seen does not end the stream.
+ * has never seen does not end the stream. The answer's text and reasoning
+ * events carry its context notice in their `metadata`, as the server stamps
+ * it on the first of them after the notice changes.
  */
 const chatEventSchema = v.union([
   v.object({
     type: v.literal("TEXT_MESSAGE_START"),
     messageId: v.string(),
+    metadata: v.optional(v.unknown()),
   }),
-  v.object({ type: v.literal("TEXT_MESSAGE_CONTENT"), delta: v.string() }),
+  v.object({
+    type: v.literal("TEXT_MESSAGE_CONTENT"),
+    delta: v.string(),
+    metadata: v.optional(v.unknown()),
+  }),
+  v.object({
+    type: v.literal("TEXT_MESSAGE_END"),
+    metadata: v.optional(v.unknown()),
+  }),
   v.object({ type: v.literal("REASONING_MESSAGE_START") }),
   v.object({
     type: v.literal("REASONING_MESSAGE_CONTENT"),
     delta: v.string(),
+    metadata: v.optional(v.unknown()),
   }),
   v.object({
     type: v.literal("TOOL_CALL_START"),
@@ -117,7 +142,14 @@ const chatEventSchema = v.union([
     type: v.literal("RUN_FINISHED"),
     outcome: v.optional(v.looseObject({ type: v.string() })),
   }),
-  v.object({ type: v.literal("RUN_ERROR") }),
+  // `code` names the failure, as the stored answer's outcome does.
+  v.object({ type: v.literal("RUN_ERROR"), code: v.optional(v.unknown()) }),
+  // What became of a message steered into the turn (`steerChatTurn`).
+  v.object({
+    type: v.literal("CUSTOM"),
+    name: v.literal(CHAT_LOCAL_RUN_STEER_EVENT),
+    value: chatLocalRunSteerEventSchema,
+  }),
 ]);
 
 export type ChatEvent = v.InferOutput<typeof chatEventSchema>;
@@ -183,17 +215,34 @@ const subagentLinkOf = (
     : { metadata: { [CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY]: parent } };
 };
 
-/** An answer as it arrives: its parts in order, and where it stands. */
+/**
+ * An answer as it arrives: its parts in order, where it stands, and what its
+ * context left out.
+ */
 export type StreamedAnswer = {
   readonly messageId: string | undefined;
   readonly parts: readonly StreamedPart[];
   readonly status: AnswerStatus;
+  readonly contextNotice: ChatContextNotice | null;
+  /** Why the run failed, once its error event said. */
+  readonly failure?: AIErrorKind;
 };
 
 export const EMPTY_ANSWER: StreamedAnswer = {
   messageId: undefined,
   parts: [],
   status: "streaming",
+  contextNotice: null,
+};
+
+/** The answer's notice as an event's metadata changes it, or as it was. */
+const noticeAfter = (
+  answer: StreamedAnswer,
+  metadata: unknown,
+): ChatContextNotice | null => {
+  // `null` is a change too: it withdraws the notice.
+  const stated = contextNoticeIn(metadata);
+  return stated === undefined ? answer.contextNotice : stated;
 };
 
 /**
@@ -239,12 +288,20 @@ export const applyChatEvent = (
         ...answer,
         messageId: answer.messageId ?? event.messageId,
         parts: [...answer.parts, { type: "text", content: "" }],
+        contextNotice: noticeAfter(answer, event.metadata),
       };
     }
     case "TEXT_MESSAGE_CONTENT": {
       return {
         ...answer,
         parts: appendDelta(answer.parts, "text", event.delta),
+        contextNotice: noticeAfter(answer, event.metadata),
+      };
+    }
+    case "TEXT_MESSAGE_END": {
+      return {
+        ...answer,
+        contextNotice: noticeAfter(answer, event.metadata),
       };
     }
     case "REASONING_MESSAGE_START": {
@@ -257,6 +314,7 @@ export const applyChatEvent = (
       return {
         ...answer,
         parts: appendDelta(answer.parts, "thinking", event.delta),
+        contextNotice: noticeAfter(answer, event.metadata),
       };
     }
     case "TOOL_CALL_START": {
@@ -320,10 +378,21 @@ export const applyChatEvent = (
       return { ...answer, status: finishedStatus(event.outcome?.type) };
     }
     case "RUN_ERROR": {
-      break;
+      return {
+        ...answer,
+        status: "failed",
+        failure: streamedTurnFailure(event.code),
+      };
+    }
+    // A steer's outcome is the turn's to act on, not part of the answer.
+    case "CUSTOM": {
+      return answer;
+    }
+    default: {
+      event satisfies never;
+      return panic("Unknown chat event");
     }
   }
-  return { ...answer, status: "failed" };
 };
 
 function finishedStatus(outcome: string | undefined): AnswerStatus {
@@ -377,6 +446,7 @@ export const answerEntry = (
   files: [],
   // The stored answer names its drafts once the thread is read again.
   drafts: [],
+  contextNotice: answer.contextNotice,
 });
 
 /**
@@ -496,6 +566,43 @@ export const chatContinueBody = ({
   };
 };
 
+/**
+ * Answers the thread's latest message again: the stored message goes back
+ * as it is, asking for a regeneration, which replaces the answer that
+ * failed. A thread whose turns run on the person's computer names its
+ * target, so the turn runs there again rather than on stella's own models.
+ */
+export const chatRegenerateBody = ({
+  anonymized,
+  matterId,
+  retry: { messageId, parts, runTarget },
+  runId,
+  threadId,
+}: {
+  readonly anonymized: boolean;
+  readonly matterId: string | undefined;
+  readonly retry: ChatRetry;
+  readonly runId: string;
+  readonly threadId: string;
+}) => {
+  const forwarded = {
+    ...turnScope({ anonymized, matterId, runId, threadId }),
+    ...(runTarget === undefined ? {} : { runTarget }),
+    message: { id: messageId, role: "user", parts },
+    turnIntent: CHAT_TURN_INTENT.regenerate,
+  };
+  return {
+    threadId,
+    runId,
+    state: {},
+    messages: [{ id: messageId, role: "user" }],
+    tools: [],
+    context: [],
+    forwardedProps: forwarded,
+    data: forwarded,
+  };
+};
+
 /** The paused message an answer continues, and what the answer carries. */
 type ChatContinuation = {
   readonly messageId: string;
@@ -566,6 +673,11 @@ export const streamConnectTimeout = (bodyLength: number): number =>
  * Opens one SSE request and hands each answer event to `onEvent` as it
  * arrives. The turn id the server names in its response reaches `onTurn`
  * before any event. Aborting `signal` ends the read without an error.
+ *
+ * Only the wait for the response has a deadline. The stream is bounded by its
+ * liveness, never by how long it has run: the server writes a keep-alive
+ * frame whenever a turn has nothing to say, so one that stays silent past
+ * `SSE_SILENCE_BOUND_MS` has lost its connection and breaks, to be rejoined.
  */
 const readChatStream = async ({
   body,
@@ -629,18 +741,37 @@ const readChatStream = async ({
           signal: controller.signal,
         });
         clearTimeout(connectTimer);
-        if (!response.ok || response.body === null) {
-          return response.status;
-        }
+        // A refusal names the turn too once the server has stored the
+        // message, so the thread, not the draft, holds what was sent.
         const turnId = response.headers.get(CHAT_TURN_ID_HEADER);
         if (turnId !== null) {
           onTurn?.(turnId);
+        }
+        if (!response.ok || response.body === null) {
+          return response.status;
         }
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         const parse = createSseParser();
         for (;;) {
-          const chunk = await reader.read();
+          let silenceTimer: ReturnType<typeof setTimeout> | undefined;
+          const silent = new Promise<never>((_resolve, reject) => {
+            silenceTimer = setTimeout(() => {
+              reject(
+                new ApiRequestError({
+                  message: `The stream from ${url} went silent`,
+                }),
+              );
+              // Releases the connection; a read the platform does not end on
+              // abort has already lost the race above.
+              abort();
+            }, SSE_SILENCE_BOUND_MS);
+          });
+          const chunk = await Promise.race([reader.read(), silent]).finally(
+            () => {
+              clearTimeout(silenceTimer);
+            },
+          );
           if (chunk.done) {
             break;
           }
@@ -657,7 +788,12 @@ const readChatStream = async ({
         return response.status;
       },
       catch: (cause) =>
-        new ApiRequestError({ message: `The stream from ${url} broke`, cause }),
+        cause instanceof ApiRequestError
+          ? cause
+          : new ApiRequestError({
+              message: `The stream from ${url} broke`,
+              cause,
+            }),
     });
     clearTimeout(connectTimer);
     signal.removeEventListener("abort", abort);
@@ -785,6 +921,43 @@ export const continueChatTurn = async ({
     source,
   });
 
+/** Answers the thread's latest message again and streams the new answer, as a send does. */
+export const regenerateChatTurn = async ({
+  anonymized,
+  fetch,
+  matterId,
+  onEvent,
+  onTurn,
+  retry,
+  runId,
+  signal,
+  source,
+  threadId,
+}: {
+  readonly anonymized: boolean;
+  readonly fetch: StreamFetch;
+  readonly matterId: string | undefined;
+  readonly onEvent: (event: ChatEvent) => void;
+  readonly onTurn: (turnId: string) => void;
+  readonly retry: ChatRetry;
+  readonly runId: string;
+  readonly signal: AbortSignal;
+  readonly source: AccessTokenSource;
+  readonly threadId: string;
+}): Promise<Result<StreamEnd, StreamBreak>> =>
+  await readChatStream({
+    body: JSON.stringify(
+      chatRegenerateBody({ anonymized, matterId, retry, runId, threadId }),
+    ),
+    fetch,
+    method: "POST",
+    onEvent,
+    onTurn,
+    path: "/v1/chat",
+    signal,
+    source,
+  });
+
 /**
  * Rejoins a running turn. With `lastEventId` it picks up after that event;
  * without, it replays the turn from its start.
@@ -853,6 +1026,49 @@ export const probeChatTurn = async ({
       }),
     );
     return Result.ok(probe.type);
+  });
+
+const steerAnswerSchema = v.object({ steer: chatLocalRunSteerOutcomeSchema });
+
+/**
+ * Hands a message to a turn running on the person's computer, without
+ * stopping it: `queued` once the computer was handed it (the turn's stream
+ * then says whether the agent took it), or `refused` with why.
+ */
+export const steerChatTurn = async ({
+  fetch,
+  inputId,
+  messageSource,
+  source,
+  text,
+  threadId,
+  turnId,
+}: {
+  readonly fetch: Fetch;
+  readonly inputId: string;
+  /** Where the message comes from; a queued one names the revision read. */
+  readonly messageSource: ChatLocalRunSteerSource;
+  readonly source: AccessTokenSource;
+  readonly text: string;
+  readonly threadId: string;
+  readonly turnId: string;
+}): Promise<Result<ChatLocalRunSteerOutcome, ApiError>> =>
+  await Result.gen(async function* () {
+    const body = {
+      inputId,
+      text,
+      source: messageSource,
+    } satisfies ChatLocalRunSteerRequest;
+    const answered = yield* Result.await(
+      requestApi({
+        fetch,
+        path: `${turnPath(threadId, turnId)}/steer`,
+        body,
+        schema: steerAnswerSchema,
+        source,
+      }),
+    );
+    return Result.ok(answered.steer);
   });
 
 /** Asks the server to stop a turn; the stream then ends with the run stopped. */

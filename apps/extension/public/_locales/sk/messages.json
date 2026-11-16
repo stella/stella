@@ -68,6 +68,9 @@
   "connectStella": {
     "message": "Pripojiť stellu"
   },
+  "openStella": {
+    "message": "Otvoriť stellu"
+  },
   "adoptTab": {
     "message": "Použiť túto kartu so stellou"
   },

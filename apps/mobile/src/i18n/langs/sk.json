@@ -17,6 +17,7 @@
     "loadFailed": "Vaše konverzácie sa nepodarilo načítať.",
     "runsLoadFailed": "Nepodarilo sa zistiť, ktoré konverzácie na vás čakajú.",
     "retry": "Skúsiť znova",
+    "resend": "Odoslať znova",
     "untitled": "Konverzácia bez názvu",
     "loadMoreFailed": "Načítať ďalšie",
     "loadOlderFailed": "Načítať staršie správy",
@@ -219,13 +220,34 @@
       },
       "patternInPath": "{pattern} v {path}",
       "commandExited": "{command} (návratový kód {code})",
-      "opensOnComputer": "Otvorte na počítači, kde krok bežal",
+      "browserClick": "Kliknúť na „{target}“ na stránke {url}",
+      "browserPressKey": "Stlačiť kláves {key} v „{target}“ na stránke {url}",
+      "browserSelect": "Vybrať „{option}“ v „{target}“ na stránke {url}",
+      "browserType": "Zadať text do „{target}“ na stránke {url}",
       "status": {
         "needs_approval": "Čakanie na schválenie",
         "running": "Rozpracovaná",
         "failed": "Zlyhalo",
         "interrupted": "Zastavené"
-      }
+      },
+      "output": {
+        "command": "Výstup",
+        "diff": "Zmeny súborov",
+        "conversation": "Konverzácia čiastkového agenta",
+        "conversationPrompt": "Zadanie",
+        "conversationReport": "Správa",
+        "cut": "Zobrazuje sa prvých {kept} z {total}",
+        "empty": "Žiadny výstup",
+        "arriving": "Stále sa prenáša z počítača, na ktorom krok bežal",
+        "notCopied": "Do tohto chatu zatiaľ nebolo skopírované",
+        "notStored": "Z tohto kroku nebolo nič uložené",
+        "runBudgetReached": "Neuložené: tento beh už uložil toľko, koľko smie jeden beh",
+        "imageTooLargeToStore": "Tento obrázok má {total}. Obrázky väčšie ako {kept} sa neukladajú, preto ho nemožno zobraziť.",
+        "loadFailed": "Nepodarilo sa načítať.",
+        "showMore": "Zobraziť viac"
+      },
+      "sessionNotResumed": "Programovací agent vo vašom počítači nemohol nadviazať tam, kde skončil, preto pokračoval podľa správ v tomto chate.",
+      "steered": "Odoslané počas práce agenta"
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# preverený zdroj} few {# preverené zdroje} other {# preverených zdrojov} many {# prevereného zdroja}}",
@@ -234,7 +256,46 @@
       "analyses": "{count, plural, one {# analýza} few {# analýzy} other {# analýz} many {# analýzy}}"
     },
     "stepCount": "{count, plural, one {# krok} few {# kroky} many {# kroku} other {# krokov}}",
-    "reasoning": "Uvažovanie"
+    "reasoning": "Uvažovanie",
+    "historyTrimmed": "Staršie správy sa nepodarilo zhrnúť, preto táto odpoveď vychádza len z poslednej časti konverzácie.",
+    "failure": {
+      "aiDeadlineExceeded": "AI neodpovedala včas. Skúste to o chvíľu znova.",
+      "aiOutputInvalid": "Odpoveď AI mala neočakávaný formát. Skúste to znova.",
+      "aiOutputModerated": "Poskytovateľ AI výstup zablokoval. Preformulujte požiadavku alebo vyberte iný model.",
+      "aiUnknown": "Požiadavka AI zlyhala. Skúste to znova.",
+      "errorFolderUnavailable": "Priečinok prepojený s týmto chatom nie je vo vašom počítači dostupný. Skontrolujte ho v stella desktop a potom to odošlite znova.",
+      "errorLimitReached": "Programovací agent vo vašom počítači vyčerpal svoj limit využitia. Skúste to znova, keď sa limit obnoví.",
+      "errorNeedsLogin": "Programovací agent vo vašom počítači vyžaduje nové prihlásenie. Prihláste sa cez stella desktop a skúste to znova.",
+      "errorNotReached": "Váš počítač túto odpoveď neprevzal. Overte, že je stella desktop spustený a pripojený, a skúste to znova.",
+      "errorRelinked": "stella desktop bol vo vašom počítači znova prepojený, takže sa táto odpoveď zastavila. Odošlite ju znova.",
+      "errorRestoring": "Váš počítač ešte vracia zmeny súborov. Odošlite to znova o chvíľu.",
+      "errorUnavailable": "Váš počítač prestal túto odpoveď spracúvať. Overte, že je stella desktop spustený a pripojený, a skúste to znova.",
+      "refusalFolderNotApproved": "Najprv povoľte programovaciemu agentovi pracovať v priečinku prepojenom s týmto chatom.",
+      "refusalHarnessUnavailable": "Programovací agent vo vašom počítači teraz túto požiadavku nemôže prevziať. Skontrolujte ho v stella desktop.",
+      "refusalModelUnavailable": "Programovací agent vo vašom počítači už tento model neponúka. Vyberte iný v ponuke Spustiť na.",
+      "refusalNoComputer": "Žiadny z vašich počítačov nie je pripojený.",
+      "refusalPermissionUnavailable": "Programovací agent vo vašom počítači s týmito oprávneniami bežať nemôže. Vyberte inú možnosť v ponuke Oprávnenia.",
+      "refusalReasoningEffortUnavailable": "Programovací agent vo vašom počítači túto úroveň uvažovania pre daný model neponúka. Vyberte inú v ponuke Úroveň uvažovania.",
+      "refusalTooLarge": "Táto konverzácia je príliš dlhá na odovzdanie do vášho počítača. Na spustenie tam začnite nový chat.",
+      "sendErrorEmptyCompletion": "AI vrátila prázdnu odpoveď. Skúste to znova alebo správu preformulujte.",
+      "sendErrorLoopDetected": "Odpoveď AI sa príliš opakovala. Skúste to znova s užšou požiadavkou.",
+      "sendErrorModelUnavailable": "Nastavený AI model už nie je dostupný. Požiadajte správcu pracovného priestoru, aby model aktualizoval v nastaveniach organizácie.",
+      "sendErrorProviderBilling": "Poskytovateľ AI nahlásil problém s fakturáciou. Obráťte sa na správcu pracovného priestoru.",
+      "sendErrorProviderCredentialsRejected": "Poskytovateľ AI odmietol nastavené prihlasovacie údaje. Požiadajte správcu pracovného priestoru, aby skontroloval kľúč API v nastaveniach organizácie.",
+      "sendErrorProviderUnavailable": "AI poskytovateľ je dočasne nedostupný. Skúste to prosím o chvíľu znova.",
+      "sendErrorQuotaExhausted": "Kvóta poskytovateľa AI je vyčerpaná. Skúste to o minútu znova alebo sa obráťte na správcu pracovného priestoru.",
+      "sendErrorStreamIncomplete": "Odpoveď AI sa prerušila skôr, ako bola dokončená. Skúste to znova.",
+      "sendErrorTurnTooLarge": "Táto odpoveď je príliš veľká na to, aby sa dala doručiť celá. Pokračujte novou správou."
+    },
+    "steerPrompt": "Poslať agentovi počas práce",
+    "steerRefused": {
+      "turnNotRunning": "Agent práve nepracuje.",
+      "noRun": "Agent teraz na vašom počítači nebeží.",
+      "cannotSteer": "Tento agent počas práce neprijíma správy.",
+      "runFull": "Agent teraz ďalšie správy neprijme.",
+      "notTaken": "Agent teraz vašu správu nemohol prijať.",
+      "queuedMessageChanged": "Správa sa medzičasom zmenila alebo už nie je v poradí, preto ju agent nedostal."
+    }
   },
   "tasks": {
     "emptyTitle": "Žiadne otvorené úlohy",
@@ -263,7 +324,8 @@
       "tomorrow": "Zajtra",
       "week": "Tento týždeň",
       "later": "Neskôr",
-      "none": "Bez termínu"
+      "none": "Bez termínu",
+      "closed": "Hotové alebo zrušené"
     },
     "markDone": "Označiť ako hotové",
     "reopen": "Znova otvoriť",
@@ -277,7 +339,43 @@
     "doneAssigning": "Hotovo",
     "someone": "Niekto",
     "membersFailed": "Členov spisu sa nepodarilo načítať.",
-    "assignFailed": "Úlohu sa nepodarilo prideliť. Skúste to znova."
+    "assignFailed": "Úlohu sa nepodarilo prideliť. Skúste to znova.",
+    "statusTitle": "Stav",
+    "priorityTitle": "Priorita",
+    "priority": {
+      "none": "Žiadna",
+      "urgent": "Urgentná",
+      "high": "Vysoká",
+      "medium": "Stredná",
+      "low": "Nízka"
+    },
+    "subtasks": "Podúlohy",
+    "linked": "Prepojené položky",
+    "delete": "Vymazať úlohu",
+    "deleteTitle": "Vymazať úlohu?",
+    "deleteMessage": "Naozaj chcete vymazať „{name}“? Túto akciu nie je možné vrátiť.",
+    "cancel": "Zrušiť",
+    "saveFailed": "Zmenu sa nepodarilo uložiť. Skúste to znova.",
+    "readOnly": "Táto úloha pochádza z prepojeného kalendára a tu ju nemožno meniť.",
+    "untitled": "Úloha bez názvu",
+    "loadOneFailed": "Túto úlohu sa nepodarilo načítať.",
+    "filter": "Filter",
+    "whoseTitle": "Priradené",
+    "whose": {
+      "mine": "Mne",
+      "everyone": "Komukoľvek",
+      "unassigned": "Nikomu"
+    },
+    "showTitle": "Zobraziť",
+    "show": {
+      "open": "Otvorené",
+      "overdue": "Po termíne",
+      "all": "Všetky, aj hotové"
+    },
+    "emptyFilteredTitle": "Žiadne úlohy",
+    "emptyFilteredDescription": "Úlohy zodpovedajúce tomuto filtru sa zobrazia tu.",
+    "loadMore": "Načítať ďalšie",
+    "loadMoreFailed": "Ďalšie úlohy sa nepodarilo načítať."
   },
   "matters": {
     "emptyTitle": "Zatiaľ žiadne spisy",

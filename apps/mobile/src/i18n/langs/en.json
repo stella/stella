@@ -17,6 +17,7 @@
     "loadFailed": "Your conversations could not be loaded.",
     "runsLoadFailed": "Could not check which conversations are waiting for you.",
     "retry": "Try again",
+    "resend": "Resend",
     "untitled": "Untitled conversation",
     "loadMoreFailed": "Load more",
     "loadOlderFailed": "Load earlier messages",
@@ -219,13 +220,34 @@
       },
       "patternInPath": "{pattern} in {path}",
       "commandExited": "{command} (exit code {code})",
-      "opensOnComputer": "Open on the computer that ran it",
+      "browserClick": "Click “{target}” on {url}",
+      "browserPressKey": "Press {key} in “{target}” on {url}",
+      "browserSelect": "Select “{option}” in “{target}” on {url}",
+      "browserType": "Enter text into “{target}” on {url}",
       "status": {
         "needs_approval": "Waiting for approval",
         "running": "In progress",
         "failed": "Failed",
         "interrupted": "Stopped"
-      }
+      },
+      "output": {
+        "command": "Output",
+        "diff": "File changes",
+        "conversation": "Subagent conversation",
+        "conversationPrompt": "Task given",
+        "conversationReport": "Report",
+        "cut": "Showing the first {kept} of {total}",
+        "empty": "No output",
+        "arriving": "Still arriving from the computer that ran this step",
+        "notCopied": "Not copied to this chat yet",
+        "notStored": "Nothing from this step was stored",
+        "runBudgetReached": "Not stored: this run had already stored as much as one run may",
+        "imageTooLargeToStore": "This image is {total}. Images over {kept} are not stored, so it cannot be shown.",
+        "loadFailed": "Couldn't load.",
+        "showMore": "Show more"
+      },
+      "sessionNotResumed": "The coding agent on your computer could not pick up where it left off, so it continued from the messages in this chat.",
+      "steered": "Sent while the agent was working"
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# source checked} other {# sources checked}}",
@@ -234,7 +256,46 @@
       "analyses": "{count, plural, one {# analysis} other {# analyses}}"
     },
     "stepCount": "{count, plural, one {# step} other {# steps}}",
-    "reasoning": "Reasoning trace"
+    "reasoning": "Reasoning trace",
+    "historyTrimmed": "Earlier messages could not be summarized, so this answer only took the most recent part of the conversation into account.",
+    "failure": {
+      "aiDeadlineExceeded": "The AI did not answer in time. Try again in a moment.",
+      "aiOutputInvalid": "The AI answer had an unexpected format. Try again.",
+      "aiOutputModerated": "The AI provider moderated the output. Rephrase the request or choose another model.",
+      "aiUnknown": "The AI request failed. Try again.",
+      "errorFolderUnavailable": "The folder linked to this chat is not available on your computer. Check it in stella desktop, then send this again.",
+      "errorLimitReached": "The coding agent on your computer reached its usage limit. Try again once the limit resets.",
+      "errorNeedsLogin": "The coding agent on your computer needs you to sign in again. Sign in through stella desktop, then try again.",
+      "errorNotReached": "Your computer did not pick up this turn. Make sure stella desktop is open and connected, then try again.",
+      "errorRelinked": "stella desktop was linked again on your computer, so this turn stopped. Send it again.",
+      "errorRestoring": "Your computer is still undoing file changes. Send this again in a moment.",
+      "errorUnavailable": "Your computer stopped running this turn. Make sure stella desktop is open and connected, then try again.",
+      "refusalFolderNotApproved": "Allow the coding agent to work in the folder linked to this chat first.",
+      "refusalHarnessUnavailable": "The coding agent on your computer cannot take this request right now. Check it in stella desktop.",
+      "refusalModelUnavailable": "The coding agent on your computer no longer offers this model. Choose another one under Run on.",
+      "refusalNoComputer": "None of your computers is connected.",
+      "refusalPermissionUnavailable": "The coding agent on your computer cannot run with these permissions. Choose another option under Permissions.",
+      "refusalReasoningEffortUnavailable": "The coding agent on your computer does not offer this reasoning effort for the model. Choose another one under Reasoning effort.",
+      "refusalTooLarge": "This conversation is too long to hand to your computer. Start a new chat to run it there.",
+      "sendErrorEmptyCompletion": "The AI returned an empty reply. Try again or rephrase your message.",
+      "sendErrorLoopDetected": "The AI response repeated too many times. Try again with a narrower request.",
+      "sendErrorModelUnavailable": "The configured AI model is no longer available. Ask your workspace admin to update the model in organization settings.",
+      "sendErrorProviderBilling": "The AI provider reported a billing problem. Contact your workspace admin.",
+      "sendErrorProviderCredentialsRejected": "The AI provider rejected the configured credentials. Ask your workspace admin to check the API key in organization settings.",
+      "sendErrorProviderUnavailable": "The AI provider is temporarily unavailable. Please try again in a moment.",
+      "sendErrorQuotaExhausted": "The AI provider's quota is exhausted. Try again in a minute, or contact your workspace admin.",
+      "sendErrorStreamIncomplete": "The AI reply was cut off before it finished. Try again.",
+      "sendErrorTurnTooLarge": "This reply grew too large to deliver in full. Send a new message to continue."
+    },
+    "steerPrompt": "Send to the agent while it works",
+    "steerRefused": {
+      "turnNotRunning": "The agent is not working right now.",
+      "noRun": "The agent is not running on your computer right now.",
+      "cannotSteer": "This agent cannot take messages while it works.",
+      "runFull": "The agent cannot take more messages right now.",
+      "notTaken": "The agent could not take your message just now.",
+      "queuedMessageChanged": "The message changed or left the queue, so the agent was not handed it."
+    }
   },
   "tasks": {
     "emptyTitle": "No open tasks",
@@ -263,7 +324,8 @@
       "tomorrow": "Tomorrow",
       "week": "This week",
       "later": "Later",
-      "none": "No due date"
+      "none": "No due date",
+      "closed": "Done or cancelled"
     },
     "markDone": "Mark as done",
     "reopen": "Reopen",
@@ -277,7 +339,43 @@
     "doneAssigning": "Done",
     "someone": "Someone",
     "membersFailed": "The matter's members could not be loaded.",
-    "assignFailed": "The task could not be assigned. Try again."
+    "assignFailed": "The task could not be assigned. Try again.",
+    "statusTitle": "Status",
+    "priorityTitle": "Priority",
+    "priority": {
+      "none": "None",
+      "urgent": "Urgent",
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low"
+    },
+    "subtasks": "Subtasks",
+    "linked": "Linked items",
+    "delete": "Delete task",
+    "deleteTitle": "Delete task?",
+    "deleteMessage": "Are you sure you want to delete “{name}”? This action cannot be undone.",
+    "cancel": "Cancel",
+    "saveFailed": "The change could not be saved. Try again.",
+    "readOnly": "This task comes from a connected calendar and cannot be changed here.",
+    "untitled": "Untitled task",
+    "loadOneFailed": "This task could not be loaded.",
+    "filter": "Filter",
+    "whoseTitle": "Assigned to",
+    "whose": {
+      "mine": "Me",
+      "everyone": "Anyone",
+      "unassigned": "Nobody"
+    },
+    "showTitle": "Show",
+    "show": {
+      "open": "Open",
+      "overdue": "Overdue",
+      "all": "All, done included"
+    },
+    "emptyFilteredTitle": "No tasks",
+    "emptyFilteredDescription": "Tasks that match this filter will appear here.",
+    "loadMore": "Load more",
+    "loadMoreFailed": "More tasks could not be loaded."
   },
   "matters": {
     "emptyTitle": "No matters yet",

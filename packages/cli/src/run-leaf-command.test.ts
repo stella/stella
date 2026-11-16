@@ -723,6 +723,44 @@ describe("--file <path> (local bytes into the tool's base64 prop)", () => {
     );
   });
 
+  test.each(["constructor", "__proto__"])(
+    "local bytes retain the own declared %s field",
+    async (prop) => {
+      const server = startConfirmGateServer();
+      const tty = makeTtyContext({
+        serverUrl: server.url,
+        stdinData: "",
+        isTTY: false,
+      });
+      const file = await writeDocx(2048);
+      try {
+        await runLeafCommand({
+          context: tty.context,
+          flags: { file, input: JSON.stringify({ confirm: true }) },
+          spec: {
+            ...TEMPLATE_CREATE_SPEC,
+            flags: [],
+            localFileBase64Prop: prop,
+            inputSchema: {
+              type: "object",
+              properties: {
+                [prop]: { type: "string", maxLength: 262_144 },
+                confirm: { type: "boolean" },
+              },
+            },
+          },
+        });
+        expect(server.calls).toHaveLength(1);
+        const args = server.calls[0]?.args ?? {};
+        expect(Object.keys(args)).toEqual(["confirm", prop]);
+        expect(Buffer.from(String(args[prop]), "base64").byteLength).toBe(2048);
+        expect(tty.stderrText()).toBe("");
+      } finally {
+        server.stop();
+      }
+    },
+  );
+
   test("a 300 KB DOCX is refused before any call, naming the cap", async () => {
     const server = startConfirmGateServer();
     const tty = makeTtyContext({
@@ -1205,6 +1243,48 @@ describe("toolErrorLines", () => {
       "  values.title: Expected string",
       "  Body too large",
       "hint: Fix the fields",
+    ]);
+  });
+
+  test("an issue code renders beside its reason, so each legal hold names its scope", () => {
+    const envelope = errorEnvelope({
+      error: {
+        code: "legal_hold_active",
+        message: "Deletion is blocked by an active legal hold",
+        hint: "Release the hold first",
+        issues: [
+          {
+            path: "hold-1",
+            code: "matter",
+            message: "2026-10-01T00:00:00.000Z",
+          },
+          {
+            path: "hold-2",
+            code: "entity",
+            message: "2026-10-02T00:00:00.000Z",
+          },
+          { path: "hold-3", code: 7, message: "2026-10-03T00:00:00.000Z" },
+        ],
+      },
+    });
+    expect(envelope?.issues).toEqual([
+      { path: "hold-1", code: "matter", message: "2026-10-01T00:00:00.000Z" },
+      { path: "hold-2", code: "entity", message: "2026-10-02T00:00:00.000Z" },
+      { path: "hold-3", message: "2026-10-03T00:00:00.000Z" },
+    ]);
+    expect(
+      envelope === null
+        ? []
+        : toolErrorLines(envelope, {
+            command: "matter delete",
+            flagPaths: FLAGS,
+          }),
+    ).toEqual([
+      "error: Deletion is blocked by an active legal hold",
+      "  hold-1: 2026-10-01T00:00:00.000Z [matter]",
+      "  hold-2: 2026-10-02T00:00:00.000Z [entity]",
+      "  hold-3: 2026-10-03T00:00:00.000Z",
+      "hint: Release the hold first",
     ]);
   });
 });

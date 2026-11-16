@@ -37,6 +37,7 @@ import {
 } from "@/api/lib/desktop-runner/app-calls";
 import { createLocalRunBell } from "@/api/lib/desktop-runner/doorbell";
 import type { DesktopRunnerDb, RunOwner } from "@/api/lib/desktop-runner/store";
+import { unqueuedSteers } from "@/api/tests/helpers/steered-queue";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -123,7 +124,7 @@ const storedTurn = async (
       result: { content: "results", status },
     },
     { type: "text.completed", messageId: "msg_1", text: "Found one." },
-    { type: "turn.completed", usage: null },
+    { type: "turn.completed", usage: null, boundary: null },
   ];
   const chunks: unknown[] = [];
   let generated = 0;
@@ -161,7 +162,27 @@ const readTurn = async ({
   origin: ReturnType<typeof createVisualResourceOrigin>;
 }) => {
   const control: LocalRunContext["control"] = asTestRaw({
-    readChatRunSession: async () => await Promise.resolve(Result.ok(null)),
+    pickDesktop: async () =>
+      await Promise.resolve(
+        Result.ok({
+          type: "available",
+          desktopId: Bun.randomUUIDv7(),
+          harness: {
+            id: "claude-code",
+            state: "ready",
+            version: "2.1.309",
+            capabilities: [],
+            approvalModes: ["ask"],
+            models: [
+              { id: "claude-test", label: "Test", reasoningEfforts: [] },
+            ],
+          },
+          linkedFolders: [],
+          approvedFolderIds: [],
+        }),
+      ),
+    readChatRunSession: async () =>
+      await Promise.resolve(Result.ok({ type: "fresh" })),
     startRun: async () =>
       await Promise.resolve(Result.ok({ type: "assigned", runId })),
     readEvents: async ({ afterSeq }: { afterSeq: number }) => {
@@ -204,6 +225,7 @@ const readTurn = async ({
   const run = createLocalChatRun(
     {
       control,
+      steeredQueue: unqueuedSteers,
       runBell: createLocalRunBell(),
       owner: runOwner,
       chatThreadId: ids.chatThreadGlobalA1,
@@ -213,14 +235,12 @@ const readTurn = async ({
     },
     {
       type: "start",
-      destination: {
-        desktopId: Bun.randomUUIDv7(),
+      target: {
+        kind: "local",
         harness: "claude-code",
-        harnessVersion: "2.1.309",
         model: "claude-test",
         reasoningEffort: null,
         approvals: "ask",
-        linkedFolderId: null,
       },
     },
   ).withResourceOrigin(origin);

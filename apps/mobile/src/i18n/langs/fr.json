@@ -17,6 +17,7 @@
     "loadFailed": "Vos conversations n’ont pas pu être chargées.",
     "runsLoadFailed": "Impossible de vérifier quelles conversations attendent votre réponse.",
     "retry": "Réessayer",
+    "resend": "Renvoyer",
     "untitled": "Conversation sans titre",
     "loadMoreFailed": "Charger plus",
     "loadOlderFailed": "Charger les messages précédents",
@@ -219,13 +220,34 @@
       },
       "patternInPath": "{pattern} dans {path}",
       "commandExited": "{command} (code de sortie {code})",
-      "opensOnComputer": "Ouvrez-le sur l’ordinateur qui l’a exécuté",
+      "browserClick": "Cliquer sur « {target} » sur {url}",
+      "browserPressKey": "Appuyer sur la touche {key} dans « {target} » sur {url}",
+      "browserSelect": "Sélectionner « {option} » dans « {target} » sur {url}",
+      "browserType": "Saisir du texte dans « {target} » sur {url}",
       "status": {
         "needs_approval": "En attente d’approbation",
         "running": "En cours",
         "failed": "Échec",
         "interrupted": "Arrêté"
-      }
+      },
+      "output": {
+        "command": "Résultat",
+        "diff": "Modifications des fichiers",
+        "conversation": "Conversation du sous-agent",
+        "conversationPrompt": "Tâche",
+        "conversationReport": "Rapport",
+        "cut": "Affichage des {kept} premiers sur {total}",
+        "empty": "Aucun résultat",
+        "arriving": "Toujours en cours de réception depuis l’ordinateur qui a exécuté cette étape",
+        "notCopied": "Pas encore copié dans cette conversation",
+        "notStored": "Rien de cette étape n’a été enregistré",
+        "runBudgetReached": "Non enregistré : cette exécution avait déjà enregistré tout ce qu’une exécution peut enregistrer",
+        "imageTooLargeToStore": "Cette image fait {total}. Les images de plus de {kept} ne sont pas enregistrées ; elle ne peut donc pas être affichée.",
+        "loadFailed": "Échec du chargement.",
+        "showMore": "Afficher plus"
+      },
+      "sessionNotResumed": "L’agent de code de votre ordinateur n’a pas pu reprendre là où il s’était arrêté : il a donc poursuivi à partir des messages de cette conversation.",
+      "steered": "Envoyé pendant que l’agent travaillait"
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# source vérifiée} other {# sources vérifiées} many {# sources vérifiées}}",
@@ -234,7 +256,46 @@
       "analyses": "{count, plural, one {# analyse} other {# analyses} many {# analyses}}"
     },
     "stepCount": "{count, plural, one {# étape} other {# étapes} many {# étapes}}",
-    "reasoning": "Raisonnement"
+    "reasoning": "Raisonnement",
+    "historyTrimmed": "Les messages précédents n'ont pas pu être résumés : cette réponse ne tient compte que de la partie la plus récente de la conversation.",
+    "failure": {
+      "aiDeadlineExceeded": "L’IA n’a pas répondu à temps. Réessayez dans un instant.",
+      "aiOutputInvalid": "La réponse de l’IA avait un format inattendu. Réessayez.",
+      "aiOutputModerated": "Le fournisseur d’IA a modéré la réponse. Reformulez la demande ou choisissez un autre modèle.",
+      "aiUnknown": "La requête d’IA a échoué. Réessayez.",
+      "errorFolderUnavailable": "Le dossier lié à cette conversation n’est pas disponible sur votre ordinateur. Vérifiez-le dans stella desktop, puis renvoyez ceci.",
+      "errorLimitReached": "L’agent de code de votre ordinateur a atteint sa limite d’utilisation. Réessayez une fois la limite réinitialisée.",
+      "errorNeedsLogin": "L’agent de code de votre ordinateur vous demande de vous reconnecter. Connectez-vous depuis stella desktop, puis réessayez.",
+      "errorNotReached": "Votre ordinateur n'a pas pris en charge cette réponse. Vérifiez que stella desktop est ouvert et connecté, puis réessayez.",
+      "errorRelinked": "stella desktop a été associé à nouveau sur votre ordinateur, cette réponse s'est donc arrêtée. Renvoyez-la.",
+      "errorRestoring": "Votre ordinateur annule encore des modifications de fichiers. Renvoyez ceci dans un instant.",
+      "errorUnavailable": "Votre ordinateur a cessé de traiter cette réponse. Vérifiez que stella desktop est ouvert et connecté, puis réessayez.",
+      "refusalFolderNotApproved": "Autorisez d’abord l’agent de code à travailler dans le dossier lié à cette conversation.",
+      "refusalHarnessUnavailable": "L’agent de code de votre ordinateur ne peut pas traiter cette demande pour le moment. Vérifiez-le dans stella desktop.",
+      "refusalModelUnavailable": "L’agent de code de votre ordinateur ne propose plus ce modèle. Choisissez-en un autre sous Exécuter sur.",
+      "refusalNoComputer": "Aucun de vos ordinateurs n’est connecté.",
+      "refusalPermissionUnavailable": "L’agent de code de votre ordinateur ne peut pas s’exécuter avec ces autorisations. Choisissez une autre option sous Autorisations.",
+      "refusalReasoningEffortUnavailable": "L’agent de code de votre ordinateur ne propose pas ce niveau de raisonnement pour le modèle. Choisissez-en un autre sous Niveau de raisonnement.",
+      "refusalTooLarge": "Cette conversation est trop longue pour être transmise à votre ordinateur. Commencez une nouvelle conversation pour l’y exécuter.",
+      "sendErrorEmptyCompletion": "L’IA a renvoyé une réponse vide. Réessayez ou reformulez votre message.",
+      "sendErrorLoopDetected": "La réponse de l’IA s’est trop répétée. Réessayez avec une demande plus ciblée.",
+      "sendErrorModelUnavailable": "Le modèle d’IA configuré n’est plus disponible. Demandez à l’administrateur de l’espace de travail de le mettre à jour dans les paramètres de l’organisation.",
+      "sendErrorProviderBilling": "Le fournisseur d’IA a signalé un problème de facturation. Contactez l’administrateur de l’espace de travail.",
+      "sendErrorProviderCredentialsRejected": "Le fournisseur d’IA a rejeté les identifiants configurés. Demandez à l’administrateur de l’espace de travail de vérifier la clé API dans les paramètres de l’organisation.",
+      "sendErrorProviderUnavailable": "Le fournisseur d’IA est temporairement indisponible. Réessayez dans un instant.",
+      "sendErrorQuotaExhausted": "Le quota du fournisseur d’IA est épuisé. Réessayez dans une minute ou contactez l’administrateur de l’espace de travail.",
+      "sendErrorStreamIncomplete": "La réponse de l’IA a été interrompue avant la fin. Réessayez.",
+      "sendErrorTurnTooLarge": "Cette réponse est devenue trop volumineuse pour être transmise en entier. Envoyez un nouveau message pour continuer."
+    },
+    "steerPrompt": "Envoyer à l’agent pendant qu’il travaille",
+    "steerRefused": {
+      "turnNotRunning": "L’agent ne travaille pas en ce moment.",
+      "noRun": "L’agent ne tourne pas sur votre ordinateur en ce moment.",
+      "cannotSteer": "Cet agent n’accepte pas de messages pendant qu’il travaille.",
+      "runFull": "L’agent ne peut pas accepter d’autres messages pour le moment.",
+      "notTaken": "L’agent n’a pas pu prendre votre message pour le moment.",
+      "queuedMessageChanged": "Le message a changé ou n’est plus dans la file d’attente, l’agent ne l’a donc pas reçu."
+    }
   },
   "tasks": {
     "emptyTitle": "Aucune tâche en cours",
@@ -263,7 +324,8 @@
       "tomorrow": "Demain",
       "week": "Cette semaine",
       "later": "Plus tard",
-      "none": "Sans échéance"
+      "none": "Sans échéance",
+      "closed": "Terminées ou annulées"
     },
     "markDone": "Marquer comme terminée",
     "reopen": "Rouvrir",
@@ -277,7 +339,43 @@
     "doneAssigning": "Terminé",
     "someone": "Quelqu’un",
     "membersFailed": "Les membres du dossier n’ont pas pu être chargés.",
-    "assignFailed": "La tâche n’a pas pu être attribuée. Réessayez."
+    "assignFailed": "La tâche n’a pas pu être attribuée. Réessayez.",
+    "statusTitle": "Statut",
+    "priorityTitle": "Priorité",
+    "priority": {
+      "none": "Aucune",
+      "urgent": "Urgente",
+      "high": "Haute",
+      "medium": "Moyenne",
+      "low": "Basse"
+    },
+    "subtasks": "Sous-tâches",
+    "linked": "Éléments liés",
+    "delete": "Supprimer la tâche",
+    "deleteTitle": "Supprimer la tâche ?",
+    "deleteMessage": "Voulez-vous vraiment supprimer « {name} » ? Cette action est irréversible.",
+    "cancel": "Annuler",
+    "saveFailed": "La modification n’a pas pu être enregistrée. Réessayez.",
+    "readOnly": "Cette tâche provient d’un calendrier connecté et ne peut pas être modifiée ici.",
+    "untitled": "Tâche sans titre",
+    "loadOneFailed": "Cette tâche n’a pas pu être chargée.",
+    "filter": "Filtrer",
+    "whoseTitle": "Assignées à",
+    "whose": {
+      "mine": "Moi",
+      "everyone": "N’importe qui",
+      "unassigned": "Personne"
+    },
+    "showTitle": "Afficher",
+    "show": {
+      "open": "Ouvertes",
+      "overdue": "En retard",
+      "all": "Toutes, terminées comprises"
+    },
+    "emptyFilteredTitle": "Aucune tâche",
+    "emptyFilteredDescription": "Les tâches correspondant à ce filtre apparaîtront ici.",
+    "loadMore": "Charger plus",
+    "loadMoreFailed": "Les tâches suivantes n’ont pas pu être chargées."
   },
   "matters": {
     "emptyTitle": "Aucun dossier pour le moment",

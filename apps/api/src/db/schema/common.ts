@@ -39,6 +39,8 @@ import {
   chatMessagePolicies,
   chatMessageRevisionPolicies,
   chatMessageSearchDocumentPolicies,
+  chatQueuedMessagePolicies,
+  chatQueueHoldPolicies,
   chatThreadCompactionPolicies,
   chatThreadNamePolicies,
   chatThreadPolicies,
@@ -353,6 +355,13 @@ export const DESTRUCTIVE_EFFECT_CHUNK_STATUSES = [
 export type DestructiveEffectChunkStatus =
   (typeof DESTRUCTIVE_EFFECT_CHUNK_STATUSES)[number];
 
+export type AccountErasureReport = {
+  retainedMatterContent: {
+    workspaceId: SafeId<"workspace">;
+    reason: "establishment_or_defence_of_legal_claims";
+  }[];
+};
+
 export type AccountDeletionStorageCleanup = {
   s3Keys: string[];
   notBefore?: string;
@@ -545,6 +554,8 @@ export {
   aiMemoryPolicies,
   chatMessagePolicies,
   chatMessageRevisionPolicies,
+  chatQueueHoldPolicies,
+  chatQueuedMessagePolicies,
   chatTurnPolicies,
   chatMessageSearchDocumentPolicies,
   chatThreadCompactionPolicies,

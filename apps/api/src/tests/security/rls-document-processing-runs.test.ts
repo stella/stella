@@ -96,14 +96,15 @@ const tryCatch = async (fn: () => Promise<unknown>) => {
 const insertAsScopedRole = async (
   values: typeof documentProcessingRuns.$inferInsert,
 ) =>
-  await scopedQuery(
-    [ids.wsA1],
-    ids.orgA,
-    async (tx) =>
-      await tryCatch(async () => {
+  await tryCatch(async () =>
+    scopedQuery(
+      [ids.wsA1],
+      ids.orgA,
+      async (tx) => {
         await tx.insert(documentProcessingRuns).values(values);
-      }),
-    ids.userA1,
+      },
+      ids.userA1,
+    ),
   );
 
 const expectRejected = (error: unknown) => {

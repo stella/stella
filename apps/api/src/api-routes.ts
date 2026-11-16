@@ -22,7 +22,10 @@ import { caseLawRoute } from "@/api/handlers/case-law/routes";
 import { catalogueRoute } from "@/api/handlers/catalogue/routes";
 import { chatMcpAppsRoute } from "@/api/handlers/chat/mcp-apps/routes";
 import { chatRoute } from "@/api/handlers/chat/routes";
-import { chatRunOutputsRoute } from "@/api/handlers/chat/run-outputs/routes";
+import {
+  chatRunOutputsRoute,
+  desktopRunnerAwaitedStepsRoute,
+} from "@/api/handlers/chat/run-outputs/routes";
 import {
   clauseCategoriesRoute,
   clausesRoute,
@@ -57,7 +60,7 @@ import {
   feedbackRoute,
 } from "@/api/handlers/feedback/routes";
 import { fieldsRoute } from "@/api/handlers/fields/routes";
-import { filesRoute } from "@/api/handlers/files/routes";
+import { filesRoute } from "@/api/handlers/files/route-table";
 import { flowsRoute } from "@/api/handlers/flows/routes";
 import { flowRunsRoute } from "@/api/handlers/flows/run-route";
 import { folioCollabRoute } from "@/api/handlers/folio-collab/routes";
@@ -283,6 +286,7 @@ export const apiRoutes = mount([
       chatRoute,
       chatMcpAppsRoute,
       chatRunOutputsRoute,
+      desktopRunnerAwaitedStepsRoute,
       dictationRoute,
       emailAIRoute,
       userFilesRoute,

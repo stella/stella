@@ -1044,10 +1044,6 @@
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },
   {
-    "id": "apps/web/src/features/chat/hooks/use-chat-session-send-queue.logic.test.ts::<module>::domain:[\"submitted\",\"streaming\"]::1",
-    "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
     "id": "apps/web/src/features/chat/lib/suggested-prompts-availability.test.ts::<module>::domain:[\"client-disconnected\",\"timeout\"]::1",
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },
@@ -1582,10 +1578,6 @@
   {
     "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/billing-codes-dialog.tsx::CreateCodeForm::maxLength:256::1",
     "reason": "Existing CreateCodeForm UI validation or presentation bound; contract migration pending."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/split-entry-dialog.tsx::SplitEntryDialog::max:100::1",
-    "reason": "Existing SplitEntryDialog UI validation or presentation bound; contract migration pending."
   },
   {
     "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-utils.ts::INTERNAL_DATE_IDS::domain:[\"_created-at\",\"_updated-at\"]::1",

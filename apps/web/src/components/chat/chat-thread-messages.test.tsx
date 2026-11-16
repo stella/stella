@@ -3,7 +3,7 @@ import { renderToReadableStream, renderToStaticMarkup } from "react-dom/server";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Result } from "better-result";
-import { afterAll, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { Window } from "happy-dom";
 import { IntlProvider } from "use-intl";
 import { createFormatter } from "use-intl/core";
@@ -23,6 +23,7 @@ import {
   PROVIDER_SETUP_ERROR_CATALOGUE,
   PROVIDER_SETUP_ERROR_CODE,
 } from "@stll/api-contract/provider-setup";
+import { createTestState } from "@stll/test-state";
 
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
 import { testChatApprovalContextValue } from "@/components/chat/chat-approval-context.test-fixtures";
@@ -45,8 +46,9 @@ import {
 import { ProviderDiagnosticError } from "@/lib/errors/provider-diagnostic";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 
-const previousApiUrl = process.env["VITE_API_URL"];
-process.env["VITE_API_URL"] = previousApiUrl ?? "https://api.example.test";
+const testState = createTestState({ file: import.meta.path, config: {} });
+
+testState.setEnvIfAbsent("VITE_API_URL", "https://api.example.test");
 
 const { ChatEditorProvider } =
   await import("@/components/chat-editor-provider");
@@ -59,14 +61,6 @@ const { buildMessageTurns, CHAT_MESSAGE_RENDER_POLICY } =
 const RETRY_BUTTON = />Retry<\/(?:span><\/)?button>/u;
 const RETRY_BUTTONS = new RegExp(RETRY_BUTTON.source, "gu");
 const RESEND_BUTTON = />Resend<\/(?:span><\/)?button>/u;
-
-afterAll(() => {
-  if (previousApiUrl === undefined) {
-    delete process.env["VITE_API_URL"];
-    return;
-  }
-  process.env["VITE_API_URL"] = previousApiUrl;
-});
 
 const withProviders = (children: ReactNode, savedSecretAvailable = false) => {
   const queryClient = new QueryClient();
@@ -292,6 +286,74 @@ describe("chat thread messages", () => {
         outcome.type === "cancelled" && outcome.reason === "user-stop",
       );
     }
+  });
+
+  test("a paused answer says where it stopped and offers Continue only as the latest answer", () => {
+    const paused = {
+      id: "assistant-paused",
+      role: "assistant",
+      parts: [
+        {
+          type: "tool-call",
+          id: "call-1",
+          // An external tool name keeps the output untyped.
+          name: "mcp__external-lookup",
+          arguments: '{"query":"court fees"}',
+          state: "complete",
+          output: { result: "Court fees" },
+        },
+      ],
+      metadata: {
+        turnOutcome: { type: "paused", reason: "tool-calls", toolCalls: 3 },
+      },
+    } satisfies ChatUIMessage;
+    const status = messages.chat.turnPaused.status.replace(
+      "{count, plural, one {# tool call} other {# tool calls}}",
+      "3 tool calls",
+    );
+    const render = (thread: ChatUIMessage[]) =>
+      renderWithProviders(
+        <ChatThreadMessages
+          activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
+          approvalPendingMessageId={null}
+          messages={structuredClone(thread)}
+          onAskUserSubmit={() => {}}
+          onContinuePausedTurn={() => {}}
+          onCreateDocumentResolve={() => {}}
+          onOpenCreatedDocument={() => {}}
+          onResend={() => {}}
+          streamdownComponents={{
+            a: ({ children, ...props }) => <a {...props}>{children}</a>,
+          }}
+        />,
+      );
+    // The fixture's copy must be what the page renders for three tool calls.
+    expect(status).toBe("Paused after 3 tool calls");
+
+    const latest = render([paused]);
+    expect(renderedText(latest)).toContain(status);
+    expect(latest).toContain(
+      `>${messages.chat.turnPaused.continue}</span></button>`,
+    );
+
+    const continued = render([
+      paused,
+      {
+        id: "user-continue",
+        role: "user",
+        parts: [{ type: "text", content: messages.chat.turnPaused.continue }],
+      },
+      {
+        id: "assistant-after",
+        role: "assistant",
+        parts: [{ type: "text", content: "Found the court fees" }],
+        metadata: { turnOutcome: { type: "completed" } },
+      },
+    ]);
+    expect(renderedText(continued)).toContain(status);
+    expect(continued).not.toContain(
+      `>${messages.chat.turnPaused.continue}</span></button>`,
+    );
   });
 
   test("renders every reloaded admission refusal with its recovery action", () => {

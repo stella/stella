@@ -1,6 +1,18 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import type { AIErrorKind } from "@stll/api-contract/ai-errors";
+import {
+  CHAT_CONTEXT_NOTICE_METADATA_KEY,
+  chatContextNoticeSchema,
+} from "@stll/api-contract/chat-context-notice";
+import type { ChatContextNotice } from "@stll/api-contract/chat-context-notice";
+import {
+  CHAT_RUN_TARGET_KIND,
+  type ChatRunTarget,
+  chatRunTargetSchema,
+} from "@stll/api-contract/chat-run-target";
+
 import type { Fetch } from "@/connection/http";
 import type { AccessTokenSource } from "@/connection/session";
 import { requestApi } from "@/state/api-request";
@@ -10,8 +22,9 @@ import type { AnswerBlock } from "@/state/chat-answer";
 import type { ChatDraft, SentFile } from "@/state/chat-attachments";
 import { draftDocumentsOf } from "@/state/chat-documents";
 import type { ChatDraftDocument } from "@/state/chat-documents";
-import { pendingInputOf } from "@/state/chat-pending-input";
-import type { PendingInput } from "@/state/chat-pending-input";
+import { storedTurnFailure } from "@/state/chat-failure";
+import { localRunTargetOf, pendingInputOf } from "@/state/chat-pending-input";
+import type { LocalRunTarget, PendingInput } from "@/state/chat-pending-input";
 
 /**
  * A stored message part. Text, reasoning, tool calls and attached files are
@@ -38,7 +51,10 @@ const messageSchema = v.object({
   role: v.string(),
   createdAt: v.pipe(v.string(), v.isoTimestamp()),
   parts: v.array(partSchema),
-  /** Read only for whether the message's turn waits for the person. */
+  /**
+   * Read for whether the message's turn waits for the person or failed, and
+   * for the answer's context notice.
+   */
   metadata: v.optional(v.unknown()),
 });
 
@@ -66,6 +82,42 @@ export type ChatEntry = {
   readonly blocks: readonly AnswerBlock[];
   readonly files: readonly SentFile[];
   readonly drafts: readonly ChatDraftDocument[];
+  /** Why the answer's turn failed; absent for one that did not. */
+  readonly failure?: AIErrorKind;
+  /** What the answer's context left out, as the web says it too. */
+  readonly contextNotice: ChatContextNotice | null;
+};
+
+const contextNoticeMetadataSchema = v.object({
+  [CHAT_CONTEXT_NOTICE_METADATA_KEY]: v.nullable(chatContextNoticeSchema),
+});
+
+/**
+ * The context notice a stored message's or a stream event's metadata states:
+ * the notice, `null` where the stream withdraws one an earlier attempt
+ * streamed, or undefined where it says nothing of one. A notice this build
+ * does not know says nothing, so it does not fail the thread.
+ */
+export const contextNoticeIn = (
+  metadata: unknown,
+): ChatContextNotice | null | undefined => {
+  const parsed = v.safeParse(contextNoticeMetadataSchema, metadata);
+  return parsed.success
+    ? parsed.output[CHAT_CONTEXT_NOTICE_METADATA_KEY]
+    : undefined;
+};
+
+/**
+ * What answers the thread's latest message again once its answer failed:
+ * that message as the thread stores it, and the computer target the thread's
+ * turns run on, if they run on the person's computer.
+ */
+export type ChatRetry = {
+  /** The answer that failed, which the new one replaces. */
+  readonly answerId: string;
+  readonly messageId: string;
+  readonly parts: readonly unknown[];
+  readonly runTarget: LocalRunTarget | undefined;
 };
 
 /**
@@ -80,13 +132,18 @@ export type ChatMessagesPage = {
   readonly activeTurnId: string | null;
   readonly usedAnonymization: boolean;
   readonly pendingInput: PendingInput | null;
+  /** On the thread's latest page, when its latest answer failed. */
+  readonly retry: ChatRetry | null;
+  /** Where the thread's turns run: on stella's model path, or a computer. */
+  readonly runTargetKind: ChatRunTarget["kind"];
 };
 
 type StoredMessage = v.InferOutput<typeof messageSchema>;
 
 /**
  * What a phone can show of one stored message. System messages and messages
- * with nothing to draw are left out.
+ * with nothing to draw are left out; a failed answer always draws, as the
+ * reason it failed.
  */
 export const toChatEntry = (message: StoredMessage): ChatEntry | undefined => {
   if (message.role !== "user" && message.role !== "assistant") {
@@ -107,11 +164,16 @@ export const toChatEntry = (message: StoredMessage): ChatEntry | undefined => {
       : [];
   });
   const drafts = draftDocumentsOf(message.parts);
+  const failure =
+    message.role === "assistant"
+      ? storedTurnFailure(message.metadata)
+      : undefined;
   if (
     text === "" &&
     blocks.length === 0 &&
     files.length === 0 &&
-    drafts.length === 0
+    drafts.length === 0 &&
+    failure === undefined
   ) {
     return undefined;
   }
@@ -123,7 +185,39 @@ export const toChatEntry = (message: StoredMessage): ChatEntry | undefined => {
     blocks,
     files,
     drafts,
+    contextNotice:
+      message.role === "assistant"
+        ? (contextNoticeIn(message.metadata) ?? null)
+        : null,
+    ...(failure === undefined ? {} : { failure }),
   };
+};
+
+/**
+ * The retry a page offers: only when its last message is an answer that
+ * failed, for the person's message it answered, which is then the thread's
+ * latest.
+ */
+const retryOf = (
+  messages: readonly StoredMessage[],
+  runTarget: unknown,
+): ChatRetry | null => {
+  const last = messages.at(-1);
+  if (
+    last?.role !== "assistant" ||
+    storedTurnFailure(last.metadata) === undefined
+  ) {
+    return null;
+  }
+  const asked = messages.findLast(({ role }) => role === "user");
+  return asked === undefined
+    ? null
+    : {
+        answerId: last.id,
+        messageId: asked.id,
+        parts: asked.parts,
+        runTarget: localRunTargetOf(runTarget),
+      };
 };
 
 /** A message this phone sends, as the thread shows it until the stored one replaces it. */
@@ -144,6 +238,7 @@ export const sentEntry = ({
   // The thread names each file; its bytes have gone with the message.
   files: files.map(({ mimeType, name }) => ({ mimeType, name })),
   drafts: [],
+  contextNotice: null,
 });
 
 /**
@@ -159,12 +254,17 @@ const toPage = (
   olderCursor: page.olderCursor,
   activeTurnId: page.activeTurnId,
   usedAnonymization: page.usedAnonymization,
+  // A thread that never chose where it runs runs on stella's model path.
+  runTargetKind: v.is(chatRunTargetSchema, page.runTarget)
+    ? page.runTarget.kind
+    : CHAT_RUN_TARGET_KIND.cloud,
   pendingInput: latest
     ? pendingInputOf({
         message: page.messages.at(-1),
         runTarget: page.runTarget,
       })
     : null,
+  retry: latest ? retryOf(page.messages, page.runTarget) : null,
 });
 
 /** An older page in front of what is loaded, without a message twice. */

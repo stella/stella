@@ -38,6 +38,12 @@ import {
 } from "@/api/lib/db/audit-recording";
 import type { AuditRecorder } from "@/api/lib/db/audit-recording";
 import { runTransactionsInCallerContext } from "@/api/lib/db/caller-async-context";
+import {
+  holdQueueOfUnavailableMemberOnTx,
+  readDueQueueHeadOnTx,
+  sweepThreadsWithDueQueueOnTx,
+} from "@/api/lib/db/chat-queue-system";
+import { sweepHandedOverChatTurnsOnTx } from "@/api/lib/db/chat-turn-handover-system";
 import { recordLegalResolveAuditInTransaction } from "@/api/lib/db/legal-resolve-audit";
 import type { LegalResolveAudit } from "@/api/lib/db/legal-resolve-audit";
 import { meterSqlClient } from "@/api/lib/db/meter-client";
@@ -241,6 +247,41 @@ export const readOperatorActivitySummary = async (now: number) =>
     readAuditedActivitySummary(tx, now),
   );
 
+/**
+ * The chat queue's sender reads across organizations which queues have a
+ * message due and who queued it, before that member is proved again, and
+ * holds a queue whose member can no longer be proved. Ids and owners only;
+ * the send itself runs on the member's own connection.
+ */
+export const readDueChatQueueHead = async (threadId: SafeId<"chatThread">) =>
+  await withAggregateTransaction(
+    rootDb,
+    async (tx) => await readDueQueueHeadOnTx({ threadId, tx }),
+  );
+export const sweepThreadsWithDueChatQueue = async (limit: number) =>
+  await withAggregateTransaction(
+    rootDb,
+    async (tx) => await sweepThreadsWithDueQueueOnTx({ limit, tx }),
+  );
+export const holdChatQueueOfUnavailableMember = async (
+  options: Omit<Parameters<typeof holdQueueOfUnavailableMemberOnTx>[0], "tx">,
+) =>
+  await withAggregateTransaction(
+    rootDb,
+    async (tx) => await holdQueueOfUnavailableMemberOnTx({ ...options, tx }),
+  );
+
+/**
+ * The handed-over chat turns another task may adopt, across organizations,
+ * before their members are proved again; the adoption runs on the member's
+ * own connection.
+ */
+export const sweepHandedOverChatTurns = async (limit: number) =>
+  await withAggregateTransaction(
+    rootDb,
+    async (tx) => await sweepHandedOverChatTurnsOnTx({ limit, tx }),
+  );
+
 /** Organization-bound OAuth operations never expose the owner connection. */
 export const readServiceOAuthClientBinding = async (clientId: string) =>
   await readOAuthClientBinding(rootDb, clientId);
@@ -422,7 +463,11 @@ export const changeOrganizationSlug = async ({
           !membership ||
           !isMemberRole(membership.role) ||
           !hasMemberPermission(
-            withCurrentMemberRole(memberRole, membership.role),
+            withCurrentMemberRole({
+              authority: memberRole,
+              role: membership.role,
+              billingAccess: membership.billingAccess,
+            }),
             {
               organization: ["update"],
             },

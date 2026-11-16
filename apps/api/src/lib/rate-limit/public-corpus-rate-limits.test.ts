@@ -448,11 +448,10 @@ describe("public corpus fleet request budgets", () => {
 
   test("accepted requests report the tightest applicable address or fleet policy", async () => {
     const bindings = createBindings();
-    const previous = env.PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX;
-    const previousAggregate = env.PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX;
+
     try {
-      env.PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX = 100;
-      env.PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX = 120;
+      testState.setConfig("PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX", 100);
+      testState.setConfig("PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX", 120);
       await using server = createApp(bindings.binding);
       for (const { path, limit } of [
         { path: "/law/statutes/search", limit: 30 },
@@ -471,8 +470,6 @@ describe("public corpus fleet request budgets", () => {
         );
       }
     } finally {
-      env.PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX = previous;
-      env.PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX = previousAggregate;
       bindings.kill();
     }
   });
@@ -588,10 +585,9 @@ describe("public corpus fleet request budgets", () => {
     });
   for (const { path, method } of searchRoutes) {
     test(`search address refusals preserve fleet capacity without double charging: ${method} ${path}`, async () => {
-      const previous = env.PUBLIC_CORPUS_SEARCH_GLOBAL_MAX;
       const bindings = createBindings();
       try {
-        env.PUBLIC_CORPUS_SEARCH_GLOBAL_MAX = 7;
+        testState.setConfig("PUBLIC_CORPUS_SEARCH_GLOBAL_MAX", 7);
         await using server = createApp(bindings.binding);
         for (let index = 0; index < 3; index += 1) {
           expect(
@@ -629,27 +625,21 @@ describe("public corpus fleet request budgets", () => {
         ).toBe(200);
         expect(bindings.increments.get("public-corpus-global-search")).toBe(4);
       } finally {
-        env.PUBLIC_CORPUS_SEARCH_GLOBAL_MAX = previous;
         bindings.kill();
       }
     });
   }
 
   test("distinct client addresses share the global budget across law and case routes", async () => {
-    const previous = {
-      search: env.PUBLIC_CORPUS_SEARCH_GLOBAL_MAX,
-      aggregate: env.PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX,
-      sitemap: env.PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX,
-    };
     const bindings = createBindings();
     const lines: string[] = [];
     setMetricLineSinkForTesting((line) => {
       lines.push(line);
     });
     try {
-      env.PUBLIC_CORPUS_SEARCH_GLOBAL_MAX = 3;
-      env.PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX = 3;
-      env.PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX = 3;
+      testState.setConfig("PUBLIC_CORPUS_SEARCH_GLOBAL_MAX", 3);
+      testState.setConfig("PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX", 3);
+      testState.setConfig("PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX", 3);
       await using server = createApp(bindings.binding);
       for (const classRoutes of [
         [
@@ -726,9 +716,6 @@ describe("public corpus fleet request budgets", () => {
         );
       }
     } finally {
-      env.PUBLIC_CORPUS_SEARCH_GLOBAL_MAX = previous.search;
-      env.PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX = previous.aggregate;
-      env.PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX = previous.sitemap;
       bindings.kill();
       resetMetricLineSinkForTesting();
     }
@@ -786,10 +773,9 @@ describe("public corpus fleet request budgets", () => {
 
   test("aggregate and sitemap per-address caps are isolated from ordinary navigation", async () => {
     const bindings = createBindings();
-    const previousSitemap = env.PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX;
-    const previousAggregate = env.PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX;
-    env.PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX = 1200;
-    env.PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX = 100;
+
+    testState.setConfig("PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX", 1200);
+    testState.setConfig("PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX", 100);
     await using server = createApp(bindings.binding);
     const lines: string[] = [];
     setMetricLineSinkForTesting((line) => {
@@ -850,8 +836,6 @@ describe("public corpus fleet request budgets", () => {
       }
       expect(lines).toEqual([]);
     } finally {
-      env.PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX = previousSitemap;
-      env.PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX = previousAggregate;
       bindings.kill();
       resetMetricLineSinkForTesting();
     }
@@ -862,13 +846,15 @@ describe("public corpus fleet request budgets", () => {
     let count = 0;
     const lines: string[] = [];
     const bindings = createBindings();
-    const previous = env.PUBLIC_CORPUS_SEARCH_GLOBAL_MAX;
+
     setMetricLineSinkForTesting((line) => {
       lines.push(line);
     });
     try {
-      env.PUBLIC_CORPUS_SEARCH_GLOBAL_MAX =
-        2 * env.PUBLIC_CORPUS_ASSUMED_REPLICAS;
+      testState.setConfig(
+        "PUBLIC_CORPUS_SEARCH_GLOBAL_MAX",
+        2 * env.PUBLIC_CORPUS_ASSUMED_REPLICAS,
+      );
       const options = createPublicCorpusGlobalRateLimitOptions(
         "search",
         bindings.binding,
@@ -931,7 +917,6 @@ describe("public corpus fleet request budgets", () => {
         context.kill();
       }
     } finally {
-      env.PUBLIC_CORPUS_SEARCH_GLOBAL_MAX = previous;
       bindings.kill();
       resetMetricLineSinkForTesting();
     }
