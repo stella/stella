@@ -49,7 +49,7 @@ const withInspector = async (
   try {
     await run({
       pttl: async (key) => Number(await client.send("PTTL", [key])),
-      get: async (key) => await client.send("GET", [key]),
+      get: async (key): Promise<unknown> => await client.send("GET", [key]),
     });
   } finally {
     client.close();

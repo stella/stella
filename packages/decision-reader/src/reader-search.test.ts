@@ -223,6 +223,26 @@ describe("buildSearchResults", () => {
     });
   });
 
+  it("groups repeated piece IDs without moving their first encounter order", () => {
+    const result = buildSearchResults({
+      pieces: [
+        { id: "p1", text: "Smith" },
+        { id: "p2", text: "Smith" },
+        { id: "p1", text: "Smith" },
+      ],
+      query: "smith",
+    });
+
+    expect(result.matchCount).toBe(3);
+    expect(Object.keys(result.rangesByPieceId)).toEqual(["p1", "p2"]);
+    expect(
+      result.rangesByPieceId["p1"]?.map(({ matchIndex }) => matchIndex),
+    ).toEqual([0, 2]);
+    expect(
+      result.rangesByPieceId["p2"]?.map(({ matchIndex }) => matchIndex),
+    ).toEqual([1]);
+  });
+
   it("finds a provision by its one-digit number", () => {
     const result = buildSearchResults({
       pieces: [

@@ -37,6 +37,11 @@ const API_FAILURE_FORMATTERS = new Set([
   "shadowGradeFields",
   "systemFields",
 ]);
+const API_HANDLER_FAILURE_FORMATTERS = new Set([
+  "requestErrorStatusFields",
+  "causeChainAttributes",
+]);
+const API_SHADOW_FORMATTERS = new Set(["shadowFields"]);
 const SAFE_TRANSFORMS = new Set([
   "sanitizeErrorForOutput",
   "sanitizeErrorAttributesForOutput",
@@ -152,6 +157,24 @@ const isSafeTransform = (context: RuleContext, node: AstNode): boolean => {
         (moduleId) => moduleId.endsWith("apps/api/src/lib/errors/utils"),
       ],
       names: API_ERROR_FORMATTERS,
+    }) ||
+    isImportedFrom({
+      context,
+      node: callee,
+      modules: [
+        (moduleId) =>
+          moduleId.endsWith("apps/api/src/lib/observability/failure"),
+      ],
+      names: API_HANDLER_FAILURE_FORMATTERS,
+    }) ||
+    isImportedFrom({
+      context,
+      node: callee,
+      modules: [
+        (moduleId) =>
+          moduleId.endsWith("apps/api/src/lib/observability/failure-shadow"),
+      ],
+      names: API_SHADOW_FORMATTERS,
     }) ||
     isOwnedSafeProjection(
       context,
