@@ -72,7 +72,12 @@ export const TwoFactorPanel = ({ className }: TwoFactorPanelProps) => {
       // The redirect target's `beforeLoad` (see routes/auth/two-factor.tsx)
       // redirects away as soon as `context.session` resolves, mirroring the
       // email-OTP step (routes/auth/otp.tsx + otp-panel.tsx).
-      await invalidateSession.mutateAsync();
+      try {
+        await invalidateSession.mutateAsync();
+      } catch (refreshError) {
+        notifyUserError(refreshError, t("errors.actionFailed"));
+        throw refreshError;
+      }
     },
     onError: (error) => {
       analytics.captureError(error, {

@@ -10,7 +10,11 @@ import { PROFESSIONAL_USE_STATUS } from "@stll/api-contract/professional-use";
 import { memberHasPermissions } from "@stll/permissions";
 import type { PermissionInput } from "@stll/permissions";
 
-import { rootKeys } from "@/lib/auth-query-options";
+import { rootKeys, sessionOptions } from "@/lib/auth-query-options";
+import {
+  bindAuthQueryOwner,
+  isAuthBootstrapQuery,
+} from "@/lib/auth-query-owner";
 import { STALE_TIME } from "@/lib/consts";
 import type { toAuthClientError } from "@/lib/errors/auth";
 import { readQueryResult } from "@/lib/errors/query-result";
@@ -65,11 +69,20 @@ export const roleOptions = resourceQueryOptions(
   queryOptions({
     retry: BOOT_QUERY_RETRY,
     queryKey: rootKeys.role,
-    queryFn: async () => {
+    queryFn: async ({ client, queryKey, signal }) => {
+      const owner = bindAuthQueryOwner({
+        queryClient: client,
+        queryKey,
+        signal,
+      });
       const { authClient } = await import("@/lib/auth-client");
+      owner.assertCurrent();
       const { role } = await authClientData(
-        await authClient.organization.getActiveMemberRole(),
+        await authClient.organization.getActiveMemberRole({
+          fetchOptions: { signal },
+        }),
       );
+      owner.accept();
       return role;
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
@@ -83,13 +96,23 @@ export const roleOptions = resourceQueryOptions(
 /** The additional membership grant is read only when role grants do not decide the operation. */
 export const activeMemberOptions = resourceQueryOptions(
   queryOptions({
-    queryKey: ["active-organization-member"],
+    queryKey: rootKeys.activeMember,
     retry: BOOT_QUERY_RETRY,
-    queryFn: async () => {
+    queryFn: async ({ client, queryKey, signal }) => {
+      const owner = bindAuthQueryOwner({
+        queryClient: client,
+        queryKey,
+        signal,
+      });
       const { authClient } = await import("@/lib/auth-client");
-      return await authClientData(
-        await authClient.organization.getActiveMember(),
+      owner.assertCurrent();
+      const member = await authClientData(
+        await authClient.organization.getActiveMember({
+          fetchOptions: { signal },
+        }),
       );
+      owner.accept();
+      return member;
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   }),
@@ -126,13 +149,32 @@ export const ensureMemberPermission = async ({
 export const refreshAuthQueries = async (queryClient: QueryClient) => {
   // Load the reset owner at the call boundary; it reads these query options.
   const { settleAuthTransition } = await import("@/lib/session-cache-guard");
-  await Promise.all([
-    queryClient.refetchQueries({ queryKey: rootKeys.session, type: "all" }),
-    queryClient.refetchQueries({ queryKey: rootKeys.role, type: "all" }),
-  ]);
-  await settleAuthTransition(queryClient);
   const { signalSessionChange } = await import("@/lib/account/session-signal");
-  signalSessionChange();
+  try {
+    const previousSession = queryClient.getQueryData(sessionOptions.queryKey);
+    const hadRole =
+      queryClient.getQueryState(roleOptions.queryKey) !== undefined;
+    await queryClient.cancelQueries({ predicate: isAuthBootstrapQuery });
+    await queryClient.cancelQueries({
+      queryKey: sessionOptions.queryKey,
+      exact: true,
+    });
+    const session = await queryClient.query({
+      ...sessionOptions,
+      staleTime: 0,
+    });
+    await settleAuthTransition(queryClient);
+    if (
+      hadRole &&
+      session?.session.activeOrganizationId &&
+      previousSession?.user.id === session.user.id
+    ) {
+      await queryClient.query({ ...roleOptions, staleTime: 0 });
+    }
+  } finally {
+    // The preceding auth mutation may have committed even if this read failed.
+    signalSessionChange();
+  }
 };
 
 /**

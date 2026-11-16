@@ -96,7 +96,12 @@ function AcceptInvitation({ invitation }: AcceptInvitationProps) {
         throw toAuthClientError(setActiveError);
       }
 
-      await invalidateSession.mutateAsync();
+      try {
+        await invalidateSession.mutateAsync();
+      } catch (refreshError) {
+        notifyUserError(refreshError, t("errors.actionFailed"));
+        throw refreshError;
+      }
       await navigate({ to: "/workspaces", replace: true });
     },
     onError: (error) => {

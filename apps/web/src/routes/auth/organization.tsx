@@ -345,13 +345,18 @@ const OrganizationList = ({
         throw toAuthClientError(error);
       }
 
-      await completeOrganizationFlow({
-        isOauthPostLogin,
-        navigate,
-        queryClient,
-        redirectTo,
-        status: "selected",
-      });
+      try {
+        await completeOrganizationFlow({
+          isOauthPostLogin,
+          navigate,
+          queryClient,
+          redirectTo,
+          status: "selected",
+        });
+      } catch (refreshError) {
+        notifyUserError(refreshError, t("errors.actionFailed"));
+        throw refreshError;
+      }
     },
     onError: (error) => {
       analytics.captureError(error, {

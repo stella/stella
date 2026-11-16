@@ -177,27 +177,25 @@ function ConsentPage() {
     setSubmission({ status: "pending" });
     // The grant binds to the session's active organization when consent is
     // given, so switching here is what decides where the app will work.
-    const outcome = await Result.tryPromise(
-      async () => await authClient.organization.setActive({ organizationId }),
-    );
-    // On failure the request may still have reached the server, so re-read
-    // the session: the page must show the organization Allow would bind to.
+    const outcome = await Result.tryPromise(async () => {
+      try {
+        const { error } = await authClient.organization.setActive({
+          organizationId,
+        });
+        if (error) {
+          throw toAuthClientError(error);
+        }
+      } finally {
+        // A failed request may still have committed. Re-read the organization
+        // Allow would bind to, and surface a failed confirmation read as well.
+        await refreshAuthQueries(queryClient);
+      }
+    });
     if (outcome.isErr()) {
-      await refreshAuthQueries(queryClient);
       setSubmission({ status: "error" });
       notifyUserError(outcome.error, t("consent.error"));
       return;
     }
-    if (outcome.value.error) {
-      await refreshAuthQueries(queryClient);
-      setSubmission({ status: "error" });
-      notifyUserError(
-        toAuthClientError(outcome.value.error),
-        t("consent.error"),
-      );
-      return;
-    }
-    await refreshAuthQueries(queryClient);
     setSubmission({ status: "idle" });
   };
 
