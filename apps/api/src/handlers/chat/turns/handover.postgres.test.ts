@@ -67,6 +67,7 @@ import {
 } from "@/api/handlers/chat/turns/adopt";
 import type { ChatMessage, ChatPart } from "@/api/handlers/chat/types";
 import { createVisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { recordAccountProfessionalUse } from "@/api/lib/auth/professional-use";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -167,6 +168,11 @@ const seedMember = async (): Promise<Member> => {
   if (proved.type !== "member") {
     return panic("The fixture member was not proved");
   }
+  // A send would refuse a member whose organization's AI settings cannot be
+  // read, and an adopted turn's follow-ups skip them the same way.
+  expect(proved.caller.orgAIConfigStatus).not.toBe(
+    ORG_AI_CONFIG_STATUS.unreadable,
+  );
   return { organizationId, userId, safeDb: proved.caller.safeDb };
 };
 
@@ -661,7 +667,18 @@ if (!databaseUrl || !runPostgresTests) {
       expect(computer.queued.interrupts).toBe(0);
 
       // A completed first turn: compaction was considered and the new thread
-      // is titled from its question and the answer.
+      // is titled from its question and the answer. Both run once the turn is
+      // stored, so after its end is visible, as they do after a send.
+      await waitFor(
+        async () =>
+          await Promise.resolve(
+            markedDue.length > 0 && titled.length > 0 ? true : undefined,
+          ),
+        {
+          description: "the adopted turn's follow-ups",
+          timeoutMs: STEP_TIMEOUT_MS,
+        },
+      );
       expect(markedDue).toEqual([seeded.threadId]);
       expect(titled).toEqual([
         expect.objectContaining({
