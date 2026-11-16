@@ -12,6 +12,10 @@ import { Text } from "@stll/ui/text";
 
 import { AnswerSteps, AnswerSubagent } from "@/components/answer-steps";
 import { ChatAttachmentChip } from "@/components/chat-attachment-chip";
+import {
+  LimitResetChoice,
+  LimitResetMessage,
+} from "@/components/chat-limit-reset";
 import { MarkdownView } from "@/components/markdown-view";
 import { ThreadMatter } from "@/components/thread-matter";
 import { APP_VARIANT } from "@/env";
@@ -94,7 +98,11 @@ export const ChatMessage = ({
         }
       })}
       {entry.failure === undefined ? null : (
-        <FailedAnswer failure={entry.failure} onRetry={onRetry} />
+        <FailedAnswer
+          failure={entry.failure}
+          limitResetsAt={entry.limitResetsAt}
+          onRetry={onRetry}
+        />
       )}
       {live || entry.text === "" ? null : <ShareAnswer text={entry.text} />}
     </View>
@@ -102,21 +110,31 @@ export const ChatMessage = ({
 };
 
 /**
- * Why an answer failed, where to fix it when that is in stella desktop, and
- * a way to ask again when the thread offers one.
+ * Why an answer failed (for a usage limit, when it resets), where to fix it
+ * when that is in stella desktop, and a way to ask again when the thread
+ * offers one. The thread's latest answer stopped by a limit also offers to
+ * continue by itself, or notify, once the limit resets.
  */
 const FailedAnswer = ({
   failure,
+  limitResetsAt,
   onRetry,
 }: {
   failure: AIErrorKind;
+  limitResetsAt: string | undefined;
   onRetry: (() => void) | undefined;
 }) => {
   const t = useTranslations("chat");
   const steps = chatFailureStepsKey(failure);
   return (
     <View className="items-start gap-2">
-      <Text variant="error">{t(`failure.${CHAT_FAILURE_KEYS[failure]}`)}</Text>
+      {limitResetsAt === undefined ? (
+        <Text variant="error">
+          {t(`failure.${CHAT_FAILURE_KEYS[failure]}`)}
+        </Text>
+      ) : (
+        <LimitResetMessage resetsAt={limitResetsAt} />
+      )}
       {steps === null ? null : (
         <Text variant="caption">{t(`localRun.${steps}`)}</Text>
       )}
@@ -124,6 +142,9 @@ const FailedAnswer = ({
         <Button onPress={onRetry} variant="outline">
           {t("resend")}
         </Button>
+      )}
+      {limitResetsAt === undefined || onRetry === undefined ? null : (
+        <LimitResetChoice />
       )}
     </View>
   );

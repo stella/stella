@@ -27,6 +27,11 @@ export default {
           "Checks a queued message bound for the member's computer finds one connected before sending it.",
       },
       {
+        path: "apps/api/src/handlers/chat/limit-reminder/limit-resume-sender.ts",
+        reason:
+          "Checks the member's computer is connected, and its agent no longer limited, before continuing a chat after a usage limit reset.",
+      },
+      {
         path: "apps/api/src/handlers/chat/local-run-plan.ts",
         reason:
           "Routes a chat turn bound for the member's computer through the control and reads its run back.",

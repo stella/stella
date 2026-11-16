@@ -85,6 +85,7 @@
     "documentClose": "Zamknij",
     "approvalBrowserNote": "Po zezwoleniu uruchomi się w Twojej przeglądarce na komputerze, przez rozszerzenie stella.",
     "grantFailed": "Nie udało się zapisać zgody. Spróbuj ponownie.",
+    "limitReminderFailed": "Nie udało się zapisać zmiany. Spróbuj ponownie.",
     "elsewhereBrowser": "Ten krok działa w Twojej przeglądarce na komputerze, przez rozszerzenie stella. Otwórz tam tę rozmowę w stelli, aby go dokończyć.",
     "elsewhereSecret": "Ten krok wymaga klucza. Ze względów bezpieczeństwa klucze dodaje się w stelli na komputerze, nie w aplikacji.",
     "elsewhereConnector": "Ten krok łączy aplikację. Ze względów bezpieczeństwa aplikacje łączy się w stelli na komputerze, nie w aplikacji.",
@@ -248,7 +249,13 @@
       },
       "sessionNotResumed": "Agent programistyczny na Twoim komputerze nie mógł wznowić pracy tam, gdzie skończył, dlatego kontynuował na podstawie wiadomości z tego czatu.",
       "steered": "Wysłano podczas pracy agenta",
-      "desktopSettingsSteps": "W stella desktop na swoim komputerze otwórz Ustawienia › Ogólne › Subskrypcje AI."
+      "desktopSettingsSteps": "W stella desktop na swoim komputerze otwórz Ustawienia › Ogólne › Subskrypcje AI.",
+      "errorLimitResetsAt": "Agent programistyczny na Twoim komputerze osiągnął limit użycia. Możesz spróbować ponownie po {time}.",
+      "limitReminderNotify": "Powiadom mnie po odnowieniu",
+      "limitReminderScheduled": "Powiadomimy Cię po {time}.",
+      "limitResumeContinue": "Kontynuuj automatycznie po odnowieniu",
+      "limitResumeScheduled": "Wznowimy automatycznie po {time}.",
+      "limitReminderCancel": "Anuluj"
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# sprawdzone źródło} few {# sprawdzone źródła} many {# sprawdzonych źródeł} other {# sprawdzonego źródła}}",

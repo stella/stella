@@ -85,6 +85,7 @@
     "documentClose": "Zavrieť",
     "approvalBrowserNote": "Po povolení sa spustí vo vašom prehliadači na počítači, cez rozšírenie stella.",
     "grantFailed": "Schválenie sa nepodarilo uložiť. Skúste to znova.",
+    "limitReminderFailed": "Zmenu sa nepodarilo uložiť. Skúste to znova.",
     "elsewhereBrowser": "Tento krok beží vo vašom prehliadači na počítači, cez rozšírenie stella. Dokončite ho tam, v stelle otvorte túto konverzáciu.",
     "elsewhereSecret": "Tento krok potrebuje kľúč. Z bezpečnostných dôvodov sa kľúče pridávajú v stelle na počítači, nie v aplikácii.",
     "elsewhereConnector": "Tento krok pripája aplikáciu. Z bezpečnostných dôvodov sa aplikácie pripájajú v stelle na počítači, nie v aplikácii.",
@@ -248,7 +249,13 @@
       },
       "sessionNotResumed": "Programovací agent vo vašom počítači nemohol nadviazať tam, kde skončil, preto pokračoval podľa správ v tomto chate.",
       "steered": "Odoslané počas práce agenta",
-      "desktopSettingsSteps": "V stella desktop vo svojom počítači otvorte Nastavenia › Všeobecné › Predplatné AI."
+      "desktopSettingsSteps": "V stella desktop vo svojom počítači otvorte Nastavenia › Všeobecné › Predplatné AI.",
+      "errorLimitResetsAt": "Programovací agent vo vašom počítači vyčerpal svoj limit využitia. Znova to môžete skúsiť po {time}.",
+      "limitReminderNotify": "Upozorniť ma, keď sa obnoví",
+      "limitReminderScheduled": "Upozorníme vás po {time}.",
+      "limitResumeContinue": "Pokračovať automaticky, keď sa obnoví",
+      "limitResumeScheduled": "Automaticky pokračuje po {time}.",
+      "limitReminderCancel": "Zrušiť"
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# preverený zdroj} few {# preverené zdroje} other {# preverených zdrojov} many {# prevereného zdroja}}",

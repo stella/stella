@@ -344,6 +344,7 @@ export const ENUM_COLUMNS = {
   case_law_statute_citation_memberships: ["target_type"],
   cell_metadata: ["entity_feature_gate"],
   chat_content_v3_backfill_receipts: ["outcome", "source"],
+  chat_limit_reminders: ["on_reset"],
   chat_queue_holds: ["reason"],
   chat_secrets: ["decision"],
   chat_threads: ["chat_reasoning_effort"],

@@ -14,7 +14,6 @@ import {
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { NEWEST_CHAT_TURN_FIRST } from "@/api/lib/chat/turn-order";
-import type { AssertNoExtraFields } from "@/api/lib/projection-totality";
 
 const config = {
   contract: "patch",
@@ -26,7 +25,10 @@ const config = {
   query: limitReminderQuery,
 } satisfies HandlerConfig;
 
-/** When the member will hear that their chat's usage limit reset, if they asked. */
+/**
+ * What happens when the usage limit that stopped the chat's latest turn
+ * resets, and when, if the member asked.
+ */
 const getChatLimitReminder = createSafeRootHandler(
   config,
   async function* ({
@@ -57,6 +59,7 @@ const getChatLimitReminder = createSafeRootHandler(
         const [reminder] = await tx
           .select({
             remindAt: chatLimitReminders.remindAt,
+            onReset: chatLimitReminders.onReset,
             turnId: chatLimitReminders.turnId,
           })
           .from(chatLimitReminders)
@@ -87,14 +90,14 @@ const getChatLimitReminder = createSafeRootHandler(
     if (found === null) {
       return Result.err(chatThreadNotFound());
     }
-    const response = {
-      remindAt: found.reminder?.remindAt.toISOString() ?? null,
-    };
+    const { reminder } = found;
     return Result.ok(
-      response satisfies AssertNoExtraFields<
-        typeof response,
-        ChatLimitReminderResponse
-      >,
+      reminder === undefined
+        ? ({ remindAt: null } satisfies ChatLimitReminderResponse)
+        : ({
+            remindAt: reminder.remindAt.toISOString(),
+            onReset: reminder.onReset,
+          } satisfies ChatLimitReminderResponse),
     );
   },
 );

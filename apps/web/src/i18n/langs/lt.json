@@ -1932,6 +1932,8 @@
       "folderStateUnreadable": "Negalima perskaityti",
       "limitReminderNotify": "Pranešti, kai atsinaujins",
       "limitReminderScheduled": "Pranešime jums po {time}.",
+      "limitResumeContinue": "Tęsti automatiškai, kai atsinaujins",
+      "limitResumeScheduled": "Automatiškai tęsis po {time}.",
       "permissionAboveLimit": "Jūsų organizacija to neleidžia",
       "permissionAskDescription": "Pokalbio aplanko failus redaguoja pats; dėl visko kito klausia.",
       "permissionAutoDescription": "Tai, ką laiko saugiu, atlieka pats; dėl kito klausia.",

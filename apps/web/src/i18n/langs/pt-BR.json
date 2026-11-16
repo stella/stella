@@ -1932,6 +1932,8 @@
       "folderStateUnreadable": "Não é possível ler",
       "limitReminderNotify": "Avise-me quando for renovado",
       "limitReminderScheduled": "Avisaremos você a partir de {time}.",
+      "limitResumeContinue": "Continuar automaticamente quando for renovado",
+      "limitResumeScheduled": "Continuará automaticamente a partir de {time}.",
       "permissionAboveLimit": "Não permitido pela sua organização",
       "permissionAskDescription": "Edita sozinho os arquivos da pasta do chat; pergunta antes de qualquer outra coisa.",
       "permissionAutoDescription": "Faz sozinho o que julga seguro; pergunta sobre o resto.",

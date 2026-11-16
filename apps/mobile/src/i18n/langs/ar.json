@@ -85,6 +85,7 @@
     "documentClose": "إغلاق",
     "approvalBrowserNote": "عند السماح بها، تعمل في متصفحك على حاسوبك عبر إضافة stella.",
     "grantFailed": "تعذّر حفظ الموافقة. حاول مرة أخرى.",
+    "limitReminderFailed": "تعذّر حفظ التغيير. حاول مرة أخرى.",
     "elsewhereBrowser": "تعمل هذه الخطوة في متصفحك على حاسوبك عبر إضافة stella. افتح هذه المحادثة في stella هناك لإكمالها.",
     "elsewhereSecret": "تحتاج هذه الخطوة إلى مفتاح. حفاظًا على الأمان، تُضاف المفاتيح في stella على حاسوبك، لا في التطبيق.",
     "elsewhereConnector": "تربط هذه الخطوة تطبيقًا. حفاظًا على الأمان، تُربط التطبيقات في stella على حاسوبك، لا في التطبيق.",
@@ -248,7 +249,13 @@
       },
       "sessionNotResumed": "تعذّر على وكيل البرمجة على حاسوبك استئناف العمل من حيث توقف، لذا تابع اعتمادًا على رسائل هذه الدردشة.",
       "steered": "أُرسلت أثناء عمل الوكيل",
-      "desktopSettingsSteps": "في stella desktop على حاسوبك، افتح الإعدادات › عام › اشتراكات الذكاء الاصطناعي."
+      "desktopSettingsSteps": "في stella desktop على حاسوبك، افتح الإعدادات › عام › اشتراكات الذكاء الاصطناعي.",
+      "errorLimitResetsAt": "بلغ وكيل البرمجة على حاسوبك حدّ الاستخدام. يمكنك المحاولة مرة أخرى بعد {time}.",
+      "limitReminderNotify": "أبلغني عند إعادة ضبطه",
+      "limitReminderScheduled": "سنبلغك بعد {time}.",
+      "limitResumeContinue": "المتابعة تلقائيًا عند إعادة ضبطه",
+      "limitResumeScheduled": "ستُستأنف تلقائيًا بعد {time}.",
+      "limitReminderCancel": "إلغاء"
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, zero {# مصادر تمت مراجعتها} one {مصدر واحد تمت مراجعته} two {مصدران تمت مراجعتهما} few {# مصادر تمت مراجعتها} many {# مصدرًا تمت مراجعته} other {# مصدر تمت مراجعته}}",

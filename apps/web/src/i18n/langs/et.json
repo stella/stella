@@ -1932,6 +1932,8 @@
       "folderStateUnreadable": "Ei saa lugeda",
       "limitReminderNotify": "Teavita mind, kui limiit lähtestub",
       "limitReminderScheduled": "Teavitame sind alates {time}.",
+      "limitResumeContinue": "Jätka automaatselt, kui limiit lähtestub",
+      "limitResumeScheduled": "Jätkub automaatselt alates {time}.",
       "permissionAboveLimit": "Sinu organisatsioon seda ei luba",
       "permissionAskDescription": "Muudab vestluse kaustas olevaid faile ise; kõige muu kohta küsib.",
       "permissionAutoDescription": "Teeb ise seda, mida peab ohutuks; ülejäänu kohta küsib.",

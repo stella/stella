@@ -284,6 +284,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { CONTENT_DELIVERY_AUDIT_ACTION } from "@/api/lib/audited-download";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import { loadFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
+import type { ServerStartedChatTurn } from "@/api/lib/auth/member-caller";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import { getOrganizationRegistryDispatch } from "@/api/lib/business-registries/credentials";
@@ -318,6 +319,7 @@ import {
 } from "@/api/lib/chat/thread-names";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import { rewriteWorkspaceUrlsToMentions } from "@/api/lib/chat/workspace-url-mentions";
+import type { UserDispatchSource } from "@/api/lib/db/audit-recording";
 import type { LocalRunAttachment } from "@/api/lib/desktop-runner/control";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
@@ -1298,6 +1300,24 @@ const keepThreadRunTarget = async ({
   });
 };
 
+/** The audit source of a turn's events: the member's, or what the server started it from. */
+const chatTurnAuditSource = (
+  started: ServerStartedChatTurn | undefined,
+): UserDispatchSource => {
+  if (started === undefined) {
+    return "chat";
+  }
+  switch (started.type) {
+    case "queue":
+      return "chat_queue";
+    case "limit-resume":
+      return "chat_limit_resume";
+    default:
+      started satisfies never;
+      return panic("Unknown server-started chat turn");
+  }
+};
+
 type AcceptIncomingTurnOptions = {
   /** Who asked for the turn: the member, or their queue sending for them. */
   source: ChatTurnSource;
@@ -1534,9 +1554,10 @@ const acceptIncomingTurn = async ({
             workspaceId,
           })
         : undefined;
-    // A queued message is sent only as a new turn that takes it from the
-    // queue; one that would not store a new turn is not the queue's to send.
-    if (source.type === "queue" && turnAcceptance === undefined) {
+    // A turn the server starts (a queued message, a resume after a usage
+    // limit) is sent only as a new turn that takes what it names; one that
+    // would not store a new turn is not the server's to send.
+    if (source.type !== "member" && turnAcceptance === undefined) {
       return Result.err(
         new HandlerError({
           status: 409,
@@ -2832,10 +2853,7 @@ export const createSendMessage = (
         yield* Result.await(lifecycle.checkAdmission());
 
         const acceptedTurnResult = await acceptIncomingTurn({
-          source:
-            session.startedFromQueue === undefined
-              ? { type: "member" }
-              : { type: "queue", ...session.startedFromQueue },
+          source: session.serverStartedTurn ?? { type: "member" },
           managedAIResidency,
           accessibleSet,
           accessibleWorkspaceIds,
@@ -3042,10 +3060,9 @@ export const createSendMessage = (
           toolWorkspaceIds,
           workspaceStatusById,
         });
-        // A turn the server started from the member's queue says so on
-        // every event its tools record.
-        const chatAuditSource =
-          session.startedFromQueue === undefined ? "chat" : "chat_queue";
+        // A turn the server started (from the member's queue, or after a
+        // usage limit reset) says so on every event its tools record.
+        const chatAuditSource = chatTurnAuditSource(session.serverStartedTurn);
         // Reads the assistant makes without an approval, such as a skill
         // loaded by `load-skill`.
         const recordReadAuditEvent = createAuditRecorder({

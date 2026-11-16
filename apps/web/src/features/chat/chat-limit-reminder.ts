@@ -1,6 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
+import type { ChatLimitResetAction } from "@stll/api-contract/chat-limit-reminder";
 
 import { chatKeys } from "@/features/chat/chat-query-contract";
 import { api } from "@/lib/api";
@@ -39,8 +40,9 @@ const readChatLimitReminder = async (
   );
 
 /**
- * Whether the member asked to hear when the usage limit that stopped this
- * chat's turn on their computer resets, and when that is.
+ * What the member asked to happen when the usage limit that stopped this
+ * chat's turn on their computer resets (hear about it, or continue the
+ * chat), and when that is.
  */
 export const chatLimitReminderOptions = ({
   activeOrganizationId,
@@ -69,15 +71,15 @@ export const chatLimitReminderOptions = ({
 const SET_REMINDER = "chat.threads.limit-reminder.set";
 const CANCEL_REMINDER = "chat.threads.limit-reminder.cancel";
 
-export const setChatLimitReminder = async (threadRef: ChatThreadRef) => {
+export const setChatLimitReminder = async (
+  threadRef: ChatThreadRef,
+  onReset: ChatLimitResetAction,
+) => {
   const threadId = toSafeId<"chatThread">(threadRef.threadId);
   const query = scopeQuery(threadRef);
+  const reminder = api.chat.threads({ threadId })["limit-reminder"];
   return await invokeAppOnlyWrite(SET_REMINDER, async () =>
-    unwrapApiResponse(
-      await api.chat.threads({ threadId })["limit-reminder"].put(undefined, {
-        query,
-      }),
-    ),
+    unwrapApiResponse(await reminder.put({ onReset }, { query })),
   );
 };
 
