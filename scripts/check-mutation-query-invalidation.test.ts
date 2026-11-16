@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 
 import {
   checkBaseline,
@@ -1254,4 +1255,255 @@ test.each([
   } else {
     assertInvalidCannotBeBaselined(findings);
   }
+});
+
+const mixedOwnedMutationSources = ({
+  operation = "await runOwned(input)",
+  factoryParameters = "input",
+  factoryBody = `resourceMutation({ mutation: "renameEntity", queryClient: {}, mutationFn: () => renameRequest(input) })`,
+}: {
+  operation?: string;
+  factoryBody?: string;
+  factoryParameters?: string;
+} = {}) => [
+  ...validSources.slice(0, 2),
+  {
+    file: "apps/web/src/account.ts",
+    text: `
+import { resourceMutation } from "@/lib/workspace-realtime";
+import { api } from "@/lib/api";
+export const renameRequest = (input) => api.entities({ workspaceId: input.workspaceId }).rename.patch(input);
+export const createRename = (${factoryParameters}) => ${factoryBody};
+const execute = ({ run }) => run();
+export const runOwned = async (input) => await execute({ run: async () => await createRename(input)() });
+`,
+  },
+  {
+    file: "apps/web/src/features.ts",
+    text: `
+import { useMutation } from "@tanstack/react-query";
+import { authClient } from "@/lib/auth-client";
+import { api } from "@/lib/api";
+import { resourceMutation } from "@/lib/workspace-realtime";
+import { createRename, renameRequest, runOwned } from "./account";
+export const verify = () => useMutation({ mutationFn: async (input) => {
+  await authClient.$fetch("/sign-in/email-otp", { method: "POST", body: input });
+  ${operation};
+} });
+`,
+  },
+];
+
+test("mixed auth mutations retain legacy status while executed nested owners keep exact contract evidence", () => {
+  const sources = mixedOwnedMutationSources();
+  const census = inspectMutationQuerySources(sources);
+  const entry = census.mutations.find(({ id }) =>
+    id.includes("verify:useMutation"),
+  );
+  const findings = inspectMutationQueryInvalidation(census, sources);
+  expect(findings).toEqual([
+    expect.objectContaining({
+      id: `${entry?.id}:mutation`,
+      disposition: "legacy",
+    }),
+  ]);
+  expect(entry?.writes.map(({ route }) => route).toSorted()).toEqual([
+    "/entities/:workspaceId/rename",
+  ]);
+  expect(entry?.ownWrites).toEqual([]);
+  expect(entry?.ownUnresolved).toEqual(entry?.unresolved);
+  expect(entry?.unresolved).toEqual([
+    expect.objectContaining({
+      reason: "unresolved-auth-plugin-endpoint",
+      expression: expect.stringContaining("authClient.$fetch"),
+    }),
+  ]);
+  expect(entry?.resourceMutations).toMatchObject([
+    {
+      file: "apps/web/src/account.ts",
+      writes: [{ route: "/entities/:workspaceId/rename" }],
+    },
+  ]);
+});
+
+test("nested resource ownership never covers raw siblings or unproven execution and declarations", () => {
+  const cases = [
+    { operation: "await runOwned(input); await renameRequest(input)" },
+    {
+      factoryParameters: "input = renameRequest({ workspaceId: 'workspace' })",
+    },
+    {
+      factoryParameters:
+        "{ input = renameRequest({ workspaceId: 'workspace' }) }",
+    },
+    { operation: "createRename(input); await renameRequest(input)" },
+    {
+      factoryBody: `{ resourceMutation({ mutation: "renameEntity", queryClient: {}, mutationFn: () => renameRequest(input) }); return () => renameRequest(input); }`,
+    },
+    {
+      factoryBody: `{ resourceMutation({ mutation: "renameEntity", queryClient: {}, mutationFn: () => renameRequest(input) }); }`,
+    },
+    { operation: "await createRename(await renameRequest(input))()" },
+    {
+      operation:
+        "const opaque = externalFactory(input); await opaque(); await renameRequest(input)",
+    },
+    {
+      factoryBody: `resourceMutation({ mutation: "renameEntity", queryClient: {}, mutationFn: () => renameRequest(input) }, renameRequest(input))`,
+    },
+    {
+      factoryBody: `resourceMutation({ mutation: "missingContract", queryClient: {}, mutationFn: () => renameRequest(input) })`,
+    },
+    {
+      factoryBody: `resourceMutation({ mutation: "renameEntity", queryClient: {}, scope: () => ({ type: "organization" }), mutationFn: () => renameRequest(input) })`,
+    },
+    {
+      factoryBody: `resourceMutation({ mutation: "renameEntity", queryClient: {}, mutationFn: () => api.entities({ workspaceId: input.workspaceId }).delete.delete(input) })`,
+    },
+    {
+      factoryBody: `resourceMutation({ mutation: "renameEntity", queryClient: {}, mutationFn: unknownWrite })`,
+    },
+    {
+      operation: `const resourceMutation = (options) => options.mutationFn; await resourceMutation({ mutation: "renameEntity", queryClient: {}, mutationFn: () => renameRequest(input) })()`,
+    },
+  ];
+  for (const fixture of cases) {
+    const findings = violations(mixedOwnedMutationSources(fixture));
+    expect({
+      fixture,
+      invalid: findings.some(
+        ({ disposition }) => disposition === "invalid-declaration",
+      ),
+    }).toEqual({ fixture, invalid: true });
+    assertInvalidCannotBeBaselined(findings);
+  }
+});
+
+test("effective nested owner factories retain their eager argument writes", () => {
+  const sources = mixedOwnedMutationSources().map((source) =>
+    source.file === "apps/web/src/features.ts"
+      ? {
+          ...source,
+          text: `
+import { useMutation } from "@tanstack/react-query";
+import { createRename, renameRequest } from "./account";
+export const verify = () => useMutation({ mutationFn: createRename(renameRequest({ workspaceId: "workspace" })) });
+`,
+        }
+      : source,
+  );
+  const census = inspectMutationQuerySources(sources);
+  const entry = census.mutations.find(({ id }) =>
+    id.includes("verify:useMutation"),
+  );
+  expect(entry?.ownWrites.map(({ route }) => route)).toEqual([
+    "/entities/:workspaceId/rename",
+  ]);
+  assertInvalidCannotBeBaselined(
+    inspectMutationQueryInvalidation(census, sources),
+  );
+});
+
+test("the post-sign-in timezone closure retains its actual user owner and refusal boundary", () => {
+  const sources = [
+    ...validSources.slice(0, 2).map((source) => ({
+      ...source,
+      text: source.file.endsWith("resource-ref.ts")
+        ? source.text.replace(
+            'ENTITY: "entity"',
+            'ENTITY: "entity", USER: "user"',
+          )
+        : source.text
+            .replace("renameEntity:", "updateUser:")
+            .replace(
+              'writes: [{ method: "PATCH", route: "/entities/:workspaceId/rename" }]',
+              'writes: [{ type: "auth-core-endpoint", endpoint: "updateUser", method: "POST", route: "/update-user" }]',
+            )
+            .replace(
+              "resources: [RESOURCE_TYPE.ENTITY]",
+              "resources: [RESOURCE_TYPE.USER]",
+            ),
+    })),
+    ...["lib/account/update-user.ts", "lib/errors/query-result.ts"].map(
+      (relative) => ({
+        file: `apps/web/src/${relative}`,
+        text: readFileSync(
+          new URL(`../apps/web/src/${relative}`, import.meta.url),
+          "utf-8",
+        ),
+      }),
+    ),
+    {
+      file: "apps/web/src/features.ts",
+      text: `
+import { useMutation } from "@tanstack/react-query";
+import { Result } from "better-result";
+import { authClient } from "@/lib/auth-client";
+import { updateUserResource } from "@/lib/account/update-user";
+export const verify = () => useMutation({ mutationFn: async (input) => {
+  await authClient.$fetch("/sign-in/email-otp", { method: "POST", body: input });
+  authClient.getSession().then(async ({ data: freshSession }) => {
+    if (freshSession?.user.timezoneId !== "UTC") return;
+    const updated = await updateUserResource({
+      queryClient: {}, input: { timezoneId: "Europe/Prague" },
+      owner: { userId: freshSession.user.id, organizationId: freshSession.session.activeOrganizationId ?? null },
+    });
+    if (Result.isError(updated)) throw updated.error;
+  }).catch(reportError);
+} });`,
+    },
+  ];
+  const census = inspectMutationQuerySources(sources);
+  const entry = census.mutations.find(({ id }) =>
+    id.includes("verify:useMutation"),
+  );
+  expect(inspectMutationQueryInvalidation(census, sources)).toEqual([
+    expect.objectContaining({
+      id: `${entry?.id}:mutation`,
+      disposition: "legacy",
+    }),
+  ]);
+  expect(entry?.writes.map(({ route }) => route)).toEqual(["/update-user"]);
+  expect(entry?.ownWrites).toEqual([]);
+  expect(entry?.ownUnresolved).toEqual(entry?.unresolved);
+  expect(entry?.unresolved?.length).toBeGreaterThan(0);
+  expect(entry?.resourceMutations).toMatchObject([
+    {
+      file: "apps/web/src/lib/account/update-user.ts",
+      writes: [{ route: "/update-user" }],
+      unresolved: [],
+    },
+  ]);
+});
+
+test("unused nested owner declarations give raw sibling writes no execution credit", () => {
+  const sources = mixedOwnedMutationSources({
+    operation:
+      "const unused = () => createRename(input)(); await renameRequest(input)",
+  });
+  const census = inspectMutationQuerySources(sources);
+  const entry = census.mutations.find(({ id }) =>
+    id.includes("verify:useMutation"),
+  );
+  expect(entry?.resourceMutations ?? []).toEqual([]);
+  expect(entry?.ownWrites).toEqual(entry?.writes);
+  assertInvalidCannotBeBaselined(
+    inspectMutationQueryInvalidation(census, sources),
+  );
+});
+
+test("calling a factory without invoking its returned callback gives no nested execution credit", () => {
+  const sources = mixedOwnedMutationSources({
+    factoryBody: `async () => resourceMutation({ mutation: "renameEntity", queryClient: {}, mutationFn: () => renameRequest(input) })()`,
+    operation: "createRename(input); await renameRequest(input)",
+  });
+  const census = inspectMutationQuerySources(sources);
+  const entry = census.mutations.find(({ id }) =>
+    id.includes("verify:useMutation"),
+  );
+  expect(entry?.resourceMutations ?? []).toEqual([]);
+  expect(entry?.ownWrites).toEqual(entry?.writes);
+  assertInvalidCannotBeBaselined(
+    inspectMutationQueryInvalidation(census, sources),
+  );
 });

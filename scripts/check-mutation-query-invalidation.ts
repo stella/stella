@@ -750,7 +750,10 @@ const mutationContracts = (
 type MutationContractErrorArgs = {
   call: ts.CallExpression;
   mutationFn: ts.Expression;
-  entry: MutationQueryCensus["mutations"][number];
+  entry: Pick<
+    MutationQueryCensus["mutations"][number],
+    "writes" | "unresolved"
+  >;
   contracts: ReadonlyMap<string, MutationContract>;
 };
 
@@ -1320,6 +1323,47 @@ type MutationExecutionArgs = {
   contracts: ReadonlyMap<string, MutationContract>;
 };
 
+/** Nested writes earn coverage only from an executed canonical owner with its
+ * own route evidence. The enclosing auth/UI mutation keeps its legacy status. */
+const nestedResourceMutationError = ({
+  entry,
+  modules,
+  contracts,
+}: MutationExecutionArgs): string | undefined => {
+  if (
+    (entry.resourceMutations?.length ?? 0) > 0 &&
+    entry.ownUnresolved.some(
+      ({ reason }) => reason === "dynamic-operation-function",
+    )
+  ) {
+    return "Nested resource mutations require a resolved enclosing operation function.";
+  }
+  for (const boundary of entry.resourceMutations ?? []) {
+    const module = modules.get(boundary.file);
+    const call = module && findCall(module, boundary);
+    const options = call?.arguments.at(0);
+    const mutationFn = options && objectProperty(options, "mutationFn");
+    if (
+      !module ||
+      !call ||
+      !canonicalCall(module, call, MUTATION_HELPER) ||
+      !mutationFn
+    ) {
+      return "Nested resource mutation execution could not be resolved to its canonical owner.";
+    }
+    const error = mutationContractError({
+      call,
+      mutationFn,
+      entry: boundary,
+      contracts,
+    });
+    if (error !== undefined) {
+      return error;
+    }
+  }
+  return undefined;
+};
+
 const inspectMutationExecution = ({
   module,
   modules,
@@ -1398,7 +1442,20 @@ const inspectMutationExecution = ({
       : { status: "invalid", reason: error };
   }
 
-  const ownWrites = entry.kind === "wrapper" ? entry.ownWrites : entry.writes;
+  const nestedError = nestedResourceMutationError({
+    module,
+    modules,
+    call,
+    entry,
+    contracts,
+  });
+  if (nestedError !== undefined) {
+    return { status: "invalid", reason: nestedError };
+  }
+  const ownWrites =
+    entry.kind === "wrapper" || (entry.resourceMutations?.length ?? 0) > 0
+      ? entry.ownWrites
+      : entry.writes;
   const observedWrites = new Set(
     ownWrites.map(({ method, route }) => `${method.toUpperCase()} ${route}`),
   );
