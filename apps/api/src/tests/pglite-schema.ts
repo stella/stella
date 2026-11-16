@@ -1869,7 +1869,7 @@ export const installPgliteMatterTimerPresence = async (
   const statements = readMigrationStatements(
     nodePath.join(
       DRIZZLE_DIR,
-      "20261116153000_matter_timer_presence",
+      "20261116190212_matter_timer_presence",
       "migration.sql",
     ),
   )
