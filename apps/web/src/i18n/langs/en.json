@@ -2226,6 +2226,7 @@
       "noRun": "The agent is not running on your computer right now.",
       "notPlain": "Only a text message without files, not sent anonymized, can go to the agent while it works.",
       "notTaken": "The agent could not take your message just now.",
+      "queuedMessageChanged": "The message changed or left the queue, so the agent was not handed it.",
       "runFull": "The agent cannot take more messages right now.",
       "title": "Your message is queued until the agent finishes",
       "turnNotRunning": "The agent is not working right now."

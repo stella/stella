@@ -123,6 +123,12 @@ const createComputer = () => {
   let state: DesktopRunnerRunView["state"] = "running";
   let chatReadSeq = 0;
   let approvalRequest: StoredRunEvent | undefined;
+  /** The text each steer handed the run, as the API queued it. */
+  const inputs = new Map<string, string>();
+  /** What the turn made of the run's steer reports, in order. */
+  const steerSettles: [string, "taken" | "refused"][] = [];
+  let steerSettled = Promise.withResolvers<undefined>();
+  let steerGate: Promise<undefined> = Promise.resolve(undefined);
   const store = (message: (seq: number) => Record<string, unknown>) => {
     const seq = stored.length + 1;
     const event = { seq, message: { ...message(seq), runId: RUNNER_RUN_ID } };
@@ -200,10 +206,19 @@ const createComputer = () => {
     answerQuestion: async () => panic("No question is asked here"),
     pairAppCall: async () => panic("No app call is reported here"),
     readRunOutputFile: async () => panic("No output file is reported here"),
-    readRunInputText: async () => panic("No steer is reported here"),
+    readRunInputText: async ({ inputId }) =>
+      Result.ok(inputs.get(inputId) ?? null),
   };
   const context: LocalRunContext = {
     control,
+    steeredQueue: {
+      settle: async (inputId, report) => {
+        steerSettles.push([inputId, report]);
+        steerSettled.resolve(undefined);
+        await steerGate;
+        return Result.ok(undefined);
+      },
+    },
     runBell,
     owner: {
       userId: toSafeId<"user">("user_bound"),
@@ -219,6 +234,21 @@ const createComputer = () => {
     context,
     queued,
     chatReadSeq: () => chatReadSeq,
+    steerSettles,
+    /** The API handed the run steer `inputId` with `text`. */
+    handInput: (inputId: string, text: string) => {
+      inputs.set(inputId, text);
+    },
+    /** Hold the turn's next steer report until `release`. */
+    holdSteers: () => {
+      const gate = Promise.withResolvers<undefined>();
+      steerGate = gate.promise;
+      steerSettled = Promise.withResolvers<undefined>();
+      return {
+        reached: steerSettled.promise,
+        release: () => gate.resolve(undefined),
+      };
+    },
     events: (chunks: readonly StreamChunk[]) => {
       for (const chunk of chunks) {
         store((seq) => ({
@@ -544,6 +574,54 @@ describe("a turn on the member's computer", () => {
     expect(body).toContain('"code":"local_runner_unavailable"');
     // The gateway ended the run; nothing is left to interrupt.
     expect(computer.queued.interrupts).toBe(0);
+  });
+
+  test("settles the queued messages it steered before it reads the run's end", async () => {
+    const clock = createDeadlineClock();
+    const computer = createComputer();
+    const taken = "0198c0de-0000-7000-8000-000000000011";
+    const refused = "0198c0de-0000-7000-8000-000000000012";
+    computer.handInput(taken, "Also check the annex.");
+    computer.handInput(refused, "And the appendix.");
+    const chunks = await harnessChunks([
+      {
+        type: "session.started",
+        sessionId: harnessSessionId("session-steered"),
+        continuation: { type: "fresh" },
+      },
+      { type: "input.settled", inputId: taken, status: "accepted" },
+      { type: "input.settled", inputId: refused, status: "rejected" },
+      { type: "text.completed", messageId: "answer", text: "Checked both." },
+      { type: "turn.completed", usage: null, boundary: null },
+    ]);
+    const held = computer.holdSteers();
+    const turn = startTurn({
+      clock,
+      runsOn: CHAT_RUN_TARGET_KIND.local,
+      source: localSource(computer),
+    });
+    computer.events(chunks);
+    computer.finish();
+    await held.reached;
+    // The run's end is stored, but the turn does not end before the queue
+    // knows the steered message was taken: the end was read and stored
+    // within these turns of the event loop when it did not wait.
+    for (let flush = 0; flush < 200; flush += 1) {
+      await new Promise((resolve) => {
+        setImmediate(resolve);
+      });
+    }
+    expect(computer.steerSettles).toEqual([[taken, "taken"]]);
+    expect(turn.outcomes).toEqual([]);
+    held.release();
+    const { end, body } = await turn.ended();
+    expect(end).toBe("stored");
+    expect(computer.steerSettles).toEqual([
+      [taken, "taken"],
+      [refused, "refused"],
+    ]);
+    expect(turn.outcomes).toEqual([{ type: "completed" }]);
+    expect(body).toContain("Checked both.");
   });
 
   test("ends at the member's stop and interrupts the computer once", async () => {

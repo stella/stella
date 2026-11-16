@@ -21,6 +21,7 @@ import type {
 } from "@stll/api-contract/chat-connector";
 import { buildCreateDocumentDownloadFileName } from "@stll/api-contract/chat-create-document";
 import { CHAT_QUEUE_ERROR_CODE } from "@stll/api-contract/chat-queue";
+import { CHAT_LOCAL_RUN_STEER_SOURCE } from "@stll/api-contract/chat-run-target";
 import { requiresPerCallChatApproval } from "@stll/api-contract/chat-secret";
 import type { RequestSecretOutput } from "@stll/api-contract/chat-secret";
 import {
@@ -1000,6 +1001,7 @@ export const useChatSession = ({
           const outcome = await chat.steerLocalTurn({
             inputId: input.id,
             text: input.text,
+            source: { type: CHAT_LOCAL_RUN_STEER_SOURCE.composer },
           });
           if (outcome.type === "steered") {
             return;
@@ -1204,17 +1206,29 @@ export const useChatSession = ({
                 read === null
                   ? null
                   : steerableQueuedText({ item, parts: read.message.parts });
+              // Taken, the server removes it from the queue at the revision
+              // the turn was handed (one edited since stays queued).
+              removedHereRef.current.add(id);
               const steered =
                 text !== null &&
-                (await chat.steerLocalTurn({ inputId: id, text })).type ===
-                  "steered";
-              await writeQueue(async () =>
-                // Removed at the revision the turn was handed: one edited
-                // since stays queued.
-                steered && read !== null
-                  ? await removeFromQueue(id, read.revision)
-                  : await sendQueuedChatMessageNow(threadRef.threadId, id),
-              );
+                read !== null &&
+                (
+                  await chat.steerLocalTurn({
+                    inputId: id,
+                    text,
+                    source: {
+                      type: CHAT_LOCAL_RUN_STEER_SOURCE.queued,
+                      revision: read.revision,
+                    },
+                  })
+                ).type === "steered";
+              if (!steered) {
+                removedHereRef.current.delete(id);
+                await writeQueue(
+                  async () =>
+                    await sendQueuedChatMessageNow(threadRef.threadId, id),
+                );
+              }
             })(),
             "use-chat-session.steer-queued-message",
           );
@@ -1235,14 +1249,7 @@ export const useChatSession = ({
           return panic("Unhandled send-now route");
       }
     },
-    [
-      chat,
-      readQueue,
-      removeFromQueue,
-      threadRef.threadId,
-      threadSendState,
-      writeQueue,
-    ],
+    [chat, readQueue, threadRef.threadId, threadSendState, writeQueue],
   );
 
   /** The confirmed Send now over a turn waiting on the member: it ends what
@@ -2368,15 +2375,21 @@ export const useChatSession = ({
     steerOnResumeRef.current = null;
     detached(
       (async () => {
+        // Taken, the server removes it from the queue at that revision.
+        removedHereRef.current.add(steered.id);
         const outcome = await chat.steerLocalTurn({
           inputId: steered.id,
           text: steered.text,
+          source: {
+            type: CHAT_LOCAL_RUN_STEER_SOURCE.queued,
+            revision: steered.revision,
+          },
         });
+        if (outcome.type !== "steered") {
+          removedHereRef.current.delete(steered.id);
+        }
         switch (outcome.type) {
           case "steered":
-            await writeQueue(
-              async () => await removeFromQueue(steered.id, steered.revision),
-            );
             return;
           case "refused":
             notifySteerRefused(outcome.reason);
@@ -2390,7 +2403,7 @@ export const useChatSession = ({
       })(),
       "use-chat-session.steer-on-resume",
     );
-  }, [chat, notifySteerRefused, removeFromQueue, turnRunning, writeQueue]);
+  }, [chat, notifySteerRefused, turnRunning]);
 
   // The server sends the first queued message as a turn of its own, which
   // this page did not start: once that message has left the queue (not

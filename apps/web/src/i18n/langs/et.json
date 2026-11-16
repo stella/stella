@@ -2226,6 +2226,7 @@
       "noRun": "Agent ei tööta praegu sinu arvutis.",
       "notPlain": "Töö ajal saad agendile saata ainult failideta tekstisõnumi, mida ei saadeta anonüümitud režiimis.",
       "notTaken": "Agent ei saanud sinu sõnumit praegu vastu võtta.",
+      "queuedMessageChanged": "Sõnum on vahepeal muutunud või pole enam järjekorras, seega agent seda ei saanud.",
       "runFull": "Agent ei saa praegu rohkem sõnumeid vastu võtta.",
       "title": "Sinu sõnum ootab järjekorras, kuni agent lõpetab",
       "turnNotRunning": "Agent praegu ei tööta."

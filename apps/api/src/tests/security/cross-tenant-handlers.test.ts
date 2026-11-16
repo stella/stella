@@ -2979,12 +2979,20 @@ const isolationCases: IsolationCase[] = [
     runAAgainstB: async ({ workspaceA }) =>
       await runHandler(steerChatTurn, workspaceA, {
         params: { threadId: chatTurnThreadB, turnId: chatTurnB },
-        body: { inputId: Bun.randomUUIDv7(), text: "Also check the annex." },
+        body: {
+          inputId: Bun.randomUUIDv7(),
+          text: "Also check the annex.",
+          source: { type: "composer" },
+        },
       }),
     runBPositive: async ({ sameUserWorkspaceB }) =>
       await runHandler(steerChatTurn, sameUserWorkspaceB, {
         params: { threadId: chatTurnThreadB, turnId: chatTurnB },
-        body: { inputId: Bun.randomUUIDv7(), text: "Also check the annex." },
+        body: {
+          inputId: Bun.randomUUIDv7(),
+          text: "Also check the annex.",
+          source: { type: "composer" },
+        },
       }),
     expectDenied: (result) => {
       expect(getStatusCode(result)).toBe(404);

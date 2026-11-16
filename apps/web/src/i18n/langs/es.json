@@ -2226,6 +2226,7 @@
       "noRun": "El agente no se está ejecutando en tu ordenador ahora mismo.",
       "notPlain": "Mientras el agente trabaja, solo puedes enviarle un mensaje de texto sin archivos y que no se envíe en modo anonimizado.",
       "notTaken": "El agente no pudo aceptar tu mensaje en este momento.",
+      "queuedMessageChanged": "El mensaje cambió o ya no está en la cola, así que el agente no lo recibió.",
       "runFull": "El agente no puede aceptar más mensajes ahora.",
       "title": "Tu mensaje queda en cola hasta que el agente termine",
       "turnNotRunning": "El agente no está trabajando ahora."

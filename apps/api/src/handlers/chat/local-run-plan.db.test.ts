@@ -32,6 +32,7 @@ import {
 } from "@/api/lib/feature-access/policy";
 import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
+import { unqueuedSteers } from "@/api/tests/helpers/steered-queue";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -127,6 +128,7 @@ const send = async (
     workspaceIds: [],
     readApprovalCeiling: async () =>
       await readLocalRunApprovalCeiling(safeDb(), ids.orgA),
+    steeredQueue: unqueuedSteers,
     runtime: { control, runBell: createLocalRunBell() },
   });
   if (resolved.isOk()) {

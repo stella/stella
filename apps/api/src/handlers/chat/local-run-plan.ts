@@ -16,6 +16,7 @@ import {
   createLocalChatRun,
   type LocalChatRun,
   type LocalRunContext,
+  type LocalRunSteeredQueue,
 } from "@/api/handlers/chat/local-run-chunks";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { DesktopRunnerControl } from "@/api/lib/desktop-runner/control";
@@ -49,6 +50,8 @@ export type ResolveChatLocalRunOptions = {
   readApprovalCeiling: () => Promise<
     Result<DesktopRunnerApprovalMode, SafeDbError>
   >;
+  /** The thread's queue, for the run's reports on queued messages it steered. */
+  steeredQueue: LocalRunSteeredQueue;
   /** The gateway control; the process's own by default. */
   runtime?: { control: DesktopRunnerControl; runBell: DesktopRunnerRunBell };
 };
@@ -94,6 +97,7 @@ export const resolveChatLocalRun = async ({
   chatThreadId,
   workspaceIds,
   readApprovalCeiling,
+  steeredQueue,
   runtime = getDesktopRunnerControl(),
 }: ResolveChatLocalRunOptions): Promise<
   Result<LocalChatRun | undefined, HandlerError | SafeDbError>
@@ -125,6 +129,7 @@ export const resolveChatLocalRun = async ({
   }
   const context: LocalRunContext = {
     control: runtime.control,
+    steeredQueue,
     runBell: runtime.runBell,
     owner: { userId, organizationId },
     chatThreadId,

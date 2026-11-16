@@ -284,6 +284,9 @@ const UNEXPORTED_QUEUED_CHAT_MESSAGE_COLUMNS = [
   "userId",
   // When the queue's sweep last tried the thread: internal bookkeeping.
   "sweptAt",
+  // Which revision a running turn was handed as a steer: bookkeeping until
+  // the run reports on it.
+  "steeredRevision",
 ] as const satisfies readonly (keyof QueuedChatMessageExportRow)[];
 
 type MissingExportedQueuedChatMessageColumn = UnprojectedColumns<

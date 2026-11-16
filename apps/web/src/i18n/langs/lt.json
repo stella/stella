@@ -2226,6 +2226,7 @@
       "noRun": "Agentas dabar neveikia jūsų kompiuteryje.",
       "notPlain": "Agentui dirbant galima siųsti tik tekstinę žinutę be failų, išsiųstą ne anonimizuotu režimu.",
       "notTaken": "Agentas šiuo metu negalėjo priimti jūsų žinutės.",
+      "queuedMessageChanged": "Žinutė pasikeitė arba jos nebėra eilėje, todėl agentas jos negavo.",
       "runFull": "Agentas šiuo metu negali priimti daugiau žinučių.",
       "title": "Jūsų žinutė laukia eilėje, kol agentas baigs",
       "turnNotRunning": "Agentas šiuo metu nedirba."

@@ -1768,6 +1768,7 @@
   "chat.steerRefused.noRun": "The agent is not running on your computer right now.",
   "chat.steerRefused.notPlain": "Only a text message without files, not sent anonymized, can go to the agent while it works.",
   "chat.steerRefused.notTaken": "The agent could not take your message just now.",
+  "chat.steerRefused.queuedMessageChanged": "The message changed or left the queue, so the agent was not handed it.",
   "chat.steerRefused.runFull": "The agent cannot take more messages right now.",
   "chat.steerRefused.title": "Your message is queued until the agent finishes",
   "chat.steerRefused.turnNotRunning": "The agent is not working right now.",

@@ -175,6 +175,7 @@ import { isExternalMcpToolPart } from "@/api/handlers/chat/mcp-tool-parts";
 import { loadClientMessages } from "@/api/handlers/chat/message-page";
 import type { MessagePersistencePlan } from "@/api/handlers/chat/persist-message";
 import { planMessagePersistence } from "@/api/handlers/chat/persist-message";
+import { createSteeredQueue } from "@/api/handlers/chat/queue/steered-message";
 import {
   loadRequestedSkillsPrompt,
   requestedSkillNames,
@@ -2882,6 +2883,13 @@ export const createSendMessage = (
                 safeDb,
                 session.activeOrganizationId,
               ),
+            steeredQueue: createSteeredQueue({
+              organizationId: session.activeOrganizationId,
+              recordAuditEvent,
+              safeDb,
+              threadId: body.threadId,
+              userId: user.id,
+            }),
             ...(dependencies.localRunRuntime === undefined
               ? {}
               : { runtime: dependencies.localRunRuntime }),

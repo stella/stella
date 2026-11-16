@@ -5,7 +5,10 @@ import { randomUUID } from "expo-crypto";
 import { fetch as streamingFetch } from "expo/fetch";
 import { AppState } from "react-native";
 
-import type { ChatLocalRunSteerRefusal } from "@stll/api-contract/chat-run-target";
+import {
+  CHAT_LOCAL_RUN_STEER_SOURCE,
+  type ChatLocalRunSteerRefusal,
+} from "@stll/api-contract/chat-run-target";
 
 import { epochMilliseconds } from "@/connection/clock";
 import type { AccessTokenSource } from "@/connection/session";
@@ -367,6 +370,7 @@ function useTurnSteer({
         ...thread,
         fetch,
         inputId,
+        messageSource: { type: CHAT_LOCAL_RUN_STEER_SOURCE.composer },
         text: draft.text,
         turnId,
       });

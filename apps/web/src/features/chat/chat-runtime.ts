@@ -35,6 +35,7 @@ import {
   chatLocalRunSteerEventSchema,
   type ChatLocalRunSteerOutcome,
   type ChatLocalRunSteerRefusal,
+  type ChatLocalRunSteerSource,
 } from "@stll/api-contract/chat-run-target";
 import { createChatTurnTimingObserver } from "@stll/api-contract/chat-turn-duration";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
@@ -270,6 +271,7 @@ export type ChatRuntime = ChatActivitySession & {
   steerLocalTurn: (input: {
     inputId: string;
     text: string;
+    source: ChatLocalRunSteerSource;
   }) => Promise<ChatSteerOutcome>;
   getSnapshot: () => ChatRuntimeSnapshot;
   /** Answer the latest message again: a regeneration, which the server
@@ -1590,9 +1592,11 @@ export const createChatRuntime = ({
   const steerLocalTurn = async ({
     inputId,
     text,
+    source,
   }: {
     inputId: string;
     text: string;
+    source: ChatLocalRunSteerSource;
   }): Promise<ChatSteerOutcome> => {
     // The loading the steer was asked in: a later one is another request,
     // which the steer must not reach.
@@ -1627,7 +1631,7 @@ export const createChatRuntime = ({
             const { data, error } = await api.chat
               .threads({ threadId: toSafeId<"chatThread">(key.threadId) })
               .turns({ turnId: steeredTurn })
-              .steer.post({ inputId, text });
+              .steer.post({ inputId, text, source });
             return error
               ? Result.err(toAPIError(error))
               : Result.ok(data.steer);
