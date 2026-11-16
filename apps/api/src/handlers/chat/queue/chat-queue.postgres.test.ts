@@ -869,6 +869,7 @@ const suite = (
             send: sendOf(id, "steer me"),
             threadId,
             tx,
+            uploadedFileIds: [],
           });
         }
         await acceptTurnOnTx({
