@@ -11,6 +11,11 @@ import { STELLA_API_VERSION_PREFIX } from "./index";
 // desktop-dictation-transcription.test.ts binds these paths to it.
 export const DESKTOP_DICTATION_MODELS_PATH =
   `${STELLA_API_VERSION_PREFIX}/desktop/dictation/models` as const;
+/** The query parameter (set to `1`) a desktop that shows `provider` and
+ *  `outsideRegion` sends with the models request. Without it the API lists
+ *  only the region's models, without those fields, which older desktops
+ *  refuse to read. */
+export const DESKTOP_DICTATION_MODELS_LABELED_QUERY = "labels" as const;
 export const DESKTOP_DICTATION_TRANSCRIBE_PATH =
   `${STELLA_API_VERSION_PREFIX}/desktop/dictation/transcribe` as const;
 

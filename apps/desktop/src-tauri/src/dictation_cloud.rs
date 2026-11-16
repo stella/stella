@@ -60,6 +60,8 @@ const JOIN_RESERVE_MILLIS: usize = 500;
 #[serde(rename_all = "camelCase")]
 struct Contract {
   models_path: String,
+  /// Asks for the labeled model list this version shows.
+  models_labeled_query: String,
   transcribe_path: String,
   max_audio_bytes: usize,
   max_audio_seconds: usize,
@@ -569,11 +571,13 @@ impl CloudModels {
 pub async fn models(app: &AppHandle) -> Result<CloudModels, String> {
   let account = cloud_account(app).await?;
   let response = crate::http_client::device_proof_request(
-    client(MODELS_TIMEOUT)?.get(format!(
-      "{}{}",
-      account.api_base_url,
-      contract().models_path
-    )),
+    client(MODELS_TIMEOUT)?
+      .get(format!(
+        "{}{}",
+        account.api_base_url,
+        contract().models_path
+      ))
+      .query(&[(contract().models_labeled_query.as_str(), "1")]),
     &account.device_key,
     Some(&account.credential.key),
     None,

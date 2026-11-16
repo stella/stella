@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import * as v from "valibot";
 
 import {
+  DESKTOP_DICTATION_MODELS_LABELED_QUERY,
   DESKTOP_DICTATION_MODELS_PATH,
   DESKTOP_DICTATION_TRANSCRIBE_PATH,
   desktopDictationModelsSchema,
@@ -15,6 +16,7 @@ import {
 test("the typed transcription contract reads the native one", () => {
   expect(contract).toStrictEqual({
     modelsPath: DESKTOP_DICTATION_MODELS_PATH,
+    modelsLabeledQuery: DESKTOP_DICTATION_MODELS_LABELED_QUERY,
     transcribePath: DESKTOP_DICTATION_TRANSCRIBE_PATH,
     maxAudioBytes: MAX_TRANSCRIPTION_AUDIO_BYTES,
     maxAudioSeconds: MAX_TRANSCRIPTION_AUDIO_SECONDS,
