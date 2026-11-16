@@ -420,6 +420,14 @@ const UserMessageEditForm = ({
     checked: undoFiles,
     problem: undoProblem,
   });
+  /** Whether this form's edit session is still the open one. */
+  const sessionOpen = () => {
+    let open = false;
+    session.run(() => {
+      open = true;
+    });
+    return open;
+  };
   /** Ask for the undo and follow it while this form's session is open. */
   const undoFilesFirst = async (target: LocalFilesUndoMessage) =>
     await Result.tryPromise(
@@ -433,11 +441,7 @@ const UserMessageEditForm = ({
             ),
           wait: async (ms) => {
             await sleep(ms);
-            let open = false;
-            session.run(() => {
-              open = true;
-            });
-            return open;
+            return sessionOpen();
           },
           now: readClientClockMs,
         }),
@@ -504,14 +508,10 @@ const UserMessageEditForm = ({
           }
           // The form may have closed while the undo was followed: a closed
           // or replaced edit sends nothing, the folder stays restored.
-          let open = false;
-          session.run(() => {
-            open = true;
-            setUndoing(false);
-          });
-          if (!open) {
+          if (!sessionOpen()) {
             return;
           }
+          setUndoing(false);
         }
         const outcome = await onSubmit(edit);
         if (outcome.type !== "accepted") {
