@@ -893,7 +893,7 @@ export const streamChat = async ({
       modelRejectsStreamingTools(resolvedFallbackModel))
       ? null
       : resolvedFallbackModel;
-  const { abortController, deadlineSignal } = run.control;
+  const { deadlineSignal } = run.control;
   const restorationPairs: ChatAnonRestoration[] = [];
   // Set before the turn by the send path's compaction, or during it by a
   // step's own; the answer carries whichever it has.
@@ -983,6 +983,133 @@ export const streamChat = async ({
           yield* attemptStream;
         })();
 
+  const production = produceChatTurn({
+    answerQuoteChecker,
+    contextNotice,
+    decisionPassageStamper,
+    dismissesAwaited: resumeDismissesAwaited(preparedResume),
+    initialMessages: preparedMessageList,
+    latestMessageId,
+    onFinish,
+    organizationId,
+    owningAssistantMessageId,
+    resolveAssistantTextRefs,
+    resolveAssistantToolInputRefs,
+    resolveAssistantToolOutputRefs,
+    resolveAssistantValueRefs,
+    restorationPairs,
+    run,
+    runId,
+    safeDb,
+    source: stream,
+    // A turn on the member's computer was answered by its harness, not by a
+    // cloud model: it names no turn model and its reasoning no provenance.
+    stampAnswer: (message) =>
+      localRun === undefined
+        ? stampReasoningProvenance({
+            message: {
+              ...message,
+              metadata: { ...message.metadata, turnModel: servedTurnModel },
+            },
+            model: {
+              provider: servedTurnModel.provider,
+              modelId: servedTurnModel.model,
+            },
+            initialMessages: rawMessages,
+          })
+        : message,
+    storedHistory,
+    thirdPartyBoundary,
+    threadId,
+    turnBudget,
+    visualOrigin,
+  });
+  emitRequestStage({
+    route: "/v1/chat/:threadId/messages",
+    stage: "request_setup",
+    durationMs: performance.now() - admittedAt,
+    outcome: "completed",
+  });
+  return {
+    type: "streaming",
+    response: run.produce(production.output, production.durability, viewer),
+  };
+};
+
+/** What a turn's run produces: its chunks, and the log they are kept in. */
+export type ChatTurnProduction = {
+  output: AsyncIterable<StreamChunk>;
+  durability: StreamDurability;
+};
+
+type ProduceChatTurnOptions = {
+  /** The run's chunks, from the model or from the member's computer. */
+  source: AsyncIterable<PublicStreamChunk>;
+  run: ChatTurnRun;
+  safeDb: SafeDb;
+  organizationId: SafeId<"organization">;
+  runId: string;
+  threadId: SafeId<"chatThread">;
+  thirdPartyBoundary: ChatThirdPartyBoundary;
+  latestMessageId: string;
+  /** The history the run continues, as its source received it. */
+  initialMessages: ChatMessage[];
+  restorationPairs: ChatAnonRestoration[];
+  owningAssistantMessageId: SafeId<"chatMessage"> | undefined;
+  turnBudget: ChatTurnBudgetRun;
+  contextNotice: ContextNoticeStamp;
+  /** See `ProcessTurnForPersistenceOptions.dismissesAwaited`. */
+  dismissesAwaited: boolean;
+  /** Names who answered the finished turn on its message. */
+  stampAnswer: (
+    message: StreamChatFinishEvent["responseMessage"],
+  ) => StreamChatFinishEvent["responseMessage"];
+  storedHistory: StoredHistory;
+  visualOrigin: Pick<VisualResourceOrigin, "accepts"> | undefined;
+  decisionPassageStamper: DecisionPassageStamper;
+  answerQuoteChecker: AnswerQuoteChecker;
+  resolveAssistantTextRefs: ((text: string) => string) | undefined;
+  resolveAssistantToolInputRefs: AssistantToolInputRefResolver | undefined;
+  resolveAssistantToolOutputRefs: AssistantToolOutputRefResolver | undefined;
+  resolveAssistantValueRefs: AssistantValueRefResolver | undefined;
+  onFinish: StreamChatProps["onFinish"];
+};
+
+/**
+ * Turn a run's source into what the run produces: the chunks its viewers
+ * see, stored in the run's log under the run's execution, with the turn
+ * settled through `onFinish` once the source ends. The same for a turn a
+ * request starts and for one a task adopts, so both store and show a turn
+ * alike; only who delivers the output differs (`ChatTurnRun.produce` or
+ * `ChatTurnRun.pump`).
+ */
+export const produceChatTurn = ({
+  answerQuoteChecker,
+  contextNotice,
+  decisionPassageStamper,
+  dismissesAwaited,
+  initialMessages: preparedMessageList,
+  latestMessageId,
+  onFinish,
+  organizationId,
+  owningAssistantMessageId,
+  resolveAssistantTextRefs,
+  resolveAssistantToolInputRefs,
+  resolveAssistantToolOutputRefs,
+  resolveAssistantValueRefs,
+  restorationPairs,
+  run,
+  runId,
+  safeDb,
+  source,
+  stampAnswer,
+  storedHistory,
+  thirdPartyBoundary,
+  threadId,
+  turnBudget,
+  visualOrigin,
+}: ProduceChatTurnOptions): ChatTurnProduction => {
+  const { abortController, deadlineSignal } = run.control;
   const log = createChatRunLog({
     db: async (callback) => {
       const result = await safeDb(callback);
@@ -1019,7 +1146,7 @@ export const streamChat = async ({
           })
         : new Set<string>(),
     restorationPairs,
-    source: projectVisualPreviewStream(stream),
+    source: projectVisualPreviewStream(source),
     stamper: decisionPassageStamper,
   });
   const timingPhase: { status: "running" | "settled" } = { status: "running" };
@@ -1040,7 +1167,7 @@ export const streamChat = async ({
           getRestorableCheckpoint: () => run.restorableCheckpoint,
         }),
     deadlineSignal,
-    dismissesAwaited: resumeDismissesAwaited(preparedResume),
+    dismissesAwaited,
     flushPendingSource: persistenceVisibleStream.flushPending,
     initialMessages: preparedMessageList,
     onFinish: (event) => {
@@ -1048,22 +1175,7 @@ export const streamChat = async ({
         ...event.responseMessage.metadata,
         ...contextNotice.metadata(),
       };
-      // A turn on the member's computer was answered by its harness, not by a
-      // cloud model: it names no turn model and its reasoning no provenance.
-      const finished =
-        localRun === undefined
-          ? stampReasoningProvenance({
-              message: {
-                ...event.responseMessage,
-                metadata: { ...metadata, turnModel: servedTurnModel },
-              },
-              model: {
-                provider: servedTurnModel.provider,
-                modelId: servedTurnModel.model,
-              },
-              initialMessages: rawMessages,
-            })
-          : { ...event.responseMessage, metadata };
+      const finished = stampAnswer({ ...event.responseMessage, metadata });
       settlement.event = {
         outcome: event.outcome,
         responseMessage: attachTerminalTurnOutcome({
@@ -1217,12 +1329,6 @@ export const streamChat = async ({
     return readPresent(timing.value);
   };
 
-  emitRequestStage({
-    route: "/v1/chat/:threadId/messages",
-    stage: "request_setup",
-    durationMs: performance.now() - admittedAt,
-    outcome: "completed",
-  });
   const providerWaitStartedAt = performance.now();
   const observedOutput = observeChatOutputStages({
     source: output,
@@ -1230,29 +1336,24 @@ export const streamChat = async ({
     getSettlementOutcome: () => settlement.event?.outcome.type,
   });
   return {
-    type: "streaming",
-    response: run.produce(
-      withChatTurnTiming({
-        source: observedOutput,
-        getPhase: () => timingPhase.status,
-        readTiming,
-      }),
-      createChatTurnTimingDurability({
-        log,
-        getTerminal: () =>
-          settlement.event === undefined ||
-          settlement.terminalChunk === undefined
-            ? undefined
-            : {
-                chunk: settlement.terminalChunk,
-                messageId: settlement.event.responseMessage.id,
-              },
-        getPhase: () => timingPhase.status,
-        finishSettlement,
-        readTiming,
-      }),
-      viewer,
-    ),
+    output: withChatTurnTiming({
+      source: observedOutput,
+      getPhase: () => timingPhase.status,
+      readTiming,
+    }),
+    durability: createChatTurnTimingDurability({
+      log,
+      getTerminal: () =>
+        settlement.event === undefined || settlement.terminalChunk === undefined
+          ? undefined
+          : {
+              chunk: settlement.terminalChunk,
+              messageId: settlement.event.responseMessage.id,
+            },
+      getPhase: () => timingPhase.status,
+      finishSettlement,
+      readTiming,
+    }),
   };
 };
 

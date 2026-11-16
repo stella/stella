@@ -3,11 +3,13 @@ import {
   and,
   desc,
   eq,
+  gt,
   inArray,
   isNotNull,
   isNull,
   lte,
   or,
+  type SQL,
   sql,
 } from "drizzle-orm";
 
@@ -1263,7 +1265,7 @@ type ClaimChatTurnForExecutionOnTxProps = ChatTurnExecutionClaim & {
 type ClaimSource = {
   executionId: string | null;
   id: SafeId<"chatTurn">;
-  status: "accepted" | "awaiting-user" | "running";
+  status: "accepted" | "awaiting-user" | "handed-over" | "running";
 };
 
 const claimActiveTiming = (
@@ -1271,7 +1273,9 @@ const claimActiveTiming = (
   incomingMessageId: SafeId<"chatMessage">,
 ) => {
   switch (source.status) {
+    // A handed-over turn's active time ran on through the gap.
     case "accepted":
+    case "handed-over":
       return {
         activeDurationMs: chatTurns.activeDurationMs,
         activeStartedAt: chatTurns.activeStartedAt,
@@ -1475,6 +1479,36 @@ export const claimChatTurnForExecutionOnTx = async ({
     return { executionId, id: legacyTurnId };
   }
 
+  return await takeChatTurnOnTx({
+    executionId,
+    incomingMessageId,
+    leaseExpiresAt,
+    pings,
+    source,
+    tx,
+  });
+};
+
+/**
+ * Give `source` to a new execution: one compare-and-set on its status and
+ * owner, under the thread lock the caller holds. Null when another claim, a
+ * stop or the reaper changed the turn first.
+ */
+const takeChatTurnOnTx = async ({
+  executionId,
+  incomingMessageId,
+  leaseExpiresAt,
+  pings,
+  source,
+  tx,
+}: {
+  executionId: string;
+  incomingMessageId: SafeId<"chatMessage">;
+  leaseExpiresAt: SQL<Date>;
+  pings: ChatRunPings;
+  source: ClaimSource;
+  tx: Transaction;
+}): Promise<ChatTurnExecution | null> => {
   const executionOwnershipPredicate =
     source.executionId === null
       ? isNull(chatTurns.executionId)
@@ -1504,6 +1538,101 @@ export const claimChatTurnForExecutionOnTx = async ({
   const row = claimed.at(0);
   return row ? { executionId, id: row.id } : null;
 };
+
+/** A handed-over turn this execution now runs, and where it stood. */
+export type AdoptedChatTurn = {
+  execution: ChatTurnExecution;
+  /** The answer so far the released owner stored; the run continues it. */
+  checkpointMessageId: SafeId<"chatMessage">;
+  /** The chat run whose log the turn's viewers tail. */
+  runId: string;
+  workspaceId: SafeId<"workspace"> | null;
+};
+
+/**
+ * Adopt a handed-over turn: under the thread lock, one compare-and-set from
+ * `handed-over` with no owner and a live adopt-by to `running` under a new
+ * execution with a run lease. Exactly one of any number of adopters wins;
+ * the others, and a turn a stop or the reaper ended first, get null. From
+ * this write on the run log and the turn row refuse every other execution.
+ */
+export const adoptHandedOverChatTurnOnTx = async ({
+  pings,
+  threadId,
+  turnId,
+  tx,
+}: {
+  pings: ChatRunPings;
+  threadId: SafeId<"chatThread">;
+  turnId: SafeId<"chatTurn">;
+  tx: Transaction;
+}): Promise<AdoptedChatTurn | null> => {
+  if (!(await lockChatThreadForTurnOnTx({ threadId, tx }))) {
+    return null;
+  }
+  const handedOver = (
+    await tx
+      .select({
+        assistantMessageId: chatTurns.assistantMessageId,
+        runId: chatTurns.runId,
+        userMessageId: chatTurns.userMessageId,
+        workspaceId: chatTurns.workspaceId,
+      })
+      .from(chatTurns)
+      .where(
+        and(
+          eq(chatTurns.id, turnId),
+          eq(chatTurns.threadId, threadId),
+          eq(chatTurns.status, "handed-over"),
+          isNull(chatTurns.executionId),
+          gt(chatTurns.leaseExpiresAt, databaseNow()),
+        ),
+      )
+      .limit(1)
+  ).at(0);
+  if (handedOver === undefined) {
+    return null;
+  }
+  const { assistantMessageId, runId } = handedOver;
+  if (assistantMessageId === null || runId === null) {
+    // The payload check requires the answer; only a run that produced, and
+    // so bound its id, is ever released.
+    return panic("A handed-over chat turn has no stored answer or run");
+  }
+  const execution = await takeChatTurnOnTx({
+    executionId: Bun.randomUUIDv7(),
+    incomingMessageId: handedOver.userMessageId,
+    // The adopter's heartbeat renews it, as for any run.
+    leaseExpiresAt: nextChatTurnRunLeaseExpiry(),
+    pings,
+    source: { executionId: null, id: turnId, status: "handed-over" },
+    tx,
+  });
+  return execution === null
+    ? null
+    : {
+        execution,
+        checkpointMessageId: assistantMessageId,
+        runId,
+        workspaceId: handedOver.workspaceId,
+      };
+};
+
+/** `adoptHandedOverChatTurnOnTx` in its own transaction, as the member. */
+export const adoptHandedOverChatTurn = async ({
+  safeDb,
+  ...turn
+}: {
+  safeDb: SafeDb;
+  threadId: SafeId<"chatThread">;
+  turnId: SafeId<"chatTurn">;
+}): Promise<Result<AdoptedChatTurn | null, SafeDbError>> =>
+  await withChatRunPings(
+    async (pings) =>
+      await safeDb(
+        async (tx) => await adoptHandedOverChatTurnOnTx({ ...turn, pings, tx }),
+      ),
+  );
 
 /** Claim an accepted turn, or resume the awaiting turn owning an assistant. */
 export const claimChatTurnForExecution = async ({

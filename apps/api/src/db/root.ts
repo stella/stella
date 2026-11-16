@@ -43,6 +43,7 @@ import {
   readDueQueueHeadOnTx,
   sweepThreadsWithDueQueueOnTx,
 } from "@/api/lib/db/chat-queue-system";
+import { sweepHandedOverChatTurnsOnTx } from "@/api/lib/db/chat-turn-handover-system";
 import { recordLegalResolveAuditInTransaction } from "@/api/lib/db/legal-resolve-audit";
 import type { LegalResolveAudit } from "@/api/lib/db/legal-resolve-audit";
 import { meterSqlClient } from "@/api/lib/db/meter-client";
@@ -268,6 +269,17 @@ export const holdChatQueueOfUnavailableMember = async (
   await withAggregateTransaction(
     rootDb,
     async (tx) => await holdQueueOfUnavailableMemberOnTx({ ...options, tx }),
+  );
+
+/**
+ * The handed-over chat turns another task may adopt, across organizations,
+ * before their members are proved again; the adoption runs on the member's
+ * own connection.
+ */
+export const sweepHandedOverChatTurns = async (limit: number) =>
+  await withAggregateTransaction(
+    rootDb,
+    async (tx) => await sweepHandedOverChatTurnsOnTx({ limit, tx }),
   );
 
 /** Organization-bound OAuth operations never expose the owner connection. */
