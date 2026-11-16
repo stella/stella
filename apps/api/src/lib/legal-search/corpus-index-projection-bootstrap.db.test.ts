@@ -17,6 +17,7 @@ import {
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { bootstrapCorpusProjectionDesiredStateBatchTx } from "@/api/lib/legal-search/corpus-index-projection-bootstrap";
+import { installCorpusProjectionCanonicalEpochGuard } from "@/api/tests/helpers/corpus-projection-canonical-epoch-guard";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -44,6 +45,7 @@ let db: ReturnType<typeof drizzle>;
 
 beforeAll(async () => {
   client = await createTestPglite();
+  await installCorpusProjectionCanonicalEpochGuard(client);
   db = drizzle({ client });
 });
 

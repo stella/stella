@@ -27,6 +27,7 @@ import {
   synchronizeLockedCaseLawProjectionBatchTx,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { advanceCorpusProjectionErasuresTx } from "@/api/lib/legal-search/corpus-index-projection-erasure-store";
+import { installCorpusProjectionCanonicalEpochGuard } from "@/api/tests/helpers/corpus-projection-canonical-epoch-guard";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -50,6 +51,7 @@ let db: ReturnType<typeof drizzle>;
 
 beforeAll(async () => {
   client = await createTestPglite();
+  await installCorpusProjectionCanonicalEpochGuard(client);
   db = drizzle({
     client,
     logger: {
@@ -218,6 +220,39 @@ test("one canonical mutation advances every active family generation once", asyn
     },
   ]);
   expect(after.at(0)?.fingerprint).not.toBe(before.at(0)?.fingerprint);
+});
+
+test("a desired state written at any epoch but the canonical one is refused by the suite's guard", async () => {
+  // Every writer in this suite (and in the bootstrap, desired-epoch and
+  // ranking-signal suites) runs under the write-time guard; this shows the
+  // guard bites, so its silence there means something.
+  const subject = {
+    family: "case_law",
+    entityId: CASE_LAW_DECISION_ID,
+  } as const;
+  await db.transaction(
+    async (tx) =>
+      await ensureCorpusProjectionDesiredStateTx(
+        asTestRaw<Transaction>(tx),
+        subject,
+        "case_law_v5",
+      ),
+  );
+  const ahead = async () =>
+    await db
+      .update(corpusIndexProjectionStates)
+      .set({
+        desiredEpoch: sql`${corpusIndexProjectionStates.desiredEpoch} + 1`,
+      })
+      .where(eq(corpusIndexProjectionStates.entityId, CASE_LAW_DECISION_ID));
+  const refusal = await ahead().then(
+    () => null,
+    (error: unknown) => error,
+  );
+  // The driver wraps the database error; the guard's message is its cause.
+  expect(String(refusal instanceof Error ? refusal.cause : refusal)).toContain(
+    "is not the canonical projection epoch",
+  );
 });
 
 test("every active generation's desired epoch is a reading of the one canonical projection epoch", async () => {

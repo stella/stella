@@ -902,8 +902,8 @@ export const QUERY_PLAN_REGISTRY = [
     contract: planContracts["corpus-index.flip-regressions"],
   },
   {
-    // One coverage page: the serving generation's applied-census index in
-    // entity order, each copy probed in the candidate by primary key.
+    // One coverage page: the serving generation's states in primary-key
+    // order, each probed in the candidate by primary key.
     id: "corpus-index.flip-coverage-page",
     class: "page",
     role: "root",
