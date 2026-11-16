@@ -19,6 +19,7 @@ import {
   withGenericTypeProbes,
 } from "./package-api-compatibility";
 import { hasRuntimeExport } from "./package-api-export-space";
+import { createSignatureInputComparison } from "./package-api-signature-comparison";
 import { ALL_PACKAGE_ORDER } from "./publish-packages";
 
 // This module is the check under the offline network preload: it spawns
@@ -770,6 +771,8 @@ const narrowedMembers = (
 
 type SignatureComparisonOptions = {
   checker: ts.TypeChecker;
+  files: Map<string, string>;
+  openProgram: (files: Map<string, string>) => ts.Program;
   old: ts.Symbol;
   next: ts.Symbol;
   label: string;
@@ -789,28 +792,101 @@ const mutuallyAssignable = (
  * then share their type parameters, position by position. A re-exported
  * dependency type has no probe; it is one declaration on both sides.
  */
-const genericTypeComparison = (
-  checker: ts.TypeChecker,
-  symbol: ts.Symbol,
-  label: string,
-): { count: number; probe: ts.Type | undefined } | undefined => {
+type GenericComparisonOptions = {
+  checker: ts.TypeChecker;
+  symbol: ts.Symbol;
+  label: string;
+  space?: "type" | "value";
+};
+
+type GenericComparison = {
+  count: number;
+  probe: ts.Type | undefined;
+  defaults: ReadonlyMap<number, ts.Type>;
+};
+
+const genericTypeComparison = ({
+  checker,
+  symbol,
+  label,
+  space = "type",
+}: GenericComparisonOptions): GenericComparison | undefined => {
   const declaration = symbol.declarations?.find(isGenericTypeDeclaration);
-  if (declaration === undefined) {
+  if (
+    declaration === undefined ||
+    (space === "value" && !ts.isClassDeclaration(declaration))
+  ) {
     return undefined;
   }
   const count = declaration.typeParameters.length;
+  const defaults = new Map<number, ts.Type>();
   if (!isComparedDeclaration(declaration)) {
-    return { count, probe: undefined };
+    return { count, probe: undefined, defaults };
   }
-  const probe = genericTypeProbe(declaration);
+  const probe = genericTypeProbe(declaration, { space });
   if (probe === undefined) {
     return fail(`${label}: generic type has no comparison probe`);
   }
-  return { count, probe: checker.getTypeFromTypeNode(probe) };
+  if (space === "type") {
+    for (let provided = count - 1; provided >= 0; provided -= 1) {
+      if (declaration.typeParameters[provided]?.default === undefined) {
+        break;
+      }
+      const omitted = genericTypeProbe(declaration, { provided });
+      if (omitted === undefined) {
+        return fail(`${label}: generic default has no comparison probe`);
+      }
+      defaults.set(provided, checker.getTypeFromTypeNode(omitted));
+    }
+  }
+  return { count, probe: checker.getTypeFromTypeNode(probe), defaults };
+};
+
+const incompatibleTypeSignatures = ({
+  checker,
+  old,
+  next,
+  label,
+}: Pick<
+  SignatureComparisonOptions,
+  "checker" | "old" | "next" | "label"
+>): string[] => {
+  const oldType = checker.getDeclaredTypeOfSymbol(old);
+  const nextType = checker.getDeclaredTypeOfSymbol(next);
+  const oldGeneric = genericTypeComparison({ checker, symbol: old, label });
+  const nextGeneric = genericTypeComparison({ checker, symbol: next, label });
+  if ((oldGeneric?.count ?? 0) !== (nextGeneric?.count ?? 0)) {
+    return [`${label}: changed type parameter count`];
+  }
+  if (
+    oldGeneric?.probe !== undefined && nextGeneric?.probe !== undefined
+      ? !mutuallyAssignable(checker, oldGeneric.probe, nextGeneric.probe)
+      : !mutuallyAssignable(checker, oldType, nextType)
+  ) {
+    return [`${label}: incompatible type signature`];
+  }
+  const breaks = narrowedMembers(checker, oldType, nextType, label);
+  if (oldGeneric !== undefined && nextGeneric !== undefined) {
+    for (const [provided, oldDefault] of oldGeneric.defaults) {
+      const nextDefault = nextGeneric.defaults.get(provided);
+      if (nextDefault === undefined) {
+        breaks.push(
+          `${label}: removed default after ${provided} type arguments`,
+        );
+      } else if (!mutuallyAssignable(checker, oldDefault, nextDefault)) {
+        breaks.push(
+          `${label}: incompatible default after ${provided} type arguments`,
+        );
+      }
+    }
+  }
+  return breaks;
 };
 
 const incompatibleSymbolSignatures = ({
   checker,
+  files,
+  openProgram,
   old,
   next,
   label,
@@ -824,29 +900,61 @@ const incompatibleSymbolSignatures = ({
   if (hasSymbolFlag(old, ts.SymbolFlags.Value)) {
     const oldType = checker.getTypeOfSymbolAtLocation(old, oldLocation);
     const nextType = checker.getTypeOfSymbolAtLocation(next, location);
-    if (!checker.isTypeAssignableTo(nextType, oldType)) {
+    const oldGeneric = genericTypeComparison({
+      checker,
+      symbol: old,
+      label,
+      space: "value",
+    });
+    const nextGeneric = genericTypeComparison({
+      checker,
+      symbol: next,
+      label,
+      space: "value",
+    });
+    const aligned =
+      oldGeneric?.probe !== undefined && nextGeneric?.probe !== undefined;
+    const compatible =
+      oldGeneric?.probe !== undefined && nextGeneric?.probe !== undefined
+        ? checker.isTypeAssignableTo(nextGeneric.probe, oldGeneric.probe)
+        : checker.isTypeAssignableTo(nextType, oldType);
+    if (!compatible) {
       breaks.push(`${label}: incompatible value signature`);
     } else if (!hasSymbolFlag(old, ts.SymbolFlags.Module)) {
+      if (aligned) {
+        // The value probe aligns the class's type parameters while preserving
+        // its constructors, static members and prototype. Construct signatures
+        // are bivariant, so also compare their input contracts as callables.
+        const accepts = createSignatureInputComparison({
+          checker,
+          files,
+          openProgram,
+          oldLocation,
+          nextLocation: location,
+        });
+        const nextConstructors = checker.getSignaturesOfType(
+          nextType,
+          ts.SignatureKind.Construct,
+        );
+        for (const constructor of checker.getSignaturesOfType(
+          oldType,
+          ts.SignatureKind.Construct,
+        )) {
+          if (
+            !nextConstructors.some((candidate) =>
+              accepts(constructor, candidate),
+            )
+          ) {
+            breaks.push(`${label}: incompatible constructor input signature`);
+          }
+        }
+      }
       // A namespace's members are its exports, compared one by one below.
       breaks.push(...narrowedMembers(checker, oldType, nextType, label));
     }
   }
   if (hasSymbolFlag(old, ts.SymbolFlags.Type)) {
-    const oldType = checker.getDeclaredTypeOfSymbol(old);
-    const nextType = checker.getDeclaredTypeOfSymbol(next);
-    const oldGeneric = genericTypeComparison(checker, old, label);
-    const nextGeneric = genericTypeComparison(checker, next, label);
-    if ((oldGeneric?.count ?? 0) !== (nextGeneric?.count ?? 0)) {
-      breaks.push(`${label}: changed type parameter count`);
-    } else if (
-      oldGeneric?.probe !== undefined && nextGeneric?.probe !== undefined
-        ? !mutuallyAssignable(checker, oldGeneric.probe, nextGeneric.probe)
-        : !mutuallyAssignable(checker, oldType, nextType)
-    ) {
-      breaks.push(`${label}: incompatible type signature`);
-    } else {
-      breaks.push(...narrowedMembers(checker, oldType, nextType, label));
-    }
+    breaks.push(...incompatibleTypeSignatures({ checker, old, next, label }));
   }
   return breaks;
 };
@@ -1011,7 +1119,19 @@ export const breakingApiChanges = ({
           });
         }
         breaks.push(
-          ...incompatibleSymbolSignatures({ checker, old, next, label }).map(
+          ...incompatibleSymbolSignatures({
+            checker,
+            files,
+            openProgram: (declarations) =>
+              declarationProgram(
+                declarations,
+                [...declarations.keys()],
+                packageDir,
+              ),
+            old,
+            next,
+            label,
+          }).map(
             (message) =>
               ({ type: "signature", entrypoint: entry, message }) as const,
           ),

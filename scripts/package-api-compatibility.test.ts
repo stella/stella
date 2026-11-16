@@ -1,4 +1,6 @@
 import { expect, test } from "bun:test";
+import path from "node:path";
+import ts from "typescript6";
 
 import { normalizeCompatibilityDeclarations } from "./package-api-compatibility";
 import { type ApiReport, breakingApiChanges } from "./package-api-report";
@@ -74,6 +76,256 @@ test("normalization is stable and preserves unchanged overloaded contracts", () 
     }),
   ).toEqual([]);
 });
+
+const consumerDiagnostics = (declaration: string, consumer: string) => {
+  const file = path.join(import.meta.dir, "__api-consumer__.ts");
+  const source = ts.createSourceFile(
+    file,
+    `${declaration}\n${consumer}`,
+    ts.ScriptTarget.ESNext,
+    true,
+  );
+  const options: ts.CompilerOptions = {
+    strict: true,
+    noEmit: true,
+    types: [],
+    target: ts.ScriptTarget.ESNext,
+  };
+  const host = ts.createCompilerHost(options);
+  const getSourceFile = host.getSourceFile.bind(host);
+  host.getSourceFile = (name, ...args) =>
+    name === file ? source : getSourceFile(name, ...args);
+  const program = ts.createProgram({ rootNames: [file], options, host });
+  return [
+    ...program.getSyntacticDiagnostics(source),
+    ...program.getSemanticDiagnostics(source),
+  ].map((diagnostic) => ({
+    code: diagnostic.code,
+    message: ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"),
+  }));
+};
+
+test.each(["interface", "declare class"])(
+  "overloaded %s methods preserve polymorphic receivers and last-signature inference",
+  (kind) => {
+    const declaration = `export ${kind} Client<T extends { id: number }> {
+      convert(value: T, peer: this): this;
+      convert(value: number): number;
+    }`;
+    const consumer = `declare const client: Client<{ id: number; label: string }>;
+      const same: typeof client = client.convert({ id: 1, label: "a" }, client);
+      const number: number = client.convert(1);
+      type Last = Parameters<typeof client.convert>;
+      const args: Last = [1];
+      interface Specialized extends Client<{ id: number; label: string }> { marker: true }
+      declare const specialized: Specialized;
+      const subtype: Specialized = specialized.convert({ id: 1, label: "a" }, specialized);`;
+    expect(consumerDiagnostics(declaration, consumer)).toEqual([]);
+    const normalized = normalizeCompatibilityDeclarations(declaration);
+    expect(consumerDiagnostics(normalized, consumer)).toEqual([]);
+    const invalidReceiver = `${consumer}\nspecialized.convert({ id: 1, label: "a" }, client);`;
+    expect(
+      consumerDiagnostics(declaration, invalidReceiver).length,
+    ).toBeGreaterThan(0);
+    expect(
+      consumerDiagnostics(normalized, invalidReceiver).length,
+    ).toBeGreaterThan(0);
+    expect(normalizeCompatibilityDeclarations(normalized)).toBe(normalized);
+    expect(
+      breakingApiChanges({
+        before: report(declaration),
+        after: report(`${declaration}\nexport declare const added: number;`),
+        packageDir: process.cwd(),
+      }),
+    ).toEqual([]);
+  },
+);
+
+test.each(["interface", "declare class"])(
+  "overloaded %s receiver methods still reject narrower inputs",
+  (kind) => {
+    const declaration = `export ${kind} Client {
+      convert(value: INPUT, peer: this): this;
+      convert(value: boolean): boolean;
+    }`;
+    const broad = declaration.replace("INPUT", "string | number");
+    const narrow = declaration.replace("INPUT", "string");
+    const consumer = "declare const client: Client; client.convert(1, client);";
+    expect(consumerDiagnostics(broad, consumer)).toEqual([]);
+    expect(consumerDiagnostics(narrow, consumer).length).toBeGreaterThan(0);
+    expect(
+      breakingApiChanges({
+        before: report(broad),
+        after: report(narrow),
+        packageDir: process.cwd(),
+      }),
+    ).toContainEqual(
+      expect.objectContaining({
+        type: "signature",
+        message: expect.stringContaining("incompatible"),
+      }),
+    );
+  },
+);
+
+const receiverClass = (
+  members: string,
+  modifier = "",
+  parameter = "T extends { id: number }",
+) =>
+  `export declare ${modifier}class Client<${parameter}> {
+    convert(value: T, peer: this): this;
+    convert(value: number): number;
+    ${members}
+  }`;
+
+test.each([
+  [
+    "default type argument",
+    receiverClass("", "", "T extends { id: number } = { id: 1 }"),
+  ],
+  ["abstract class", receiverClass("", "abstract ")],
+  ["protected constructor", receiverClass("protected constructor();")],
+  ["private constructor", receiverClass("private constructor();")],
+])(
+  "unchanged generic receiver %s retains its full value contract",
+  (_name, declaration) => {
+    expect(consumerDiagnostics(declaration, "")).toEqual([]);
+    expect(
+      breakingApiChanges({
+        before: report(declaration),
+        after: report(`${declaration}\nexport declare const added: number;`),
+        packageDir: process.cwd(),
+      }),
+    ).toEqual([]);
+  },
+);
+
+test("generic receiver constructor overloads can reorder without losing calls", () => {
+  const before = receiverClass(
+    'constructor(mode: "short"); constructor(mode: "long", count: number);',
+  );
+  const after = receiverClass(
+    'constructor(mode: "long", count: number); constructor(mode: "short");',
+  );
+  const consumer = 'new Client("short"); new Client("long", 1);';
+  expect(consumerDiagnostics(before, consumer)).toEqual([]);
+  expect(consumerDiagnostics(after, consumer)).toEqual([]);
+  expect(
+    breakingApiChanges({
+      before: report(before),
+      after: report(after),
+      packageDir: process.cwd(),
+    }),
+  ).toEqual([]);
+});
+
+test.each([
+  {
+    name: "a constructor input",
+    before: receiverClass("constructor(value: string | number);"),
+    after: receiverClass("constructor(value: string);"),
+    consumer: "new Client(1);",
+  },
+  {
+    name: "one discriminated constructor overload",
+    before: receiverClass(
+      'constructor(mode: "first", value: string | number); constructor(mode: "second", value: number);',
+    ),
+    after: receiverClass(
+      'constructor(mode: "first", value: string); constructor(mode: "second", value: string | number);',
+    ),
+    consumer: 'new Client("first", 1);',
+  },
+  {
+    name: "a generic constraint",
+    before: receiverClass(""),
+    after: receiverClass("", "", "T extends { id: number; label: string }"),
+    consumer: "new Client<{ id: number }>();",
+  },
+  {
+    name: "a generic parameter",
+    before: receiverClass("", "", "T extends { id: number }, Extra = string"),
+    after: receiverClass(""),
+    consumer: "new Client<{ id: number }, number>();",
+  },
+  {
+    name: "an omitted default type argument",
+    before: receiverClass("", "", "T extends { id: number } = { id: 1 }"),
+    after: receiverClass(""),
+    consumer: "declare const client: Client;",
+  },
+  {
+    name: "a default type argument's result",
+    before: receiverClass(
+      "value: T;",
+      "",
+      "T extends { id: number } = { id: 1 }",
+    ),
+    after: receiverClass(
+      "value: T;",
+      "",
+      "T extends { id: number } = { id: 2 }",
+    ),
+    consumer: "const id: 1 = new Client().value.id;",
+  },
+  {
+    name: "a static input",
+    before: receiverClass("static use(value: string | number): void;"),
+    after: receiverClass("static use(value: string): void;"),
+    consumer: "Client.use(1);",
+  },
+  {
+    name: "a static member",
+    before: receiverClass("static option: number;"),
+    after: receiverClass(""),
+    consumer: "const value: number = Client.option;",
+  },
+  {
+    name: "a writable static member",
+    before: receiverClass("static option: number;"),
+    after: receiverClass("static readonly option: number;"),
+    consumer: "Client.option = 1;",
+  },
+  {
+    name: "a prototype input",
+    before: receiverClass("use(value: string | number): void;"),
+    after: receiverClass("use(value: string): void;"),
+    consumer: "new Client().use(1);",
+  },
+  {
+    name: "an instance member",
+    before: receiverClass("option: number;"),
+    after: receiverClass(""),
+    consumer: "const value: number = new Client().option;",
+  },
+  {
+    name: "public construction",
+    before: receiverClass(""),
+    after: receiverClass("", "abstract "),
+    consumer: "new Client();",
+  },
+  {
+    name: "protected construction",
+    before: receiverClass("protected constructor();"),
+    after: receiverClass("private constructor();"),
+    consumer:
+      "class Derived extends Client<{ id: number }> { constructor() { super(); } }",
+  },
+])(
+  "generic receiver comparisons reject loss of $name",
+  ({ before, after, consumer }) => {
+    expect(consumerDiagnostics(before, consumer)).toEqual([]);
+    expect(consumerDiagnostics(after, consumer).length).toBeGreaterThan(0);
+    expect(
+      breakingApiChanges({
+        before: report(before),
+        after: report(after),
+        packageDir: process.cwd(),
+      }).length,
+    ).toBeGreaterThan(0);
+  },
+);
 
 test.each([
   "private state: string; private refresh(): void;",
@@ -250,3 +502,118 @@ test("a brand keyed on a unique symbol compares equal to itself across the two t
     }),
   );
 });
+
+test.each([
+  {
+    name: "equivalent default aliases",
+    before:
+      "type Default = { id: 1 }; export interface Client<T = Default> { value: T }",
+    after:
+      "type Default = { id: 1 }; type Equivalent = Default; export interface Client<T = Equivalent> { value: T }",
+    consumer: "declare const client: Client; const id: 1 = client.value.id;",
+  },
+  {
+    name: "defaults depending on an earlier argument",
+    before:
+      "type Box<T> = { value: T }; export type Client<T, U = Box<T>> = { first: T; second: U };",
+    after:
+      "type Box<T> = { value: T }; export type Client<T, U = { value: T }> = { first: T; second: U };",
+    consumer:
+      "declare const client: Client<string>; const value: string = client.second.value;",
+  },
+  {
+    name: "each omitted suffix with renamed parameters",
+    before:
+      "export interface Client<T = string, U = readonly T[]> { first: T; second: U }",
+    after:
+      "export interface Client<A = string, B = ReadonlyArray<A>> { first: A; second: B }",
+    consumer:
+      "declare const defaulted: Client; declare const explicit: Client<number>; const strings: readonly string[] = defaulted.second; const numbers: readonly number[] = explicit.second;",
+  },
+  {
+    name: "an added default",
+    before: "export interface Client<T> { value: T }",
+    after: "export interface Client<T = string> { value: T }",
+    consumer:
+      "declare const client: Client<number>; const value: number = client.value;",
+  },
+  {
+    name: "a default unused by the public type",
+    before: "export type Client<T = string> = { value: number };",
+    after: "export type Client<T = boolean> = { value: number };",
+    consumer:
+      "declare const client: Client; const value: number = client.value;",
+  },
+])(
+  "generic default comparison preserves $name",
+  ({ before, after, consumer }) => {
+    expect(consumerDiagnostics(before, consumer)).toEqual([]);
+    expect(consumerDiagnostics(after, consumer)).toEqual([]);
+    expect(
+      breakingApiChanges({
+        before: report(before),
+        after: report(after),
+        packageDir: process.cwd(),
+      }),
+    ).toEqual([]);
+  },
+);
+
+test.each([
+  {
+    name: "changed dependent default",
+    before: "export interface Client<T, U = T[]> { value: U }",
+    after: "export interface Client<T, U = T> { value: U }",
+    consumer:
+      "declare const client: Client<number>; const value: number[] = client.value;",
+  },
+  {
+    name: "removed default after an explicit argument",
+    before: "export interface Client<T, U = T[]> { value: U }",
+    after: "export interface Client<T, U> { value: U }",
+    consumer: "declare const client: Client<number>;",
+  },
+  {
+    name: "changed alias default",
+    before: "export type Client<T = string> = { value: T };",
+    after: "export type Client<T = number> = { value: T };",
+    consumer:
+      "declare const client: Client; const value: string = client.value;",
+  },
+])(
+  "generic default comparison rejects $name",
+  ({ before, after, consumer }) => {
+    expect(consumerDiagnostics(before, consumer)).toEqual([]);
+    expect(consumerDiagnostics(after, consumer).length).toBeGreaterThan(0);
+    expect(
+      breakingApiChanges({
+        before: report(before),
+        after: report(after),
+        packageDir: process.cwd(),
+      }).length,
+    ).toBeGreaterThan(0);
+  },
+);
+
+test.each(["interface-first", "class-first"])(
+  "merged generic declarations retain their value contract: %s",
+  (order) => {
+    const declarations = [
+      "export interface Client<T = string> { value: T }",
+      "export declare class Client<T> { constructor(value: T); }",
+    ];
+    const declaration = (
+      order === "interface-first" ? declarations : declarations.toReversed()
+    ).join("\n");
+    const consumer =
+      'const client: Client = new Client("value"); const value: string = client.value;';
+    expect(consumerDiagnostics(declaration, consumer)).toEqual([]);
+    expect(
+      breakingApiChanges({
+        before: report(declaration),
+        after: report(`${declaration}\nexport declare const added: number;`),
+        packageDir: process.cwd(),
+      }),
+    ).toEqual([]);
+  },
+);
