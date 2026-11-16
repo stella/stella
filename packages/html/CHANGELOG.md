@@ -1,5 +1,17 @@
 # @stll/html
 
+## 0.1.2
+
+### Patch Changes
+
+- [#8537](https://github.com/stella/stella/pull/8537) [`001c640`](https://github.com/stella/stella/commit/001c640e64cb00e3948bdf68a18a40347c65a40f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update the HTML parser and tree adapter to parse5 8 with domhandler 6.
+
+## 0.1.1
+
+### Patch Changes
+
+- [#7924](https://github.com/stella/stella/pull/7924) [`8bcf336`](https://github.com/stella/stella/commit/8bcf336068af58ccb4a28150967aa128e586ba88) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Use the `domhandler` 5 that parse5's htmlparser2 tree adapter and Cheerio build their trees with, so the exported node types, guards and constructors describe the nodes `load` returns.
+
 ## 0.1.0
 
 ### Minor Changes

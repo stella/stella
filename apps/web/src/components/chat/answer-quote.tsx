@@ -32,6 +32,7 @@ import {
   useAnswerCitedDecisions,
   useAnswerQuoteChecks,
 } from "@/components/chat/chat-decision-citation";
+import { CopyControlFeedback, useCopyControl } from "@/components/copy-control";
 import { CitationCopyOptions } from "@/components/legal-reader/citation-copy-options";
 import { quotationMarksFor } from "@/components/legal-reader/citation-copy.logic";
 import { decisionCitationMetadata } from "@/components/references/decision-citation-chip.logic";
@@ -85,6 +86,9 @@ const QuoteAttribution = ({
   const format = useFormatter();
   const { open } = useOpenDecisionTab();
   const [copyOpen, setCopyOpen] = useState(false);
+  // Each format is a citation around the quote, which no selection of the
+  // answer reproduces, so only a chosen format confirms.
+  const quoteCopy = useCopyControl({ confirmation: "in-place" });
   const { decision, located } = verified;
   const metadata = decisionCitationMetadata(decision);
   const readerHref = `${metadata.readerUrl}#${encodeURIComponent(located.anchorId)}`;
@@ -161,12 +165,13 @@ const QuoteAttribution = ({
         <PopoverTrigger
           render={<Button className="-my-1" size="xs" variant="ghost" />}
         >
-          <CopyFromMenuIcon aria-hidden="true" className="size-3.5" />
-          {t("common.copy")}
+          {/* The chosen format confirms here, where the reader pressed. */}
+          <CopyControlFeedback control={quoteCopy} icon={CopyFromMenuIcon} />
           <ChevronDownIcon aria-hidden="true" className="size-3" />
         </PopoverTrigger>
         <PopoverPanel align="start" className="w-auto">
           <CitationCopyOptions
+            control={quoteCopy}
             citation={citation}
             marks={quotationMarksFor({
               country: decision.country,

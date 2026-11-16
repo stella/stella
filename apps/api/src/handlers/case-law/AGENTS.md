@@ -754,9 +754,19 @@ An opening publisher section heading uses `"publisher-heading"`; a court section
 schemas; ingestion rejects invalid structure with a typed reason and retains
 text. Footnotes keep their own placement and never become head-matter regions.
 
-Every block has: `id` (nanoid), `anchorId` (stable for deep
-links) and `plainText` (for search/AI); `heading` and `paragraph` also
-carry typed inlines.
+Every block has: `id` (the parse's own block identity), `anchorId` (the
+link target) and `plainText` (for search/AI); `heading` and `paragraph`
+also carry typed inlines.
+
+Parsers number blocks as they read them, so their anchors (`p-12`,
+`op1-h3`) move whenever a reparse splits, joins or reclassifies an earlier
+block. Mint those only with `positionalBlockAnchor`
+(`no-template-block-anchor`); `sanitizeResult` replaces every anchor in
+that shape with a stable one (`withStableBlockAnchors`): `n<court number>`
+for a numbered paragraph, otherwise `x<hash of its words>`, under any
+supplement or opinion prefix. Publisher anchors are kept. Only `anchorId`
+changes: block `id` keys citation scopes, table-cell pieces and projection
+digests within one stored document.
 
 A footnote printed over several paragraphs is several adjacent footnote
 paragraphs sharing one `note.noteId` and repeating the same
@@ -915,9 +925,9 @@ in raw envelopes before projecting fields. Live fields absent from the mapping
 stay in raw storage and raise a per-source drift signal. Do not filter raw
 publisher records at write time.
 
-The legacy exclusion census exists only to separate contract enforcement from
-source migrations. Remove entries as their source migrates; never add entries
-or call `legacyExcludedSourceField` in new code. The exact census and snapshots
-make every remaining exclusion visible in review. Source flips bump the parser
-version and backfill through normal stored-raw reparse; missing historical raw
-surfaces require a re-crawl, not an invented backfill.
+The census snapshot lists every registered source and its justified exclusions,
+including sources with no exclusions. A new exclusion changes that reviewable
+contract. There is no free-text or migration-only exclusion constructor.
+Structured projection changes bump the parser version and backfill through
+normal stored-raw reparse. Reclassifying bytes already retained in raw changes
+no stored data; missing historical raw surfaces require a re-crawl.

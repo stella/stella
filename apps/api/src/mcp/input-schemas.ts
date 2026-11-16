@@ -343,6 +343,28 @@ type CursorInputOptions = {
  * readable prefix, and silently restarting that caller at page one would
  * repeat a page it had already read.
  */
+const CONTINUATION_TOKEN_LENGTH = 32;
+
+/** The token of a read still running: lowercase hex, as the server issues it. */
+const isIssuedContinuationToken = (value: string): boolean =>
+  value.length === CONTINUATION_TOKEN_LENGTH && /^[0-9a-f]+$/u.test(value);
+
+/**
+ * The token a `status: "running"` answer carries. A value outside the class the
+ * server issues reads as absent, like an invented cursor.
+ */
+export const continuationTokenInput = v.optional(
+  v.pipe(
+    v.string(),
+    v.minLength(LIMITS.mcpNonEmptyMin),
+    v.maxLength(CONTINUATION_TOKEN_LENGTH),
+    v.description('From a status "running" answer; collects that work.'),
+    v.transform((value: string) =>
+      isIssuedContinuationToken(value) ? value : undefined,
+    ),
+  ),
+);
+
 export const cursorInput = ({
   description,
   issuedBy = isIssuablePaginationCursor,

@@ -85,6 +85,7 @@ const RUN_REVEAL_BY_CELL_STATE = {
   // Each of these reads in its own cell, so the header adds nothing.
   done: AI_COLUMN_RUN_REVEAL.onInteraction,
   not_stated: AI_COLUMN_RUN_REVEAL.onInteraction,
+  not_found_in_cut_document: AI_COLUMN_RUN_REVEAL.onInteraction,
   failed: AI_COLUMN_RUN_REVEAL.onInteraction,
   refused: AI_COLUMN_RUN_REVEAL.onInteraction,
   refused_budget: AI_COLUMN_RUN_REVEAL.onInteraction,

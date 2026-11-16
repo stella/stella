@@ -28,6 +28,7 @@ import {
 import { RUST_TEST_DISCOVERY_INPUTS } from "./check-rust-test-determinism";
 import { runBudgetedCheck, TASK_STALL_MS } from "./code-quality-task-budget";
 import configuredBudgets from "./code-quality-task-budgets.json" with { type: "json" };
+import { lintCommand } from "./lint-command";
 import { isChangedLintPath } from "./lint-paths";
 import { matches } from "./oxlint-config-scopes";
 import { lintModuleClosure } from "./oxlint-module-closure";
@@ -105,8 +106,8 @@ export const OXLINT_CONFIGURATION_CACHE_INPUTS = [
   "$TURBO_ROOT$/scripts/ownership/*.ts",
   "$TURBO_ROOT$/scripts/ownership-loader.ts",
   "$TURBO_ROOT$/scripts/ownership-types.ts",
+  "$TURBO_ROOT$/scripts/provider-client-modules.ts",
   "$TURBO_ROOT$/scripts/sha256-owners.ts",
-  "$TURBO_ROOT$/scripts/sha256-migration-ledger.json",
   "$TURBO_ROOT$/scripts/status-write-shapes.ts",
   "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
   "$TURBO_ROOT$/scripts/oxlint-rule-ids.ts",
@@ -138,6 +139,7 @@ export const OXLINT_CONFIGURATION_CACHE_INPUTS = [
   "$TURBO_ROOT$/scripts/product-frontend-files.ts",
   "$TURBO_ROOT$/.claude/mcp/doc-sources.ts",
   "$TURBO_ROOT$/packages/api-contract/src/capability-request.ts",
+  "$TURBO_ROOT$/packages/api-contract/src/document-version-upload.ts",
   "$TURBO_ROOT$/packages/api-contract/src/case-law-text-field.ts",
   "$TURBO_ROOT$/packages/auth-model/src/contract.ts",
   "$TURBO_ROOT$/packages/errors/src/query-field-policy.ts",
@@ -157,8 +159,16 @@ export const OXLINT_CONFIGURATION_CACHE_INPUTS = [
   "$TURBO_ROOT$/scripts/tailwind-lint-cache.ts",
   "$TURBO_ROOT$/scripts/test-timing-ledger.json",
 ] as const;
+// scripts/lint.ts starts every lint run with the command
+// scripts/lint-command.ts builds, so a change to either can change what any
+// workspace lint reports.
+export const LINT_ENTRY_INPUTS = [
+  "$TURBO_ROOT$/scripts/lint.ts",
+  "$TURBO_ROOT$/scripts/lint-command.ts",
+] as const;
 export const LINT_ONLY_CACHE_INPUTS = [
   ...OXLINT_CONFIGURATION_CACHE_INPUTS,
+  ...LINT_ENTRY_INPUTS,
   "$TURBO_ROOT$/tsconfig.tooling.json",
 ] as const;
 export const PLUGIN_FIXTURE_INPUTS = [
@@ -173,6 +183,7 @@ export const PLUGIN_FIXTURE_INPUTS = [
   ...DEPENDENCY_CACHE_INPUTS,
   ...SHARED_COMPILER_CACHE_INPUTS,
   ...OXLINT_CONFIGURATION_CACHE_INPUTS,
+  ...LINT_ENTRY_INPUTS,
   "$TURBO_ROOT$/scripts/lint-oxlint-fixtures.sh",
   "$TURBO_ROOT$/scripts/oxlint-safe-fixers.test.ts",
   "$TURBO_ROOT$/scripts/oxlint-additional-guards.test.ts",
@@ -200,6 +211,7 @@ export const ROOT_SCRIPT_LINT_INPUTS = [
   ...DEPENDENCY_CACHE_INPUTS,
   ...SHARED_COMPILER_CACHE_INPUTS,
   ...OXLINT_CONFIGURATION_CACHE_INPUTS,
+  ...LINT_ENTRY_INPUTS,
   "$TURBO_ROOT$/scripts/lint-root-scripts.sh",
   "$TURBO_ROOT$/scripts/lint-root-scripts.ts",
   "$TURBO_ROOT$/scripts/root-script-lint.ts",
@@ -1286,29 +1298,60 @@ const turboCommand = (tasks: readonly string[], scope: TaskScope): string[] => [
     : scope.targets.map((target) => `--filter=./${target}`)),
 ];
 
-export const prioritizeWebLint = (commands: string[][]): string[][] =>
+/**
+ * The largest type-aware program of a code-quality leg, run in a command of
+ * its own before the leg's other workspaces.
+ */
+type LeadProgram = {
+  readonly workspace: string;
+  readonly name: string;
+  /**
+   * Whether its typecheck may run beside its lint. The API's lint holds
+   * about 10 GiB on a 16 GiB runner, so its typecheck waits for the rest.
+   */
+  readonly typecheckBesideLint: boolean;
+};
+
+const LEAD_PROGRAMS = {
+  web: { workspace: "apps/web", name: "@stll/web", typecheckBesideLint: true },
+  api: { workspace: "apps/api", name: "@stll/api", typecheckBesideLint: false },
+} as const satisfies Record<string, LeadProgram>;
+
+export const prioritizeLeadLint = (
+  commands: string[][],
+  lead: LeadProgram,
+): string[][] =>
   commands.flatMap((command) => {
+    const own = `--filter=./${lead.workspace}`;
     if (
       command[2] !== "turbo" ||
       !command.includes("lint") ||
-      command.includes("--filter=!./apps/web") ||
+      command.includes(`--filter=!./${lead.workspace}`) ||
       (command.some((argument) => argument.startsWith("--filter=./")) &&
-        !command.includes("--filter=./apps/web"))
+        !command.includes(own))
     ) {
       return [command];
     }
-    // Explicit task IDs start the critical web program before the smaller
-    // workspaces. Its generated prerequisites still run through Turbo.
-    const web = [
-      ...turboCommand(
-        command.includes("typecheck")
-          ? ["@stll/web#lint", "@stll/web#typecheck"]
-          : ["@stll/web#lint"],
-        { type: "all" },
-      ),
-    ];
-    return [web, [...command, "--filter=!./apps/web"]];
+    // Explicit task IDs start the critical program before the smaller
+    // workspaces, and nothing else type-aware shares the runner's memory with
+    // it. Its generated prerequisites still run through Turbo.
+    const typecheck = command.includes("typecheck");
+    const leadTasks =
+      typecheck && lead.typecheckBesideLint
+        ? [`${lead.name}#lint`, `${lead.name}#typecheck`]
+        : [`${lead.name}#lint`];
+    const rest = [...command, `--filter=!./${lead.workspace}`];
+    return typecheck && !lead.typecheckBesideLint
+      ? [
+          turboCommand(leadTasks, { type: "all" }),
+          rest,
+          turboCommand([`${lead.name}#typecheck`], { type: "all" }),
+        ]
+      : [turboCommand(leadTasks, { type: "all" }), rest];
   });
+
+export const prioritizeWebLint = (commands: string[][]): string[][] =>
+  prioritizeLeadLint(commands, LEAD_PROGRAMS.web);
 
 const sameScope = (left: TaskScope, right: TaskScope): boolean => {
   if (left.type !== right.type) {
@@ -1338,15 +1381,10 @@ export const resultBoundaryLintCommand = (
   if (paths.length === 0) {
     return null;
   }
-  return [
-    "bun",
-    "--bun",
-    "oxlint",
-    "-c",
-    "oxlint.result-boundary.config.ts",
+  return lintCommand({ config: "result-boundary" }, [
     "--deny-warnings",
     ...paths,
-  ];
+  ]);
 };
 
 type PlanResultBoundaryLintOptions = {
@@ -1409,8 +1447,8 @@ export const scopedCommands = (
           )
         : command,
     );
-    return partition.leg === "web"
-      ? prioritizeWebLint(partitioned)
+    return partition.leg === "web" || partition.leg === "api"
+      ? prioritizeLeadLint(partitioned, LEAD_PROGRAMS[partition.leg])
       : partitioned;
   }
   const commands: string[][] = [];

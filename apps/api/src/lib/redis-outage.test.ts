@@ -17,9 +17,13 @@
 import { describe, expect, test } from "bun:test";
 
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
+import { createTestState } from "@stll/test-state";
 
+import { envBase } from "@/api/env-base";
 import type { RateLimitOptions } from "@/api/lib/rate-limit/contracts";
 import { LimiterStoreUnavailableError } from "@/api/lib/rate-limit/store-unavailable";
+
+const testState = createTestState({ file: import.meta.path, config: envBase });
 
 // Port 1 is privileged and unbound in every environment this runs in, so a
 // connect attempt fails immediately rather than hanging on a routing black
@@ -49,7 +53,7 @@ describe("link icons during a Valkey outage", () => {
   });
 });
 
-process.env["REDIS_URL"] = UNREACHABLE_REDIS_URL;
+testState.setConfig("REDIS_URL", UNREACHABLE_REDIS_URL);
 
 // Imported directly, not only through the facades. The batching runner pairs
 // test files by the modules they name, so naming the connection module here is
@@ -136,7 +140,6 @@ describe("the outage under test", () => {
   // be running, or wherever the client has been mocked: every consumer below
   // would succeed for the ordinary reason.
   test("a real client cannot reach Valkey", async () => {
-    const { envBase } = await import("@/api/env-base");
     expect(envBase.REDIS_URL).toBe(UNREACHABLE_REDIS_URL);
 
     const client = createRedisClient({
@@ -384,3 +387,25 @@ test(
   },
   SETTLE_BUDGET_MS,
 );
+
+describe("public-read continuation during a Valkey outage", () => {
+  test("every store command reports unavailable rather than throwing", async () => {
+    const { createContinuationStore } =
+      await import("@/api/lib/legal-search/public-read-continuation-store");
+    const store = createContinuationStore();
+
+    const first = await settle(store.readFinished("outage-work"));
+    expect(first.status).toBe("ok");
+    if (first.status === "ok") {
+      expect(Result.isError(first.value)).toBe(true);
+    }
+
+    const second = await settle(
+      store.acquireLease("outage-work", "owner", 1000),
+    );
+    expect(second.status).toBe("ok");
+    if (second.status === "ok") {
+      expect(Result.isError(second.value)).toBe(true);
+    }
+  });
+});

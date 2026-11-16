@@ -7,12 +7,12 @@ import {
   ACTION_ADMISSION_REFUSALS,
 } from "@stll/api-contract/action-admission";
 import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
+import { memberWaitsOf } from "@stll/api-contract/chat-member-wait";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import {
-  getAwaitingUserInteractions,
   toPersistableChatMessage,
   toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
@@ -147,6 +147,7 @@ const awaitingApprovalAndAskUserContent = {
 const seedAwaitingTurn = async () => {
   const { assistantMessageId, threadId, userMessageId } = await seedThread();
   const acceptance = createChatTurnAcceptance({
+    source: { type: "member" },
     organizationId: ids.orgA,
     threadId,
     userId: ids.userA1,
@@ -229,6 +230,7 @@ describe("durable chat turn persistence", () => {
       const { assistantMessageId, threadId, userMessageId } =
         await seedThread();
       const acceptance = createChatTurnAcceptance({
+        source: { type: "member" },
         organizationId: fixtureIds.orgA,
         threadId,
         userId: fixtureIds.userA1,
@@ -566,6 +568,7 @@ describe("durable chat turn persistence", () => {
   test("finalizes the assistant message, data scope, and turn atomically", async () => {
     const { assistantMessageId, threadId, userMessageId } = await seedThread();
     const acceptance = createChatTurnAcceptance({
+      source: { type: "member" },
       organizationId: ids.orgA,
       threadId,
       userId: ids.userA1,
@@ -656,6 +659,7 @@ describe("durable chat turn persistence", () => {
   test("rolls back assistant finalization when an atomic write fails", async () => {
     const { assistantMessageId, threadId, userMessageId } = await seedThread();
     const acceptance = createChatTurnAcceptance({
+      source: { type: "member" },
       organizationId: ids.orgA,
       threadId,
       userId: ids.userA1,
@@ -752,6 +756,7 @@ describe("durable chat turn persistence", () => {
   test("accepts with the user message and settles once with the assistant message", async () => {
     const { assistantMessageId, threadId, userMessageId } = await seedThread();
     const acceptance = createChatTurnAcceptance({
+      source: { type: "member" },
       organizationId: ids.orgA,
       threadId,
       userId: ids.userA1,
@@ -872,6 +877,7 @@ describe("durable chat turn persistence", () => {
     ).toHaveLength(1);
 
     const regeneration = createChatTurnAcceptance({
+      source: { type: "member" },
       organizationId: ids.orgA,
       threadId,
       userId: ids.userA1,
@@ -952,6 +958,7 @@ describe("durable chat turn persistence", () => {
   test("resumes the same durable turn after an ask-user answer", async () => {
     const { assistantMessageId, threadId, userMessageId } = await seedThread();
     const acceptance = createChatTurnAcceptance({
+      source: { type: "member" },
       organizationId: ids.orgA,
       threadId,
       userId: ids.userA1,
@@ -1052,6 +1059,7 @@ describe("durable chat turn persistence", () => {
   test("keeps an awaited interaction durable when a continuation names another tool", async () => {
     const { assistantMessageId, threadId, userMessageId } = await seedThread();
     const acceptance = createChatTurnAcceptance({
+      source: { type: "member" },
       organizationId: ids.orgA,
       threadId,
       userId: ids.userA1,
@@ -1162,6 +1170,7 @@ describe("durable chat turn persistence", () => {
   test("resumes from every pending approval in one assistant response", async () => {
     const { assistantMessageId, threadId, userMessageId } = await seedThread();
     const acceptance = createChatTurnAcceptance({
+      source: { type: "member" },
       organizationId: ids.orgA,
       threadId,
       userId: ids.userA1,
@@ -1298,6 +1307,7 @@ describe("durable chat turn persistence", () => {
   test("rejects a competing send before its user message can be persisted", async () => {
     const { threadId, userMessageId } = await seedThread();
     const acceptance = createChatTurnAcceptance({
+      source: { type: "member" },
       organizationId: ids.orgA,
       threadId,
       userId: ids.userA1,
@@ -1378,6 +1388,7 @@ describe("durable chat turn persistence", () => {
   test("reclaims an expired execution before accepting its replacement", async () => {
     const { threadId, userMessageId } = await seedThread();
     const acceptance = createChatTurnAcceptance({
+      source: { type: "member" },
       organizationId: ids.orgA,
       threadId,
       userId: ids.userA1,
@@ -1435,6 +1446,7 @@ describe("durable chat turn persistence", () => {
 
     const replacementMessageId = toSafeId<"chatMessage">(Bun.randomUUIDv7());
     const replacement = createChatTurnAcceptance({
+      source: { type: "member" },
       organizationId: ids.orgA,
       threadId,
       userId: ids.userA1,
@@ -1512,6 +1524,7 @@ describe("durable chat turn persistence", () => {
     const { assistantMessageId, threadId } = await seedAwaitingTurn();
     const replacementMessageId = toSafeId<"chatMessage">(Bun.randomUUIDv7());
     const replacementAcceptance = createChatTurnAcceptance({
+      source: { type: "member" },
       organizationId: ids.orgA,
       threadId,
       userId: ids.userA1,
@@ -1585,6 +1598,7 @@ describe("durable chat turn persistence", () => {
       .where(eq(chatMessages.id, assistantMessageId));
     const replacementMessageId = toSafeId<"chatMessage">(Bun.randomUUIDv7());
     const replacement = createChatTurnAcceptance({
+      source: { type: "member" },
       organizationId: ids.orgA,
       threadId,
       userId: ids.userA1,
@@ -1638,7 +1652,7 @@ describe("durable chat turn persistence", () => {
       reason: "superseded",
       type: "cancelled",
     });
-    expect(getAwaitingUserInteractions(reloadedAssistant)).toEqual([]);
+    expect(memberWaitsOf(reloadedAssistant)).toEqual([]);
     expect(
       reloadedAssistant.parts.flatMap((part) =>
         part.type === "tool-call"
@@ -1659,7 +1673,8 @@ describe("durable chat turn persistence", () => {
           needsApproval: true,
         },
         input: { query: "Draft" },
-        state: "approval-responded",
+        // Declined, as the engine stores a call the user declined.
+        state: "error",
       },
       { approval: undefined, input: undefined, state: "error" },
     ]);
@@ -1689,6 +1704,7 @@ describe("durable chat turn persistence", () => {
   test("a duplicate awaiting-user claim cannot mutate replay history", async () => {
     const { assistantMessageId, threadId, userMessageId } = await seedThread();
     const acceptance = createChatTurnAcceptance({
+      source: { type: "member" },
       organizationId: ids.orgA,
       threadId,
       userId: ids.userA1,
@@ -1821,6 +1837,7 @@ describe("durable chat turn persistence", () => {
   test("renews a claimed execution by the run's heartbeat lease", async () => {
     const { threadId, userMessageId } = await seedThread();
     const acceptance = createChatTurnAcceptance({
+      source: { type: "member" },
       organizationId: ids.orgA,
       threadId,
       userId: ids.userA1,
@@ -1888,6 +1905,7 @@ describe("durable chat turn persistence", () => {
   test("terminalizes a claimed turn when work fails before streaming", async () => {
     const { threadId, userMessageId } = await seedThread();
     const acceptance = createChatTurnAcceptance({
+      source: { type: "member" },
       organizationId: ids.orgA,
       threadId,
       userId: ids.userA1,
@@ -1995,6 +2013,7 @@ describe("durable chat turn persistence", () => {
   test("settles through the database clock when the worker clock is behind", async () => {
     const { threadId, userMessageId } = await seedThread();
     const acceptance = createChatTurnAcceptance({
+      source: { type: "member" },
       organizationId: ids.orgA,
       threadId,
       userId: ids.userA1,
@@ -2139,6 +2158,7 @@ describe("settling a continuation reports a stored message that breaks the rules
       role: "assistant",
     });
     const acceptance = createChatTurnAcceptance({
+      source: { type: "member" },
       organizationId: ids.orgA,
       threadId,
       userId: ids.userA1,

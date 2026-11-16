@@ -4,6 +4,7 @@ import { USAGE_ACTION_TYPE_CONSTRAINT_VALIDATION } from "../usage-action-type-co
 export default {
   id: "repairs-usage-action-type-constraint-validation",
   revision: 1135,
+  lifecycle: "finalized",
   type: "repairs",
   values: [USAGE_ACTION_TYPE_CONSTRAINT_VALIDATION],
 } satisfies OnlineMigrationEntry;

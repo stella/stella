@@ -88,6 +88,10 @@ const OXC_PROJECT_PROXIES = [
     target: "apps/api/tsconfig.visual-sandbox.json",
   },
   {
+    config: "apps/desktop/scripts/tsconfig.json",
+    target: "apps/desktop/tsconfig.test.json",
+  },
+  {
     config: "apps/desktop/tests/tsconfig.json",
     target: "apps/desktop/tsconfig.test.json",
   },

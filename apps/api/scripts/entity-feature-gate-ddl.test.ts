@@ -1,6 +1,4 @@
 import { expect, test } from "bun:test";
-import { is } from "drizzle-orm";
-import { PgTable } from "drizzle-orm/pg-core";
 
 import { entityFeatureGateMetadata } from "../src/db/entity-feature-gate-metadata";
 import {
@@ -10,6 +8,7 @@ import {
 } from "../src/db/entity-feature-gate-migrations";
 import { entityFeaturePolicyDefinitions } from "../src/db/entity-feature-policies";
 import * as schema from "../src/db/schema";
+import { schemaTables } from "../src/db/schema-tables";
 import rolePrivilegeCensus from "../src/lib/db/role-privilege-census.json" with { type: "json" };
 import { createPolicyStatementsOf } from "../src/tests/helpers/lock-taking-sql";
 import {
@@ -107,7 +106,7 @@ const reviewedRoleSwitch = (set: "TRUE" | "FALSE") =>
     ),
   );
 
-const tables = Object.values(schema).filter((table) => is(table, PgTable));
+const tables = schemaTables(schema);
 const descriptors = entityFeatureGateMetadata(tables);
 
 test("today's schema needs no gate DDL", async () => {

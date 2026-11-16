@@ -16,6 +16,11 @@ export default {
     names: MODEL_OPERATION_BOUNDARIES.facade,
     allowed: [
       {
+        path: "apps/api/src/lib/chat/ai-data-policy.contract.type-test.ts",
+        reason:
+          "Checks generation entry-point request policy types; invokes no model operation.",
+      },
+      {
         path: "apps/api/scripts/ai-native-image-canary.ts",
         reason:
           "operator canary/probe run with operator credentials outside tenant request admission",
@@ -24,6 +29,11 @@ export default {
         path: "apps/api/scripts/ai-provider-canary.ts",
         reason:
           "operator canary/probe run with operator credentials outside tenant request admission",
+      },
+      {
+        path: "apps/api/evals/avt-verification.ts",
+        reason:
+          "operator eval run with operator credentials outside tenant request admission; it passes the verification engine's own dispatch through unchanged to price each call",
       },
       {
         path: "apps/api/scripts/ai-provider-cassette-probe.ts",

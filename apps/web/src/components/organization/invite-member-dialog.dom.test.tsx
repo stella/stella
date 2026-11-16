@@ -85,8 +85,8 @@ test("an address that is already a member is told once, beside the field", async
     expect(
       view.getAllByText(
         englishMessages.errors.apiCodes.alreadyOrganizationMember,
-      ),
-    ).toHaveLength(1);
+      ).length,
+    ).toBe(1);
   });
   expect(addToast).not.toHaveBeenCalled();
   expect(view.queryByText(englishMessages.errors.actionFailed)).toBeNull();
@@ -116,7 +116,7 @@ test("a refusal that arrives after the dialog closed reaches a toast", async () 
     });
   }
   await waitFor(() => {
-    expect(view.queryByRole("dialog")).toBeNull();
+    expect(view.queryByRole("dialog") === null).toBe(true);
   });
 
   await act(async () => {
@@ -144,8 +144,8 @@ test("an address already invited says where to resend, without a toast", async (
     expect(
       view.getAllByText(
         englishMessages.errors.apiCodes.invitationAlreadyPending,
-      ),
-    ).toHaveLength(1);
+      ).length,
+    ).toBe(1);
   });
   expect(addToast).not.toHaveBeenCalled();
 });

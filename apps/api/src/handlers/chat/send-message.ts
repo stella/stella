@@ -1,30 +1,30 @@
 import { panic, Result } from "better-result";
 import type { InferOk } from "better-result";
-import { deepEquals } from "bun";
 import { and, eq } from "drizzle-orm";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import {
   BROWSER_CONTROL_PROTOCOL_VERSION,
-  type BrowserExtensionCapability,
   CHAT_INPUT_REFUSAL_CODE,
+  CHAT_TURN_ID_HEADER,
   CHAT_TURN_INTENT,
   CHAT_TURN_NOT_OWNED_ERROR_CODE,
-  RESOURCE_TYPE,
-  resourceRef,
 } from "@stll/api-contract";
 import {
   ACTION_ADMISSION_REFUSALS,
   isActionAdmissionCode,
 } from "@stll/api-contract/action-admission";
-import {
-  isHarnessChatToolCall,
-  isServerChatToolCall,
-} from "@stll/api-contract/chat";
+import { isHarnessChatToolCall } from "@stll/api-contract/chat";
 import { CONNECT_CONNECTOR_TOOL_NAME } from "@stll/api-contract/chat-connector";
 import type { ConnectableMcpConnectorCatalog } from "@stll/api-contract/chat-connector";
-import type { ChatRunTarget } from "@stll/api-contract/chat-run-target";
+import { memberWaitsOf } from "@stll/api-contract/chat-member-wait";
+import { CHAT_QUEUE_ERROR_CODE } from "@stll/api-contract/chat-queue";
+import {
+  CHAT_LOCAL_RUN_WEB_SEARCH_BY_HARNESS,
+  CHAT_RUN_TARGET_KIND,
+  type ChatRunTarget,
+} from "@stll/api-contract/chat-run-target";
 import { workspaceIsVisible } from "@stll/api-contract/workspace-status";
 import { CHAT_CONTEXT_FILE_MAX_MEGABYTES } from "@stll/chat-limits";
 import type { SkillMetadata } from "@stll/skills/frontmatter";
@@ -42,16 +42,17 @@ import {
   resolveActiveChatSkillContext,
 } from "@/api/handlers/chat/active-skill-context";
 import { createTurnAnswerQuoteChecker } from "@/api/handlers/chat/answer-quote-checks";
+import type { TurnBrowserExtension } from "@/api/handlers/chat/browser-extension-capability";
 import {
   chatMessageFromPersisted,
   getAwaitedApprovalToolNames,
-  getAwaitingUserInteractions,
   getResumedUserInteraction,
   isChatPart,
+  synchronizeToolResultContent,
   toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
 import {
-  finalizeAssistantTurn,
+  CHAT_MEMBER_MESSAGE_PLACEMENT,
   persistAcceptedMessageWithClaim,
   persistClaimedReplayMessage,
   persistFailedChatTurn,
@@ -65,18 +66,16 @@ import {
   buildChatPromptCacheKey,
   buildChatSystemPromptParts,
   chatVolatilePromptSection,
+  CLOUD_PROMPT_TARGET,
   extendChatUntrustedPromptSuffix,
   extractTitle,
 } from "@/api/handlers/chat/chat-prompt";
 import type {
+  ChatPromptTarget,
   ChatSafePromptLayers,
   ChatToolAvailability,
   ChatUntrustedPromptSuffix,
 } from "@/api/handlers/chat/chat-prompt";
-import {
-  chatRefsWrittenIn,
-  toolCallIdsOf,
-} from "@/api/handlers/chat/chat-refs-shown";
 import { resolveChatSandboxPlan } from "@/api/handlers/chat/chat-sandbox-plan";
 import type {
   ChatSendRequest,
@@ -94,12 +93,12 @@ import {
   CHAT_RUN_MODE,
   DEFAULT_CHAT_EDIT_APPLY_MODE,
   DEFAULT_DOCX_EDIT_REPRESENTATION,
+  hasAgUiEnvelopeCorrelationMismatch,
   parseMessage,
   requireUserMessageContent,
-  resolveBrowserExtensionCapability,
+  resolveTurnBrowserExtension,
   toolCallOwnershipOf,
   validateMessage,
-  validateToolCallParts,
 } from "@/api/handlers/chat/chat-schema";
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
 import {
@@ -107,14 +106,17 @@ import {
   CHAT_METERED_PROVIDER_TIMEOUT_MS,
   claimChatTurnForExecution,
   createChatTurnAcceptance,
-  isChatTurnNotOwned,
   isChatTurnRunIdTaken,
   startChatTurnRun,
 } from "@/api/handlers/chat/chat-turn-persistence";
-import type { ChatTurnExecution } from "@/api/handlers/chat/chat-turn-persistence";
+import type {
+  ChatTurnExecution,
+  ChatTurnSource,
+} from "@/api/handlers/chat/chat-turn-persistence";
 import {
   CHAT_TURN_BOUNDARY_MODE,
   ChatTurnRun,
+  chatTurnRunBoundOf,
   countChatTurnSettlement,
   processChatTurnOwnership,
 } from "@/api/handlers/chat/chat-turn-run";
@@ -123,15 +125,11 @@ import type {
   ChatTurnOwnership,
   ChatTurnStoredSettlement,
 } from "@/api/handlers/chat/chat-turn-run";
-import {
-  CUT_SHORT_OUTCOME,
-  settleHistoryForRun,
-} from "@/api/handlers/chat/chat-turn-settlement";
+import { settleHistoryForRun } from "@/api/handlers/chat/chat-turn-settlement";
 import { CHAT_TURN_PERMISSIONS } from "@/api/handlers/chat/chat-turn-state";
 import type { ChatTurnFailureCode } from "@/api/handlers/chat/chat-turn-state";
 import { COMPACTION_SUMMARY_MESSAGE_ID } from "@/api/handlers/chat/compaction";
 import {
-  computeAssistantTurnWorkspaceIds,
   extractIncomingMessageWorkspaceIds,
   extractThreadDataWorkspaceIds,
 } from "@/api/handlers/chat/data-scope";
@@ -149,7 +147,10 @@ import {
   resolveTruncationTarget,
 } from "@/api/handlers/chat/history-window";
 import { sourceScopesOfLatestUserMessage } from "@/api/handlers/chat/latest-source-scopes";
-import type { LocalChatRun } from "@/api/handlers/chat/local-run-chunks";
+import type {
+  LocalChatRun,
+  LocalRunAppIssuer,
+} from "@/api/handlers/chat/local-run-chunks";
 import {
   resolveChatLocalRun,
   type ResolveChatLocalRunOptions,
@@ -182,7 +183,6 @@ import {
   localRunAttachmentsOf,
   streamChat,
 } from "@/api/handlers/chat/stream-chat";
-import type { StreamChatFinishEvent } from "@/api/handlers/chat/stream-chat";
 import type { StoredHistory } from "@/api/handlers/chat/stream-message-identity";
 import {
   createChatThirdPartyBoundary,
@@ -247,10 +247,16 @@ import {
   scopeAllowsTool,
 } from "@/api/handlers/chat/tools/tool-scope";
 import { loadTurnPromptSources } from "@/api/handlers/chat/turn-prompt-sources";
+import {
+  type AssistantTurnFailure,
+  type CompletedTurnFollowUps,
+  persistStreamedTurn,
+  type StreamedTurnPersistence,
+  type StreamedTurnSettlementContext,
+} from "@/api/handlers/chat/turns/settle";
 import type {
   ChatMention,
   ChatMessage,
-  ChatPart,
   PersistableChatMessage,
   PersistableTerminalAssistantMessage,
 } from "@/api/handlers/chat/types";
@@ -290,13 +296,11 @@ import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { isReadyGeneratedDocumentDraft } from "@/api/lib/chat/created-draft";
 import { resolveCredentialMemberExecutionContext } from "@/api/lib/chat/credential-member-execution-context";
 import { expandThreadDataScope } from "@/api/lib/chat/data-scope";
+import { readLocalRunApprovalCeiling } from "@/api/lib/chat/local-run-approval-ceiling";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import {
-  CHAT_REF_ENCODING,
   CHAT_REF_INPUT_STATE,
   type ChatEntityRefContext,
-  type ChatRefBinding,
-  type ChatRefContext,
   type ChatRefInputState,
   type ChatUnresolvedInputRefContext,
   isChatRefContext,
@@ -345,6 +349,8 @@ import {
 import type { UsageLaneDecision } from "@/api/lib/usage/lane-routing";
 import { previewVisual } from "@/api/lib/visual-preview";
 import { loadWebSearchProvidersForOrg } from "@/api/lib/web-search/load-org-keys";
+import { LegalHoldActiveError } from "@/api/lib/workspaces/legal-holds/errors";
+import { legalHoldRefusal } from "@/api/lib/workspaces/legal-holds/refusal";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
@@ -540,7 +546,7 @@ type ClaimedChatTurnOwnership =
       failure: { code: ChatTurnFailureCode; retryable: boolean };
       owningAssistantMessage?: PersistableChatMessage | undefined;
     }
-  | { status: "handed-over" };
+  | { status: "with-run" };
 
 type ChatSendLifecycleOptions = {
   ownership?: ChatTurnOwnership;
@@ -549,6 +555,7 @@ type ChatSendLifecycleOptions = {
   externalMcpToolsLoader: LazyExternalMcpToolsLoader;
   /** The boundary mode the turn's settlement is counted under. */
   mode: ChatTurnObservation["mode"];
+  organizationId: SafeId<"organization">;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   scopedDb: ScopedDb;
@@ -556,87 +563,6 @@ type ChatSendLifecycleOptions = {
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
   rollbackSideEffects: typeof rollbackUnpersistedChatSideEffects;
-};
-
-/**
- * Why a streamed turn could not be persisted: the failure code its turn row
- * records and the error the stream reports to the client.
- */
-type AssistantTurnFailure = {
-  code: ChatTurnFailureCode;
-  error: HandlerError<500>;
-};
-
-/** What a stored, completed turn's follow-ups read. */
-type CompletedTurnFollowUps = {
-  messagesAfterAssistantPersist: ReturnType<
-    typeof applyAssistantPersistencePlan
-  >;
-  resolvedResponseMessage: ChatMessage;
-};
-
-/**
- * What a streamed turn's persistence left: nothing when another execution or
- * the reaper settled the turn first, the failure to report when storing
- * failed, else the stored outcome and, for a completed turn, what its
- * follow-ups read.
- */
-const persistedTurnSettlement = ({
-  messages,
-  persistResult,
-  resolvedResponseMessage,
-  threadId,
-}: {
-  messages: ApplyAssistantPersistencePlanProps["messages"];
-  persistResult: Awaited<ReturnType<typeof finalizeAssistantTurn>>;
-  resolvedResponseMessage: ChatMessage;
-  threadId: SafeId<"chatThread">;
-}): Result<
-  {
-    followUps: CompletedTurnFollowUps | null;
-    settlement: ChatTurnStoredSettlement;
-  },
-  AssistantTurnFailure
-> => {
-  if (
-    Result.isError(persistResult) &&
-    isChatTurnNotOwned(persistResult.error)
-  ) {
-    // Another execution or the reaper settled the turn first: its outcome
-    // stands, and this run has nothing left to store or count.
-    return Result.ok({ followUps: null, settlement: { type: "not-owned" } });
-  }
-  if (Result.isError(persistResult)) {
-    captureError(
-      persistResult.error,
-      handlerErrorContext("chat.persistedTurnSettlement.persistResult_error", {
-        threadId,
-      }),
-    );
-    return Result.err({
-      code: "persistence",
-      error: new HandlerError({
-        status: 500,
-        message: "Failed to persist assistant turn",
-        cause: persistResult.error,
-      }),
-    });
-  }
-  const { outcome: storedOutcome, persistencePlan } = persistResult.value;
-  return Result.ok({
-    // A stop that won the race stored `cancelled`, whatever the run proposed.
-    followUps:
-      storedOutcome.type === "completed"
-        ? {
-            messagesAfterAssistantPersist: applyAssistantPersistencePlan({
-              messages,
-              persistencePlan,
-            }),
-            resolvedResponseMessage,
-          }
-        : null,
-    settlement: { type: "stored", outcome: storedOutcome },
-  });
 };
 
 /**
@@ -653,15 +579,7 @@ const settleStreamedAssistantTurn = async ({
   runFollowUps,
   threadId,
 }: {
-  persist: () => Promise<
-    Result<
-      {
-        followUps: CompletedTurnFollowUps | null;
-        settlement: ChatTurnStoredSettlement;
-      },
-      AssistantTurnFailure
-    >
-  >;
+  persist: () => Promise<StreamedTurnPersistence>;
   run: ChatTurnRun;
   runFollowUps: (followUps: CompletedTurnFollowUps) => Promise<void>;
   threadId: SafeId<"chatThread">;
@@ -741,7 +659,7 @@ export class ChatSendLifecycle {
         return signal.aborted;
       case "preflight":
       case "failure-pending":
-      case "handed-over":
+      case "with-run":
         return false;
       default:
         return panic(this.claimedTurn satisfies never);
@@ -883,7 +801,7 @@ export class ChatSendLifecycle {
     ) {
       return false;
     }
-    const interaction = getAwaitingUserInteractions(this.checkpoint).at(0);
+    const interaction = memberWaitsOf(this.checkpoint).at(0);
     if (interaction === undefined) {
       return false;
     }
@@ -920,7 +838,10 @@ export class ChatSendLifecycle {
    * run gets nothing of the request, so it behaves the same once the request
    * is gone.
    */
-  startRun(connectors: LoadedExternalMcpTools | undefined): ChatTurnRun {
+  startRun(
+    connectors: LoadedExternalMcpTools | undefined,
+    runsOn: ChatRunTarget["kind"],
+  ): ChatTurnRun {
     if (this.claimedTurn.status !== "preflight") {
       return panic("Cannot start a run for a turn this send does not hold");
     }
@@ -929,7 +850,7 @@ export class ChatSendLifecycle {
       admission: this.admission,
       checkpoint: this.checkpoint,
       connectors,
-      deadlineMs: CHAT_METERED_PROVIDER_TIMEOUT_MS,
+      bound: chatTurnRunBoundOf(runsOn),
       mode: this.options.mode,
       owner: {
         indexThread: this.options.indexThread,
@@ -942,7 +863,7 @@ export class ChatSendLifecycle {
         workspaceId: this.options.workspaceId,
       },
     });
-    this.claimedTurn = { status: "handed-over" };
+    this.claimedTurn = { status: "with-run" };
     this.releaseClaim();
     this.connectorsHandedOff = connectors !== undefined;
     return run;
@@ -1114,7 +1035,7 @@ export class ChatSendLifecycle {
                   }),
             };
           case "unclaimed":
-          case "handed-over":
+          case "with-run":
             return undefined;
           default:
             this.claimedTurn satisfies never;
@@ -1151,6 +1072,7 @@ export class ChatSendLifecycle {
       }
       if (this.pendingSideEffects !== undefined) {
         const rollbackResult = await this.options.rollbackSideEffects({
+          organizationId: this.options.organizationId,
           recordAuditEvent: this.options.recordAuditEvent,
           safeDb: this.options.safeDb,
           threadId: this.options.threadId,
@@ -1173,7 +1095,7 @@ export class ChatSendLifecycle {
       }
     } finally {
       this.releaseClaim();
-      if (this.claimedTurn.status !== "handed-over") {
+      if (this.claimedTurn.status !== "with-run") {
         await this.admission?.release();
       }
     }
@@ -1376,6 +1298,8 @@ const keepThreadRunTarget = async ({
 };
 
 type AcceptIncomingTurnOptions = {
+  /** Who asked for the turn: the member, or their queue sending for them. */
+  source: ChatTurnSource;
   accessibleSet: ReadonlySet<string>;
   accessibleWorkspaceIds: SafeId<"workspace">[];
   body: ChatSendRequest;
@@ -1395,6 +1319,7 @@ type AcceptIncomingTurnOptions = {
 
 /** Persists the incoming message and establishes the turn's durable owner. */
 const acceptIncomingTurn = async ({
+  source,
   accessibleSet,
   accessibleWorkspaceIds,
   body,
@@ -1601,12 +1526,24 @@ const acceptIncomingTurn = async ({
       latestMessagePlan.persistencePlan.type !== "none"
         ? createChatTurnAcceptance({
             organizationId,
+            source,
             threadId: body.threadId,
             userId,
             userMessageId: parsedMessage.message.id,
             workspaceId,
           })
         : undefined;
+    // A queued message is sent only as a new turn that takes it from the
+    // queue; one that would not store a new turn is not the queue's to send.
+    if (source.type === "queue" && turnAcceptance === undefined) {
+      return Result.err(
+        new HandlerError({
+          status: 409,
+          code: CHAT_QUEUE_ERROR_CODE.notDue,
+          message: "The queued message is not the next one the queue may send",
+        }),
+      );
+    }
     const persistenceProps = {
       acceptedSendMode: body.sendMode,
       recordAuditEvent,
@@ -1648,7 +1585,7 @@ const acceptIncomingTurn = async ({
           acceptedTurnId: null,
           continuationInteraction:
             getResumedUserInteraction({
-              awaited: getAwaitingUserInteractions(
+              awaited: memberWaitsOf(
                 validationThreadState.persistedMessage === null
                   ? null
                   : chatMessageFromPersisted({
@@ -1695,6 +1632,10 @@ const acceptIncomingTurn = async ({
     } else {
       const persistenceResult = await persistAcceptedMessageWithClaim({
         ...persistenceProps,
+        placement:
+          isEdit || isExplicitRegeneration
+            ? CHAT_MEMBER_MESSAGE_PLACEMENT.rewrite
+            : CHAT_MEMBER_MESSAGE_PLACEMENT.append,
         plannedOnHistory,
         ...(isEdit ? { refuseTurn: refuseChatUserMessageEditTurn } : {}),
         turnAcceptance,
@@ -1850,6 +1791,11 @@ type PrepareValidatedIncomingMessageOptions = {
 };
 
 /** Validates the provider-facing message and adopts thread/file rollback ownership. */
+/** An upload a legal hold refused answers with the shared hold refusal. */
+const uploadRefusal = <UploadError>(
+  error: UploadError | LegalHoldActiveError,
+) => (LegalHoldActiveError.is(error) ? legalHoldRefusal(error) : error);
+
 const prepareValidatedIncomingMessage = async ({
   dependencies: { caseLawDb, loadWebSearchProviders, uploadMessageFiles },
   authorization: {
@@ -2253,7 +2199,7 @@ const prepareValidatedIncomingMessage = async ({
       // The upload helper already cleans a partial upload (and a newly
       // created thread) before returning an error.
       lifecycle.releaseSideEffects();
-      return Result.err(uploadResult.error);
+      return Result.err(uploadRefusal(uploadResult.error));
     }
     lifecycle.trackUploadedFiles(uploadResult.value.uploadedFiles);
 
@@ -2382,15 +2328,36 @@ const currentExecutionContextReader = (dependencies: SendMessageDependencies) =>
   resolveCredentialMemberExecutionContext;
 
 /** A turn on the computer gets its files, unless a raw copy would defeat anonymization. */
+/**
+ * A coding agent on the member's computer answers with its own tools, so its
+ * prompt names none of stella's cloud tools or settings, and says how its web
+ * search runs at the turn's permission level. A turn bound for a computer
+ * runs there or is refused, so the run target alone decides.
+ */
+const turnPromptTarget = (
+  runTarget: ChatRunTarget | undefined,
+): ChatPromptTarget =>
+  runTarget === undefined || runTarget.kind === CHAT_RUN_TARGET_KIND.cloud
+    ? CLOUD_PROMPT_TARGET
+    : {
+        type: "local_run",
+        webSearch:
+          CHAT_LOCAL_RUN_WEB_SEARCH_BY_HARNESS[runTarget.harness][
+            runTarget.approvals
+          ],
+      };
+
 const turnCopiesFiles = (
   localRun: LocalChatRun | undefined,
   sendMode: ChatSendMode,
 ) => localRun !== undefined && sendMode !== CHAT_SEND_MODE.anonymized;
 
-const localRunWithAttachments = (
+const localRunForTurn = (
   localRun: LocalChatRun | undefined,
   attachments: readonly LocalRunAttachment[],
-): LocalChatRun | undefined => localRun?.withAttachments(attachments);
+  origin: LocalRunAppIssuer,
+): LocalChatRun | undefined =>
+  localRun?.withAttachments(attachments).withResourceOrigin(origin);
 
 export const createSendMessage = (
   dependencies: SendMessageDependencies = SEND_MESSAGE_DEPENDENCIES,
@@ -2413,6 +2380,7 @@ export const createSendMessage = (
       safeDb,
       scopedDb,
       session,
+      set,
       usageLane,
       user,
     }) {
@@ -2423,10 +2391,6 @@ export const createSendMessage = (
       const body = transportBody.forwardedProps;
       const parentRunId = "parentRunId" in body ? body.parentRunId : undefined;
       const resume = "resume" in body ? body.resume : undefined;
-      const transportParentRunId =
-        "parentRunId" in transportBody ? transportBody.parentRunId : undefined;
-      const transportResume =
-        "resume" in transportBody ? transportBody.resume : undefined;
       let acceptedLifecycle: ChatSendLifecycle | undefined = undefined;
       const isClientConnectionAborted = () =>
         acceptedLifecycle === undefined
@@ -2449,18 +2413,7 @@ export const createSendMessage = (
         task: "chat",
       });
 
-      const hasEnvelopeCorrelationMismatch = (): boolean =>
-        transportBody.threadId !== body.threadId ||
-        transportBody.runId !== body.runId ||
-        transportParentRunId !== parentRunId ||
-        !deepEquals(transportResume, resume) ||
-        !deepEquals(transportBody.data, body) ||
-        !transportBody.messages.some(
-          (message) =>
-            message.id === body.message.id &&
-            message.role === body.message.role,
-        );
-      if (hasEnvelopeCorrelationMismatch()) {
+      if (hasAgUiEnvelopeCorrelationMismatch(transportBody)) {
         return Result.err(
           new HandlerError({
             status: 400,
@@ -2624,13 +2577,14 @@ export const createSendMessage = (
         : (body.editApplyMode ?? DEFAULT_CHAT_EDIT_APPLY_MODE);
       const docxEditRepresentation =
         body.docxEditRepresentation ?? DEFAULT_DOCX_EDIT_REPRESENTATION;
+      const activeFile = body.activeFile;
       const activeFileEntity =
-        body.activeFile?.supportsDocxEdits === true && workspaceId !== null
+        activeFile?.supportsDocxEdits === true && workspaceId !== null
           ? yield* Result.await(
               safeDb((tx) =>
                 tx.query.entities.findFirst({
                   where: {
-                    id: { eq: body.activeFile?.entityId },
+                    id: { eq: activeFile.entityId },
                     workspaceId: { eq: workspaceId },
                   },
                   columns: { currentVersionId: true },
@@ -2716,6 +2670,7 @@ export const createSendMessage = (
         indexThread: dependencies.indexThread,
         externalMcpToolsLoader,
         mode: CHAT_TURN_BOUNDARY_MODE[body.sendMode],
+        organizationId: session.activeOrganizationId,
         recordAuditEvent,
         safeDb,
         scopedDb,
@@ -2802,8 +2757,10 @@ export const createSendMessage = (
           webSearchProviders,
         } = preparedIncomingMessage;
 
-        // A turn bound for a computer is routed before it is admitted or
-        // stored: a computer that cannot take it refuses the send.
+        // Whether a turn may be asked to run on a computer at all. Which
+        // computer takes it is decided once the turn is stored, as its run
+        // starts, so a computer that cannot take it fails the turn the
+        // member's message is stored with.
         const localRun = yield* Result.await(
           resolveChatLocalRun({
             runTarget: body.runTarget,
@@ -2817,6 +2774,11 @@ export const createSendMessage = (
               pinnedIds: effectiveContextMatterIds,
               accessibleWorkspaceIds,
             }),
+            readApprovalCeiling: async () =>
+              await readLocalRunApprovalCeiling(
+                safeDb,
+                session.activeOrganizationId,
+              ),
             ...(dependencies.localRunRuntime === undefined
               ? {}
               : { runtime: dependencies.localRunRuntime }),
@@ -2836,6 +2798,12 @@ export const createSendMessage = (
             workspaceId,
           }),
         );
+        // One decision for the turn: the prompt's browser line and the
+        // browser tool offer both read it, so they cannot disagree.
+        const turnBrowserExtension = resolveTurnBrowserExtension({
+          reported: body.browserExtension,
+          runsLocally: localRun !== undefined,
+        });
 
         const modelAdmission = yield* Result.await(
           lifecycle.admitExecution({
@@ -2856,6 +2824,10 @@ export const createSendMessage = (
         yield* Result.await(lifecycle.checkAdmission());
 
         const acceptedTurnResult = await acceptIncomingTurn({
+          source:
+            session.startedFromQueue === undefined
+              ? { type: "member" }
+              : { type: "queue", ...session.startedFromQueue },
           managedAIResidency,
           accessibleSet,
           accessibleWorkspaceIds,
@@ -2887,6 +2859,12 @@ export const createSendMessage = (
           toolWorkspaceIds,
           turnExecution,
         } = acceptedTurnResult.value;
+        // From here the member's message and its turn are stored, so every
+        // answer names the turn, a refusal included: a client then knows
+        // from the response alone that the thread holds what it sent. A
+        // stream refused before it opens (`ChatTurnFailureResponse`) gets the
+        // header from here too.
+        set.headers[CHAT_TURN_ID_HEADER] = turnExecution.id;
 
         const skillBindingScope = yield* Result.await(
           settleInternalPreflight(
@@ -3056,6 +3034,10 @@ export const createSendMessage = (
           toolWorkspaceIds,
           workspaceStatusById,
         });
+        // A turn the server started from the member's queue says so on
+        // every event its tools record.
+        const chatAuditSource =
+          session.startedFromQueue === undefined ? "chat" : "chat_queue";
         // Reads the assistant makes without an approval, such as a skill
         // loaded by `load-skill`.
         const recordReadAuditEvent = createAuditRecorder({
@@ -3068,7 +3050,7 @@ export const createSendMessage = (
             trigger: {
               type: "user_dispatch",
               userId: user.id,
-              source: "chat",
+              source: chatAuditSource,
               sourceId: body.threadId,
             },
             runId: parsedMessage.message.id,
@@ -3100,6 +3082,7 @@ export const createSendMessage = (
         };
         const chatToolContext = {
           visualTools,
+          appTools: { origin: visualOrigin },
           featureAccessSnapshot,
           createAIAbortSignal: createMeteredAIAbortSignal,
           organizationId: session.activeOrganizationId,
@@ -3131,9 +3114,7 @@ export const createSendMessage = (
           hasActiveDocxEditClient,
           hasActiveDocxFileClient,
           docxSuggestionSurface,
-          browserExtension: resolveBrowserExtensionCapability(
-            body.browserExtension,
-          ),
+          browserExtension: turnBrowserExtension,
           editApplyMode,
           docxEditRepresentation,
           webSearchEnabled: thread.data.webSearchEnabled,
@@ -3156,7 +3137,7 @@ export const createSendMessage = (
               trigger: {
                 type: "user_dispatch",
                 userId: user.id,
-                source: "chat",
+                source: chatAuditSource,
                 sourceId: body.threadId,
               },
               runId: parsedMessage.message.id,
@@ -3185,6 +3166,7 @@ export const createSendMessage = (
         const chatContextResult = await prepareChatContext({
           caseLawDb: dependencies.caseLawDb,
           copiesFilesToComputer: turnCopiesFiles(localRun, body.sendMode),
+          promptTarget: turnPromptTarget(body.runTarget),
           recordAuditEvent,
           featureAccessSnapshot,
           activeDecision: body.activeDecision,
@@ -3219,9 +3201,7 @@ export const createSendMessage = (
               toolScope: body.toolScope,
             }),
           },
-          browserExtension: resolveBrowserExtensionCapability(
-            body.browserExtension,
-          ),
+          browserExtension: turnBrowserExtension,
           userContext: body.userContext,
           userId: user.id,
           workspaceId,
@@ -3301,6 +3281,7 @@ export const createSendMessage = (
             externalConnectors,
             modelAdmission,
             externalTools: externalMcpTools?.tools ?? {},
+            organizationAIInstructions: chatContext.organizationAIInstructions,
             skillMetadata: chatContext.skillMetadata,
             skillBindingScope: chatContext.skillBindingScope,
             activeSkillContext: chatContext.activeSkillContext,
@@ -3401,8 +3382,6 @@ export const createSendMessage = (
 
         yield* Result.await(lifecycle.checkAdmission());
 
-        const isServerTool = isServerChatToolCall;
-
         // A completed, non-anonymized turn marks compaction due and titles a
         // new thread; neither affects whether the turn itself settled.
         const runCompletedTurnFollowUps = async (
@@ -3468,109 +3447,42 @@ export const createSendMessage = (
               // The run owns the turn and the loaded connectors from here.
               // Agent runs load none for streaming, so the send's cleanup
               // closes any validation-only load.
-              const run = lifecycle.startRun(externalMcpTools);
+              const run = lifecycle.startRun(
+                externalMcpTools,
+                body.runTarget?.kind ?? CHAT_RUN_TARGET_KIND.cloud,
+              );
               try {
-                // The streamed turn's persistence: every expected failure
-                // comes back as a `Result` naming the turn row's failure code,
-                // and nothing here settles the turn, which is the `onFinish`
-                // boundary's job. It returns what the turn row now holds, and
-                // for a completed turn what its follow-ups need.
-                const persistStreamedAssistantTurn = async ({
-                  outcome,
-                  responseMessage,
-                }: StreamChatFinishEvent): Promise<
-                  Result<
-                    {
-                      followUps: CompletedTurnFollowUps | null;
-                      settlement: ChatTurnStoredSettlement;
-                    },
-                    AssistantTurnFailure
-                  >
-                > => {
-                  const validatedToolParts = validateToolCallParts({
-                    allowPartialInput: CUT_SHORT_OUTCOME[outcome.type],
-                    allowDeferredServerInput: outcome.type === "awaiting-user",
-                    message: responseMessage,
-                    // A turn on a computer carries only what its harness ran.
-                    ownership: localRun === undefined ? "cloud" : "harness",
-                    tools: streamingTools,
-                  });
-                  if (Result.isError(validatedToolParts)) {
-                    // Nothing of this turn can be stored.
-                    return Result.err({
-                      code: "persistence",
-                      error: new HandlerError({
-                        status: 500,
-                        message: "Generated chat tool parts are invalid",
-                        cause: validatedToolParts.error,
-                      }),
-                    });
-                  }
-                  const canonicalResponseMessage = toPersistableChatMessage({
-                    ...responseMessage,
-                    parts: validatedToolParts.value,
-                  });
-                  const resolved = resolveAssistantMessageRefs({
+                const settlementContext = {
+                  turn: {
+                    execution: turnExecution,
+                    threadId: body.threadId,
+                    userId: user.id,
+                    workspaceId,
+                    owningAssistantMessage,
+                    sendMode: body.sendMode,
+                  },
+                  history: {
+                    messages: latestMessagePlan.messages,
+                    existingIds: latestMessagePlan.existingIds,
+                  },
+                  threadNames,
+                  refs: {
+                    registry: refRegistry,
+                    observedBeforeRun: workspaceIdsBeforeStream,
                     accessibleWorkspaceIds: accessibleSet,
-                    isServerTool,
-                    messages: [canonicalResponseMessage],
                     opaqueReadWorkspaceIds:
                       turnRunModeOf(body) === CHAT_RUN_MODE.agent
                         ? toolWorkspaceIds
                         : [],
-                    refRegistry,
-                    workspaceIdsBeforeStream,
-                  });
-                  const resolvedResponseMessage =
-                    resolved.messages.at(0) ??
-                    panic("Missing chat response message");
-                  const addedThreadNames = {
-                    refBindings: resolved.refBindings,
-                    toolCallIds: toolCallIdsOf(resolvedResponseMessage.parts),
-                  };
-
-                  // Widen the thread's data scope to cover any
-                  // workspace-scoped content the assistant just
-                  // emitted (source-document parts from search and
-                  // workspace tools). Scope, message, and turn settlement are
-                  // written in one transaction below.
-                  //
-                  // If expansion fails (transient DB error, etc.), the whole
-                  // transaction fails. Storing workspace-
-                  // scoped content in `chat_messages` while the
-                  // owning thread's `data_workspace_ids` stays stale
-                  // would leave the new content readable after the
-                  // user loses access to those workspaces — the same
-                  // class of leak this whole change exists to close.
-                  //
-                  const persistResult = await finalizeAssistantTurn({
-                    acceptedSendMode: body.sendMode,
-                    threadNames: {
-                      added: addedThreadNames,
-                      read: threadNames,
-                    },
-                    dataScopeExpansion: {
-                      newWorkspaceIds: resolved.workspaceIds,
-                    },
-                    existingIds: latestMessagePlan.existingIds,
-                    execution: turnExecution,
-                    outcome,
-                    owningAssistantMessage,
-                    recordAuditEvent,
-                    responseMessage: resolvedResponseMessage,
-                    safeDb,
-                    threadId: body.threadId,
-                    userId: user.id,
-                    workspaceId,
-                    indexThread: dependencies.indexThread,
-                  });
-                  return persistedTurnSettlement({
-                    messages: latestMessagePlan.messages,
-                    persistResult,
-                    resolvedResponseMessage,
-                    threadId: body.threadId,
-                  });
-                };
+                  },
+                  // A turn on a computer carries only what its harness ran.
+                  toolCalls:
+                    localRun === undefined
+                      ? { ownership: "cloud", tools: streamingTools }
+                      : { ownership: "harness" },
+                  member: { recordAuditEvent, safeDb },
+                  indexThread: dependencies.indexThread,
+                } satisfies StreamedTurnSettlementContext;
 
                 const outcome = await dependencies.streamResponse({
                   modelAdmission,
@@ -3589,7 +3501,10 @@ export const createSendMessage = (
                   onFinish: async (event) =>
                     await settleStreamedAssistantTurn({
                       persist: async () =>
-                        await persistStreamedAssistantTurn(event),
+                        await persistStreamedTurn({
+                          context: settlementContext,
+                          event,
+                        }),
                       run,
                       runFollowUps: async (followUps) =>
                         await runCompletedTurnFollowUps(run, followUps),
@@ -3604,9 +3519,10 @@ export const createSendMessage = (
                   promptCachingEnabled,
                   runMode: turnRunModeOf(body),
                   sandboxRun,
-                  localRun: localRunWithAttachments(
+                  localRun: localRunForTurn(
                     localRun,
                     chatContext.localRunAttachments,
+                    visualOrigin,
                   ),
                   usageLane: turnLane.lane,
                   decisionPassageStamper: createTurnDecisionPassageStamper({
@@ -3693,40 +3609,6 @@ export const createSendMessage = (
 const sendMessage = createSendMessage();
 
 export default sendMessage;
-
-type ApplyAssistantPersistencePlanProps = {
-  messages: PersistableChatMessage[];
-  persistencePlan: MessagePersistencePlan;
-};
-
-const applyAssistantPersistencePlan = ({
-  messages,
-  persistencePlan,
-}: ApplyAssistantPersistencePlanProps): PersistableChatMessage[] | null => {
-  switch (persistencePlan.type) {
-    case "none":
-      return null;
-    case "insert":
-      return [...messages, persistencePlan.message];
-    case "update":
-      return messages.map((message) =>
-        message.id === persistencePlan.messageId
-          ? persistencePlan.message
-          : message,
-      );
-    case "replace-last-assistant":
-      return [
-        ...messages.filter(
-          (message) => message.id !== persistencePlan.deleteMessageId,
-        ),
-        persistencePlan.insertMessage,
-      ];
-    default: {
-      persistencePlan satisfies never;
-      return panic(`Unhandled persistence plan: ${String(persistencePlan)}`);
-    }
-  }
-};
 
 const messageNeedsExternalMcpValidation = (
   message: ChatSendRequest["message"],
@@ -3829,6 +3711,7 @@ const turnRunModeOf = (
 type PrepareChatContextProps = {
   caseLawDb?: SendMessageDependencies["caseLawDb"];
   copiesFilesToComputer: boolean;
+  promptTarget: ChatPromptTarget;
   recordAuditEvent: AuditRecorder;
   featureAccessSnapshot: FeatureAccessSnapshot;
   activeDecision: IncomingActiveDecision | undefined;
@@ -3852,7 +3735,7 @@ type PrepareChatContextProps = {
   sendMode: ChatSendMode;
   threadId: SafeId<"chatThread">;
   toolAvailability: ChatToolAvailability;
-  browserExtension: BrowserExtensionCapability;
+  browserExtension: TurnBrowserExtension;
   userContext: IncomingUserContext | undefined;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
@@ -3860,6 +3743,7 @@ type PrepareChatContextProps = {
 
 type PrepareChatContextResult = Result<
   {
+    organizationAIInstructions: string;
     hydratedMessages: ChatMessage[];
     /** The files a turn on the member's computer copies into its folder. */
     localRunAttachments: readonly LocalRunAttachment[];
@@ -3933,6 +3817,7 @@ const auditedLocalRunAttachments = async ({
 const prepareChatContext = async ({
   caseLawDb,
   copiesFilesToComputer,
+  promptTarget,
   recordAuditEvent,
   featureAccessSnapshot,
   activeDecision,
@@ -3965,10 +3850,11 @@ const prepareChatContext = async ({
       safeDb((tx) =>
         tx.query.organizationSettings.findFirst({
           where: { organizationId: { eq: organizationId } },
-          columns: { practiceJurisdictions: true },
+          columns: { aiInstructions: true, practiceJurisdictions: true },
         }),
       ),
     );
+    const organizationAIInstructions = orgSettingsRow?.aiInstructions ?? "";
     const practiceJurisdictions = normalizeOptionalArray(
       orgSettingsRow?.practiceJurisdictions,
     );
@@ -3989,6 +3875,7 @@ const prepareChatContext = async ({
         offeredToolNamesForSkills,
         organizationId,
         practiceJurisdictions,
+        organizationAIInstructions,
         refRegistry,
         safeDb,
         messages: messageWindow,
@@ -3996,6 +3883,7 @@ const prepareChatContext = async ({
         skillBindingScope,
         threadId,
         toolAvailability,
+        promptTarget,
         browserExtension,
         userContext,
         userId,
@@ -4056,6 +3944,7 @@ const prepareChatContext = async ({
     );
 
     return Result.ok({
+      organizationAIInstructions,
       promptCacheKey: buildChatPromptCacheKey(systemPrompt.cacheStablePrefix),
       systemSafe: systemPrompt.safeLayers,
       systemUntrusted: systemPrompt.untrustedSuffix,
@@ -4365,206 +4254,6 @@ const readActiveFileFallbackForModel = async ({
     };
     return Result.ok(fallback);
   });
-
-type ResolveAssistantMessageRefsProps = {
-  accessibleWorkspaceIds: ReadonlySet<string>;
-  /** Whether the call records a server executor for its output. */
-  isServerTool: (part: Extract<ChatPart, { type: "tool-call" }>) => boolean;
-  messages: PersistableChatMessage[];
-  opaqueReadWorkspaceIds: readonly SafeId<"workspace">[];
-  refRegistry: ReturnType<typeof createChatRefRegistry>;
-  workspaceIdsBeforeStream: ReadonlySet<SafeId<"workspace">>;
-};
-
-type ResolveAssistantMessageRefsResult = {
-  messages: PersistableChatMessage[];
-  /** The refs the messages showed the model. */
-  refBindings: ChatRefBinding[];
-  workspaceIds: SafeId<"workspace">[];
-};
-
-const stringifyToolPayload = (value: unknown): unknown => JSON.stringify(value);
-
-const toolResultPayload = ({
-  outputsByCallId,
-  part,
-}: {
-  outputsByCallId: ReadonlyMap<string, unknown>;
-  part: Extract<ChatPart, { type: "tool-result" }>;
-}): unknown => {
-  if (outputsByCallId.has(part.toolCallId)) {
-    return outputsByCallId.get(part.toolCallId);
-  }
-  if (part.state === "error" && part.error !== undefined) {
-    return { error: part.error };
-  }
-  return undefined;
-};
-
-const synchronizeToolResultContent = (
-  parts: readonly ChatPart[],
-): ChatPart[] => {
-  const outputsByCallId = new Map<string, unknown>();
-  for (const part of parts) {
-    if (part.type === "tool-call" && part.output !== undefined) {
-      outputsByCallId.set(part.id, part.output);
-    }
-  }
-
-  return parts.map((part) => {
-    if (part.type !== "tool-result" || part.state === "streaming") {
-      return part;
-    }
-    const payload = toolResultPayload({ outputsByCallId, part });
-    if (Array.isArray(part.content)) {
-      if (!deepEquals(part.content, payload)) {
-        panic(`Canonical tool result ${part.toolCallId} disagrees with output`);
-      }
-      return part;
-    }
-    const content = stringifyToolPayload(payload);
-    if (typeof content !== "string") {
-      panic(
-        `Canonical tool result ${part.toolCallId} has no serializable output`,
-      );
-    }
-    return { ...part, content };
-  });
-};
-
-type ResolveAssistantPartRefsProps = {
-  part: ChatMessage["parts"][number];
-  entityContexts: ChatEntityRefContext[];
-  unresolvedInputRefs: ChatUnresolvedInputRefContext[];
-  refRegistry: ReturnType<typeof createChatRefRegistry>;
-};
-
-const resolveAssistantPartRefs = ({
-  part,
-  entityContexts,
-  unresolvedInputRefs,
-  refRegistry,
-}: ResolveAssistantPartRefsProps): ChatMessage["parts"][number] => {
-  // A harness call is stored as its harness reported it: its name only
-  // collides with a registry tool's by chance, so no registry ref rule
-  // applies to it.
-  const withDeclaredToolRefs: unknown =
-    part.type === "tool-call" && !isHarnessChatToolCall(part)
-      ? {
-          ...part,
-          ...("input" in part
-            ? {
-                input: resolveRegistryToolInputRefs({
-                  input: part.input,
-                  onEntityRefResolved: (target) => {
-                    entityContexts.push({
-                      entity: resourceRef({
-                        type: RESOURCE_TYPE.ENTITY,
-                        id: target.entityId,
-                      }),
-                      toolCallId: part.id,
-                      workspace: resourceRef({
-                        type: RESOURCE_TYPE.WORKSPACE,
-                        id: target.workspaceId,
-                      }),
-                    });
-                  },
-                  onRefUnresolved: (unresolved) => {
-                    unresolvedInputRefs.push({
-                      ...unresolved,
-                      toolCallId: part.id,
-                    });
-                  },
-                  refRegistry,
-                  toolName: part.name,
-                }),
-              }
-            : {}),
-          ...("output" in part
-            ? {
-                output: resolveRegistryToolOutputRefs({
-                  output: part.output,
-                  refRegistry,
-                  toolName: part.name,
-                }),
-              }
-            : {}),
-        }
-      : part;
-  const resolved = refRegistry.resolveAssistantValueRefs(withDeclaredToolRefs);
-  if (!isChatPart(resolved)) {
-    panic("Resolving assistant refs changed the message part shape");
-  }
-  return resolved;
-};
-
-const resolveAssistantMessageRefs = ({
-  accessibleWorkspaceIds,
-  isServerTool,
-  messages,
-  opaqueReadWorkspaceIds,
-  refRegistry,
-  workspaceIdsBeforeStream,
-}: ResolveAssistantMessageRefsProps): ResolveAssistantMessageRefsResult => {
-  const observedWorkspaceIdsAfterStream = refRegistry.getObservedWorkspaceIds();
-  const turnWorkspaceIds = new Set<SafeId<"workspace">>();
-  const refBindings: ChatRefBinding[] = [];
-
-  const resolvedMessages = messages.map((message) => {
-    if (message.role !== "assistant") {
-      return message;
-    }
-    const entityContexts: ChatEntityRefContext[] = [];
-    const unresolvedInputRefs: ChatUnresolvedInputRefContext[] = [];
-    const resolvedParts = message.parts.map((part) =>
-      resolveAssistantPartRefs({
-        part,
-        entityContexts,
-        unresolvedInputRefs,
-        refRegistry,
-      }),
-    );
-    const parts = synchronizeToolResultContent(resolvedParts);
-    const messageWorkspaceIds = computeAssistantTurnWorkspaceIds({
-      accessibleWorkspaceIds,
-      opaqueReadWorkspaceIds,
-      observedWorkspaceIdsAfterStream,
-      responseParts: parts,
-      workspaceIdsBeforeStream,
-    });
-    for (const id of messageWorkspaceIds) {
-      turnWorkspaceIds.add(id);
-    }
-    const shownRefBindings = refRegistry.collectRefBindings(
-      chatRefsWrittenIn({ isServerTool, parts: message.parts }),
-    );
-    refBindings.push(...shownRefBindings);
-    const refContext = {
-      version: 2,
-      refs: shownRefBindings,
-      entities: entityContexts,
-      unresolvedInputs: unresolvedInputRefs,
-      workspaceScope: messageWorkspaceIds.map((id) =>
-        resourceRef({ type: RESOURCE_TYPE.WORKSPACE, id }),
-      ),
-    } satisfies ChatRefContext;
-    return {
-      ...message,
-      metadata: {
-        ...message.metadata,
-        refContext,
-        refEncoding: CHAT_REF_ENCODING.PERSISTED_RESOURCE_REFS_V2,
-      },
-      parts,
-    };
-  });
-
-  return {
-    messages: resolvedMessages,
-    refBindings,
-    workspaceIds: [...turnWorkspaceIds],
-  };
-};
 
 type HydrateAssistantMessageRefsProps = {
   messages: ChatMessage[];

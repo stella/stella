@@ -16,8 +16,8 @@ import {
 } from "@stll/legal-ast/statute-anchor-scheme";
 import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
 
+import { fakeReaderAdapters } from "../tests/reader-adapters";
 import { CitedProvisionExpansion, CitedProvisionPeek } from "./cited-provision";
-import { fakeReaderAdapters } from "./decision-text.test";
 import { BlockRenderer } from "./document-ast-text";
 import { DecisionReaderProvider } from "./reader-adapters";
 import type {

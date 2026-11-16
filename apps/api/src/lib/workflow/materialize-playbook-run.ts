@@ -240,7 +240,7 @@ export const resolveScopedGate = async ({
       status: 400,
       code: PLAYBOOK_RUN_FAILURE_CODE.SCOPE_UNRESOLVED,
       retryable: false,
-      hint: "Configure a matching Document Type classifier or change the playbook document-type scope before running it.",
+      hint: "Configure a matching Document Type classifier, or change the playbook document-type scope before running it. An approved playbook runs on its approved scope until it is approved again.",
       message:
         "This playbook is scoped to a document type, but the workspace has no matching Document Type classifier to gate on.",
     };

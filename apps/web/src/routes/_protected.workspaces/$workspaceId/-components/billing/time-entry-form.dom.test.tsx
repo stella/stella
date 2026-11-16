@@ -2,6 +2,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic, Result } from "better-result";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
+import { localeInputText } from "@stll/money";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import messages from "@/i18n/langs/en.json";
@@ -25,6 +26,7 @@ const { entitySummariesOptions } =
 const { billingCodesOptions } =
   await import("@/lib/workspaces/queries/billing-codes");
 const { resolvedRateOptions } = await import("@/lib/workspaces/queries/rates");
+const { roleOptions, activeMemberOptions } = await import("@/lib/auth-queries");
 const { toSafeId } = await import("@/lib/safe-id");
 const { DEFAULT_CURRENCY, formatCurrencyAmount } =
   await import("@/components/billing/format-currency");
@@ -58,7 +60,7 @@ const rateOptions = (activityCode: string) =>
     activityCode,
   });
 
-const mount = () => {
+const mount = (role: "owner" | "member" = "owner") => {
   const submitted: TimeEntryFormValues[] = [];
   const client = new QueryClient({
     defaultOptions: {
@@ -67,6 +69,22 @@ const mount = () => {
     },
   });
   clients.push(client);
+  client.setQueryData(roleOptions.queryKey, role);
+  // The member holds no additional billing grant: their role decides.
+  client.setQueryData(activeMemberOptions.queryKey, {
+    id: "member-1",
+    organizationId: "organization-1",
+    role,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    userId: "user-1",
+    user: {
+      id: "user-1",
+      email: "member@example.test",
+      name: "Member",
+      image: undefined,
+    },
+    billingAccess: false,
+  });
   client.setQueryData(entitySummariesOptions(WORKSPACE_ID).queryKey, [
     { id: "work-item-1", name: "Work item" },
   ]);
@@ -198,9 +216,13 @@ describe("TimeEntryForm activity pricing", () => {
 
   const pricingCases = {
     automatic: { type: "automatic" },
-    manual: { type: "manual", draft: "275.50", currency: "EUR" },
+    manual: {
+      type: "manual",
+      draft: localeInputText({ value: "275.50", tagName: "INPUT" }),
+      currency: "EUR",
+    },
   } as const satisfies Record<
-    TimeEntryPricingSelection["type"],
+    Exclude<TimeEntryPricingSelection["type"], "hidden">,
     TimeEntryPricingSelection
   >;
   test.each(Object.values(pricingCases))(
@@ -267,4 +289,37 @@ describe("TimeEntryForm activity pricing", () => {
       currency: "EUR",
     });
   });
+});
+
+test("members without monetary visibility submit time independently of cached rates", async () => {
+  const { client, submitted } = mount("member");
+  expect(client.getQueryData(rateOptions("A1").queryKey)).toEqual({
+    hourlyRate: 10_000,
+    currency: "EUR",
+  });
+  expect(screen.queryByText(messages.billing.rates.hourlyRate)).toBeNull();
+  expect(
+    screen.queryByRole("button", { name: messages.billing.rates.override }),
+  ).toBeNull();
+  await submit();
+  await waitFor(() => expect(submitted).toHaveLength(1));
+  expect(submitted.at(0)).toMatchObject({
+    rateAtEntry: 0,
+    currency: DEFAULT_CURRENCY,
+  });
+  expect(client.getQueryState(rateOptions("A1").queryKey)?.fetchStatus).toBe(
+    "idle",
+  );
+});
+
+test("an authorized time entry can override an absent automatic rate", async () => {
+  mount();
+  await chooseActivity("A2");
+  await screen.findByText(messages.billing.rates.noRateFound);
+  await act(async () => {
+    fireEvent.click(
+      screen.getByRole("button", { name: messages.billing.rates.override }),
+    );
+  });
+  expect(screen.getByPlaceholderText("350.00")).toBeDefined();
 });

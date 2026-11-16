@@ -261,45 +261,9 @@ const send = async (client: WebChatClient, text: string) => {
   await client.sendUserMessage(Bun.randomUUIDv7(), text);
 };
 
-// --- The web app's send queue ---------------------------------------------------
-
-const WEB_SEND_QUEUE_URL = new URL(
-  "../../../../web/src/features/chat/hooks/use-chat-session-send-queue.logic.ts",
-  import.meta.url,
-).href;
-
-type QueuedEntry = { id: string; message: { content: string; id: string } };
-type SendQueueState = { queue: readonly QueuedEntry[] };
-type SendQueueTransition = {
-  dispatchedEntry: QueuedEntry | null;
-  state: SendQueueState;
-};
-type SendQueueModule = {
-  createInitialSendQueueState: (conversationId: string) => SendQueueState;
-  reduceSendQueue: (
-    state: SendQueueState,
-    event: Record<string, unknown>,
-  ) => SendQueueTransition;
-};
-
-/** The composer's send queue (`useChatSession`'s reducer), from the web
- *  app itself. */
-const loadSendQueue = async (): Promise<SendQueueModule> => {
-  const module: unknown = await import(WEB_SEND_QUEUE_URL);
-  if (
-    typeof module !== "object" ||
-    module === null ||
-    typeof Reflect.get(module, "reduceSendQueue") !== "function" ||
-    typeof Reflect.get(module, "createInitialSendQueueState") !== "function"
-  ) {
-    return panic("The web send queue no longer exports its reducer");
-  }
-  return asTestRaw<SendQueueModule>(module);
-};
-
 // --- Scenarios ------------------------------------------------------------------
 
-const SCENARIOS = {
+const SCENARIOS: Record<string, ReplayScenario> = {
   // CHAT_ORACLE.ledgerEffectsAuthorized: a call stopped while its input
   // streams never runs, and the next message settles the thread around it.
   "interrupt-mid-tool": {
@@ -439,68 +403,6 @@ const SCENARIOS = {
       expect(regenerate).toEqual(ask);
     },
   },
-  // A message queued while the answer streams and cancelled before the turn
-  // ends is never sent: the provider is asked nothing after the turn.
-  "queued-send-cancelled": {
-    plan: [
-      {
-        label: "ask",
-        inbound: "text",
-        pauses: [{ label: "answer-streaming", at: "text-open" }],
-      },
-      { label: "next-message", inbound: "text" },
-    ],
-    run: async ({ client, gate, harness, threadId }) => {
-      const { createInitialSendQueueState, reduceSendQueue } =
-        await loadSendQueue();
-      await client.startUserMessage(
-        Bun.randomUUIDv7(),
-        "Summarize the draft",
-        showsAnswerText,
-      );
-      await gate.reached("answer-streaming");
-      expect(client.runtimeState().requestActive).toBe(true);
-      let queue = createInitialSendQueueState(threadId);
-      queue = reduceSendQueue(queue, {
-        type: "turn-boundary-checked",
-        isGenerating: true,
-        status: "streaming",
-      }).state;
-      const queuedId = Bun.randomUUIDv7();
-      const queuedText = "Also list the parties";
-      queue = reduceSendQueue(queue, {
-        type: "message-enqueued",
-        entry: {
-          id: queuedId,
-          text: queuedText,
-          fileCount: 0,
-          message: { content: queuedText, id: queuedId },
-        },
-      }).state;
-      queue = reduceSendQueue(queue, {
-        type: "queued-message-removed",
-        id: queuedId,
-      }).state;
-      gate.release("answer-streaming");
-      await client.settle();
-      const boundary = reduceSendQueue(queue, {
-        type: "turn-boundary-checked",
-        isGenerating: false,
-        status: "ready",
-      });
-      // Whatever the queue hands back is sent, as `useChatSession` does, so
-      // a cancelled message that still went out meets the transcript.
-      if (boundary.dispatchedEntry !== null) {
-        await client.sendUserMessage(
-          boundary.dispatchedEntry.message.id,
-          boundary.dispatchedEntry.message.content,
-        );
-      }
-      await harness.expectSoundWebClient({ client, threadId });
-      await send(client, "Thanks");
-      await harness.expectSoundWebClient({ client, threadId });
-    },
-  },
   // Two calls in one step, both approved; one fails. The model is handed
   // one result and one failure, each on its own call.
   "parallel-tools-one-fails": {
@@ -528,7 +430,7 @@ const SCENARIOS = {
       ).toContain("could not delete memo");
     },
   },
-} as const satisfies Record<string, ReplayScenario>;
+};
 
 const isNamed = (input: unknown, name: string) =>
   typeof input === "object" &&

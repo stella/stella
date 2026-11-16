@@ -95,6 +95,7 @@ const mountCard = ({
         <ChatApprovalContext
           value={{
             activeOrganizationId: "sample-organization",
+            approvalIdsAwaitedAtOpen: new Set(),
             alwaysApprovedTools: new Set(),
             conversationApprovedTools: new Set(),
             confirmStoredApprovalGrant: async () =>
@@ -414,6 +415,43 @@ describe("request secret card", () => {
     );
 
     expect(submissions).toEqual([{ decision: "decline" }]);
+    queryClient.clear();
+  });
+
+  test("shows a failed submission and lets the user answer again", async () => {
+    const submissions: unknown[] = [];
+    const continuations: RequestSecretOutput[] = [];
+    const { queryClient } = mountCard({
+      handleRequestSecret: async (_toolCallId, decision) => {
+        submissions.push(decision);
+        if (submissions.length === 1) {
+          throw new Error("submission unavailable");
+        }
+        return declineOutput;
+      },
+      continueRequestSecret: async (_toolCallId, receipt) => {
+        continuations.push(receipt);
+      },
+    });
+    const decline = () =>
+      screen.getByRole("button", { name: messages.common.decline });
+
+    await act(async () => fireEvent.click(decline()));
+
+    expect(screen.getByRole("alert").textContent).toBe(
+      messages.chat.requestSecret.error,
+    );
+    expect(decline().hasAttribute("disabled")).toBe(false);
+    expect(continuations).toEqual([]);
+
+    await act(async () => fireEvent.click(decline()));
+
+    expect(submissions).toEqual([
+      { decision: "decline" },
+      { decision: "decline" },
+    ]);
+    expect(continuations).toEqual([declineOutput]);
+    expect(screen.queryByRole("alert")).toBeNull();
     queryClient.clear();
   });
 

@@ -508,6 +508,7 @@ export type WorkspaceFile = {
   parentId: string | null;
   fileName: string;
   mimeType: string;
+  sizeBytes: number;
 };
 
 const fetchAllWorkspaceFiles = async ({
@@ -541,6 +542,7 @@ const fetchAllWorkspaceFiles = async ({
           parentId: file.parentId,
           fileName: file.fileName,
           mimeType: file.mimeType,
+          sizeBytes: file.sizeBytes,
         })),
       );
     },

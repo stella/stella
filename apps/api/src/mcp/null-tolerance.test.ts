@@ -12,10 +12,6 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
-beforeEach(() => {
-  loadOrgSettingsMock.mockClear();
-});
-
 /**
  * A known LLM-client behavior (Stripe's agent toolkit tests for it explicitly)
  * is sending an explicit JSON `null` for an optional field instead of omitting
@@ -200,6 +196,7 @@ const invokeValidateOnly = async (
   });
 
 beforeEach(() => {
+  loadOrgSettingsMock.mockClear();
   loadOrgSettingsMock.mockClear();
 });
 

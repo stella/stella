@@ -2,10 +2,10 @@
   "type": "parser",
   "name": "CZ_REGIONAL",
   "key": "cz-regional",
-  "parserVersion": 19,
+  "parserVersion": 27,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",
-    "reason": "Recompute the instructions from stored raw so the court's own Poučení label, alone or opening the first instruction, is printed once under the synthesized heading; AST blocks have no separate feature storage."
+    "reason": "Dependency patch tracking only: @tanstack/ai is reached through the desktop runner wire schema in transaction infrastructure, not parser execution. No parser-owned value changes; the matching no-stored-row-effect declaration requires no replay."
   }
 }

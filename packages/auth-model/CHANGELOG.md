@@ -1,5 +1,27 @@
 # @stll/auth-model
 
+## 0.8.1
+
+### Patch Changes
+
+- [#8564](https://github.com/stella/stella/pull/8564) [`383c1db`](https://github.com/stella/stella/commit/383c1db86a75f2b3114fdfeda0dff9df7b6bb975) Thanks [@NavpreetSSidhu](https://github.com/NavpreetSSidhu)! - Add `ORGANIZATION_LOGO_RULES`, the format and size rules for an organization logo.
+
+## 0.8.0
+
+### Minor Changes
+
+- [#8537](https://github.com/stella/stella/pull/8537) [`001c640`](https://github.com/stella/stella/commit/001c640e64cb00e3948bdf68a18a40347c65a40f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Align the schema contract version with Better Auth 1.7.19 after verifying the core and organization schemas are unchanged. `BETTER_AUTH_CONTRACT_VERSION` and `BETTER_AUTH_PARITY_MANIFEST.betterAuthVersion` now carry the literal `"1.7.19"`; no entrypoints are removed.
+
+### Patch Changes
+
+- [#8537](https://github.com/stella/stella/pull/8537) [`001c640`](https://github.com/stella/stella/commit/001c640e64cb00e3948bdf68a18a40347c65a40f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Build declarations through the native tsrs API supported by tsdown 0.23.7, resolving the compiler from each package.
+
+## 0.7.1
+
+### Patch Changes
+
+- [#6568](https://github.com/stella/stella/pull/6568) [`d61016a`](https://github.com/stella/stella/commit/d61016a6d30def831c2d1657b1e895b8f409d3f3) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The opaque organization slug's random source takes an ArrayBuffer-backed byte view, so the module type-checks under both the Node and DOM declarations of `crypto.getRandomValues`.
+
 ## 0.7.0
 
 ### Minor Changes

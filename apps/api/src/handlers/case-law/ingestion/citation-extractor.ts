@@ -94,7 +94,8 @@ export type ExtractedCitation = {
    * where a sentence names one decision twice over — by docket and by
    * collection number. There the entry anchors on the docket the reader sees
    * and takes its identity from the collection number, which names exactly
-   * one decision where a docket may name a file's worth.
+   * one decision where a docket may name a file's worth. A docket printed
+   * with its sheet names one decision too, and keeps its own identity.
    */
   identifierValue: string;
   /**
@@ -1941,9 +1942,10 @@ const collectionJoinAfterDocket = (
  * collection number becomes the identity, because it names exactly one
  * decision where a docket names a whole file.
  *
- * A Constitutional Court docket is the exception: the collection mention
- * beside it is absorbed into the docket's citation, which keeps the docket's
- * identity.
+ * Two dockets are the exception: a Constitutional Court docket, and a docket
+ * printed with its sheet, which names one decision already. The collection
+ * mention beside either is absorbed into the docket's citation, which keeps
+ * the docket's identity.
  *
  * Czech collections only. A Hungarian docket already names one decision (its
  * document number), and the only Hungarian reporter-type citation, a
@@ -1987,8 +1989,14 @@ const mergeCollectionCitations = ({
       }
       // A Constitutional Court docket keeps resolving by itself: the
       // collection numbers reach a ruling only once its row carries them, and
-      // the docket reaches it either way.
-      if (join !== CZ_US_COLLECTION_AFTER_DOCKET) {
+      // the docket reaches it either way. So does a docket printed with its
+      // sheet ("č. j. 1 Azs 13/2006-39"): docket and sheet name one decision
+      // as exactly as the collection number does, and every row carries its
+      // docket while few carry their collection number.
+      if (
+        join !== CZ_US_COLLECTION_AFTER_DOCKET &&
+        docket.citedSheetNumber === null
+      ) {
         docket.identifierType = reporter.identifierType;
         docket.identifierValue = reporter.identifierValue;
       }

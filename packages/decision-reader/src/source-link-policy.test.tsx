@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
 
-import { renderReaderFixture as renderToStaticMarkup } from "./decision-text.test";
+import { renderReaderFixture as renderToStaticMarkup } from "../tests/reader-adapters";
 import {
   BlockRenderer,
   InlineContent,

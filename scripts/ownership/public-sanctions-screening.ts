@@ -22,6 +22,11 @@ export default {
         reason: "Screens anonymous subjects against the public corpus.",
       },
       {
+        path: "apps/api/src/lib/smoke-session/store.ts",
+        reason:
+          "Reads list freshness as public screening sees it, to judge a staging journey's refresh job.",
+      },
+      {
         path: "apps/api/src/server.ts",
         reason: "Starts anonymous matcher warmup after the listener binds.",
       },

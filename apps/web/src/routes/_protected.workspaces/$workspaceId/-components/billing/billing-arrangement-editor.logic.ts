@@ -10,9 +10,9 @@ import {
   BPS_PER_PERCENTAGE_POINT,
 } from "@stll/api-contract/billing";
 import { currencyCodeSchema } from "@stll/api-contract/currency-code";
-import { tryToMinorUnits } from "@stll/money";
+import { parseLocaleDecimal, parseLocaleMinorUnits } from "@stll/money";
 
-export const hourlyArrangementSchema = (invalidCap: string) =>
+export const hourlyArrangementSchema = (invalidCap: string, locale: string) =>
   v.pipe(
     v.strictObject({
       currency: currencyCodeSchema,
@@ -22,19 +22,28 @@ export const hourlyArrangementSchema = (invalidCap: string) =>
     }),
     v.rawTransform(({ dataset, addIssue, NEVER }) => {
       const value = dataset.value;
-      const capAmount = value.capAmount
-        ? tryToMinorUnits({ amount: value.capAmount, currency: value.currency })
+      const capResult = value.capAmount
+        ? parseLocaleMinorUnits({
+            amount: value.capAmount,
+            currency: value.currency,
+            locale,
+          })
         : undefined;
+      const capAmount = capResult?.unwrapOr(null);
       if (capAmount === null || (capAmount !== undefined && capAmount <= 0)) {
         addIssue({ message: invalidCap });
         return NEVER;
       }
+      // The cap redisplays in locale digits, so it is read back the same way.
       const minuteResult = value.capMinutes
-        ? parseIntegerToken(value.capMinutes, {
-            sign: "unsigned",
-            min: 1,
-            max: BILLING_CAP_MINUTES_MAX,
-          })
+        ? parseIntegerToken(
+            parseLocaleDecimal({
+              amount: value.capMinutes,
+              locale,
+              maximumFractionDigits: 0,
+            }).unwrapOr(""),
+            { sign: "unsigned", min: 1, max: BILLING_CAP_MINUTES_MAX },
+          )
         : undefined;
       if (minuteResult !== undefined && Result.isError(minuteResult)) {
         addIssue({ message: invalidCap });
@@ -44,7 +53,11 @@ export const hourlyArrangementSchema = (invalidCap: string) =>
       if (capAmount === undefined && capMinutes === undefined) {
         return { currency: value.currency };
       }
-      const thresholdResult = parseDecimalToken(value.alertThreshold, {
+      const thresholdInput = parseLocaleDecimal({
+        amount: value.alertThreshold,
+        locale,
+      });
+      const thresholdResult = parseDecimalToken(thresholdInput.unwrapOr(""), {
         sign: "unsigned",
         min: 0.01,
         max: BPS_PER_PERCENTAGE_POINT,

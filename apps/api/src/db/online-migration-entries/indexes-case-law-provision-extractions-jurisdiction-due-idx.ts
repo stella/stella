@@ -3,6 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "indexes-case-law-provision-extractions-jurisdiction-due-idx",
   revision: 460,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     {

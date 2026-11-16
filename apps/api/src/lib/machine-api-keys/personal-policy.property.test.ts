@@ -94,6 +94,7 @@ const verification = (permissions: Record<string, string[]>) => ({
   key: verifiedKey(permissions),
 });
 const authorizeAs = (role: (typeof roleNames)[number]) => async () => ({
+  billingAccess: false,
   memberId: "member_fixture",
   email: "member@example.test",
   role,
@@ -274,10 +275,12 @@ describe("personal API key authority", () => {
 
   test("read-only defaults carry no write permissions for any role", () => {
     for (const role of roleNames) {
-      expect(personalApiKeyPermissions(sessionMemberRole(role))).toEqual({
-        workspace: ["read"],
-        searchHistory: ["read"],
-      });
+      const permissions = personalApiKeyPermissions(sessionMemberRole(role));
+      expect(permissions["workspace"]).toEqual(["read"]);
+      expect(permissions["searchHistory"]).toEqual(["read"]);
+      for (const actions of Object.values(permissions)) {
+        expect(actions.every((action) => action === "read")).toBe(true);
+      }
     }
   });
 

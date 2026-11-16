@@ -13,7 +13,9 @@ import {
 
 const bodySchema = v.object({
   name: displayNameSchema(),
-  styleSource: fileSchema({ maxBytes: FILE_SIZE_LIMIT_BYTES.document }),
+  styleSource: fileSchema({
+    maxBytes: FILE_SIZE_LIMIT_BYTES.multipartDocument,
+  }),
 });
 
 const config = {

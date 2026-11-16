@@ -1,11 +1,24 @@
+import type {
+  BetaOutputConfig,
+  BetaThinkingConfigParam,
+} from "@anthropic-ai/sdk/resources/beta/messages/messages";
+import type { ThinkingConfig } from "@google/genai";
 import { HarmBlockThreshold, HarmCategory } from "@google/genai";
 import { FetchHttpHandler } from "@smithy/fetch-http-handler";
-import { createModel, extendAdapter } from "@tanstack/ai";
-import type { AnyTextAdapter, ContentPart, ModelMessage } from "@tanstack/ai";
+import { createModel, EventType, extendAdapter } from "@tanstack/ai";
+import type {
+  AdapterYieldChunk,
+  AnyTextAdapter,
+  ContentPart,
+  ModelMessage,
+} from "@tanstack/ai";
 import { createAnthropicChat } from "@tanstack/ai-anthropic";
 import type { AnthropicTextProviderOptions } from "@tanstack/ai-anthropic";
 import { BedrockConverseTextAdapter } from "@tanstack/ai-bedrock";
-import type { BedrockConverseProviderOptions } from "@tanstack/ai-bedrock";
+import type {
+  BedrockConverseProviderOptions,
+  ResolvedBedrockAuth,
+} from "@tanstack/ai-bedrock";
 import { createGeminiChat } from "@tanstack/ai-gemini";
 import type { GeminiTextProviderOptions } from "@tanstack/ai-gemini";
 import { createMistralText } from "@tanstack/ai-mistral";
@@ -77,6 +90,17 @@ import {
 import { withProviderImageInput } from "@/api/lib/chat/provider-image-input";
 import { withProviderStreamContract } from "@/api/lib/chat/provider-stream-contract";
 import { validateDataUrl } from "@/api/lib/data-url";
+import {
+  markProviderAdapterError,
+  providerAdapterEvidence,
+} from "@/api/lib/errors/provider-call-failure";
+import {
+  providerTransportCode,
+  recordProviderSends,
+  withRecordedResponse,
+  withSendEvidence,
+} from "@/api/lib/errors/provider-retry-evidence";
+import type { ProviderSendRecord } from "@/api/lib/errors/provider-retry-evidence";
 import { registerProviderDiagnosticCredentials } from "@/api/lib/errors/redacted-provider-diagnostic";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
@@ -84,6 +108,7 @@ import {
   createManagedOpenRouterText,
   createStellaOpenRouterText,
 } from "@/api/lib/stella-openrouter-text-adapter";
+import { isRecord } from "@/api/lib/type-guards";
 import {
   MANAGED_MODEL_TIER,
   type ManagedModelTier,
@@ -139,20 +164,14 @@ type MissingInstanceProvider = Exclude<
 
 true satisfies MissingInstanceProvider extends never ? true : never;
 
-type AnthropicAdaptiveThinking = {
-  type: "adaptive";
-  display?: "omitted" | "summarized" | undefined;
-};
+// The provider-native settings preserve reviewed defaults that the unified
+// reasoning level cannot express (adaptive thinking without a chosen effort).
+// The adapter patch rejects mixing these with top-level reasoning.
+type StellaAnthropicThinking = BetaThinkingConfigParam;
 
-type StellaAnthropicThinking =
-  | NonNullable<AnthropicTextProviderOptions["thinking"]>
-  | AnthropicAdaptiveThinking;
-
-type StellaAnthropicTextProviderOptions = Omit<
-  AnthropicTextProviderOptions,
-  "thinking"
-> & {
+type StellaAnthropicTextProviderOptions = AnthropicTextProviderOptions & {
   thinking?: StellaAnthropicThinking | undefined;
+  output_config?: BetaOutputConfig | undefined;
 };
 
 type AnthropicReasoningEffort = NonNullable<
@@ -183,10 +202,7 @@ type ResolvedGoogleThinkingLevel = v.InferOutput<
   typeof resolvedGoogleThinkingLevelSchema
 >;
 
-type StellaGeminiThinkingConfig = Omit<
-  NonNullable<GeminiTextProviderOptions["thinkingConfig"]>,
-  "thinkingLevel"
-> & {
+type StellaGeminiThinkingConfig = Omit<ThinkingConfig, "thinkingLevel"> & {
   thinkingLevel: ResolvedGoogleThinkingLevel;
 };
 
@@ -669,6 +685,204 @@ const createExtendedGeminiAdapter = (
   return gemini(modelId, apiKey);
 };
 
+type AdapterChatOptions = Parameters<AnyTextAdapter["chatStream"]>[0];
+type AdapterRunError = Extract<
+  AdapterYieldChunk,
+  { type: typeof EventType.RUN_ERROR }
+>;
+
+type AdapterLogger = AdapterChatOptions["logger"];
+
+/**
+ * `logger`, also recording the socket code of the failure an adapter logs
+ * as fatal. The Gemini and Bedrock adapters take no `wrapFetch`, and log the
+ * failure they then report as a `RUN_ERROR` without it.
+ */
+const recordingLogger = (
+  logger: AdapterLogger,
+  record: ProviderSendRecord,
+): AdapterLogger =>
+  new Proxy(logger, {
+    get: (target, key) => {
+      if (key === "errors") {
+        const errors: AdapterLogger["errors"] = (message, meta) => {
+          const code = providerTransportCode(meta?.["error"]);
+          if (record.evidence === undefined && code !== undefined) {
+            record.evidence = { code };
+          }
+          target.errors(message, meta);
+        };
+        return errors;
+      }
+      const value: unknown = Reflect.get(target, key, target);
+      if (typeof value !== "function") {
+        return value;
+      }
+      const bound: unknown = value.bind(target);
+      return bound;
+    },
+  });
+
+/** `options` with its requests recorded into `record`. */
+const recordedOptions = (
+  options: AdapterChatOptions,
+  record: ProviderSendRecord,
+): AdapterChatOptions => ({
+  ...options,
+  logger: recordingLogger(options.logger, record),
+  wrapFetch: recordProviderSends({
+    record,
+    signal: options.request?.signal ?? options.abortController?.signal,
+    outer: options.wrapFetch,
+  }),
+});
+
+/**
+ * A `RUN_ERROR`'s evidence with what its last request recorded: the retry
+ * hints and the request id join the provider's body, and a request that got
+ * no response, which has no body, is its socket code. A per-call `wrapFetch`
+ * makes some adapters (OpenRouter) send through a client of their own for
+ * that call, which skips any projection installed on the adapter's client,
+ * so the record is what keeps the request id.
+ */
+const runErrorEvidence = (
+  chunk: AdapterRunError,
+  record: ProviderSendRecord,
+): Record<string, unknown> | undefined => {
+  const recorded = record.evidence;
+  if (recorded === undefined) {
+    return isRecord(chunk.rawEvent) ? chunk.rawEvent : undefined;
+  }
+  if (isRecord(chunk.rawEvent)) {
+    return withRecordedResponse(chunk.rawEvent, recorded);
+  }
+  if (chunk.rawEvent !== undefined) {
+    return undefined;
+  }
+  return recorded.code === undefined ? undefined : { code: recorded.code };
+};
+
+/**
+ * Marks every failure the provider adapter itself raises or reports, so the
+ * generation layer tells a provider request that got no response from the
+ * same socket failure anywhere else in a run (an MCP connection, a
+ * middleware's database or cache call), which it does not retry
+ * (`providerFailureKind`). Each call's requests go through
+ * `recordProviderSends`, so the retry hints and the socket code TanStack's
+ * `RUN_ERROR` projection drops join its evidence.
+ */
+const withProviderFailureOrigin = (adapter: AnyTextAdapter): AnyTextAdapter => {
+  const marked = async function* (
+    record: ProviderSendRecord,
+    stream: AsyncIterable<AdapterYieldChunk>,
+  ): AsyncIterable<AdapterYieldChunk> {
+    const iterator = stream[Symbol.asyncIterator]();
+    // Set once the adapter's stream has finished on its own, by ending or by
+    // throwing; any other exit (the reader stopped early) closes it here.
+    let settled = false;
+    try {
+      for (;;) {
+        const step = await Result.tryPromise(async () => await iterator.next());
+        if (Result.isError(step)) {
+          settled = true;
+          // Both mark the adapter's own error in place; it is rethrown as is.
+          const failure = step.error.cause;
+          markProviderAdapterError(withSendEvidence(failure, record));
+          throw failure;
+        }
+        if (step.value.done === true) {
+          settled = true;
+          return;
+        }
+        const chunk = step.value.value;
+        if (chunk.type !== EventType.RUN_ERROR) {
+          yield chunk;
+          continue;
+        }
+        const evidence = runErrorEvidence(chunk, record);
+        yield evidence === undefined
+          ? chunk
+          : { ...chunk, rawEvent: providerAdapterEvidence(evidence) };
+      }
+    } finally {
+      if (!settled) {
+        const closed = await Result.tryPromise(
+          async () => await iterator.return?.(),
+        );
+        // Best effort: the reader already stopped, so a close that fails has
+        // no one left to tell.
+        closed.match({ err: () => undefined, ok: () => undefined });
+      }
+    }
+  };
+  const chatStream: AnyTextAdapter["chatStream"] = (options) => {
+    const record: ProviderSendRecord = { evidence: undefined };
+    return marked(record, adapter.chatStream(recordedOptions(options, record)));
+  };
+  const structuredOutput: AnyTextAdapter["structuredOutput"] = async (
+    options,
+  ) => {
+    const record: ProviderSendRecord = { evidence: undefined };
+    const output = await Result.tryPromise(
+      async () =>
+        await adapter.structuredOutput({
+          ...options,
+          chatOptions: recordedOptions(options.chatOptions, record),
+        }),
+    );
+    if (Result.isError(output)) {
+      // Both mark the adapter's own error in place; it is rethrown as is.
+      const failure = output.error.cause;
+      markProviderAdapterError(withSendEvidence(failure, record));
+      throw failure;
+    }
+    return output.value;
+  };
+  const originalStream = adapter.structuredOutputStream;
+  const structuredOutputStream: AnyTextAdapter["structuredOutputStream"] =
+    originalStream === undefined
+      ? undefined
+      : (options) => {
+          const record: ProviderSendRecord = { evidence: undefined };
+          return marked(
+            record,
+            originalStream.call(adapter, {
+              ...options,
+              chatOptions: recordedOptions(options.chatOptions, record),
+            }),
+          );
+        };
+  return new Proxy(adapter, {
+    get: (target, key) => {
+      if (key === "chatStream") {
+        return chatStream;
+      }
+      if (key === "structuredOutput") {
+        return structuredOutput;
+      }
+      if (key === "structuredOutputStream") {
+        return structuredOutputStream;
+      }
+      const value: unknown = Reflect.get(target, key, target);
+      if (typeof value !== "function") {
+        return value;
+      }
+      const bound: unknown = value.bind(target);
+      return bound;
+    },
+  });
+};
+
+/**
+ * A provider SDK client sends each request once. The generation layer
+ * (`withProviderRetryWait`) owns every retry, so each send passes the checks
+ * it makes before a dispatch; an SDK retry would send the same request again
+ * below them. `provider-retry-policy.ts` restates what the SDKs retried, and
+ * `tanstack-ai-models.retries.test.ts` holds every provider to one request
+ * per attempt.
+ */
+const SDK_RETRIES_OFF = { maxRetries: 0 } as const;
+
 type AnthropicAdapterOptions = {
   modelId: string;
   apiKey: string;
@@ -686,11 +900,10 @@ const createExtendedAnthropicAdapter = ({
       features: ["structured_outputs"] as const,
     }),
   ]);
-  return anthropic(
-    modelId,
-    apiKey,
-    anthropicClientOptions(anthropicWorkspaceId),
-  );
+  return anthropic(modelId, apiKey, {
+    ...anthropicClientOptions(anthropicWorkspaceId),
+    ...SDK_RETRIES_OFF,
+  });
 };
 
 const createExtendedOpenAIAdapter = (
@@ -703,7 +916,7 @@ const createExtendedOpenAIAdapter = (
       features: ["structured_outputs"] as const,
     }),
   ]);
-  return openai(modelId, apiKey);
+  return openai(modelId, apiKey, SDK_RETRIES_OFF);
 };
 
 type OpenRouterAdapterOptions = { modelId: string } & (
@@ -825,6 +1038,20 @@ const withInlineImages = (messages: ModelMessage[]): ModelMessage[] =>
 // The AWS SDK's default Node HTTP/2 transport closes Converse streams early in Bun.
 class BunBedrockTextAdapter extends BedrockConverseTextAdapter<never> {
   private readonly requestHandler = new FetchHttpHandler();
+
+  // One attempt per request, as `SDK_RETRIES_OFF` asks of the other
+  // clients: AWS standard mode makes three, and an explicit `maxAttempts`
+  // also outranks `AWS_MAX_ATTEMPTS`.
+  protected override buildClientConfig(
+    resolved: ResolvedBedrockAuth,
+    region: string,
+    endpoint: string | undefined,
+  ) {
+    return {
+      ...super.buildClientConfig(resolved, region, endpoint),
+      maxAttempts: 1,
+    };
+  }
 
   protected override async getClient() {
     const client = await super.getClient();
@@ -975,7 +1202,10 @@ export const createTanStackTextAdapterFactory = (
   const factory = createProviderTextAdapterFactory({ ...options, provider });
   return (modelId) =>
     withProviderStreamContract(
-      withProviderImageInput(factory(modelId), provider),
+      withProviderImageInput(
+        withProviderFailureOrigin(factory(modelId)),
+        provider,
+      ),
       stopReasons,
     );
 };

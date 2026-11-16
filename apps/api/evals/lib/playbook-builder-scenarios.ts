@@ -8,6 +8,11 @@
  * an offer there means the model stopped instead of acting or asking.
  */
 
+import {
+  ASK_USER_SELECTION,
+  type AskUserSelection,
+} from "@stll/api-contract/chat-ask-user";
+
 import type { RegistryReadToolDataByName } from "@/api/handlers/chat/tools/registry-adapter/run-registry-tool";
 import { SPAWN_SUBAGENTS_TOOL_NAME } from "@/api/handlers/chat/tools/subagent-tool-shared";
 import { attachmentText } from "@/api/handlers/chat/upload-files";
@@ -57,8 +62,13 @@ export type AskedQuestion = {
   question: string;
   reason: string;
   options: readonly string[];
+  selection: AskUserSelection;
   default: string | undefined;
 };
+
+/** The script's reply: its own words, or the options it ticks on a
+ *  multiple-choice question. */
+type ScriptedAnswer = string | readonly string[];
 
 /**
  * One call a run made, in order. `questions` is set on an `ask-user` call.
@@ -108,7 +118,10 @@ export type BuilderScenario = {
    */
   pickedDocuments: readonly FixtureDocument[];
   /** The script's answer, given the calls the run made before asking. */
-  answer: (question: AskedQuestion, history: readonly BuilderEvent[]) => string;
+  answer: (
+    question: AskedQuestion,
+    history: readonly BuilderEvent[],
+  ) => ScriptedAnswer;
   check: (evidence: BuilderEvidence) => string[];
 };
 
@@ -399,6 +412,46 @@ const answerByTopic =
 const questionText = ({ question, reason, options }: AskedQuestion) =>
   [question, reason, ...options].join(" ");
 
+const isMultipleChoice = ({ selection }: AskedQuestion) =>
+  selection === ASK_USER_SELECTION.multiple;
+
+/**
+ * An option standing for every other one. The card's Select all does that
+ * job, so a matters or documents question offers none.
+ */
+const ALL_OPTION = /\b(?:all|every|both)\b|\bvše|\bvšechn|\bkaždý/iu;
+
+/**
+ * The matters and documents questions are multiple choice, without an
+ * option for all of them; `named` are the markers of real options.
+ */
+const selectionDefects = ({
+  question,
+  subject,
+  named,
+}: {
+  question: AskedQuestion;
+  subject: "matters" | "documents";
+  named: readonly string[];
+}): string[] => {
+  const defects: string[] = [];
+  if (!isMultipleChoice(question)) {
+    defects.push(`asked which ${subject} as a single-choice question`);
+  }
+  if (
+    question.options.some((option) => {
+      let rest = option;
+      for (const marker of named) {
+        rest = rest.replaceAll(marker, "");
+      }
+      return ALL_OPTION.test(rest);
+    })
+  ) {
+    defects.push(`offered an option for all ${subject}`);
+  }
+  return defects;
+};
+
 const askedQuestions = (events: readonly BuilderEvent[]) =>
   events.flatMap(({ questions }) => questions);
 
@@ -412,7 +465,12 @@ const indexOfFirst = (
 
 const isSave = ({ name }: BuilderEvent) => name === SAVE_PLAYBOOK;
 
-/** Positions a save call carries; the skill saves one per call. */
+/**
+ * Positions one save after the first may carry. The skill states the same cap,
+ * and a test holds the two together.
+ */
+export const MAX_POSITIONS_PER_LATER_SAVE = 5;
+
 const positionCount = (input: unknown): number => {
   if (typeof input !== "object" || input === null || !("positions" in input)) {
     return 0;
@@ -486,9 +544,19 @@ const mattersQuestionDefects = (events: readonly BuilderEvent[]): string[] => {
   if (listed > asked) {
     defects.push("asked which matters before listing them");
   }
-  const options = askedQuestions(events.slice(asked, asked + 1))
-    .filter(isMattersQuestion)
-    .flatMap((question) => question.options);
+  const mattersQuestions = askedQuestions(
+    events.slice(asked, asked + 1),
+  ).filter(isMattersQuestion);
+  defects.push(
+    ...mattersQuestions.flatMap((question) =>
+      selectionDefects({
+        question,
+        subject: "matters",
+        named: MATTERS.map(({ name }) => name),
+      }),
+    ),
+  );
+  const options = mattersQuestions.flatMap((question) => question.options);
   const unoffered = MATTERS.filter(
     ({ name }) => !options.some((option) => option.includes(name)),
   );
@@ -643,7 +711,7 @@ const savesInsideScripts = (events: readonly BuilderEvent[]): string[] =>
 /**
  * Defects of the calls every scenario shares (the saved text and sources are
  * scored beside these in `scoreScenario`): one playbook, enough positions, no
- * resends,
+ * resends, a first save of one position and later saves within the cap,
  * no matter read or script refused, no save written inside a script, no work
  * handed to subagents, no search for starter playbooks, side options that
  * each name one role, and on the chat surface no read written before its
@@ -690,10 +758,20 @@ const commonDefects = ({
   if (resent.length > 0) {
     defects.push(`resent unchanged positions: ${resent.join(", ")}`);
   }
-  for (const save of events.filter(isSave)) {
-    const count = positionCount(save.input);
-    if (count > 1) {
-      defects.push(`saved ${String(count)} positions in one call`);
+  // A refused save stored nothing, so the first save is the first accepted one.
+  const [first, ...later] = events
+    .filter((event) => isSave(event) && event.error === null)
+    .map(({ input }) => positionCount(input));
+  if (first !== undefined && first !== 1) {
+    defects.push(
+      `first save carried ${String(first)} positions; the skill starts with one`,
+    );
+  }
+  for (const count of later) {
+    if (count > MAX_POSITIONS_PER_LATER_SAVE) {
+      defects.push(
+        `saved ${String(count)} positions in one call; the cap is ${String(MAX_POSITIONS_PER_LATER_SAVE)}`,
+      );
     }
   }
   return defects;
@@ -873,15 +951,47 @@ const isCandidatesQuestion = (question: AskedQuestion) =>
   !isMattersQuestion(question) &&
   CANDIDATE_MARKERS.some((marker) => questionText(question).includes(marker));
 
-/** Picks the two executed agreements from the candidates offered. */
-const pickConfirmedCandidates = (question: AskedQuestion): string => {
+/**
+ * Picks the two executed agreements from the candidates offered: ticked on a
+ * multiple-choice question, typed out otherwise.
+ */
+const pickConfirmedCandidates = (question: AskedQuestion): ScriptedAnswer => {
   const picked = question.options.filter((option) =>
     CONFIRMED_MARKERS.some((marker) => option.includes(marker)),
   );
-  return picked.length > 0
-    ? picked.join(", ")
-    : "Use the Keller GmbH and Brandt AG agreements; the Vogel one is only a draft.";
+  if (picked.length === 0) {
+    return "Use the Keller GmbH and Brandt AG agreements; the Vogel one is only a draft.";
+  }
+  return isMultipleChoice(question) ? picked : picked.join(", ");
 };
+
+/** The documents question asked first: multiple choice, no "all" option. */
+const candidatesSelectionDefects = (
+  events: readonly BuilderEvent[],
+): string[] => {
+  const question = askedQuestions(events).find(isCandidatesQuestion);
+  return question === undefined
+    ? []
+    : selectionDefects({
+        question,
+        subject: "documents",
+        named: CANDIDATE_MARKERS,
+      });
+};
+
+/** Ticks the supply matter when the matters question is multiple choice. */
+const withSupplyMatterTicked =
+  (answer: (question: AskedQuestion) => string) =>
+  (question: AskedQuestion): ScriptedAnswer => {
+    const words = answer(question);
+    if (!isMattersQuestion(question) || !isMultipleChoice(question)) {
+      return words;
+    }
+    const ticked = question.options.filter((option) =>
+      option.includes(SUPPLY_MATTER.name),
+    );
+    return ticked.length > 0 ? ticked : words;
+  };
 
 /**
  * The candidates were offered before any read, only the picked documents
@@ -927,14 +1037,16 @@ const liabilityGroundingDefects = (
     : ["no liability position grounded in the contracts' 12-month cap"];
 };
 
-const answerDiscoveryTopic = answerByTopic({
-  contracts: `Yes, please look for them in the "${SUPPLY_MATTER.name}" matter.`,
-  language: "English.",
-  law: "German law.",
-  matters: `The "${SUPPLY_MATTER.name}" matter.`,
-  side: "We are the customer.",
-  type: "IT services agreements with software suppliers.",
-});
+const answerDiscoveryTopic = withSupplyMatterTicked(
+  answerByTopic({
+    contracts: `Yes, please look for them in the "${SUPPLY_MATTER.name}" matter.`,
+    language: "English.",
+    law: "German law.",
+    matters: `The "${SUPPLY_MATTER.name}" matter.`,
+    side: "We are the customer.",
+    type: "IT services agreements with software suppliers.",
+  }),
+);
 
 const discovery: BuilderScenario = {
   id: "discovery",
@@ -964,6 +1076,7 @@ const discovery: BuilderScenario = {
     defects.push(
       ...mattersQuestionDefects(events),
       ...namedMatterDefects(events),
+      ...candidatesSelectionDefects(events),
       ...confirmedReadDefects(events),
       ...liabilityGroundingDefects(playbooks),
     );
@@ -971,14 +1084,16 @@ const discovery: BuilderScenario = {
   },
 };
 
-const answerContractsLaterTopic = answerByTopic({
-  contracts: "Not now. Start from defaults and the interview.",
-  language: "English.",
-  law: "German law.",
-  matters: `The "${SUPPLY_MATTER.name}" matter.`,
-  side: "We are the customer.",
-  type: "IT services agreements with software suppliers.",
-});
+const answerContractsLaterTopic = withSupplyMatterTicked(
+  answerByTopic({
+    contracts: "Not now. Start from defaults and the interview.",
+    language: "English.",
+    law: "German law.",
+    matters: `The "${SUPPLY_MATTER.name}" matter.`,
+    side: "We are the customer.",
+    type: "IT services agreements with software suppliers.",
+  }),
+);
 
 /**
  * The user declines contracts, lets the first positions land, then asks for
@@ -1028,6 +1143,7 @@ const contractsLater: BuilderScenario = {
     defects.push(
       ...mattersQuestionDefects(later),
       ...namedMatterDefects(later),
+      ...candidatesSelectionDefects(later),
       ...confirmedReadDefects(later),
       ...liabilityGroundingDefects(playbooks),
     );
@@ -1066,14 +1182,16 @@ const isGroundingQuestion = (question: AskedQuestion) => {
   );
 };
 
-const answerGroundingLaterTopic = answerByTopic({
-  contracts: "Start without them for now.",
-  language: "English.",
-  law: "German law.",
-  matters: `The "${SUPPLY_MATTER.name}" matter.`,
-  side: "We are the customer.",
-  type: "IT services agreements with software suppliers.",
-});
+const answerGroundingLaterTopic = withSupplyMatterTicked(
+  answerByTopic({
+    contracts: "Start without them for now.",
+    language: "English.",
+    law: "German law.",
+    matters: `The "${SUPPLY_MATTER.name}" matter.`,
+    side: "We are the customer.",
+    type: "IT services agreements with software suppliers.",
+  }),
+);
 
 /**
  * The user starts without contracts and says yes only when the model offers
@@ -1124,6 +1242,7 @@ const groundingLater: BuilderScenario = {
       ...mattersQuestionDefects(later),
       ...candidatesQuestionDefects(later),
       ...namedMatterDefects(later),
+      ...candidatesSelectionDefects(later),
       ...confirmedReadDefects(later),
       ...liabilityGroundingDefects(playbooks),
     );

@@ -1,5 +1,3 @@
-import type { ComponentProps } from "react";
-
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -8,10 +6,6 @@ import {
   resolveChatComposerAction,
 } from "@stll/chat/composer";
 import { Button } from "@stll/ui/button";
-import {
-  COMPOSER_CONTROL_BUTTON_SIZE,
-  COMPOSER_SEND_BUTTON_CLASS,
-} from "@stll/ui/composer";
 import { ArrowUpIcon, RotateCcwIcon, SquareIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
@@ -19,11 +13,12 @@ import { guideAnchor } from "@/features/guides/guide-anchor";
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 
 type ChatComposerActionButtonProps = ChatComposerActionState & {
+  /** A stop was asked for and the turn has not ended yet: the button says
+   *  so and takes no second click. */
+  stopping?: boolean;
   className?: string;
   guideAnchorsEnabled?: boolean;
   iconClassName?: string;
-  size?: ComponentProps<typeof Button>["size"];
-  variant?: ComponentProps<typeof Button>["variant"];
 };
 
 export const ChatComposerActionButton = (
@@ -36,7 +31,9 @@ export const ChatComposerActionButton = (
       case "send":
         return t("chat.sendPrompt");
       case "stop":
-        return t("chat.stopResponse");
+        return props.stopping === true
+          ? t("chat.stopping")
+          : t("chat.stopResponse");
       case "retry":
         return t("common.retry");
       default:
@@ -44,7 +41,10 @@ export const ChatComposerActionButton = (
         return panic(`Unhandled mode: ${String(mode)}`);
     }
   })();
-  const enabled = mode !== "send" || props.canSend;
+  const enabled =
+    mode === "stop"
+      ? props.stopping !== true
+      : mode !== "send" || props.canSend;
 
   const handleClick = () => {
     switch (mode) {
@@ -63,12 +63,7 @@ export const ChatComposerActionButton = (
     }
   };
 
-  const {
-    className,
-    iconClassName,
-    size = COMPOSER_CONTROL_BUTTON_SIZE,
-    variant,
-  } = props;
+  const { className, iconClassName } = props;
 
   return (
     <Button
@@ -76,26 +71,15 @@ export const ChatComposerActionButton = (
         GUIDE_ANCHORS.chatSend,
         props.guideAnchorsEnabled ?? false,
       )}
+      aria-busy={mode === "stop" && props.stopping === true ? true : undefined}
       aria-label={label}
-      // Canonical composer send/stop/retry look, baked in so every chat
-      // surface renders the identical round, foreground-filled button
-      // without repeating the styling at each call site. Callers pass
-      // only state + handlers; `className` remains available for
-      // positioning overrides and wins via twMerge if it must.
-      className={cn(
-        // `size-7` pins the circle to the ComposerPlusMenu trigger's
-        // diameter at every breakpoint (`icon-sm` alone is 32px below
-        // `sm`), so a composer row's two round ends always match.
-        COMPOSER_SEND_BUTTON_CLASS,
-        className,
-        !enabled && "opacity-50",
-      )}
+      className={cn(className, !enabled && "opacity-50")}
       disabled={!enabled}
       onClick={handleClick}
-      size={size}
+      size="icon-round"
       tooltip={false}
       type="button"
-      variant={variant}
+      variant="composer"
     >
       <span
         aria-hidden="true"

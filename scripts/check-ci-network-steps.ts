@@ -583,12 +583,55 @@ type RunContext = {
   shell?: ShellContext;
 };
 
+// `bun run <name>` runs a script from the working directory's package.json.
+const PACKAGE_SCRIPT_RUN = /\bbun\s+(?:--\S+\s+)*run\s+(?<name>[\w:.-]+)/u;
+
+/**
+ * Fetches in the package.json scripts a step runs with `bun run`, retried
+ * when the step runs them through retry.sh. Without this, a step that runs
+ * an install script by name escapes both the retry and the timeout rule.
+ */
+const packageScriptFetches = (
+  repo: Repository,
+  run: string,
+  { cwd = ".", declared, shell = {} }: RunContext,
+): NetworkFetch[] => {
+  const file = path.posix.join(cwd, "package.json");
+  const text = repo.read(file);
+  if (text === null) {
+    return [];
+  }
+  const parsed: unknown = JSON.parse(text);
+  const scripts =
+    record(parsed) && record(parsed["scripts"]) ? parsed["scripts"] : {};
+  return logicalLines(run).flatMap((line) =>
+    segments(line).flatMap((segment) => {
+      const name = PACKAGE_SCRIPT_RUN.exec(segment)?.groups?.["name"];
+      if (name === undefined) {
+        return [];
+      }
+      const command = scripts[name];
+      if (typeof command !== "string") {
+        return [];
+      }
+      const wrapped = startsWithRetry(segment);
+      return scanShell(command, `${file}#${name}`, declared, shell).map(
+        (fetch) => ({ ...fetch, wrapped: fetch.wrapped || wrapped }),
+      );
+    }),
+  );
+};
+
 export const runFetches = (
   repo: Repository,
   run: string,
-  { actionDir, label, cwd = ".", declared, shell = {} }: RunContext,
+  context: RunContext,
 ): NetworkFetch[] => {
-  const fetches = scanShell(run, label, declared, shell);
+  const { actionDir, label, cwd = ".", declared, shell = {} } = context;
+  const fetches = [
+    ...scanShell(run, label, declared, shell),
+    ...packageScriptFetches(repo, run, context),
+  ];
   const visited = new Set<string>();
   const follow = (
     source: string,
@@ -804,6 +847,19 @@ export const networkViolations = (
         rawJob["steps"],
       ).entries()) {
         const name = stepName(step, index);
+        const uses = step["uses"];
+        const withInputs = record(step["with"]) ? step["with"] : {};
+        if (
+          typeof uses === "string" &&
+          uses.startsWith("actions/checkout@") &&
+          withInputs["filter"] === "blob:none"
+        ) {
+          add({
+            id: violationId(file, job, name, "retry"),
+            rule: "retry",
+            message: `${file}: ${job}: ${name}: partial-clone actions/checkout must use stella/.github/actions/partial-clone-checkout`,
+          });
+        }
         const fetches: NetworkFetch[] = [];
         const run = step["run"];
         if (typeof run === "string") {
@@ -826,7 +882,6 @@ export const networkViolations = (
             });
           }
         }
-        const uses = step["uses"];
         const action = typeof uses === "string" ? localAction(uses) : null;
         if (action !== null) {
           fetches.push(...summarizeAction(action, new Set()).fetches);

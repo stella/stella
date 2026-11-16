@@ -12,7 +12,11 @@ import { fileURLToPath } from "node:url";
 
 import { isDocumentAst } from "@stll/legal-ast/document-ast";
 
-import { structureFidelityIn } from "@/api/lib/legal-search/parsers/structure-fidelity";
+import { plKisDocumentRules } from "@/api/handlers/case-law/ingestion/adapters/pl-kis";
+import {
+  type StructureFidelityDocument,
+  structureFidelityIn,
+} from "@/api/lib/legal-search/parsers/structure-fidelity";
 import { isRecord } from "@/api/lib/type-guards";
 import type { StructureFidelityCensus } from "@/api/tests/helpers/structure-fidelity-baseline";
 
@@ -38,10 +42,31 @@ const decisionOf = (output: unknown): Record<string, unknown> | null => {
   return isRecord(document) ? document : output;
 };
 
+/**
+ * What a source's documents are, where a source publishes more than
+ * decisions; every other source's documents are decisions.
+ */
+const DOCUMENT_OF: Readonly<
+  Partial<
+    Record<
+      string,
+      (decision: Record<string, unknown>) => StructureFidelityDocument
+    >
+  >
+> = {
+  "pl-kis": ({ decisionType }) =>
+    plKisDocumentRules(
+      typeof decisionType === "string" ? decisionType : undefined,
+    )
+      ? "decision"
+      : "other",
+};
+
 const findingsOf = (
+  adapter: string,
   decision: Record<string, unknown>,
 ): StructureFidelityCensus[string][string] | null => {
-  const { documentAst, fulltext } = decision;
+  const { documentAst, fulltext, language } = decision;
   if (!isDocumentAst(documentAst)) {
     return typeof fulltext === "string" && fulltext.trim().length > 0
       ? [
@@ -53,7 +78,11 @@ const findingsOf = (
         ]
       : null;
   }
-  return structureFidelityIn(documentAst.blocks);
+  return structureFidelityIn(
+    documentAst.blocks,
+    typeof language === "string" ? language : undefined,
+    DOCUMENT_OF[adapter]?.(decision) ?? "decision",
+  );
 };
 
 export const collectStructureFidelityCensus =
@@ -64,7 +93,8 @@ export const collectStructureFidelityCensus =
     for (const [adapter, fixtures] of Object.entries(outputs)) {
       for (const [fixture, output] of Object.entries(fixtures)) {
         const decision = decisionOf(output);
-        const findings = decision === null ? null : findingsOf(decision);
+        const findings =
+          decision === null ? null : findingsOf(adapter, decision);
         if (findings === null) {
           continue;
         }

@@ -10,9 +10,13 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { APIError } from "@/lib/errors/api";
 import { parseProviderDiagnostic } from "@/lib/errors/provider-diagnostic";
 
+import { localRunLimitResetsAtOf } from "./chat-local-run-limit";
+
 type ObserveChatProviderDiagnosticOptions = {
   scope: HandlerExceptionScope;
   onDiagnostic: (diagnostic: ProviderDiagnostic) => void;
+  /** When the usage limit of the harness that ran a local turn resets. */
+  onLocalRunLimit: (resetsAt: string) => void;
 };
 
 const CLASSIFIED_RUN_ERROR_KINDS: ReadonlySet<string> = new Set(
@@ -36,15 +40,24 @@ export const isClassifiedRunError = (error: Error): boolean => {
 };
 
 /**
- * The SDK reduces RUN_ERROR to Error(message); retain Stella's validated envelope before yielding.
+ * The SDK reduces RUN_ERROR to Error(message); retain Stella's validated
+ * envelope and a local run's limit reset before yielding.
  * @yields Every original stream event, unchanged.
  */
 export const observeChatProviderDiagnostic = async function* (
   source: AsyncIterable<StreamChunk>,
-  { scope, onDiagnostic }: ObserveChatProviderDiagnosticOptions,
+  {
+    scope,
+    onDiagnostic,
+    onLocalRunLimit,
+  }: ObserveChatProviderDiagnosticOptions,
 ): AsyncIterable<StreamChunk> {
   for await (const chunk of source) {
     if (chunk.type === EventType.RUN_ERROR) {
+      const resetsAt = localRunLimitResetsAtOf(chunk.metadata);
+      if (resetsAt !== null) {
+        onLocalRunLimit(resetsAt);
+      }
       const diagnostic: unknown = chunk.metadata?.["providerDiagnostic"];
       if (diagnostic !== undefined) {
         const parsed = parseProviderDiagnostic(diagnostic);

@@ -13,6 +13,7 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from "@stll/ui/popover";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -196,16 +197,15 @@ export const FacetOptions = ({
                 type="radio"
                 value={item.value}
               />
-              <BidiText
-                as="span"
+              <TruncatedText
                 className={cn(
-                  "min-w-0 flex-1 truncate",
+                  "flex-1",
                   checked ? "text-foreground font-medium" : "text-foreground",
                 )}
-                title={item.label}
+                render={<BidiText as="span" />}
               >
                 {item.label}
-              </BidiText>
+              </TruncatedText>
               {item.count !== null && (
                 <bdi className="text-muted-foreground text-2xs shrink-0 tabular-nums">
                   {formatFacetCount(item, format.number)}

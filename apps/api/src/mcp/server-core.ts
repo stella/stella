@@ -57,6 +57,7 @@ import { chargeMcpReadBytes } from "@/api/lib/rate-limit/mcp-read-fence";
 import { isEventStreamResponse, withSseHeartbeat } from "@/api/lib/sse";
 import type { SseStreamBinding } from "@/api/lib/sse";
 import { mcpActionPeriodIdentity } from "@/api/mcp/action-admission-identity";
+import { recordAgentRunAppCall } from "@/api/mcp/agent-run-app-calls";
 import {
   resolveMachineApiKeySession,
   revalidateMachineApiKeySession,
@@ -1203,7 +1204,7 @@ export const createMcpHttpRequestHandler = ({
         toolName === MCP_WEB_HANDOFF_TOOL || mode === "anonymized"
           ? result
           : await decorateToolResult(result, context);
-      return await boundMcpToolResult({
+      const answered = await boundMcpToolResult({
         result: decoratedResult,
         requestId: mcpReq.id,
         definition,
@@ -1213,6 +1214,16 @@ export const createMcpHttpRequestHandler = ({
         toolName,
         chargeReadBytes,
       });
+      // What the run is answered, once its limits passed, and before the
+      // answer leaves, so a chat turn reading the run finds it. A read the
+      // limits refused answers an error, which keeps nothing.
+      await recordAgentRunAppCall({
+        context,
+        toolName,
+        args: toolRequest.params.arguments ?? {},
+        result: answered,
+      });
+      return answered;
     };
     let consumesServices = definition.consumesServices;
     if (

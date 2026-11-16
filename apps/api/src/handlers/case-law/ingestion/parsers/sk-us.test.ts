@@ -65,6 +65,22 @@ describe("the document the court renders as markup", () => {
     expect(new Set(anchors).size).toBe(anchors.length);
   });
 
+  test("a docket in the title's type that wraps after the formula is no second title", () => {
+    const { documentAst } = parse(
+      '<html><body><span style="font-size: 22px">NÁLEZ<br/><br/>Ústavného súdu Slovenskej republiky<br/>' +
+        "V mene Slovenskej republiky<br/>PL. ÚS<br/>10/2014-78</span><br/>" +
+        '<span style="font-size: 12px">rozhodol:<br/>Návrhu vyhovuje.<br/>Odôvodnenie:<br/>Prvý dôvod.</span></body></html>',
+    );
+    expect(
+      documentAst.blocks
+        .filter(
+          (block) =>
+            block.type === "heading" && block.role === "decision-title",
+        )
+        .map((block) => block.plainText),
+    ).toEqual(["NÁLEZ Ústavného súdu Slovenskej republiky"]);
+  });
+
   test("reads its parts from the words the court prints, not from tags", async () => {
     const payload = await readGzipJson(
       new URL("sk-us-content.json.gz", FIXTURES),

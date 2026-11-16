@@ -27,15 +27,18 @@ import { Label } from "@stll/ui/label";
 import { MatterIcon } from "@stll/ui/matter-icon";
 import { ReviewDiffText } from "@stll/ui/review-diff-text";
 import { diffWords } from "@stll/ui/review-word-diff";
+import { ScrollArea } from "@stll/ui/scroll-area";
 import { Switch } from "@stll/ui/switch";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/tabs";
 import { Textarea } from "@stll/ui/textarea";
 import { TimeField, TimeFieldGroup } from "@stll/ui/time-field";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { detectDesktopPlatform, formatShortcut } from "../shared/shortcut-keys";
 import type { ShortcutKeys } from "../shared/shortcut-keys";
 import {
   appRows,
+  hasWindowTitles,
   titleRows,
   wallClockTime,
   withMovedEdge,
@@ -44,6 +47,7 @@ import type {
   ActivitySuggestion,
   EvidenceRow,
   RangeEdge,
+  RangeMatterBasis,
 } from "./activity-calendar-logic";
 import { calendarDate } from "./activity-logic";
 import type { ActivityDaySnapshot } from "./activity-types";
@@ -108,6 +112,9 @@ type ActivitySuggestionCardProps = {
   editable: boolean;
   timeLabel: string;
   sourceAppVisuals: ActivityDaySnapshot["sourceAppVisuals"];
+  /** Why no window titles were recorded, with the action that changes it;
+   * `null` when no action would. */
+  titlesNotice: React.ReactElement | null;
   assist: DraftAssistView;
   /** The user's earlier entries the current draft followed. */
   earlierEntries: CardDraft["earlierEntries"];
@@ -169,6 +176,7 @@ export const ActivitySuggestionCard = ({
   editable,
   timeLabel,
   sourceAppVisuals,
+  titlesNotice,
   assist,
   earlierEntries,
   flags,
@@ -191,9 +199,24 @@ export const ActivitySuggestionCard = ({
   const locale = useLocale();
   const card = useRef<HTMLElement>(null);
   // The card is keyed by suggestion: each one takes focus as it opens, so a
-  // day can be triaged from the keyboard.
+  // day can be triaged from the keyboard, and scrolls wholly into view, so
+  // its actions show however low on the day it opens. While it stays on
+  // screen it keeps them in view as it grows (a draft arrives, details
+  // open); a card scrolled away is left there.
   useEffect(() => {
-    card.current?.focus();
+    // The effect runs after the card's section has mounted.
+    const element =
+      card.current ?? panic("Suggestion card mounted without its element");
+    element.focus({ preventScroll: true });
+    element.scrollIntoView({ block: "nearest" });
+    const observer = new ResizeObserver(() => {
+      const { bottom, top } = element.getBoundingClientRect();
+      if (bottom > 0 && top < window.innerHeight) {
+        element.scrollIntoView({ block: "nearest" });
+      }
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
   }, []);
   const acceptable =
     editable &&
@@ -254,18 +277,20 @@ export const ActivitySuggestionCard = ({
   return (
     <section
       aria-label={title}
-      className="bg-popover text-popover-foreground ring-border flex flex-col gap-3 rounded-xl p-3.5 text-sm shadow-lg ring-1 outline-none"
+      // At most the window's height, less the calendar's sticky header: the
+      // description and evidence scroll inside, so the actions stay in view.
+      className="bg-popover text-popover-foreground ring-border flex max-h-[calc(100dvh-4rem)] scroll-mt-12 scroll-mb-2 flex-col rounded-xl text-sm shadow-lg ring-1 outline-none"
       data-activity-suggestion-card={suggestion.id}
       ref={card}
       tabIndex={-1}
     >
-      <header className="flex items-start gap-2">
+      <header className="flex items-start gap-2 px-3.5 pt-3.5 pb-3">
         <div className="min-w-0 flex-1">
           <h2 className="flex min-w-0 items-center gap-2 font-semibold">
             {edit.matter === null ? null : (
               <MatterIcon matter={edit.matter} className="size-4 shrink-0" />
             )}
-            <bdi className="truncate">{title}</bdi>
+            <TruncatedText render={<bdi />}>{title}</TruncatedText>
           </h2>
           <p className="text-muted-foreground text-xs tabular-nums">
             {timeLabel}
@@ -280,104 +305,140 @@ export const ActivitySuggestionCard = ({
           <XIcon aria-hidden="true" />
         </Button>
       </header>
-      {times.type === "selected" ? (
-        <SelectedRangeFields
-          durationMs={suggestion.durationMs}
-          editable={editable}
-          times={times}
-        />
-      ) : null}
-      {suggestion.segments.length === 0 ? (
-        <p className="text-muted-foreground text-xs">{t("rangeEmpty")}</p>
-      ) : null}
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-muted-foreground text-xs">
-          {t("entryMatter")}
-        </span>
-        <MatterPicker
-          candidates={candidates}
-          disabled={!editable}
-          label={edit.matter?.name ?? t("chooseMatter")}
-          // Codes follow the matter's billing format, so a new matter
-          // drops them until it is drafted again.
-          onChoose={(matter) => onEdit({ matter, classification: null })}
-        />
-      </div>
-      <DraftAssistStrip
-        view={assist}
-        onDraft={onDraft}
-        onRefine={onRefine}
-        onAcceptProposal={onAcceptProposal}
-        onDismissProposal={onDismissProposal}
-        onUndo={onUndo}
-        onRestoreTemplate={onRestoreTemplate}
-        onAllow={() => {
-          onAllow();
-          // The consent buttons go away; keep the card's shortcuts in reach.
-          card.current?.focus();
-        }}
-      />
-      <Textarea
-        aria-label={t("entryNarrative")}
-        className="min-h-16 resize-none"
-        data-activity-narrative={writtenPhase(edit.written)}
-        disabled={!editable}
-        maxLength={DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH}
-        onChange={(event) => onEdit({ narrative: event.target.value })}
-        rows={2}
-        value={edit.narrative}
-      />
-      <DraftClassification classification={edit.classification} />
-      <GuidelineFlags
-        flags={flags}
-        onSplit={
-          editable && structure?.type === "split" ? onAcceptStructure : null
-        }
-      />
-      {structure === null ? null : (
-        <StructureProposal
-          editable={editable}
-          onAccept={onAcceptStructure}
-          structure={structure}
-        />
-      )}
-      <EarlierEntries entries={earlierEntries} />
-      <div className="flex flex-wrap items-center gap-2">
-        <Label className="gap-2 text-xs">
-          <Switch
-            checked={edit.billable}
-            disabled={!editable}
-            onCheckedChange={(billable) => onEdit({ billable })}
+      <ScrollArea
+        axis="vertical"
+        className="min-h-0 flex-1"
+        data-activity-card-body=""
+        scrollFade
+      >
+        <div className="flex flex-col gap-3 px-3.5 pb-3">
+          {times.type === "selected" ? (
+            <SelectedRangeFields
+              durationMs={suggestion.durationMs}
+              editable={editable}
+              times={times}
+            />
+          ) : null}
+          {suggestion.segments.length === 0 ? (
+            <p className="text-muted-foreground text-xs">{t("rangeEmpty")}</p>
+          ) : null}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-muted-foreground text-xs">
+              {t("entryMatter")}
+            </span>
+            <MatterPicker
+              candidates={candidates}
+              disabled={!editable}
+              label={edit.matter?.name ?? t("chooseMatter")}
+              // Codes follow the matter's billing format, so a new matter
+              // drops them until it is drafted again. A card that started on
+              // no matter starts non-billable; the first matter chosen makes
+              // it billable, as every matter's card starts.
+              onChoose={(matter) =>
+                onEdit({
+                  matter,
+                  classification: null,
+                  ...(edit.matter === null ? { billable: true } : {}),
+                })
+              }
+            />
+          </div>
+          {edit.matter === null ? (
+            <RangeMatterNote suggestion={suggestion} />
+          ) : null}
+          <DraftAssistStrip
+            view={assist}
+            onDraft={onDraft}
+            onRefine={onRefine}
+            onAcceptProposal={onAcceptProposal}
+            onDismissProposal={onDismissProposal}
+            onUndo={onUndo}
+            onRestoreTemplate={onRestoreTemplate}
+            onAllow={() => {
+              onAllow();
+              // The consent buttons go away; keep the card's shortcuts in reach.
+              card.current?.focus();
+            }}
           />
-          {t("entryBillable")}
-        </Label>
-        <CopyButton
-          className="ms-auto"
-          copiedLabel={t("copied")}
-          disabled={edit.narrative.trim().length === 0}
-          iconClassName="size-4"
-          label={t("copySummary")}
-          onCopy={onCopy}
-          size="sm"
-          variant="ghost"
-        />
-      </div>
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        <Button
-          disabled={!editable}
-          onClick={onReject}
-          size="sm"
-          variant="ghost"
-        >
-          {t("reject")}
-          <ShortcutHint label={shortcutLabel(REJECT_KEYS)} />
-        </Button>
-        <Button disabled={!acceptable} onClick={onAccept} size="sm">
-          {t("accept")}
-          <ShortcutHint label={shortcutLabel(ACCEPT_KEYS)} />
-        </Button>
-      </div>
-      <Evidence suggestion={suggestion} sourceAppVisuals={sourceAppVisuals} />
+          {titlesNotice !== null && !hasWindowTitles(suggestion) ? (
+            // The description falls back to app names without titles; say
+            // why next to it, where the gap shows.
+            <div className="text-xs" data-activity-titles-reason="">
+              {titlesNotice}
+            </div>
+          ) : null}
+          <Textarea
+            aria-label={t("entryNarrative")}
+            className="min-h-16 shrink-0 resize-none"
+            data-activity-narrative={writtenPhase(edit.written)}
+            disabled={!editable}
+            maxLength={DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH}
+            onChange={(event) => onEdit({ narrative: event.target.value })}
+            rows={2}
+            value={edit.narrative}
+          />
+          <DraftClassification classification={edit.classification} />
+          <GuidelineFlags
+            flags={flags}
+            onSplit={
+              editable && structure?.type === "split" ? onAcceptStructure : null
+            }
+          />
+          {structure === null ? null : (
+            <StructureProposal
+              editable={editable}
+              onAccept={onAcceptStructure}
+              structure={structure}
+            />
+          )}
+          <EarlierEntries entries={earlierEntries} />
+          <Evidence
+            matterId={edit.matter?.id ?? null}
+            sourceAppVisuals={sourceAppVisuals}
+            suggestion={suggestion}
+          />
+        </div>
+      </ScrollArea>
+      <footer
+        className="border-border flex flex-col gap-2 border-t px-3.5 pt-2.5 pb-3"
+        data-activity-card-actions=""
+      >
+        <div className="flex flex-wrap items-center gap-2">
+          <Label className="gap-2 text-xs">
+            <Switch
+              checked={edit.billable}
+              disabled={!editable}
+              onCheckedChange={(billable) => onEdit({ billable })}
+            />
+            {t("entryBillable")}
+          </Label>
+          <CopyButton
+            className="ms-auto"
+            copiedLabel={t("copied")}
+            disabled={edit.narrative.trim().length === 0}
+            iconClassName="size-4"
+            label={t("copySummary")}
+            onCopy={onCopy}
+            size="sm"
+            variant="ghost"
+          />
+        </div>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <Button
+            disabled={!editable}
+            onClick={onReject}
+            size="sm"
+            variant="ghost"
+          >
+            {t("reject")}
+            <ShortcutHint label={shortcutLabel(REJECT_KEYS)} />
+          </Button>
+          <Button disabled={!acceptable} onClick={onAccept} size="sm">
+            {t("accept")}
+            <ShortcutHint label={shortcutLabel(ACCEPT_KEYS)} />
+          </Button>
+        </div>
+      </footer>
     </section>
   );
 };
@@ -435,6 +496,31 @@ const SelectedRangeFields = ({
         </p>
       )}
     </div>
+  );
+};
+
+const RANGE_MATTER_NOTES = {
+  majority: null,
+  mostlyUnmatched: "rangeMostlyUnmatched",
+  splitBetweenMatters: "rangeSplitBetweenMatters",
+  // The card already says nothing was recorded.
+  nothingRecorded: null,
+} as const satisfies Record<RangeMatterBasis, string | null>;
+
+/** Why a selected range starts on no matter, when activity was recorded in
+ * it. */
+const RangeMatterNote = ({
+  suggestion,
+}: {
+  suggestion: ActivitySuggestion;
+}) => {
+  const t = useTranslations("activity");
+  if (suggestion.type !== "manual") {
+    return null;
+  }
+  const note = RANGE_MATTER_NOTES[suggestion.matterBasis];
+  return note === null ? null : (
+    <p className="text-muted-foreground text-xs text-pretty">{t(note)}</p>
   );
 };
 
@@ -581,38 +667,58 @@ const DraftAssistStrip = ({
         </section>
       );
     case "consent":
-      return (
-        <div
-          className="bg-muted/60 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg px-2.5 py-2 text-xs"
-          data-activity-draft-consent=""
-        >
-          <p className="flex min-w-0 flex-1 basis-56 items-start gap-1.5 text-pretty">
-            <AiActionIcon
-              aria-hidden="true"
-              className="mt-px size-3.5 shrink-0"
-            />
-            {t("aiDraftConsent")}
-          </p>
-          <Button
-            loading={view.pending}
-            onClick={onAllow}
-            size="xs"
-            variant="outline"
-          >
-            {t("aiDraftAllow")}
-          </Button>
-        </div>
-      );
+      return <DraftConsent onAllow={onAllow} pending={view.pending} />;
     default:
       view satisfies never;
       return panic("Unhandled stella AI draft view");
   }
 };
 
+/**
+ * The ask before stella AI drafts anything: one line and Allow, with what a
+ * draft sends a click away. Allow is the same consent whether or not the
+ * details are open.
+ */
+const DraftConsent = ({
+  onAllow,
+  pending,
+}: {
+  onAllow: () => void;
+  pending: boolean;
+}) => {
+  const t = useTranslations("activity");
+  return (
+    <Collapsible
+      className="bg-muted/60 flex flex-col gap-2 rounded-lg px-2.5 py-2 text-xs"
+      data-activity-draft-consent=""
+    >
+      <div className="flex items-center gap-2">
+        <AiActionIcon aria-hidden="true" className="size-3.5 shrink-0" />
+        <p className="min-w-0 flex-1 text-pretty">
+          {t("aiDraftOffer")}{" "}
+          <CollapsibleTrigger render={<Button size="inline" variant="link" />}>
+            {t("aiDraftWhatIsSent")}
+          </CollapsibleTrigger>
+        </p>
+        <Button loading={pending} onClick={onAllow} size="xs" variant="outline">
+          {t("aiDraftAllow")}
+        </Button>
+      </div>
+      <CollapsiblePanel>
+        <p className="text-muted-foreground ps-5.5 text-pretty">
+          {t("aiDraftConsent")}
+        </p>
+      </CollapsiblePanel>
+    </Collapsible>
+  );
+};
+
 const STEER_CHIPS = [
   "aiSteerShorter",
   "aiSteerMoreDetail",
   "aiSteerClientFriendly",
+  // Each catalogue names its own language, as people say it.
+  "aiSteerWriteInLanguage",
 ] as const;
 
 /** An instruction for stella AI to change the draft, with quick chips and the
@@ -623,16 +729,9 @@ const RefineInput = ({
   onRefine: (steer: string, remember: boolean) => void;
 }) => {
   const t = useTranslations("activity");
-  const locale = useLocale();
   const [text, setText] = useState("");
   const [remember, setRemember] = useState(false);
-  const language = new Intl.DisplayNames([locale], { type: "language" }).of(
-    locale,
-  );
-  const chips = [
-    ...STEER_CHIPS.map((key) => t(key)),
-    ...(language === undefined ? [] : [t("aiSteerWriteIn", { language })]),
-  ];
+  const chips = STEER_CHIPS.map((key) => t(key));
   const steer = text.trim();
   return (
     <Form
@@ -871,10 +970,15 @@ const EarlierEntries = ({
   );
 };
 
+/** The recorded time behind a card, by title or by app. A row whose time
+ * went to a matter other than the card's names that matter faintly. */
 const Evidence = ({
+  matterId,
   suggestion,
   sourceAppVisuals,
 }: {
+  /** The card's matter, which its own rows need not repeat. */
+  matterId: string | null;
   suggestion: ActivitySuggestion;
   sourceAppVisuals: ActivityDaySnapshot["sourceAppVisuals"];
 }) => {
@@ -884,19 +988,29 @@ const Evidence = ({
   if (apps.length === 0) {
     return null;
   }
+  // Untitled time alone would only repeat the Apps tab.
+  const titled = hasWindowTitles(suggestion);
   return (
-    <Tabs defaultValue={titles.length > 0 ? "titles" : "apps"}>
+    <Tabs defaultValue={titled ? "titles" : "apps"}>
       <TabsList variant="underline">
-        <TabsTab disabled={titles.length === 0} value="titles">
+        <TabsTab disabled={!titled} value="titles">
           {t("evidenceTitles")}
         </TabsTab>
         <TabsTab value="apps">{t("evidenceApps")}</TabsTab>
       </TabsList>
       <TabsPanel value="titles">
-        <EvidenceRows rows={titles} sourceAppVisuals={sourceAppVisuals} />
+        <EvidenceRows
+          matterId={matterId}
+          rows={titles}
+          sourceAppVisuals={sourceAppVisuals}
+        />
       </TabsPanel>
       <TabsPanel value="apps">
-        <EvidenceRows rows={apps} sourceAppVisuals={sourceAppVisuals} />
+        <EvidenceRows
+          matterId={matterId}
+          rows={apps}
+          sourceAppVisuals={sourceAppVisuals}
+        />
       </TabsPanel>
     </Tabs>
   );
@@ -905,9 +1019,11 @@ const Evidence = ({
 const EVIDENCE_ROW_LIMIT = 8;
 
 const EvidenceRows = ({
+  matterId,
   rows,
   sourceAppVisuals,
 }: {
+  matterId: string | null;
   rows: readonly EvidenceRow[];
   sourceAppVisuals: ActivityDaySnapshot["sourceAppVisuals"];
 }) => {
@@ -922,7 +1038,7 @@ const EvidenceRows = ({
               appIdentifier={row.appIdentifier}
               sourceAppVisuals={sourceAppVisuals}
             />
-            <bdi className="min-w-0 flex-1 truncate">{row.label}</bdi>
+            <EvidenceLabel row={row} />
             <span className="text-muted-foreground shrink-0 tabular-nums">
               {t("durationMinutes", {
                 minutes: Math.max(1, Math.round(row.durationMs / 60_000)),
@@ -930,6 +1046,16 @@ const EvidenceRows = ({
               · {format.number(row.share, { style: "percent" })}
             </span>
           </div>
+          {row.matter === null || row.matter.id === matterId ? null : (
+            // Under the title, past the icon's width and gap.
+            <TruncatedText
+              className="text-foreground-subtle -mt-0.5 ps-6"
+              data-activity-evidence-matter=""
+              render={<bdi />}
+            >
+              {row.matter.name}
+            </TruncatedText>
+          )}
           <div aria-hidden="true" className="bg-muted h-1 rounded-full">
             <div
               className="bg-foreground-muted h-1 rounded-full"
@@ -940,4 +1066,28 @@ const EvidenceRows = ({
       ))}
     </ul>
   );
+};
+
+const EvidenceLabel = ({ row }: { row: EvidenceRow }) => {
+  const t = useTranslations("activity");
+  switch (row.type) {
+    case "named":
+      return (
+        <TruncatedText className="flex-1" render={<bdi />}>
+          {row.label}
+        </TruncatedText>
+      );
+    case "untitled":
+      return (
+        <TruncatedText
+          className="text-muted-foreground flex-1"
+          render={<bdi />}
+        >
+          {t("evidenceUntitled", { app: row.label })}
+        </TruncatedText>
+      );
+    default:
+      row.type satisfies never;
+      return panic("Unhandled evidence row");
+  }
 };

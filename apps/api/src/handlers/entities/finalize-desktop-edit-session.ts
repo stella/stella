@@ -4,15 +4,18 @@ import * as v from "valibot";
 
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import { workspaceAcceptsWrites } from "@stll/api-contract/workspace-status";
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import {
+  cellMetadata,
   desktopEditSessions,
   entities,
   fields,
   workspaces,
 } from "@/api/db/schema";
+import { envBase } from "@/api/env-base";
 import { status } from "@/api/http/status";
 import { captureError, detached } from "@/api/lib/analytics/capture";
 import {
@@ -39,6 +42,10 @@ import {
   hashDesktopEditSessionToken,
 } from "@/api/lib/desktop-edit-sessions";
 import { DESKTOP_EDIT_DOCUMENT_SOURCE } from "@/api/lib/document-source";
+import {
+  CELL_COMPANION_BATCH,
+  planCellCompanions,
+} from "@/api/lib/entity-versions/cell-companions";
 import { computeVersionDiffStats } from "@/api/lib/entity-versions/compute-version-diff";
 import { findDesktopEditableFileForProperty } from "@/api/lib/entity-versions/desktop-edit-session-utils";
 import { CARRIED_FIELD_COLUMNS } from "@/api/lib/entity-versions/field-clone-policy";
@@ -63,6 +70,7 @@ import {
 } from "@/api/lib/files/organization-file-usage";
 import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
 import { createFileKey } from "@/api/lib/files/utils";
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -70,7 +78,8 @@ import { observedStatus } from "@/api/lib/observability/server-error-answer";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import {
   getS3,
-  readS3ArrayBuffer,
+  OBJECT_READ_TIMEOUT_MS,
+  readS3ObjectBounded,
   S3_OBJECT_WRITE_CERTAINTY,
   writeS3ObjectWithRetry,
 } from "@/api/lib/s3";
@@ -498,10 +507,21 @@ export const finalizeDesktopEditSessionHandler = async ({
         } as const;
       }
 
-      const checkpointBuffer = await readS3ArrayBuffer(
-        checkpointKey,
-        request.signal,
-      );
+      const checkpointBytes = await readS3ObjectBounded({
+        bucket: envBase.S3_BUCKET,
+        key: checkpointKey,
+        maxBytes: FILE_SIZE_LIMIT_BYTES.multipartDocument,
+        signal: AbortSignal.any([
+          request.signal,
+          AbortSignal.timeout(OBJECT_READ_TIMEOUT_MS),
+        ]),
+      });
+      const checkpointBuffer =
+        checkpointBytes.buffer instanceof ArrayBuffer &&
+        checkpointBytes.byteOffset === 0 &&
+        checkpointBytes.byteLength === checkpointBytes.buffer.byteLength
+          ? checkpointBytes.buffer
+          : checkpointBytes.slice().buffer;
 
       const validation = await validateDesktopEditFileBuffer({
         buffer: checkpointBuffer,
@@ -638,6 +658,27 @@ export const finalizeDesktopEditSessionHandler = async ({
         .insert(fields)
         .values(clonedFields)
         .returning({ id: fields.id, propertyId: fields.propertyId });
+      // A cell a member locked stays locked across the edit; the edited
+      // file's own cell describes new bytes.
+      const companions = await planCellCompanions({
+        tx,
+        kind: "desktop-edit",
+        sourceWorkspaceId: authorizedSession.value.workspaceId,
+        targetWorkspaceId: authorizedSession.value.workspaceId,
+        versions: [
+          {
+            sourceVersionId: editSession.baseVersionId,
+            targetVersionId: nextVersionId,
+          },
+        ],
+        replacedPropertyIds: [editSession.propertyId],
+      });
+      for (const rows of chunkItems(
+        companions.metadata,
+        CELL_COMPANION_BATCH,
+      )) {
+        await tx.insert(cellMetadata).values(rows);
+      }
 
       const nextField = insertedFields.find(
         (field) => field.propertyId === editSession.propertyId,

@@ -150,7 +150,10 @@ const prepareFixture = async (db: GatedTestDb, scale: number) => {
 
 type WindowFixture = Awaited<ReturnType<typeof prepareFixture>>;
 
-const productionReads = {
+const productionReads: Record<
+  CaseLawWindowProfile,
+  (fixture: WindowFixture) => Promise<void>
+> = {
   "case-law-reader": async (fixture: WindowFixture) => {
     const read = await readDecisionReaderSource({
       caseLawDb: fixture.caseLawDb,
@@ -216,10 +219,7 @@ const productionReads = {
     expect(read.anchorIds).toContain(PARAGRAPH_ID);
     expect(read.input.userMessage).toContain(fixture.text);
   },
-} satisfies Record<
-  CaseLawWindowProfile,
-  (fixture: WindowFixture) => Promise<void>
->;
+};
 
 const expectRedacted = async (profile: string, fixture: WindowFixture) => {
   switch (profile) {

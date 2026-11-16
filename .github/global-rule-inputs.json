@@ -212,6 +212,8 @@
     "scripts/knip-exports-ratchet.test.ts",
     "scripts/knip-exports-ratchet.ts",
     "scripts/landing-deploy-scope.test.ts",
+    "scripts/lint-command.ts",
+    "scripts/lint.ts",
     "scripts/main-heavy-plan.test.ts",
     "scripts/main-heavy.test.ts",
     "scripts/marketing-reshoot.ts",
@@ -316,6 +318,14 @@
     {
       "path": "scripts/check-publish-reproducibility.sh",
       "reason": "Runs under published_exports_required in ci-checks-generated; package sources, manifests and packing inputs select that scope."
+    },
+    {
+      "path": "scripts/check-tailwind-sources.test.ts",
+      "reason": "Runs as the Tailwind sources root check in ci-checks-rest; its declared inputs in scripts/ci-root-check-inputs.json, which include this script, select it."
+    },
+    {
+      "path": "scripts/check-tailwind-sources.ts",
+      "reason": "Runs as the Tailwind sources root check in ci-checks-rest; its declared inputs in scripts/ci-root-check-inputs.json, which include this script, select it."
     },
     {
       "path": "scripts/fork-contributor-commands.sh",

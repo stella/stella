@@ -1,17 +1,21 @@
+import { Result } from "better-result";
 import { SQL } from "bun";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { DrizzleQueryError } from "drizzle-orm";
 
 import { RESOURCE_TYPE, resourceRef, toResourceName } from "@stll/api-contract";
+import { createTestState } from "@stll/test-state";
 
 import {
   createSearchSummaryChatThread,
+  loadMatterSearchContexts,
   refineSearchOutputSchema,
   searchSummaryOutputSchema,
   validateSearchQueryWithPostgres,
 } from "@/api/handlers/search/ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
+import { ArtefactProvenanceDecodeError } from "@/api/lib/chat/artefact-provenance";
 import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
 import {
   clearRootDbMocks,
@@ -19,27 +23,26 @@ import {
 } from "@/api/tests/helpers/mock-root-db";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
-beforeEach(() => {
-  noopAuditRecorder.mockClear();
-  upsertSearchDocumentMock.mockClear();
-});
+const testState = createTestState({ file: import.meta.path, config: {} });
 
-process.env["REDIS_URL"] ??= "redis://localhost:6379";
-process.env["EMAIL_PROVIDER"] ??= "smtp";
-process.env["SMTP_HOST"] ??= "localhost";
-process.env["SMTP_PORT"] ??= "1025";
-process.env["TRANSACTIONAL_EMAIL_FROM"] ??= "test@example.com";
-process.env["FRONTEND_URL"] ??= "http://localhost:3000";
-process.env["BETTER_AUTH_SECRET"] ??= "x".repeat(32);
-process.env["BETTER_AUTH_URL"] ??= "http://localhost:3001";
-process.env["GOTENBERG_URL"] ??= "http://localhost:3002";
-process.env["GOTENBERG_USERNAME"] ??= "test";
-process.env["GOTENBERG_PASSWORD"] ??= "test";
+testState.setEnvIfAbsent("REDIS_URL", "redis://localhost:6379");
+testState.setEnvIfAbsent("EMAIL_PROVIDER", "smtp");
+testState.setEnvIfAbsent("SMTP_HOST", "localhost");
+testState.setEnvIfAbsent("SMTP_PORT", "1025");
+testState.setEnvIfAbsent("TRANSACTIONAL_EMAIL_FROM", "test@example.com");
+testState.setEnvIfAbsent("FRONTEND_URL", "http://localhost:3000");
+testState.setEnvIfAbsent("BETTER_AUTH_SECRET", "x".repeat(32));
+testState.setEnvIfAbsent("BETTER_AUTH_URL", "http://localhost:3001");
+testState.setEnvIfAbsent("GOTENBERG_URL", "http://localhost:3002");
+testState.setEnvIfAbsent("GOTENBERG_USERNAME", "test");
+testState.setEnvIfAbsent("GOTENBERG_PASSWORD", "test");
 
 const searchGlobalMock = mock();
 const upsertSearchDocumentMock = mock(async () => undefined);
 
 beforeEach(() => {
+  noopAuditRecorder.mockClear();
+  upsertSearchDocumentMock.mockClear();
   searchGlobalMock.mockReset();
   upsertSearchDocumentMock.mockClear();
   clearRootDbMocks();
@@ -93,27 +96,29 @@ describe("search summary chat", () => {
     };
     const { safeDb, scopedDb } = createScopedDbMock(tx);
 
-    searchGlobalMock.mockResolvedValueOnce({
-      facets: { editor: [], mimeType: [], type: [], workspace: [] },
-      hits: [
-        {
-          ...entitySearchIdentity("entity_1"),
-          entityId: "entity_1",
-          headline: null,
-          lastEditedByImage: null,
-          lastEditedByName: null,
-          mimeType: "application/pdf",
-          title: "Motion.pdf",
-          type: "document",
-          updatedAt: "2026-04-30T08:00:00.000Z",
-          workspaceId,
-          workspaceName: "Motion matter",
-        },
-      ],
-      nextCursor: null,
-      chatCoverage: "complete",
-      totalCount: 1,
-    });
+    searchGlobalMock.mockResolvedValueOnce(
+      Result.ok({
+        facets: { editor: [], mimeType: [], type: [], workspace: [] },
+        hits: [
+          {
+            ...entitySearchIdentity("entity_1"),
+            entityId: "entity_1",
+            headline: null,
+            lastEditedByImage: null,
+            lastEditedByName: null,
+            mimeType: "application/pdf",
+            title: "Motion.pdf",
+            type: "document",
+            updatedAt: "2026-04-30T08:00:00.000Z",
+            workspaceId,
+            workspaceName: "Motion matter",
+          },
+        ],
+        nextCursor: null,
+        chatCoverage: "complete",
+        totalCount: 1,
+      }),
+    );
 
     const result = await createSearchSummaryChatThread({
       accessibleWorkspaceIds: [workspaceId],
@@ -177,27 +182,29 @@ describe("search summary chat", () => {
     };
     const { safeDb, scopedDb } = createScopedDbMock(tx);
 
-    searchGlobalMock.mockResolvedValueOnce({
-      facets: { editor: [], mimeType: [], type: [], workspace: [] },
-      hits: [
-        {
-          ...entitySearchIdentity("entity_1"),
-          entityId: "entity_1",
-          headline: null,
-          lastEditedByImage: null,
-          lastEditedByName: null,
-          mimeType: "application/pdf",
-          title: "Motion.pdf",
-          type: "document",
-          updatedAt: "2026-04-30T08:00:00.000Z",
-          workspaceId,
-          workspaceName: "Motion matter",
-        },
-      ],
-      nextCursor: null,
-      chatCoverage: "complete",
-      totalCount: 1,
-    });
+    searchGlobalMock.mockResolvedValueOnce(
+      Result.ok({
+        facets: { editor: [], mimeType: [], type: [], workspace: [] },
+        hits: [
+          {
+            ...entitySearchIdentity("entity_1"),
+            entityId: "entity_1",
+            headline: null,
+            lastEditedByImage: null,
+            lastEditedByName: null,
+            mimeType: "application/pdf",
+            title: "Motion.pdf",
+            type: "document",
+            updatedAt: "2026-04-30T08:00:00.000Z",
+            workspaceId,
+            workspaceName: "Motion matter",
+          },
+        ],
+        nextCursor: null,
+        chatCoverage: "complete",
+        totalCount: 1,
+      }),
+    );
 
     await createSearchSummaryChatThread({
       accessibleWorkspaceIds: [workspaceId],
@@ -240,27 +247,29 @@ describe("search summary chat", () => {
     };
     const { safeDb, scopedDb } = createScopedDbMock(tx);
 
-    searchGlobalMock.mockResolvedValueOnce({
-      facets: { editor: [], mimeType: [], type: [], workspace: [] },
-      hits: [
-        {
-          ...entitySearchIdentity("entity_1"),
-          entityId: "entity_1",
-          headline: null,
-          lastEditedByImage: null,
-          lastEditedByName: null,
-          mimeType: "application/pdf",
-          title: "Motion.pdf",
-          type: "document",
-          updatedAt: "2026-04-30T08:00:00.000Z",
-          workspaceId,
-          workspaceName: "Motion matter",
-        },
-      ],
-      nextCursor: null,
-      chatCoverage: "complete",
-      totalCount: 1,
-    });
+    searchGlobalMock.mockResolvedValueOnce(
+      Result.ok({
+        facets: { editor: [], mimeType: [], type: [], workspace: [] },
+        hits: [
+          {
+            ...entitySearchIdentity("entity_1"),
+            entityId: "entity_1",
+            headline: null,
+            lastEditedByImage: null,
+            lastEditedByName: null,
+            mimeType: "application/pdf",
+            title: "Motion.pdf",
+            type: "document",
+            updatedAt: "2026-04-30T08:00:00.000Z",
+            workspaceId,
+            workspaceName: "Motion matter",
+          },
+        ],
+        nextCursor: null,
+        chatCoverage: "complete",
+        totalCount: 1,
+      }),
+    );
 
     const result = await createSearchSummaryChatThread({
       accessibleWorkspaceIds: [workspaceId],
@@ -316,40 +325,42 @@ describe("search summary chat", () => {
     };
     const { safeDb, scopedDb } = createScopedDbMock(tx);
 
-    searchGlobalMock.mockResolvedValueOnce({
-      facets: { editor: [], mimeType: [], type: [], workspace: [] },
-      hits: [
-        {
-          ...entitySearchIdentity("entity_1"),
-          entityId: "entity_1",
-          headline: null,
-          lastEditedByImage: null,
-          lastEditedByName: null,
-          mimeType: "application/pdf",
-          title: "First.pdf",
-          type: "document",
-          updatedAt: "2026-04-30T08:00:00.000Z",
-          workspaceId: firstWorkspaceId,
-          workspaceName: "First matter",
-        },
-        {
-          ...entitySearchIdentity("entity_2"),
-          entityId: "entity_2",
-          headline: null,
-          lastEditedByImage: null,
-          lastEditedByName: null,
-          mimeType: "application/pdf",
-          title: "Second.pdf",
-          type: "document",
-          updatedAt: "2026-04-30T08:00:00.000Z",
-          workspaceId: secondWorkspaceId,
-          workspaceName: "Second matter",
-        },
-      ],
-      nextCursor: null,
-      chatCoverage: "complete",
-      totalCount: 2,
-    });
+    searchGlobalMock.mockResolvedValueOnce(
+      Result.ok({
+        facets: { editor: [], mimeType: [], type: [], workspace: [] },
+        hits: [
+          {
+            ...entitySearchIdentity("entity_1"),
+            entityId: "entity_1",
+            headline: null,
+            lastEditedByImage: null,
+            lastEditedByName: null,
+            mimeType: "application/pdf",
+            title: "First.pdf",
+            type: "document",
+            updatedAt: "2026-04-30T08:00:00.000Z",
+            workspaceId: firstWorkspaceId,
+            workspaceName: "First matter",
+          },
+          {
+            ...entitySearchIdentity("entity_2"),
+            entityId: "entity_2",
+            headline: null,
+            lastEditedByImage: null,
+            lastEditedByName: null,
+            mimeType: "application/pdf",
+            title: "Second.pdf",
+            type: "document",
+            updatedAt: "2026-04-30T08:00:00.000Z",
+            workspaceId: secondWorkspaceId,
+            workspaceName: "Second matter",
+          },
+        ],
+        nextCursor: null,
+        chatCoverage: "complete",
+        totalCount: 2,
+      }),
+    );
 
     const result = await createSearchSummaryChatThread({
       accessibleWorkspaceIds: [firstWorkspaceId, secondWorkspaceId],
@@ -410,27 +421,29 @@ describe("search summary chat", () => {
     };
     const { safeDb, scopedDb } = createScopedDbMock(tx);
 
-    searchGlobalMock.mockResolvedValueOnce({
-      facets: { editor: [], mimeType: [], type: [], workspace: [] },
-      hits: [
-        {
-          ...entitySearchIdentity("entity_1"),
-          entityId: "entity_1",
-          headline: null,
-          lastEditedByImage: null,
-          lastEditedByName: null,
-          mimeType: "application/pdf",
-          title: "Motion.pdf",
-          type: "document",
-          updatedAt: "2026-04-30T08:00:00.000Z",
-          workspaceId,
-          workspaceName: "Motion matter",
-        },
-      ],
-      nextCursor: null,
-      chatCoverage: "complete",
-      totalCount: 1,
-    });
+    searchGlobalMock.mockResolvedValueOnce(
+      Result.ok({
+        facets: { editor: [], mimeType: [], type: [], workspace: [] },
+        hits: [
+          {
+            ...entitySearchIdentity("entity_1"),
+            entityId: "entity_1",
+            headline: null,
+            lastEditedByImage: null,
+            lastEditedByName: null,
+            mimeType: "application/pdf",
+            title: "Motion.pdf",
+            type: "document",
+            updatedAt: "2026-04-30T08:00:00.000Z",
+            workspaceId,
+            workspaceName: "Motion matter",
+          },
+        ],
+        nextCursor: null,
+        chatCoverage: "complete",
+        totalCount: 1,
+      }),
+    );
 
     await createSearchSummaryChatThread({
       accessibleWorkspaceIds: [workspaceId],
@@ -502,5 +515,96 @@ describe("search query validation", () => {
     if (type === "failed") {
       expect(validation).toMatchObject({ cause: failure });
     }
+  });
+});
+
+test("search summary refuses unreadable provenance before writing a chat thread", async () => {
+  const organizationId = toSafeId<"organization">("org_1");
+  const write = mock();
+  const { safeDb, scopedDb } = createScopedDbMock({ insert: write });
+  const result = await createSearchSummaryChatThread({
+    accessibleWorkspaceIds: [],
+    grantedScopes: undefined,
+    body: {
+      ...emptySearchSummaryFilters(),
+      citations: [],
+      limit: 1,
+      query: "motion",
+      summary: "Relevant result.",
+      title: "Search summary",
+    },
+    organizationId,
+    safeDb,
+    scopedDb,
+    search: async () =>
+      Result.err(
+        new ArtefactProvenanceDecodeError({
+          message: "Invalid stored artefact provenance",
+        }),
+      ),
+    upsertSearchDocument: upsertSearchDocumentMock,
+    userId: toSafeId<"user">("user_1"),
+    recordAuditEvent: noopAuditRecorder,
+  });
+  expect(result).toMatchObject({
+    code: 500,
+    response: { message: "Search results could not be read" },
+  });
+  expect(write).not.toHaveBeenCalled();
+  expect(upsertSearchDocumentMock).not.toHaveBeenCalled();
+});
+
+describe("matter search contexts", () => {
+  const workspaceId = toSafeId<"workspace">("ws_1");
+  const load = async (search: typeof searchGlobalMock) => {
+    const { scopedDb } = createScopedDbMock({});
+    return await loadMatterSearchContexts({
+      accessibleWorkspaceIds: [workspaceId],
+      grantedScopes: undefined,
+      organizationId: toSafeId<"organization">("org_1"),
+      query: "motion",
+      scopedDb,
+      search,
+      userId: toSafeId<"user">("user_1"),
+      workspaceId,
+    });
+  };
+
+  test("searches only the matter's own files", async () => {
+    searchGlobalMock.mockResolvedValueOnce(
+      Result.ok({
+        facets: { editor: [], mimeType: [], type: [], workspace: [] },
+        hits: [],
+        nextCursor: null,
+        chatCoverage: "complete",
+        totalCount: 0,
+      }),
+    );
+
+    const result = await load(searchGlobalMock);
+
+    expect(result.isOk() && result.value).toEqual([]);
+    const call = searchGlobalMock.mock.calls.at(0)?.[0];
+    expect(call).toMatchObject({
+      selectedWorkspaceIds: [workspaceId],
+      types: ["document", "folder", "task", "message", "link"],
+    });
+  });
+
+  test("answers unreadable provenance as a server error", async () => {
+    searchGlobalMock.mockResolvedValueOnce(
+      Result.err(
+        new ArtefactProvenanceDecodeError({
+          message: "Invalid stored artefact provenance",
+        }),
+      ),
+    );
+
+    const result = await load(searchGlobalMock);
+
+    expect(result.isErr() && result.error).toMatchObject({
+      status: 500,
+      message: "Search results could not be read",
+    });
   });
 });

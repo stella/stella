@@ -153,10 +153,12 @@ const CANCELLED_REQUEST_CLASS = "AbortError";
 // Errors whose type names an expected outcome, handled where it happens: no
 // desktop app running, a public-law source down, a signed-out session, a
 // model provider's failure the chat shows with its setup guidance (the API
-// reports the provider failures it does not classify itself).
+// reports the provider failures it does not classify itself), a coding agent
+// on the member's computer at its usage limit.
 const EXPECTED_OUTCOME_TYPES: ReadonlySet<string> = new Set([
   "AuthClientError",
   "DesktopBridgeUnavailableError",
+  "LocalRunLimitError",
   "ProviderDiagnosticError",
   "PublicLawUnavailableError",
 ]);

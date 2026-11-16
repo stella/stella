@@ -20,11 +20,6 @@ import {
 } from "@/routes/_protected.contacts/-contact-import-request";
 import type { ImportCommitPayload } from "@/routes/_protected.contacts/-import-candidate";
 
-// Spies created in a test stay attached if it fails before restoring them.
-afterEach(() => {
-  mock.restore();
-});
-
 const PAYLOAD = {
   taxIdScheme: "br_cpf_cnpj",
   rows: [{ type: "person", displayName: "Jane Doe" }],
@@ -46,6 +41,8 @@ beforeEach(() => {
   fixtureClient.setQueryData(["session"], { user: { id: SCOPE.userId } });
 });
 afterEach(() => {
+  // Spies created in a test stay attached if it fails before restoring them.
+  mock.restore();
   disconnectOwner();
   releaseUserStorage(fixtureAreas());
   fixtureClient.clear();

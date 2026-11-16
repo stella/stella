@@ -48,6 +48,7 @@ export {
   HARNESS_QUESTION_TOOL,
   harnessEventsToChunks,
 } from "./harness/stream-chunks";
+export { createChunkCoalescer } from "./harness/chunk-coalescer";
 export type {
   HarnessCompatibility,
   HarnessCompatibilityManifest,

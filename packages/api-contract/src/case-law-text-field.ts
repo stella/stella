@@ -1,3 +1,4 @@
+// parser-output-unchanged: adds the decision-type availability vocabulary; only cz-uohs sets it, and it bumps its own version.
 // parser-output-unchanged: the decision-date availability marker is derived only from metadata a source sets; sources that never set it parse as before.
 import { panic } from "better-result";
 
@@ -182,6 +183,20 @@ export const DECISION_DATE_AVAILABILITY_STATUSES = [
 
 export type DecisionDateAvailability = {
   status: (typeof DECISION_DATE_AVAILABILITY_STATUSES)[number];
+};
+
+/**
+ * Whether the source names a decision's type in words. A source that names it
+ * only by a code (an address in a code list) or not at all declares it in
+ * `metadata.decisionTypeAvailability`, so the absence is a typed marker.
+ */
+export const DECISION_TYPE_AVAILABILITY_STATUSES = [
+  "published",
+  "not-published-by-source",
+] as const;
+
+export type DecisionTypeAvailability = {
+  status: (typeof DECISION_TYPE_AVAILABILITY_STATUSES)[number];
 };
 
 /**

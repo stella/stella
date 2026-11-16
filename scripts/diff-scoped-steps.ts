@@ -12,8 +12,10 @@ const STEP_BASE =
 /** A script reading a base from the environment, or defaulting to main. */
 const SCRIPT_BASE =
   /process\.env(?:\.|\[\s*["'])\w*BASE\w*|\$\{?\w*BASE_(?:REF|SHA)\b|["'`]origin\/main["'`]/u;
+// A repository script, also when a step runs it from a tooling checkout
+// (`$GITHUB_WORKSPACE/.tooling/scripts/x.sh` runs `scripts/x.sh`).
 const SCRIPT_PATH =
-  /(?:^|[\s"'])((?:scripts|apps\/[\w-]+\/scripts|packages\/[\w-]+\/src)\/[\w./-]+\.(?:ts|sh|mjs))/gu;
+  /(?:^|[\s"']|\/\.[\w-]+\/)((?:scripts|apps\/[\w-]+\/scripts|packages\/[\w-]+\/src)\/[\w./-]+\.(?:ts|sh|mjs))/gu;
 // Classification labels are prose; a word in them must not decide membership.
 const LABEL_ENV = new Set(["CI_CHECK_KIND", "CI_CHECK_CONTEXT"]);
 
@@ -94,15 +96,6 @@ const GENERATED_CONFLICTS =
 
 /** Keys are `<workflow file>:<job>#<step name>`. */
 export const DIFF_SCOPED_STEPS = {
-  "queue-admission.yml:admission#Run deterministic manifest checks":
-    operational(CHECK_POOL),
-  "queue-admission.yml:admission#Check parser versions":
-    expands(PARSER_VERSIONS),
-  "queue-admission.yml:admission#Check workflow job classifications":
-    fullTree(JOB_CLASSIFICATION),
-  "queue-admission.yml:admission#Code quality for changed files": expands(
-    "Turbo's affected scope adds reverse dependants of the queued change.",
-  ),
   "autofix.yml:dependabot-bun-autofix#Verify trusted autofix sources":
     diffComplete("Verifies the provenance of the commits being fixed."),
   "autofix.yml:dependabot-bun-autofix#Align Tauri counterparts": diffComplete(
@@ -170,10 +163,6 @@ export const DIFF_SCOPED_STEPS = {
     diffComplete(
       "Checks exactly the pull requests between the group's base and head.",
     ),
-  "merge-group-hold.yml:dequeue-held-pull-request#Check out trusted base scripts":
-    operational(
-      "Checks out the hold check from the pull request's base; no verdict.",
-    ),
   "merge-group-hold.yml:dequeue-held-pull-request#Restore active hold labels and remove held pull requests from the queue":
     operational(
       "Restores hold labels and dequeues the pull request the event names; no verdict on content.",
@@ -187,12 +176,24 @@ export const DIFF_SCOPED_STEPS = {
   "publish-npm.yml:pack#Verify manual package recovery source": diffComplete(
     "Checks that the recovered package source is an ancestor of main.",
   ),
+  "publish-npm.yml:release-trigger#Resolve upstream release receipt":
+    operational(
+      "Proves protected main carries the release commit before pack builds it.",
+    ),
+  "ci.yml:ci-plan#Preserve the comparison-base resolver across source checkouts":
+    operational(
+      "Stages the comparison-base resolver for a later step; it resolves no base itself.",
+    ),
   "publish-npm.yml:pack#Build and pack selected packages": operational(
     "Packs the packages selected for publication.",
   ),
   "deploy-landing.yml:scope#Decide whether the push changes the site": expands(
     "Follows the landing's workspace graph and declared inputs from the pushed range.",
   ),
+  "deploy-outlook-addin.yml:scope#Decide whether the push changes the add-in":
+    expands(
+      "Follows the add-in's workspace graph and declared inputs from the last successful deploy run.",
+    ),
   "ci.yml:ci-plan#Resolve comparison base": operational(
     "Resolves the base the plan compares against.",
   ),

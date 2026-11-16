@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 import type { Result } from "better-result";
 
+import type { DesktopLinkFailure } from "@stll/api-contract/desktop-rpc";
+
 /**
  * How the page may answer a desktop challenge: after the person's own click,
  * or on its own once the app on this computer proved the challenge is its
@@ -8,11 +10,28 @@ import type { Result } from "better-result";
  */
 export type DesktopLinkApproval = "explicit" | "local-proof";
 
+/**
+ * Why the app refused a link, for the refusals the page names with their own
+ * next step. An update has its own outcome; an unclassified failure is an
+ * error.
+ */
+export type DesktopLinkRefusal = Extract<
+  DesktopLinkFailure,
+  "account_conflict" | "switch_declined" | "declined"
+>;
+
 export type DesktopLinkOutcome =
   | { status: "connected"; email: string }
   | { status: "started" }
   | { status: "approval-required" }
-  | { status: "update-required" };
+  | { status: "update-required" }
+  | { status: "refused"; reason: DesktopLinkRefusal };
+
+/**
+ * How linking the account to the app ended: an outcome, or the failure the
+ * link reported. Named, so no caller infers it from the link's body.
+ */
+export type DesktopLinkResult = Result<DesktopLinkOutcome, unknown>;
 
 type DesktopConnectionOutcome = DesktopLinkOutcome | { status: "error" };
 
@@ -34,17 +53,18 @@ type DesktopLinkOptions = {
 
 type DesktopConnectionStoreOptions = {
   /** Link the account to a running app with a typed failure result. */
-  link: (
-    options: DesktopLinkOptions,
-  ) => Promise<Result<DesktopLinkOutcome, unknown>>;
+  link: (options: DesktopLinkOptions) => Promise<DesktopLinkResult>;
   /** Report a link failure; the store itself never throws into the UI. */
   onError: (error: unknown) => void;
+  /** Ask the app to switch to this account; it confirms in its own window. */
+  requestSwitch: () => void;
 };
 
 /** Shared state lets multiple surfaces join the same connection attempt. */
 export const createDesktopConnectionStore = ({
   link,
   onError,
+  requestSwitch,
 }: DesktopConnectionStoreOptions) => {
   const listeners = new Set<() => void>();
   let state: DesktopConnectionState = IDLE;
@@ -104,8 +124,22 @@ export const createDesktopConnectionStore = ({
     return await started;
   };
 
+  /**
+   * Asks the app that refused this account to switch to it. The app asks the
+   * member to confirm and reports back on the page it opens, so this page
+   * drops the refusal it showed.
+   */
+  const switchAccount = () => {
+    if (attempt) {
+      return;
+    }
+    publish(IDLE);
+    requestSwitch();
+  };
+
   return {
     connect,
+    switchAccount,
     getServerState: () => IDLE,
     getState: () => state,
     subscribe: (listener: () => void) => {
@@ -127,6 +161,7 @@ function settledState(
       return IDLE;
     case "connected":
     case "update-required":
+    case "refused":
     case "error":
       return outcome;
     default:

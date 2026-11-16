@@ -62,7 +62,7 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - name: Setup regeneration tooling
-        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
+        uses: stella/.github/actions/setup-bun-cached@0cc2def60afb3e0fac0df9f541baf926f77889fa
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: .regeneration-controls/package.json
@@ -203,7 +203,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
+        uses: stella/.github/actions/setup-bun-cached@0cc2def60afb3e0fac0df9f541baf926f77889fa
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
@@ -373,26 +373,24 @@ jobs:
           bash "$GH_RETRY_SCRIPT" api --paginate "repos/$REPOSITORY/pulls/$PR_NUMBER/files" --jq '.[].filename' > "$RUNNER_TEMP/changed-paths"
 
       - name: Checkout pull request head
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: stella/.github/actions/partial-clone-checkout@0cc2def60afb3e0fac0df9f541baf926f77889fa
         with:
           persist-credentials: false
           ref: ${{ github.event.pull_request.head.sha }}
           # Recent history without file contents: enough to find the settled
           # commit and list what changed since.
           fetch-depth: 21
-          filter: blob:none
           sparse-checkout: |
             /scripts/
             /packages/scripts/src/generated-files.ts
             /package.json
           sparse-checkout-cone-mode: false
 
-      # No install follows, so the shared package cache would only cost time.
+      # No install follows, so this job needs no shared package store.
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version-file: "package.json"
-          no-cache: true
 
       - name: Check planner availability
         id: planner
@@ -519,7 +517,7 @@ jobs:
           git diff --name-only -z --no-renames --diff-filter=A "$BASE_SHA"..."$HEAD_SHA" -- apps/api/ > "$RUNNER_TEMP/autofix-added-paths"
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
+        uses: stella/.github/actions/setup-bun-cached@0cc2def60afb3e0fac0df9f541baf926f77889fa
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"

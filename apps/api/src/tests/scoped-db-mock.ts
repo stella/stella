@@ -1,8 +1,10 @@
 import { panic, Result } from "better-result";
 import { getColumns } from "drizzle-orm";
+import type { SQLWrapper } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import { QueryPromise } from "drizzle-orm/query-promise";
 
-import { member, user } from "@/api/db/auth-schema";
+import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbRetryConfig, ScopedDb } from "@/api/db/safe-db";
 import {
@@ -10,6 +12,7 @@ import {
   entityVersions,
   featureEnrolments,
   fields,
+  legalHolds,
 } from "@/api/db/schema";
 import { advisoryExecutionRows } from "@/api/tests/fixtures/aggregate-lock-order";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -200,11 +203,83 @@ const fixtureSelect =
       !("select" in tx) ||
       typeof tx.select !== "function"
     ) {
-      return panic("Missing fixture select");
+      // The double holds no legal holds, so a hold check needs no fixture.
+      return {
+        from: (table: unknown) =>
+          table === legalHolds
+            ? createSelectQueryMock([]).from()
+            : panic("Missing fixture select"),
+      };
     }
     const result: unknown = Reflect.apply(tx.select, tx, [selection]);
+    if (
+      typeof result === "object" &&
+      result !== null &&
+      "from" in result &&
+      typeof result.from === "function"
+    ) {
+      const from = result.from;
+      return {
+        ...result,
+        from: (table: unknown): unknown => {
+          if (
+            table === legalHolds ||
+            (table === organization &&
+              columns.length === 1 &&
+              columns.at(0) === organization.id)
+          ) {
+            return createSelectQueryMock([]).from();
+          }
+          const query: unknown = Reflect.apply(from, result, [table]);
+          return query;
+        },
+      };
+    }
     return result;
   };
+
+const pgDialect = new PgDialect();
+
+// The legal-hold organization fence (see lockLegalHoldOrganizations) takes an
+// advisory lock per organization. The double holds no locks and no holds, so
+// it answers the fence itself; every other statement reaches the test's own
+// execute, which then never needs to know about the fence.
+const LEGAL_HOLD_ORGANIZATION_FENCE =
+  /pg_advisory_xact_lock(?:_shared)?\(\$\d+, hashtext\(ordered\.id\)\)/u;
+
+// A member's new message is admitted in one statement (`admitMemberMessageOnTx`)
+// that reads the thread's waiting turn and queue. The double stores neither,
+// so it answers that the message is admitted.
+const MEMBER_MESSAGE_ADMISSION = /^\s*WITH awaiting AS \(/u;
+
+const executeWithLegalHoldFence = async (
+  tx: unknown,
+  statement: SQLWrapper | string,
+): Promise<unknown> => {
+  const text =
+    typeof statement === "string"
+      ? statement
+      : pgDialect.sqlToQuery(statement.getSQL()).sql;
+  if (LEGAL_HOLD_ORGANIZATION_FENCE.test(text)) {
+    return [];
+  }
+  if (MEMBER_MESSAGE_ADMISSION.test(text)) {
+    return [{ awaiting: false, queued: false, released: false }];
+  }
+  if (
+    typeof tx !== "object" ||
+    tx === null ||
+    !("execute" in tx) ||
+    typeof tx.execute !== "function"
+  ) {
+    // Advisory fences such as the contact capacity lock read no fixture
+    // data, so every handler that takes one acquires it here. Other
+    // statements stay unanswered unless the test supplies `execute`.
+    return advisoryExecutionRows(statement);
+  }
+  const result: unknown = await Reflect.apply(tx.execute, tx, [statement]);
+  return result;
+};
 
 export const createScopedDbMock = (
   tx: unknown,
@@ -232,13 +307,6 @@ export const createScopedDbMock = (
         ? providedQuery.documentProcessingRuns
         : {};
     const transaction = {
-      // Advisory fences such as the contact capacity lock read no fixture
-      // data, so every handler that takes one acquires it here. Other
-      // statements stay unanswered unless the test supplies `execute`.
-      execute: async (statement: unknown) => {
-        await Promise.resolve();
-        return advisoryExecutionRows(statement);
-      },
       ...(options?.authorizedWorkspaceIds === undefined
         ? {}
         : {
@@ -248,6 +316,8 @@ export const createScopedDbMock = (
               ),
           }),
       ...(typeof tx === "object" && tx !== null ? tx : {}),
+      execute: async (statement: SQLWrapper | string): Promise<unknown> =>
+        await executeWithLegalHoldFence(tx, statement),
       query: {
         ...providedQuery,
         documentProcessingRuns: {

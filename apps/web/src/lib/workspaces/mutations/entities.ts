@@ -14,22 +14,15 @@ import type { ExceptionFingerprintKey } from "@/lib/analytics/exception-fingerpr
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { UpsertFieldContent } from "@/lib/api-contract";
-import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { invokeCapability } from "@/lib/capabilities/capability-request";
-import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { fileMetadataByFieldQueryRoot } from "@/lib/files/file-metadata-query.logic";
 import { replaceCachedFileName } from "@/lib/files/queries";
 import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
-import { inboxKeys } from "@/lib/inbox/queries";
 import { toSafeId } from "@/lib/safe-id";
 import type { EntityKind } from "@/lib/types";
-import {
-  invalidateDeletedEntityQueries,
-  invalidateRenamedEntityQueries,
-} from "@/lib/workspaces/mutations/entities.logic";
-import { entityViewKeys } from "@/lib/workspaces/queries/entity-views";
+import { resourceMutation } from "@/lib/workspace-realtime";
+import { invalidateDeletedEntityQueries } from "@/lib/workspaces/mutations/entities.logic";
 
 type CreateEntitiesVars = {
   type: "manual-input";
@@ -205,22 +198,6 @@ const renameQueues = new WeakMap<QueryClient, Map<string, Promise<void>>>();
 export const useRenameEntity = (
   inspectorStore?: StoreApi<InspectorTabsStore>,
 ) => {
-  const { activeOrganizationId, id: userId } = useAuthenticatedUser();
-  return useRenameEntityForUser({
-    activeOrganizationId,
-    inspectorStore,
-    userId,
-  });
-};
-
-type RenameEntityForUserOptions = {
-  activeOrganizationId: string;
-  inspectorStore: StoreApi<InspectorTabsStore> | undefined;
-  userId: string;
-};
-
-export const useRenameEntityForUser = (options: RenameEntityForUserOptions) => {
-  const { activeOrganizationId, inspectorStore, userId } = options;
   const analytics = useAnalytics();
   const t = useTranslations();
   const queryClient = useQueryClient();
@@ -234,6 +211,23 @@ export const useRenameEntityForUser = (options: RenameEntityForUserOptions) => {
     });
     notifyUserError(error, t("errors.actionFailed"));
   };
+
+  const renameEntityRequest = async ({
+    workspaceId,
+    entityId,
+    name,
+  }: RenameEntityInvocation) => {
+    const response = await api
+      .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+      .rename.patch({ entityId: toSafeId<"entity">(entityId), name });
+    return unwrapApiResponse(response);
+  };
+
+  const renameMutation = resourceMutation({
+    mutation: "renameEntity",
+    queryClient,
+    mutationFn: renameEntityRequest,
+  });
 
   const mutation = useMutation({
     onMutate: async ({
@@ -284,16 +278,7 @@ export const useRenameEntityForUser = (options: RenameEntityForUserOptions) => {
       }
       return optimistic.value;
     },
-    mutationFn: async ({
-      workspaceId,
-      entityId,
-      name,
-    }: RenameEntityInvocation) => {
-      const response = await api
-        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .rename.patch({ entityId: toSafeId<"entity">(entityId), name });
-      return unwrapApiResponse(response);
-    },
+    mutationFn: renameMutation,
     onSuccess: (data, { workspaceId, entityId }, context) => {
       const reconciled = Result.try(() => {
         const store = inspectorStore
@@ -331,35 +316,6 @@ export const useRenameEntityForUser = (options: RenameEntityForUserOptions) => {
         });
       }
       context.release();
-      // Refetches repair caches independently of the committed mutation's settlement.
-      detached(
-        (async () => {
-          await Promise.all([
-            invalidateRenamedEntityQueries({
-              queryClient,
-              workspaceId,
-              entityId,
-            }),
-            queryClient.invalidateQueries({
-              queryKey: entityViewKeys.all(activeOrganizationId, userId),
-            }),
-            queryClient.invalidateQueries({
-              queryKey: inboxKeys.all(activeOrganizationId, userId),
-            }),
-            ...(data.file
-              ? [
-                  queryClient.invalidateQueries({
-                    queryKey: fileMetadataByFieldQueryRoot({
-                      workspaceId,
-                      fieldId: data.file.fieldId,
-                    }),
-                  }),
-                ]
-              : []),
-          ]);
-        })(),
-        "entity-rename.refresh",
-      );
     },
     onError: (error, { workspaceId, entityId, name }, context) => {
       const rolledBack = Result.try(() => {

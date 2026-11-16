@@ -2,7 +2,6 @@ import { panic } from "better-result";
 import {
   afterAll,
   afterEach,
-  beforeAll,
   beforeEach,
   describe,
   expect,
@@ -14,6 +13,7 @@ import type { CryptoKey, JWK } from "jose";
 import * as v from "valibot";
 
 import { OPAQUE_ORGANIZATION_SLUG_PATTERN } from "@stll/auth-model";
+import { createTestState } from "@stll/test-state";
 import { DAY_IN_MS } from "@stll/time";
 
 import {
@@ -34,7 +34,7 @@ import { oauthClient, organization, user } from "@/api/db/auth-schema";
 import { registrationDailyBudget } from "@/api/db/registration-budget-schema";
 import { rootDb } from "@/api/db/root";
 import { env } from "@/api/env";
-import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
+import { withoutContentEncryptionKeyForTesting } from "@/api/env-content-encryption";
 import {
   agentAuthConfirmRoute,
   agentAuthRoute,
@@ -57,6 +57,8 @@ import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { serveForTest } from "@/api/tests/helpers/test-server";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
+const testState = createTestState({ file: import.meta.path, config: env });
+
 const testFetchState = createTestFetch();
 
 // These tests drive the ID-JAG path end to end against the same
@@ -65,15 +67,6 @@ const testFetchState = createTestFetch();
 // stubbed `globalThis.fetch` for the issuer's well-known URL. A
 // trusted-issuer row is inserted so the (empty-by-default) allow-list
 // accepts it; every other issuer stays rejected.
-
-let priorStorageSetting = false;
-beforeEach(() => {
-  priorStorageSetting = env.AGENT_CLIENT_STORAGE_V1_ENABLED;
-  env.AGENT_CLIENT_STORAGE_V1_ENABLED = true;
-});
-afterEach(() => {
-  env.AGENT_CLIENT_STORAGE_V1_ENABLED = priorStorageSetting;
-});
 
 type Json = Record<string, unknown>;
 
@@ -103,13 +96,13 @@ let issuerPublicJwk: JWK;
 const realFetch = globalThis.fetch;
 
 const enableFeature = () => {
-  env.FEATURE_AGENT_ID_JAG = true;
+  testState.setConfig("FEATURE_AGENT_ID_JAG", true);
 };
 const disableFeature = () => {
-  env.FEATURE_AGENT_ID_JAG = false;
+  testState.setConfig("FEATURE_AGENT_ID_JAG", false);
 };
 
-beforeAll(async () => {
+testState.beforeAll(async () => {
   await initAgentAuthTestDb();
   const { privateKey, publicKey } = await generateKeyPair("ES256", {
     extractable: true,
@@ -120,6 +113,7 @@ beforeAll(async () => {
 });
 
 beforeEach(() => {
+  testState.setConfig("AGENT_CLIENT_STORAGE_V1_ENABLED", true);
   // Stub only the issuer JWKS URL; everything else hits the real fetch.
   const resolveUrl = (input: Parameters<typeof fetch>[0]): string => {
     if (typeof input === "string") {
@@ -145,7 +139,6 @@ beforeEach(() => {
 
 afterAll(async () => {
   await server.stop();
-  disableFeature();
   await releaseAgentAuthTestDb();
 });
 
@@ -154,7 +147,6 @@ afterEach(async () => {
   await rootDb
     .delete(agentTrustedIssuer)
     .where(eq(agentTrustedIssuer.issuer, ISSUER));
-  disableFeature();
 });
 
 const trustIssuer = async (attestationPolicy?: unknown) => {
@@ -357,8 +349,7 @@ describe("agent-auth ID-JAG storage configuration", () => {
       sub: `sub-stepup-${Bun.randomUUIDv7()}`,
     };
     await createHumanSession(stepUpIdentity.email);
-    const originalKey = envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY;
-    envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY = undefined;
+    const restoreKey = withoutContentEncryptionKeyForTesting();
     try {
       for (const identity of [readyIdentity, stepUpIdentity]) {
         const response = await postIdentity(
@@ -371,7 +362,7 @@ describe("agent-auth ID-JAG storage configuration", () => {
         expect(body["claim_token"]).toBeUndefined();
       }
     } finally {
-      envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY = originalKey;
+      restoreKey();
     }
   });
 });
@@ -640,7 +631,7 @@ describe("agent-auth ID-JAG full exchange", () => {
     enableFeature();
     await trustIssuer();
     for (const mode of ["error", "no_change"] as const) {
-      env.AGENT_CLIENT_STORAGE_V1_ENABLED = false;
+      testState.setConfig("AGENT_CLIENT_STORAGE_V1_ENABLED", false);
       const assertion = await mintIdJag({
         email: `idjag-deferred-${Bun.randomUUIDv7()}@external.test`,
         sub: `sub-deferred-${Bun.randomUUIDv7()}`,
@@ -678,7 +669,7 @@ describe("agent-auth ID-JAG full exchange", () => {
         records.push(record);
       });
       try {
-        env.AGENT_CLIENT_STORAGE_V1_ENABLED = true;
+        testState.setConfig("AGENT_CLIENT_STORAGE_V1_ENABLED", true);
         const token = await postToken({
           grant_type: AGENT_AUTH_JWT_BEARER_GRANT_TYPE,
           assertion: String(identityBody["identity_assertion"]),

@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
+
+import { assertProperty } from "@stll/property-testing";
 
 import type { Fetch } from "@/connection/http";
 import {
@@ -8,7 +11,7 @@ import {
 import type { StoredSession } from "@/connection/session";
 
 import type { Timer } from "./timers";
-import { discardTimer, saveTimer } from "./timers";
+import { discardTimer, matterTimerAction, saveTimer } from "./timers";
 
 const SESSION: StoredSession = {
   signInId: "sign-in-1",
@@ -108,5 +111,45 @@ describe("finishing a timer", () => {
     ).toBe(
       "Billable time entries need an effective rate Set a rate for the matter.",
     );
+  });
+});
+
+describe("a matter's timer action", () => {
+  const timers = fc.array(
+    fc.record({
+      id: fc.uuid(),
+      matterId: fc.constantFrom(null, "matter-1", "matter-2"),
+      state: fc.constantFrom("running" as const, "paused" as const),
+    }),
+    { maxLength: 6 },
+  );
+
+  test("pauses the matter's running timer, else resumes its paused one, else starts", () => {
+    assertProperty(
+      "pauses the matter's running timer, else resumes its paused one, else starts",
+      fc.property(timers, (drawn) => {
+        const all = drawn.map((timer): Timer => ({ ...TIMER, ...timer }));
+        const own = all.filter((timer) => timer.matterId === "matter-1");
+        const action = matterTimerAction(all, "matter-1");
+        switch (action.type) {
+          case "pause":
+            expect(own).toContain(action.timer);
+            expect(action.timer.state).toBe("running");
+            return;
+          case "resume":
+            expect(own).toContain(action.timer);
+            expect(own.every((timer) => timer.state === "paused")).toBe(true);
+            return;
+          case "start":
+            expect(own).toEqual([]);
+        }
+      }),
+    );
+  });
+
+  test("leaves another matter's running timer alone", () => {
+    expect(
+      matterTimerAction([{ ...TIMER, matterId: "matter-2" }], "matter-1"),
+    ).toEqual({ type: "start" });
   });
 });

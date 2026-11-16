@@ -1,11 +1,12 @@
 import { panic, Result } from "better-result";
 import { and, asc, eq, gt, gte, inArray, lte, or, sql } from "drizzle-orm";
+import { EmptyFilter } from "drizzle-orm/relations";
 import * as v from "valibot";
 
 import { TIME_ENTRY_STATUSES } from "@stll/api-contract";
 import { apiDateSchema } from "@stll/api-contract/api-date";
 import { BILLING_CODE_MAX_LENGTH } from "@stll/api-contract/billing";
-import { roles } from "@stll/permissions";
+import { BILLING_MATTER_READ_PERMISSION, roles } from "@stll/permissions";
 
 import { member, user } from "@/api/db/auth-schema";
 import {
@@ -489,7 +490,7 @@ const resolveInvoiceWorkspace = async ({
           limit: 1,
           where:
             requestedMatterId === undefined
-              ? undefined
+              ? EmptyFilter
               : { workspaceId: { eq: requestedMatterId } },
         },
       },
@@ -688,6 +689,10 @@ const handleListTimeEntriesTool: TypedMcpToolHandler<
     return validationErrorResult(parsed.issues);
   }
   const input = parsed.output;
+  const canReadBilling = hasEffectiveAuthority(
+    context,
+    BILLING_MATTER_READ_PERMISSION,
+  );
 
   // Detail mode.
   if (input.time_entry_id !== undefined) {
@@ -732,6 +737,7 @@ const handleListTimeEntriesTool: TypedMcpToolHandler<
     });
     const entry = {
       ...entryRow,
+      rateAtEntry: canReadBilling ? entryRow.rateAtEntry : null,
       // Detail mode may be reached by time_entry_id alone (no matter_id), so
       // carry the resolved owning workspace on the row itself; the chat
       // ref-mediation layer reads it to mint the entity's ref instead of
@@ -852,6 +858,7 @@ const handleListTimeEntriesTool: TypedMcpToolHandler<
 
   const entries = page.items.map((row) => ({
     ...row,
+    rateAtEntry: canReadBilling ? row.rateAtEntry : null,
     userName: row.userId ? (userNames.get(row.userId) ?? null) : null,
   }));
 
@@ -1305,7 +1312,7 @@ const resolveRateArgsSchema = nullAsAbsent(
 const handleResolveRateTool: McpToolHandler<
   v.InferInput<typeof RESOLVE_RATE_PROJECTION>
 > = async ({ args, context }) => {
-  if (!hasEffectiveAuthority(context, { rate: ["read"] })) {
+  if (!hasEffectiveAuthority(context, BILLING_MATTER_READ_PERMISSION)) {
     return errorResult("Forbidden");
   }
 
@@ -1551,7 +1558,7 @@ const invoiceDetailView = (
 const handleListInvoicesTool: TypedMcpToolHandler<
   v.InferInput<typeof LIST_INVOICES_PROJECTION>
 > = async ({ args, context }) => {
-  if (!hasEffectiveAuthority(context, { workspace: ["read"] })) {
+  if (!hasEffectiveAuthority(context, BILLING_MATTER_READ_PERMISSION)) {
     return errorResult("Forbidden");
   }
 
@@ -1718,7 +1725,7 @@ const handleGetUsageTool: TypedMcpToolHandler<
   );
 };
 
-export const BILLING_TOOL_DEFINITIONS = [
+const BILLING_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
     consumesServices: false,
     annotations: {
@@ -1843,13 +1850,11 @@ export const BILLING_TOOL_DEFINITIONS = [
       "Returns integer minor-unit rate and currency, or nulls if none applies.",
     inputSchema: resolveRateArgsSchema,
     access: "read",
-    permissions: { type: "all", permissions: { rate: ["read"] } },
+    permissions: { type: "all", permissions: BILLING_MATTER_READ_PERMISSION },
     readClass: "tenant",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_TIME_BILLING",
     featureId: "time-billing",
-    isVisibleToMemberRole: (memberRole) =>
-      roles[memberRole].authorize({ rate: ["read"] }).success,
     name: "resolve_rate",
     scope: "stella:read",
   }),
@@ -1876,7 +1881,7 @@ export const BILLING_TOOL_DEFINITIONS = [
         "The matter_id/invoice_id cross-field requirement stays authoritative in the runtime schema.",
     },
     access: "read",
-    permissions: { type: "all", permissions: { workspace: ["read"] } },
+    permissions: { type: "all", permissions: BILLING_MATTER_READ_PERMISSION },
     readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
@@ -1887,8 +1892,6 @@ export const BILLING_TOOL_DEFINITIONS = [
     },
     feature: "FEATURE_TIME_BILLING",
     featureId: "time-billing",
-    isVisibleToMemberRole: (memberRole) =>
-      roles[memberRole].authorize({ workspace: ["read"] }).success,
     name: "list_invoices",
     scope: "stella:read",
   }),

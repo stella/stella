@@ -184,7 +184,11 @@ pub fn manage(app: &AppHandle) {
         opener.opener().open_url(url, None::<&str>).is_ok()
       }),
       changed: Box::new(move || {
-        let _ = changed.emit(CHANGED_EVENT, ());
+        crate::logging::best_effort(
+          changed.emit(CHANGED_EVENT, ()),
+          "ChatGPT connection change was not announced",
+        );
+        crate::desktop_runner::harness_sign_in_changed();
       }),
       clear_harness_sign_in: Box::new(move || {
         if let Some(installation) = harness.try_state::<HarnessInstallation>()
@@ -208,7 +212,10 @@ pub fn apply_feature_gate(app: &AppHandle, enabled: bool) {
   if !enabled && let Some(auth) = app.try_state::<ChatGptAuth>() {
     auth.cancel();
   }
-  let _ = app.emit(CHANGED_EVENT, ());
+  crate::logging::best_effort(
+    app.emit(CHANGED_EVENT, ()),
+    "ChatGPT connection change was not announced",
+  );
 }
 
 /// What the desktop runner adds to a managed Codex app-server launch to run

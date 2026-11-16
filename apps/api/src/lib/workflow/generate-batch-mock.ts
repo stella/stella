@@ -124,6 +124,7 @@ export const generateBatchMock = async ({
         skippedPropertyIds,
         unsupportedPropertyIds: [],
         settlements: new Map(),
+        withheld: [],
       });
     }
 
@@ -283,6 +284,7 @@ export const generateBatchMock = async ({
       aiJustifications,
       skippedPropertyIds,
       unsupportedPropertyIds: [],
+      withheld: [],
       settlements: new Map(
         aiResults.map((result) => [result.propertyId, "answered" as const]),
       ),

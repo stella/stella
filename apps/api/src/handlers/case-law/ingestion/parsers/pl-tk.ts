@@ -40,6 +40,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { collapseHtmlWhitespace } from "@/api/lib/legal-search/document-builders/html-whitespace";
 import { inlineStyleValue } from "@/api/lib/legal-search/document-builders/inline-style";
+import { readInlineLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
 import {
   type MetadataUrlDefect,
   type SafeHref,
@@ -1074,7 +1075,9 @@ const walkBlockInlines = (
   while (end > start && isBlankEdge(inlines[end - 1])) {
     end -= 1;
   }
-  return collapseHtmlWhitespace(inlines.slice(start, end));
+  return readInlineLetterSpacing(
+    collapseHtmlWhitespace(inlines.slice(start, end)),
+  );
 };
 
 const FOOTNOTE_ANCHOR = /^tresc-przypisu-(?<id>.+)$/u;

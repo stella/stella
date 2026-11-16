@@ -1,7 +1,12 @@
+import { and, inArray, ne } from "drizzle-orm";
+
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
+
 import { WORKSPACE_ACCESS_MODE } from "@/api/db/rls";
 import { rlsDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import { workspaces } from "@/api/db/schema";
 import {
   createMembershipSafeDb,
   createSafeDb,
@@ -209,6 +214,17 @@ export type RootRunActor<
   writeSafeDb: PinnedSafeDb;
   inputDb: MembershipScopedDb;
   inputSafeDb: MembershipSafeDb;
+  /**
+   * A write handle that also pins `sourceWorkspaceIds`, for one write whose
+   * row records those matters as its data sources. Returns `null` unless the
+   * requester can open every one of them now. A matter being deleted does not
+   * count: the row policies that guard source data refuse it, so a row citing
+   * it could never be read. This proves access only; a deletion can still
+   * overlap the write, which must take `holdLiveSourceWorkspaces` as well.
+   */
+  writeDbWithReadableSources: (
+    sourceWorkspaceIds: readonly SafeId<"workspace">[],
+  ) => Promise<PinnedScopedDb | null>;
   organizationId: SafeId<"organization">;
   workspaceId: TWorkspace;
   userId: SafeId<"user">;
@@ -252,14 +268,43 @@ export function createRootRunActor<TRun extends SafeIdType>(
     workspaceIds: workspaceId === null ? [] : [workspaceId],
   };
   const member = { organizationId, userId };
+  const writeDb = createPinnedScopedDb(tenant, database);
+  const inputDb = createRootMembershipScopedDb(member, database);
   return {
     organizationId,
     workspaceId,
     userId,
     runId: brandRunId(data.runId),
-    writeDb: createPinnedScopedDb(tenant, database),
+    writeDb,
     writeSafeDb: createPinnedSafeDb(tenant, database),
-    inputDb: createRootMembershipScopedDb(member, database),
+    inputDb,
     inputSafeDb: createRootMembershipSafeDb(member, database),
+    writeDbWithReadableSources: async (sourceWorkspaceIds) => {
+      if (sourceWorkspaceIds.length === 0) {
+        return writeDb;
+      }
+      const readable = await inputDb((tx) =>
+        tx
+          .select({ id: workspaces.id })
+          .from(workspaces)
+          .where(
+            and(
+              inArray(workspaces.id, [...sourceWorkspaceIds]),
+              ne(workspaces.status, WORKSPACE_STATUS.deleting),
+            ),
+          )
+          .limit(sourceWorkspaceIds.length),
+      );
+      if (readable.length !== sourceWorkspaceIds.length) {
+        return null;
+      }
+      return createPinnedScopedDb(
+        {
+          ...tenant,
+          workspaceIds: [...tenant.workspaceIds, ...sourceWorkspaceIds],
+        },
+        database,
+      );
+    },
   };
 }

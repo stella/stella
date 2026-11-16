@@ -12,6 +12,7 @@ const scriptedStore = () => {
   const calls: DesktopLinkApproval[] = [];
   const openers: ((desktopUrl: string) => void)[] = [];
   const errors: unknown[] = [];
+  const switches: true[] = [];
   const store = createDesktopConnectionStore({
     link: async ({ approval, onDesktopOpening }) => {
       calls.push(approval);
@@ -21,8 +22,11 @@ const scriptedStore = () => {
     onError: (error) => {
       errors.push(error);
     },
+    requestSwitch: () => {
+      switches.push(true);
+    },
   });
-  return { linked, calls, errors, openers, store };
+  return { linked, calls, errors, openers, store, switches };
 };
 
 const DESKTOP_URL = "stella://account/complete?correlationId=fixture";
@@ -115,6 +119,7 @@ describe("desktop account connection", () => {
       onError: (error) => {
         errors.push(error);
       },
+      requestSwitch: () => {},
     });
     expect(await store.connect("explicit")).toEqual({ status: "error" });
     expect(errors).toEqual([failure]);
@@ -144,9 +149,34 @@ describe("desktop account connection", () => {
       onError: (error) => {
         errors.push(error);
       },
+      requestSwitch: () => {},
     });
     expect(await store.connect("explicit")).toEqual({ status: "started" });
     expect(store.getState()).toEqual({ status: "idle" });
     expect(errors).toEqual([]);
+  });
+
+  test("an account conflict stays on the page until the person asks the app to switch", async () => {
+    const { store, errors, linked, switches } = scriptedStore();
+    const attempt = store.connect("local-proof");
+    // Asking for a switch while the link runs would race its outcome.
+    store.switchAccount();
+    expect(switches).toEqual([]);
+    linked.resolve(
+      Result.ok({ status: "refused", reason: "account_conflict" }),
+    );
+    expect(await attempt).toEqual({
+      status: "refused",
+      reason: "account_conflict",
+    });
+    expect(store.getState()).toEqual({
+      status: "refused",
+      reason: "account_conflict",
+    });
+    expect(errors).toEqual([]);
+
+    store.switchAccount();
+    expect(switches).toEqual([true]);
+    expect(store.getState()).toEqual({ status: "idle" });
   });
 });

@@ -19,6 +19,8 @@ export type ClaudeCodeStatus =
   | { state: "signing_in"; signInPage: boolean }
   | { state: "signed_in"; email: string | null; plan: string | null }
   | { state: "api_key" }
+  /** The sign-in could not be read; it is read again after a wait. */
+  | { state: "unknown" }
   | { state: "failed"; reason: ClaudeCodeFailure };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -39,7 +41,8 @@ export const isClaudeCodeStatus = (
   switch (value["state"]) {
     case "not_installed":
     case "signed_out":
-    case "api_key": {
+    case "api_key":
+    case "unknown": {
       return true;
     }
     case "signing_in": {

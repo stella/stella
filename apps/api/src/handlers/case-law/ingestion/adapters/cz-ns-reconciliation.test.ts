@@ -756,6 +756,25 @@ describe("cz-ns buildDecision", () => {
     ]);
   });
 
+  test("a docket the court later suffixed names the row stored before it", async () => {
+    mockFetch({ printStatus: 404 });
+
+    const suffixed = await reconciliation.buildDecision({
+      unid: UNID.FIRST,
+      caseNumber: `${DOCKET.FIRST}- II.`,
+    });
+    const plain = await reconciliation.buildDecision({
+      unid: UNID.FIRST,
+      caseNumber: DOCKET.FIRST,
+    });
+    if (suffixed.type !== "built" || plain.type !== "built") {
+      throw new Error("expected both listing rows to build");
+    }
+    expect(String(suffixed.decision.caseNumber)).toBe(`${DOCKET.FIRST}- II.`);
+    expect(String(suffixed.decision.legacyCaseNumber)).toBe(DOCKET.FIRST);
+    expect(plain.decision.legacyCaseNumber).toBeUndefined();
+  });
+
   /** The court's own words, as it writes them under `Právní věta:`. */
   const HEADNOTE =
     "Uloží-li soud rodičům povinnost účastnit se mimosoudního smírčího nebo " +

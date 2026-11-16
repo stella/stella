@@ -31,6 +31,7 @@ import {
 } from "./button.shared";
 import { Loader } from "./loader";
 import { renderTooltipTrigger } from "./tooltip-trigger-helper";
+import { TruncatedText } from "./truncated-text";
 
 /**
  * Disabled styling for a button that is only `aria-disabled`.
@@ -73,6 +74,7 @@ const BUTTON_SIZE_CLASS_NAMES = {
   default: "h-9 px-[calc(--spacing(3)-1px)] sm:h-8",
   icon: "size-9 sm:size-8",
   "icon-lg": "size-10 sm:size-9",
+  "icon-round": "size-7 rounded-full sm:size-7",
   "icon-sm": "size-8 sm:size-7",
   "icon-xl":
     "size-11 sm:size-10 [&_svg:not([class*='size-'])]:size-5 sm:[&_svg:not([class*='size-'])]:size-4.5",
@@ -112,8 +114,12 @@ const BUTTON_SIZE_CLASS_NAMES = {
 // Every shared variant: its shared colours, then the web's states. A
 // selected button (`data-pressed`) shows its own treatment, and hover never
 // paints over it.
+const BUTTON_PRIMARY_STATE_CLASS =
+  "shadow-primary/24 data-pressed:bg-primary/80 [:hover:not([data-pressed])]:bg-primary/90 shadow-xs not-disabled:inset-shadow-[0_1px_--theme(--color-white/16%)] [:active,[data-pressed]]:inset-shadow-[0_1px_--theme(--color-black/8%)] [:disabled,:active,[data-pressed]]:shadow-none";
+
 const BUTTON_VARIANT_CLASS_NAMES = {
-  default: `${tokens("default")} shadow-primary/24 data-pressed:bg-primary/80 [:hover:not([data-pressed])]:bg-primary/90 shadow-xs not-disabled:inset-shadow-[0_1px_--theme(--color-white/16%)] [:active,[data-pressed]]:inset-shadow-[0_1px_--theme(--color-black/8%)] [:disabled,:active,[data-pressed]]:shadow-none`,
+  composer: `${tokens("composer")} ${BUTTON_PRIMARY_STATE_CLASS} hover:bg-foreground/90`,
+  default: `${tokens("default")} ${BUTTON_PRIMARY_STATE_CLASS}`,
   destructive: `${tokens("destructive")} shadow-destructive/8 data-pressed:border-destructive/56 data-pressed:bg-destructive/20 [:hover:not([data-pressed])]:border-destructive/40 [:hover:not([data-pressed])]:bg-destructive/14 active:bg-destructive/18 shadow-xs not-dark:bg-clip-padding not-disabled:not-active:not-data-pressed:before:shadow-[0_1px_--theme(--color-black/4%)] [:disabled,:active,[data-pressed]]:shadow-none`,
   "destructive-outline": `${tokens("destructive-outline")} dark:bg-input/32 data-pressed:border-destructive/56 data-pressed:bg-destructive/8 [:hover:not([data-pressed])]:border-destructive/32 [:hover:not([data-pressed])]:bg-destructive/4 shadow-xs/5 not-dark:bg-clip-padding not-disabled:not-active:not-data-pressed:before:shadow-[0_1px_--theme(--color-black/4%)] dark:not-disabled:before:shadow-[0_-1px_--theme(--color-white/2%)] dark:not-disabled:not-active:not-data-pressed:before:shadow-[0_-1px_--theme(--color-white/6%)] [:disabled,:active,[data-pressed]]:shadow-none`,
   "destructive-ghost": `${tokens("destructive-ghost")} data-pressed:bg-destructive/14 data-pressed:inset-ring-destructive/32 [:hover:not([data-pressed])]:bg-destructive/10 data-pressed:inset-ring`,
@@ -233,6 +239,7 @@ const BUTTON_SIZE_CONTENT = {
   default: BUTTON_CONTENT.text,
   icon: BUTTON_CONTENT.icon,
   "icon-lg": BUTTON_CONTENT.icon,
+  "icon-round": BUTTON_CONTENT.icon,
   "icon-sm": BUTTON_CONTENT.icon,
   "icon-xl": BUTTON_CONTENT.icon,
   "icon-2xs": BUTTON_CONTENT.icon,
@@ -254,13 +261,12 @@ const BUTTON_SIZE_CONTENT = {
  * A button never grows past its container (`max-w-full` on every variant).
  * A one-line text label is cut to fit with an ellipsis; the button's
  * accessible name keeps the whole text, and `tooltip` can show it. The label
- * is a plain span, not a `TruncatedText`: a tooltip root in every button's
+ * is a `TruncatedText` without its own hint: a tooltip root in every button's
  * label would cost every screen with many buttons. `layout="wrap"` lets a
  * label take several lines instead. An inline button is a word in a sentence
  * and a plain button lays out its own content, so neither has a one-line
  * label to cut.
  */
-const BUTTON_LABEL_CLASS = "block min-w-0 truncate";
 
 const cutsLabel = ({
   layout,
@@ -294,13 +300,13 @@ const containedLabel = (children: ReactNode): ReactNode => {
   const closeRun = () => {
     if (run.length > 0) {
       parts.push(
-        <span
-          className={BUTTON_LABEL_CLASS}
+        <TruncatedText
           data-slot="button-label"
+          hint={false}
           key={`label:${String(parts.length)}`}
         >
           {run}
-        </span>,
+        </TruncatedText>,
       );
       run = [];
     }
@@ -507,11 +513,23 @@ function buttonContent({
 }
 
 /**
- * The run is the visible target: underlined like a link, ringed while its
- * button has keyboard focus (per line, so a wrapped run rings each line).
+ * The run is the visible target, ringed while its button has keyboard focus
+ * (per line, so a wrapped run rings each line).
  */
 const BUTTON_TEXT_RUN_CLASS =
-  "has-focus-visible:ring-ring cursor-pointer rounded-xs underline underline-offset-2 box-decoration-clone select-text hover:decoration-2 has-focus-visible:ring-2 has-disabled:cursor-not-allowed has-disabled:opacity-64";
+  "has-focus-visible:ring-ring cursor-pointer rounded-xs box-decoration-clone select-text has-focus-visible:ring-2 has-disabled:cursor-not-allowed has-disabled:opacity-64";
+
+/**
+ * How a run shows it can be pressed: underlined like a link, or `plain`, by
+ * what it holds (a claim's text mark, which draws its own line), as a plain
+ * Button's look is its content.
+ */
+const BUTTON_TEXT_RUN_VARIANT_CLASS = {
+  link: "underline underline-offset-2 hover:decoration-2",
+  plain: "",
+} as const;
+
+type ButtonTextRunVariant = keyof typeof BUTTON_TEXT_RUN_VARIANT_CLASS;
 
 // Visually hidden but focusable: the run, not this box, shows the focus.
 const BUTTON_TEXT_RUN_TARGET_CLASS =
@@ -537,6 +555,8 @@ type ButtonTextRunProps = Omit<
 > & {
   children: ReactNode;
   className?: string | undefined;
+  /** `link` unless the run holds a text mark that draws its own line. */
+  variant?: ButtonTextRunVariant | undefined;
 };
 
 /**
@@ -552,10 +572,15 @@ const ButtonTextRun = ({
   children,
   className,
   disabled,
+  variant = "link",
   ...props
 }: ButtonTextRunProps) => (
   <label
-    className={cn(BUTTON_TEXT_RUN_CLASS, className)}
+    className={cn(
+      BUTTON_TEXT_RUN_CLASS,
+      BUTTON_TEXT_RUN_VARIANT_CLASS[variant],
+      className,
+    )}
     data-slot="button-text-run"
   >
     {/* Pinned after the spread: a value typed wider than the props could

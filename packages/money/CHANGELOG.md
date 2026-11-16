@@ -1,5 +1,13 @@
 # @stll/money
 
+## 0.4.0
+
+### Minor Changes
+
+- [#7629](https://github.com/stella/stella/pull/7629) [`3978f45`](https://github.com/stella/stella/commit/3978f45cea7b4a37d42882f1be9075ea933d2f39) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add locale decimal input parsing and exact redisplay formatters, with branded `LocaleInputText` values that keep canonical stored decimals out of locale-validated form fields: such text comes only from the formatters, from an input element (`localeInputText`) or as `EMPTY_LOCALE_INPUT_TEXT`. Parsing accepts locale separators or an unambiguous dot or comma decimal, and reports a typed `LocaleAmountParseError` instead of guessing when text allows two readings.
+
+- [#7940](https://github.com/stella/stella/pull/7940) [`ad81543`](https://github.com/stella/stella/commit/ad81543e9c85c79cc921caa5b72d7ee39cde94c3) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `toMajorUnitsText`: a stored minor-unit amount as exact major-unit decimal text (`123456 EUR` is `"1234.56"`), for machine readers such as prompts and exports.
+
 ## 0.3.1
 
 ### Patch Changes

@@ -36,6 +36,7 @@ import { DirectionalIcon } from "./directional-icon";
 import { Input } from "./input";
 import { Popover, PopoverPopup, PopoverTrigger } from "./popover";
 import { TimeField } from "./time-field";
+import { TruncatedText } from "./truncated-text";
 
 // ---------------------------------------------------------------------------
 // Calendar utilities
@@ -139,13 +140,21 @@ const getFirstDayOfWeek = (locale: string): number => {
   return info.firstDay === 7 ? 6 : info.firstDay - 1;
 };
 
-const getMonthDays = (
-  year: number,
-  month: number,
-  firstDow: number,
-  weekendDays: ReadonlySet<number>,
-  today: string,
-): CalendarDay[] => {
+type GetMonthDaysOptions = {
+  year: number;
+  month: number;
+  firstDow: number;
+  weekendDays: ReadonlySet<number>;
+  today: string;
+};
+
+const getMonthDays = ({
+  year,
+  month,
+  firstDow,
+  weekendDays,
+  today,
+}: GetMonthDaysOptions): CalendarDay[] => {
   const days: CalendarDay[] = [];
   const first = Temporal.PlainDate.from({ year, month: month + 1, day: 1 });
   const startOffset = (first.dayOfWeek - 1 - firstDow + 7) % 7;
@@ -591,7 +600,14 @@ const DatePickerPopoverContent = (props: DatePickerPopoverContentProps) => {
   const decadeBase = decadeBaseOverride ?? decadeStart(viewYear);
 
   const days = useMemo(
-    () => getMonthDays(viewYear, viewMonth, firstDow, weekendDays, today),
+    () =>
+      getMonthDays({
+        year: viewYear,
+        month: viewMonth,
+        firstDow,
+        weekendDays,
+        today,
+      }),
     [viewYear, viewMonth, firstDow, weekendDays, today],
   );
   const weekdays = useMemo(
@@ -859,12 +875,12 @@ const DatePickerPopoverContent = (props: DatePickerPopoverContentProps) => {
         }
       >
         {showIcon && <CalendarIcon className="size-3.5 shrink-0" />}
-        <span
-          className="min-w-0 flex-1 truncate text-start"
+        <TruncatedText
+          className="flex-1 text-start"
           id={labelledBy ? displayValueId : undefined}
         >
           {displayLabel}
-        </span>
+        </TruncatedText>
         {isOverdue && overdueLabel && (
           <span className="text-destructive text-xs">{overdueLabel}</span>
         )}

@@ -2,8 +2,10 @@ import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { organization, twoFactor } from "better-auth/plugins";
 import { Result } from "better-result";
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import * as v from "valibot";
+
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import { authCapabilitiesRoute } from "@/api/handlers/auth/routes";
@@ -17,31 +19,22 @@ import { authenticateMcpRequest } from "@/api/mcp/auth";
 import { MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
 import { serveRoutesForTest } from "@/api/tests/helpers/serve-routes";
 
+const testState = createTestState({ file: import.meta.path, config: env });
+
 const routeServer = serveRoutesForTest(authCapabilitiesRoute);
-afterAll(async () => {
-  await routeServer.stop();
-});
 
 const email = "member@example.test";
 const password = "fixture password for tests";
 const unconfigured = { email: undefined, organizationId: undefined };
 
-const previous = {
-  email: env.APP_REVIEW_ACCOUNT_EMAIL,
-  organizationId: env.APP_REVIEW_ORGANIZATION_ID,
-  demoEmail: env.DEMO_ACCOUNT_EMAIL,
-};
-
-beforeAll(() => {
-  env.APP_REVIEW_ACCOUNT_EMAIL = undefined;
-  env.APP_REVIEW_ORGANIZATION_ID = undefined;
-  env.DEMO_ACCOUNT_EMAIL = undefined;
+testState.beforeAll(() => {
+  testState.setConfig("APP_REVIEW_ACCOUNT_EMAIL", undefined);
+  testState.setConfig("APP_REVIEW_ORGANIZATION_ID", undefined);
+  testState.setConfig("DEMO_ACCOUNT_EMAIL", undefined);
 });
 
-afterAll(() => {
-  env.APP_REVIEW_ACCOUNT_EMAIL = previous.email;
-  env.APP_REVIEW_ORGANIZATION_ID = previous.organizationId;
-  env.DEMO_ACCOUNT_EMAIL = previous.demoEmail;
+afterAll(async () => {
+  await routeServer.stop();
 });
 
 /** The same auth setup with and without the review-account plugin. */

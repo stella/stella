@@ -1,20 +1,36 @@
 /**
  * Pass one: find the claims a document makes.
  *
- * The model reads the document one window of blocks at a time, with a few
- * neighbouring blocks for context, and lists each claim as a verbatim quote of the block it sits in. The
- * quote is located in the block's own text here, so a claim's anchor is
- * always the document's words, never the model's paraphrase. A quote that
- * cannot be found is shown back once for correction; one that still cannot
- * be found is not a claim this run can point at.
+ * The model reads the document one window of text at a time
+ * (`extraction-windows.ts`: sized by text, a long block cut into pieces),
+ * with some neighbouring text for context, and lists each claim as a
+ * verbatim quote of the block or piece it sits in. The quote is located in
+ * that text here, so a claim's anchor is always the document's words, never
+ * the model's paraphrase. A quote that cannot be found is shown back once
+ * for correction; one that still cannot be found is not a claim this run can
+ * point at.
+ *
+ * A window whose call fails is tried again, twice, after a growing wait,
+ * when the failure is one a retry can clear. A window that still fails is
+ * reported as text the run did not read, never dropped silently and never
+ * failing the windows that were read; only when no window could be read does
+ * extraction fail. Losing access or reaching the run's model-call cap ends
+ * extraction at once, as before.
+ *
+ * A run limited to a paragraph range sends only that range's text, so its
+ * cost follows the range; a claim's anchor is still an offset into its whole
+ * block, where the reader shows it.
  */
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import { mapWithConcurrency } from "@stll/concurrency";
+import { backoffDelay } from "@stll/concurrency/backoff-delay";
+import { sleep } from "@stll/concurrency/sleep";
 import { locateQuote } from "@stll/legal-ast/quote-locate";
 
+import { aiFailureCanClearOnRetry } from "@/api/lib/ai-error";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import {
   CLAIM_FRAMINGS,
@@ -25,20 +41,37 @@ import type {
   ClaimAnchor,
   ClaimFraming,
   ClaimType,
+  VerificationUnreadPart,
 } from "@/api/lib/lists/verification/contract";
-import type { VerificationBlock } from "@/api/lib/lists/verification/document-text";
 import {
-  blocksText,
-  createVerificationCall,
+  extractionPieces,
+  extractionWindows,
+  windowContext,
+  windowText,
+} from "@/api/lib/lists/verification/extraction-windows";
+import type {
+  ExtractionPiece,
+  ExtractionWindow,
+} from "@/api/lib/lists/verification/extraction-windows";
+import { createVerificationCall } from "@/api/lib/lists/verification/model-call";
+import type {
+  ListVerificationAccessRevokedError,
+  VerificationModelDeps,
 } from "@/api/lib/lists/verification/model-call";
-import type { VerificationModelDeps } from "@/api/lib/lists/verification/model-call";
+import type { VerificationPassage } from "@/api/lib/lists/verification/paragraph-scope";
+import type { ModelRunCapError } from "@/api/lib/usage/model-run-caps/caps";
 
-/** Blocks per extraction call: small enough that the model does not skim. */
-const WINDOW_BLOCKS = 40;
-/** Blocks shown on each side of a window, so a claim split across a block
- *  boundary still reads as one. */
-const CONTEXT_BLOCKS = 3;
 const CONCURRENCY = 3;
+/** Calls after the first a failing window gets. */
+export const EXTRACTION_WINDOW_RETRIES = 2;
+
+/** The wait before retry `attempt` (from 0): about 2 s, then about 8 s. */
+const retryDelayMs = (attempt: number): number =>
+  backoffDelay(attempt, {
+    baseMs: 2000,
+    factor: 4,
+    jitter: { type: "additive", random: Math.random(), rangeMs: 1000 },
+  });
 
 const rawClaimSchema = v.strictObject({
   blockId: v.string(),
@@ -59,7 +92,7 @@ export type ExtractedClaim = {
   framing: ClaimFraming;
   text: string;
   anchor: ClaimAnchor;
-  /** Reading order: the block's index, then the offset inside it. */
+  /** Reading order: the passage's index, then the offset inside it. */
   blockIndex: number;
 };
 
@@ -75,40 +108,92 @@ For each claim give:
 
 List claims in the order they appear. Only list claims in the blocks you are asked about; the blocks around them are context.`;
 
-type Window = { from: number; to: number };
-
 const windowTask = (
-  blocks: readonly VerificationBlock[],
-  { from, to }: Window,
+  pieces: readonly ExtractionPiece[],
+  window: ExtractionWindow,
 ): string => {
-  const asked = blocks.slice(from, to);
-  const context = blocks.slice(
-    Math.max(0, from - CONTEXT_BLOCKS),
-    Math.min(blocks.length, to + CONTEXT_BLOCKS),
-  );
-  return `Document blocks:\n${blocksText(context)}\n\nList the claims in these blocks only: ${asked.map((block) => block.id).join(", ")}`;
+  const asked = pieces.slice(window.from, window.to);
+  const { before, after } = windowContext(pieces, window);
+  return `Document blocks:\n${windowText([...before, ...asked, ...after])}\n\nList the claims in these blocks only: ${asked.map((piece) => piece.id).join(", ")}`;
 };
 
 type Grounding =
   | { type: "grounded"; claim: ExtractedClaim }
   | { type: "misquoted"; raw: RawClaim; reason: string };
 
+/** What a cited id reads: a piece, or, when the model names a cut block
+ *  rather than the piece it was shown, the pieces of that block this window
+ *  asked about. */
+type GroundTarget = {
+  key: string;
+  passageIndex: number;
+  start: number;
+  end: number;
+};
+
+/**
+ * The ids one window's answer may cite. A cut block's own id reads only the
+ * pieces of it the window asked about, never the whole block: a quote that
+ * repeats earlier in the block would otherwise anchor to a piece another
+ * window read. A block the window did not ask about has no target under its
+ * own id once it is cut.
+ */
+const groundTargets = (
+  pieces: readonly ExtractionPiece[],
+  passages: readonly VerificationPassage[],
+  { from, to }: ExtractionWindow,
+): ReadonlyMap<string, GroundTarget> => {
+  const targets = new Map<string, GroundTarget>();
+  for (const piece of pieces) {
+    targets.set(piece.id, {
+      key: piece.id,
+      passageIndex: piece.passageIndex,
+      start: piece.start,
+      end: piece.end,
+    });
+  }
+  for (const piece of pieces.slice(from, to)) {
+    const blockId =
+      passages[piece.passageIndex]?.block.id ??
+      panic("A piece names a passage outside the run");
+    if (blockId === piece.id) {
+      continue;
+    }
+    const asked = targets.get(blockId);
+    targets.set(blockId, {
+      key: blockId,
+      passageIndex: piece.passageIndex,
+      start: asked?.start ?? piece.start,
+      end: piece.end,
+    });
+  }
+  return targets;
+};
+
+/**
+ * The quote's place in the text the model read, as offsets into the whole
+ * block: a scoped run's anchors, and a piece's, land where the reader shows
+ * the document, not where its slice began.
+ */
 const ground = (
   raw: RawClaim,
-  blockIndexById: ReadonlyMap<string, number>,
-  blocks: readonly VerificationBlock[],
+  targets: ReadonlyMap<string, GroundTarget>,
+  passages: readonly VerificationPassage[],
   cursor: Map<string, number>,
 ): Grounding => {
-  const blockIndex = blockIndexById.get(raw.blockId);
-  const block = blockIndex === undefined ? undefined : blocks.at(blockIndex);
-  if (blockIndex === undefined || block === undefined) {
+  const target = targets.get(raw.blockId);
+  const passage =
+    target === undefined ? undefined : passages.at(target.passageIndex);
+  if (target === undefined || passage === undefined) {
     return {
       type: "misquoted",
       raw,
       reason: "names a block that does not exist",
     };
   }
-  const span = locateQuote(block.text, raw.quote, cursor.get(block.id) ?? 0);
+  const { block } = passage;
+  const read = block.text.slice(target.start, target.end);
+  const span = locateQuote(read, raw.quote, cursor.get(target.key) ?? 0);
   if (span === null) {
     return {
       type: "misquoted",
@@ -116,27 +201,34 @@ const ground = (
       reason: "is not in that block word for word",
     };
   }
-  cursor.set(block.id, span.end);
-  const text = block.text
+  cursor.set(target.key, span.end);
+  const text = read
     .slice(span.start, span.end)
     .slice(0, VERIFICATION_LIMITS.CLAIM_TEXT_MAX);
+  const start = target.start + span.start;
   const anchor: ClaimAnchor =
     block.source.type === "docx-block"
       ? {
           type: "docx-block",
           blockId: block.source.blockId,
-          start: span.start,
-          end: span.start + text.length,
+          start,
+          end: start + text.length,
         }
       : {
           type: "pdf-page",
           pageNumber: block.source.pageNumber,
-          start: span.start,
-          end: span.start + text.length,
+          start,
+          end: start + text.length,
         };
   return {
     type: "grounded",
-    claim: { type: raw.type, framing: raw.framing, text, anchor, blockIndex },
+    claim: {
+      type: raw.type,
+      framing: raw.framing,
+      text,
+      anchor,
+      blockIndex: target.passageIndex,
+    },
   };
 };
 
@@ -150,17 +242,84 @@ const repairMessage = (
     )
     .join("\n")}\nAnswer with only these claims.`;
 
-type ExtractClaimsArgs = {
-  blocks: readonly VerificationBlock[];
-  deps: VerificationModelDeps;
+/** Why extraction stops the whole run: no window may go on without it. */
+type ExtractionStop = ListVerificationAccessRevokedError | ModelRunCapError;
+
+/** One window's outcome once its retries are spent. */
+type WindowOutcome =
+  | { type: "read"; claims: ExtractedClaim[] }
+  | { type: "unread"; window: ExtractionWindow; cause: unknown }
+  // The run was cancelled: every window ends, and the run fails as it
+  // would have before reading anything.
+  | { type: "cancelled"; cause: unknown };
+
+/** The unread windows as parts of the document, neighbouring windows
+ *  joined into one part. */
+const unreadParts = (
+  pieces: readonly ExtractionPiece[],
+  passages: readonly VerificationPassage[],
+  windows: readonly ExtractionWindow[],
+): VerificationUnreadPart[] => {
+  const edge = (pieceIndex: number, side: "start" | "end") => {
+    const piece = pieces[pieceIndex];
+    const passage =
+      piece === undefined ? undefined : passages[piece.passageIndex];
+    if (piece === undefined || passage === undefined) {
+      return panic("An unread window names a piece outside the run");
+    }
+    return { blockId: passage.block.id, offset: piece[side] };
+  };
+  const parts: VerificationUnreadPart[] = [];
+  let open: ExtractionWindow | null = null;
+  for (const window of windows) {
+    if (open !== null && open.to === window.from) {
+      open = { from: open.from, to: window.to };
+      continue;
+    }
+    if (open !== null) {
+      parts.push({
+        start: edge(open.from, "start"),
+        end: edge(open.to - 1, "end"),
+      });
+    }
+    open = window;
+  }
+  if (open !== null) {
+    parts.push({
+      start: edge(open.from, "start"),
+      end: edge(open.to - 1, "end"),
+    });
+  }
+  return parts;
 };
 
-/** Every grounded claim in reading order, capped at the per-run maximum. */
+export type ClaimExtraction = {
+  /** Every grounded claim in reading order, capped at the per-run maximum. */
+  claims: ExtractedClaim[];
+  /** Text no call could read; empty when the whole run was read. */
+  unread: VerificationUnreadPart[];
+};
+
+type ExtractClaimsArgs = {
+  /** The text the run reads, in reading order: every block whole, or the
+   *  slices a paragraph scope keeps. A claim's `blockIndex` indexes this. */
+  passages: readonly VerificationPassage[];
+  deps: VerificationModelDeps;
+  /** The wait before a window's retry; a process-local boundary that
+   *  focused tests replace. */
+  waitBeforeRetry?: (attempt: number, signal: AbortSignal) => Promise<void>;
+};
+
+const waitWithBackoff = async (attempt: number, signal: AbortSignal) => {
+  await sleep(retryDelayMs(attempt), { signal });
+};
+
 export const extractClaims = async ({
-  blocks,
+  passages,
   deps,
+  waitBeforeRetry = waitWithBackoff,
 }: ExtractClaimsArgs): Promise<
-  Result<ExtractedClaim[], WorkflowIntegrationError>
+  Result<ClaimExtraction, WorkflowIntegrationError>
 > => {
   const call = createVerificationCall({
     deps,
@@ -169,13 +328,85 @@ export const extractClaims = async ({
     shared: null,
     outputSchema: extractionSchema,
   });
-  const blockIndexById = new Map(
-    blocks.map((block, index) => [block.id, index]),
-  );
-  const windows: Window[] = [];
-  for (let from = 0; from < blocks.length; from += WINDOW_BLOCKS) {
-    windows.push({ from, to: Math.min(blocks.length, from + WINDOW_BLOCKS) });
-  }
+  const pieces = extractionPieces(passages);
+  const windows = extractionWindows(pieces);
+  /** Every failure this extraction observes reaches analytics here: each
+   *  failed window attempt, and anything thrown past the windows. */
+  const captureFailure = (cause: unknown) => {
+    call.captureError(cause);
+  };
+
+  /** One call and its repair round. A failed call throws. */
+  const readWindow = async (
+    window: ExtractionWindow,
+  ): Promise<Result<ExtractedClaim[], ExtractionStop>> => {
+    const targets = groundTargets(pieces, passages, window);
+    const request = call.request(windowTask(pieces, window));
+    const output = await call.generate([request]);
+    if (Result.isError(output)) {
+      return output;
+    }
+    const cursor = new Map<string, number>();
+    const grounded: ExtractedClaim[] = [];
+    const misquoted: { raw: RawClaim; reason: string }[] = [];
+    for (const raw of output.value.claims) {
+      const result = ground(raw, targets, passages, cursor);
+      if (result.type === "grounded") {
+        grounded.push(result.claim);
+      } else {
+        misquoted.push(result);
+      }
+    }
+    if (misquoted.length === 0) {
+      return Result.ok(grounded);
+    }
+    const repaired = await call.generate([
+      request,
+      { role: "assistant", content: JSON.stringify(output.value) },
+      { role: "user", content: repairMessage(misquoted) },
+    ]);
+    if (Result.isError(repaired)) {
+      return repaired;
+    }
+    for (const raw of repaired.value.claims) {
+      const result = ground(raw, targets, passages, cursor);
+      if (result.type === "grounded") {
+        grounded.push(result.claim);
+      }
+    }
+    return Result.ok(grounded);
+  };
+
+  /** A window read with its retries. A cancelled run is `cancelled`; a
+   *  failure that ends only this window is `unread`. */
+  const settleWindow = async (
+    window: ExtractionWindow,
+    attempt = 0,
+  ): Promise<Result<WindowOutcome, ExtractionStop>> => {
+    const settled = await Result.tryPromise({
+      try: async () => await readWindow(window),
+      catch: (cause) => cause,
+    });
+    if (Result.isOk(settled)) {
+      const read = settled.value;
+      return Result.isError(read)
+        ? Result.err(read.error)
+        : Result.ok({ type: "read", claims: read.value });
+    }
+    const cause = settled.error;
+    if (deps.abortSignal.aborted) {
+      return Result.ok({ type: "cancelled", cause });
+    }
+    captureFailure(cause);
+    if (
+      attempt >= EXTRACTION_WINDOW_RETRIES ||
+      !aiFailureCanClearOnRetry(cause)
+    ) {
+      return Result.ok({ type: "unread", window, cause });
+    }
+    await waitBeforeRetry(attempt, deps.abortSignal);
+    return await settleWindow(window, attempt + 1);
+  };
 
   return Result.flatten(
     await Result.tryPromise({
@@ -183,75 +414,77 @@ export const extractClaims = async ({
         const perWindow = await mapWithConcurrency({
           items: windows,
           limit: CONCURRENCY,
-          operation: async (window) => {
-            const request = call.request(windowTask(blocks, window));
-            const output = await call.generate([request]);
-            if (Result.isError(output)) {
-              return output;
-            }
-            const cursor = new Map<string, number>();
-            const grounded: ExtractedClaim[] = [];
-            const misquoted: { raw: RawClaim; reason: string }[] = [];
-            for (const raw of output.value.claims) {
-              const result = ground(raw, blockIndexById, blocks, cursor);
-              if (result.type === "grounded") {
-                grounded.push(result.claim);
-              } else {
-                misquoted.push(result);
-              }
-            }
-            if (misquoted.length === 0) {
-              return Result.ok(grounded);
-            }
-            const repaired = await call.generate([
-              request,
-              { role: "assistant", content: JSON.stringify(output.value) },
-              { role: "user", content: repairMessage(misquoted) },
-            ]);
-            if (Result.isError(repaired)) {
-              return repaired;
-            }
-            for (const raw of repaired.value.claims) {
-              const result = ground(raw, blockIndexById, blocks, cursor);
-              if (result.type === "grounded") {
-                grounded.push(result.claim);
-              }
-            }
-            return Result.ok(grounded);
-          },
+          operation: async (window) => await settleWindow(window),
         });
-        // A claim listed twice (in two windows, or again in a repair) is one
-        // claim: its anchor is its identity.
-        const unique = new Map<string, ExtractedClaim>();
         const resolved: ExtractedClaim[] = [];
-        for (const window of perWindow) {
-          if (window.isErr()) {
+        const unread: { window: ExtractionWindow; cause: unknown }[] = [];
+        for (const outcome of perWindow) {
+          if (outcome.isErr()) {
             return Result.err(
               new WorkflowIntegrationError({
                 message: "Claim extraction failed",
-                cause: window.error,
+                cause: outcome.error,
               }),
             );
           }
-          resolved.push(...window.value);
+          switch (outcome.value.type) {
+            case "read": {
+              resolved.push(...outcome.value.claims);
+              break;
+            }
+            case "unread": {
+              unread.push(outcome.value);
+              break;
+            }
+            case "cancelled": {
+              return Result.err(
+                new WorkflowIntegrationError({
+                  message: "Claim extraction failed",
+                  cause: outcome.value.cause,
+                }),
+              );
+            }
+            default: {
+              outcome.value satisfies never;
+              return panic("Unhandled extraction window outcome");
+            }
+          }
         }
+        // Nothing read is not a run with no claims: it is a failed one.
+        const firstUnread = unread.at(0);
+        if (firstUnread !== undefined && unread.length === windows.length) {
+          return Result.err(
+            new WorkflowIntegrationError({
+              message: "Claim extraction failed",
+              cause: firstUnread.cause,
+            }),
+          );
+        }
+        // A claim listed twice (in two windows, or again in a repair) is one
+        // claim: its anchor is its identity.
+        const unique = new Map<string, ExtractedClaim>();
         for (const claim of resolved) {
           const key = `${String(claim.blockIndex)}:${String(claim.anchor.start)}:${String(claim.anchor.end)}`;
           if (!unique.has(key)) {
             unique.set(key, claim);
           }
         }
-        return Result.ok(
-          [...unique.values()]
+        return Result.ok({
+          claims: [...unique.values()]
             .toSorted(
               (a, b) =>
                 a.blockIndex - b.blockIndex || a.anchor.start - b.anchor.start,
             )
             .slice(0, VERIFICATION_LIMITS.CLAIMS_PER_RUN_MAX),
-        );
+          unread: unreadParts(
+            pieces,
+            passages,
+            unread.map(({ window }) => window),
+          ),
+        });
       },
       catch: (cause) => {
-        call.captureError(cause);
+        captureFailure(cause);
         return new WorkflowIntegrationError({
           message: "Claim extraction failed",
           cause,

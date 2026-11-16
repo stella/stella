@@ -178,16 +178,26 @@ export const setPath = (
   let node = target;
   for (let index = 0; index < segments.length - 1; index += 1) {
     const segment = segments[index] ?? "";
-    const next = node[segment];
+    const next = Object.hasOwn(node, segment) ? node[segment] : undefined;
     if (isRecord(next)) {
       node = next;
     } else {
       const created: Record<string, unknown> = {};
-      node[segment] = created;
+      Object.defineProperty(node, segment, {
+        value: created,
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
       node = created;
     }
   }
-  node[segments.at(-1) ?? path] = value;
+  Object.defineProperty(node, segments.at(-1) ?? path, {
+    value,
+    enumerable: true,
+    configurable: true,
+    writable: true,
+  });
 };
 
 /**
@@ -203,7 +213,7 @@ const hasInputPath = (
   const segments = path.split(".");
   let node: unknown = target;
   for (const segment of segments) {
-    if (!isRecord(node)) {
+    if (!isRecord(node) || !Object.hasOwn(node, segment)) {
       return false;
     }
     node = node[segment];
@@ -346,7 +356,8 @@ export const composeInputFromFlags = async <T extends FlagSpec>({
 }: ComposeInputFromFlagsOptions<T>): Promise<ArgsResult> => {
   for (const flagSpec of flagSpecs) {
     const path = flagPath(flagSpec);
-    const value = flags[flagKey(flagSpec)];
+    const key = flagKey(flagSpec);
+    const value = Object.hasOwn(flags, key) ? flags[key] : undefined;
     if (!flagValueProvided(flagSpec, value)) {
       continue;
     }
@@ -525,9 +536,13 @@ export const parsePayload = (result: CallToolResult): unknown => {
   return Result.isOk(parsed) ? unwrapCapabilityResult(parsed.value) : undefined;
 };
 
-/** One structured validation issue: dot-path (empty for root) plus reason. */
+/**
+ * One structured issue: dot-path (empty for root), reason, and an optional
+ * machine code (a legal-hold refusal names each hold's scope there).
+ */
 type ErrorIssue = {
   path: string;
+  code?: string;
   message: string;
 };
 
@@ -567,8 +582,11 @@ const parseErrorIssues = (error: Record<string, unknown>): ErrorIssue[] => {
     }
     const path = entry["path"];
     const message = entry["message"];
+    const code = entry["code"];
     if (typeof path === "string" && typeof message === "string") {
-      issues.push({ path, message });
+      issues.push(
+        typeof code === "string" ? { path, code, message } : { path, message },
+      );
     }
   }
   return issues;
@@ -1091,7 +1109,7 @@ export const toolErrorLines = (
     retryAfterMs?: number;
     contactUrl?: string;
     hint: string | undefined;
-    issues: readonly { path: string; message: string }[];
+    issues: readonly ErrorIssue[];
   },
   {
     command,
@@ -1120,10 +1138,14 @@ export const toolErrorLines = (
   } else {
     lines.push(`error: ${envelope.message}`);
     for (const issue of envelope.issues) {
+      const reason =
+        issue.code === undefined
+          ? issue.message
+          : `${issue.message} [${issue.code}]`;
       lines.push(
         issue.path === ""
-          ? `  ${issue.message}`
-          : `  ${issueLocation(issue.path, flagPaths)}: ${issue.message}`,
+          ? `  ${reason}`
+          : `  ${issueLocation(issue.path, flagPaths)}: ${reason}`,
       );
     }
   }
@@ -1327,7 +1349,10 @@ export const runLeafCommand = async ({
   const localFileProp = spec.localFileBase64Prop;
   const localFilePath = flags[LOCAL_FILE_FLAG_KEY];
   if (localFileProp !== undefined && typeof localFilePath === "string") {
-    if (args[localFileProp] !== undefined) {
+    if (
+      Object.hasOwn(args, localFileProp) &&
+      args[localFileProp] !== undefined
+    ) {
       writers.stderr(
         `${LOCAL_FILE_FLAG} and --${kebabCase(localFileProp)} both carry the document; pass one of them\n`,
       );
@@ -1348,7 +1373,7 @@ export const runLeafCommand = async ({
       setExit(context, EXIT_CODES.validation);
       return;
     }
-    args[localFileProp] = encoded.value;
+    args = { ...args, [localFileProp]: encoded.value };
   }
 
   if (spec.discriminatorInject !== undefined) {

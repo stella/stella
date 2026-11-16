@@ -1,6 +1,11 @@
 /* The popup's colour tokens. The extension popup loads no app stylesheet, so
- * its palette is named once here and style.css reads it with `var(--token)`. */
+ * its palette is named once here and style.css reads it with `var(--token)`.
+ * The popup follows the system colour scheme; the dark values are the app's
+ * own dark tokens (packages/ui/src/styles/theme.css, `.dark`), written out
+ * with the colour scale they name. */
 :root {
+  color-scheme: light dark;
+  --background: #fff;
   --foreground: #171717;
   --muted-foreground: #525252;
   --primary: #171717;
@@ -10,4 +15,27 @@
   --status-access-needed: #a16207;
   --secondary: #e5e5e5;
   --secondary-foreground: #171717;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* --background: neutral-950 lifted with 5% white. */
+    --background: color-mix(in srgb, oklch(14.5% 0 0) 95%, #fff);
+    /* --foreground: neutral-100. */
+    --foreground: oklch(97% 0 0);
+    /* --muted-foreground: neutral-400. */
+    --muted-foreground: oklch(70.8% 0 0);
+    /* --primary and --primary-foreground: neutral-100 on neutral-800. */
+    --primary: oklch(97% 0 0);
+    --primary-foreground: oklch(26.9% 0 0);
+    /* --ring: neutral-500. */
+    --status-idle: oklch(55.6% 0 0);
+    /* --success-foreground: emerald-400. */
+    --status-connected: oklch(76.5% 0.177 163.223);
+    /* --warning-foreground: amber-400. */
+    --status-access-needed: oklch(82.8% 0.189 84.429);
+    /* --input: 10% white, as the light secondary is 10% black on white. */
+    --secondary: color-mix(in srgb, #fff 10%, var(--background));
+    --secondary-foreground: oklch(97% 0 0);
+  }
 }

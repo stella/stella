@@ -8,6 +8,7 @@ import { ScanEngineError } from "@stll/scan-engine/types";
 
 import { ClientOperationError } from "@/lib/errors/client";
 import type { PageViewport } from "@/lib/pdf/pdfjs-loader";
+import { fakeRenderTask } from "@/lib/pdf/render-task.test-fixtures";
 
 import { runCleanScan } from "./clean-scan-run";
 import type { CleanScanFailure } from "./clean-scan-run";
@@ -36,15 +37,7 @@ const pageProxy = (promise: Promise<void>, onRender: () => void) =>
     getViewport: viewport,
     render: () => {
       onRender();
-      return {
-        _internalRenderTask: null,
-        onContinue: () => undefined,
-        onError: () => undefined,
-        promise,
-        cancel: () => undefined,
-        separateAnnots: false,
-        imageCoordinates: {},
-      };
+      return fakeRenderTask({ promise });
     },
   }) satisfies Parameters<typeof runCleanScan>[0]["pages"][number]["proxy"];
 

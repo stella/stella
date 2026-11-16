@@ -266,6 +266,7 @@ const unreadBuild = async (
   );
 
 export const czNsFixture = (): EnrolledAdapterFixture => ({
+  rawFieldValues: { "Senátní značka": CZ_NS_DETAIL_PAGE },
   buildDecision: async () =>
     await withTestFetch(
       asFetchMock(async (input: string | URL | Request) => {
@@ -419,20 +420,41 @@ const CZ_NSS_FIXTURE_FIELD_IDS = [
   "vyrokrozhodnuti",
   "zastupce",
   "zobrazovanedatum",
+  "evidencniznackars",
+  "spzncjpredkladacirozhodnutinss",
+  "spzncjnapadenarozhodnutinss",
+  "anotace",
+  "datumpredlozenirs",
+  "datumrozhodnutirs",
+  "rozhodnutonapursnss",
+  "nssjudikat",
+  "nsssesit",
+  "nssrok",
+  "vyhledavanidlehesel",
+  "rozpornaprejudikatura",
+  "nadpis",
+  "vztahkpredpisům",
+  "datumvydanivsbnss",
+  "pravnivetaan",
 ] as const;
 
 /** Stands in wherever the value carries nothing the assertions read. */
 const CZ_NSS_PLACEHOLDER_VALUE = "Ne";
+/** The values the fixture's detail page states a second time, by field. */
+const CZ_NSS_FIXTURE_REPEATED_VALUES: Readonly<Record<string, string[]>> = {
+  krajskysoud: ["Krajský soud v Ostravě"],
+  ecli: ["ECLI:CZ:NSS:2016:5.As.140.2014.53"],
+  datumvydanirozhodnuti: ["26.05.2016"],
+};
+
+const czNssFixtureValue = (fieldId: string) =>
+  CZ_NSS_FIXTURE_VALUES[fieldId] ?? CZ_NSS_PLACEHOLDER_VALUE;
 
 const CZ_NSS_DETAIL_PAGE = `<html><body>${CZ_NSS_FIXTURE_FIELD_IDS.map(
-  (fieldId) =>
-    czNssDetailField(
-      fieldId,
-      CZ_NSS_FIXTURE_VALUES[fieldId] ?? CZ_NSS_PLACEHOLDER_VALUE,
-    ),
+  (fieldId) => czNssDetailField(fieldId, czNssFixtureValue(fieldId)),
 ).join(
   "",
-)}<table><tbody><tr><td class="det-textval" data-field-id="ecli">ECLI:CZ:NSS:2016:5.As.140.2014.53</td><td class="det-textval" data-field-id="datumvydanirozhodnuti">26.05.2016</td></tr></tbody></table></body></html>`;
+)}<div data-field-id="krajskysoud"><span class="det-textval"><a href="/DokumentDetail/Index/641750">Krajský soud v Ostravě</a></span></div><table><tbody><tr><td class="det-textval" data-field-id="ecli">ECLI:CZ:NSS:2016:5.As.140.2014.53</td><td class="det-textval" data-field-id="datumvydanirozhodnuti">26.05.2016</td></tr></tbody></table></body></html>`;
 
 const CZ_NSS_DOCUMENT_PAGE = `<html><body>
   <p>ČESKÁ REPUBLIKA</p>
@@ -446,6 +468,17 @@ const CZ_NSS_DOCUMENT_PAGE = `<html><body>
 export const czNssFixture = (
   detailHtml = CZ_NSS_DETAIL_PAGE,
 ): EnrolledAdapterFixture => ({
+  rawFieldValues: Object.fromEntries(
+    CZ_NSS_FIXTURE_FIELD_IDS.map((fieldId) => [
+      fieldId.replace("&#xA7;", "§"),
+      [
+        czNssFixtureValue(fieldId),
+        // The detail page states these again: the regional court as a link,
+        // the identifier and date in the table of related decisions.
+        ...(CZ_NSS_FIXTURE_REPEATED_VALUES[fieldId] ?? []),
+      ],
+    ]),
+  ),
   buildDecision: async () =>
     await withTestFetch(
       asFetchMock(async (input: string | URL | Request) => {
@@ -517,7 +550,7 @@ const czRegionalParagraph = (
  * empty on most decisions, and a fixture that left them so would certify
  * neither the EU-relevance markers nor the publisher's relation graph.
  */
-const CZ_REGIONAL_DOCUMENT_PAYLOAD = JSON.stringify({
+const CZ_REGIONAL_DOCUMENT_RECORD = {
   uuid: "00000000-0000-4000-8000-000000000001",
   header: [
     czRegionalParagraph(
@@ -618,7 +651,10 @@ const CZ_REGIONAL_DOCUMENT_PAYLOAD = JSON.stringify({
       italic: false,
     },
   ],
-});
+};
+const CZ_REGIONAL_DOCUMENT_PAYLOAD = JSON.stringify(
+  CZ_REGIONAL_DOCUMENT_RECORD,
+);
 
 /**
  * The chain payload: one later decision affecting this one, with the id the
@@ -648,6 +684,13 @@ const CZ_REGIONAL_CHAIN_PAYLOAD = JSON.stringify([
  * than of a payload written by hand.
  */
 export const czRegionalFixture = (): EnrolledAdapterFixture => ({
+  rawFieldValues: {
+    "document.metadata": CZ_REGIONAL_DOCUMENT_RECORD.metadata,
+    "document.tableCellInfo": CZ_REGIONAL_DOCUMENT_PAYLOAD,
+    "document.styles[].alignment": ["LEFT", "LEFT"],
+    "document.styles[].hasSpaceBefore": [false, true],
+    "document.styles[].hasSpaceAfter": [false, true],
+  },
   buildDecision: async () =>
     await withTestFetch(
       asFetchMock(async (input: string | URL | Request) => {
@@ -1134,13 +1177,21 @@ const PL_NCOURT_CONTENT = `<?xml version='1.0' encoding='UTF-8'?>
   </xBlock>
 </xPart>`;
 
+const PL_NCOURT_LISTING_XML = `<judgement>${Object.entries(
+  PL_NCOURT_LISTING_ROW,
+)
+  .map(([name, value]) => `<${name}>${value}</${name}>`)
+  .join("")}</judgement>`;
+
 /** Built from the three payloads directly, as the crawl hands them over. */
 export const plNcourtFixture = (): EnrolledAdapterFixture => ({
+  rawFieldValues: {
+    excerpt: PL_NCOURT_LISTING_XML,
+    "xPart@xml:space": PL_NCOURT_CONTENT,
+  },
   buildDecision: async () => {
     const built = assemblePlNcourtDecision({
-      listingXml: `<judgement>${Object.entries(PL_NCOURT_LISTING_ROW)
-        .map(([name, value]) => `<${name}>${value}</${name}>`)
-        .join("")}</judgement>`,
+      listingXml: PL_NCOURT_LISTING_XML,
       detailXml: PL_NCOURT_DETAIL,
       contentXml: PL_NCOURT_CONTENT,
     });
@@ -1264,6 +1315,10 @@ const CZ_US_PAGES: Readonly<Record<string, string>> = {
  * the text, the record card and the abstract, each read from the court.
  */
 export const czUsFixture = (): EnrolledAdapterFixture => ({
+  rawFieldValues: {
+    "Název soudu": CZ_US_RECORD_CARD,
+    "URL adresa": CZ_US_RECORD_CARD,
+  },
   buildDecision: async () =>
     await withTestFetch(
       asFetchMock(async (input: string | URL | Request) => {
@@ -2584,7 +2639,7 @@ const plKisField = (dataType: string, key: string, value: unknown) => ({
 });
 
 /** The detail the service serves for that row: dictionary ids, and the HTML. */
-const PL_KIS_DETAIL = JSON.stringify({
+const PL_KIS_DETAIL_RECORD = {
   id: 705_415,
   versionId: 759_101,
   nazwa: "Zmiana wiążącej informacji stawkowej",
@@ -2619,13 +2674,68 @@ const PL_KIS_DETAIL = JSON.stringify({
         listaGrup: ["WYBRANI"],
         listaRol: [],
       }),
+      plKisField("StringType", "DATA_INTERP_ZAPYT", "2026-07-27T14:01:02.542Z"),
+      plKisField("StringType", "DATA_ODP", "2026-08-07T14:01:09.732Z"),
+      plKisField("StringType", "NR_INTERP_ZAPYT", "BSSP.05.02.14.2026"),
+      plKisField("StringType", "SYGN_ODP", "PT1.054.31.2026"),
+      plKisField(
+        "StringType",
+        "TRESC_INTERP_ZAPYT",
+        "<p>Treść dokumentu zachowana w odpowiedzi źródłowej.</p>",
+      ),
+      plKisField(
+        "StringType",
+        "DATA_WYSLANIA_NEWSLETTERA",
+        "2026-08-05T07:31:29.495Z",
+      ),
+      plKisField("ListType", "KATEGORIA_TEMAT_NEWS", [
+        "58125",
+        "58126",
+        "58127",
+        "58128",
+        "58131",
+        "58133",
+      ]),
+      plKisField(
+        "StringType",
+        "TYTUL_NEWS",
+        "Newsletter Systemu Informacji Celno-Skarbowej Eureka - pozostałe podatki nr 2/2026.",
+      ),
+      plKisField(
+        "StringType",
+        "TRESC_NEWS",
+        "<p>Treść dokumentu zachowana w odpowiedzi źródłowej.</p>",
+      ),
+      plKisField("StringType", "DATA_ORZECZENIA", "2026-09-17T06:05:24.532Z"),
+      plKisField("StringType", "SADY", "21333"),
+      plKisField("StringType", "SYGNATURA_ORZECZENIA", "C-223/25"),
     ],
   },
   informacjaTytulDto: [],
-});
+};
+const PL_KIS_DETAIL = JSON.stringify(PL_KIS_DETAIL_RECORD);
 
 /** Built through the adapter's own envelope writer from the row and the detail. */
 export const plKisFixture = (): EnrolledAdapterFixture => ({
+  rawFieldValues: {
+    SYG: PL_KIS_LISTING_ROW.SYG,
+    DATA_INTERP_ZAPYT: PL_KIS_DETAIL_RECORD.dokument.fields,
+    DATA_ODP: PL_KIS_DETAIL_RECORD.dokument.fields,
+    NR_INTERP_ZAPYT: PL_KIS_DETAIL_RECORD.dokument.fields,
+    SYGN_ODP: PL_KIS_DETAIL_RECORD.dokument.fields,
+    TRESC_INTERP_ZAPYT: PL_KIS_DETAIL_RECORD.dokument.fields,
+    DATA_WYSLANIA_NEWSLETTERA: PL_KIS_DETAIL_RECORD.dokument.fields,
+    KATEGORIA_TEMAT_NEWS: PL_KIS_DETAIL_RECORD.dokument.fields,
+    TYTUL_NEWS: PL_KIS_DETAIL_RECORD.dokument.fields,
+    TRESC_NEWS: PL_KIS_DETAIL_RECORD.dokument.fields,
+    DATA_ORZECZENIA: PL_KIS_DETAIL_RECORD.dokument.fields,
+    SADY: PL_KIS_DETAIL_RECORD.dokument.fields,
+    SYGNATURA_ORZECZENIA: PL_KIS_DETAIL_RECORD.dokument.fields,
+    POZIOM_DOSTEPU_WYBRANEJ_TRESCI: PL_KIS_DETAIL_RECORD.dokument.fields,
+    "informacja/id": 705_415,
+    "informacja/nazwa": "Zmiana wiążącej informacji stawkowej",
+    "informacja/informacjaTytulDto": [],
+  },
   buildDecision: async () => {
     const row = { ...PL_KIS_LISTING_ROW };
     const built = await assemblePlKisDecision({
@@ -2703,6 +2813,7 @@ const plUodoUnionRow = (
 export const plUodoFixture = (
   documentUrl = PL_UODO_BODY,
 ): EnrolledAdapterFixture => ({
+  rawFieldValues: { type: "PublicDocument", version: "4.3" },
   buildDecision: async () => {
     const listed = await readGzipJson(PL_UODO_LISTING);
     const rows: unknown[] = Array.isArray(listed) ? listed : [];
@@ -2802,6 +2913,19 @@ const PL_UOKIK_SOURCE_ID = "pl-uokik-inventory-fixture";
  * the pipeline closes it.
  */
 export const plUokikFixture = (): EnrolledAdapterFixture => ({
+  rawFieldValues: {
+    "listing.@position": "13911",
+    "listing.@siblings": "22253",
+    "listing.entrydata": [
+      {
+        "@columnnumber": "0",
+        "@name": "$7",
+        text: {
+          "0": "[<B>Numer decyzji: </B>DOK-9/2011<BR><b>]Data decyzji:      [</B>28.11.2011<BR>][<A HREF=/bp/dec_prez.nsf/0/2520D55B0F17A317C1257EC6007B9773?OpenDocument   title='opis dokumentu'>Inco-Veritas S.A. z siedzibą w Warszawie</A>][<BR>]Pozostałe[<BR>]",
+        },
+      },
+    ],
+  },
   buildDecision: async () => {
     const view = await readGzipJson(PL_UOKIK_VIEW_2011);
     const listed: unknown[] =

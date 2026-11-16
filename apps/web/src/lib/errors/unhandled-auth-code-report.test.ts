@@ -180,6 +180,34 @@ test.each([
   },
 );
 
+test.each([
+  {
+    name: "refused credentials on password sign-in",
+    requestUrl: "https://api.test/api/auth/sign-in/email",
+    reported: false,
+  },
+  {
+    name: "refused credentials on another auth route",
+    requestUrl: "https://api.test/api/auth/change-email",
+    reported: true,
+  },
+])("reports $name only when no form owns them", ({ requestUrl, reported }) => {
+  const report = mock(() => undefined);
+
+  reportUnhandledAuthClientError(
+    {
+      code: "INVALID_EMAIL_OR_PASSWORD",
+      message: "Invalid email or password",
+      status: 401,
+      statusText: "Unauthorized",
+    },
+    report,
+    requestUrl,
+  );
+
+  expect(report).toHaveBeenCalledTimes(reported ? 1 : 0);
+});
+
 test("an ended session on a me route reports nothing", async () => {
   const capture = spyOn(getAnalytics(), "captureError").mockImplementation(
     () => undefined,

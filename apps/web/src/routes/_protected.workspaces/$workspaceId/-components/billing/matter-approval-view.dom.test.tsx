@@ -486,7 +486,13 @@ describe("matter approval view", () => {
     await mount("member", approvalPage, (client) => {
       client.setQueryData(
         timeEntriesOptions(WORKSPACE, USER, { status: "submitted" }).queryKey,
-        [{ ...draft, rateAtEntry: cents(draft.rateAtEntry) }],
+        [
+          {
+            ...draft,
+            rateAtEntry:
+              draft.rateAtEntry === null ? null : cents(draft.rateAtEntry),
+          },
+        ],
       );
       client.setQueryData(
         timeEntriesOptions(WORKSPACE, USER, { status: "approved" }).queryKey,
@@ -733,7 +739,9 @@ describe("returning checked time together", () => {
       ]),
     );
     await testing.waitFor(() =>
-      expect(testing.screen.queryByText("Narrative entry-a")).toBeNull(),
+      expect(testing.screen.queryByText("Narrative entry-a") === null).toBe(
+        true,
+      ),
     );
     expect(testing.screen.queryByText("Narrative entry-c")).toBeNull();
     expect(testing.screen.getByText("Narrative entry-b")).toBeTruthy();

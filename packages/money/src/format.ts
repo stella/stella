@@ -50,6 +50,380 @@ export const currencyMinorUnitDigits = (currency: string): number => {
 /** A decimal amount in major units: an optional sign, digits, an optional point. */
 const DECIMAL_AMOUNT = /^(?<sign>[+-]?)(?<whole>\d*)(?:\.(?<fraction>\d*))?$/u;
 
+export type LocaleAmountParseError = {
+  reason:
+    | "empty"
+    | "syntax"
+    | "ambiguous"
+    | "precision"
+    | "unsafe-integer"
+    | "locale";
+  message: string;
+};
+
+export type ParseLocaleMinorUnitsParams = {
+  amount: string;
+  currency: string;
+  locale: string;
+};
+
+const localeSeparators = (locale: string) =>
+  Result.try(() => {
+    const formatter = new Intl.NumberFormat(locale, { useGrouping: false });
+    const groupedParts = new Intl.NumberFormat(locale).formatToParts(
+      1_234_567_890_123,
+    );
+    const digits = new Map<string, string>();
+    for (let digit = 0; digit <= 9; digit += 1) {
+      digits.set(formatter.format(digit), String(digit));
+    }
+    const integerGroups = groupedParts
+      .filter((part) => part.type === "integer")
+      .map((part) => part.value.length);
+    return {
+      decimal:
+        new Intl.NumberFormat(locale)
+          .formatToParts(12_345.6)
+          .find((part) => part.type === "decimal")?.value ?? ".",
+      group: groupedParts.find((part) => part.type === "group")?.value,
+      primaryGroupSize: integerGroups.at(-1) ?? 3,
+      secondaryGroupSize: integerGroups.at(-2) ?? integerGroups.at(-1) ?? 3,
+      digits,
+    };
+  });
+
+type NormalizeGroupedWholeParams = {
+  whole: string;
+  grouping: string;
+  primaryGroupSize: number;
+  secondaryGroupSize: number;
+};
+
+const normalizeGroupedWhole = ({
+  whole,
+  grouping,
+  primaryGroupSize,
+  secondaryGroupSize,
+}: NormalizeGroupedWholeParams): string | null => {
+  const groups = whole.split(grouping);
+  const leadingGroup = groups.at(0) ?? "";
+  const trailingGroup = groups.at(-1) ?? "";
+  const middleGroups = groups.slice(1, -1);
+  if (
+    !new RegExp(`^[0-9]{1,${secondaryGroupSize}}$`, "u").test(leadingGroup) ||
+    !new RegExp(`^[0-9]{${primaryGroupSize}}$`, "u").test(trailingGroup) ||
+    middleGroups.some(
+      (part) => !new RegExp(`^[0-9]{${secondaryGroupSize}}$`, "u").test(part),
+    )
+  ) {
+    return null;
+  }
+  return groups.join("");
+};
+
+const ASCII_DECIMAL_MARKS = [".", ","] as const;
+
+type NormalizeInputSeparatorsParams = {
+  unsigned: string;
+  decimal: string;
+  group: string | undefined;
+  primaryGroupSize: number;
+};
+
+const normalizeInputSeparators = ({
+  unsigned,
+  decimal,
+  group,
+  primaryGroupSize,
+}: NormalizeInputSeparatorsParams) => {
+  // A locale whose own mark is neither (Arabic "٫") takes either ASCII mark.
+  const alternateDecimal =
+    ASCII_DECIMAL_MARKS.filter((mark) => mark !== decimal).find((mark) =>
+      unsigned.includes(mark),
+    ) ?? (decimal === "," ? "." : ",");
+  const alternateParts = unsigned.split(alternateDecimal);
+  const hasLocaleDecimal = unsigned.includes(decimal);
+  const hasSingleAlternate = alternateParts.length === 2;
+  const alternateFractionLength = alternateParts.at(1)?.length;
+  if (
+    !hasLocaleDecimal &&
+    hasSingleAlternate &&
+    alternateFractionLength === primaryGroupSize
+  ) {
+    return { status: "ambiguous" } as const;
+  }
+  if (
+    !hasLocaleDecimal &&
+    hasSingleAlternate &&
+    alternateFractionLength !== primaryGroupSize
+  ) {
+    return {
+      status: "normalized",
+      unsigned: unsigned.replace(alternateDecimal, () => decimal),
+      grouping: group,
+    } as const;
+  }
+  let grouping = group;
+  if (decimal === "," && unsigned.split(decimal).at(0)?.includes(".")) {
+    grouping = ".";
+  }
+  return { status: "normalized", unsigned, grouping } as const;
+};
+
+/**
+ * The fraction kept at the allowed places, undefined when none is left, or
+ * null when a digit past them is not zero. Trailing zeros carry no value
+ * (100.00 yen is 100 yen); any other extra digit would need rounding.
+ */
+const exactFraction = (
+  fraction: string | undefined,
+  maximumFractionDigits: number | undefined,
+): string | undefined | null => {
+  if (
+    fraction === undefined ||
+    maximumFractionDigits === undefined ||
+    fraction.length <= maximumFractionDigits
+  ) {
+    return fraction;
+  }
+  if (!/^0*$/u.test(fraction.slice(maximumFractionDigits))) {
+    return null;
+  }
+  const kept = fraction.slice(0, maximumFractionDigits);
+  return kept === "" ? undefined : kept;
+};
+
+export type ParseLocaleDecimalParams = {
+  amount: string;
+  locale: string;
+  maximumFractionDigits?: number;
+};
+
+declare const localeInputTextBrand: unique symbol;
+
+/** Text whose separators and digits belong to a person's formatting locale. */
+export type LocaleInputText = string & {
+  readonly [localeInputTextBrand]: "LocaleInputText";
+};
+
+/** The control a person typed into: an input or textarea element. */
+export type LocaleInputSource = {
+  readonly value: string;
+  readonly tagName: string;
+};
+
+function brandLocaleInputText(value: string): LocaleInputText;
+function brandLocaleInputText(value: string): string {
+  return value;
+}
+
+/**
+ * The text of the control a person typed into. It takes the element, not its
+ * string, so canonical stored text cannot be passed off as locale input; stored
+ * values reach a field only through the redisplay formatters below.
+ */
+export const localeInputText = (source: LocaleInputSource): LocaleInputText =>
+  brandLocaleInputText(source.value);
+
+/** The text of a cleared locale input. */
+export const EMPTY_LOCALE_INPUT_TEXT: LocaleInputText =
+  brandLocaleInputText("");
+
+/** Normalize a human-entered locale decimal without converting through a float. */
+export const parseLocaleDecimal = ({
+  amount,
+  locale,
+  maximumFractionDigits,
+}: ParseLocaleDecimalParams): Result<string, LocaleAmountParseError> => {
+  const text = amount.trim();
+  if (text.length === 0) {
+    return Result.err({
+      reason: "empty",
+      message: "Amount is empty",
+    });
+  }
+  const separators = localeSeparators(locale);
+  if (separators.isErr()) {
+    return Result.err({
+      reason: "locale",
+      message: "Invalid locale",
+    });
+  }
+  const { decimal, group, primaryGroupSize, secondaryGroupSize, digits } =
+    separators.value;
+  const whitespaceGroup = group !== undefined && /^\s$/u.test(group);
+  let localizedDigits = "";
+  for (const character of text) {
+    localizedDigits += digits.get(character) ?? character;
+  }
+  const normalizedWhitespace = whitespaceGroup
+    ? localizedDigits.replace(/[\u0020\u00a0\u202f]/gu, () => group)
+    : localizedDigits;
+  const sign = /^[+-]/u.exec(normalizedWhitespace)?.at(0) ?? "";
+  const unsignedInput = sign
+    ? normalizedWhitespace.slice(1)
+    : normalizedWhitespace;
+  const normalizedSeparators = normalizeInputSeparators({
+    unsigned: unsignedInput,
+    decimal,
+    group,
+    primaryGroupSize,
+  });
+  if (normalizedSeparators.status === "ambiguous") {
+    return Result.err({
+      reason: "ambiguous",
+      message: "Amount has an ambiguous separator",
+    });
+  }
+  const { unsigned, grouping } = normalizedSeparators;
+  const decimalParts = unsigned.split(decimal);
+  if (
+    decimalParts.length > 2 ||
+    (decimalParts.length === 1 && decimalParts.at(0)?.length === 0) ||
+    (decimalParts.length === 2 && decimalParts.at(1)?.length === 0)
+  ) {
+    return Result.err({
+      reason: "syntax",
+      message: "Invalid amount format",
+    });
+  }
+  const whole = decimalParts.at(0) || "0";
+  const fraction = decimalParts.at(1);
+  let wholeDigits = whole;
+  if (grouping !== undefined && whole.includes(grouping)) {
+    const normalizedWhole = normalizeGroupedWhole({
+      whole,
+      grouping,
+      primaryGroupSize,
+      secondaryGroupSize,
+    });
+    if (normalizedWhole === null) {
+      return Result.err({
+        reason: "syntax",
+        message: "Invalid amount grouping",
+      });
+    }
+    wholeDigits = normalizedWhole;
+  }
+  if (
+    !/^[0-9]+$/u.test(wholeDigits) ||
+    (fraction !== undefined && !/^[0-9]+$/u.test(fraction))
+  ) {
+    return Result.err({
+      reason: "syntax",
+      message: "Invalid amount format",
+    });
+  }
+  const exact = exactFraction(fraction, maximumFractionDigits);
+  if (exact === null) {
+    return Result.err({
+      reason: "precision",
+      message: "Amount has too many fraction digits",
+    });
+  }
+  return Result.ok(
+    `${sign}${wholeDigits}${exact === undefined ? "" : `.${exact}`}`,
+  );
+};
+
+/** Parse human-entered major units according to their formatting locale. */
+export const parseLocaleMinorUnits = ({
+  amount,
+  currency,
+  locale,
+}: ParseLocaleMinorUnitsParams): Result<
+  CentsAmount,
+  LocaleAmountParseError
+> => {
+  const normalized = parseLocaleDecimal({
+    amount,
+    locale,
+    maximumFractionDigits: currencyMinorUnitDigits(currency),
+  });
+  if (normalized.isErr()) {
+    return normalized;
+  }
+  const parsed = tryToMinorUnits({
+    amount: normalized.value,
+    currency,
+  });
+  return parsed === null
+    ? Result.err({
+        reason: "unsafe-integer",
+        message: "Amount exceeds the supported range",
+      })
+    : Result.ok(parsed);
+};
+
+export type FormatLocaleMinorUnitsInputParams = {
+  amountCents: number;
+  currency: string;
+  locale: string;
+};
+
+const localizeAsciiDigits = (
+  value: string,
+  digits: Map<string, string>,
+): string => {
+  const localizedByAscii = new Map(
+    [...digits].map(([localized, ascii]) => [ascii, localized]),
+  );
+  const localized = value
+    .split("")
+    .map((character) => localizedByAscii.get(character) ?? character)
+    .join("");
+  return localized;
+};
+
+export type FormatLocaleDecimalInputParams = {
+  amount: string;
+  locale: string;
+};
+
+/** Render canonical decimal text using locale digits and its decimal mark. */
+export const formatLocaleDecimalInput = ({
+  amount,
+  locale,
+}: FormatLocaleDecimalInputParams): LocaleInputText => {
+  const groups = DECIMAL_AMOUNT.exec(amount)?.groups;
+  const whole = groups?.["whole"] ?? "";
+  const fraction = groups?.["fraction"];
+  if (groups === undefined || `${whole}${fraction ?? ""}`.length === 0) {
+    return panic(
+      `formatLocaleDecimalInput(${JSON.stringify(amount)}): not a canonical decimal`,
+    );
+  }
+  const separators = localeSeparators(locale).unwrap(
+    "formatLocaleDecimalInput: invalid locale",
+  );
+  const canonical = `${groups["sign"] ?? ""}${whole || "0"}${
+    fraction === undefined ? "" : `${separators.decimal}${fraction}`
+  }`;
+  return brandLocaleInputText(
+    localizeAsciiDigits(canonical, separators.digits),
+  );
+};
+
+/** Render stored minor units as locale input text that parses back unchanged. */
+export const formatLocaleMinorUnitsInput = ({
+  amountCents,
+  currency,
+  locale,
+}: FormatLocaleMinorUnitsInputParams): LocaleInputText => {
+  const fractionDigits = currencyMinorUnitDigits(currency);
+  const sign = amountCents < 0 ? "-" : "";
+  const digits = String(Math.abs(amountCents)).padStart(
+    fractionDigits + 1,
+    "0",
+  );
+  const split = digits.length - fractionDigits;
+  const canonical =
+    fractionDigits === 0
+      ? `${sign}${digits}`
+      : `${sign}${digits.slice(0, split)}.${digits.slice(split)}`;
+  return formatLocaleDecimalInput({ amount: canonical, locale });
+};
+
 /** Scientific notation, which `String(1e21)` and `String(1e-7)` both produce. */
 const EXPONENT_AMOUNT =
   /^(?<sign>[+-]?)(?<whole>\d+)(?:\.(?<fraction>\d+))?[eE](?<exponent>[+-]?\d+)$/u;

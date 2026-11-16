@@ -3,6 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "indexes-apikey-personal-owner-keyset-idx",
   revision: 210,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     {

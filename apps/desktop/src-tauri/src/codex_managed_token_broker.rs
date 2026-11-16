@@ -555,6 +555,10 @@ fn helper_token(environment: impl Fn(&str) -> Option<String>) -> Option<String> 
 }
 
 fn fail_helper() -> i32 {
+  #[expect(
+    clippy::let_underscore_must_use,
+    reason = "the helper's stderr is its only channel, so a failed write has nowhere to go"
+  )]
   let _ = std::io::stderr()
     .write_all(b"Could not use the ChatGPT connection. Reconnect ChatGPT in Stella.\n");
   1
@@ -631,14 +635,32 @@ mod tests {
 
   fn exchange(endpoint: &str, request: &[u8]) -> Vec<u8> {
     let mut stream = std::os::unix::net::UnixStream::connect(endpoint).unwrap();
-    stream
+    // The broker closes a refused peer at once. On macOS a timeout set on a
+    // socket whose peer already closed fails (EINVAL): that is the refusal,
+    // and no response follows.
+    if stream
       .set_read_timeout(Some(Duration::from_secs(10)))
-      .unwrap();
-    // The broker closes a refused peer at once, so these can lose that race;
-    // only the response says what the broker decided.
+      .is_err()
+    {
+      return Vec::new();
+    }
+    // The rest can lose the same race; only the response says what the
+    // broker decided.
+    #[expect(
+      clippy::let_underscore_must_use,
+      reason = "the broker may close a refused peer first; only the response is asserted"
+    )]
     let _ = stream.write_all(request);
+    #[expect(
+      clippy::let_underscore_must_use,
+      reason = "the broker may close a refused peer first; only the response is asserted"
+    )]
     let _ = stream.shutdown(std::net::Shutdown::Write);
     let mut response = Vec::new();
+    #[expect(
+      clippy::let_underscore_must_use,
+      reason = "the broker may close a refused peer first; only the response is asserted"
+    )]
     let _ = stream.read_to_end(&mut response);
     response
   }
@@ -699,9 +721,15 @@ mod tests {
   impl Drop for Place {
     fn drop(&mut self) {
       for directory in self.directories.get_mut().drain(..) {
-        let _ = std::fs::remove_dir_all(directory);
+        crate::logging::best_effort(
+          std::fs::remove_dir_all(directory),
+          "test directory was not removed",
+        );
       }
-      let _ = std::fs::remove_dir_all(&self.root);
+      crate::logging::best_effort(
+        std::fs::remove_dir_all(&self.root),
+        "test directory was not removed",
+      );
     }
   }
 

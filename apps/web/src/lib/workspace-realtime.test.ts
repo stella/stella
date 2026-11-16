@@ -1,4 +1,9 @@
-import { hashKey, QueryClient, type QueryKey } from "@tanstack/react-query";
+import {
+  hashKey,
+  QueryClient,
+  type QueryKey,
+  QueryObserver,
+} from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
 
 import { REALTIME_EVENT_TYPE, RESOURCE_TYPE } from "@stll/api-contract";
@@ -8,6 +13,7 @@ import {
   contactsQueryRoot,
   workspaceMembersQueryRoot,
 } from "@/lib/resource-query-roots.logic";
+import { createWorkspaceQueryActionBatch } from "@/lib/workspace-sse";
 import { workspacesKeys } from "@/lib/workspaces/queries.logic";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities.logic";
 
@@ -41,10 +47,19 @@ describe("workspace realtime policy", () => {
       return;
     }
 
-    expect(getWorkspaceRealtimeQueryActions(updated, WORKSPACE_ID)).toEqual([
+    expect(
+      getWorkspaceRealtimeQueryActions(updated, {
+        workspaceId: WORKSPACE_ID,
+        queryClient: new QueryClient(),
+      }),
+    ).toEqual([
       {
         type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
         queryKey: ["entities", WORKSPACE_ID],
+      },
+      {
+        type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
+        queryKey: ["my-work"],
       },
       {
         type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
@@ -55,7 +70,12 @@ describe("workspace realtime policy", () => {
         queryKey: ["workspaces", WORKSPACE_ID, "overview"],
       },
     ]);
-    expect(getWorkspaceRealtimeQueryActions(deleted, WORKSPACE_ID)).toEqual([
+    expect(
+      getWorkspaceRealtimeQueryActions(deleted, {
+        workspaceId: WORKSPACE_ID,
+        queryClient: new QueryClient(),
+      }),
+    ).toEqual([
       {
         type: WORKSPACE_REALTIME_QUERY_ACTION.REMOVE_PREFIX,
         queryKey: ["entities", WORKSPACE_ID, "entity-1"],
@@ -63,6 +83,10 @@ describe("workspace realtime policy", () => {
       {
         type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
         queryKey: ["entities", WORKSPACE_ID],
+      },
+      {
+        type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
+        queryKey: ["my-work"],
       },
       {
         type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
@@ -75,7 +99,7 @@ describe("workspace realtime policy", () => {
     ]);
   });
 
-  test("maps view changes and explicitly ignores resources without a policy", () => {
+  test("maps view changes and refreshes activity for resource facts", () => {
     const view = parseEvent({
       type: REALTIME_EVENT_TYPE.RESOURCE_UPDATED,
       resource: { type: RESOURCE_TYPE.WORKSPACE_VIEW, id: "view-1" },
@@ -91,13 +115,32 @@ describe("workspace realtime policy", () => {
       return;
     }
 
-    expect(getWorkspaceRealtimeQueryActions(view, WORKSPACE_ID)).toEqual([
+    expect(
+      getWorkspaceRealtimeQueryActions(view, {
+        workspaceId: WORKSPACE_ID,
+        queryClient: new QueryClient(),
+      }),
+    ).toEqual([
       {
         type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
         queryKey: ["views", WORKSPACE_ID],
       },
+      {
+        type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
+        queryKey: workspacesKeys.overviewActivityAll(WORKSPACE_ID),
+      },
     ]);
-    expect(getWorkspaceRealtimeQueryActions(memory, WORKSPACE_ID)).toEqual([]);
+    expect(
+      getWorkspaceRealtimeQueryActions(memory, {
+        workspaceId: WORKSPACE_ID,
+        queryClient: new QueryClient(),
+      }),
+    ).toEqual([
+      {
+        type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
+        queryKey: workspacesKeys.overviewActivityAll(WORKSPACE_ID),
+      },
+    ]);
   });
 
   test("maps field changes to entity and field-file caches", () => {
@@ -116,10 +159,19 @@ describe("workspace realtime policy", () => {
       return;
     }
 
-    expect(getWorkspaceRealtimeQueryActions(updated, WORKSPACE_ID)).toEqual([
+    expect(
+      getWorkspaceRealtimeQueryActions(updated, {
+        workspaceId: WORKSPACE_ID,
+        queryClient: new QueryClient(),
+      }),
+    ).toEqual([
       {
         type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
         queryKey: ["entities", WORKSPACE_ID],
+      },
+      {
+        type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
+        queryKey: workspacesKeys.overviewActivityAll(WORKSPACE_ID),
       },
       {
         type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
@@ -130,10 +182,19 @@ describe("workspace realtime policy", () => {
         queryKey: ["files", "metadata", WORKSPACE_ID, "field-1"],
       },
     ]);
-    expect(getWorkspaceRealtimeQueryActions(deleted, WORKSPACE_ID)).toEqual([
+    expect(
+      getWorkspaceRealtimeQueryActions(deleted, {
+        workspaceId: WORKSPACE_ID,
+        queryClient: new QueryClient(),
+      }),
+    ).toEqual([
       {
         type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
         queryKey: ["entities", WORKSPACE_ID],
+      },
+      {
+        type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
+        queryKey: workspacesKeys.overviewActivityAll(WORKSPACE_ID),
       },
       {
         type: WORKSPACE_REALTIME_QUERY_ACTION.REMOVE_PREFIX,
@@ -170,10 +231,19 @@ describe("workspace realtime policy", () => {
       return;
     }
 
-    expect(getWorkspaceRealtimeQueryActions(event, WORKSPACE_ID)).toEqual([
+    expect(
+      getWorkspaceRealtimeQueryActions(event, {
+        workspaceId: WORKSPACE_ID,
+        queryClient: new QueryClient(),
+      }),
+    ).toEqual([
       {
         type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
         queryKey: ["entities", WORKSPACE_ID],
+      },
+      {
+        type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
+        queryKey: ["my-work"],
       },
       {
         type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
@@ -210,10 +280,19 @@ describe("workspace realtime policy", () => {
       return;
     }
 
-    expect(getWorkspaceRealtimeQueryActions(entitySet, WORKSPACE_ID)).toEqual([
+    expect(
+      getWorkspaceRealtimeQueryActions(entitySet, {
+        workspaceId: WORKSPACE_ID,
+        queryClient: new QueryClient(),
+      }),
+    ).toEqual([
       {
         type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
         queryKey: ["entities", WORKSPACE_ID],
+      },
+      {
+        type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
+        queryKey: ["my-work"],
       },
       {
         type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
@@ -224,7 +303,12 @@ describe("workspace realtime policy", () => {
         queryKey: ["workspaces", WORKSPACE_ID, "overview"],
       },
     ]);
-    expect(getWorkspaceRealtimeQueryActions(flowRunSet, WORKSPACE_ID)).toEqual([
+    expect(
+      getWorkspaceRealtimeQueryActions(flowRunSet, {
+        workspaceId: WORKSPACE_ID,
+        queryClient: new QueryClient(),
+      }),
+    ).toEqual([
       {
         type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
         queryKey: ["flow-runs", WORKSPACE_ID],
@@ -241,6 +325,10 @@ describe("workspace realtime policy", () => {
         type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
         queryKey: ["entities", WORKSPACE_ID],
       },
+      {
+        type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
+        queryKey: workspacesKeys.overviewActivityAll(WORKSPACE_ID),
+      },
     ]);
   });
 
@@ -255,7 +343,10 @@ describe("workspace realtime policy", () => {
     }
     for (const workspaceId of [WORKSPACE_ID, "workspace-2"]) {
       expect(
-        getWorkspaceRealtimeQueryActions(event, workspaceId),
+        getWorkspaceRealtimeQueryActions(event, {
+          workspaceId,
+          queryClient: new QueryClient(),
+        }),
       ).toContainEqual({
         type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
         queryKey: ["correspondence"],
@@ -289,7 +380,10 @@ describe("workspace realtime policy", () => {
         continue;
       }
       expect(
-        getWorkspaceRealtimeQueryActions(event, WORKSPACE_ID),
+        getWorkspaceRealtimeQueryActions(event, {
+          workspaceId: WORKSPACE_ID,
+          queryClient: new QueryClient(),
+        }),
       ).toContainEqual({
         type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
         queryKey: expectedQueryKey,
@@ -323,7 +417,12 @@ describe("workspace realtime policy", () => {
     if (!event) {
       return;
     }
-    expect(getWorkspaceRealtimeQueryActions(event, WORKSPACE_ID)).toEqual([]);
+    expect(
+      getWorkspaceRealtimeQueryActions(event, {
+        workspaceId: WORKSPACE_ID,
+        queryClient: new QueryClient(),
+      }),
+    ).toEqual([]);
   });
 });
 
@@ -338,7 +437,10 @@ describe("matter refresh after a reconnect", () => {
     );
 
   test("covers every query any missed event could have changed", () => {
-    const refreshActions = getWorkspaceReconnectQueryActions(WORKSPACE_ID);
+    const refreshActions = getWorkspaceReconnectQueryActions({
+      workspaceId: WORKSPACE_ID,
+      queryClient: new QueryClient(),
+    });
     expect(
       refreshActions.every(
         ({ type }) => type === WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
@@ -368,10 +470,10 @@ describe("matter refresh after a reconnect", () => {
       if (!event) {
         continue;
       }
-      for (const { queryKey } of getWorkspaceRealtimeQueryActions(
-        event,
-        WORKSPACE_ID,
-      )) {
+      for (const { queryKey } of getWorkspaceRealtimeQueryActions(event, {
+        workspaceId: WORKSPACE_ID,
+        queryClient: new QueryClient(),
+      })) {
         expect([missed, queryKey, covers(refreshKeys, queryKey)]).toEqual([
           missed,
           queryKey,
@@ -420,3 +522,68 @@ describe("matter query ownership", () => {
     );
   });
 });
+
+for (const rowCount of [10, 100]) {
+  test(`mixed entity and list events refresh overview activity once with ${rowCount} rows`, async () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { staleTime: Infinity, retry: false } },
+    });
+    const starts = new Map<string, number>();
+    const keys = [
+      workspacesKeys.overview(WORKSPACE_ID),
+      workspacesKeys.overviewActivityAll(WORKSPACE_ID),
+    ];
+    const subscriptions = keys.map((queryKey) => {
+      client.setQueryData(
+        queryKey,
+        Array.from({ length: rowCount }, (_, id) => id),
+      );
+      return new QueryObserver(client, {
+        queryKey,
+        queryFn: async () => {
+          const hash = hashKey(queryKey);
+          starts.set(hash, (starts.get(hash) ?? 0) + 1);
+          return [];
+        },
+      }).subscribe(() => undefined);
+    });
+    const refreshes: Promise<void>[] = [];
+    const batch = createWorkspaceQueryActionBatch(
+      (actions) => {
+        for (const action of actions) {
+          if (action.type === WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE) {
+            refreshes.push(
+              client.invalidateQueries({ queryKey: action.queryKey }),
+            );
+          }
+        }
+      },
+      () => () => undefined,
+    );
+    try {
+      for (const resourceType of [
+        RESOURCE_TYPE.ENTITY,
+        RESOURCE_TYPE.LEGAL_LIST,
+      ]) {
+        batch.add(
+          getWorkspaceRealtimeQueryActions(
+            {
+              type: REALTIME_EVENT_TYPE.RESOURCE_SET_UPDATED,
+              resourceType,
+            },
+            { workspaceId: WORKSPACE_ID, queryClient: client },
+          ),
+        );
+      }
+      batch.cancel();
+      await Promise.all(refreshes);
+      expect(keys.map((key) => starts.get(hashKey(key)) ?? 0)).toEqual([1, 1]);
+    } finally {
+      batch.cancel();
+      for (const unsubscribe of subscriptions) {
+        unsubscribe();
+      }
+      client.clear();
+    }
+  });
+}

@@ -23,7 +23,11 @@ import {
 
 import { createUuid } from "@/lib/uuid";
 
-import { resetBrowserApproval } from "./browser-approval-mode";
+import {
+  observeBrowserPage,
+  resetBrowserApproval,
+  toBrowserObservedPage,
+} from "./browser-approval-mode";
 import type { BrowserCommandRun } from "./browser-tool-execution";
 
 const RESPONSE_TIMEOUT_MS = 45_000;
@@ -249,6 +253,9 @@ const handleMessage = ({ data, origin, source }: MessageEvent): void => {
       controlledTabId: tabId,
       controllerId: runtime.identity?.controllerId ?? runtime.controllerId,
     };
+    // Website approvals judge the next command by this report, never by a
+    // URL the model wrote.
+    observeBrowserPage(toBrowserObservedPage(response.result.snapshot));
   }
   pending.resolve(response.result);
 };
@@ -294,6 +301,7 @@ export const mountBrowserExtensionBridge = (): (() => void) => {
     }
     runtime.pendingRequests.clear();
     bridgeRuntime = null;
+    observeBrowserPage(null);
     notifyConnectionListeners();
   };
 };

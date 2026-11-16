@@ -17,6 +17,57 @@ describe("the windows around a citation", () => {
     });
   });
 
+  test("reads a mention on to the end of its sentence, but keeps contexts at the window", () => {
+    const opening = "Rozsudek sp. zn. 21 Cdo 1/20 ";
+    const middle = "byl v řízení uplatněn jako podklad námitky ".repeat(8);
+    const ending = "a soud jej odmítl.";
+    const after = " Další věta.";
+    const windows = extractContexts(
+      [{ text: `${opening}${middle}${ending}${after}` }],
+      "sp. zn. 21 Cdo 1/20",
+      0,
+    );
+
+    expect(windows?.mentions[0]).toEndWith("a soud jej odmítl.");
+    expect(windows?.contexts[0]).not.toContain("odmítl");
+  });
+
+  test("does not read past a paragraph break or the bound", () => {
+    const opening = "Rozsudek sp. zn. 21 Cdo 1/20 ";
+    const filler = "slovo ".repeat(40);
+    const nextParagraph = "\nNový odstavec a soud jej odmítl.";
+    const broken = extractContexts(
+      [{ text: `${opening}${filler}${nextParagraph}` }],
+      "sp. zn. 21 Cdo 1/20",
+      0,
+    );
+    expect(broken?.mentions[0]).not.toContain("odmítl");
+
+    const unbounded = "slovo ".repeat(400);
+    const capped = extractContexts(
+      [{ text: `${opening}${unbounded}a soud jej odmítl.` }],
+      "sp. zn. 21 Cdo 1/20",
+      0,
+    );
+    expect(capped?.mentions[0]).toBe(capped?.contexts[0]);
+  });
+
+  test("an abbreviation does not end the sentence the window reads on to", () => {
+    const opening = "Rozsudek sp. zn. 21 Cdo 1/20 ";
+    const filler = "slovo ".repeat(35);
+    const windows = extractContexts(
+      [
+        {
+          text: `${opening}${filler}viz sp. zn. II. ÚS 1/20 a soud jej odmítl.`,
+        },
+      ],
+      "sp. zn. 21 Cdo 1/20",
+      0,
+    );
+
+    expect(windows?.mentions[0]).toEndWith("a soud jej odmítl.");
+  });
+
   test("is null when the section does not carry the citation", () => {
     expect(extractContexts([{ text: "Bez citace." }], "21 Cdo 1/20", 0)).toBe(
       null,

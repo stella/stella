@@ -1,12 +1,5 @@
 import { expect, test } from "bun:test";
-import { is } from "drizzle-orm";
-import {
-  foreignKey,
-  getTableConfig,
-  PgTable,
-  pgTable,
-  uuid,
-} from "drizzle-orm/pg-core";
+import { foreignKey, getTableConfig, pgTable, uuid } from "drizzle-orm/pg-core";
 
 import { entityFeatureCoverageViolations } from "@/api/db/entity-feature-coverage";
 import {
@@ -18,9 +11,10 @@ import * as schema from "@/api/db/schema";
 import { createPolicyStatementsOf } from "@/api/tests/helpers/lock-taking-sql";
 
 import { readEffectiveEntityFeatureGateDefinitions } from "./entity-feature-gate-migrations";
+import { schemaTables } from "./schema-tables";
 
 test("every app-readable entity relation inherits feature visibility", () => {
-  const tables = Object.values(schema).filter((table) => is(table, PgTable));
+  const tables = schemaTables(schema);
   expect(entityFeatureCoverageViolations(tables)).toEqual([]);
 });
 
@@ -194,7 +188,7 @@ test("the committed migration matches every schema-owned visibility policy", asy
     .filter(([key]) => key.endsWith(".workspace_entity_feature"))
     .map(([, statement]) => statement)
     .toSorted();
-  const tables = Object.values(schema).filter((table) => is(table, PgTable));
+  const tables = schemaTables(schema);
   expect(statements).toEqual(
     (
       await createPolicyStatementsOf(entityFeaturePolicyDefinitions(tables))

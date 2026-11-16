@@ -969,8 +969,8 @@ test("invoice draft identity ignores search changes", async () => {
     appRouter.history.push("/workspaces/matter-a/invoices/invoice-b?q=next"),
   );
   await testing.waitFor(() =>
-    expect(view.getByRole("textbox", { name: "Invoice draft" })).not.toBe(
-      input,
+    expect(view.getByRole("textbox", { name: "Invoice draft" }) === input).toBe(
+      false,
     ),
   );
   expect(view.getByRole("textbox", { name: "Invoice draft" })).toHaveProperty(

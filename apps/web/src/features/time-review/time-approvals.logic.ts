@@ -17,28 +17,16 @@ export type PersonReview = {
   days: { date: string; rows: ReviewRowWithPerson[] }[];
 };
 
-const groupByKey = <T>(items: readonly T[], keyOf: (item: T) => string) => {
-  const groups = new Map<string, T[]>();
-  for (const item of items) {
-    const key = keyOf(item);
-    const group = groups.get(key);
-    if (group) {
-      group.push(item);
-    } else {
-      groups.set(key, [item]);
-    }
-  }
-  return groups;
-};
-
 /**
  * What a row would bill: nothing to price for unpriced or non-billable time,
  * which never reaches an invoice, and zero for no-charge time.
  */
 export const reviewAmount = (row: TimeReviewRowData): CentsAmount | null =>
-  row.currency === UNPRICED_TIME_ENTRY_CURRENCY || !row.billable
+  row.rateAtEntry === null ||
+  row.currency === UNPRICED_TIME_ENTRY_CURRENCY ||
+  !row.billable
     ? null
-    : timeEntryAmount(row);
+    : timeEntryAmount({ ...row, rateAtEntry: row.rateAtEntry });
 
 const totalsOf = (rows: readonly ReviewRowWithPerson[]) => {
   let billedMinutes = 0;
@@ -65,14 +53,14 @@ export const groupForReview = (
   locale: string,
 ): PersonReview[] => {
   const compareNames = compareByLocale(locale);
-  return [...groupByKey(rows, (row) => row.timekeeperId ?? "")]
+  return [...Map.groupBy(rows, (row) => row.timekeeperId ?? "")]
     .map(([, personRows]) => {
       const first = personRows[0];
       return {
         timekeeperId: first === undefined ? null : first.timekeeperId,
         timekeeperName: first === undefined ? null : first.timekeeperName,
         ...totalsOf(personRows),
-        days: [...groupByKey(personRows, (row) => row.dateWorked)]
+        days: [...Map.groupBy(personRows, (row) => row.dateWorked)]
           .map(([date, dayRows]) => ({ date, rows: dayRows }))
           .toSorted((a, b) => (a.date < b.date ? -1 : 1)),
       };

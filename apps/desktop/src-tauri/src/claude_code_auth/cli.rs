@@ -189,13 +189,19 @@ async fn read_capped(
     return Err(RunError::Oversize);
   }
   let mut rest = stream.into_inner();
-  let _ = tokio::io::copy(&mut rest, &mut tokio::io::sink()).await;
+  crate::logging::best_effort(
+    tokio::io::copy(&mut rest, &mut tokio::io::sink()).await,
+    "oversized CLI output was not drained",
+  );
   Ok(output)
 }
 
 pub(super) async fn drain(stream: Option<impl AsyncRead + Unpin>) {
   if let Some(mut stream) = stream {
-    let _ = tokio::io::copy(&mut stream, &mut tokio::io::sink()).await;
+    crate::logging::best_effort(
+      tokio::io::copy(&mut stream, &mut tokio::io::sink()).await,
+      "CLI output was not drained",
+    );
   }
 }
 

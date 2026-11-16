@@ -26,7 +26,8 @@ export type AttachmentNotice =
   | "read-failed"
   | "pick-failed"
   | "scan-failed"
-  | "pdf-failed";
+  | "pdf-failed"
+  | "share-failed";
 
 /** Reading a file the picker copied must not leave the chip spinning. */
 const READ_TIMEOUT_MS = 60_000;
@@ -155,6 +156,12 @@ export const useChatAttachments = () => {
     notice,
     pickDocument,
     scanDocument,
+    /** Files handed over another way, such as a share from another app; settles once each is read. */
+    addFiles: add,
+    /** A share that could not be read. */
+    shareFailed: () => {
+      setNotice("share-failed");
+    },
     remove: (id: string) => {
       setNotice(undefined);
       update(latest.current.filter((attachment) => attachment.id !== id));

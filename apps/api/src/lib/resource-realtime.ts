@@ -39,12 +39,23 @@ export const broadcastWorkspaceResourceChanges = (
   broadcast(workspaceId, resourcesChangedRealtimeEvent(changes));
 };
 
+type ResourceSetBroadcastOptions = {
+  mutationDigest?: string;
+  broadcastEvent?: typeof broadcast;
+};
+
 export const broadcastWorkspaceResourceSetUpdated = (
   workspaceId: SafeId<"workspace">,
   resourceType: ResourceType,
-  broadcastEvent: typeof broadcast = broadcast,
+  {
+    mutationDigest,
+    broadcastEvent = broadcast,
+  }: ResourceSetBroadcastOptions = {},
 ): void => {
-  broadcastEvent(workspaceId, resourceSetUpdatedRealtimeEvent(resourceType));
+  broadcastEvent(
+    workspaceId,
+    resourceSetUpdatedRealtimeEvent(resourceType, mutationDigest),
+  );
 };
 
 /**
@@ -65,9 +76,10 @@ export const announceContactSetChanged = (
 export const broadcastOrganizationResourceSetUpdated = (
   organizationId: SafeId<"organization">,
   resourceType: ResourceType,
+  { mutationDigest }: Pick<ResourceSetBroadcastOptions, "mutationDigest"> = {},
 ): void => {
   broadcastToOrganization(
     organizationId,
-    resourceSetUpdatedRealtimeEvent(resourceType),
+    resourceSetUpdatedRealtimeEvent(resourceType, mutationDigest),
   );
 };

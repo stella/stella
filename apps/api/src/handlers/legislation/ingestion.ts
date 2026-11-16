@@ -63,6 +63,7 @@ import {
   eligibleExpression,
   legislationVersionRef,
 } from "@/api/lib/legal-search/legislation-validity-window";
+import { recoverVersionChanges } from "@/api/lib/legal-search/legislation-version-changes-recovery";
 import { syncLegislationWorkIdentifiersTx } from "@/api/lib/legal-search/legislation-work-identifiers";
 import { syncLegislationWorkNamesTx } from "@/api/lib/legal-search/legislation-work-names";
 import {
@@ -985,6 +986,11 @@ export const processLegislationDocument = async (
       projection: revision.withoutCorpusWrite(classification),
       scopedDb,
     });
+    await recoverVersionChanges({
+      db: scopedDb,
+      works: [revisionInput],
+      around: existing.id,
+    });
     return {
       type: "stored",
       id: existing.id,
@@ -1086,6 +1092,14 @@ export const processLegislationDocument = async (
       scopedDb,
     });
   }
+
+  // Last: settling the corpus pointers advances the payload revision, and a
+  // summary records the revision it was computed from.
+  await recoverVersionChanges({
+    db: scopedDb,
+    works: [revisionInput],
+    around: id,
+  });
 
   return {
     type: "stored",

@@ -1,3 +1,6 @@
+import { mcpHandoffRedeemResultSchema } from "@stll/api-contract/mcp-web-handoff";
+
+import { contractJson, respond } from "../helpers/route-mock";
 import { expect, test } from "../helpers/test";
 
 for (const destination of ["/workspaces", "/law?country=cze"]) {
@@ -7,8 +10,10 @@ for (const destination of ["/workspaces", "/law?country=cze"]) {
     const requests: unknown[] = [];
     await page.route("**/api/auth/mcp-handoff/redeem", async (route) => {
       requests.push(route.request().postDataJSON());
-      await route.fulfill({
-        json:
+      await respond(
+        route,
+        contractJson(
+          mcpHandoffRedeemResultSchema,
           requests.length === 1
             ? {
                 status: "needs_confirmation",
@@ -16,7 +21,8 @@ for (const destination of ["/workspaces", "/law?country=cze"]) {
                 organizationName: "Example legal team",
               }
             : { status: "redeemed" },
-      });
+        ),
+      );
     });
     await page.goto(`${destination}#section=2&sh=sh1_browser_fixture`, {
       waitUntil: "domcontentloaded",
@@ -97,7 +103,10 @@ test.describe("signed-out public-law handoff", () => {
     let redemptionCount = 0;
     await page.route("**/api/auth/mcp-handoff/redeem", async (route) => {
       redemptionCount += 1;
-      await route.fulfill({ json: { status: "refused" } });
+      await respond(
+        route,
+        contractJson(mcpHandoffRedeemResultSchema, { status: "refused" }),
+      );
     });
     await page.goto("/law?country=cze#section=2&sh=sh1_browser_fixture", {
       waitUntil: "domcontentloaded",

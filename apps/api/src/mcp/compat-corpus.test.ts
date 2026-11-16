@@ -12,14 +12,17 @@ import {
 } from "@stll/api-contract/search";
 import { assertProperty } from "@stll/property-testing";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import { toSafeId } from "@/api/lib/branded-types";
-import { LIMITS } from "@/api/lib/limits";
-import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
 import {
   corpusCountryQuotas,
   rankCorpusCountries,
+} from "@/api/lib/legal-search/case-law-multi-country";
+import { LIMITS } from "@/api/lib/limits";
+import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
+import {
   readCompatStatute,
   resolveCompatCorpusCountries,
 } from "@/api/mcp/compat-corpus";
@@ -35,6 +38,8 @@ import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 /**
  * The OpenAI-compatible pair reaching the public legal corpus.
@@ -257,7 +262,12 @@ const run = async ({
     // The dispatch boundary forwards the context's anonymization seams to the
     // pipeline; this stands in for it so the suite exercises the same path.
     await finalizeToolEgress(
-      { context, mode, response },
+      {
+        outputSchema: undefined,
+        context,
+        mode,
+        response,
+      },
       {
         anonymizeTextFields: context.testDependencies?.anonymizeTextFields,
         loadAnonymizationAllowlistCanonicalsByWorkspace:
@@ -284,14 +294,14 @@ const withPublicLaw = async (
   body: () => Promise<void>,
 ) => {
   const previousFeature = env.FEATURE_PUBLIC_LAW;
-  env.FEATURE_PUBLIC_LAW = featurePublicLaw;
+  testState.setConfig("FEATURE_PUBLIC_LAW", featurePublicLaw);
   const restoreRuntimeMode = setRuntimeModeForTesting({
     mode: localDevOpen ? RUNTIME_MODE.open : RUNTIME_MODE.strict,
   });
   try {
     await body();
   } finally {
-    env.FEATURE_PUBLIC_LAW = previousFeature;
+    testState.setConfig("FEATURE_PUBLIC_LAW", previousFeature);
     restoreRuntimeMode();
   }
 };

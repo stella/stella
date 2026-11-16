@@ -7,6 +7,7 @@ import {
 export default {
   id: "indexes-chat-turns-org-run-id-uidx",
   revision: 680,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     onlineUniqueIndexDefinition(

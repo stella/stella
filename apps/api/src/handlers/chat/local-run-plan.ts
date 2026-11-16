@@ -1,17 +1,22 @@
-import { panic, Result } from "better-result";
+import { Result } from "better-result";
 
 import {
   CHAT_LOCAL_RUN_REFUSAL,
   CHAT_RUN_TARGET_KIND,
   type ChatRunTarget,
+  isApprovalModeWithin,
+  isChatLocalRunHarness,
 } from "@stll/api-contract/chat-run-target";
-import { DESKTOP_RUNNER_FEATURE_ID } from "@stll/api-contract/desktop-runner";
+import {
+  DESKTOP_RUNNER_FEATURE_ID,
+  type DesktopRunnerApprovalMode,
+} from "@stll/api-contract/desktop-runner";
 
+import type { SafeDbError } from "@/api/db/safe-db";
 import {
   createLocalChatRun,
   type LocalChatRun,
   type LocalRunContext,
-  type LocalRunPlan,
 } from "@/api/handlers/chat/local-run-chunks";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { DesktopRunnerControl } from "@/api/lib/desktop-runner/control";
@@ -41,6 +46,13 @@ export type ResolveChatLocalRunOptions = {
   organizationId: SafeId<"organization">;
   chatThreadId: SafeId<"chatThread">;
   workspaceIds: readonly SafeId<"workspace">[];
+  /**
+   * The most the organization lets a run do without asking, read when the
+   * turn starts so a lowered ceiling holds the next turn.
+   */
+  readApprovalCeiling: () => Promise<
+    Result<DesktopRunnerApprovalMode, SafeDbError>
+  >;
   /** The gateway control; the process's own by default. */
   runtime?: { control: DesktopRunnerControl; runBell: DesktopRunnerRunBell };
 };
@@ -58,16 +70,23 @@ export const readOpenLocalRunThread = async (
 ) => await runtime.control.readOpenRunChatThread(options);
 
 const refuse = (
-  status: 400 | 403 | 409,
+  status: 400 | 403,
   code: (typeof CHAT_LOCAL_RUN_REFUSAL)[keyof typeof CHAT_LOCAL_RUN_REFUSAL],
   message: string,
 ) => Result.err(new HandlerError({ status, code, message }));
 
 /**
- * Route a turn bound for the member's computer before anything about it is
- * stored. A computer that cannot take the turn refuses it with a typed code;
- * the turn never falls back to stella's own models. A resumed turn is not
- * routed: it answers the run that paused, on whichever computer holds it.
+ * Check that a turn bound for the member's computer may be asked for at all,
+ * before anything about it is stored: the request does not also ask for the
+ * agent sandbox, local runs are enabled for the member, and the approval mode
+ * is within the organization's ceiling. These depend on the request and the
+ * member alone, so a refusal here repeats however often it is sent.
+ *
+ * Which computer takes the turn is decided once the turn is stored, as its
+ * run starts (`routeLocalRun`): a computer that cannot take it ends the turn
+ * as a failed turn the member reads on every client. The turn never falls
+ * back to stella's own models. A resumed turn answers the run that paused, on
+ * whichever computer holds it.
  */
 export const resolveChatLocalRun = async ({
   runTarget,
@@ -78,9 +97,10 @@ export const resolveChatLocalRun = async ({
   organizationId,
   chatThreadId,
   workspaceIds,
+  readApprovalCeiling,
   runtime = getDesktopRunnerControl(),
 }: ResolveChatLocalRunOptions): Promise<
-  Result<LocalChatRun | undefined, HandlerError | DatabaseError>
+  Result<LocalChatRun | undefined, HandlerError | SafeDbError>
 > => {
   if (
     runTarget === undefined ||
@@ -107,11 +127,10 @@ export const resolveChatLocalRun = async ({
       "Running chat turns on a computer is not available.",
     );
   }
-  const owner = { userId, organizationId };
   const context: LocalRunContext = {
     control: runtime.control,
     runBell: runtime.runBell,
-    owner,
+    owner: { userId, organizationId },
     chatThreadId,
     workspaceIds,
     mcp: { serverName: MCP_SERVER_NAME, url: getMcpResourceUrl() },
@@ -124,56 +143,90 @@ export const resolveChatLocalRun = async ({
       }),
     );
   }
-  const picked = await runtime.control.pickDesktop({
+  // The organization's ceiling holds whichever computer takes the turn. A
+  // resumed run was held to it when it started and keeps its mode.
+  const ceiling = await readApprovalCeiling();
+  if (ceiling.isErr()) {
+    return Result.err(ceiling.error);
+  }
+  if (!isApprovalModeWithin(runTarget.approvals, ceiling.value)) {
+    return refuse(
+      403,
+      CHAT_LOCAL_RUN_REFUSAL.approvalsAboveLimit,
+      "Your organization does not let a run on your computer do that much without asking.",
+    );
+  }
+  return Result.ok(
+    createLocalChatRun(context, { type: "start", target: runTarget }),
+  );
+};
+
+/** The run a handed-over turn reads on, or why the adopter cannot read it. */
+type AdoptedChatLocalRun =
+  | { type: "adopted"; run: LocalChatRun }
+  /** The turn has no chat run on a computer for this member. */
+  | { type: "no-run" }
+  /** The member may no longer run turns on a computer. */
+  | { type: "unavailable" };
+
+/**
+ * The run of a handed-over turn, read on by the task that adopted it: the
+ * member may still run turns on a computer (a member who lost that is
+ * refused, and the turn ends at its lease), and the run goes on with the
+ * matters the thread reaches now. The approval ceiling was held when the run
+ * started, as for a resumed run.
+ */
+export const adoptChatLocalRun = async ({
+  chatThreadId,
+  chatTurnId,
+  featureAccessSnapshot,
+  organizationId,
+  runtime = getDesktopRunnerControl(),
+  userId,
+  workspaceIds,
+}: Pick<
+  ResolveChatLocalRunOptions,
+  | "chatThreadId"
+  | "featureAccessSnapshot"
+  | "organizationId"
+  | "runtime"
+  | "userId"
+  | "workspaceIds"
+> & {
+  chatTurnId: SafeId<"chatTurn">;
+}): Promise<Result<AdoptedChatLocalRun, DatabaseError>> => {
+  if (
+    !isFeatureEnabled(featureAccessSnapshot, DESKTOP_RUNNER_FEATURE_ID, {
+      organizationId,
+      userId,
+    })
+  ) {
+    return Result.ok({ type: "unavailable" });
+  }
+  const owner = { userId, organizationId };
+  const found = await runtime.control.readHandedOverChatRun({
     owner,
-    harness: runTarget.harness,
+    chat: { threadId: chatThreadId, turnId: chatTurnId },
   });
-  if (picked.isErr()) {
-    return Result.err(picked.error);
+  if (found.isErr()) {
+    return Result.err(found.error);
   }
-  const desktop = picked.value;
-  switch (desktop.type) {
-    case "no_computer":
-      return refuse(
-        409,
-        CHAT_LOCAL_RUN_REFUSAL.noComputer,
-        "None of your computers is connected.",
-      );
-    case "harness_unavailable":
-      return refuse(
-        409,
-        CHAT_LOCAL_RUN_REFUSAL.harnessUnavailable,
-        "The harness on your computer cannot take a turn right now.",
-      );
-    case "available": {
-      if (!desktop.harness.models.some(({ id }) => id === runTarget.model)) {
-        return refuse(
-          409,
-          CHAT_LOCAL_RUN_REFUSAL.modelUnavailable,
-          "The harness on your computer does not offer that model.",
-        );
-      }
-      if (!desktop.harness.approvalModes.includes(runTarget.approvals)) {
-        return refuse(
-          409,
-          CHAT_LOCAL_RUN_REFUSAL.approvalsUnavailable,
-          "Your computer cannot run the harness with those permissions.",
-        );
-      }
-      const plan: LocalRunPlan = {
-        type: "start",
-        destination: {
-          desktopId: desktop.desktopId,
-          harness: runTarget.harness,
-          harnessVersion: desktop.harness.version,
-          model: runTarget.model,
-          approvals: runTarget.approvals,
-        },
-      };
-      return Result.ok(createLocalChatRun(context, plan));
-    }
-    default:
-      desktop satisfies never;
-      return panic("Unknown computer pick");
+  const run = found.value;
+  if (run === null || !isChatLocalRunHarness(run.harness)) {
+    return Result.ok({ type: "no-run" });
   }
+  return Result.ok({
+    type: "adopted",
+    run: createLocalChatRun(
+      {
+        control: runtime.control,
+        runBell: runtime.runBell,
+        owner,
+        chatThreadId,
+        workspaceIds,
+        mcp: { serverName: MCP_SERVER_NAME, url: getMcpResourceUrl() },
+      },
+      { type: "adopt", harness: run.harness },
+    ),
+  });
 };

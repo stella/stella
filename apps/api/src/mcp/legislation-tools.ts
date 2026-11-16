@@ -47,8 +47,13 @@ import {
   ACTION_COST_CALL_KIND,
   actionRequestObserver,
 } from "@/api/lib/usage/action-costs/context";
+import {
+  isBoundTextCursor,
+  windowBoundText,
+} from "@/api/mcp/bound-text-window";
 import type { McpRequestContext } from "@/api/mcp/context";
 import {
+  continuationTokenInput,
   countryInputSchema,
   countryNormalization,
   cursorInput,
@@ -64,10 +69,6 @@ import {
   READ_PROVISION_HISTORY_INPUT_NORMALIZATION,
   readProvisionHistoryArgsSchema,
 } from "@/api/mcp/legislation-input";
-import {
-  isProvisionTextCursor,
-  windowProvisionText,
-} from "@/api/mcp/provision-text-window";
 import type { StatuteDocument } from "@/api/mcp/public-law-handlers";
 import {
   defaultListStatuteVersionsHandler,
@@ -80,9 +81,14 @@ import {
   isLegislationSearchSuccess,
   isStatuteDocument,
 } from "@/api/mcp/public-law-handlers";
+import {
+  createToolContinuation,
+  runContinuablePublicRead,
+} from "@/api/mcp/public-read-continuation";
 import { serializeAuthorizedCorpusMcpResourceName } from "@/api/mcp/resource-serialization";
 import type {
   InternalToolErrorResult,
+  InternalToolResult,
   McpToolDefinition,
   McpToolHandler,
   TypedMcpToolHandler,
@@ -110,6 +116,7 @@ import {
   defineChatProjectionMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { openMcpRead } from "@/api/mcp/write-tool-authority";
 
 /**
@@ -239,6 +246,7 @@ const searchLegislationArgsSchema = nullAsAbsent(
       description: "Opaque cursor from a previous search_legislation call",
       maxLength: CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH,
     }),
+    continuation_token: continuationTokenInput,
   }),
 );
 
@@ -266,7 +274,7 @@ const provisionRequestSchema = v.strictObject({
   language: v.optional(languageInputSchema),
   text_cursor: cursorInput({
     description: "Opaque nextTextCursor from this provision and consolidation",
-    issuedBy: isProvisionTextCursor,
+    issuedBy: isBoundTextCursor,
   }),
 });
 
@@ -328,11 +336,11 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       "publication status, effective date and a matched snippet. Filters: " +
       "document type, status, language, and an effective-date range (ISO " +
       "YYYY-MM-DD). `as_of` searches text in force on that date; omit it to include historical wording. " +
-      "No facets are returned and `total` is not counted, so " +
-      "page with the returned nextCursor instead of reasoning about a result " +
-      "count. A hit is metadata only: pass its `eli` to read_statute for the " +
+      "No facets are returned; `total` is not counted, so page with nextCursor. " +
+      "A hit is metadata only: pass its `eli` to read_statute for the " +
       "text, the outline of anchors and the consolidated versions. " +
-      "Use `url` for the stella reader when served, otherwise the publisher; `source_url` is the publisher source.",
+      "Use `url` for the stella reader when served, otherwise the publisher; `source_url` is the publisher source. " +
+      'Under load it may answer status "running": not a failure. After retryAfterMs, repeat the call with continuation_token.',
     inputSchema: searchLegislationArgsSchema,
     inputNormalization: {
       country: countryNormalization({
@@ -514,13 +522,63 @@ const invalidCursorError = (toolName: LegislationToolName, cursor: string) =>
 
 // --- search_legislation ---------------------------------------------------
 
+type SearchLegislationData = v.InferInput<typeof SEARCH_LEGISLATION_PROJECTION>;
+type FinishedSearchLegislationData = Exclude<
+  SearchLegislationData,
+  { status: "running" }
+>;
+
+export const createLegislationContinuation = (
+  options: Pick<
+    Parameters<typeof createToolContinuation>[1],
+    "store" | "ownerId" | "limits"
+  > = {},
+) =>
+  createToolContinuation<
+    typeof searchLegislationArgsSchema,
+    FinishedSearchLegislationData,
+    null
+  >(searchLegislationArgsSchema, { ...options, progress: () => null });
+
+export type LegislationContinuation = ReturnType<
+  typeof createLegislationContinuation
+>;
+
+let legislationContinuation: LegislationContinuation | undefined;
+
+/** One per process, so concurrent calls on this task can find each other. */
+const getLegislationContinuation = (): LegislationContinuation => {
+  legislationContinuation ??= createLegislationContinuation();
+  return legislationContinuation;
+};
+
 const handleSearchLegislationTool: TypedMcpToolHandler<
-  v.InferInput<typeof SEARCH_LEGISLATION_PROJECTION>
+  SearchLegislationData
 > = async ({ args, context }) => {
   const parsed = v.safeParse(searchLegislationArgsSchema, args);
   if (!parsed.success) {
     return validationErrorResult(parsed.issues);
   }
+  const { continuation_token: continuationToken, ...searchArgs } =
+    parsed.output;
+  return await runContinuablePublicRead({
+    toolName: SEARCH_LEGISLATION_TOOL,
+    continuation:
+      context.testDependencies?.legislationSearchContinuation ??
+      getLegislationContinuation(),
+    args: searchArgs,
+    continuationToken,
+    context,
+    execute: async (workArgs) => await searchLegislationWork(workArgs, context),
+    finish: async (response) => await Promise.resolve(response),
+  });
+};
+
+/** The search itself; it may outlive the call that started it. */
+const searchLegislationWork = async (
+  searchArgs: v.InferOutput<typeof searchLegislationArgsSchema>,
+  context: AuthorizedMcpRequestContext,
+): Promise<InternalToolResult<FinishedSearchLegislationData>> => {
   const {
     country,
     as_of: asOf,
@@ -531,9 +589,9 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
     language,
     query,
     status,
-  } = parsed.output;
+  } = searchArgs;
   const limit = normalizeTenantPageLimit(
-    parsed.output.limit ?? DEFAULT_SEARCH_LIMIT,
+    searchArgs.limit ?? DEFAULT_SEARCH_LIMIT,
   );
 
   const unavailable = publicCountryUnavailable(country, {
@@ -976,7 +1034,7 @@ const provisionItemResult = ({
         };
       }
 
-      const window = windowProvisionText({
+      const window = windowBoundText({
         ...(item.text_cursor === undefined ? {} : { cursor: item.text_cursor }),
         limit: LIMITS.legislationProvisionTextChars,
         subject: JSON.stringify([item.eli, item.anchor, String(version.id)]),
@@ -1318,7 +1376,7 @@ const handleReadProvisionHistoryTool: TypedMcpToolHandler<
         },
       };
     }
-    const window = windowProvisionText({
+    const window = windowBoundText({
       ...(textCursor === undefined ? {} : { cursor: textCursor }),
       limit: LIMITS.legislationProvisionTextChars,
       subject: JSON.stringify([eli, anchor, String(item.documentId)]),

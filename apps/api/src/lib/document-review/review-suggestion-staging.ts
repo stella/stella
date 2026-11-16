@@ -18,15 +18,10 @@ import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import type { FolioAIEditOperation } from "@stll/folio-core/ai-edits";
 
 import type { Transaction } from "@/api/db/root";
-import {
-  documentReviewFindings,
-  documentReviewRuns,
-  docxSuggestions,
-} from "@/api/db/schema";
+import { documentReviewFindings, docxSuggestions } from "@/api/db/schema";
 import type { DocxSuggestionSeverity } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { basisReferenceWorkspaceIds } from "@/api/lib/document-review/reference-passages";
 import {
   DOCUMENT_REVIEW_DECISION,
   DOCUMENT_REVIEW_FINDINGS_PER_RUN_MAX,
@@ -89,6 +84,25 @@ const suggestionOperation = (
   }
 };
 
+export const REVIEW_FIX_STAGING = {
+  stage: "stage",
+  withheld: "withheld",
+} as const;
+
+/**
+ * What the run's data sources allow staging to do. `sourceDataWorkspaceIds` is
+ * every other matter the run's reference text came from, never a subset: a
+ * fix's text can restate any of them, and the row must stay hidden from anyone
+ * who cannot open all of them. When the requester cannot open one, the fixes
+ * are withheld.
+ */
+export type ReviewFixStaging =
+  | {
+      type: typeof REVIEW_FIX_STAGING.stage;
+      sourceDataWorkspaceIds: SafeId<"workspace">[];
+    }
+  | { type: typeof REVIEW_FIX_STAGING.withheld };
+
 export type StageReviewFixSuggestionsArgs = {
   tx: Transaction;
   workspaceId: SafeId<"workspace">;
@@ -96,6 +110,7 @@ export type StageReviewFixSuggestionsArgs = {
    *  tool's do. */
   entityId: SafeId<"entity">;
   runId: SafeId<"documentReviewRun">;
+  fixStaging: ReviewFixStaging;
 };
 
 export type StagedReviewFixSuggestions = {
@@ -103,6 +118,8 @@ export type StagedReviewFixSuggestions = {
   staged: number;
   /** New fixes left unstaged because the document is at its pending cap. */
   skippedForPendingLimit: number;
+  /** Fixes left unstaged because the requester cannot open a source matter. */
+  skippedForUnreadableReference: number;
 };
 
 /**
@@ -122,33 +139,8 @@ export const stageReviewFixSuggestions = async ({
   workspaceId,
   entityId,
   runId,
+  fixStaging,
 }: StageReviewFixSuggestionsArgs): Promise<StagedReviewFixSuggestions> => {
-  // A review-origin suggestion restates the reviewed document plus the run's
-  // pinned references, which may live in other matters. Those are its data
-  // scope, so the row records them the way a chat-origin suggestion records
-  // its thread's: reading the run through this transaction is what narrows
-  // them to what the writer is itself authorized for. The run's own matter is
-  // `workspace_id` and is excluded, exactly as the column's insert check
-  // expects.
-  const runs = await tx
-    .select({ basis: documentReviewRuns.basis })
-    .from(documentReviewRuns)
-    .where(
-      and(
-        eq(documentReviewRuns.id, runId),
-        eq(documentReviewRuns.workspaceId, workspaceId),
-      ),
-    )
-    .limit(1);
-  const run = runs.at(0);
-  if (run === undefined) {
-    // Finalization holds the run row in this same transaction.
-    return panic("Staging review fixes for a run that does not exist");
-  }
-  const sourceDataWorkspaceIds = basisReferenceWorkspaceIds(run.basis).filter(
-    (referenceWorkspaceId) => referenceWorkspaceId !== workspaceId,
-  );
-
   const findings = await tx
     .select({
       id: documentReviewFindings.id,
@@ -181,8 +173,27 @@ export const stageReviewFixSuggestions = async ({
     staged.push({ findingId: row.id, issue, severity });
   }
   if (staged.length === 0) {
-    return { staged: 0, skippedForPendingLimit: 0 };
+    return {
+      staged: 0,
+      skippedForPendingLimit: 0,
+      skippedForUnreadableReference: 0,
+    };
   }
+
+  switch (fixStaging.type) {
+    case REVIEW_FIX_STAGING.withheld:
+      return {
+        staged: 0,
+        skippedForPendingLimit: 0,
+        skippedForUnreadableReference: staged.length,
+      };
+    case REVIEW_FIX_STAGING.stage:
+      break;
+    default:
+      fixStaging satisfies never;
+      return panic("Unhandled review fix staging decision");
+  }
+  const { sourceDataWorkspaceIds } = fixStaging;
 
   // The engine built these, so a rejection is a bug in the fix derivation, not
   // untrusted input: fail loudly rather than persisting an op no reader of the
@@ -242,7 +253,11 @@ export const stageReviewFixSuggestions = async ({
   const insertable = fresh.slice(0, capacity.remaining);
   const skippedForPendingLimit = fresh.length - insertable.length;
   if (insertable.length === 0) {
-    return { staged: 0, skippedForPendingLimit };
+    return {
+      staged: 0,
+      skippedForPendingLimit,
+      skippedForUnreadableReference: 0,
+    };
   }
 
   // audit: skip — proposals, not document mutations, exactly as the batch
@@ -257,5 +272,9 @@ export const stageReviewFixSuggestions = async ({
     })
     .returning({ id: docxSuggestions.id });
 
-  return { staged: inserted.length, skippedForPendingLimit };
+  return {
+    staged: inserted.length,
+    skippedForPendingLimit,
+    skippedForUnreadableReference: 0,
+  };
 };

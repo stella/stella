@@ -6,7 +6,8 @@ import { NewChatIcon, QuoteIcon } from "@stll/ui/icons";
 
 import { CHAT_SELECTION_ACTION } from "@/components/chat/chat-selection-branch.logic";
 import type { ChatSelectionAction } from "@/components/chat/chat-selection-branch.logic";
-import { CopyActionButton } from "@/components/copy-action-button";
+import { CopyControlButton } from "@/components/copy-control";
+import type { CopyControlState } from "@/components/copy-control";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 
 const ACTION_LABEL_CLASS = "max-sm:sr-only";
@@ -15,6 +16,7 @@ export const ChatSelectionActions = ({
   actions,
   askInNewChat,
   quoteInReply,
+  copy,
   copyText,
 }: ChatSelectionActionsProps) => {
   const t = useTranslations();
@@ -73,13 +75,14 @@ export const ChatSelectionActions = ({
           }
           case CHAT_SELECTION_ACTION.copy: {
             return (
-              <CopyActionButton
-                // A fresh selection starts unconfirmed.
-                key={`${action}:${copyText}`}
+              <CopyControlButton
+                content={copyText}
+                control={copy}
+                key={action}
                 labelClassName={ACTION_LABEL_CLASS}
+                // Pressing it keeps the words selected.
                 onMouseDown={(event) => event.preventDefault()}
                 size="sm"
-                text={copyText}
                 variant="ghost"
               />
             );
@@ -98,5 +101,7 @@ type ChatSelectionActionsProps = {
   actions: ChatSelectionAction[];
   askInNewChat: () => void;
   quoteInReply: () => void;
+  /** The bar's copy owner, which also confirms the reader's own copy. */
+  copy: CopyControlState<"selection">;
   copyText: string;
 };

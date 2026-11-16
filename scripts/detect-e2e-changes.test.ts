@@ -14,6 +14,7 @@ import path from "node:path";
 import { Script } from "node:vm";
 
 import { parseBunLockText } from "./bun-lock-text";
+import { isRepositoryCheckoutAction } from "./ci-job-classification/checkout-actions";
 import {
   type ChangedFileScopeDetectors,
   computeChangedFileScope,
@@ -226,8 +227,7 @@ const evaluateExpression = (expression: string, context: object) =>
 const checkoutRefs = Object.values(ciContract.jobs).flatMap((job) =>
   (job.steps ?? []).filter(
     (step) =>
-      step.uses?.startsWith("actions/checkout@") &&
-      step.with?.["ref"] !== undefined,
+      isRepositoryCheckoutAction(step.uses) && step.with?.["ref"] !== undefined,
   ),
 );
 const marketingCheckout = (job: string) => {
@@ -533,7 +533,7 @@ describe("detect-e2e-changes", () => {
     );
     expect(requiredExpression(collabRedis["if"])).toBe(
       githubExpression(
-        "!cancelled() && needs.ci-plan.outputs.collaboration_suite_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true'))",
+        "!cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.collaboration_suite_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true')))",
       ),
     );
     expect(requiredExpression(collabRedis["run"])).toBe(
@@ -595,15 +595,18 @@ describe("detect-e2e-changes", () => {
         workflowStepValue(production, "Check route network baseline")["if"],
       ),
     ).toContain("matrix.shard == 'network-baseline'");
-    for (const stepName of [
-      "Run Playwright shard",
-      "Run route-smoke Playwright shard",
-    ]) {
-      expect(
-        requiredExpression(workflowStepValue(production, stepName)["if"]),
-        stepName,
-      ).toContain("matrix.shard != 'network-baseline'");
-    }
+    expect(
+      requiredExpression(
+        workflowStepValue(production, "Run Playwright shard")["if"],
+      ),
+    ).toContain("matrix.shard != 'network-baseline'");
+    const routeRun = workflowStepRun(
+      production,
+      "Check route network baseline",
+    );
+    expect(routeRun).toContain("test:e2e -- route-smoke.spec.ts");
+    expect(routeRun).not.toContain("--grep-invert");
+    expect(routeRun).not.toContain("--shard");
   });
 
   test("plans e2e outputs from selection and fallback semantics", () => {
@@ -1887,27 +1890,23 @@ describe("detect-e2e-changes", () => {
     const uploads = workflow
       .split(/^ {6}- /mu)
       .filter((step) => /name: playwright-blob-/u.test(step));
-    const defaultOutputUploads = uploads.filter(
-      (step) => !/name: playwright-blob-route-smoke-/u.test(step),
-    );
-    const routeSmokeUploads = uploads.filter((step) =>
-      /name: playwright-blob-route-smoke-/u.test(step),
-    );
-
-    expect(defaultOutputUploads.length).toBeGreaterThan(0);
-    for (const upload of defaultOutputUploads) {
+    expect(uploads.length).toBeGreaterThan(0);
+    for (const upload of uploads) {
       expect(upload).toContain("uses: actions/upload-artifact@");
       expect(upload).toContain("path: apps/web/e2e/test-results/blob-report/");
     }
-    expect(routeSmokeUploads).toHaveLength(1);
-    for (const upload of routeSmokeUploads) {
-      expect(upload).toContain("uses: actions/upload-artifact@");
-      expect(upload).toContain(
-        `path: apps/web/e2e/test-results/route-smoke-\${{ matrix.shard }}/blob-report/`,
-      );
-    }
-    expect(workflow).toContain(
-      `E2E_OUTPUT_DIR: test-results/route-smoke-\${{ matrix.shard }}`,
+    const networkUpload = workflowStepValue(
+      workflowJob("e2e-production-shard"),
+      "Upload network baseline blob report",
+    );
+    expect(networkUpload).toMatchObject({
+      with: {
+        name: "network-baseline-blob",
+        path: "apps/web/e2e/test-results/blob-report/",
+      },
+    });
+    expect(requiredExpression(networkUpload["if"])).toContain(
+      "matrix.shard == 'network-baseline'",
     );
     expect(workflow).not.toContain("path: apps/web/test-results/blob-report/");
   });
@@ -2032,7 +2031,12 @@ test("every workflow browser command uses the pinned image and no reachable brow
       );
       const runs =
         isRecord(action) && isRecord(action["runs"]) ? action["runs"] : {};
-      const reached = reachableSteps(stepsOf(runs["steps"], step.uses));
+      // Only composite actions have steps to inherit; a node action runs one
+      // entry point and reaches no further workflow steps.
+      const reached =
+        runs["using"] === "composite"
+          ? reachableSteps(stepsOf(runs["steps"], step.uses))
+          : [];
       actionSteps.set(step.uses, reached);
       return [step, ...reached];
     });

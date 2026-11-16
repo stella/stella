@@ -33,10 +33,6 @@ import type {
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
-beforeEach(() => {
-  createTimeEntryHandlerMock.mockReset();
-});
-
 const createTimeEntryHandlerMock = mock();
 
 // Inject the backing time-entry create handler through the request context so
@@ -183,6 +179,7 @@ let analytics: RecordingAnalytics;
 let logs: RecordingLogger;
 
 beforeEach(() => {
+  createTimeEntryHandlerMock.mockReset();
   resetFailureObservationsForTesting();
   analytics = installRecordingAnalytics();
   logs = installRecordingLogger();

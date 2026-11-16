@@ -20,3 +20,5 @@
 **/*.key
 **/*.p12
 **/*.pfx
+# Public timestamp-authority CA certificates, not keys: the API imports them.
+!apps/api/src/lib/files/pdf-signing/trust/*.pem

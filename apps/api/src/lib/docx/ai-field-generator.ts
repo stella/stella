@@ -262,6 +262,7 @@ const generateFieldText = async (
   const { abortController, caching, messages, model, system } =
     await resolveFieldChat(input);
   return await collectTanStackTextRun({
+    threadId: Bun.randomUUIDv7(),
     userId: input.admission.userId,
     admission: input.admission,
     model,
@@ -297,6 +298,7 @@ const generateFieldObject = async <TSchema extends v.GenericSchema>(
   const { abortController, caching, messages, model, system } =
     await resolveFieldChat(input);
   return await generateTanStackChatObject({
+    threadId: Bun.randomUUIDv7(),
     userId: input.admission.userId,
     admission: input.admission,
     model,

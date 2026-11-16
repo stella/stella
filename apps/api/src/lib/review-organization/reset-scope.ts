@@ -15,12 +15,14 @@ import { runScopedWorkInTransaction } from "@/api/db/scoped";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
+import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import {
   WORKSPACE_DELETION_RETAINED_STAGES,
   WORKSPACE_DELETION_RETAINED_TABLES,
 } from "@/api/lib/organization-storage-teardown";
 import { inOrder } from "@/api/lib/review-organization/in-order";
 import { isRecord } from "@/api/lib/type-guards";
+import { requireNoHold } from "@/api/lib/workspaces/legal-holds/holds";
 
 /**
  * Organization-scoped tables the reset leaves in place, each with its reason.
@@ -38,6 +40,8 @@ export const REVIEW_RESET_KEPT_TABLES = {
   organization_settings: "Organization settings, not reviewer content.",
   billing_draft_user_settings:
     "Per-user billing draft consent and preferences, not reviewer content.",
+  conflict_checks:
+    "Conflict checks are an invitation-only feature the review organization is never granted, so no reviewer can record one there; the table stays empty for it.",
   organization_access_states: "Organization access state, set by operators.",
   organization_configured_access: "Organization access, set by operators.",
   feature_enrolments:
@@ -58,7 +62,7 @@ export const REVIEW_RESET_KEPT_TABLES = {
     "Account-owned creation replay receipts; retaining them prevents duplicate organizations after a content reset.",
   organization_professional_use_acceptances:
     "The organization's professional-use acceptance; written once, never reviewer content.",
-  legal_list_verification_budgets: "Usage ledger: verification budget.",
+  model_run_budgets: "Usage ledger: model run caps.",
   organization_file_objects:
     "Storage accounting, settled by the cleanup workers as objects are erased.",
   organization_file_usage:
@@ -83,6 +87,8 @@ export const REVIEW_RESET_KEPT_TABLES = {
   business_registry_credentials:
     "Integration credentials: never touched by the reset.",
   feedback_reports: "Product feedback the operators read.",
+  legal_holds:
+    "Audited preservation records: an active hold refuses the reset, and a released hold goes with its matter or item.",
   chat_content_v3_backfill_receipts:
     "Repair receipts the operators read; identifiers only, never chat content.",
   sanctions_organization_marks:
@@ -114,8 +120,12 @@ export const REVIEW_RESET_CLEARED_TABLES = [
   "case_law_research_columns",
   "chat_run_log_entries",
   "chat_run_logs",
+  "chat_queue_holds",
+  "chat_queued_messages",
   "chat_secrets",
   "chat_threads",
+  "chat_browser_site_grants",
+  "chat_limit_reminders",
   "chat_tool_grants",
   "chat_turns",
   "clause_categories",
@@ -134,6 +144,7 @@ export const REVIEW_RESET_CLEARED_TABLES = [
   "correspondence_drop_logs",
   "correspondence_filers",
   "desktop_presence",
+  "desktop_runner_folder_restores",
   "desktop_runner_runs",
   "desktop_runners",
   "desktop_time_entry_batches",
@@ -161,6 +172,7 @@ export const REVIEW_RESET_CLEARED_TABLES = [
   "number_series_allocations",
   "number_series_counters",
   "office_file_evidence",
+  "organization_data_exports",
   "pending_uploads",
   "playbook_definition_versions",
   "playbook_definitions",
@@ -176,6 +188,7 @@ export const REVIEW_RESET_CLEARED_TABLES = [
   "search_document_preview_passages",
   "search_documents",
   "search_history_entries",
+  "search_history_country_clears",
   "search_history_tombstones",
   "search_history_owners",
   "search_projection_repair_queue",
@@ -210,14 +223,34 @@ export const REVIEW_RESET_CLEARED_TABLES = [
 
 /**
  * Cleared tables the sweep empties in one statement, each group contiguous in
- * the sweep order. Every member is deleted on the owner connection, never in
- * a member-scoped transaction (the sweep refuses a group that is not).
+ * the sweep order. A group's members are all deleted on the owner connection,
+ * or all in the one member-scoped transaction; the sweep refuses a group that
+ * mixes the two.
  */
 export const REVIEW_RESET_SHARED_STATEMENTS: readonly (readonly (typeof REVIEW_RESET_CLEARED_TABLES)[number][])[] =
   [
     // A desktop's presence and its runner rows: device bookkeeping the owner
     // removes directly, with the runs' commands and events by cascade.
-    ["desktop_presence", "desktop_runner_runs", "desktop_runners"],
+    [
+      "desktop_presence",
+      "desktop_runner_folder_restores",
+      "desktop_runner_runs",
+      "desktop_runners",
+    ],
+    // The member's own chat settings: standing approvals for websites and
+    // for tools, and usage limit reminders, all keyed on the same member and
+    // organization.
+    ["chat_browser_site_grants", "chat_limit_reminders", "chat_tool_grants"],
+    // A chat's run logs and its queue: rows of the organization's chats that
+    // the owner removes directly, in one statement.
+    [
+      "chat_run_log_entries",
+      "chat_run_logs",
+      "chat_queue_holds",
+      "chat_queued_messages",
+    ],
+    // Independent search history deletion barriers under one owner policy.
+    ["search_history_country_clears", "search_history_tombstones"],
   ];
 
 /**
@@ -332,6 +365,14 @@ export const sweepReviewOrganization = async (
   organizationId: SafeId<"organization">,
   userId: SafeId<"user">,
 ): Promise<Map<string, number>> => {
+  const hold = await requireNoHold({
+    tx,
+    organizationId,
+    target: { type: "organization" },
+  });
+  if (hold.isErr()) {
+    abortTransaction(hold.error);
+  }
   // audit: skip - the reset sweep; the run's totals go to the system audit
   const removed = new Map<string, number>();
   // Chat attachments name no organization; their rows hold their threads
@@ -427,10 +468,26 @@ export const sweepReviewOrganization = async (
       }
     };
     if (shared !== undefined) {
-      if (shared.some((member) => applicationTables.has(member))) {
-        return panic("A shared reset statement holds a member-scoped table");
+      const scoped = shared.filter((member) => applicationTables.has(member));
+      if (scoped.length === 0) {
+        await clear(tx);
+        return Result.ok(undefined);
       }
-      await clear(tx);
+      if (scoped.length !== shared.length) {
+        return panic(
+          "A shared reset statement mixes member-scoped and owner tables",
+        );
+      }
+      await runScopedWorkInTransaction({
+        tx,
+        organizationId,
+        userId,
+        workspaceScope: {
+          type: WORKSPACE_ACCESS_MODE.explicit,
+          workspaceIds,
+        },
+        fn: clear,
+      });
       return Result.ok(undefined);
     }
     // Explicit owner cleanup policies cover user and feature-hidden rows.

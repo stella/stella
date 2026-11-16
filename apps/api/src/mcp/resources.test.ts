@@ -15,6 +15,7 @@ import {
   loadSkill,
   readSkillRequiredTools,
 } from "@stll/skills";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
@@ -47,6 +48,8 @@ import {
   createScopedDbMock,
   createSelectQueryMock,
 } from "@/api/tests/scoped-db-mock";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const MARKER_REFERENCE_URI = "stella://reference/template-markers";
 const FIELD_REFERENCE_URI = "stella://reference/template-fields";
@@ -706,13 +709,13 @@ describe("MCP resources", () => {
     async (app) => {
       const previous = env.FEATURE_PUBLIC_LAW;
       const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
-      env.FEATURE_PUBLIC_LAW = false;
+      testState.setConfig("FEATURE_PUBLIC_LAW", false);
       try {
         expect(
           await rejectionOf(readMcpResource(app.uri, "law")),
         ).toBeInstanceOf(ProtocolError);
       } finally {
-        env.FEATURE_PUBLIC_LAW = previous;
+        testState.setConfig("FEATURE_PUBLIC_LAW", previous);
         restore();
       }
     },
@@ -720,7 +723,7 @@ describe("MCP resources", () => {
 
   test("lists and reads the legislation workflow only behind its own gate", async () => {
     const previousFeaturePublicLaw = env.FEATURE_PUBLIC_LAW;
-    env.FEATURE_PUBLIC_LAW = false;
+    testState.setConfig("FEATURE_PUBLIC_LAW", false);
     const restoreRuntimeMode = setRuntimeModeForTesting({
       mode: RUNTIME_MODE.strict,
     });
@@ -743,12 +746,12 @@ describe("MCP resources", () => {
         (await listMcpResources("default")).map((entry) => entry.uri),
       ).toContain(WORKFLOW_REFERENCE_URI);
 
-      env.FEATURE_PUBLIC_LAW = true;
+      testState.setConfig("FEATURE_PUBLIC_LAW", true);
       expect(
         (await listMcpResources("default")).map((entry) => entry.uri),
       ).toContain(LEGISLATION_WORKFLOW_REFERENCE_URI);
     } finally {
-      env.FEATURE_PUBLIC_LAW = previousFeaturePublicLaw;
+      testState.setConfig("FEATURE_PUBLIC_LAW", previousFeaturePublicLaw);
       restoreRuntimeMode();
     }
   });

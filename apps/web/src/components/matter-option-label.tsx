@@ -1,5 +1,6 @@
 import { BidiText } from "@stll/ui/bidi-text";
 import { MatterIcon } from "@stll/ui/matter-icon";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 export type MatterOptionLabelMatter = {
   clientName?: string | null | undefined;
@@ -25,11 +26,11 @@ export const MatterOptionLabel = ({
       className="size-4 shrink-0"
       matter={{ id: matter.id, color: matter.color }}
     />
-    <BidiText className="truncate">{matter.name}</BidiText>
+    <TruncatedText render={<BidiText />}>{matter.name}</TruncatedText>
     {matter.clientName === null || matter.clientName === undefined ? null : (
-      <span className="text-muted-foreground min-w-0 truncate text-xs">
+      <TruncatedText className="text-muted-foreground text-xs">
         <BidiText>{matter.clientName}</BidiText>
-      </span>
+      </TruncatedText>
     )}
   </span>
 );

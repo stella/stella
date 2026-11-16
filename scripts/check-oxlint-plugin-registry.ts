@@ -32,6 +32,7 @@ export const NON_PLUGIN_MODULES: ReadonlySet<string> = new Set([
   "physical-properties.ts",
   "public-law-decision-surface-modules.ts",
   "public-read-io-provenance.ts",
+  "regex-sources.ts",
   "restricted-import.ts",
   "utils.ts",
   "test-determinism-rule.ts",

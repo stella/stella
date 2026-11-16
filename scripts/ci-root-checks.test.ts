@@ -390,6 +390,7 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
   ],
   "ci-checks-rest/Test maintenance release preparation": [
     "packages/property-testing/src/pinned-seeds.ts",
+    "scripts/check-desktop-support-floor.ts",
     "scripts/check-marketing-recordings.ts",
     "scripts/prepare-maintenance-release.property.test.ts",
     "scripts/prepare-maintenance-release.ts",
@@ -560,7 +561,11 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
     "scripts/changeset-guard.ts",
     "scripts/check-cli-release-coupling.test.ts",
     "scripts/check-cli-release-coupling.ts",
+    "scripts/check-desktop-support-floor.ts",
+    "scripts/check-marketing-recordings.ts",
     "scripts/ci-check-pool-registry.ts",
+    "scripts/prepare-maintenance-release.ts",
+    "scripts/product-media.ts",
   ],
   "ci-checks-rest/Test CLI contract changeset guard": [
     "scripts/borrowed-dependencies.ts",
@@ -606,8 +611,11 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
   ],
   "ci-checks-rest/Test migration identity logic": [
     "scripts/check-migration-order.test.ts",
+    "scripts/check-migration-order.ts",
   ],
-  "ci-checks-rest/Check migration identity against the base branch": [],
+  "ci-checks-rest/Check migration identity against the base branch": [
+    "scripts/check-migration-order.ts",
+  ],
   "ci-checks-rest/Test dead-columns reference matching": [
     "scripts/check-dead-columns.ts",
   ],

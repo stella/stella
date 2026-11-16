@@ -11,16 +11,20 @@ type MatterDocument = {
   name?: string | null;
 };
 
+/** The matter's documents a picker offers: the ones stored as DOCX or PDF. */
+export const pickableDocuments = <T extends MatterDocument>(
+  files: readonly T[],
+) =>
+  files.filter(
+    (file) => file.mimeType === DOCX_MIME || file.mimeType === PDF_MIME,
+  );
+
 export const filterVisibleDocuments = <T extends MatterDocument>(
   files: readonly T[],
   search: string,
 ) => {
   const matches = createSearchQueryMatcher(search);
-  return files
-    .filter(
-      (file) =>
-        (file.mimeType === DOCX_MIME || file.mimeType === PDF_MIME) &&
-        matches(file.name ?? file.fileName),
-    )
+  return pickableDocuments(files)
+    .filter((file) => matches(file.name ?? file.fileName))
     .slice(0, MAX_VISIBLE_DOCUMENTS);
 };

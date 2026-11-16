@@ -2,10 +2,10 @@
   "type": "parser",
   "name": "AT_VERG",
   "key": "at-verg",
-  "parserVersion": 11,
+  "parserVersion": 13,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",
-    "reason": "Read the parts of an Austrian decision from what the court printed, not from the publisher's section labels: the docket line, formula and bench recital are head matter, the ruling is the holding wherever it is filed, the reasons, instructions on appeal and the place and date follow in order, and Findok decisions carry the same roles."
+    "reason": "Dependency patch tracking only: @tanstack/ai is reached through the desktop runner wire schema in transaction infrastructure, not parser execution. No parser-owned value changes; the matching no-stored-row-effect declaration requires no replay."
   }
 }

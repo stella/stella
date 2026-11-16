@@ -16,6 +16,40 @@ afterEach(() => {
 });
 
 describe("logger attributes", () => {
+  test.each([
+    "__proto__",
+    "constructor",
+    "prototype",
+    "toString",
+    "valueOf",
+    "hasOwnProperty",
+  ])("keeps accepted %s attributes as own data fields", (key) => {
+    const recording = installRecordingLogger();
+    const cases = [
+      { input: "entry", output: "entry" },
+      { input: 17, output: 17 },
+      { input: true, output: true },
+      { input: ["entry"], output: ["entry"] },
+      { input: [17], output: [17] },
+      { input: [true], output: [true] },
+      { input: { count: 17 }, output: '{"count":17}' },
+    ];
+    try {
+      for (const { input, output } of cases) {
+        const attributes = Object.fromEntries([[key, input]]);
+        const sanitized = sanitizeLogAttributes(attributes);
+        expect(sanitized).toEqual(Object.fromEntries([[key, output]]));
+        expect(Object.hasOwn(sanitized ?? {}, key)).toBe(true);
+        expect(Object.getPrototypeOf(sanitized)).toBe(Object.prototype);
+        logger.info("test.attribute", attributes);
+        expect(recording.records.at(-1)?.attributes).toEqual(sanitized);
+      }
+      expect(recording.records).toHaveLength(cases.length);
+    } finally {
+      recording.restore();
+    }
+  });
+
   test("drops sensitive attribute keys before emission", () => {
     expect(
       sanitizeLogAttributes({

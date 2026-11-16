@@ -44,6 +44,7 @@ import {
 } from "@stll/ui/select";
 import { stellaToast } from "@stll/ui/toast";
 import { ViewToolbarChrome } from "@stll/ui/view-toolbar";
+import { PropertyIcon } from "@stll/workspace-ui/property-icon";
 
 import { CsvIcon, DocxIcon, XlsxIcon } from "@/components/document-icon";
 import { FolderExpandToggle } from "@/components/file-tree/folder-expand-toggle";
@@ -52,7 +53,6 @@ import { AiColumnSelectionAction } from "@/components/workspaces/ai-column-run-c
 import { BulkAddColumns } from "@/components/workspaces/bulk-add-columns";
 import { getInternalPropertyId } from "@/components/workspaces/entity-utils";
 import { useStartWorkflow } from "@/components/workspaces/hooks/use-start-workflow";
-import { PropertyIcon } from "@/components/workspaces/property-helpers";
 import { RowActions } from "@/components/workspaces/row-actions";
 import { ColumnToggle } from "@/components/workspaces/table/column-toggle";
 import type { ColumnToggleGroup } from "@/components/workspaces/table/column-toggle";
@@ -156,10 +156,7 @@ export const ViewToolbar = ({
       : [];
 
   return (
-    <ViewToolbarChrome
-      className="md:ms-auto md:justify-end"
-      data-slot="workspace-view-toolbar"
-    >
+    <ViewToolbarChrome data-slot="workspace-view-toolbar">
       <QueryViewFeedback view={propertiesView} />
       <ExtractionRunProgress workspaceId={workspaceId} />
 

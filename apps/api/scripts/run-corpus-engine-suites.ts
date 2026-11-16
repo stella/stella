@@ -26,14 +26,59 @@ const COMMAND_TIMEOUT_MS = 90_000;
 const ENGINE_STARTUP_TIMEOUT_MS = 60_000;
 const SUITE_TIMEOUT_MS = 40 * 60_000;
 
+/** Where a suite's engine node keeps its metastore. */
+export const CORPUS_ENGINE_METASTORE = {
+  /** The node's own file-backed metastore, in its data volume. */
+  file: "file",
+  /**
+   * A Postgres metastore in a container of its own beside the node, on a
+   * network the two share. The suite reaches it on loopback, and can run more
+   * engine processes in the node's container against the same metastore.
+   */
+  postgres: "postgres",
+} as const;
+
+type CorpusEngineMetastore =
+  (typeof CORPUS_ENGINE_METASTORE)[keyof typeof CORPUS_ENGINE_METASTORE];
+
 // Longest suite first; every file owns its engine, index storage and process.
-export const CORPUS_ENGINE_TEST_FILES = [
-  "src/lib/legal-search/corpus-index-delete-survivor.contract.test.ts",
-  "src/handlers/legislation/search-relaxed.contract.test.ts",
-  "src/handlers/legislation/statute-recall.contract.test.ts",
-  "src/lib/legal-search/corpus-index-scored-scan.contract.test.ts",
-  "src/lib/legal-search/corpus-index-query-features.contract.test.ts",
-] as const;
+export const CORPUS_ENGINE_TEST_SUITES = [
+  {
+    file: "src/lib/legal-search/corpus-index-delete-survivor.contract.test.ts",
+    metastore: CORPUS_ENGINE_METASTORE.file,
+  },
+  {
+    file: "src/lib/legal-search/corpus-offline-indexer.contract.test.ts",
+    metastore: CORPUS_ENGINE_METASTORE.postgres,
+  },
+  {
+    file: "src/lib/legal-search/corpus-index-projection-offline-build.contract.test.ts",
+    metastore: CORPUS_ENGINE_METASTORE.postgres,
+  },
+  {
+    file: "src/handlers/legislation/search-relaxed.contract.test.ts",
+    metastore: CORPUS_ENGINE_METASTORE.file,
+  },
+  {
+    file: "src/handlers/legislation/statute-recall.contract.test.ts",
+    metastore: CORPUS_ENGINE_METASTORE.file,
+  },
+  {
+    file: "src/lib/legal-search/corpus-index-scored-scan.contract.test.ts",
+    metastore: CORPUS_ENGINE_METASTORE.file,
+  },
+  {
+    file: "src/lib/legal-search/corpus-index-query-features.contract.test.ts",
+    metastore: CORPUS_ENGINE_METASTORE.file,
+  },
+] as const satisfies readonly {
+  file: string;
+  metastore: CorpusEngineMetastore;
+}[];
+
+export const CORPUS_ENGINE_TEST_FILES = CORPUS_ENGINE_TEST_SUITES.map(
+  ({ file }) => file,
+);
 
 export const assertCorpusEngineTestCoverage = async (apiRoot: string) => {
   const discovered = await discoverGatedTestFiles({
@@ -53,6 +98,36 @@ export const assertCorpusEngineTestCoverage = async (apiRoot: string) => {
   }
 };
 
+type PlannedEngine =
+  | { type: typeof CORPUS_ENGINE_METASTORE.file; dataVolume: string }
+  | {
+      type: typeof CORPUS_ENGINE_METASTORE.postgres;
+      network: string;
+      metastoreContainerName: string;
+    };
+
+// The Postgres topology mounts no named volume: the node's data directory
+// stays in its container's writable layer and the metastore's in an anonymous
+// volume, both removed with their containers.
+const plannedEngine = (
+  metastore: CorpusEngineMetastore,
+  containerName: string,
+): PlannedEngine => {
+  switch (metastore) {
+    case CORPUS_ENGINE_METASTORE.file:
+      return { type: metastore, dataVolume: `${containerName}-data` };
+    case CORPUS_ENGINE_METASTORE.postgres:
+      return {
+        type: metastore,
+        network: `${containerName}-net`,
+        metastoreContainerName: `${containerName}-metastore`,
+      };
+    default:
+      metastore satisfies never;
+      return panic(`Unhandled corpus engine metastore: ${String(metastore)}`);
+  }
+};
+
 type PlanCorpusEngineSuitesOptions = {
   outputRoot: string;
   runId: string;
@@ -62,7 +137,7 @@ export const planCorpusEngineSuites = ({
   outputRoot,
   runId,
 }: PlanCorpusEngineSuitesOptions) =>
-  CORPUS_ENGINE_TEST_FILES.map((file, index) => {
+  CORPUS_ENGINE_TEST_SUITES.map(({ file, metastore }, index) => {
     const containerName = `corpus-suite-${runId}-${index}`;
     const outputDir = path.join(outputRoot, containerName);
     return {
@@ -70,7 +145,7 @@ export const planCorpusEngineSuites = ({
       kind: TEST_BATCH_KIND.regular,
       containerName,
       outputDir,
-      dataVolume: `${containerName}-data`,
+      engine: plannedEngine(metastore, containerName),
       junitPath: path.join(outputDir, "tests.xml"),
     };
   });
@@ -265,9 +340,164 @@ export const waitForCorpusEngineReadiness = async ({
   ]);
 };
 
+const METASTORE_DATABASE = "metastore";
+
+const loopbackBinding = (binding: string, what: string) => {
+  if (/^127\.0\.0\.1:\d+$/u.exec(binding) === null) {
+    panic(`Unexpected ${what} port binding: ${binding}`);
+  }
+  return binding;
+};
+
+type StartCorpusEngineOptions = {
+  apiRoot: string;
+  image: string;
+  metastoreImage: string;
+  signal: AbortSignal;
+  suite: CorpusEngineSuite;
+  run: (options: CommandOptions) => Promise<string>;
+};
+
+/** What the suite's test process learns about its engine, beside the endpoint. */
+type EngineTestEnvironment = {
+  STELLA_CORPUS_ENGINE_TEST_CONTAINER: string | undefined;
+  STELLA_CORPUS_METASTORE_TEST_URL: string | undefined;
+};
+
+const startCorpusEngine = async ({
+  apiRoot,
+  image,
+  metastoreImage,
+  signal,
+  suite,
+  run,
+}: StartCorpusEngineOptions): Promise<EngineTestEnvironment> => {
+  const command = async (args: string[]) =>
+    await run({ command: args, cwd: apiRoot, signal });
+  const { engine } = suite;
+  switch (engine.type) {
+    case CORPUS_ENGINE_METASTORE.file:
+      await command([
+        "docker",
+        "volume",
+        "create",
+        dockerVolumeName(engine.dataVolume),
+      ]);
+      await command([
+        "docker",
+        "run",
+        "--detach",
+        "--name",
+        dockerContainerName(suite.containerName),
+        "--publish",
+        "127.0.0.1::7280",
+        "--mount",
+        `type=volume,source=${dockerVolumeName(engine.dataVolume)},target=/quickwit/qwdata`,
+        dockerImageRef(image),
+        "run",
+      ]);
+      return {
+        STELLA_CORPUS_ENGINE_TEST_CONTAINER: undefined,
+        STELLA_CORPUS_METASTORE_TEST_URL: undefined,
+      };
+    case CORPUS_ENGINE_METASTORE.postgres: {
+      await command(["docker", "network", "create", engine.network]);
+      await command([
+        "docker",
+        "run",
+        "--detach",
+        "--name",
+        dockerContainerName(engine.metastoreContainerName),
+        "--network",
+        engine.network,
+        "--env",
+        "POSTGRES_HOST_AUTH_METHOD=trust",
+        "--env",
+        `POSTGRES_DB=${METASTORE_DATABASE}`,
+        "--publish",
+        "127.0.0.1::5432",
+        dockerImageRef(metastoreImage),
+      ]);
+      // The image's first start serves only its socket while it initializes,
+      // so a TCP probe holds until the database the node connects to exists.
+      await run({
+        command: [
+          "docker",
+          "exec",
+          engine.metastoreContainerName,
+          "sh",
+          "-c",
+          `until pg_isready --quiet --host 127.0.0.1 --username postgres --dbname ${METASTORE_DATABASE}; do sleep 0.2; done`,
+        ],
+        cwd: apiRoot,
+        signal,
+        timeoutMs: ENGINE_STARTUP_TIMEOUT_MS,
+      });
+      const metastore = loopbackBinding(
+        await command([
+          "docker",
+          "port",
+          engine.metastoreContainerName,
+          "5432/tcp",
+        ]),
+        "metastore",
+      );
+      await command([
+        "docker",
+        "run",
+        "--detach",
+        "--name",
+        dockerContainerName(suite.containerName),
+        "--network",
+        engine.network,
+        "--env",
+        `QW_METASTORE_URI=postgres://postgres@${engine.metastoreContainerName}:5432/${METASTORE_DATABASE}`,
+        "--publish",
+        "127.0.0.1::7280",
+        dockerImageRef(image),
+        "run",
+      ]);
+      return {
+        STELLA_CORPUS_ENGINE_TEST_CONTAINER: suite.containerName,
+        STELLA_CORPUS_METASTORE_TEST_URL: `postgres://postgres@${metastore}/${METASTORE_DATABASE}`,
+      };
+    }
+    default:
+      engine satisfies never;
+      return panic(`Unhandled corpus engine: ${String(engine)}`);
+  }
+};
+
+/** Every command that removes what `startCorpusEngine` created, in order. */
+const corpusEngineTeardown = (suite: CorpusEngineSuite): string[][] => {
+  const removeNode = [
+    "docker",
+    "rm",
+    "--force",
+    "--volumes",
+    suite.containerName,
+  ];
+  const { engine } = suite;
+  switch (engine.type) {
+    case CORPUS_ENGINE_METASTORE.file:
+      return [removeNode, ["docker", "volume", "rm", engine.dataVolume]];
+    case CORPUS_ENGINE_METASTORE.postgres:
+      return [
+        removeNode,
+        ["docker", "rm", "--force", "--volumes", engine.metastoreContainerName],
+        ["docker", "network", "rm", engine.network],
+      ];
+    default:
+      engine satisfies never;
+      return panic(`Unhandled corpus engine: ${String(engine)}`);
+  }
+};
+
 type ExecuteCorpusSuiteOptions = {
   apiRoot: string;
   image: string;
+  /** Postgres image for a suite whose engine keeps its metastore there. */
+  metastoreImage: string;
   signal: AbortSignal;
   suite: CorpusEngineSuite;
   run?: (options: CommandOptions) => Promise<string>;
@@ -276,6 +506,7 @@ type ExecuteCorpusSuiteOptions = {
 export const executeCorpusSuite = async ({
   apiRoot,
   image,
+  metastoreImage,
   signal,
   suite,
   run = runCommand,
@@ -288,35 +519,18 @@ export const executeCorpusSuite = async ({
   const command = async (args: string[]) =>
     await run({ command: args, cwd: apiRoot, signal });
   const result = await Result.tryPromise(async () => {
-    await command([
-      "docker",
-      "volume",
-      "create",
-      dockerVolumeName(suite.dataVolume),
-    ]);
-    await command([
-      "docker",
-      "run",
-      "--detach",
-      "--name",
-      dockerContainerName(suite.containerName),
-      "--publish",
-      "127.0.0.1::7280",
-      "--mount",
-      `type=volume,source=${dockerVolumeName(suite.dataVolume)},target=/quickwit/qwdata`,
-      dockerImageRef(image),
-      "run",
-    ]);
-    const binding = await command([
-      "docker",
-      "port",
-      suite.containerName,
-      "7280/tcp",
-    ]);
-    const match = /^127\.0\.0\.1:(\d+)$/u.exec(binding);
-    if (match === null) {
-      panic(`Unexpected corpus engine port binding: ${binding}`);
-    }
+    const engineEnvironment = await startCorpusEngine({
+      apiRoot,
+      image,
+      metastoreImage,
+      signal,
+      suite,
+      run,
+    });
+    const binding = loopbackBinding(
+      await command(["docker", "port", suite.containerName, "7280/tcp"]),
+      "corpus engine",
+    );
     const endpoint = `http://${binding}`;
     await waitForCorpusEngineReadiness({ apiRoot, endpoint, signal, run });
     const environment = {
@@ -324,6 +538,7 @@ export const executeCorpusSuite = async ({
       [CORPUS_ENGINE_GATE]: corpusRunner.gateValue,
       STELLA_RUN_POSTGRES_TESTS: undefined,
       STELLA_CORPUS_ENGINE_TEST_ENDPOINT: endpoint,
+      ...engineEnvironment,
       PGLITE_TEST_SNAPSHOT: undefined,
       TMPDIR: temporaryDir,
     };
@@ -363,35 +578,30 @@ export const executeCorpusSuite = async ({
         output: log,
       }),
   );
-  const cleanup = await Result.tryPromise(
-    async () =>
-      await run({
-        command: ["docker", "rm", "--force", "--volumes", suite.containerName],
-        cwd: apiRoot,
-        output: log,
-      }),
-  );
-  const volumeCleanup = await Result.tryPromise(
-    async () =>
-      await run({
-        command: ["docker", "volume", "rm", suite.dataVolume],
-        cwd: apiRoot,
-        output: log,
-      }),
-  );
+  const teardownStep = async (teardownCommand: string[]) =>
+    await Result.tryPromise(
+      async () =>
+        await run({ command: teardownCommand, cwd: apiRoot, output: log }),
+    );
+  // Every step runs even when an earlier one failed.
+  const teardown: Awaited<ReturnType<typeof teardownStep>>[] = [];
+  for (const teardownCommand of corpusEngineTeardown(suite)) {
+    teardown.push(await teardownStep(teardownCommand));
+  }
   closeSync(log);
   process.stdout.write(
     `\n##[group]${suite.file}\n${readFileSync(logPath, "utf-8")}\n##[endgroup]\n`,
   );
   // Retain reports/logs, but do not accumulate engine indexes after teardown.
-  if (cleanup.isOk()) {
+  if (teardown.at(0)?.isOk() === true) {
     rmSync(temporaryDir, { recursive: true, force: true });
   }
   const errors = [
     result.match({ ok: () => [], err: ({ message }) => [message] }),
     diagnostics.match({ ok: () => [], err: ({ message }) => [message] }),
-    cleanup.match({ ok: () => [], err: ({ message }) => [message] }),
-    volumeCleanup.match({ ok: () => [], err: ({ message }) => [message] }),
+    ...teardown.map((step) =>
+      step.match({ ok: () => [], err: ({ message }) => [message] }),
+    ),
   ].flat();
   if (errors.length > 0) {
     throw new CorpusSuiteCommandError({ message: errors.join("; ") });
@@ -419,6 +629,10 @@ if (import.meta.main) {
       cwd: apiRoot,
       signal: abort.signal,
     });
+    // The workflow passes the Postgres image its service container already pulled.
+    const metastoreImage =
+      process.env["STELLA_CORPUS_METASTORE_IMAGE"] ??
+      panic("STELLA_CORPUS_METASTORE_IMAGE names the metastore image");
     const suites = planCorpusEngineSuites({
       outputRoot: path.join(apiRoot, ".cache/corpus-engine-suites"),
       runId: Bun.randomUUIDv7(),
@@ -433,6 +647,7 @@ if (import.meta.main) {
         await executeCorpusSuite({
           apiRoot,
           image,
+          metastoreImage,
           signal: abort.signal,
           suite,
         }),

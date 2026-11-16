@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, test } from "bun:test";
 
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import { toSafeId } from "@/api/lib/branded-types";
+import { ArtefactProvenanceDecodeError } from "@/api/lib/chat/artefact-provenance";
 import { HIGHLIGHT_START, HIGHLIGHT_STOP } from "@/api/lib/search/highlight";
 import { readSearchPreview as readSearchPreviewWithDatabase } from "@/api/lib/search/preview";
 import {
@@ -15,7 +16,7 @@ const { scopedDb } = createScopedDbMock(rootDbTestDouble);
 
 const readSearchPreview = async (
   input: Parameters<typeof readSearchPreviewWithDatabase>[0],
-) => await readSearchPreviewWithDatabase(input, scopedDb);
+) => (await readSearchPreviewWithDatabase(input, scopedDb)).unwrap();
 
 const previewQuery = {
   query: "",
@@ -96,6 +97,7 @@ describe("search preview rendering contract", () => {
   test("returns bounded chat messages with their speaker roles and visible text", async () => {
     rootDbExecuteMock.mockResolvedValueOnce([
       {
+        generation_provenance: null,
         messages: [
           {
             id: "00000000-0000-4000-8000-000000000010",
@@ -141,6 +143,7 @@ describe("search preview rendering contract", () => {
     const oversizedContent = "a".repeat(20_000);
     rootDbExecuteMock.mockResolvedValueOnce([
       {
+        generation_provenance: null,
         messages: [
           {
             id: "00000000-0000-4000-8000-000000000010",
@@ -188,6 +191,7 @@ describe("search preview rendering contract", () => {
   test("retains the matching chat message when earlier context exhausts the cap", async () => {
     rootDbExecuteMock.mockResolvedValueOnce([
       {
+        generation_provenance: null,
         messages: [
           {
             id: "00000000-0000-4000-8000-000000000010",
@@ -229,6 +233,7 @@ describe("search preview rendering contract", () => {
   test("retains a late match inside an oversized target message", async () => {
     rootDbExecuteMock.mockResolvedValueOnce([
       {
+        generation_provenance: null,
         messages: [
           {
             id: "00000000-0000-4000-8000-000000000010",
@@ -267,6 +272,7 @@ describe("search preview rendering contract", () => {
   test("retains a late quoted phrase instead of an earlier standalone word", async () => {
     rootDbExecuteMock.mockResolvedValueOnce([
       {
+        generation_provenance: null,
         messages: [
           {
             id: "00000000-0000-4000-8000-000000000010",
@@ -303,6 +309,7 @@ describe("search preview rendering contract", () => {
   test("orders context around a first-position target without duplicates", async () => {
     rootDbExecuteMock.mockResolvedValueOnce([
       {
+        generation_provenance: null,
         messages: [
           {
             id: "00000000-0000-4000-8000-000000000010",
@@ -357,6 +364,7 @@ describe("search preview rendering contract", () => {
   test("renders indexed source-document metadata in chat previews", async () => {
     rootDbExecuteMock.mockResolvedValueOnce([
       {
+        generation_provenance: null,
         messages: [
           {
             id: "00000000-0000-4000-8000-000000000010",
@@ -400,6 +408,7 @@ describe("search preview rendering contract", () => {
     rootDbExecuteMock.mockResolvedValueOnce([
       {
         isTitleOnlyMatch: true,
+        generation_provenance: null,
         messages: [],
         title: "Closing memorandum review",
       },
@@ -415,6 +424,7 @@ describe("search preview rendering contract", () => {
     rootDbExecuteMock.mockResolvedValueOnce([
       {
         isTitleOnlyMatch: false,
+        generation_provenance: null,
         messages: [
           {
             id: "00000000-0000-4000-8000-000000000010",
@@ -457,6 +467,7 @@ describe("search preview rendering contract", () => {
   test("skips malformed persisted chat parts", async () => {
     rootDbExecuteMock.mockResolvedValueOnce([
       {
+        generation_provenance: null,
         messages: [
           {
             id: "00000000-0000-4000-8000-000000000010",
@@ -474,3 +485,21 @@ describe("search preview rendering contract", () => {
     });
   });
 });
+
+test.each([{}, { version: 2, slots: {} }])(
+  "chat preview propagates invalid provenance %j as a typed failure",
+  async (metadata) => {
+    clearRootDbMocks();
+    rootDbExecuteMock.mockResolvedValueOnce([
+      { generation_provenance: metadata, messages: [] },
+    ]);
+    const result = await readSearchPreviewWithDatabase(
+      { ...previewQuery, type: "chat" },
+      scopedDb,
+    );
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error).toBeInstanceOf(ArtefactProvenanceDecodeError);
+    }
+  },
+);

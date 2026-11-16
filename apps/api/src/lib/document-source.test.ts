@@ -38,6 +38,7 @@ describe("documentSourceSchema", () => {
         itemId: "01ITEM",
         eTag: '"{GUID},1"',
         webUrl: "https://contoso.sharepoint.com/x.docx",
+        contentHash: "a".repeat(64),
       }),
     ).toMatchObject({ kind: "sharepoint", itemId: "01ITEM" });
     // A sharepoint source missing required provenance fields is rejected.

@@ -1,5 +1,19 @@
 # @stll/docx-utils
 
+## 0.3.1
+
+### Patch Changes
+
+- [#8153](https://github.com/stella/stella/pull/8153) [`8c87766`](https://github.com/stella/stella/commit/8c87766f58f7e610b1ba6922a2c0ba210e9026b4) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Depends on `@stll/docx-core` 0.43.0.
+
+- [#8537](https://github.com/stella/stella/pull/8537) [`001c640`](https://github.com/stella/stella/commit/001c640e64cb00e3948bdf68a18a40347c65a40f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Build declarations through the native tsrs API supported by tsdown 0.23.7, resolving the compiler from each package.
+
+## 0.3.0
+
+### Minor Changes
+
+- [#7331](https://github.com/stella/stella/pull/7331) [`f0709d0`](https://github.com/stella/stella/commit/f0709d04e3894fdf4ee752a82463ce577eeb65d6) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Use docx-core ZIP for shared bounded archive loading. Remove the JSZip-specific extraction, repacking and entry-writing helpers.
+
 ## 0.2.0
 
 ### Minor Changes

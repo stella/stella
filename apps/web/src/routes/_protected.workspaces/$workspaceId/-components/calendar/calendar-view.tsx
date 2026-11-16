@@ -19,16 +19,19 @@ import { useFormattingLocale } from "@/i18n/formatting-context";
 import { getFirstWeekday, getWeekendDays } from "@/i18n/week";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import type { WebApiRoutes } from "@/lib/api";
 import { normalizeOptionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
-import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
+import type { IdempotentRequest } from "@/lib/idempotency/use-idempotent-submit";
 import { appToday } from "@/lib/local-iso-date";
 import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
 import { captureInvalidTaskOption } from "@/lib/task-option-telemetry";
 import type { EntityKind, WorkspaceView } from "@/lib/types";
+import { resourceMutation } from "@/lib/workspace-realtime";
 import { useUpsertField } from "@/lib/workspaces/mutations/entities";
 import {
   calendarTasksKeys,
@@ -85,9 +88,29 @@ export const useCalendarCreateTask = ({
   workspaceId: string;
   datePropertyId: string | undefined;
 }) => {
-  const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
   const queryClient = useQueryClient();
+  const createTask = useIdempotentMutation({
+    mutationFn: resourceMutation({
+      mutation: "createTask",
+      queryClient,
+      mutationFn: async (
+        {
+          workspaceId: mutationWorkspaceId,
+          body,
+        }: {
+          workspaceId: string;
+          body: WebApiRoutes["tasks"][":workspaceId"]["put"]["body"];
+        },
+        request: IdempotentRequest,
+      ) =>
+        unwrapApiResponse(
+          await api
+            .tasks({ workspaceId: mutationWorkspaceId })
+            .put(body, request),
+        ),
+    }),
+  });
   const upsertField = useUpsertField();
   const isEditable =
     !!datePropertyId && !isInternalDateProperty(datePropertyId);
@@ -109,25 +132,22 @@ export const useCalendarCreateTask = ({
       datePropertyId === TASK_DATE_IDS[1]
         ? toDayStartDateTime(date)
         : undefined;
-    const { data: taskData, error: taskError } = await idempotentSubmit.run({
-      operation: JSON.stringify(["api.tasks({workspaceId})", { workspaceId }]),
-      body: {
-        name: t("tasks.untitled"),
-        ...(dueDate && { dueDate }),
-        ...(startAt && { allDay: true, startAt }),
-      },
-      send: async (creationPayload) =>
-        api.tasks({ workspaceId }).put(creationPayload),
-    });
-
-    const entityId = taskData?.entityId;
-    if (taskError || !entityId) {
-      notifyUserError(
-        taskError ? toAPIError(taskError) : undefined,
-        t("errors.actionFailed"),
-      );
+    const created = await Result.tryPromise(
+      async () =>
+        await createTask.mutateAsync({
+          workspaceId,
+          body: {
+            name: t("tasks.untitled"),
+            ...(dueDate && { dueDate }),
+            ...(startAt && { allDay: true, startAt }),
+          },
+        }),
+    );
+    if (Result.isError(created)) {
+      notifyUserError(created.error, t("errors.actionFailed"));
       return;
     }
+    const entityId = created.value.entityId;
 
     // Set custom date property if not using built-in due date
     if (!isTaskDateProperty(datePropertyId)) {

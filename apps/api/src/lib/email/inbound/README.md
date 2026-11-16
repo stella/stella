@@ -7,9 +7,10 @@ Addresses use 32 random bytes encoded as 64 lowercase hexadecimal characters.
 
 ## Trust and attribution
 
-- The root `mailauth/nodemailer` resolution replaces mailauth 5.0.3's vulnerable
-  address parser with Nodemailer 10.0.10, the same copy the API ships. Remove this
-  resolution when mailauth itself pins a patched version.
+- The root `mailauth/nodemailer` resolution gives mailauth the same Nodemailer
+  copy the API ships, so its address parser is the one the API's dependency
+  updates keep patched. The `mailauth/joi` resolution pins Joi past advisories
+  in the exact version mailauth declares.
 - The local verifier evaluates SPF, DKIM and DMARC against DNS using the supplied
   SMTP peer, HELO and MAIL FROM. Received and Authentication-Results message
   headers cannot authorize a delivery. A passing DMARC result must also have an

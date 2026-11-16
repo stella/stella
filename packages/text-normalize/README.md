@@ -118,15 +118,25 @@ returns all matches. Use `{ maxMatches: 1 }` for the first occurrence of a
 scope, then pass its `start` and `end` to search within that scope. Existing
 callers retain their own casing or folding before calling either helper.
 
-## Spaced letters
+## Letter spacing
 
-`collapseSpacedLetters` joins letter-spaced court headings
-(`r o z h o d o l :` to `rozhodol:`) back into searchable words. It
-requires at least four spaced letters, so Czech/Slovak single-letter word
-lists (`a b c`) are left intact. `spacedLetterRunRegex()` returns the
-underlying matcher for callers that need per-match offsets (find-in-page
-highlighting). Index-time and query-time collapse share this one
-threshold so a heading collapses identically on both sides.
+Courts set operative words and headings in spaced letters
+(`r o z h o d o l :`, `p o s t a n a w i a`). `collapseLetterSpacing` reads
+them as the words they spell and changes only whitespace: one space joins two
+letters, and a wider gap, a tab or a no-break space separates words. A run of
+four or more letters is a spaced word; a shorter one is a spaced word inside a
+spaced phrase or beside a wide gap in a text that spaces words, unless it is a
+row of one-letter words a sentence writes (`a v`, `i o`). Options carry the
+document's own evidence: `documentWords` (from `documentWordCounts`) for words
+split into uneven chunks, `spacedWords` for recognized section markers,
+`setApart` for courts that space short words alone, and `emphasis` for text the
+source sets apart as spaced emphasis as a whole (see `isLetterSpacedEmphasis`).
+
+`collapseSpacedLetters` is the same reading with every run of spaces squeezed,
+applied until it settles: the search and comparison form. Index-time and
+query-time folding share it, so a heading folds identically on both sides.
+`letterSpacingJoins(text)` returns the indices of the whitespace that fold
+removes, for readers and find-in-page highlighting that hide those gaps.
 
 Both match-key helpers replace lone surrogates with U+FFFD on both sides via
 `toWellFormed()` before matching Unicode scalars. A lone surrogate can match

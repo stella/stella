@@ -24,9 +24,12 @@ import {
   locateGazetteCitations,
   PROVISION_CITATION_GRAMMARS,
 } from "@stll/legal-atlas/provision-citation-grammars";
-import type {
-  JurisdictionProfile,
-  WorkIdentifier,
+import {
+  type JurisdictionProfile,
+  SECTION_UNITS,
+  type SectionTermSpec,
+  type SectionUnit,
+  type WorkIdentifier,
 } from "@stll/legal-atlas/provision-citation-profile";
 import {
   nominativeTitle,
@@ -226,20 +229,46 @@ const readCitedAct = async ({
     : { type: "unresolved", actName: read.actName };
 };
 
-const normalizedSection = (
+type CitedProvision = { anchor: string; section: string };
+
+/**
+ * The provisions a cited number may name, most likely first. The words that
+ * introduce a number (`§`, `čl.`, `článok`) are the profile's own; an act
+ * numbers its provisions by section or by article, never both, so a bare
+ * number names a section, else the article of that number.
+ */
+const citedProvisions = (
   section: string,
   profile: JurisdictionProfile,
-): { anchor: string; section: string } | null => {
-  const match = /^(?:§\s*)?(\d+)\s*([a-z])?$/iu.exec(section.trim());
+): readonly CitedProvision[] => {
+  const written = section.trim();
+  const folded = written.toLocaleLowerCase(profile.language);
+  let term: SectionTermSpec | undefined;
+  for (const candidate of profile.sectionTerms) {
+    if (
+      folded.startsWith(candidate.text.toLocaleLowerCase(profile.language)) &&
+      (term === undefined || candidate.text.length > term.text.length)
+    ) {
+      term = candidate;
+    }
+  }
+  const match = /^(\d+)\s*([a-z])?$/iu.exec(
+    written.slice(term?.text.length ?? 0).trim(),
+  );
   const number = match?.at(1);
   if (number === undefined) {
-    return null;
+    return [];
   }
-  const suffix = match?.at(2)?.toLowerCase() ?? "";
-  return {
-    anchor: `${statuteAnchorKindPrefix(profile.anchor, "section")}${number}${suffix}`,
-    section: `${number}${suffix}`,
-  };
+  const designator = `${number}${match?.at(2)?.toLowerCase() ?? ""}`;
+  const units: readonly SectionUnit[] =
+    term === undefined ? SECTION_UNITS : [term.unit];
+  return units.map((unit) => ({
+    anchor: `${statuteAnchorKindPrefix(profile.anchor, unit)}${designator}`,
+    section:
+      unit === "section"
+        ? designator
+        : `${profile.citationTerms.article} ${designator}`,
+  }));
 };
 
 const collectionKey = (collection: string) =>
@@ -393,8 +422,8 @@ const createLawResolver =
     if (input.section === undefined) {
       return { status: "incomplete_identifier", missing: ["section"] };
     }
-    const section = normalizedSection(input.section, profile.citation);
-    if (section === null) {
+    const provisions = citedProvisions(input.section, profile.citation);
+    if (provisions.length === 0) {
       return { status: "not_found", reason: "unknown_section" };
     }
     const expression = await resolveExpression(
@@ -405,21 +434,44 @@ const createLawResolver =
     if (expression.type !== "expression") {
       return { status: "not_found", reason: "unknown_document" };
     }
-    const [document, preview] = await Promise.all([
-      readDocument(expression.id, legislationDb, "search"),
-      readPreview({
+    // The next candidate is asked only when the one before it is missing.
+    const readCited = async (
+      remaining: readonly CitedProvision[],
+    ): Promise<
+      | {
+          section: string;
+          preview: Extract<
+            Awaited<ReturnType<typeof readPreview>>,
+            { blocks: unknown }
+          >;
+        }
+      | undefined
+    > => {
+      const [provision, ...rest] = remaining;
+      if (provision === undefined) {
+        return undefined;
+      }
+      const preview = await readPreview({
         documentId: expression.id,
-        anchor: section.anchor,
+        anchor: provision.anchor,
         citedAnchor: undefined,
         legislationDb,
-      }),
+      });
+      return "blocks" in preview
+        ? { section: provision.section, preview }
+        : await readCited(rest);
+    };
+    const [document, found] = await Promise.all([
+      readDocument(expression.id, legislationDb, "search"),
+      readCited(provisions),
     ]);
     if (!("eli" in document)) {
       return { status: "not_found", reason: "unknown_document" };
     }
-    if (!("blocks" in preview)) {
+    if (found === undefined) {
       return { status: "not_found", reason: "unknown_section" };
     }
+    const { preview } = found;
     const inForce = {
       from: document.versionValidFrom,
       to: document.versionValidTo,
@@ -432,7 +484,7 @@ const createLawResolver =
         eli,
         country: profile.citation.jurisdiction,
         title: document.title,
-        section: section.section,
+        section: found.section,
         readerUrl:
           preview.url ??
           panic("Resolved public-law provision has no reader URL"),
@@ -453,6 +505,7 @@ const unavailable: LawResolver = async () =>
 
 const LAW_RESOLVERS = {
   AUT: unavailable,
+  BRA: unavailable,
   CZE: resolveCzechLaw,
   EU: unavailable,
   GBR: unavailable,

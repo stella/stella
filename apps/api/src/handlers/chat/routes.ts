@@ -1,3 +1,6 @@
+import createBrowserSiteGrant from "@/api/handlers/chat/browser-site-grants/create";
+import deleteBrowserSiteGrant from "@/api/handlers/chat/browser-site-grants/delete";
+import listBrowserSiteGrants from "@/api/handlers/chat/browser-site-grants/list";
 import getDecisionChatThread from "@/api/handlers/chat/decision-threads/get";
 import createMessageExport from "@/api/handlers/chat/export/create";
 import forkThread from "@/api/handlers/chat/fork/create";
@@ -6,8 +9,13 @@ import getSuggestedPrompts from "@/api/handlers/chat/get-suggested-prompts";
 import getThreadRecap from "@/api/handlers/chat/get-thread-recap";
 import getThreadTitle from "@/api/handlers/chat/get-thread-title";
 import improvePrompt from "@/api/handlers/chat/improve-prompt";
+import cancelChatLimitReminder from "@/api/handlers/chat/limit-reminder/cancel";
+import getChatLimitReminder from "@/api/handlers/chat/limit-reminder/get";
+import setChatLimitReminder from "@/api/handlers/chat/limit-reminder/set";
 import getLinkIcon from "@/api/handlers/chat/link-icons/get";
 import getExactIcon from "@/api/handlers/chat/link-icons/get-exact";
+import approveLocalFolder from "@/api/handlers/chat/local-folder-approval";
+import getLocalRunStepContent from "@/api/handlers/chat/local-run-step-content";
 import getLocalRunners from "@/api/handlers/chat/local-runners";
 import getMessage from "@/api/handlers/chat/messages/get";
 import getMessages from "@/api/handlers/chat/messages/list";
@@ -16,6 +24,15 @@ import getMessageRevisions from "@/api/handlers/chat/messages/revisions/list";
 import revertMessageRevision from "@/api/handlers/chat/messages/revisions/revert";
 import proposeMessageSpanEdit from "@/api/handlers/chat/messages/revisions/span-edit";
 import getOlderMessages from "@/api/handlers/chat/older-messages/list";
+import cancelQueuedChatMessage from "@/api/handlers/chat/queue/cancel";
+import enqueueChatMessage from "@/api/handlers/chat/queue/enqueue";
+import moveQueuedChatMessage from "@/api/handlers/chat/queue/move";
+import pauseChatQueue from "@/api/handlers/chat/queue/pause";
+import readChatQueue from "@/api/handlers/chat/queue/read";
+import readQueuedChatMessage from "@/api/handlers/chat/queue/read-message";
+import replaceQueuedChatMessage from "@/api/handlers/chat/queue/replace";
+import resumeChatQueue from "@/api/handlers/chat/queue/resume";
+import sendQueuedChatMessageNow from "@/api/handlers/chat/queue/send-now";
 import readFileThread from "@/api/handlers/chat/read-file-thread";
 import resolveFileThread from "@/api/handlers/chat/resolve-file-thread";
 import resolveTemplateThread from "@/api/handlers/chat/resolve-template-thread";
@@ -28,8 +45,11 @@ import submitConnector from "@/api/handlers/chat/submit-connector";
 import submitSecret from "@/api/handlers/chat/submit-secret";
 import suggestThreadTitle from "@/api/handlers/chat/suggest-thread-title";
 import tableChart from "@/api/handlers/chat/table-chart";
+import readBackgroundTasks from "@/api/handlers/chat/threads/background-tasks";
 import deleteThread from "@/api/handlers/chat/threads/delete";
 import getThreads from "@/api/handlers/chat/threads/list";
+import updateChatThreadPinState from "@/api/handlers/chat/threads/pin-state/update";
+import updateChatThreadReadState from "@/api/handlers/chat/threads/read-state/update";
 import renameThread from "@/api/handlers/chat/threads/rename";
 import updateThread from "@/api/handlers/chat/threads/update";
 import readChatToolGrantCoverage from "@/api/handlers/chat/tool-grants/coverage";
@@ -37,7 +57,12 @@ import createChatToolGrant from "@/api/handlers/chat/tool-grants/create";
 import deleteChatToolGrant from "@/api/handlers/chat/tool-grants/delete";
 import listChatToolGrants from "@/api/handlers/chat/tool-grants/list";
 import cancelTurn from "@/api/handlers/chat/turns/cancel";
+import {
+  readLocalFilesUndo,
+  undoLocalFiles,
+} from "@/api/handlers/chat/turns/local-files-undo";
 import { joinChatTurn, probeChatTurn } from "@/api/handlers/chat/turns/resume";
+import steerTurn from "@/api/handlers/chat/turns/steer";
 import updateThreadModel from "@/api/handlers/chat/update-thread-model";
 import { routes } from "@/api/http/route";
 
@@ -52,6 +77,11 @@ export const chatRoute = routes(
     "/tool-grants": { GET: listChatToolGrants, POST: createChatToolGrant },
     "/tool-grants/coverage": { GET: readChatToolGrantCoverage },
     "/tool-grants/:grantId": { DELETE: deleteChatToolGrant },
+    "/browser-site-grants": {
+      GET: listBrowserSiteGrants,
+      POST: createBrowserSiteGrant,
+    },
+    "/browser-site-grants/:grantId": { DELETE: deleteBrowserSiteGrant },
     "/workspaces/:workspaceId/file-thread": {
       POST: resolveFileThread,
       GET: readFileThread,
@@ -63,11 +93,24 @@ export const chatRoute = routes(
     "/decision-threads/:decisionId": { GET: getDecisionChatThread },
     "/model-options": { GET: getModelOptions },
     "/local-runners": { GET: getLocalRunners },
+    "/local-runners/:desktopId/folders/:linkId/approval": {
+      PUT: approveLocalFolder,
+    },
     "/skill-availability": { GET: listUnavailableChatSkills },
     "/table-chart": { POST: tableChart },
     "/improve-prompt": { POST: improvePrompt },
     "/threads/:threadId": { DELETE: deleteThread, PATCH: updateThread },
+    "/threads/:threadId/local-run-steps/:callId/content": {
+      GET: getLocalRunStepContent,
+    },
     "/threads/:threadId/model": { PATCH: updateThreadModel },
+    "/threads/:threadId/limit-reminder": {
+      GET: getChatLimitReminder,
+      PUT: setChatLimitReminder,
+      DELETE: cancelChatLimitReminder,
+    },
+    "/threads/:threadId/read-state": { PATCH: updateChatThreadReadState },
+    "/threads/:threadId/pin-state": { PATCH: updateChatThreadPinState },
     "/threads/:threadId/title": { PATCH: renameThread, GET: getThreadTitle },
     "/threads/:threadId/title/suggest": { POST: suggestThreadTitle },
     "/threads/:threadId/messages": { GET: getMessages },
@@ -88,6 +131,31 @@ export const chatRoute = routes(
     "/threads/:threadId/turns/:turnId/resume": { GET: probeChatTurn },
     "/threads/:threadId/turns/:turnId/join": { GET: joinChatTurn },
     "/threads/:threadId/turns/:turnId/cancel": { POST: cancelTurn },
+    "/threads/:threadId/turns/:turnId/steer": { POST: steerTurn },
+    "/threads/:threadId/turns/:turnId/local-files/undo": {
+      GET: readLocalFilesUndo,
+      POST: undoLocalFiles,
+    },
+    "/threads/:threadId/background-tasks": { GET: readBackgroundTasks },
+    "/threads/:threadId/queue": {
+      GET: readChatQueue,
+      POST: enqueueChatMessage,
+    },
+    "/threads/:threadId/queue/hold": {
+      PUT: pauseChatQueue,
+      DELETE: resumeChatQueue,
+    },
+    "/threads/:threadId/queue/:messageId": {
+      GET: readQueuedChatMessage,
+      PUT: replaceQueuedChatMessage,
+      DELETE: cancelQueuedChatMessage,
+    },
+    "/threads/:threadId/queue/:messageId/move": {
+      POST: moveQueuedChatMessage,
+    },
+    "/threads/:threadId/queue/:messageId/send-now": {
+      POST: sendQueuedChatMessageNow,
+    },
     "/threads/:threadId/fork": { POST: forkThread },
     "/threads/:threadId/export": { POST: createMessageExport },
   },

@@ -1,4 +1,5 @@
 // parser-output-unchanged: native NFC normalization retains the same code points and operation order.
+// parser-output-unchanged: each block is classified once, and the publisher-message check stops at a kept line holding a word no closed message can consume; classifications are unchanged.
 import { panic } from "better-result";
 
 import { DANGEROUS_CHARS } from "@stll/legal-ast/text-sanitize";
@@ -62,6 +63,28 @@ const SOURCE_PLACEHOLDER_WORD_SEQUENCES = SOURCE_PLACEHOLDER_MESSAGES.map(
     return tokens;
   },
 );
+
+const SOURCE_PLACEHOLDER_VOCABULARY = new Set(
+  SOURCE_PLACEHOLDER_WORD_SEQUENCES.flatMap((message) =>
+    message.filter((part) => typeof part === "string"),
+  ),
+);
+// Publisher slots hold only these characters, with at most four letters in a
+// row, so a word outside both can never be consumed by a closed message.
+const OUTSIDE_PUBLISHER_SLOTS = /[^#a-z0-9.\-–]|[a-z]{5}/u;
+
+/**
+ * True when `text` holds a word that no closed placeholder message can
+ * consume, so {@link isSourcePlaceholderSequence} cannot accept it.
+ */
+export const excludesSourcePlaceholder = (text: string): boolean =>
+  normalizeSourcePlaceholder(text)
+    .split(" ")
+    .some(
+      (word) =>
+        !SOURCE_PLACEHOLDER_VOCABULARY.has(word) &&
+        OUTSIDE_PUBLISHER_SLOTS.test(word),
+    );
 
 const matchesPublisherSlot = (slot: PublisherSlot, text: string): boolean => {
   switch (slot.type) {
@@ -128,7 +151,7 @@ const isSourcePlaceholder = (text: string): boolean => {
 
 // Every token must belong to a complete closed message; bounded identifier
 // slots may wrap, but unknown tokens always remain candidate ruling text.
-const isSourcePlaceholderSequence = (text: string): boolean => {
+export const isSourcePlaceholderSequence = (text: string): boolean => {
   const normalized = normalizeSourcePlaceholder(text);
   if (!normalized) {
     return false;
@@ -161,7 +184,26 @@ const PERSON_NAME_SUFFIXES = new Set(["Jr.", "Sr.", "II", "III"]);
 const PERSON_WORD = /^\p{Lu}[\p{L}\p{M}]*(?:['’-][\p{L}\p{M}]+)*$/u;
 const PERSON_INITIAL = /^\p{Lu}\.$/u;
 
+/** Whether splitting `text` on single spaces yields more than `limit` tokens. */
+const exceedsTokens = (text: string, limit: number): boolean => {
+  let spaces = 0;
+  for (
+    let index = text.indexOf(" ");
+    index !== -1;
+    index = text.indexOf(" ", index + 1)
+  ) {
+    spaces += 1;
+    if (spaces >= limit) {
+      return true;
+    }
+  }
+  return false;
+};
+
 const isPersonName = (text: string): boolean => {
+  if (exceedsTokens(text, PERSON_NAME_MAX_TOKENS)) {
+    return false;
+  }
   const tokens = text.split(" ");
   if (tokens.length === 0 || tokens.length > PERSON_NAME_MAX_TOKENS) {
     return false;
@@ -248,7 +290,10 @@ const matchesNamedProduction = (
 
 // Titles and list punctuation belong to the production, never to a name slot.
 const isAttribution = (text: string): boolean => {
-  const nameStart = text.toLowerCase().startsWith("opinion by ")
+  const nameStart = text
+    .slice(0, "opinion by ".length)
+    .toLowerCase()
+    .startsWith("opinion by ")
     ? "opinion by ".length
     : 0;
   const comma = text.indexOf(",", nameStart);
@@ -295,13 +340,29 @@ const isPresentJudgeList = (text: string): boolean => {
   return people > 0;
 };
 
+// No production admits more tokens than its fixed words plus a full name slot.
+const NAMED_PRODUCTION_MAX_TOKENS = Math.max(
+  ...NAMED_METADATA_PRODUCTIONS.map(
+    ({ prefix, suffix }) =>
+      prefix.length + suffix.length + PERSON_NAME_MAX_TOKENS,
+  ),
+);
+
+const matchesNamedProductions = (text: string): boolean => {
+  if (exceedsTokens(text, NAMED_PRODUCTION_MAX_TOKENS)) {
+    return false;
+  }
+  const tokens = text.split(" ");
+  return NAMED_METADATA_PRODUCTIONS.some((production) =>
+    matchesNamedProduction(tokens, production),
+  );
+};
+
 const isNamedMetadata = (text: string): boolean =>
   isAttribution(text) ||
   isSignature(text) ||
   isPresentJudgeList(text) ||
-  NAMED_METADATA_PRODUCTIONS.some((production) =>
-    matchesNamedProduction(text.split(" "), production),
-  );
+  matchesNamedProductions(text);
 
 const COURT_HEADER =
   /^(?:in\s+the\s+)?\p{L}+(?:\s+\p{L}+){0,3}\s+court\s+of\s+appeals\s+for\s+the\s+\p{L}+(?:\s+\p{L}+){0,8}\s+circuit[.!]?$/u;
@@ -325,6 +386,23 @@ const METADATA_PATTERNS = [
   DATE_ONLY,
 ] as const;
 
+// The longest month name, a two-digit day, a comma and a four-digit year.
+const DATE_ONLY_MAX_LENGTH = "september".length + 2 + 1 + 4;
+const WHITESPACE = /\s/u;
+/** Whether `text` holds more than `limit` non-whitespace code units. */
+const exceedsCompactLength = (text: string, limit: number): boolean => {
+  let length = 0;
+  for (let index = 0; index < text.length; index += 1) {
+    if (!WHITESPACE.test(text.charAt(index))) {
+      length += 1;
+      if (length > limit) {
+        return true;
+      }
+    }
+  }
+  return false;
+};
+
 // The OCR-date grammar keeps its existing whitespace-insensitive behavior.
 const isMetadata = (text: string): boolean => {
   if (isNamedMetadata(text)) {
@@ -333,7 +411,8 @@ const isMetadata = (text: string): boolean => {
   const folded = text.toLowerCase();
   return METADATA_PATTERNS.some((pattern) =>
     pattern === DATE_ONLY
-      ? pattern.test(folded.replace(/\s+/gu, ""))
+      ? !exceedsCompactLength(folded, DATE_ONLY_MAX_LENGTH) &&
+        pattern.test(folded.replace(/\s+/gu, ""))
       : pattern.test(folded),
   );
 };
@@ -488,6 +567,31 @@ const classifyRulingText = (rulingText: string): CourtListenerTextUsability => {
     : COURTLISTENER_TEXT_USABILITY.UNDECODABLE;
 };
 
+// A complete metadata line can sit between wrapped publisher-message parts
+// in one paragraph. Only exact full consumption can reject that remainder;
+// every other path keeps the original candidate blocks. A kept line holding a
+// word no message can consume settles the answer without reading further.
+const isPublisherRemainder = (
+  remainder: readonly { block: string }[],
+): boolean => {
+  const parts: string[] = [];
+  for (const { block } of remainder) {
+    const kept: string[] = [];
+    for (const raw of block.split("\n")) {
+      const line = raw.replace(/\s+/gu, " ").trim();
+      if (isMetadata(line)) {
+        continue;
+      }
+      if (excludesSourcePlaceholder(line)) {
+        return false;
+      }
+      kept.push(line);
+    }
+    parts.push(kept.join(" "));
+  }
+  return isSourcePlaceholderSequence(parts.join(" "));
+};
+
 const classifyBody = (unattributed: string): CourtListenerTextUsability => {
   const blocks = unattributed
     .split(/\n[^\S\n]*\n/gu)
@@ -500,31 +604,17 @@ const classifyBody = (unattributed: string): CourtListenerTextUsability => {
   ) {
     return COURTLISTENER_TEXT_USABILITY.USABLE;
   }
-  const blockKinds = blocks.map(nonRulingBlock);
-  const metadataBlocks = new Set(
-    blockKinds.flatMap((kind, index) => (kind === "metadata" ? [index] : [])),
-  );
-  const remainder = blocks.flatMap((block, index) =>
-    metadataBlocks.has(index) ? [] : [{ block, kind: nonRulingBlock(block) }],
-  );
-  // A complete metadata line can sit between wrapped publisher-message parts
-  // in one paragraph. Only exact full consumption can reject that remainder;
-  // every other path keeps the original candidate blocks.
-  const publisherRemainder = remainder
-    .map(({ block }) =>
-      block
-        .split("\n")
-        .map((line) => line.replace(/\s+/gu, " ").trim())
-        .filter((line) => !isMetadata(line))
-        .join(" "),
-    )
-    .join(" ");
-  if (isSourcePlaceholderSequence(publisherRemainder)) {
+  const classified = blocks.map((block) => ({
+    block,
+    kind: nonRulingBlock(block),
+  }));
+  const remainder = classified.filter(({ kind }) => kind !== "metadata");
+  if (isPublisherRemainder(remainder)) {
     return COURTLISTENER_TEXT_USABILITY.SOURCE_PLACEHOLDER;
   }
   const rulingBlocks: string[] = [];
   const hasPlaceholder = remainder.some(({ kind }) => kind === "placeholder");
-  const hasMetadata = metadataBlocks.size > 0;
+  const hasMetadata = remainder.length < classified.length;
   for (const { block, kind } of remainder) {
     switch (kind) {
       case "metadata":

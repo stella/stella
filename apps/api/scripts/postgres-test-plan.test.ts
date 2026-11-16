@@ -4,11 +4,14 @@ import path from "node:path";
 import packageJson from "../package.json" with { type: "json" };
 import {
   anyBootsPgliteTestDatabase,
+  assertTemplateDatabaseTestsAreExclusive,
   bootsPgliteTestDatabase,
   clusterExclusivePostgresTests,
   EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS,
   findSharedTableDdlViolations,
   isolateSharedTableDdlTests,
+  needsTemplateDatabase,
+  TEMPLATE_DATABASE_TEST_PATHS,
 } from "./postgres-test-plan";
 import { discoverGatedTestFiles } from "./run-gated-tests";
 
@@ -158,6 +161,28 @@ describe("PostgreSQL shared-table DDL isolation", () => {
   });
 });
 
+describe("PostgreSQL migrated template planning", () => {
+  test("creates a template only when a declared path is selected", () => {
+    expect(needsTemplateDatabase(["src/example.postgres.test.ts"])).toBeFalse();
+    expect(
+      needsTemplateDatabase([
+        "src/example.postgres.test.ts",
+        ...TEMPLATE_DATABASE_TEST_PATHS,
+      ]),
+    ).toBeTrue();
+  });
+
+  test("requires every template consumer to run exclusively", () => {
+    expect(() => assertTemplateDatabaseTestsAreExclusive()).not.toThrow();
+    expect(() =>
+      assertTemplateDatabaseTestsAreExclusive(
+        TEMPLATE_DATABASE_TEST_PATHS,
+        new Set(),
+      ),
+    ).toThrow("src/db/online-repairs-beside-writer.postgres.test.ts");
+  });
+});
+
 describe("PostgreSQL suites on the PGlite test database", () => {
   test.each([
     'import { getRlsFixture } from "@/api/tests/security/rls-fixture";',
@@ -233,3 +258,20 @@ test.each([
     ).toEqual(new Set([testPath]));
   },
 );
+
+test("the scheduled-run block measurement runs after all cluster workers finish", async () => {
+  const testPath = "src/tests/query-perf/scheduled-run.postgres.test.ts";
+  const runner = packageJson.ciGateTestRunners["test:postgres"];
+  expect(
+    await discoverGatedTestFiles({
+      apiRoot: path.resolve(import.meta.dir, ".."),
+      gate: runner.gate,
+      testFileGlob: runner.testFileGlob,
+    }),
+  ).toContain(testPath);
+  expect(
+    clusterExclusivePostgresTests(
+      new Map([[testPath, "test('measurement', () => {})"]]),
+    ),
+  ).toEqual(new Set([testPath]));
+});

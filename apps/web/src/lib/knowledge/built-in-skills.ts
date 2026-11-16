@@ -6,7 +6,11 @@ import { STARTER_SKILLS } from "@stll/skills/starter-skills";
 import type { StarterSkillSlug } from "@stll/skills/starter-skills";
 
 import type { TranslationKey } from "@/i18n/types";
+import { SIGNED_OUT_QUERY_OWNER } from "@/lib/account/queries";
+import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { skillsOptions } from "@/lib/knowledge/queries";
+import type { PromptSuggestion } from "@/lib/prompts/types";
+import { queryView } from "@/lib/query-view.logic";
 
 /**
  * The title and description people read for each built-in skill. The API
@@ -17,10 +21,29 @@ export const BUILT_IN_SKILL_COPY = {
   "playbook-builder": {
     name: "knowledge.agentSkills.builtIn.playbookBuilder.name",
     description: "knowledge.agentSkills.builtIn.playbookBuilder.description",
+    openingPrompts: [
+      {
+        name: "knowledge.agentSkills.builtIn.playbookBuilder.openingPrompts.fromContracts.name",
+        body: "knowledge.agentSkills.builtIn.playbookBuilder.openingPrompts.fromContracts.body",
+      },
+      {
+        name: "knowledge.agentSkills.builtIn.playbookBuilder.openingPrompts.fromMarketStandards.name",
+        body: "knowledge.agentSkills.builtIn.playbookBuilder.openingPrompts.fromMarketStandards.body",
+      },
+      {
+        name: "knowledge.agentSkills.builtIn.playbookBuilder.openingPrompts.extendExisting.name",
+        body: "knowledge.agentSkills.builtIn.playbookBuilder.openingPrompts.extendExisting.body",
+      },
+    ],
   },
 } as const satisfies Record<
   BuiltInSkillId,
-  { name: TranslationKey; description: TranslationKey }
+  {
+    name: TranslationKey;
+    description: TranslationKey;
+    /** First messages offered while a chat with the skill is still empty. */
+    openingPrompts: readonly { name: TranslationKey; body: TranslationKey }[];
+  }
 >;
 
 const isBuiltInSkillId = (skillName: string): skillName is BuiltInSkillId =>
@@ -175,5 +198,59 @@ export const useSkillLabel = () => {
     return starter !== undefined && skill.skillDisplayName === starter.seed.name
       ? t(starter.copy.name)
       : (skill.skillDisplayName ?? skill.skillName);
+  };
+};
+
+type ActiveSkillIntro = {
+  title: string;
+  /** Absent for an installed skill whose row is not loaded or has none. */
+  description: string | undefined;
+  /** Only built-in skills have opening prompts. */
+  prompts: readonly PromptSuggestion[];
+};
+
+/**
+ * What an empty chat shows about the skill it runs with. An installed
+ * skill's description is read from the skills list when a surface has
+ * already loaded it; this hook never starts that fetch.
+ */
+export const useActiveSkillIntro = (skill: SkillNames): ActiveSkillIntro => {
+  const t = useTranslations();
+  const skillLabel = useSkillLabel();
+  const user = useMaybeAuthenticatedUser();
+  const skillPagesView = queryView(
+    useSkillsPages({
+      enabled: false,
+      organizationId: user?.activeOrganizationId ?? "",
+      userId: user?.id ?? SIGNED_OUT_QUERY_OWNER,
+    }),
+  );
+  const title = skillLabel(skill);
+  const copy =
+    skill.skillId === undefined ? builtInSkillCopy(skill.skillName) : undefined;
+  if (copy !== undefined) {
+    return {
+      title,
+      description: t(copy.description),
+      prompts: copy.openingPrompts.map(({ name, body }) => ({
+        id: body,
+        name: t(name),
+        body: t(body),
+      })),
+    };
+  }
+  const installed =
+    skillPagesView.type === "items"
+      ? skillPagesView.items.pages
+          .flatMap((page) => page.installed)
+          .find((row) => row.id === skill.skillId)
+      : undefined;
+  return {
+    title,
+    description:
+      installed === undefined || installed.description.trim() === ""
+        ? undefined
+        : installed.description,
+    prompts: [],
   };
 };

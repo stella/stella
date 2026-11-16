@@ -162,7 +162,7 @@ const lintPluginSpecifiers = (config: LintConfig): string[] => [
  * Every bare import a hook loads that the root package.json does not declare,
  * and every package executable a hook runs that no root dependency provides.
  */
-export const undeclaredHookDependencies = async (
+const undeclaredHookDependencies = async (
   root: string,
 ): Promise<UndeclaredHookDependency[]> => {
   const manifest = v.parse(

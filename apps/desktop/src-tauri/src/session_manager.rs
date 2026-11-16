@@ -1,3 +1,4 @@
+use crate::logging::best_effort;
 use futures_util::{StreamExt, future::join_all};
 use notify::{
   Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
@@ -60,8 +61,9 @@ pub fn set_takeover_response(label: &str, approved: bool) {
   let mut guard = TAKEOVER_SENDERS.lock().unwrap_or_else(|e| e.into_inner());
   if let Some(ref mut map) = *guard
     && let Some(tx) = map.remove(label)
+    && tx.send(approved).is_err()
   {
-    let _ = tx.send(approved);
+    tracing::debug!("takeover answer had no waiter");
   }
 }
 
@@ -79,7 +81,15 @@ const LIBRE_OFFICE_LOCK_SUFFIX: &str = "#";
 const MICROSOFT_OFFICE_LOCK_PREFIX: &str = "~$";
 const SUPPORT_EMAIL: &str = "hello@stll.app";
 const CONTENT_TYPES_ENTRY: &str = "[Content_Types].xml";
-const MAX_OFFICE_DOWNLOAD_BYTES: u64 = 50 * 1024 * 1024;
+/// The API contract's `MULTIPART_DOCUMENT_MAX_BYTES`, which `build.rs` derives
+/// from the contract's source. Each checkpoint goes back as one multipart form,
+/// so a larger file could be opened but never saved: it is refused before the
+/// user edits it.
+const MAX_OFFICE_DOWNLOAD_BYTES: u64 =
+  match u64::from_str_radix(env!("STELLA_EDITABLE_DOCUMENT_MAX_BYTES"), 10) {
+    Ok(bytes) => bytes,
+    Err(_) => panic!("build.rs emits the document limit as a decimal integer"),
+  };
 const ZIP_LOCAL_FILE_HEADER_MAGIC: &[u8] = b"PK\x03\x04";
 const GENERIC_OFFICE_DOWNLOAD_MIME_TYPES: &[&str] =
   &["application/octet-stream", "binary/octet-stream"];
@@ -2667,7 +2677,10 @@ impl SessionManager {
       .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     if let Some(ref handle) = self.app_handle {
       let snapshot = self.get_snapshot();
-      let _ = handle.emit_to("main", "state-changed", &snapshot);
+      best_effort(
+        handle.emit_to("main", "state-changed", &snapshot),
+        "session state change was not announced",
+      );
 
       crate::tray::refresh(handle, &snapshot);
     }
@@ -3189,20 +3202,29 @@ fn open_path_native(path: &str) -> Result<(), String> {
 fn reveal_in_folder(path: &str) {
   #[cfg(target_os = "macos")]
   {
-    let _ = std::process::Command::new("open")
-      .args(["-R", path])
-      .spawn();
+    best_effort(
+      std::process::Command::new("open")
+        .args(["-R", path])
+        .spawn(),
+      "file manager could not be opened",
+    );
   }
   #[cfg(target_os = "windows")]
   {
-    let _ = std::process::Command::new("explorer")
-      .args(["/select,", path])
-      .spawn();
+    best_effort(
+      std::process::Command::new("explorer")
+        .args(["/select,", path])
+        .spawn(),
+      "file manager could not be opened",
+    );
   }
   #[cfg(target_os = "linux")]
   {
     if let Some(parent) = Path::new(path).parent() {
-      let _ = std::process::Command::new("xdg-open").arg(parent).spawn();
+      best_effort(
+        std::process::Command::new("xdg-open").arg(parent).spawn(),
+        "file manager could not be opened",
+      );
     }
   }
 }

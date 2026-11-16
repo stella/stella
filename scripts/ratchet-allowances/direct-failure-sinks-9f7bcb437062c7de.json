@@ -1,0 +1,6 @@
+{
+  "metric": "direct-failure-sinks",
+  "file": "apps/api/src/handlers/chat/queue/enqueue.ts",
+  "delta": 1,
+  "reason": "Deleting the chat files an enqueue stored for a message that was not queued is best-effort cleanup after the outcome is decided: a failed cleanup must not replace the answer the member gets (queued elsewhere, sent, queue full), so it is reported to telemetry and the files stay as the thread's chat files, removed with the thread."
+}

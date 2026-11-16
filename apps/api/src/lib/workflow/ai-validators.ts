@@ -297,6 +297,28 @@ type ValidatedFieldContent = Extract<
   { type: "text" | "single-select" | "multi-select" | "date" | "int" | "money" }
 >;
 
+/** Content that states no value: blank text, or an empty select, multi-select
+ *  or date. */
+export const isEmptyFieldContent = (
+  content: ValidatedFieldContent,
+): boolean => {
+  switch (content.type) {
+    case "single-select":
+    case "date":
+      return content.value === null;
+    case "multi-select":
+      return content.value.length === 0;
+    case "text":
+      return content.value.trim().length === 0;
+    case "int":
+    case "money":
+      return false;
+    default:
+      content satisfies never;
+      return panic("Field content type not matched");
+  }
+};
+
 export const fieldContentFromValidated = (
   validated: ValidatedAnswer,
 ): ValidatedFieldContent | null => {

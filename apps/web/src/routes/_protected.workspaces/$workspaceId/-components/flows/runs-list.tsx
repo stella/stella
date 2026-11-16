@@ -4,6 +4,7 @@ import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronRightIcon } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import {
   FlowStatusBadge,
@@ -59,9 +60,13 @@ const RunRow = ({
         <span className="hover:bg-muted/50 flex w-full items-center gap-3 px-4 py-3">
           <FlowStatusBadge status={run.status} />
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium" dir="auto">
+            <TruncatedText
+              className="text-sm font-medium"
+              dir="auto"
+              render={<p />}
+            >
               {run.name}
-            </p>
+            </TruncatedText>
             <div className="text-muted-foreground mt-0.5 flex items-center gap-2 text-xs">
               <FlowTriggerBadge triggerType={run.triggerType} />
               <span className="tabular-nums">

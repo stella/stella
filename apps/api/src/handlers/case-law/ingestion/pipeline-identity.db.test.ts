@@ -37,6 +37,7 @@ import {
 import { EMPTY_AST } from "@/api/lib/legal-search/ingestion-types";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   openGatedTestDatabase,
@@ -148,6 +149,102 @@ if (!databaseUrl || !runPostgresTests) {
             ),
           );
         await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
+      }
+    });
+
+    test("known pre-contract state rejects fallback siblings without overwriting the first decision", async () => {
+      const scopedSourceId = createSafeId<"caseLawSource">();
+      await db.insert(caseLawSources).values({
+        id: scopedSourceId,
+        adapterKey: `fallback-${scopedSourceId}`,
+        name: "Fallback identity fixture",
+        enabled: false,
+      });
+      let observationOrder = 0n;
+      const write = async (court: string, decisionDate: string) =>
+        await processDecision({
+          input: {
+            ...decisionAt(court, undefined),
+            decisionDate,
+            rawHash: `${court}:${decisionDate}`,
+          },
+          observationOrder: ++observationOrder,
+          sourceId: scopedSourceId,
+          scopedDb,
+          observedAt: new Date("2026-07-31T12:00:00.000Z"),
+        });
+      try {
+        await write("Mestský súd Košice", "2025-04-18");
+        const before = await db
+          .select({
+            id: caseLawDecisions.id,
+            court: caseLawDecisions.court,
+            decisionDate: caseLawDecisions.decisionDate,
+            fallbackCohortKey: caseLawDecisions.fallbackCohortKey,
+            fallbackContentHash: caseLawDecisions.fallbackContentHash,
+          })
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.sourceId, scopedSourceId));
+        expect(before).toHaveLength(1);
+        const original =
+          before.at(0) ?? panic("Initial fallback observation must be stored");
+        expect(original.fallbackContentHash).not.toBeNull();
+        for (const [court, decisionDate] of [
+          ["Okresný súd Bardejov", "2025-04-18"],
+        ] as const) {
+          // db-await-in-loop: each observation must leave the first decision unchanged.
+          // processDecision answers a refused write as an error result.
+          const attempted = await write(court, decisionDate);
+          expect(attempted.isErr()).toBe(true);
+          if (attempted.isErr()) {
+            expect(
+              isPgConstraintError(
+                attempted.error,
+                PG_ERROR.UNIQUE_VIOLATION,
+                "case_law_decisions_source_case_lang_null_idx",
+              ),
+            ).toBe(true);
+          }
+        }
+        expect(
+          await db
+            .select({
+              id: caseLawDecisions.id,
+              court: caseLawDecisions.court,
+              decisionDate: caseLawDecisions.decisionDate,
+              fallbackCohortKey: caseLawDecisions.fallbackCohortKey,
+              fallbackContentHash: caseLawDecisions.fallbackContentHash,
+            })
+            .from(caseLawDecisions)
+            .where(eq(caseLawDecisions.sourceId, scopedSourceId)),
+        ).toEqual(before);
+        await write("Mestský súd Košice", "2025-04-18");
+        expect(
+          await db
+            .select({ id: caseLawDecisions.id })
+            .from(caseLawDecisions)
+            .where(eq(caseLawDecisions.sourceId, scopedSourceId)),
+        ).toHaveLength(1);
+        await write("Mestský súd Košice", "2025-05-28");
+        const corrected = await db
+          .select({
+            id: caseLawDecisions.id,
+            decisionDate: caseLawDecisions.decisionDate,
+            fallbackContentHash: caseLawDecisions.fallbackContentHash,
+          })
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.sourceId, scopedSourceId));
+        expect(corrected).toEqual([
+          {
+            id: original.id,
+            decisionDate: "2025-05-28",
+            fallbackContentHash: original.fallbackContentHash,
+          },
+        ]);
+      } finally {
+        await db
+          .delete(caseLawSources)
+          .where(eq(caseLawSources.id, scopedSourceId));
       }
     });
 
@@ -770,6 +867,56 @@ if (!databaseUrl || !runPostgresTests) {
       expect(await docketRows(caseNumber)).toEqual([
         { id: legacyRow.id, sourceDocumentId: "nalus-record:uncounted" },
       ]);
+    });
+
+    test("adopts a legacy row at the document's own URL under a reissued docket and ECLI", async () => {
+      // A court adding a sibling to a docket suffixes the first document's
+      // number and reissues its ECLI: only the URL still names it.
+      const caseNumber = "22 Cdo 120/2026";
+      const url = "https://publisher.test/WebSearch/renamed-unid";
+      const legacy = plainTextIngestionResult({
+        ...decisionAt(`Renamed ${caseNumber}`, undefined),
+        caseNumber,
+        ecli: "ECLI:CZ:NS:2026:22.CDO.120.2026.1",
+        sourceUrl: url,
+      });
+      (
+        await processDecision({
+          input: legacy,
+          observationOrder: 1n,
+          sourceId,
+          scopedDb,
+          observedAt: new Date("2026-07-31T12:00:00.000Z"),
+        })
+      ).unwrap();
+      const [legacyRow] = await docketRows(caseNumber);
+      if (legacyRow === undefined) {
+        throw new Error("expected legacy row");
+      }
+
+      const renamedCaseNumber = `${caseNumber}- I.`;
+      (
+        await processDecision({
+          input: plainTextIngestionResult({
+            ...legacy,
+            caseNumber: renamedCaseNumber,
+            ecli: "ECLI:CZ:NS:2026:22.CDO.120.2026.2",
+            sourceDocumentId: "renamed-unid",
+            legacyCaseNumber: caseNumber,
+            legacySourceUrls: [url],
+            rawHash: "hash-renamed-docket",
+          }),
+          observationOrder: 2n,
+          sourceId,
+          scopedDb,
+          observedAt: new Date("2026-07-31T12:00:01.000Z"),
+        })
+      ).unwrap();
+
+      expect(await docketRows(caseNumber)).toEqual([
+        { id: legacyRow.id, sourceDocumentId: "renamed-unid" },
+      ]);
+      expect(await docketRows(renamedCaseNumber)).toEqual([]);
     });
 
     test("adopts a legacy row stored under the docket an earlier release derived", async () => {
@@ -1787,8 +1934,11 @@ if (!databaseUrl || !runPostgresTests) {
     test("binds a legacy row before a listing-only preservation return", async () => {
       const publisherId = "listing-only-legacy-binding";
       const legacyUrl = "https://publisher.test/listing-only-legacy";
+      // A docket of its own: before the contract phase, the docket-only index
+      // refuses a second court's document-less row on the shared docket.
       const legacy = plainTextIngestionResult({
         ...decisionAt("Listing-only legacy", undefined),
+        caseNumber: "0T/77/2019",
         sourceUrl: legacyUrl,
       });
       (

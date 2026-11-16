@@ -18,8 +18,8 @@
     "clean": "git clean -xdf .cache .turbo node_modules",
     "test": "bun test src",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/errors",
-    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/errors"
+    "lint": "cd ../.. && bun scripts/lint.ts packages/errors",
+    "lint:fix": "cd ../.. && bun scripts/lint.ts --fix packages/errors"
   },
   "dependencies": {
     "better-result": "catalog:"

@@ -1,6 +1,10 @@
 import { panic, Result } from "better-result";
 
-import { slugify, stripDiacriticsForSlug } from "@stll/text-normalize";
+import {
+  normalizeUnicode,
+  slugify,
+  stripDiacriticsForSlug,
+} from "@stll/text-normalize";
 import { decodeUuidSuffix, encodeCompactUuid, isUuid } from "@stll/uuid-codec";
 
 /**
@@ -348,4 +352,39 @@ export const matchCaseLawDecisionPath = ({
   return requestedPath === createCaseLawDecisionPath(legacy)
     ? { type: CASE_LAW_DECISION_PATH_MATCH.LEGACY_FOLD, canonical }
     : { type: CASE_LAW_DECISION_PATH_MATCH.OTHER, canonical };
+};
+
+/** What a search hit is matched against a typed reference by. */
+export type DecisionRefCandidate = {
+  caseNumber: string;
+  ecli: string | null;
+};
+
+const normalizeDecisionRef = (value: string): string =>
+  normalizeUnicode(value, "NFKC").toLowerCase().replace(/\s+/gu, " ").trim();
+
+/**
+ * The search hit a decision reference (a docket or an ECLI, as a chat link
+ * names a decision) means: the hit with that case number, else that ECLI,
+ * else the best match.
+ */
+export const pickCaseLawDecisionHit = <THit extends DecisionRefCandidate>(
+  decisionRef: string,
+  hits: readonly THit[],
+): THit | null => {
+  const normalizedRef = normalizeDecisionRef(decisionRef);
+  const exactCaseNumber = hits.find(
+    (hit) => normalizeDecisionRef(hit.caseNumber) === normalizedRef,
+  );
+
+  if (exactCaseNumber) {
+    return exactCaseNumber;
+  }
+
+  const exactEcli = hits.find(
+    (hit) =>
+      hit.ecli !== null && normalizeDecisionRef(hit.ecli) === normalizedRef,
+  );
+
+  return exactEcli ?? hits.at(0) ?? null;
 };

@@ -28,7 +28,13 @@ const fixtureEnvironment = (() => {
   return env;
 })();
 
-const runCliContractGuard = ({ root, base }: { root: string; base: string }) =>
+const spawnCliContractGuard = ({
+  root,
+  base,
+}: {
+  root: string;
+  base: string;
+}) =>
   Bun.spawnSync(
     [
       process.execPath,
@@ -225,7 +231,7 @@ describe("CLI contract changeset guard integration", () => {
   test("a failing CLI emits an error annotation only in its captured output", () => {
     withGitFixture((root) => {
       changeCatalogAndCommit(root);
-      const missing = runCliContractGuard({ root, base: "main" });
+      const missing = spawnCliContractGuard({ root, base: "main" });
       expect(missing.exitCode).toBe(1);
       expect(missing.stderr.toString()).toContain(
         "::error::cli-contract-changeset:",
@@ -238,7 +244,7 @@ describe("CLI contract changeset guard integration", () => {
       );
       runGit(root, ["add", ".changeset/cli.md"]);
       runGit(root, ["commit", "-m", "qualify CLI change"]);
-      const satisfied = runCliContractGuard({ root, base: "main" });
+      const satisfied = spawnCliContractGuard({ root, base: "main" });
       expect(satisfied.exitCode).toBe(0);
       expect(satisfied.stderr.toString()).toBe("");
       expect(satisfied.stdout.toString()).not.toContain("::error::");
@@ -272,14 +278,14 @@ describe("CLI contract changeset guard integration", () => {
       );
       runGit(root, ["add", ".changeset/empty.md"]);
       runGit(root, ["commit", "-m", "empty changeset"]);
-      expect(runCliContractGuard({ root, base: "main" }).exitCode).toBe(1);
+      expect(spawnCliContractGuard({ root, base: "main" }).exitCode).toBe(1);
       writeFileSync(
         path.join(root, ".changeset/cli.md"),
         '---\n"@stll/cli": patch\n---\n\nContract change.\n',
       );
       runGit(root, ["add", ".changeset/cli.md"]);
       runGit(root, ["commit", "-m", "qualify CLI change"]);
-      expect(runCliContractGuard({ root, base: "main" }).exitCode).toBe(0);
+      expect(spawnCliContractGuard({ root, base: "main" }).exitCode).toBe(0);
     });
   });
 
@@ -292,7 +298,7 @@ describe("CLI contract changeset guard integration", () => {
       );
       runGit(root, ["add", ".changeset/unrelated.md"]);
       runGit(root, ["commit", "-m", "unrelated changeset"]);
-      expect(runCliContractGuard({ root, base: "main" }).exitCode).toBe(1);
+      expect(spawnCliContractGuard({ root, base: "main" }).exitCode).toBe(1);
     });
   });
 
@@ -303,14 +309,14 @@ describe("CLI contract changeset guard integration", () => {
     withGitFixture(
       (root) => {
         changeCatalogAndCommit(root);
-        expect(runCliContractGuard({ root, base: "main" }).exitCode).toBe(1);
+        expect(spawnCliContractGuard({ root, base: "main" }).exitCode).toBe(1);
         writeFileSync(
           path.join(root, ".changeset/own.md"),
           '---\n"@stll/cli": patch\n---\n\nContract change.\n',
         );
         runGit(root, ["add", ".changeset/own.md"]);
         runGit(root, ["commit", "-m", "carry its own changeset"]);
-        expect(runCliContractGuard({ root, base: "main" }).exitCode).toBe(0);
+        expect(spawnCliContractGuard({ root, base: "main" }).exitCode).toBe(0);
       },
       { baseChangeset: '---\n"@stll/cli": patch\n---\n\nEarlier change.\n' },
     );
@@ -319,21 +325,21 @@ describe("CLI contract changeset guard integration", () => {
   test("accepts a CLI version bump without a changeset", () => {
     withGitFixture((root) => {
       changeCatalogAndCommit(root, "1.2.14");
-      expect(runCliContractGuard({ root, base: "main" }).exitCode).toBe(0);
+      expect(spawnCliContractGuard({ root, base: "main" }).exitCode).toBe(0);
     });
   });
 
   test("ignores formatting-only contract changes", () => {
     withGitFixture((root) => {
       changeCatalogFormattingOnly(root);
-      expect(runCliContractGuard({ root, base: "main" }).exitCode).toBe(0);
+      expect(spawnCliContractGuard({ root, base: "main" }).exitCode).toBe(0);
     });
   });
 
   test("fails closed when the base ref is missing", () => {
     withGitFixture((root) => {
       changeCatalogAndCommit(root);
-      const result = runCliContractGuard({ root, base: "missing-base" });
+      const result = spawnCliContractGuard({ root, base: "missing-base" });
       expect(result.exitCode).not.toBe(0);
       expect(result.stderr.toString()).toContain(
         "git merge-base missing-base HEAD failed",
@@ -352,7 +358,7 @@ describe("CLI contract changeset guard integration", () => {
         path.join(root, "packages/cli/package.json"),
         '{"name":"@stll/cli","version":"1.2.14"}\n',
       );
-      expect(runCliContractGuard({ root, base: "main" }).exitCode).toBe(1);
+      expect(spawnCliContractGuard({ root, base: "main" }).exitCode).toBe(1);
     });
   });
 
@@ -363,7 +369,7 @@ describe("CLI contract changeset guard integration", () => {
         path.join(root, "packages/cli", CATALOG_SHARD),
         '{"id":"matters.list","inputSchema":{}}\n',
       );
-      expect(runCliContractGuard({ root, base: "main" }).exitCode).toBe(1);
+      expect(spawnCliContractGuard({ root, base: "main" }).exitCode).toBe(1);
     });
   });
 
@@ -378,7 +384,7 @@ describe("CLI contract changeset guard integration", () => {
       );
       runGit(root, ["add", relativePath]);
       runGit(root, ["commit", "-m", "generated contract change"]);
-      expect(runCliContractGuard({ root, base: "main" }).exitCode).toBe(1);
+      expect(spawnCliContractGuard({ root, base: "main" }).exitCode).toBe(1);
     });
   });
 
@@ -396,7 +402,7 @@ describe("CLI contract changeset guard integration", () => {
         }
         runGit(root, ["add", "."]);
         runGit(root, ["commit", "-m", "change shard membership"]);
-        expect(runCliContractGuard({ root, base: "main" }).exitCode).toBe(1);
+        expect(spawnCliContractGuard({ root, base: "main" }).exitCode).toBe(1);
       });
     },
   );
@@ -409,7 +415,7 @@ describe("CLI contract changeset guard integration", () => {
         "packages/cli/capabilities/renamed.json",
       ]);
       runGit(root, ["commit", "-am", "rename generated contract"]);
-      expect(runCliContractGuard({ root, base: "main" }).exitCode).toBe(1);
+      expect(spawnCliContractGuard({ root, base: "main" }).exitCode).toBe(1);
     });
   });
 });

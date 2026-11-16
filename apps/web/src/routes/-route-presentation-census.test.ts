@@ -111,6 +111,9 @@ const ROUTE_PRESENTATION_EXEMPTIONS: Readonly<Record<string, RouteExemption>> =
     "/mcp/oauth-callback": {
       reason: "OAuth callback that closes or redirects.",
     },
+    "/sharepoint/oauth-callback": {
+      reason: "OAuth callback that redirects to the connections settings.",
+    },
     "/onboarding": {
       reason:
         "Standalone onboarding shell; it does not render app breadcrumbs.",
@@ -275,7 +278,7 @@ type CensusInput = {
   sources: readonly RouteSource[];
 };
 
-export function findMissingRoutePresentation({
+function findMissingRoutePresentation({
   routeTree,
   sources,
 }: CensusInput): string[] {

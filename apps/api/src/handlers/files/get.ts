@@ -4,6 +4,7 @@ import { DOCUMENT_PROPERTIES_MAX_BYTES } from "@stll/api-contract";
 import { resolveEmailMimeType } from "@stll/api-contract/email-mime-types";
 import { classifyFailure } from "@stll/errors";
 import { fetchWithTimeout } from "@stll/fetch";
+import { readBodyWithIdleDeadline } from "@stll/fetch/body-reader";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { env } from "@/api/env";
@@ -22,10 +23,13 @@ import { createEmailAttachmentDescriptor } from "@/api/lib/files/email-attachmen
 import { emailToPreview } from "@/api/lib/files/email-to-html";
 import { convertToPdf, isConvertibleMimeType } from "@/api/lib/files/gotenberg";
 import {
-  FILE_READ_URL_EXPIRY_SECONDS,
   fileFieldQuery,
-} from "@/api/lib/files/read-file";
+  LIVE_VERSION_DELIVERY,
+  recordLiveVersionDelivery,
+} from "@/api/lib/files/live-version-field";
+import { FILE_READ_URL_EXPIRY_SECONDS } from "@/api/lib/files/read-file";
 import { createFileKey } from "@/api/lib/files/utils";
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -37,6 +41,8 @@ import {
   secureDocumentResponse,
 } from "@/api/lib/secure-document-response";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
+
+const STAMPED_DOWNLOAD_READ_TIMEOUT_MS = 30_000;
 
 type ReadEmailHtmlPreviewHandlerProps = {
   scopedDb: ScopedDb;
@@ -108,9 +114,12 @@ export const readEmailHtmlPreviewHandler = async ({
   }
 
   // The preview carries the message body; record the view once there is a
-  // preview to return.
-  await scopedDb(
-    async (tx) =>
+  // preview to return, and only while the version is still live.
+  const delivery = await recordLiveVersionDelivery({
+    scopedDb,
+    fieldId,
+    workspaceId,
+    record: async (tx) =>
       await recordAuditEvent(tx, {
         action: CONTENT_DELIVERY_AUDIT_ACTION.inline,
         resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
@@ -124,7 +133,10 @@ export const readEmailHtmlPreviewHandler = async ({
           sizeBytes: content.sizeBytes,
         },
       }),
-  );
+  });
+  if (delivery === LIVE_VERSION_DELIVERY.withdrawn) {
+    return status(404);
+  }
 
   return {
     ...previewResult.value,
@@ -267,16 +279,21 @@ export const printPdfHandler = async ({
   // endpoint streams full content, so it needs the same audit row the
   // presigned-download path emits (GDPR Art. 30 / SOC 2 access record), but a
   // failed S3 fetch or conversion must not leave a spurious download record.
+  // The record re-checks the version, so a withdrawal during the read answers
+  // 404.
   const recordDownload = async () =>
-    await scopedDb(
-      async (tx) =>
+    await recordLiveVersionDelivery({
+      scopedDb,
+      fieldId,
+      workspaceId,
+      record: async (tx) =>
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.DOWNLOAD,
           resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
           resourceId: row.entityId,
           metadata: { format: "pdf" },
         }),
-    );
+    });
 
   if (content.mimeType === PDF_MIME_TYPE || content.pdfFileId) {
     const fileKey = createFileKey({
@@ -291,7 +308,10 @@ export const printPdfHandler = async ({
       return storedFileUnreadable(response.error);
     }
 
-    await recordDownload();
+    if ((await recordDownload()) === LIVE_VERSION_DELIVERY.withdrawn) {
+      await response.value.body?.cancel();
+      return status(404);
+    }
     return streamedPdfResponse(response.value, outputName);
   }
 
@@ -332,7 +352,9 @@ export const printPdfHandler = async ({
     );
   }
 
-  await recordDownload();
+  if ((await recordDownload()) === LIVE_VERSION_DELIVERY.withdrawn) {
+    return status(404);
+  }
   return pdfResponse(conversionResult.value.buffer, outputName);
 };
 
@@ -384,14 +406,26 @@ export const stampedDownloadHandler = async ({
     expiresIn: FILE_READ_URL_EXPIRY_SECONDS,
   });
   const response = await fetchWithTimeout(presignedUrl, {
-    timeoutMs: 30_000,
+    timeoutMs: STAMPED_DOWNLOAD_READ_TIMEOUT_MS,
   });
 
   if (!response.ok) {
     return storedFileUnreadable(storedFileUnavailable(response.status));
   }
 
-  const buffer = await response.arrayBuffer();
+  const bytes = await readBodyWithIdleDeadline(response, {
+    idleMs: STAMPED_DOWNLOAD_READ_TIMEOUT_MS,
+    maxBytes:
+      metadata === "strip"
+        ? DOCUMENT_PROPERTIES_MAX_BYTES
+        : FILE_SIZE_LIMIT_BYTES.document,
+  });
+  const buffer =
+    bytes.buffer instanceof ArrayBuffer &&
+    bytes.byteOffset === 0 &&
+    bytes.byteLength === bytes.buffer.byteLength
+      ? bytes.buffer
+      : bytes.slice().buffer;
   const versionStamp = row.versionStamp;
   const verificationCode = row.verificationCode;
   const stampResult = await Result.tryPromise({
@@ -441,9 +475,13 @@ export const stampedDownloadHandler = async ({
 
   // Record the access only once the requested rendition exists, matching the
   // presigned-download path's DOWNLOAD audit row. A failed read or transform
-  // must not leave a spurious download record.
-  await scopedDb(
-    async (tx) =>
+  // must not leave a spurious download record, and a version withdrawn while
+  // it ran answers 404.
+  const delivery = await recordLiveVersionDelivery({
+    scopedDb,
+    fieldId,
+    workspaceId,
+    record: async (tx) =>
       await recordAuditEvent(tx, {
         action: AUDIT_ACTION.DOWNLOAD,
         resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
@@ -454,7 +492,10 @@ export const stampedDownloadHandler = async ({
           stamped: true,
         },
       }),
-  );
+  });
+  if (delivery === LIVE_VERSION_DELIVERY.withdrawn) {
+    return status(404);
+  }
 
   const body = new ArrayBuffer(renditionBytes.byteLength);
   new Uint8Array(body).set(renditionBytes);

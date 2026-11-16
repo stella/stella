@@ -8,6 +8,7 @@ publish = false
 
 [lints.clippy]
 all = { level = "warn", priority = -1 }
+let_underscore_must_use = "deny"
 map_err_ignore = "deny"
 await_holding_lock = "deny"
 significant_drop_in_scrutinee = "deny"
@@ -26,3 +27,4 @@ stella-desktop-signing-core = { path = "../signing-core", version = "0.0.1" }
 core-foundation = "0.10"
 security-framework = "3"
 security-framework-sys = "2.17"
+tracing = "0.1"

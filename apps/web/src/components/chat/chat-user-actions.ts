@@ -66,6 +66,9 @@ export const CHAT_USER_ACTIONS = {
     handler: "confirmStoredApprovalGrant",
     via: "session",
   },
+  /** Sends the message that runs the next step of a turn paused on its
+   *  budget. */
+  "continue-paused-turn": { handler: "continuePausedTurn", via: "session" },
   /** Resumes the chat with a committed private input receipt. */
   "continue-private-input": {
     handler: "continueRequestSecret",
@@ -82,15 +85,18 @@ export const CHAT_USER_ACTIONS = {
   "edit-answer": { handler: "handleAskUserEditAndRerun", via: "session" },
   /** Replaces one of the user's own messages and drops every later turn. */
   "edit-message": { handler: "editUserMessage", via: "session" },
+  /** Takes a queued message back into the composer. */
+  "edit-queued-message": { handler: "editQueuedMessage", via: "session" },
   export: { via: "page" },
   fork: { via: "request" },
-  /** An open message editor holds queued prompts until it closes. */
+  /** An open message editor pauses the queue until it closes. */
   "hold-queue-for-message-edit": {
     handler: "holdQueueForMessageEdit",
     via: "session",
   },
   "improve-prompt": { via: "page" },
   "load-older": { handler: "loadOlder", via: "session" },
+  "move-queued-message": { handler: "moveQueuedMessage", via: "session" },
   "move-to-side": { via: "page" },
   /** Leaves the thread: its request closes, and its turn is not stopped. */
   "new-chat": { handler: "leave", via: "session" },
@@ -102,16 +108,28 @@ export const CHAT_USER_ACTIONS = {
   /** Opens a sent message's editor; a running turn is stopped first. */
   "open-message-editor": { handler: "startUserMessageEdit", via: "session" },
   "open-playbook": { handler: "handleOpenPlaybook", via: "session" },
+  /** Holds the queue: nothing queued is sent until it is resumed. */
+  "pause-queue": { handler: "pauseQueue", via: "session" },
+  /** Holds a message until the turn ends, where a plain send would steer
+   *  it (Cmd/Ctrl+Enter, the queue button). */
+  queue: { handler: "queueMessage", via: "session" },
   /** Reloads the canonical answer after an accepted edit or revision conflict. */
   "refresh-edited-answer": { handler: "refreshAnswers", via: "session" },
   "remove-queued-message": { handler: "removeQueuedMessage", via: "session" },
   "rename-thread": { via: "request" },
+  /** Send now over a turn that waits on the member, once confirmed: it
+   *  ends what the turn waits on. */
+  "replace-with-queued-message": {
+    handler: "replaceWithQueuedMessage",
+    via: "session",
+  },
   /** The error's resend after the anonymization boundary refused a turn. */
   "resend-without-anonymization": {
     handler: "resendLatestMessage",
     via: "session",
   },
   "resolve-draft": { handler: "handleCreateDocumentResolve", via: "session" },
+  "resume-queue": { handler: "resumeQueue", via: "session" },
   retry: { handler: "resendLatestMessage", via: "session" },
   "run-client-tool": { handler: "addToolResult", via: "session" },
   "select-matters": { via: "page" },
@@ -123,7 +141,9 @@ export const CHAT_USER_ACTIONS = {
     via: "session",
   },
   "submit-private-input": { handler: "handleRequestSecret", via: "session" },
-  /** Moves a queued message to the front and stops the running turn. */
+  /** Hands a queued message to a running turn that takes it; otherwise the
+   *  server sends it next, stopping a running turn (a waiting one asks for
+   *  confirmation first). */
   "send-queued-message-now": {
     handler: "sendQueuedMessageNow",
     via: "session",
@@ -261,3 +281,23 @@ export const canForkAssistantMessage = ({
   ...message
 }: AssistantMessageActionState): boolean =>
   !isGenerating || !isLatestAssistantMessage(message);
+
+/**
+ * Undoing a local turn's file changes is offered only while nothing runs and
+ * no prompt follows the answer: a send or a streaming turn leaves the turn
+ * behind the computer's newest one, which the server refuses to undo.
+ */
+export const canUndoLocalFilesOf = ({
+  isGenerating,
+  messageId,
+  messages,
+}: AssistantMessageActionState): boolean => {
+  if (isGenerating) {
+    return false;
+  }
+  const index = messages.findIndex(({ id }) => id === messageId);
+  return (
+    index !== -1 &&
+    messages.slice(index + 1).every(({ role }) => role !== "user")
+  );
+};

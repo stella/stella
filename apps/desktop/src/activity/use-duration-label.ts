@@ -17,3 +17,11 @@ export const useDurationLabel = () => {
     return t("durationUnderMinute");
   };
 };
+
+/** Writes a duration counted in whole minutes, as a suggestion's pieces and
+ * its card count it: never in hours, so the minutes can be added up. */
+export const useMinutesLabel = () => {
+  const t = useTranslations("activity");
+  return (minutes: number) =>
+    minutes > 0 ? t("durationMinutes", { minutes }) : t("durationUnderMinute");
+};

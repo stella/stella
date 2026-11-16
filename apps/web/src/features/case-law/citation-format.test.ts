@@ -35,6 +35,7 @@ const EXPECTED_STATUTE_QUOTATIONS = {
 const EXPECTED_JURISDICTION_QUOTATIONS = {
   ...EXPECTED_QUOTATIONS,
   AUT: "„text“",
+  BRA: "“text”",
   GBR: "“text”",
   USA: "“text”",
 } as const satisfies Record<CaseLawJurisdiction, string>;
@@ -276,6 +277,53 @@ describe("British neutral citations", () => {
   test("uses English quotation marks for corpus and region codes", () => {
     for (const country of ["GBR", "gbr", "GB"]) {
       expect(formatJurisdictionQuotation("text", country)).toBe("“text”");
+    }
+  });
+});
+
+describe("Brazilian citations", () => {
+  test.each(["BRA", "bra", "BR", "br"])(
+    "%s cites the court by its sigla with the judgment date",
+    (country) => {
+      expect(
+        formatDecisionCitation({
+          caseNumber: "RE 99234567 AgR",
+          caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+          country,
+          court: "Supremo Tribunal Federal",
+          decisionDate: "2020-02-03",
+          decisionType: "acórdão",
+          ecli: null,
+          name: null,
+          paragraph: null,
+          pincite: null,
+        }),
+      ).toBe("STF, RE 99234567 AgR, j. 03/02/2020");
+    },
+  );
+
+  test("a court without a sigla keeps its name", () => {
+    expect(
+      formatDecisionCitation({
+        caseNumber: "0701234-56.2099.8.07.0001",
+        caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+        country: "BRA",
+        court: "Tribunal de Justiça do Estado de São Paulo",
+        decisionDate: null,
+        decisionType: null,
+        ecli: null,
+        name: null,
+        paragraph: null,
+        pincite: null,
+      }),
+    ).toBe(
+      "Tribunal de Justiça do Estado de São Paulo, 0701234-56.2099.8.07.0001",
+    );
+  });
+
+  test("uses Brazilian quotation marks for corpus and region codes", () => {
+    for (const country of ["BRA", "bra", "BR"]) {
+      expect(formatJurisdictionQuotation("texto", country)).toBe("“texto”");
     }
   });
 });

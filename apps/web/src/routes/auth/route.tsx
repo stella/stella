@@ -21,7 +21,7 @@ function AuthLayout() {
   const t = useTranslations();
 
   return (
-    <div className="auth-gradient flex min-h-dvh flex-col">
+    <div className="auth-gradient flex min-h-dvh shrink-0 flex-col">
       <style>{`
         .auth-gradient {
           background: linear-gradient(
@@ -31,7 +31,7 @@ function AuthLayout() {
           );
         }
       `}</style>
-      <div className="flex flex-1 flex-col px-8 lg:px-16 xl:px-24">
+      <div className="flex flex-1 flex-col px-8 pb-12 lg:px-16 xl:px-24">
         <header className="flex flex-wrap items-end justify-between gap-4 pt-12">
           <div className="flex items-center gap-3">
             <a
@@ -41,9 +41,6 @@ function AuthLayout() {
             >
               <StellaWordmark className="text-foreground h-6 w-auto" />
             </a>
-            <span className="border-border text-muted-foreground text-3xs rounded-sm border px-1.5 py-0.5 font-medium tracking-[0.1em] uppercase">
-              {t("auth.betaNoticeTitle")}
-            </span>
           </div>
           <div className="flex items-center gap-2">
             <ThemePicker />

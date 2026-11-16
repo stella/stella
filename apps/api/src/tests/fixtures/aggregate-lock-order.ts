@@ -63,6 +63,7 @@ export const aggregateFences = () => {
       aggregate: "organizationDataBoxes",
       id: { organizationId },
     },
+    organizationSettings: { aggregate: "organizationSettings", id: organizationId, mode: "update" },
     organizationObjectIntent: {
       aggregate: "organizationObjectIntent",
       id: organizationId,
@@ -89,6 +90,10 @@ export const aggregateFences = () => {
     caseLawRepublication: {
       aggregate: "caseLawRepublication",
       id: "global",
+    },
+    corpusProjectionOfflineRequest: {
+      aggregate: "corpusProjectionOfflineRequest",
+      id: "0198e331-e578-7000-8000-0000000000b7",
     },
     caseLawSitemapMonth: {
       aggregate: "caseLawSitemapMonth",

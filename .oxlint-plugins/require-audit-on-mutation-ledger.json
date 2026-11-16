@@ -485,15 +485,6 @@
     "reason": "Shared public corpus or index maintenance with no tenant actor."
   },
   {
-    "id": "apps/api/src/lib/chat/run-log.ts::createChatRunLog.append",
-    "writes": {
-      "insert:chatRunLogEntries": 1,
-      "insert:chatRunLogs": 1,
-      "update:chatRunLogs": 1
-    },
-    "reason": "Background work state transition; the request that started the work records the audit event."
-  },
-  {
     "id": "apps/api/src/lib/chat/run-log.ts::createChatRunLog.close",
     "writes": {
       "insert:chatRunLogs": 1,
@@ -1231,14 +1222,6 @@
     "reason": "Shared public corpus or index maintenance with no tenant actor."
   },
   {
-    "id": "apps/api/src/lib/legal-search/corpus-index-projection-census-store.ts::repairAppliedCorpusProjectionDriftTx",
-    "writes": {
-      "update:corpusIndexProjectionIntents": 1,
-      "update:corpusIndexProjectionStates": 1
-    },
-    "reason": "Shared public corpus or index maintenance with no tenant actor."
-  },
-  {
     "id": "apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts::chargeExpiredAppendStatesTx",
     "writes": {
       "update:corpusIndexProjectionStates": 1
@@ -1276,7 +1259,7 @@
   {
     "id": "apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts::recoverExpiredCorpusProjectionIntentsTx",
     "writes": {
-      "update:corpusIndexProjectionIntents": 3
+      "update:corpusIndexProjectionIntents": 2
     },
     "reason": "Shared public corpus or index maintenance with no tenant actor."
   },
@@ -1325,14 +1308,6 @@
     "reason": "Shared public corpus or index maintenance with no tenant actor."
   },
   {
-    "id": "apps/api/src/lib/legal-search/corpus-index-projection-erasure-store.ts::advanceCorpusProjectionErasuresTx",
-    "writes": {
-      "update:corpusIndexProjectionIntents": 3,
-      "update:corpusIndexProjectionStates": 2
-    },
-    "reason": "Shared public corpus or index maintenance with no tenant actor."
-  },
-  {
     "id": "apps/api/src/lib/legal-search/corpus-index-projection-revision.ts::pruneCorpusIndexProjectionRevisionsTx",
     "writes": {
       "delete:?": 1
@@ -1348,13 +1323,6 @@
     "reason": "Shared public corpus or index maintenance with no tenant actor."
   },
   {
-    "id": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts::cancelCorpusProjectionReservationTx",
-    "writes": {
-      "update:corpusIndexProjectionIntents": 1
-    },
-    "reason": "Shared public corpus or index maintenance with no tenant actor."
-  },
-  {
     "id": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts::classifyCorpusProjectionReservationFailureTx",
     "writes": {
       "update:corpusIndexProjectionIntents": 1,
@@ -1363,39 +1331,9 @@
     "reason": "Shared public corpus or index maintenance with no tenant actor."
   },
   {
-    "id": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts::commitCorpusProjectionAppendTx",
-    "writes": {
-      "update:corpusIndexProjectionIntents": 3,
-      "update:corpusIndexProjectionStates": 1
-    },
-    "reason": "Shared public corpus or index maintenance with no tenant actor."
-  },
-  {
     "id": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts::continueCorpusProjectionAppendPartTx",
     "writes": {
       "update:corpusIndexProjectionIntents": 1
-    },
-    "reason": "Shared public corpus or index maintenance with no tenant actor."
-  },
-  {
-    "id": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts::prepareCorpusProjectionReplacementsTx",
-    "writes": {
-      "update:corpusIndexProjectionIntents": 1,
-      "update:corpusIndexProjectionStates": 1
-    },
-    "reason": "Shared public corpus or index maintenance with no tenant actor."
-  },
-  {
-    "id": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts::reserveCorpusProjectionIntentsTx",
-    "writes": {
-      "insert:corpusIndexProjectionIntents": 1
-    },
-    "reason": "Shared public corpus or index maintenance with no tenant actor."
-  },
-  {
-    "id": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts::startCorpusProjectionAppendBatchTx",
-    "writes": {
-      "update:corpusIndexProjectionIntents": 3
     },
     "reason": "Shared public corpus or index maintenance with no tenant actor."
   },

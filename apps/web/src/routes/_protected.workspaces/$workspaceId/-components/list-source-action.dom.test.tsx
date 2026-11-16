@@ -12,11 +12,11 @@ import {
   test,
 } from "bun:test";
 
+import { LEGAL_LIST_SOURCE_QUOTE_MAX_LENGTH } from "@stll/api-contract/limits";
 import type { OrganizationRoleName } from "@stll/auth-model";
 import { sleep } from "@stll/concurrency/sleep";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { parseTimeZoneId } from "@stll/time";
-import { stellaToast } from "@stll/ui/toast";
 
 import arabic from "@/i18n/langs/ar.json";
 import czech from "@/i18n/langs/cs.json";
@@ -34,6 +34,7 @@ const { QueryClient, QueryClientProvider } =
 const { act, cleanup, fireEvent, render, waitFor } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
+const { stellaToast } = await import("@stll/ui/toast");
 const { createMemoryHistory, createRootRoute, createRouter, RouterProvider } =
   await import("@tanstack/react-router");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
@@ -52,6 +53,7 @@ const { ListItemSources } =
 const { PDF_MIME, DOCX_MIME } = await import("@/lib/consts");
 const principal = { organizationId: "org-fixture", userId: "user-fixture" };
 const workspaceId = "019a0000-0000-7000-8000-000000000001";
+const otherWorkspaceId = "019a0000-0000-7000-8000-000000000099";
 const listId = "019a0000-0000-7000-8000-000000000002";
 const itemEntityId = "019a0000-0000-7000-8000-000000000003";
 const documentId = "019a0000-0000-7000-8000-000000000004";
@@ -65,6 +67,7 @@ const files = [
     fileName: "agreement.pdf",
     parentId: null,
     mimeType: PDF_MIME,
+    sizeBytes: 240_000,
   },
   {
     entityId: "019a0000-0000-7000-8000-000000000008",
@@ -73,11 +76,14 @@ const files = [
     fileName: "statement.docx",
     parentId: null,
     mimeType: DOCX_MIME,
+    sizeBytes: 36_000,
   },
 ];
 const utcTimeZone =
   parseTimeZoneId("UTC") ?? panic("UTC fixture must be a supported time zone");
 const settings = {
+  aiInstructions: "",
+  aiInstructionsMaxLength: 3000,
   declaredFeatureIds: ["legal-lists", "list-verification"],
   deploymentFeatures: { legalLists: true },
   capabilities: {},
@@ -89,6 +95,7 @@ const settings = {
   promptCachingEnabled: true,
   managedAIResidency: "eu",
   memoryExtractionEnabled: false,
+  localRunMaxApprovalMode: "full_auto",
   timeMinimumUnitMinutes: 1,
   timeEditWindowDays: 30,
   timeLockedThroughMonth: null,
@@ -271,6 +278,27 @@ const openForm = async (mounted: Awaited<ReturnType<typeof mountAction>>) => {
     }),
   );
 };
+/** One document is a single choice: type its name and pick the match. */
+const pickDocument = async (
+  mounted: Awaited<ReturnType<typeof mountAction>>,
+  query: string,
+  name: string,
+) => {
+  await typeInPicker(mounted, query);
+  fireEvent.click(await mounted.view.findByRole("option", { name }));
+};
+const typeInPicker = async (
+  mounted: Awaited<ReturnType<typeof mountAction>>,
+  value: string,
+) => {
+  const input = mounted.view.getByRole("combobox", {
+    name: mounted.messages.common.document,
+  });
+  await act(async () => {
+    input.focus();
+    fireEvent.input(input, { target: { value }, inputType: "insertText" });
+  });
+};
 const save = async (mounted: Awaited<ReturnType<typeof mountAction>>) => {
   await act(async () => {
     fireEvent.click(
@@ -318,8 +346,24 @@ for (const { locale, messages } of [
   test(`${locale}: attach a PDF page and quote, refresh sources and the fact, and show the new source`, async () => {
     answer();
     const mounted = await mountAction({ locale, messages, showSources: true });
+    const sourcesKey = legalListSourcesOptions({
+      workspaceId,
+      listId,
+      itemEntityId,
+      viewer: principal,
+    }).queryKey;
+    const otherSourcesKey = legalListSourcesOptions({
+      workspaceId: otherWorkspaceId,
+      listId,
+      itemEntityId,
+      viewer: principal,
+    }).queryKey;
+    const otherItemsKey = legalListKeys.items(otherWorkspaceId, listId);
+    mounted.client.setQueryData(otherSourcesKey, emptySources);
+    mounted.client.setQueryData(otherItemsKey, { pages: [] });
+    expect(mounted.client.getQueryData(sourcesKey)).toEqual(emptySources);
     await openForm(mounted);
-    fireEvent.click(mounted.view.getByText("Signed agreement"));
+    await pickDocument(mounted, "Signed", "Signed agreement");
     fireEvent.change(mounted.view.getByLabelText(messages.lists.sources.page), {
       target: { value: "12" },
     });
@@ -343,9 +387,29 @@ for (const { locale, messages } of [
       await mounted.view.findByText("Payment falls due on delivery."),
     ).toBeTruthy();
     expect(mounted.view.queryByText(messages.common.empty)).toBeNull();
-    expect(mounted.invalidation).toHaveBeenCalledWith({
-      queryKey: legalListKeys.items(workspaceId, listId),
+    expect(mounted.client.getQueryData(sourcesKey)).toMatchObject({
+      items: [
+        {
+          id: sourceId,
+          sourceEntityId: documentId,
+          sourceEntityVersionId: versionId,
+          locator: { type: "pdf-page", pageNumber: 12 },
+          quote: "Payment falls due on delivery.",
+        },
+      ],
     });
+    expect(mounted.client.getQueryState(sourcesKey)?.isInvalidated).toBe(false);
+    expect(mounted.client.getQueryData(otherSourcesKey)).toEqual(emptySources);
+    expect(mounted.client.getQueryState(otherSourcesKey)?.isInvalidated).toBe(
+      false,
+    );
+    expect(mounted.client.getQueryState(otherItemsKey)?.isInvalidated).toBe(
+      false,
+    );
+    expect(
+      mounted.client.getQueryState(workspaceFilesOptions(workspaceId).queryKey)
+        ?.isInvalidated,
+    ).toBe(false);
     expect(
       mounted.client.getQueryState(legalListKeys.items(workspaceId, listId))
         ?.isInvalidated,
@@ -365,7 +429,7 @@ for (const value of ["0", "-1", "1.5", "9007199254740992"]) {
     answer();
     const mounted = await mountAction();
     await openForm(mounted);
-    fireEvent.click(mounted.view.getByText("Signed agreement"));
+    await pickDocument(mounted, "Signed", "Signed agreement");
     fireEvent.change(mounted.view.getByLabelText(english.lists.sources.page), {
       target: { value },
     });
@@ -396,11 +460,8 @@ test("zero matter files keep the document picker and no-results message visible"
   answer();
   const mounted = await mountAction({ matterFiles: [] });
   await openForm(mounted);
-  expect(mounted.view.getByText(english.common.document)).toBeTruthy();
-  expect(
-    mounted.view.getByRole("searchbox", { name: english.common.search }),
-  ).toBeTruthy();
-  expect(mounted.view.getByText(english.common.noResults)).toBeTruthy();
+  await typeInPicker(mounted, "agreement");
+  expect(await mounted.view.findByText(english.common.noResults)).toBeTruthy();
   expect(mounted.view.queryByRole("checkbox")).toBeNull();
 });
 test("a document is required and the quote limit rejects excess input", async () => {
@@ -411,13 +472,19 @@ test("a document is required and the quote limit rejects excess input", async ()
   expect((await mounted.view.findByRole("alert")).textContent).toBe(
     english.lists.sources.documentRequired,
   );
-  fireEvent.click(mounted.view.getByText("Signed agreement"));
+  await pickDocument(mounted, "Signed", "Signed agreement");
   fireEvent.change(mounted.view.getByLabelText(english.lists.sources.quote), {
-    target: { value: "x".repeat(10_001) },
+    target: { value: "x".repeat(LEGAL_LIST_SOURCE_QUOTE_MAX_LENGTH + 1) },
   });
   await save(mounted);
   expect((await mounted.view.findByRole("alert")).textContent).toBe(
-    english.lists.sources.quoteTooLong.replace("{limit}", "10,000"),
+    english.lists.sources.quoteTooLong.replace("{limit}", () =>
+      // English digit grouping, as the form renders it in this locale.
+      String(LEGAL_LIST_SOURCE_QUOTE_MAX_LENGTH).replace(
+        /\B(?=(?:\d{3})+$)/gu,
+        ",",
+      ),
+    ),
   );
   expect(requests).toHaveLength(0);
 });
@@ -425,7 +492,7 @@ test("correcting a page validation error allows saving without reopening the for
   answer();
   const mounted = await mountAction();
   await openForm(mounted);
-  fireEvent.click(mounted.view.getByText("Signed agreement"));
+  await pickDocument(mounted, "Signed", "Signed agreement");
   fireEvent.change(mounted.view.getByLabelText(english.lists.sources.page), {
     target: { value: "0" },
   });
@@ -445,18 +512,14 @@ test("choosing DOCX replaces PDF, clears its page, and accepts a quote at the li
   answer();
   const mounted = await mountAction();
   await openForm(mounted);
-  fireEvent.click(mounted.view.getByText("Signed agreement"));
+  await pickDocument(mounted, "Signed", "Signed agreement");
   fireEvent.change(mounted.view.getByLabelText(english.lists.sources.page), {
     target: { value: "12" },
   });
-  fireEvent.change(
-    mounted.view.getByRole("searchbox", { name: english.common.search }),
-    { target: { value: "capek" } },
-  );
-  fireEvent.click(mounted.view.getByText("Čapek statement"));
+  await pickDocument(mounted, "capek", "Čapek statement");
   expect(mounted.view.queryByLabelText(english.lists.sources.page)).toBeNull();
   fireEvent.change(mounted.view.getByLabelText(english.lists.sources.quote), {
-    target: { value: "x".repeat(10_000) },
+    target: { value: "x".repeat(LEGAL_LIST_SOURCE_QUOTE_MAX_LENGTH) },
   });
   await save(mounted);
   await waitFor(() => expect(mounted.created).toHaveLength(1));
@@ -465,13 +528,13 @@ test("choosing DOCX replaces PDF, clears its page, and accepts a quote at the li
     ?.json();
   expect(body.locator).toEqual({ type: "document" });
   expect(body.sourceEntityId).toBe(files.at(1)?.entityId);
-  expect(body.quote).toHaveLength(10_000);
+  expect(body.quote).toHaveLength(LEGAL_LIST_SOURCE_QUOTE_MAX_LENGTH);
 });
 test("an optional page and quote can both be omitted", async () => {
   answer();
   const mounted = await mountAction();
   await openForm(mounted);
-  fireEvent.click(mounted.view.getByText("Signed agreement"));
+  await pickDocument(mounted, "Signed", "Signed agreement");
   await save(mounted);
   await waitFor(() => expect(mounted.created).toHaveLength(1));
   const body = await requests
@@ -486,7 +549,7 @@ test("a server refusal preserves the draft, reports an error, and leaves sources
   spies.push(toast);
   const mounted = await mountAction();
   await openForm(mounted);
-  fireEvent.click(mounted.view.getByText("Signed agreement"));
+  await pickDocument(mounted, "Signed", "Signed agreement");
   fireEvent.change(mounted.view.getByLabelText(english.lists.sources.quote), {
     target: { value: "Keep this quote" },
   });

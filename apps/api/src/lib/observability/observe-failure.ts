@@ -106,7 +106,7 @@ type AcceptedContext = {
 const acceptFailureContext = (
   ctx: Readonly<Record<string, unknown>> | undefined,
 ): AcceptedContext => {
-  const accepted: Record<string, string> = {};
+  const accepted = new Map<string, string>();
   let rejected = 0;
   for (const [key, value] of Object.entries(ctx ?? {})) {
     if (
@@ -114,12 +114,12 @@ const acceptFailureContext = (
       typeof value === "string" &&
       value.length <= MAX_CONTEXT_VALUE_LENGTH
     ) {
-      accepted[key] = value;
+      accepted.set(key, value);
     } else {
       rejected += 1;
     }
   }
-  return { accepted, rejected };
+  return { accepted: Object.fromEntries(accepted), rejected };
 };
 
 type ResolvedPolicy = OutputPolicy & { readonly source: "grade" | "legacy" };

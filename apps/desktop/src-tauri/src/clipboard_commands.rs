@@ -1,3 +1,4 @@
+use crate::logging::best_effort;
 use serde::{Deserialize, Serialize};
 use std::{sync::PoisonError, time::Instant};
 use tauri::{AppHandle, Emitter, State, WebviewWindow};
@@ -114,7 +115,10 @@ pub fn clipboard_set_capture_status(
     manager.set_capture_status(status)?;
     manager.snapshot(&caller)
   };
-  let _ = window.emit(HISTORY_EVENT, ());
+  best_effort(
+    window.emit(HISTORY_EVENT, ()),
+    "clipboard history change was not announced",
+  );
   Ok(snapshot)
 }
 
@@ -130,7 +134,10 @@ pub fn clipboard_exclude_item_source_app(
     manager.exclude_source_app(&id)?;
     manager.snapshot(&caller)
   };
-  let _ = window.emit(HISTORY_EVENT, ());
+  best_effort(
+    window.emit(HISTORY_EVENT, ()),
+    "clipboard history change was not announced",
+  );
   Ok(snapshot)
 }
 
@@ -146,7 +153,10 @@ pub fn clipboard_remove_source_app_exclusion(
     manager.remove_source_app_exclusion(&identifier)?;
     manager.snapshot(&caller)
   };
-  let _ = window.emit(HISTORY_EVENT, ());
+  best_effort(
+    window.emit(HISTORY_EVENT, ()),
+    "clipboard history change was not announced",
+  );
   Ok(snapshot)
 }
 
@@ -162,7 +172,10 @@ pub fn clipboard_set_retention(
     manager.set_retention(retention)?;
     manager.snapshot(&caller)
   };
-  let _ = window.emit(HISTORY_EVENT, ());
+  best_effort(
+    window.emit(HISTORY_EVENT, ()),
+    "clipboard history change was not announced",
+  );
   Ok(snapshot)
 }
 
@@ -179,7 +192,10 @@ pub fn clipboard_set_screen_capture(
 ) -> Result<ClipboardSnapshot, String> {
   let previous = state.lock().map_err(lock_error)?.screen_capture();
   let rollback = || {
-    let _ = clipboard_window::apply_screen_capture(&app, previous);
+    best_effort(
+      clipboard_window::apply_screen_capture(&app, previous),
+      "screen capture setting was not rolled back",
+    );
   };
   if let Err(error) = clipboard_window::apply_screen_capture(&app, capture) {
     rollback();
@@ -208,7 +224,10 @@ pub fn clipboard_delete_item(
     }
     manager.snapshot(&caller)
   };
-  let _ = window.emit(HISTORY_EVENT, ());
+  best_effort(
+    window.emit(HISTORY_EVENT, ()),
+    "clipboard history change was not announced",
+  );
   Ok(snapshot)
 }
 
@@ -226,7 +245,10 @@ pub fn clipboard_duplicate_item(
     }
     manager.snapshot(&caller)
   };
-  let _ = window.emit(HISTORY_EVENT, ());
+  best_effort(
+    window.emit(HISTORY_EVENT, ()),
+    "clipboard history change was not announced",
+  );
   Ok(snapshot)
 }
 
@@ -241,7 +263,10 @@ pub fn clipboard_clear_history(
     manager.clear()?;
     manager.snapshot(&caller)
   };
-  let _ = window.emit(HISTORY_EVENT, ());
+  best_effort(
+    window.emit(HISTORY_EVENT, ()),
+    "clipboard history change was not announced",
+  );
   Ok(snapshot)
 }
 
@@ -259,7 +284,10 @@ pub fn clipboard_create_group(
     manager.create_group(&name, color, item_id.as_deref())?;
     manager.snapshot(&caller)
   };
-  let _ = window.emit(HISTORY_EVENT, ());
+  best_effort(
+    window.emit(HISTORY_EVENT, ()),
+    "clipboard history change was not announced",
+  );
   Ok(snapshot)
 }
 
@@ -278,7 +306,10 @@ pub fn clipboard_delete_group(
     }
     manager.snapshot(&caller)
   };
-  let _ = window.emit(HISTORY_EVENT, ());
+  best_effort(
+    window.emit(HISTORY_EVENT, ()),
+    "clipboard history change was not announced",
+  );
   Ok(snapshot)
 }
 
@@ -298,7 +329,10 @@ pub fn clipboard_update_group(
     }
     manager.snapshot(&caller)
   };
-  let _ = window.emit(HISTORY_EVENT, ());
+  best_effort(
+    window.emit(HISTORY_EVENT, ()),
+    "clipboard history change was not announced",
+  );
   Ok(snapshot)
 }
 
@@ -317,7 +351,10 @@ pub fn clipboard_move_group(
     }
     manager.snapshot(&caller)
   };
-  let _ = window.emit(HISTORY_EVENT, ());
+  best_effort(
+    window.emit(HISTORY_EVENT, ()),
+    "clipboard history change was not announced",
+  );
   Ok(snapshot)
 }
 
@@ -338,7 +375,10 @@ pub fn clipboard_update_item(
     }
     manager.snapshot(&caller)
   };
-  let _ = window.emit(HISTORY_EVENT, ());
+  best_effort(
+    window.emit(HISTORY_EVENT, ()),
+    "clipboard history change was not announced",
+  );
   Ok(snapshot)
 }
 
@@ -357,7 +397,10 @@ pub fn clipboard_set_item_group(
     }
     manager.snapshot(&caller)
   };
-  let _ = window.emit(HISTORY_EVENT, ());
+  best_effort(
+    window.emit(HISTORY_EVENT, ()),
+    "clipboard history change was not announced",
+  );
   Ok(snapshot)
 }
 
@@ -376,7 +419,10 @@ pub fn clipboard_set_item_name(
     }
     manager.snapshot(&caller)
   };
-  let _ = window.emit(HISTORY_EVENT, ());
+  best_effort(
+    window.emit(HISTORY_EVENT, ()),
+    "clipboard history change was not announced",
+  );
   Ok(snapshot)
 }
 
@@ -471,7 +517,10 @@ pub fn clipboard_save_editor_item(
       return Err(ITEM_NOT_FOUND_ERROR.to_string());
     }
   }
-  let _ = app.emit(HISTORY_EVENT, ());
+  best_effort(
+    app.emit(HISTORY_EVENT, ()),
+    "clipboard history change was not announced",
+  );
   Ok(())
 }
 
@@ -549,7 +598,10 @@ pub fn clipboard_copy_item(
   };
   // The clip is on the system clipboard either way, so the hand-off proceeds
   // and a history failure is reported after it.
-  let _ = window.emit(HISTORY_EVENT, ());
+  best_effort(
+    window.emit(HISTORY_EVENT, ()),
+    "clipboard history change was not announced",
+  );
   clipboard_window::hide(&window)
     .map_err(|message| ClipboardCopyError::Hide { message })?;
   history

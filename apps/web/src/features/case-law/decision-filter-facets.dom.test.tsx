@@ -19,6 +19,8 @@ const { prefetchDecisionFacetsAfterSearch, useDecisionBrowseFacets } =
 const { decisionFacetsOptions, decisionsPageOptions } =
   await import("./queries/decisions");
 const { APIError, shouldRetryAPIRequest } = await import("@/lib/errors/api");
+const { shouldRetrySearch } =
+  await import("@/features/case-law/search-busy.logic");
 
 const facets = {
   country: [],
@@ -373,7 +375,7 @@ test("the shared 429 retry policy recovers the facet GET instead of caching rate
       filters: { country: "CZ", search: "fixture query", excerpt: "short" },
       page: 1,
     }).retry,
-  ).toBe(shouldRetryAPIRequest);
+  ).toBe(shouldRetrySearch);
   for (const request of requests) {
     assertFacetRequest(request, "CZ");
   }
