@@ -1850,14 +1850,22 @@ export const buildCapabilityCatalog = async () => {
   });
 };
 
+/**
+ * What one export produces from its single catalog build: the coverage doc and
+ * embedded API runtime, the npm package shards, or both.
+ */
+type CatalogExportScope = "runtime" | "shards" | "both";
+
 // Repeated calls rescan handler files; already imported modules remain warm.
 // Callers must start a new process when changing an existing handler's source.
 export const exportCapabilityCatalog = async (
   mode: "write" | "check",
-  catalogOnly = false,
+  scope: CatalogExportScope = "runtime",
   catalogDirectory = CATALOG_PATH,
 ): Promise<number> => {
   const checkMode = mode === "check";
+  const shardsInScope = scope !== "runtime";
+  const runtimeInScope = scope !== "shards";
   const { entries, errors, internalWaiverCounts } =
     await buildRepositoryCatalog();
 
@@ -1922,7 +1930,7 @@ export const exportCapabilityCatalog = async (
     internalWaiverCounts,
   });
 
-  const catalogDrift = catalogOnly
+  const catalogDrift = shardsInScope
     ? await syncCapabilityShards({
         directory: catalogDirectory,
         shards: catalogShards,
@@ -1930,16 +1938,21 @@ export const exportCapabilityCatalog = async (
       })
     : [];
   if (!checkMode) {
-    if (!catalogOnly) {
+    if (runtimeInScope) {
       await writeCapabilityRuntime(entries);
       await Bun.write(COVERAGE_DOC_PATH, doc);
     }
+    const written = {
+      runtime: "coverage and runtime",
+      shards: "npm shards",
+      both: "npm shards, coverage and runtime",
+    }[scope];
     process.stderr.write(
-      `export-capability-catalog: wrote ${catalogOnly ? "npm shards" : "coverage and runtime"} for ${entries.length} capabilities\n`,
+      `export-capability-catalog: wrote ${written} for ${entries.length} capabilities\n`,
     );
     return 0;
   }
-  const committedDoc = catalogOnly
+  const committedDoc = !runtimeInScope
     ? doc
     : await Bun.file(COVERAGE_DOC_PATH)
         .text()
@@ -1973,7 +1986,7 @@ if (import.meta.main) {
   process.exit(
     await exportCapabilityCatalog(
       process.argv.includes("--check") ? "check" : "write",
-      process.argv.includes("--catalog-only"),
+      process.argv.includes("--catalog-only") ? "shards" : "runtime",
       catalogDirectory,
     ),
   );

@@ -206,8 +206,9 @@ test.skipIf(!process.env["CI"])(
 import { exportCapabilityCatalog } from ${JSON.stringify(path.join(checkout, EXPORTER))};
 for await (const mode of createInterface({ input: process.stdin })) {
   if (mode !== "write" && mode !== "check") throw new TypeError("Invalid export mode");
-  const shards = await exportCapabilityCatalog(mode, true);
-  process.send(mode === "write" && shards === 0 ? await exportCapabilityCatalog(mode) : shards);
+  // One catalog build per request: a write produces the shards and the
+  // runtime together, a check compares the shards.
+  process.send(await exportCapabilityCatalog(mode, mode === "write" ? "both" : "shards"));
 }
 process.exit(0);`,
           ],
