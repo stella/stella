@@ -536,6 +536,12 @@ const isScopeObject = (object: ts.ObjectLiteralExpression): boolean => {
   if (value.text === "organization") {
     return true;
   }
+  if (value.text === "workspace-set") {
+    return (
+      hasExactProperties(object, ["type", "workspaceIds"]) &&
+      objectProperty(object, "workspaceIds") !== undefined
+    );
+  }
   return (
     value.text === "workspace" &&
     hasExactProperty(object, "workspaceId") &&
