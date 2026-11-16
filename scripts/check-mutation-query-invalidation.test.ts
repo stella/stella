@@ -1545,3 +1545,62 @@ export const useTaskConsumer = () => useTaskStatusAction("workspace");`,
   expect(entry.ownWrites).toEqual([]);
   expect(inspectMutationQueryInvalidation(census, sources)).toEqual([]);
 });
+
+test("workspace-set reader scopes require their exact identity without becoming mutation scopes", () => {
+  const readerSources = (scope: string) => [
+    ...validSources.slice(0, 2),
+    {
+      file: "apps/web/src/batch-reader.ts",
+      text: `
+      import { queryOptions } from "@tanstack/react-query";
+      import { RESOURCE_TYPE } from "@stll/api-contract";
+      import { resourceQueryOptions } from "@/lib/workspace-realtime";
+      export const batchOptions = (workspaceIds: readonly string[]) => resourceQueryOptions(
+        queryOptions({ queryKey: ["batch", workspaceIds], queryFn: async () => [] }),
+        { resources: [RESOURCE_TYPE.WORKSPACE], scope: ${scope} },
+      );
+    `,
+    },
+  ];
+  expect(
+    violations(readerSources('{ type: "workspace-set", workspaceIds }')),
+  ).toEqual([]);
+  expect(
+    violations(
+      readerSources('{ type: "workspace-set", workspaceIds: ["workspace"] }'),
+    ),
+  ).toEqual([]);
+  for (const scope of [
+    '{ type: "workspace-set" }',
+    '{ type: "workspace-set", workspaceId: "workspace" }',
+    '{ type: "workspace-set", workspaceIds, organizationId: "organization" }',
+    '{ type: "unknown", workspaceIds }',
+  ]) {
+    expect(
+      violations(readerSources(scope)).some(
+        ({ disposition }) => disposition === "invalid-declaration",
+      ),
+    ).toBe(true);
+  }
+  const mutationSources = [
+    ...validSources.slice(0, 2),
+    {
+      file: "apps/web/src/batch-mutation.ts",
+      text: `
+      import { useMutation } from "@tanstack/react-query";
+      import { resourceMutation } from "@/lib/workspace-realtime";
+      import { api } from "@/lib/api";
+      export const rename = () => useMutation({ mutationFn: resourceMutation({
+        mutation: "renameEntity", queryClient,
+        scope: { type: "workspace-set", workspaceIds: ["workspace"] },
+        mutationFn: async ({ workspaceId, entityId }) => api.entities({ workspaceId }).rename.patch({ entityId }),
+      }) });
+    `,
+    },
+  ];
+  expect(
+    violations(mutationSources).some(({ reason }) =>
+      reason.includes("scope must name a closed primary scope"),
+    ),
+  ).toBe(true);
+});

@@ -42,6 +42,10 @@ import {
 import type { CourtWeightMap } from "@/api/lib/case-law/court-weights";
 import { readCachedDecisionAst } from "@/api/lib/case-law/decision-ast-cache";
 import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identifiers";
+import {
+  readDecisionReviewsWithin,
+  requireDecisionReviews,
+} from "@/api/lib/case-law/decision-reviews";
 import { readCachedDecisionRowAst } from "@/api/lib/case-law/decision-row-ast-cache";
 import { readDecisionSectionIndex } from "@/api/lib/case-law/decision-section-cache";
 import {
@@ -437,6 +441,18 @@ const decisionPayloadReaders = (
     }),
 });
 
+type ReadOwnReviewsOptions = Omit<
+  Parameters<typeof readDecisionReviewsWithin>[0],
+  "decisionIds"
+> & { decisionId: SafeId<"caseLawDecision"> };
+
+/** The procedural reviews of the decision being read, and of it alone. */
+const readOwnReviews = async ({ decisionId, ...read }: ReadOwnReviewsOptions) =>
+  requireDecisionReviews(
+    await readDecisionReviewsWithin({ ...read, decisionIds: [decisionId] }),
+    decisionId,
+  );
+
 export const readDecisionHandler = definePublicLawSharedQuery(
   PUBLIC_LAW_SHARED_QUERY.caseLawDecisionRead,
   async ({
@@ -478,6 +494,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
       citationsFromPage,
       citationsToPage,
       caseFile,
+      reviews,
     ] = await Promise.all([
       // Bounded and degraded to no badge: a slow registry read must cost the
       // decision its chip, not the reader its decision.
@@ -505,6 +522,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
             countries: subject.countries,
           }),
       listCaseFileDocuments({ tx, decision, cursor: caseFileCursor }),
+      readOwnReviews({ tx, decisionId, countries: subject.countries }),
     ]);
 
     if (caseFile === false) {
@@ -633,6 +651,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
       decisionDate: decision.decisionDate,
       decisionType: decision.decisionType,
       citationCount: decision.citationCount,
+      appealReviews: reviews,
       documentAst,
       extractionWarnings: decision.extractionWarnings,
       sections,

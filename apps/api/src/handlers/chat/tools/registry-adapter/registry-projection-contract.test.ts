@@ -11,6 +11,7 @@ import {
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
+import { noDecisionReviewFound } from "@stll/api-contract/case-law-reviews";
 import {
   countedSearchTotal,
   DECISION_SEARCH_MATCHES,
@@ -281,6 +282,8 @@ const buildContext = (tx: unknown): AuthorizedMcpRequestContext => {
         readCaseLawCoverageHandler: readCaseLawCoverageHandlerMock,
         readGatedDecisionWithDocument: readGatedDecisionWithDocumentMock,
         readGatedDecisionCitations: readGatedDecisionCitationsMock,
+        readDecisionReviews: async ({ decisionIds }) =>
+          new Map(decisionIds.map((id) => [id, noDecisionReviewFound()])),
         readGatedDecisionCitationDigest: readGatedDecisionCitationDigestMock,
         searchLegislationHandler: searchLegislationHandlerMock,
         searchServedSoftLaw: searchServedSoftLawMock,
@@ -1796,6 +1799,7 @@ const CONTRACT_CORPUS = {
       buildArgs: () => ({ decision_ids: [uid(54)] }),
       setup: () => {
         readGatedDecisionWithDocumentMock.mockResolvedValue({
+          appealReviews: noDecisionReviewFound(),
           extractionWarnings: [],
           hasDocument: true,
           documentPending: false,
@@ -1960,6 +1964,7 @@ const CONTRACT_CORPUS = {
       setup: () => {
         readGatedDecisionCitationsMock.mockResolvedValue({
           type: "page",
+          decisionId: toSafeId<"caseLawDecision">(uid(54)),
           page: {
             doctrineAvailability: "available",
             items: [
@@ -2708,6 +2713,7 @@ describe("decision text in chat projection", () => {
   test("decision read preserves its text through the chat projection", async () => {
     const text = "[23] Žaloba se zamítá. Náklady řízení nese žalobce.";
     readGatedDecisionWithDocumentMock.mockResolvedValue({
+      appealReviews: noDecisionReviewFound(),
       extractionWarnings: [],
       hasDocument: true,
       documentPending: false,

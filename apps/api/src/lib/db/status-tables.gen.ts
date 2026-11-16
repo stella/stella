@@ -312,6 +312,7 @@ export const ENUM_COLUMNS = {
   case_law_corpus_tombstones: ["reason"],
   case_law_decision_citation_stats: ["direction", "polarity"],
   case_law_decision_judges: ["role"],
+  case_law_decision_reviews: ["evidence_classification", "outcome", "source"],
   case_law_decisions: ["case_number_type"],
   case_law_polarity_rules: ["kind"],
   case_law_population_counts: ["kind"],

@@ -2227,9 +2227,10 @@ export const buildSendRequestBody = ({
 
   applyChatContext({ body, context });
 
-  // Cloud is the default and travels as an absent field.
+  // A surface with a Run on choice names it, cloud included; the server runs
+  // a send that names none where its thread runs.
   const runTarget = context?.getRunTarget?.();
-  if (runTarget?.kind === "local") {
+  if (runTarget !== undefined) {
     body.runTarget = runTarget;
   }
 
