@@ -6,6 +6,7 @@ import {
 import { atFindokRetention } from "@/api/handlers/case-law/ingestion/retention/sources/at-findok";
 import { atRisRetention } from "@/api/handlers/case-law/ingestion/retention/sources/at-ris";
 import { brTjdftRetention } from "@/api/handlers/case-law/ingestion/retention/sources/br-tjdft";
+import { brTstRetention } from "@/api/handlers/case-law/ingestion/retention/sources/br-tst";
 import { czNsRetention } from "@/api/handlers/case-law/ingestion/retention/sources/cz-ns";
 import { czNssRetention } from "@/api/handlers/case-law/ingestion/retention/sources/cz-nss";
 import { czRegionalRetention } from "@/api/handlers/case-law/ingestion/retention/sources/cz-regional";
@@ -72,6 +73,7 @@ const RETENTION_POLICIES = {
   [ADAPTER_KEYS.PL_UOKIK]: plUokikRetention,
   [ADAPTER_KEYS.UK_FCL]: ukFclRetention,
   [ADAPTER_KEYS.BR_TJDFT]: brTjdftRetention,
+  [ADAPTER_KEYS.BR_TST]: brTstRetention,
   [IMPORT_SOURCE_KEYS.COURTLISTENER]: usCourtlistenerRetention,
 } as const satisfies Record<AdapterKey | ImportSourceKey, RetentionPolicy>;
 

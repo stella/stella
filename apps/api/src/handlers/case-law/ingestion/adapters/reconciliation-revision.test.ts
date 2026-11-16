@@ -80,6 +80,10 @@ const IDENTITY_REVISION_PAYLOADS = {
     { uuid: "00000000-0000-4000-8000-000000000001" },
     { uuid: "00000000-0000-4000-8000-000000000002" },
   ],
+  [ADAPTER_KEYS.BR_TST]: [
+    { id: "00000000000000000000000000000001", dispositivo: "provido" },
+    { id: "00000000000000000000000000000001", dispositivo: "desprovido" },
+  ],
 } as const satisfies Record<AdapterKey, readonly unknown[]>;
 
 describe("every registered adapter keeps publisher identity in its revision signal", () => {

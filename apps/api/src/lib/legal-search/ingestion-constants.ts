@@ -1,3 +1,4 @@
+// parser-output-unchanged: the TST adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: source declarations move to independent entries; values are unchanged.
 export {
   ADAPTER_KEYS,
@@ -7,6 +8,13 @@ export {
   PARSER_VERSIONS,
   SOURCE_FINGERPRINT_VERSIONS,
 } from "./parser-registry.gen";
+
+/**
+ * The TST reconciliation slice of its súmulas, OJs and precedentes
+ * normativos, listed whole by number: some carry no publication date, so no
+ * day slice holds them. It sorts before every day, first in walk order.
+ */
+export const BR_TST_PRECEDENTS_SLICE = "0-precedentes";
 
 /**
  * Capacity bound for a complete `case_law_sources` read, and nothing more.

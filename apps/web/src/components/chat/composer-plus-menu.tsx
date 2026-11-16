@@ -75,7 +75,6 @@ import {
   ComposerEditModeSubmenu,
 } from "@/components/chat/chat-edit-mode-menu";
 import {
-  CHAT_MODEL_MENU_POPUP_CLASS_NAME,
   ChatModelOptionsMenu,
   type ComposerModelsMenuProps,
 } from "@/components/chat/chat-model-options-menu";
@@ -495,7 +494,7 @@ const ComposerModelsSubmenu = ({
         <CpuIcon />
         {t("chat.composerMenu.models")}
       </MenuSubTrigger>
-      <MenuSubPopup className={CHAT_MODEL_MENU_POPUP_CLASS_NAME}>
+      <MenuSubPopup className="w-[min(32rem,calc(100vw-2rem))] max-w-(--available-width)">
         <ChatModelOptionsMenu
           enabled={enabled && open}
           key={open ? "open" : "closed"}

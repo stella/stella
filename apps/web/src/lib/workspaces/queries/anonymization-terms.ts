@@ -13,9 +13,13 @@ export const anonymizationTermsOptions = (workspaceId: string) =>
   queryOptions({
     queryKey: anonymizationTermsKeys.all(workspaceId),
     queryFn: async ({ signal }) => {
-      const response = await api
-        .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        ["anonymization-terms"].get({ fetch: { signal } });
+      const workspaceApi = api.workspaces({
+        workspaceId: toSafeId<"workspace">(workspaceId),
+      });
+
+      const response = await workspaceApi["anonymization-terms"].get({
+        fetch: { signal },
+      });
 
       return unwrapApiResponse(response);
     },

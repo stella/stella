@@ -885,6 +885,16 @@ RETURN COALESCE(
       }
     }
   },
+  "br-tst": {
+    "base": {},
+    "composed": {
+      "documentSupplements": {
+        "items": {
+          "sourceUrl": "url"
+        }
+      }
+    }
+  },
   "us-courtlistener": {
     "base": {},
     "composed": {

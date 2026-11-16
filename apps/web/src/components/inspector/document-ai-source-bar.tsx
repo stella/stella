@@ -155,14 +155,16 @@ export const DocumentAiSourceBar = ({
         return panic("bounding-box generation ran without a justification id");
       }
       const result = await Result.tryPromise(async () => {
-        const response = await api
-          .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-          ["bounding-boxes"].post(
-            {
-              justificationId: toSafeId<"justification">(justificationId),
-            },
-            { fetch: { signal } },
-          );
+        const workspaceApi = api.workspaces({
+          workspaceId: toSafeId<"workspace">(workspaceId),
+        });
+
+        const response = await workspaceApi["bounding-boxes"].post(
+          {
+            justificationId: toSafeId<"justification">(justificationId),
+          },
+          { fetch: { signal } },
+        );
         if (response.error) {
           throw toAPIError(response.error);
         }

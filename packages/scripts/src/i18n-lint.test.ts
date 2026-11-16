@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { LOCALES, parseGlossary } from "./glossary-gen";
@@ -993,3 +995,87 @@ describe("bare error messages", () => {
     ).toEqual([]);
   });
 });
+
+test.each(["nested-last", "literal-last"])(
+  "lint baseline keeps the last flattened value with %s",
+  async (order) => {
+    const directory = await mkdtemp(path.join(tmpdir(), "i18n-lint-records-"));
+    const langs = path.join(directory, "langs");
+    try {
+      await mkdir(langs);
+      await writeFile(
+        path.join(directory, "glossary.json"),
+        JSON.stringify({ verbs: [], legalConcepts: [], ptBR: [] }),
+      );
+      const source =
+        order === "nested-last"
+          ? {
+              "nested.key": "Hello {person}",
+              nested: { key: "Hello {name}" },
+              second: "Goodbye {person}",
+            }
+          : {
+              nested: { key: "Hello {name}" },
+              "nested.key": "Hello {person}",
+              second: "Goodbye {person}",
+            };
+      const target =
+        order === "nested-last"
+          ? {
+              "nested.key": "Hallo {person}",
+              nested: { key: "Hallo {user}" },
+              second: "Tschüss {user}",
+            }
+          : {
+              nested: { key: "Hallo {user}" },
+              "nested.key": "Hallo {person}",
+              second: "Tschüss {user}",
+            };
+      await writeFile(path.join(langs, "en.json"), JSON.stringify(source));
+      for (const locale of ["fr", "de"]) {
+        await writeFile(
+          path.join(langs, `${locale}.json`),
+          JSON.stringify(target),
+        );
+      }
+      const subprocess = Bun.spawn(
+        [
+          process.execPath,
+          path.join(import.meta.dir, "i18n-lint.ts"),
+          langs,
+          "--write-baseline",
+        ],
+        { stdout: "pipe", stderr: "pipe" },
+      );
+      const [exitCode, stdout, stderr] = await Promise.all([
+        subprocess.exited,
+        new Response(subprocess.stdout).text(),
+        new Response(subprocess.stderr).text(),
+      ]);
+      const result = { exitCode, output: stdout + stderr };
+      expect(result.exitCode, result.output).toBe(0);
+      const entry = { source: "Goodbye {person}", target: "Tschüss {user}" };
+      const nested = { source: "Hello {name}", target: "Hallo {user}" };
+      const placeholder =
+        order === "nested-last"
+          ? {
+              "nested.key": { de: nested, fr: nested },
+              second: { de: entry, fr: entry },
+            }
+          : { second: { de: entry, fr: entry } };
+      expect(result.output).toContain(
+        `${order === "nested-last" ? 4 : 2} grandfathered violations.`,
+      );
+      expect(
+        await readFile(
+          path.join(directory, "i18n-lint-baseline.json"),
+          "utf-8",
+        ),
+      ).toBe(
+        `${JSON.stringify({ placeholder, icu: {}, plural: {}, terminology: {} }, null, 2)}\n`,
+      );
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+);

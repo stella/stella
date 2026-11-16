@@ -1,4 +1,5 @@
 // parser-output-unchanged: the br-tjdft adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
+// parser-output-unchanged: the TST adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the ÚOHS adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the EU Publications Office gate paces one request per second; request timing only, parsed output is unchanged.
 // parser-output-unchanged: the SÚIP gate entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
@@ -79,6 +80,15 @@ export const PUBLISHER_GATES = {
     publisher: "TJDFT",
     intervalMs: 1100,
     hosts: ["jurisdf.tjdft.jus.br"],
+  },
+  /**
+   * The TST jurisprudence backend. It states no limit; one request a second
+   * is politeness, and each answer can run to megabytes of full text.
+   */
+  "tst-jus-br": {
+    publisher: "TST",
+    intervalMs: 1000,
+    hosts: ["jurisprudencia-backend2.tst.jus.br"],
   },
   "edpb-eu": {
     publisher: "European Data Protection Board",

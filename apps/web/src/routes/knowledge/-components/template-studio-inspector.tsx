@@ -602,15 +602,13 @@ const pushFillPreview = (
   clauseTexts?: Record<string, string>,
 ) => {
   cancelLookupPreviews();
-  const preview: Record<string, TemplatePreviewValue> = {};
+  // Linked clause slots seed the preview before entered and derived values.
+  const preview = new Map<string, TemplatePreviewValue>(
+    Object.entries(clauseTexts ?? {}),
+  );
   const fieldByPath = new Map<string, LookupPreviewField>(
     optionalReadonlyArray(fields).map((field) => [field.path, field]),
   );
-  // Linked clause slots preview their resolved text, keyed by slot name to
-  // match the folio plugin's clause-range key.
-  if (clauseTexts) {
-    Object.assign(preview, clauseTexts);
-  }
   for (const [key, value] of Object.entries(values)) {
     if (key.startsWith(ARRAY_INDEX_KEY_PREFIX)) {
       continue;
@@ -626,25 +624,27 @@ const pushFillPreview = (
       values,
     );
     if (previewValue !== null) {
-      preview[path] = previewValue;
+      preview.set(path, previewValue);
     }
   }
   // Formula fields are derived (no form input), so they never appear in the
   // submitted values; render them from the field list directly.
   const availableFields = optionalReadonlyArray(fields);
   for (const field of availableFields) {
-    if (field.formula === undefined || preview[field.path] !== undefined) {
+    if (field.formula === undefined || preview.get(field.path) !== undefined) {
       continue;
     }
     const computed = renderDeterministicFieldValue(field, values);
     if (computed !== null) {
-      preview[field.path] = computed;
+      preview.set(field.path, computed);
     }
   }
   const pending = applyCachedLookupRenderings(preview, availableFields);
   useTemplateStudioStore
     .getState()
-    .actions?.setFillPreview(Object.keys(preview).length > 0 ? preview : null);
+    .actions?.setFillPreview(
+      preview.size > 0 ? Object.fromEntries(preview) : null,
+    );
   if (pending.length > 0) {
     queueLookupPreviews(pending, () =>
       pushFillPreview(values, fields, clauseTexts),
@@ -784,13 +784,13 @@ const cancelLookupPreviews = () => {
  *  formatted spans where the format carries markup) and return the requests
  *  that still need the endpoint. */
 const applyCachedLookupRenderings = (
-  preview: Record<string, TemplatePreviewValue>,
+  preview: Map<string, TemplatePreviewValue>,
   fields: readonly LookupPreviewField[],
 ): LookupPreviewRequest[] => {
   const pending: LookupPreviewRequest[] = [];
   for (const field of fields) {
     const lookup = field.lookup;
-    const raw = preview[field.path];
+    const raw = preview.get(field.path);
     // The entered value is always a plain string (the registry number);
     // anything else is a previous substitution and needs no lookup.
     if (lookup === undefined || typeof raw !== "string") {
@@ -817,7 +817,7 @@ const applyCachedLookupRenderings = (
       if (cached === undefined) {
         pending.push(request);
       } else if (cached !== null) {
-        preview[request.previewPath] = lookupPreviewValue(cached);
+        preview.set(request.previewPath, lookupPreviewValue(cached));
       }
     }
   }

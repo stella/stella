@@ -28,6 +28,8 @@ export const ADAPTER_KEYS = {
 
   BR_TJDFT: "br-tjdft",
 
+  BR_TST: "br-tst",
+
   CZ_NS: "cz-ns",
 
   CZ_NSS: "cz-nss",
@@ -96,6 +98,8 @@ export const PARSER_VERSIONS = {
 
   [ADAPTER_KEYS.BR_TJDFT]: 1,
 
+  [ADAPTER_KEYS.BR_TST]: 1,
+
   [ADAPTER_KEYS.CZ_NS]: 32,
 
   [ADAPTER_KEYS.CZ_NSS]: 39,
@@ -160,6 +164,8 @@ export const SOURCE_FINGERPRINT_VERSIONS = {
   [ADAPTER_KEYS.AT_VWGH]: 0,
 
   [ADAPTER_KEYS.BR_TJDFT]: 0,
+
+  [ADAPTER_KEYS.BR_TST]: 0,
 
   [ADAPTER_KEYS.CZ_NS]: 0,
 
@@ -227,6 +233,8 @@ export const PARSER_VERSION_SCOPES = {
   [ADAPTER_KEYS.AT_VWGH]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_VWGH], scope: {"type":"all","reason":"Dependency patch tracking only: @tanstack/ai is reached through the desktop runner wire schema in transaction infrastructure, not parser execution. No parser-owned value changes; the matching no-stored-row-effect declaration requires no replay."} },
 
   [ADAPTER_KEYS.BR_TJDFT]: { version: PARSER_VERSIONS[ADAPTER_KEYS.BR_TJDFT], scope: {"type":"all","reason":"the source's first parser; there are no stored rows to narrow"} },
+
+  [ADAPTER_KEYS.BR_TST]: { version: PARSER_VERSIONS[ADAPTER_KEYS.BR_TST], scope: {"type":"all","reason":"the source's first parser; there are no stored rows to narrow"} },
 
   [ADAPTER_KEYS.CZ_NS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NS], scope: {"type":"all","reason":"Dependency patch tracking only: @tanstack/ai is reached through the desktop runner wire schema in transaction infrastructure, not parser execution. No parser-owned value changes; the matching no-stored-row-effect declaration requires no replay."} },
 

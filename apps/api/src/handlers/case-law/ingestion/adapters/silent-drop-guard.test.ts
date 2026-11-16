@@ -14,6 +14,7 @@ import {
 import { isRecord } from "@/api/lib/type-guards";
 import {
   brTjdftFixture,
+  brTstFixture,
   czNsFixture,
   czNssFixture,
   czRegionalFixture,
@@ -167,6 +168,30 @@ rozhodnutí a dospěl k závěru, že řízení bylo vedeno v souladu se zákone
     driver: "html",
     fixture: brTjdftFixture,
     part: "detail",
+  },
+  // The listing row is JSON whose one parsed markup is the full text. The
+  // record's highlight renderings repeat that text and are deliberately not
+  // read (the inventory excludes them), so the probe record carries the full
+  // text alone, keyed as the fixture's decision is.
+  "br-tst": {
+    driver: "html",
+    fixture: brTstFixture,
+    part: "listing",
+    text: JSON.stringify({
+      id: "1440689e193408199c97a145c130b652",
+      tipo: { codigoTipoJurisprudencia: "ACORDAO", nome: "Acordão" },
+      orgao: { numero: 0, nome: "Tribunal Superior do Trabalho", sigla: "TST" },
+      numFormatado: "RR - 1000-10.2020.5.01.0001",
+      dtaJulgamento: "2024-03-06",
+      inteiroTeorHtml: `<html><head></head><body>
+<!-- Synthetic document fixture; no published case or personal data. -->
+<p class=Identificaaao><span><b>A C Ó R D Ã O</b></span></p>
+<p class=Ementa><span><b>RECURSO DE REVISTA. </b></span><span><i>Conhecimento</i> e provimento.</span></p>
+<p class=Voto><span><b>V O T O</b></span></p>
+<p class=Corpo><span>Conheço do recurso <u>por violação</u> do artigo.</span></p>
+<p class=Date><span>Brasília, 6 de março de 2024.</span></p>
+</body></html>`,
+    }),
   },
 } as const satisfies Record<string, Driver>;
 const drivers = new Map<string, Driver>(Object.entries(DRIVERS));

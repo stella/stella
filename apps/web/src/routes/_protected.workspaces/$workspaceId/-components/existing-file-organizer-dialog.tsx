@@ -555,19 +555,21 @@ export const ExistingFileOrganizerDialog = ({
           trimmedInstructions,
         ],
         queryFn: async ({ signal }) => {
-          const response = await api
-            .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-            ["organize-suggestions"].post(
-              {
-                existingFolders: suggestionRequestFolders,
-                files: suggestionRequestFiles,
-                locale: requestLocale,
-                ...(trimmedInstructions.length > 0
-                  ? { userInstructions: trimmedInstructions }
-                  : {}),
-              },
-              { fetch: { signal } },
-            );
+          const entitiesApi = api.entities({
+            workspaceId: toSafeId<"workspace">(workspaceId),
+          });
+
+          const response = await entitiesApi["organize-suggestions"].post(
+            {
+              existingFolders: suggestionRequestFolders,
+              files: suggestionRequestFiles,
+              locale: requestLocale,
+              ...(trimmedInstructions.length > 0
+                ? { userInstructions: trimmedInstructions }
+                : {}),
+            },
+            { fetch: { signal } },
+          );
 
           return unwrapApiResponse(response);
         },

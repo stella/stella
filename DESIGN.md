@@ -296,6 +296,8 @@ When a screen needs a look the components lack, add it once here and in
 | Long reference that wraps with running text                        | `ButtonTextRun`                                                                        |
 | Current choice in a set                                            | `Button selected`, or a `ToggleGroup` for exclusive options                            |
 | Filter tabs, view modes, density                                   | `ToggleGroup` + `ToggleGroupItem` (a segmented tray)                                   |
+| Full-width inspector action row                                    | `Button size="inspector-row" variant="ghost"`                                          |
+| Quiet caption that opens a menu or popover                         | `MenuTrigger` / `PopoverTrigger` `appearance="caption"`                                |
 | A button that stays pressed                                        | `Toggle`                                                                               |
 | Setting row with a switch                                          | `SwitchField` (`label`, `description`); `Switch size="sm"`                             |
 | Keyboard shortcut                                                  | `Kbd keys={["mod", "K"]}` (platform spelling); `MenuShortcut`, `TooltipPopup shortcut` |
@@ -335,7 +337,7 @@ it, and add it here in the same change that adds it to `packages/ui`.
 - `Button` `focusRing`: `inside`, `outside`
 - `Button`, `ButtonTextRun` `layout`: `wrap`
 - `Button` `shape`: `box`, `round`
-- `Button`, `Toggle`, `ToggleGroup`, `ToggleGroupItem` `size`: `chip`, `default`, `icon`, `icon-2xs`, `icon-lg`, `icon-round`, `icon-sm`, `icon-xl`, `icon-xs`, `inline`, `lg`, `row`, `sm`, `touch`, `xl`, `xs`
+- `Button`, `Toggle`, `ToggleGroup`, `ToggleGroupItem` `size`: `chip`, `default`, `icon`, `icon-2xs`, `icon-lg`, `icon-round`, `icon-sm`, `icon-xl`, `icon-xs`, `inline`, `inspector-row`, `lg`, `row`, `sm`, `touch`, `xl`, `xs`
 - `Button` `variant`: `composer`, `default`, `destructive`, `destructive-ghost`, `destructive-outline`, `ghost`, `link`, `muted`, `muted-destructive`, `outline`, `plain`, `secondary`
 - `ButtonTextRun` `variant`: `link`, `plain`
 - `ColorPicker`, `EntityActionsButton`, `SortableHead`, `TableCell`, `TableHead` `align`: `center`, `end`, `start`
@@ -357,6 +359,7 @@ it, and add it here in the same change that adds it to `packages/ui`.
 - `DropdownMenuCheckboxItem`, `MenuCheckboxItem` `variant`: `default`, `switch`
 - `DropdownMenuItem`, `MenuItem` `variant`: `default`, `destructive`
 - `DropdownMenuRadioItem`, `MenuRadioItem` `indicator`: `check`, `none`
+- `DropdownMenuTrigger`, `MenuTrigger`, `PopoverTrigger` `appearance`: `caption`, `default`
 - `Form` `density`: `compact`, `default`, `snug`
 - `Form` `layout`: `inline`, `stack`
 - `InlineDropIndicator` `position`: `after`, `before`

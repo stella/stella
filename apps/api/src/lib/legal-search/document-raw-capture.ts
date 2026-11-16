@@ -103,6 +103,11 @@ export const DOCUMENT_RAW_CAPTURE = {
     parts: ["detail"],
     objectPrefixes: [],
   },
+  [ADAPTER_KEYS.BR_TST]: {
+    type: "inline",
+    parts: ["listing"],
+    objectPrefixes: [],
+  },
   [ADAPTER_KEYS.PL_KIS]: {
     type: "inline",
     parts: ["detail"],

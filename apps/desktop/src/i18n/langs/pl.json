@@ -624,7 +624,9 @@
       "unavailableRegion": "stella AI nie oferuje jeszcze przetwarzania mowy w regionie Twojej organizacji.",
       "unavailableProvider": "Dostawca AI Twojej organizacji nie oferuje przetwarzania mowy.",
       "unavailable": "Przetwarzanie przez stella AI jest teraz niedostępne.",
-      "model": "Model przetwarzania"
+      "model": "Model przetwarzania",
+      "outsideRegion": "Poza Twoim regionem",
+      "outsideRegionNote": "Ten model przetwarza dźwięk poza regionem Twojej organizacji."
     },
     "language": {
       "title": "Język dyktowania",

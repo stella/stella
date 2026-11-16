@@ -32,10 +32,21 @@ bun add @stll/template-conditions
 
 - Condition evaluation: `evaluateCondition`, `parseCondition`,
   `evaluateNumericExpression`, `serializeCondition`, `resolvePath`.
-- Field values: `renderDeterministicFieldValue`, `renderComposite`,
-  `formatDate`.
+- Field values: `renderDeterministicFieldValue`, `formatDate`.
 - Marker grammar: `scanMarkers`, `classifyMarker`, `markerPattern`,
   `placeholderPattern`, and the directive-kind constants.
+
+## Migrating to 0.7
+
+`evaluateCondition(expression, data, namedConditions?)` now owns its recursion
+state. Calls with two or three arguments retain their behavior, including the
+50-reference limit for named conditions and cycle detection.
+
+The previously exported fourth `_resolved` and fifth `_depth` arguments have
+been removed. Remove those arguments when they only supplied the defaults
+(`new Set()` and `0`). Consumers that deliberately supplied visited names or a
+starting depth must adapt that logic before upgrading, or remain on 0.6.x;
+there is no public replacement for manually controlling the recursion state.
 
 ## License
 

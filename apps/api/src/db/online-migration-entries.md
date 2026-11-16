@@ -52,3 +52,9 @@ only finalized entries and leaves pending ones to be built after the rollout.
 Startup records an incomplete pending step as pending whatever migration is
 newest, and still refuses an incomplete finalized index, cutover or retirement
 outside its deploy window; repairs keep their own startup rule.
+
+After such a rollout, `bun run db:drain-pending-online` (in `apps/api`) builds
+the pending entries one unit per session, in the phase's order, through the
+same health gate as `migrate`. It never waits on the online lock: while a
+migrate run holds it, the drain retries later. `runNextPendingOnlineUnit` is
+the unit step it repeats.

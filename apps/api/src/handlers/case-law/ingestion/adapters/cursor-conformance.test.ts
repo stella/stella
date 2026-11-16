@@ -514,6 +514,11 @@ const ADAPTER_CONFORMANCE = {
     maxSteadyStateCursors: 1,
     maxSteadyStatePositions: 0,
   },
+  [ADAPTER_KEYS.BR_TST]: {
+    disposition: "excluded",
+    reason:
+      "the walk, the window restart, the quiet parked cycle and the rate-limit halt are covered by br-tst.test.ts against a scripted search",
+  },
 } as const satisfies Record<AdapterKey, AdapterCoverage>;
 
 /**

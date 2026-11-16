@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import { visitCursorPages } from "./infinite-query";
+import { iterateCursorPages, visitCursorPages } from "./infinite-query";
 
 describe("cursor page traversal", () => {
   test("visits every page in cursor order before requesting its successor", async () => {
@@ -36,4 +36,67 @@ describe("cursor page traversal", () => {
     expect(await rejectionOf(traversal)).toBe(reason);
     expect(cursors).toEqual([undefined, "next"]);
   });
+});
+
+test("a visitor can stop at its cap without fetching the remaining cursor", async () => {
+  const cursors: (string | undefined)[] = [];
+  const visited: number[] = [];
+  await visitCursorPages({
+    getPage: async (cursor) => {
+      cursors.push(cursor);
+      return {
+        items: [1, 2],
+        nextCursor: cursor === undefined ? "unread" : null,
+      };
+    },
+    visit: (page) => {
+      visited.push(...page.items);
+    },
+    shouldContinue: () => visited.length < 2,
+  });
+  expect(cursors).toEqual([undefined]);
+  expect(visited).toEqual([1, 2]);
+});
+
+test("cursor streams preserve numeric offsets and consumer backpressure", async () => {
+  const cursors: number[] = [];
+  const stream = iterateCursorPages({
+    initialCursor: 0,
+    getPage: async (cursor) => {
+      cursors.push(cursor);
+      return {
+        text: cursor === 0 ? "first" : "second",
+        next: cursor === 0 ? 7 : null,
+      };
+    },
+    getNextCursor: (page) => page.next,
+  });
+  expect(cursors).toEqual([]);
+  expect(await stream.next()).toEqual({
+    value: { text: "first", next: 7 },
+    done: false,
+  });
+  expect(cursors).toEqual([0]);
+  expect(await stream.next()).toEqual({
+    value: { text: "second", next: null },
+    done: false,
+  });
+  expect(cursors).toEqual([0, 7]);
+  await stream.return(undefined);
+  expect(cursors).toEqual([0, 7]);
+});
+
+test("closing a cursor stream leaves its successor unread", async () => {
+  const cursors: number[] = [];
+  const stream = iterateCursorPages({
+    initialCursor: 0,
+    getPage: async (cursor) => {
+      cursors.push(cursor);
+      return { next: cursor + 1 };
+    },
+    getNextCursor: (page) => page.next,
+  });
+  await stream.next();
+  await stream.return(undefined);
+  expect(cursors).toEqual([0]);
 });

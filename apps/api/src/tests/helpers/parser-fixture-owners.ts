@@ -31,6 +31,7 @@ export const PARSER_FIXTURE_OWNERS = {
   "hu-bhgy": ["parseHuBhgyDecision"],
   "uk-fcl": ["parseUkFclDecision"],
   "br-tjdft": ["parseBrTjdftDocument"],
+  "br-tst": ["parseBrTstHtml", "parseBrTstDespacho", "parseBrTstPrecedent"],
   "pl-kis": [
     "parsePlKisDocumentHtml",
     "parsePlKisDocumentPdf",

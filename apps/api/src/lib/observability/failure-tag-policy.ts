@@ -56,6 +56,8 @@ export const TAGGED_FAILURE_REASON = {
   BilingualFormattingError: "tagged_failure",
   BillingDraftValidationError: "tagged_failure",
   BodyByteLimitError: "tagged_failure",
+  BrTstParseError: "tagged_failure",
+  BrTstResponseError: "tagged_failure",
   BufferIntentOwnershipError: "tagged_failure",
   BufferIntentWorkspaceUnavailableError: "tagged_failure",
   CanaryRateLimitError: "tagged_failure",

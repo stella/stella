@@ -141,11 +141,19 @@ export const STATED_DECISION_TYPE_KINDS = {
     "top_up_tax_opinion",
   "postanowienie rozstrzygające spór o właściwość": "order",
 
-  // Brazilian (TJDFT bases). A panel's judgment, and a decision one judge,
-  // or the court's presidency, gives alone.
+  // Brazilian. A panel's judgment (TST and TJDFT); a TST despacho; a
+  // decision one TJDFT judge, or the TJDFT presidency, gives alone. A
+  // súmula, an orientação jurisprudencial and a precedente normativo (TST)
+  // state the court's settled reading of the law for later cases, as a
+  // Hungarian uniformity decision does.
   acórdão: "judgment",
+  despacho: "order",
   "decisão monocrática": "decision",
   "decisão da presidência": "decision",
+  súmula: "uniformity_decision",
+  "orientação jurisprudencial": "uniformity_decision",
+  "orientação jurisprudencial transitória": "uniformity_decision",
+  "precedente normativo": "uniformity_decision",
 
   // EU (CDM resource types) and the United States (CourtListener).
   judgment: "judgment",

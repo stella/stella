@@ -14,6 +14,7 @@ import { atVergAdapter } from "@/api/handlers/case-law/ingestion/adapters/at-ver
 import { atVfghAdapter } from "@/api/handlers/case-law/ingestion/adapters/at-vfgh";
 import { atVwghAdapter } from "@/api/handlers/case-law/ingestion/adapters/at-vwgh";
 import { brTjdftAdapter } from "@/api/handlers/case-law/ingestion/adapters/br-tjdft";
+import { brTstAdapter } from "@/api/handlers/case-law/ingestion/adapters/br-tst";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import { czNssAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
 import { czRegionalAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
@@ -70,6 +71,7 @@ const ADAPTER_REGISTRY = {
   [ADAPTER_KEYS.CZ_US]: czUsAdapter,
   [ADAPTER_KEYS.CZ_REGIONAL]: czRegionalAdapter,
   [ADAPTER_KEYS.CZ_UOHS]: czUohsAdapter,
+  [ADAPTER_KEYS.BR_TST]: brTstAdapter,
   [ADAPTER_KEYS.SK_COURTS]: skCourtsAdapter,
   [ADAPTER_KEYS.SK_US]: skUsAdapter,
   [ADAPTER_KEYS.PL_COURTS]: plCourtsAdapter,

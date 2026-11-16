@@ -36,18 +36,20 @@ const documentTranslationPreparationKeys = {
 const fetchDocumentTranslationPreparation = async (
   { workspaceId, entityId, fieldId }: DocumentTranslationPreparationRef,
   signal: AbortSignal,
-) =>
-  unwrapApiResponse(
-    await api
-      .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-      ["document-translations"].prepare.post(
-        {
-          entityId: toSafeId<"entity">(entityId),
-          fieldId: toSafeId<"field">(fieldId),
-        },
-        { fetch: { signal } },
-      ),
+) => {
+  const workspaceApi = api.workspaces({
+    workspaceId: toSafeId<"workspace">(workspaceId),
+  });
+  return unwrapApiResponse(
+    await workspaceApi["document-translations"].prepare.post(
+      {
+        entityId: toSafeId<"entity">(entityId),
+        fieldId: toSafeId<"field">(fieldId),
+      },
+      { fetch: { signal } },
+    ),
   );
+};
 
 export const documentTranslationPreparationOptions = (
   ref: DocumentTranslationPreparationRef,
@@ -75,15 +77,18 @@ const documentTranslationRunKeys = {
 const fetchDocumentTranslationRun = async (
   { workspaceId, runId }: DocumentTranslationRunRef,
   signal?: AbortSignal,
-) =>
-  unwrapApiResponse(
-    await api
-      .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-      ["document-translations"].runs({
+) => {
+  const workspaceApi = api.workspaces({
+    workspaceId: toSafeId<"workspace">(workspaceId),
+  });
+  return unwrapApiResponse(
+    await workspaceApi["document-translations"]
+      .runs({
         runId: toSafeId<"documentTranslationRun">(runId),
       })
       .get({ ...(signal === undefined ? {} : { fetch: { signal } }) }),
   );
+};
 
 type DocumentTranslationRunDetail = Awaited<
   ReturnType<typeof fetchDocumentTranslationRun>

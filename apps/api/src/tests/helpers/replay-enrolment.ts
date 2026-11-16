@@ -12,6 +12,7 @@ export const OFF_REPLAY_ENROLMENT_FIXTURE = {
   [ADAPTER_KEYS.CZ_US]: { mode: "off" },
   [ADAPTER_KEYS.CZ_UOHS]: { mode: "off" },
   [ADAPTER_KEYS.BR_TJDFT]: { mode: "off" },
+  [ADAPTER_KEYS.BR_TST]: { mode: "off" },
   [ADAPTER_KEYS.SK_COURTS]: { mode: "off" },
   [ADAPTER_KEYS.SK_US]: { mode: "off" },
   [ADAPTER_KEYS.PL_COURTS]: { mode: "off" },

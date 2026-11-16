@@ -7,6 +7,7 @@ import { Menu as MenuPrimitive } from "@base-ui/react/menu";
 import { ChevronRightIcon } from "../icons";
 import { OVERLAY_LAYER_CLASS_NAMES } from "../lib/overlay-layer";
 import { cn } from "../lib/utils";
+import { COMPOSER_PICKER_TRIGGER_CLASS } from "./composer-tokens";
 import { DirectionalIcon } from "./directional-icon";
 import { Kbd } from "./kbd";
 import { renderTooltipTrigger } from "./tooltip-trigger-helper";
@@ -18,13 +19,34 @@ const Menu = MenuPrimitive.Root;
 const MenuPortal = MenuPrimitive.Portal;
 
 function MenuTrigger({
+  appearance = "default",
+  className,
   tooltip,
   ...props
-}: MenuPrimitive.Trigger.Props & { tooltip?: React.ReactNode }) {
+}: MenuPrimitive.Trigger.Props & {
+  appearance?: "default" | "caption";
+  tooltip?: React.ReactNode;
+}) {
+  const appearanceClassName =
+    appearance === "caption"
+      ? cn(
+          COMPOSER_PICKER_TRIGGER_CLASS,
+          "relative pointer-coarse:after:absolute pointer-coarse:after:size-full pointer-coarse:after:min-h-11 pointer-coarse:after:min-w-11",
+        )
+      : undefined;
   return renderTooltipTrigger({
     tooltip,
     trigger: (
-      <MenuPrimitive.Trigger data-slot="menu-trigger" nativeButton {...props} />
+      <MenuPrimitive.Trigger
+        className={
+          typeof className === "function"
+            ? (state) => cn(appearanceClassName, className(state))
+            : cn(appearanceClassName, className)
+        }
+        data-slot="menu-trigger"
+        nativeButton
+        {...props}
+      />
     ),
   });
 }

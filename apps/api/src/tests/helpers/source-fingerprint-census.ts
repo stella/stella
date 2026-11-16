@@ -28,6 +28,7 @@ import {
   atFindokFixture,
   atRisFixture,
   brTjdftFixture,
+  brTstAcordaoFixture,
   czNsFixture,
   czNssFixture,
   czRegionalFixture,
@@ -75,6 +76,7 @@ export const SOURCE_FINGERPRINT_DRIVERS = {
   [ADAPTER_KEYS.CZ_US]: one(czUsFixture),
   [ADAPTER_KEYS.CZ_REGIONAL]: one(czRegionalFixture),
   [ADAPTER_KEYS.CZ_UOHS]: one(czUohsFixture),
+  [ADAPTER_KEYS.BR_TST]: one(brTstAcordaoFixture),
   [ADAPTER_KEYS.SK_COURTS]: one(skCourtsFixture),
   [ADAPTER_KEYS.SK_US]: one(skUsFixture),
   [ADAPTER_KEYS.PL_COURTS]: [
