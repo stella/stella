@@ -11,10 +11,15 @@
  * without states, would make the seeding fact lie without failing anything
  * else. The guard is on by default in every PGlite test database (the build
  * behind `createTestPglite` installs it), so it fails the commit that breaks
- * the rule in whichever suite the writer runs. It is not installed in the
- * Postgres suites' shared database: there a generation one suite registers
- * is active for every other suite running at the same time, so the guard
- * would fail unrelated fixtures rather than writers.
+ * the rule in whichever suite the writer runs.
+ *
+ * A Postgres suite installs it for itself (`guardPostgresSuiteSeeding` in
+ * `corpus-projection-seeding-guard-postgres.ts`),
+ * checking only the generations it registers: in the shared test database a
+ * generation one suite left registered is active for every suite after it,
+ * so a database-wide guard would fail unrelated fixtures rather than writers.
+ * The install is DDL on the canonical tables, so such a suite runs in an
+ * exclusive process on a fresh clone (`scripts/postgres-test-plan.ts`).
  *
  * It checks that states exist, not that they are current: a writer that
  * changes a projection input of a row that already has states is caught by
@@ -76,13 +81,25 @@ const partialScopes = (): string => {
  * writer role that may not read the generation registry or the states is
  * still checked.
  */
-const corpusProjectionSeedingGuardStatements = (): string[] =>
-  corpusProjectionSeedingGuardSql()
+export const corpusProjectionSeedingGuardStatements = (
+  checked: readonly CheckedGeneration[] | null = null,
+): string[] =>
+  corpusProjectionSeedingGuardSql(checked)
     .split(STATEMENT_BREAK)
     .map((statement) => statement.trim().replace(/;$/u, ""))
     .filter((statement) => statement.length > 0);
 
-const corpusProjectionSeedingGuardSql = (): string => {
+export type CheckedGeneration = keyof typeof CORPUS_INDEX_MANIFESTS;
+
+/** All active generations, or only the ones a Postgres suite registered. */
+const checkedScope = (checked: readonly CheckedGeneration[] | null): string =>
+  checked === null
+    ? "true"
+    : `g.generation IN (${checked.map(quoted).join(", ")})`;
+
+const corpusProjectionSeedingGuardSql = (
+  checked: readonly CheckedGeneration[] | null,
+): string => {
   const active = CORPUS_INDEX_ACTIVE_GENERATION_STATUSES.map(quoted).join(", ");
   const dialect = new PgDialect();
   const projectable = {
@@ -134,6 +151,7 @@ const corpusProjectionSeedingGuardSql = (): string => {
         FROM corpus_index_generations g
        WHERE g.family = v_family
          AND g.status IN (${active})
+         AND ${checkedScope(checked)}
          AND ${partialScopes()}
          AND NOT EXISTS (
            SELECT 1 FROM corpus_index_projection_states s
@@ -154,6 +172,7 @@ const corpusProjectionSeedingGuardSql = (): string => {
          AND s.entity_id = NEW.id
        WHERE g.family = v_family
          AND g.status IN (${active})
+         AND ${checkedScope(checked)}
          AND ${partialScopes()};
       -- None of them: allowed only while the row is not projectable; its
       -- settle transaction seeds every active generation at once.
