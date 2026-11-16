@@ -205,7 +205,8 @@ const readTurn = async (turnId: SafeId<"chatTurn">) =>
   (await testDb.query.chatTurns.findFirst({ where: { id: { eq: turnId } } })) ??
   panic("Expected the turn row");
 
-const RUN_ID = "chat-run-adopted";
+/** Run ids are unique per organization, so each seeded turn has its own. */
+const runIdOf = (seeded: SeededTurn) => `chat-run-${seeded.execution.id}`;
 
 /**
  * Release the seeded turn as a stopping task does: its answer so far stored,
@@ -221,7 +222,7 @@ const handOver = async (seeded: SeededTurn, adoptBy: "future" | "past") => {
         adoptBy === "future"
           ? sql`now() + interval '90 seconds'`
           : sql`now() - interval '1 second'`,
-      runId: RUN_ID,
+      runId: runIdOf(seeded),
       status: "handed-over",
     })
     .where(eq(chatTurns.id, seeded.execution.id));
@@ -252,7 +253,7 @@ describe("adopting a handed-over turn", () => {
     expect(winners).toHaveLength(1);
     const [winner] = winners;
     expect(winner?.checkpointMessageId).toBe(seeded.checkpointMessageId);
-    expect(winner?.runId).toBe(RUN_ID);
+    expect(winner?.runId).toBe(runIdOf(seeded));
     const turn = await readTurn(seeded.execution.id);
     expect(turn.status).toBe("running");
     expect(turn.executionId).toBe(winner?.execution.executionId ?? null);
