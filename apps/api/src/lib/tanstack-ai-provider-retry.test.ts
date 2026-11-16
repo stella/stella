@@ -558,7 +558,7 @@ const scriptedAdapter = (turns: ScriptedTurn[]) => {
     async *chatStream({ runId, threadId }) {
       const turn = turns.shift() ?? "answer";
       requests.push(turn);
-      const run = { runId: runId ?? "run-1", threadId: threadId ?? "t-1" };
+      const run = { runId: runId ?? "run-1", threadId };
       yield { type: EventType.RUN_STARTED, ...run } satisfies AdapterYieldChunk;
       if (turn === "rate-limited") {
         yield {
