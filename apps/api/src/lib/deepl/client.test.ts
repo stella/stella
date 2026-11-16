@@ -1,6 +1,10 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, jest, test } from "bun:test";
+
+import { BodyByteLimitError } from "@stll/fetch/body-reader";
+import { createTestState } from "@stll/test-state";
 
 import { DeepLDocumentError, DeepLUpstreamError } from "@/api/lib/deepl/errors";
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 
 import {
@@ -13,6 +17,10 @@ import {
 } from "./client";
 
 const testFetchState = createTestFetch();
+const documentState = createTestState({
+  file: import.meta.path,
+  config: FILE_SIZE_LIMIT_BYTES,
+});
 
 const originalFetch = globalThis.fetch;
 const originalSleep = Bun.sleep;
@@ -286,5 +294,139 @@ describe("DeepL text translation", () => {
     );
     expect(DeepLDocumentError.is(resultError)).toBeTrue();
     expect(called).toBeFalse();
+  });
+});
+
+const installDocumentResult = (response: Response) => {
+  installFetchMock(async (input) => {
+    const url = toFetchUrl(input);
+    if (url.endsWith("/v2/document")) {
+      return jsonResponse({
+        document_id: "document-id",
+        document_key: "document-key",
+      });
+    }
+    if (url.endsWith("/v2/document/document-id")) {
+      return jsonResponse({
+        document_id: "document-id",
+        status: "done",
+        billed_characters: 17,
+      });
+    }
+    expect(url).toEndWith("/v2/document/document-id/result");
+    return response;
+  });
+};
+
+describe("DeepL document result body", () => {
+  beforeEach(() => {
+    Bun.sleep = async () => {};
+    documentState.setConfig("document", 3);
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+    testFetchState.restore();
+    Bun.sleep = originalSleep;
+  });
+
+  test.each([2, 3])(
+    "accepts %s bytes split across transport chunks",
+    async (length) => {
+      installDocumentResult(
+        new Response(
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(new Uint8Array([1]));
+              controller.enqueue(new Uint8Array(length - 1).fill(2));
+              controller.close();
+            },
+          }),
+        ),
+      );
+      expect(await translateDocx()).toEqual({
+        bytes: new Uint8Array([1, ...new Uint8Array(length - 1).fill(2)]),
+        billedCharacters: 17,
+      });
+    },
+  );
+
+  test("refuses cumulative output past the document limit and cancels the unfinished body", async () => {
+    let cancelledWith: unknown;
+    installDocumentResult(
+      new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(new Uint8Array([1, 2]));
+            controller.enqueue(new Uint8Array([3, 4]));
+          },
+          cancel(reason) {
+            cancelledWith = reason;
+          },
+        }),
+      ),
+    );
+    const failure = await translateDocx().catch((error: unknown) => error);
+    expect(DeepLUpstreamError.is(failure)).toBe(true);
+    if (!DeepLUpstreamError.is(failure)) {
+      expect.unreachable("Expected upstream wrapper");
+    }
+    expect(failure.message).toBe("DeepL response body could not be read");
+    expect(BodyByteLimitError.is(failure.cause)).toBe(true);
+    expect(failure.cause).toHaveProperty("limit", 3);
+    expect(cancelledWith).toBe(failure.cause);
+  });
+
+  test("preserves the underlying stream error", async () => {
+    const cause = new Error("result disconnected");
+    installDocumentResult(
+      new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.error(cause);
+          },
+        }),
+      ),
+    );
+    const failure = await translateDocx().catch((error: unknown) => error);
+    expect(DeepLUpstreamError.is(failure)).toBe(true);
+    if (!DeepLUpstreamError.is(failure)) {
+      expect.unreachable("Expected upstream wrapper");
+    }
+    expect(failure.cause).toBe(cause);
+  });
+
+  test("bounds a stalled result body by the existing result duration", async () => {
+    jest.useFakeTimers();
+    const reading = Promise.withResolvers<undefined>();
+    let cancelledWith: unknown;
+    installDocumentResult(
+      new Response(
+        new ReadableStream<Uint8Array>(
+          {
+            pull() {
+              reading.resolve(undefined);
+            },
+            cancel(reason) {
+              cancelledWith = reason;
+            },
+          },
+          { highWaterMark: 0 },
+        ),
+      ),
+    );
+    const outcome = translateDocx().catch((error: unknown) => error);
+    // Zero prefetch makes pull the handshake for the reader's pending read;
+    // the canonical idle timer is installed before reader.read invokes it.
+    await reading.promise;
+    jest.advanceTimersByTime(119_999);
+    expect(cancelledWith).toBeUndefined();
+    jest.advanceTimersByTime(1);
+    const failure = await outcome;
+    expect(DeepLUpstreamError.is(failure)).toBe(true);
+    if (!DeepLUpstreamError.is(failure)) {
+      expect.unreachable("Expected upstream wrapper");
+    }
+    expect(failure.cause).toHaveProperty("name", "TimeoutError");
+    expect(cancelledWith).toBe(failure.cause);
   });
 });

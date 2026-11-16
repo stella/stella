@@ -17,6 +17,7 @@ import { backoffDelay } from "@stll/concurrency/backoff-delay";
  * actionable HTTP responses.
  */
 import { fetchWithTimeout, type FetchWithTimeoutInit } from "@stll/fetch";
+import { readBodyWithIdleDeadline } from "@stll/fetch/body-reader";
 import { Temporal } from "@stll/time";
 
 import {
@@ -27,6 +28,7 @@ import {
   DeepLTimeoutError,
   DeepLUpstreamError,
 } from "@/api/lib/deepl/errors";
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 
 const PRO_BASE_URL = "https://api.deepl.com";
 const FREE_BASE_URL = "https://api-free.deepl.com";
@@ -217,7 +219,10 @@ const parseDeepLJson = <TSchema extends v.GenericSchema>({
 
 const readDeepLBytes = async (response: Response): Promise<Uint8Array> => {
   try {
-    return new Uint8Array(await response.arrayBuffer());
+    return await readBodyWithIdleDeadline(response, {
+      maxBytes: FILE_SIZE_LIMIT_BYTES.document,
+      idleMs: RESULT_TIMEOUT_MS,
+    });
   } catch (error) {
     throw new DeepLUpstreamError({
       message: "DeepL response body could not be read",

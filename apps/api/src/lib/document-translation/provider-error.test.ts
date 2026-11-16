@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
 
+import { BodyByteLimitError } from "@stll/fetch/body-reader";
+
 import { DeepLTimeoutError, DeepLUpstreamError } from "@/api/lib/deepl/errors";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -59,4 +61,30 @@ test("preserves DeepL polling timeouts as availability failures", () => {
   expect(documentTranslationProviderErrorCode(providerError)).toBe(
     "provider_unavailable",
   );
+});
+
+test("preserves the terminal document limit result for DeepL output", () => {
+  const cause = new BodyByteLimitError({
+    message: "Document limit exceeded",
+    limit: 3,
+  });
+  expect(
+    documentTranslationProviderErrorCode(
+      new DeepLUpstreamError({
+        message: "DeepL response body could not be read",
+        cause,
+      }),
+    ),
+  ).toBe("internal");
+  expect(documentTranslationProviderErrorCode(cause)).toBe(
+    "translation_failed",
+  );
+  expect(
+    documentTranslationProviderErrorCode(
+      new DeepLUpstreamError({
+        message: "body failed",
+        cause: new Error("disconnected"),
+      }),
+    ),
+  ).toBe("translation_failed");
 });
