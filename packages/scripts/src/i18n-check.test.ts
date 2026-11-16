@@ -12,6 +12,7 @@ import {
   findSourceChanges,
   findStaleBaselineEntries,
   findUntranslated,
+  flattenMessages,
   isSorted,
   parseSourceLock,
   serializeSourceLock,
@@ -511,3 +512,50 @@ describe("source lock", () => {
     );
   });
 });
+
+test("catalog sync preserves inputs and is a fixed point", () => {
+  const key = fc.stringMatching(/^[a-z]{1,6}$/u);
+  const leaf = fc.string({ maxLength: 12 });
+  const catalog = fc.dictionary(key, fc.oneof(leaf, fc.dictionary(key, leaf)));
+  assertProperty(
+    "catalog sync preserves inputs and is a fixed point",
+    fc.property(catalog, catalog, (source, target) => {
+      const originalSource = structuredClone(source);
+      const originalTarget = structuredClone(target);
+      const result = syncMessages(source, target);
+      expect(source).toEqual(originalSource);
+      expect(target).toEqual(originalTarget);
+      expect([...flattenMessages(result).keys()].toSorted()).toEqual(
+        [...flattenMessages(source).keys()].toSorted(),
+      );
+      expect(syncMessages(source, result)).toEqual(result);
+    }),
+    { numRuns: 100 },
+  );
+});
+
+test.each([
+  {
+    name: "leaf to namespace",
+    source: { caption: "Caption" },
+    target: "Old caption",
+  },
+  {
+    name: "namespace to leaf",
+    source: "Caption",
+    target: { old: "Old caption" },
+  },
+])(
+  "sync keeps replacement messages when changing $name",
+  ({ source, target }) => {
+    const english = { section: { value: source, sibling: "Keep" } };
+    const translated = { section: { value: target, sibling: "Translation" } };
+    const original = structuredClone(translated);
+    const result = syncMessages(english, translated);
+    expect(result).toEqual({
+      section: { value: source, sibling: "Translation" },
+    });
+    expect(translated).toEqual(original);
+    expect(syncMessages(english, result)).toEqual(result);
+  },
+);

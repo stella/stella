@@ -90,7 +90,10 @@ const run = async (
 const toCheckId = (id: string) => toSafeId<"conflictCheck">(id);
 
 /** The HTTP status a refused operation carries, or null when it succeeded. */
-const statusOf = (result: { isErr: () => boolean; error?: unknown }) =>
+const statusOf = (result: {
+  isErr: () => boolean;
+  error?: unknown;
+}): unknown =>
   result.isErr() && result.error instanceof HandlerError
     ? result.error.status
     : null;

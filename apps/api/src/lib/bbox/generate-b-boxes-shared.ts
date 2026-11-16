@@ -15,8 +15,9 @@ import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import type { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import { recordText } from "@/api/lib/fields/record-text";
 import { createFileKey } from "@/api/lib/files/utils";
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
-import { readS3ArrayBuffer } from "@/api/lib/s3";
+import { readS3BytesBounded } from "@/api/lib/s3";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 export type GenerateBBoxesProps = {
@@ -278,8 +279,11 @@ export const prepareJustificationData = async (
       mimeType: PDF_MIME_TYPE,
     });
 
-    const fileBuffer = await readS3ArrayBuffer(fileKey);
-    const pdf = await PDF.load(new Uint8Array(fileBuffer));
+    const fileBytes = await readS3BytesBounded({
+      key: fileKey,
+      maxBytes: FILE_SIZE_LIMIT_BYTES.document,
+    });
+    const pdf = await PDF.load(fileBytes);
 
     return Result.ok({
       prompt: tool.prompt,

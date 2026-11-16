@@ -43,6 +43,7 @@ import {
   decideFeatureAccess,
 } from "@/api/lib/feature-access/policy";
 import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
+import { unqueuedSteers } from "@/api/tests/helpers/steered-queue";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const ORGANIZATION_ID = toSafeId<"organization">(
@@ -170,6 +171,7 @@ const resolve = async ({
     chatThreadId: THREAD_ID,
     workspaceIds: [],
     readApprovalCeiling,
+    steeredQueue: unqueuedSteers,
     runtime: { control, runBell: createLocalRunBell() },
   });
   return { resolved, picks, starts };

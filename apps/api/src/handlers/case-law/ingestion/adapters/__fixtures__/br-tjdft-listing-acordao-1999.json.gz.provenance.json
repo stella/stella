@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "ce499935538176a1464ff1caaa4a950f83e5b738f2150aebd4970045c2842920",
+  "sourceUrl": "https://jurisdf.tjdft.jus.br/api/v1/pesquisa",
+  "capturedAt": "2026-10-25T02:27:18.000Z",
+  "note": "POST body {\"query\":\"\",\"termosAcessorios\":[{\"campo\":\"base\",\"valor\":\"acordaos\"},{\"campo\":\"dataPublicacao\",\"valor\":\"entre 1999-12-22 e 1999-12-22\"}],\"pagina\":3,\"tamanho\":1,\"retornaInteiroTeor\":true,\"retornaTotalizacao\":false}; a 1999 acórdão whose text rendering boxes the case data and the headnote in pipe borders"
+}

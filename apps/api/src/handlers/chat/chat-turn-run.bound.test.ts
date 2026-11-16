@@ -328,6 +328,54 @@ describe("a turn on the member's computer", () => {
     expect(computer.queued.interrupts).toBe(0);
   });
 
+  test("settles the queued messages it steered before it reads the run's end", async () => {
+    const clock = createDeadlineClock();
+    const computer = createComputer();
+    const taken = "0198c0de-0000-7000-8000-000000000011";
+    const refused = "0198c0de-0000-7000-8000-000000000012";
+    computer.handInput(taken, "Also check the annex.");
+    computer.handInput(refused, "And the appendix.");
+    const chunks = await harnessChunks([
+      {
+        type: "session.started",
+        sessionId: harnessSessionId("session-steered"),
+        continuation: { type: "fresh" },
+      },
+      { type: "input.settled", inputId: taken, status: "accepted" },
+      { type: "input.settled", inputId: refused, status: "rejected" },
+      { type: "text.completed", messageId: "answer", text: "Checked both." },
+      { type: "turn.completed", usage: null, boundary: null },
+    ]);
+    const held = computer.holdSteers();
+    const turn = startTurn({
+      clock,
+      runsOn: CHAT_RUN_TARGET_KIND.local,
+      source: localSource(computer),
+    });
+    computer.events(chunks);
+    computer.finish();
+    await held.reached;
+    // The run's end is stored, but the turn does not end before the queue
+    // knows the steered message was taken: the end was read and stored
+    // within these turns of the event loop when it did not wait.
+    for (let flush = 0; flush < 200; flush += 1) {
+      await new Promise((resolve) => {
+        setImmediate(resolve);
+      });
+    }
+    expect(computer.steerSettles).toEqual([[taken, "taken"]]);
+    expect(turn.outcomes).toEqual([]);
+    held.release();
+    const { end, body } = await turn.ended();
+    expect(end).toBe("stored");
+    expect(computer.steerSettles).toEqual([
+      [taken, "taken"],
+      [refused, "refused"],
+    ]);
+    expect(turn.outcomes).toEqual([{ type: "completed" }]);
+    expect(body).toContain("Checked both.");
+  });
+
   test("ends at the member's stop and interrupts the computer once", async () => {
     const clock = createDeadlineClock();
     const computer = createComputer();

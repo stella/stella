@@ -174,6 +174,7 @@ import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { abortControllerFromSignal } from "@/api/lib/tanstack-ai-generate";
 import { isRecord } from "@/api/lib/type-guards";
 import { createDesktopDeviceSigner } from "@/api/tests/helpers/desktop-device-proof";
+import { unqueuedSteers } from "@/api/tests/helpers/steered-queue";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { chatBackgroundTasksScalingScenario } from "@/api/tests/read-scaling/chat-background-tasks";
 import { chatLocalFilesUndoScalingScenario } from "@/api/tests/read-scaling/chat-local-files-undo";
@@ -2818,6 +2819,7 @@ describe("chat turns on a computer", () => {
 
   const contextFor = (chatThreadId: SafeId<"chatThread">): LocalRunContext => ({
     control,
+    steeredQueue: unqueuedSteers,
     runBell,
     owner,
     chatThreadId,

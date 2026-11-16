@@ -1,4 +1,6 @@
+import { panic } from "better-result";
 import { expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 
 import {
   checkBaseline,
@@ -146,7 +148,13 @@ const authPluginSources = ({
   parameter = 'action: "delete" | "leave"',
 }: {
   operation: string;
-  writes?: typeof organizationWrites;
+  writes?: {
+    type: string;
+    plugin?: string;
+    endpoint: string;
+    method: string;
+    route: string;
+  }[];
   imported?: string;
   parameter?: string;
 }) => [
@@ -1014,6 +1022,7 @@ test("bound scope adapters must return their sole resource mutation promise", ()
     "async (input) => await write({ workspaceId, input })",
     "(input) => { return write({ workspaceId, input }); }",
     "async function(input) { return await write({ workspaceId, input }); }",
+    "function save(input) { return write({ workspaceId, input }); }",
   ]) {
     expect({ adapter, findings: violations(fixture(adapter)) }).toEqual({
       adapter,
@@ -1028,6 +1037,8 @@ test("bound scope adapters must return their sole resource mutation promise", ()
     "(input) => { api.entities({ workspaceId }).rename.patch(input); return write({ workspaceId, input }); }",
     "(input) => write({ workspaceId, input: api.entities({ workspaceId }).rename.patch(input) })",
     "(write) => write({ workspaceId, input })",
+    "function write(input) { return write({ workspaceId, input }); }",
+    "async function write(input) { return await write({ workspaceId, input }); }",
     "(input) => write({ workspaceId, input: input[getKey()] })",
     "(input) => write({ workspaceId, input: input.taskId() })",
     "(input = api.entities({ workspaceId }).rename.patch({})) => write({ workspaceId, input })",
@@ -1038,4 +1049,499 @@ test("bound scope adapters must return their sole resource mutation promise", ()
       covered: false,
     });
   }
+});
+
+test("a parameter factory shadows its function expression's tagged return", () => {
+  const sources = [
+    ...validSources.slice(0, 2),
+    {
+      file: "apps/web/src/features.ts",
+      text: `import { useQuery } from "@tanstack/react-query";
+        import { resourceQueryOptions } from "@/lib/workspace-realtime";
+        import { RESOURCE_TYPE } from "@stll/api-contract";
+        export const build = function options(options) {
+          useQuery(options());
+          return resourceQueryOptions(
+            {queryKey: ["owned"], queryFn: async () => []},
+            {resources: [RESOURCE_TYPE.ENTITY], scope: {type: "organization"}},
+          );
+        };`,
+    },
+  ];
+  const census = inspectMutationQuerySources(sources);
+  const reader = census.readers.find(({ callee }) => callee === "useQuery");
+  expect(reader).toBeDefined();
+  if (!reader) {
+    throw new TypeError("Fixture must contain its executing query reader");
+  }
+  expect(violations(sources).map(({ id }) => id)).toContain(
+    `${reader.id}:reader`,
+  );
+});
+
+test("core auth update ownership follows the canonical client and rejects unproven receivers", () => {
+  const sourcesFor = (
+    imported: string,
+    operation: string,
+    parameter = "input: unknown",
+  ) =>
+    authPluginSources({
+      imported,
+      operation,
+      parameter,
+      writes: [
+        {
+          type: "auth-core-endpoint",
+          endpoint: "updateUser",
+          method: "POST",
+          route: "/update-user",
+        },
+      ],
+    }).map((source) => ({
+      ...source,
+      text: source.text
+        .replaceAll("deleteOrganization", "updateUser")
+        .replaceAll("RESOURCE_TYPE.ORGANIZATION", "RESOURCE_TYPE.USER")
+        .replace('ORGANIZATION: "organization"', 'USER: "user"'),
+    }));
+  const sources = sourcesFor(
+    'import { authClient } from "@/lib/auth-client";',
+    "authClient.updateUser(input)",
+  );
+  expect(
+    inspectMutationQuerySources(sources)
+      .mutations.flatMap(({ writes }) => writes)
+      .map(({ route }) => route),
+  ).toEqual(["/update-user"]);
+  expect(violations(sources)).toEqual([]);
+  for (const invalid of [
+    sourcesFor(
+      'import { authClient } from "@/lib/other-client";',
+      "authClient.updateUser(input)",
+    ),
+    sourcesFor(
+      'import { authClient } from "@/lib/auth-client";',
+      "authClient.updateUser(input)",
+      "authClient: unknown",
+    ),
+    sourcesFor(
+      'import { authClient } from "@/lib/auth-client";',
+      "authClient[operation](input)",
+    ),
+    sourcesFor(
+      'import { authClient } from "@/lib/auth-client";',
+      "authClient.deleteUser(input)",
+    ),
+  ]) {
+    assertInvalidCannotBeBaselined(violations(invalid));
+  }
+});
+
+test("secondary organization dependencies require an explicit owner and valid resources", () => {
+  const sourcesFor = (organizationReads: string) =>
+    validSources.map((source) => ({
+      ...source,
+      text:
+        source.file === "apps/web/src/features.ts"
+          ? source.text.replace(
+              '{ resources: [RESOURCE_TYPE.WORKSPACE], scope: { type: "organization" } }',
+              () =>
+                `{ resources: [RESOURCE_TYPE.WORKSPACE], scope: { type: "organization" }, organizationReads: ${organizationReads} }`,
+            )
+          : source.text,
+    }));
+  expect(
+    violations(
+      sourcesFor("{ organizationId, resources: [RESOURCE_TYPE.ENTITY] }"),
+    ),
+  ).toEqual([]);
+  for (const invalid of [
+    "{ resources: [RESOURCE_TYPE.ENTITY] }",
+    "{ organizationId, resources: [] }",
+    "{ organizationId, resources: [RESOURCE_TYPE.MISSING] }",
+    "{ organizationId, resources: [RESOURCE_TYPE.ENTITY], wildcard: true }",
+  ]) {
+    assertInvalidCannotBeBaselined(violations(sourcesFor(invalid)));
+  }
+});
+
+const mutationFactorySources = ({
+  factory = `export const createRename = ({ queryClient }) => resourceMutation({ mutation: "renameEntity", queryClient, mutationFn: () => api.entities({ workspaceId: "123" }).rename.patch({ entityId: "123" }) });`,
+  imported = 'import { resourceMutation } from "@/lib/workspace-realtime";',
+  argument = "{ queryClient: {} }",
+  parameter = "",
+  prelude = "",
+}: {
+  factory?: string;
+  imported?: string;
+  argument?: string;
+  parameter?: string;
+  prelude?: string;
+} = {}) => [
+  ...validSources.slice(0, 2),
+  {
+    file: "apps/web/src/lib/rename.ts",
+    text: `
+${imported}
+import { api } from "@/lib/api";
+const rename = () => api.entities({ workspaceId: "123" }).rename.patch({ entityId: "123" });
+${factory}
+`,
+  },
+  {
+    file: "apps/web/src/features.ts",
+    text: `
+import { useMutation } from "@tanstack/react-query";
+import { createRename } from "@/lib/rename";
+import { api } from "@/lib/api";
+const rename = () => api.entities({ workspaceId: "123" }).rename.patch({ entityId: "123" });
+${prelude}
+export const save = (${parameter}) => useMutation({ mutationFn: createRename(${argument}) });
+`,
+  },
+];
+
+test("a stable imported factory returns the canonical mutation owner directly", () => {
+  const sources = mutationFactorySources();
+  const census = inspectMutationQuerySources(sources);
+  expect(
+    census.mutations.some(
+      ({ kind, writes }) =>
+        kind === "useMutation" &&
+        writes.some(({ route }) => route === "/entities/:workspaceId/rename"),
+    ),
+  ).toBe(true);
+  expect(violations(sources)).toEqual([]);
+});
+
+test.each([
+  {
+    name: "eager body write",
+    factory: `export const createRename = ({ queryClient }) => { rename(); return resourceMutation({ mutation: "renameEntity", queryClient, mutationFn: () => api.entities({ workspaceId: "123" }).rename.patch({ entityId: "123" }) }); };`,
+  },
+  { name: "eager argument write", argument: "{ queryClient: rename() }" },
+  {
+    name: "eager owner options",
+    factory: `export const createRename = ({ queryClient }) => resourceMutation({ mutation: "renameEntity", queryClient: rename(), mutationFn: () => api.entities({ workspaceId: "123" }).rename.patch({ entityId: "123" }) });`,
+  },
+  {
+    name: "parameter default",
+    factory: `export const createRename = ({ queryClient } = rename()) => resourceMutation({ mutation: "renameEntity", queryClient, mutationFn: () => api.entities({ workspaceId: "123" }).rename.patch({ entityId: "123" }) });`,
+  },
+  {
+    name: "binding default",
+    factory: `export const createRename = ({ queryClient = rename() }) => resourceMutation({ mutation: "renameEntity", queryClient, mutationFn: () => api.entities({ workspaceId: "123" }).rename.patch({ entityId: "123" }) });`,
+  },
+  {
+    name: "opaque returned function",
+    factory: `export const createRename = ({ queryClient }) => async () => resourceMutation({ mutation: "renameEntity", queryClient, mutationFn: () => api.entities({ workspaceId: "123" }).rename.patch({ entityId: "123" }) })();`,
+  },
+  {
+    name: "mutable factory",
+    factory: `export let createRename = ({ queryClient }) => resourceMutation({ mutation: "renameEntity", queryClient, mutationFn: () => api.entities({ workspaceId: "123" }).rename.patch({ entityId: "123" }) });`,
+  },
+  {
+    name: "reassigned declaration",
+    factory: `export function createRename({ queryClient }) { return resourceMutation({ mutation: "renameEntity", queryClient, mutationFn: () => api.entities({ workspaceId: "123" }).rename.patch({ entityId: "123" }) }); } createRename = () => rename;`,
+  },
+  { name: "shadowed factory", parameter: "createRename: unknown" },
+  {
+    name: "foreign owner import",
+    imported: 'import { resourceMutation } from "@/lib/foreign-owner";',
+  },
+])("mutation factories cannot conceal $name", ({ name: _name, ...options }) => {
+  const findings = violations(mutationFactorySources(options));
+  if (_name === "shadowed factory") {
+    expect(findings.length).toBeGreaterThan(0);
+  } else {
+    assertInvalidCannotBeBaselined(findings);
+  }
+});
+
+const mixedOwnedMutationSources = ({
+  operation = "await runOwned(input)",
+  factoryParameters = "input",
+  factoryBody = `resourceMutation({ mutation: "renameEntity", queryClient: {}, mutationFn: () => renameRequest(input) })`,
+}: {
+  operation?: string;
+  factoryBody?: string;
+  factoryParameters?: string;
+} = {}) => [
+  ...validSources.slice(0, 2),
+  {
+    file: "apps/web/src/account.ts",
+    text: `
+import { resourceMutation } from "@/lib/workspace-realtime";
+import { api } from "@/lib/api";
+export const renameRequest = (input) => api.entities({ workspaceId: input.workspaceId }).rename.patch(input);
+export const createRename = (${factoryParameters}) => ${factoryBody};
+const execute = ({ run }) => run();
+export const runOwned = async (input) => await execute({ run: async () => await createRename(input)() });
+`,
+  },
+  {
+    file: "apps/web/src/features.ts",
+    text: `
+import { useMutation } from "@tanstack/react-query";
+import { authClient } from "@/lib/auth-client";
+import { api } from "@/lib/api";
+import { resourceMutation } from "@/lib/workspace-realtime";
+import { createRename, renameRequest, runOwned } from "./account";
+export const verify = () => useMutation({ mutationFn: async (input) => {
+  await authClient.$fetch("/sign-in/email-otp", { method: "POST", body: input });
+  ${operation};
+} });
+`,
+  },
+];
+
+test("mixed auth mutations retain legacy status while executed nested owners keep exact contract evidence", () => {
+  const sources = mixedOwnedMutationSources();
+  const census = inspectMutationQuerySources(sources);
+  const entry =
+    census.mutations.find(({ id }) => id.includes("verify:useMutation")) ??
+    panic("Expected the fixture mutation primitive");
+  const findings = inspectMutationQueryInvalidation(census, sources);
+  expect(findings).toEqual([
+    expect.objectContaining({
+      id: `${entry.id}:mutation`,
+      disposition: "legacy",
+    }),
+  ]);
+  expect(entry.writes.map(({ route }) => route).toSorted()).toEqual([
+    "/entities/:workspaceId/rename",
+  ]);
+  expect(entry.ownWrites).toEqual([]);
+  expect(entry.ownUnresolved).toEqual(entry.unresolved);
+  expect(entry.unresolved).toEqual([
+    expect.objectContaining({
+      reason: "unresolved-auth-plugin-endpoint",
+      expression: expect.stringContaining("authClient.$fetch"),
+    }),
+  ]);
+  expect(entry.resourceMutations).toMatchObject([
+    {
+      file: "apps/web/src/account.ts",
+      writes: [{ route: "/entities/:workspaceId/rename" }],
+    },
+  ]);
+});
+
+test("nested resource ownership never covers raw siblings or unproven execution and declarations", () => {
+  const cases = [
+    { operation: "await runOwned(input); await renameRequest(input)" },
+    {
+      factoryParameters: "input = renameRequest({ workspaceId: 'workspace' })",
+    },
+    {
+      factoryParameters:
+        "{ input = renameRequest({ workspaceId: 'workspace' }) }",
+    },
+    { operation: "createRename(input); await renameRequest(input)" },
+    {
+      factoryBody: `{ resourceMutation({ mutation: "renameEntity", queryClient: {}, mutationFn: () => renameRequest(input) }); return () => renameRequest(input); }`,
+    },
+    {
+      factoryBody: `{ resourceMutation({ mutation: "renameEntity", queryClient: {}, mutationFn: () => renameRequest(input) }); }`,
+    },
+    { operation: "await createRename(await renameRequest(input))()" },
+    {
+      operation:
+        "const opaque = externalFactory(input); await opaque(); await renameRequest(input)",
+    },
+    {
+      factoryBody: `resourceMutation({ mutation: "renameEntity", queryClient: {}, mutationFn: () => renameRequest(input) }, renameRequest(input))`,
+    },
+    {
+      factoryBody: `resourceMutation({ mutation: "missingContract", queryClient: {}, mutationFn: () => renameRequest(input) })`,
+    },
+    {
+      factoryBody: `resourceMutation({ mutation: "renameEntity", queryClient: {}, scope: () => ({ type: "organization" }), mutationFn: () => renameRequest(input) })`,
+    },
+    {
+      factoryBody: `resourceMutation({ mutation: "renameEntity", queryClient: {}, mutationFn: () => api.entities({ workspaceId: input.workspaceId }).delete.delete(input) })`,
+    },
+    {
+      factoryBody: `resourceMutation({ mutation: "renameEntity", queryClient: {}, mutationFn: unknownWrite })`,
+    },
+    {
+      operation: `const resourceMutation = (options) => options.mutationFn; await resourceMutation({ mutation: "renameEntity", queryClient: {}, mutationFn: () => renameRequest(input) })()`,
+    },
+  ];
+  for (const fixture of cases) {
+    const findings = violations(mixedOwnedMutationSources(fixture));
+    expect({
+      fixture,
+      invalid: findings.some(
+        ({ disposition }) => disposition === "invalid-declaration",
+      ),
+    }).toEqual({ fixture, invalid: true });
+    assertInvalidCannotBeBaselined(findings);
+  }
+});
+
+test("effective nested owner factories retain their eager argument writes", () => {
+  const sources = mixedOwnedMutationSources().map((source) =>
+    source.file === "apps/web/src/features.ts"
+      ? {
+          ...source,
+          text: `
+import { useMutation } from "@tanstack/react-query";
+import { createRename, renameRequest } from "./account";
+export const verify = () => useMutation({ mutationFn: createRename(renameRequest({ workspaceId: "workspace" })) });
+`,
+        }
+      : source,
+  );
+  const census = inspectMutationQuerySources(sources);
+  const entry = census.mutations.find(({ id }) =>
+    id.includes("verify:useMutation"),
+  );
+  expect(entry?.ownWrites.map(({ route }) => route)).toEqual([
+    "/entities/:workspaceId/rename",
+  ]);
+  assertInvalidCannotBeBaselined(
+    inspectMutationQueryInvalidation(census, sources),
+  );
+});
+
+test("the post-sign-in timezone closure retains its actual user owner and refusal boundary", () => {
+  const sources = [
+    ...validSources.slice(0, 2).map((source) => ({
+      ...source,
+      text: source.file.endsWith("resource-ref.ts")
+        ? source.text.replace(
+            'ENTITY: "entity"',
+            'ENTITY: "entity", USER: "user"',
+          )
+        : source.text
+            .replace("renameEntity:", "updateUser:")
+            .replace(
+              'writes: [{ method: "PATCH", route: "/entities/:workspaceId/rename" }]',
+              'writes: [{ type: "auth-core-endpoint", endpoint: "updateUser", method: "POST", route: "/update-user" }]',
+            )
+            .replace(
+              "resources: [RESOURCE_TYPE.ENTITY]",
+              "resources: [RESOURCE_TYPE.USER]",
+            ),
+    })),
+    ...["lib/account/update-user.ts", "lib/errors/query-result.ts"].map(
+      (relative) => ({
+        file: `apps/web/src/${relative}`,
+        text: readFileSync(
+          new URL(`../apps/web/src/${relative}`, import.meta.url),
+          "utf-8",
+        ),
+      }),
+    ),
+    {
+      file: "apps/web/src/features.ts",
+      text: `
+import { useMutation } from "@tanstack/react-query";
+import { Result } from "better-result";
+import { authClient } from "@/lib/auth-client";
+import { updateUserResource } from "@/lib/account/update-user";
+export const verify = () => useMutation({ mutationFn: async (input) => {
+  await authClient.$fetch("/sign-in/email-otp", { method: "POST", body: input });
+  authClient.getSession().then(async ({ data: freshSession }) => {
+    if (freshSession?.user.timezoneId !== "UTC") return;
+    const updated = await updateUserResource({
+      queryClient: {}, input: { timezoneId: "Europe/Prague" },
+      owner: { userId: freshSession.user.id, organizationId: freshSession.session.activeOrganizationId ?? null },
+    });
+    if (Result.isError(updated)) throw updated.error;
+  }).catch(reportError);
+} });`,
+    },
+  ];
+  const census = inspectMutationQuerySources(sources);
+  const entry =
+    census.mutations.find(({ id }) => id.includes("verify:useMutation")) ??
+    panic("Expected the fixture mutation primitive");
+  expect(inspectMutationQueryInvalidation(census, sources)).toEqual([
+    expect.objectContaining({
+      id: `${entry.id}:mutation`,
+      disposition: "legacy",
+    }),
+  ]);
+  expect(entry.writes.map(({ route }) => route)).toEqual(["/update-user"]);
+  expect(entry.ownWrites).toEqual([]);
+  expect(entry.ownUnresolved).toEqual(entry.unresolved);
+  expect(entry.unresolved.length).toBeGreaterThan(0);
+  expect(entry.resourceMutations).toMatchObject([
+    {
+      file: "apps/web/src/lib/account/update-user.ts",
+      writes: [{ route: "/update-user" }],
+      unresolved: [],
+    },
+  ]);
+});
+
+test("unused nested owner declarations give raw sibling writes no execution credit", () => {
+  const sources = mixedOwnedMutationSources({
+    operation:
+      "const unused = () => createRename(input)(); await renameRequest(input)",
+  });
+  const census = inspectMutationQuerySources(sources);
+  const entry = census.mutations.find(({ id }) =>
+    id.includes("verify:useMutation"),
+  );
+  expect(entry?.resourceMutations ?? []).toEqual([]);
+  expect(entry?.ownWrites).toEqual(entry?.writes);
+  assertInvalidCannotBeBaselined(
+    inspectMutationQueryInvalidation(census, sources),
+  );
+});
+
+test("calling a factory without invoking its returned callback gives no nested execution credit", () => {
+  const sources = mixedOwnedMutationSources({
+    factoryBody: `async () => resourceMutation({ mutation: "renameEntity", queryClient: {}, mutationFn: () => renameRequest(input) })()`,
+    operation: "createRename(input); await renameRequest(input)",
+  });
+  const census = inspectMutationQuerySources(sources);
+  const entry = census.mutations.find(({ id }) =>
+    id.includes("verify:useMutation"),
+  );
+  expect(entry?.resourceMutations ?? []).toEqual([]);
+  expect(entry?.ownWrites).toEqual(entry?.writes);
+  assertInvalidCannotBeBaselined(
+    inspectMutationQueryInvalidation(census, sources),
+  );
+});
+
+test("task action closures preserve their eager registered mutation boundary", () => {
+  const sources = [
+    ...validSources.slice(0, 2).map((source) => ({
+      ...source,
+      text: source.text
+        .replace("renameEntity:", "updateTask:")
+        .replace("/entities/:workspaceId/rename", "/tasks/:workspaceId"),
+    })),
+    {
+      file: "apps/web/src/components/workspaces/tasks/task-status-menu.tsx",
+      text: readFileSync(
+        new URL(
+          "../apps/web/src/components/workspaces/tasks/task-status-menu.tsx",
+          import.meta.url,
+        ),
+        "utf-8",
+      ),
+    },
+    {
+      file: "apps/web/src/features.ts",
+      text: `import { useTaskStatusAction } from "@/components/workspaces/tasks/task-status-menu";
+export const useTaskConsumer = () => useTaskStatusAction("workspace");`,
+    },
+  ];
+  const census = inspectMutationQuerySources(sources);
+  const entry =
+    census.mutations.find(({ id }) =>
+      id.includes("useTaskConsumer:useTaskStatusAction"),
+    ) ?? panic("Expected the task action caller wrapper");
+  expect(entry.writes.map(({ route }) => route)).toEqual([
+    "/tasks/:workspaceId",
+  ]);
+  expect(entry.wrapperOf.length).toBeGreaterThan(0);
+  expect(entry.ownWrites).toEqual([]);
+  expect(inspectMutationQueryInvalidation(census, sources)).toEqual([]);
 });

@@ -1,8 +1,9 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { and, asc, countDistinct, eq, inArray, sql } from "drizzle-orm";
 import fc from "fast-check";
 
+import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { assertProperty } from "@stll/property-testing";
 import { createTestClock } from "@stll/test-kit";
 
@@ -33,6 +34,10 @@ import {
   readChatQueueOnTx,
   replaceQueuedChatMessageOnTx,
 } from "@/api/handlers/chat/queue/chat-queue-store";
+import {
+  createSteeredQueue,
+  markSteeredQueuedMessageOnTx,
+} from "@/api/handlers/chat/queue/steered-message";
 import type { ChatTurnOutcome } from "@/api/handlers/chat/types";
 import { deleteChatFilesOnTx } from "@/api/handlers/chat/upload-files";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -101,6 +106,15 @@ type Model = {
 const sendOf = (id: SafeId<"chatMessage">, text: string): QueuedChatSend => ({
   sendMode: "anonymized",
   message: { id, role: "user", parts: [{ type: "text", content: text }] },
+});
+
+/** A message queued to be sent raw: the only kind a steer hands a turn. */
+const rawSendOf = (
+  id: SafeId<"chatMessage">,
+  text: string,
+): QueuedChatSend => ({
+  ...sendOf(id, text),
+  sendMode: CHAT_SEND_MODE.rawOverride,
 });
 
 /** The model's answer to a member's new message on a thread no turn runs. */
@@ -850,6 +864,194 @@ const suite = (
       expect(await takeAndAccept({ id, owner, revision: 0, threadId })).toBe(
         "taken",
       );
+    });
+
+    test("a steered message the turn took is not sent at the turn's end; a refused one is", async () => {
+      const owner = await seedOwner();
+      const threadId = await seedThread(owner);
+      const taken = createSafeId<"chatMessage">();
+      const refused = createSafeId<"chatMessage">();
+      const editedSince = createSafeId<"chatMessage">();
+      await withLock(threadId, owner, async (tx) => {
+        for (const id of [taken, refused, editedSince]) {
+          await enqueueChatMessageOnTx({
+            id,
+            send: rawSendOf(id, "steer me"),
+            threadId,
+            tx,
+            uploadedFileIds: [],
+          });
+        }
+        await acceptTurnOnTx({
+          messageId: createSafeId<"chatMessage">(),
+          owner,
+          threadId,
+          tx,
+        });
+      });
+      await setTurnStatus({ owner, status: "running", threadId });
+      // The steer route marks each at the revision the member read; a
+      // revision since edited is no longer the message the member saw.
+      expect(
+        await withLock(
+          threadId,
+          owner,
+          async (tx) =>
+            await markSteeredQueuedMessageOnTx({
+              id: taken,
+              revision: 1,
+              threadId,
+              tx,
+            }),
+        ),
+      ).toBe("changed");
+      for (const id of [taken, refused, editedSince]) {
+        expect(
+          await withLock(
+            threadId,
+            owner,
+            async (tx) =>
+              await markSteeredQueuedMessageOnTx({
+                id,
+                revision: 0,
+                threadId,
+                tx,
+              }),
+          ),
+        ).toBe("marked");
+      }
+      await withLock(threadId, owner, async (tx) => {
+        await replaceQueuedChatMessageOnTx({
+          expectedRevision: 0,
+          id: editedSince,
+          send: rawSendOf(editedSince, "edited after the steer"),
+          threadId,
+          tx,
+        });
+      });
+      // The run holds the first revision's steer under this id: the edited
+      // revision cannot be steered under it too, or the first one's report
+      // would remove the revision the run never had.
+      expect(
+        await withLock(
+          threadId,
+          owner,
+          async (tx) =>
+            await markSteeredQueuedMessageOnTx({
+              id: editedSince,
+              revision: 1,
+              threadId,
+              tx,
+            }),
+        ),
+      ).toBe("changed");
+      const steeredQueue = createSteeredQueue({
+        organizationId: owner.organizationId,
+        recordAuditEvent: async () => {},
+        safeDb: async (run) => Result.ok(await database.transaction(run)),
+        threadId,
+        userId: owner.userId,
+      });
+      // What the turn's producer does with the run's reports, before the
+      // run's end is read.
+      expect((await steeredQueue.settle(taken, "taken")).isOk()).toBe(true);
+      expect((await steeredQueue.settle(refused, "refused")).isOk()).toBe(true);
+      expect((await steeredQueue.settle(editedSince, "taken")).isOk()).toBe(
+        true,
+      );
+      const queued = await database
+        .select({
+          id: chatQueuedMessages.id,
+          position: chatQueuedMessages.position,
+          revision: chatQueuedMessages.revision,
+          steeredRevision: chatQueuedMessages.steeredRevision,
+        })
+        .from(chatQueuedMessages)
+        .where(eq(chatQueuedMessages.threadId, threadId))
+        .orderBy(asc(chatQueuedMessages.position));
+      expect(queued).toEqual([
+        { id: refused, position: 1, revision: 0, steeredRevision: null },
+        { id: editedSince, position: 2, revision: 1, steeredRevision: null },
+      ]);
+      await setTurnStatus({ owner, status: "completed", threadId });
+      // The turn's end: the taken message is gone, the refused one goes
+      // first, the one edited since after it.
+      expect(
+        await takeAndAccept({ id: taken, owner, revision: 0, threadId }),
+      ).toBe("not-due");
+      expect(
+        await takeAndAccept({ id: refused, owner, revision: 0, threadId }),
+      ).toBe("taken");
+      expect(
+        await database
+          .select({ id: chatMessages.id })
+          .from(chatMessages)
+          .where(eq(chatMessages.id, taken)),
+      ).toEqual([]);
+    });
+
+    test("a steer is refused a message queued anonymized, or switched to it since", async () => {
+      const owner = await seedOwner();
+      const threadId = await seedThread(owner);
+      const anonymized = createSafeId<"chatMessage">();
+      const switched = createSafeId<"chatMessage">();
+      await withLock(threadId, owner, async (tx) => {
+        await enqueueChatMessageOnTx({
+          id: anonymized,
+          send: sendOf(anonymized, "keep me anonymized"),
+          threadId,
+          tx,
+          uploadedFileIds: [],
+        });
+        await enqueueChatMessageOnTx({
+          id: switched,
+          send: rawSendOf(switched, "switched on another device"),
+          threadId,
+          tx,
+          uploadedFileIds: [],
+        });
+        await acceptTurnOnTx({
+          messageId: createSafeId<"chatMessage">(),
+          owner,
+          threadId,
+          tx,
+        });
+        // Another device switches the raw message to anonymized.
+        await replaceQueuedChatMessageOnTx({
+          expectedRevision: 0,
+          id: switched,
+          send: sendOf(switched, "switched on another device"),
+          threadId,
+          tx,
+        });
+      });
+      await setTurnStatus({ owner, status: "running", threadId });
+      const mark = async (id: SafeId<"chatMessage">, revision: number) =>
+        await withLock(
+          threadId,
+          owner,
+          async (tx) =>
+            await markSteeredQueuedMessageOnTx({ id, revision, threadId, tx }),
+        );
+      // The revision the first device read is gone; the one it became, and
+      // a message queued anonymized from the start, never reach the turn raw.
+      expect(await mark(switched, 0)).toBe("changed");
+      expect(await mark(switched, 1)).toBe("not-raw");
+      expect(await mark(anonymized, 0)).toBe("not-raw");
+      expect(
+        await database
+          .select({
+            id: chatQueuedMessages.id,
+            revision: chatQueuedMessages.revision,
+            steeredRevision: chatQueuedMessages.steeredRevision,
+          })
+          .from(chatQueuedMessages)
+          .where(eq(chatQueuedMessages.threadId, threadId))
+          .orderBy(asc(chatQueuedMessages.position)),
+      ).toEqual([
+        { id: anonymized, revision: 0, steeredRevision: null },
+        { id: switched, revision: 1, steeredRevision: null },
+      ]);
     });
 
     test("a refusal the sender met outside the lock holds only a head still due", async () => {

@@ -6,6 +6,7 @@ export { default as constraints_case_law_identifier_retry_constraints } from "./
 export { default as constraints_case_law_parsed_source_constraint } from "./online-migration-entries/constraints-case-law-parsed-source-constraint";
 export { default as constraints_chat_content_v3_constraints } from "./online-migration-entries/constraints-chat-content-v3-constraints";
 export { default as constraints_chat_turns_handed_over_constraints } from "./online-migration-entries/constraints-chat-turns-handed-over-constraints";
+export { default as constraints_citation_polarity_evidence_constraints } from "./online-migration-entries/constraints-citation-polarity-evidence-constraints";
 export { default as constraints_client_invoice_constraints } from "./online-migration-entries/constraints-client-invoice-constraints";
 export { default as constraints_contact_vat_id_constraints } from "./online-migration-entries/constraints-contact-vat-id-constraints";
 export { default as constraints_corpus_projection_cleanup_stall_constraints } from "./online-migration-entries/constraints-corpus-projection-cleanup-stall-constraints";
@@ -163,6 +164,7 @@ export { default as repairs_chat_content_v3_repair } from "./online-migration-en
 export { default as repairs_chat_run_text_boundaries } from "./online-migration-entries/repairs-chat-run-text-boundaries";
 export { default as repairs_chat_turn_ordinal_backfill } from "./online-migration-entries/repairs-chat-turn-ordinal-backfill";
 export { default as repairs_chat_turns_handed_over_constraint_validations } from "./online-migration-entries/repairs-chat-turns-handed-over-constraint-validations";
+export { default as repairs_citation_polarity_evidence } from "./online-migration-entries/repairs-citation-polarity-evidence";
 export { default as repairs_client_invoice_backfill } from "./online-migration-entries/repairs-client-invoice-backfill";
 export { default as repairs_client_invoice_constraint_validations } from "./online-migration-entries/repairs-client-invoice-constraint-validations";
 export { default as repairs_client_invoice_tenant_key } from "./online-migration-entries/repairs-client-invoice-tenant-key";

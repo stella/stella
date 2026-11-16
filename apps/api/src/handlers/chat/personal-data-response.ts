@@ -287,6 +287,9 @@ const UNEXPORTED_QUEUED_CHAT_MESSAGE_COLUMNS = [
   // Ids of the chat files the enqueue stored, kept so removing the message
   // deletes them; the files are exported with the account's chat files.
   "uploadedFileIds",
+  // Which revision a running turn was handed as a steer: bookkeeping until
+  // the run reports on it.
+  "steeredRevision",
 ] as const satisfies readonly (keyof QueuedChatMessageExportRow)[];
 
 type MissingExportedQueuedChatMessageColumn = UnprojectedColumns<

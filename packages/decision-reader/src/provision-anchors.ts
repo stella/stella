@@ -281,7 +281,7 @@ export const locateProvisionAnchors = <T>({
       hits.push(span);
     }
   }
-  const anchorsByPieceId: Record<string, ProvisionAnchorSpan<T>[]> = {};
+  const anchorsByPieceId = new Map<string, ProvisionAnchorSpan<T>[]>();
   for (const [pieceId, spans] of hitsByPiece) {
     const kept = dropOverlappingSpans(spans);
     const keptSources = new Set(kept.map(({ source }) => source));
@@ -290,7 +290,7 @@ export const locateProvisionAnchors = <T>({
         failures.push({ id: source.id, reason: "span-overlap" });
       }
     }
-    anchorsByPieceId[pieceId] = kept;
+    anchorsByPieceId.set(pieceId, kept);
   }
-  return { anchorsByPieceId, failures };
+  return { anchorsByPieceId: Object.fromEntries(anchorsByPieceId), failures };
 };
