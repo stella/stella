@@ -14,7 +14,7 @@ const originalFetch = globalThis.fetch;
 globalThis.fetch = Object.assign(async () => Response.json(null), {
   preconnect: () => undefined,
 });
-const React = await import("react");
+const { Profiler } = await import("react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { act, cleanup, render } = await import("@testing-library/react");
@@ -74,43 +74,33 @@ test("the header timer does not re-render while no timer runs", async () => {
   let commits = 0;
   await withFakeTimers(async (timers) => {
     render(
-      React.createElement(
-        QueryClientProvider,
-        { client: queryClient },
-        React.createElement(
-          IntlProvider,
-          { locale: "en", messages, timeZone: "UTC" },
-          React.createElement(
-            FormattingProvider,
-            { locale: "en-GB", timeZone: "UTC" },
-            React.createElement(
-              AuthenticatedUserProvider,
-              {
-                user: {
-                  activeOrganizationId: "org-a",
-                  email: "member@example.test",
-                  id: "member",
-                  image: null,
-                  name: "Member",
-                  preferredName: null,
-                  timezoneId: "UTC",
-                  wordEditShortcut: null,
-                },
-              },
-              React.createElement(
-                React.Profiler,
-                {
-                  id: "global-timer",
-                  onRender: () => {
-                    commits += 1;
-                  },
-                },
-                React.createElement(GlobalTimerContent),
-              ),
-            ),
-          ),
-        ),
-      ),
+      <QueryClientProvider client={queryClient}>
+        <IntlProvider locale="en" messages={messages} timeZone="UTC">
+          <FormattingProvider locale="en-GB" timeZone="UTC">
+            <AuthenticatedUserProvider
+              user={{
+                activeOrganizationId: "org-a",
+                email: "member@example.test",
+                id: "member",
+                image: null,
+                name: "Member",
+                preferredName: null,
+                timezoneId: "UTC",
+                wordEditShortcut: null,
+              }}
+            >
+              <Profiler
+                id="global-timer"
+                onRender={() => {
+                  commits += 1;
+                }}
+              >
+                <GlobalTimerContent />
+              </Profiler>
+            </AuthenticatedUserProvider>
+          </FormattingProvider>
+        </IntlProvider>
+      </QueryClientProvider>,
     );
     // Let the timers and navigation queries settle without moving the clock.
     for (let round = 0; round < 10; round += 1) {

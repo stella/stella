@@ -57,9 +57,9 @@ const TimerElapsed = ({
   timer: TimeTimer;
 }) => {
   const format = useFormatter();
-  const now = useNow({
-    updateInterval: timer.state === "running" ? 1000 : undefined,
-  }).getTime();
+  const now = useNow(
+    timer.state === "running" ? { updateInterval: 1000 } : {},
+  ).getTime();
   return (
     <bdi className={className}>
       {formatTimerSeconds({
