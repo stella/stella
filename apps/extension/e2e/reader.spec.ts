@@ -108,7 +108,8 @@ const countLayoutReads = async (page: Page) => {
         configurable: true,
         value(this: Element) {
           counts.calls += 1;
-          return Reflect.apply(original, this, []);
+          const result: unknown = Reflect.apply(original, this, []);
+          return result;
         },
       });
     }
