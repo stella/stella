@@ -43,6 +43,19 @@ test("announces the outcome as one status region headed by its title", () => {
   ).not.toBeNull();
 });
 
+test("moves focus to the outcome heading once shown, so it is read out", () => {
+  const before = document.createElement("button");
+  document.body.append(before);
+  before.focus();
+  const view = render(
+    <OutcomeScreen title="Invitation declined" tone="success" />,
+  );
+  const heading = view.getByRole("heading", { name: "Invitation declined" });
+  expect(document.activeElement).toBe(heading);
+  expect(heading.getAttribute("tabindex")).toBe("-1");
+  before.remove();
+});
+
 test("a counterpart joins stella's tile through the connector; without one the badge sits on the tile", () => {
   const joined = render(
     <OutcomeScreen

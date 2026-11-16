@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 import { useLatest } from "../hooks/use-latest";
 import { OutcomeScreenView } from "./outcome-screen-view";
@@ -24,7 +24,7 @@ export type OutcomeCloseTab = {
   onStillOpen: () => void;
 };
 
-type OutcomeScreenProps = OutcomeScreenViewProps & {
+type OutcomeScreenProps = Omit<OutcomeScreenViewProps, "headingRef"> & {
   /** Close the tab once shown; see `OutcomeCloseTab`. */
   closeTab?: OutcomeCloseTab;
 };
@@ -48,7 +48,23 @@ const useCloseTab = (closeTab: OutcomeCloseTab | undefined) => {
   }, [latest, wantsClose]);
 };
 
+/**
+ * Moves focus to the outcome's heading once shown. A flow often swaps its form
+ * for the outcome in one render; the status region then appears together with
+ * its message, which assistive technology may not announce, and the control
+ * that was pressed is gone. Focus on the heading reads it out and keeps the
+ * reader on the page.
+ */
+const useFocusedHeading = () => {
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    heading.current?.focus({ preventScroll: true });
+  }, []);
+  return heading;
+};
+
 export const OutcomeScreen = ({ closeTab, ...view }: OutcomeScreenProps) => {
   useCloseTab(closeTab);
-  return <OutcomeScreenView {...view} />;
+  const heading = useFocusedHeading();
+  return <OutcomeScreenView {...view} headingRef={heading} />;
 };

@@ -145,17 +145,44 @@ const jsxElementsUnder = (node: unknown) =>
     (candidate) => candidate.type === "JSXElement" && candidate !== node,
   );
 
-// A slot (`{children}`) means the frame carries content a caller supplies.
-const hasChildrenSlot = (frame: unknown): boolean =>
-  everyNode(frame).some(
-    (node) =>
-      node.type === "JSXExpressionContainer" &&
-      ((isIdentifier(node.expression) && node.expression.name === "children") ||
-        (isAstNode(node.expression) &&
-          node.expression.type === "MemberExpression" &&
-          isIdentifier(node.expression.property) &&
-          node.expression.property.name === "children")),
-  );
+// Elements whose `{value}` is a line of text, not content of its own.
+const TEXT_ELEMENTS = new Set([
+  "FrameTitle",
+  "FrameDescription",
+  "p",
+  "span",
+  "strong",
+  "bdi",
+  "h1",
+  "h2",
+  "Button",
+  "Link",
+  "a",
+]);
+
+const isValueReference = (expression: unknown): boolean =>
+  isIdentifier(expression) ||
+  (isAstNode(expression) && expression.type === "MemberExpression");
+
+// A value placed outside a line of text (`{children}`, `{fields}`) is content
+// the frame does not show here, a form as easily as a message, so the frame
+// cannot be judged from this file.
+const hasContentSlot = (frame: unknown): boolean =>
+  everyNode(frame).some((node) => {
+    if (
+      node.type !== "JSXExpressionContainer" ||
+      !isValueReference(node.expression)
+    ) {
+      return false;
+    }
+    // An attribute value (`onClick={go}`) configures; it shows nothing.
+    const holder: unknown = node.parent;
+    if (!isAstNode(holder) || holder.type === "JSXAttribute") {
+      return false;
+    }
+    const name = elementName(holder);
+    return name === null || !TEXT_ELEMENTS.has(name);
+  });
 
 const isBlankText = (node: unknown) =>
   isAstNode(node) &&
@@ -206,7 +233,7 @@ const isWholeRender = (node: AstNode): boolean => {
 // description and at most one way on: the shape every hand-built outcome card
 // took.
 const isMessageCard = (frame: unknown): boolean => {
-  if (!isAstNode(frame) || !isWholeRender(frame) || hasChildrenSlot(frame)) {
+  if (!isAstNode(frame) || !isWholeRender(frame) || hasContentSlot(frame)) {
     return false;
   }
   const names = jsxElementsUnder(frame).map(elementName);
@@ -244,15 +271,42 @@ const roleAttributeValue = (opening: unknown): string | null => {
   return null;
 };
 
-// A live status region that announces a heading: an outcome page, not an
-// inline status line.
-const isHeadedStatusRegion = (element: unknown): boolean =>
-  isAstNode(element) &&
-  roleAttributeValue(element.openingElement) === "status" &&
-  jsxElementsUnder(element).some((child) => {
-    const name = elementName(child);
-    return name !== null && TITLE_ELEMENTS.has(name);
-  });
+// Work still under way: a region that shows one is reporting progress, not
+// an outcome.
+const PROGRESS_ELEMENTS = new Set([
+  "progress",
+  "meter",
+  "Progress",
+  "Loader",
+  "LoaderState",
+  "Skeleton",
+]);
+
+const showsProgress = (child: AstNode): boolean => {
+  const name = elementName(child);
+  return (
+    (name !== null && PROGRESS_ELEMENTS.has(name)) ||
+    roleAttributeValue(child.openingElement) === "progressbar"
+  );
+};
+
+// A live status region that announces a heading and no work in progress: an
+// outcome page, not an inline status line or a running task.
+const isHeadedStatusRegion = (element: unknown): boolean => {
+  if (
+    !isAstNode(element) ||
+    roleAttributeValue(element.openingElement) !== "status"
+  ) {
+    return false;
+  }
+  const children = jsxElementsUnder(element);
+  return (
+    children.some((child) => {
+      const name = elementName(child);
+      return name !== null && TITLE_ELEMENTS.has(name);
+    }) && !children.some(showsProgress)
+  );
+};
 
 const OWNER_HINT =
   "Use `OutcomeScreen` from '@stll/ui/outcome-screen' so every flow that ends shows the one outcome design";

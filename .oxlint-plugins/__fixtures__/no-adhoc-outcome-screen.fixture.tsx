@@ -53,4 +53,29 @@ export const SettingsCard = () => (
   </Frame>
 );
 
+export const UploadProgress = ({
+  uploaded,
+  total,
+}: {
+  uploaded: number;
+  total: number;
+}) => (
+  <section role="status">
+    <h1>Uploading files</h1>
+    <progress max={total} value={uploaded} />
+  </section>
+);
+
+const profileFields = <input aria-label="Name" />;
+
+export const ProfileCard = () => (
+  <Frame>
+    <FrameHeader>
+      <FrameTitle>Profile</FrameTitle>
+    </FrameHeader>
+    {profileFields}
+    <Button>Save</Button>
+  </Frame>
+);
+
 export const htmlMention = "The editor writes its value on <html>.";

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactNode, Ref } from "react";
 
 import { CheckIcon, XIcon } from "../icons";
 import { cn } from "../lib/utils";
@@ -33,6 +33,8 @@ export type OutcomeScreenViewProps = {
   documentTitle?: string;
   /** The wordmark at the foot of a page; defaults to the Latin lockup. */
   wordmark?: ReactNode;
+  /** Makes the heading focusable and hands it over, to move focus to it. */
+  headingRef?: Ref<HTMLHeadingElement>;
 };
 
 const TONE_BADGE = {
@@ -116,16 +118,21 @@ export const OutcomeScreenView = ({
   surface = "page",
   documentTitle,
   wordmark,
+  headingRef,
 }: OutcomeScreenViewProps) => {
   const outcome = (
     <section
-      className="flex w-full max-w-[26rem] flex-col items-center text-center"
+      className="flex w-full max-w-[26rem] flex-col items-center text-center wrap-anywhere"
       data-slot="outcome"
       data-tone={tone}
       role="status"
     >
       <OutcomeGlyph counterpart={counterpart} tone={tone} />
-      <h1 className="mt-8 text-2xl font-semibold tracking-tight text-balance">
+      <h1
+        className="mt-8 text-2xl font-semibold tracking-tight text-balance outline-none"
+        ref={headingRef}
+        tabIndex={headingRef === undefined ? undefined : -1}
+      >
         {title}
       </h1>
       {description === undefined ? null : (

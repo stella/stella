@@ -95,12 +95,16 @@ test("rejects a frame that is a whole page with a title and one way on", async (
     "const C = () => (",
     '  <main><Frame><FramePanel role="status"><h1>Connected</h1><p>Back</p></FramePanel></Frame></main>',
     ");",
+    // A value inside a line of text is still that line's text.
+    "const D = ({ title }) => (",
+    "  <Frame><FrameHeader><FrameTitle>{title}</FrameTitle></FrameHeader></Frame>",
+    ");",
   ].join("\n");
   expect(
     await lintSingleRule(RULE, source, {
       sourcePath: "apps/web/src/routes/example.tsx",
     }),
-  ).toEqual([3, 15, 21, 21]);
+  ).toEqual([3, 15, 21, 21, 24]);
 });
 
 test("accepts section cards, decisions, forms, slots and inline status lines", async () => {
@@ -130,6 +134,18 @@ test("accepts section cards, decisions, forms, slots and inline status lines", a
     ");",
     // A live status line without a heading.
     'const F = () => <p role="status">Saved</p>;',
+    // Content supplied elsewhere, such as a form's fields.
+    "const fields = <Input />;",
+    "const G = () => (",
+    "  <Frame><FrameHeader><FrameTitle>Profile</FrameTitle></FrameHeader><FramePanel>{fields}<Button>Save</Button></FramePanel></Frame>",
+    ");",
+    // A task still running, announced with its progress.
+    "const H = () => (",
+    '  <section role="status"><h1>Uploading files</h1><progress value={uploaded} max={total} /></section>',
+    ");",
+    "const I = () => (",
+    '  <section role="status"><h1>Reviewing</h1><Loader label="Reviewing" /></section>',
+    ");",
   ].join("\n");
   expect(
     await lintSingleRule(RULE, source, {
