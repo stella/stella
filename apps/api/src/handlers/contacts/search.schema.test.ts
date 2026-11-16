@@ -44,9 +44,11 @@ afterAll(async () => {
   await server.stop();
 });
 
-const request = (path: string, q: string) =>
-  server.fetch(
-    new Request(`http://localhost${path}?${new URLSearchParams({ q })}`),
+const request = async (path: string, q: string) =>
+  await server.fetch(
+    new Request(
+      `http://localhost${path}?${new URLSearchParams({ q }).toString()}`,
+    ),
   );
 
 test("both contact query boundaries accept the shared search limit without changing text", async () => {
