@@ -20,6 +20,7 @@ import type {
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
 import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution";
+import { readCappedByGroup } from "@/api/lib/db/read-bounded";
 import { LIMITS } from "@/api/lib/limits";
 
 const higher = alias(publishedCaseLawDecisions, "reviewing_decision");
@@ -70,7 +71,7 @@ export const readDecisionReviewsWithin = async ({
   const rowsFor = async (direction: "incoming" | "outgoing") => {
     // Cap the indexed edge scan before publication joins: hidden records must
     // not turn a bounded summary into a walk of the whole incoming graph.
-    const edges = tx
+    const edgeScan = tx
       .select({
         reviewingDecisionId: caseLawDecisionReviews.reviewingDecisionId,
         reviewedDecisionId: caseLawDecisionReviews.reviewedDecisionId,
@@ -95,73 +96,78 @@ export const readDecisionReviewsWithin = async ({
         asc(caseLawDecisionReviews.reviewedCourt),
         asc(caseLawDecisionReviews.reviewedCaseNumber),
         asc(caseLawDecisionReviews.reviewedDecisionDate),
-      )
-      .limit(DECISION_REVIEW_LINK_LIMIT + 1)
-      .as("review_edges");
-    return await tx
-      .select({
-        subjectId: publishedCaseLawDecisions.id,
-        reviewer: {
-          reviewingDecisionId: higher.id,
-          reviewingCaseNumber: higher.caseNumber,
-          reviewingCourt: higher.court,
-        },
-        visible: sql<boolean>`${higherSource.id} IS NOT NULL`,
-        link: {
-          // A public header can name an unavailable target; its private id cannot escape.
-          reviewedDecisionId: sql<SafeId<"caseLawDecision"> | null>`CASE WHEN ${lowerSource.id} IS NOT NULL THEN ${lower.id} ELSE NULL END`,
-          reviewedCaseNumber: edges.reviewedCaseNumber,
-          reviewedCourt: edges.reviewedCourt,
-          reviewedDecisionDate: edges.reviewedDecisionDate,
-          outcome: edges.outcome,
-          source: edges.source,
-          evidenceStatus: edges.evidenceStatus,
-        },
-      })
-      .from(publishedCaseLawDecisions)
-      .innerJoin(
-        caseLawSources,
-        and(
-          eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
-          redistributableCaseLawSourceFor(caseLawSources.descriptor),
-        ),
-      )
-      .innerJoinLateral(edges, sql`true`)
-      .leftJoin(
-        higher,
-        and(
-          eq(higher.id, edges.reviewingDecisionId),
-          inArray(higher.country, [...countries]),
-        ),
-      )
-      .leftJoin(
-        higherSource,
-        and(
-          eq(higherSource.id, higher.sourceId),
-          redistributableCaseLawSourceFor(higherSource.descriptor),
-        ),
-      )
-      .leftJoin(
-        lower,
-        and(
-          eq(lower.id, edges.reviewedDecisionId),
-          inArray(lower.country, [...countries]),
-        ),
-      )
-      .leftJoin(
-        lowerSource,
-        and(
-          eq(lowerSource.id, lower.sourceId),
-          redistributableCaseLawSourceFor(lowerSource.descriptor),
-        ),
-      )
-      .where(
-        and(
-          inArray(publishedCaseLawDecisions.id, [...decisionIds]),
-          inArray(publishedCaseLawDecisions.country, [...countries]),
-        ),
-      )
-      .limit(decisionIds.length * (DECISION_REVIEW_LINK_LIMIT + 1));
+      );
+    return await readCappedByGroup(edgeScan, {
+      cap: DECISION_REVIEW_LINK_LIMIT,
+      readRows: async (limited) => {
+        const edges = limited.as("review_edges");
+        return await tx
+          .select({
+            subjectId: publishedCaseLawDecisions.id,
+            reviewer: {
+              reviewingDecisionId: higher.id,
+              reviewingCaseNumber: higher.caseNumber,
+              reviewingCourt: higher.court,
+            },
+            visible: sql<boolean>`${higherSource.id} IS NOT NULL`,
+            link: {
+              // A public header can name an unavailable target; its private id cannot escape.
+              reviewedDecisionId: sql<SafeId<"caseLawDecision"> | null>`CASE WHEN ${lowerSource.id} IS NOT NULL THEN ${lower.id} ELSE NULL END`,
+              reviewedCaseNumber: edges.reviewedCaseNumber,
+              reviewedCourt: edges.reviewedCourt,
+              reviewedDecisionDate: edges.reviewedDecisionDate,
+              outcome: edges.outcome,
+              source: edges.source,
+              evidenceStatus: edges.evidenceStatus,
+            },
+          })
+          .from(publishedCaseLawDecisions)
+          .innerJoin(
+            caseLawSources,
+            and(
+              eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
+              redistributableCaseLawSourceFor(caseLawSources.descriptor),
+            ),
+          )
+          .innerJoinLateral(edges, sql`true`)
+          .leftJoin(
+            higher,
+            and(
+              eq(higher.id, edges.reviewingDecisionId),
+              inArray(higher.country, [...countries]),
+            ),
+          )
+          .leftJoin(
+            higherSource,
+            and(
+              eq(higherSource.id, higher.sourceId),
+              redistributableCaseLawSourceFor(higherSource.descriptor),
+            ),
+          )
+          .leftJoin(
+            lower,
+            and(
+              eq(lower.id, edges.reviewedDecisionId),
+              inArray(lower.country, [...countries]),
+            ),
+          )
+          .leftJoin(
+            lowerSource,
+            and(
+              eq(lowerSource.id, lower.sourceId),
+              redistributableCaseLawSourceFor(lowerSource.descriptor),
+            ),
+          )
+          .where(
+            and(
+              inArray(publishedCaseLawDecisions.id, [...decisionIds]),
+              inArray(publishedCaseLawDecisions.country, [...countries]),
+            ),
+          )
+          .limit(decisionIds.length * (DECISION_REVIEW_LINK_LIMIT + 1));
+      },
+      groupKeyOf: ({ subjectId }) => subjectId,
+    });
   };
   const incoming = await rowsFor("incoming");
   const outgoing = await rowsFor("outgoing");
@@ -170,46 +176,39 @@ export const readDecisionReviewsWithin = async ({
     {
       reviewedBy: DecisionReviewLink[];
       reviews: DecisionReviewLink[];
-      incomingScanned: number;
-      outgoingScanned: number;
     }
   >();
   for (const id of decisionIds) {
     bySubject.set(id, {
       reviewedBy: [],
       reviews: [],
-      incomingScanned: 0,
-      outgoingScanned: 0,
     });
   }
-  for (const { subjectId, link, reviewer, visible } of incoming) {
+  for (const { subjectId, link, reviewer, visible } of incoming.rows) {
     const evidence =
       bySubject.get(subjectId) ?? panic("Unrequested review subject");
-    evidence.incomingScanned += 1;
     if (visible && reviewer !== null) {
       evidence.reviewedBy.push({ ...link, ...reviewer });
     }
   }
-  for (const { subjectId, link, reviewer, visible } of outgoing) {
+  for (const { subjectId, link, reviewer, visible } of outgoing.rows) {
     const evidence =
       bySubject.get(subjectId) ?? panic("Unrequested review subject");
-    evidence.outgoingScanned += 1;
     if (visible && reviewer !== null) {
       evidence.reviews.push({ ...link, ...reviewer });
     }
   }
   for (const [id, evidence] of bySubject) {
-    const status =
-      evidence.incomingScanned > DECISION_REVIEW_LINK_LIMIT
-        ? "unknown"
-        : decisionReviewStatus(evidence.reviewedBy);
+    const reviewedByTruncated = incoming.overflowed.has(id);
+    const status = reviewedByTruncated
+      ? "unknown"
+      : decisionReviewStatus(evidence.reviewedBy);
     const fields = {
       basis: "available_corpus",
-      reviewedBy: evidence.reviewedBy.slice(0, DECISION_REVIEW_LINK_LIMIT),
-      reviews: evidence.reviews.slice(0, DECISION_REVIEW_LINK_LIMIT),
-      reviewedByTruncated:
-        evidence.incomingScanned > DECISION_REVIEW_LINK_LIMIT,
-      reviewsTruncated: evidence.outgoingScanned > DECISION_REVIEW_LINK_LIMIT,
+      reviewedBy: evidence.reviewedBy,
+      reviews: evidence.reviews,
+      reviewedByTruncated,
+      reviewsTruncated: outgoing.overflowed.has(id),
     } as const;
     result.set(
       id,

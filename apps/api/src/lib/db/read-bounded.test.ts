@@ -1,7 +1,7 @@
 import { Panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import { readBoundedByGroup } from "./read-bounded";
+import { readBoundedByGroup, readCappedByGroup } from "./read-bounded";
 
 describe("complete reads bounded per group", () => {
   test.each([
@@ -97,4 +97,41 @@ describe("complete reads bounded per group", () => {
     );
     expect(rejection).toBe(failure);
   });
+});
+
+describe("reads capped per group", () => {
+  test.each([
+    { groups: [], cap: 2, overflowed: [] },
+    { groups: [0, 2, 2], cap: 2, overflowed: [] },
+    { groups: [3, 1], cap: 2, overflowed: [0] },
+    { groups: [2, 2, 6], cap: 2, overflowed: [2] },
+    { groups: [1], cap: 0, overflowed: [0] },
+  ])(
+    "keeps the first $cap rows of each of $groups",
+    async ({ groups, cap, overflowed }) => {
+      const limits: number[] = [];
+      const sourceRows = groups.flatMap((count, group) =>
+        Array.from({ length: count }, (_unused, index) => ({ group, index })),
+      );
+      const result = await readCappedByGroup(
+        {
+          limit: (limit) => {
+            limits.push(limit);
+            return limit;
+          },
+        },
+        {
+          cap,
+          readRows: async (perGroupLimit) =>
+            sourceRows.filter(({ index }) => index < perGroupLimit),
+          groupKeyOf: (row) => row.group,
+        },
+      );
+      expect(limits).toEqual([cap + 1]);
+      expect(result.rows).toEqual(
+        sourceRows.filter(({ index }) => index < cap),
+      );
+      expect([...result.overflowed]).toEqual(overflowed);
+    },
+  );
 });
