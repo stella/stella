@@ -1,8 +1,8 @@
 import { classifyFailure } from "@stll/errors";
 
-import { readDecisionHandler } from "@/api/handlers/case-law/decisions/get";
 import {
   hydrateDeferredDocument,
+  prepareDecisionDocumentRead,
   readsSharedPublicLawCorpus,
   STORED_ONLY_DOCUMENT_HYDRATION,
 } from "@/api/handlers/case-law/decisions/get-deferred-document";
@@ -70,15 +70,16 @@ export const createVerifyQuotationHandler = ({
       id: brandPersistedCaseLawDecisionId(body.decision_id),
     }),
     read: async (subject) =>
-      await readDecisionHandler({ subject, citationsCursor: null }),
+      await prepareDecisionDocumentRead({ subject, citationsCursor: null }),
     // Anonymous and stored-only: no demand is recorded and no publisher is
     // fetched, so this runs nothing beyond what the gated read returned.
-    followUp: async (gatedRead, { body }) => {
-      const read = await hydrateDeferredDocument(
-        gatedRead,
-        false,
-        STORED_ONLY_DOCUMENT_HYDRATION,
-      );
+    followUp: async (prepared, { body }) => {
+      const read = await hydrateDeferredDocument({
+        prepared,
+        caseLawDb,
+        recordDemand: false,
+        documentHydration: STORED_ONLY_DOCUMENT_HYDRATION,
+      });
       const readStatus = handlerStatusOf(read);
       // The subject existed moments ago; a redaction can race the read.
       if (readStatus?.code === 404) {

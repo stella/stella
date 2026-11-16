@@ -34,6 +34,7 @@ const createFixture = async (db: FixtureDb) => {
     publishedCaseLawDecisions.sourceId,
     publishedCaseLawDecisions.country,
     publishedCaseLawDecisions.language,
+    publishedCaseLawDecisions.documentUrl,
     publishedCaseLawDecisions.updatedAt,
     publishedCaseLawDecisions.contentHash,
     publishedCaseLawDecisions.astS3Key,

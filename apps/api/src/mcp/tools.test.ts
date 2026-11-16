@@ -659,6 +659,8 @@ const createCitationDigest = (
 });
 
 const createReadDecisionResult = () => ({
+  textIncompleteReason: null,
+  textWithheldReason: null,
   extractionWarnings: [],
   analysis: null,
   caseNumber: "29 Cdo 123/2024",
