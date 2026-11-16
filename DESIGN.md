@@ -434,6 +434,15 @@ it, and add it here in the same change that adds it to `packages/ui`.
 - `Toggle`, `ToggleGroupItem` `variant`: `ghost`, `muted`, `outline`
 - `ToolbarIconAction` `density`: `header`, `toolbar`
 
+### Table First Lines
+
+`TABLE_FIRST_LINE` from `@stll/ui/table` owns the first-line boxes shared by
+row content, readonly row labels, struts, and Checkbox's cell appearance.
+`TableFirstLine` derives its keys from that definition: `text` uses a 20px
+slot and content minimum; `control` uses 28px for a line inside an editable
+field. Consumers use the same entry's `slot` and `content` values rather
+than maintaining parallel geometry maps.
+
 ### Menu Rows & Sections
 
 One metric for every row of a menu list, whichever component draws

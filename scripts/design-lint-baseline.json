@@ -732,7 +732,6 @@
     "apps/web/src/components/inspector/anonymization-facet.tsx": 1,
     "apps/web/src/components/inspector/pdf-signing-stamp.logic.ts": 1,
     "apps/web/src/components/templates/registry-autofill.ts": 1,
-    "apps/web/src/components/workspaces/table/select-row-content.tsx": 1,
     "apps/web/src/features/case-law/components/case-viewer/analysis/types.ts": 1,
     "apps/web/src/features/knowledge/views/templates/template-preview-view.tsx": 1,
     "apps/web/src/features/time-timers/timer.logic.ts": 1,

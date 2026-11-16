@@ -10,6 +10,8 @@ import type { RowSelectionState } from "@tanstack/react-table";
 import { row_getIsSomeSelected } from "@tanstack/react-table/static-functions";
 
 import { Checkbox } from "@stll/ui/checkbox";
+import { TABLE_FIRST_LINE as ROW_FIRST_LINE } from "@stll/ui/table";
+import type { TableFirstLine as RowFirstLine } from "@stll/ui/table";
 import { cn } from "@stll/ui/utils";
 
 import type {
@@ -19,21 +21,8 @@ import type {
   WorkspaceTable,
 } from "@/components/workspaces/table/types";
 
-/**
- * The first line of a host's cells. Every cell pads by p-2; the host's cell
- * content reserves `content` as its minimum height and puts its first line in
- * the middle of it, and the number and checkbox take `slot`, the same line. Both come from the one
- * key a host passes, so the number stays on its row's first line however tall
- * the row grows, instead of floating to its middle or above the text.
- */
-export const ROW_FIRST_LINE = {
-  /** Plain text lines: text-sm, leading-5. */
-  text: { slot: "h-5", content: "min-h-5" },
-  /** Editable values: a text-sm line inside a py-1 control. */
-  control: { slot: "h-7", content: "min-h-7" },
-} as const satisfies Record<string, { slot: string; content: string }>;
-
-export type RowFirstLine = keyof typeof ROW_FIRST_LINE;
+export { ROW_FIRST_LINE };
+export type { RowFirstLine };
 
 // A line box needs a glyph to have a baseline; this one has no width.
 const ZERO_WIDTH_SPACE = "\u200B";

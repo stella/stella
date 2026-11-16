@@ -3,6 +3,8 @@
 import { Checkbox as CheckboxPrimitive } from "@base-ui/react/checkbox";
 
 import { cn } from "../lib/utils";
+import { TABLE_FIRST_LINE } from "./table-layout";
+import type { TableFirstLine } from "./table-layout";
 
 const Checkbox = (props: CheckboxProps) => {
   if (props.appearance === "cell") {
@@ -31,7 +33,7 @@ type CellCheckboxProps = Omit<
   /** The row's visible number or label, before its checkbox is revealed. */
   rowLabel: string;
   /** Aligns the label and glyph with a text line or a field's first line. */
-  firstLine: "text" | "control";
+  firstLine: TableFirstLine;
   onCheckedChange: NonNullable<CheckboxPrimitive.Root.Props["onCheckedChange"]>;
 };
 
@@ -81,7 +83,8 @@ const renderCellCheckbox = ({
     <span
       aria-hidden="true"
       className={cn(
-        CELL_LINE_CLASS_NAME[firstLine],
+        "absolute inset-x-0 top-2 flex min-w-12 items-center justify-center",
+        TABLE_FIRST_LINE[firstLine].slot,
         "text-xs tabular-nums transition-opacity group-hover/row:opacity-0 group-focus-visible/selection:opacity-0 group-data-[state=selected]/row:opacity-0",
         checked && "opacity-0",
       )}
@@ -92,7 +95,8 @@ const renderCellCheckbox = ({
     <span
       aria-hidden="true"
       className={cn(
-        CELL_LINE_CLASS_NAME[firstLine],
+        "absolute inset-x-0 top-2 flex min-w-12 items-center justify-center",
+        TABLE_FIRST_LINE[firstLine].slot,
         "pointer-events-none opacity-0 transition-opacity group-hover/row:opacity-100 group-focus-visible/selection:opacity-100 group-data-[state=selected]/row:opacity-100",
         checked && "opacity-100",
       )}
@@ -121,12 +125,6 @@ const renderCellCheckbox = ({
     </span>
   </CheckboxPrimitive.Root>
 );
-
-const CELL_LINE_CLASS_NAME = {
-  text: "absolute inset-x-0 top-2 flex h-5 min-w-12 items-center justify-center",
-  control:
-    "absolute inset-x-0 top-2 flex h-7 min-w-12 items-center justify-center",
-} as const satisfies Record<CellCheckboxProps["firstLine"], string>;
 
 const CHECKBOX_CLASS_NAME =
   "border-input bg-background ring-ring focus-visible:ring-offset-background aria-invalid:border-destructive/36 focus-visible:aria-invalid:border-destructive/64 focus-visible:aria-invalid:ring-destructive/48 dark:not-data-checked:bg-input/32 dark:aria-invalid:ring-destructive/24 relative inline-flex size-4.5 shrink-0 items-center justify-center rounded-sm border shadow-xs/5 outline-none not-dark:bg-clip-padding before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-sm)-1px)] not-data-disabled:not-data-checked:not-aria-invalid:before:shadow-[0_1px_--theme(--color-black/4%)] focus-visible:ring-2 focus-visible:ring-offset-1 data-disabled:opacity-64 sm:size-4 dark:not-data-disabled:not-data-checked:not-aria-invalid:before:shadow-[0_-1px_--theme(--color-white/6%)] [[data-disabled],[data-checked],[aria-invalid]]:shadow-none";

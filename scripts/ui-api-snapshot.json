@@ -385,6 +385,7 @@
       "SortableHead",
       "StellaMark",
       "StellaWordmarkLatin",
+      "TABLE_FIRST_LINE",
       "TOAST_RIGHT_OFFSET_VAR",
       "TOOLBAR_ROW_HEIGHT",
       "TOOLBAR_ROW_HEIGHT_PX",
@@ -955,6 +956,7 @@
     "./components/stella-wordmark": ["StellaWordmarkLatin"],
     "./components/table": [
       "SortableHead",
+      "TABLE_FIRST_LINE",
       "Table",
       "TableBody",
       "TableCaption",
@@ -1809,6 +1811,7 @@
     "./switch": ["Switch", "SwitchField"],
     "./table": [
       "SortableHead",
+      "TABLE_FIRST_LINE",
       "Table",
       "TableBody",
       "TableCaption",
