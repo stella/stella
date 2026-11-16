@@ -10,6 +10,7 @@ import * as v from "valibot";
 
 import messages from "../../src/i18n/langs/en.json" with { type: "json" };
 import { createUploadedDocumentRoute } from "../helpers/document";
+import { PLAYWRIGHT_EXPECT_TIMEOUT_60_SECONDS_MS } from "../helpers/wait-budgets";
 import {
   createTestWorkspace,
   deleteTestWorkspace,
@@ -85,26 +86,34 @@ const resizeHandle = (dock: Locator) =>
 // accessibility tree. `getAttribute` never runs the page's locator handlers;
 // these auto-waiting assertions do, so the dialog is dismissed before the
 // read, and anything else hiding the handle fails a named assertion.
+// The value is read through the handle's slot, not its role: the dialog can
+// re-raise between the assertion and the read, and a modal hides the role
+// from the accessibility tree while the attribute stays readable.
 const paneWidth = async (dock: Locator): Promise<number> => {
   await expect(dock).toHaveAttribute("data-state", DOCK_STATE.expanded);
-  const handle = resizeHandle(dock);
   await expect(
-    handle,
+    resizeHandle(dock),
     "the expanded dock exposes its resize handle",
   ).toBeVisible();
-  return Number(await handle.getAttribute("aria-valuenow"));
+  return Number(
+    await dock
+      .locator('[data-slot="inspector-resize-handle"]')
+      .getAttribute("aria-valuenow"),
+  );
 };
 
 const expectDocumentOpen = async (page: Page, dock: Locator) => {
   await expect(dock).toHaveAttribute("data-state", DOCK_STATE.expanded);
   await expect(
     page.locator(".layout-run-text", { hasText: FIXTURE_TEXT }),
-  ).toBeVisible({ timeout: 60_000 });
+  ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_60_SECONDS_MS });
 };
 
 const reloadAndRestore = async (page: Page, dock: Locator) => {
   await page.reload({ waitUntil: "domcontentloaded" });
-  await expect(dock).toBeVisible({ timeout: 60_000 });
+  await expect(dock).toBeVisible({
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_60_SECONDS_MS,
+  });
   await expectInteractive(page);
   if ((await dock.getAttribute("data-state")) === DOCK_STATE.collapsed) {
     await paneToggle(dock, messages.inspector.showPane).click();

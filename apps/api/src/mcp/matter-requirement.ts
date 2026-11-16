@@ -9,13 +9,15 @@ import type { InternalToolErrorResult } from "@/api/mcp/tool-types";
 import { structuredErrorResult } from "@/api/mcp/tool-utils";
 
 /**
- * Where a write tool acts. `organization` tools (the clause and playbook
+ * Where a write tool acts. `account` tools require no active organization.
+ * `organization` tools (the clause and playbook
  * library, templates, contacts, organization settings, creating a matter)
  * work in an organization that has no matter yet. `matter` tools act on data
  * that lives inside a matter, so they cannot succeed until the caller can
  * reach one.
  */
 export const WRITE_TOOL_SCOPE = {
+  account: "account",
   organization: "organization",
   matter: "matter",
 } as const;
@@ -40,7 +42,7 @@ export type McpWriteToolName = Extract<
   { access: "write" }
 >["name"];
 
-const { organization, matter } = WRITE_TOOL_SCOPE;
+const { account, organization, matter } = WRITE_TOOL_SCOPE;
 
 /**
  * Every write tool's scope, keyed by the registry's write-tool union so a new
@@ -88,6 +90,7 @@ export const WRITE_TOOL_SCOPES = {
   delete_reader_annotation: organization,
   add_matter_member: matter,
   remove_matter_member: matter,
+  create_organization: account,
   update_organization_settings: organization,
   set_practice_jurisdictions: organization,
   fill_template: organization,

@@ -223,13 +223,21 @@ const codeUnitIndex = (code: string, byteOffset: number): number =>
 const countMemos = (code: string, location: FunctionLocation): number =>
   (code.slice(location.start, location.end).match(MEMO_HOOK) ?? []).length;
 
-const addBailout = (
-  bailouts: Map<string, BailoutRecord>,
-  file: string,
-  code: string,
-  location: FunctionLocation | undefined,
-  reason: string,
-): void => {
+type AddBailoutOptions = {
+  bailouts: Map<string, BailoutRecord>;
+  file: string;
+  code: string;
+  location: FunctionLocation | undefined;
+  reason: string;
+};
+
+const addBailout = ({
+  bailouts,
+  file,
+  code,
+  location,
+  reason,
+}: AddBailoutOptions): void => {
   const key = `${file}::${location?.name ?? "<module-transform>"}`;
   const record = bailouts.get(key) ?? {
     reasons: new Set<string>(),
@@ -270,13 +278,13 @@ const addExplicitOptOuts = (
       break;
     }
     if (OPT_OUT_DIRECTIVES.has(directive.expression.value)) {
-      addBailout(
+      addBailout({
         bailouts,
         file,
         code,
-        undefined,
-        `explicit module opt-out: ${directive.expression.value}`,
-      );
+        location: undefined,
+        reason: `explicit module opt-out: ${directive.expression.value}`,
+      });
     }
   }
   walk(sourceFile.program, (node, ancestors) => {
@@ -314,13 +322,13 @@ const addExplicitOptOuts = (
         break;
       }
       if (OPT_OUT_DIRECTIVES.has(directive.expression.value)) {
-        addBailout(
+        addBailout({
           bailouts,
           file,
           code,
-          functionLocation(sourceFile, node),
-          `explicit opt-out: ${directive.expression.value}`,
-        );
+          location: functionLocation(sourceFile, node),
+          reason: `explicit opt-out: ${directive.expression.value}`,
+        });
       }
     }
   });
@@ -347,26 +355,32 @@ const scanFile = (
       },
     });
     for (const error of result.errors) {
-      addBailout(
+      addBailout({
         bailouts,
         file,
         code,
-        diagnosticLocation(sourceFile, code, error),
-        error.message,
-      );
+        location: diagnosticLocation(sourceFile, code, error),
+        reason: error.message,
+      });
     }
     if (result.fatal) {
-      addBailout(bailouts, file, code, undefined, "fatal transform");
+      addBailout({
+        bailouts,
+        file,
+        code,
+        location: undefined,
+        reason: "fatal transform",
+      });
     }
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "throw";
-    addBailout(
+    addBailout({
       bailouts,
       file,
       code,
-      undefined,
-      `transform-threw: ${message.slice(0, 60)}`,
-    );
+      location: undefined,
+      reason: `transform-threw: ${message.slice(0, 60)}`,
+    });
   }
 };
 

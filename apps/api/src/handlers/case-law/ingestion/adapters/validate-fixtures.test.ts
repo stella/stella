@@ -20,6 +20,7 @@ import {
   toPlainTextIngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
 import { ukFclFixture } from "@/api/tests/helpers/case-law-enrolled-fixtures";
+import { assertReaderAcceptsAst } from "@/api/tests/helpers/parser-reader-guard";
 
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
 
@@ -67,6 +68,8 @@ const validateDecision = (
     raw,
     metadataUrlSchemaForAdapter(adapter),
   ).unwrap(prefix);
+
+  assertReaderAcceptsAst(d.documentAst);
 
   // Required fields
   expect(d.caseNumber, `${prefix}.caseNumber`).toBeTruthy();
@@ -162,5 +165,11 @@ describe("fixture validation", () => {
 });
 
 test("synthetic UK fixture has the common decision shape", async () => {
-  validateDecision(await ukFclFixture().buildDecision(), 0, "uk-fcl");
+  // Building the decision replaces the global fetch with the fixture's.
+  const originalFetch = globalThis.fetch;
+  try {
+    validateDecision(await ukFclFixture().buildDecision(), 0, "uk-fcl");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

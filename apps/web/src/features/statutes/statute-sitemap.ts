@@ -118,7 +118,7 @@ const readSitemapPage = async <TSchema extends v.GenericSchema>({
     );
   }
 
-  if (response.value.status === 429) {
+  if (response.value.status === 429 || response.value.status === 503) {
     return Result.err(
       createSitemapUpstreamBusyError({ action, response: response.value }),
     );

@@ -11,4 +11,7 @@ export const READ_CONTACT_COLUMNS = {
   dateOfBirthMonth: true,
   dateOfBirthDay: true,
   nationalityCodes: true,
+  externalSource: true,
+  externalId: true,
+  externalChangeKey: true,
 } as const;

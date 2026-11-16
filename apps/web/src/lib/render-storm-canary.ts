@@ -96,17 +96,13 @@ export type RenderStormDetails = {
   regionCounts: readonly (readonly [region: string, commits: number])[];
 };
 
-type RenderStormOnRender = (
-  id: string,
-  phase: RenderStormPhase,
-  actualDuration: number,
-  baseDuration: number,
-  startTime: number,
-  commitTime: number,
-) => void;
+type RenderStormCommit = {
+  phase: RenderStormPhase;
+  commitTime: number;
+};
 
 export type RenderStormMonitor = {
-  onRender: RenderStormOnRender;
+  onCommit: (commit: RenderStormCommit) => void;
   /**
    * Attribute the current commit to a named region. Called by the nested
    * `RenderStormRegion` profilers, which commit in the same React pass as
@@ -168,14 +164,7 @@ export const createRenderStormMonitor = (
     windowStart = now;
   };
 
-  const onRender: RenderStormOnRender = (
-    _id,
-    phase,
-    _actualDuration,
-    _baseDuration,
-    _startTime,
-    commitTime,
-  ) => {
+  const onCommit = ({ phase, commitTime }: RenderStormCommit) => {
     if (windowStart === undefined) {
       windowStart = commitTime;
     } else if (commitTime - windowStart >= RENDER_STORM_WINDOW_MS) {
@@ -193,5 +182,5 @@ export const createRenderStormMonitor = (
     );
   };
 
-  return { onRegionRender, onRender };
+  return { onRegionRender, onCommit };
 };

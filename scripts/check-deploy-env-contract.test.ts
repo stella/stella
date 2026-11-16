@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
+import { BULLMQ_QUEUE_HOSTS } from "../apps/api/src/bullmq-queue-hosts";
 import {
   DEPLOY_ENV_CONTRACT,
   DEPLOY_TASK_ADDRESSES,
+  DEPLOY_WORKER_HOSTS,
 } from "../apps/api/src/deploy-env-contract";
 import { checkDeployEnvContract } from "./check-deploy-env-contract";
 import { ENV_CATALOG, ENV_OWNER, ENV_REQUIREMENT } from "./env-catalog";
@@ -13,6 +15,11 @@ const fixture = () => {
       Object.entries(DEPLOY_TASK_ADDRESSES).map(([task, address]) => [
         address,
         {
+          containers: Object.values(DEPLOY_WORKER_HOSTS)
+            .flat()
+            .filter((location) => location.address === address)
+            .map(({ container }): string => container)
+            .toSorted(),
           environment: DEPLOY_ENV_CONTRACT.filter(
             (entry) =>
               entry.tasks.some((required) => required === task) &&
@@ -60,7 +67,7 @@ describe("deployment setting contract", () => {
     expect(result.exitCode).toBe(1);
     expect(result.lines).toEqual([
       "production api DEPLOY_ENVIRONMENT expected environment",
-      "production api DATABASE_URL expected either",
+      "production api DATABASE_URL expected either, or all of DB_HOST,DB_PORT,DB_USER,DB_PASSWORD,DB_NAME",
     ]);
   });
 
@@ -89,6 +96,95 @@ describe("deployment setting contract", () => {
       "production api DEPLOY_ENVIRONMENT expected environment",
       "production api OPENROUTER_FAST_TIER_API_KEY expected secrets",
     ]);
+  });
+
+  test("a queue whose consumer container is not deployed refuses, naming queue, container and task", async () => {
+    const value = fixture();
+    const names = apiNames(value);
+    names.containers = ["api"];
+    const result = await run(value);
+    expect(result.exitCode).toBe(1);
+    expect(result.lines).toEqual([
+      `production queue file-derivatives needs container file-derivative-worker in ${DEPLOY_TASK_ADDRESSES.api} (stella-infra modules/ecs)`,
+    ]);
+    names.containers = ["api", "file-derivative-worker"];
+    expect((await run(value)).exitCode).toBe(0);
+  });
+
+  test("a missing task address refuses the queues it alone hosts", async () => {
+    const value = fixture();
+    value.environments.production = Object.fromEntries(
+      Object.entries(value.environments.production).filter(
+        ([address]) => address !== DEPLOY_TASK_ADDRESSES.api,
+      ),
+    );
+    const result = await run(value);
+    expect(result.exitCode).toBe(1);
+    expect(result.lines).toContain(
+      `production queue file-derivatives needs container file-derivative-worker in ${DEPLOY_TASK_ADDRESSES.api} (stella-infra modules/ecs)`,
+    );
+  });
+
+  test("document processing runs in either of its tasks", async () => {
+    const ocr = "module.ecs.aws_ecs_task_definition.ocr_worker";
+    const value = fixture();
+    const production = Object.fromEntries(
+      Object.entries(value.environments.production).filter(
+        ([address]) => address !== DEPLOY_TASK_ADDRESSES["document-processing"],
+      ),
+    );
+    value.environments.production = production;
+    const refused = await run(value);
+    expect(refused.lines).toContain(
+      `production queue document-processing needs container document-processing in ${DEPLOY_TASK_ADDRESSES["document-processing"]} or container document-processing-worker in ${ocr} (stella-infra modules/ecs)`,
+    );
+    production[ocr] = {
+      environment: [],
+      secrets: [],
+      containers: ["document-processing-worker", "ocr"],
+    };
+    const accepted = await run(value);
+    expect(accepted.lines).not.toContainEqual(
+      expect.stringContaining("queue document-processing "),
+    );
+  });
+
+  test("every queue resolves to at least one task address and container", () => {
+    for (const host of Object.values(BULLMQ_QUEUE_HOSTS)) {
+      expect(DEPLOY_WORKER_HOSTS[host].length, host).toBeGreaterThan(0);
+      for (const { address, container } of DEPLOY_WORKER_HOSTS[host]) {
+        expect(address, host).toStartWith(
+          "module.ecs.aws_ecs_task_definition.",
+        );
+        expect(container, host).not.toBe("");
+      }
+    }
+  });
+
+  test("a projection without containers is invalid", async () => {
+    const withoutContainers = (
+      tasks: ReturnType<typeof fixture>["environments"]["production"],
+    ) =>
+      Object.fromEntries(
+        Object.entries(tasks).map(([address, { environment, secrets }]) => [
+          address,
+          { environment, secrets },
+        ]),
+      );
+    const value = fixture();
+    const stripped = {
+      version: 1,
+      environments: {
+        staging: withoutContainers(value.environments.staging),
+        production: withoutContainers(value.environments.production),
+      },
+    };
+    expect(await run(stripped)).toEqual({
+      exitCode: 1,
+      lines: [
+        "deploy-env-contract: unreadable or invalid version 1 names projection",
+      ],
+    });
   });
 
   test("absent task addresses refuse instead of skipping the task", async () => {
@@ -140,6 +236,38 @@ describe("deployment setting contract", () => {
     );
   });
 
+  test("a deployment may carry the database components instead of the URL", async () => {
+    const value = fixture();
+    const components = [
+      "DB_HOST",
+      "DB_PORT",
+      "DB_USER",
+      "DB_PASSWORD",
+      "DB_NAME",
+    ];
+    for (const environment of [
+      value.environments.staging,
+      value.environments.production,
+    ]) {
+      for (const names of Object.values(environment)) {
+        names.environment = names.environment.filter(
+          (name) => name !== "DATABASE_URL",
+        );
+        names.secrets.push(...components);
+      }
+    }
+    expect((await run(value)).exitCode).toBe(0);
+    // One component short of the set is not a database connection.
+    apiNames(value).secrets = apiNames(value).secrets.filter(
+      (name) => name !== "DB_PASSWORD",
+    );
+    const refused = await run(value);
+    expect(refused.exitCode).toBe(1);
+    expect(refused.lines).toContain(
+      "production api DATABASE_URL expected either, or all of DB_HOST,DB_PORT,DB_USER,DB_PASSWORD,DB_NAME",
+    );
+  });
+
   test("every required API catalog name is contracted and every contract name is catalogued", () => {
     const catalogNames = new Set(ENV_CATALOG.map(({ name }) => name));
     const contractNames = new Set(DEPLOY_ENV_CONTRACT.map(({ name }) => name));
@@ -152,8 +280,11 @@ describe("deployment setting contract", () => {
         expect(contractNames.has(entry.name), entry.name).toBe(true);
       }
     }
-    for (const { name } of DEPLOY_ENV_CONTRACT) {
+    for (const { name, alternatives = [] } of DEPLOY_ENV_CONTRACT) {
       expect(catalogNames.has(name), name).toBe(true);
+      for (const alternative of alternatives.flat()) {
+        expect(catalogNames.has(alternative), alternative).toBe(true);
+      }
     }
     expect(contractNames.size).toBe(DEPLOY_ENV_CONTRACT.length);
   });

@@ -1,0 +1,19 @@
+{
+  "id": "require-locked-rows-write",
+  "rules": ["require-locked-rows-write/require-locked-rows-write"],
+  "type": "changed-lines",
+  "expiresAt": "2026-11-22T00:00:00.000Z",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "require-locked-rows-write/require-locked-rows-write",
+    "apps/api/src",
+    "apps/api/scripts"
+  ]
+}

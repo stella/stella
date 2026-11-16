@@ -2,9 +2,11 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
+import { getTableConfig } from "drizzle-orm/pg-core";
 
 import { WORKSPACE_ACCESS_MODE } from "@/api/db/rls";
 import type { ScopedDb } from "@/api/db/safe-db";
+import * as schema from "@/api/db/schema";
 import type { TransactionOf } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -23,14 +25,22 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { ORGANIZATION_DELETION_FOR_TEST_SQL } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+import { schemaTables } from "./schema-tables";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const databaseUrl = process.env["DATABASE_URL"];
 const ENTITY_COUNT = 100_000;
 const MATCHES_PER_KIND = 1000;
 const SAMPLE_COUNT = 5;
-const POLICY_COUNT = 47;
+// Every table the schema gates carries one feature policy for the app role.
+const POLICY_COUNT = schemaTables(schema).filter((table) =>
+  getTableConfig(table).policies.some(
+    (policy) => policy.name === "workspace_entity_feature",
+  ),
+).length;
 const MAX_BUFFER_RATIO = 1.25;
 const QUERY_TEXT = "budgetneedle";
 const HIT_LIMIT = 20;
@@ -407,7 +417,9 @@ describe.skipIf(!enabled)(
             }
           }
         }
-        await client`DELETE FROM organization WHERE id = ${organizationId}`;
+        await client.unsafe(ORGANIZATION_DELETION_FOR_TEST_SQL("$1"), [
+          organizationId,
+        ]);
         reportStage("cleanup-organization-deleted");
         await client`DELETE FROM "user" WHERE id = ${userId}`;
         reportStage("cleanup-user-deleted");

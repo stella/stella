@@ -3,10 +3,12 @@ import * as v from "valibot";
 
 import { PUBLIC_CASE_LAW_PAGE_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 
+import readDecisionAnchorRedirectsRoute from "@/api/handlers/case-law/decisions/anchor-redirects";
 import {
   listDecisionFacetsHandler,
   listDecisionFacetsQuerySchema,
 } from "@/api/handlers/case-law/decisions/facets";
+import validateDecisionFilters from "@/api/handlers/case-law/decisions/filter-validation";
 import {
   readDecisionHandler,
   readDecisionQuerySchema,
@@ -23,6 +25,7 @@ import {
 } from "@/api/handlers/case-law/decisions/list";
 import listDecisionCitations from "@/api/handlers/case-law/decisions/list-citations";
 import { createSafePublicSubjectFollowUpHandler } from "@/api/handlers/case-law/decisions/public-subject";
+import verifyQuotation from "@/api/handlers/case-law/decisions/quotes/check";
 import readCaseLawCoverage from "@/api/handlers/case-law/decisions/read-coverage";
 import {
   projectDecisionReader,
@@ -82,7 +85,10 @@ import {
   safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
-import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import {
+  caseLawPublicReadDb,
+  tryCaseLawPublicRead,
+} from "@/api/lib/case-law-public-read-db";
 import { readCourtRegistry } from "@/api/lib/case-law/court-presentation";
 import { loadPublicCourtWeights } from "@/api/lib/case-law/public-case-law-config";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
@@ -425,8 +431,9 @@ const listSitemapShardDecisions = createSafeBoundedPublicHandler(
     query: sitemapShardDecisionsQuerySchema,
   },
   async function* ({ query }) {
+    // A shard read refused by the corpus schema lane answers 503.
     const response = yield* Result.await(
-      Result.tryPromise(
+      tryCaseLawPublicRead(
         async () =>
           await listSitemapShardDecisionsHandler(query, caseLawPublicReadDb),
       ),
@@ -487,10 +494,14 @@ export const publicCaseLawRoute = routes(
     "/coverage": { GET: readCaseLawCoverage },
     "/decisions": { GET: listDecisions },
     "/decisions/facets": { GET: listDecisionFacets },
+    "/decisions/filter-validation": { GET: validateDecisionFilters },
     "/decisions/status": { GET: readCaseLawCorpusStatus },
     "/decisions/latest": { GET: listLatestDecisions },
     "/decisions/by-slug/:slug": { GET: readDecisionBySlug },
     "/decisions/:decisionId": { GET: readDecision },
+    "/decisions/:decisionId/anchor-redirects": {
+      GET: readDecisionAnchorRedirectsRoute,
+    },
     "/decisions/:decisionId/citations": { GET: listDecisionCitations },
     "/decisions/:decisionId/citations/summary": {
       GET: summarizeDecisionCitations,
@@ -502,6 +513,7 @@ export const publicCaseLawRoute = routes(
     "/provisions/citing-decisions": { GET: listCitingDecisions },
     "/provisions/citation-counts": { GET: readStatuteCitationCounts },
     "/decisions/search": { POST: searchDecisions },
+    "/decisions/quotes/verify": { POST: verifyQuotation },
     "/sitemap/shards": { GET: listSitemapShards },
     "/sitemap/decisions/shard": { GET: listSitemapShardDecisions },
   },

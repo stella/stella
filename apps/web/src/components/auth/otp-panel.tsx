@@ -1,9 +1,9 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
 
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { TaggedError } from "better-result";
+import { Result, TaggedError } from "better-result";
 import { useTranslations } from "use-intl";
 
 import {
@@ -26,6 +26,7 @@ import { cn } from "@stll/ui/utils";
 import { InboxQuickJump } from "@/components/auth/inbox-quick-jump";
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
 import { usePulse } from "@/hooks/use-pulse";
+import { updateUserResource } from "@/lib/account/update-user";
 import { useAnalytics } from "@/lib/analytics/provider";
 import {
   authClient,
@@ -91,6 +92,7 @@ export const OTPPanel = ({
 }: OTPPanelProps) => {
   const t = useTranslations();
   const analytics = useAnalytics();
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [otp, setOtp] = useState(initialOtp ?? "");
   const [resetConfirmation, setResetConfirmation] = useState<{
@@ -230,7 +232,18 @@ export const OTPPanel = ({
           const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
           const timezones: readonly string[] = COMMON_TIMEZONES;
           if (timezones.includes(browserTz)) {
-            await authClient.updateUser({ timezoneId: browserTz });
+            const updated = await updateUserResource({
+              queryClient,
+              input: { timezoneId: browserTz },
+              owner: {
+                userId: freshSession.user.id,
+                organizationId:
+                  freshSession.session.activeOrganizationId ?? null,
+              },
+            });
+            if (Result.isError(updated)) {
+              throw updated.error;
+            }
           }
           return;
         })

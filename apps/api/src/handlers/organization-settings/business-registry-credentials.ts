@@ -20,6 +20,7 @@ import {
 import {
   BUSINESS_REGISTRY_DISPATCH,
   executeRegistryLookup,
+  NO_REGISTRY_WEB_SEARCH,
 } from "@/api/lib/business-registries/dispatch";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -107,6 +108,7 @@ export const saveBusinessRegistryCredential = createSafeRootHandler(
       encryptRegistryCredential(session.activeOrganizationId, credential),
     );
     const probe = await executeRegistryLookup({
+      loadWebSearch: NO_REGISTRY_WEB_SEARCH,
       observer,
       permit: grantThirdPartyOutboundPermit(),
       handler: bindRegistryCredential(

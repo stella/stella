@@ -710,7 +710,9 @@ describe("CLI legal citation projection", () => {
             writers: search.writers,
             allActive: false,
           });
-          const result = JSON.parse(search.out.join(""));
+          const result: { results: unknown[] } = JSON.parse(
+            search.out.join(""),
+          );
           expect(format === "json" ? result.results.at(0) : result).toEqual(
             subject,
           );
@@ -722,7 +724,11 @@ describe("CLI legal citation projection", () => {
 
 describe("audit detail status output", () => {
   for (const format of ["json", "jsonl", "table"] as const) {
-    for (const changesStatus of ["visible", "feature_unavailable"] as const) {
+    for (const changesStatus of [
+      "visible",
+      "feature_unavailable",
+      "unrecognized_resource",
+    ] as const) {
       test(`${format} preserves ${changesStatus} beside audit changes`, () => {
         const item = {
           id: "entry",

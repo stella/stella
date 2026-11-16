@@ -24,11 +24,11 @@ import { legislationProjectionInputFromCanonical } from "@/api/lib/legal-search/
 import {
   censusCorpusProjectionRevisions,
   CORPUS_PROJECTION_APPEND_COMMIT_MODE,
-  corpusIndexUnknownAppendBarrierAt,
   corpusProjectionRevisionsQuery,
   deleteCorpusProjectionRevisions,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import { executeCorpusProjectionAppendCycle } from "@/api/lib/legal-search/corpus-index-projection-executor";
+import { corpusProjectionAppendPublishBarrier } from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
 import { CORPUS_PROJECTION_GENERATION_SCOPE } from "@/api/lib/legal-search/corpus-index-projection-scope";
 import { writeCorpusDocument } from "@/api/lib/legal-search/corpus-storage";
 import { EFFECTIVE_CONSOLIDATION } from "@/api/lib/legal-search/legislation-expression-classification";
@@ -103,10 +103,11 @@ const runCycle = async (
     generation: TARGET.generation,
     scope: CORPUS_PROJECTION_GENERATION_SCOPE,
     limit: 1,
-    leaseMs: 600_000,
+    fillWindowMs: 600_000,
     payloadReadConcurrency: 1,
     retryDelayMs: 5000,
     payloadRetryLimit: 3,
+    proofAfterIndexId: null,
   });
 };
 
@@ -127,14 +128,16 @@ beforeAll(
       name: "Multipart test",
       descriptor: null,
     });
-    const written = await writeCorpusDocument({
-      documentId: DOCUMENT_ID,
-      jurisdiction: "CZE",
-      text: TEXT,
-      sections: null,
-      ast: null,
-      stored: null,
-    });
+    const written = (
+      await writeCorpusDocument({
+        documentId: DOCUMENT_ID,
+        jurisdiction: "CZE",
+        text: TEXT,
+        sections: null,
+        ast: null,
+        stored: null,
+      })
+    ).unwrap();
     if (written.type !== "written") {
       panic("Seeded corpus payload was not written");
     }
@@ -201,7 +204,12 @@ afterAll(async () => {
 test("an oversized act without an AST commits all text passages after the last part", async () => {
   const accepted: Record<string, unknown>[][] = [];
   const result = await runCycle(async (_indexId, ndjson) => {
-    accepted.push(ndjson.split("\n").map((line) => JSON.parse(line)));
+    accepted.push(
+      ndjson.split("\n").map((line) => {
+        const doc: Record<string, unknown> = JSON.parse(line);
+        return doc;
+      }),
+    );
     const intent = await db
       .select({ status: corpusIndexProjectionIntents.status })
       .from(corpusIndexProjectionIntents);
@@ -296,7 +304,12 @@ test("a later part failure leaves the whole revision pending cleanup", async () 
         new CorpusIndexError({ message: "second part failed" }),
       );
     }
-    accepted.push(...ndjson.split("\n").map((line) => JSON.parse(line)));
+    accepted.push(
+      ...ndjson.split("\n").map((line) => {
+        const doc: Record<string, unknown> = JSON.parse(line);
+        return doc;
+      }),
+    );
     await Bun.sleep(10);
     return Result.ok();
   });
@@ -323,8 +336,11 @@ test("a later part failure leaves the whole revision pending cleanup", async () 
   expect(intents[0]?.expectedDocumentCount).toBeNull();
   expect(intents[0]?.appendStartedAt).toEqual(partStarts[1]);
   expect(intents[0]?.cleanupNotBefore).toEqual(
-    corpusIndexUnknownAppendBarrierAt(
-      partStarts[1] ?? panic("Missing last part start"),
+    corpusProjectionAppendPublishBarrier(
+      {
+        type: "unknown",
+        appendStartedAt: partStarts[1] ?? panic("Missing last part start"),
+      },
       MANIFEST,
     ),
   );

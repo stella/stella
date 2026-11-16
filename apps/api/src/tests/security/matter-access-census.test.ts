@@ -3,6 +3,8 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
+import { treeBaseRevision } from "@stll/scripts/src/tree-base-revision";
+
 import {
   AUTHORIZED_WORKSPACE_OWNER_FILE,
   AUTHORIZED_WORKSPACE_OWNER_MODULE,
@@ -233,11 +235,7 @@ describe("matter access census", () => {
   });
 
   test("the allowlist only shrinks from the merge base", () => {
-    const base = Bun.spawnSync(["git", "merge-base", "HEAD", "origin/main"], {
-      cwd: repoRoot,
-    });
-    expect(base.exitCode).toBe(0);
-    const revision = new TextDecoder().decode(base.stdout).trim();
+    const revision = treeBaseRevision({ repoRoot });
     const present = Bun.spawnSync(
       ["git", "ls-tree", "--name-only", revision, ALLOWLIST_PATH],
       { cwd: repoRoot },

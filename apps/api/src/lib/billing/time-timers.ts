@@ -19,6 +19,7 @@ import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
+import { scheduleTimerActivityUpdates } from "@/api/lib/push/timer-activity-queue";
 
 export const timerParams = v.object({ id: resourceIdSchema("timeTimer") });
 export const timerDetails = v.object({
@@ -313,19 +314,17 @@ export const timerStateTransition = (state: "running" | "paused") =>
     params,
     recordAuditEvent,
   }: TimerStateTransitionContext) {
+    const owner = {
+      organizationId: session.activeOrganizationId,
+      userId: user.id,
+    };
     const outcome = yield* Result.await(
       safeDb(async (tx) =>
-        changeTimerState({
-          tx,
-          owner: {
-            organizationId: session.activeOrganizationId,
-            userId: user.id,
-          },
-          id: params.id,
-          state,
-          recordAuditEvent,
-        }),
+        changeTimerState({ tx, owner, id: params.id, state, recordAuditEvent }),
       ),
     );
+    if (outcome.isOk()) {
+      scheduleTimerActivityUpdates([owner]);
+    }
     return Result.ok(yield* outcome);
   };

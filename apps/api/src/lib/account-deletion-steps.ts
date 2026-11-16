@@ -1,11 +1,14 @@
 import {
   and,
+  arrayOverlaps,
   count,
   eq,
   inArray,
   isNotNull,
   isNull,
   ne,
+  not,
+  notInArray,
   or,
   sql,
 } from "drizzle-orm";
@@ -14,6 +17,7 @@ import type { AnyPgColumn, PgTable } from "drizzle-orm/pg-core";
 import { compareCodeUnit } from "@stll/collation";
 import { Temporal } from "@stll/time";
 
+import { ACCOUNT_ERASURE_USER_SETTING } from "@/api/db/account-erasure-policies";
 import { agentDelegation, agentRegistration } from "@/api/db/agent-auth-schema";
 import {
   account,
@@ -36,8 +40,10 @@ import {
   accountExports,
   agentSkills,
   aiMemories,
+  billingDraftUserSettings,
   BUFFER_OBJECT_CLEANUP_INTENT_STATUS,
   bufferObjectCleanupIntents,
+  chatMessages,
   chatThreads,
   contacts,
   correspondence,
@@ -45,25 +51,36 @@ import {
   correspondenceFilers,
   desktopEditHandoffs,
   desktopEditSessions,
+  desktopRunnerRuns,
+  desktopRunners,
   entities,
+  feedbackReports,
   fileChatThreads,
   fileComparisonUploads,
   folioCollabRooms,
   folioCollabRoomTokens,
+  legalReaderAnnotations,
   mcpOAuthState,
   mcpUserConnections,
   mcpWebHandoff,
   pdfSigningSessions,
   PENDING_UPLOAD_RECOVERABLE_STATUSES,
   pendingUploads,
+  pushDevices,
   rateEntries,
+  savedSearches,
+  savedTimeNarratives,
+  searchHistoryCountryClears,
   searchHistoryEntries,
   searchHistoryOwners,
   searchHistoryTombstones,
   sharepointConnections,
   sharepointOAuthState,
   taskAssignees,
+  templateLookupFormatUserDefaults,
+  timerActivityDevices,
   userFiles,
+  userProfessionalUseAcceptances,
   WORK_OBLIGATION_EVENT_TYPE,
   WORK_OBLIGATION_STATUS,
   workObligationEvents,
@@ -98,6 +115,7 @@ import {
   preserveBufferObjectCleanupIntents,
 } from "@/api/lib/buffer-intent-reconciliation";
 import {
+  lockAccountDeletionPendingUploads,
   withAggregateLock,
   withAggregateParentBatch,
 } from "@/api/lib/db/aggregate-lock";
@@ -129,6 +147,7 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 import { fileComparisonObjectKey } from "@/api/lib/uploads/file-comparison/uploads";
+import { outsideRetainedMatters } from "@/api/lib/workspaces/legal-holds/retained-matters";
 
 // ── Extracted steps for verifyAndDeleteUser ─────────────────────────────
 //
@@ -139,7 +158,7 @@ import { fileComparisonObjectKey } from "@/api/lib/uploads/file-comparison/uploa
 // before this extraction.
 //
 // Steps that delete or clear a user-owned table's reference to `user` also
-// export a `*_TABLES` constant listing the Drizzle tables they cover. These
+// declare a `*_TABLES` constant listing the Drizzle tables they cover. These
 // constants are combined into `ACCOUNT_DELETION_MANUAL_TABLES` at the
 // bottom of this file, which the account-deletion coverage guard
 // (`account-deletion-coverage.test.ts`) uses to verify that every table
@@ -230,7 +249,7 @@ export type RevokeAuthCredentialsParams = {
   email: string;
 };
 
-export const REVOKE_AUTH_CREDENTIALS_TABLES = [
+const REVOKE_AUTH_CREDENTIALS_TABLES = [
   account,
   session,
   twoFactor,
@@ -269,7 +288,7 @@ export const revokeAuthCredentialsAndInvitations = async ({
   await tx.delete(invitation).where(eq(invitation.email, email));
 };
 
-export const REVOKE_OAUTH_TOKENS_TABLES = [
+const REVOKE_OAUTH_TOKENS_TABLES = [
   mcpWebHandoff,
   oauthAccessToken,
   oauthRefreshToken,
@@ -326,7 +345,7 @@ export const deleteConnectedCredentialsAndOAuthState = async (
     .where(eq(agentDelegation.userId, currentUserId));
 };
 
-export const CLEAR_WORKSPACE_LEAD_ROLE_TABLES = [
+const CLEAR_WORKSPACE_LEAD_ROLE_TABLES = [
   workspaces,
 ] as const satisfies readonly PgTable[];
 
@@ -404,7 +423,7 @@ export const selectActiveTaskAssignments = async (
     )
     .limit(LIMITS.accountDeletionTaskAssignmentsMax + 1);
 
-export const REASSIGN_ACTIVE_TASKS_TABLES = [
+const REASSIGN_ACTIVE_TASKS_TABLES = [
   correspondence,
   correspondenceFilers,
   correspondenceAllowedSenders,
@@ -790,7 +809,38 @@ const recordAccountDeletionAuditEvents = async (
   }
 };
 
-export const RESET_FOLIO_COLLAB_USER_STATE_TABLES = [
+type RetainedMatterContentOptions = {
+  tx: Transaction;
+  currentUserId: string;
+  retainedWorkspaceIds: readonly SafeId<"workspace">[];
+};
+
+const erasableChatThreads = (
+  retainedWorkspaceIds: readonly SafeId<"workspace">[],
+) =>
+  and(
+    outsideRetainedMatters(chatThreads.workspaceId, retainedWorkspaceIds),
+    ...(retainedWorkspaceIds.length === 0
+      ? []
+      : [
+          not(
+            arrayOverlaps(chatThreads.dataWorkspaceIds, [
+              ...retainedWorkspaceIds,
+            ]),
+          ),
+          notInArray(
+            chatThreads.id,
+            sql`(SELECT ${chatMessages.threadId} FROM ${chatMessages} WHERE ${inArray(chatMessages.workspaceId, [...retainedWorkspaceIds])})`,
+          ),
+          notInArray(
+            chatThreads.id,
+            // A file chat can belong to a held matter even when workspaceId is null.
+            sql`(SELECT ${fileChatThreads.chatThreadId} FROM ${fileChatThreads} WHERE ${inArray(fileChatThreads.workspaceId, [...retainedWorkspaceIds])})`,
+          ),
+        ]),
+  );
+
+const RESET_FOLIO_COLLAB_USER_STATE_TABLES = [
   folioCollabRoomTokens,
   folioCollabRooms,
 ] as const satisfies readonly PgTable[];
@@ -800,10 +850,11 @@ export const RESET_FOLIO_COLLAB_USER_STATE_TABLES = [
  * Completed rooms remain workspace-owned; pending seed snapshots are retired
  * with their claim. The generation bump fences uploads already in flight.
  */
-export const resetFolioCollabUserState = async (
-  tx: Transaction,
-  currentUserId: string,
-): Promise<void> => {
+export const resetFolioCollabUserState = async ({
+  tx,
+  currentUserId,
+  retainedWorkspaceIds,
+}: RetainedMatterContentOptions): Promise<void> => {
   const readClaims = async (candidateIds?: SafeId<"folioCollabRoom">[]) =>
     (
       await tx
@@ -821,6 +872,10 @@ export const resetFolioCollabUserState = async (
           and(
             eq(folioCollabRooms.seedClaimedBy, currentUserId),
             eq(folioCollabRooms.seedState, "claimed"),
+            outsideRetainedMatters(
+              folioCollabRooms.workspaceId,
+              retainedWorkspaceIds,
+            ),
             ...(candidateIds === undefined
               ? []
               : [inArray(folioCollabRooms.id, candidateIds)]),
@@ -993,9 +1048,10 @@ export type DeleteDesktopEditSessionsParams = {
   tx: Transaction;
   currentUserId: string;
   s3KeysToDelete: string[];
+  retainedWorkspaceIds: readonly SafeId<"workspace">[];
 };
 
-export const DELETE_DESKTOP_EDIT_SESSIONS_TABLES = [
+const DELETE_DESKTOP_EDIT_SESSIONS_TABLES = [
   desktopEditSessions,
   desktopEditHandoffs,
 ] as const satisfies readonly PgTable[];
@@ -1007,6 +1063,7 @@ export const deleteDesktopEditSessionsAndHandoffs = async ({
   tx,
   currentUserId,
   s3KeysToDelete,
+  retainedWorkspaceIds,
 }: DeleteDesktopEditSessionsParams): Promise<void> => {
   const desktopCheckpointRows = await tx
     .select({
@@ -1020,6 +1077,10 @@ export const deleteDesktopEditSessionsAndHandoffs = async ({
     .where(
       and(
         eq(desktopEditSessions.createdBy, currentUserId),
+        outsideRetainedMatters(
+          desktopEditSessions.workspaceId,
+          retainedWorkspaceIds,
+        ),
         isNotNull(desktopEditSessions.checkpointUpdatedAt),
       ),
     );
@@ -1036,10 +1097,26 @@ export const deleteDesktopEditSessionsAndHandoffs = async ({
 
   await tx
     .delete(desktopEditHandoffs)
-    .where(eq(desktopEditHandoffs.createdBy, currentUserId));
+    .where(
+      and(
+        eq(desktopEditHandoffs.createdBy, currentUserId),
+        outsideRetainedMatters(
+          desktopEditHandoffs.workspaceId,
+          retainedWorkspaceIds,
+        ),
+      ),
+    );
   await tx
     .delete(desktopEditSessions)
-    .where(eq(desktopEditSessions.createdBy, currentUserId));
+    .where(
+      and(
+        eq(desktopEditSessions.createdBy, currentUserId),
+        outsideRetainedMatters(
+          desktopEditSessions.workspaceId,
+          retainedWorkspaceIds,
+        ),
+      ),
+    );
 };
 
 const DELETE_PDF_SIGNING_SESSIONS_TABLES = [
@@ -1054,22 +1131,32 @@ const DELETE_PDF_SIGNING_SESSIONS_TABLES = [
  * than a workflow trace: they are deleted outright instead of anonymized.
  * Nothing of theirs lives in object storage.
  */
-export const deletePdfSigningSessions = async (
-  tx: Transaction,
-  currentUserId: string,
-): Promise<void> => {
+export const deletePdfSigningSessions = async ({
+  tx,
+  currentUserId,
+  retainedWorkspaceIds,
+}: RetainedMatterContentOptions): Promise<void> => {
   await tx
     .delete(pdfSigningSessions)
-    .where(eq(pdfSigningSessions.createdBy, currentUserId));
+    .where(
+      and(
+        eq(pdfSigningSessions.createdBy, currentUserId),
+        outsideRetainedMatters(
+          pdfSigningSessions.workspaceId,
+          retainedWorkspaceIds,
+        ),
+      ),
+    );
 };
 
 export type DeletePendingUploadsParams = {
   tx: Transaction;
   currentUserId: string;
   s3KeysToDelete: string[];
+  retainedWorkspaceIds: readonly SafeId<"workspace">[];
 };
 
-export const DELETE_PENDING_UPLOADS_TABLES = [
+const DELETE_PENDING_UPLOADS_TABLES = [
   pendingUploads,
 ] as const satisfies readonly PgTable[];
 
@@ -1080,25 +1167,13 @@ export const deletePendingUploads = async ({
   tx,
   currentUserId,
   s3KeysToDelete,
+  retainedWorkspaceIds,
 }: DeletePendingUploadsParams): Promise<void> => {
-  const stagedUploadRows = await tx
-    .select({
-      declaredMime: pendingUploads.declaredMime,
-      id: pendingUploads.id,
-      organizationId: pendingUploads.organizationId,
-      purpose: pendingUploads.purpose,
-      purposeData: pendingUploads.purposeData,
-      status: pendingUploads.status,
-      workspaceId: pendingUploads.workspaceId,
-    })
-    .from(pendingUploads)
-    .where(
-      and(
-        eq(pendingUploads.userId, currentUserId),
-        ne(pendingUploads.status, "finalized"),
-      ),
-    )
-    .for("update");
+  const stagedUploadRows = await lockAccountDeletionPendingUploads({
+    tx,
+    currentUserId,
+    retainedWorkspaceIds,
+  });
   s3KeysToDelete.push(
     ...stagedUploadRows.flatMap(pendingUploadS3KeysForDeletion),
   );
@@ -1130,7 +1205,15 @@ export const deletePendingUploads = async ({
 
   await tx
     .delete(pendingUploads)
-    .where(eq(pendingUploads.userId, currentUserId));
+    .where(
+      and(
+        eq(pendingUploads.userId, currentUserId),
+        outsideRetainedMatters(
+          pendingUploads.workspaceId,
+          retainedWorkspaceIds,
+        ),
+      ),
+    );
 };
 
 export type DeleteFileComparisonUploadsParams = {
@@ -1139,7 +1222,7 @@ export type DeleteFileComparisonUploadsParams = {
   s3KeysToDelete: string[];
 };
 
-export const DELETE_FILE_COMPARISON_UPLOADS_TABLES = [
+const DELETE_FILE_COMPARISON_UPLOADS_TABLES = [
   fileComparisonUploads,
 ] as const satisfies readonly PgTable[];
 
@@ -1179,9 +1262,10 @@ export type DeleteUserFilesParams = {
   tx: Transaction;
   currentUserId: SafeId<"user">;
   s3KeysToDelete: string[];
+  retainedWorkspaceIds: readonly SafeId<"workspace">[];
 };
 
-export const DELETE_USER_FILES_TABLES = [
+const DELETE_USER_FILES_TABLES = [
   userFiles,
   accountExports,
 ] as const satisfies readonly PgTable[];
@@ -1195,6 +1279,7 @@ export const deleteUserFiles = async ({
   tx,
   currentUserId,
   s3KeysToDelete,
+  retainedWorkspaceIds,
 }: DeleteUserFilesParams): Promise<Date | null> => {
   // audit: skip - The enclosing account-deletion request records file and export erasure in this transaction.
   // The account lock held by erasure fences claims and completion. Reclaimed
@@ -1234,7 +1319,12 @@ export const deleteUserFiles = async ({
     })
     .from(userFiles)
     .innerJoin(chatThreads, eq(chatThreads.id, userFiles.threadId))
-    .where(eq(userFiles.userId, currentUserId));
+    .where(
+      and(
+        eq(userFiles.userId, currentUserId),
+        erasableChatThreads(retainedWorkspaceIds),
+      ),
+    );
 
   if (files.length > 0) {
     s3KeysToDelete.push(
@@ -1258,11 +1348,24 @@ export const deleteUserFiles = async ({
     );
   }
 
-  await tx.delete(userFiles).where(eq(userFiles.userId, currentUserId));
+  await tx
+    .delete(userFiles)
+    .where(
+      and(
+        eq(userFiles.userId, currentUserId),
+        inArray(
+          userFiles.threadId,
+          tx
+            .select({ id: chatThreads.id })
+            .from(chatThreads)
+            .where(erasableChatThreads(retainedWorkspaceIds)),
+        ),
+      ),
+    );
   return exportObjects.at(0)?.notBefore ?? null;
 };
 
-export const DELETE_CHAT_THREADS_TABLES = [
+const DELETE_CHAT_THREADS_TABLES = [
   fileChatThreads,
   chatThreads,
 ] as const satisfies readonly PgTable[];
@@ -1271,17 +1374,33 @@ export const DELETE_CHAT_THREADS_TABLES = [
  * 10. AI chat threads — messages and fileChatThreads cascade on thread
  * deletion.
  */
-export const deleteChatThreadsAndFileLinks = async (
-  tx: Transaction,
-  currentUserId: string,
-): Promise<void> => {
+export const deleteChatThreadsAndFileLinks = async ({
+  tx,
+  currentUserId,
+  retainedWorkspaceIds,
+}: RetainedMatterContentOptions): Promise<void> => {
   await tx
     .delete(fileChatThreads)
-    .where(eq(fileChatThreads.userId, currentUserId));
-  await tx.delete(chatThreads).where(eq(chatThreads.userId, currentUserId));
+    .where(
+      and(
+        eq(fileChatThreads.userId, currentUserId),
+        outsideRetainedMatters(
+          fileChatThreads.workspaceId,
+          retainedWorkspaceIds,
+        ),
+      ),
+    );
+  await tx
+    .delete(chatThreads)
+    .where(
+      and(
+        eq(chatThreads.userId, currentUserId),
+        erasableChatThreads(retainedWorkspaceIds),
+      ),
+    );
 };
 
-export const DELETE_PERSONAL_AI_MEMORIES_TABLES = [
+const DELETE_PERSONAL_AI_MEMORIES_TABLES = [
   aiMemories,
 ] as const satisfies readonly PgTable[];
 
@@ -1291,25 +1410,44 @@ export const DELETE_PERSONAL_AI_MEMORIES_TABLES = [
  * memories and the suggestions only this user could review, and clear their
  * attribution on memories others already rely on.
  */
-export const deletePersonalAiMemories = async (
-  tx: Transaction,
-  currentUserId: string,
-): Promise<void> => {
+export const deletePersonalAiMemories = async ({
+  tx,
+  currentUserId,
+  retainedWorkspaceIds,
+}: RetainedMatterContentOptions): Promise<void> => {
   const userId = brandPersistedUserId(currentUserId);
 
-  await tx.delete(aiMemories).where(eq(aiMemories.userId, userId));
+  const erasableMemory = and(
+    outsideRetainedMatters(aiMemories.workspaceId, retainedWorkspaceIds),
+    ...(retainedWorkspaceIds.length === 0
+      ? []
+      : [
+          not(
+            arrayOverlaps(aiMemories.sourceDataWorkspaceIds, [
+              ...retainedWorkspaceIds,
+            ]),
+          ),
+        ]),
+  );
+  await tx
+    .delete(aiMemories)
+    .where(and(eq(aiMemories.userId, userId), erasableMemory));
   await tx
     .delete(aiMemories)
     .where(
-      and(eq(aiMemories.createdBy, userId), eq(aiMemories.status, "suggested")),
+      and(
+        eq(aiMemories.createdBy, userId),
+        eq(aiMemories.status, "suggested"),
+        erasableMemory,
+      ),
     );
   await tx
     .update(aiMemories)
     .set({ createdBy: null })
-    .where(eq(aiMemories.createdBy, userId));
+    .where(and(eq(aiMemories.createdBy, userId), erasableMemory));
 };
 
-export const DELETE_WORKSPACE_VIEW_TEMPLATES_TABLES = [
+const DELETE_WORKSPACE_VIEW_TEMPLATES_TABLES = [
   workspaceViewTemplates,
   agentSkills,
 ] as const satisfies readonly PgTable[];
@@ -1327,7 +1465,7 @@ export const deletePersonalWorkspaceViewTemplatesAndAgentSkills = async (
   await tx.delete(agentSkills).where(eq(agentSkills.userId, currentUserId));
 };
 
-export const DELETE_BILLING_RATES_TABLES = [
+const DELETE_BILLING_RATES_TABLES = [
   rateEntries,
 ] as const satisfies readonly PgTable[];
 
@@ -1343,6 +1481,7 @@ export const deletePersonalBillingRates = async (
 
 const DELETE_SEARCH_HISTORY_TABLES = [
   searchHistoryEntries,
+  searchHistoryCountryClears,
   searchHistoryOwners,
   searchHistoryTombstones,
 ] as const satisfies readonly PgTable[];
@@ -1416,6 +1555,151 @@ export const deleteSearchHistory = async (
   await recordAuditGroups({ tx, groups: auditGroups });
 };
 
+const DELETE_PUSH_DEVICES_TABLES = [
+  pushDevices,
+  timerActivityDevices,
+] as const satisfies readonly PgTable[];
+
+/**
+ * 15. Mobile push devices and the phones that show the person's timer, in
+ * every organization. A device token is personal
+ * data with no history value, and the user row is soft-deleted, so the
+ * `user_id` cascade never fires.
+ */
+export const deletePushDevices = async (
+  tx: Transaction,
+  currentUserId: SafeId<"user">,
+): Promise<void> => {
+  // audit: skip - the account deletion request records this erasure
+  await tx.delete(pushDevices).where(eq(pushDevices.userId, currentUserId));
+  // audit: skip - the account deletion request records this erasure
+  await tx
+    .delete(timerActivityDevices)
+    .where(eq(timerActivityDevices.userId, currentUserId));
+};
+
+const DELETE_DESKTOP_RUNNERS_TABLES = [
+  desktopRunners,
+  desktopRunnerRuns,
+] as const satisfies readonly PgTable[];
+
+/**
+ * 16. The person's desktop runners and their runs, in every organization,
+ * recorded per organization. Runners go first, as a session claim locks a
+ * runner before its runs; their runs cascade, and are then deleted by name
+ * too, since each keeps its output key. Queued commands, events and folder
+ * restores cascade. The user row is soft-deleted, so the `user_id` cascade
+ * never fires.
+ */
+export const deleteDesktopRunners = async (
+  tx: Transaction,
+  currentUserId: SafeId<"user">,
+): Promise<void> => {
+  const removed = await tx
+    .delete(desktopRunners)
+    .where(eq(desktopRunners.userId, currentUserId))
+    .returning({ organizationId: desktopRunners.organizationId });
+  await tx
+    .delete(desktopRunnerRuns)
+    .where(eq(desktopRunnerRuns.userId, currentUserId));
+  const runnersByOrganization = new Map<SafeId<"organization">, number>();
+  for (const { organizationId } of removed) {
+    runnersByOrganization.set(
+      organizationId,
+      (runnersByOrganization.get(organizationId) ?? 0) + 1,
+    );
+  }
+  await recordAuditGroups({
+    tx,
+    groups: [...runnersByOrganization].map(([organizationId, runnerCount]) => ({
+      bindings: {
+        organizationId,
+        workspaceId: null,
+        userId: currentUserId,
+        execution: {
+          performer: { type: "user" as const, id: currentUserId },
+          trigger: { type: "system" as const, source: "account_deletion" },
+        },
+      },
+      events: [
+        {
+          action: AUDIT_ACTION.DELETE,
+          resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+          resourceId: organizationId,
+          metadata: {
+            change: "member-desktop-runners-cleared",
+            userId: currentUserId,
+            runnerCount,
+          },
+        },
+      ],
+    })),
+  });
+};
+
+const DELETE_PERSONAL_RECORDS_TABLES = [
+  legalReaderAnnotations,
+  savedTimeNarratives,
+  billingDraftUserSettings,
+  savedSearches,
+  templateLookupFormatUserDefaults,
+  userProfessionalUseAcceptances,
+  feedbackReports,
+] as const satisfies readonly PgTable[];
+
+/**
+ * 17. Personal records the account export returns: private reader notes,
+ * saved narratives and searches, billing-draft and template preferences, and
+ * the professional-use acceptance. Shared reader notes stay with the
+ * organization. Filed feedback stays with the maintainers without its
+ * reporter link. The user row is soft-deleted, so none of these foreign-key
+ * actions fire on their own.
+ */
+export const deletePersonalRecords = async (
+  tx: Transaction,
+  currentUserId: SafeId<"user">,
+): Promise<void> => {
+  // These tables admit the owner connection only for the erasing account.
+  await tx.execute(
+    sql`SELECT set_config(${ACCOUNT_ERASURE_USER_SETTING}, ${currentUserId}, true)`,
+  );
+  // audit: skip - the account deletion request records this erasure
+  await tx
+    .delete(legalReaderAnnotations)
+    .where(
+      and(
+        eq(legalReaderAnnotations.userId, currentUserId),
+        eq(legalReaderAnnotations.visibility, "private"),
+      ),
+    );
+  // audit: skip - the account deletion request records this erasure
+  await tx
+    .delete(savedTimeNarratives)
+    .where(eq(savedTimeNarratives.userId, currentUserId));
+  // audit: skip - the account deletion request records this erasure
+  await tx
+    .delete(billingDraftUserSettings)
+    .where(eq(billingDraftUserSettings.userId, currentUserId));
+  await tx.execute(
+    sql`SELECT set_config(${ACCOUNT_ERASURE_USER_SETTING}, '', true)`,
+  );
+  // audit: skip - the account deletion request records this erasure
+  await tx.delete(savedSearches).where(eq(savedSearches.userId, currentUserId));
+  // audit: skip - the account deletion request records this erasure
+  await tx
+    .delete(templateLookupFormatUserDefaults)
+    .where(eq(templateLookupFormatUserDefaults.userId, currentUserId));
+  // audit: skip - the account deletion request records this erasure
+  await tx
+    .delete(userProfessionalUseAcceptances)
+    .where(eq(userProfessionalUseAcceptances.userId, currentUserId));
+  // audit: skip - the account deletion request records this erasure
+  await tx
+    .update(feedbackReports)
+    .set({ userId: null })
+    .where(eq(feedbackReports.userId, currentUserId));
+};
+
 export type RecordAccountDeletionRequestParams = {
   tx: Transaction;
   deletionRequestId: SafeId<"accountDeletionRequest">;
@@ -1425,6 +1709,7 @@ export type RecordAccountDeletionRequestParams = {
   taskReassignmentCount: number;
   s3KeysToDelete: string[];
   storageCleanupNotBefore?: Date | null;
+  retainedWorkspaceIds: readonly SafeId<"workspace">[];
 };
 
 /**
@@ -1441,6 +1726,7 @@ export const recordAccountDeletionRequest = async ({
   taskReassignmentCount,
   s3KeysToDelete,
   storageCleanupNotBefore,
+  retainedWorkspaceIds,
 }: RecordAccountDeletionRequestParams): Promise<void> => {
   const effectChunks = createS3DeletionEffectChunks(s3KeysToDelete);
   await tx.insert(accountDeletionRequests).values({
@@ -1449,6 +1735,12 @@ export const recordAccountDeletionRequest = async ({
     organizationIds,
     workspaceIds,
     taskReassignmentCount,
+    erasureReport: {
+      retainedMatterContent: retainedWorkspaceIds.map((id) => ({
+        workspaceId: id,
+        reason: "establishment_or_defence_of_legal_claims",
+      })),
+    },
     status: s3KeysToDelete.length > 0 ? "pending" : "completed",
     storageCleanup: {
       s3Keys: s3KeysToDelete,
@@ -1509,6 +1801,9 @@ export const ACCOUNT_DELETION_MANUAL_TABLES = [
   ...DELETE_WORKSPACE_VIEW_TEMPLATES_TABLES,
   ...DELETE_BILLING_RATES_TABLES,
   ...DELETE_SEARCH_HISTORY_TABLES,
+  ...DELETE_PUSH_DEVICES_TABLES,
+  ...DELETE_DESKTOP_RUNNERS_TABLES,
+  ...DELETE_PERSONAL_RECORDS_TABLES,
 ] as const satisfies readonly PgTable[];
 
 type AccountDeletionNonFkOwnership = {
@@ -1528,4 +1823,6 @@ type AccountDeletionNonFkOwnership = {
 export const ACCOUNT_DELETION_NON_FK_OWNERSHIP = [
   { table: agentRegistration, userColumn: agentRegistration.boundUserId },
   { table: agentDelegation, userColumn: agentDelegation.userId },
+  // A run's owner is bound through its runner, whose `user_id` holds the FK.
+  { table: desktopRunnerRuns, userColumn: desktopRunnerRuns.userId },
 ] as const satisfies readonly AccountDeletionNonFkOwnership[];

@@ -59,6 +59,7 @@ import { createTestPglite } from "@/api/tests/pglite-test-db";
 import {
   createSanctionsMatcherPool,
   SANCTIONS_MATCHER_CONFIG,
+  SANCTIONS_MATCHER_REPLY_GRACE_MS,
 } from "./matcher-pool";
 import type { MatcherWorkOutcome } from "./matcher-pool";
 import type { SanctionsMatcherSession } from "./matcher-pool-core";
@@ -87,6 +88,12 @@ const FRESH_NOW = new Date(VERIFIED_AT.getTime() + HOUR_MS);
 // Past the 48-hour limit most lists carry, within the 14 days of the Czech one.
 const STALE_NOW = new Date(VERIFIED_AT.getTime() + 72 * HOUR_MS);
 const TRUNCATED_ENTRIES = SANCTIONS_MATCH_LIMIT + 5;
+/** The fields these tests read from an emitted metric line. */
+type MetricLine = {
+  SanctionsScreeningListCompletion?: unknown;
+  source?: unknown;
+  outcome?: unknown;
+};
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
@@ -435,7 +442,10 @@ describe("sanctions screening service", () => {
         // A capped scan that found matches stays a possible match.
         expect(result.unwrap().status).toBe("possible-match");
         const metrics = metricLines
-          .map((line) => JSON.parse(line))
+          .map((line) => {
+            const metric: MetricLine = JSON.parse(line);
+            return metric;
+          })
           .filter(({ SanctionsScreeningListCompletion }) =>
             Number.isInteger(SanctionsScreeningListCompletion),
           );
@@ -880,6 +890,56 @@ test("a cold start converges when editions load for longer than any request dead
   }
 });
 
+test("an edition re-warms after the worker holding its index is retired", async () => {
+  const workers: Worker[] = [];
+  const loads = new Map<SanctionsSource, number>();
+  const pool = createSanctionsMatcherPool({
+    createWorker: () => {
+      const worker = new Worker(
+        new URL("sanctions-matcher-worker.ts", import.meta.url),
+      );
+      workers.push(worker);
+      return worker;
+    },
+  });
+  const publicScreen = createPublicSanctionsScreening({
+    pool,
+    loadEntries: async (options) => {
+      const entries = await loadEditionEntries(options);
+      const source = entries.at(0)?.source ?? panic("Missing fixture entry");
+      loads.set(source, (loads.get(source) ?? 0) + 1);
+      return entries;
+    },
+  });
+  try {
+    await publicScreen(publicProps("A Completely Distant Name"));
+    await publicScreen.warmupSettled();
+    expect(
+      (await publicScreen(publicProps("A Completely Distant Name"))).unwrap()
+        .status,
+    ).toBe("clear");
+
+    const first = workers.at(0) ?? panic("Missing matcher worker");
+    await first.terminate();
+    const recovering = (
+      await publicScreen(publicProps("A Completely Distant Name"))
+    ).unwrap();
+    expect(recovering.lists.every(({ reason }) => reason === "warming")).toBe(
+      true,
+    );
+    await publicScreen.warmupSettled();
+
+    expect(
+      (await publicScreen(publicProps("A Completely Distant Name"))).unwrap()
+        .status,
+    ).toBe("clear");
+    expect(workers).toHaveLength(2);
+    expect([...loads.values()].every((count) => count === 2)).toBe(true);
+  } finally {
+    await pool.close();
+  }
+});
+
 test("a startup failure remains tied to its edition while a replacement warms", async () => {
   const clock = createMatcherTestClock();
   const pool = createSanctionsMatcherPool({ clock });
@@ -1103,6 +1163,131 @@ test("concurrent cold requests share one warmup and its read never holds the mat
     expect(reads).toBe(sanctionsSourceIds().length);
   } finally {
     gate.resolve(undefined);
+    await pool.close();
+  }
+});
+
+test("screening deadlines between edition leases do not discard warmed indexes", async () => {
+  const clock = createMatcherTestClock();
+  const workers: Worker[] = [];
+  const pool = createSanctionsMatcherPool({
+    clock,
+    createWorker: () => {
+      const worker = new Worker(
+        new URL("sanctions-matcher-worker.ts", import.meta.url),
+      );
+      workers.push(worker);
+      return worker;
+    },
+  });
+  const editions = new Map(
+    (await readSanctionsFreshness({ db: requestDb, now: FRESH_NOW })).flatMap(
+      ({ source, edition }) => (edition === null ? [] : [[source, edition]]),
+    ),
+  );
+  const firstSource: SanctionsSource = "eu";
+  const secondSource: SanctionsSource = "uk";
+  const firstEdition =
+    editions.get(firstSource) ?? panic("Missing first fixture edition");
+  const secondEdition =
+    editions.get(secondSource) ?? panic("Missing second fixture edition");
+  const secondRead = Promise.withResolvers<undefined>();
+  const releaseSecondRead = Promise.withResolvers<undefined>();
+  const indexed = new Map<SanctionsSource, number>();
+  const reloading = new Set<SanctionsSource>();
+  let trackReloads = false;
+  let stalledReads = 0;
+  const releaseStalledReads = Promise.withResolvers<undefined>();
+  const publicScreen = createPublicSanctionsScreening({
+    pool: {
+      ...pool,
+      run: async (work, options) =>
+        await pool.run(
+          async (session) =>
+            await work({
+              ...session,
+              hasEdition: (source, editionId) =>
+                !reloading.has(source) && session.hasEdition(source, editionId),
+              load: async (request) => {
+                if (trackReloads) {
+                  indexed.set(
+                    request.source,
+                    (indexed.get(request.source) ?? 0) + 1,
+                  );
+                }
+                const reply = await session.load(request);
+                if (reply === "indexed") {
+                  reloading.delete(request.source);
+                }
+                return reply;
+              },
+            }),
+          options,
+        ),
+    },
+    clock,
+    loadEntries: async (options) => {
+      if (trackReloads && options.edition.id === secondEdition.id) {
+        secondRead.resolve(undefined);
+        await releaseSecondRead.promise;
+      }
+      return await loadEditionEntries(options);
+    },
+  });
+  try {
+    await publicScreen(publicProps("A Completely Distant Name"));
+    await publicScreen.warmupSettled();
+    expect(workers).toHaveLength(1);
+
+    trackReloads = true;
+    reloading.add(firstSource);
+    reloading.add(secondSource);
+    publicScreen.warmupWant(requestDb, firstSource, firstEdition);
+    publicScreen.warmupWant(requestDb, secondSource, secondEdition);
+    await secondRead.promise;
+    expect(indexed.get(firstSource)).toBe(1);
+
+    const stalledDb: ScopedDb = async (operation) => {
+      stalledReads += 1;
+      await releaseStalledReads.promise;
+      return await requestDb(operation);
+    };
+    const requests = Array.from(
+      { length: 4 },
+      async (_, index) =>
+        await publicScreen({
+          ...publicProps(`Gap Request ${index}`),
+          db: stalledDb,
+        }),
+    );
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve);
+    });
+    clock.advance(SANCTIONS_MATCHER_CONFIG.deadlineMs);
+    releaseStalledReads.resolve(undefined);
+    for (const request of requests) {
+      const answer = (await request).unwrap();
+      expect(["clear", "unavailable"]).toContain(answer.status);
+      expect(answer.lists).toHaveLength(sanctionsSourceIds().length);
+    }
+    expect(stalledReads).toBeGreaterThan(0);
+    expect(stalledReads).toBeLessThanOrEqual(
+      SANCTIONS_MATCHER_CONFIG.poolSizeMax,
+    );
+
+    releaseSecondRead.resolve(undefined);
+    await publicScreen.warmupSettled();
+    expect(indexed).toEqual(
+      new Map([
+        [firstSource, 1],
+        [secondSource, 1],
+      ]),
+    );
+    expect(workers).toHaveLength(1);
+  } finally {
+    releaseStalledReads.resolve(undefined);
+    releaseSecondRead.resolve(undefined);
+    await publicScreen.warmupSettled();
     await pool.close();
   }
 });
@@ -1680,9 +1865,12 @@ test.each(["hang", "crash"] as const)(
       expect((await ask()).status).toBe("unavailable");
       await entered.promise;
       if (fault === "hang") {
-        // Only the stall limit frees a hung worker; a request deadline never does.
+        // The stall limit fails the warm lease, then the bounded reply grace
+        // retires the worker that never answered.
         expect(clock.pending()).toEqual([SANCTIONS_WARM_STALL_MS]);
         clock.advance(SANCTIONS_WARM_STALL_MS);
+        expect(clock.pending()).toEqual([SANCTIONS_MATCHER_REPLY_GRACE_MS]);
+        clock.advance(SANCTIONS_MATCHER_REPLY_GRACE_MS);
       } else {
         await crashed.promise;
       }
@@ -1805,7 +1993,10 @@ test("a bounded scan with no matches is incomplete and keeps its screened editio
       expect(list.editionId).not.toBeNull();
       expect(list.verifiedAt).not.toBeNull();
     }
-    const metrics = metricLines.map((line) => JSON.parse(line));
+    const metrics = metricLines.map((line) => {
+      const metric: MetricLine = JSON.parse(line);
+      return metric;
+    });
     expect(metrics).toHaveLength(sanctionsSourceIds().length);
     expect(metrics.map(({ source, outcome }) => [source, outcome])).toEqual(
       sanctionsSourceIds().map((source) => [source, "incomplete"]),

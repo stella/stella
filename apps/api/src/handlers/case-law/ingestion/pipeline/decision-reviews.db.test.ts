@@ -19,7 +19,7 @@ import { lockCaseLawDecisionSnapshot } from "@/api/lib/db/aggregate-lock";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const MIGRATION =
-  "../../../../../drizzle/20261029094325_case_law_decision_reviews/migration.sql";
+  "../../../../../drizzle/20261116090100_case_law_decision_reviews/migration.sql";
 const REVIEWING = toSafeId<"caseLawDecision">(
   "019dd78d-2e0c-7000-955a-63d713b246ba",
 );
@@ -76,14 +76,10 @@ const prepare = async () => {
     FOR ALL TO public USING (current_user = (SELECT pg_get_userbyid(relowner) FROM pg_class WHERE oid = 'public.system_audit_runs'::regclass))
     WITH CHECK (current_user = (SELECT pg_get_userbyid(relowner) FROM pg_class WHERE oid = 'public.system_audit_runs'::regclass));`);
   await client.exec(await Bun.file(new URL(MIGRATION, import.meta.url)).text());
-  await client.exec(
-    await Bun.file(
-      new URL(
-        "../../../../../drizzle/20261029094525_review_reconciliation_audit/migration.sql",
-        import.meta.url,
-      ),
-    ).text(),
-  );
+  // The ingestion role's audit insert, as granted by the soft-law serving migration.
+  await client.exec(`GRANT INSERT ON TABLE system_audit_runs TO stella_ingestion;
+  CREATE POLICY system_audit_runs_ingestion_insert ON system_audit_runs
+    AS PERMISSIVE FOR INSERT TO stella_ingestion WITH CHECK (true);`);
   return client;
 };
 type Db = ReturnType<typeof drizzle>;

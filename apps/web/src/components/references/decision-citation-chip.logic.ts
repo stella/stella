@@ -8,8 +8,6 @@ import {
   createCaseLawDecisionRouteParams,
 } from "@stll/api-contract/case-law-decision-route";
 
-import { DECISION_CITATION_PRESENTATION } from "@/components/references/decision-citation-presentation.logic";
-import type { DecisionCitationPresentation } from "@/components/references/decision-citation-presentation.logic";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 
 export type DecisionCitationMetadata = {
@@ -198,25 +196,6 @@ export const decisionCitationCourtLabel = ({
   ...court
 }: DecisionCitationCourtInput): string =>
   registeredCode ?? courtAbbreviation(court) ?? court.court;
-
-/**
- * How a citation drawn beside the text it was found in presents itself. The
- * expanded chip repeats the case number so two decisions of one court read
- * apart; text that already prints that number has told them apart, so its
- * chip keeps only the court.
- */
-export const presentationBesideCitationText = ({
-  caseNumber,
-  citationText,
-  presentation,
-}: {
-  caseNumber: string;
-  citationText: string;
-  presentation: DecisionCitationPresentation;
-}): DecisionCitationPresentation =>
-  citationTextNamesCase(citationText, caseNumber)
-    ? DECISION_CITATION_PRESENTATION.compact
-    : presentation;
 
 /** What a citation shows of a loaded decision, and where it opens. */
 export const decisionCitationMetadata = (

@@ -5,7 +5,7 @@ import { VISUAL_SANDBOX_LIMITS } from "@stll/api-contract/visual-sandbox";
 import { VISUAL_THEME_VARIABLES } from "@stll/api-contract/visual-theme";
 import { assertProperty } from "@stll/property-testing";
 
-import { sanitizeVisualHtml } from "./sanitize";
+import { sanitizeVisualHtml, VisualMarkupError } from "./sanitize";
 
 describe("visual presentation markup", () => {
   test("preserves inline interactive scripts after document normalization", () => {
@@ -103,6 +103,7 @@ describe("visual presentation markup", () => {
       const result = sanitizeVisualHtml(html);
       expect(result.isErr()).toBe(true);
       if (result.isErr()) {
+        expect(result.error).toBeInstanceOf(VisualMarkupError);
         expect(result.error.reason).toBe(reason);
       }
     }

@@ -1,17 +1,19 @@
 import { panic } from "better-result";
 import { afterEach, expect, test } from "bun:test";
-import * as cheerio from "cheerio";
-import { isTag } from "domhandler";
 
+import { load } from "@stll/html";
+import { isTag } from "@stll/html/nodes";
+
+import { listAdapters } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
+import baseline from "@/api/handlers/case-law/ingestion/adapters/silent-drop-guard-baseline.json";
 import {
   decodeSourceRawEnvelope,
   encodeSourceRawEnvelope,
   type StoredRawReparseInput,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import { listAdapters } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
-import baseline from "@/api/handlers/case-law/ingestion/adapters/silent-drop-guard-baseline.json";
+} from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 import {
+  brTstFixture,
   czNsFixture,
   czNssFixture,
   czRegionalFixture,
@@ -29,6 +31,9 @@ import {
   skUsFixture,
   ukFclFixture,
 } from "@/api/tests/helpers/case-law-enrolled-fixtures";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+
+const testFetchState = createTestFetch();
 
 type SupportedDriver = {
   driver: "html" | "xml" | "json-text";
@@ -153,14 +158,43 @@ rozhodnutí a dospěl k závěru, že řízení bylo vedeno v souladu se zákone
     part: "detail",
     file: "pl-uokik-detail-2520d55b0f17a317c1257ec6007b9773.html",
   },
+  "cz-uohs": {
+    driver: "unsupported",
+    reason:
+      "Decision text is read from stored PDF and office document objects, which require an object-level driver.",
+  },
+  // The listing row is JSON whose one parsed markup is the full text. The
+  // record's highlight renderings repeat that text and are deliberately not
+  // read (the inventory excludes them), so the probe record carries the full
+  // text alone, keyed as the fixture's decision is.
+  "br-tst": {
+    driver: "html",
+    fixture: brTstFixture,
+    part: "listing",
+    text: JSON.stringify({
+      id: "1440689e193408199c97a145c130b652",
+      tipo: { codigoTipoJurisprudencia: "ACORDAO", nome: "Acordão" },
+      orgao: { numero: 0, nome: "Tribunal Superior do Trabalho", sigla: "TST" },
+      numFormatado: "RR - 1000-10.2020.5.01.0001",
+      dtaJulgamento: "2024-03-06",
+      inteiroTeorHtml: `<html><head></head><body>
+<!-- Synthetic document fixture; no published case or personal data. -->
+<p class=Identificaaao><span><b>A C Ó R D Ã O</b></span></p>
+<p class=Ementa><span><b>RECURSO DE REVISTA. </b></span><span><i>Conhecimento</i> e provimento.</span></p>
+<p class=Voto><span><b>V O T O</b></span></p>
+<p class=Corpo><span>Conheço do recurso <u>por violação</u> do artigo.</span></p>
+<p class=Date><span>Brasília, 6 de março de 2024.</span></p>
+</body></html>`,
+    }),
+  },
 } as const satisfies Record<string, Driver>;
 const drivers = new Map<string, Driver>(Object.entries(DRIVERS));
 const replayAdapters = listAdapters().filter(
   ({ reparseStoredRaw }) => reparseStoredRaw !== undefined,
 );
-const originalFetch = globalThis.fetch;
+
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
 });
 
 type Slot = { path: readonly (string | number)[]; text: string };
@@ -200,7 +234,7 @@ const replaceSlot = (
     return text;
   }
   if (Array.isArray(value) && typeof key === "number") {
-    return value.map((item, index) =>
+    return value.map((item: unknown, index) =>
       index === key ? replaceSlot(item, rest, text) : item,
     );
   }
@@ -472,7 +506,7 @@ for (const adapter of replayAdapters) {
     ).toBe("parsed");
     const misses: string[] = [];
     for (const [slotIndex, slot] of slots.entries()) {
-      const $ = cheerio.load(slot.text, { xml: driver.driver === "xml" });
+      const $ = load(slot.text, { xml: driver.driver === "xml" });
       const roots =
         driver.textRoot === undefined
           ? $("*")
@@ -502,7 +536,7 @@ for (const adapter of replayAdapters) {
         const bare = tokens.at(2) ?? panic("Bare marker missing");
         let mutated = `${first} ${slot.text} ${last} ${bare}`;
         if (driver.driver !== "json-text") {
-          const dom = cheerio.load(slot.text, { xml: driver.driver === "xml" });
+          const dom = load(slot.text, { xml: driver.driver === "xml" });
           const candidates =
             driver.textRoot === undefined
               ? dom("*")

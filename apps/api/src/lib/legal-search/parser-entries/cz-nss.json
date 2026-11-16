@@ -1,0 +1,11 @@
+{
+  "type": "parser",
+  "name": "CZ_NSS",
+  "key": "cz-nss",
+  "parserVersion": 39,
+  "sourceFingerprintVersion": 0,
+  "scope": {
+    "type": "all",
+    "reason": "Recompute publisher field occurrences, table tuples and references from every held detail page; document-only legacy raw retains its existing metadata."
+  }
+}

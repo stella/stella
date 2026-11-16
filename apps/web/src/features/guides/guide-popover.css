@@ -32,7 +32,7 @@
     var(--primary-foreground)
   );
   --stella-guide-ring: var(--color-ring, var(--ring));
-  --stella-guide-radius: var(--radius, 0.625rem);
+  --stella-guide-radius: var(--radius-lg, 0.5rem);
 
   --stella-guide-width: min(34rem, calc(100vw - 2rem));
 

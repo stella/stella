@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { createTestState } from "@stll/test-state";
+
 import { env } from "@/api/env";
 import { envApiServerSchema } from "@/api/env-schema";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -10,6 +12,8 @@ import {
   resolveMcpReadFencePolicy,
 } from "@/api/lib/rate-limit/mcp-read-fence";
 import { MCP_READ_MAX_ENTRIES } from "@/api/lib/rate-limit/mcp-read-fence-policy";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const identity = {
   organizationId: toSafeId<"organization">("org_read_a"),
@@ -190,13 +194,9 @@ describe("shared read windows", () => {
   });
 
   test("missing operator configuration is unavailable", () => {
-    const previous = env.MCP_READ_WINDOW_MS;
-    env.MCP_READ_WINDOW_MS = undefined;
-    try {
-      expect(Result.isError(resolveMcpReadFencePolicy())).toBe(true);
-    } finally {
-      env.MCP_READ_WINDOW_MS = previous;
-    }
+    testState.setConfig("MCP_READ_WINDOW_MS", undefined);
+
+    expect(Result.isError(resolveMcpReadFencePolicy())).toBe(true);
   });
 
   test("a timeout with disconnected cancellation stays unavailable with both causes", async () => {

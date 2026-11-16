@@ -1,12 +1,102 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  fixtureHasExpectedError,
+  newGuardRolloutErrors,
   NON_PLUGIN_MODULES,
   redeclaredSharedHelpers,
   ruleNamesFromSource,
 } from "./check-oxlint-plugin-registry.ts";
 
+test("a new rule must ship a registered repair or dated changed-lines scope", () => {
+  const rule = "no-raw-path-relative/no-raw-path-relative";
+  const options = { rules: [rule], now: new Date("2026-10-13T00:00:00.000Z") };
+  expect(newGuardRolloutErrors({ ...options, rollouts: [] })).toHaveLength(1);
+  expect(
+    newGuardRolloutErrors({
+      ...options,
+      rollouts: [
+        {
+          id: "fixture",
+          rules: [rule],
+          type: "changed-lines",
+          expiresAt: "2026-10-20T00:00:00.000Z",
+          check: [],
+        },
+      ],
+    }),
+  ).toEqual([]);
+  expect(
+    newGuardRolloutErrors({
+      ...options,
+      rollouts: [{ id: "path", rules: [rule], type: "full", check: [] }],
+    }),
+  ).toHaveLength(1);
+  expect(
+    newGuardRolloutErrors({
+      ...options,
+      rollouts: [
+        {
+          id: "path",
+          rules: [rule],
+          type: "autofix",
+          generator: "unknown",
+          check: [],
+        },
+      ],
+    }),
+  ).toHaveLength(1);
+  expect(
+    newGuardRolloutErrors({
+      ...options,
+      rollouts: [
+        {
+          id: "path",
+          rules: [rule],
+          type: "autofix",
+          generator: "cloud-setup",
+          check: [],
+        },
+      ],
+    }),
+  ).toEqual([]);
+  for (const expiresAt of [
+    "invalid",
+    "2026-10-13T00:00:00.000Z",
+    "2026-10-20T00:00:00.001Z",
+  ]) {
+    expect(
+      newGuardRolloutErrors({
+        ...options,
+        rollouts: [
+          {
+            id: "path",
+            rules: [rule],
+            type: "changed-lines",
+            expiresAt,
+            check: [],
+          },
+        ],
+      }),
+    ).toHaveLength(1);
+  }
+});
+
 describe("plugin rule census", () => {
+  test("recognizes suppression-free expect-error markers for the named rule", () => {
+    const source =
+      "// expect-error: searchable-long-select/searchable-long-select\nconst x = 1;";
+    expect(
+      fixtureHasExpectedError(
+        source,
+        "searchable-long-select/searchable-long-select",
+      ),
+    ).toBe(true);
+    expect(fixtureHasExpectedError(source, "some-other-plugin/some-rule")).toBe(
+      false,
+    );
+  });
+
   test("keeps shared rule data and detector helpers out of the plugin census", () => {
     expect(
       NON_PLUGIN_MODULES.has("public-law-decision-surface-modules.ts"),

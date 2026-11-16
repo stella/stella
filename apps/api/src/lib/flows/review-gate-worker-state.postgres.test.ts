@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
+import { createTestClock } from "@stll/test-kit";
+
 import { databaseRelations } from "@/api/db/database-relations";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -17,6 +19,8 @@ import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { flowReviewGateFixture } from "@/api/tests/helpers/flow-review-gate";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
+
+const stateClock = createTestClock();
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -396,11 +400,17 @@ if (!databaseUrl || !enabled) {
             try {
               await db
                 .update(flowRuns)
-                .set({ status: "running" })
+                .set({
+                  status: "running",
+                  startedAt: new Date(stateClock.now()),
+                })
                 .where(eq(flowRuns.id, f.runId));
               await db
                 .update(flowRunSteps)
-                .set({ status: "running" })
+                .set({
+                  status: "running",
+                  startedAt: new Date(stateClock.now()),
+                })
                 .where(eq(flowRunSteps.reviewTaskEntityId, f.taskEntityId));
               // Another delivery reached a gate while this worker held its
               // earlier snapshot. AI completion is now behind the next gate;
@@ -408,7 +418,11 @@ if (!databaseUrl || !enabled) {
               if (phase === "complete") {
                 await db
                   .update(flowRunSteps)
-                  .set({ status: "completed", reviewTaskEntityId: null })
+                  .set({
+                    status: "completed",
+                    finishedAt: new Date(stateClock.now()),
+                    reviewTaskEntityId: null,
+                  })
                   .where(eq(flowRunSteps.reviewTaskEntityId, f.taskEntityId));
                 const next = (await f.read()).steps.at(1);
                 if (!next) {
@@ -416,7 +430,10 @@ if (!databaseUrl || !enabled) {
                 }
                 await db
                   .update(flowRunSteps)
-                  .set({ status: "running" })
+                  .set({
+                    status: "running",
+                    startedAt: new Date(stateClock.now()),
+                  })
                   .where(eq(flowRunSteps.id, next.id));
                 await db
                   .update(flowRunSteps)
@@ -436,7 +453,10 @@ if (!databaseUrl || !enabled) {
                   .where(eq(flowRuns.id, f.runId));
                 await db
                   .update(flowRunSteps)
-                  .set({ status: "awaiting_review" })
+                  .set({
+                    status: "awaiting_review",
+                    startedAt: new Date(stateClock.now()),
+                  })
                   .where(eq(flowRunSteps.runId, f.runId));
               }
               if (first === "approve") {

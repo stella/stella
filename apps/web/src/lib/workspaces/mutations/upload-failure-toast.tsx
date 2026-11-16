@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import { Button } from "@stll/ui/button";
 import { stellaToast } from "@stll/ui/toast";
 
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
@@ -79,13 +80,15 @@ const UploadFailureDescription = ({
       {hidden.length > 0 && (
         <span className="block">
           {!showAll && (
-            <button
-              className="cursor-pointer underline select-none"
+            <Button
               onClick={() => setShowAll(true)}
-              type="button"
+              size="inline"
+              variant="link"
             >
+              {/* An inline link is always underlined: in a toast the
+                  underline is the only cue that the line acts. */}
               {labels.additionalFailures(hidden.length)}
-            </button>
+            </Button>
           )}
           {showAll && (
             <FailureList failures={hidden} fallback={labels.reasonFallback} />

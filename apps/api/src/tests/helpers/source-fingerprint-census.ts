@@ -15,18 +15,19 @@
 import { sha256Hex } from "@stll/sha256/node";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import {
-  decodeSourceRawEnvelope,
-  encodeSourceRawEnvelope,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import type { SourceRegistrationKey } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { courtListenerConformanceFixture } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/conformance-fixture";
 import { COURTLISTENER_IMPORT_KEY } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/map";
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import {
+  decodeSourceRawEnvelope,
+  encodeSourceRawEnvelope,
+} from "@/api/lib/legal-search/ingestion-types";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import {
   atFindokFixture,
   atRisFixture,
+  brTstAcordaoFixture,
   czNsFixture,
   czNssFixture,
   czRegionalFixture,
@@ -74,6 +75,7 @@ export const SOURCE_FINGERPRINT_DRIVERS = {
   [ADAPTER_KEYS.CZ_US]: one(czUsFixture),
   [ADAPTER_KEYS.CZ_REGIONAL]: one(czRegionalFixture),
   [ADAPTER_KEYS.CZ_UOHS]: one(czUohsFixture),
+  [ADAPTER_KEYS.BR_TST]: one(brTstAcordaoFixture),
   [ADAPTER_KEYS.SK_COURTS]: one(skCourtsFixture),
   [ADAPTER_KEYS.SK_US]: one(skUsFixture),
   [ADAPTER_KEYS.PL_COURTS]: [

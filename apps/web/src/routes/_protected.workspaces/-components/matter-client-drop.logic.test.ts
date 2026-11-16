@@ -47,6 +47,7 @@ describe("dropping a matter card on a client group", () => {
       resolveMatterClientDrop({ source: novakMatter, group: BERGER_GROUP }),
     ).toEqual({
       type: "move",
+      previousClientId: "client-novak",
       matterId: "matter-merger",
       matterName: "Merger due diligence",
       clientId: "client-berger",

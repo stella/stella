@@ -109,7 +109,15 @@ if (!databaseUrl || !runPostgresTests) {
         "failure.sink": SINK_EVENT,
         "error.sqlstate": "28P01",
       });
-      expect(analytics.exceptions()).toHaveLength(1);
+      // Count this probe's own failure: the process may still deliver an
+      // earlier file's late exception while this test runs.
+      expect(
+        analytics
+          .exceptions()
+          .filter(
+            (event) => event.properties["failure.reason"] === "pg_auth_failed",
+          ),
+      ).toHaveLength(1);
 
       const emitted = JSON.stringify({
         records: logs.records,

@@ -1,4 +1,4 @@
-//! The agent CLI releases this desktop build installs.
+//! The agent CLI and tool releases this desktop build installs.
 //!
 //! `harness/pins.json` names the versions. `scripts/generate-harness-releases.ts`
 //! reads the upstream metadata for them and writes `harness/releases.gen.json`:
@@ -58,6 +58,74 @@ impl ManagedHarness {
     match self {
       Self::Codex => output.strip_prefix("codex-cli ") == Some(version),
       Self::ClaudeCode => output.strip_suffix(" (Claude Code)") == Some(version),
+    }
+  }
+}
+
+/// A tool the desktop installs for the commands a run starts. It is not a
+/// harness: no chat can pick it, it has no status line and no configuration
+/// directory. A run finds it on the `PATH` of the CLI it starts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum ManagedTool {
+  Bun,
+}
+
+/// Anything the installer keeps: its slot, directory, download and probe.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum ManagedInstall {
+  Harness(ManagedHarness),
+  Tool(ManagedTool),
+}
+
+impl From<ManagedHarness> for ManagedInstall {
+  fn from(harness: ManagedHarness) -> Self {
+    Self::Harness(harness)
+  }
+}
+
+impl From<ManagedTool> for ManagedInstall {
+  fn from(tool: ManagedTool) -> Self {
+    Self::Tool(tool)
+  }
+}
+
+impl ManagedInstall {
+  /// In install order: a harness a member can sign in to comes first.
+  pub const ALL: [Self; 3] = [
+    Self::Harness(ManagedHarness::Codex),
+    Self::Harness(ManagedHarness::ClaudeCode),
+    Self::Tool(ManagedTool::Bun),
+  ];
+
+  /// The directory name.
+  pub const fn id(self) -> &'static str {
+    match self {
+      Self::Harness(harness) => harness.id(),
+      Self::Tool(ManagedTool::Bun) => "bun",
+    }
+  }
+
+  /// The variable naming its Stella-owned configuration directory, if it has one.
+  pub const fn config_env(self) -> Option<&'static str> {
+    match self {
+      Self::Harness(harness) => Some(harness.config_env()),
+      Self::Tool(_) => None,
+    }
+  }
+
+  /// Variables that keep the version probe offline and free of side effects.
+  pub(crate) const fn probe_env(self) -> &'static [(&'static str, &'static str)] {
+    match self {
+      Self::Harness(harness) => harness.probe_env(),
+      Self::Tool(_) => &[],
+    }
+  }
+
+  /// Whether `--version` output names exactly `version`.
+  pub(crate) fn reports_version(self, output: &str, version: &str) -> bool {
+    match self {
+      Self::Harness(harness) => harness.reports_version(output, version),
+      Self::Tool(ManagedTool::Bun) => output.trim() == version,
     }
   }
 }
@@ -134,28 +202,39 @@ struct Harnesses {
   claude_code: TableRelease,
 }
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Tools {
+  bun: TableRelease,
+}
+
 /// The table also repeats the pins it was generated from; only the tests
 /// read them, to bind the table to `pins.json`.
 #[derive(Deserialize)]
 struct Table {
   harnesses: Harnesses,
+  tools: Tools,
 }
 
 fn table() -> Table {
   serde_json::from_str(RELEASES).expect("the committed harness release table is valid")
 }
 
-/// The releases for the platform this build runs on. A harness is absent on
+/// The releases for the platform this build runs on. A release is absent on
 /// a platform its vendor publishes no build for.
 #[derive(Debug, Clone)]
 pub struct HarnessReleases {
   pub codex: Option<HarnessRelease>,
   pub claude_code: Option<HarnessRelease>,
+  pub bun: Option<HarnessRelease>,
 }
 
 impl HarnessReleases {
   pub fn pinned() -> Self {
-    let Harnesses { codex, claude_code } = table().harnesses;
+    let Table {
+      harnesses: Harnesses { codex, claude_code },
+      tools: Tools { bun },
+    } = table();
     let release = |TableRelease { version, assets }: TableRelease| {
       assets
         .current()
@@ -164,13 +243,15 @@ impl HarnessReleases {
     Self {
       codex: release(codex),
       claude_code: release(claude_code),
+      bun: release(bun),
     }
   }
 
-  pub fn get(&self, harness: ManagedHarness) -> Option<&HarnessRelease> {
-    match harness {
-      ManagedHarness::Codex => self.codex.as_ref(),
-      ManagedHarness::ClaudeCode => self.claude_code.as_ref(),
+  pub fn get(&self, managed: impl Into<ManagedInstall>) -> Option<&HarnessRelease> {
+    match managed.into() {
+      ManagedInstall::Harness(ManagedHarness::Codex) => self.codex.as_ref(),
+      ManagedInstall::Harness(ManagedHarness::ClaudeCode) => self.claude_code.as_ref(),
+      ManagedInstall::Tool(ManagedTool::Bun) => self.bun.as_ref(),
     }
   }
 }
@@ -220,6 +301,7 @@ mod tests {
   struct Pins {
     codex: String,
     claude_agent_sdk: String,
+    bun: String,
   }
 
   #[derive(Deserialize)]
@@ -227,6 +309,7 @@ mod tests {
   struct PinnedTable {
     pins: Pins,
     harnesses: Harnesses,
+    tools: Tools,
   }
 
   fn assets(release: TableRelease) -> [(&'static str, ReleaseAsset); 4] {
@@ -251,6 +334,13 @@ mod tests {
     ("win32-x64", "x86_64-pc-windows-msvc"),
   ];
 
+  const BUN_PACKAGES: [(&str, &str); 4] = [
+    ("darwin-arm64", "bun-darwin-aarch64"),
+    ("darwin-x64", "bun-darwin-x64-baseline"),
+    ("win32-arm64", "bun-windows-aarch64"),
+    ("win32-x64", "bun-windows-x64-baseline"),
+  ];
+
   fn target(platform: &str) -> &'static str {
     TARGETS
       .iter()
@@ -272,6 +362,7 @@ mod tests {
     let PinnedTable {
       pins: table_pins,
       harnesses: Harnesses { codex, claude_code },
+      tools: Tools { bun },
     } = serde_json::from_str(RELEASES).unwrap();
     assert_eq!(table_pins.codex, pins.codex);
     assert_eq!(table_pins.claude_agent_sdk, pins.claude_agent_sdk);
@@ -319,15 +410,58 @@ mod tests {
       assert!(asset.archive_bytes > 0);
       assert_eq!(asset.executable, format!("package/claude{exe}"));
     }
+
+    assert_eq!(table_pins.bun, pins.bun);
+    assert!(is_release_version(&pins.bun));
+    assert_eq!(bun.version, pins.bun);
+    for (platform, asset) in assets(bun) {
+      let exe = if platform.starts_with("win32") {
+        ".exe"
+      } else {
+        ""
+      };
+      let package = BUN_PACKAGES
+        .iter()
+        .find(|(name, _)| *name == platform)
+        .map(|(_, package)| *package)
+        .unwrap();
+      assert_eq!(asset.target, target(platform));
+      assert_eq!(
+        asset.url,
+        format!(
+          "https://registry.npmjs.org/@oven/{package}/-/{package}-{}.tgz",
+          pins.bun
+        )
+      );
+      assert!(matches!(&asset.digest, ArchiveDigest::Sha512(hex) if is_hex(hex, 128)));
+      assert!(asset.archive_bytes > 0);
+      assert_eq!(asset.executable, format!("package/bin/bun{exe}"));
+    }
   }
 
   #[test]
-  fn every_shipped_platform_has_both_harnesses() {
+  fn bun_is_installed_but_is_no_harness_a_chat_or_a_window_can_name() {
+    assert!(ManagedInstall::ALL.contains(&ManagedTool::Bun.into()));
+    assert!(
+      !ManagedHarness::ALL
+        .iter()
+        .any(|harness| harness.id() == "bun")
+    );
+    assert!(serde_json::from_str::<ManagedHarness>("\"bun\"").is_err());
+    assert_eq!(ManagedInstall::Tool(ManagedTool::Bun).config_env(), None);
+    assert_eq!(
+      ManagedInstall::ALL.map(ManagedInstall::id),
+      ["codex", "claude-code", "bun"]
+    );
+  }
+
+  #[test]
+  fn every_shipped_platform_has_every_release() {
     let releases = HarnessReleases::pinned();
     let shipped = cfg!(any(target_os = "macos", target_os = "windows"));
-    for harness in ManagedHarness::ALL {
-      let release = releases.get(harness);
-      assert_eq!(release.is_some(), shipped, "{}", harness.id());
+    for managed in ManagedInstall::ALL {
+      let release = releases.get(managed);
+      assert_eq!(release.is_some(), shipped, "{}", managed.id());
       if let Some(release) = release {
         assert!(is_contained_relative(&release.asset.executable));
       }
@@ -346,6 +480,10 @@ mod tests {
     assert!(
       !ManagedHarness::ClaudeCode.reports_version("12.1.309 (Claude Code)", "2.1.309")
     );
+    let bun = ManagedInstall::Tool(ManagedTool::Bun);
+    assert!(bun.reports_version("1.4.4\n", "1.4.4"));
+    assert!(!bun.reports_version("1.4.40", "1.4.4"));
+    assert!(!bun.reports_version("bun 1.4.4", "1.4.4"));
   }
 
   #[test]

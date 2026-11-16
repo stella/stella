@@ -38,6 +38,7 @@ import {
 import { Step, Steps } from "@stll/ui/steps";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { useReferencePassageTexts } from "@/components/ai-suggestions/document-review-passage-texts";
@@ -102,6 +103,7 @@ import { detached } from "@/lib/detached";
 import { APIError, toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import {
   duplicatePosition,
   extractToGraded,
@@ -668,6 +670,7 @@ const PlaybookEditorForm = ({
   host,
   onReload,
 }: PlaybookEditorFormProps) => {
+  const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
   const queryClient = useQueryClient();
   const isEdit = playbookId !== null;
@@ -1151,7 +1154,12 @@ const PlaybookEditorForm = ({
     // request reads as success anywhere the response is not checked.
     const response =
       playbookId === null
-        ? await api.playbooks.post(payload)
+        ? await idempotentSubmit.run({
+            operation: "api.playbooks",
+            body: payload,
+            send: async (creationPayload) =>
+              api.playbooks.post(creationPayload),
+          })
         : await api
             .playbooks({
               playbookId: toSafeId<"playbookDefinition">(playbookId),
@@ -1656,7 +1664,7 @@ const PlaybookEditorForm = ({
                 </Select>
                 <Link
                   className="text-muted-foreground hover:text-foreground text-xs"
-                  to="/admin/document-types"
+                  to="/settings/organization/document-types"
                 >
                   {t("knowledge.playbooks.manageTypes")}
                 </Link>
@@ -1935,9 +1943,9 @@ const OutlineRail = ({
                 size="xs"
                 variant="ghost"
               >
-                <span
+                <TruncatedText
                   className={cn(
-                    "min-w-0 flex-1 truncate text-sm leading-5",
+                    "flex-1 text-sm leading-5",
                     issue
                       ? "text-foreground font-medium"
                       : "text-muted-foreground italic",
@@ -1945,7 +1953,7 @@ const OutlineRail = ({
                   dir="auto"
                 >
                   {issue || t("knowledge.playbooks.untitledPosition")}
-                </span>
+                </TruncatedText>
                 {position.mode === "graded" && (
                   <span
                     className="size-2 shrink-0 rounded-full"

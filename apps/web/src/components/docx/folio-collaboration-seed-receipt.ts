@@ -5,6 +5,8 @@ import { sleep } from "@stll/concurrency/sleep";
 import { FetchBoundaryError } from "@stll/errors";
 import { sha256Hex } from "@stll/sha256/browser";
 
+import { APIError } from "@/lib/errors/api";
+
 const SEED_RECEIPT_MAX_ATTEMPTS = 5;
 const SEED_RECEIPT_RETRY_BASE_MS = 1000;
 const SEED_RECEIPT_RETRY_MAX_MS = 10_000;
@@ -54,7 +56,8 @@ export const completeFolioSeedReceipt = async ({
     }
     if (
       attempt === SEED_RECEIPT_MAX_ATTEMPTS - 1 ||
-      (receipt.error instanceof FetchBoundaryError &&
+      ((receipt.error instanceof FetchBoundaryError ||
+        APIError.is(receipt.error)) &&
         (receipt.error.status === 403 || receipt.error.status === 409))
     ) {
       return { status: "failed", error: receipt.error } as const;

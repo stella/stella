@@ -47,14 +47,16 @@ export const MarkdownFileViewer = ({
   // Workspace .md edits use the same hybrid editor as skills. Edits feed
   // the draft; the existing Save button uploads a new file version.
   return (
-    <MarkdownHybridEditor
-      imagePolicy="data-only"
-      key={tabId}
-      markdown={text}
-      onMarkdownChange={setDraft}
-      readOnly={readOnly || isSaving}
-      ref={editorRef}
-    />
+    <div className="contents" data-print-root="">
+      <MarkdownHybridEditor
+        imagePolicy="data-only"
+        key={tabId}
+        markdown={text}
+        onMarkdownChange={setDraft}
+        readOnly={readOnly || isSaving}
+        ref={editorRef}
+      />
+    </div>
   );
 };
 

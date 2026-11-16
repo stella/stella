@@ -18,14 +18,14 @@ import { inspect } from "node:util";
 import { sanitizeErrorForOutput } from "@stll/errors";
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
-import type {
-  IngestionResult,
-  SourceAdapter,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import {
   ADAPTER_MODULES,
   loadAdapterByKey,
 } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry-lazy";
+import type {
+  IngestionResult,
+  SourceAdapter,
+} from "@/api/lib/legal-search/ingestion-types";
 
 const writeStdoutLine = (message = ""): void => {
   process.stdout.write(`${message}\n`);

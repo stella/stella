@@ -1,15 +1,9 @@
 import { expect, test } from "bun:test";
-import {
-  existsSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { waitForExternalState } from "@stll/property-testing/external-state";
+import { waitForFileContent } from "@stll/property-testing/external-state";
 
 import { withGenerationLock } from "./generation-lock";
 
@@ -60,9 +54,11 @@ const fixture = () => {
 };
 
 const waitFor = async (filename: string) => {
-  await waitForExternalState({
+  await waitForFileContent({
     description: `a worker publishes ${filename}`,
-    read: () => existsSync(filename),
+    path: filename,
+    // An empty marker: once it exists, the announcement is complete.
+    parse: () => true,
   });
 };
 
@@ -159,5 +155,37 @@ test("invalid lock files return errors without running generation", async () => 
     expect(executions).toBe(1);
   } finally {
     rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("a bounded waiter times out without running and can acquire after release", async () => {
+  const { directory, spawn, cleanup } = fixture();
+  const lockPath = path.join(directory, "lock.sqlite");
+  let executions = 0;
+  try {
+    const holder = spawn("--hold");
+    await waitFor(path.join(directory, `acquired-${holder.pid}`));
+    const failed = await withGenerationLock({
+      lockPath,
+      waitTimeoutMs: 20,
+      run: () => {
+        executions++;
+      },
+    });
+    expect(failed.isErr()).toBe(true);
+    if (failed.isErr()) {
+      expect(failed.error.message).toContain("Timed out");
+    }
+    expect(executions).toBe(0);
+    holder.kill("SIGKILL");
+    await holder.exited;
+    const acquired = await withGenerationLock({
+      lockPath,
+      waitTimeoutMs: 1000,
+      run: () => "recovered",
+    });
+    expect(acquired.unwrap()).toBe("recovered");
+  } finally {
+    await cleanup();
   }
 });

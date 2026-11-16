@@ -8,6 +8,7 @@ import {
   type ResourceRef,
 } from "@stll/api-contract";
 import type { CaseLawDecisionLanguageAlternate } from "@stll/api-contract/case-law-decision-route";
+import type { GlobalSearchChatCoverage } from "@stll/api-contract/search";
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
 
 import type { ContactType, DocumentProcessingStatus } from "@/api/db/schema";
@@ -220,7 +221,7 @@ export type ContactGlobalSearchHit = GlobalSearchHitBase & {
   contactType: ContactType;
 };
 
-type CaseLawGlobalSearchHit = GlobalSearchHitBase & {
+export type CaseLawGlobalSearchHit = GlobalSearchHitBase & {
   type: "case-law";
   courtAbbreviation: string | null;
   resource: ResourceRef<"case_law_decision">;
@@ -266,4 +267,5 @@ export type GlobalSearchResult = {
   facets: GlobalSearchFacets;
   totalCount: number;
   nextCursor: string | null;
+  chatCoverage: GlobalSearchChatCoverage;
 };

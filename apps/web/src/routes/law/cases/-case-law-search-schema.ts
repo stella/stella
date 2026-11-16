@@ -1,5 +1,6 @@
 import * as v from "valibot";
 
+import { caseLawFilterValidationSchema } from "@stll/api-contract/case-law-filter-scope";
 import { DECISION_SORTS } from "@stll/api-contract/search";
 
 import {
@@ -59,6 +60,10 @@ const optionalStrictSchema = v.fallback(
 
 export const searchSchema = routeSearchSchema({
   country: optionalBrowseStringSchema(3),
+  filterNotice: v.fallback(
+    v.optional(caseLawFilterValidationSchema.entries.removed),
+    undefined,
+  ),
   court: optionalBrowseStringSchema(512),
   from: optionalDateSchema,
   lang: optionalBrowseStringSchema(16),

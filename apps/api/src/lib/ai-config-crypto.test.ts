@@ -1,16 +1,20 @@
 import { describe, expect, spyOn, test } from "bun:test";
 
+import { createTestState } from "@stll/test-state";
+
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
 import { ConfigurationError } from "@/api/lib/errors/tagged-errors";
 
-process.env["EMAIL_PROVIDER"] ??= "smtp";
-process.env["GOTENBERG_PASSWORD"] ??= "gotenberg";
-process.env["GOTENBERG_URL"] ??= "http://localhost:3003";
-process.env["GOTENBERG_USERNAME"] ??= "gotenberg";
-process.env["REDIS_URL"] ??= "redis://localhost:6379";
-process.env["SMTP_HOST"] ??= "localhost";
-process.env["SMTP_PORT"] ??= "1025";
+const testState = createTestState({ file: import.meta.path, config: {} });
+
+testState.setEnvIfAbsent("EMAIL_PROVIDER", "smtp");
+testState.setEnvIfAbsent("GOTENBERG_PASSWORD", "gotenberg");
+testState.setEnvIfAbsent("GOTENBERG_URL", "http://localhost:3003");
+testState.setEnvIfAbsent("GOTENBERG_USERNAME", "gotenberg");
+testState.setEnvIfAbsent("REDIS_URL", "redis://localhost:6379");
+testState.setEnvIfAbsent("SMTP_HOST", "localhost");
+testState.setEnvIfAbsent("SMTP_PORT", "1025");
 
 const { decryptAIConfig, encryptAIConfig, isOrgAIConfig, maskApiKey } =
   await import("@/api/lib/ai-config-crypto");
@@ -19,6 +23,8 @@ const { normalizeOrgAIConfig } = await import("@/api/lib/ai-config");
 const captureModule = await import("@/api/lib/analytics/capture");
 const { installRecordingAnalytics, installRecordingLogger } =
   await import("@/api/tests/helpers/recording-telemetry");
+const { assertSettingsFailureConfidential } =
+  await import("@/api/tests/helpers/settings-failure-confidentiality");
 
 const descriptorGraph = (value: unknown, seen = new Set<object>()): unknown => {
   if ((typeof value !== "object" && typeof value !== "function") || !value) {
@@ -148,6 +154,19 @@ describe("unreadable configuration boundary", () => {
       expect(analytics.events).toEqual([]);
       expect(capture).not.toHaveBeenCalled();
       expect(devErrors).not.toHaveBeenCalled();
+
+      assertSettingsFailureConfidential({
+        reason: fixture.reason,
+        organizationId,
+        outputs: {
+          analyticsEvents: analytics.events,
+          captureEntries: capture.mock.calls,
+          developmentEntries: devErrors.mock.calls,
+          groupIdentifies: analytics.groupIdentifies,
+          logRecords: logs.records,
+          returned: result.error,
+        },
+      });
 
       const recorded = JSON.stringify(
         descriptorGraph({

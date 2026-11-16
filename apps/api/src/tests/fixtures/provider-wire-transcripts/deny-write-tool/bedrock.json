@@ -34,6 +34,7 @@
           },
           "toolConfig": {
             "tools": [
+              "show_app",
               "ask-user",
               "request_secret",
               "use_connector_secret",
@@ -134,7 +135,7 @@
                         "text": "{\"error\":\"User declined tool execution\"}"
                       }
                     ],
-                    "status": "success"
+                    "status": "error"
                   }
                 }
               ]
@@ -151,6 +152,7 @@
           },
           "toolConfig": {
             "tools": [
+              "show_app",
               "ask-user",
               "request_secret",
               "use_connector_secret",

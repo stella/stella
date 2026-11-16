@@ -2,6 +2,7 @@ import type { CallToolResult } from "@modelcontextprotocol/server";
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { createTestState } from "@stll/test-state";
 import { Temporal } from "@stll/time";
 
 import { env } from "@/api/env";
@@ -20,7 +21,6 @@ import { coordinationKey } from "@/api/lib/redis-keys";
 import { createMcpHttpRequestHandler } from "@/api/mcp/server-core";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw, readTestJson } from "@/api/tests/helpers/test-tool-set";
 
 const state = createTestState({ file: import.meta.path, config: env });

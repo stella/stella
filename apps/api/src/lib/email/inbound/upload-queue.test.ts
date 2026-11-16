@@ -1,12 +1,17 @@
 import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
-import { EML_MIME_TYPE } from "@stll/api-contract/email-mime-types";
+import { DATA_BOX_MESSAGE_MIME_TYPE } from "@stll/api-contract/data-box";
+import {
+  EML_MIME_TYPE,
+  MSG_MIME_TYPE,
+} from "@stll/api-contract/email-mime-types";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   type fileUploadedMail,
+  type retireUploadedMailSource,
   UploadedMailUnavailableError,
 } from "@/api/lib/email/inbound/upload";
 import { enqueueUploadedMailFiling } from "@/api/lib/email/inbound/upload-enqueue";
@@ -116,15 +121,61 @@ describe("uploaded mail filing job", () => {
     ).toEqual({ status: "skipped", reason: "no_matter_access" });
   });
 
-  test("an attempt files the stored file under the job's scope", async () => {
+  test.each([EML_MIME_TYPE, MSG_MIME_TYPE, DATA_BOX_MESSAGE_MIME_TYPE])(
+    "a %s attempt files the exact stored generation under the job's scope",
+    async (mimeType) => {
+      const fileMail = mock<typeof fileUploadedMail>(async () => filed());
+      expect(
+        await processUploadedMailJob({
+          data: { ...data, mimeType },
+          database,
+          readFile,
+          fileMail,
+        }),
+      ).toEqual(FILED);
+      expect(fileMail.mock.calls.at(0)?.[0]).toMatchObject({
+        mimeType,
+        sourceFileId: data.sourceFileId,
+        scope,
+      });
+    },
+  );
+
+  test("non-correspondence generations retire metadata without reading or scanning bytes", async () => {
+    const retireMail = mock<typeof retireUploadedMailSource>(async () =>
+      Result.ok({ status: "skipped", reason: "not_email" }),
+    );
+    const read = mock(readFile);
     const fileMail = mock<typeof fileUploadedMail>(async () => filed());
     expect(
-      await processUploadedMailJob({ data, database, readFile, fileMail }),
-    ).toEqual(FILED);
-    expect(fileMail.mock.calls.at(0)?.[0]).toMatchObject({
-      mimeType: EML_MIME_TYPE,
-      scope,
-    });
+      await processUploadedMailJob({
+        data: { ...data, mimeType: "application/pdf" },
+        database,
+        readFile: read,
+        fileMail,
+        retireMail,
+      }),
+    ).toEqual({ status: "skipped", reason: "not_email" });
+    expect(retireMail.mock.calls).toEqual([
+      [{ database, scope, sourceFileId: data.sourceFileId }],
+    ]);
+    expect(read).not.toHaveBeenCalled();
+    expect(fileMail).not.toHaveBeenCalled();
+  });
+
+  test("failed metadata retirement rejects so BullMQ retries without reading bytes", async () => {
+    const read = mock(readFile);
+    expect(
+      await rejectionOf(
+        processUploadedMailJob({
+          data: { ...data, mimeType: "application/pdf" },
+          database,
+          readFile: read,
+          retireMail: async () => unavailable(),
+        }),
+      ),
+    ).toBeInstanceOf(UploadedMailUnavailableError);
+    expect(read).not.toHaveBeenCalled();
   });
 
   test("every failed attempt is observed and only an exhausted job escalates", () => {

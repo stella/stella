@@ -20,6 +20,17 @@ describe("a rejected request's field issues", () => {
     expect(shown).toContain("256");
   });
 
+  test("a declared size over its limit names the limit in megabytes", () => {
+    expect(
+      userErrorFromThrown(
+        rejected([
+          { field: "size", constraint: "maxBytes", limit: 2 * 1024 * 1024 },
+        ]),
+        "Action failed",
+      ),
+    ).toBe("The file is larger than 2 MB.");
+  });
+
   test("a missing required field gets its own message", () => {
     const shown = userErrorFromThrown(
       rejected([{ field: "name", constraint: "required" }]),

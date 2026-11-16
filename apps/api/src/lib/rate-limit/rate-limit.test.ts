@@ -327,60 +327,75 @@ class FakeRedisClient {
   }
 }
 
-test("HTTP quota rejection emits its named policy once without the counter key", async () => {
-  const context = new TrackingRateLimitContext();
-  const logs = installRecordingLogger();
-  const metrics: string[] = [];
-  setMetricLineSinkForTesting((line) => {
-    metrics.push(line);
-  });
-  const server = serveLimited(
-    { "/limited": { POST: answering(() => "served") } },
-    [
-      rateLimit({
-        context,
-        duration: WINDOW_MS,
-        max: 1,
-        generator: () => "private-caller-credential",
-        budget: () => ({ name: "mcp.transport.bearer", keyKind: "bearer" }),
-      }),
-    ],
-  );
-  try {
-    expect(
-      (await server.fetch("http://localhost/limited", { method: "POST" }))
-        .status,
-    ).toBe(200);
-    expect(metrics).toHaveLength(0);
-    expect(
-      (await server.fetch("http://localhost/limited", { method: "POST" }))
-        .status,
-    ).toBe(429);
-    const rejections = logs.records.filter(
-      ({ message }) => message === "rate_limit.rejected",
-    );
-    expect(rejections).toHaveLength(1);
-    expect(rejections.at(0)?.attributes).toEqual({
-      budget: "mcp.transport.bearer",
-      "budget.keyKind": "bearer",
-      "budget.windowMs": WINDOW_MS,
-      "http.status_code": 429,
+test.each([429, 503] as const)(
+  "HTTP budget rejection reports its actual %i status without the counter key",
+  async (refusalStatus) => {
+    const context = new TrackingRateLimitContext();
+    const logs = installRecordingLogger();
+    const metrics: string[] = [];
+    setMetricLineSinkForTesting((line) => {
+      metrics.push(line);
     });
-    expect(metrics).toHaveLength(1);
-    expect(JSON.parse(metrics.at(0) ?? "{}")).toMatchObject({
-      budgetName: "mcp.transport.bearer",
-      RateLimitRejected: 1,
-    });
-    expect(JSON.stringify(rejections)).not.toContain(
-      "private-caller-credential",
+    const server = serveLimited(
+      { "/limited": { POST: answering(() => "served") } },
+      [
+        rateLimit({
+          context,
+          refusalStatus,
+          duration: WINDOW_MS,
+          max: 1,
+          generator: () => "private-caller-credential",
+          budget: () => ({ name: "mcp.transport.bearer", keyKind: "bearer" }),
+        }),
+      ],
     );
-  } finally {
-    await server.stop();
-    logs.restore();
-    resetMetricLineSinkForTesting();
-    context.kill();
-  }
-});
+    try {
+      expect(
+        (await server.fetch("http://localhost/limited", { method: "POST" }))
+          .status,
+      ).toBe(200);
+      expect(metrics).toHaveLength(0);
+      expect(
+        (await server.fetch("http://localhost/limited", { method: "POST" }))
+          .status,
+      ).toBe(refusalStatus);
+      const rejections = logs.records.filter(
+        ({ message }) => message === "rate_limit.rejected",
+      );
+      expect(rejections).toHaveLength(1);
+      expect(rejections.at(0)?.attributes).toEqual({
+        budget: "mcp.transport.bearer",
+        "budget.keyKind": "bearer",
+        "budget.windowMs": WINDOW_MS,
+        "http.status_code": refusalStatus,
+      });
+      // A 503 refusal sheds load: it is observed from its cause as a
+      // transient capacity failure; a 429 is the caller's and observes none.
+      expect(metrics.map((line): unknown => JSON.parse(line))).toEqual([
+        expect.objectContaining({
+          budgetName: "mcp.transport.bearer",
+          RateLimitRejected: 1,
+        }),
+        ...(refusalStatus === 503
+          ? [
+              expect.objectContaining({
+                sink: "api.capacity_refused",
+                reason: "work_capacity_unavailable",
+              }),
+            ]
+          : []),
+      ]);
+      expect(JSON.stringify(rejections)).not.toContain(
+        "private-caller-credential",
+      );
+    } finally {
+      await server.stop();
+      logs.restore();
+      resetMetricLineSinkForTesting();
+      context.kill();
+    }
+  },
+);
 
 describe("RedisRateLimitContext", () => {
   test("keeps one refund identity per request while sharing the counter key", async () => {

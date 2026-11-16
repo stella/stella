@@ -20,7 +20,10 @@ import {
   catalogueKeys,
   catalogueOptions,
 } from "@/lib/knowledge/queries/catalogue";
-import { subscribeToMcpOAuthOutcome } from "@/lib/mcp-oauth-channel";
+import {
+  subscribeToMcpConnectionRefresh,
+  subscribeToMcpOAuthOutcome,
+} from "@/lib/mcp-oauth-channel";
 import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignment.logic";
 import { organizationSettingsOptions } from "@/lib/organization/settings-queries";
 import type { CatalogueBrowserFilterKind } from "@/routes/knowledge/-components/catalogue/catalogue-browser";
@@ -65,10 +68,19 @@ export function MemberToolsPage({
   });
   const canManageCustomTools = hasOrganizationManagementAccess(role);
 
-  // OAuth completion lands in a popup tab/window; the popup
-  // broadcasts via BroadcastChannel (falling back to opener
-  // postMessage), so the catalogue page needs an active subscription
-  // to surface the toast and refetch the catalogue.
+  useExternalSyncEffect(
+    () =>
+      subscribeToMcpConnectionRefresh(() => {
+        detached(
+          queryClient.invalidateQueries({
+            queryKey: catalogueKeys.all(organizationId),
+          }),
+          "knowledge-tools.invalidate",
+        );
+      }),
+    [organizationId, queryClient],
+  );
+
   useExternalSyncEffect(
     () =>
       subscribeToMcpOAuthOutcome((outcome) => {
@@ -77,19 +89,13 @@ export function MemberToolsPage({
             title: t("knowledge.mcp.connectedToast"),
             type: "success",
           });
-          detached(
-            queryClient.invalidateQueries({
-              queryKey: catalogueKeys.all(organizationId),
-            }),
-            "knowledge-tools.invalidate",
-          );
           return;
         }
         notifyUserProblem(t("knowledge.mcp.errorTitle"), {
           description: t("knowledge.mcp.errorDescription"),
         });
       }),
-    [organizationId, queryClient, t],
+    [t],
   );
 
   return (

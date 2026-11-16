@@ -11,10 +11,8 @@ const SOURCE_ROOTS = [
 ];
 
 const ALLOWED = {
-  "apps/web/src/components/legal-reader/citation-copy-options.tsx":
-    "The citation formatter is a menu with several copy formats.",
-  "apps/web/src/components/workspaces/matter-context-menu.tsx":
-    "The matter link action lives in a contextual menu.",
+  "apps/web/src/components/copy-control.tsx":
+    "The one Copy owner confirms by toast only for a Copy in a menu that closes as it copies.",
 } as const;
 
 describe("copy feedback ownership", () => {

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { fail as panic } from "node:assert";
 import {
-  copyFileSync,
+  cpSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -9,13 +10,18 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import * as v from "valibot";
 
 import { loadChangesetPolicy } from "./changeset-guard";
 import { publishedPackageNames } from "./check-published-package-lists";
-import { readNpmReleaseGraph } from "./generate-npm-release-jobs";
+import {
+  NPM_RELEASE_WORKFLOW,
+  readNpmReleaseGraph,
+} from "./generate-npm-release-jobs";
 import {
   changedPathsCommand,
   expandPublishPackages,
+  npmRegistryVersion,
   selectPublishPackages,
 } from "./publish-package-selection";
 import { ALL_PACKAGE_ORDER } from "./publish-packages";
@@ -186,9 +192,7 @@ describe("publish package selection", () => {
     expect(workflow).toContain(
       `artifact-run-id: ${String.fromCodePoint(36)}{{ inputs.artifact_run_id || '' }}`,
     );
-    expect(workflow).toContain(
-      "uses: stella/.github/.github/workflows/npm-independent-release.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8",
-    );
+    expect(workflow).toContain(`uses: ${NPM_RELEASE_WORKFLOW}`);
   });
 
   test("selects an explicit historical recovery package without requiring new tooling in old source", async () => {
@@ -197,8 +201,9 @@ describe("publish package selection", () => {
     ).text();
 
     expect(workflow).toContain(
-      'elif [[ "$EVENT_NAME" == "workflow_dispatch" && "$MANUAL_PACKAGE" != "all" ]]; then',
+      'if [[ "$EVENT_NAME" == "workflow_run" || ( "$EVENT_NAME" == "workflow_dispatch" && "$MANUAL_PACKAGE" != "all" ) ]]; then',
     );
+    expect(workflow).not.toContain("pkgs=(cli)");
     expect(workflow).toContain(
       'selection="$(bun .pack-tooling/scripts/publish-package-selection.ts "$EVENT_NAME" "$MANUAL_PACKAGE" "$GITHUB_WORKSPACE")"',
     );
@@ -216,6 +221,7 @@ describe("publish package selection", () => {
       eventName: "workflow_dispatch",
       manualPackage: "cli",
       changedPaths: [],
+      readRegistryVersion: () => "absent",
     });
     const expected = new Set(["cli"]);
     const pending = ["cli"];
@@ -251,6 +257,7 @@ describe("publish package selection", () => {
         eventName: "workflow_dispatch",
         manualPackage: "cli",
         changedPaths: [],
+        readRegistryVersion: () => "absent",
       }),
     ).toEqual(selection);
   });
@@ -288,18 +295,48 @@ describe("publish package selection", () => {
   test("historical source without unrelated packages supports leaf and dependency dispatches", () => {
     const root = mkdtempSync(path.join(tmpdir(), "publish-source-"));
     try {
-      const tooling = path.join(root, "tooling", "scripts");
+      const toolingRoot = path.join(root, "tooling");
+      const tooling = path.join(toolingRoot, "scripts");
       const source = path.join(root, "source");
-      mkdirSync(tooling, { recursive: true });
-      for (const script of [
-        "publish-package-selection",
-        "publish-packages",
-        "generate-npm-release-jobs",
-      ]) {
-        copyFileSync(
-          new URL(`${script}.ts`, import.meta.url),
-          path.join(tooling, `${script}.ts`),
-        );
+      const workflow = v.parse(
+        v.object({
+          jobs: v.object({
+            pack: v.object({
+              steps: v.array(
+                v.looseObject({
+                  name: v.optional(v.string()),
+                  with: v.optional(
+                    v.looseObject({
+                      "sparse-checkout": v.optional(v.string()),
+                    }),
+                  ),
+                }),
+              ),
+            }),
+          }),
+        }),
+        Bun.YAML.parse(
+          readFileSync(
+            new URL("../.github/workflows/publish-npm.yml", import.meta.url),
+            "utf-8",
+          ),
+        ),
+      );
+      const checkout = workflow.jobs.pack.steps.find(
+        (step) => step.name === "Checkout pack tooling",
+      );
+      const sparse =
+        checkout?.with?.["sparse-checkout"] ??
+        panic("Pack tooling must declare its sparse checkout");
+      for (const file of sparse
+        .split("\n")
+        .map((entry) => entry.trim())
+        .filter(Boolean)) {
+        const target = path.join(toolingRoot, file);
+        mkdirSync(path.dirname(target), { recursive: true });
+        cpSync(new URL(`../${file}`, import.meta.url), target, {
+          recursive: true,
+        });
       }
       for (const directory of [
         "cli",
@@ -369,6 +406,22 @@ describe("publish package selection", () => {
       expect(result.exitCode).toBe(0);
       expect(
         new TextDecoder().decode(result.stdout).trim().split("\n"),
+      ).toEqual(["stable-stringify", "auth-model", "agent-input", "cli"]);
+      // A release run resolves the same closure from the release source.
+      const releaseRun = Bun.spawnSync(
+        [
+          process.execPath,
+          path.join(tooling, "publish-package-selection.ts"),
+          "workflow_run",
+          "all",
+          source,
+        ],
+        { cwd: root, stdout: "pipe", stderr: "pipe" },
+      );
+      expect(new TextDecoder().decode(releaseRun.stderr)).toBe("");
+      expect(releaseRun.exitCode).toBe(0);
+      expect(
+        new TextDecoder().decode(releaseRun.stdout).trim().split("\n"),
       ).toEqual(["stable-stringify", "auth-model", "agent-input", "cli"]);
       rmSync(path.join(source, "packages", "agent-input", "package.json"));
       const missing = Bun.spawnSync(
@@ -446,14 +499,130 @@ describe("publish package selection", () => {
     );
   });
 
-  test("keeps workflow-run CLI releases explicit", () => {
+  test("a CLI release packs the CLI's dependencies npm lacks, dependencies first", () => {
+    // cli -> agent-input -> text-normalize, and cli -> stable-stringify.
+    const manifests: Readonly<Record<string, object>> = {
+      cli: {
+        version: "6.11.1",
+        dependencies: {
+          "@stll/agent-input": "workspace:^",
+          "@stll/stable-stringify": "workspace:^",
+        },
+      },
+      "agent-input": {
+        version: "0.4.3",
+        dependencies: { "@stll/text-normalize": "workspace:^" },
+      },
+      "text-normalize": { version: "0.8.0" },
+      "stable-stringify": { version: "0.2.2" },
+    };
+    const readManifest = (directory: string) =>
+      JSON.stringify({
+        name: `@stll/${directory}`,
+        ...(manifests[directory] ?? panic(`unexpected read of ${directory}`)),
+      });
+    const select = (
+      eventName: "workflow_run" | "workflow_dispatch",
+      registry: Readonly<Record<string, "published" | "absent" | "unknown">>,
+    ) => {
+      const asked: string[] = [];
+      const selection = selectPublishPackages({
+        eventName,
+        manualPackage: eventName === "workflow_run" ? "all" : "cli",
+        changedPaths: [],
+        readManifest,
+        readRegistryVersion: (name, version) => {
+          asked.push(`${name}@${version}`);
+          return registry[name] ?? "published";
+        },
+      });
+      return { selection, asked };
+    };
+
+    // A release that bumps a transitive dependency packs it before its user.
+    for (const eventName of ["workflow_run", "workflow_dispatch"] as const) {
+      const bumped = select(eventName, {
+        "@stll/agent-input": "absent",
+        "@stll/text-normalize": "absent",
+      });
+      expect(bumped.selection).toEqual([
+        "text-normalize",
+        "agent-input",
+        "cli",
+      ]);
+      // The CLI itself is always packed; only its dependencies are looked up.
+      expect(bumped.asked.toSorted()).toEqual([
+        "@stll/agent-input@0.4.3",
+        "@stll/stable-stringify@0.2.2",
+        "@stll/text-normalize@0.8.0",
+      ]);
+    }
+    // Resumed after text-normalize published: only what is left.
+    expect(
+      select("workflow_run", { "@stll/agent-input": "absent" }).selection,
+    ).toEqual(["agent-input", "cli"]);
+    // Nothing bumped beside the CLI: every dependency comes from npm.
+    expect(select("workflow_run", {}).selection).toEqual(["cli"]);
+    // An unreadable registry packs the package rather than assume npm has it.
+    expect(
+      select("workflow_run", { "@stll/stable-stringify": "unknown" }).selection,
+    ).toEqual(["stable-stringify", "cli"]);
+  });
+
+  test("a CLI release covers whatever workspace dependencies the CLI has", async () => {
+    // Every dependency npm lacks: the release packs the CLI's whole closure,
+    // so a dependency the CLI gains later is packed without a hand list.
+    const absent = () => "absent" as const;
+    const closure = selectPublishPackages({
+      eventName: "workflow_dispatch",
+      manualPackage: "cli",
+      changedPaths: [],
+      readRegistryVersion: absent,
+    });
     expect(
       selectPublishPackages({
         eventName: "workflow_run",
         manualPackage: "all",
         changedPaths: [],
+        readRegistryVersion: absent,
       }),
-    ).toEqual(["cli"]);
+    ).toEqual(closure);
+    const cliDependencies = manifestDependencies(await packageManifest("cli"))
+      .filter((name) => name.startsWith("@stll/"))
+      .map((name) => name.slice("@stll/".length))
+      .filter((name) => ALL_PACKAGE_ORDER.some((known) => known === name));
+    expect(cliDependencies.length).toBeGreaterThan(0);
+    for (const dependency of cliDependencies) {
+      expect(closure.indexOf(dependency)).toBeGreaterThanOrEqual(0);
+      expect(closure.indexOf(dependency)).toBeLessThan(closure.indexOf("cli"));
+    }
+    expect(closure.at(-1)).toBe("cli");
+  });
+
+  test("reads the registry answer for an exact version through npm view", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "npm-view-"));
+    try {
+      // A stand-in npm: published, missing, empty and failing answers.
+      const npm = path.join(root, "npm");
+      writeFileSync(
+        npm,
+        `#!/usr/bin/env bash
+case "$2" in
+  "@stll/a@1.0.0") echo '"1.0.0"' ;;
+  "@stll/b@1.0.0") echo 'npm error code E404' >&2; exit 1 ;;
+  "@stll/c@1.0.0") ;;
+  *) echo 'npm error code ECONNRESET' >&2; exit 1 ;;
+esac
+`,
+        { mode: 0o755 },
+      );
+      expect(npmRegistryVersion("@stll/a", "1.0.0", npm)).toBe("published");
+      expect(npmRegistryVersion("@stll/b", "1.0.0", npm)).toBe("absent");
+      expect(npmRegistryVersion("@stll/c", "1.0.0", npm)).toBe("absent");
+      expect(npmRegistryVersion("@stll/d", "1.0.0", npm)).toBe("unknown");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   test("rejects a push with no changed library changelog", () => {

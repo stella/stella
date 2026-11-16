@@ -1,11 +1,18 @@
+import { CancelledError } from "@tanstack/react-query";
+import { TaggedError } from "better-result";
+
 import type { ErrorReference } from "@/lib/analytics/error-reference";
 import { routeExceptionFingerprintKey } from "@/lib/analytics/exception-fingerprint";
-import { reportErrorOnce } from "@/lib/analytics/reported-error";
+import {
+  leaveErrorToBoundary,
+  reportErrorOnce,
+} from "@/lib/analytics/reported-error";
 import type {
   Analytics,
   RouteErrorLifecycleProperties,
 } from "@/lib/analytics/types";
 import { detached } from "@/lib/detached";
+import { isStaleDeploymentLoadError } from "@/lib/preload-error-recovery";
 
 export type RouteErrorAnalytics = Pick<
   Analytics,
@@ -45,8 +52,59 @@ export const resolveCaughtRouteTemplate = (
   matches.at(-1)?.fullPath ??
   "unknown";
 
+/**
+ * A cancelled read is ordinary while pages change, so telemetry drops it. One
+ * that reaches a visible error page failed that page and is reported as such.
+ */
+export class RouteCancelledReadError extends TaggedError(
+  "RouteCancelledReadError",
+)<{
+  message: string;
+  cause: unknown;
+  reference: ErrorReference;
+  routeTemplate: string;
+}> {}
+
+const reportableRouteError = (
+  error: unknown,
+  routeTemplate: string,
+  reference: ErrorReference,
+): unknown =>
+  error instanceof CancelledError
+    ? new RouteCancelledReadError({
+        message: `A cancelled read failed the route ${routeTemplate}`,
+        cause: error,
+        reference,
+        routeTemplate,
+      })
+    : error;
+
+/**
+ * A route's error boundary owns the capture of what it catches: the recovery
+ * panel reports with its support reference, the network state after its
+ * retries run out, and the permission states not at all.
+ */
+export const createRouteCatchHandler =
+  (
+    lifecycle: Pick<RouteErrorLifecycleController, "caught">,
+    readRouteTemplate: () => string,
+  ) =>
+  (error: unknown): void => {
+    leaveErrorToBoundary(error);
+    lifecycle.caught(readRouteTemplate());
+  };
+
+type LoadedRouteErrorLifecycleModule = {
+  createLoadedRouteErrorLifecycleController: (
+    analytics: RouteErrorAnalytics,
+    initial: RouteErrorLifecycleSnapshot,
+  ) => RouteErrorLifecycleController;
+};
+
 export const createRouteErrorLifecycleController = (
   analytics: RouteErrorAnalytics,
+  loadModule: () => Promise<LoadedRouteErrorLifecycleModule> = async () =>
+    import("@/lib/analytics/route-error-lifecycle-loaded"),
 ): RouteErrorLifecycleController => {
   let snapshot: RouteErrorLifecycleSnapshot = {
     inspectorState: "unavailable",
@@ -58,11 +116,17 @@ export const createRouteErrorLifecycleController = (
   const load = async () => {
     if (!loaded) {
       const initial = snapshot;
-      loaded = import("@/lib/analytics/route-error-lifecycle-loaded")
+      loaded = loadModule()
         .then((module) =>
           module.createLoadedRouteErrorLifecycleController(analytics, initial),
         )
         .catch((error: unknown) => {
+          // Vite's preload helper also dispatches this rejection as
+          // `vite:preloadError`, so preload recovery owns a stale chunk. Its
+          // redacted exception carries no message and no in-app frame.
+          if (isStaleDeploymentLoadError(error)) {
+            return undefined;
+          }
           analytics.captureError(error, {
             fingerprintKey: "createRouteErrorLifecycleController.load:failure",
             scope: {
@@ -131,21 +195,23 @@ export const createRouteErrorLifecycleController = (
     shown: (options) => {
       if (capturedReference !== options.reference) {
         capturedReference = options.reference;
+        const routeTemplate = caughtRouteTemplate ?? snapshot.routeTemplate;
         reportErrorOnce(options.error, (error) => {
-          analytics.captureError(error, {
-            fingerprintKey: routeExceptionFingerprintKey(
-              caughtRouteTemplate ?? snapshot.routeTemplate,
-            ),
-            scope: {
-              type: "request",
-              method: "GET",
-              routeTemplate: caughtRouteTemplate ?? snapshot.routeTemplate,
+          analytics.captureError(
+            reportableRouteError(error, routeTemplate, options.reference),
+            {
+              fingerprintKey: routeExceptionFingerprintKey(routeTemplate),
+              scope: {
+                type: "request",
+                method: "GET",
+                routeTemplate,
+              },
+              context: {
+                reference: options.reference,
+                type: "recovery",
+              },
             },
-            context: {
-              reference: options.reference,
-              type: "recovery",
-            },
-          });
+          );
         });
       }
       detached(

@@ -9,10 +9,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import {
-  defaultVarcharSchema,
-  resourceIdSchema,
-} from "@/api/lib/custom-schema";
+import { displayNameSchema, resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { pickDefined } from "@/api/lib/pick-defined";
 import {
@@ -22,7 +19,7 @@ import {
 import type { TemplateMetadataUpdate } from "@/api/lib/templates/write-template";
 
 const updateTemplateBodySchema = v.object({
-  name: v.exactOptional(defaultVarcharSchema),
+  name: v.exactOptional(displayNameSchema()),
   categoryId: v.exactOptional(v.nullable(resourceIdSchema("templateCategory"))),
   tags: v.exactOptional(
     v.pipe(

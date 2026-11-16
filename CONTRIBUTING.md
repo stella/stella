@@ -100,6 +100,11 @@ to explore the codebase.
 
 ## Development Workflow
 
+Every new guard or lint ships with an autofix or codemod registered in the PR
+Autofix job, or enforces only lines changed against the merge base for its first
+week. Register the dated scope in `scripts/guard-rollouts/<id>.json` so the existing
+dated-waiver inventory and healing checks enforce its seven-day deadline.
+
 1. Create a branch from `main` for your changes.
 2. Make your changes, following the conventions below.
 3. Run checks before pushing:
@@ -246,6 +251,7 @@ it:
 - `@stll/country-codes`
 - `@stll/docx-utils`
 - `@stll/fetch`
+- `@stll/html`
 - `@stll/mcp-kit`
 - `@stll/money`
 - `@stll/scan-engine`
@@ -272,6 +278,15 @@ An empty changeset is a deliberate statement, not a way around the check: it
 records that the change is internal — a rename behind the export map, a test,
 a comment — and produces no version bump. Anything a consumer of the package
 can observe needs a real bump.
+
+Published packages also commit `packages/<name>/api-report.json`. After changing
+an entrypoint, export, or signature, run `bun run update:package-api` and commit
+the updated reports. Check them with `bun run check:package-api` (against
+`origin/main`; pass another base ref as its argument).
+Removing or renaming an export, or narrowing a signature, requires a
+breaking-release changeset for that package: major, or minor while the package
+is still at `0.x`. Published packages have consumers outside this repository. CI compares the reports with the target branch and rejects stale
+reports or breaking changes without that changeset.
 
 ## Pull Request Checklist
 

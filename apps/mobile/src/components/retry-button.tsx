@@ -1,6 +1,7 @@
 import { ActivityIndicator } from "react-native";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@stll/ui/button";
+
 import { useAppColors } from "@/theme";
 
 /** The outlined button a failed load offers to run again. */
@@ -11,12 +12,9 @@ export const RetryButton = ({
   label: string;
   onPress: () => void;
 }) => (
-  <Button
-    className="mt-3 self-center"
-    label={label}
-    onPress={onPress}
-    variant="outline"
-  />
+  <Button className="mt-3 self-center" onPress={onPress} variant="outline">
+    {label}
+  </Button>
 );
 
 /** Where loading the next page of a list stands. */

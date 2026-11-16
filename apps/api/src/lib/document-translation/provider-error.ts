@@ -1,5 +1,7 @@
 import { panic } from "better-result";
 
+import { BodyByteLimitError } from "@stll/fetch/body-reader";
+
 import { classifyAIError } from "@/api/lib/ai-error";
 import { DeepLTimeoutError, DeepLUpstreamError } from "@/api/lib/deepl/errors";
 import type { DocumentTranslationRunErrorCode } from "@/api/lib/document-translation/contract";
@@ -18,6 +20,10 @@ const isDeepLProviderUnavailable = (error: unknown): boolean =>
 export const documentTranslationProviderErrorCode = (
   error: unknown,
 ): DocumentTranslationRunErrorCode => {
+  // Preserve the existing terminal result of the document publication limit.
+  if (DeepLUpstreamError.is(error) && BodyByteLimitError.is(error.cause)) {
+    return "internal";
+  }
   if (isDeepLProviderUnavailable(error)) {
     return "provider_unavailable";
   }
@@ -37,6 +43,21 @@ export const documentTranslationProviderErrorCode = (
     case "provider_billing":
     case "provider_credentials_rejected":
     case "quota_exhausted":
+    case "local_runner_needs_login":
+    case "local_runner_limit_reached":
+    case "local_runner_unavailable":
+    case "local_runner_turn_too_large":
+    case "turn_too_large":
+    case "local_runner_not_reached":
+    case "local_runner_relinked":
+    case "local_runner_restoring":
+    case "local_runner_folder_unavailable":
+    case "local_runner_no_computer":
+    case "local_runner_harness_unavailable":
+    case "local_runner_model_unavailable":
+    case "local_runner_reasoning_effort_unavailable":
+    case "local_runner_approvals_unavailable":
+    case "local_runner_folder_not_approved":
     case "unknown":
       return "translation_failed";
     default: {

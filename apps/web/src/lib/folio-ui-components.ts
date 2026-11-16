@@ -9,7 +9,6 @@ import type { FolioUIComponents } from "@stll/folio-react";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { ColorPicker } from "@stll/ui/color-picker";
-import type { ColorPickerProps } from "@stll/ui/color-picker";
 import {
   Dialog,
   DialogBackdrop,
@@ -46,9 +45,13 @@ import {
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { retainOutlinePageNumbers } from "@/components/docx/folio-outline-items.logic";
 
-const LocalizedColorPicker = (props: Omit<ColorPickerProps, "moreLabel">) => {
+const LocalizedColorPicker = (
+  props: ComponentProps<FolioUIComponents["ColorPicker"]>,
+) => {
   const t = useTranslations();
 
+  // Folio passes its toolbar button as the native-button trigger, so the
+  // picker renders it directly as the popover trigger.
   return createElement(ColorPicker, {
     ...props,
     moreLabel: t("common.showMore"),

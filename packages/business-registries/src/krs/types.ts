@@ -69,7 +69,7 @@ export type KrsRawSiedzibaIAdres = {
  * sp. z o.o. and S.A. The remaining sub-fields (kapitał docelowy /
  * zapasowy, akcje, aporty, …) are typed lazily as we promote them.
  */
-export type KrsRawMonetaryValue = {
+type KrsRawMonetaryValue = {
   wartosc?: string;
   waluta?: string;
 };
@@ -101,13 +101,13 @@ export type KrsRawDzial1 = {
 //   "LIKWIDACJA" / "POSTĘPOWANIE LIKWIDACYJNE"  → liquidation
 // Only values containing the Polish stem `LIKWIDAC` map to the
 // `liquidating` status; everything else is restructuring.
-export type KrsRawProceedingDetail = {
+type KrsRawProceedingDetail = {
   rodzajPostepowania?: string;
   organWydajacy?: string;
   sygnatura?: string;
 };
 
-export type KrsRawProceeding = {
+type KrsRawProceeding = {
   otwarciePostepowaniaRestrukturyzacyjnegoNaprawczegoPrzymusowejRestrukturyzacjiUporzadkowanejLikwidacji?: KrsRawProceedingDetail;
   zakonczeniePostepowaniaRestrukturyzacyjnegoNaprawczegoPrzymusowejRestrukturyzacjiUporzadkowanejLikwidacji?: KrsRawProceedingDetail;
 };

@@ -17,6 +17,7 @@ import {
   TREE_PARENT_CYCLE_ERROR_CODE,
   TREE_PARENT_GUARDS,
 } from "@/api/lib/db/tree-parent-guard";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -80,6 +81,10 @@ const parentOf = async (categoryId: SafeId<"templateCategory">) =>
       .limit(1)
   ).at(0)?.parentId;
 
+/** Narrows a proxied member to a callable that can be bound to its owner. */
+const isCallable = (value: unknown): value is (...args: unknown[]) => unknown =>
+  typeof value === "function";
+
 const category = (
   id: SafeId<"templateCategory">,
   name: string,
@@ -121,10 +126,8 @@ beforeAll(async () => {
 afterAll(async () => {
   await testDb.transaction(async (tx) => {
     await tx.execute(sql.raw("RESET ROLE"));
-    await tx
-      .delete(organization)
-      .where(eq(organization.id, otherOrganizationId));
-    await tx.delete(organization).where(eq(organization.id, organizationId));
+    await deleteOrganizationsForTest(tx, [otherOrganizationId]);
+    await deleteOrganizationsForTest(tx, [organizationId]);
   });
   await releaseTestDb();
 });
@@ -210,8 +213,8 @@ test("a cycle check that cannot read its answer refuses rather than allowing", a
           if (property === "execute") {
             return async () => ({ unexpected: true });
           }
-          const value = Reflect.get(target, property);
-          return typeof value === "function" ? value.bind(target) : value;
+          const value: unknown = Reflect.get(target, property);
+          return isCallable(value) ? value.bind(target) : value;
         },
       });
       return await callback(asTestRaw<Transaction>(proxied));
@@ -267,8 +270,8 @@ test("a loop the pre-check misses is refused by the database with the same 400",
                 ? { rows: [{ cycle: false }] }
                 : await target.execute(query);
           }
-          const value = Reflect.get(target, property);
-          return typeof value === "function" ? value.bind(target) : value;
+          const value: unknown = Reflect.get(target, property);
+          return isCallable(value) ? value.bind(target) : value;
         },
       });
       return await callback(asTestRaw<Transaction>(proxied));

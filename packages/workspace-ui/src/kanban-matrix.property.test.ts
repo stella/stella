@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 import { buildKanbanBoardMatrix, resolveKanbanGrouping } from "@stll/ui/kanban";
 import type { KanbanSchema } from "@stll/ui/kanban";
 
@@ -40,7 +40,8 @@ const rowArbitrary: fc.Arbitrary<Row> = fc.record({
 
 describe("kanban board matrix invariants", () => {
   test("no input card is lost or duplicated, and every cell preserves input order", () => {
-    fc.assert(
+    assertProperty(
+      "no input card is lost or duplicated, and every cell preserves input order",
       fc.property(fc.array(rowArbitrary, { maxLength: 80 }), (rows) => {
         const matrix = buildKanbanBoardMatrix({
           group,
@@ -75,7 +76,7 @@ describe("kanban board matrix invariants", () => {
           }
         }
       }),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 });

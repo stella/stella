@@ -1,8 +1,4 @@
-import {
-  useMutation,
-  useMutationState,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import {
@@ -21,6 +17,7 @@ import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useObservedMutationState } from "@/lib/idempotency/use-observed-mutation-state";
 import { toSafeId } from "@/lib/safe-id";
 import { legalListItemsOptions } from "@/lib/workspaces/queries/legal-lists";
 
@@ -73,18 +70,23 @@ export const useFactDetailActions = (scope: ListScope) => {
   const save = useMutation({
     mutationKey,
     scope: { id: mutationKey.join(":") },
-    mutationFn: async ({ targetIds: [itemEntityId], details }: SaveVariables) =>
-      unwrapApiResponse(
-        await api
-          .lists({ workspaceId: toSafeId<"workspace">(scope.workspaceId) })
-          ["item-fact-details"].put(
-            toFactDetailsBody({
-              listId: toSafeId<"legalList">(scope.listId),
-              itemEntityId,
-              details,
-            }),
-          ),
-      ),
+    mutationFn: async ({
+      targetIds: [itemEntityId],
+      details,
+    }: SaveVariables) => {
+      const listsApi = api.lists({
+        workspaceId: toSafeId<"workspace">(scope.workspaceId),
+      });
+      return unwrapApiResponse(
+        await listsApi["item-fact-details"].put(
+          toFactDetailsBody({
+            listId: toSafeId<"legalList">(scope.listId),
+            itemEntityId,
+            details,
+          }),
+        ),
+      );
+    },
     onMutate: async ({
       targetIds: [itemEntityId],
       details,
@@ -128,11 +130,11 @@ export const useFactSaveState = (
   scope: ListScope,
   itemEntityId: ListItem["id"],
 ): SaveState => {
-  const entries = useMutationState({
+  const entries = useObservedMutationState({
     filters: { mutationKey: factDetailsMutationKey(scope) },
-    select: (mutation) => ({
-      targetIds: readTargetIds(mutation.state.variables),
-      status: mutation.state.status,
+    select: (state) => ({
+      targetIds: readTargetIds(state.variables),
+      status: state.status,
     }),
   });
   return saveStateOf(entries, itemEntityId);

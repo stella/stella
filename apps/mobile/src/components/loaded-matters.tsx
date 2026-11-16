@@ -4,31 +4,40 @@ import { Result } from "better-result";
 import { FlatList, Pressable, RefreshControl, SectionList } from "react-native";
 import { useLocale, useTranslations } from "use-intl";
 
-import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
+import { Text } from "@stll/ui/text";
+
+import { EmptyCard, emptyListProps } from "@/components/empty-state-screen";
 import { useHeaderSearch } from "@/components/header-search";
+import { LoadFailedCard } from "@/components/load-failure";
 import { MatterRow } from "@/components/matter-row";
 import { useMattersView } from "@/components/matters-view";
-import { RetryButton } from "@/components/retry-button";
-import { Text } from "@/components/ui/text";
+import type { AccessTokenSource } from "@/connection/session";
 import { ChevronDownIcon, ChevronRightIcon } from "@/icons.gen";
+import type { ApiError } from "@/state/api-request";
 import type { MattersLoad, MatterSummary } from "@/state/matters";
 import { groupByClient } from "@/state/matters-groups";
+import type { Timer } from "@/state/timers";
 import { useAppColors } from "@/theme";
 
 /**
  * The matters a load returned, or why it could not, with pull-to-refresh
  * either way; under their clients unless the header's menu says otherwise.
  * A client's heading folds its matters away; a search shows every match,
- * folded or not.
+ * folded or not. Each row's swipe works the matter's timer, once the
+ * timers have loaded.
  */
 export const LoadedMatters = ({
   load,
   onReload,
   refreshing,
+  source,
+  timers,
 }: {
   load: Promise<MattersLoad>;
   onReload: () => void;
   refreshing: boolean;
+  source: AccessTokenSource;
+  timers: Promise<Result<Timer[], ApiError>>;
 }) => {
   const t = useTranslations("matters");
   const { query } = useHeaderSearch();
@@ -36,6 +45,7 @@ export const LoadedMatters = ({
   const locale = useLocale();
   const colors = useAppColors();
   const { result } = use(load);
+  const loadedTimers = use(timers);
 
   // The session provider is already returning to sign-in.
   if (Result.isError(result) && result.error._tag === "SignedOutError") {
@@ -47,9 +57,20 @@ export const LoadedMatters = ({
   const empty = Result.isOk(result) ? (
     <EmptyCard description={t("emptyDescription")} title={t("emptyTitle")} />
   ) : (
-    <EmptyCard description={t("loadFailed")} title={t("emptyTitle")}>
-      <RetryButton label={t("retry")} onPress={onReload} />
-    </EmptyCard>
+    <LoadFailedCard
+      error={result.error}
+      onRetry={onReload}
+      retryLabel={t("retry")}
+      title={t("loadFailed")}
+    />
+  );
+  const row = (matter: MatterSummary, underClient: boolean) => (
+    <MatterRow
+      matter={matter}
+      source={source}
+      timers={Result.isOk(loadedTimers) ? loadedTimers.value : null}
+      underClient={underClient}
+    />
   );
   const refreshControl = (
     <RefreshControl
@@ -62,15 +83,13 @@ export const LoadedMatters = ({
   if (groupBy === "client") {
     return (
       <SectionList
-        contentContainerStyle={screenStyles.content}
+        {...emptyListProps(matters.length === 0)}
         // The header is the platform's translucent bar; the list scrolls under it.
         contentInsetAdjustmentBehavior="automatic"
         keyExtractor={(matter) => matter.id}
         ListEmptyComponent={empty}
         refreshControl={refreshControl}
-        renderItem={({ item, section }) => (
-          <MatterRow matter={item} underClient={section.client !== null} />
-        )}
+        renderItem={({ item, section }) => row(item, section.client !== null)}
         renderSectionHeader={({ section }) => {
           const open = searching || !collapsed.has(section.key);
           const Chevron = open ? ChevronDownIcon : ChevronRightIcon;
@@ -106,13 +125,13 @@ export const LoadedMatters = ({
   }
   return (
     <FlatList
-      contentContainerStyle={screenStyles.content}
+      {...emptyListProps(matters.length === 0)}
       contentInsetAdjustmentBehavior="automatic"
       data={matters}
       keyExtractor={(matter) => matter.id}
       ListEmptyComponent={empty}
       refreshControl={refreshControl}
-      renderItem={({ item }) => <MatterRow matter={item} />}
+      renderItem={({ item }) => row(item, false)}
     />
   );
 };

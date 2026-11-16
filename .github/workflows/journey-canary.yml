@@ -29,6 +29,7 @@ jobs:
           fetch-depth: ${{ (github.event_name == 'workflow_dispatch' || github.event.schedule == '41 */6 * * *') && '0' || '1' }}
           persist-credentials: false
           sparse-checkout: |
+            /packages/db-load-gate/src/default-busy-windows.json
             /scripts/journey-detail.jq
             /scripts/check-cli-promotion.ts
             /scripts/promoted-cli-target.ts
@@ -52,7 +53,6 @@ jobs:
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version-file: package.json
-          no-cache: true
 
       - name: Check released CLI journeys
         timeout-minutes: 3

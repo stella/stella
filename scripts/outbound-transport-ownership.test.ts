@@ -230,6 +230,7 @@ describe("outbound transport ownership", () => {
       'void globalThis["Math"];',
       "const { Math: math } = globalThis;",
       'void import("node:path");',
+      'import { readBodyWithIdleDeadline } from "@stll/fetch/body-reader";',
       "void import(`node:path`);",
       "function load(require: Loader) { return require(modulePath); }",
       'type Module = typeof import("node:http");',
@@ -300,6 +301,48 @@ describe("outbound transport ownership", () => {
     expect(
       references('export type { ClientRequest } from "node:http";'),
     ).toEqual([]);
+  });
+
+  test("import trivia does not change transport classification", () => {
+    const forms = [
+      [
+        'import "undici";',
+        'import /* transport registration */\n/* 注釈 🌍 */ "undici";',
+      ],
+      [
+        'import {} from "undici";',
+        'import /* transport registration */\n/* 注釈 🌍 */ {} from "undici";',
+      ],
+      [
+        'import client from "undici";',
+        'import /* transport registration */\n/* 注釈 🌍 */ client from "undici";',
+      ],
+      [
+        'import * as client from "undici";',
+        'import /* transport registration */\n/* 注釈 🌍 */ * as client from "undici";',
+      ],
+      [
+        'import { request } from "undici";',
+        'import /* transport registration */\n/* 注釈 🌍 */ { request } from "undici";',
+      ],
+      [
+        'import { type Dispatcher, request } from "undici";',
+        'import /* transport registration */\n/* 注釈 🌍 */ { type Dispatcher, request } from "undici";',
+      ],
+      [
+        'import { type Dispatcher } from "undici";',
+        'import /* transport registration */\n/* 注釈 🌍 */ { type Dispatcher } from "undici";',
+      ],
+      [
+        'import type { Dispatcher } from "undici";',
+        'import /* transport registration */\n/* 注釈 🌍 */ type { Dispatcher } from "undici";',
+      ],
+    ] as const;
+
+    expect(references(forms[0][0])).toEqual(["module:undici"]);
+    for (const [plain, withTrivia] of forms) {
+      expect(references(withTrivia)).toEqual(references(plain));
+    }
   });
 
   test("platform utilities retain their local-only classification", () => {

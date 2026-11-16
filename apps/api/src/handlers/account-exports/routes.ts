@@ -1,5 +1,6 @@
 import requestPersonalDataExport from "@/api/handlers/account-exports/create";
 import downloadPersonalDataExport from "@/api/handlers/account-exports/download";
+import personalDataExportDownloadLink from "@/api/handlers/account-exports/download/get";
 import latestPersonalDataExport from "@/api/handlers/account-exports/get";
 import personalDataExportStatus from "@/api/handlers/account-exports/status/get";
 import { mount, routes } from "@/api/http/route";
@@ -10,6 +11,7 @@ export const accountExportsRoute = mount(
       {
         "/": { GET: latestPersonalDataExport, POST: requestPersonalDataExport },
         "/:exportId": { GET: personalDataExportStatus },
+        "/:exportId/download-link": { GET: personalDataExportDownloadLink },
         "/:exportId/download": { GET: downloadPersonalDataExport },
       },
       { prefix: "/data-exports" },

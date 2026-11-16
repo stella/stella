@@ -4,12 +4,11 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
-  useState,
   useSyncExternalStore,
 } from "react";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMatch, useNavigate, useRouterState } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
+import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
 
@@ -20,21 +19,17 @@ import {
   ChatTabPanel,
   ChatTabPanelShell,
 } from "@/components/inspector/chat-tab-panel";
+import { CurrentFileFieldSync } from "@/components/inspector/current-file-field-sync";
 import { DOCUMENT_PANE } from "@/components/inspector/document-pane";
 import { ExternalReferencePanel } from "@/components/inspector/external-reference-panel";
 import { MetadataPanelSkeleton } from "@/components/inspector/file-facets";
 import { FileTabPanel } from "@/components/inspector/file-tab-panel";
-import {
-  resolveFileFieldPropertyId,
-  shouldReplaceFileFieldAfterSync,
-} from "@/components/inspector/inspector-panel.logic";
 import { InspectorRail } from "@/components/inspector/inspector-rail";
 import {
   InspectorTabHeader,
   MatterOriginLink,
 } from "@/components/inspector/inspector-tab-header";
 import {
-  closeInspectorTabsForEntities,
   isGenericInspectorTab,
   useInspectorTabsStore,
 } from "@/components/inspector/inspector-tabs-store";
@@ -49,7 +44,6 @@ import { useFileFullViewNavigation } from "@/components/inspector/use-file-full-
 import { useFileTabRename } from "@/components/inspector/use-file-tab-rename";
 import { usePdfTabZoom } from "@/components/inspector/use-pdf-tab-zoom";
 import { useTabContextMenu } from "@/components/inspector/use-tab-context-menu";
-import { useSelectedFileVersionMissing } from "@/components/inspector/versions-facet";
 import { getInspectorView } from "@/components/inspector/view-registry";
 import { RenderStormRegion } from "@/components/render-storm-canary";
 import { MatterMetadataPanel } from "@/components/workspaces/matter-metadata-sheet";
@@ -60,10 +54,8 @@ import { documentOpenTiming } from "@/lib/analytics/document-open-timing";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { APIError } from "@/lib/errors/api";
 import { getCachedAnonymization } from "@/lib/pdf/anonymization-cache";
 import { workspaceOptions } from "@/lib/workspaces/queries";
-import { entityOptions } from "@/lib/workspaces/queries/entities";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
 import { useCurrentWorkspaceView } from "@/lib/workspaces/use-workspace-view-params";
 import { resolveWorkspaceViewParams } from "@/lib/workspaces/view-params.logic";
@@ -174,20 +166,24 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   // route so the metadata persona can drive the route's
   // `?justification=` (which controls bboxes on the route's PDF
   // viewer) instead of touching the inspector tab.
-  const pdfRouteMatch = useMatch({
-    from: "/_protected/workspaces/$workspaceId/$viewId/document",
-    shouldThrow: false,
+  const pdfRouteSearch = useRouterState({
+    select: (routerState) =>
+      routerState.matches.find(
+        (match) =>
+          match.routeId ===
+          "/_protected/workspaces/$workspaceId/$viewId/document",
+      )?.search,
   });
-  const pdfRouteJustification = pdfRouteMatch?.search.justification ?? null;
-  const routeOwnedEditingFieldId = pdfRouteMatch?.search.editing
-    ? (pdfRouteMatch.search.field ?? null)
+  const pdfRouteJustification = pdfRouteSearch?.justification ?? null;
+  const routeOwnedEditingFieldId = pdfRouteSearch?.editing
+    ? (pdfRouteSearch.field ?? null)
     : null;
   // The document route can hand its main pane to the review, in which case the
   // inspector is where that document is read. Only that one field's tab swaps:
   // every other tab keeps the fullscreen persona.
   const documentReviewPaneFieldId =
-    pdfRouteMatch?.search.pane === DOCUMENT_PANE.review
-      ? (pdfRouteMatch.search.field ?? null)
+    pdfRouteSearch?.pane === DOCUMENT_PANE.review
+      ? (pdfRouteSearch.field ?? null)
       : null;
 
   // A revive suggestion for a route-owned view is only meaningful
@@ -411,6 +407,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   // and we avoid calling hooks inside the pdfTabs.map.
   const ribbonContextMenu = useTabContextMenu({
     tabId: activeTab?.id ?? "",
+    tabLabel: activeTab?.label ?? "",
     onClose: () => {
       if (activeTab) {
         handleCloseTab(activeTab.id);
@@ -541,6 +538,11 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
         {!minimized && activeTab && isGenericInspectorTab(activeTab) && (
           <GenericInspectorView
             onClose={() => handleCloseTab(activeTab.id)}
+            onMoveToMain={() =>
+              useInspectorTabsStore
+                .getState()
+                .closeTab(activeTab.id, { movedToMain: true })
+            }
             tab={activeTab}
           />
         )}
@@ -600,115 +602,10 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   );
 };
 
-const CurrentFileFieldSync = ({
-  isFieldIdPinned,
-  isActive,
-  tab,
-}: {
-  isFieldIdPinned: boolean;
-  isActive: boolean;
-  tab: FileTab;
-}) => {
-  const replaceFileFieldId = useInspectorTabsStore((s) => s.replaceFileFieldId);
-  const [currentFileFieldIdsByProperty] = useState(
-    () => new Map<string, string>(),
-  );
-  const { data: entity, error } = useQuery(
-    entityOptions(tab.workspaceId, tab.entityId),
-  );
-
-  useExternalSyncEffect(() => {
-    if (APIError.is(error) && error.status === 404) {
-      closeInspectorTabsForEntities([tab.entityId]);
-    }
-  }, [error, tab.entityId]);
-
-  const activeFileField = entity?.fields.find((field) => {
-    if (field.content.type !== "file") {
-      return false;
-    }
-    return field.id === tab.id;
-  });
-  const filePropertyId = resolveFileFieldPropertyId({
-    activeFilePropertyId: activeFileField?.propertyId,
-    currentFileFieldIdsByProperty,
-    fieldId: tab.id,
-    tabPropertyId: tab.propertyId,
-  });
-  const latestFileFieldForProperty =
-    filePropertyId === undefined
-      ? undefined
-      : entity?.fields.findLast(
-          (field) =>
-            field.propertyId === filePropertyId &&
-            field.content.type === "file",
-        );
-  const isSelectedFieldMissing = useSelectedFileVersionMissing({
-    enabled: isActive && activeFileField === undefined,
-    fieldId: tab.id,
-    workspaceId: tab.workspaceId,
-  });
-
-  useLayoutEffect(() => {
-    if (activeFileField !== undefined) {
-      currentFileFieldIdsByProperty.set(
-        activeFileField.propertyId,
-        activeFileField.id,
-      );
-    }
-
-    if (
-      latestFileFieldForProperty === undefined ||
-      latestFileFieldForProperty.id === tab.id ||
-      latestFileFieldForProperty.content.type !== "file"
-    ) {
-      return;
-    }
-    const previousCurrentFieldId = currentFileFieldIdsByProperty.get(
-      latestFileFieldForProperty.propertyId,
-    );
-    if (
-      !shouldReplaceFileFieldAfterSync({
-        isFieldIdPinned,
-        isSelectedFieldMissing,
-        previousCurrentFieldId,
-        selectedFieldId: tab.id,
-      })
-    ) {
-      return;
-    }
-
-    const latestFileContent = latestFileFieldForProperty.content;
-    currentFileFieldIdsByProperty.set(
-      latestFileFieldForProperty.propertyId,
-      latestFileFieldForProperty.id,
-    );
-    replaceFileFieldId(tab.id, {
-      id: latestFileFieldForProperty.id,
-      fileName: latestFileContent.fileName,
-      label: latestFileContent.fileName,
-      mimeType: latestFileContent.mimeType,
-      pdfFileId: latestFileContent.pdfFileId,
-      propertyId: latestFileFieldForProperty.propertyId,
-    });
-  }, [
-    activeFileField,
-    currentFileFieldIdsByProperty,
-    filePropertyId,
-    isFieldIdPinned,
-    isSelectedFieldMissing,
-    latestFileFieldForProperty,
-    replaceFileFieldId,
-    tab.entityId,
-    tab.id,
-  ]);
-
-  return null;
-};
-
 type GenericInspectorViewProps = {
   tab: GenericTab;
   onClose: () => void;
+  onMoveToMain: () => void;
 };
 
 /**
@@ -720,7 +617,11 @@ type GenericInspectorViewProps = {
  * synced in from a peer browser tab where the registering route
  * hasn't been visited yet.
  */
-const GenericInspectorView = ({ tab, onClose }: GenericInspectorViewProps) => {
+const GenericInspectorView = ({
+  tab,
+  onClose,
+  onMoveToMain,
+}: GenericInspectorViewProps) => {
   const registration = getInspectorView(tab.viewType);
   if (registration === undefined) {
     return null;
@@ -736,6 +637,7 @@ const GenericInspectorView = ({ tab, onClose }: GenericInspectorViewProps) => {
   return (
     <Renderer
       onClose={onClose}
+      onMoveToMain={onMoveToMain}
       tab={{
         id: tab.id,
         label: tab.label,

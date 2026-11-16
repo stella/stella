@@ -332,3 +332,45 @@ test.describe("pinned chrome on a board scrolled sideways", () => {
     expect(identityBackground).not.toContain("/");
   });
 });
+
+test("host-controlled dragging peeks a collapsed band and closes it on cancellation", async ({
+  page,
+}) => {
+  await page.goto(`${fixturePath}?externalDrag`);
+  const openColumn = page.locator('[data-column-header="open"]');
+  await expect(openColumn).toHaveCount(0);
+  await page.getByRole("button", { name: "Start host drag" }).click();
+  await expect(openColumn).toBeVisible();
+  await page
+    .getByRole("button", { name: "End host drag", exact: true })
+    .click();
+  await expect(openColumn).toHaveCount(0);
+});
+
+// Ending a host drag must dominate a retained drop target, including after the peek delay.
+test("an ended host drag cannot reopen its retained band target", async ({
+  page,
+}) => {
+  await page.goto(`${fixturePath}?externalDrag`);
+  await page.clock.install();
+  const openColumn = page.locator('[data-column-header="open"]');
+  await page
+    .getByRole("button", { name: "Start host drag", exact: true })
+    .click();
+  await page.clock.runFor(2000);
+  await expect(openColumn).toBeVisible();
+  await page
+    .getByRole("button", {
+      name: "End host drag retaining target",
+      exact: true,
+    })
+    .click();
+  await expect(openColumn).toHaveCount(0);
+  await page.clock.runFor(2000);
+  await expect(openColumn).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Start host drag", exact: true })
+    .click();
+  await page.clock.runFor(2000);
+  await expect(openColumn).toBeVisible();
+});

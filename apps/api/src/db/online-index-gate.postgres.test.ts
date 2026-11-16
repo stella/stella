@@ -115,11 +115,7 @@ type Fixture = {
   pid: number;
   table: string;
   name: string;
-  index: {
-    name: string;
-    tableName: string;
-    definitionBody: string;
-    isUnique: boolean;
+  index: Parameters<typeof ensureOnlineIndexValid>[0]["index"] & {
     createSql: string;
   };
   gate: OnlineIndexGateOptions & {
@@ -186,6 +182,7 @@ const withFixture = async (work: (fixture: Fixture) => Promise<void>) => {
       );
       await owner.unsafe(`INSERT INTO public.${table} VALUES (1, 2)`);
       const index = {
+        introducedBy: "20261001123000_database_backfill_state",
         name,
         tableName: table,
         definitionBody: `ON public.${table} USING btree (id)`,
@@ -630,7 +627,8 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
       await fixture.blocker`BEGIN ISOLATION LEVEL REPEATABLE READ`;
       await fixture.blocker`SELECT 1 FROM pg_class LIMIT 1`;
       const build = Result.tryPromise({
-        try: async () => await fixture.builder.unsafe(fixture.index.createSql),
+        try: async () =>
+          await fixture.builder.unsafe<unknown>(fixture.index.createSql),
         catch: (cause: unknown) => cause,
       });
       await waitForPhase(
@@ -652,7 +650,7 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
       const assertDuplicateRejected = async () => {
         const insert = await Result.tryPromise({
           try: async () =>
-            await fixture.owner.unsafe(
+            await fixture.owner.unsafe<unknown>(
               `INSERT INTO public.${fixture.table} VALUES (1, 3)`,
             ),
           catch: (cause: unknown) => cause,
@@ -1039,6 +1037,7 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
       await fixture.blocker.unsafe(`SELECT * FROM public.${fixture.table}`);
       let clock = fixture.gate.clock();
       let polls = 0;
+      const clockAdvance: { atPoll: number | null } = { atPoll: null };
       const gate = createOnlineIndexGate({
         connection: fixture.connection,
         observer: fixture.observation,
@@ -1054,9 +1053,18 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
             "the DROP reaches the reader lock barrier",
           );
           polls++;
-          expect(polls).toBeLessThanOrEqual(2);
-          if (polls === 2) {
+          // The first lock observation can precede the monitor's own progress
+          // observation. Advance only after the monitor has seen the wait.
+          if (
+            clockAdvance.atPoll === null &&
+            fixture.records.some((record) =>
+              JSON.stringify(record).includes(
+                "waiting for concurrent index lock",
+              ),
+            )
+          ) {
             clock += fixture.gate.config.maxSnapshotWaitMs;
+            clockAdvance.atPoll = polls;
           }
         },
       });
@@ -1064,7 +1072,13 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
         expect(
           await gate.attempt(`DROP INDEX CONCURRENTLY public.${fixture.name}`),
         ).toBe("retry");
-        expect(polls).toBe(2);
+        const advancedAtPoll = clockAdvance.atPoll;
+        if (advancedAtPoll === null) {
+          throw new TypeError(
+            "Monitor wait milestone did not advance the clock",
+          );
+        }
+        expect(polls).toBe(advancedAtPoll);
         expect(
           fixture.records
             .map((record) => JSON.stringify(record))
@@ -1214,6 +1228,7 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
           await fixture.connection.execute(statement, parameters);
         },
       };
+      let discardFirstProgress = true;
       let clock = fixture.gate.clock();
       let polls = 0;
       const retire = async (
@@ -1224,6 +1239,35 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
           index: { name: fixture.name, tableName: fixture.table },
           reserveObserver: async () => ({
             ...fixture.observation,
+            // The gate consumes the lock observation that releases its test barrier.
+            // A separate pg_stat_activity read can precede a transient wait-event edge.
+            query: async (statement, parameters) => {
+              if (!statement.includes("pg_stat_progress_create_index")) {
+                return await fixture.observation.query(statement, parameters);
+              }
+              let progress: readonly unknown[] = [];
+              await waitForExternalState({
+                description:
+                  "the DROP monitor observes its writer lock barrier",
+                intervalMs: 5,
+                read: async () => {
+                  progress = await fixture.observation.query(
+                    statement,
+                    parameters,
+                  );
+                  if (discardFirstProgress) {
+                    discardFirstProgress = false;
+                    return false;
+                  }
+                  return progress.some(
+                    (row) =>
+                      isRecord(row) &&
+                      row["phase"] === "waiting for concurrent index lock",
+                  );
+                },
+              });
+              return progress;
+            },
             release: () => undefined,
           }),
           gate: { ...fixture.gate, clock: () => clock, wait },

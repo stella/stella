@@ -87,6 +87,7 @@ const bodySchema = v.union([
 
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   contentDelivery: {
     type: "none",
     reason:
@@ -173,6 +174,7 @@ const createDocumentAnnotation = createSafeHandler(
         pageTextSha256ByAnchorId: placed.pageTextSha256ByAnchorId,
       },
       recordAuditEvent,
+      replayIdentity: "spans",
       safeDb,
       userId: user.id,
     });

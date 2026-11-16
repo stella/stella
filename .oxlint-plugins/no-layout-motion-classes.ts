@@ -375,18 +375,18 @@ export default eslintCompatPlugin({
         ],
         messages: {
           easeIn:
-            "conventions-ux (Interactions & Animations): never use `ease-in` " +
+            "Never use `ease-in` " +
             "for UI; it starts slowly, so the interface feels late to react. " +
             "Entering and exiting surfaces use ease-out; movement on screen " +
             "uses ease-in-out.",
           longDuration:
-            "conventions-ux (Interactions & Animations): UI transitions stay " +
+            "UI transitions stay " +
             "at or under 300ms (press 100-160ms, tooltip and small popover " +
             "125-200ms, dropdown 150-250ms, dialog and sheet up to 300ms). " +
             "Decorative or teaching motion that is not interface feedback " +
             "goes in the rule's allowedFiles with a reason.",
           scaleFromZero:
-            "conventions-ux (Interactions & Animations): never enter or exit " +
+            "Never enter or exit " +
             "from `scale-0`; nothing in the real world appears from a point. " +
             "Start near full size with opacity 0 (scale-95 or scale-98 with " +
             "opacity-0), scaled from the trigger with origin-(--transform-origin).",
@@ -396,18 +396,21 @@ export default eslintCompatPlugin({
             "(for example `pointer-coarse:opacity-100`), not a " +
             "`hover: none` media query.",
           layoutTransition:
-            "conventions-ux (Interactions & Animations): animate transform " +
-            "and opacity only. This transition names a layout property " +
-            "(width, height, top, left, right, bottom, inset, margin, " +
-            "padding, flex-basis, font-size), which forces a layout recalc " +
-            "on every frame. Use scale/translate instead.",
+            "Animate transform and opacity only. This transition names a " +
+            "layout property (width, height, top, left, right, bottom, " +
+            "inset, margin, padding, flex-basis, font-size), which forces a " +
+            "layout recalc on every frame. Use scale/translate instead. A " +
+            "surface that changes its own box (a disclosure panel, a " +
+            "collapsible rail, a popup positioner, a progress bar) may " +
+            "transition the box property it owns: list the exact utility " +
+            "in the rule's allowedFiles with its file and reason.",
           transitionAll:
-            "conventions-ux (Interactions & Animations): never transition " +
+            "Never transition " +
             "`all`; it repaints properties nobody chose to animate. Use " +
             "an exact compositable property: transition-opacity or " +
             "transition-transform.",
           viewportUnit:
-            "conventions-ux (Viewport & Responsive): `h-screen`/`w-screen` " +
+            "`h-screen`/`w-screen` " +
             "and `vh` lengths resolve against the largest viewport and " +
             "ignore mobile browser chrome, which causes scroll and overlap " +
             "bugs. Use the dynamic-viewport units: min-h-dvh, h-dvh, " +

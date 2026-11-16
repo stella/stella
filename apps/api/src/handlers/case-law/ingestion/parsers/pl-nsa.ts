@@ -1,3 +1,4 @@
+// parser-output-unchanged: the section-or-full-text choice and textComplete read the same validateAst verdict; only the logging moved to the pipeline.
 /**
  * Polish administrative-court decision reader for the Hugging Face dataset
  * import.
@@ -15,17 +16,16 @@
 
 import { panic } from "better-result";
 
-// parser-output-unchanged: imports the document AST from its package owner
 import type {
   Block,
   DocumentAst,
   ParagraphRole,
 } from "@stll/legal-ast/document-ast";
+import { collapseLetterSpacing } from "@stll/text-normalize";
 
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import {
   buildValidationHtml,
-  validateAndLog,
   validateAst,
 } from "@/api/lib/legal-search/parsers/validate-ast";
 import type { ValidationResult } from "@/api/lib/legal-search/parsers/validate-ast";
@@ -510,7 +510,8 @@ export const plNsaParagraphs = (
   stated: PlNsaStatedSuperscripts,
 ): string[] =>
   withSentencesJoined(withoutPageFurniture(splitParagraphs(text))).map(
-    (paragraph) => withSuperscripts(paragraph, stated),
+    // Letter-spaced emphasis (`o d d a l a`) read once the lines are joined.
+    (paragraph) => withSuperscripts(collapseLetterSpacing(paragraph), stated),
   );
 
 const escapeHtml = (text: string): string =>
@@ -536,7 +537,7 @@ const fromSections = (
       anchorId: `h-${section}`,
       type: "heading",
       level: 2,
-      role: "section-heading",
+      role: section === "thesis" ? "publisher-heading" : "section-heading",
       inlines: [{ type: "text", text: heading }],
       plainText: heading,
     });
@@ -649,19 +650,10 @@ export const parsePlNsaDecision = (
         ]
       : chosen.blocks;
 
-  // Run on every path, the empty one included: a row that yields no text is
-  // the case this signal exists to report.
-  const validation = validateAndLog(
-    {
-      parser: "pl-nsa",
-      caseNumber: input.caseNumber,
-      language: "pl",
-      url: input.sourceUrl,
-    },
-    referenceHtml,
-    blocks,
-    comparison,
-  );
+  // Measured, not logged: the verdict becomes the `textComplete` metadata,
+  // and the pipeline reports retention (and an empty decision) for what is
+  // stored.
+  const validation = validateAst(referenceHtml, blocks, comparison);
 
   if (blocks.length === 0) {
     return {

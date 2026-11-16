@@ -1,0 +1,49 @@
+{
+  "description": "A stored turn of a coding agent on the member's computer, as the API keeps it. Each call of the subagent names the subagent's step in its metadata, never in its input; the web and the phone must group it the same way. The last step carries the link only in its input, where nothing reads it: it stays on the turn.",
+  "parts": [
+    {
+      "type": "tool-call",
+      "id": "run_call-agent",
+      "name": "harness_native_tool",
+      "arguments": "{\"tool\":\"Agent\",\"detail\":{\"kind\":\"subagent\",\"description\":\"Check the lease\"}}",
+      "input": {
+        "tool": "Agent",
+        "detail": { "kind": "subagent", "description": "Check the lease" }
+      },
+      "state": "complete",
+      "output": { "status": "completed" }
+    },
+    {
+      "type": "tool-call",
+      "id": "run_call-grep",
+      "name": "command_execution",
+      "arguments": "{\"command\":\"rg arrears\"}",
+      "input": { "command": "rg arrears" },
+      "metadata": { "stellaLocalRunParentCall": "run_call-agent" },
+      "state": "complete",
+      "output": { "status": "completed" }
+    },
+    {
+      "type": "tool-call",
+      "id": "run_call-docs",
+      "name": "mcp__docs__search",
+      "arguments": "{\"query\":\"arrears cap\"}",
+      "input": { "query": "arrears cap" },
+      "metadata": { "stellaLocalRunParentCall": "run_call-agent" },
+      "state": "complete",
+      "output": { "status": "completed" }
+    },
+    {
+      "type": "tool-call",
+      "id": "run_call-input-link",
+      "name": "command_execution",
+      "arguments": "{\"command\":\"ls drafts\",\"parentCallId\":\"run_call-agent\"}",
+      "input": { "command": "ls drafts", "parentCallId": "run_call-agent" },
+      "state": "complete",
+      "output": { "status": "completed" }
+    }
+  ],
+  "subagentCallId": "run_call-agent",
+  "stepsOfSubagent": ["run_call-grep", "run_call-docs"],
+  "onTheTurn": ["run_call-input-link"]
+}

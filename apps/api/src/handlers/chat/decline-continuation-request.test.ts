@@ -33,14 +33,14 @@ const captureAdapter = (sink: ModelMessage[][]): AnyTextAdapter => ({
     yield {
       type: EventType.RUN_STARTED,
       runId: runId ?? "run-2",
-      threadId: threadId ?? "thread-1",
+      threadId,
       model,
       timestamp,
     } satisfies AdapterYieldChunk;
     yield {
       type: EventType.RUN_FINISHED,
       runId: runId ?? "run-2",
-      threadId: threadId ?? "thread-1",
+      threadId,
       finishReason: "stop",
       model,
       timestamp,

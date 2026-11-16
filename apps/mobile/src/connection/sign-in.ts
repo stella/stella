@@ -11,6 +11,7 @@ import {
   TokenError,
 } from "./errors";
 import type { Fetch } from "./http";
+import { readIdTokenSubject } from "./id-token";
 import {
   type AuthorizationCrypto,
   createAuthorizationState,
@@ -124,8 +125,22 @@ export const signIn = async ({
         }),
       );
     }
+    if (tokens.id_token === undefined) {
+      return Result.err(
+        new TokenError({
+          message:
+            "The server issued no ID token, so the session would not know whose it is",
+        }),
+      );
+    }
+    const userId = yield* readIdTokenSubject({
+      clientId,
+      idToken: tokens.id_token,
+      issuer: metadata.issuer,
+    });
     return Result.ok({
       session: {
+        signInId: createAuthorizationState(crypto),
         serverUrl,
         issuer: metadata.issuer,
         clientId,
@@ -133,6 +148,7 @@ export const signIn = async ({
         revocationEndpoint: metadata.revocation_endpoint,
         resource,
         refreshToken: tokens.refresh_token,
+        userId,
       },
       access: {
         token: tokens.access_token,

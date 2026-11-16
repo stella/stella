@@ -38,7 +38,7 @@ export type ServingCorpusIndexGeneration = {
   cluster: QuickwitCluster;
 };
 
-export const CORPUS_INDEX_SOURCE_TABLES = {
+const CORPUS_INDEX_SOURCE_TABLES = {
   case_law: caseLawSources,
   legislation: legislationSources,
 } as const satisfies Record<

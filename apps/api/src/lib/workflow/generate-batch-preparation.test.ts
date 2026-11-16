@@ -6,7 +6,11 @@ import type { FieldContent } from "@/api/db/schema-validators";
 import { toSafeId } from "@/api/lib/branded-types";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import { isMissingCorpusObjectError } from "@/api/lib/s3";
-import { generateBatch } from "@/api/lib/workflow/generate-batch";
+import { generateWorkflowData } from "@/api/lib/workflow/ai-generate-batch";
+import {
+  fetchAndPrepareFiles,
+  generateBatch,
+} from "@/api/lib/workflow/generate-batch";
 import type { GenerateBatchProps } from "@/api/lib/workflow/generate-batch-shared";
 import type { AIBatchProperty } from "@/api/lib/workflow/get-execution-plan";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -31,8 +35,10 @@ const fileContent = {
 
 const dependencies = {
   fetchInputFieldsForBatch: async () => [
-    { id: fileFieldId, propertyId, content: fileContent },
+    { id: fileFieldId, propertyId, content: fileContent, aiSettlement: null },
   ],
+  fetchAndPrepareFiles,
+  generateWorkflowData,
 };
 
 // The object the PDF path reaches for: the input file's own id under the
@@ -42,6 +48,7 @@ const inputObjectKey = `org_test/workspace_test/${fileContent.id}.pdf`;
 const aiProperty = {
   id: propertyId,
   status: "stale",
+  answerShape: "value",
   content: { version: 1, type: "text" },
   dependencies: [],
   tool: { version: 1, type: "ai-model", prompt: "Extract the parties." },
@@ -106,5 +113,52 @@ describe("workflow batch input preparation", () => {
         .filter(({ method }) => method === "GET")
         .map(({ key }) => key),
     ).toEqual([inputObjectKey]);
+  });
+});
+
+describe("an answer the batch request never returned", () => {
+  const selectProperty = {
+    ...aiProperty,
+    id: toSafeId<"property">("property_select"),
+    content: { version: 1, type: "single-select", options: [], fallback: null },
+  } as const satisfies AIBatchProperty;
+
+  const batchWithout = async (properties: readonly AIBatchProperty[]) =>
+    await generateBatch(
+      {
+        ...props,
+        batch: {
+          id: "batch_0",
+          inputs: [propertyId],
+          properties: [...properties],
+        },
+      },
+      {
+        ...dependencies,
+        fetchAndPrepareFiles: async () => [],
+        // The request answered nothing for any property it was asked.
+        generateWorkflowData: async () =>
+          Result.ok({
+            output: {},
+            refusedPropertyIds: new Set(),
+            properties: [...properties],
+            fit: { type: "whole", files: [] },
+          }),
+      },
+    );
+
+  test("fails the batch instead of settling the property as not stated", async () => {
+    const result = await batchWithout([aiProperty]);
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(WorkflowIntegrationError.is(result.error)).toBe(true);
+    }
+  });
+
+  test("still settles a select with no options, which is never asked, as not stated", async () => {
+    const result = Result.unwrap(await batchWithout([selectProperty]));
+
+    expect([...result.settlements]).toEqual([[selectProperty.id, "notStated"]]);
   });
 });

@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/observability/case-law-freshness-metrics.ts",
+  "delta": 1,
+  "reason": "The waiting-replacement gauge reads each served generation in turn, as the backlog read beside it does; the served generations are the serving one and the few a jurisdiction was flipped to."
+}

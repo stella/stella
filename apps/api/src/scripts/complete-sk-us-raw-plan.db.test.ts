@@ -7,12 +7,12 @@ import fc from "fast-check";
 import { assertProperty } from "@stll/property-testing";
 
 import { caseLawSources } from "@/api/db/schema";
-import { SOURCE_RAW_ENVELOPE_CONTENT_TYPE } from "@/api/handlers/case-law/ingestion/adapter";
 import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import { SOURCE_RAW_ENVELOPE_CONTENT_TYPE } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   completeSkUsRawStatement,

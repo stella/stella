@@ -40,6 +40,7 @@ const createExpenseBodySchema = v.object({
 
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   description:
     "Record a disbursement in the current matter against a work item " +
     "(matterId: the document, folder, or task the cost belongs to). amount " +

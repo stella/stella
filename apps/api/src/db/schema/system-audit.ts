@@ -1,6 +1,6 @@
+import { stellaIngestion } from "@/api/db/rls";
 import type { SystemRunActor } from "@/api/lib/system-audit/actors";
 
-import { stellaIngestion } from "../rls";
 import { jsonb, p, sql, stella, timestamptz } from "./common";
 
 const OWNER_ONLY = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.system_audit_runs'::regclass)`;
@@ -58,10 +58,10 @@ export const systemAuditRuns = p.pgTable.withRLS(
       to: stella,
       withCheck: sql`true`,
     }),
-    p.pgPolicy("system_audit_runs_ingestion_review_insert", {
+    p.pgPolicy("system_audit_runs_ingestion_insert", {
       for: "insert",
       to: stellaIngestion,
-      withCheck: sql`${table.actor} = 'system:case-law-review-reconcile'`,
+      withCheck: sql`true`,
     }),
     p.pgPolicy("system_audit_runs_no_update", {
       as: "restrictive",

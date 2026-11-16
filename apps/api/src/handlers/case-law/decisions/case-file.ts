@@ -113,10 +113,9 @@ export const listCaseFileDocuments = async ({
   if (after === false) {
     return false;
   }
-  const familyKey = await docketFamilyKeyToRead({
+  const familyKey = docketFamilyKeyToRead({
     country: decision.country,
     locator,
-    tx,
   });
   const localizedCourts = tx
     .select({ court: publishedCaseLawDecisions.court })
@@ -242,6 +241,8 @@ const UNPROJECTED_CASE_FILE_COLUMNS = [
   "fulltext",
   // Ingestion reconciliation scheduling is not public document metadata.
   "textlessDetailRecheckedAt",
+  // Extraction diagnostics accompany document content in the detail reader.
+  "extractionWarnings",
   // Text sections belong to the detail reader.
   "sections",
   // Structured document content belongs to the detail reader.
@@ -264,6 +265,12 @@ const UNPROJECTED_CASE_FILE_COLUMNS = [
   "documentUrl",
   // Publisher ingestion identity; the public link uses id or slug.
   "sourceDocumentId",
+  // Fallback identity and cohort bookkeeping are not public document labels.
+  "fallbackIdentityKey",
+  "fallbackCohortKey",
+  "fallbackContentHash",
+  "fallbackPublicationHash",
+  "fallbackDocumentHash",
   // The file's document labels use the published primary reference.
   "sheetNumber",
   // Document-fetch queue priority is internal bookkeeping.
@@ -272,6 +279,17 @@ const UNPROJECTED_CASE_FILE_COLUMNS = [
   "documentFetchAttemptedAt",
   // Document-fetch retry state is internal bookkeeping.
   "documentFetchAttempts",
+  // These materialized publisher fields are already represented in metadata.
+  "nssReporterNumber",
+  "nssReporterYear",
+  "nssReporterIssue",
+  "nssKeywordSearchCode",
+  "nssRegistryCaseNumber",
+  "nssRegistryReferral",
+  "nssRegistryReferralDate",
+  "nssRegistryAgainstCases",
+  "nssRegistryStatus",
+  "nssRegistryAnnotation",
   // Open publisher metadata is deliberately absent from compact document links.
   "metadata",
   // Source change detection is internal bookkeeping.
@@ -282,6 +300,7 @@ const UNPROJECTED_CASE_FILE_COLUMNS = [
   "parsedSourceHash",
   "parsedSourceHashVersion",
   "parsedSourceRawS3Key",
+  "parsedInputState",
   // Source observation timing is internal bookkeeping.
   "sourceObservedAt",
   // Source observation ordering is internal bookkeeping.

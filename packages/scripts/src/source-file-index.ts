@@ -12,18 +12,26 @@ type SourceFileEntry = {
 
 const indexes = new Map<string, readonly SourceFileEntry[]>();
 
+type SourceFileIndexOptions = {
+  pattern?: string;
+};
+
 export const containsJsxTag = (sourceText: string) => sourceText.includes("<");
 
-/** A process-wide, read-once index of the TypeScript sources below one root. */
-export const sourceFileIndex = (sourceRoot: string) => {
+/** A process-wide, read-once index of the sources below one root. */
+export const sourceFileIndex = (
+  sourceRoot: string,
+  { pattern = "**/*.{ts,tsx}" }: SourceFileIndexOptions = {},
+) => {
   const root = path.resolve(sourceRoot);
-  const cached = indexes.get(root);
+  const cacheKey = `${root}\0${pattern}`;
+  const cached = indexes.get(cacheKey);
   if (cached) {
     return cached;
   }
 
   const entries = [
-    ...new Bun.Glob("**/*.{ts,tsx}").scanSync({ cwd: root, onlyFiles: true }),
+    ...new Bun.Glob(pattern).scanSync({ cwd: root, onlyFiles: true }),
   ]
     .toSorted()
     .map((relativePath) => {
@@ -40,6 +48,6 @@ export const sourceFileIndex = (sourceRoot: string) => {
         },
       };
     });
-  indexes.set(root, entries);
+  indexes.set(cacheKey, entries);
   return entries;
 };

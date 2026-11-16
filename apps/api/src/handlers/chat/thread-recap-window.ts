@@ -6,6 +6,7 @@ import {
   readThreadStoredContentSendModeOnTx,
   THREAD_STORED_CONTENT_SEND_MODE,
 } from "@/api/lib/chat/thread-stored-content-send-mode";
+import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
 
 const RECAP_RECENT_MESSAGE_LIMIT = 24;
 
@@ -96,15 +97,25 @@ export const loadRecapMessageWindow = async ({
     switch (sendMode) {
       case THREAD_STORED_CONTENT_SEND_MODE.anonymized:
         return { sendMode };
-      case THREAD_STORED_CONTENT_SEND_MODE.raw:
+      case THREAD_STORED_CONTENT_SEND_MODE.raw: {
+        const { projection, subjectByThread } = await readChatCopyProjection({
+          tx,
+          threadIds: [threadId],
+          values: [firstUserMessages, recentMessagesDesc],
+        });
         return {
           sendMode,
+          withdrawnMarker: projection.marker(
+            [firstUserMessages, recentMessagesDesc],
+            subjectByThread.get(threadId),
+          ),
           recentCount: recentMessagesDesc.length,
           messages: buildRecapMessageWindow({
             firstUserMessage: firstUserMessages.at(0) ?? null,
             recentMessagesDesc,
-          }),
+          }).map((row) => projection.chat(row, subjectByThread.get(threadId))),
         };
+      }
       default:
         sendMode satisfies never;
         return panic(`Unhandled thread send mode: ${String(sendMode)}`);

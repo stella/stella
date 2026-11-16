@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import * as v from "valibot";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   CONFIGURATION_PLACEHOLDERS,
@@ -93,7 +93,8 @@ describe("configuration placeholders", () => {
               .map(([before, cased, after]) => `${before}${cased}${after}`),
       );
 
-    fc.assert(
+    assertProperty(
+      "no casing or padding of a sentinel ever reaches a consumer",
       fc.property(sentinelValue, (value) => {
         expect(isConfigurationPlaceholder(value)).toBe(true);
         expect(credentialsFromEnvValues(value, value)).toBeNull();
@@ -111,7 +112,7 @@ describe("configuration placeholders", () => {
           expect(violation).toContain("REQUIRED_VALUE");
         }
       }),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 

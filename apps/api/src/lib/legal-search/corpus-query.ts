@@ -6,7 +6,11 @@ import type {
   WorkIdentifier,
 } from "@stll/legal-atlas/provision-citation-profile";
 import { provisionCitationProfileFor } from "@stll/legal-atlas/provision-citation-profiles";
-import { foldToAscii, normalizeUnicode } from "@stll/text-normalize";
+import {
+  foldToAscii,
+  normalizeNumericIndices,
+  normalizeUnicode,
+} from "@stll/text-normalize";
 
 import {
   decisionTypeFilter,
@@ -91,7 +95,10 @@ export type CorpusQueryToken =
  * parse error; an empty span yields no token at all. Text without quotes yields
  * exactly the terms it always did.
  */
-export const tokenizeCorpusFreeText = (text: string): CorpusQueryToken[] => {
+export const tokenizeCorpusFreeText = (raw: string): CorpusQueryToken[] => {
+  // The indexed projection prints numeric superscripts with a caret. Read a
+  // pasted superscript as the same two tokens before any compatibility fold.
+  const text = normalizeNumericIndices(raw);
   const tokens: CorpusQueryToken[] = [];
   let plain = "";
 

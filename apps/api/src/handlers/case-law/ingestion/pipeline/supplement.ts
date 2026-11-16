@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import { caseLawDecisionSupplements } from "@/api/db/schema";
@@ -23,6 +23,7 @@ import {
 import type { SupplementPlacement } from "@/api/handlers/case-law/ingestion/pipeline/supplement-placement";
 import {
   SUPPLEMENT_JUDGMENT_UNREADABLE,
+  SUPPLEMENT_REMOVED_WHILE_LEAVING,
   SUPPLEMENT_STANDALONE_REASON,
 } from "@/api/handlers/case-law/ingestion/pipeline/supplement-types";
 import type {
@@ -39,6 +40,13 @@ import { openRawSourceWriteWindow } from "@/api/lib/legal-search/raw-source-stor
 import { logger } from "@/api/lib/observability/logger";
 
 /**
+ * What became of the supplement row once its former holder was written:
+ * detached from it, moved to another judgment by a concurrent placement,
+ * or deleted.
+ */
+type FormerHolderLeft = "detached" | "moved" | "removed";
+
+/**
  * Take the supplement out of a judgment a correction says it no longer
  * belongs to, then place it again. The former holder is written first, and
  * its write leaves the supplement out (`selectComposableSupplements`); only
@@ -49,7 +57,7 @@ import { logger } from "@/api/lib/observability/logger";
 const leaveFormerHolder = async (
   placement: SupplementPlacement,
   formerId: SafeId<"caseLawDecision">,
-): Promise<ProcessSupplementResult> => {
+): Promise<Result<ProcessSupplementResult, unknown>> => {
   const {
     supplement,
     sourceId,
@@ -70,10 +78,8 @@ const leaveFormerHolder = async (
     readStoredRaw,
   });
   if (rebuiltFormer.type === "read-failed") {
-    return supplementJudgmentReadFailed(
-      placement,
-      formerId,
-      rebuiltFormer.error,
+    return Result.ok(
+      supplementJudgmentReadFailed(placement, formerId, rebuiltFormer.error),
     );
   }
   if (rebuiltFormer.type === "unreadable") {
@@ -83,13 +89,13 @@ const leaveFormerHolder = async (
       sourceDocumentId,
       "error.detail": rebuiltFormer.detail,
     });
-    return {
+    return Result.ok({
       status: PROCESS_DECISION_STATUS.COMPLETE,
       disposition: {
         type: "standalone",
         reason: SUPPLEMENT_STANDALONE_REASON.JUDGMENT_UNREADABLE,
       },
-    };
+    });
   }
   const rewritten = await processStoredDecision(
     {
@@ -105,12 +111,15 @@ const leaveFormerHolder = async (
     },
     placement.resolveSourceContract,
   );
-  if (rewritten.status === PROCESS_DECISION_STATUS.RETRYABLE) {
+  if (rewritten.isErr()) {
     return rewritten;
+  }
+  if (rewritten.value.status === PROCESS_DECISION_STATUS.RETRYABLE) {
+    return Result.ok(rewritten.value);
   }
   // The rewrite parks a supplement it leaves out; one still naming the
   // former holder is detached here.
-  const detached = await scopedDb(async (tx) => {
+  const left = await scopedDb(async (tx): Promise<FormerHolderLeft> => {
     if (
       await detachSupplement(tx, {
         sourceId,
@@ -118,7 +127,7 @@ const leaveFormerHolder = async (
         decisionId: formerId,
       })
     ) {
-      return true;
+      return "detached";
     }
     const current = (
       await tx
@@ -132,14 +141,38 @@ const leaveFormerHolder = async (
         )
         .limit(1)
     ).at(0);
-    return current?.decisionId === null;
+    if (current === undefined) {
+      return "removed";
+    }
+    return current.decisionId === null ? "detached" : "moved";
   });
-  if (!detached) {
-    // Moved by a concurrent placement; the next observation settles it.
-    return {
-      status: PROCESS_DECISION_STATUS.RETRYABLE,
-      reason: PROCESS_DECISION_RETRY_REASON.CONTENTION,
-    };
+  switch (left) {
+    case "detached":
+      break;
+    case "moved":
+      // Moved by a concurrent placement; the next observation settles it.
+      return Result.ok({
+        status: PROCESS_DECISION_STATUS.RETRYABLE,
+        reason: PROCESS_DECISION_RETRY_REASON.CONTENTION,
+      });
+    case "removed":
+      // Only an erasure or a takedown deletes a supplement row (see
+      // SUPPLEMENT_ROW_DELETERS). Placing it again here would bring back
+      // what it removed, and retrying would only wait for the next
+      // observation, which places it from the start where the erasure
+      // checks run. So the step ends here.
+      logger.warn(SUPPLEMENT_REMOVED_WHILE_LEAVING, {
+        sourceId,
+        judgmentId: formerId,
+        sourceDocumentId,
+      });
+      return Result.ok({
+        status: PROCESS_DECISION_STATUS.COMPLETE,
+        disposition: { type: "removed", formerJudgmentId: formerId },
+      });
+    default:
+      left satisfies never;
+      return panic("Unhandled former holder outcome");
   }
   return await processSupplement(
     {
@@ -187,7 +220,7 @@ export const processSupplement = async (
   resolveSourceContract: SourceContractResolver = createSourceContractResolver(
     scopedDb,
   ),
-): Promise<ProcessSupplementResult> => {
+): Promise<Result<ProcessSupplementResult, unknown>> => {
   const { metadataUrlSchema } = await resolveSourceContract(sourceId);
   const { sourceDocumentId } = supplement.document;
   const expectedRole = DECISION_SUPPLEMENT_DOCUMENT_ROLE[supplement.kind];
@@ -199,7 +232,11 @@ export const processSupplement = async (
   }
   // The internal supplement kind does not establish a publisher role when
   // the adapter could not classify every component of the source enum.
-  const document = sanitizeResult(supplement.document, metadataUrlSchema);
+  const sanitized = sanitizeResult(supplement.document, metadataUrlSchema);
+  if (sanitized.isErr()) {
+    return sanitized;
+  }
+  const document = sanitized.value;
   assertDocketKeyedSupplementAllowed(document.country);
   const key: SupplementTargetKey = {
     sourceId,
@@ -231,10 +268,10 @@ export const processSupplement = async (
       }),
   );
   if (placed.type === "erased") {
-    return {
+    return Result.ok({
       status: PROCESS_DECISION_STATUS.COMPLETE,
       disposition: { type: "erased", decisionId: placed.decisionId },
-    };
+    });
   }
   const { row, selection, leavesHolder, judgment } = placed;
 
@@ -271,10 +308,12 @@ export const processSupplement = async (
   }
 
   if (judgment.redacted) {
-    return await absorbSupplementIntoJudgment(placement, judgment.id, {
-      type: "withheld",
-      judgmentId: judgment.id,
-    });
+    return Result.ok(
+      await absorbSupplementIntoJudgment(placement, judgment.id, {
+        type: "withheld",
+        judgmentId: judgment.id,
+      }),
+    );
   }
 
   const merged = async (): Promise<ProcessSupplementResult> =>
@@ -288,7 +327,7 @@ export const processSupplement = async (
     row.decisionId === judgment.id &&
     row.mergedSourceHash === row.sourceHash
   ) {
-    return await merged();
+    return Result.ok(await merged());
   }
 
   const rebuilt = await rebuildStoredJudgment({
@@ -298,7 +337,9 @@ export const processSupplement = async (
     readStoredRaw,
   });
   if (rebuilt.type === "read-failed") {
-    return supplementJudgmentReadFailed(placement, judgment.id, rebuilt.error);
+    return Result.ok(
+      supplementJudgmentReadFailed(placement, judgment.id, rebuilt.error),
+    );
   }
   if (rebuilt.type === "unreadable") {
     logger.warn(SUPPLEMENT_JUDGMENT_UNREADABLE, {
@@ -310,13 +351,13 @@ export const processSupplement = async (
     if (row.decisionId === judgment.id) {
       // The judgment still publishes an earlier version; a standalone row
       // would be a second public copy of the same reasons.
-      return {
+      return Result.ok({
         status: PROCESS_DECISION_STATUS.COMPLETE,
         disposition: {
           type: "standalone",
           reason: SUPPLEMENT_STANDALONE_REASON.JUDGMENT_UNREADABLE,
         },
-      };
+      });
     }
     return await keepSupplementStandalone(
       placement,
@@ -337,8 +378,11 @@ export const processSupplement = async (
     },
     resolveSourceContract,
   );
-  if (written.status === PROCESS_DECISION_STATUS.RETRYABLE) {
+  if (written.isErr()) {
     return written;
+  }
+  if (written.value.status === PROCESS_DECISION_STATUS.RETRYABLE) {
+    return Result.ok(written.value);
   }
 
   const after = (
@@ -365,7 +409,7 @@ export const processSupplement = async (
   ) {
     // The judgment's write absorbed the row already, or reported that it
     // could not; asking again settles which.
-    return await merged();
+    return Result.ok(await merged());
   }
   return await keepSupplementStandalone(
     placement,

@@ -18,6 +18,7 @@ import {
   resetLogSinkForTesting,
   setLogSinkForTesting,
 } from "@/api/lib/observability/logger";
+import { isMcpErrorCode } from "@/api/mcp/error-codes";
 import { McpGatewayLoadError } from "@/api/mcp/errors";
 import type { GatewayDispatchResult } from "@/api/mcp/gateway/dispatch-call";
 import { gatewayLoadErrorResult } from "@/api/mcp/gateway/external-tools";
@@ -110,7 +111,12 @@ const expectOutcome = (expected: {
     ({ attributes }) => attributes?.["event"] === "mcp_tool_call",
   );
   expect(calls).toHaveLength(1);
-  expect(calls.at(0)).toEqual({
+  const {
+    "error.code": errorCode,
+    refused_fields: refusedFields,
+    ...attributes
+  } = calls.at(0)?.attributes ?? {};
+  expect({ ...calls.at(0), attributes }).toEqual({
     severityText: "INFO",
     message: "mcp.tool_call.completed",
     attributes: {
@@ -121,6 +127,13 @@ const expectOutcome = (expected: {
       duration_ms: expect.any(Number),
     },
   });
+  // A refusal adds only its known code and declared argument names.
+  if (errorCode !== undefined) {
+    expect(errorCode === "unknown" || isMcpErrorCode(errorCode)).toBe(true);
+  }
+  if (refusedFields !== undefined) {
+    expect(refusedFields).toMatch(/^[a-z][a-z0-9_]*(?:,[a-z][a-z0-9_]*)*$/u);
+  }
   expect(calls.at(0)?.attributes?.["duration_ms"]).toBeGreaterThanOrEqual(0);
   const logged = JSON.stringify(calls);
   for (const privateValue of [

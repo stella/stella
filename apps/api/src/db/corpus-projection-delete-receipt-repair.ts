@@ -24,47 +24,22 @@
  * `pg_constraint.convalidated` proves the walk completed.
  */
 
-import { panic } from "better-result";
-
-import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
-import { defaultConfig, type Verdict } from "@stll/db-load-gate/health";
-
-import { isRecord } from "../lib/type-guards";
-import { createBackfillRuntime } from "./backfill-runtime";
+import {
+  type CorpusProjectionRevisionWalkRuntime,
+  walkCorpusProjectionRevisions,
+} from "./corpus-projection-revision-walk";
 import { readConstraintCompletion } from "./online-constraint-completion";
 import { validateOnlineConstraints } from "./online-ddl";
 import type { OnlineConstraintValidation, OnlineTableGate } from "./online-ddl";
 import type {
+  MigrationOwnedOnlineRepair,
   OnlineMigrationConnection,
   OnlineMigrationOutcome,
-  OnlineRepair,
 } from "./online-migration-connection";
 
 const REPAIR_NAME = "corpus-projection-delete-receipt";
 const TABLE_NAME = "corpus_index_projection_intents";
 const CONSTRAINT_NAME = "corpus_index_projection_intents_delete_receipt_paired";
-
-/**
- * Rows per transaction, walked in primary-key order. The batch is a bounded
- * index range rather than a scan for the rows that still need the instant:
- * those have no index of their own, and the table keeps one row per append
- * attempt of the whole corpus.
- */
-const BATCH = 1000;
-const BATCH_LOCK_TIMEOUT = "30s";
-const BATCH_STATEMENT_TIMEOUT = "1min";
-
-/** Primary-key floor: every UUID sorts after it, so the walk starts here. */
-const ID_FLOOR = "00000000-0000-0000-0000-000000000000";
-
-const READ_BATCH_BOUNDARY_SQL = `
-  SELECT id
-  FROM public."${TABLE_NAME}"
-  WHERE id > $1
-  ORDER BY id
-  OFFSET $2
-  LIMIT 1
-`;
 
 const REPAIR_RANGE_SQL = `
   UPDATE public."${TABLE_NAME}"
@@ -82,69 +57,6 @@ const REPAIR_TAIL_SQL = `
     AND "delete_opstamp" IS NOT NULL
     AND "delete_task_created_at" IS NULL
 `;
-
-const readBatchBoundary = async (
-  connection: Pick<OnlineMigrationConnection, "query">,
-  cursor: string,
-  size: number,
-): Promise<string | null> => {
-  const row = (
-    await connection.query(READ_BATCH_BOUNDARY_SQL, [cursor, size - 1])
-  ).at(0);
-  if (row === undefined) {
-    return null;
-  }
-  if (!isRecord(row) || typeof row["id"] !== "string") {
-    return panic(
-      `Online repair ${REPAIR_NAME}: batch boundary has an invalid shape`,
-    );
-  }
-  return row["id"];
-};
-
-/** A keyset cursor advances atomically with the idempotent range UPDATE. */
-const repairFrom = async (
-  connection: OnlineMigrationConnection,
-  { readVerdict, sleep = Bun.sleep, clock, log }: RepairRuntimeOptions,
-) => {
-  const runtime = createBackfillRuntime({
-    name: REPAIR_NAME,
-    tableName: TABLE_NAME,
-    initialSize: BATCH,
-    config: {
-      ...defaultConfig,
-      batchLockTimeoutMs: 30_000,
-      batchStatementTimeoutMs: 60_000,
-    },
-    connection,
-    readVerdict,
-    clock,
-    log,
-  });
-  try {
-    return await runBackfillPass({
-      holdPolicy: "propagate",
-      sleep,
-      step: async () =>
-        await runtime.step(async ({ tx, cursor, size }) => {
-          await tx.execute(`SET LOCAL lock_timeout = '${BATCH_LOCK_TIMEOUT}'`);
-          await tx.execute(
-            `SET LOCAL statement_timeout = '${BATCH_STATEMENT_TIMEOUT}'`,
-          );
-          const floor = cursor ?? ID_FLOOR;
-          const boundary = await readBatchBoundary(tx, floor, size);
-          if (boundary === null) {
-            await tx.execute(REPAIR_TAIL_SQL, [floor]);
-            return { cursor: floor, done: true, value: null };
-          }
-          await tx.execute(REPAIR_RANGE_SQL, [floor, boundary]);
-          return { cursor: boundary, done: false, value: null };
-        }),
-    });
-  } finally {
-    await runtime.close();
-  }
-};
 
 export const CORPUS_PROJECTION_DELETE_RECEIPT_CONSTRAINTS = [
   { tableName: TABLE_NAME, constraintName: CONSTRAINT_NAME },
@@ -165,16 +77,10 @@ const validateConstraint = async (
     constraints: CORPUS_PROJECTION_DELETE_RECEIPT_CONSTRAINTS,
   });
 
-type RepairRuntimeOptions = {
-  readVerdict?: () => Promise<Verdict>;
-  sleep?: (milliseconds: number) => Promise<void>;
-  clock?: () => number;
-  log?: (record: unknown) => void;
-};
-
 export const createCorpusProjectionDeleteReceiptRepair = (
-  options: RepairRuntimeOptions = {},
-): OnlineRepair => ({
+  options: CorpusProjectionRevisionWalkRuntime = {},
+): MigrationOwnedOnlineRepair => ({
+  introducedBy: "20260908140000_corpus_projection_delete_task_instant",
   name: REPAIR_NAME,
   readCompletion: async (connection) =>
     await readConstraintCompletion({
@@ -192,7 +98,16 @@ export const createCorpusProjectionDeleteReceiptRepair = (
     ) {
       return await validateConstraint(connection, tables);
     }
-    const pass = await repairFrom(connection, options);
+    const pass = await walkCorpusProjectionRevisions(
+      connection,
+      {
+        name: REPAIR_NAME,
+        tableName: TABLE_NAME,
+        repairRangeSql: REPAIR_RANGE_SQL,
+        repairTailSql: REPAIR_TAIL_SQL,
+      },
+      options,
+    );
     if (pass.isErr()) {
       throw pass.error;
     }

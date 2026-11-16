@@ -66,6 +66,7 @@ const sourceOf = (
     status: "read",
     decision: {
       appealReviews: noDecisionReviewFound(),
+      extractionWarnings: [],
       id: brandPersistedCaseLawDecisionId(id),
       caseNumberType: "case-number",
       courtAbbreviation: "ÚS",

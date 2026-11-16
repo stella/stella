@@ -12,6 +12,7 @@ import {
   BreadcrumbSeparator,
 } from "@stll/ui/breadcrumb";
 import { Separator } from "@stll/ui/separator";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { PublicWorkspaceShell } from "@/components/public-workspace-shell";
 import { SidebarTrigger, useSidebar } from "@/components/sidebar";
@@ -124,6 +125,9 @@ export function PublicLawBreadcrumbs() {
                 activeProps={CRUMB_ACTIVE_PROPS}
                 className={CRUMB_LINK_CLASS}
                 to="/law/cases"
+                search={
+                  trail?.kind === "decision" ? trail.country.link.search : {}
+                }
               >
                 {t("common.caseLaw")}
               </Link>
@@ -149,9 +153,7 @@ export function PublicLawBreadcrumbs() {
               <BreadcrumbSeparator className="shrink-0" />
               <BreadcrumbItem className="min-w-0">
                 <BreadcrumbPage className="min-w-0">
-                  <span className="block truncate">
-                    {t("caseLaw.coverage.title")}
-                  </span>
+                  <TruncatedText>{t("caseLaw.coverage.title")}</TruncatedText>
                 </BreadcrumbPage>
               </BreadcrumbItem>
             </>

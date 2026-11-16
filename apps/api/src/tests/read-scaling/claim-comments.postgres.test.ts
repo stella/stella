@@ -1,13 +1,14 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { createTestState } from "@stll/test-state";
+
 import { env } from "@/api/env";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { apiApp } from "@/api/server";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { organizationFeatureGrants } from "@/api/tests/helpers/feature-grants";
-import { createTestState } from "@/api/tests/helpers/test-state";
 
 import {
   claimCommentScalingScenarios,

@@ -32,7 +32,7 @@ const TEST_FILE_GLOB = `{${TEST_ROOTS.join(",")}}/**/*.test.{ts,tsx}`;
 // Non-test helper modules live here; some install a module mock at import.
 const TEST_HELPER_GLOB = "src/tests/**/*.ts";
 const MODULE_MOCK_PATTERN = /\bmock\.module\s*\(/u;
-const PROPERTY_TEST_MARKERS = ["fc.assert", "assertProperty"];
+export const PROPERTY_TEST_MARKERS = ["fc.assert", "assertProperty"];
 // Keep headroom as the legal-list suite grows: larger batches cross the 2 GiB
 // guard once the additional handler and schema modules share one process.
 const REGULAR_TEST_BATCH_SIZE = 10;

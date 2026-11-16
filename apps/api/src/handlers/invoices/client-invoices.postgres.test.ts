@@ -12,6 +12,7 @@ import {
   INVOICE_STATUS,
   invoiceLines,
   invoices,
+  requestIdempotencyReceipts,
   sellerProfiles,
   timeEntries,
   workspaceMembers,
@@ -26,6 +27,7 @@ import {
 } from "@/api/db/scoped";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { buildMcpContextFromChat } from "@/api/handlers/chat/tools/registry-adapter/mcp-chat-context";
+import createClientInvoice from "@/api/handlers/client-invoices/create";
 import createInvoice from "@/api/handlers/invoices/create";
 import { loadInvoiceExport } from "@/api/handlers/invoices/export-records";
 import readInvoiceById from "@/api/handlers/invoices/get";
@@ -52,8 +54,10 @@ import {
   withInvoiceMatterLocks,
 } from "@/api/lib/db/aggregate-lock";
 import type { AcquiredInvoiceMatterLocks } from "@/api/lib/db/aggregate-lock";
+import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { fingerprintRequest } from "@/api/lib/idempotency/request-receipts";
 import { LIMITS } from "@/api/lib/limits";
 import {
   hasMemberPermission,
@@ -75,6 +79,8 @@ import {
   type TestHandlerContextOverrides,
 } from "@/api/tests/helpers/handler-context";
 import { deleteMatterBillingRecords } from "@/api/tests/helpers/matter-billing-cleanup";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
+import { insertOwnerContacts } from "@/api/tests/helpers/owner-contacts";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 import { withInterleaving } from "@/api/tests/helpers/transaction-interleaving";
 import { clientInvoicePrefillScalingScenario } from "@/api/tests/read-scaling/client-invoice-prefill";
@@ -112,7 +118,7 @@ if (!databaseUrl || !runPostgres) {
         await db
           .delete(workspaces)
           .where(inArray(workspaces.organizationId, orgIds));
-        await db.delete(organization).where(inArray(organization.id, orgIds));
+        await deleteOrganizationsForTest(db, orgIds);
       }
       if (userIds.length > 0) {
         await db.delete(user).where(inArray(user.id, userIds));
@@ -218,6 +224,7 @@ if (!databaseUrl || !runPostgres) {
           organizationId: orgId,
           userId,
           role: kind === "owner" || kind === "admin" ? kind : "member",
+          billingAccess: kind === "full" || kind === "partial",
           createdAt: new Date(),
         })),
       );
@@ -228,7 +235,8 @@ if (!databaseUrl || !runPostgres) {
           featureId: "time-billing" as const,
         })),
       );
-      await db.insert(contacts).values(
+      await insertOwnerContacts(
+        db,
         [clientId, otherClientId].map((id) => ({
           id,
           organizationId: orgId,
@@ -392,6 +400,106 @@ if (!databaseUrl || !runPostgres) {
         route: "/v1/client-invoices/:clientId/prefill",
       });
 
+    test("client invoice replay follows current matter membership", async () => {
+      const scenario = await seedScenario();
+      const userId = scenario.actors.full;
+      const organizationId = scenario.orgId;
+      const body = {
+        invoiceDate: "2026-10-15",
+        currency: "EUR",
+        matters: [scenario.firstMatterId, scenario.secondMatterId].map(
+          (workspaceId) => ({
+            workspaceId,
+            timeEntryIds: [createSafeId<"timeEntry">()],
+            expenseIds: [],
+          }),
+        ),
+      };
+      const params = { clientId: scenario.clientId };
+      const route = "/v1/client-invoices/:clientId";
+      const key = createSafeId<"requestIdempotencyReceipt">();
+      const response = { id: scenario.invoiceId };
+      await scoped(
+        scenario,
+        userId,
+      )(
+        async (tx) =>
+          await tx.insert(requestIdempotencyReceipts).values({
+            id: createSafeId<"requestIdempotencyReceipt">(),
+            organizationId,
+            userId,
+            idempotencyKey: key,
+            route,
+            requestFingerprint: fingerprintRequest({
+              method: "PUT",
+              route,
+              body,
+              params,
+              query: {},
+            }),
+            state: "completed",
+            claimedAt: new Date(),
+            completedAt: new Date(),
+            responseCode: 200,
+            responseBody: response,
+          }),
+      );
+
+      const invoke = async () =>
+        await createClientInvoice.handler(
+          createTestHandlerContext<
+            Parameters<typeof createClientInvoice.handler>[0]
+          >({
+            audit: NO_AUDIT,
+            scopedDb: scoped(scenario, userId),
+            safeDb: createMembershipSafeDb(markRlsDatabase(db), {
+              organizationId,
+              userId,
+              serverValidatedWorkspaceIds: [],
+            }),
+            session: { activeOrganizationId: organizationId },
+            user: { id: userId },
+            memberRole: sessionMemberRole("member", true),
+            featureAccessSnapshot: enrolledTimeBillingSnapshot({
+              organizationId,
+              userId,
+            }),
+            params,
+            body,
+            query: {},
+            route,
+            request: new Request(
+              `https://example.test/v1/client-invoices/${params.clientId}`,
+              { method: "PUT", headers: { "Idempotency-Key": key } },
+            ),
+          }),
+        );
+      const available = await invoke();
+      expect(available).toBeInstanceOf(Response);
+      if (!(available instanceof Response)) {
+        panic("Expected stored invoice response");
+      }
+      expect(available.headers.get("Idempotency-Replayed")).toBe("true");
+      expect(await available.json()).toEqual(response);
+      await db
+        .delete(workspaceMembers)
+        .where(
+          and(
+            eq(workspaceMembers.userId, userId),
+            eq(workspaceMembers.workspaceId, scenario.secondMatterId),
+          ),
+        );
+      const unavailable = await invoke();
+      expect(unavailable).toBeInstanceOf(HttpStatusResponse);
+      if (!(unavailable instanceof HttpStatusResponse)) {
+        panic("Expected current matter access refusal");
+      }
+      expect(unavailable.code).toBe(404);
+      expect(unavailable.response).toMatchObject({
+        message: "Some client matters were not found or are inaccessible",
+      });
+    });
+
     test.each(["exempt", "not_vat_payer"] as const)(
       "finalization checks a Polish %s basis in every client-invoice matter",
       async (vatTreatment) => {
@@ -450,7 +558,7 @@ if (!databaseUrl || !runPostgres) {
           audit: async (_tx, event) => {
             events.push(event);
           },
-          memberRole: sessionMemberRole("member"),
+          memberRole: sessionMemberRole("member", true),
           session: { activeOrganizationId: scenario.orgId },
           user: { id: scenario.actors.full },
           workspaceId: scenario.firstMatterId,
@@ -654,19 +762,31 @@ if (!databaseUrl || !runPostgres) {
       // A contact cannot disappear while its invoice remains; an organization
       // deletion removes both in one statement, regardless of cascade order.
       await expectSqlState(
-        db.delete(contacts).where(eq(contacts.id, scenario.clientId)),
+        withOwnerOrganizationScope(
+          db,
+          scenario.orgId,
+          async (tx) =>
+            await tx.delete(contacts).where(eq(contacts.id, scenario.clientId)),
+        ),
         "23001",
       );
-      const deleted = await db
-        .delete(organization)
-        .where(eq(organization.id, scenario.orgId))
-        .returning({ id: organization.id });
-      expect(deleted).toEqual([{ id: scenario.orgId }]);
+      await deleteOrganizationsForTest(db, [scenario.orgId]);
       expect(
         await db
-          .select({ id: contacts.id })
-          .from(contacts)
-          .where(eq(contacts.organizationId, scenario.orgId)),
+          .select({ id: organization.id })
+          .from(organization)
+          .where(eq(organization.id, scenario.orgId)),
+      ).toEqual([]);
+      expect(
+        await withOwnerOrganizationScope(
+          db,
+          scenario.orgId,
+          async (tx) =>
+            await tx
+              .select({ id: contacts.id })
+              .from(contacts)
+              .where(eq(contacts.organizationId, scenario.orgId)),
+        ),
       ).toEqual([]);
       expect(
         await db
@@ -1228,7 +1348,7 @@ if (!databaseUrl || !runPostgres) {
                 .from(sql`(SELECT 1) quota`),
           );
         expect(await readQuota()).toEqual([{ first: "1", second: "1" }]);
-        const memberRole = sessionMemberRole("member");
+        const memberRole = sessionMemberRole("member", true);
         expect(
           hasMemberPermission(memberRole, { invoice: ["create", "update"] }),
         ).toBe(true);
@@ -1828,7 +1948,7 @@ if (!databaseUrl || !runPostgres) {
           .where(eq(invoiceLines.id, scenario.secondLineId));
       });
       const userId = scenario.actors.full;
-      const memberRole = sessionMemberRole("member");
+      const memberRole = sessionMemberRole("member", true);
       expect(hasMemberPermission(memberRole, { invoice: ["update"] })).toBe(
         true,
       );
@@ -1958,7 +2078,7 @@ if (!databaseUrl || !runPostgres) {
             }),
             scopedDb,
             audit: async () => {},
-            memberRole: sessionMemberRole(role),
+            memberRole: sessionMemberRole(role, true),
             session: { activeOrganizationId: scenario.orgId },
             user: { id: actor },
             workspaceId,
@@ -2084,7 +2204,7 @@ if (!databaseUrl || !runPostgres) {
             organizationId: scenario.orgId,
             userId,
             userEmail: "invoice-reader@example.test",
-            memberRole: sessionMemberRole(actor),
+            memberRole: sessionMemberRole(actor, true),
             featureAccessSnapshot: enrolledTimeBillingSnapshot({
               organizationId: scenario.orgId,
               userId,
@@ -2099,6 +2219,9 @@ if (!databaseUrl || !runPostgres) {
               accessibleWorkspaceIds,
               pinnedIds: [],
             }),
+            workspaceStatusById: new Map(
+              accessibleWorkspaceIds.map((id) => [id, "active" as const]),
+            ),
           }),
         );
       };
@@ -2259,7 +2382,7 @@ if (!databaseUrl || !runPostgres) {
           safeDb,
           scopedDb,
           audit: async () => {},
-          memberRole: sessionMemberRole(actor),
+          memberRole: sessionMemberRole(actor, true),
           session: { activeOrganizationId: scenario.orgId },
           user: { id: userId },
           workspaceId: scenario.firstMatterId,
@@ -2321,7 +2444,7 @@ if (!databaseUrl || !runPostgres) {
                 organizationId: scenario.orgId,
                 userId,
                 userEmail: "invoice-reader@example.test",
-                memberRole: sessionMemberRole(actor),
+                memberRole: sessionMemberRole(actor, true),
                 featureAccessSnapshot: enrolledTimeBillingSnapshot({
                   organizationId: scenario.orgId,
                   userId,
@@ -2332,6 +2455,9 @@ if (!databaseUrl || !runPostgres) {
                   accessibleWorkspaceIds: matterIds,
                   pinnedIds: [],
                 }),
+                workspaceStatusById: new Map(
+                  matterIds.map((id) => [id, "active" as const]),
+                ),
               }),
             ),
           }),
@@ -2419,6 +2545,7 @@ if (!databaseUrl || !runPostgres) {
         const userId = scenario.actors[actor];
         const memberRole = sessionMemberRole(
           actor === "owner" || actor === "admin" ? actor : "member",
+          true,
         );
         const accessibleWorkspaceIds = [scenario.firstMatterId];
         if (actor !== "partial") {
@@ -2447,6 +2574,9 @@ if (!databaseUrl || !runPostgres) {
               accessibleWorkspaceIds,
               pinnedIds: [],
             }),
+            workspaceStatusById: new Map(
+              accessibleWorkspaceIds.map((id) => [id, "active" as const]),
+            ),
           }),
         );
         expect(

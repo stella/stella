@@ -1,59 +1,132 @@
 import { use } from "react";
 
-import { Result } from "better-result";
-import { RefreshControl, SectionList, View } from "react-native";
+import {
+  ActivityIndicator,
+  RefreshControl,
+  SectionList,
+  View,
+} from "react-native";
 import { useTimeZone, useTranslations } from "use-intl";
 
-import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
+import { Button } from "@stll/ui/button";
+import { Text } from "@stll/ui/text";
+
+import { EmptyCard, emptyListProps } from "@/components/empty-state-screen";
 import { useHeaderSearch } from "@/components/header-search";
-import { RetryButton } from "@/components/retry-button";
+import { LoadFailedCard } from "@/components/load-failure";
+import { RoleFailureNotice } from "@/components/role";
 import { TaskRow } from "@/components/task-row";
-import { Text } from "@/components/ui/text";
+import type { AccessTokenSource } from "@/connection/session";
 import { dayAt, groupByDue } from "@/state/tasks";
-import type { TasksLoad, TaskSummary } from "@/state/tasks";
+import type { TasksLoad, TaskSummary, TasksView } from "@/state/tasks";
 import { useAppColors } from "@/theme";
 
 /**
- * The open tasks a load returned, under when they fall due, or why they
- * could not load, with pull-to-refresh either way. The header's search
- * filters them by name or matter.
+ * The tasks a load returned, under when they fall due, or why they could
+ * not load, with pull-to-refresh either way and the next page at the end.
+ * The header's search filters them by name or matter.
  */
 export const LoadedTasks = ({
   load,
+  loadingMore,
+  onLoadMore,
   onReload,
   refreshing,
+  showMatter,
+  source,
+  view,
 }: {
   load: Promise<TasksLoad>;
+  loadingMore: boolean;
+  onLoadMore: (current: TasksLoad) => void;
   onReload: () => void;
   refreshing: boolean;
+  showMatter: boolean;
+  source: AccessTokenSource;
+  view: TasksView;
 }) => {
   const t = useTranslations("tasks");
   const { query } = useHeaderSearch();
   const colors = useAppColors();
   const timeZone = useTimeZone() ?? "UTC";
-  const { loadedAt, result } = use(load);
+  const current = use(load);
 
   // The session provider is already returning to sign-in.
-  if (Result.isError(result) && result.error._tag === "SignedOutError") {
+  if (current.error?._tag === "SignedOutError") {
     return null;
   }
 
-  const tasks = Result.isOk(result) ? matching(result.value, query) : [];
-  const empty = Result.isOk(result) ? (
-    <EmptyCard description={t("emptyDescription")} title={t("emptyTitle")} />
-  ) : (
-    <EmptyCard description={t("loadFailed")} title={t("emptyTitle")}>
-      <RetryButton label={t("retry")} onPress={onReload} />
-    </EmptyCard>
-  );
+  const tasks = matching(current.tasks, query);
+  // The tab's first view keeps its own words; any other names what it shows.
+  const mineOpen =
+    view.whose === "mine" &&
+    view.show === "open" &&
+    view.matterId === undefined;
+  const empty =
+    current.tasks.length === 0 && current.error !== null ? (
+      <LoadFailedCard
+        error={current.error}
+        onRetry={onReload}
+        retryLabel={t("retry")}
+        title={t("loadFailed")}
+      />
+    ) : (
+      <EmptyCard
+        description={
+          mineOpen ? t("emptyDescription") : t("emptyFilteredDescription")
+        }
+        title={mineOpen ? t("emptyTitle") : t("emptyFilteredTitle")}
+      />
+    );
+
+  const footer = (() => {
+    if (current.tasks.length === 0) {
+      return null;
+    }
+    if (loadingMore) {
+      return <ActivityIndicator className="py-6" color={colors.muted} />;
+    }
+    if (current.error !== null) {
+      return (
+        <View className="items-center gap-2 py-6">
+          <Text variant="caption">{t("loadMoreFailed")}</Text>
+          <Button
+            onPress={() => {
+              onLoadMore(current);
+            }}
+            size="sm"
+            variant="outline"
+          >
+            {t("retry")}
+          </Button>
+        </View>
+      );
+    }
+    return current.nextCursor === null ? null : (
+      <View className="items-center py-6">
+        <Button
+          onPress={() => {
+            onLoadMore(current);
+          }}
+          size="sm"
+          variant="outline"
+        >
+          {t("loadMore")}
+        </Button>
+      </View>
+    );
+  })();
 
   return (
     <SectionList
-      contentContainerStyle={screenStyles.content}
+      {...emptyListProps(tasks.length === 0)}
       // The header is the platform's translucent bar; the list scrolls under it.
       contentInsetAdjustmentBehavior="automatic"
       keyExtractor={(task) => task.id}
       ListEmptyComponent={empty}
+      // Why a role that could not be read offers no changes here.
+      ListHeaderComponent={<RoleFailureNotice />}
+      ListFooterComponent={footer ?? undefined}
       refreshControl={
         <RefreshControl
           onRefresh={onReload}
@@ -62,14 +135,19 @@ export const LoadedTasks = ({
         />
       }
       renderItem={({ item, section }) => (
-        <TaskRow overdue={section.due === "overdue"} task={item} />
+        <TaskRow
+          overdue={section.due === "overdue"}
+          showMatter={showMatter}
+          source={source}
+          task={item}
+        />
       )}
       renderSectionHeader={({ section }) => (
         <View className="pt-6 pb-1">
           <Text variant="headline">{t(`due.${section.due}`)}</Text>
         </View>
       )}
-      sections={groupByDue(tasks, dayAt(loadedAt, timeZone))}
+      sections={groupByDue(tasks, dayAt(current.loadedAt, timeZone))}
       stickySectionHeadersEnabled={false}
     />
   );

@@ -6,11 +6,12 @@ import {
   DOCX_SUGGESTIONS_PENDING_MAX,
 } from "@stll/api-contract";
 
-import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { WebApiRoutes } from "@/lib/api";
 import { parseDeterministicDate } from "@/lib/deterministic-date";
 import { unwrapApiResponse } from "@/lib/errors/api";
+import { captureQueryError } from "@/lib/errors/query-result";
+import { visitCursorPages } from "@/lib/infinite-query";
 
 import { entitiesKeys } from "./entities";
 
@@ -71,30 +72,29 @@ export const docxSuggestionsOptions = ({
         status: "pending" | "accepted" | "rejected",
         max: number,
       ) => {
-        const firstPage = await endpoint.get({
-          query: { status, limit: DOCX_SUGGESTIONS_PAGE_SIZE_MAX },
-          fetch: { signal },
+        const result: {
+          items: SerializedDocxSuggestion[];
+          nextCursor: string | null;
+        } = { items: [], nextCursor: null };
+        await visitCursorPages({
+          getPage: async (cursor) =>
+            unwrapApiResponse(
+              await endpoint.get({
+                query: {
+                  status,
+                  limit: DOCX_SUGGESTIONS_PAGE_SIZE_MAX,
+                  ...(cursor === undefined ? {} : { cursor }),
+                },
+                fetch: { signal },
+              }),
+            ),
+          visit: (page) => {
+            result.items.push(...page.items);
+            result.nextCursor = page.nextCursor;
+          },
+          shouldContinue: () => result.items.length < max,
         });
-        const firstData = unwrapApiResponse(firstPage);
-
-        const items = [...firstData.items];
-        let nextCursor = firstData.nextCursor;
-
-        while (nextCursor !== null && items.length < max) {
-          const page = await endpoint.get({
-            query: {
-              status,
-              limit: DOCX_SUGGESTIONS_PAGE_SIZE_MAX,
-              cursor: nextCursor,
-            },
-            fetch: { signal },
-          });
-          const pageData = unwrapApiResponse(page);
-          items.push(...pageData.items);
-          nextCursor = pageData.nextCursor;
-        }
-
-        return { items, nextCursor };
+        return result;
       };
 
       // Hydrate only the PENDING rows — the actionable set — and page them
@@ -110,7 +110,7 @@ export const docxSuggestionsOptions = ({
       // with more pending rows still available. Surface it so a truncated
       // pending hydration is never silent.
       if (pending.nextCursor !== null) {
-        getAnalytics().captureError(
+        captureQueryError(
           new Error(
             `docx-suggestions pending hydration capped at ${DOCX_SUGGESTIONS_PENDING_MAX} rows for entity ${entityId}; newer pending suggestions were not loaded`,
           ),

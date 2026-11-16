@@ -351,7 +351,7 @@ const loadConnectorTools = async ({
 
   try {
     return await dependencies.withTimeout(async () => await discovery, {
-      label: `external-mcp-tools:${row.slug}`,
+      label: "external-mcp-tools-discovery",
       timeoutMs: EXTERNAL_MCP_DISCOVERY_TIMEOUT_MS,
     });
   } catch (error) {
@@ -375,10 +375,11 @@ const loadConnectorTools = async ({
       // Sequencing only: a late discovery rejection is the fallout of the
       // timeout reported below (often the close above), not a new failure.
       detached(
-        Promise.allSettled([discovery]).then(
-          async () =>
-            await closeAbandonedClient({ client, connectorSlug: row.slug }),
-        ),
+        async () =>
+          Promise.allSettled([discovery]).then(
+            async () =>
+              await closeAbandonedClient({ client, connectorSlug: row.slug }),
+          ),
         "external-mcp-tools.discovery",
       );
     } else {

@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   CORPUS_QUERY_LEAF_BUDGET,
@@ -120,7 +120,8 @@ const leafCount = (clause: string): number => {
 };
 
 test("no dictionary can produce a clause that escapes its own quoting", () => {
-  fc.assert(
+  assertProperty(
+    "no dictionary can produce a clause that escapes its own quoting",
     fc.property(dictionaryText, queryText, (text, query) => {
       const { entries } = parseExpansionDictionary(text);
       const clause = corpusFreeTextClause(query, {
@@ -131,7 +132,7 @@ test("no dictionary can produce a clause that escapes its own quoting", () => {
       }
       expect(isWellQuoted(clause)).toBe(true);
     }),
-    propertyConfig(),
+    {},
   );
 });
 
@@ -140,7 +141,8 @@ test("no dictionary can produce a clause that escapes its own quoting", () => {
 // and the builder must not drop the reader's own terms to fit. So the ceiling
 // is the budget or the unexpanded clause, whichever is larger.
 test("expansion never pushes a clause past the leaf budget it started under", () => {
-  fc.assert(
+  assertProperty(
+    "expansion never pushes a clause past the leaf budget it started under",
     fc.property(dictionaryText, queryText, (text, query) => {
       const { entries } = parseExpansionDictionary(text);
       const base = corpusFreeTextClause(query);
@@ -159,12 +161,13 @@ test("expansion never pushes a clause past the leaf budget it started under", ()
         expect(expanded).toBe(base);
       }
     }),
-    propertyConfig(),
+    {},
   );
 });
 
 test("expansion only ever adds leaves to the unexpanded clause", () => {
-  fc.assert(
+  assertProperty(
+    "expansion only ever adds leaves to the unexpanded clause",
     fc.property(dictionaryText, queryText, (text, query) => {
       const { entries } = parseExpansionDictionary(text);
       const base = corpusFreeTextClause(query);
@@ -180,6 +183,6 @@ test("expansion only ever adds leaves to the unexpanded clause", () => {
       // unexpanded clause has is still there.
       expect(expanded.split(" AND ").length).toBe(base.split(" AND ").length);
     }),
-    propertyConfig(),
+    {},
   );
 });

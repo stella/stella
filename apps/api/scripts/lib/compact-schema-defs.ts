@@ -166,29 +166,39 @@ const rewriteSchema = (
       return { $ref: `${DEFS_REF_PREFIX}${name}` };
     }
   }
-  const rewritten: JsonRecord = {};
+  const rewritten = new Map<string, unknown>();
   for (const [key, value] of Object.entries(node)) {
     if (SCHEMA_MAP_KEYWORDS.has(key) && isRecord(value)) {
-      const map: JsonRecord = {};
-      for (const [childKey, child] of Object.entries(value)) {
-        map[childKey] = rewriteSchema(child, context);
-      }
-      rewritten[key] = map;
+      rewritten.set(
+        key,
+        Object.fromEntries(
+          Object.entries(value).map(([childKey, child]) => [
+            childKey,
+            rewriteSchema(child, context),
+          ]),
+        ),
+      );
       continue;
     }
     if (SCHEMA_LIST_KEYWORDS.has(key) && Array.isArray(value)) {
-      rewritten[key] = value.map((child) => rewriteSchema(child, context));
+      rewritten.set(
+        key,
+        value.map((child) => rewriteSchema(child, context)),
+      );
       continue;
     }
     if (!SCHEMA_KEYWORDS.has(key)) {
-      rewritten[key] = value;
+      rewritten.set(key, value);
       continue;
     }
-    rewritten[key] = Array.isArray(value)
-      ? value.map((child) => rewriteSchema(child, context))
-      : rewriteSchema(value, context);
+    rewritten.set(
+      key,
+      Array.isArray(value)
+        ? value.map((child) => rewriteSchema(child, context))
+        : rewriteSchema(value, context),
+    );
   }
-  return rewritten;
+  return Object.fromEntries(rewritten);
 };
 
 export type CapabilityInputSchemaParts = {
@@ -352,12 +362,13 @@ export const compactSchemaDefs = (
     for (const [serialized, { name, node }] of chosen) {
       bodies.set(name, rewriteSchema(node, context, serialized));
     }
-    const compacted: CompactedCapabilityInputSchema = {};
-    for (const part of INPUT_PARTS) {
-      if (document[part] !== undefined) {
-        compacted[part] = rewriteSchema(document[part], context);
-      }
-    }
+    const compacted = Object.fromEntries(
+      INPUT_PARTS.flatMap((part) =>
+        document[part] === undefined
+          ? []
+          : [[part, rewriteSchema(document[part], context)]],
+      ),
+    );
 
     // A def's own body contributes refs to its children, so only refs from
     // OUTSIDE a def plus refs from kept defs count. Recomputing from scratch
@@ -392,12 +403,15 @@ export const compactSchemaDefs = (
     }
 
     // Name-sorted defs; the shard serializer canonicalizes the complete output.
-    const defs: JsonRecord = {};
-    for (const name of [...bodies.keys()].toSorted()) {
-      defs[name] = bodies.get(name);
-    }
-    compacted[DEFS_KEY] = defs;
-    return { inputSchema: compacted, status: "compacted" };
+    return {
+      inputSchema: {
+        ...compacted,
+        $defs: Object.fromEntries(
+          [...bodies.keys()].toSorted().map((name) => [name, bodies.get(name)]),
+        ),
+      },
+      status: "compacted",
+    };
   }
 };
 

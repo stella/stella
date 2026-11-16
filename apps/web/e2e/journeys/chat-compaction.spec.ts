@@ -9,6 +9,7 @@ import * as v from "valibot";
 
 import messages from "../../src/i18n/langs/en.json" with { type: "json" };
 import { apiDelete, apiGet } from "../helpers/api";
+import { PLAYWRIGHT_EXPECT_TIMEOUT_60_SECONDS_MS } from "../helpers/wait-budgets";
 import { JOURNEY_TAG } from "../playwright.journeys.config";
 
 const TURN_FILLER = "Clause ".repeat(25_000);
@@ -135,7 +136,9 @@ test(
   async ({ page, request }) => {
     test.setTimeout(11 * 60_000);
     await page.goto("/chat/new", { waitUntil: "commit" });
-    await expect(chatComposer(page)).toBeVisible({ timeout: 60_000 });
+    await expect(chatComposer(page)).toBeVisible({
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_60_SECONDS_MS,
+    });
 
     let turn = 1;
     let thread = await sendTurn({ page, request, turn });
@@ -178,7 +181,9 @@ test(
       reloadedThread.context.summarizedMessageCount,
     ).toBeGreaterThanOrEqual(thread.context.summarizedMessageCount);
     expect(reloadedThread.context.breakdown.summaryTokens).toBeGreaterThan(0);
-    await expect(page.getByRole("log")).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByRole("log")).toBeVisible({
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_60_SECONDS_MS,
+    });
     await expectNoTrimmedHistory(page, reloadedThread);
   },
 );

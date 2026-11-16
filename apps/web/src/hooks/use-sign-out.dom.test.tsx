@@ -1,22 +1,20 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, beforeEach, expect, test } from "bun:test";
 
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/frame" });
 
 const originalFetch = globalThis.fetch;
 let responseStatus = 200;
-globalThis.fetch = Object.assign(
-  async () => {
-    expect(document.documentElement.hidden).toBe(false);
-    return Response.json(
-      responseStatus === 200 ? { success: true } : { message: "unavailable" },
-      { status: responseStatus },
-    );
-  },
-  { preconnect: () => undefined },
-);
+const fakeFetch = async () => {
+  expect(document.documentElement.hidden).toBe(false);
+  return Response.json(
+    responseStatus === 200 ? { success: true } : { message: "unavailable" },
+    { status: responseStatus },
+  );
+};
+globalThis.fetch = Object.assign(fakeFetch, { preconnect: () => undefined });
 
 const { signOutAndRelease } = await import("@/hooks/use-sign-out");
 const { releaseUserStorage, storageOwner } =

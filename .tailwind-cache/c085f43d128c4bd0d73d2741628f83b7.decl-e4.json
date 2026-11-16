@@ -1,1 +1,0 @@
-{"divide-border/70":{"valid":true,"declarations":[[">","border-color","color-mix(in oklab, var(--border) 70%, transparent)"]],"values":{"color-mix(in oklab, var(--border) 70%, transparent)":{"p":["--border"],"f":[],"u":false}}}}

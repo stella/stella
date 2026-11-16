@@ -51,6 +51,21 @@ describe("write tool scope classification", () => {
     }
   });
 
+  test("account-level creation requires no matter or active organization", () => {
+    expect(WRITE_TOOL_SCOPES.create_organization).toBe(
+      WRITE_TOOL_SCOPE.account,
+    );
+    expect(writeCallNeedsMatter("create_organization", {})).toBe(false);
+    expect(
+      matterRequiredResult({
+        args: { name: "New organization" },
+        context: { accessibleWorkspaceIds: [], memberRole: "member" },
+        saveMatterCallable: false,
+        toolName: "create_organization",
+      }),
+    ).toBeNull();
+  });
+
   test("membership operations need a matter and organization settings do not", () => {
     expect(writeCallNeedsMatter("add_matter_member", {})).toBe(true);
     expect(writeCallNeedsMatter("remove_matter_member", {})).toBe(true);

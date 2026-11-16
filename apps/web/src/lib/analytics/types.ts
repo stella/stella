@@ -34,6 +34,7 @@ export const WEB_ANALYTICS_EVENTS = {
   followupShown: "followup_shown",
   followupSelected: "followup_selected",
   keyActionTimed: "key_action_timed",
+  clientTransient: "client_transient",
 } as const;
 
 export type WebAnalyticsEvent =

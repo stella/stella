@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * Renders the message range a compaction summarized back into a bounded,
  * untrusted transcript for memory extraction.
@@ -13,13 +14,12 @@
  * Everything here is untrusted tenant content. It is flattened and hard-capped
  * before the prompt constructor escapes it at the trust boundary.
  */
-
-import { panic } from "better-result";
 import { and, asc, eq, sql } from "drizzle-orm";
 
-import type { rootDb } from "@/api/db/root";
+import type { Transaction } from "@/api/db/root";
 import { chatMessages } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
 
 // One background extraction must not turn into an unbounded prompt on the
 // tenant's own provider key: cap both the rows read and the rendered text.
@@ -31,7 +31,7 @@ const TRANSCRIPT_MESSAGE_MAX_CHARS = 2000;
 
 type LoadCompactionTranscriptOptions = {
   /** The caller's handle; the extractor passes the scheduler's. */
-  db: Pick<typeof rootDb, "select">;
+  db: Transaction;
   threadId: SafeId<"chatThread">;
   firstSummarizedMessageId: SafeId<"chatMessage">;
   lastSummarizedMessageId: SafeId<"chatMessage">;
@@ -81,7 +81,14 @@ export const loadCompactionTranscript = async ({
     .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id))
     .limit(TRANSCRIPT_MAX_MESSAGES);
 
-  return renderTranscript(rows);
+  const { projection, subjectByThread } = await readChatCopyProjection({
+    tx: db,
+    threadIds: [threadId],
+    values: rows,
+  });
+  return renderTranscript(
+    rows.map((row) => projection.chat(row, subjectByThread.get(threadId))),
+  );
 };
 
 type TranscriptRow = {

@@ -25,6 +25,7 @@ import {
 import { MatterIcon } from "@stll/ui/matter-icon";
 import {
   Menu,
+  MenuAnchor,
   MenuCheckboxItem,
   MenuGroup,
   MenuGroupLabel,
@@ -36,6 +37,7 @@ import {
   MenuSubTrigger,
   MenuTrigger,
 } from "@stll/ui/menu";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { typedCharacter } from "@stll/ui/typed-character";
 import { cn } from "@stll/ui/utils";
 
@@ -73,7 +75,6 @@ import {
   ComposerEditModeSubmenu,
 } from "@/components/chat/chat-edit-mode-menu";
 import {
-  CHAT_MODEL_MENU_POPUP_CLASS_NAME,
   ChatModelOptionsMenu,
   type ComposerModelsMenuProps,
 } from "@/components/chat/chat-model-options-menu";
@@ -99,6 +100,7 @@ import {
 import { slashItemChipAttrs } from "@/components/chat/prompt-slash-extension";
 import type { SlashItem } from "@/components/chat/prompt-slash-extension";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
+import { useBrowserExtensionStoreUrl } from "@/features/chat/browser-control/use-browser-extension-store-url";
 import { useSetChatWebSearch } from "@/features/chat/components/chat-web-search-toggle";
 import { guideAnchor } from "@/features/guides/guide-anchor";
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
@@ -116,6 +118,7 @@ import {
   mcpConnectionsOptions,
   mcpConnectorsOptions,
 } from "@/lib/knowledge/queries";
+import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 import {
   type ChatSkillRowState,
@@ -163,7 +166,7 @@ type ComposerPlusMenuProps = {
    *  (a thread with nothing to leave, or a rotation under way), mirroring
    *  the dock's own new-chat button which keeps the same action. */
   onNewThread?: (() => void) | null | undefined;
-  models?: ComposerModelsMenuProps | undefined;
+  models?: ComposerModelsMenuProps | null | undefined;
   /** Enables the Edit mode submenu (how AI edits land in the open DOCX).
    *  Lives only here, never in the dock; omit on surfaces without a
    *  selectable edit mode. */
@@ -485,11 +488,13 @@ const ComposerModelsSubmenu = ({
     <MenuSub onOpenChange={setOpen} open={open}>
       <MenuSubTrigger
         {...guideAnchor(GUIDE_ANCHORS.chatMenuModels, guideAnchorsEnabled)}
+        // Until the stored choice is known, nothing can be picked on it.
+        disabled={models.state === "loading"}
       >
         <CpuIcon />
         {t("chat.composerMenu.models")}
       </MenuSubTrigger>
-      <MenuSubPopup className={CHAT_MODEL_MENU_POPUP_CLASS_NAME}>
+      <MenuSubPopup className="w-[min(32rem,calc(100vw-2rem))] max-w-(--available-width)">
         <ChatModelOptionsMenu
           enabled={enabled && open}
           key={open ? "open" : "closed"}
@@ -548,25 +553,20 @@ const ComposerSkillItemBody = ({
       className={cn("mt-0.5 self-start", blocked && "text-muted-foreground")}
     />
     <span className="min-w-0 flex-1">
-      <BidiText
-        as="span"
-        className={cn(
-          "block truncate text-sm",
-          blocked && "text-muted-foreground",
-        )}
+      <TruncatedText
+        className={cn("text-sm", blocked && "text-muted-foreground")}
+        render={<BidiText as="span" />}
       >
         {itemName(item)}
-      </BidiText>
-      <BidiText
-        as="span"
-        className={cn(
-          "text-muted-foreground block text-xs",
-          // The reason is the row's point; let it wrap rather than clip.
-          !blocked && "truncate",
-        )}
+      </TruncatedText>
+      <TruncatedText
+        className="text-muted-foreground block text-xs"
+        // The reason is the row's point; let it wrap rather than clip.
+        lines={blocked ? "none" : 1}
+        render={<BidiText as="span" />}
       >
         {secondary}
-      </BidiText>
+      </TruncatedText>
     </span>
   </>
 );
@@ -606,14 +606,17 @@ const WebSearchFixSkillItem = ({
 /**
  * One row of the Skills submenu. A skill this chat cannot run stays listed,
  * disabled, with what the chat lacks; where the composer can meet that need
- * in one click, the row does so and inserts the skill.
+ * in one click, the row does so and inserts the skill. A missing extension
+ * cannot be met in place: the row opens its store listing instead.
  */
 const ComposerSkillMenuItem = ({
+  browserExtensionStoreUrl,
   chat,
   item,
   onSelect,
   state,
 }: {
+  browserExtensionStoreUrl: string | null;
   chat: ComposerSkillChatContext | undefined;
   item: SlashItem;
   onSelect: (item: SlashItem) => void;
@@ -636,6 +639,21 @@ const ComposerSkillMenuItem = ({
     );
   }
   const message = t(state.messageKey);
+  if (
+    state.fixable &&
+    state.need === CHAT_SKILL_CONTEXT_NEED.browserExtension &&
+    browserExtensionStoreUrl !== null
+  ) {
+    return (
+      <MenuItem
+        onClick={() => {
+          openIsolatedWindow(browserExtensionStoreUrl);
+        }}
+      >
+        <ComposerSkillItemBody blocked item={item} secondary={message} />
+      </MenuItem>
+    );
+  }
   if (state.fixable && chat !== undefined) {
     if (state.need === CHAT_SKILL_CONTEXT_NEED.webSearch) {
       return (
@@ -712,7 +730,8 @@ export const ComposerSkillsMenu = ({
   // Only skills no chat can run leave the menu; one this chat alone cannot
   // run stays, disabled, with what the chat lacks.
   const unavailableSkillIds = availability?.hidden;
-  const oneClickNeeds = oneClickSkillNeeds(chat);
+  const browserExtensionStoreUrl = useBrowserExtensionStoreUrl();
+  const oneClickNeeds = oneClickSkillNeeds(chat, browserExtensionStoreUrl);
   const shortcutRows = useMemo(
     () => commandShortcutRowsFromSkillPages(data?.pages, unavailableSkillIds),
     [data?.pages, unavailableSkillIds],
@@ -782,6 +801,7 @@ export const ComposerSkillsMenu = ({
   } else {
     skillItemsContent = filteredItems.map((item) => (
       <ComposerSkillMenuItem
+        browserExtensionStoreUrl={browserExtensionStoreUrl}
         chat={chat}
         item={item}
         key={itemKey(item)}
@@ -890,7 +910,7 @@ export const ComposerSkillsMenu = ({
 };
 
 // The trigger-less Menu a shortcut opens at the caret, following the
-// sr-only-trigger shape of the shell's anchored menus (`useAnchoredMenu`).
+// nonfocusable-anchor shape of the shell's anchored menus (`useAnchoredMenu`).
 const ComposerShortcutPopup = ({
   anchor,
   children,
@@ -909,7 +929,7 @@ const ComposerShortcutPopup = ({
   side: ShortcutPopupSide;
 }) => (
   <Menu onOpenChange={onOpenChange} open={open}>
-    <MenuTrigger nativeButton={false} render={<span className="sr-only" />} />
+    <MenuAnchor />
     <MenuPopup
       align="start"
       anchor={anchor}
@@ -1266,9 +1286,9 @@ const ComposerMentionItem = ({
         {...capabilityProps}
       >
         <MentionIcon mention={option} />
-        <BidiText as="span" className="min-w-0 flex-1 truncate">
+        <TruncatedText className="flex-1" render={<BidiText as="span" />}>
           {option.label}
-        </BidiText>
+        </TruncatedText>
       </MenuItem>
     )}
   </CapabilityAction>
@@ -1398,9 +1418,9 @@ const ComposerContextMatterSub = ({
           className="size-3.5 shrink-0"
           matter={{ id: matter.id, color: matter.color }}
         />
-        <BidiText as="span" className="min-w-0 flex-1 truncate">
+        <TruncatedText className="flex-1" render={<BidiText as="span" />}>
           {matter.name}
-        </BidiText>
+        </TruncatedText>
       </MenuSubTrigger>
       <MenuSubPopup
         className="w-72"
@@ -1430,15 +1450,18 @@ const ComposerContextMatterSub = ({
                   matter={{ id: matter.id, color: matter.color }}
                 />
                 <span className="min-w-0 flex-1">
-                  <BidiText as="span" className="block truncate text-sm">
+                  <TruncatedText
+                    className="text-sm"
+                    render={<BidiText as="span" />}
+                  >
                     {matter.name}
-                  </BidiText>
-                  <BidiText
-                    as="span"
-                    className="text-muted-foreground block truncate text-xs"
+                  </TruncatedText>
+                  <TruncatedText
+                    className="text-muted-foreground text-xs"
+                    render={<BidiText as="span" />}
                   >
                     {t("chat.composerMenu.referenceMatter")}
-                  </BidiText>
+                  </TruncatedText>
                 </span>
               </MenuItem>
             )}
@@ -1553,9 +1576,9 @@ export const ComposerMcpSubmenu = ({
       if (!connection) {
         return (
           <MenuItem key={connector.id} onClick={openMcpSettings}>
-            <BidiText as="span" className="truncate">
+            <TruncatedText render={<BidiText as="span" />}>
               {connector.displayName}
-            </BidiText>
+            </TruncatedText>
           </MenuItem>
         );
       }
@@ -1571,9 +1594,9 @@ export const ComposerMcpSubmenu = ({
             );
           }}
         >
-          <BidiText as="span" className="truncate">
+          <TruncatedText render={<BidiText as="span" />}>
             {connector.displayName}
-          </BidiText>
+          </TruncatedText>
         </MenuCheckboxItem>
       );
     });

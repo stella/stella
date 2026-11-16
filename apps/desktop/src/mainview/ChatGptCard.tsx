@@ -8,6 +8,7 @@ import { ChatGptPasteCallback } from "./ChatGptPasteCallback";
 /** The ChatGPT connection: its state, and what the user can do next. */
 export const ChatGptCard = ({
   status,
+  install,
   notice,
   onSignIn,
   onCancel,
@@ -85,6 +86,7 @@ export const ChatGptCard = ({
       {status.state === "signing_in" ? (
         <ChatGptPasteCallback onComplete={onComplete} />
       ) : null}
+      {install}
       {notice ? (
         <p
           className="text-destructive-foreground text-sm"
@@ -105,6 +107,8 @@ export type ChatGptNotice =
 
 type ChatGptCardProps = {
   status: ChatGptStatus;
+  /** The managed Codex CLI's install line; `null` while its status is unknown. */
+  install: React.JSX.Element | null;
   notice: ChatGptNotice | null;
   onSignIn: (request: ChatGptSignIn) => void;
   onCancel: () => void;

@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { afterAll, describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
+import { createTestState } from "@stll/test-state";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
@@ -28,7 +30,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
-import { createTestState } from "@/api/tests/helpers/test-state";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -45,7 +47,7 @@ testState.beforeAll(async () => {
 
 afterAll(async () => {
   for (const organizationId of organizationIds) {
-    await db.delete(organization).where(eq(organization.id, organizationId));
+    await deleteOrganizationsForTest(db, [organizationId]);
   }
   for (const policyId of policyIds) {
     await db.delete(usagePolicies).where(eq(usagePolicies.id, policyId));

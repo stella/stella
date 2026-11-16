@@ -1,8 +1,10 @@
-import { render } from "@react-email/components";
+import type React from "react";
+
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { UI_LOCALES } from "@stll/locales";
 
+import { renderEmail } from "../render/render";
 import * as BetterAuthOTP from "./better-auth-otp";
 import { subject as otpSubject } from "./better-auth-otp-subject";
 import * as NewDeviceLogin from "./new-device-login";
@@ -10,6 +12,8 @@ import { subject as newDeviceLoginSubject } from "./new-device-login-subject";
 import * as OrganizationInvitation from "./organization-invitation";
 import { subject as invitationSubject } from "./organization-invitation-subject";
 import * as ProductFeedback from "./product-feedback";
+
+const renderHtml = (email: React.ReactElement) => renderEmail(email).html;
 
 /**
  * Render tests for the transactional emails. A broken OTP or invite render is
@@ -67,9 +71,9 @@ const expectNoIntlErrors = () => {
 };
 
 describe("OTP email", () => {
-  test("renders the one-time code for every OTP type", async () => {
+  test("renders the one-time code for every OTP type", () => {
     for (const type of OTP_TYPES) {
-      const html = await render(
+      const html = renderHtml(
         <BetterAuthOTP.Email lang="en" otp="951753" type={type} />,
       );
       expect(html).toContain("951753");
@@ -85,10 +89,10 @@ describe("OTP email", () => {
 });
 
 describe("link/CTA emails carry the correct href", () => {
-  test("organization invitation embeds the invite link", async () => {
+  test("organization invitation embeds the invite link", () => {
     const inviteLink =
       "https://app.stella.test/auth/accept-invitation/tok_abc123";
-    const html = await render(
+    const html = renderHtml(
       <OrganizationInvitation.Email
         invitedByUsername="Jane Doe"
         inviteLink={inviteLink}
@@ -101,9 +105,9 @@ describe("link/CTA emails carry the correct href", () => {
     expectNoIntlErrors();
   });
 
-  test("new-device-login embeds the sessions URL", async () => {
+  test("new-device-login embeds the sessions URL", () => {
     const sessionsUrl = "https://app.stella.test/account/sessions";
-    const html = await render(
+    const html = renderHtml(
       <NewDeviceLogin.Email
         device="Chrome on macOS"
         ipAddress="203.0.113.42"
@@ -116,8 +120,8 @@ describe("link/CTA emails carry the correct href", () => {
     expectNoIntlErrors();
   });
 
-  test("ampersands in an invite link are HTML-escaped, not left raw", async () => {
-    const html = await render(
+  test("ampersands in an invite link are HTML-escaped, not left raw", () => {
+    const html = renderHtml(
       <OrganizationInvitation.Email
         invitedByUsername="Jane Doe"
         inviteLink="https://app.stella.test/accept?token=a&next=/x"
@@ -132,16 +136,16 @@ describe("link/CTA emails carry the correct href", () => {
 });
 
 describe("every supported locale renders without missing-interpolation errors", () => {
-  test("OTP, invitation, and new-device-login render cleanly in all locales", async () => {
+  test("OTP, invitation, and new-device-login render cleanly in all locales", () => {
     // Sequential renders so a captured console.error stays attributable to a
     // single locale rather than interleaving across parallel renders.
     for (const lang of LOCALES) {
-      const otpHtml = await render(
+      const otpHtml = renderHtml(
         <BetterAuthOTP.Email lang={lang} otp="123456" type="sign-in" />,
       );
       expect(otpHtml).toContain("123456");
 
-      const inviteHtml = await render(
+      const inviteHtml = renderHtml(
         <OrganizationInvitation.Email
           invitedByUsername="Jane Doe"
           inviteLink="https://app.stella.test/accept/tok"
@@ -154,7 +158,7 @@ describe("every supported locale renders without missing-interpolation errors", 
       expect(inviteHtml).toContain("Acme Inc");
       expect(inviteHtml).toContain("Jane Doe");
 
-      const deviceHtml = await render(
+      const deviceHtml = renderHtml(
         <NewDeviceLogin.Email
           device="Chrome on macOS"
           ipAddress="203.0.113.42"
@@ -176,13 +180,13 @@ describe("every supported locale renders without missing-interpolation errors", 
     }
   });
 
-  test("Arabic renders right-to-left and Latin locales left-to-right", async () => {
-    const arabic = await render(
+  test("Arabic renders right-to-left and Latin locales left-to-right", () => {
+    const arabic = renderHtml(
       <BetterAuthOTP.Email lang="ar" otp="123456" type="sign-in" />,
     );
     expect(arabic).toContain('dir="rtl"');
 
-    const english = await render(
+    const english = renderHtml(
       <BetterAuthOTP.Email lang="en" otp="123456" type="sign-in" />,
     );
     expect(english).toContain('dir="ltr"');
@@ -192,8 +196,8 @@ describe("every supported locale renders without missing-interpolation errors", 
 describe("user-supplied strings are HTML-escaped in the rendered output", () => {
   const INJECTION = "<script>alert('xss')</script>";
 
-  test("invitation escapes the organization name and inviter name", async () => {
-    const html = await render(
+  test("invitation escapes the organization name and inviter name", () => {
+    const html = renderHtml(
       <OrganizationInvitation.Email
         invitedByUsername={INJECTION}
         inviteLink="https://app.stella.test/accept/tok"
@@ -205,8 +209,8 @@ describe("user-supplied strings are HTML-escaped in the rendered output", () => 
     expect(html).toContain("&lt;script&gt;");
   });
 
-  test("new-device-login escapes the device string", async () => {
-    const html = await render(
+  test("new-device-login escapes the device string", () => {
+    const html = renderHtml(
       <NewDeviceLogin.Email
         device={INJECTION}
         ipAddress="203.0.113.42"
@@ -219,8 +223,8 @@ describe("user-supplied strings are HTML-escaped in the rendered output", () => 
     expect(html).toContain("&lt;script&gt;");
   });
 
-  test("product-feedback escapes every reporter-supplied field", async () => {
-    const html = await render(
+  test("product-feedback escapes every reporter-supplied field", () => {
+    const html = renderHtml(
       <ProductFeedback.Email
         receipt="FB-7K2M-9QXZ"
         report={{

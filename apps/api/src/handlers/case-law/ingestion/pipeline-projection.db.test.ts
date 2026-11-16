@@ -12,7 +12,6 @@ import {
   corpusIndexProjectionStates,
   relations,
 } from "@/api/db/schema";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -26,6 +25,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { parseCorpusLocation } from "@/api/lib/legal-search/corpus-location";
 import type { EncodedPack } from "@/api/lib/legal-search/corpus-pack";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
@@ -53,6 +53,9 @@ const corpus = {
 const input = (court: string, rawHash: string): IngestionResult =>
   plainTextIngestionResult({
     caseNumber: "4 As 3/2008",
+    // The publisher's id keeps a refresh that restates the court on its
+    // decision; a document-less identity would read it as a sibling.
+    sourceDocumentId: "nss-4-as-3-2008",
     court,
     country: "CZE",
     language: "cs",
@@ -92,14 +95,16 @@ afterAll(async () => {
 });
 
 test("a settled case-law write advances desired state and dedup replay repairs to a fixed point", async () => {
-  await processDecision({
-    input: input("Nejvyšší správní soud", "publisher-v1"),
-    observationOrder: 1n,
-    sourceId,
-    scopedDb,
-    observedAt: new Date("2026-08-31T12:00:00.000Z"),
-    corpus,
-  });
+  (
+    await processDecision({
+      input: input("Nejvyšší správní soud", "publisher-v1"),
+      observationOrder: 1n,
+      sourceId,
+      scopedDb,
+      observedAt: new Date("2026-08-31T12:00:00.000Z"),
+      corpus,
+    })
+  ).unwrap();
   const decision = (
     await db
       .select({ id: caseLawDecisions.id, textKey: caseLawDecisions.textS3Key })
@@ -132,14 +137,16 @@ test("a settled case-law write advances desired state and dedup replay repairs t
   ).at(0);
 
   const refreshed = input("Ústavní soud", "publisher-v2");
-  await processDecision({
-    input: refreshed,
-    observationOrder: 2n,
-    sourceId,
-    scopedDb,
-    observedAt: new Date("2026-08-31T12:00:01.000Z"),
-    corpus,
-  });
+  (
+    await processDecision({
+      input: refreshed,
+      observationOrder: 2n,
+      sourceId,
+      scopedDb,
+      observedAt: new Date("2026-08-31T12:00:01.000Z"),
+      corpus,
+    })
+  ).unwrap();
   const refreshedState = (
     await db
       .select({
@@ -150,14 +157,16 @@ test("a settled case-law write advances desired state and dedup replay repairs t
       .where(eq(corpusIndexProjectionStates.entityId, decision.id))
   ).at(0);
 
-  await processDecision({
-    input: refreshed,
-    observationOrder: 3n,
-    sourceId,
-    scopedDb,
-    observedAt: new Date("2026-08-31T12:00:02.000Z"),
-    corpus,
-  });
+  (
+    await processDecision({
+      input: refreshed,
+      observationOrder: 3n,
+      sourceId,
+      scopedDb,
+      observedAt: new Date("2026-08-31T12:00:02.000Z"),
+      corpus,
+    })
+  ).unwrap();
   const replay = (
     await db
       .select({

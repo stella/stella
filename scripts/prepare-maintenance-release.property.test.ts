@@ -12,9 +12,9 @@ import {
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
+import { createTestState } from "@stll/test-state";
 
-import { createTestState } from "../apps/api/src/tests/helpers/test-state";
 import { parseChangelogMarkdown } from "../apps/landing/src/lib/changelog-markdown";
 import { parseChangesetEntry } from "./changeset-entry";
 import {
@@ -27,8 +27,13 @@ import {
   parseMaintenanceReleaseOptions,
   parseStableVersion,
   prepareMaintenanceReleaseFiles,
+  projectReleaseDates,
   readPendingChangesets,
   readPreviousRelease,
+  readReleaseManifest,
+  type ReceiptCoverage,
+  type ReceiptCoverageReader,
+  receiptCoverageReader,
   refreshMaintenanceReleaseFiles,
   resolveGitHubToken,
   withFileRollback,
@@ -200,7 +205,8 @@ describe("the token the GitHub reads are made with", () => {
   });
 
   test("changes GITHUB_TOKEN alone, whatever the parent environment holds", () => {
-    fc.assert(
+    assertProperty(
+      "changes GITHUB_TOKEN alone, whatever the parent environment holds",
       fc.property(
         fc.dictionary(fc.stringMatching(/^[A-Z][A-Z_]{0,7}$/u), fc.string()),
         fc.option(fc.string({ minLength: 1 }), { nil: null }),
@@ -218,7 +224,7 @@ describe("the token the GitHub reads are made with", () => {
           expect(child["GITHUB_TOKEN"]).toBe(token ?? parent["GITHUB_TOKEN"]);
         },
       ),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 });
@@ -671,7 +677,8 @@ describe("pending changesets folded into the release", () => {
 
 describe("maintenance release preparation", () => {
   test("increments every safe stable patch version without changing its series", () => {
-    fc.assert(
+    assertProperty(
+      "increments every safe stable patch version without changing its series",
       fc.property(
         fc.nat({ max: 1_000_000 }),
         fc.nat({ max: 1_000_000 }),
@@ -688,7 +695,7 @@ describe("maintenance release preparation", () => {
           });
         },
       ),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 
@@ -847,7 +854,7 @@ describe("maintenance release preparation", () => {
     );
   });
 
-  test("keeps a previous tag already recorded as never promoted", () => {
+  test("a previous tag recorded as never promoted takes the date GitHub now gives it", () => {
     const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-"));
     roots.push(root);
     releaseFixture(root, `${JSON.stringify({ "v1.2.3": null }, null, 2)}\n`);
@@ -860,7 +867,72 @@ describe("maintenance release preparation", () => {
       ).trim(),
       rootDir: root,
     });
-    expect(readReleaseDates(root)).toEqual({ "v1.2.3": null });
+    expect(readReleaseDates(root)).toEqual({ "v1.2.3": PUBLISHED.publishedAt });
+  });
+
+  test("a recorded never-promoted release stays null even when GitHub shows it published", () => {
+    const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-"));
+    roots.push(root);
+    const recorded = `${JSON.stringify(
+      {
+        _note: "Publication timestamps, keyed by tag.",
+        "v0.8.10": null,
+        "v0.9.14": null,
+        "v1.2.2": "2026-01-01T00:00:00Z",
+      },
+      null,
+      2,
+    )}\n`;
+    releaseFixture(root, recorded);
+
+    // Each recorded null is a release that was never promoted to production;
+    // a GitHub release published for it later does not change that.
+    prepareMaintenanceReleaseFiles({
+      previousRelease: PUBLISHED,
+      previousFinalVersion: "1.2.3",
+      rootDir: root,
+    });
+    expect(
+      readFileSync(
+        nodePath.join(
+          root,
+          "apps/landing/src/data/changelog-release-dates.json",
+        ),
+        "utf-8",
+      ),
+    ).toBe(
+      `${JSON.stringify(
+        {
+          _note: "Publication timestamps, keyed by tag.",
+          "v0.8.10": null,
+          "v0.9.14": null,
+          "v1.2.2": "2026-01-01T00:00:00Z",
+          "v1.2.3": PUBLISHED.publishedAt,
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    expect(
+      projectReleaseDates({
+        dates: readReleaseManifest(root).releases,
+        previousRelease: UNPROMOTED,
+        previousTag: "v1.2.4",
+      }),
+    ).toMatchObject({ "v0.8.10": null, "v0.9.14": null, "v1.2.4": null });
+  });
+
+  test.each([
+    [{ latest: "2026-01-01T00:00:00Z" }, "invalid stable release ref: latest"],
+    [{ "v1.2": null }, "invalid stable release ref: v1.2"],
+    [{ _note: 3 }, "note must be a string"],
+    [{ "v1.2.1": 1 }, "invalid publication time for v1.2.1"],
+  ])("the manifest reader refuses %j", (entries, message) => {
+    const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-"));
+    roots.push(root);
+    releaseFixture(root, `${JSON.stringify(entries, null, 2)}\n`);
+
+    expect(() => readReleaseManifest(root)).toThrow(message);
   });
 
   test("reads the publication date of a published release", async () => {
@@ -1045,7 +1117,7 @@ describe("maintenance release preparation", () => {
     }
     expect(caught).toBeInstanceOf(MaintenanceReleaseError);
     if (!(caught instanceof MaintenanceReleaseError)) {
-      throw new Error("Expected maintenance release failure");
+      throw new TypeError("Expected maintenance release failure");
     }
     expect(caught.message).toContain("persistent write failure");
     expect(caught.message).toContain(
@@ -1292,7 +1364,8 @@ describe("a superseded version's notes folded into the release", () => {
   // of cuts leaves no undated page behind the newest, and a bullet of a
   // superseded version stays on exactly one page.
   test("leaves every page but the newest dated after any run of cuts", () => {
-    fc.assert(
+    assertProperty(
+      "leaves every page but the newest dated after any run of cuts",
       fc.property(
         fc.array(fc.constantFrom("published", "superseded", "unpromoted"), {
           maxLength: 6,
@@ -1338,7 +1411,7 @@ describe("a superseded version's notes folded into the release", () => {
           expect(holding).toHaveLength(1);
         },
       ),
-      propertyConfig({ numRuns: 50 }),
+      { numRuns: 50 },
     );
   });
 });
@@ -1377,6 +1450,7 @@ const job = (
 ) => ({
   conclusion,
   name,
+  run_attempt: 1,
   status,
 });
 
@@ -1397,15 +1471,18 @@ const fakeGitHub = (responses: Record<string, unknown>) => {
   return Object.assign(read, { paths });
 };
 
+const NOT_COVERED = async (): Promise<ReceiptCoverage> => "not_covered";
+
 const cutRefusal = async (
   responses: Record<string, unknown>,
+  coverage: ReceiptCoverageReader = NOT_COVERED,
 ): Promise<string> => {
   const written: string[] = [];
   try {
     await assertReleaseCutReady(
       CUT_SHA,
       false,
-      fakeGitHub(responses),
+      { json: fakeGitHub(responses), coverage },
       (text) => {
         written.push(text);
       },
@@ -1427,7 +1504,7 @@ describe("release cut readiness", () => {
     });
     const written: string[] = [];
 
-    await assertReleaseCutReady(CUT_SHA, false, read, (text) => {
+    await assertReleaseCutReady(CUT_SHA, false, { json: read }, (text) => {
       written.push(text);
     });
 
@@ -1467,6 +1544,37 @@ describe("release cut readiness", () => {
     );
   });
 
+  // The screenshots job fails only on a functional capture failure (a
+  // difference alone passes it with a warning), so it blocks like any job.
+  test("refuses a main/heavy run that failed only in marketing screenshots", async () => {
+    const message = await cutRefusal({
+      [STATUSES_PATH]: [
+        commitStatus("main/heavy", "failure", 11),
+        PR_DEPTH_GREEN,
+      ],
+      [jobsPath(11)]: {
+        jobs: [
+          job("suites / web-tests", "success"),
+          job("suites / marketing-screenshots / check", "failure"),
+          job("suites / ci-result", "failure"),
+          job("status", "failure"),
+        ],
+      },
+    });
+
+    expect(message).toBe(
+      [
+        `main is not release-ready at ${CUT_SHA}:`,
+        `  main/heavy: failure (status failure) ${RUN_PREFIX}11`,
+        "    failing job: suites / marketing-screenshots / check (failure)",
+        "    failing job: suites / ci-result (failure)",
+        "    failing job: status (failure)",
+        `    run it: gh workflow run main-heavy.yml --ref main -f sha=${CUT_SHA}`,
+        "Cut from a commit where both are green, or pass --allow-unproven-main to cut anyway.",
+      ].join("\n"),
+    );
+  });
+
   test("reads only the newest status of each gate", async () => {
     const newerRed = await cutRefusal({
       [STATUSES_PATH]: [
@@ -1487,7 +1595,12 @@ describe("release cut readiness", () => {
         commitStatus("main/heavy", "failure", 10),
       ],
     });
-    await assertReleaseCutReady(CUT_SHA, false, newerGreen, () => undefined);
+    await assertReleaseCutReady(
+      CUT_SHA,
+      false,
+      { json: newerGreen },
+      () => undefined,
+    );
   });
 
   test("refuses a missing main/heavy status and says how to run it", async () => {
@@ -1545,7 +1658,12 @@ describe("release cut readiness", () => {
       [STATUSES_PATH]: [HEAVY_GREEN],
       [SCHEDULED_PR_DEPTH_PATH]: scheduledRun("completed", "success"),
     });
-    await assertReleaseCutReady(CUT_SHA, false, read, () => undefined);
+    await assertReleaseCutReady(
+      CUT_SHA,
+      false,
+      { json: read },
+      () => undefined,
+    );
     expect(read.paths).toEqual([STATUSES_PATH, SCHEDULED_PR_DEPTH_PATH]);
 
     const failed = await cutRefusal({
@@ -1612,8 +1730,146 @@ describe("release cut readiness", () => {
       ],
     });
 
-    await assertReleaseCutReady(CUT_SHA, false, read, () => undefined);
+    await assertReleaseCutReady(
+      CUT_SHA,
+      false,
+      { json: read },
+      () => undefined,
+    );
     expect(read.paths).toHaveLength(2);
+  });
+
+  test("cuts without the statuses when a merge-group receipt covers the commit", async () => {
+    const asked: string[] = [];
+    const written: string[] = [];
+
+    await assertReleaseCutReady(
+      CUT_SHA,
+      false,
+      {
+        json: fakeGitHub({
+          [STATUSES_PATH]: [],
+          [SCHEDULED_PR_DEPTH_PATH]: { workflow_runs: [] },
+        }),
+        coverage: async (sha) => {
+          asked.push(sha);
+          return "covered";
+        },
+      },
+      (text) => {
+        written.push(text);
+      },
+    );
+
+    expect(asked).toEqual([CUT_SHA]);
+    expect(written).toEqual([
+      `maintenance-release: a merge-group receipt and validated queue history stand in for main/heavy and main/pr-depth on ${CUT_SHA}\n`,
+    ]);
+  });
+
+  test("an uncovered receipt keeps both statuses required", async () => {
+    const responses = {
+      [STATUSES_PATH]: [],
+      [SCHEDULED_PR_DEPTH_PATH]: { workflow_runs: [] },
+    };
+    const expected = [
+      `main is not release-ready at ${CUT_SHA}:`,
+      "  main/heavy: missing (no status on the commit)",
+      `    run it: gh workflow run main-heavy.yml --ref main -f sha=${CUT_SHA}`,
+      "  main/pr-depth: missing (no status and no scheduled run on the commit)",
+      `    run it: gh workflow run main-pr-depth.yml --ref main -f sha=${CUT_SHA}`,
+      "Cut from a commit where both are green, or pass --allow-unproven-main to cut anyway.",
+    ].join("\n");
+
+    expect(await cutRefusal(responses, NOT_COVERED)).toBe(expected);
+    // A coverage check that cannot run answers nothing: the same refusal.
+    expect(
+      await cutRefusal(responses, async () => {
+        throw new Error("coverage check crashed");
+      }),
+    ).toBe(expected);
+  });
+
+  test("a failed gate refuses even when a merge-group receipt covers the commit", async () => {
+    const asked: string[] = [];
+    const message = await cutRefusal(
+      {
+        [STATUSES_PATH]: [
+          commitStatus("main/heavy", "failure", 11),
+          PR_DEPTH_GREEN,
+        ],
+        [jobsPath(11)]: { jobs: [job("suites / api-tests (2)", "failure")] },
+      },
+      async (sha) => {
+        asked.push(sha);
+        return "covered";
+      },
+    );
+
+    expect(message).toBe(
+      [
+        `main is not release-ready at ${CUT_SHA}:`,
+        `  main/heavy: failure (status failure) ${RUN_PREFIX}11`,
+        "    failing job: suites / api-tests (2) (failure)",
+        `    run it: gh workflow run main-heavy.yml --ref main -f sha=${CUT_SHA}`,
+        "Cut from a commit where both are green, or pass --allow-unproven-main to cut anyway.",
+      ].join("\n"),
+    );
+    expect(asked).toEqual([]);
+  });
+
+  test("green statuses cut without asking for receipt coverage", async () => {
+    const asked: string[] = [];
+    const written: string[] = [];
+
+    await assertReleaseCutReady(
+      CUT_SHA,
+      false,
+      {
+        json: fakeGitHub({ [STATUSES_PATH]: [PR_DEPTH_GREEN, HEAVY_GREEN] }),
+        coverage: async (sha) => {
+          asked.push(sha);
+          return "not_covered";
+        },
+      },
+      (text) => {
+        written.push(text);
+      },
+    );
+
+    expect(asked).toEqual([]);
+    expect(written).toEqual([
+      `maintenance-release: main/heavy and main/pr-depth are green on ${CUT_SHA}\n`,
+    ]);
+  });
+
+  test("only exit 0 of the coverage command is coverage", async () => {
+    const root = mkdtempSync(nodePath.join(tmpdir(), "receipt-coverage-"));
+    roots.push(root);
+    const argumentsPath = nodePath.join(root, "arguments");
+    const stub = (exitCode: number) => {
+      const path = nodePath.join(root, `exit-${String(exitCode)}.sh`);
+      writeFileSync(
+        path,
+        `printf '%s\\n' "$@" > '${argumentsPath}'\nexit ${String(exitCode)}\n`,
+      );
+      return ["bash", path];
+    };
+
+    expect(await receiptCoverageReader(stub(0))(CUT_SHA)).toBe("covered");
+    expect(readFileSync(argumentsPath, "utf-8")).toBe(
+      `stella/stella\n${CUT_SHA}\n`,
+    );
+    for (const exitCode of [1, 2, 127]) {
+      expect(await receiptCoverageReader(stub(exitCode))(CUT_SHA)).toBe(
+        "not_covered",
+      );
+    }
+    expect(
+      await receiptCoverageReader([nodePath.join(root, "absent-command")])(
+        CUT_SHA,
+      ),
+    ).toBe("not_covered");
   });
 
   test("an explicit override prints the same refusal and lets the cut go on", async () => {
@@ -1622,7 +1878,10 @@ describe("release cut readiness", () => {
     await assertReleaseCutReady(
       CUT_SHA,
       true,
-      fakeGitHub({ [STATUSES_PATH]: [PR_DEPTH_GREEN] }),
+      {
+        json: fakeGitHub({ [STATUSES_PATH]: [PR_DEPTH_GREEN] }),
+        coverage: NOT_COVERED,
+      },
       (text) => {
         written.push(text);
       },

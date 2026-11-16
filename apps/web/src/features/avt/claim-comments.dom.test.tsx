@@ -11,12 +11,18 @@ import {
   test,
 } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import { toSafeId } from "@/lib/safe-id";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 Object.assign(import.meta.env, { VITE_API_URL: "http://localhost:3001" });
-type RecordedRequest = { method: string; path: string; body: unknown };
+type RecordedRequest = {
+  method: string;
+  path: string;
+  body: unknown;
+  headers: Headers;
+};
 // Every product request must be one a test seeded a response for, so the
 // assertions see exactly the comment traffic.
 const requests: RecordedRequest[] = [];
@@ -37,6 +43,7 @@ const fetchImplementation = Object.assign(
       method: request.method,
       path: pathname,
       body: text === "" ? null : JSON.parse(text),
+      headers: request.headers,
     });
     const answer = answers.shift();
     if (answer === undefined) {
@@ -104,6 +111,8 @@ const comment = ({
   kind: "comment" as const,
   mine,
   quote: claim.text,
+  quotePrefix: "",
+  quoteSuffix: "",
   startOffset: 0,
   style: null,
   updatedAt: at,
@@ -214,12 +223,15 @@ test("a reviewer adds, edits and deletes a comment on the selected claim", async
   fireEvent.click(screen.getByRole("button", { name: messages.folio.comment }));
   fireEvent.change(
     screen.getByRole("textbox", { name: messages.folio.comment }),
-    { target: { value: "Ask for the minutes." } },
+    {
+      target: { value: "Ask for the minutes." },
+    },
   );
   fireEvent.click(screen.getByRole("button", { name: messages.common.save }));
   await waitFor(() => expect(requests).toHaveLength(2));
   expect(requests.at(0)).toEqual({
     method: "POST",
+    headers: expect.anything(),
     path: commentsPath,
     body: {
       body: "Ask for the minutes.",
@@ -228,6 +240,7 @@ test("a reviewer adds, edits and deletes a comment on the selected claim", async
       visibility: "private",
     },
   });
+  expect(requests.at(0)?.headers.get("Idempotency-Key")).toBeString();
   expect(requests.at(1)?.method).toBe("GET");
   await waitFor(() =>
     expect(screen.getByText("Ask for the minutes.")).toBeTruthy(),
@@ -243,12 +256,15 @@ test("a reviewer adds, edits and deletes a comment on the selected claim", async
   );
   fireEvent.change(
     screen.getByRole("textbox", { name: messages.folio.comment }),
-    { target: { value: "Ask for the signed minutes." } },
+    {
+      target: { value: "Ask for the signed minutes." },
+    },
   );
   fireEvent.click(screen.getByRole("button", { name: messages.common.save }));
   await waitFor(() => expect(requests).toHaveLength(2));
   expect(requests.at(0)).toEqual({
     method: "PATCH",
+    headers: expect.anything(),
     path: `${commentsPath}/${added.id}`,
     body: { change: "body", body: "Ask for the signed minutes." },
   });
@@ -281,7 +297,9 @@ test("editing and sharing a private comment stores its words before sharing them
     );
     fireEvent.change(
       screen.getByRole("textbox", { name: messages.folio.comment }),
-      { target: { value: "Final." } },
+      {
+        target: { value: "Final." },
+      },
     );
     fireEvent.click(
       screen.getByRole("button", {
@@ -329,7 +347,9 @@ test("a comment still being stored offers no controls until the server answers",
   fireEvent.click(screen.getByRole("button", { name: messages.folio.comment }));
   fireEvent.change(
     screen.getByRole("textbox", { name: messages.folio.comment }),
-    { target: { value: "Ask for the minutes." } },
+    {
+      target: { value: "Ask for the minutes." },
+    },
   );
   fireEvent.click(screen.getByRole("button", { name: messages.common.save }));
   await waitFor(() => expect(requests).toHaveLength(1));
@@ -398,8 +418,16 @@ test("a comment being written on one claim is discarded when another claim is se
           contested={new Set()}
           factsById={new Map()}
           onReviewEvent={() => undefined}
-          runId={runId}
-          stepper={{ current: null, total: 0, onPrev: null, onNext: null }}
+          run={{
+            id: toSafeId<"legalListVerificationRun">(runId),
+            evidence: {
+              listId: toSafeId<"legalList">(
+                "0199a3c4-5b6d-7e8f-9a0b-000000009004",
+              ),
+              facts: [],
+            },
+          }}
+          recheckRun={{ state: "idle", start: () => undefined }}
           workspaceId={workspaceId}
         />
       </>
@@ -419,7 +447,9 @@ test("a comment being written on one claim is discarded when another claim is se
   fireEvent.click(screen.getByRole("button", { name: messages.folio.comment }));
   fireEvent.change(
     screen.getByRole("textbox", { name: messages.folio.comment }),
-    { target: { value: "Draft on the first claim." } },
+    {
+      target: { value: "Draft on the first claim." },
+    },
   );
   fireEvent.click(screen.getByRole("button", { name: NEXT_CLAIM }));
   expect(

@@ -164,12 +164,14 @@ const commitDelete = async (
   const leaseToken = Bun.randomUUIDv7();
   const leases = await db.transaction(
     async (tx) =>
-      await claimCorpusProjectionCleanupTx(tx, {
-        ...scopeOf(fixture),
-        limit: 10,
-        leaseMs: 60_000,
-        newLeaseToken: () => leaseToken,
-      }),
+      (
+        await claimCorpusProjectionCleanupTx(tx, {
+          ...scopeOf(fixture),
+          limit: 10,
+          leaseMs: 60_000,
+          newLeaseToken: () => leaseToken,
+        })
+      ).leases,
   );
   expect(leases).toHaveLength(fixture.intentIds.length);
   await db.transaction(

@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useWorkspaceChatMentionRegistration } from "@/features/chat/hooks/use-workspace-chat-mention-registration";
 import { chatThreadOptions } from "@/features/chat/queries";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
+import { loadRouteResource } from "@/lib/errors/route-resource";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { routePresentation } from "@/routes/-route-presentation";
 import { ChatThreadPage } from "@/routes/_protected.chat/-components/chat-thread-page";
@@ -34,13 +35,15 @@ export const Route = createFileRoute(
       },
       context: { allowMissingThread: true },
     });
-    if (
-      context.queryClient.getQueryData(threadQueryOptions.queryKey) !==
-      undefined
-    ) {
-      return;
-    }
-    await ensureRouteQueryData(context.queryClient, threadQueryOptions);
+    // A thread that is not saved yet is a valid draft: /chat/new and
+    // "Build with AI" navigate to fresh ids before the first message.
+    // Only malformed or inaccessible ids become not-found.
+    await loadRouteResource({
+      ids: [params.workspaceId, params.threadId],
+      load: async () =>
+        context.queryClient.getQueryData(threadQueryOptions.queryKey) ??
+        (await ensureRouteQueryData(context.queryClient, threadQueryOptions)),
+    });
   },
 });
 

@@ -2,7 +2,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { Result } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import { createWebTestEnvironment } from "../../../../tests/environment.test-fixtures";
 import type { acceptAnswerEdit, AnswerEditProposal } from "./answer-edit-api";

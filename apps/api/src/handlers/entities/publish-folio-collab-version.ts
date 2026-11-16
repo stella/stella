@@ -5,7 +5,8 @@ import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
-import { captureError } from "@/api/lib/analytics/capture";
+import { envBase } from "@/api/env-base";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -37,11 +38,13 @@ import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organiz
 import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
 import { createFileKey } from "@/api/lib/files/utils";
+import { FOLIO_COLLAB_CHECKPOINT_MAX_BYTES } from "@/api/lib/folio-collab-room-contract";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import {
-  readS3ArrayBuffer,
+  OBJECT_READ_TIMEOUT_MS,
+  readS3ObjectBounded,
   S3_OBJECT_WRITE_CERTAINTY,
   writeS3ObjectWithRetry,
 } from "@/api/lib/s3";
@@ -151,7 +154,21 @@ export const readPublishableCheckpoint = async ({
 }: ReadPublishableCheckpointOptions): Promise<
   Result<Uint8Array<ArrayBuffer>, HandlerError>
 > => {
-  const checkpoint = await readS3ArrayBuffer(checkpointKey, signal);
+  const storedCheckpointBytes = await readS3ObjectBounded({
+    bucket: envBase.S3_BUCKET,
+    key: checkpointKey,
+    maxBytes: FOLIO_COLLAB_CHECKPOINT_MAX_BYTES,
+    signal: AbortSignal.any([
+      signal,
+      AbortSignal.timeout(OBJECT_READ_TIMEOUT_MS),
+    ]),
+  });
+  const checkpoint =
+    storedCheckpointBytes.buffer instanceof ArrayBuffer &&
+    storedCheckpointBytes.byteOffset === 0 &&
+    storedCheckpointBytes.byteLength === storedCheckpointBytes.buffer.byteLength
+      ? storedCheckpointBytes.buffer
+      : storedCheckpointBytes.slice().buffer;
   const checkpointBytes = new Uint8Array(checkpoint);
   const actualSha256Hex = hashSha256Hex(checkpointBytes);
   if (actualSha256Hex !== expectedSha256Hex) {
@@ -351,42 +368,50 @@ const startPublicationFollowUps = async ({
       }),
     );
   });
-  enqueuePdfDerivativeOrMarkFailed({
-    encrypted: PUBLISHED_FILE_ENCRYPTION.encrypted,
-    entityId: publication.entityId,
-    fieldId: publication.fieldId,
-    mimeType: DOCX_MIME_TYPE,
-    organizationId,
-    userId: brandPersistedUserId(userId),
-    workspaceId,
-  }).catch((error: unknown) => {
-    captureError(
-      error,
-      handlerErrorContext("publication.enqueuePdfDerivative", {
+  detached(
+    async () =>
+      enqueuePdfDerivativeOrMarkFailed({
+        encrypted: PUBLISHED_FILE_ENCRYPTION.encrypted,
         entityId: publication.entityId,
         fieldId: publication.fieldId,
+        mimeType: DOCX_MIME_TYPE,
+        organizationId,
+        userId: brandPersistedUserId(userId),
+        workspaceId,
+      }).catch((error: unknown) => {
+        captureError(
+          error,
+          handlerErrorContext("publication.enqueuePdfDerivative", {
+            entityId: publication.entityId,
+            fieldId: publication.fieldId,
+          }),
+        );
       }),
-    );
-  });
-  computeVersionDiffStats({
-    entityId: publication.entityId,
-    organizationId,
-    scopedDb: async (callback) => {
-      const result = await safeDb(callback);
-      return result.unwrap(
-        "Collaboration version diff reads stay inside the authorized workspace scope.",
-      );
-    },
-    versionId: publication.versionId,
-    workspaceId,
-  }).catch((error: unknown) => {
-    captureError(
-      error,
-      handlerErrorContext("publication.computeVersionDiff", {
+    "publish-folio-collab-version.enqueue-pdf-derivative-or-mark-failed",
+  );
+  detached(
+    async () =>
+      computeVersionDiffStats({
+        entityId: publication.entityId,
+        organizationId,
+        scopedDb: async (callback) => {
+          const result = await safeDb(callback);
+          return result.unwrap(
+            "Collaboration version diff reads stay inside the authorized workspace scope.",
+          );
+        },
         versionId: publication.versionId,
+        workspaceId,
+      }).catch((error: unknown) => {
+        captureError(
+          error,
+          handlerErrorContext("publication.computeVersionDiff", {
+            versionId: publication.versionId,
+          }),
+        );
       }),
-    );
-  });
+    "publish-folio-collab-version.compute-version-diff-stats",
+  );
 };
 
 const publicationRejection = (

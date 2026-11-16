@@ -14,6 +14,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { ENTITY_LINK_TYPES } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { TASK_LINK_AUDIT_CHANGE } from "@/api/lib/tasks/entity-link-audit";
 import { includes } from "@/api/lib/type-guards";
 
 const createEntityLinkBodySchema = v.object({
@@ -150,7 +151,7 @@ export const createEntityLinkHandler = async function* ({
           resourceId: taskEntityId,
           metadata: {
             kind: "task",
-            change: "entity-link-added",
+            change: TASK_LINK_AUDIT_CHANGE.ADDED,
             linkType,
             sourceEntityId,
             targetEntityId,
@@ -177,6 +178,7 @@ export const createEntityLinkHandler = async function* ({
 const createEntityLink = createSafeHandler(
   {
     contract: "patch",
+    idempotency: { type: "replay" },
     description:
       "Link a task to another document, folder, or task, with a link type " +
       "that defaults to related. Both ends must be in this matter, an entity " +

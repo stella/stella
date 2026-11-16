@@ -38,10 +38,13 @@ runs:
 
     - name: Download production web build
       if: steps.stack.outcome == 'success'
-      uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-      with:
-        name: e2e-web-build
-        path: apps/web/dist
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: >-
+        bash scripts/download-run-artifact.sh
+        --name e2e-web-build
+        --path apps/web/dist
 
     # The manifest is written by the build, so this only catches a build
     # artifact from another commit; it is not an integrity check.

@@ -1,0 +1,11 @@
+@import "tailwindcss";
+@import "../../styles/theme.css";
+@source "../court-filter.tsx";
+@source "../checkbox.tsx";
+@source "../search-field.tsx";
+@source "../input-group.tsx";
+@source "../scroll-area.tsx";
+
+body {
+  padding: 1rem;
+}

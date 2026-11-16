@@ -124,6 +124,38 @@ test("the restricted review account is configured with both keys or neither", ()
   }
 });
 
+test("the synthetic-monitoring session secret boots only outside production", () => {
+  const secret = "s".repeat(32);
+  for (const deployEnvironment of [
+    undefined,
+    "staging",
+    "development",
+  ] as const) {
+    expect(
+      envApiInvariantViolation({
+        ...environment,
+        DEPLOY_ENVIRONMENT: deployEnvironment,
+        SMOKE_SESSION_SECRET: secret,
+      }),
+    ).toBeNull();
+  }
+  expect(
+    envApiInvariantViolation({
+      ...environment,
+      DEPLOY_ENVIRONMENT: "production",
+    }),
+  ).toBeNull();
+  expect(
+    envApiInvariantViolation({
+      ...environment,
+      DEPLOY_ENVIRONMENT: "production",
+      SMOKE_SESSION_SECRET: secret,
+    }),
+  ).toBe(
+    "SMOKE_SESSION_SECRET is for non-production deployments; unset it when DEPLOY_ENVIRONMENT=production.",
+  );
+});
+
 test("Sign in with Apple boots only fully configured, with a readable key", () => {
   const apple = {
     APPLE_AUTH_CLIENT_ID: "app.example.web",
@@ -148,6 +180,33 @@ test("Sign in with Apple boots only fully configured, with a readable key", () =
       APPLE_AUTH_PRIVATE_KEY: "not a key",
     }),
   ).toContain("APPLE_AUTH_PRIVATE_KEY must be the PEM text");
+});
+
+test("APNs credentials are configured as a complete set or not at all", () => {
+  const apns = {
+    APNS_KEY_ID: "KEY1234567",
+    APNS_TEAM_ID: "TEAM123456",
+    APNS_PRIVATE_KEY:
+      "-----BEGIN PRIVATE KEY-----\nabc\n-----END PRIVATE KEY-----",
+  };
+  expect(envApiInvariantViolation(environment)).toBeNull();
+  expect(envApiInvariantViolation({ ...environment, ...apns })).toBeNull();
+  const { APNS_KEY_ID, APNS_TEAM_ID, APNS_PRIVATE_KEY } = apns;
+  for (const partial of [
+    { APNS_TEAM_ID, APNS_PRIVATE_KEY },
+    { APNS_KEY_ID, APNS_PRIVATE_KEY },
+    { APNS_KEY_ID, APNS_TEAM_ID },
+  ]) {
+    expect(envApiInvariantViolation({ ...environment, ...partial })).toBe(
+      "APNS_KEY_ID, APNS_TEAM_ID and APNS_PRIVATE_KEY must be set together.",
+    );
+  }
+  expect(v.safeParse(envApiServerSchema.APNS_KEY_ID, "not-an-id").success).toBe(
+    false,
+  );
+  expect(
+    v.safeParse(envApiServerSchema.APNS_PRIVATE_KEY, "plain text").success,
+  ).toBe(false);
 });
 
 test("managed checks require an explicit supported provider and bounded configuration", () => {

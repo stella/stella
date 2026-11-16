@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { decisionReaderTextPieces } from "@stll/decision-reader/reader-text-pieces.logic";
 import { visibleDecisionBlocks } from "@stll/legal-ast/case-law-reader";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
@@ -26,6 +27,7 @@ import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header"
 import type { InspectorViewRenderProps } from "@/components/inspector/view-registry";
 import { AnnotationToolbar } from "@/components/legal-reader/annotations/annotation-toolbar";
 import { GuestAnnotationPrompt } from "@/components/legal-reader/annotations/guest-annotation-prompt";
+import { OrphanedAnnotationsNotice } from "@/components/legal-reader/annotations/orphaned-annotations-notice";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
 import {
   LEGAL_READER_CONTENT_CLEARANCE_CLASS_NAME,
@@ -81,13 +83,15 @@ const HEADER_DECISION_FACTS = [
 /** A compact decision reader composed for the inspector's bounded width. */
 export const CaseDecisionInspectorView = ({
   onClose,
+  onMoveToMain,
   tab,
 }: InspectorViewRenderProps<CaseDecisionViewPayload>) => {
   const t = useTranslations();
   const { payload } = tab;
   const textScale = useReaderTextScale("decision");
   const decisionId = toSafeId<"caseLawDecision">(payload.decisionId);
-  const citationAnchors = useDecisionCitationAnchors(decisionId);
+  const { citationAnchors, unresolvedCitationAnchors } =
+    useDecisionCitationAnchors(decisionId);
   const {
     data: decision,
     isError,
@@ -172,6 +176,7 @@ export const CaseDecisionInspectorView = ({
     marks: "all",
     scrollContainerRef: contentRef,
     target: annotationTarget,
+    text: decision === undefined ? null : decisionReaderTextPieces(decision),
   });
   // The pane has no margin column, so a note takes its place in the text:
   // under the paragraph it belongs to, where the margin would have put it
@@ -247,7 +252,7 @@ export const CaseDecisionInspectorView = ({
             // The text moves to the page, so the tab that held it goes.
             render: () => (
               <DecisionMainViewAction
-                onMoveToMain={onClose}
+                onMoveToMain={onMoveToMain}
                 payload={{
                   ...payload,
                   searchQuery: find.findQuery || undefined,
@@ -263,6 +268,11 @@ export const CaseDecisionInspectorView = ({
       <GuestAnnotationPrompt
         className="shrink-0"
         count={annotations.guestCount}
+      />
+      <OrphanedAnnotationsNotice
+        className="shrink-0"
+        onRemove={annotations.removeOrphaned}
+        orphaned={annotations.orphaned}
       />
       {/* The composer floats over the text, bound to this decision, the way
           it floats over a PDF bound to that file. */}
@@ -334,6 +344,7 @@ export const CaseDecisionInspectorView = ({
                   surface="inspector"
                   annotationAnchors={annotations.anchors}
                   citationAnchors={citationAnchors}
+                  unresolvedCitationAnchors={unresolvedCitationAnchors}
                   decision={decision}
                   decisionId={decisionId}
                   expandProvisions={provisions.expandProvisions}

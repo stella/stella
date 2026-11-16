@@ -52,6 +52,13 @@ const rejects = [
     source: "docker run -v ./data:/data image",
   },
   {
+    // A shell helper is no script: its quoted strings are still read.
+    id: "shell-quoted-mount",
+    inspect: inspectDockerHelper,
+    source:
+      'if [ -n "$data" ]; then\n  mount_args="-v $data:/data"\nfi\nrun_container "$mount_args"\n',
+  },
+  {
     id: "driver-option",
     inspect: inspectDockerHelper,
     source: "docker --context local volume create --opt type=none data",
@@ -131,6 +138,33 @@ test("host mount guard accepts and rejects the documented cases", () => {
   ]) {
     expect(isDockerMountGuardInput(file, "docker run")).toBe(true);
   }
+});
+
+test("scalar Docker option values cannot inject mounts, while spreads and mount values remain checked", () => {
+  for (const option of ["--name", "--publish", "--env-file", "--memory"]) {
+    expect(
+      inspectDockerHelper(
+        `["docker", "--host", host, "run", "${option}", value, "--", image]`,
+      ),
+    ).toEqual([]);
+    expect(
+      inspectDockerHelper(
+        `["docker", "run", "${option}", ...values, "--", image]`,
+      ).length,
+    ).toBeGreaterThan(0);
+    expect(
+      inspectDockerHelper(`docker run ${option} $value image`).length,
+    ).toBeGreaterThan(0);
+  }
+  for (const option of ["--mount", "--volume", "--volume-driver"]) {
+    expect(
+      inspectDockerHelper(`["docker", "run", "${option}", value, "--", image]`)
+        .length,
+    ).toBeGreaterThan(0);
+  }
+  expect(
+    inspectDockerHelper('["docker", "run", ...options, "--", image]').length,
+  ).toBeGreaterThan(0);
 });
 
 test.each([

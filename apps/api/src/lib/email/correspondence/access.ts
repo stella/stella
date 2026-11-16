@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { and, eq, isNull, sql } from "drizzle-orm";
 
 import type { CorrespondenceActorDisplay } from "@stll/api-contract/correspondence";
+import { workspaceAcceptsWrites } from "@stll/api-contract/workspace-status";
 
 import { member, user } from "@/api/db/auth-schema";
 import {
@@ -97,7 +98,7 @@ export const assertCorrespondenceAccess = async ({
     )
     .limit(1)
     .for("update");
-  if (matters.at(0)?.status !== "active") {
+  if (!workspaceAcceptsWrites(matters.at(0)?.status)) {
     return Result.err(
       new HandlerError({
         status: 403,

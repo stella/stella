@@ -23,7 +23,15 @@ const assertLightweightPush = (config: unknown) => {
       typecheck: {
         run: "bun scripts/pre-push-typecheck.ts --base origin/main",
       },
+      "migration-order": {
+        run: "bun scripts/check-migration-order.ts origin/main",
+      },
       secrets: { use_stdin: true, run: "bun run secrets:check:pushed" },
+      // Reads one commit header per published commit; no compiler work.
+      signatures: {
+        use_stdin: true,
+        run: "bash scripts/check-pushed-signatures.sh",
+      },
       "ai-skills": { run: "bash scripts/check-ai-skill-sources.sh" },
       lockfiles: { run: "bun run check:standalone-lockfiles" },
       "job-classification": {

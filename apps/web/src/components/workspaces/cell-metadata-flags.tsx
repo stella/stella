@@ -7,6 +7,7 @@ import { useTranslations } from "use-intl";
 import { isReviewFlag, REVIEW_FLAG } from "@stll/api-contract";
 import type { ReviewFlag } from "@stll/api-contract";
 import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
 import {
   CheckCircle2Icon,
   LockIcon,
@@ -19,6 +20,7 @@ import {
   MenuItem,
   MenuSeparator,
 } from "@stll/ui/menu";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { useLatest } from "@stll/ui/use-latest";
 import { cn } from "@stll/ui/utils";
 
@@ -171,22 +173,26 @@ export const CellMetadataFlags = ({
         <Tooltip
           content={t("workspaces.table.lock.lock")}
           render={
-            <button
+            <Button
               aria-label={t("workspaces.table.lock.lock")}
               className={cn(
                 CELL_CORNER_CLASS.start,
-                "bg-background/55 text-foreground-ghost focus-visible:ring-ring flex size-3 items-center justify-center rounded-full opacity-0 backdrop-blur-[2px] transition-opacity outline-none group-hover/cell-content:opacity-100 focus-visible:opacity-100 focus-visible:ring-1",
+                "flex opacity-0 transition-opacity group-hover/cell-content:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100",
               )}
               data-row-expansion-ignore
               onClick={(event) => {
                 event.stopPropagation();
                 setLocked(true);
               }}
-              type="button"
+              focusRing="inside"
+              shape="round"
+              variant="plain"
             />
           }
         >
-          <LockOpenIcon className="size-2.5" strokeWidth={2.5} />
+          <span className="text-foreground-ghost bg-background/55 flex size-3 items-center justify-center rounded-full backdrop-blur-[2px]">
+            <LockOpenIcon className="size-2.5" strokeWidth={2.5} />
+          </span>
         </Tooltip>
       )}
       {hasActiveFlag ? (
@@ -205,21 +211,25 @@ export const CellMetadataFlags = ({
             />
           }
           render={
-            <button
+            <Button
               aria-label={getFlagLabel(VERIFIED_FLAG_ID)}
               className={cn(
                 CELL_CORNER_CLASS.end,
-                "bg-background/55 text-foreground-ghost focus-visible:ring-ring flex size-3 items-center justify-center rounded-full opacity-0 backdrop-blur-[2px] transition-opacity outline-none group-hover/cell-content:opacity-100 focus-visible:opacity-100 focus-visible:ring-1",
+                "flex opacity-0 transition-opacity group-hover/cell-content:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100",
               )}
               onClick={(event) => {
                 event.stopPropagation();
                 toggleFlag(VERIFIED_FLAG_ID);
               }}
-              type="button"
+              focusRing="inside"
+              shape="round"
+              variant="plain"
             />
           }
         >
-          <CheckCircle2Icon className="size-2.5" strokeWidth={2.5} />
+          <span className="text-foreground-ghost bg-background/55 flex size-3 items-center justify-center rounded-full backdrop-blur-[2px]">
+            <CheckCircle2Icon className="size-2.5" strokeWidth={2.5} />
+          </span>
         </Tooltip>
       )}
     </>
@@ -254,20 +264,26 @@ const CellCornerFlag = ({ flags, metadata, onDrop }: CellCornerFlagProps) => {
             }
             key={flag.id}
             render={
-              <button
+              <Button
                 aria-label={getFlagLabel(flag.id)}
-                className="bg-background/55 focus-visible:ring-ring flex size-3 items-center justify-center rounded-full opacity-100 backdrop-blur-[2px] outline-none focus-visible:ring-1"
+                className="flex"
                 data-row-expansion-ignore
                 onClick={(event) => {
                   event.stopPropagation();
                   onDrop(flag.id);
                 }}
-                style={{ color: flag.color }}
-                type="button"
+                focusRing="inside"
+                shape="round"
+                variant="plain"
               />
             }
           >
-            <Icon className="size-2.5" strokeWidth={2.5} />
+            <span
+              className="bg-background/55 flex size-3 items-center justify-center rounded-full backdrop-blur-[2px]"
+              style={{ color: flag.color }}
+            >
+              <Icon className="size-2.5" strokeWidth={2.5} />
+            </span>
           </Tooltip>
         );
       })}
@@ -295,10 +311,10 @@ const CellLockBadge = ({ provenance, onUnlock }: CellLockBadgeProps) => {
         name={displayName}
       />
       <span className="min-w-0">
-        <span className="block truncate font-medium">
+        <TruncatedText className="font-medium" hint={false}>
           {t("workspaces.table.lock.locked")}
-        </span>
-        <span className="text-muted-foreground block truncate text-xs">
+        </TruncatedText>
+        <TruncatedText className="text-muted-foreground text-xs" hint={false}>
           {displayName ? (
             <>
               <BidiText>{displayName}</BidiText>
@@ -308,7 +324,7 @@ const CellLockBadge = ({ provenance, onUnlock }: CellLockBadgeProps) => {
           ) : (
             relativeTime
           )}
-        </span>
+        </TruncatedText>
       </span>
     </span>
   ) : (
@@ -320,21 +336,22 @@ const CellLockBadge = ({ provenance, onUnlock }: CellLockBadgeProps) => {
       className="max-w-72 text-wrap"
       content={tooltipContent}
       render={
-        <button
+        <Button
           aria-label={t("workspaces.table.lock.unlock")}
-          className={cn(
-            CELL_CORNER_CLASS.start,
-            "bg-background/55 text-foreground focus-visible:ring-ring animate-in fade-in-0 zoom-in-75 flex size-3 items-center justify-center rounded-full backdrop-blur-[2px] duration-150 outline-none focus-visible:ring-1 motion-reduce:animate-none",
-          )}
+          className={cn(CELL_CORNER_CLASS.start, "flex")}
           data-row-expansion-ignore
           onClick={(event) => {
             event.stopPropagation();
             onUnlock();
           }}
-          type="button"
+          focusRing="inside"
+          shape="round"
+          variant="plain"
         >
-          <LockIcon className="size-2.5" strokeWidth={2.5} />
-        </button>
+          <span className="text-foreground animate-in fade-in-0 zoom-in-75 bg-background/55 flex size-3 items-center justify-center rounded-full backdrop-blur-[2px] duration-150 motion-reduce:animate-none">
+            <LockIcon className="size-2.5" strokeWidth={2.5} />
+          </span>
+        </Button>
       }
     />
   );
@@ -366,8 +383,10 @@ const FlagProvenanceTooltip = ({
         name={displayName}
       />
       <span className="min-w-0">
-        <span className="block truncate font-medium">{label}</span>
-        <span className="text-muted-foreground block truncate text-xs">
+        <TruncatedText className="font-medium" hint={false}>
+          {label}
+        </TruncatedText>
+        <TruncatedText className="text-muted-foreground text-xs" hint={false}>
           {displayName ? (
             <>
               <BidiText>{displayName}</BidiText>
@@ -377,7 +396,7 @@ const FlagProvenanceTooltip = ({
           ) : (
             relativeTime
           )}
-        </span>
+        </TruncatedText>
       </span>
     </span>
   );
@@ -435,9 +454,9 @@ export const CellMetadataMenuSection = ({
           <MenuSeparator />
           <MenuItem className="min-h-7 py-0.5 text-sm" onClick={clearFlags}>
             <XIcon className="size-3.5 shrink-0 opacity-75" />
-            <span className="min-w-0 flex-1 truncate">
+            <TruncatedText className="flex-1">
               {t("workspaces.table.clearFlags")}
-            </span>
+            </TruncatedText>
           </MenuItem>
         </>
       )}

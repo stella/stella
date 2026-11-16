@@ -8,6 +8,7 @@ publish = false
 
 [lints.clippy]
 all = { level = "warn", priority = -1 }
+let_underscore_must_use = "deny"
 map_err_ignore = "deny"
 await_holding_lock = "deny"
 significant_drop_in_scrutinee = "deny"

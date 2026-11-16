@@ -645,6 +645,33 @@ describe("install-free invocation classification", () => {
       ...extra,
     });
 
+  test("checks Bun inside an assigned command substitution with environment assignments", () => {
+    const root = repository(
+      `jobs:
+  fixture:
+    steps:
+      - run: 'x=$(A="$a" B="$b" bun scripts/s.ts)'
+`,
+      { "scripts/s.ts": 'import "fixture-package";\n' },
+    );
+    const invocations = installFreeInvocations({
+      root,
+      workflow: CI_WORKFLOW,
+    });
+
+    expect(invocations).toHaveLength(1);
+    expect(invocations.at(0)?.classification).toEqual({
+      type: "files",
+      cwd: "",
+      entries: ["scripts/s.ts"],
+    });
+    expect(
+      invocations.flatMap((invocation) => invocationProblems(root, invocation)),
+    ).toEqual([
+      "fixture › step 1: bun scripts/s.ts: scripts/s.ts imports fixture-package",
+    ]);
+  });
+
   test("resolves pinned same-repository checkout paths and enforces sparse import availability", () => {
     const source = (options: string, condition = "") => `jobs:
   tooling:
@@ -1703,6 +1730,7 @@ test("everything CI runs without the dependency install imports only built-ins",
     "scripts/e2e-spec-shards-core.ts",
     "scripts/install-free-ci.test.ts",
     "scripts/ci-pr-jobs-cli.ts",
+    "scripts/ui-playground-shards.ts",
   ]) {
     expect(loaded).toContain(file);
   }

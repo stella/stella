@@ -5,6 +5,9 @@ import type { VariantProps } from "class-variance-authority";
 
 import { cn } from "../lib/utils";
 
+/** Preserve source word breaks while allowing oversized tokens to fit narrow panes. */
+export const LEGAL_TEXT_CLASS_NAME = "hyphens-manual wrap-anywhere";
+
 const proseVariants = cva("max-w-[80ch] leading-relaxed", {
   defaultVariants: { size: "default", tone: "default" },
   variants: {

@@ -67,7 +67,9 @@ export type CapabilityCatalogEntry = {
   access: "read" | "write";
   destructive: boolean;
   confirmation?: "required";
+  idempotency?: { type: "replay" };
   scope: string;
+  accountScope?: string;
   additionalScopes?: readonly string[];
   /** API-owned finite transport deadline for this generated capability command. */
   requestTimeoutMs?: number;
@@ -209,13 +211,11 @@ const propertyMap = (
   if (!isRecord(raw)) {
     return {};
   }
-  const out: Record<string, PropSchema> = {};
-  for (const [key, value] of Object.entries(raw)) {
-    if (isRecord(value)) {
-      out[key] = value;
-    }
-  }
-  return out;
+  return Object.fromEntries(
+    Object.entries(raw).filter((entry): entry is [string, PropSchema] =>
+      isRecord(entry[1]),
+    ),
+  );
 };
 
 const requiredSet = (schema: JsonSchema | undefined): ReadonlySet<string> => {
@@ -456,15 +456,12 @@ const resolveFlags = ({
  */
 const withoutFilelessField = (body: JsonSchema, field: string): JsonSchema => {
   const properties = body["properties"];
-  if (!isRecord(properties) || !(field in properties)) {
+  if (!isRecord(properties) || !Object.hasOwn(properties, field)) {
     return body;
   }
-  const kept: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(properties)) {
-    if (key !== field) {
-      kept[key] = value;
-    }
-  }
+  const kept = Object.fromEntries(
+    Object.entries(properties).filter(([key]) => key !== field),
+  );
   return { ...body, properties: kept };
 };
 
@@ -624,6 +621,9 @@ export const deriveCapabilityLeaf = (
       ...(paginationPart === undefined ? {} : { paginationPart }),
       ...(paginationPart === undefined ? {} : { itemsKey: "items" }),
       destructive: entry.destructive,
+      ...(entry.idempotency === undefined
+        ? {}
+        : { idempotency: entry.idempotency }),
       ...(entry.confirmation === undefined
         ? {}
         : { confirmation: entry.confirmation }),
@@ -663,7 +663,9 @@ const canInsert = (tree: RouteNode, path: readonly string[]): boolean => {
     if (segment === undefined) {
       return false;
     }
-    const child = node.children[segment];
+    const child = Object.hasOwn(node.children, segment)
+      ? node.children[segment]
+      : undefined;
     if (child === undefined) {
       return true; // rest of the path is fresh
     }
@@ -676,7 +678,8 @@ const canInsert = (tree: RouteNode, path: readonly string[]): boolean => {
   return (
     node.kind === "route" &&
     terminal !== undefined &&
-    node.children[terminal] === undefined
+    (!Object.hasOwn(node.children, terminal) ||
+      node.children[terminal] === undefined)
   );
 };
 
@@ -692,10 +695,17 @@ const insertAt = (
       throw new RouteGenerationError("capability insert passed through a leaf");
     }
     const segment = path[index] ?? "";
-    const child = node.children[segment];
+    const child = Object.hasOwn(node.children, segment)
+      ? node.children[segment]
+      : undefined;
     if (child === undefined) {
       const created: RouteNode = { kind: "route", children: {} };
-      node.children[segment] = created;
+      Object.defineProperty(node.children, segment, {
+        value: created,
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
       node = created;
       continue;
     }
@@ -705,7 +715,12 @@ const insertAt = (
   if (node.kind !== "route" || terminal === undefined) {
     throw new RouteGenerationError("capability insert has no terminal segment");
   }
-  node.children[terminal] = leaf;
+  Object.defineProperty(node.children, terminal, {
+    value: leaf,
+    enumerable: true,
+    configurable: true,
+    writable: true,
+  });
 };
 
 /**

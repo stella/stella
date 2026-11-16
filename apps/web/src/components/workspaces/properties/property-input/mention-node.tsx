@@ -4,6 +4,7 @@ import type { NodeViewProps } from "@tiptap/react";
 
 import { cn } from "@stll/ui/utils";
 
+import { usePropertyDisplayName } from "@/lib/workspaces/property-display-name";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 
 type MentionNodeProps = NodeViewProps & {
@@ -38,19 +39,20 @@ const readMentionAttrs = (value: unknown): MentionAttrs => {
 
 export const MentionNode = ({ workspaceId, ...props }: MentionNodeProps) => {
   const attributes = readMentionAttrs(props.node.attrs);
-  const { data: propertyName } = useSuspenseQuery({
+  const displayName = usePropertyDisplayName();
+  const { data: property } = useSuspenseQuery({
     ...propertiesOptions(workspaceId),
-    select: (data) => data.find((item) => item.id === attributes.id)?.name,
+    select: (data) => data.find((item) => item.id === attributes.id),
   });
 
   return (
     <NodeViewWrapper className="inline w-fit">
       <span
         className={cn(
-          "bg-info/10 text-info-foreground rounded px-1 py-0.5 font-medium",
+          "bg-info/10 text-info-foreground rounded-sm px-1 py-0.5 font-medium",
         )}
       >
-        {propertyName ?? attributes.label}
+        {property === undefined ? attributes.label : displayName(property)}
       </span>
     </NodeViewWrapper>
   );

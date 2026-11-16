@@ -112,8 +112,35 @@ const fixture = () => {
 };
 
 describe("generator output boundary", () => {
+  test("matches directory globs without admitting prefix siblings", () => {
+    expect(() =>
+      assertOutputPaths("migration-restamp", [
+        "apps/api/drizzle/x/migration.sql",
+      ]),
+    ).not.toThrow();
+    expect(() =>
+      assertOutputPaths("migration-restamp", [
+        "apps/api/drizzle-other/x/migration.sql",
+      ]),
+    ).toThrow("apps/api/drizzle-other/x/migration.sql");
+    expect(() =>
+      assertOutputPaths("migration-restamp", [".github/workflows/x.yml"]),
+    ).toThrow(".github/workflows/x.yml");
+  });
+
+  test("exact outputs refuse sibling files", () => {
+    expect(() =>
+      assertOutputPaths("query-plan-contracts", [
+        "apps/api/src/tests/query-plans/contracts.json.bak",
+      ]),
+    ).toThrow("contracts.json.bak");
+  });
+
   test("registers only the supported generator IDs", () => {
-    expect(Object.keys(PR_GENERATORS)).toEqual(["query-plan-contracts"]);
+    expect(Object.keys(PR_GENERATORS)).toEqual([
+      "migration-restamp",
+      "query-plan-contracts",
+    ]);
   });
 
   test("required services are checked against the actual job", () => {

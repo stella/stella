@@ -30,6 +30,18 @@ export const REGISTRATION_CHECKS = [
   {
     type: "pool",
     job: "ci-checks-policy",
+    name: "Web raw JSON API census self-test",
+    command: ["bun", "test", "scripts/web-raw-json-api-census.test.ts"],
+  },
+  {
+    type: "pool",
+    job: "ci-checks-policy",
+    name: "Web raw JSON API census",
+    command: ["bun", "scripts/web-raw-json-api-census.ts"],
+  },
+  {
+    type: "pool",
+    job: "ci-checks-policy",
     name: "Deployment feature guard",
     command: [
       "bun",

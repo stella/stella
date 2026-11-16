@@ -49,6 +49,7 @@ export const backfillLegislationWorkNamesPage = async ({
         id: legislationDocuments.id,
         country: legislationDocuments.country,
         title: legislationDocuments.title,
+        documentType: legislationDocuments.documentType,
       })
       .from(legislationDocuments)
       .where(after === null ? undefined : gt(legislationDocuments.id, after))

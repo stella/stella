@@ -803,6 +803,184 @@ describe("corpus generation operator command", () => {
     ]);
   });
 
+  test("parity reports, read only, what readers would lose to the candidate", async () => {
+    await db.insert(corpusIndexGenerations).values(
+      (
+        [
+          ["case_law_v7", "serving"],
+          ["case_law_v10", "building"],
+        ] as const
+      ).map(([generation, status]) => ({
+        family: "case_law" as const,
+        generation,
+        cluster: "q09" as const,
+        manifestDigest: corpusIndexManifestDigest(
+          requireCorpusIndexManifest("case_law", generation),
+        ),
+        status,
+      })),
+    );
+    // Served by case_law_v7, and still waiting for its first append in
+    // case_law_v10: a regression.
+    await seedConvergedProjection("case_law_v7");
+    await db.insert(corpusIndexProjectionStates).values({
+      family: "case_law",
+      generation: "case_law_v10",
+      entityId: PROJECTED_ENTITY_ID,
+      desiredAction: "upsert",
+      desiredEpoch: 1n,
+      desiredFingerprint: FINGERPRINT,
+      desiredIndexId: "case_law_v10_cze",
+    });
+    // Served by case_law_v7, with no case_law_v10 state at all.
+    const unseeded = toSafeId<"corpusIndexProjectionIntent">(
+      "0198e331-e578-7000-8000-000000000708",
+    );
+    await db.insert(corpusIndexProjectionIntents).values({
+      id: unseeded,
+      family: "case_law",
+      generation: "case_law_v7",
+      entityId: PENDING_ENTITY_ID,
+      epoch: 1n,
+      fingerprint: FINGERPRINT,
+      indexId: "case_law_v7_cs_sk",
+      status: "applied",
+      appendStartedAt: NOW,
+      appendCommittedAt: NOW,
+      expectedDocumentCount: 1,
+      appliedAt: NOW,
+    });
+    await db.insert(corpusIndexProjectionStates).values({
+      family: "case_law",
+      generation: "case_law_v7",
+      entityId: PENDING_ENTITY_ID,
+      desiredAction: "upsert",
+      desiredEpoch: 1n,
+      desiredFingerprint: FINGERPRINT,
+      desiredIndexId: "case_law_v7_cs_sk",
+      appliedAction: "upsert",
+      appliedEpoch: 1n,
+      appliedRevision: unseeded,
+      appliedFingerprint: FINGERPRINT,
+      appliedIndexId: "case_law_v7_cs_sk",
+      appliedAt: NOW,
+    });
+    const before = await registryRows();
+
+    // Both decisions have been served for months: neither is new enough to
+    // be the candidate's expected lag.
+    await db
+      .update(corpusIndexProjectionStates)
+      .set({ createdAt: NOW })
+      .where(eq(corpusIndexProjectionStates.generation, "case_law_v7"));
+    const report = await run({
+      args: caseLaw("parity", "case_law_v10", "--list"),
+    });
+    expect(report.err).toBe("");
+    // Regressions remain: a distinct exit code a wrapper can gate on.
+    expect(report.code).toBe(3);
+    expect(report.out).toContain(
+      "checked: compared with case_law_v7, which serves case_law",
+    );
+    expect(report.out).toContain(
+      "checked: every serving state walked (2); 1 without a candidate state",
+    );
+    expect(report.out).toContain("not shown or stale (exact): 1");
+    expect(report.out).toContain("  case_law_v10_cze not_shown 1");
+    expect(report.out).toContain(
+      `  not_shown: ${PROJECTED_ENTITY_ID} case_law_v10_cze, serving epoch 1, candidate epoch none`,
+    );
+    expect(report.out).toContain(`  no state: ${PENDING_ENTITY_ID}`);
+    expect(report.out).toContain(
+      "verdict: regressions remain (1 without a candidate state, 1 not shown or stale)",
+    );
+    expect(await registryRows()).toEqual(before);
+    expect(await auditCounts()).toEqual([]);
+
+    // Without --list no decision is printed by id.
+    const summary = await run({ args: caseLaw("parity", "case_law_v10") });
+    expect(summary.code).toBe(3);
+    expect(summary.out).not.toContain(PENDING_ENTITY_ID);
+
+    // Once the candidate holds and shows both decisions, the verdict is proven.
+    await db
+      .delete(corpusIndexProjectionStates)
+      .where(eq(corpusIndexProjectionStates.generation, "case_law_v10"));
+    for (const [entityId, revision] of [
+      [PROJECTED_ENTITY_ID, "0198e331-e578-7000-8000-000000000710"],
+      [PENDING_ENTITY_ID, "0198e331-e578-7000-8000-000000000711"],
+    ] as const) {
+      const id = toSafeId<"corpusIndexProjectionIntent">(revision);
+      // db-await-in-loop: two decisions of the fixture
+      await db.insert(corpusIndexProjectionIntents).values({
+        id,
+        family: "case_law",
+        generation: "case_law_v10",
+        entityId,
+        epoch: 1n,
+        fingerprint: FINGERPRINT,
+        indexId: "case_law_v10_cze",
+        status: "applied",
+        appendStartedAt: NOW,
+        appendCommittedAt: NOW,
+        expectedDocumentCount: 1,
+        appliedAt: NOW,
+      });
+      // db-await-in-loop: as above
+      await db.insert(corpusIndexProjectionStates).values({
+        family: "case_law",
+        generation: "case_law_v10",
+        entityId,
+        desiredAction: "upsert",
+        desiredEpoch: 1n,
+        desiredFingerprint: FINGERPRINT,
+        desiredIndexId: "case_law_v10_cze",
+        appliedAction: "upsert",
+        appliedEpoch: 1n,
+        appliedRevision: id,
+        appliedFingerprint: FINGERPRINT,
+        appliedIndexId: "case_law_v10_cze",
+        appliedAt: NOW,
+      });
+    }
+    const proven = await run({ args: caseLaw("parity", "case_law_v10") });
+    expect(proven.out).toContain("verdict: no regression");
+    expect(proven.code).toBe(0);
+
+    // The same family, with a walk that may not read every copy, decides
+    // nothing: an empty reading is not a proof.
+    const budgeted = await run({
+      args: caseLaw("parity", "case_law_v10", "--coverage-pages", "0"),
+    });
+    expect(budgeted.out).toContain("resume with --coverage-from start");
+    expect(budgeted.out).toContain("verdict: undecided (coverage_incomplete)");
+    expect(budgeted.code).toBe(4);
+  });
+
+  test("parity is refused for a family nothing serves, or for the serving generation itself", async () => {
+    await db.insert(corpusIndexGenerations).values({
+      family: "case_law",
+      generation: "case_law_v10",
+      cluster: "q09",
+      manifestDigest: corpusIndexManifestDigest(
+        requireCorpusIndexManifest("case_law", "case_law_v10"),
+      ),
+      status: "building",
+    });
+    const absent = await run({ args: caseLaw("parity", "case_law_v10") });
+    expect(absent.code).toBe(1);
+    expect(absent.err).toContain("refused (CorpusIndexFlipPairRefusedError)");
+    expect(absent.err).toContain("No generation serves case_law");
+
+    await db
+      .update(corpusIndexGenerations)
+      .set({ status: "serving" })
+      .where(eq(corpusIndexGenerations.generation, "case_law_v10"));
+    const itself = await run({ args: caseLaw("parity", "case_law_v10") });
+    expect(itself.code).toBe(1);
+    expect(itself.err).toContain("refused (CorpusIndexFlipPairRefusedError)");
+  });
+
   test("malformed command lines are refused with the usage", async () => {
     for (const args of [
       [],
@@ -811,6 +989,14 @@ describe("corpus generation operator command", () => {
       ["serve", "--family", "statutes", "--generation", "case_law_v7"],
       ["serve", "--family", "case_law"],
       caseLaw("serve", "case_law_v7", "--limit", "1"),
+      caseLaw("serve", "case_law_v7", "--list"),
+      caseLaw("parity", "case_law_v10", "--apply"),
+      caseLaw("parity", "case_law_v10", "--exempt-minutes", "1441"),
+      caseLaw("parity", "case_law_v10", "--exempt-minutes", "-1"),
+      caseLaw("parity", "case_law_v10", "--coverage-pages", "20001"),
+      caseLaw("parity", "case_law_v10", "--coverage-from", "case_law_v7_cs_sk"),
+      caseLaw("parity", "case_law_v10", "--coverage-from", "end"),
+      ["status", "--list"],
     ]) {
       // db-await-in-loop: parsing refuses before any database is opened
       const refused = await run({

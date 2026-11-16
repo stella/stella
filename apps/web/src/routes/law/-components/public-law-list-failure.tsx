@@ -11,7 +11,10 @@ import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { RecoverableErrorStatus } from "@/components/recoverable-error-status";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
-import { reportErrorOnce } from "@/lib/analytics/reported-error";
+import {
+  leaveErrorToBoundary,
+  reportErrorOnce,
+} from "@/lib/analytics/reported-error";
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { publicLawFailureDisposition } from "@/lib/public-law-api";
@@ -50,6 +53,7 @@ export const PublicLawResultsBoundary = ({
     key={searchKey}
     getResetKey={() => resetKeyOf(resetOn)}
     errorComponent={PublicLawListFailure}
+    onCatch={leaveErrorToBoundary}
   >
     {children}
   </CatchBoundary>

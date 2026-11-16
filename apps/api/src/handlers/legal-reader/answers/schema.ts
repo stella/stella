@@ -29,7 +29,7 @@ const question = v.pipe(
 const createFields = {
   ...modelOptions,
   decisionId: resourceIdSchema("caseLawDecision"),
-  locale,
+  locale: v.exactOptional(locale),
   // Each quote code unit and span consumes at least one JSON wire byte, so
   // these transport-derived bounds admit every selection the server can read.
   // Every span must also match its paragraph before anything is stored.
@@ -59,10 +59,13 @@ export const createAnswerBodySchema = v.union([
 ]);
 export const followUpBodySchema = v.strictObject({
   ...modelOptions,
-  locale,
+  locale: v.exactOptional(locale),
   question,
 });
-export const regenerateBodySchema = v.strictObject({ ...modelOptions, locale });
+export const regenerateBodySchema = v.strictObject({
+  ...modelOptions,
+  locale: v.exactOptional(locale),
+});
 export const answerParamsSchema = v.object({
   answerId: resourceIdSchema("legalReaderAnswer"),
 });

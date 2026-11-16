@@ -246,6 +246,31 @@ const MAX_BYTES = 5 * 1024 * 1024;
 // cannot route through the error-capture channel, which logs back through
 // here), so the chain never rejects either.
 let devLogWrites: Promise<void> = Promise.resolve();
+let observeDevErrorRecord: ((record: unknown) => void) | null = null;
+
+type DevErrorJsonlObserver = {
+  drain: () => Promise<void>;
+  restore: () => void;
+};
+
+/**
+ * In-memory test sink attached at the final JSONL record boundary. Writes
+ * queued before installation settle first, so only later records reach it.
+ */
+export const installDevErrorJsonlObserverForTest = async (
+  observer: (record: unknown) => void,
+): Promise<DevErrorJsonlObserver> => {
+  await devLogWrites;
+  observeDevErrorRecord = observer;
+  return {
+    drain: async () => {
+      await devLogWrites;
+    },
+    restore: () => {
+      observeDevErrorRecord = null;
+    },
+  };
+};
 
 let dirReady: Promise<void> | null = null;
 const ensureLogDir = async (): Promise<void> => {
@@ -315,6 +340,8 @@ const appendDevErrorJsonl = async ({
       ...(context && Object.keys(context).length > 0 ? { context } : {}),
       error: serializeDevError(error),
     };
+
+    observeDevErrorRecord?.(record);
 
     await appendFile(DEV_LOG_PATH, `${JSON.stringify(record)}\n`);
   } catch {

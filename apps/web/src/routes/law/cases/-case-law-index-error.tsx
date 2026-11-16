@@ -12,6 +12,7 @@ import { QueryViewFeedback } from "@/components/query-view-feedback";
 import {
   activeCaseLawFilterCount,
   decisionDateRange,
+  dropCaseLawFilters,
   validDecisionDate,
   withQuery,
 } from "@/features/case-law/case-law-index-search.logic";
@@ -84,14 +85,21 @@ export const PublicCaseLawIndexError = (props: ErrorComponentProps) => {
         facets={facets}
         onDateRangeChange={(range) =>
           recoverSearch({
-            ...withQuery(search, query),
+            ...dropCaseLawFilters(withQuery(search, query), [
+              "from",
+              "to",
+              "year",
+            ]),
             from: validDecisionDate(range.from),
             to: validDecisionDate(range.to),
-            year: undefined,
           })
         }
         onSelect={(key, value) =>
-          recoverSearch({ ...withQuery(search, query), [key]: value })
+          recoverSearch(
+            value === undefined
+              ? dropCaseLawFilters(withQuery(search, query), [key])
+              : { ...withQuery(search, query), [key]: value },
+          )
         }
         selection={{
           court: search.court,

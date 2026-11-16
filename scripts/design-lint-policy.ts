@@ -132,13 +132,39 @@ export const BUILTIN_LINT_BACKLOG_RULES = [
 type BuiltinLintBacklogRule = (typeof BUILTIN_LINT_BACKLOG_RULES)[number];
 
 /**
+ * The `no-native-ui` rules (one per `@stll/ui` component that wraps native
+ * markup, from `.oxlint-plugins/no-native-ui-registry.ts`) that product code
+ * still breaks. A rule with no offenders is not listed: it is an error across
+ * its whole scope.
+ */
+const NO_NATIVE_UI_BACKLOG_RULES = [
+  "no-native-ui/no-native-accordion",
+  "no-native-ui/no-native-button",
+  "no-native-ui/no-native-checkbox",
+  "no-native-ui/no-native-details-grid",
+  "no-native-ui/no-native-dialog",
+  "no-native-ui/no-native-form",
+  "no-native-ui/no-native-input",
+  "no-native-ui/no-native-label",
+  "no-native-ui/no-native-menu",
+  "no-native-ui/no-native-number-input",
+  "no-native-ui/no-native-secret-input",
+  "no-native-ui/no-native-select",
+  "no-native-ui/no-native-separator",
+  "no-native-ui/no-native-table",
+  "no-native-ui/no-native-textarea",
+  "no-native-ui/no-native-tooltip",
+] as const;
+
+/**
  * Rules whose merged-code debt is carried by `scripts/design-lint-baseline.json`.
  *
  * `require-bounded-request-schema` and `no-unbounded-response-body` are not
  * design rules: they are API size-bound guards whose findings need scope
  * analysis, so no lexical `scripts/ratchet.ts` counter can measure them.
  * `no-computed-key-record-assignment` resolves its receiver by scope for the
- * same reason. They, and the function shape limits above, ride this per-file,
+ * same reason, and `exhaustive-union-map` finds a map's lookups through the
+ * same scope analysis. They, and the function shape limits above, ride this per-file,
  * oxlint-measured backlog because it is the one debt mechanism that counts
  * with the rule itself.
  */
@@ -146,12 +172,15 @@ export const DESIGN_LINT_BACKLOG_RULES = [
   "shadcn/no-restyle",
   "shadcn/no-arbitrary-values",
   "no-raw-overflow-scroll/no-raw-overflow-scroll",
+  "no-raw-context-menu/no-raw-context-menu",
   "no-imported-class-constant/no-imported-class-constant",
   "require-bounded-request-schema/require-bounded-request-schema",
   "no-unbounded-response-body/no-unbounded-response-body",
   "no-computed-key-record-assignment/no-computed-key-record-assignment",
+  "exhaustive-union-map/exhaustive-union-map",
   "no-direct-status-set/no-direct-status-set",
   "require-polite-publisher-fetch/require-polite-publisher-fetch",
+  ...NO_NATIVE_UI_BACKLOG_RULES,
   ...SIZE_LINT_BACKLOG_RULES,
   ...BUILTIN_LINT_BACKLOG_RULES,
 ] as const;
@@ -279,6 +308,14 @@ export const SHADCN_LINT_RULES = {
           pattern: "^(?:BidiText|UserText)$",
           allow: ["layout", "typography", "color"],
         },
+        // Truncation around the caller's own element (a span, a paragraph, a
+        // chip): the caller owns how it looks, the component owns only how
+        // the text is cut, so it takes every class but the ones that cut.
+        {
+          pattern: "^TruncatedText$",
+          allow: ["*"],
+          deny: ["truncate", "text-ellipsis", "text-clip", "line-clamp-*"],
+        },
         // A placeholder mirrors the shape of the content it stands in for.
         { pattern: "^Skeleton$", allow: ["layout", "shape"] },
         // RTL-flipping wrapper around an icon: the caller owns the icon's
@@ -346,6 +383,19 @@ export const SHADCN_LINT_SETTINGS = {
   note: "Design rules: DESIGN.md, Component Conventions.",
 } as const;
 
+/**
+ * Third-party brand artwork (file-type, sign-in provider, AI provider, and
+ * chat-client logos and window mockups), drawn in the owner's colours rather
+ * than the theme's. Both the SVG attribute check below and
+ * `no-raw-color-literals` exempt exactly these files.
+ */
+export const THIRD_PARTY_ARTWORK_FILES = [
+  "apps/landing/src/components/react/previews/CliMcpPreview.tsx",
+  "apps/web/src/components/ai-provider-icons.tsx",
+  "apps/web/src/components/auth/sign-in-brand-marks.tsx",
+  "packages/ui/src/components/document-mark.shared.ts",
+] as const;
+
 export const SHADCN_LINT_POLICY_OVERRIDES = [
   {
     // Plugin fixtures are inputs for the local rules' tests, written to
@@ -374,14 +424,8 @@ export const SHADCN_LINT_POLICY_OVERRIDES = [
     rules: { "shadcn/no-arbitrary-values": "off" },
   },
   {
-    // Third-party brand artwork (file-type, sign-in provider, AI provider,
-    // and chat-client logos) is drawn in the owner's colours, not the theme's.
-    files: [
-      "apps/landing/src/components/react/previews/CliMcpPreview.tsx",
-      "apps/web/src/components/ai-provider-icons.tsx",
-      "apps/web/src/components/auth/sign-in-panel.tsx",
-      "apps/web/src/components/document-icon.tsx",
-    ],
+    // Third-party brand artwork is drawn in the owner's colours, not the theme's.
+    files: [...THIRD_PARTY_ARTWORK_FILES],
     rules: { "shadcn/no-raw-colors": "off" },
   },
 ] as const satisfies readonly OxlintOverride[];
@@ -404,12 +448,17 @@ export const DESIGN_LINT_MEASURED_RULES = {
   "shadcn/no-unknown-classes": "off",
   "shadcn/require-static-classes": "off",
   "no-raw-overflow-scroll/no-raw-overflow-scroll": "off",
+  "no-raw-context-menu/no-raw-context-menu": "off",
   "no-imported-class-constant/no-imported-class-constant": "off",
   "require-bounded-request-schema/require-bounded-request-schema": "off",
   "no-unbounded-response-body/no-unbounded-response-body": "off",
   "no-computed-key-record-assignment/no-computed-key-record-assignment": "off",
+  "exhaustive-union-map/exhaustive-union-map": "off",
   "no-direct-status-set/no-direct-status-set": "off",
   "require-polite-publisher-fetch/require-polite-publisher-fetch": "off",
+  ...Object.fromEntries(
+    NO_NATIVE_UI_BACKLOG_RULES.map((rule) => [rule, "off"] as const),
+  ),
 } satisfies DummyRuleMap &
   Record<keyof typeof SHADCN_LINT_RULES, DummyRuleMap[string]>;
 

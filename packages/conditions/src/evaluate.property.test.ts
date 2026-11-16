@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import * as v from "valibot";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   type ConditionValue,
@@ -123,19 +123,21 @@ const negate = (child: ConditionNode): ConditionNode => ({
 
 describe("evaluator invariants (property-based)", () => {
   test("every generated node is schema-valid and evaluation is total", () => {
-    fc.assert(
+    assertProperty(
+      "every generated node is schema-valid and evaluation is total",
       fc.property(nodeArb, dataArb, (node, data) => {
         expect(v.is(conditionNodeSchema, node)).toBe(true);
         expect(typeof evaluateCondition(node, makeResolver(data))).toBe(
           "boolean",
         );
       }),
-      propertyConfig(),
+      {},
     );
   });
 
   test("a group combinator equals every/some over its children", () => {
-    fc.assert(
+    assertProperty(
+      "a group combinator equals every/some over its children",
       fc.property(
         fc.array(nodeArb, { maxLength: 4 }),
         fc.constantFrom<Combinator>("and", "or"),
@@ -150,24 +152,26 @@ describe("evaluator invariants (property-based)", () => {
           expect(evaluateCondition(group, resolve)).toBe(expected);
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 
   test("double negation is identity", () => {
-    fc.assert(
+    assertProperty(
+      "double negation is identity",
       fc.property(nodeArb, dataArb, (node, data) => {
         const resolve = makeResolver(data);
         expect(evaluateCondition(negate(negate(node)), resolve)).toBe(
           evaluateCondition(node, resolve),
         );
       }),
-      propertyConfig(),
+      {},
     );
   });
 
   test("neq is the negation of eq for the same operands", () => {
-    fc.assert(
+    assertProperty(
+      "neq is the negation of eq for the same operands",
       fc.property(operandArb, operandArb, dataArb, (left, right, data) => {
         const resolve = makeResolver(data);
         const eqNode: ConditionNode = {
@@ -186,12 +190,13 @@ describe("evaluator invariants (property-based)", () => {
           !evaluateCondition(neqNode, resolve),
         );
       }),
-      propertyConfig(),
+      {},
     );
   });
 
   test("not_contains is the negation of contains", () => {
-    fc.assert(
+    assertProperty(
+      "not_contains is the negation of contains",
       fc.property(
         refOperandArb,
         fc.string(),
@@ -215,12 +220,13 @@ describe("evaluator invariants (property-based)", () => {
           );
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 
   test("is_not_empty is the negation of is_empty", () => {
-    fc.assert(
+    assertProperty(
+      "is_not_empty is the negation of is_empty",
       fc.property(refOperandArb, dataArb, (operand, data) => {
         const resolve = makeResolver(data);
         const empty: ConditionNode = {
@@ -237,7 +243,7 @@ describe("evaluator invariants (property-based)", () => {
           !evaluateCondition(notEmpty, resolve),
         );
       }),
-      propertyConfig(),
+      {},
     );
   });
 
@@ -247,7 +253,8 @@ describe("evaluator invariants (property-based)", () => {
   // result (e.g. gt/lt always false for dates), so this is what actually pins
   // gt/lt/gte/lte semantics — and what would have caught the ISO-date bug.
   test("ordered comparisons are reflexive for any non-blank literal value", () => {
-    fc.assert(
+    assertProperty(
+      "ordered comparisons are reflexive for any non-blank literal value",
       fc.property(
         // Exclude the empty string: a blank value is the "not comparable"
         // sentinel and is intentionally excluded from ordered comparisons.
@@ -266,7 +273,7 @@ describe("evaluator invariants (property-based)", () => {
           expect(evaluateCondition(cmp("lt"), resolve)).toBe(false);
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 
@@ -274,7 +281,8 @@ describe("evaluator invariants (property-based)", () => {
   // comparable, so no ordered operator may match it against a real literal.
   // The lexicographic fallback would otherwise rank "" before every date.
   test("an absent value never satisfies an ordered comparison", () => {
-    fc.assert(
+    assertProperty(
+      "an absent value never satisfies an ordered comparison",
       fc.property(
         fc.constantFrom<"gt" | "lt" | "gte" | "lte">("gt", "lt", "gte", "lte"),
         fc.oneof(fc.string({ minLength: 1 }), fc.integer()),
@@ -288,7 +296,7 @@ describe("evaluator invariants (property-based)", () => {
           expect(evaluateCondition(node, makeResolver({}))).toBe(false);
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 });

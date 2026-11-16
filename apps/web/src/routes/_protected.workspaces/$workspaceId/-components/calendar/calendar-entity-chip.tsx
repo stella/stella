@@ -6,8 +6,9 @@ import { useTranslations } from "use-intl";
 
 import { isTaskStatus } from "@stll/api-contract";
 import type { TaskStatus } from "@stll/api-contract";
-import { CalendarEntryButton } from "@stll/ui/calendar";
+import { CalendarEntryButton } from "@stll/ui/calendar-primitives";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
@@ -104,9 +105,8 @@ export const CalendarEntityChip = ({
     <CalendarEntryButton
       ref={dragRef}
       className={cn(
-        "bg-card w-full rounded border border-s-2 px-1.5 py-0.5",
+        "bg-card w-full rounded-sm border border-s-2 px-1.5 py-0.5",
         "hover:bg-accent text-start text-xs",
-        "truncate",
         isEditable && "cursor-grab active:cursor-grabbing",
         status === null
           ? TASK_STATUS_BORDER_COLORS.open
@@ -115,7 +115,7 @@ export const CalendarEntityChip = ({
       onClick={containedEventHandler(handleClick)}
     >
       <span className="flex min-w-0 items-center gap-1">
-        <span className="truncate">{name}</span>
+        <TruncatedText hint={false}>{name}</TruncatedText>
       </span>
     </CalendarEntryButton>
   );

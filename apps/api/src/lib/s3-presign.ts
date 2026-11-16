@@ -1,3 +1,11 @@
+import {
+  CopyObjectCommand,
+  GetObjectCommand,
+  type GetObjectCommandOutput,
+  HeadObjectCommand,
+  PutObjectCommand,
+  S3Client as AwsS3Client,
+} from "@aws-sdk/client-s3";
 /**
  * AWS SDK v3 wrapper for presigned PUT uploads and the matching
  * post-upload verification calls.
@@ -20,20 +28,14 @@
  * presigned URLs can then be issued through an STS session policy
  * scoped to one organization/workspace key prefix.
  */
-
-import {
-  CopyObjectCommand,
-  GetObjectCommand,
-  HeadObjectCommand,
-  PutObjectCommand,
-  S3Client as AwsS3Client,
-} from "@aws-sdk/client-s3";
 import { AssumeRoleCommand, STSClient } from "@aws-sdk/client-sts";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { Result, TaggedError } from "better-result";
+import { TransformStream } from "node:stream/web";
 
 import { fetchWithTimeout } from "@stll/fetch";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
+import { readCappedBytes } from "@stll/skills/streaming";
 import { Temporal } from "@stll/time";
 
 import { envBase } from "@/api/env-base";
@@ -41,6 +43,8 @@ import { PRIVATE_CACHE_CONTROL } from "@/api/http/cache";
 import { detached } from "@/api/lib/analytics/capture";
 import { contentDisposition } from "@/api/lib/content-disposition";
 import { markContentDeliveryIntent } from "@/api/lib/files/content-delivery";
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
+import { recordReadWork } from "@/api/lib/observability/request-work";
 import {
   isMissingS3ObjectError,
   resolveS3Credentials,
@@ -393,7 +397,7 @@ let scopedS3ClientFactory: ScopedS3ClientFactory = buildScopedAwsS3Client;
 
 const disposeScopedClient = (entry: ScopedClientCacheEntry): void => {
   detached(
-    entry.promise.then(({ client }) => client.destroy()),
+    async () => entry.promise.then(({ client }) => client.destroy()),
     "s3-presign.dispose-scoped-client",
   );
 };
@@ -470,11 +474,12 @@ const getScopedAwsS3Client = async (
     throw error;
   });
   detached(
-    entry.promise.then((cached) => {
-      entry.cached = cached;
-      pruneScopedClientCache();
-      return undefined;
-    }),
+    async () =>
+      entry.promise.then((cached) => {
+        entry.cached = cached;
+        pruneScopedClientCache();
+        return undefined;
+      }),
     "s3-presign.cache-entry-settled",
   );
   _scopedClientCache.set(cacheKey, entry);
@@ -552,6 +557,55 @@ export const createTenantS3RequestSignal = (
   timeoutMs = AWS_SDK_REQUEST_TIMEOUT_MS,
 ): AbortSignal => AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]);
 
+const readTenantObjectBody = async ({
+  Body,
+  ContentLength,
+}: GetObjectCommandOutput): Promise<Result<Uint8Array, S3PresignError>> => {
+  if (
+    ContentLength === undefined ||
+    ContentLength > FILE_SIZE_LIMIT_BYTES.document
+  ) {
+    return Result.err(
+      new S3PresignError({
+        message: "S3 object length does not satisfy the document byte limit",
+      }),
+    );
+  }
+  if (!Body) {
+    return Result.err(
+      new S3PresignError({
+        message: "S3 returned an object without a response body",
+      }),
+    );
+  }
+  const body: ReadableStream<unknown> = Body.transformToWebStream();
+  const bytes = await readCappedBytes(
+    body.pipeThrough(
+      new TransformStream<unknown, Uint8Array>({
+        transform(chunk, controller) {
+          if (chunk instanceof Uint8Array) {
+            controller.enqueue(chunk);
+          } else {
+            controller.error(
+              new S3PresignError({
+                message: "S3 returned an invalid response chunk",
+              }),
+            );
+          }
+        },
+      }),
+    ),
+    FILE_SIZE_LIMIT_BYTES.document,
+  );
+  return bytes === null
+    ? Result.err(
+        new S3PresignError({
+          message: "S3 object body exceeds the document byte limit",
+        }),
+      )
+    : Result.ok(bytes);
+};
+
 const DEFAULT_TENANT_S3_OPERATION_HOOKS: TenantS3OperationHooks = {
   resolveClient: getTenantAwsS3Client,
   headObjectSize: async (client, command, signal) => {
@@ -561,15 +615,22 @@ const DEFAULT_TENANT_S3_OPERATION_HOOKS: TenantS3OperationHooks = {
     return response.ContentLength ?? null;
   },
   readObject: async (client, command, signal) => {
-    const response = await client.send(command, {
-      abortSignal: createTenantS3RequestSignal(signal),
-    });
-    if (!response.Body) {
-      throw new S3PresignError({
-        message: "S3 returned an object without a response body",
+    const operation = new AbortController();
+    try {
+      const response = await client.send(command, {
+        abortSignal: createTenantS3RequestSignal(
+          AbortSignal.any([signal, operation.signal]),
+        ),
       });
+      const body = await readTenantObjectBody(response);
+      if (Result.isError(body)) {
+        throw body.error;
+      }
+      return body.value;
+    } finally {
+      // Header refusal must close the unread body without aborting its caller.
+      operation.abort();
     }
-    return await response.Body.transformToByteArray();
   },
   writeObject: async (client, command, signal) => {
     await client.send(command, {
@@ -718,6 +779,7 @@ export const readTenantS3ArrayBuffer = async ({
       ),
     scope,
   });
+  recordReadWork("storageReadBytes", bytes.byteLength);
   if (bytes.buffer instanceof ArrayBuffer) {
     return bytes.buffer.slice(
       bytes.byteOffset,

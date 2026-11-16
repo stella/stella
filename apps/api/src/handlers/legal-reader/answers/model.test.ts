@@ -24,6 +24,7 @@ type FixtureMode =
 type AdapterFixtureOptions = {
   mode: FixtureMode;
   turns: number[];
+  threadIds: string[];
   toolCalls: number;
   toolResults: unknown[];
 };
@@ -32,6 +33,7 @@ type AdapterFixtureOptions = {
 const adapterFixture = ({
   mode,
   turns,
+  threadIds,
   toolCalls,
   toolResults,
 }: AdapterFixtureOptions) =>
@@ -50,9 +52,10 @@ const adapterFixture = ({
     async *chatStream({ runId, threadId, messages }) {
       const iteration = turns.length + 1;
       turns.push(iteration);
+      threadIds.push(threadId);
       const run = {
         runId: runId ?? "fixture-run",
-        threadId: threadId ?? "fixture-thread",
+        threadId,
       };
       yield { type: EventType.RUN_STARTED, ...run } satisfies StreamChunk;
       if (mode === "error") {
@@ -200,10 +203,11 @@ const modelFixture = ({
   keySource = "instance",
 }: ModelFixtureOptions) => {
   const turns: number[] = [];
+  const threadIds: string[] = [];
   const toolResults: unknown[] = [];
   const events: ServerAnalyticsCaptureParams[] = [];
   const model = {
-    adapter: adapterFixture({ mode, turns, toolCalls, toolResults }),
+    adapter: adapterFixture({ mode, turns, threadIds, toolCalls, toolResults }),
     keySource,
     modelId: "gpt-5.5",
     modelOptions: {},
@@ -216,7 +220,7 @@ const modelFixture = ({
     identifyOrganizationGroup: () => undefined,
     flush: async () => undefined,
   } satisfies ServerAnalytics;
-  return { model, turns, toolResults, events, analytics };
+  return { model, turns, threadIds, toolResults, events, analytics };
 };
 
 describe("reader answer real SDK model boundary", () => {
@@ -297,6 +301,7 @@ describe("reader answer real SDK model boundary", () => {
       ]);
     }
     expect(result.value.content).toBe(deltas.join(""));
+    expect(fixture.threadIds).toEqual([input.answerId, input.answerId]);
     expect(result.value.content).toBe("Context. Explained.");
     expect(result.value.model).toBe("gpt-5.5");
     expect(result.value.usage).toEqual({

@@ -23,7 +23,11 @@ import path from "node:path";
 
 import { sha256Hex } from "@stll/sha256/bun";
 
-import { APP_VERSION } from "../app.config";
+import {
+  APP_VERSION,
+  BAR_GLYPHS_FOLDER,
+  SHARE_EXTENSION_FOLDER,
+} from "../app.config";
 
 export const NATIVE_PLATFORMS = ["ios", "android"] as const;
 
@@ -36,9 +40,9 @@ const APP_ROOT = path.resolve(import.meta.dir, "..");
  * this fingerprint itself, so neither may feed it; everything else in the app
  * config does, the variant's name, identifier and scheme included.
  */
-// The flags are distinct bits, so their sum is the combined mask.
-export const FINGERPRINT_SOURCE_SKIPS: number =
-  SourceSkips.ExpoConfigVersions + SourceSkips.ExpoConfigRuntimeVersionIfString;
+export const FINGERPRINT_SOURCE_SKIPS: SourceSkips =
+  // oxlint-disable-next-line no-bitwise -- SourceSkips is a flag enum: its members are bits, combined into one mask.
+  SourceSkips.ExpoConfigVersions | SourceSkips.ExpoConfigRuntimeVersionIfString;
 
 /**
  * The part of the store version an update may not cross: the major version,
@@ -95,6 +99,35 @@ const createNativeFingerprint = async (
         id: "releaseLine",
         contents: releaseLine(APP_VERSION),
         reasons: ["releaseLine"],
+      },
+      ...(platform === "ios"
+        ? [
+            "metro.config.cjs",
+            "widgets.metro.config.cjs",
+            "scripts/build-widget-bundle.mjs",
+            "scripts/xcode-widget-bundle.sh",
+          ].map((filePath) => ({
+            type: "file" as const,
+            filePath,
+            reasons: ["widgetBundle"],
+          }))
+        : []),
+      // The share extension's sources, copied into the native project at
+      // prebuild, out of the config's sight.
+      ...(platform === "ios"
+        ? [
+            {
+              type: "dir" as const,
+              filePath: SHARE_EXTENSION_FOLDER,
+              reasons: ["shareExtension"],
+            },
+          ]
+        : []),
+      // Copied into the asset catalog at prebuild, out of the config's sight.
+      {
+        type: "dir",
+        filePath: BAR_GLYPHS_FOLDER,
+        reasons: ["barGlyphs"],
       },
     ],
   });

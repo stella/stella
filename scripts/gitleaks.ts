@@ -13,7 +13,11 @@ import path from "node:path";
 
 import { sha256Hex } from "@stll/sha256/node";
 
-import { GITLEAKS_SHA256, GITLEAKS_VERSION } from "./gitleaks-pins";
+import {
+  GITLEAKS_BINARY_SHA256,
+  GITLEAKS_SHA256,
+  GITLEAKS_VERSION,
+} from "./gitleaks-pins";
 
 class GitleaksProvisionError extends TaggedError("GitleaksProvisionError")<{
   message: string;
@@ -68,9 +72,18 @@ type ResolveGitleaksOptions = {
   download?: (url: string) => Uint8Array | Promise<Uint8Array>;
   // Tests supply a local fixture archive and its digest; the hook always uses repo pins.
   checksums?: Readonly<Record<keyof typeof GITLEAKS_SHA256, string>>;
+  binaryChecksums?: Readonly<Record<keyof typeof GITLEAKS_SHA256, string>>;
 };
 
-/** Cached archives are reverified; extracted executables are never trusted on their own. */
+const hasPinnedBytes = (
+  binary: string | null,
+  digest: string,
+): binary is string =>
+  binary !== null &&
+  existsSync(binary) &&
+  sha256Hex(readFileSync(binary)) === digest;
+
+/** Cached archives are reverified; an executable is trusted only by its pinned release bytes. */
 export const resolveGitleaks = async ({
   platform = process.platform,
   arch = process.arch,
@@ -78,6 +91,7 @@ export const resolveGitleaks = async ({
   pathBinary = Bun.which("gitleaks"),
   download = downloadArchive,
   checksums = GITLEAKS_SHA256,
+  binaryChecksums = GITLEAKS_BINARY_SHA256,
 }: ResolveGitleaksOptions = {}) =>
   Result.tryPromise({
     try: async () => {
@@ -97,6 +111,15 @@ export const resolveGitleaks = async ({
         GITLEAKS_VERSION,
         `${platform}-${arch}`,
       );
+      // An installed or cached executable with the pinned release bytes needs
+      // no archive: hosts that install the scanner ahead of time (offline
+      // sandboxes included) never download here.
+      const binaryDigest = binaryChecksums[`${platform}-${arch}`];
+      for (const candidate of [pathBinary, path.join(cache, "gitleaks")]) {
+        if (hasPinnedBytes(candidate, binaryDigest)) {
+          return candidate;
+        }
+      }
       mkdirSync(cache, { recursive: true, mode: 0o700 });
       const scratch = mkdtempSync(path.join(cache, ".provision-"));
       const archive = path.join(cache, "archive.tar.gz");

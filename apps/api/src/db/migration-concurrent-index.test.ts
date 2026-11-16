@@ -4,6 +4,7 @@ import nodePath from "node:path";
 
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 
+import { isGeneratedGateCheckBlock } from "./entity-feature-gate-migrations";
 import { ONLINE_VALIDATED_INDEX_NAMES } from "./online-migrations";
 
 const MIGRATIONS_DIR = nodePath.resolve(import.meta.dir, "../../drizzle");
@@ -48,10 +49,14 @@ const CUSTOM_BOUNDED_TYPE_CHANGE_MIGRATIONS = new Set([
 ]);
 const ENTITY_FEATURE_GATE_MIGRATION =
   "20261009112500_entity_feature_row_gates/migration.sql";
+/** Written by apps/api/scripts/generate-entity-feature-gate-propagation.ts. */
+const GENERATED_GATE_MIGRATION =
+  /^\d{14}_entity_feature_gate_registry\/migration\.sql$/u;
 // Migrations may execute only these exact reviewed DO blocks.
 // Fingerprinting the complete statement makes comments, quoting tricks, and
 // dynamically assembled commands unable to bypass migration safety checks.
 const APPROVED_PROCEDURAL_STATEMENTS = new Set([
+  "20261030193033_database_temporary_owner_only/migration.sql:82d31d5f5d5854ee07c1f5f30649257c039f4f42fa34cb286b70d2d3d5f89932",
   // Installs the stored-key organization guard function and trigger without
   // dynamic SQL or timeout changes.
   "20261020000100_stored_keys_organization_scope/migration.sql:a8f5e5afd839562bffe89b8c47b72fa43ccc40ef80a824bf3279151ed3e1dcb5",
@@ -59,6 +64,11 @@ const APPROVED_PROCEDURAL_STATEMENTS = new Set([
   // Checks stored-key ownership with bounded existence reads before the
   // static constraint validations.
   "20261020000200_stored_keys_organization_scope_validate/migration.sql:4fe1c7457c1ef05de1ae41b2c0975e3accd0d9961f57d58744f1197f0222efb6",
+  // Creates the constrained non-login correspondence maintenance role only
+  // when absent, then verifies attributes, memberships, and ownership of its
+  // routines, including the uploaded-source registration trigger routine.
+  // Static catalog checks and role DDL retain the migration's bounded timeouts.
+  "20261102071500_correspondence_source_maintenance/migration.sql:5612adcb2a7776fc0922aa2c3dfe779bbe61e806511c901c27400157c8b4cc25",
   // Renames legacy resource paths in stable order with collision checks and
   // transaction-local snapshots. Static writes retain the 1s lock and 30s
   // statement budgets; a timeout rolls back the entire cutover.
@@ -665,6 +675,13 @@ const isUnapprovedProceduralStatement = (
     return false;
   }
 
+  // A gate migration the generator wrote may add the gate checks it owns.
+  if (
+    GENERATED_GATE_MIGRATION.test(relativePath) &&
+    isGeneratedGateCheckBlock(statement)
+  ) {
+    return false;
+  }
   const hash = hashSha256Hex(statement);
   if (
     relativePath === ENTITY_FEATURE_GATE_MIGRATION &&
@@ -2310,6 +2327,17 @@ describe("entity feature gate migration semantics", () => {
       true,
     );
     expect(isUnapprovedProceduralStatement("other/migration.sql", valid)).toBe(
+      true,
+    );
+    // A generated gate migration adds the same checks to any gated table,
+    // and nothing else.
+    const generated =
+      "20261030034001_entity_feature_gate_registry/migration.sql";
+    expect(isUnapprovedProceduralStatement(generated, wrongRelation)).toBe(
+      false,
+    );
+    expect(isUnapprovedProceduralStatement(generated, wrongCheck)).toBe(true);
+    expect(isUnapprovedProceduralStatement(generated, injectedUpdate)).toBe(
       true,
     );
   });

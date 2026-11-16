@@ -1,4 +1,5 @@
 // parser-output-unchanged: shared SHA-256 ownership preserves derived ID bytes and UUID layout (sha256-storage-parity.test.ts compares each migrated boundary with the Node digest); search-history ID branding serves cursor pagination only; reader answer ID branding serves stored answers only.
+// parser-output-unchanged: conflict check ID branding serves cursor pagination only.
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { isUuid } from "@stll/uuid-codec";
 
@@ -34,6 +35,12 @@ export const brandPersistedWorkspaceId = (
   workspaceId: string,
 ): SafeId<"workspace"> => toSafeId<"workspace">(workspaceId);
 
+/** Multi-matter desktop requests validate UUIDs before scoped authorization. */
+export const brandValidatedWorkspaceId = (
+  value: string,
+): SafeId<"workspace"> | null =>
+  isUuid(value) ? toSafeId<"workspace">(value) : null;
+
 // parser-output-unchanged: Agent-skill ID validation is unused by legal parsers and cannot alter their output.
 export const parsePersistedAgentSkillId = (
   id: string,
@@ -43,6 +50,10 @@ export const parsePersistedAgentSkillId = (
 export const brandPersistedSavedTimeNarrativeId = (
   id: string,
 ): SafeId<"savedTimeNarrative"> => toSafeId<"savedTimeNarrative">(id);
+
+export const brandPersistedSoftLawDocumentId = (
+  id: string,
+): SafeId<"softLawDocument"> => toSafeId<"softLawDocument">(id);
 
 export const brandPersistedLegalReaderAnswerId = (
   id: string,
@@ -105,6 +116,11 @@ export const brandPersistedEntityId = (entityId: string): SafeId<"entity"> =>
 export const brandPersistedReportExportId = (
   reportExportId: string,
 ): SafeId<"reportExport"> => toSafeId<"reportExport">(reportExportId);
+
+// parser-output-unchanged: Adds the data export id brander; no parser calls it.
+export const brandPersistedDataExportId = (
+  dataExportId: string,
+): SafeId<"dataExport"> => toSafeId<"dataExport">(dataExportId);
 
 export const brandPersistedFieldId = (fieldId: string): SafeId<"field"> =>
   toSafeId<"field">(fieldId);
@@ -182,10 +198,6 @@ export const brandValidatedPropertyId = (
 ): SafeId<"property"> | null =>
   isUuid(propertyId) ? toSafeId<"property">(propertyId) : null;
 
-export const brandPersistedPlaybookId = (
-  playbookId: string,
-): SafeId<"playbook"> => toSafeId<"playbook">(playbookId);
-
 export const brandPersistedPlaybookDefinitionId = (
   playbookDefinitionId: string,
 ): SafeId<"playbookDefinition"> =>
@@ -233,6 +245,11 @@ export const brandPersistedLegalReaderAnnotationId = (
 ): SafeId<"legalReaderAnnotation"> =>
   toSafeId<"legalReaderAnnotation">(legalReaderAnnotationId);
 
+export const brandPersistedLegalListClaimReviewEventId = (
+  legalListClaimReviewEventId: string,
+): SafeId<"legalListClaimReviewEvent"> =>
+  toSafeId<"legalListClaimReviewEvent">(legalListClaimReviewEventId);
+
 export const brandPersistedCaseLawCitationId = (
   caseLawCitationId: string,
 ): SafeId<"caseLawCitation"> => toSafeId<"caseLawCitation">(caseLawCitationId);
@@ -245,6 +262,12 @@ export const brandPersistedLegislationDocumentId = (
   legislationDocumentId: string,
 ): SafeId<"legislationDocument"> =>
   toSafeId<"legislationDocument">(legislationDocumentId);
+
+/** A legislation source id an operator typed, or null when it is no UUID. */
+export const brandValidatedLegislationSourceId = (
+  sourceId: string,
+): SafeId<"legislationSource"> | null =>
+  isUuid(sourceId) ? toSafeId<"legislationSource">(sourceId) : null;
 
 export const brandValidatedCorpusIndexProjectionIntentId = (
   intentId: string,
@@ -313,6 +336,10 @@ export const brandPersistedSavedSearchId = (
   savedSearchId: string,
 ): SafeId<"savedSearch"> => toSafeId<"savedSearch">(savedSearchId);
 
+export const brandPersistedConflictCheckId = (
+  conflictCheckId: string,
+): SafeId<"conflictCheck"> => toSafeId<"conflictCheck">(conflictCheckId);
+
 export const brandPersistedSearchHistoryEntryId = (
   entryId: string,
 ): SafeId<"searchHistoryEntry"> => toSafeId<"searchHistoryEntry">(entryId);
@@ -320,11 +347,6 @@ export const brandPersistedSearchHistoryEntryId = (
 export const brandPersistedTemplateLookupFormatId = (
   formatId: string,
 ): SafeId<"templateLookupFormat"> => toSafeId<"templateLookupFormat">(formatId);
-
-export const brandPersistedCaseLawResearchColumnId = (
-  researchColumnId: string,
-): SafeId<"caseLawResearchColumn"> =>
-  toSafeId<"caseLawResearchColumn">(researchColumnId);
 
 export const brandPersistedTimeEntryId = (
   timeEntryId: string,

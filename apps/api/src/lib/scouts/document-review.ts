@@ -14,6 +14,7 @@ import {
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import { basisReferenceWorkspaceIds } from "@/api/lib/document-review/reference-passages";
 import { DOCUMENT_REVIEW_FINDINGS_PER_RUN_MAX } from "@/api/lib/document-review/run-contract";
 import {
   REVIEW_FINDINGS_SHOWN_MAX,
@@ -46,6 +47,7 @@ const emitDocumentReviewSignal = async ({
       .select({
         organizationId: documentReviewRuns.organizationId,
         entityId: documentReviewRuns.entityId,
+        basis: documentReviewRuns.basis,
       })
       .from(documentReviewRuns)
       .where(
@@ -69,7 +71,14 @@ const emitDocumentReviewSignal = async ({
       ),
     )
     .limit(DOCUMENT_REVIEW_FINDINGS_PER_RUN_MAX);
-  const findings = toReviewSignalFindings(rows.map((row) => row.payload));
+  const findings = toReviewSignalFindings(
+    rows.map((row) => row.payload),
+    {
+      quoteRationale: basisReferenceWorkspaceIds(run.basis).every(
+        (id) => id === workspaceId,
+      ),
+    },
+  );
   const verdict = reviewVerdict(findings);
   if (verdict === "safe") {
     return;

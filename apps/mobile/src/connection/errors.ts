@@ -40,6 +40,8 @@ export class AuthorizationError extends TaggedError("AuthorizationError")<{
 export class TokenError extends TaggedError("TokenError")<{
   message: string;
   oauthError?: string | undefined;
+  /** The token endpoint's HTTP status, when it answered with a refusal. */
+  status?: number | undefined;
   cause?: unknown;
 }> {}
 

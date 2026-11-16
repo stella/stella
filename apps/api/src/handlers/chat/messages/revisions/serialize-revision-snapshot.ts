@@ -1,16 +1,13 @@
+import { clientVisibleStoredContent } from "@/api/handlers/chat/chat-message-parts";
 import type { PersistedChatMessageContent } from "@/api/handlers/chat/types";
 
-type RevisionSnapshot = {
-  version: PersistedChatMessageContent["version"];
-  data: unknown[];
-  metadata?: unknown;
-};
+type RevisionSnapshot = Pick<
+  PersistedChatMessageContent,
+  "version" | "data" | "metadata"
+>;
 
-// Persistence proofs belong to the server; snapshots expose only stored JSON.
+// Persistence proofs and fields from later releases stay on the server.
 export const serializeRevisionSnapshot = (
   content: RevisionSnapshot,
-): RevisionSnapshot => ({
-  version: content.version,
-  data: content.data,
-  ...(content.metadata === undefined ? {} : { metadata: content.metadata }),
-});
+): { version: 3; data: unknown[]; metadata?: unknown } =>
+  clientVisibleStoredContent(content);

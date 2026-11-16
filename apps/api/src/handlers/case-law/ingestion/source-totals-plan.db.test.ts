@@ -6,7 +6,7 @@ import type { Transaction } from "@/api/db/root";
 import { caseLawSources } from "@/api/db/schema";
 import {
   sourceStoredTotalCountQuery,
-  sourceStoredTotalRefreshClaim,
+  sourceStoredTotalRefreshClaimStatement,
 } from "@/api/handlers/case-law/ingestion/source-totals";
 import { createSafeId } from "@/api/lib/branded-types";
 import { isRecord } from "@/api/lib/type-guards";
@@ -14,6 +14,7 @@ import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   explainRoot,
+  indexedAccessPaths,
   scanOccurrences,
 } from "@/api/tests/query-plans/plan-walker";
 
@@ -56,6 +57,7 @@ describe.skipIf(!enabled)("stored total planning on PostgreSQL 18", () => {
     const version = (
       await db.execute(
         sql`SELECT current_setting('server_version_num')::int AS version`,
+        "objects",
       )
     ).at(0)?.["version"];
     expect(version).toBeGreaterThanOrEqual(180_000);
@@ -77,10 +79,12 @@ describe.skipIf(!enabled)("stored total planning on PostgreSQL 18", () => {
       ),
     );
     await db.execute(sql.raw(`SET search_path TO ${schema}, public`));
-    const attemptColumn =
-      await db.execute(sql`SELECT 1 FROM information_schema.columns
+    const attemptColumn = await db.execute(
+      sql`SELECT 1 FROM information_schema.columns
       WHERE table_schema = ${schema} AND table_name = 'case_law_sources'
-        AND column_name = ${caseLawSources.storedTotalAttemptedAt.name}`);
+        AND column_name = ${caseLawSources.storedTotalAttemptedAt.name}`,
+      "objects",
+    );
     if (attemptColumn.length === 0) {
       // The owning migration names an unqualified table, so this fixture's path owns the change.
       const migration = await Bun.file(
@@ -123,10 +127,17 @@ describe.skipIf(!enabled)("stored total planning on PostgreSQL 18", () => {
   });
 
   test("the production exact count sees source-specific rows including an empty source", async () => {
-    const large = await db.execute(sourceStoredTotalCountQuery(first));
-    const small = await db.execute(sourceStoredTotalCountQuery(second));
+    const large = await db.execute(
+      sourceStoredTotalCountQuery(first),
+      "objects",
+    );
+    const small = await db.execute(
+      sourceStoredTotalCountQuery(second),
+      "objects",
+    );
     const empty = await db.execute(
       sourceStoredTotalCountQuery(createSafeId<"caseLawSource">()),
+      "objects",
     );
     expect(large.at(0)?.["total"]).toBe(700);
     expect(small.at(0)?.["total"]).toBe(300);
@@ -136,13 +147,16 @@ describe.skipIf(!enabled)("stored total planning on PostgreSQL 18", () => {
   test("the production refresh claim uses the source primary key with one bounded row", async () => {
     await db.transaction(async (actualTx) => {
       const tx = asTestRaw<Transaction>(actualTx);
-      const query = sourceStoredTotalRefreshClaim({
+      const query = sourceStoredTotalRefreshClaimStatement({
         tx,
         sourceId: first,
         now: new Date("2026-10-03T12:00:00Z"),
       });
       const root = explainRoot(
-        await actualTx.execute(sql`EXPLAIN (FORMAT JSON) ${query.getSQL()}`),
+        await actualTx.execute(
+          sql`EXPLAIN (FORMAT JSON) ${query.getSQL()}`,
+          "objects",
+        ),
       );
       assertNotExecuted(root);
       const scans = scanOccurrences(root);
@@ -158,7 +172,11 @@ describe.skipIf(!enabled)("stored total planning on PostgreSQL 18", () => {
         ),
       ).toBe(true);
       expect(sourceScan).toBeDefined();
-      expect(sourceScan?.nodeType).toBe("Index Scan");
+      expect(
+        indexedAccessPaths(root, "case_law_sources").some(({ branches }) =>
+          branches.some(({ indexName }) => indexName.includes("pkey")),
+        ),
+      ).toBe(true);
       expect(sourceScan?.index).toContain("pkey");
       expect(sourceScan?.rows).toBeLessThanOrEqual(1);
       expect(root["Total Cost"]).toBeLessThan(100);
@@ -173,19 +191,31 @@ describe.skipIf(!enabled)("stored total planning on PostgreSQL 18", () => {
     const root = explainRoot(
       await db.execute(
         sql`EXPLAIN (FORMAT JSON) ${sourceStoredTotalCountQuery(second)}`,
+        "objects",
       ),
     );
     assertNotExecuted(root);
     expect(root["Node Type"]).toBe("Aggregate");
     expect(root["Total Cost"]).toBeLessThan(50_000);
-    const corpus = scanOccurrences(root).filter(
+    // This is a covering-index proof: the aggregate must not visit heap rows.
+    const corpus = indexedAccessPaths(root, "case_law_decisions", {
+      accessKind: "index-only",
+    });
+    expect(corpus).toHaveLength(1);
+    expect(
+      corpus
+        .at(0)
+        ?.branches.every(({ indexCondition }) =>
+          indexCondition?.includes("source_id"),
+        ),
+    ).toBe(true);
+    expect(corpus.at(0)?.branches).not.toEqual([]);
+    // No other scan of the table, of any kind, may join the covering one.
+    const corpusScans = scanOccurrences(root).filter(
       ({ relation }) => relation === "case_law_decisions",
     );
-    expect(corpus).toHaveLength(1);
-    expect(corpus.at(0)?.nodeType).toBe("Index Only Scan");
-    expect(corpus.at(0)?.indexCond).toContain("source_id");
-    expect(corpus.at(0)?.index).toBeDefined();
-    expect(corpus.at(0)?.rows).toBeGreaterThan(6000);
-    expect(corpus.at(0)?.rows).toBeLessThan(8000);
+    expect(corpusScans).toHaveLength(1);
+    expect(corpusScans.at(0)?.rows).toBeGreaterThan(6000);
+    expect(corpusScans.at(0)?.rows).toBeLessThan(8000);
   });
 });

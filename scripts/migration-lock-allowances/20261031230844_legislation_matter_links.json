@@ -1,0 +1,5 @@
+{
+  "add-foreign-key": "The three foreign keys are installed NOT VALID on the new empty legislation matter-links table, so installation scans no rows and validation runs in the gated online phase. The 1s lock_timeout bounds locks on the referenced legislation document, workspace, and user tables; statements are bounded by 30s statement_timeout.",
+  "create-policy": "The four workspace policies are installed on the new empty legislation matter-links table before publication, without reading application relations. Lock acquisition is bounded by 1s lock_timeout and statements by 30s statement_timeout.",
+  "row-level-security": "ENABLE RLS applies only to the new empty legislation matter-links table before publication, so no application traffic can hold or write it. Lock acquisition is bounded by 1s lock_timeout and statements by 30s statement_timeout."
+}

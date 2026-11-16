@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 import type { Fetch } from "@/connection/http";
 import {
   createAccessTokenSource,
+  createSessionStore,
   type StoredSession,
 } from "@/connection/session";
 import { ApiRequestError } from "@/state/api-request";
@@ -26,7 +27,9 @@ const SESSION: StoredSession = {
     "https://stella.example.com/v1/mcp/oauth/mobile-client-metadata.json",
   tokenEndpoint: "https://stella.example.com/api/auth/oauth2/token",
   resource: "https://stella.example.com/v1",
+  signInId: "sign-in-1",
   refreshToken: "refresh-1",
+  userId: "user-1",
 };
 
 const row = (entityId: string, kind: string): MatterEntity => ({
@@ -68,18 +71,22 @@ const server = (respond: (call: Call) => Response) => {
   return { fetch, calls };
 };
 
-const sourceFor = (fetch: Fetch) =>
-  createAccessTokenSource({
+const sourceFor = (fetch: Fetch) => {
+  const store = createSessionStore({
+    read: async () => SESSION,
+    write: async () => {},
+    prepareClear: async () => {},
+    clear: async () => {},
+  });
+  return createAccessTokenSource({
     fetch,
     initialAccess: { token: "access-0", expiresAt: Number.MAX_SAFE_INTEGER },
     now: () => 0,
     session: SESSION,
-    store: {
-      read: async () => SESSION,
-      write: async () => {},
-      clear: async () => {},
-    },
+    generation: store.generation(),
+    store,
   });
+};
 
 describe("listing a matter's entities", () => {
   test("posts the page query and keeps the fields a row shows", async () => {
@@ -95,6 +102,7 @@ describe("listing a matter's entities", () => {
       source: sourceFor(fetch),
       workspaceId: "matter 1",
       cursor: "cursor-0",
+      fileFieldId: null,
     });
     expect(result.isOk() ? result.value : result.error._tag).toEqual({
       items: [row("e1", "document")],
@@ -115,6 +123,64 @@ describe("listing a matter's entities", () => {
     ]);
   });
 
+  test("asks for the documents column and names each file's format", async () => {
+    const { fetch, calls } = server(() =>
+      Response.json({
+        items: [
+          {
+            ...row("pdf", "document"),
+            fields: [
+              {
+                propertyId: "files",
+                content: {
+                  type: "file",
+                  mimeType: "application/pdf",
+                  fileName: "smlouva",
+                },
+              },
+            ],
+          },
+          {
+            ...row("docx", "document"),
+            fields: [
+              {
+                propertyId: "files",
+                content: {
+                  type: "file",
+                  mimeType:
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                  fileName: "Dodatek 1",
+                },
+              },
+            ],
+          },
+          { ...row("f1", "folder"), fields: [] },
+        ],
+        nextCursor: null,
+      }),
+    );
+    const result = await listMatterEntities({
+      fetch,
+      source: sourceFor(fetch),
+      workspaceId: "m",
+      cursor: null,
+      fileFieldId: "files",
+    });
+    expect(
+      result.isOk()
+        ? result.value.items.map((entity) => entity.format)
+        : result.error._tag,
+    ).toEqual([
+      { kind: "pdf", label: "PDF" },
+      { kind: "word", label: "DOCX" },
+      undefined,
+    ]);
+    const [call] = calls;
+    expect(call !== "token" && call?.body).toMatchObject({
+      fieldIds: ["files"],
+    });
+  });
+
   test("the first page carries no cursor", async () => {
     const { fetch, calls } = server(() =>
       Response.json({ items: [], limit: 50, nextCursor: null }),
@@ -124,6 +190,7 @@ describe("listing a matter's entities", () => {
       source: sourceFor(fetch),
       workspaceId: "m",
       cursor: null,
+      fileFieldId: null,
     });
     const [call] = calls;
     expect(call !== "token" && call?.body).not.toHaveProperty("cursor");
@@ -136,6 +203,7 @@ describe("listing a matter's entities", () => {
       source: sourceFor(refused.fetch),
       workspaceId: "m",
       cursor: null,
+      fileFieldId: null,
     });
     expect(result.isErr() && result.error._tag).toBe("ApiRequestError");
     expect(refused.calls).toHaveLength(3);
@@ -149,6 +217,7 @@ describe("listing a matter's entities", () => {
       source: sourceFor(fetch),
       workspaceId: "m",
       cursor: null,
+      fileFieldId: null,
     });
     expect(result.isErr() && result.error._tag).toBe("ApiRequestError");
   });
@@ -238,25 +307,77 @@ describe("paging", () => {
 });
 
 describe("sections", () => {
+  const inFolder = (entity: MatterEntity, parentId: string): MatterEntity => ({
+    ...entity,
+    parentId,
+  });
+  const ids = (sections: ReturnType<typeof entitySections>) =>
+    sections.map((section) => ({
+      key: section.key,
+      rows: section.data.map((tree) =>
+        tree.type === "folder"
+          ? `${tree.entity.entityId}@${tree.depth}${tree.open ? "+" : "-"}`
+          : `${tree.entity.entityId}@${tree.depth}`,
+      ),
+    }));
+
   test("documents with folders first, then tasks, in server order; unknown kinds and empty sections left out", () => {
-    const sections = entitySections([
-      row("d1", "document"),
-      row("t1", "task"),
-      row("f1", "folder"),
-      row("x1", "signal"),
-      row("d2", "document"),
+    const sections = entitySections(
+      [
+        row("d1", "document"),
+        row("t1", "task"),
+        row("f1", "folder"),
+        row("x1", "signal"),
+        row("d2", "document"),
+      ],
+      new Set(),
+    );
+    expect(ids(sections)).toEqual([
+      { key: "documents", rows: ["f1@0-", "d1@0", "d2@0"] },
+      { key: "tasks", rows: ["t1@0"] },
     ]);
     expect(
-      sections.map((section) => ({
-        key: section.key,
-        ids: section.data.map((entity) => entity.entityId),
-      })),
-    ).toEqual([
-      { key: "documents", ids: ["f1", "d1", "d2"] },
-      { key: "tasks", ids: ["t1"] },
-    ]);
-    expect(
-      entitySections([row("t1", "task")]).map((section) => section.key),
+      entitySections([row("t1", "task")], new Set()).map(
+        (section) => section.key,
+      ),
     ).toEqual(["tasks"]);
+  });
+
+  test("a closed folder hides its contents; an open one lists them beneath it, folders first", () => {
+    const entities = [
+      row("f1", "folder"),
+      inFolder(row("d1", "document"), "f1"),
+      inFolder(row("f2", "folder"), "f1"),
+      inFolder(row("d2", "document"), "f2"),
+      row("d3", "document"),
+    ];
+    expect(ids(entitySections(entities, new Set()))).toEqual([
+      { key: "documents", rows: ["f1@0-", "d3@0"] },
+    ]);
+    expect(ids(entitySections(entities, new Set(["f1"])))).toEqual([
+      { key: "documents", rows: ["f1@0+", "f2@1-", "d1@1", "d3@0"] },
+    ]);
+    expect(ids(entitySections(entities, new Set(["f1", "f2"])))).toEqual([
+      { key: "documents", rows: ["f1@0+", "f2@1+", "d2@2", "d1@1", "d3@0"] },
+    ]);
+  });
+
+  test("a row whose folder is not loaded sits at the top level, and a cycle of folders lists each once", () => {
+    const sections = entitySections(
+      [
+        inFolder(row("d1", "document"), "not-loaded"),
+        inFolder(row("fa", "folder"), "fb"),
+        inFolder(row("fb", "folder"), "fa"),
+        inFolder(row("fc", "folder"), "fc"),
+      ],
+      new Set(["fa", "fb", "fc"]),
+    );
+    const rows = sections.flatMap((section) => section.data);
+    expect(rows.map((tree) => tree.entity.entityId).toSorted()).toEqual([
+      "d1",
+      "fa",
+      "fb",
+      "fc",
+    ]);
   });
 });

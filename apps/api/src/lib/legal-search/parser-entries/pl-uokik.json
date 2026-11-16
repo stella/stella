@@ -1,0 +1,11 @@
+{
+  "type": "parser",
+  "name": "PL_UOKIK",
+  "key": "pl-uokik",
+  "parserVersion": 37,
+  "sourceFingerprintVersion": 0,
+  "scope": {
+    "type": "all",
+    "reason": "Retain the publisher's excluded fields in the stored record instead of naming them as exclusions."
+  }
+}

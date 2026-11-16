@@ -31,7 +31,10 @@ import {
 } from "@stll/ai-catalog/benchmarks";
 import type { ModelBenchmarkRating } from "@stll/ai-catalog/benchmarks";
 import { fetchWithTimeout } from "@stll/fetch";
-import { readCappedBytes } from "@stll/skills/streaming";
+import {
+  BodyByteLimitError,
+  readBodyWithIdleDeadline,
+} from "@stll/fetch/body-reader";
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import { formatInteger } from "./model-catalog-rates-gen";
@@ -210,18 +213,20 @@ const fetchPage = async (
     try: async () => {
       const response = await fetchArenaPage(pageUrl(offset));
       httpStatus = response.status;
-      const bytes =
-        response.body === null
-          ? new Uint8Array()
-          : await readCappedBytes(response.body, PAGE_MAX_BYTES);
+      const bytes = await readBodyWithIdleDeadline(response, {
+        idleMs: FETCH_TIMEOUT_MS,
+        maxBytes: PAGE_MAX_BYTES,
+      });
       return {
-        payload: bytes === null ? null : new TextDecoder().decode(bytes),
+        payload: new TextDecoder().decode(bytes),
         status: response.status,
       };
     },
     catch: (cause) =>
       inconclusive(
-        `Arena page at offset ${offset} failed to load: ${cause instanceof Error ? cause.message : String(cause)}`,
+        cause instanceof BodyByteLimitError
+          ? `Arena page at offset ${offset} exceeds ${PAGE_MAX_BYTES} bytes`
+          : `Arena page at offset ${offset} failed to load: ${cause instanceof Error ? cause.message : String(cause)}`,
       ),
   });
   if (Result.isError(fetched)) {
@@ -231,13 +236,6 @@ const fetchPage = async (
   if (status !== 200) {
     return Result.err(
       inconclusive(`Arena page at offset ${offset} responded ${status}`),
-    );
-  }
-  if (payload === null) {
-    return Result.err(
-      inconclusive(
-        `Arena page at offset ${offset} exceeds ${PAGE_MAX_BYTES} bytes`,
-      ),
     );
   }
   const json = Result.try({
@@ -660,7 +658,7 @@ export const runBenchmarkCheck = async ({
 const defaultArenaFetch: ArenaFetch = async (url) =>
   fetchWithTimeout(url, {
     headers: { accept: "application/json" },
-    timeout: { type: "idle", ms: FETCH_TIMEOUT_MS },
+    timeout: { type: "headers", ms: FETCH_TIMEOUT_MS },
   });
 
 const main = async (): Promise<void> => {

@@ -118,10 +118,12 @@ describe("review_folder_consistency", () => {
       );
       return Result.ok({
         lastBlockId: null,
-        contentBySourceId: new Map([
+        withheld: [],
+        outcomeBySourceId: new Map([
           [
             "cross-document-consistency",
             {
+              type: "answered" as const,
               content: {
                 type: "text" as const,
                 version: 1 as const,
@@ -227,10 +229,12 @@ describe("review_folder_consistency", () => {
         );
         return Result.ok({
           lastBlockId: null,
-          contentBySourceId: new Map([
+          withheld: [],
+          outcomeBySourceId: new Map([
             [
               "cross-document-consistency",
               {
+                type: "answered" as const,
                 content: { type: "text", version: 1, value: "No conflict." },
                 citations: [],
               },

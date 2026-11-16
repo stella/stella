@@ -3,8 +3,6 @@ import { describe, expect, test } from "bun:test";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { CASE_LAW_CORPUS_MIRROR_STATUS } from "@/api/db/schema";
-import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   classifyObservation,
   resolveExistingDecisionPolicy,
@@ -18,7 +16,11 @@ import {
 } from "@/api/lib/case-law/decision-text";
 import { parsePrimaryReferenceType } from "@/api/lib/legal-search/decision-primary-reference";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
-import { DOCUMENT_DELIVERY } from "@/api/lib/legal-search/ingestion-types";
+import {
+  DOCUMENT_DELIVERY,
+  EMPTY_AST,
+} from "@/api/lib/legal-search/ingestion-types";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 
 // A source fingerprint that leaves the record out hashes a listing-only
@@ -47,7 +49,7 @@ const observation = (overrides: ObservationOverrides): IngestionResult =>
       documentDelivery: DOCUMENT_DELIVERY.DEFERRED,
       ...overrides,
     }),
-  );
+  ).unwrap();
 
 const stored = (result: IngestionResult): ExistingDecision => ({
   id: createSafeId<"caseLawDecision">(),
@@ -56,8 +58,10 @@ const stored = (result: IngestionResult): ExistingDecision => ({
   citationKey: null,
   country: result.country,
   decisionDate: result.decisionDate ?? null,
+  decisionType: result.decisionType ?? null,
   sourceDocumentId: result.sourceDocumentId ?? null,
   ecli: result.ecli ?? null,
+  sheetNumber: result.sheetNumber ?? null,
   metadata: result.metadata,
   sourceHash: result.rawHash,
   sourceHashVersion: 0,
@@ -65,7 +69,15 @@ const stored = (result: IngestionResult): ExistingDecision => ({
   sourceObservationHash: result.rawHash,
   redactedAt: null,
   corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+  fulltext: result.fulltext ?? null,
+  sections: result.sections ?? null,
+  documentAst: result.documentAst,
   contentHash: null,
+  fallbackContentHash: null,
+  fallbackIdentityKey: null,
+  fallbackCohortKey: null,
+  fallbackPublicationHash: null,
+  fallbackDocumentHash: null,
   textS3Key: null,
   normalizedS3Key: null,
   astS3Key: null,

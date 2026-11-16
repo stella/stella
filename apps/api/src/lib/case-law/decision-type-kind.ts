@@ -140,6 +140,16 @@ export const STATED_DECISION_TYPE_KINDS = {
     "top_up_tax_opinion",
   "postanowienie rozstrzygające spór o właściwość": "order",
 
+  // Brazilian (TST). A súmula, an orientação jurisprudencial and a
+  // precedente normativo state the court's settled reading of the law for
+  // later cases, as a Hungarian uniformity decision does.
+  acórdão: "judgment",
+  despacho: "order",
+  súmula: "uniformity_decision",
+  "orientação jurisprudencial": "uniformity_decision",
+  "orientação jurisprudencial transitória": "uniformity_decision",
+  "precedente normativo": "uniformity_decision",
+
   // EU (CDM resource types) and the United States (CourtListener).
   judgment: "judgment",
   order: "order",
@@ -243,6 +253,17 @@ export const decisionTypeKind = (
       reading satisfies never;
       return panic(`Unhandled decision type reading: ${String(reading)}`);
   }
+};
+
+/** The normalized kind exposed beside a publisher's spelling on decision rows. */
+export const classifiedDecisionTypeKind = (
+  stated: string | null,
+): DecisionTypeKind | null => {
+  if (stated === null) {
+    return null;
+  }
+  const kind = decisionTypeKind(stated);
+  return kind === DECISION_TYPE_KIND_OTHER ? null : kind;
 };
 
 /**

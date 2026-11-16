@@ -14,6 +14,7 @@ import {
   type SQL,
   sql,
 } from "drizzle-orm";
+import { unionAll } from "drizzle-orm/pg-core";
 
 import type { DecisionPrimaryReferenceType } from "@stll/legal-ast/decision-identifier";
 
@@ -24,20 +25,17 @@ import {
   caseLawDecisions,
   caseLawReplayBatches,
   caseLawReplayBlocked,
+  PARSED_INPUT_STATE,
 } from "@/api/db/schema";
-import { STORED_RAW_REPARSE_REJECTION } from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  IngestionResult,
-  SourceAdapter,
-  StoredRawReader,
-  StoredRawReparseInput,
-  StoredRawReparseOutcome,
-  StoredRawReparseRejection,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import { metadataUrlSchemaForAdapter } from "@/api/handlers/case-law/ingestion/metadata-url-schemas";
 import { caseLawCanonicalPayload } from "@/api/handlers/case-law/ingestion/pipeline/corpus-mirror";
 import { processStoredDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
-import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
+import { CASE_LAW_CORPUS_DEPENDENCIES } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
+import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
+import {
+  PROCESS_DECISION_STATUS,
+  processResultForCorpusOutcome,
+} from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import {
   createSourceContractResolver,
   type SourceContractResolver,
@@ -53,8 +51,18 @@ import {
   payloadCarriesDocument,
 } from "@/api/lib/case-law/stored-payload";
 import { lockCaseLawDecisionRows } from "@/api/lib/db/aggregate-lock";
+import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
+import {
+  timestampCasToken,
+  timestampMatchesCasToken,
+} from "@/api/lib/db/timestamp-cas";
 import type { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
+import { openCorpusPackBatch } from "@/api/lib/legal-search/corpus-pack-batch";
+import type {
+  CorpusPackBatch,
+  CorpusPackBatchOutcomes,
+} from "@/api/lib/legal-search/corpus-pack-batch";
 import { corpusContentHash } from "@/api/lib/legal-search/corpus-storage";
 import type { CorpusPayload } from "@/api/lib/legal-search/corpus-storage";
 import { decisionReplayIdentity } from "@/api/lib/legal-search/decision-language-identity";
@@ -64,6 +72,18 @@ import {
   sanitizeResult,
   storedCaseNumberOf,
 } from "@/api/lib/legal-search/ingestion-normalization";
+import {
+  STORED_RAW_REPARSE_REJECTION,
+  storedRawResultReader,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  IngestionResult,
+  SourceAdapter,
+  StoredRawReader,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
+  StoredRawReparseRejection,
+} from "@/api/lib/legal-search/ingestion-types";
 import {
   PARSER_REPARSE_FEATURES,
   PARSER_VERSION_SCOPES,
@@ -174,7 +194,7 @@ export type ReplayDecisionRow = {
   contentHash: string | null;
   parserVersion: number | null;
   /** Exact revision compared under the fixed-point row lock, not a batch identity. */
-  updateToken: string;
+  updateToken: TimestampCasToken;
   sourceRawS3Key: string;
   sourceRawContentType: string | null;
   corpusMirrorStatus: (typeof CASE_LAW_CORPUS_MIRROR_STATUS)[keyof typeof CASE_LAW_CORPUS_MIRROR_STATUS];
@@ -224,7 +244,12 @@ export type CaseLawReplayScope =
   | (typeof CASE_LAW_REPLAY_SCOPE)[keyof typeof CASE_LAW_REPLAY_SCOPE]
   | { type: "decision"; decisionId: SafeId<"caseLawDecision"> }
   | { type: "court"; court: string }
-  | { type: "celex"; celex: string };
+  | { type: "celex"; celex: string }
+  /**
+   * The decisions a parser version wrote. A version that stored a defect is
+   * a window of rows, and naming it replays that window and nothing else.
+   */
+  | { type: "parser-version"; parserVersion: number };
 
 const replayScopePredicate = (scope: CaseLawReplayScope): SQL | undefined => {
   switch (scope.type) {
@@ -236,6 +261,8 @@ const replayScopePredicate = (scope: CaseLawReplayScope): SQL | undefined => {
       return eq(caseLawDecisions.court, scope.court);
     case "celex":
       return sql`${caseLawDecisions.metadata}->>'celex' = ${scope.celex}`;
+    case "parser-version":
+      return eq(caseLawDecisions.parserVersion, scope.parserVersion);
     default:
       scope satisfies never;
       return panic(`Unhandled scope: ${String(scope)}`);
@@ -289,14 +316,70 @@ const replayableRows = (
     isNull(caseLawDecisions.redactedAt),
   );
 
+/**
+ * The comparison of a row's stored parse with its current input, made by the
+ * database function the `parsed_input_state` trigger also calls.
+ */
+const parsedInputStateOf = () =>
+  sql<string>`case_law_parsed_input_state(
+    ${caseLawDecisions.sourceHash},
+    ${caseLawDecisions.sourceHashVersion},
+    ${caseLawDecisions.sourceRawS3Key},
+    ${caseLawDecisions.parsedSourceHash},
+    ${caseLawDecisions.parsedSourceHashVersion},
+    ${caseLawDecisions.parsedSourceRawS3Key}
+  )`;
+
 /** One database predicate owns successful parsing of the current raw input. */
 export const parsedReplayInputPredicate = (targetParserVersion: number) =>
   sql<boolean>`coalesce((
     ${caseLawDecisions.parserVersion} >= ${targetParserVersion}
-    AND ${caseLawDecisions.parsedSourceHash} = ${caseLawDecisions.sourceHash}
-    AND ${caseLawDecisions.parsedSourceHashVersion} = ${caseLawDecisions.sourceHashVersion}
-    AND ${caseLawDecisions.parsedSourceRawS3Key} = ${caseLawDecisions.sourceRawS3Key}
+    AND ${parsedInputStateOf()} = ${PARSED_INPUT_STATE.PARSED}
   ), false)`;
+
+/**
+ * The rows the background replay has not read at the current parser, as
+ * disjoint arms. Each arm is an equality or range on a prefix of the
+ * replay-pending index (source, parser version, parsed-input state, id), so the
+ * lag probe reads each from the index alone, whatever the planner estimates.
+ */
+export const BACKGROUND_REPLAY_ARMS = [
+  "unversioned",
+  "older-parser",
+  "unparsed",
+  "underived",
+] as const;
+
+export type BackgroundReplayArm = (typeof BACKGROUND_REPLAY_ARMS)[number];
+
+export const backgroundReplayArmPredicate = (
+  arm: BackgroundReplayArm,
+  currentParserVersion: number,
+): SQL | undefined => {
+  switch (arm) {
+    case "unversioned":
+      return isNull(caseLawDecisions.parserVersion);
+    case "older-parser":
+      return lt(caseLawDecisions.parserVersion, currentParserVersion);
+    case "unparsed":
+      return and(
+        eq(caseLawDecisions.parserVersion, currentParserVersion),
+        eq(caseLawDecisions.parsedInputState, PARSED_INPUT_STATE.UNPARSED),
+      );
+    // A row written before the state trigger and not yet derived falls back
+    // to the same comparison, so the selection is the same before and after
+    // derivation. The arm goes once every row is derived.
+    case "underived":
+      return and(
+        eq(caseLawDecisions.parserVersion, currentParserVersion),
+        isNull(caseLawDecisions.parsedInputState),
+        sql`${parsedInputStateOf()} = ${PARSED_INPUT_STATE.UNPARSED}`,
+      );
+    default:
+      arm satisfies never;
+      return panic(`Unhandled background replay arm: ${String(arm)}`);
+  }
+};
 
 /** Old writers may restore an earlier parser, but replay never downgrades one. */
 export const replayReadmissionInputPredicate = (targetParserVersion: number) =>
@@ -360,6 +443,77 @@ export const replayBatchReadmissionPredicate = () =>
     ),
   )}), false)`;
 
+type BackgroundReplaySelection = Extract<
+  ReplaySelection,
+  { type: "background" }
+>;
+
+/** What excludes a pending row from the background replay, whatever its arm. */
+const backgroundReplayExclusions = (
+  selection: BackgroundReplaySelection,
+  tx: Pick<Transaction, "select">,
+): SQL | undefined =>
+  and(
+    parserScopePredicate(selection.adapterKey),
+    // Durable reservations are recovered through pendingBatch; the sweep
+    // must not bypass a row's backoff or reselect a terminal receipt.
+    // Existence predicates let the planner combine receipt exclusions
+    // with owner RLS checks; scalar subplans repeat their startup cost.
+    sql<boolean>`NOT EXISTS (${tx
+      .select({ present: sql<boolean>`true` })
+      .from(caseLawReplayBatches)
+      .where(
+        and(
+          eq(caseLawReplayBatches.sourceId, caseLawDecisions.sourceId),
+          // Exhausted previews exclude only this dry-run parser generation.
+          or(
+            sql`right(${caseLawReplayBatches.id}, length(${BACKGROUND_REPLAY_PREVIEW_SUFFIX})) <> ${BACKGROUND_REPLAY_PREVIEW_SUFFIX}`,
+            selection.mode === "dry-run"
+              ? eq(
+                  caseLawReplayBatches.outcome,
+                  REPLAY_PREVIEW_FAILURE.RETRY_EXHAUSTED,
+                )
+              : undefined,
+          ),
+          eq(caseLawReplayBatches.firstDecisionId, caseLawDecisions.id),
+          eq(
+            caseLawReplayBatches.sourceRawS3Key,
+            caseLawDecisions.sourceRawS3Key,
+          ),
+          eq(
+            caseLawReplayBatches.parserVersionTo,
+            selection.currentParserVersion,
+          ),
+          // Reopening is bounded and fenced by the locked reservation owner.
+          not(replayBatchReadmissionPredicate()),
+        ),
+      )
+      .limit(1)})`,
+    sql<boolean>`NOT EXISTS (${tx
+      .select({ present: sql<boolean>`true` })
+      .from(caseLawReplayBlocked)
+      .where(
+        and(
+          eq(caseLawReplayBlocked.sourceId, caseLawDecisions.sourceId),
+          eq(caseLawReplayBlocked.decisionId, caseLawDecisions.id),
+          // Unknown legacy receipts cannot identify a consumed object.
+          eq(
+            caseLawReplayBlocked.sourceRawS3Key,
+            caseLawDecisions.sourceRawS3Key,
+          ),
+          eq(
+            caseLawReplayBlocked.parserVersionTo,
+            selection.currentParserVersion,
+          ),
+          or(
+            eq(caseLawReplayBlocked.outcome, "rejected"),
+            parsedReplayInputPredicate(selection.currentParserVersion),
+          ),
+        ),
+      )
+      .limit(1)})`,
+  );
+
 export const replaySelectionPredicate = (
   selection: ReplaySelection,
   tx: Pick<Transaction, "select">,
@@ -369,72 +523,12 @@ export const replaySelectionPredicate = (
       return undefined;
     case "background":
       return and(
-        parserScopePredicate(selection.adapterKey),
         or(
-          isNull(caseLawDecisions.parserVersion),
-          lt(caseLawDecisions.parserVersion, selection.currentParserVersion),
-          and(
-            eq(caseLawDecisions.parserVersion, selection.currentParserVersion),
-            not(parsedReplayInputPredicate(selection.currentParserVersion)),
+          ...BACKGROUND_REPLAY_ARMS.map((arm) =>
+            backgroundReplayArmPredicate(arm, selection.currentParserVersion),
           ),
         ),
-        // Durable reservations are recovered through pendingBatch; the sweep
-        // must not bypass a row's backoff or reselect a terminal receipt.
-        // Existence predicates let the planner combine receipt exclusions
-        // with owner RLS checks; scalar subplans repeat their startup cost.
-        sql<boolean>`NOT EXISTS (${tx
-          .select({ present: sql<boolean>`true` })
-          .from(caseLawReplayBatches)
-          .where(
-            and(
-              eq(caseLawReplayBatches.sourceId, caseLawDecisions.sourceId),
-              // Exhausted previews exclude only this dry-run parser generation.
-              or(
-                sql`right(${caseLawReplayBatches.id}, length(${BACKGROUND_REPLAY_PREVIEW_SUFFIX})) <> ${BACKGROUND_REPLAY_PREVIEW_SUFFIX}`,
-                selection.mode === "dry-run"
-                  ? eq(
-                      caseLawReplayBatches.outcome,
-                      REPLAY_PREVIEW_FAILURE.RETRY_EXHAUSTED,
-                    )
-                  : undefined,
-              ),
-              eq(caseLawReplayBatches.firstDecisionId, caseLawDecisions.id),
-              eq(
-                caseLawReplayBatches.sourceRawS3Key,
-                caseLawDecisions.sourceRawS3Key,
-              ),
-              eq(
-                caseLawReplayBatches.parserVersionTo,
-                selection.currentParserVersion,
-              ),
-              // Reopening is bounded and fenced by the locked reservation owner.
-              not(replayBatchReadmissionPredicate()),
-            ),
-          )
-          .limit(1)})`,
-        sql<boolean>`NOT EXISTS (${tx
-          .select({ present: sql<boolean>`true` })
-          .from(caseLawReplayBlocked)
-          .where(
-            and(
-              eq(caseLawReplayBlocked.sourceId, caseLawDecisions.sourceId),
-              eq(caseLawReplayBlocked.decisionId, caseLawDecisions.id),
-              // Unknown legacy receipts cannot identify a consumed object.
-              eq(
-                caseLawReplayBlocked.sourceRawS3Key,
-                caseLawDecisions.sourceRawS3Key,
-              ),
-              eq(
-                caseLawReplayBlocked.parserVersionTo,
-                selection.currentParserVersion,
-              ),
-              or(
-                eq(caseLawReplayBlocked.outcome, "rejected"),
-                parsedReplayInputPredicate(selection.currentParserVersion),
-              ),
-            ),
-          )
-          .limit(1)})`,
+        backgroundReplayExclusions(selection, tx),
       );
     default:
       selection satisfies never;
@@ -566,7 +660,7 @@ export const buildReplayPageQuery = (
       sourceHash: caseLawDecisions.sourceHash,
       contentHash: caseLawDecisions.contentHash,
       parserVersion: caseLawDecisions.parserVersion,
-      updateToken: sql<string>`${caseLawDecisions.updatedAt}::text`,
+      updateToken: timestampCasToken(caseLawDecisions.updatedAt),
       sourceRawS3Key: caseLawDecisions.sourceRawS3Key,
       sourceRawContentType: caseLawDecisions.sourceRawContentType,
       corpusMirrorStatus: caseLawDecisions.corpusMirrorStatus,
@@ -606,7 +700,12 @@ export const selectReplayPage = async ({
   );
 };
 
-/** Existence only: no aggregate, full-row projection, or corpus walk. */
+/**
+ * Existence only: no aggregate, full-row projection, or corpus walk. One
+ * read per arm, each ordered by the replay-pending index, so each is an index
+ * read stopping at its first row: a plan that is stable by construction, not
+ * one that depends on the planner's estimate of how many rows are behind.
+ */
 export const buildBackgroundReplayProbe = (
   tx: Transaction,
   {
@@ -620,25 +719,40 @@ export const buildBackgroundReplayProbe = (
     currentParserVersion: number;
     mode: "enrolled" | "dry-run";
   },
-) =>
-  tx
-    .select({ id: caseLawDecisions.id })
-    .from(caseLawDecisions)
-    .where(
-      and(
-        replayableRows(sourceId, CASE_LAW_REPLAY_SCOPE.SOURCE),
-        replaySelectionPredicate(
-          {
-            type: "background",
-            ...(adapterKey === undefined ? {} : { adapterKey }),
-            currentParserVersion,
-            mode,
-          },
-          tx,
+) => {
+  const selection = {
+    type: "background",
+    ...(adapterKey === undefined ? {} : { adapterKey }),
+    currentParserVersion,
+    mode,
+  } as const satisfies BackgroundReplaySelection;
+  const [first, second, ...rest] = BACKGROUND_REPLAY_ARMS.map((arm) =>
+    tx
+      .select({ id: caseLawDecisions.id })
+      .from(caseLawDecisions)
+      .where(
+        and(
+          replayableRows(sourceId, CASE_LAW_REPLAY_SCOPE.SOURCE),
+          backgroundReplayArmPredicate(arm, currentParserVersion),
+          backgroundReplayExclusions(selection, tx),
         ),
-      ),
-    )
-    .limit(1);
+      )
+      // Ordered by every index column, so an arm whose equalities fix the
+      // first three still asks for the index's order: a sequential scan would
+      // have to sort what it reads, whatever the planner estimates it finds.
+      .orderBy(
+        asc(caseLawDecisions.sourceId),
+        asc(caseLawDecisions.parserVersion),
+        asc(caseLawDecisions.parsedInputState),
+        asc(caseLawDecisions.id),
+      )
+      .limit(1),
+  );
+  if (first === undefined || second === undefined) {
+    return panic("The background replay probe reads at least two arms");
+  }
+  return unionAll(first, second, ...rest).limit(1);
+};
 
 export type ReplayabilitySplit = {
   /** Rows whose stored payload can be re-parsed locally. */
@@ -914,6 +1028,12 @@ type ReplayRowOptions = {
   rejectionPolicy: ReplayRejectionPolicy;
   /** Test seam, threaded to the withdrawal's corpus-object delete. */
   withdraw: WithdrawDocument;
+  corpus: CaseLawCorpusDependencies;
+  /**
+   * The page's pack. A written row's payloads join it, and its outcome is
+   * settled when the page flushes it, not here.
+   */
+  corpusBatch: CorpusPackBatch;
 };
 
 /**
@@ -1151,11 +1271,19 @@ const replayWouldChangeRow = async ({
   row: ReplayDecisionRow;
   result: IngestionResult;
   scopedDb: ScopedDb;
-}): Promise<boolean> => {
-  const result = sanitizeResult(input, metadataUrlSchema);
-  const payload = caseLawCanonicalPayload(result);
+}): Promise<Result<boolean, unknown>> => {
+  const normalized = sanitizeResult(input, metadataUrlSchema);
+  if (normalized.isErr()) {
+    return normalized;
+  }
+  const result = normalized.value;
+  const canonical = caseLawCanonicalPayload(result);
+  if (canonical.isErr()) {
+    return canonical;
+  }
+  const payload = canonical.value;
   if (row.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.PENDING) {
-    return true;
+    return Result.ok(true);
   }
   // Derived from the payload like the text is, so a parser that reads the
   // reference or its kind differently changes the row. Read as the write
@@ -1164,10 +1292,10 @@ const replayWouldChangeRow = async ({
     row.caseNumber !== storedCaseNumberOf(result) ||
     row.caseNumberType !== parsePrimaryReferenceType(result.caseNumberType)
   ) {
-    return true;
+    return Result.ok(true);
   }
   if (describedColumnsChanged({ input, result, row })) {
-    return true;
+    return Result.ok(true);
   }
   const sourceChanged = !shouldSkipRefresh({
     existingMetadata: row.metadata,
@@ -1176,20 +1304,21 @@ const replayWouldChangeRow = async ({
     incomingRawHash: result.rawHash,
   });
   if (sourceChanged) {
-    return true;
+    return Result.ok(true);
   }
   // The stored hash answers what reading the stored payload back would.
   if (row.contentHash !== null) {
-    return parsedOutputRequiresWrite(
-      row.contentHash,
-      corpusContentHash(payload),
+    return Result.ok(
+      parsedOutputRequiresWrite(row.contentHash, corpusContentHash(payload)),
     );
   }
-  return !(await storedPayloadMatches({
-    payload,
-    row,
-    scopedDb,
-  }));
+  return Result.ok(
+    !(await storedPayloadMatches({
+      payload,
+      row,
+      scopedDb,
+    })),
+  );
 };
 
 type ProvedReplayInputOptions = Pick<
@@ -1219,7 +1348,10 @@ const alreadyProvedReplayInput = async ({
               eq(caseLawDecisions.id, row.id),
               eq(caseLawDecisions.sourceId, sourceId),
               eq(caseLawDecisions.sourceRawS3Key, row.sourceRawS3Key),
-              sql`${caseLawDecisions.updatedAt}::text = ${row.updateToken}`,
+              timestampMatchesCasToken(
+                caseLawDecisions.updatedAt,
+                row.updateToken,
+              ),
               eq(caseLawDecisions.parserVersion, parserVersion),
               eq(caseLawDecisions.sourceHash, result.rawHash),
               eq(caseLawDecisions.sourceHashVersion, sourceFingerprintVersion),
@@ -1257,9 +1389,11 @@ const replayRow = async ({
   sourceId,
   sourceLease,
   withdraw,
+  corpus,
+  corpusBatch,
   signal,
   s3Policy,
-}: ReplayRowOptions): Promise<ReplayRowReport> => {
+}: ReplayRowOptions): Promise<Result<ReplayRowReport, unknown>> => {
   signal?.throwIfAborted();
   const base = {
     id: row.id,
@@ -1271,24 +1405,26 @@ const replayRow = async ({
   if (reparsed.type === "supplement") {
     // Written over its own row, a supplement would stay the standalone
     // decision it is not. `supplement-fold.ts` folds it into its judgment.
-    return {
+    return Result.ok({
       ...base,
       outcome: REPLAY_ROW_OUTCOME.REJECTED,
       rejection: STORED_RAW_REPARSE_REJECTION.SUPPLEMENT,
       detail: `a ${reparsed.supplement.kind} supplement; fold it instead`,
-    };
+    });
   }
 
   if (reparsed.type === "rejected") {
-    return await withdrawRejectedRow({
-      row,
-      rejection: reparsed.rejection,
-      detail: reparsed.detail,
-      rejectionPolicy,
-      scopedDb,
-      sourceLease,
-      withdraw,
-    });
+    return Result.ok(
+      await withdrawRejectedRow({
+        row,
+        rejection: reparsed.rejection,
+        detail: reparsed.detail,
+        rejectionPolicy,
+        scopedDb,
+        sourceLease,
+        withdraw,
+      }),
+    );
   }
 
   // A legacy spelling the adapter vouched for stands in for the regenerated
@@ -1306,15 +1442,15 @@ const replayRow = async ({
   });
   const selectedIdentity = decisionReplayIdentity(row.country, row);
   if (!Bun.deepEquals(regeneratedIdentity, selectedIdentity)) {
-    return {
+    return Result.ok({
       ...base,
       outcome: REPLAY_ROW_OUTCOME.REJECTED,
       rejection: STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH,
       detail: `selected ${JSON.stringify(selectedIdentity)}, regenerated ${JSON.stringify(regeneratedIdentity)}`,
-    };
+    });
   }
 
-  const changed = await replayWouldChangeRow({
+  const planned = await replayWouldChangeRow({
     metadataUrlSchema,
     row,
     // The row holds the document its supplements were composed into, which
@@ -1329,6 +1465,11 @@ const replayRow = async ({
     scopedDb,
   });
 
+  if (planned.isErr()) {
+    return planned;
+  }
+  const changed = planned.value;
+
   if (
     !changed &&
     (sourceLease === null ||
@@ -1340,7 +1481,7 @@ const replayRow = async ({
         result: reparsed.result,
       })))
   ) {
-    return { ...base, outcome: REPLAY_ROW_OUTCOME.UNCHANGED };
+    return Result.ok({ ...base, outcome: REPLAY_ROW_OUTCOME.UNCHANGED });
   }
   const candidate = {
     outcome: REPLAY_ROW_OUTCOME.WOULD_APPLY,
@@ -1351,9 +1492,9 @@ const replayRow = async ({
     decisionId: row.id,
   } as const satisfies ReplayWriteCandidate;
   if (sourceLease === null) {
-    return { ...base, outcome: candidate.outcome };
+    return Result.ok({ ...base, outcome: candidate.outcome });
   }
-  const processed = await writeReplayCandidate({
+  const written = await writeReplayCandidate({
     ...(signal === undefined ? {} : { signal }),
     ...(s3Policy === undefined ? {} : { s3Policy }),
     candidate,
@@ -1361,20 +1502,26 @@ const replayRow = async ({
     scopedDb,
     sourceId,
     resolveSourceContract,
+    corpus,
+    corpusBatch,
   });
+  if (written.isErr()) {
+    return written;
+  }
+  const processed = written.value;
   if (processed.status === PROCESS_DECISION_STATUS.RETRYABLE) {
-    return {
+    return Result.ok({
       ...base,
       outcome: REPLAY_ROW_OUTCOME.RETRYABLE,
       detail: processed.reason,
-    };
+    });
   }
-  return {
+  return Result.ok({
     ...base,
     outcome: changed
       ? REPLAY_ROW_OUTCOME.APPLIED
       : REPLAY_ROW_OUTCOME.UNCHANGED,
-  };
+  });
 };
 
 type ReplayWriteCandidate = {
@@ -1394,6 +1541,8 @@ type WriteReplayCandidateOptions = {
   scopedDb: ScopedDb;
   sourceId: SafeId<"caseLawSource">;
   resolveSourceContract: SourceContractResolver;
+  corpus: CaseLawCorpusDependencies;
+  corpusBatch: CorpusPackBatch;
 };
 
 const writeReplayCandidate = async ({
@@ -1404,6 +1553,8 @@ const writeReplayCandidate = async ({
   scopedDb,
   sourceId,
   resolveSourceContract,
+  corpus,
+  corpusBatch,
 }: WriteReplayCandidateOptions) => {
   // Ordered on the source's own counter, under its lease: the row guards
   // compare observation orders, so a replay numbering itself independently
@@ -1442,6 +1593,8 @@ const writeReplayCandidate = async ({
       // as the observation's time, which is what orders it against a crawl.
       observedAt: new Date(),
       observationOrder,
+      corpus,
+      corpusBatch,
     },
     resolveSourceContract,
   );
@@ -1450,6 +1603,8 @@ const writeReplayCandidate = async ({
 type ReplayOneRowOptions = {
   signal?: AbortSignal;
   s3Policy?: S3CredentialRefreshOptions;
+  corpus: CaseLawCorpusDependencies;
+  corpusBatch: CorpusPackBatch;
   resolveSourceContract: SourceContractResolver;
   metadataUrlSchema?: unknown;
   capability: Extract<ReplayCapability, { type: "supported" }>;
@@ -1484,6 +1639,8 @@ const replayOneRow = async ({
   sourceId,
   sourceLease,
   withdraw,
+  corpus,
+  corpusBatch,
   signal,
   s3Policy,
 }: ReplayOneRowOptions): Promise<Result<ReplayRowReport, unknown>> => {
@@ -1529,7 +1686,11 @@ const replayOneRow = async ({
     });
   }
   const parsed = await Result.tryPromise({
-    try: async () => await capability.reparse(storedInputFor(row, raw)),
+    try: async () =>
+      await capability.reparse({
+        ...storedInputFor(row, raw),
+        readObject: storedRawResultReader(readStoredRaw),
+      }),
     catch: (cause) =>
       new ReplayStageError({
         message: "Stored replay adapter failed",
@@ -1541,23 +1702,27 @@ const replayOneRow = async ({
     return parsed;
   }
   signal?.throwIfAborted();
-  return await Result.tryPromise(
-    async () =>
-      await replayRow({
-        ...(signal === undefined ? {} : { signal }),
-        ...(s3Policy === undefined ? {} : { s3Policy }),
-        row,
-        raw,
-        resolveSourceContract,
-        metadataUrlSchema,
-        reparsed: parsed.value,
-        rejectionPolicy,
-        scopedDb,
-        sourceId,
-        sourceLease,
-        withdraw,
-      }),
-  );
+  return (
+    await Result.tryPromise(
+      async () =>
+        await replayRow({
+          ...(signal === undefined ? {} : { signal }),
+          ...(s3Policy === undefined ? {} : { s3Policy }),
+          row,
+          raw,
+          resolveSourceContract,
+          metadataUrlSchema,
+          reparsed: parsed.value,
+          rejectionPolicy,
+          scopedDb,
+          sourceId,
+          sourceLease,
+          withdraw,
+          corpus,
+          corpusBatch,
+        }),
+    )
+  ).andThen((outcome) => outcome);
 };
 
 // Every row outcome completes under the source lease, including paths that
@@ -1571,6 +1736,99 @@ const completeReplayRow = async (
   }
   await options.sourceLease?.beforeDatabaseMark();
   return report;
+};
+
+type AttemptedReplayRow = { row: ReplayDecisionRow; report: ReplayRowReport };
+
+type ReplayPageAttempt = {
+  attempted: AttemptedReplayRow[];
+  /** The row whose attempt failed without a fact about it, if any. */
+  failed: { row: ReplayDecisionRow; error: unknown } | null;
+};
+
+/**
+ * Fold the page pack's answer into a row that queued payloads. The row's
+ * write reported complete when it queued them; whether they became durable
+ * is only known once the pack flushed.
+ */
+const settleQueuedReplayRow = ({
+  row,
+  report,
+  flushed,
+}: {
+  row: ReplayDecisionRow;
+  report: ReplayRowReport;
+  flushed: Result<CorpusPackBatchOutcomes, unknown>;
+}): ReplayRowReport => {
+  if (report.outcome === REPLAY_ROW_OUTCOME.RETRYABLE) {
+    return report;
+  }
+  const settled = processResultForCorpusOutcome(
+    Result.isError(flushed)
+      ? { type: "failed", error: flushed.error }
+      : flushed.value.get(row.id),
+    { decisionId: row.id, caseNumber: row.caseNumber, country: row.country },
+  );
+  return settled.status === PROCESS_DECISION_STATUS.RETRYABLE
+    ? {
+        ...report,
+        outcome: REPLAY_ROW_OUTCOME.RETRYABLE,
+        detail: settled.reason,
+      }
+    : report;
+};
+
+/**
+ * One page, one pack: every row the page writes queues its payloads into a
+ * single pack, the way an ingestion page does, so a page costs one object
+ * write rather than one per row. Rows are recorded and the cursor moves only
+ * after the pack settled them; a row whose payloads did not settle reports
+ * retryable and holds the cursor, so a resume writes it again.
+ */
+const openReplayPagePack = ({
+  scopedDb,
+  corpus,
+  s3Policy,
+}: {
+  scopedDb: ScopedDb;
+  corpus: CaseLawCorpusDependencies;
+  s3Policy: S3CredentialRefreshOptions | undefined;
+}) => {
+  const pack = openCorpusPackBatch({
+    scopedDb,
+    transfer: corpus.transfer,
+    ...(s3Policy === undefined ? {} : { s3Policy }),
+  });
+  const queued = new Set<SafeId<"caseLawDecision">>();
+  const corpusBatch: CorpusPackBatch = {
+    enqueue: (entry) => {
+      const enqueued = pack.enqueue(entry);
+      if (Result.isOk(enqueued)) {
+        queued.add(entry.decisionId);
+      }
+      return enqueued;
+    },
+    flush: pack.flush,
+  };
+  return {
+    corpusBatch,
+    /**
+     * Send the pack, whatever stopped the page: the rows already written are
+     * waiting for their payloads. Like an ingestion page, it is drained
+     * independently of the caller's signal.
+     */
+    settle: async (
+      attempted: readonly AttemptedReplayRow[],
+    ): Promise<AttemptedReplayRow[]> => {
+      const flushed = await corpusBatch.flush();
+      return attempted.map(({ row, report }) => ({
+        row,
+        report: queued.has(row.id)
+          ? settleQueuedReplayRow({ row, report, flushed })
+          : report,
+      }));
+    },
+  };
 };
 
 /** Bounded, printable context for a failure that halted the run. */
@@ -1597,15 +1855,10 @@ const failureDetail = (error: unknown): string => {
 /** Pause between lease attempts while a replay waits for the source. */
 export const REPLAY_LEASE_RETRY_PAUSE_MS = 5000;
 
-export type ReplayLeaseAcquisition<TLease> =
-  | { type: "acquired"; lease: TLease; waitedMs: number }
-  | { type: "unavailable"; waitedMs: number };
-
-// Generic over the lease because the wait reads nothing from it: an acquire
-// either produced one or did not.
-export type AcquireReplayLeaseOptions<TLease> = {
-  acquire: () => Promise<TLease | null>;
-  /** Paused time the acquire may be retried for; 0 attempts once. */
+type WithReplayLeaseOptions<T> = {
+  /** One complete operation under the source's lease; `null` while it is held. */
+  run: () => Promise<T | null>;
+  /** Paused time the operation may be retried for; 0 attempts once. */
   waitBudgetMs: number;
   /** Called once, when the first attempt lost and the wait begins. */
   onWaitStart?: () => void;
@@ -1614,7 +1867,8 @@ export type AcquireReplayLeaseOptions<TLease> = {
 };
 
 /**
- * Take a source's ingestion lease, waiting out an ingestion that holds it.
+ * Wait for a lease owner to run one complete operation, without exporting
+ * its lease, waiting out an ingestion that holds the source.
  *
  * An ingestion takes the lease per reconciliation unit and releases it in
  * between, so a single attempt made while the source is being crawled loses
@@ -1625,30 +1879,30 @@ export type AcquireReplayLeaseOptions<TLease> = {
  * counting attempts too would make the number of tries depend on database
  * latency.
  */
-export const acquireReplayLease = async <TLease>({
-  acquire,
+export const runWithReplayLease = async <T>({
+  run,
   waitBudgetMs,
   onWaitStart,
   sleep = Bun.sleep,
-}: AcquireReplayLeaseOptions<TLease>): Promise<
-  ReplayLeaseAcquisition<TLease>
+}: WithReplayLeaseOptions<T>): Promise<
+  | { type: "completed"; value: T; waitedMs: number }
+  | { type: "unavailable"; waitedMs: number }
 > => {
-  const lease = await acquire();
-  if (lease !== null) {
-    return { type: "acquired", lease, waitedMs: 0 };
+  const first = await run();
+  if (first !== null) {
+    return { type: "completed", value: first, waitedMs: 0 };
   }
   if (waitBudgetMs < REPLAY_LEASE_RETRY_PAUSE_MS) {
     return { type: "unavailable", waitedMs: 0 };
   }
-
   onWaitStart?.();
   let waitedMs = 0;
   while (waitedMs + REPLAY_LEASE_RETRY_PAUSE_MS <= waitBudgetMs) {
     await sleep(REPLAY_LEASE_RETRY_PAUSE_MS);
     waitedMs += REPLAY_LEASE_RETRY_PAUSE_MS;
-    const retried = await acquire();
-    if (retried !== null) {
-      return { type: "acquired", lease: retried, waitedMs };
+    const value = await run();
+    if (value !== null) {
+      return { type: "completed", value, waitedMs };
     }
   }
   return { type: "unavailable", waitedMs };
@@ -1689,6 +1943,8 @@ export type ReplayCaseLawSourceOptions = {
   rejectionPolicy?: ReplayRejectionPolicy;
   /** Test seam; production withdraws through the canonical stores. */
   withdraw?: WithdrawDocument;
+  /** Test seam; production writes each page's pack to the corpus store. */
+  corpus?: CaseLawCorpusDependencies;
   /**
    * Receives every visited row's report, in walk order. The report's
    * problem listing is a sample; this sees every row. A failure stops the
@@ -1771,6 +2027,7 @@ export const replayCaseLawSource = async ({
   onRow,
   rejectionPolicy = REPLAY_REJECTION_POLICY.REPORT,
   withdraw = withdrawCaseLawDecisionDocument,
+  corpus = CASE_LAW_CORPUS_DEPENDENCIES,
   recordRow,
   signal,
   s3Policy,
@@ -1821,47 +2078,80 @@ export const replayCaseLawSource = async ({
     },
   });
 
-  const replayPage = async (
+  /** The page's rows in order, into its pack; stops where the walk would. */
+  const attemptRows = async (
     page: readonly ReplayDecisionRow[],
+    corpusBatch: CorpusPackBatch,
+    attempted: AttemptedReplayRow[] = [],
     index = 0,
-  ): Promise<{ type: "complete" } | { type: "halted" }> => {
+  ): Promise<ReplayPageAttempt> => {
     const row = page.at(index);
     if (row === undefined) {
-      return { type: "complete" };
+      return { attempted, failed: null };
     }
+    const attempt = (
+      await Result.tryPromise({
+        try: async () =>
+          await completeReplayRow({
+            ...(signal === undefined ? {} : { signal }),
+            ...(s3Policy === undefined ? {} : { s3Policy }),
+            resolveSourceContract,
+            metadataUrlSchema: metadataUrlSchemaForAdapter(adapter.key),
+            capability,
+            readStoredRaw,
+            ...(expectedRawS3Key === undefined ? {} : { expectedRawS3Key }),
+            row,
+            rejectionPolicy,
+            scopedDb,
+            sourceId,
+            sourceLease,
+            withdraw,
+            corpus,
+            corpusBatch,
+          }),
+        catch: (cause) => cause,
+      })
+    ).andThen((result) => result);
+    if (Result.isError(attempt)) {
+      return { attempted, failed: { row, error: attempt.error } };
+    }
+    attempted.push({ row, report: attempt.value });
+    return attempt.value.outcome === REPLAY_ROW_OUTCOME.RETRYABLE
+      ? { attempted, failed: null }
+      : await attemptRows(page, corpusBatch, attempted, index + 1);
+  };
 
-    const attempted = await Result.tryPromise({
-      try: async () =>
-        await completeReplayRow({
-          ...(signal === undefined ? {} : { signal }),
-          ...(s3Policy === undefined ? {} : { s3Policy }),
-          resolveSourceContract,
-          metadataUrlSchema: metadataUrlSchemaForAdapter(adapter.key),
-          capability,
-          readStoredRaw,
-          ...(expectedRawS3Key === undefined ? {} : { expectedRawS3Key }),
-          row,
-          rejectionPolicy,
-          scopedDb,
-          sourceId,
-          sourceLease,
-          withdraw,
-        }),
-      catch: (cause) => cause,
-    });
-
-    const attempt = attempted.andThen((result) => result);
-
+  const replayPage = async (
+    page: readonly ReplayDecisionRow[],
+  ): Promise<{ type: "complete" } | { type: "halted" }> => {
+    const pack = openReplayPagePack({ scopedDb, corpus, s3Policy });
+    const attempt = await attemptRows(page, pack.corpusBatch);
+    const recorded = await recordRows(await pack.settle(attempt.attempted));
+    if (recorded.type === "halted") {
+      return recorded;
+    }
     // A failure that says nothing about the row (a payload read that did
     // not confirm absence, a database error) is not a fact to record
     // against it. The run stops with the cursor still behind the row, so
     // resuming re-attempts it instead of stepping over it forever.
-    if (Result.isError(attempt)) {
-      failure = classifyReplayFailure(attempt.error);
-      haltReason = `${row.caseNumber} (${row.language}) could not be replayed: ${failureDetail(attempt.error)}`;
-      return { type: "halted" };
+    if (attempt.failed === null) {
+      return { type: "complete" };
     }
-    const rowReport = attempt.value;
+    const { row, error } = attempt.failed;
+    failure = classifyReplayFailure(error);
+    haltReason = `${row.caseNumber} (${row.language}) could not be replayed: ${failureDetail(error)}`;
+    return { type: "halted" };
+  };
+
+  const recordRows = async (
+    rows: readonly AttemptedReplayRow[],
+    index = 0,
+  ): Promise<{ type: "complete" } | { type: "halted" }> => {
+    const attempted = rows.at(index);
+    if (attempted === undefined) {
+      return { type: "complete" };
+    }
+    const { row, report: rowReport } = attempted;
     await onRow?.({ row, report: rowReport });
 
     visited += 1;
@@ -1903,7 +2193,7 @@ export const replayCaseLawSource = async ({
       haltReason = `result of ${row.caseNumber} (${row.language}) could not be recorded (${failureDetail(recorded.error)}): ${JSON.stringify(rowReport)}`;
       return { type: "halted" };
     }
-    return await replayPage(page, index + 1);
+    return await recordRows(rows, index + 1);
   };
 
   // Read before the first page: the walk visits the rows the scope held when

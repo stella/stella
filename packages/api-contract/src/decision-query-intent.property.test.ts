@@ -4,7 +4,6 @@ import fc from "fast-check";
 
 import {
   assertProperty,
-  propertyConfig,
   propertySeed,
   propertyTestTimeout,
 } from "@stll/property-testing";
@@ -65,7 +64,8 @@ describe("case-law query parser properties", () => {
   test(
     "canonical docket values parse to a stable canonical identifier",
     () => {
-      fc.assert(
+      assertProperty(
+        "canonical docket values parse to a stable canonical identifier",
         fc.property(
           fc.oneof(
             fc.constantFrom(...canonicalDockets),
@@ -89,7 +89,7 @@ describe("case-law query parser properties", () => {
             expect(parseDecisionQuery(first.value)).toEqual(first);
           },
         ),
-        propertyConfig({ seed: propertySeed() }),
+        { seed: propertySeed() },
       );
     },
     propertyTestTimeout(10_000),
@@ -98,11 +98,12 @@ describe("case-law query parser properties", () => {
   test(
     "operator shaped unrecognized entries remain intact text",
     () => {
-      fc.assert(
+      assertProperty(
+        "operator shaped unrecognized entries remain intact text",
         fc.property(adversarialText, (text) => {
           expect(parseDecisionQuery(text)).toEqual({ type: "text", text });
         }),
-        propertyConfig({ seed: propertySeed() }),
+        { seed: propertySeed() },
       );
     },
     propertyTestTimeout(10_000),

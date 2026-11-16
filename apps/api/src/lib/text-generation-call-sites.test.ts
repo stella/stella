@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
 
+import { createTestState } from "@stll/test-state";
+
 import { env } from "@/api/env";
 import {
   PENDING_TEXT_CALL_SITES,
@@ -18,7 +20,6 @@ import {
   loadProviderWireCassettes,
 } from "@/api/tests/helpers/provider-wire-cassette";
 import { STRUCTURED_OUTPUT_ENTRY_POINTS } from "@/api/tests/helpers/structured-output-role-fixtures";
-import { createTestState } from "@/api/tests/helpers/test-state";
 
 // Every handler that reads a text generation's answer against every provider
 // wire cassette: the real handler, generation seam, model resolution and

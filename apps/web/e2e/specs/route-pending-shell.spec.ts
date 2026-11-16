@@ -1,4 +1,9 @@
 import type { Page } from "@playwright/test";
+
+import {
+  PLAYWRIGHT_EXPECT_TIMEOUT_2_SECONDS_MS,
+  PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+} from "../helpers/wait-budgets";
 import "@tanstack/react-router";
 
 import { appShellNavigationLink } from "../helpers/app-shell";
@@ -10,9 +15,16 @@ const cases = [
   { path: "/contacts", listPath: "/v1/contacts" },
 ] as const;
 
+// The router slice this spec patches; AnyRouter types it as any.
+type HeldRoute = {
+  options: { loader?: (context: unknown) => unknown };
+  update: (options: { loader: (context: unknown) => unknown }) => void;
+};
+type HeldRouter = { routesById: Record<string, HeldRoute | undefined> };
+
 const holdProtectedLoader = async (page: Page, path: string) => {
   await page.evaluate((targetPath) => {
-    const router = window.__TSR_ROUTER__;
+    const router = window.__TSR_ROUTER__ as unknown as HeldRouter | undefined;
     const route = router?.routesById["/_protected"];
     const original = route?.options.loader;
     if (route === undefined || typeof original !== "function") {
@@ -103,7 +115,7 @@ for (const { path, listPath } of cases) {
     });
     await page.goto("/knowledge", { waitUntil: "commit" });
     await expect(appShellNavigationLink(page, path)).toBeVisible({
-      timeout: 30_000,
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
     });
     await expectSingleShell(page);
     const list = await holdRequest(page, listPath);
@@ -130,7 +142,7 @@ for (const { path, listPath } of cases) {
       await expect(page.locator("html")).toHaveAttribute(
         "data-parent-loader-settled",
         "true",
-        { timeout: 2000 },
+        { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_2_SECONDS_MS },
       );
       // The router can retain the parent fallback until its child settles.
       // Prove the actual page loader remains in flight instead of requiring
@@ -138,11 +150,11 @@ for (const { path, listPath } of cases) {
       await expect(page.locator("html")).toHaveAttribute(
         "data-page-loader-state",
         "running",
-        { timeout: 2000 },
+        { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_2_SECONDS_MS },
       );
       await expect(
         content.locator('[data-slot="skeleton"]').first(),
-      ).toBeVisible({ timeout: 2000 });
+      ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_2_SECONDS_MS });
       await expectSingleShell(page);
 
       const listResponse = page.waitForResponse(

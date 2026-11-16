@@ -14,6 +14,7 @@ import { entityFeatureGateMetadata } from "@/api/db/entity-feature-gate-metadata
 import * as schema from "@/api/db/schema";
 import { workspaces } from "@/api/db/schema";
 import {
+  WORKSPACE_DELETION_BLOCKING_TABLES,
   WORKSPACE_DELETION_MANUAL_TABLES,
   WORKSPACE_DELETION_RETAINED_TABLES,
   WORKSPACE_STORAGE_CLASS,
@@ -74,6 +75,9 @@ const clearedBySiblingForeignKey = (
 const retainedTables: ReadonlySet<PgTable> = new Set(
   WORKSPACE_DELETION_RETAINED_TABLES,
 );
+const blockingTables: ReadonlySet<PgTable> = new Set(
+  WORKSPACE_DELETION_BLOCKING_TABLES,
+);
 
 const deletionClosure = (): Set<PgTable> => {
   const closure = new Set<PgTable>([
@@ -124,7 +128,8 @@ describe("workspace deletion coverage", () => {
         !closure.has(edge.child) &&
         // A retained row blocks the deletion: the fence refuses its own
         // matter, and its restrictive references refuse any other.
-        !retainedTables.has(edge.child),
+        !retainedTables.has(edge.child) &&
+        !blockingTables.has(edge.child),
     );
     expect(
       uncovered.map(
@@ -144,6 +149,21 @@ describe("workspace deletion coverage", () => {
       );
       expect(references.length).toBeGreaterThan(0);
       expect(references.every((edge) => edge.onDelete === "no action")).toBe(
+        true,
+      );
+    }
+  });
+
+  test("blocking tables refuse deletion through restrictive references only", () => {
+    const closure = deletionClosure();
+    const edges = foreignKeyEdges();
+    for (const table of blockingTables) {
+      expect(closure.has(table)).toBe(false);
+      const references = edges.filter(
+        (edge) => edge.child === table && closure.has(edge.parent),
+      );
+      expect(references.length).toBeGreaterThan(0);
+      expect(references.every((edge) => edge.onDelete === "restrict")).toBe(
         true,
       );
     }

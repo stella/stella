@@ -80,6 +80,7 @@ export const RowNumberLabel = ({
 );
 
 type SelectRowContentProps<TRow extends TableRowData> = {
+  ariaLabel?: string | undefined;
   firstLine: RowFirstLine;
   index: number;
   label: string;
@@ -89,6 +90,7 @@ type SelectRowContentProps<TRow extends TableRowData> = {
 };
 
 export const SelectRowContent = <TRow extends TableRowData = TableTreeNode>({
+  ariaLabel,
   firstLine,
   index,
   label,
@@ -127,7 +129,7 @@ export const SelectRowContent = <TRow extends TableRowData = TableTreeNode>({
   return (
     <button
       aria-checked={someSelected ? "mixed" : selected}
-      aria-label={label}
+      aria-label={ariaLabel ?? label}
       className="group/selection ring-ring hover:bg-muted/50 absolute inset-0 min-w-12 shrink-0 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-inset"
       data-slot="table-selection-cell"
       onClick={(event) => {

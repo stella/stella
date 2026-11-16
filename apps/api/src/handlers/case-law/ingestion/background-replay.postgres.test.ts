@@ -9,6 +9,7 @@ import {
   type HeavyWorkKind,
 } from "@stll/db-load-gate/slot";
 import { waitForExternalState } from "@stll/property-testing/external-state";
+import { createTestState } from "@stll/test-state";
 
 import {
   CORPUS_SCHEMA_LANE_LOCK_SQL,
@@ -30,11 +31,6 @@ import {
 import { envBase } from "@/api/env-base";
 import { envDbLoadGate } from "@/api/env-db-load-gate";
 import {
-  EMPTY_AST,
-  type SourceAdapter,
-  type StoredRawReader,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import {
   type BackgroundReplayBatch,
   type BackgroundReplaySource,
   type BackgroundReplayTickReport,
@@ -46,10 +42,7 @@ import {
   REPLAY_ROW_OUTCOME,
   type ReplayRunReport,
 } from "@/api/handlers/case-law/ingestion/replay";
-import {
-  BACKGROUND_REPLAY_LIMITS,
-  REPLAY_ENROLMENT,
-} from "@/api/handlers/case-law/ingestion/replay-enrolment";
+import { BACKGROUND_REPLAY_LIMITS } from "@/api/handlers/case-law/ingestion/replay-enrolment";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
   absentDecisionTextFields,
@@ -63,6 +56,11 @@ import {
   ADAPTER_KEYS,
   PARSER_VERSIONS,
 } from "@/api/lib/legal-search/ingestion-constants";
+import {
+  EMPTY_AST,
+  type SourceAdapter,
+  type StoredRawReader,
+} from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import {
   RAW_SOURCE_FAMILY,
@@ -74,7 +72,10 @@ import {
   withGatedTestClients,
 } from "@/api/tests/gated-test-database";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import { OFF_REPLAY_ENROLMENT_FIXTURE } from "@/api/tests/helpers/replay-enrolment";
 import { runReplayTickFixture } from "@/api/tests/helpers/replay-tick";
+
+const testState = createTestState({ file: import.meta.path, config: {} });
 
 /** A replayed raw key is reported only when the reserved batch has one. */
 const replayedKeyOf = (key: string | null) =>
@@ -1250,9 +1251,9 @@ if (!databaseUrl || !enabled) {
         const oldEnabled = process.env["CASE_LAW_REPLAY_ENABLED"];
         const oldKill = process.env["CASE_LAW_REPLAY_KILL_SWITCH"];
         const oldDisabled = process.env["CASE_LAW_REPLAY_DISABLED_SOURCES"];
-        process.env["CASE_LAW_REPLAY_ENABLED"] = "true";
-        process.env["CASE_LAW_REPLAY_KILL_SWITCH"] = "false";
-        process.env["CASE_LAW_REPLAY_DISABLED_SOURCES"] = "";
+        testState.setEnv("CASE_LAW_REPLAY_ENABLED", "true");
+        testState.setEnv("CASE_LAW_REPLAY_KILL_SWITCH", "false");
+        testState.setEnv("CASE_LAW_REPLAY_DISABLED_SOURCES", "");
         const fake = startReplayFixtureStorage();
         const rawKey = rawSourcePayloadKey({
           owner: {
@@ -1276,7 +1277,7 @@ if (!databaseUrl || !enabled) {
             PARSER_VERSIONS[ADAPTER_KEYS.EU_ECJ],
           );
           const enrolment = {
-            ...REPLAY_ENROLMENT,
+            ...OFF_REPLAY_ENROLMENT_FIXTURE,
             [ADAPTER_KEYS.EU_ECJ]: {
               mode: "enrolled",
               dailyBudget: 3,
@@ -1370,19 +1371,19 @@ if (!databaseUrl || !enabled) {
         } finally {
           fake.stop();
           if (oldEnabled === undefined) {
-            delete process.env["CASE_LAW_REPLAY_ENABLED"];
+            testState.deleteEnv("CASE_LAW_REPLAY_ENABLED");
           } else {
-            process.env["CASE_LAW_REPLAY_ENABLED"] = oldEnabled;
+            testState.setEnv("CASE_LAW_REPLAY_ENABLED", oldEnabled);
           }
           if (oldKill === undefined) {
-            delete process.env["CASE_LAW_REPLAY_KILL_SWITCH"];
+            testState.deleteEnv("CASE_LAW_REPLAY_KILL_SWITCH");
           } else {
-            process.env["CASE_LAW_REPLAY_KILL_SWITCH"] = oldKill;
+            testState.setEnv("CASE_LAW_REPLAY_KILL_SWITCH", oldKill);
           }
           if (oldDisabled === undefined) {
-            delete process.env["CASE_LAW_REPLAY_DISABLED_SOURCES"];
+            testState.deleteEnv("CASE_LAW_REPLAY_DISABLED_SOURCES");
           } else {
-            process.env["CASE_LAW_REPLAY_DISABLED_SOURCES"] = oldDisabled;
+            testState.setEnv("CASE_LAW_REPLAY_DISABLED_SOURCES", oldDisabled);
           }
           await db
             .delete(databaseBackfillStates)

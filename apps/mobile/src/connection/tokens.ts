@@ -9,6 +9,8 @@ const tokenResponseSchema = v.object({
   access_token: v.pipe(v.string(), v.minLength(1)),
   expires_in: v.pipe(v.number(), v.minValue(1)),
   refresh_token: v.optional(v.pipe(v.string(), v.minLength(1))),
+  /** Present when the grant includes `openid`, which the app always asks for. */
+  id_token: v.optional(v.pipe(v.string(), v.minLength(1))),
   token_type: v.string(),
 });
 
@@ -47,6 +49,7 @@ const requestTokens = async (
       new TokenError({
         message: `The token endpoint responded ${status}`,
         oauthError: refusal.success ? refusal.output.error : undefined,
+        status,
       }),
     );
   }
@@ -56,7 +59,10 @@ const requestTokens = async (
     : Result.err(
         new TokenError({
           message: "The token endpoint answered an unexpected body",
-          cause: new v.ValiError(tokens.issues),
+          cause: tokens.issues.map((issue) => ({
+            message: issue.message,
+            path: issue.path?.map((item) => String(item.key)),
+          })),
         }),
       );
 };

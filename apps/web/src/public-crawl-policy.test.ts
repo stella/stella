@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import nodePath from "node:path";
 
 import { loadCatalogue } from "@stll/catalogue";
 
@@ -11,6 +12,7 @@ import type { FileRouteTypes } from "@/routeTree.gen";
 import {
   createPublicCrawlRules,
   isPublicCrawlPath,
+  PUBLIC_CRAWL_ASSETS,
   PUBLIC_CRAWL_ROUTES,
   type PublicCrawlOptions,
 } from "./public-crawl-policy";
@@ -27,6 +29,19 @@ const options = {
 } as const satisfies PublicCrawlOptions;
 
 describe("public crawl policy", () => {
+  test("published ownership proofs match their crawlable static assets", async () => {
+    for (const { path } of PUBLIC_CRAWL_ASSETS) {
+      const key = await Bun.file(
+        nodePath.join(import.meta.dir, "../public", path),
+      ).text();
+      expect(`${key.trim()}.txt`).toBe(path.slice(1));
+      expect(isPublicCrawlPath(path, options)).toBe(true);
+      expect(isPublicCrawlPath(`${path}/other`, options)).toBe(false);
+      expect(
+        isPublicCrawlPath(path, { ...options, publicLawCrawlAllowed: false }),
+      ).toBe(false);
+    }
+  });
   test("declares a route for each crawl surface", () => {
     expect(new Set(crawlRoutes.map(({ path }) => path)).size).toBe(
       crawlRoutes.length,

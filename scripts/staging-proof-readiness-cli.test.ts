@@ -64,6 +64,7 @@ for (const fixture of [
       commit: COMMIT,
       deployEnvironment: "production",
     }),
+    sample: "wrong-deployment" as const,
   },
   { name: "malformed JSON", status: 200, body: "not JSON" },
   {
@@ -79,6 +80,7 @@ for (const fixture of [
       commit: "b".repeat(40),
       status: "ready",
     },
+    sample: "wrong-deployment" as const,
   },
   {
     name: "an unhealthy status",
@@ -98,7 +100,7 @@ for (const fixture of [
   { name: "a null payload", status: 200, body: "null" },
   { name: "an array payload", status: 200, body: "[]" },
 ]) {
-  test(`${fixture.name} is not ready`, async () => {
+  test(`${fixture.name} is ${"sample" in fixture ? "another deployment" : "not ready"}`, async () => {
     const server = Bun.serve({
       hostname: "127.0.0.1",
       port: 0,
@@ -119,7 +121,9 @@ for (const fixture of [
       expect(
         await readStagingReadiness(options(server.url)),
         "rejection" in fixture ? fixture.rejection.reason : fixture.name,
-      ).toEqual({ status: "not-ready" });
+      ).toEqual({
+        status: "sample" in fixture ? fixture.sample : "not-ready",
+      });
     } finally {
       await server.stop(true);
     }
@@ -197,7 +201,10 @@ const runFault = async (fault: string) => {
     } else if (fault === "invalid-state") {
       await writeFile(statePath, JSON.stringify({ status: "unknown" }));
     } else if (fault === "report-output" || fault === "report-summary") {
-      await writeFile(statePath, JSON.stringify({ status: "ready" }));
+      await writeFile(
+        statePath,
+        JSON.stringify({ status: "ready", recoveredGapsMs: [] }),
+      );
       await mkdir(fault === "report-output" ? output : summary);
     } else if (fault === "invalid-url") {
       mode = "wait";
@@ -241,6 +248,63 @@ const runFault = async (fault: string) => {
     await rm(directory, { recursive: true, force: true });
   }
 };
+
+test("a recovered readiness gap finishes ready and is named as a warning", async () => {
+  const { mkdtemp, readFile, rm, writeFile } = await import("node:fs/promises");
+  const { default: path } = await import("node:path");
+  const directory = await mkdtemp(
+    path.resolve(import.meta.dir, "../.proof-gap-test-"),
+  );
+  const statePath = path.join(directory, "state.json");
+  const summary = path.join(directory, "summary");
+  const output = path.join(directory, "output");
+  try {
+    for (const [recoveredGapsMs, warned] of [
+      [[42_400], true],
+      [[], false],
+    ] as const) {
+      await rm(summary, { force: true });
+      await rm(output, { force: true });
+      await writeFile(
+        statePath,
+        JSON.stringify({ status: "ready", recoveredGapsMs }),
+      );
+      const child = Bun.spawn(
+        [
+          process.execPath,
+          path.join(import.meta.dir, "staging-proof-readiness-cli.ts"),
+          "finish",
+        ],
+        {
+          env: {
+            PATH: process.env["PATH"] ?? "",
+            STAGING_PROOF_STATE_PATH: statePath,
+            STAGING_PROOF_PREFLIGHT: "ready",
+            GITHUB_OUTPUT: output,
+            GITHUB_STEP_SUMMARY: summary,
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      const [exitCode, stdout] = await Promise.all([
+        child.exited,
+        new Response(child.stdout).text(),
+      ]);
+      expect(exitCode).toBe(0);
+      expect(await readFile(output, "utf-8")).toBe("status=ready\n");
+      const report = await readFile(summary, "utf-8");
+      expect(
+        report.includes(
+          "WARNING: task replaced during proof: readiness returned to the same commit after 42 s",
+        ),
+      ).toBe(warned);
+      expect(stdout.includes("::warning title=task-replaced::")).toBe(warned);
+    }
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
 
 for (const fault of [
   "missing-state",
@@ -327,85 +391,103 @@ test("current deployment initialization failures stop proof with an escaped summ
   }
 });
 
-for (const status of ["ok", "unavailable"]) {
-  test(`preflight uses the deployment checker's stable readiness probes for ${status}`, async () => {
-    const { mkdtemp, readFile, rm, writeFile } =
-      await import("node:fs/promises");
-    const { default: path } = await import("node:path");
-    const directory = await mkdtemp(
-      path.resolve(import.meta.dir, "../.proof-wait-test-"),
-    );
-    const statePath = path.join(directory, "state.json");
-    const output = path.join(directory, "output");
-    let reads = 0;
-    const server = Bun.serve({
-      hostname: "127.0.0.1",
-      port: 0,
-      fetch: (request) => {
-        expect(new URL(request.url).pathname).toBe("/ready");
-        expect(request.headers.get("x-fixture-edge-token")).toBe(
-          "fixture-access-token",
-        );
-        reads += 1;
-        return Response.json({
-          status,
-          commit: COMMIT,
-          deployEnvironment: "staging",
-        });
-      },
-    });
-    try {
-      await writeFile(
-        `${statePath}.ecs.json`,
-        JSON.stringify({
-          commit: COMMIT,
-          scope: ["api"],
-          services: [
-            {
-              service: "api",
-              deploymentId: "ecs-svc/current",
-              tasks: [{ startedBy: "ecs-svc/current", lastStatus: "RUNNING" }],
-            },
-          ],
-        }),
+for (const recorded of [true, false]) {
+  for (const status of ["ok", "unavailable"]) {
+    test(`preflight uses the deployment checker's stable readiness probes for ${status}${recorded ? "" : " without a receipt"}`, async () => {
+      const { mkdtemp, readFile, rm, writeFile } =
+        await import("node:fs/promises");
+      const { default: path } = await import("node:path");
+      const directory = await mkdtemp(
+        path.resolve(import.meta.dir, "../.proof-wait-test-"),
       );
-      const child = Bun.spawn(
-        [
-          process.execPath,
-          path.join(import.meta.dir, "staging-proof-readiness-cli.ts"),
-          "wait",
-        ],
-        {
-          env: {
-            PATH: process.env["PATH"] ?? "",
-            STAGING_PROOF_STATE_PATH: statePath,
-            EXPECTED_COMMIT: COMMIT,
-            E2E_API_URL: server.url.toString(),
-            E2E_EDGE_HEADER_NAME: "x-fixture-edge-token",
-            E2E_EDGE_HEADER_VALUE: "fixture-access-token",
-            API_DEPLOYMENT_ATTEMPTS: "5",
-            API_DEPLOYMENT_DELAY_MS: "1",
-            GITHUB_OUTPUT: output,
-          },
-          stdout: "pipe",
-          stderr: "pipe",
+      const statePath = path.join(directory, "state.json");
+      const output = path.join(directory, "output");
+      const summary = path.join(directory, "summary");
+      let reads = 0;
+      const server = Bun.serve({
+        hostname: "127.0.0.1",
+        port: 0,
+        fetch: (request) => {
+          expect(new URL(request.url).pathname).toBe("/ready");
+          expect(request.headers.get("x-fixture-edge-token")).toBe(
+            "fixture-access-token",
+          );
+          reads += 1;
+          return Response.json({
+            status,
+            commit: COMMIT,
+            deployEnvironment: "staging",
+          });
         },
-      );
-      const [exitCode, stdout, stderr] = await Promise.all([
-        child.exited,
-        new Response(child.stdout).text(),
-        new Response(child.stderr).text(),
-      ]);
-      expect(reads).toBe(5);
-      expect(exitCode, stderr).toBe(status === "ok" ? 0 : 78);
-      expect(await readFile(output, "utf-8")).toBe(
-        `status=${status === "ok" ? "ready" : "environment-unavailable"}\n`,
-      );
-      expect(stdout).not.toContain("fixture-access-token");
-      expect(stderr).not.toContain("fixture-access-token");
-    } finally {
-      await server.stop(true);
-      await rm(directory, { recursive: true, force: true });
-    }
-  });
+      });
+      try {
+        if (recorded) {
+          await writeFile(
+            `${statePath}.ecs.json`,
+            JSON.stringify({
+              commit: COMMIT,
+              scope: ["api"],
+              services: [
+                {
+                  service: "api",
+                  deploymentId: "ecs-svc/current",
+                  tasks: [
+                    { startedBy: "ecs-svc/current", lastStatus: "RUNNING" },
+                  ],
+                },
+              ],
+            }),
+          );
+        }
+        const child = Bun.spawn(
+          [
+            process.execPath,
+            path.join(import.meta.dir, "staging-proof-readiness-cli.ts"),
+            "wait",
+          ],
+          {
+            env: {
+              PATH: process.env["PATH"] ?? "",
+              STAGING_PROOF_STATE_PATH: statePath,
+              EXPECTED_COMMIT: COMMIT,
+              E2E_API_URL: server.url.toString(),
+              E2E_EDGE_HEADER_NAME: "x-fixture-edge-token",
+              E2E_EDGE_HEADER_VALUE: "fixture-access-token",
+              API_DEPLOYMENT_ATTEMPTS: "5",
+              API_DEPLOYMENT_DELAY_MS: "1",
+              GITHUB_OUTPUT: output,
+              GITHUB_STEP_SUMMARY: summary,
+            },
+            stdout: "pipe",
+            stderr: "pipe",
+          },
+        );
+        const [exitCode, stdout, stderr] = await Promise.all([
+          child.exited,
+          new Response(child.stdout).text(),
+          new Response(child.stderr).text(),
+        ]);
+        expect(reads).toBe(5);
+        expect(exitCode, stderr).toBe(status === "ok" ? 0 : 78);
+        expect(await readFile(output, "utf-8")).toBe(
+          `status=${status === "ok" ? "ready" : "environment-unavailable"}\n`,
+        );
+        expect(stdout).not.toContain("fixture-access-token");
+        expect(stderr).not.toContain("fixture-access-token");
+        // Without a receipt the readiness probes still decide, with a warning.
+        const report = await readFile(summary, "utf-8");
+        expect(
+          report.includes(
+            "WARNING: ECS readiness receipt not produced by infra",
+          ),
+        ).toBe(!recorded);
+        expect(stdout.includes("::warning title=receipt-unrecorded::")).toBe(
+          !recorded,
+        );
+      } finally {
+        await server.stop(true);
+        await rm(directory, { recursive: true, force: true });
+      }
+    });
+  }
 }

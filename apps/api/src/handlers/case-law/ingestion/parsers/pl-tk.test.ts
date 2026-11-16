@@ -6,9 +6,9 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import * as cheerio from "cheerio";
 import fc from "fast-check";
 
+import { load } from "@stll/html";
 import {
   type Block,
   hasInlineChildren,
@@ -20,13 +20,15 @@ import { extractCitations } from "@/api/handlers/case-law/ingestion/citation-ext
 import {
   listPlTkPageFields,
   parsePlTkPage,
-  parsePlTkText,
+  parsePlTkText as uncheckedParsePlTkText,
   parsePolishDate,
   readPlTkCasePage,
   readPlTkRuling,
-  validatePlTkBlocks,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-tk";
 import { segmentDecision } from "@/api/lib/legal-search/segment-decision";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+const parsePlTkText = guardParser(uncheckedParsePlTkText);
 
 const FIXTURES = new URL("__fixtures__/", import.meta.url);
 
@@ -400,24 +402,6 @@ describe("what the portal's markup states beyond the words", () => {
     // `<font class="wyrok_kursywa">` around Latin phrases in the reasons.
     expect(serialized).toContain('"type":"italic"');
   });
-
-  test("the text is checked against the portal's markup, so dropped text is caught", async () => {
-    const { textHtml, blocks } = await judgmentBlocks();
-
-    const whole = validatePlTkBlocks("K 2/26", textHtml, blocks);
-    const truncated = validatePlTkBlocks(
-      "K 2/26",
-      textHtml,
-      blocks.slice(0, 40),
-    );
-
-    expect(whole.issues.map((issue) => issue.code)).not.toContain(
-      "CONTENT_LOSS",
-    );
-    expect(truncated.issues.map((issue) => issue.code)).toContain(
-      "CONTENT_LOSS",
-    );
-  });
 });
 
 describe("the court a ruling names", () => {
@@ -477,7 +461,7 @@ for (const href of [
   ["javascript", "alert(1)"].join(":"),
 ]) {
   test(`portal document links retain known-base resolution or whole-entry omission: ${href}`, async () => {
-    const $ = cheerio.load(await casePage("pl-tk-case-k-2-26.html.gz"));
+    const $ = load(await casePage("pl-tk-case-k-2-26.html.gz"));
     const documents = $('[id="sprawaForm:tabView:dokumentyWSprawie"]');
     documents.empty().append("<ul><li><a>Document</a></li></ul>");
     documents.find("a").attr("href", href);
@@ -681,11 +665,7 @@ describe("the portal's typesetting, read as a browser lays it out", () => {
       <div id="tekst_1"><p>word${gap}<span class="wyrok_indeks_gorny">1</span></p></div>
     </div>`);
       const ruling = readPlTkRuling(page, "1");
-      expect(
-        cheerio
-          .load(ruling?.textHtml ?? "")("p")
-          .text(),
-      ).toBe(`word${kept}1`);
+      expect(load(ruling?.textHtml ?? "")("p").text()).toBe(`word${kept}1`);
     },
   );
 

@@ -1,8 +1,10 @@
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { afterAll, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
+
+import { createTestState } from "@stll/test-state";
 
 import type {
   AskUserInput,
@@ -14,19 +16,10 @@ import messages from "@/i18n/langs/en.json";
 
 type AskUserPart = Extract<RegisteredChatUIToolCallPart, { name: "ask-user" }>;
 
-const previousApiUrl = process.env["VITE_API_URL"];
-process.env["VITE_API_URL"] = previousApiUrl ?? "https://api.example.test";
+const state = createTestState({ file: import.meta.path, config: {} });
+state.setEnvIfAbsent("VITE_API_URL", "https://api.example.test");
 
 const { AskUserCard } = await import("@/components/chat/ask-user-card");
-
-afterAll(() => {
-  if (previousApiUrl === undefined) {
-    delete process.env["VITE_API_URL"];
-    return;
-  }
-
-  process.env["VITE_API_URL"] = previousApiUrl;
-});
 
 const renderWithIntl = (children: ReactNode) =>
   renderToStaticMarkup(
@@ -148,7 +141,8 @@ describe("ask-user clarification card", () => {
     expect(html).toContain("<form");
     expect(html).toContain('type="text"');
     expect(html).toContain('type="submit"');
-    expect(html).toContain(">Submit answers</button>");
+    // A label may sit in the button's cut-to-fit span.
+    expect(html).toMatch(/>Submit answers<\/(?:span><\/)?button>/u);
   });
 
   test("keeps option chips out of form submission semantics", () => {
@@ -167,7 +161,11 @@ describe("ask-user clarification card", () => {
     );
 
     expect(html).toContain('type="submit"');
-    expect(html).toContain('type="button">Czech law</button>');
-    expect(html).toContain('type="button">Spanish law</button>');
+    expect(html).toMatch(
+      /<button[^>]*type="button"[^>]*>(?:<span[^>]*>)?Czech law(?:<\/span>)?<\/button>/u,
+    );
+    expect(html).toMatch(
+      /<button[^>]*type="button"[^>]*>(?:<span[^>]*>)?Spanish law(?:<\/span>)?<\/button>/u,
+    );
   });
 });

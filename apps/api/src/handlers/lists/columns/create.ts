@@ -22,6 +22,7 @@ const bodySchema = v.object({
 });
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   featureAccess: { type: "required", featureId: LEGAL_LISTS_FEATURE_ID },
   description:
     "Add a column to a list by binding one of the matter's properties to it, " +

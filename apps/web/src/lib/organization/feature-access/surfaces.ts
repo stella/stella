@@ -30,6 +30,13 @@ export const CALLER_FEATURE = {
     routeImports: ["@/features/avt/"],
   },
   legalLists: LEGAL_LISTS_FEATURE,
+  // Gates column options in the property composer, not a route.
+  tableAnalysis: {
+    id: "table-analysis",
+    requires: [],
+    undeclared: { type: "hidden" },
+    routeImports: [],
+  },
 } as const;
 
 export type CallerFeature =

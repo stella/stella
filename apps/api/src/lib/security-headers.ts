@@ -12,6 +12,8 @@ import type { Middleware } from "@/api/http/route";
 
 export const CORS_EXPOSED_HEADERS = [
   "Content-Disposition",
+  "Idempotency-Replayed",
+  "Retry-After",
   "X-Ai-Field-Errors",
   CLAUSE_WARNINGS_HEADER,
   UNDECIDED_CONDITIONS_HEADER,

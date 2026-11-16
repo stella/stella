@@ -8,6 +8,7 @@ import * as v from "valibot";
 
 import { fetchWithTimeout } from "@stll/fetch";
 import { Button } from "@stll/ui/button";
+import { Form } from "@stll/ui/form";
 import {
   Frame,
   FrameDescription,
@@ -156,8 +157,7 @@ function AgentClaimPage() {
               {t("agentClaim.accessReadSearch")}
             </p>
           </div>
-          <form
-            className="flex flex-col gap-4"
+          <Form
             onSubmit={(event) => {
               event.preventDefault();
               detached(handleApprove(), "agent-claim.approve");
@@ -185,7 +185,7 @@ function AgentClaimPage() {
             >
               {t("agentClaim.approve")}
             </Button>
-          </form>
+          </Form>
         </FramePanel>
       </Frame>
     </div>

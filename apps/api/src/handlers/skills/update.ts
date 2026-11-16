@@ -21,7 +21,7 @@ import { requireEditableSkillOrigin } from "@/api/lib/agent-skills/origin";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { displayNameSchema, resourceIdSchema } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { PG_ERROR } from "@/api/lib/pg-error";
@@ -34,7 +34,7 @@ const updateSkillParamsSchema = v.object({
 const updateSkillBodySchema = v.object({
   enabled: v.optional(v.boolean()),
   invocation: v.optional(tSkillInvocation()),
-  name: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(64))),
+  name: v.optional(displayNameSchema({ maxLength: 64 })),
   description: v.optional(
     v.pipe(
       v.string(),

@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import type { ReservedSQL, SQL } from "bun";
 import { describe, expect, test } from "bun:test";
 import { getTableName } from "drizzle-orm";
@@ -13,15 +14,20 @@ import { Temporal } from "@stll/time";
 
 import { readOnlineIndexConfig } from "../env-online-index";
 import { CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT } from "../lib/decision-date-bounds-sql";
+import { isPgError, PG_ERROR } from "../lib/pg-error";
+import { isRecord } from "../lib/type-guards";
 import { withGatedTestClients } from "../tests/gated-test-database";
 import { createCorpusProjectionDeleteReceiptRepair } from "./corpus-projection-delete-receipt-repair";
 import { createDecisionDateCeilingRepair } from "./decision-date-ceiling-repair";
-import type { OnlineMigrationConnection } from "./online-migration-connection";
+import type {
+  MigrationOwnedOnlineRepair,
+  OnlineMigrationConnection,
+} from "./online-migration-connection";
 import {
-  assertOnlineMigrationsApplied,
   ONLINE_MIGRATION_INDEX_CUTOVERS,
   ONLINE_MIGRATION_INDEXES,
   type OnlineRepairOptions,
+  reportOnlineMigrations as reportOnlineMigrationsWithOwnership,
   runOnlineMigrations,
 } from "./online-migrations";
 import { APPLICATION_RLS_ROLE_NAME } from "./role-names";
@@ -32,6 +38,21 @@ import {
   corpusIndexProjectionIntents,
 } from "./schema";
 import { terminateReserved } from "./sql-close";
+
+const reportOnlineMigrations = async (
+  ...args: Parameters<typeof reportOnlineMigrationsWithOwnership>
+) => {
+  const outcome = await reportOnlineMigrationsWithOwnership(...args);
+  switch (outcome.type) {
+    case "validated":
+      return outcome.report;
+    case "migrator_active":
+      throw new TypeError("Expected startup validation ownership");
+    default:
+      outcome satisfies never;
+      throw new TypeError("Unknown validation ownership");
+  }
+};
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -44,11 +65,15 @@ const readyIndexes = [
 /** Index handling has its own suite; this adapter routes every repair query to real PG. */
 const repairConnection = (
   connection: ReservedSQL,
+  newestAppliedMigration = "99999999999999_later_release",
 ): OnlineMigrationConnection => ({
   execute: async (statement, parameters = []) => {
     await connection.unsafe(statement, [...parameters]);
   },
   query: async (statement, parameters = []) => {
+    if (statement.includes("FROM drizzle.__drizzle_migrations")) {
+      return [{ name: newestAppliedMigration }];
+    }
     if (statement.includes("pg_catalog.pg_index")) {
       if (statement.includes("starts_with")) {
         return [];
@@ -353,6 +378,7 @@ describe.skipIf(!enabled)(
                 }),
                 repairs: [
                   {
+                    introducedBy: cutover.introducedBy,
                     name: "later-repair",
                     readCompletion: async () => {
                       repairs += 1;
@@ -439,7 +465,8 @@ describe.skipIf(!enabled)(
               ? createDecisionDateCeilingRepair(options)
               : createCorpusProjectionDeleteReceiptRepair(options);
           const pool = {
-            reserve: async () => repairConnection(await client.reserve()),
+            reserve: async () =>
+              repairConnection(await client.reserve(), repair.introducedBy),
           };
           const runnerOptions = {
             repairs: [repair],
@@ -496,8 +523,15 @@ describe.skipIf(!enabled)(
             ).at(0)?.count;
             expect(cursorCount).toBe(fixture.firstBatch);
           }
-          await assertOnlineMigrationsApplied(pool, runnerOptions);
-          expect(events).toHaveLength(2);
+          const startup = await reportOnlineMigrations(pool, runnerOptions);
+          expect(startup.pending).toEqual([
+            {
+              kind: "repair",
+              name: repair.name,
+              introducedBy: repair.introducedBy,
+            },
+          ]);
+          expect(events).toHaveLength(1);
           for (const event of events) {
             expect(structuredClone(event)).toMatchObject({
               event: "online_repair_pending",
@@ -511,7 +545,7 @@ describe.skipIf(!enabled)(
           resume = true;
           now = pending.holdUntil;
           await runOnlineMigrations(pool, runnerOptions);
-          await assertOnlineMigrationsApplied(pool, runnerOptions);
+          await reportOnlineMigrations(pool, runnerOptions);
           await runOnlineMigrations(pool, runnerOptions);
           const counts = (
             await client.unsafe<{ count: number; once: number }[]>(
@@ -533,5 +567,203 @@ describe.skipIf(!enabled)(
         });
       });
     }
+  },
+);
+
+const LOCK_WAIT_REPAIR = "lock-wait-repair";
+const LOCK_WAIT_CHECKPOINT = {
+  /** The walk committed a batch, so a durable cursor exists. */
+  committed: "committed",
+  /** The very first batch lost its wait; nothing durable exists yet. */
+  absent: "absent",
+} as const;
+type LockWaitCheckpoint =
+  (typeof LOCK_WAIT_CHECKPOINT)[keyof typeof LOCK_WAIT_CHECKPOINT];
+
+/**
+ * A walk whose batch marks every row in one transaction behind a short
+ * `lock_timeout`, so a row lock held by another session makes PostgreSQL
+ * refuse it with 55P03 and roll the batch back.
+ */
+const lockWaitRepair = (
+  checkpoint: LockWaitCheckpoint,
+): MigrationOwnedOnlineRepair => ({
+  introducedBy: "20261001123000_database_backfill_state",
+  name: LOCK_WAIT_REPAIR,
+  readCompletion: async (connection) => {
+    const row = (
+      await connection.query(
+        "SELECT cursor FROM database_backfill_states WHERE name = $1",
+        [LOCK_WAIT_REPAIR],
+      )
+    ).at(0);
+    if (row === undefined) {
+      return { type: "incomplete", reason: "Walk not started" };
+    }
+    if (isRecord(row) && row["cursor"] === "complete") {
+      return { type: "complete" };
+    }
+    return {
+      type: "pending",
+      reason: "Walk interrupted",
+      cursor: "1",
+      holdUntil: null,
+      heldSince: null,
+    };
+  },
+  repair: async (connection) => {
+    if (checkpoint === LOCK_WAIT_CHECKPOINT.committed) {
+      await connection.execute(
+        "INSERT INTO database_backfill_states (name, cursor, batch) VALUES ($1, '1', '{}'::jsonb) ON CONFLICT (name) DO NOTHING",
+        [LOCK_WAIT_REPAIR],
+      );
+    }
+    await connection.execute("BEGIN");
+    const batch = await Result.tryPromise(async () => {
+      await connection.execute("SET LOCAL lock_timeout = '100ms'");
+      await connection.execute("UPDATE lock_wait_rows SET marked = true");
+      await connection.execute(
+        "INSERT INTO database_backfill_states (name, cursor, batch) VALUES ($1, 'complete', '{}'::jsonb) ON CONFLICT (name) DO UPDATE SET cursor = 'complete'",
+        [LOCK_WAIT_REPAIR],
+      );
+    });
+    if (Result.isError(batch)) {
+      await connection.execute("ROLLBACK");
+      // Wrapped like a failed migrate statement: the SQLSTATE sits in `cause`.
+      throw batch.error;
+    }
+    await connection.execute("COMMIT");
+    return { type: "complete" };
+  },
+});
+
+type BlockedRowRun = {
+  client: SQL;
+  run: () => Promise<unknown>;
+  release: () => Promise<void>;
+  events: unknown[];
+  repair: MigrationOwnedOnlineRepair;
+};
+
+/** Runs the real runner while a second session holds one row's lock. */
+const withBlockedRow = async (
+  checkpoint: LockWaitCheckpoint,
+  work: (run: BlockedRowRun) => Promise<void>,
+) => {
+  await withScratch(async (client, openClient) => {
+    await client.unsafe(
+      "CREATE TABLE lock_wait_rows (id int PRIMARY KEY, marked boolean NOT NULL DEFAULT false)",
+    );
+    await client.unsafe(
+      "INSERT INTO lock_wait_rows (id) SELECT generate_series(1, 3)",
+    );
+    const repair = lockWaitRepair(checkpoint);
+    const events: unknown[] = [];
+    const pool = {
+      reserve: async () =>
+        repairConnection(await client.reserve(), repair.introducedBy),
+    };
+    const runnerOptions = {
+      repairs: [repair],
+      indexGate: {
+        ebs: { type: "disabled" },
+        config: {
+          ...readOnlineIndexConfig({}),
+          health: { ...defaultConfig, busyWindows: [] },
+        },
+      },
+      reserveObserver: async () => {
+        const observer = await openClient().reserve();
+        return {
+          execute: async (statement, parameters = []) => {
+            await observer.unsafe(statement, [...parameters]);
+          },
+          query: async (statement, parameters = []) =>
+            await observer.unsafe(statement, [...parameters]),
+          release: async () => {
+            await observer.release();
+          },
+        };
+      },
+      log: (record: unknown) => {
+        events.push(record);
+      },
+    } satisfies OnlineRepairOptions;
+    const blocker = await openClient().reserve();
+    const lock = { held: true };
+    await blocker.unsafe("BEGIN");
+    await blocker.unsafe(
+      "SELECT id FROM lock_wait_rows WHERE id = 2 FOR UPDATE",
+    );
+    const release = async () => {
+      if (lock.held) {
+        lock.held = false;
+        await blocker.unsafe("ROLLBACK");
+      }
+    };
+    try {
+      await work({
+        client,
+        run: async () => await runOnlineMigrations(pool, runnerOptions),
+        release,
+        events,
+        repair,
+      });
+    } finally {
+      await release();
+      await blocker.release();
+    }
+  });
+};
+
+const readMarked = async (client: SQL) =>
+  (
+    await client.unsafe<{ marked: number }[]>(
+      "SELECT count(*) FILTER (WHERE marked)::int AS marked FROM lock_wait_rows",
+    )
+  ).at(0)?.marked;
+
+describe.skipIf(!enabled)(
+  "an online repair batch that loses its lock wait on PostgreSQL 18",
+  () => {
+    test("deploys pending behind a durable checkpoint and the rerun completes", async () => {
+      await withBlockedRow(
+        LOCK_WAIT_CHECKPOINT.committed,
+        async ({ client, run, release, events, repair }) => {
+          expect(await run()).toEqual({ type: "complete" });
+          expect(await readMarked(client)).toBe(0);
+          expect(events).toHaveLength(1);
+          expect(structuredClone(events.at(0))).toMatchObject({
+            event: "online_repair_pending",
+            repair: repair.name,
+            completion: { type: "pending" },
+          });
+
+          await release();
+          expect(await run()).toEqual({ type: "complete" });
+          expect(await readMarked(client)).toBe(3);
+          const connection = repairConnection(await client.reserve());
+          const completion = await repair.readCompletion(connection);
+          await connection.release();
+          expect(completion).toEqual({ type: "complete" });
+          expect(events).toHaveLength(1);
+        },
+      );
+    });
+
+    test("fails the run when nothing durable can resume the walk", async () => {
+      await withBlockedRow(
+        LOCK_WAIT_CHECKPOINT.absent,
+        async ({ client, run, events }) => {
+          const failure = await run().then(
+            () => new TypeError("Expected the lost lock wait to fail the run"),
+            (error: unknown) => error,
+          );
+          expect(isPgError(failure, PG_ERROR.LOCK_NOT_AVAILABLE)).toBe(true);
+          expect(await readMarked(client)).toBe(0);
+          expect(events).toEqual([]);
+        },
+      );
+    });
   },
 );

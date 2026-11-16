@@ -74,6 +74,7 @@ export const StyleSetPreview = ({
     previewResult = (
       <Suspense fallback={<DocxLoadingShell />}>
         <DocxEditor
+          accessibleName={t("styleSets.editor.previewDocument")}
           autoOpenReviewSidebar={false}
           className="folio-docx-preview h-full"
           documentBuffer={preview.data}

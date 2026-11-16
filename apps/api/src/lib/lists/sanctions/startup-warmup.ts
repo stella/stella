@@ -7,8 +7,8 @@ import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 
 /** A broken matcher must not keep an otherwise useful API instance out forever. */
-const SANCTIONS_STARTUP_WARMUP_BOUND_MS = 10 * 60 * 1000;
 const SANCTIONS_STARTUP_POLL_MS = 1000;
+const SANCTIONS_STARTUP_WARMUP_BOUND_MS = 10 * 60 * 1000;
 const STARTUP_SCREEN_FAILED_SINK = failureSink({
   event: "sanctions.startup_warmup_screen_failed",
   expected: [],
@@ -45,12 +45,22 @@ export const createSanctionsStartupWarmup = ({
   sleep = Bun.sleep,
   terminalize,
   boundMs = SANCTIONS_STARTUP_WARMUP_BOUND_MS,
+  editionDurations = () => ({}),
+  observe = (observation) => {
+    logger.info("sanctions.startup_warmup", observation);
+  },
 }: {
   screen: StartupScreen;
   now?: () => number;
   sleep?: (durationMs: number) => Promise<unknown>;
   terminalize: () => void;
   boundMs?: number;
+  editionDurations?: () => Readonly<Record<string, number>>;
+  observe?: (observation: {
+    totalMs: number;
+    editions: Readonly<Record<string, number>>;
+    reason: "settled" | "warming-bound-exceeded";
+  }) => void;
 }) => {
   let state: SanctionsStartupWarmupStatus = { status: "warming" };
   let running: Promise<void> | null = null;
@@ -62,6 +72,14 @@ export const createSanctionsStartupWarmup = ({
     const startedAt = now();
     running = (async () => {
       let lastLists: readonly StartupList[] = [];
+      const finish = (reason: "settled" | "warming-bound-exceeded") => {
+        const finishedAt = now();
+        observe({
+          totalMs: Math.round(finishedAt - startedAt),
+          editions: editionDurations(),
+          reason,
+        });
+      };
       for (;;) {
         // A failed screening and a rejected one are both retried.
         const screened = (
@@ -86,6 +104,7 @@ export const createSanctionsStartupWarmup = ({
             reason: "settled",
             lists: listOutcomes(lastLists),
           };
+          finish("settled");
           return;
         }
         if (now() - startedAt >= boundMs) {
@@ -99,6 +118,7 @@ export const createSanctionsStartupWarmup = ({
             sources: warming.map(({ source }) => source).join(","),
             boundMs,
           });
+          finish("warming-bound-exceeded");
           return;
         }
         await sleep(SANCTIONS_STARTUP_POLL_MS);

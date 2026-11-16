@@ -23,6 +23,7 @@ import type {
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
 import { readPublicDecisionBadges } from "@/api/lib/case-law/decision-badges";
+import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
@@ -96,6 +97,11 @@ const orgAIConfig = {
 } satisfies OrgAIConfig;
 
 const getThreads = createGetThreads({
+  readCopies: async (options) =>
+    await readWithdrawnCopyProjection({
+      ...options,
+      caseLawDb: asyncCaseLawDb,
+    }),
   readDecisionBadges: async ({ decisionIds }) =>
     await readPublicDecisionBadges({
       caseLawDb: asyncCaseLawDb,
@@ -179,6 +185,7 @@ const createContext = (): SendMessageCtx => {
     route: "/v1/chat" satisfies ApiRoutePath,
     safeDb,
     scopedDb,
+    set: { headers: {}, status: 200 },
     session: { activeOrganizationId: ids.orgA },
     user: { id: ids.userA1 },
   });
@@ -202,6 +209,7 @@ test("the first send binds the reader decision to the listed thread badge", asyn
       request: new Request("http://localhost/v1/chat/threads"),
       route: "/v1/chat/threads" satisfies ApiRoutePath,
       safeDb,
+      set: { headers: {}, status: 200 },
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },
     }),

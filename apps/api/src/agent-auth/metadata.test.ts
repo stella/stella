@@ -1,10 +1,14 @@
 import { describe, expect, test } from "bun:test";
 
+import { createTestState } from "@stll/test-state";
+
 import { AUTH_MD_SPEC_VERSION } from "@/api/agent-auth/constants";
 import { getAgentAuthManifest } from "@/api/agent-auth/manifest";
 import { getAgentAuthMetadataBlock } from "@/api/agent-auth/metadata";
 import { env } from "@/api/env";
 import { getMcpProtectedResourceMetadata } from "@/api/mcp/metadata";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 /**
  * Local-conformance pin: our served discovery shapes must carry exactly the
@@ -49,30 +53,22 @@ describe("auth.md conformance (pinned spec version)", () => {
   });
 
   test("identity_assertion is advertised only when the ID-JAG flag is on", () => {
-    const original = env.FEATURE_AGENT_ID_JAG;
-    try {
-      // Dark-launched off: discovery must not offer a path the endpoint 403s.
-      env.FEATURE_AGENT_ID_JAG = false;
-      const off = getAgentAuthMetadataBlock();
-      expect(off.identity_types_supported).toEqual([
-        "service_auth",
-        "anonymous",
-      ]);
-      expect(off.identity_assertion.assertion_types_supported).toEqual([]);
+    // Dark-launched off: discovery must not offer a path the endpoint 403s.
+    testState.setConfig("FEATURE_AGENT_ID_JAG", false);
+    const off = getAgentAuthMetadataBlock();
+    expect(off.identity_types_supported).toEqual(["service_auth", "anonymous"]);
+    expect(off.identity_assertion.assertion_types_supported).toEqual([]);
 
-      env.FEATURE_AGENT_ID_JAG = true;
-      const on = getAgentAuthMetadataBlock();
-      expect(on.identity_types_supported).toEqual([
-        "service_auth",
-        "anonymous",
-        "identity_assertion",
-      ]);
-      expect(on.identity_assertion.assertion_types_supported).toEqual([
-        "urn:ietf:params:oauth:token-type:id-jag",
-      ]);
-    } finally {
-      env.FEATURE_AGENT_ID_JAG = original;
-    }
+    testState.setConfig("FEATURE_AGENT_ID_JAG", true);
+    const on = getAgentAuthMetadataBlock();
+    expect(on.identity_types_supported).toEqual([
+      "service_auth",
+      "anonymous",
+      "identity_assertion",
+    ]);
+    expect(on.identity_assertion.assertion_types_supported).toEqual([
+      "urn:ietf:params:oauth:token-type:id-jag",
+    ]);
   });
 
   test("PRM carries the user-facing v0.6.0 fields agents render at claim time", () => {

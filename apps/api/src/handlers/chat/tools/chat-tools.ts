@@ -1,7 +1,6 @@
 import { panic, Result } from "better-result";
 
 import {
-  type BrowserClientCapability,
   BUILT_IN_CHAT_TOOL_POLICY_KINDS,
   type ChatSourceScope,
 } from "@stll/api-contract";
@@ -12,6 +11,10 @@ import type { SkillMetadata } from "@stll/skills/frontmatter";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { UsageEventLane } from "@/api/db/schema";
 import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
+import {
+  browserExtensionPolicy,
+  type TurnBrowserExtension,
+} from "@/api/handlers/chat/browser-extension-capability";
 import {
   CHAT_EDIT_APPLY_MODE,
   type ChatEditApplyMode,
@@ -66,6 +69,12 @@ import {
   REMEMBER_TOOL_NAME,
 } from "@/api/handlers/chat/tools/remember-tool";
 import { createSecretTools } from "@/api/handlers/chat/tools/secret-tools";
+import {
+  createShowAppTool,
+  createTurnAppLedger,
+  SHOW_APP_DEPLOYMENT_FEATURE,
+} from "@/api/handlers/chat/tools/show-app-tool";
+import type { TurnAppLedger } from "@/api/handlers/chat/tools/show-app-tool";
 import { createShowVisualTools } from "@/api/handlers/chat/tools/show-visual-tools";
 import {
   businessRegistryCallScope,
@@ -141,6 +150,7 @@ import {
 import type { ResolvedWebSearchProviders } from "@/api/lib/web-search/select-provider";
 import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
 import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
+import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
 import { isAccountAuthorizedForMcpTool } from "@/api/mcp/write-tool-authority";
 
 const WEB_SEARCH_NATIVE_TOOL_SLUG = "web-search";
@@ -240,8 +250,7 @@ type ResolveRegisteredDocxEditModeOptions = {
   recordAuditEventAvailable: boolean;
   requestWorkspaceId: SafeId<"workspace"> | null;
   toolWorkspaceIds: AuthorizedToolWorkspaceIds;
-  workspaceStatusById:
-    ReadonlyMap<string, AccessibleWorkspace["status"]> | undefined;
+  workspaceStatusById: ReadonlyMap<string, AccessibleWorkspace["status"]>;
 };
 
 type ChatRequestWorkspaceOptions = Pick<
@@ -261,7 +270,7 @@ const chatRequestWorkspace = ({
   ) {
     return null;
   }
-  const status = workspaceStatusById?.get(requestWorkspaceId);
+  const status = workspaceStatusById.get(requestWorkspaceId);
   return status === undefined ? null : { id: requestWorkspaceId, status };
 };
 
@@ -388,6 +397,7 @@ type RegistryWriteTools = ChatRegistryWriteToolMap;
 type SubagentTools = ReturnType<typeof createSpawnSubagentsTool>;
 type RememberTools = ReturnType<typeof createRememberTools>;
 type ShowVisualTools = ReturnType<typeof createShowVisualTools>;
+type ShowAppTools = ReturnType<typeof createShowAppTool>;
 type SecretTools = ReturnType<typeof createSecretTools>;
 type ConnectorTools = ReturnType<typeof createConnectorTools>;
 
@@ -416,7 +426,8 @@ type BuiltInChatTools = OrgTools &
   RegistryWriteTools &
   SubagentTools &
   RememberTools &
-  ShowVisualTools;
+  ShowVisualTools &
+  ShowAppTools;
 
 export type ChatTools = BuiltInChatTools;
 
@@ -428,9 +439,40 @@ export type ChatBuiltinApprovalToolName = Exclude<
 type BuiltInChatToolPolicyName =
   keyof BuiltInChatTools | CurrentSkillEditToolName;
 
+/**
+ * A turn's `show_app` and the ledger its code-mode reads feed. Every app
+ * chat shows presents a public-law read, so without the corpus, or without
+ * an origin that stores the turn's answer, a turn offers neither.
+ */
+const turnAppTools = (
+  appTools: Pick<Parameters<typeof createShowAppTool>[0], "origin"> | undefined,
+): {
+  codeMode: { recordAppRead?: TurnAppLedger["record"] };
+  tools: Partial<ShowAppTools>;
+} => {
+  if (
+    appTools === undefined ||
+    !isMcpToolFeatureEnabled(SHOW_APP_DEPLOYMENT_FEATURE)
+  ) {
+    return { codeMode: {}, tools: {} };
+  }
+  const ledger = createTurnAppLedger();
+  return {
+    codeMode: { recordAppRead: ledger.record },
+    tools: createShowAppTool({ ledger, origin: appTools.origin }),
+  };
+};
+
 export type GetChatToolsProps = {
+  organizationAIInstructions?: string | undefined;
   /** Only the owning chat turn can issue and store displayed visual resources. */
   visualTools?: Parameters<typeof createShowVisualTools>[0] | undefined;
+  /**
+   * The owning turn's origin, which mints the parts `show_app` shows. Only a
+   * turn that stores its own answer offers the tool.
+   */
+  appTools?:
+    Pick<Parameters<typeof createShowAppTool>[0], "origin"> | undefined;
   featureAccessSnapshot?: FeatureAccessSnapshot | undefined;
   testDependencies?: ChatRegistryContextDeps["testDependencies"] | undefined;
   /** Deployment gate; injectable so both disabled and enabled toolsets test. */
@@ -537,7 +579,7 @@ export type GetChatToolsProps = {
    * Present only when the requesting web surface has a live, permissioned
    * extension executor; absent means the tool is not registered.
    */
-  browserClient?: BrowserClientCapability | undefined;
+  browserExtension?: TurnBrowserExtension | undefined;
   /**
    * Which client executor resolves `suggest_changes` this turn, and so
    * which per-surface schema the model sees. Not derivable from the two
@@ -609,8 +651,7 @@ export type GetChatToolsProps = {
    * NOT default to "active" on the write path; callers supply real statuses
    * from `accessibleWorkspaces`.
    */
-  workspaceStatusById?:
-    ReadonlyMap<string, AccessibleWorkspace["status"]> | undefined;
+  workspaceStatusById: ReadonlyMap<string, AccessibleWorkspace["status"]>;
   /**
    * Current delegation depth; 0 at top level. Subagent toolsets are
    * built by re-invoking `getChatTools` with `depth + 1` (see
@@ -959,7 +1000,7 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
     hasActiveDocxEditClient,
     hasActiveDocxFileClient,
     docxSuggestionSurface,
-    browserClient,
+    browserExtension,
     webSearchEnabled,
     webSearchProviders,
     externalTools = {},
@@ -1049,7 +1090,9 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
     directTools: [],
     unavailableReasons: new Map(),
   };
+  const turnApps = turnAppTools(props.appTools);
   const executionTools = buildChatCodeModeTools({
+    ...turnApps.codeMode,
     sourceScopes,
     featureAccessSnapshot,
     testDependencies,
@@ -1068,6 +1111,7 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
     toolWorkspaceIds,
     userId,
     userEmail,
+    workspaceStatusById,
   });
   const skillTools = createSkillTools({
     activeSkillContext,
@@ -1112,7 +1156,11 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
   const { boeTools, infosoudTools } = nativeSourceTools(
     disabledNativeToolSlugs,
   );
-  const browserControlTools = browserClient ? createBrowserControlTool() : {};
+  const browserControlTools =
+    browserExtension !== undefined &&
+    browserExtensionPolicy(browserExtension).toolOffered
+      ? createBrowserControlTool()
+      : {};
   const { webSearchProvider, urlFetcher } = webSearchProviders;
   // The `webSearchProvider !== null` re-check narrows the type for
   // createWebSearchTools; it is implied by `webResearchAvailable`.
@@ -1400,14 +1448,16 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
         buildSubagentToolset: (proposalSink) =>
           getChatTools({
             ...props,
-            browserClient: undefined,
+            browserExtension: undefined,
             visualTools: undefined,
+            appTools: undefined,
             hasActiveDocxEditClient: false,
             delegationDepth: delegationDepth + 1,
             projectToolSet: (tools) =>
               projectToolMapForSubagent(tools, proposalSink),
           }),
         organizationId,
+        organizationAIInstructions: props.organizationAIInstructions,
         modelAdmission,
         orgAIConfig,
         managedAIResidency,
@@ -1426,6 +1476,7 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
       ...(props.visualTools === undefined
         ? {}
         : createShowVisualTools(props.visualTools)),
+      ...turnApps.tools,
       ...orgTools,
       ...secretTools,
       ...connectorTools,
@@ -1501,7 +1552,7 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
         .filter((name) => {
           const featureId = toolFeatureId(name);
           return (
-            !(name in tools) &&
+            !Object.hasOwn(tools, name) &&
             featureId !== undefined &&
             Object.hasOwn(featureRegistry, featureId) &&
             featureRegistry[featureId]?.enrolment === "general-availability"
@@ -1512,7 +1563,7 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
             [name, "unavailable for this caller or deployment"] as const,
         ),
       ...Object.keys(registered)
-        .filter((name) => !(name in projected))
+        .filter((name) => !Object.hasOwn(projected, name))
         .map((name) => [name, "subagents cannot call it"] as const),
       ...sourceScopeDroppedTools(sourceScope).map(
         (name) => [name, sourceScopeUnavailableReason(sourceScopes)] as const,

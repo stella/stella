@@ -4,16 +4,11 @@ import { stripDiacritics } from "@stll/text-normalize";
 
 import { DECISION_CITATION_PRESENTATION } from "@/components/references/decision-citation-presentation.logic";
 import {
-  clearProvisionQuestionDraft,
   createProvisionViewTab,
   filterCitingDecisions,
   isProvisionViewPayload,
   presentedCitingDecisions,
-  provisionQuestionDraftKey,
   provisionTabId,
-  readProvisionQuestionDraft,
-  submitsOnEnter,
-  writeProvisionQuestionDraft,
 } from "@/features/statutes/provision-inspector.logic";
 import type { ProvisionViewPayload } from "@/features/statutes/provision-inspector.logic";
 
@@ -147,36 +142,6 @@ describe("provisionTabId", () => {
   });
 });
 
-describe("submitsOnEnter", () => {
-  test("Enter sends the question", () => {
-    expect(
-      submitsOnEnter({ isComposing: false, key: "Enter", shiftKey: false }),
-    ).toBe(true);
-  });
-
-  test("Enter while an IME composes confirms the candidate instead", () => {
-    // Japanese, Chinese and Korean input ends a candidate with Enter. Sending
-    // there would post a half-written question and clear the box.
-    expect(
-      submitsOnEnter({ isComposing: true, key: "Enter", shiftKey: false }),
-    ).toBe(false);
-  });
-
-  test("Shift+Enter opens a line", () => {
-    expect(
-      submitsOnEnter({ isComposing: false, key: "Enter", shiftKey: true }),
-    ).toBe(false);
-  });
-
-  test("another key is not a send", () => {
-    for (const key of ["a", "Escape", "Tab", " "]) {
-      expect(submitsOnEnter({ isComposing: false, key, shiftKey: false })).toBe(
-        false,
-      );
-    }
-  });
-});
-
 const supremeCourtDecision = {
   caseNumber: "22 Cdo 3819/2019",
   court: "Nejvyšší soud",
@@ -292,107 +257,5 @@ describe("presentedCitingDecisions", () => {
         presentation: DECISION_CITATION_PRESENTATION.compact,
       },
     ]);
-  });
-});
-
-/** A tab's storage, and the same storage with site data blocked. */
-const memoryStorage = (): Storage => {
-  const entries = new Map<string, string>();
-  return {
-    get length() {
-      return entries.size;
-    },
-    clear: () => entries.clear(),
-    getItem: (key) => entries.get(key) ?? null,
-    key: (index) => [...entries.keys()].at(index) ?? null,
-    removeItem: (key) => {
-      entries.delete(key);
-    },
-    setItem: (key, value) => {
-      entries.set(key, value);
-    },
-  };
-};
-
-const blockedStorage = (): Storage => {
-  const refuse = () => {
-    throw new DOMException("site data blocked", "SecurityError");
-  };
-  return {
-    get length(): number {
-      return refuse();
-    },
-    clear: refuse,
-    getItem: refuse,
-    key: refuse,
-    removeItem: refuse,
-    setItem: refuse,
-  };
-};
-
-describe("provision question drafts", () => {
-  const otherProvision = { ...payload, anchorId: "paragraf-48" };
-
-  test("a draft survives the round trip that creates the account", () => {
-    const storage = memoryStorage();
-    const key = provisionQuestionDraftKey(payload);
-
-    writeProvisionQuestionDraft(storage, key, "Does this cover a sublease?");
-
-    // The inspector is unmounted by the navigation and rebuilt on return; only
-    // the payload comes back, so the key has to be derivable from it alone.
-    expect(
-      readProvisionQuestionDraft(storage, provisionQuestionDraftKey(payload)),
-    ).toBe("Does this cover a sublease?");
-  });
-
-  test("each provision keeps its own unsent question", () => {
-    const storage = memoryStorage();
-
-    writeProvisionQuestionDraft(
-      storage,
-      provisionQuestionDraftKey(payload),
-      "About § 47",
-    );
-
-    expect(
-      readProvisionQuestionDraft(
-        storage,
-        provisionQuestionDraftKey(otherProvision),
-      ),
-    ).toBe("");
-  });
-
-  test("emptying the box clears the draft rather than storing nothing", () => {
-    const storage = memoryStorage();
-    const key = provisionQuestionDraftKey(payload);
-
-    writeProvisionQuestionDraft(storage, key, "typed then deleted");
-    writeProvisionQuestionDraft(storage, key, "");
-
-    expect(storage.length).toBe(0);
-    expect(readProvisionQuestionDraft(storage, key)).toBe("");
-  });
-
-  test("sending clears it, so the next visit starts empty", () => {
-    const storage = memoryStorage();
-    const key = provisionQuestionDraftKey(payload);
-
-    writeProvisionQuestionDraft(storage, key, "sent");
-    clearProvisionQuestionDraft(storage, key);
-
-    expect(readProvisionQuestionDraft(storage, key)).toBe("");
-  });
-
-  // Site data can be blocked outright, and the question box must still work.
-  test("a storage that refuses every call costs the reader nothing", () => {
-    const storage = blockedStorage();
-    const key = provisionQuestionDraftKey(payload);
-
-    expect(() =>
-      writeProvisionQuestionDraft(storage, key, "typed"),
-    ).not.toThrow();
-    expect(() => clearProvisionQuestionDraft(storage, key)).not.toThrow();
-    expect(readProvisionQuestionDraft(storage, key)).toBe("");
   });
 });

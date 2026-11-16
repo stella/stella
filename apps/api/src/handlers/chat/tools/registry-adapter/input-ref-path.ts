@@ -45,7 +45,7 @@ const mapSegments = ({
   mapLeaf,
 }: MapSegmentsArgs): Record<string, unknown> => {
   const [segment, ...rest] = segments;
-  if (segment === undefined || !(segment.key in container)) {
+  if (segment === undefined || !Object.hasOwn(container, segment.key)) {
     return container;
   }
   const location =

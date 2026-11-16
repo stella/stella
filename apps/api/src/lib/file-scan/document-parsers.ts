@@ -28,6 +28,7 @@ import {
 
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { mintScannedFile } from "@/api/lib/file-scan/scanned-file";
+import { recordReadWork } from "@/api/lib/observability/request-work";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 
 /**
@@ -49,15 +50,23 @@ export const derivedScannedFile = (
 export const parseScannedDocx = async (
   file: ScannedFile,
   options?: Parameters<typeof parseDocx>[1],
-) => await parseDocx(file.bytes, options);
+) => {
+  recordReadWork("astParses");
+  return await parseDocx(file.bytes, options);
+};
 
 export const scannedDocxToMarkdown = async (
   file: ScannedFile,
   options?: Parameters<typeof docxToMarkdown>[1],
-) => await docxToMarkdown(file.bytes, options);
+) => {
+  recordReadWork("documentConversions");
+  return await docxToMarkdown(file.bytes, options);
+};
 
-export const extractScannedDocxText = async (file: ScannedFile) =>
-  await extractDocxText(file.bytes);
+export const extractScannedDocxText = async (file: ScannedFile) => {
+  recordReadWork("documentConversions");
+  return await extractDocxText(file.bytes);
+};
 
 export const compareScannedDocx = async (
   base: ScannedFile,

@@ -57,6 +57,7 @@ const BillingCodesDialog = lazy(async () => {
  */
 const timesheetsSearchSchema = routeSearchSchema({
   view: v.optional(v.picklist(["approvals"])),
+  rates: v.optional(v.literal("manage")),
 });
 
 export const Route = createFileRoute(
@@ -185,7 +186,19 @@ function TimesheetsPage() {
   const requestedView = Route.useSearch({ select: (search) => search.view });
   const view =
     canApprove && requestedView === "approvals" ? "approvals" : "personal";
-  const [rateDialogOpen, setRateDialogOpen] = useState(false);
+  const requestedRates = Route.useSearch({ select: (search) => search.rates });
+  const rateDialogOpen = requestedRates === "manage" && canManageRates;
+  const setRateDialogOpen = (open: boolean) => {
+    detached(
+      navigate({
+        search: (previous) => ({
+          ...previous,
+          rates: open ? "manage" : undefined,
+        }),
+      }),
+      "timesheets.manage-rates",
+    );
+  };
   const [codesDialogOpen, setCodesDialogOpen] = useState(false);
   const format = useFormatter();
   const workspaceId = Route.useParams({

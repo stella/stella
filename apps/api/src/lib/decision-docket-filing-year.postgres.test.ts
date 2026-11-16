@@ -2,8 +2,6 @@ import { PGlite } from "@electric-sql/pglite";
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
-import { readFileSync } from "node:fs";
-import path from "node:path";
 
 import { DECISION_DOCKET_FILING_YEAR_FIXTURES } from "@stll/api-contract/decision-docket-filing-year.fixtures";
 import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
@@ -13,24 +11,17 @@ import {
   decisionDateNotBeforeFilingYearSql,
   decisionDocketFilingYearFunctionSql,
 } from "@/api/lib/decision-date-bounds-sql";
+import { readDecisionDocketFilingYearMigration } from "@/api/tests/decision-docket-filing-year-migration";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
 test("the committed SQL function is derived from the registered filing-year rules", () => {
-  const migration = readFileSync(
-    path.resolve(
-      import.meta.dir,
-      "../../drizzle/20261029094425_czech_docket_long_sheets/migration.sql",
-    ),
-    "utf-8",
-  );
-  expect(
-    migration
-      .slice(migration.indexOf("CREATE OR REPLACE FUNCTION"))
-      .trim()
-      .replace("CREATE OR REPLACE FUNCTION", "CREATE FUNCTION"),
-  ).toBe(decisionDocketFilingYearFunctionSql());
+  const migration = readDecisionDocketFilingYearMigration();
+  const declaration = migration.startsWith("CREATE OR REPLACE")
+    ? "replace"
+    : "create";
+  expect(migration).toBe(decisionDocketFilingYearFunctionSql(declaration));
 });
 
 describe.skipIf(!enabled)("docket filing-year parity (postgres)", () => {

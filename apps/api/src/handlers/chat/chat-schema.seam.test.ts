@@ -149,6 +149,7 @@ const streamProviderToolCall = async (
 
   const chunks: StreamChunk[] = [];
   for await (const chunk of adapter.chatStream({
+    threadId: "chat-schema.seam-thread",
     logger: resolveDebugOption(false),
     messages: [{ role: "user", content: "Suggest changes." }],
     model: adapter.model,
@@ -247,6 +248,7 @@ const continuationOutcome = async ({
   rawArguments: string;
 }): Promise<string> => {
   const result = await validateMessage({
+    toolCallOwnership: "cloud",
     message: {
       id: MESSAGE_ID,
       role: "assistant",

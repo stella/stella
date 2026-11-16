@@ -837,10 +837,10 @@ const ASSIGNMENT_WORD = /^[A-Za-z_][A-Za-z0-9_]*=/u;
 
 // Whether a search's option clusters ask it to stop early. The value of
 // `-e`, `-A` and the like is skipped, so `-e -q` searches for "-q".
-const searchExitsEarly = (options: readonly Token[]): boolean => {
+const searchExitsEarly = (options: readonly string[]): boolean => {
   let valueNext = false;
-  for (const { value, quoted } of options) {
-    if (valueNext || quoted) {
+  for (const value of options) {
+    if (valueNext) {
       valueNext = false;
       continue;
     }
@@ -868,19 +868,21 @@ const searchExitsEarly = (options: readonly Token[]): boolean => {
   return false;
 };
 
-const exitsEarly = (words: readonly Token[]): boolean => {
-  const commandIndex = words.findIndex(
-    (word) => !ASSIGNMENT_WORD.test(word.value),
-  );
-  const command = words[commandIndex];
-  if (command === undefined || command.quoted) {
+// Quoting belongs to syntax parsing; readers receive the decoded word values.
+const exitsEarly = (words: readonly string[]): boolean => {
+  const commandIndex = words.findIndex((word) => !ASSIGNMENT_WORD.test(word));
+  if (commandIndex === -1) {
     return false;
   }
-  if (command.value === "head") {
+  const command = words.at(commandIndex);
+  if (command === undefined) {
+    return false;
+  }
+  if (command === "head") {
     return true;
   }
   return (
-    SEARCH_COMMANDS.has(command.value) &&
+    SEARCH_COMMANDS.has(command) &&
     searchExitsEarly(words.slice(commandIndex + 1))
   );
 };
@@ -915,7 +917,7 @@ const earlyExitPipeFindings = ({
     );
     const words = tokens.slice(start, end === -1 ? tokens.length : end);
     const reader = words.at(0);
-    if (reader === undefined || !exitsEarly(words)) {
+    if (reader === undefined || !exitsEarly(words.map(({ value }) => value))) {
       continue;
     }
     const line = lineOffset + reader.line;

@@ -135,24 +135,35 @@ export const lookupResearchAnswersBodySchema = v.strictObject({
 export const toResearchAnswerResponse = (
   row: typeof caseLawResearchAnswers.$inferSelect,
   now: Date,
-) => ({
-  columnId: row.columnId,
-  decisionId: row.decisionId,
-  state: row.state,
-  // JSONB written by this deployment, read back through the field-content
-  // schema: a cell that drifted renders as the union's error arm rather than
-  // reaching the client as an unknown shape.
-  answer: row.answer === null ? null : parseStoredAnswerContent(row.answer),
-  run: row.run,
-  failureReason: row.failureReason,
-  updatedAt: row.updatedAt.toISOString(),
-  /**
-   * A pending cell whose run went quiet past the stale window: the process
-   * serving it is gone, and a new run may claim it. Decided on the server's
-   * clock so the client never compares timestamps of its own.
-   */
-  stale:
-    row.state === "pending" &&
-    now.getTime() - row.updatedAt.getTime() >
-      LIMITS.caseLawResearchPendingStaleMs,
-});
+  marker: string | null,
+) => {
+  const identity = {
+    columnId: row.columnId,
+    decisionId: row.decisionId,
+    updatedAt: row.updatedAt.toISOString(),
+  };
+  if (marker !== null) {
+    return {
+      ...identity,
+      state: "withdrawn" as const,
+      withdrawnMarker: marker,
+      answer: null,
+      run: null,
+      failureReason: null,
+      stale: false,
+    };
+  }
+  return {
+    ...identity,
+    state: row.state,
+    withdrawnMarker: null,
+    // Persisted JSON follows the same field-content boundary as matter cells.
+    answer: row.answer === null ? null : parseStoredAnswerContent(row.answer),
+    run: row.run,
+    failureReason: row.failureReason,
+    stale:
+      row.state === "pending" &&
+      now.getTime() - row.updatedAt.getTime() >
+        LIMITS.caseLawResearchPendingStaleMs,
+  };
+};

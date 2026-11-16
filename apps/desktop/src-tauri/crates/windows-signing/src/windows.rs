@@ -89,6 +89,10 @@ pub(crate) fn sign_digest(
     .map_err(signing_error)?;
   if let Some(owner) = prompt_owner {
     // Best effort: without it the prompt still shows, only unparented.
+    #[expect(
+      clippy::let_underscore_must_use,
+      reason = "without a prompt owner the prompt still shows, only unparented"
+    )]
     let _ = key.set_prompt_owner(owner);
   }
   let signature = key.sign(digest, key_type).map_err(signing_error)?;

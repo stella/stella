@@ -1,8 +1,7 @@
 import { Result } from "better-result";
-import { describe, expect, spyOn, test } from "bun:test";
-import JSZip from "jszip";
+import { describe, expect, mock, spyOn, test } from "bun:test";
 
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 
 import {
   DERIVATIVE_REFUSAL,
@@ -33,7 +32,10 @@ import {
 } from "@/api/tests/helpers/image-fixtures";
 import { legacyWordFile } from "@/api/tests/helpers/legacy-word-fixture";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
 
 describe("PDF derivative policy", () => {
   test("does not generate derivatives for natively renderable OOXML files", () => {
@@ -118,16 +120,20 @@ const withConverterFetch = async <T>(
   convert: () => Promise<T>,
 ): Promise<{ result: T; urls: string[] }> => {
   const urls: string[] = [];
-  const fetchSpy = spyOn(globalThis, "fetch").mockImplementation(
-    asFetchMock(async (input: string | URL | Request) => {
-      urls.push(requestUrl(input));
-      return respond();
-    }),
+  const fetchSpy = Object.assign(
+    mock(
+      asFetchMock(async (input: string | URL | Request) => {
+        urls.push(requestUrl(input));
+        return respond();
+      }),
+    ),
+    { preconnect: globalThis.fetch.preconnect },
   );
+  testFetchState.set(fetchSpy);
   try {
     return { result: await convert(), urls };
   } finally {
-    fetchSpy.mockRestore();
+    testFetchState.restore();
   }
 };
 
@@ -182,15 +188,14 @@ describe("PDF conversion routes", () => {
   });
 
   test("names an unsupported document field", async () => {
-    const archive = new JSZip();
-    writeZipEntry(
-      archive,
+    const archive = new ZipArchive();
+    archive.set(
       "word/document.xml",
       new TextEncoder().encode(
         '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:fldSimple w:instr="INCLUDEPICTURE https://example.test/a.png"/></w:document>',
       ),
     );
-    const bytes = await archive.generateAsync({ type: "uint8array" });
+    const bytes = await archive.generate({ compression: "store" });
     const { result, urls } = await withConverterFetch(
       () => new Response("unexpected", { status: 500 }),
       async () => await convertToPdf(fileOf(bytes, DOCX_MIME_TYPE)),
@@ -395,17 +400,23 @@ const uploadedFileName = async (
   convert: () => ReturnType<typeof convertToPdf>,
 ): Promise<string | undefined> => {
   const bodies: string[] = [];
-  const fetchSpy = spyOn(globalThis, "fetch").mockImplementation(
-    asFetchMock(async (_input: string | URL | Request, init?: RequestInit) => {
-      bodies.push(await new Response(init?.body).text());
-      return new Response(new TextEncoder().encode("%PDF-1.7 converted"));
-    }),
+  const fetchSpy = Object.assign(
+    mock(
+      asFetchMock(
+        async (_input: string | URL | Request, init?: RequestInit) => {
+          bodies.push(await new Response(init?.body).text());
+          return new Response(new TextEncoder().encode("%PDF-1.7 converted"));
+        },
+      ),
+    ),
+    { preconnect: globalThis.fetch.preconnect },
   );
+  testFetchState.set(fetchSpy);
   const warn = spyOn(logger, "warn").mockImplementation(() => {});
   try {
     await convert();
   } finally {
-    fetchSpy.mockRestore();
+    testFetchState.restore();
     warn.mockRestore();
   }
   expect(bodies).toHaveLength(1);

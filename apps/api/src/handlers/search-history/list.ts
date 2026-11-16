@@ -1,5 +1,6 @@
 import { Result } from "better-result";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, gt, max, min, notExists, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import * as v from "valibot";
 
 import { numberFromString } from "@stll/api-contract/http-input";
@@ -22,6 +23,7 @@ import { brandPersistedSearchHistoryEntryId } from "@/api/lib/safe-id-boundaries
 import {
   searchHistoryCountrySchema,
   searchHistoryKindSchema,
+  searchHistoryReadIdentityPredicate,
   toSearchHistoryEntryResponse,
 } from "./entries";
 
@@ -66,6 +68,8 @@ const UNSELECTED_HISTORY_COLUMNS = [
   "userId",
   "lookupKey",
   "countryUsedAt",
+  "baseLookupKey",
+  "countryRepairFailedAt",
 ] as const satisfies readonly (keyof typeof searchHistoryEntries.$inferSelect)[];
 
 const searchHistoryCursor = createTimestampIdCursorCodec({
@@ -112,8 +116,24 @@ const listSearchHistory = createSafeRootHandler(
     }
 
     const rows = yield* Result.await(
-      safeDb((tx) =>
-        tx
+      safeDb((tx) => {
+        const candidate = alias(
+          searchHistoryEntries,
+          "history_identity_candidate",
+        );
+        const sameIdentity = searchHistoryReadIdentityPredicate({
+          entry: candidate,
+          identity: searchHistoryEntries,
+        });
+        const firstUse = tx
+          .select({ value: min(candidate.firstUsedAt) })
+          .from(candidate)
+          .where(sameIdentity);
+        const useCount = tx
+          .select({ value: max(candidate.useCount) })
+          .from(candidate)
+          .where(sameIdentity);
+        return tx
           .select({
             id: searchHistoryEntries.id,
             kind: searchHistoryEntries.kind,
@@ -121,21 +141,44 @@ const listSearchHistory = createSafeRootHandler(
             courtId: searchHistoryEntries.courtId,
             ciphertext: searchHistoryEntries.ciphertext,
             iv: searchHistoryEntries.iv,
-            firstUsedAt: searchHistoryEntries.firstUsedAt,
+            firstUsedAt: sql`(${firstUse})`.mapWith(
+              searchHistoryEntries.firstUsedAt,
+            ),
             lastUsedAt: searchHistoryEntries.lastUsedAt,
-            useCount: searchHistoryEntries.useCount,
+            useCount: sql`(${useCount})`.mapWith(Number),
             lastUsedAtCursor: searchHistoryCursor.cursorValue.as(
               "last_used_at_cursor",
             ),
           })
           .from(searchHistoryEntries)
-          .where(and(...conditions))
+          .where(
+            and(
+              ...conditions,
+              notExists(
+                tx
+                  .select({ id: candidate.id })
+                  .from(candidate)
+                  .where(
+                    and(
+                      sameIdentity,
+                      or(
+                        sql`${candidate.lastUsedAt} > ${searchHistoryEntries.lastUsedAt}::timestamptz`,
+                        and(
+                          sql`${candidate.lastUsedAt} = ${searchHistoryEntries.lastUsedAt}::timestamptz`,
+                          gt(candidate.id, searchHistoryEntries.id),
+                        ),
+                      ),
+                    ),
+                  ),
+              ),
+            ),
+          )
           .orderBy(
             desc(searchHistoryEntries.lastUsedAt),
             desc(searchHistoryEntries.id),
           )
-          .limit(limit + 1),
-      ),
+          .limit(limit + 1);
+      }),
     );
     type SelectedHistoryRow = Omit<(typeof rows)[number], "lastUsedAtCursor">;
     type UnselectedHistoryColumn = (typeof UNSELECTED_HISTORY_COLUMNS)[number];

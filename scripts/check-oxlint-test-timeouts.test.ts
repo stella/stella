@@ -372,3 +372,20 @@ test("custom lint test timeout overrides require a measured allow-list reason", 
   expect(customLintTestTimeoutViolations()).toEqual([]);
   expect(repositoryCustomLintRunnerViolations()).toEqual([]);
 });
+
+for (const [name, options] of [
+  ["spread over lines", "{\n    timeout: 60_000,\n  }"],
+  ["on one line", "{ timeout: 60_000 }"],
+] as const) {
+  test(`a multiline call rejects a timeout option ${name}`, () => {
+    withFixture((directory, file) => {
+      writeFileSync(
+        file,
+        `${IMPORTS}test(\n  "case",\n  () => {},\n  ${options},\n);\n`,
+      );
+      expect(customLintTestTimeoutViolations({ directory })).toEqual([
+        "fixture.test.ts: pass test options inline without timeout keys or spreads; exceptions require an allow-list reason",
+      ]);
+    });
+  });
+}

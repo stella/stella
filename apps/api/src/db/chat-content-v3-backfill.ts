@@ -1,8 +1,9 @@
 import { panic, Result, TaggedError } from "better-result";
 
 import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
-import { defaultConfig, type Verdict } from "@stll/db-load-gate/health";
+import type { Verdict } from "@stll/db-load-gate/health";
 
+import { loadGateHealthConfig } from "../env-online-index";
 import { queryOrganizationFencedRepairBatch } from "../lib/db/aggregate-lock";
 import { isRecord } from "../lib/type-guards";
 import { createBackfillRuntime } from "./backfill-runtime";
@@ -15,8 +16,8 @@ import { readConstraintCompletion } from "./online-constraint-completion";
 import { validateOnlineConstraints } from "./online-ddl";
 import type { OnlineConstraintValidation } from "./online-ddl";
 import type {
+  MigrationOwnedOnlineRepair,
   OnlineMigrationConnection,
-  OnlineRepair,
 } from "./online-migration-connection";
 import { CHAT_CONTENT_V3_BACKFILL_OUTCOMES } from "./schema/chat";
 import type { chatContentV3BackfillReceipts } from "./schema/chat";
@@ -267,7 +268,7 @@ export const backfillChatContentV3Batch = async ({
   return { cursor: last, done: rows.length === 0, value: receipts };
 };
 
-export const readChatContentV3Completion: OnlineRepair["readCompletion"] =
+export const readChatContentV3Completion: MigrationOwnedOnlineRepair["readCompletion"] =
   async (connection) => {
     for (const { table } of Object.values(CHAT_CONTENT_V3_SOURCES)) {
       const constraint = await readConstraintCompletion({
@@ -309,7 +310,8 @@ type RepairOptions = {
 };
 export const createChatContentV3Repair = (
   options: RepairOptions = {},
-): OnlineRepair => ({
+): MigrationOwnedOnlineRepair => ({
+  introducedBy: "20261015050000_agent_skill_invocation",
   name: "chat-content-v3",
   readCompletion: readChatContentV3Completion,
   repair: async (connection, tables) => {
@@ -331,7 +333,7 @@ export const createChatContentV3Repair = (
         tableName: CHAT_CONTENT_V3_SOURCES[source].table,
         initialSize: CHAT_CONTENT_V3_BATCH_SIZE,
         config: {
-          ...defaultConfig,
+          ...loadGateHealthConfig(),
           minSize: 1,
           maxSize: CHAT_CONTENT_V3_BATCH_SIZE,
         },

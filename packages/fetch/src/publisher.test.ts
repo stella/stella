@@ -366,9 +366,9 @@ describe("publisher scheduler", () => {
       },
     });
     await request("https://publisher.example/case", {
-      init: { timeout: { type: "idle", ms: 321 } },
+      init: { timeout: { type: "headers", ms: 321 } },
     });
-    expect(seen).toEqual([{ type: "idle", ms: 321 }]);
+    expect(seen).toEqual([{ type: "headers", ms: 321 }]);
   });
 
   test("refuses crawl delays above the maximum", async () => {

@@ -4,7 +4,6 @@ import { sanitizeErrorForOutput } from "@stll/errors";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import type { ExistingDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision-identity";
 import {
   PROCESS_DECISION_RETRY_REASON,
@@ -13,6 +12,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import type { ProcessResult } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import { writeOwnedRawPayload } from "@/api/handlers/case-law/ingestion/pipeline/raw-payload";
+import type { ProcessDecisionAttemptOptions } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { errorSystemFields } from "@/api/lib/errors/utils";
@@ -20,6 +20,7 @@ import {
   enqueueCaseLawRawSweepTx,
   rawSweepSettleAfter,
 } from "@/api/lib/legal-search/case-law-raw-sweeps";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import type {
   RawSourceWriteFailure,
   RawSourceWriteWindow,
@@ -241,6 +242,46 @@ export const acquireSourceRawArtifact = async ({
     signal?.throwIfAborted();
     return rawWriteFailed(error);
   }
+};
+
+type ArchivePreservedObservationRawOptions = AcquireSourceRawArtifactOptions &
+  Pick<ProcessDecisionAttemptOptions, "inputProvenance" | "scopedDb">;
+
+/** Archive fetched bodies before a partial observation advances only its watermark. */
+export const archivePreservedObservationRaw = async ({
+  inputProvenance,
+  preservesExistingDetail,
+  scopedDb,
+  ...rawOptions
+}: ArchivePreservedObservationRawOptions): Promise<ProcessResult | null> => {
+  if (
+    inputProvenance.type !== "observation" ||
+    !preservesExistingDetail ||
+    rawOptions.existing === undefined
+  ) {
+    return null;
+  }
+  // The richer row retains its pointer and derived fields. The incoming
+  // envelope and files remain archived under that decision's raw owner.
+  const archived = await acquireSourceRawArtifact({
+    ...rawOptions,
+    preservesExistingDetail: false,
+  });
+  if (archived.type === "acquired" && !archived.artifact.s3UploadFailed) {
+    return null;
+  }
+  await recordAbandonedRawWrite({
+    scopedDb,
+    existing: rawOptions.existing,
+    rawWrites: rawOptions.rawWrites,
+    decisionId: rawOptions.decisionId,
+    sourceId: rawOptions.sourceId,
+  });
+  return {
+    status: PROCESS_DECISION_STATUS.RETRYABLE,
+    inserted: false,
+    reason: PROCESS_DECISION_RETRY_REASON.SOURCE_RAW_WRITE,
+  };
 };
 
 /**

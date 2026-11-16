@@ -22,6 +22,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 import { readBillingUsage, recordBillingCapCrossings } from "./arrangements";
 
@@ -60,7 +61,7 @@ if (!databaseUrl || !runPostgres) {
     },
   });
   cleanUp(async () => {
-    await db.delete(organization).where(eq(organization.id, organizationId));
+    await deleteOrganizationsForTest(db, [organizationId]);
   });
   cleanUp(async () => {
     await db.delete(user).where(eq(user.id, userId));

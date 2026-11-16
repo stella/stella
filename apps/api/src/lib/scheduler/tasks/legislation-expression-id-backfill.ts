@@ -17,8 +17,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { brandPersistedLegislationDocumentId } from "@/api/lib/safe-id-boundaries";
 import {
   logSchedulerBackfillStatus,
-  SCHEDULER_BACKFILL_CONFIG,
   SCHEDULER_BACKFILL_IDS,
+  schedulerBackfillConfig,
 } from "@/api/lib/scheduler/backfill-config";
 import {
   type SchedulerTask,
@@ -320,7 +320,7 @@ export const createLegislationExpressionIdBackfill =
       initialSize: pageRows,
       initialCursor: backfillCursor(job.payload),
       config: {
-        ...SCHEDULER_BACKFILL_CONFIG,
+        ...schedulerBackfillConfig(),
         minSize: Math.min(100, pageRows),
         maxSize: pageRows,
       },

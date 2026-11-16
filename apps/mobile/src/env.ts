@@ -27,7 +27,35 @@ export const DEFAULT_SERVER_URL: string =
  * without one is broken, so it stops at launch rather than signing in on
  * another build's redirect.
  */
-export const APP_VARIANT: MobileAppVariant = v.parse(
-  v.object({ variant: v.picklist(MOBILE_APP_VARIANTS) }),
+const extra = v.parse(
+  v.object({
+    liveActivities: v.optional(v.boolean(), false),
+    pushNotifications: v.optional(v.boolean(), false),
+    shareInbox: v.optional(
+      v.nullable(v.object({ appGroup: v.string(), folder: v.string() })),
+      null,
+    ),
+    variant: v.picklist(MOBILE_APP_VARIANTS),
+  }),
   Constants.expoConfig?.extra,
-).variant;
+);
+
+export const APP_VARIANT: MobileAppVariant = extra.variant;
+
+/**
+ * Whether the build carries the widget extension that draws Live
+ * Activities (`app.config.ts`); a release leaves it out until it signs it.
+ */
+export const LIVE_ACTIVITIES: boolean = extra.liveActivities;
+
+/**
+ * Whether the build may take push notifications (`app.config.ts`); a
+ * release does once its profile carries the push capability.
+ */
+export const PUSH_NOTIFICATIONS: boolean = extra.pushNotifications;
+
+/**
+ * Where the share extension hands over what was shared (`app.config.ts`): a
+ * folder of the App Group's container; null in a build without the extension.
+ */
+export const SHARE_INBOX = extra.shareInbox;

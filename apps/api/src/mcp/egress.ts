@@ -1,7 +1,10 @@
 import { panic, Result, TaggedError } from "better-result";
 
+import { BILLING_MATTER_READ_PERMISSION } from "@stll/permissions";
+
 import { loadAnonymizationAllowlistCanonicalsByWorkspace } from "@/api/lib/anonymization-allowlist";
 import { loadAnonymizationGazetteerEntriesByWorkspace } from "@/api/lib/anonymization-blacklist";
+import { hasVisibleMoney } from "@/api/lib/billing/money-response";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { emitAnonymizationRefusalMetric } from "@/api/lib/observability/request-metrics";
@@ -13,6 +16,7 @@ import {
   COMPAT_SEARCH_OUTPUT_SCHEMA,
 } from "@/api/mcp/compat-contract";
 import type { McpMode } from "@/api/mcp/constants";
+import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import type { AnonymizedFieldBoundaryError } from "@/api/mcp/field-markers";
 import type {
   InternalToolResult,
@@ -31,6 +35,7 @@ import {
   untypedToolDataResult,
   windowTextByCursor,
 } from "@/api/mcp/tool-utils";
+import { anonymizeWindowFields } from "@/api/mcp/window-anonymization-cache";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 
 const ANONYMIZED_FIELD_MISSING_FALLBACK = "[REDACTED]";
@@ -64,6 +69,7 @@ type FinalizeToolEgressOptions<TResponse extends McpToolResponse> = {
   context: AuthorizedMcpRequestContext;
   mode: McpMode;
   response: TResponse;
+  outputSchema: unknown;
 };
 
 type EgressDependencies = {
@@ -75,6 +81,30 @@ type EgressDependencies = {
     typeof loadAnonymizationGazetteerEntriesByWorkspace | undefined;
 };
 
+const responsePayload = (response: McpToolResponse): unknown => {
+  if (!isMcpEgressPlan(response)) {
+    switch (response.status) {
+      case "success":
+        return response.data;
+      case "error":
+        return undefined;
+      default:
+        response satisfies never;
+        return panic("Unhandled MCP response status");
+    }
+  }
+  switch (response.egress) {
+    case "structured":
+      return response.payload;
+    case "compatSearch":
+    case "compatFetch":
+      return response;
+    default:
+      response satisfies never;
+      return panic("Unhandled MCP egress plan");
+  }
+};
+
 export function finalizeToolEgress<TData>(
   options: FinalizeToolEgressOptions<TypedMcpToolResponse<TData>>,
   dependencies?: EgressDependencies,
@@ -84,7 +114,12 @@ export function finalizeToolEgress(
   dependencies?: EgressDependencies,
 ): Promise<InternalToolResult>;
 export async function finalizeToolEgress(
-  { context, mode, response }: FinalizeToolEgressOptions<McpToolResponse>,
+  {
+    context,
+    mode,
+    response,
+    outputSchema,
+  }: FinalizeToolEgressOptions<McpToolResponse>,
   {
     anonymizeTextFields: anonymize = anonymizeTextFields,
     loadAnonymizationAllowlistCanonicalsByWorkspace:
@@ -93,6 +128,16 @@ export async function finalizeToolEgress(
       loadGazetteer = loadAnonymizationGazetteerEntriesByWorkspace,
   }: EgressDependencies = {},
 ): Promise<InternalToolResult> {
+  const payload = responsePayload(response);
+  if (
+    hasVisibleMoney(outputSchema, payload) &&
+    !hasEffectiveAuthority(context, BILLING_MATTER_READ_PERMISSION)
+  ) {
+    return structuredErrorResult({
+      code: "permission_denied",
+      message: "Forbidden",
+    });
+  }
   if (!isMcpEgressPlan(response)) {
     return response;
   }
@@ -261,18 +306,28 @@ const anonymizeTextFieldsByWorkspace = async ({
     ]);
 
   for (const [workspaceId, group] of byWorkspace) {
-    const anonymized = await anonymize({
-      catalogs: {
-        type: "preloaded",
-        excludedCanonicals: catalogFor(
-          excludedCanonicalsByWorkspace,
-          workspaceId,
-        ),
-        gazetteerEntries: catalogFor(gazetteerByWorkspace, workspaceId),
-      },
-      fields: group.map((field) => field.value),
-      organizationId: context.organizationId,
+    const catalogs = {
+      type: "preloaded",
+      excludedCanonicals: catalogFor(
+        excludedCanonicalsByWorkspace,
+        workspaceId,
+      ),
+      gazetteerEntries: catalogFor(gazetteerByWorkspace, workspaceId),
+    } as const;
+    const fieldValues = group.map((field) => field.value);
+    const anonymized = await anonymizeWindowFields({
+      context,
       workspaceId,
+      source: { catalogs, fields: fieldValues },
+      anonymize: async () => {
+        const result = await anonymize({
+          catalogs,
+          fields: fieldValues,
+          organizationId: context.organizationId,
+          workspaceId,
+        });
+        return result.map((value) => value.fields);
+      },
     });
     // Fail closed: the caller discards the whole payload, so no field of this
     // or any other group leaves unanonymized.
@@ -286,7 +341,7 @@ const anonymizeTextFieldsByWorkspace = async ({
           allowEmptyFallback: false,
           fallback: field.value,
           missingFallback: ANONYMIZED_FIELD_MISSING_FALLBACK,
-          value: anonymized.value.fields[index],
+          value: anonymized.value[index],
         }),
       );
     }

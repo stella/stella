@@ -3,6 +3,7 @@ import * as v from "valibot";
 import { numberFromString } from "@stll/api-contract/http-input";
 
 import {
+  displayNameSchema,
   paginationCursorSchema,
   resourceIdSchema,
   workspaceParams,
@@ -30,11 +31,7 @@ import { LIMITS } from "@/api/lib/limits";
 // layer; only the shapes the two layers express differently are written
 // twice.
 
-const tStepName = v.pipe(
-  v.string(),
-  v.minLength(1),
-  v.maxLength(FLOW_STEP_NAME_MAX_CHARS),
-);
+const tStepName = displayNameSchema({ maxLength: FLOW_STEP_NAME_MAX_CHARS });
 
 const tFlowStep = v.union([
   v.object({
@@ -95,11 +92,7 @@ const tFlowTrigger = v.union([
 ]);
 
 export const flowDefinitionBodySchema = v.object({
-  name: v.pipe(
-    v.string(),
-    v.minLength(1),
-    v.maxLength(FLOW_DEFINITION_NAME_MAX_CHARS),
-  ),
+  name: displayNameSchema({ maxLength: FLOW_DEFINITION_NAME_MAX_CHARS }),
   description: v.union([
     v.pipe(v.string(), v.maxLength(FLOW_DEFINITION_DESCRIPTION_MAX_CHARS)),
     v.null(),

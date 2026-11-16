@@ -1,7 +1,10 @@
 import type { ReactNode } from "react";
 
 import { DecisionCitationChip } from "@/components/references/decision-citation-chip";
-import type { DecisionCitationChipProps } from "@/components/references/decision-citation-chip";
+import type {
+  DecisionCitationChipProps,
+  DecisionCitationDrawing,
+} from "@/components/references/decision-citation-chip";
 import { ParagraphReference } from "@/features/case-law/components/case-viewer/paragraph-reference";
 import type { ParagraphReferenceProps } from "@/features/case-law/components/case-viewer/paragraph-reference";
 
@@ -14,6 +17,9 @@ type CitationPayloads = {
 };
 
 export type CitationKind = keyof CitationPayloads;
+
+/** How a decision citation draws itself: over source text, or beside text. */
+export type { DecisionCitationDrawing };
 
 export type CitationChipProps<Kind extends CitationKind = CitationKind> = {
   [Key in Kind]: { kind: Key } & CitationPayloads[Key];
@@ -33,27 +39,9 @@ const CITATION_RENDERERS: CitationRenderers = {
       reference={reference}
     />
   ),
-  decision: ({
-    decision,
-    passage,
-    preview,
-    presentation,
-    paragraphNumber,
-    onOpen,
-    label,
-    citingText,
-  }) => (
-    <DecisionCitationChip
-      citingText={citingText}
-      decision={decision}
-      label={label}
-      onOpen={onOpen}
-      paragraphNumber={paragraphNumber}
-      passage={passage}
-      presentation={presentation}
-      preview={preview}
-    />
-  ),
+  // Forwarded whole: the chip's props are a union, and a source-text chip
+  // must arrive without any of the drawings that add words.
+  decision: ({ kind: _kind, ...chip }) => <DecisionCitationChip {...chip} />,
 };
 
 const renderCitation = <Kind extends CitationKind>(

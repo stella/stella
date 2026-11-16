@@ -1,17 +1,22 @@
 import { panic, TaggedError } from "better-result";
+import { afterEach, beforeEach } from "bun:test";
 
 import type { ChatHarnessProfile } from "@/api/tests/helpers/chat-harness-profile";
 import {
   providerWireFormatOf,
   signedGeminiCallsOf,
 } from "@/api/tests/helpers/provider-request-transcript";
-import type { ProviderRequest } from "@/api/tests/helpers/provider-request-transcript";
+import type {
+  ProviderRequest,
+  SignedGeminiCall,
+} from "@/api/tests/helpers/provider-request-transcript";
 import type {
   AwsEventStreamMessage,
   ProviderWireCassette,
   ProviderWireExchange,
 } from "@/api/tests/helpers/provider-wire-cassette";
 import type { ReplayGate } from "@/api/tests/helpers/provider-wire-gate";
+import { installTestFetch } from "@/api/tests/helpers/test-fetch";
 
 /** A request the replay would not answer. */
 class ProviderWireRefusal extends TaggedError("ProviderWireRefusal")<{
@@ -20,10 +25,10 @@ class ProviderWireRefusal extends TaggedError("ProviderWireRefusal")<{
 
 // A fetch-level provider: every request an SDK makes goes through
 // `globalThis.fetch`, so replacing it serves cassettes to the real adapters
-// with nothing mocked above the socket. The replacement is installed once
-// and serves whatever is queued now, because some SDK clients keep the fetch
-// they were constructed with. Nothing reaches the network: a request to any
-// other host, or with no exchange queued, is refused and recorded.
+// with nothing mocked above the socket. A fixture reinstalls the same function
+// for each test, because some SDK clients keep the fetch they were constructed
+// with. Requests to another host or with no exchange queued are refused and
+// recorded, so no provider request reaches the network.
 
 /** Hosts the supported provider APIs are served from. */
 const PROVIDER_HOST =
@@ -395,22 +400,24 @@ const responseFor = (
   });
 };
 
-/**
- * Installs the replay as `globalThis.fetch` until `restore`. Queue a
- * cassette with `serve`, run the adapter, then read `takeFindings`.
- */
-export const installProviderWireReplay = ({
-  passThroughOrigins = [],
-  profile,
-  retryAfterMs,
-}: {
+type ProviderWireReplayOptions = {
   /** In-process services (a fake object store) whose requests go through
    *  untouched; nothing else leaves the replay. */
   passThroughOrigins?: readonly string[];
   profile?: ChatHarnessProfile | undefined;
   /** OpenAI/Anthropic retry hints; omitted to preserve recorded headers. */
   retryAfterMs?: number | undefined;
-} = {}) => {
+};
+
+/**
+ * Installs the replay as `globalThis.fetch` until `restore`. Test-local
+ * callers restore in teardown; suites use registerProviderWireReplay.
+ */
+export const installProviderWireReplay = ({
+  passThroughOrigins = [],
+  profile,
+  retryAfterMs,
+}: ProviderWireReplayOptions = {}) => {
   const originalFetch = globalThis.fetch;
   let queue: {
     exchange: ProviderWireExchange;
@@ -428,8 +435,9 @@ export const installProviderWireReplay = ({
   let unexpected: string[] = [];
   let requests: ReplayedRequest[] = [];
   const transcripts: ProviderRequest[] = [];
-  // The signed calls the conversation's served answers made so far.
-  const signedCalls = new Map<string, string>();
+  // The signed calls the conversation's served answers made so far, with
+  // the model each answer came from.
+  const signedCalls = new Map<string, SignedGeminiCall>();
 
   const replayFetch = async (
     input: string | URL | Request,
@@ -460,7 +468,12 @@ export const installProviderWireReplay = ({
         }
         transcripts.push(
           format === "gemini"
-            ? { body, format, signedCalls: new Map(signedCalls) }
+            ? {
+                body,
+                format,
+                model: requestModel,
+                signedCalls: new Map(signedCalls),
+              }
             : { body, format },
         );
       }
@@ -554,7 +567,7 @@ export const installProviderWireReplay = ({
       const { body: answer } = current.entry.exchange.response;
       if (format === "gemini" && answer.encoding === "text") {
         for (const [id, signature] of signedGeminiCallsOf(answer.text)) {
-          signedCalls.set(id, signature);
+          signedCalls.set(id, { signature, model: requestModel });
         }
       }
       requests.push({
@@ -594,11 +607,13 @@ export const installProviderWireReplay = ({
       : await profile.measure("replay", answerRequest);
   };
 
-  globalThis.fetch = Object.assign(replayFetch, {
+  const installedFetch = Object.assign(replayFetch, {
     preconnect: () => undefined,
   });
+  const fetchInstallation = installTestFetch(installedFetch);
 
   return {
+    install: fetchInstallation.install,
     /** Queues `cassette`'s exchanges, replacing anything still queued. */
     serve: (
       cassette: Pick<ProviderWireCassette, "exchanges" | "model">,
@@ -678,10 +693,32 @@ export const installProviderWireReplay = ({
       requests = [];
       return findings;
     },
-    restore: () => {
-      globalThis.fetch = originalFetch;
-    },
+    restore: fetchInstallation.restore,
   };
 };
 
 export type ProviderWireReplay = ReturnType<typeof installProviderWireReplay>;
+
+type RegisterProviderWireReplayOptions = {
+  onInstall: (replay: ProviderWireReplay) => void;
+  options?: () => ProviderWireReplayOptions;
+};
+
+/** Register in suite scope so restoration precedes the global fetch leak guard. */
+export const registerProviderWireReplay = ({
+  onInstall,
+  options = () => ({}),
+}: RegisterProviderWireReplayOptions) => {
+  let replay: ProviderWireReplay | undefined;
+  beforeEach(() => {
+    if (replay === undefined) {
+      replay = installProviderWireReplay(options());
+    } else {
+      replay.install();
+    }
+    onInstall(replay);
+  });
+  afterEach(() => {
+    replay?.restore();
+  });
+};

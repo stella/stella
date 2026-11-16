@@ -35,6 +35,13 @@ const visualLoaders = {
       return { default: TaskMetadataPlayground };
     },
   },
+  "overview-stat-cards": {
+    load: async () => {
+      const { OverviewStatCardsPlayground } =
+        await import("./-components/overview-stat-cards-playground");
+      return { default: OverviewStatCardsPlayground };
+    },
+  },
   "column-composer": {
     load: async () => {
       const { ColumnComposerPlayground } =
@@ -47,6 +54,13 @@ const visualLoaders = {
       const { HandoffConfirmationPlayground } =
         await import("./-components/handoff-confirmation-playground");
       return { default: HandoffConfirmationPlayground };
+    },
+  },
+  "case-law-text-availability": {
+    load: async () => {
+      const { CaseLawTextAvailabilityPlayground } =
+        await import("./-components/case-law-text-availability-playground");
+      return { default: CaseLawTextAvailabilityPlayground };
     },
   },
   "hungarian-decision": {
@@ -91,6 +105,20 @@ const visualLoaders = {
       return { default: ChatLongPastePlayground };
     },
   },
+  "button-label": {
+    load: async () => {
+      const { ButtonLabelPlayground } =
+        await import("./-components/button-label-playground");
+      return { default: ButtonLabelPlayground };
+    },
+  },
+  "menu-commits": {
+    load: async () => {
+      const { MenuCommitsPlayground } =
+        await import("./-components/menu-commits-playground");
+      return { default: MenuCommitsPlayground };
+    },
+  },
   "chat-composer-reference": {
     load: async () => {
       const { ChatComposerReferencePlayground } =
@@ -133,11 +161,39 @@ const visualLoaders = {
       };
     },
   },
+  "chat-answer-footer": {
+    load: async () => {
+      const [{ ChatCitationsPlayground }, { CHAT_ANSWER_FOOTER_CASSETTE }] =
+        await Promise.all([
+          import("./-components/chat-citations-playground"),
+          import("./-components/chat-answer-footer-cassette"),
+        ]);
+      return {
+        default: () => (
+          <ChatCitationsPlayground cassette={CHAT_ANSWER_FOOTER_CASSETTE} />
+        ),
+      };
+    },
+  },
   "chat-link-icons": {
     load: async () => {
       const { ChatLinkIconsPlayground } =
         await import("./-components/chat-link-icons-playground");
       return { default: ChatLinkIconsPlayground };
+    },
+  },
+  "chat-follow-ups": {
+    load: async () => {
+      const { ChatFollowUpsPlayground } =
+        await import("./-components/chat-follow-ups-playground");
+      return { default: ChatFollowUpsPlayground };
+    },
+  },
+  "ask-user": {
+    load: async () => {
+      const { AskUserPlayground } =
+        await import("./-components/ask-user-playground");
+      return { default: AskUserPlayground };
     },
   },
   "reader-answers": {

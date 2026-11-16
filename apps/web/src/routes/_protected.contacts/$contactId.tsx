@@ -24,6 +24,7 @@ import { useFormatter } from "@/i18n/formatting-context";
 import { useDeleteContact } from "@/lib/contacts/mutations";
 import { contactOptions, contactsKeys } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
+import { loadRouteResource } from "@/lib/errors/route-resource";
 import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
@@ -47,10 +48,14 @@ export const Route = createFileRoute("/_protected/contacts/$contactId")({
   loader: async ({ context, params }) => {
     // Prime the contact query the page suspends on so the fetch starts during
     // navigation instead of after the component mounts and suspends.
-    await ensureRouteQueryData(
-      context.queryClient,
-      contactOptions(context.user.activeOrganizationId, params.contactId),
-    );
+    await loadRouteResource({
+      ids: [params.contactId],
+      load: async () =>
+        await ensureRouteQueryData(
+          context.queryClient,
+          contactOptions(context.user.activeOrganizationId, params.contactId),
+        ),
+    });
   },
   pendingComponent: ContactDetailPending,
   remountDeps: ({ params }) => params.contactId,
@@ -78,13 +83,12 @@ const ContactSectionSkeleton = ({
   </section>
 );
 
-// Mirrors the real detail layout: header (back/icon/title/badge/actions) above a
+// Mirrors the real detail layout: header (icon/title/badge/actions) above a
 // two-column grid of section cards, so the page does not jump when data lands.
 function ContactDetailPending() {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4">
       <div className="flex items-center gap-3">
-        <Skeleton className="size-7 rounded-md" />
         <Skeleton className="size-5 rounded-full" />
         <Skeleton className="h-6 w-48" />
         <Skeleton className="h-5 w-16 rounded-md" />
@@ -121,7 +125,11 @@ function ContactDetailPage() {
   );
   const deleteContact = useDeleteContact();
   const [invoiceComposerOpen, setInvoiceComposerOpen] = useState(false);
-  const canCreateInvoice = usePermissions({ invoice: ["create"] });
+  const canCreateInvoice = usePermissions({
+    invoice: ["create"],
+    billing: ["read"],
+  });
+  const canReadBilling = usePermissions({ billing: ["read"] });
   const canCreateMatter = usePermissions({ workspace: ["create"] });
   const canDeleteContact = usePermissions({ contact: ["delete"] });
   const openCreateMatter = useCreateMatterStore((s) => s.openDialog);
@@ -192,11 +200,14 @@ function ContactDetailPage() {
           )}
           {canCreateMatter && (
             <Button
-              onClick={() =>
+              onClick={(event) =>
                 openCreateMatter({
-                  id: contact.id,
-                  displayName: contact.displayName,
-                  type: contact.type,
+                  opener: event.currentTarget,
+                  client: {
+                    id: contact.id,
+                    displayName: contact.displayName,
+                    type: contact.type,
+                  },
                 })
               }
               size="sm"
@@ -323,20 +334,24 @@ function ContactDetailPage() {
                 value={contact.vatId}
               />
               <VatPayerSelect contact={contact} />
-              <EditableRow
-                // A draft is typed in one currency's units; a currency change
-                // remounts the row; its commit guard discards the old draft.
-                key={`default-hourly-rate-${contact.currency ?? "none"}`}
-                contact={contact}
-                field="defaultHourlyRate"
-                label={t("contacts.fields.defaultHourlyRate")}
-              />
-              <EditableRow
-                contact={contact}
-                field="currency"
-                label={t("common.currency")}
-                value={contact.currency}
-              />
+              {canReadBilling && (
+                <EditableRow
+                  // A draft is typed in one currency's units; a currency change
+                  // remounts the row; its commit guard discards the old draft.
+                  key={`default-hourly-rate-${contact.currency ?? "none"}`}
+                  contact={contact}
+                  field="defaultHourlyRate"
+                  label={t("contacts.fields.defaultHourlyRate")}
+                />
+              )}
+              {canReadBilling && (
+                <EditableRow
+                  contact={contact}
+                  field="currency"
+                  label={t("common.currency")}
+                  value={contact.currency}
+                />
+              )}
               <EditableRow
                 contact={contact}
                 field="paymentTermDays"

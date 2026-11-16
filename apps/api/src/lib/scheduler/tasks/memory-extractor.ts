@@ -30,6 +30,7 @@ import {
   readThreadStoredContentSendModeOnTx,
   THREAD_STORED_CONTENT_SEND_MODE,
 } from "@/api/lib/chat/thread-stored-content-send-mode";
+import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { holdMemberAccessOnTx } from "@/api/lib/db/member-access-hold";
 import { errorTag } from "@/api/lib/errors/utils";
@@ -514,7 +515,19 @@ const extractCandidates = async ({
 }: ExtractCandidatesOptions): Promise<
   Result<ExtractedCandidate[] | null, unknown>
 > => {
-  const summary = compaction.summaryMarkdown.slice(0, SUMMARY_MAX_CHARS);
+  const summary = await actor.inputDb(async (tx) => {
+    const { projection, subjectByThread } = await readChatCopyProjection({
+      tx,
+      threadIds: [compaction.threadId],
+      values: compaction.summaryMarkdown,
+    });
+    return (
+      projection.marker(
+        compaction.summaryMarkdown,
+        subjectByThread.get(compaction.threadId),
+      ) ?? compaction.summaryMarkdown
+    ).slice(0, SUMMARY_MAX_CHARS);
+  });
   // The summary is lossy by design; the messages it replaced are still in
   // the database, so mine those too. A failure here degrades to
   // summary-only extraction rather than losing the whole compaction.

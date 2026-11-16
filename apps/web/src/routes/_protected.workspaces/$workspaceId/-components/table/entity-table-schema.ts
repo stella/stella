@@ -27,6 +27,7 @@ import type {
 } from "@/components/workspaces/table/table-schema";
 import type { WorkspaceProperty, WorkspaceView } from "@/lib/types";
 import { pairPlaybookVerdicts } from "@/lib/workspaces/playbook-verdicts";
+import { propertyDisplayName } from "@/lib/workspaces/property-display-name";
 import { includesListItems } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
 
 /** Labels the schema needs; the caller resolves them for the reader's locale. */
@@ -39,6 +40,7 @@ type WorkspaceTableLabels = {
   author: string;
   lastUpdated: string;
   version: string;
+  documents: string;
 };
 
 export type WorkspaceTableSchemaParams = {
@@ -47,13 +49,21 @@ export type WorkspaceTableSchemaParams = {
   labels: WorkspaceTableLabels;
 };
 
-const listColumn = (
-  id: string,
-  label: string,
-  size: number,
-  render: WorkspaceEntityColumnRender,
-  { sort = true }: { sort?: boolean } = {},
-): WorkspaceColumnDescriptor => ({
+type ListColumnOptions = {
+  id: string;
+  label: string;
+  size: number;
+  render: WorkspaceEntityColumnRender;
+  sort?: boolean | undefined;
+};
+
+const listColumn = ({
+  id,
+  label,
+  size,
+  render,
+  sort = true,
+}: ListColumnOptions): WorkspaceColumnDescriptor => ({
   id,
   label,
   render,
@@ -92,24 +102,36 @@ export const workspaceTableSchema = ({
 
   if (includesListItems(view.layout.filters)) {
     columns.push(
-      listColumn(getInternalPropertyId("name"), labels.name, 260, {
-        type: "name",
+      listColumn({
+        id: getInternalPropertyId("name"),
+        label: labels.name,
+        size: 260,
+        render: { type: "name" },
       }),
-      listColumn(
-        getInternalPropertyId("list-item-type"),
-        labels.itemType,
-        140,
-        { type: "list-item-type" },
-        { sort: false },
-      ),
-      listColumn(getInternalPropertyId("status"), labels.status, 140, {
-        type: "task-status",
+      listColumn({
+        id: getInternalPropertyId("list-item-type"),
+        label: labels.itemType,
+        size: 140,
+        render: { type: "list-item-type" },
+        sort: false,
       }),
-      listColumn(getInternalPropertyId("priority"), labels.priority, 120, {
-        type: "task-priority",
+      listColumn({
+        id: getInternalPropertyId("status"),
+        label: labels.status,
+        size: 140,
+        render: { type: "task-status" },
       }),
-      listColumn(getInternalPropertyId("due-date"), labels.dueDate, 140, {
-        type: "task-due-date",
+      listColumn({
+        id: getInternalPropertyId("priority"),
+        label: labels.priority,
+        size: 120,
+        render: { type: "task-priority" },
+      }),
+      listColumn({
+        id: getInternalPropertyId("due-date"),
+        label: labels.dueDate,
+        size: 140,
+        render: { type: "task-due-date" },
       }),
     );
   }
@@ -122,7 +144,7 @@ export const workspaceTableSchema = ({
   ])) {
     columns.push({
       id: property.id,
-      label: property.name,
+      label: propertyDisplayName(property, labels.documents),
       render: { type: "property", property, verdictProperty },
       size: PROPERTY_COLUMN_SIZE,
       capabilities: { sort: true, hide: true, resize: true, pin: true },

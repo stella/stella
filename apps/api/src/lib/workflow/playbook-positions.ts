@@ -1,6 +1,6 @@
 import * as v from "valibot";
 
-import { propertyContentSchema } from "@/api/db/schema-validators";
+import { scalarPropertyContentSchema } from "@/api/db/schema-validators";
 import { tConditionNode } from "@/api/lib/conditions/contract";
 import type { ConstantMap } from "@/api/lib/constant-map";
 import {
@@ -173,7 +173,7 @@ const askQuestionSchema = v.pipe(
 
 const askManualSchema = v.object({
   question: askQuestionSchema,
-  content: propertyContentSchema,
+  content: scalarPropertyContentSchema,
 });
 export type AskManual = v.InferOutput<typeof askManualSchema>;
 
@@ -188,7 +188,7 @@ const askConfigSchema = v.union([
     derived: v.optional(
       v.object({
         question: askQuestionSchema,
-        content: propertyContentSchema,
+        content: scalarPropertyContentSchema,
         rulesHash: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
       }),
     ),
@@ -196,7 +196,7 @@ const askConfigSchema = v.union([
   v.object({
     mode: v.literal("manual"),
     question: askQuestionSchema,
-    content: propertyContentSchema,
+    content: scalarPropertyContentSchema,
   }),
 ]);
 

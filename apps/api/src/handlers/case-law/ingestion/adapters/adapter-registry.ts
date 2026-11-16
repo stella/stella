@@ -1,9 +1,5 @@
 import type { Result } from "better-result";
 
-import type {
-  IngestionResult,
-  SourceAdapter,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import { atAsylghAdapter } from "@/api/handlers/case-law/ingestion/adapters/at-asylgh";
 import { atBksAdapter } from "@/api/handlers/case-law/ingestion/adapters/at-bks";
 import { atBvwgAdapter } from "@/api/handlers/case-law/ingestion/adapters/at-bvwg";
@@ -16,6 +12,7 @@ import { atUvsAdapter } from "@/api/handlers/case-law/ingestion/adapters/at-uvs"
 import { atVergAdapter } from "@/api/handlers/case-law/ingestion/adapters/at-verg";
 import { atVfghAdapter } from "@/api/handlers/case-law/ingestion/adapters/at-vfgh";
 import { atVwghAdapter } from "@/api/handlers/case-law/ingestion/adapters/at-vwgh";
+import { brTstAdapter } from "@/api/handlers/case-law/ingestion/adapters/br-tst";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import { czNssAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
 import { czRegionalAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
@@ -41,6 +38,10 @@ import {
   IMPORT_SOURCE_KEYS,
   type ImportSourceKey,
 } from "@/api/lib/legal-search/ingestion-constants";
+import type {
+  IngestionResult,
+  SourceAdapter,
+} from "@/api/lib/legal-search/ingestion-types";
 
 import { courtListenerImport } from "./courtlistener/import";
 import { checkedSourceRegistrations } from "./source-registrations";
@@ -50,6 +51,13 @@ import { checkedSourceRegistrations } from "./source-registrations";
  * anything outside this slice reaches an adapter.
  */
 export { listDeferredDocumentDrains } from "@/api/handlers/case-law/ingestion/adapters/deferred-document-processors";
+
+/**
+ * The graded budget each deferred-document fetch starts, carried with the
+ * drains so a drain outside this slice grades a slow publisher the same way
+ * the read-through path does.
+ */
+export { startDocumentFetchBudget } from "@/api/lib/legal-search/document-fetch-budget";
 
 type AdapterRegistry = {
   readonly [TKey in AdapterKey]: SourceAdapter & { readonly key: TKey };
@@ -61,6 +69,7 @@ const ADAPTER_REGISTRY = {
   [ADAPTER_KEYS.CZ_US]: czUsAdapter,
   [ADAPTER_KEYS.CZ_REGIONAL]: czRegionalAdapter,
   [ADAPTER_KEYS.CZ_UOHS]: czUohsAdapter,
+  [ADAPTER_KEYS.BR_TST]: brTstAdapter,
   [ADAPTER_KEYS.SK_COURTS]: skCourtsAdapter,
   [ADAPTER_KEYS.SK_US]: skUsAdapter,
   [ADAPTER_KEYS.PL_COURTS]: plCourtsAdapter,

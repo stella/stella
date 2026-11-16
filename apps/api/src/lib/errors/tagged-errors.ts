@@ -145,6 +145,7 @@ export type HandlerErrorMissingRequiredField = {
  */
 export type HandlerErrorValidationIssue = {
   path: string;
+  code?: string | undefined;
   message: string;
 };
 
@@ -187,6 +188,7 @@ type HandlerErrorBaseProps<
    *  path, so a caller can fix the exact entries it sent rather than parsing
    *  the summary message. */
   issues?: HandlerErrorValidationIssue[] | undefined;
+  workspaceId?: string | undefined;
   retryable?: boolean | undefined;
   retryAfterMs?: number | undefined;
 };
@@ -222,6 +224,7 @@ export class HandlerError<
   declare stepUp?: HandlerErrorStepUp | undefined;
   declare requiredFields?: HandlerErrorMissingRequiredField[] | undefined;
   declare issues?: HandlerErrorValidationIssue[] | undefined;
+  declare workspaceId?: string | undefined;
 
   constructor(props: HandlerErrorProps<TStatus>) {
     super(props);
@@ -239,6 +242,7 @@ export class HandlerError<
     this.stepUp = props.stepUp;
     this.requiredFields = props.requiredFields;
     this.issues = props.issues;
+    this.workspaceId = props.workspaceId;
   }
 }
 
@@ -287,7 +291,7 @@ export class TelemetryError extends TaggedError("TelemetryError")<{
   cause?: unknown;
 }> {}
 
-export const USAGE_LIMIT_EXCEEDED_REASONS = [
+const USAGE_LIMIT_EXCEEDED_REASONS = [
   "no_entitlement",
   "usage_limit_exceeded",
   "entitlement_inactive",
@@ -363,6 +367,7 @@ export const UNPERSISTABLE_DECISION_FIELDS = {
   PUBLISHER_CITATIONS: "publisher-citations",
   PRIMARY_REFERENCE_TYPE: "primary-reference-type",
   SUPPLEMENT: "supplement",
+  FALLBACK_IDENTITY: "fallback-identity",
 } as const;
 
 export type UnpersistableDecisionField =
@@ -418,9 +423,10 @@ export class CorpusMemberDigestMismatchError extends TaggedError(
 }> {}
 
 /**
- * A stored document AST carried vocabulary this reader does not declare:
- * a block role, a block kind, or an inline kind. The read served the
- * document with those degraded (see `persistedAstDegradations` in
+ * A stored document AST carried vocabulary this reader does not declare
+ * (a block role, a block kind, or an inline kind) or head matter after the
+ * body. The read served the document with those degraded (see
+ * `persistedAstDegradations` and `headMatterOrderDegradations` in
  * `@stll/legal-ast/document-ast`); this is telemetry only, so the row is
  * visible: either a writer newer than this reader, or a row written past
  * the ingestion boundary that needs repair.
@@ -430,6 +436,17 @@ export class StoredAstDegradedError extends TaggedError(
 )<{
   message: string;
   degradations: readonly PersistedAstDegradation[];
+}> {}
+
+export const STORED_CORPUS_VALIDATION_CODE = "stored_corpus_invalid";
+
+/** Stored JSON failed its reader contract; contains diagnostics only, never payloads. */
+export class StoredCorpusValidationError extends TaggedError(
+  "StoredCorpusValidationError",
+)<{
+  message: string;
+  code: typeof STORED_CORPUS_VALIDATION_CODE;
+  paths: readonly string[];
 }> {}
 
 /** Validation/domain-layer errors: no valid inputs, invalid config. */
@@ -576,14 +593,12 @@ export class WorkflowIntegrationError extends TaggedError(
   cause?: unknown;
 }> {}
 
-/** Post-generation OOXML structural violations. */
-export class OoxmlValidationError extends TaggedError("OoxmlValidationError")<{
+/** The documents of one request cannot fit its model, even trimmed. */
+export class DocumentTooLargeError extends TaggedError(
+  "DocumentTooLargeError",
+)<{
   message: string;
-  violations: {
-    rule: string;
-    message: string;
-    element?: string;
-  }[];
+  budgetBytes: number;
 }> {}
 
 /** Optimistic-lock failure inside a transaction. */
@@ -591,18 +606,6 @@ export class ConcurrentModificationError extends TaggedError(
   "ConcurrentModificationError",
 )<{
   message: string;
-}> {}
-
-/** DOCX template block-directive structural errors. */
-export class TemplateDirectiveError extends TaggedError(
-  "TemplateDirectiveError",
-)<{
-  message: string;
-  errors: {
-    message: string;
-    paragraphIndex: number;
-    directive: string;
-  }[];
 }> {}
 
 type AdapterFetchErrorOptions = {

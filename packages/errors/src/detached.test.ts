@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
 
-import { createDetached } from "./detached";
+import { createDetached, DetachedFunctionOperandError } from "./detached";
 
 const settle = async () => {
   await sleep(0);
@@ -32,4 +32,24 @@ test("leaves a fulfilled operation and a plain value alone", async () => {
   await settle();
 
   expect(received).toEqual([]);
+});
+
+test("refuses a function operand instead of dropping work it never started", async () => {
+  const received: { context: string; error: unknown }[] = [];
+  const detached = createDetached((error, context) => {
+    received.push({ context, error });
+  });
+  let started = false;
+  const work = async () => {
+    started = true;
+  };
+
+  // @ts-expect-error a function is work that was never started.
+  detached(work, "feature.unstarted");
+  await settle();
+
+  expect(started).toBe(false);
+  expect(received).toHaveLength(1);
+  expect(received[0]?.context).toBe("feature.unstarted");
+  expect(received[0]?.error).toBeInstanceOf(DetachedFunctionOperandError);
 });

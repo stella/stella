@@ -1,3 +1,4 @@
+// parser-output-unchanged: the TST adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the ÚOHS adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: declarations about parser output; no parser reads this module.
 /**
@@ -235,11 +236,10 @@ export const PROCESSED_FIELD_INVENTORY = {
     ),
   },
   [ADAPTER_KEYS.PL_COURTS]: {
-    "court-paragraph-numbers": skippedField(
-      PROCESSED_FIELD_SKIP_REASONS.NOT_EXTRACTED,
-      "some common-court reasons number their points ('1.' on its own line) and the number stays in the text",
-      unrecordedEvidence(
-        "the recorded SAOS details do not include a numbered reasoning",
+    "court-paragraph-numbers": providedField(
+      PARAGRAPH_NUMBERS_FROM_TEXT,
+      recordedEvidence(
+        "src/handlers/case-law/ingestion/adapters/__fixtures__/pl-courts-detail-546903.json.gz",
       ),
     ),
   },
@@ -279,7 +279,7 @@ export const PROCESSED_FIELD_INVENTORY = {
   [ADAPTER_KEYS.PL_NCOURT]: {
     "court-paragraph-numbers": skippedField(
       PROCESSED_FIELD_SKIP_REASONS.UNASSESSED,
-      "numbered units open their first paragraph as printed; the recorded documents show roman units only",
+      "the portal's numbered units are the ruling's points and lists inside a paragraph, not paragraph numbering; the reader moves numbers printed in the reasons through the court numbering, and no recorded portal document numbers its reasons",
       unrecordedEvidence(
         "no recording has been checked for numbered reasoning",
       ),
@@ -361,11 +361,10 @@ export const PROCESSED_FIELD_INVENTORY = {
     ),
   },
   [ADAPTER_KEYS.PL_UODO]: {
-    "court-paragraph-numbers": skippedField(
-      PROCESSED_FIELD_SKIP_REASONS.UNASSESSED,
-      "decision units carry outline markers kept as text with listDepth; whether they are citable paragraph numbers is unchecked",
-      unrecordedEvidence(
-        "the recorded decision has not been classified against the numbering check",
+    "court-paragraph-numbers": providedField(
+      "parsePlUodoDecisionXml takes the name of a paragraph unit (xType pass) placed straight in a branch or chapter of the reasons as ParagraphBlock.number; a pass unit nested in another unit numbers a list and keeps its printed marker",
+      recordedEvidence(
+        "src/handlers/case-law/ingestion/parsers/__fixtures__/pl-uodo-doke-561-5-2023.xml.gz",
       ),
     ),
   },
@@ -384,6 +383,17 @@ export const PROCESSED_FIELD_INVENTORY = {
       recordedEvidence(
         "src/handlers/case-law/ingestion/adapters/__fixtures__/cz-uohs-2026-R0137.pdf",
         "src/handlers/case-law/ingestion/adapters/__fixtures__/cz-uohs-2026-S0383.pdf",
+      ),
+    ),
+  },
+  [ADAPTER_KEYS.BR_TST]: {
+    "court-paragraph-numbers": skippedField(
+      PROCESSED_FIELD_SKIP_REASONS.SOURCE_LACKS,
+      "TST decisions print no citable paragraph numbers: an acórdão is cited by its docket, and the numerals it prints open headnote items and lists, not paragraphs",
+      recordedEvidence(
+        "src/handlers/case-law/ingestion/adapters/__fixtures__/br-tst-acordao-2024.json",
+        "src/handlers/case-law/ingestion/adapters/__fixtures__/br-tst-acordao-1985.json",
+        "src/handlers/case-law/ingestion/adapters/__fixtures__/br-tst-despacho-2020.json",
       ),
     ),
   },

@@ -2,7 +2,7 @@
   position: relative;
   display: inline-grid;
   grid-template-columns: minmax(0, max-content);
-  min-inline-size: 0;
+  min-inline-size: min(10ch, 100%);
   max-inline-size: 100%;
   vertical-align: baseline;
 }
@@ -10,7 +10,7 @@
 [data-slot="inline-rename-mirror"],
 [data-slot="inline-rename-input"] {
   grid-area: 1 / 1;
-  min-inline-size: 1px;
+  min-inline-size: min(10ch, 100%);
   max-inline-size: 100%;
   margin: 0;
   padding: 0;
@@ -20,7 +20,12 @@
   line-height: inherit;
 }
 
+/* The field's 10ch floor lives here as a fixed length: a parent sizing its
+   row from its content ignores a percentage floor and lays the field out
+   wider than it measured, so the overflow came out of the siblings (a
+   breadcrumb's matter name shrank to nothing beside its number). */
 [data-slot="inline-rename-mirror"] {
+  min-inline-size: 10ch;
   visibility: hidden;
   white-space: pre;
   overflow: hidden;
@@ -49,6 +54,10 @@
     position: static;
     field-sizing: content;
     inline-size: auto;
+    /* The mirror reserves the floor; the input hugs its text so opening a
+       short title does not widen or move it. */
+    min-inline-size: 0;
+    justify-self: start;
   }
 }
 

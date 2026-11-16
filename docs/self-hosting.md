@@ -324,6 +324,16 @@ it and without configuration. Users install stella desktop, open **Settings → 
 app, and click **Connect**. The desktop app shows a local approval prompt and
 stores the exact trusted web/API origin before accepting Office file handoffs.
 
+Each release refuses desktop builds below its desktop support floor (see
+[Desktop Support](./releases.md#desktop-support)). On a self-hosted server the
+floor moves only when the server is upgraded, and it never exceeds the newest
+published desktop build. A desktop that updates itself is therefore accepted
+after every upgrade: its updater reads the public download feed, not this
+server. A server older than the desktop app accepts it. Where in-app updates are
+turned off or the download feed is unreachable, deploy a desktop build at or
+above the new release's floor before upgrading the server. No server setting
+lowers or disables the floor.
+
 ## Database migrations
 
 Apply SQL migrations from `apps/api/drizzle/` before running the API against a

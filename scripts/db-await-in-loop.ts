@@ -84,7 +84,7 @@
 import { panic } from "better-result";
 import { existsSync, realpathSync } from "node:fs";
 import path from "node:path";
-import * as ts from "tsrs/unstable/ast";
+import * as ts from "tsrs/ast";
 import {
   API,
   type Checker,
@@ -93,7 +93,7 @@ import {
   type Symbol as CompilerSymbol,
   type Type,
   TypeFlags,
-} from "tsrs/unstable/async";
+} from "tsrs/async";
 
 import { compareCodeUnit } from "@stll/collation";
 import { repoRelativePath } from "@stll/portable-path";
@@ -1766,7 +1766,7 @@ export const scanDbAwaitInLoop = async ({
   const hits: DbAwaitInLoopHit[] = [];
   const unclassified: DbAwaitInLoopUnclassified[] = [];
   const directiveProblems: DbAwaitInLoopDirectiveProblem[] = [];
-  const directiveCounts: Record<string, number> = {};
+  const directiveCounts = new Map<string, number>();
   let suppressedHits = 0;
   let boundedRoundHits = 0;
   let filesScanned = 0;
@@ -1924,7 +1924,7 @@ export const scanDbAwaitInLoop = async ({
     directiveProblems.push(...directives.problems);
     const directiveCount = countParsedDirectives(directives);
     if (directiveCount > 0) {
-      directiveCounts[file] = directiveCount;
+      directiveCounts.set(file, directiveCount);
     }
     for (const { hit, loop, fanOut } of fileHits) {
       if (
@@ -1978,7 +1978,7 @@ export const scanDbAwaitInLoop = async ({
     directiveProblems: directiveProblems.toSorted(byLocation),
     unclassified: unclassified.toSorted(byLocation),
     filesScanned,
-    directiveCounts,
+    directiveCounts: Object.fromEntries(directiveCounts),
   };
 };
 

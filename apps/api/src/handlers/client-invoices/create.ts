@@ -2,8 +2,10 @@ import { Result } from "better-result";
 import { and, eq, inArray, max } from "drizzle-orm";
 import * as v from "valibot";
 
+import { withBillingRead } from "@stll/permissions";
+
 import { resultTx } from "@/api/db/safe-db";
-import { expenses, invoices, timeEntries, workspaces } from "@/api/db/schema";
+import { expenses, invoices, timeEntries } from "@/api/db/schema";
 import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -18,6 +20,7 @@ import {
   recalculateInvoiceTotals,
 } from "@/api/lib/billing/invoice-lines";
 import { latestDate } from "@/api/lib/billing/invoice-prefill.logic";
+import { invoiceTotalMoneyResponse } from "@/api/lib/billing/response-schemas";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import {
@@ -30,13 +33,18 @@ import { LIMITS } from "@/api/lib/limits";
 
 import { appendClientInvoiceMatter } from "./append-matter";
 import { clientInvoiceBody } from "./create-contract";
-import { validateClientInvoiceSelection } from "./selection";
+import {
+  resolveClientInvoiceMatters,
+  validateClientInvoiceSelection,
+} from "./selection";
 
 const createClientInvoice = createSafeRootHandler(
   {
+    moneyResponse: invoiceTotalMoneyResponse,
     contract: "patch",
+    idempotency: { type: "replay" },
     description: `Create one client draft from approved unbilled hourly work across selected matters. Every matter must belong to the client and be accessible. No partial invoice is returned. At most ${LIMITS.invoiceLinesPerInvoice} lines across ${LIMITS.clientInvoiceMatters} matters. Select the returned workspaceId as the matterId for invoices.get, finalize and PDF export. For line edits, use that line's workspaceId from invoices.get. Line overrides edit the invoice only, through invoices.lines.update.`,
-    permissions: { invoice: ["create"] },
+    permissions: withBillingRead({ invoice: ["create"] }),
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },
     mcp: {
@@ -76,27 +84,15 @@ const createClientInvoice = createSafeRootHandler(
       }
       await withInvoiceMatterLocks(tx, ids);
       // Serialize client matter membership and arrangement changes before claiming work.
-      const selected = await tx
-        .select({ id: workspaces.id })
-        .from(workspaces)
-        .where(
-          and(
-            inArray(workspaces.id, ids),
-            eq(workspaces.organizationId, session.activeOrganizationId),
-            eq(workspaces.clientId, params.clientId),
-          ),
-        )
-        .orderBy(workspaces.id)
-        .limit(ids.length);
-      if (selected.length !== ids.length) {
-        return Result.err(
-          new HandlerError({
-            status: 404,
-            message: "Some client matters were not found or are inaccessible",
-          }),
-        );
+      const selected = await resolveClientInvoiceMatters(tx, {
+        organizationId: session.activeOrganizationId,
+        clientId: params.clientId,
+        workspaceIds: ids,
+      });
+      if (selected.isErr()) {
+        return selected;
       }
-      for (const matter of selected) {
+      for (const matter of selected.value) {
         // Refuse before any write. insertInvoiceLines enforces the same quota
         // on every path that adds a matter to an invoice.
         // db-await-in-loop: at most 50 matter arrangements, locked in stable ID order
@@ -239,6 +235,26 @@ const createClientInvoice = createSafeRootHandler(
       });
     });
     return result.mapError(invoiceCreationError);
+  },
+  {
+    authorize: async ({ scopedDb, session, params, body }) => {
+      const selection = validateClientInvoiceSelection(body.matters);
+      if (selection.isErr()) {
+        return selection;
+      }
+      const authorization = await scopedDb(
+        async (tx) =>
+          await resolveClientInvoiceMatters(tx, {
+            organizationId: session.activeOrganizationId,
+            clientId: params.clientId,
+            workspaceIds: selection.value.ids,
+          }),
+      );
+      if (authorization.isErr()) {
+        return authorization;
+      }
+      return Result.ok(undefined);
+    },
   },
 );
 declareAggregateMutation(createClientInvoice, {

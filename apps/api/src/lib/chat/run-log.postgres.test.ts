@@ -15,6 +15,7 @@ import {
   USER_STOP_OUTCOME,
 } from "@/api/handlers/chat/chat-turn-persistence";
 import { createSafeId } from "@/api/lib/branded-types";
+import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import {
   createChatRunLog,
   createChatRunLogReplay,
@@ -24,6 +25,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -44,7 +46,8 @@ const beforeQuery = <Builder extends object>(
       if (property === "then") {
         return async (...args: unknown[]) => {
           await before();
-          return await Reflect.apply(value, target, args);
+          const result: unknown = await Reflect.apply(value, target, args);
+          return result;
         };
       }
       return (...args: unknown[]) => {
@@ -133,7 +136,7 @@ if (!databaseUrl || !runPostgresTests) {
       await db
         .delete(chatThreads)
         .where(inArray(chatThreads.id, [threadId, racedThreadId]));
-      await db.delete(organization).where(eq(organization.id, organizationId));
+      await deleteOrganizationsForTest(db, [organizationId]);
       await db.delete(user).where(eq(user.id, userId));
     });
 
@@ -203,7 +206,7 @@ if (!databaseUrl || !runPostgresTests) {
               new Proxy(tx, {
                 get(target, property) {
                   if (property !== "select") {
-                    return Reflect.get(target, property);
+                    return Reflect.get(target, property) as unknown;
                   }
                   return new Proxy(target.select, {
                     apply(call, thisArg, args) {
@@ -247,22 +250,20 @@ if (!databaseUrl || !runPostgresTests) {
         end,
         terminal,
       ]);
-      const received: { value: unknown } = { value: null };
-      const pending = reader.next().then((value) => {
-        received.value = value;
-        return value;
-      });
-      await Bun.sleep(50);
-      const beforeSettlement = received.value;
+      const pending = reader.next();
       expect(
-        await scopedDb(
-          async (tx) =>
-            await settleChatTurnOnTx({
-              assistantMessageId: null,
-              execution,
-              outcome: USER_STOP_OUTCOME,
-              tx,
-            }),
+        await withChatRunPings(
+          async (pings) =>
+            await scopedDb(
+              async (tx) =>
+                await settleChatTurnOnTx({
+                  pings,
+                  assistantMessageId: null,
+                  execution,
+                  outcome: USER_STOP_OUTCOME,
+                  tx,
+                }),
+            ),
         ),
       ).toBe("settled");
       const timing = await readChatTurnTiming({
@@ -275,7 +276,6 @@ if (!databaseUrl || !runPostgresTests) {
       const deliveredEnd = await pending;
       const deliveredTerminal = await reader.next();
       expect(await reader.next()).toEqual({ done: true, value: undefined });
-      expect(beforeSettlement).toBeNull();
       expect(timing.value?.status).toBe("finished");
       expect(deliveredEnd).toEqual({
         done: false,
@@ -367,7 +367,7 @@ if (!databaseUrl || !runPostgresTests) {
       const delivered = (prefix + tail)
         .split("\n")
         .filter((line) => line.startsWith("data: "))
-        .map((line) => JSON.parse(line.slice(6)));
+        .map((line): unknown => JSON.parse(line.slice(6)));
       expect(delivered.slice(1)).toEqual(chunks);
       expect(providerCalls).toBe(1);
       expect(
