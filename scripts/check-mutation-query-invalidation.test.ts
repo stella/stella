@@ -67,7 +67,7 @@ import { useQuery } from "@tanstack/react-query";
 import { fileOptions, textFileOptions } from "@/lib/files/queries";
 import { fileMetadataOptions } from "@/lib/files/file-metadata-query";
 const queryClient = { prefetchQuery: (options: unknown) => options };
-const api = { entities: (_args: { workspaceId: string }) => ({ rename: { patch: (input: unknown) => input }, delete: { patch: (input: unknown) => input } }) };
+import { api } from "@/lib/api";
 const renameEntityRequest = () => api.entities({ workspaceId: "123" }).rename.patch({ entityId: "123" });
 export const saveWorkspace = () => useMutation({ mutationFn: resourceMutation({
   mutation: "renameEntity",
@@ -335,7 +335,7 @@ test("an unwrapped mutation fails the guard", () => {
       file: "apps/web/src/features.ts",
       text: `
 import { useMutation } from "@tanstack/react-query";
-const api = { workspaces: (_args: unknown) => ({ post: (input: unknown) => input }) };
+import { api } from "@/lib/api";
 export const saveWorkspace = () => useMutation({ mutationFn: () => api.workspaces({}).post({}) });
 `,
     },
@@ -356,7 +356,7 @@ test("an unknown resource member and a direct query factory fail the guard", () 
 import { queryOptions } from "@tanstack/react-query";
 import { useMutation } from "@tanstack/react-query";
 import { resourceMutation } from "@/lib/workspace-realtime";
-const api = { workspaces: (_args: unknown) => ({ post: (input: unknown) => input }) };
+import { api } from "@/lib/api";
 export const saveWorkspace = () => useMutation({ mutationFn: resourceMutation({
   mutation: "unknownMutation",
   queryClient: {},
@@ -383,7 +383,7 @@ test("a known contract cannot bless a different observed write route", () => {
       text: `
 import { resourceMutation } from "@/lib/workspace-realtime";
 import { useMutation } from "@tanstack/react-query";
-const api = { entities: (_args: { workspaceId: string }) => ({ delete: { patch: (input: unknown) => input } }) };
+import { api } from "@/lib/api";
 export const rename = () => useMutation({ mutationFn: resourceMutation({
   mutation: "renameEntity",
   queryClient: {},
@@ -636,7 +636,7 @@ test("mutable helper aliases and caller-selected mutation scopes fail closed", (
       text: `
 import { resourceMutation } from "@/lib/workspace-realtime";
 import { useMutation } from "@tanstack/react-query";
-const api = { entities: (_args: { workspaceId: string }) => ({ rename: { patch: (input: unknown) => input } }) };
+import { api } from "@/lib/api";
 const fakeMutation = (options: { mutationFn: () => unknown }) => options.mutationFn;
 let mutableMutation = resourceMutation;
 mutableMutation = fakeMutation;
@@ -669,7 +669,7 @@ export const spreadOptions = () => useMutation({ mutationFn: resourceMutation({
 });
 
 test("only the executed mutationFn can satisfy the mutation contract", () => {
-  const rawRequest = `const api = { entities: (_args: { workspaceId: string }) => ({ rename: { patch: (input: unknown) => input } }) };\nconst renameEntityRequest = () => api.entities({ workspaceId: "123" }).rename.patch({ entityId: "123" });`;
+  const rawRequest = `import { api } from "@/lib/api";\nconst renameEntityRequest = () => api.entities({ workspaceId: "123" }).rename.patch({ entityId: "123" });`;
   const fixture = (body: string) => [
     ...validSources.slice(0, 2),
     {
@@ -720,7 +720,7 @@ test("mutation wrappers require empty owned writes and valid nested mutations", 
       text: `
 import { useMutation } from "@tanstack/react-query";
 import { resourceMutation } from "@/lib/workspace-realtime";
-const api = { entities: (_args: { workspaceId: string }) => ({ rename: { patch: (input: unknown) => input }, delete: { delete: (input: unknown) => input } }) };
+import { api } from "@/lib/api";
 const renameEntityRequest = () => api.entities({ workspaceId: "123" }).rename.patch({ entityId: "123", name: "renamed" });
 const renameMutation = resourceMutation({ mutation: "renameEntity", queryClient: {}, mutationFn: renameEntityRequest });
 const useRegisteredRename = () => useMutation({ mutationFn: renameMutation });
@@ -937,7 +937,7 @@ test("tagged mutation spreads use the same closed override rule", () => {
       text: `
 import { resourceMutation } from "@/lib/workspace-realtime";
 import { useMutation } from "@tanstack/react-query";
-const api = { entities: (_args: { workspaceId: string }) => ({ rename: { patch: (input: unknown) => input } }) };
+import { api } from "@/lib/api";
 const renameEntityRequest = () => api.entities({ workspaceId: "123" }).rename.patch({ entityId: "123" });
 const wrapped = resourceMutation({ mutation: "renameEntity", queryClient: {}, mutationFn: renameEntityRequest });
 const options = { mutationFn: wrapped };
@@ -991,4 +991,51 @@ test("frozen migration targets may gain a contract but never change or lose one"
     "Changed frozen migration targets: addMcpServer",
     "Changed frozen migration targets: renameEntity",
   ]);
+});
+
+test("bound scope adapters must return their sole resource mutation promise", () => {
+  const fixture = (adapter: string) => [
+    ...validSources.slice(0, 2),
+    {
+      file: "apps/web/src/features.ts",
+      text: `import { api } from "@/lib/api";
+        import { useMutation } from "@tanstack/react-query";
+        import { resourceMutation } from "@/lib/workspace-realtime";
+        const workspaceId = "workspace";
+        const write = resourceMutation({ mutation: "renameEntity", queryClient: {},
+          mutationFn: ({ input }) => api.entities({ workspaceId }).rename.patch(input),
+        });
+        export const useRename = () => useMutation({ mutationFn: ${adapter} });`,
+    },
+  ];
+  for (const adapter of [
+    "(input) => write({ workspaceId, input })",
+    "(input) => write({ workspaceId, input: input.taskId })",
+    "async (input) => await write({ workspaceId, input })",
+    "(input) => { return write({ workspaceId, input }); }",
+    "async function(input) { return await write({ workspaceId, input }); }",
+  ]) {
+    expect({ adapter, findings: violations(fixture(adapter)) }).toEqual({
+      adapter,
+      findings: [],
+    });
+  }
+  for (const adapter of [
+    "(input) => { write({ workspaceId, input }); }",
+    "function*(input) { return write({ workspaceId, input }); }",
+    "(input) => { write({ workspaceId, input }); return undefined; }",
+    "(input) => input ? write({ workspaceId, input }) : undefined",
+    "(input) => { api.entities({ workspaceId }).rename.patch(input); return write({ workspaceId, input }); }",
+    "(input) => write({ workspaceId, input: api.entities({ workspaceId }).rename.patch(input) })",
+    "(write) => write({ workspaceId, input })",
+    "(input) => write({ workspaceId, input: input[getKey()] })",
+    "(input) => write({ workspaceId, input: input.taskId() })",
+    "(input = api.entities({ workspaceId }).rename.patch({})) => write({ workspaceId, input })",
+  ]) {
+    const findings = violations(fixture(adapter));
+    expect({ adapter, covered: findings.length === 0 }).toEqual({
+      adapter,
+      covered: false,
+    });
+  }
 });

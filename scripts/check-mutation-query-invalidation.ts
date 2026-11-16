@@ -1081,15 +1081,84 @@ const mutationOptionsShape = ({
   return { properties };
 };
 
+const isBoundMutationArgument = (value: ts.Expression): boolean => {
+  const node = unwrap(value);
+  if (ts.isIdentifier(node) || ts.isLiteralExpression(node)) {
+    return true;
+  }
+  if (ts.isPropertyAccessExpression(node)) {
+    return isBoundMutationArgument(node.expression);
+  }
+  return (
+    ts.isObjectLiteralExpression(node) &&
+    node.properties.every((property) =>
+      ts.isShorthandPropertyAssignment(property)
+        ? property.objectAssignmentInitializer === undefined
+        : ts.isPropertyAssignment(property) &&
+          !ts.isComputedPropertyName(property.name) &&
+          isBoundMutationArgument(property.initializer),
+    )
+  );
+};
+
+/** A scope adapter must return the owned promise, with no other executed work. */
+const boundMutationCall = (
+  expression: ts.Expression,
+): ts.CallExpression | undefined => {
+  if (
+    !(ts.isArrowFunction(expression) || ts.isFunctionExpression(expression)) ||
+    (ts.isFunctionExpression(expression) &&
+      expression.asteriskToken !== undefined) ||
+    expression.parameters.some(
+      (parameter) =>
+        !ts.isIdentifier(parameter.name) || parameter.initializer !== undefined,
+    )
+  ) {
+    return undefined;
+  }
+  const body = expression.body;
+  let returned: ts.Expression | undefined;
+  if (ts.isBlock(body)) {
+    const statement =
+      body.statements.length === 1 ? body.statements[0] : undefined;
+    if (statement && ts.isReturnStatement(statement)) {
+      returned = statement.expression;
+    }
+  } else {
+    returned = body;
+  }
+  if (!returned) {
+    return undefined;
+  }
+  const value = unwrap(returned);
+  const call = ts.isAwaitExpression(value) ? unwrap(value.expression) : value;
+  return ts.isCallExpression(call) &&
+    call.arguments.every(isBoundMutationArgument)
+    ? call
+    : undefined;
+};
+
 const resolvedMutationHelper = (
   module: ModuleIndex,
   expression: ts.Expression,
 ): ts.CallExpression | undefined => {
   const resolved = resolveLocal(module, expression, expression);
-  return resolved &&
+  if (!resolved) {
+    return undefined;
+  }
+  if (
     ts.isCallExpression(resolved) &&
     canonicalCall(module, resolved, MUTATION_HELPER)
-    ? resolved
+  ) {
+    return resolved;
+  }
+  const invocation = boundMutationCall(resolved);
+  const owner =
+    invocation && resolveLocal(module, invocation.expression, invocation);
+  return owner &&
+    ts.isCallExpression(owner) &&
+    canonicalCall(module, owner, MUTATION_HELPER)
+    ? owner
     : undefined;
 };
 
