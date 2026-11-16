@@ -10,6 +10,7 @@
 import { composerReferenceStates } from "../../src/routes/dev/-visual-metadata";
 import {
   expect,
+  stableBoundingBox,
   test,
   waitForStableGeometry,
 } from "../helpers/stable-geometry";
@@ -55,10 +56,10 @@ for (const state of composerReferenceStates) {
       geometry.editor.right + EPSILON_PX,
     );
 
-    // The visible label may be cut; the full name stays the chip's title,
-    // which is also its accessible name.
+    // A cut label stays available through the shared focusable hint.
     const label = await chip.locator("bdi").textContent();
-    await expect(chip).toHaveAttribute("title", label ?? "");
+    await expect(chip).not.toHaveAttribute("title");
+    await expect(chip).toHaveAccessibleName(label ?? "");
   });
 }
 
@@ -115,3 +116,73 @@ for (const state of ["compact-long", "compact-short"] as const) {
     expect(lines.spaceMiddle).toBeLessThan(lines.chipBottom);
   });
 }
+
+test("inline pill hints follow keyboard focus without changing activation", async ({
+  page,
+}) => {
+  await page.goto("/dev?visual=chat-composer-reference", {
+    waitUntil: "domcontentloaded",
+  });
+  const section = page.locator('[data-playground-section="inline-pill-hints"]');
+  await expect(section).toBeVisible();
+  await section.getByTestId("hint-start").focus();
+  await page.keyboard.press("Tab");
+  const title = section.getByRole("button", {
+    name: "Title fallback",
+    exact: true,
+  });
+  await expect(title).toBeFocused();
+  const popup = page.locator('[data-slot="tooltip-popup"][data-open]');
+  await expect(popup).toHaveCount(1);
+  await expect(popup).toBeVisible();
+  await expect(popup).toHaveText("Full matter name from title");
+  await page.keyboard.press("Tab");
+  const rich = section.getByRole("button", { name: "Rich hint", exact: true });
+  await expect(rich).toBeFocused();
+  await expect(popup).toHaveCount(1);
+  await expect(popup).toBeVisible();
+  await expect(popup.locator("strong")).toHaveText("Rich matter context");
+  await expect(section.locator("[title]")).toHaveCount(0);
+  await page.keyboard.press("Enter");
+  await expect(section.getByTestId("hint-activations")).toHaveText("1");
+  await page.keyboard.press("Tab");
+  await expect(section.getByTestId("hint-end")).toBeFocused();
+});
+
+test("hint-bearing chips keep a full coarse-pointer target", async ({
+  browser,
+  baseURL,
+}) => {
+  const context = await browser.newContext({
+    hasTouch: true,
+    viewport: { width: 390, height: 844 },
+    reducedMotion: "reduce",
+  });
+  try {
+    const page = await context.newPage();
+    await page.goto(`${baseURL}/dev?visual=chat-composer-reference`, {
+      waitUntil: "domcontentloaded",
+    });
+    const section = page.locator(
+      '[data-playground-section="inline-pill-hints"]',
+    );
+    const trigger = section.getByRole("button", {
+      name: "Title fallback",
+      exact: true,
+    });
+    await expect(trigger).toBeVisible();
+    expect(
+      await page.evaluate(() => matchMedia("(pointer: coarse)").matches),
+    ).toBe(true);
+    const box = await stableBoundingBox(page, trigger);
+    const paintedReference = await stableBoundingBox(
+      page,
+      section.getByRole("group"),
+    );
+    expect(box.height).toBe(paintedReference.height);
+    expect(box.height).toBeGreaterThanOrEqual(44);
+    expect(box.width).toBeGreaterThanOrEqual(44);
+  } finally {
+    await context.close();
+  }
+});

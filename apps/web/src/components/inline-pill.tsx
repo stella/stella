@@ -103,6 +103,11 @@ export const InlinePill = ({
   ...dataAttrs
 }: InlinePillProps): ReactElement => {
   const clickable = onActivate !== undefined;
+  const hint =
+    tooltip === undefined || tooltip === null || tooltip === ""
+      ? title
+      : tooltip;
+  const hasHint = hint !== undefined && hint !== null && hint !== "";
   const chipKind = size === "chip" ? "reference" : undefined;
   // A tooltip-bearing pill must be keyboard-focusable so screen-
   // reader users (and tab users) can pop the placeholder content,
@@ -110,7 +115,7 @@ export const InlinePill = ({
   // Tooltip.Trigger reliably attaches hover/focus handlers to a
   // native `<button>`; attaching to a non-focusable element loses
   // the focus path entirely.
-  const renderAsButton = clickable || tooltip !== undefined;
+  const renderAsButton = clickable || hasHint;
 
   // The inner label owns truncation; TruncatedText lets it shrink inside
   // the flex pill and shows the cut label unless the pill's own tooltip
@@ -158,11 +163,14 @@ export const InlinePill = ({
       )}
       data-chip-kind={chipKind}
       onClick={onActivate}
-      title={title}
       variant="plain"
       {...dataAttrs}
     >
-      <span className={sharedClass} style={style}>
+      <span
+        className={sharedClass}
+        data-slot="inline-pill-surface"
+        style={style}
+      >
         {body}
       </span>
     </Button>
@@ -173,16 +181,15 @@ export const InlinePill = ({
       data-chip-kind={chipKind}
       role="group"
       style={style}
-      title={title}
       {...dataAttrs}
     >
       {body}
     </span>
   );
 
-  if (tooltip === undefined || tooltip === null || tooltip === "") {
+  if (!hasHint) {
     return element;
   }
 
-  return <Tooltip content={tooltip} render={element} />;
+  return <Tooltip content={hint} render={element} />;
 };

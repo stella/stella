@@ -2,12 +2,15 @@ import { useState } from "react";
 
 import type { JSONContent } from "@tiptap/core";
 
+import { Button } from "@stll/ui/button";
+
 import {
   CHAT_SEND_KEPT,
   ChatEditorProvider,
   useChatEditor,
 } from "@/components/chat-editor-provider";
 import { ChatInputSurface } from "@/components/chat-input-surface";
+import { InlinePill } from "@/components/inline-pill";
 import { useMountEffect } from "@/hooks/use-effect";
 import { useChatDraftStore } from "@/lib/chat-draft-store";
 import { getChatThreadKey, toChatThreadId } from "@/lib/chat-thread-ref";
@@ -98,6 +101,7 @@ const DraftComposer = ({ state, variant }: DraftComposerProps) => {
 /** Reference chips in a composer as narrow as a docked chat panel. */
 export const ChatComposerReferencePlayground = () => {
   const [ready, setReady] = useState(false);
+  const [activations, setActivations] = useState(0);
   // Seed only the bench's threads before mounting the real editors.
   useMountEffect(() => {
     const store = useChatDraftStore.getState();
@@ -133,6 +137,33 @@ export const ChatComposerReferencePlayground = () => {
             <DraftComposer state={state} variant={variant} />
           </section>
         ))}
+        <section
+          className="flex w-75 flex-col items-start gap-2"
+          data-playground-section="inline-pill-hints"
+        >
+          <Button data-testid="hint-start">Start hint navigation</Button>
+          <InlinePill
+            ariaLabel="Title fallback"
+            className="max-w-24"
+            title="Full matter name from title"
+            truncate
+          >
+            A matter name longer than its chip
+          </InlinePill>
+          <InlinePill
+            ariaLabel="Rich hint"
+            className="max-w-24"
+            onActivate={() => setActivations((value) => value + 1)}
+            title="Plain fallback"
+            tooltip={<strong>Rich matter context</strong>}
+            truncate
+          >
+            Another matter name longer than its chip
+          </InlinePill>
+          <InlinePill>No hint or activation</InlinePill>
+          <Button data-testid="hint-end">End hint navigation</Button>
+          <output data-testid="hint-activations">{activations}</output>
+        </section>
       </div>
     </ChatEditorProvider>
   );

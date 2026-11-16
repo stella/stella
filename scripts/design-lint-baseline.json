@@ -977,9 +977,7 @@
     "apps/landing/src/components/react/AnonymizeLiveDemo.tsx": 1,
     "apps/web/src/routes/law/-law-home/law-entry-box.tsx": 1
   },
-  "no-native-ui/no-native-tooltip": {
-    "apps/web/src/components/inline-pill.tsx": 1
-  },
+  "no-native-ui/no-native-tooltip": {},
   "eslint/complexity": {
     ".oxlint-plugins/no-ambient-nondeterminism.ts": 5,
     ".oxlint-plugins/no-known-value-widening.ts": 1,
