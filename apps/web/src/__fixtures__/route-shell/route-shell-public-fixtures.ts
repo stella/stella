@@ -1,3 +1,6 @@
+import { panic } from "better-result";
+
+import { publicCaseLawPageCountry } from "@stll/api-contract/case-law-launch-readiness";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
@@ -119,13 +122,16 @@ const statuteData = {
   work: statute,
 } satisfies typeof StatuteRoute.types.loaderData;
 
+const HUB_SCOPE =
+  publicCaseLawPageCountry("CZE") ?? panic("CZE has public case-law pages");
+
 const jurisdictionHubData = {
-  scope: "CZE",
+  scope: HUB_SCOPE,
   courts: [{ name: "Nejvyšší soud", segment: "nejvyssi-soud" }],
 } satisfies typeof JurisdictionHubRoute.types.loaderData;
 
 const courtBrowseData = {
-  scope: "CZE",
+  scope: HUB_SCOPE,
   court: "Nejvyšší soud",
   page: {
     kind: "periods",
@@ -347,16 +353,26 @@ export const publicFixtureReadyText = (routeId: string) => {
   if (data === undefined) {
     return undefined;
   }
-  return "statute" in data
-    ? data.statute.fulltext.split("\n").at(-1)
-    : data.fulltext;
+  if ("statute" in data) {
+    return data.statute.fulltext.split("\n").at(-1);
+  }
+  // The hubs list links, not a document: their court name is the content.
+  if ("courts" in data) {
+    return data.courts[0]?.name;
+  }
+  if ("page" in data) {
+    return data.court;
+  }
+  return data.fulltext;
 };
 
 export const publicFixtureReadySelector = (
   routeId: string,
   audience: "member" | "anonymous",
 ) => {
-  if (publicFixtureLoaderData(routeId) === undefined) {
+  const data = publicFixtureLoaderData(routeId);
+  // The hubs have no document viewer to wait for.
+  if (data === undefined || "courts" in data || "page" in data) {
     return undefined;
   }
   return audience === "member"
