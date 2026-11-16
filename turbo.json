@@ -933,6 +933,10 @@
     },
     "generate:capabilities": {},
     "@stll/cli#generate:capabilities": {
+      // The export reads the MCP app bundles. Building them first keeps a
+      // cache restore of @stll/mcp-apps#build from rewriting the generated
+      // stylesheet while this task's own generation reads it.
+      "dependsOn": ["@stll/mcp-apps#build"],
       "inputs": [
         "$TURBO_ROOT$/apps/api/src/**",
         "$TURBO_ROOT$/apps/api/scripts/export-capability-catalog.ts",
