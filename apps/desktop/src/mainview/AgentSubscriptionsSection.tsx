@@ -179,7 +179,7 @@ export const AgentSubscriptionsSection = ({
     content: React.JSX.Element,
   ) => (
     <div
-      className="data-highlighted:bg-muted transition-colors outline-none"
+      className="data-highlighted:bg-muted outline-none"
       data-agent-settings={target}
       tabIndex={-1}
     >
