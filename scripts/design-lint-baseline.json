@@ -476,7 +476,6 @@
     "apps/api/src/handlers/case-law/ingestion/adapters/pl-courts.ts": 3,
     "apps/api/src/handlers/sharepoint/graph-client.ts": 1,
     "apps/api/src/handlers/sharepoint/graph-oauth.ts": 1,
-    "apps/api/src/lib/deepl/client.ts": 2,
     "apps/api/src/lib/files/gotenberg.ts": 1,
     "apps/api/src/lib/web-search/tavily.ts": 1
   },
