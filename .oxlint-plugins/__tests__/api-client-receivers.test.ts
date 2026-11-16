@@ -3,6 +3,9 @@ import { expect, test } from "bun:test";
 import { lintSingleRule } from "./lint-single-rule";
 
 const RECEIVERS = [
+  "api.lists({ workspaceId })({ listId })",
+  '(api["lists"]({ workspaceId }))({ listId })',
+  "api.lists({ workspaceId })({ listId }).items({ itemId })",
   "api.workspaces({ workspaceId })",
   "api.chat.threads({ threadId })",
   'api["docx-suggestions"]({ workspaceId }).entity({ entityId })',
@@ -51,6 +54,9 @@ test("accepts query cancellation through a stable receiver alias", async () => {
 });
 
 const NON_RECEIVERS = [
+  "const route = api.lists({ workspaceId }).get()({ listId });",
+  "const route = createClient()({ listId });",
+  "const route = api.lists({ workspaceId })({ listId }).get()();",
   "const route = api.workspaces({ workspaceId }).options();",
   'const method = "get"; const route = api.workspaces({ workspaceId })[method]();',
   "const request = api.workspaces({ workspaceId }).get; const route = request();",

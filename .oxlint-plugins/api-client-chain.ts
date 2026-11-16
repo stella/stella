@@ -52,6 +52,9 @@ export const resolveApiClientReceiverRoot = (
   }
   if (node.type === "CallExpression") {
     const callee = unwrapExpression(node.callee);
+    if (callee?.type === "CallExpression") {
+      return resolveApiClientReceiverRoot(context, callee, seen);
+    }
     const method = memberPropertyName(callee);
     if (
       callee?.type !== "MemberExpression" ||
