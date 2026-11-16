@@ -921,7 +921,10 @@
         "$TURBO_ROOT$/package.json",
         "$TURBO_ROOT$/bunfig.toml",
         "$TURBO_ROOT$/bun.lock",
-        "$TURBO_ROOT$/patches/**"
+        "$TURBO_ROOT$/patches/**",
+        // The task's own outputs live under the broad source globs above.
+        "!src/generated/route-map.ts",
+        "!src/generated/tool-annotations.ts"
       ],
       "outputs": [
         "src/generated/route-map.ts",
@@ -936,7 +939,13 @@
         "$TURBO_ROOT$/apps/api/scripts/lib/**",
         "$TURBO_ROOT$/packages/**",
         "!$TURBO_ROOT$/packages/**/node_modules/**",
-        "!capabilities/**"
+        "!$TURBO_ROOT$/packages/**/.cache/**",
+        "!$TURBO_ROOT$/packages/**/.turbo/**",
+        // Its own shards and the CLI runtime derived from them are outputs,
+        // never inputs.
+        "!capabilities/**",
+        "!src/generated/route-map.ts",
+        "!src/generated/tool-annotations.ts"
       ],
       "outputs": ["capabilities/**"]
     },
