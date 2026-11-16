@@ -4131,6 +4131,36 @@
   },
   {
     "schema": "public",
+    "table": "corpus_index_generation_seeding_passes",
+    "policy": "case_law_global_access",
+    "command": "SELECT",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "true",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "corpus_index_generation_seeding_passes",
+    "policy": "case_law_ingestion_access",
+    "command": "ALL",
+    "roles": ["stella_ingestion"],
+    "permissive": "PERMISSIVE",
+    "using": "true",
+    "withCheck": "true"
+  },
+  {
+    "schema": "public",
+    "table": "corpus_index_generation_seeding_passes",
+    "policy": "corpus_index_generation_seeding_pass_owner_access",
+    "command": "ALL",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('corpus_index_generation_seeding_passes'::regclass)::oid)))",
+    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('corpus_index_generation_seeding_passes'::regclass)::oid)))"
+  },
+  {
+    "schema": "public",
     "table": "corpus_index_generations",
     "policy": "case_law_global_access",
     "command": "SELECT",
@@ -4338,6 +4368,36 @@
     "permissive": "PERMISSIVE",
     "using": "true",
     "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "corpus_index_route_seedings",
+    "policy": "case_law_global_access",
+    "command": "SELECT",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "true",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "corpus_index_route_seedings",
+    "policy": "case_law_ingestion_access",
+    "command": "ALL",
+    "roles": ["stella_ingestion"],
+    "permissive": "PERMISSIVE",
+    "using": "true",
+    "withCheck": "true"
+  },
+  {
+    "schema": "public",
+    "table": "corpus_index_route_seedings",
+    "policy": "corpus_index_route_seeding_owner_access",
+    "command": "ALL",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('corpus_index_route_seedings'::regclass)::oid)))",
+    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('corpus_index_route_seedings'::regclass)::oid)))"
   },
   {
     "schema": "public",
