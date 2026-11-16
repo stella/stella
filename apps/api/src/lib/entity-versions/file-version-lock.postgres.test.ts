@@ -496,13 +496,11 @@ if (!databaseUrl || !enabled) {
           const fixture = await seedFixture(db);
           const colleagueId = mintAuthProviderId<"user">();
           try {
-            await db
-              .insert(user)
-              .values({
-                id: colleagueId,
-                name: "Timer colleague",
-                email: `${colleagueId}@example.test`,
-              });
+            await db.insert(user).values({
+              id: colleagueId,
+              name: "Timer colleague",
+              email: `${colleagueId}@example.test`,
+            });
             const startedAt = new Date("2026-10-11T09:00:00.000Z");
             await db.insert(member).values({
               id: Bun.randomUUIDv7(),
