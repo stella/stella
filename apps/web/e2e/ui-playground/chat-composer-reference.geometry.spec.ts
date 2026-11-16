@@ -56,10 +56,11 @@ for (const state of composerReferenceStates) {
       geometry.editor.right + EPSILON_PX,
     );
 
-    // A cut label stays available through the shared focusable hint.
+    // Static editor chips retain the full name without adding a control.
     const label = await chip.locator("bdi").textContent();
     await expect(chip).not.toHaveAttribute("title");
     await expect(chip).toHaveAccessibleName(label ?? "");
+    await expect(chip).not.toHaveRole("button");
   });
 }
 
@@ -149,18 +150,53 @@ test("inline pill hints follow keyboard focus without changing activation", asyn
   await expect(section.getByTestId("hint-end")).toBeFocused();
 });
 
+for (const source of ["skill", "prompt"] as const) {
+  test(`the ${source} editor chip owns one focusable hint and opens its editor`, async ({
+    page,
+  }) => {
+    await page.goto("/dev?visual=chat-composer-reference", {
+      waitUntil: "domcontentloaded",
+    });
+    const section = page.locator(
+      '[data-playground-section="pasted-reference-hints"]',
+    );
+    const node = section.locator(`[data-source="${source}"]`);
+    const trigger = node.getByRole("button");
+    await expect(trigger).toHaveCount(1);
+    await expect(trigger).toBeVisible();
+    await expect(trigger.locator("button, [tabindex='0']")).toHaveCount(0);
+    const label = await node.locator("bdi").textContent();
+    await trigger.focus();
+    await page.keyboard.press("Shift+Tab");
+    await page.keyboard.press("Tab");
+    await expect(trigger).toBeFocused();
+    await expect(
+      page.locator('[data-slot="tooltip-popup"][data-open]'),
+    ).toHaveText(label ?? "");
+    await page.keyboard.press("Enter");
+    const popup = page.locator('[data-slot="popover-popup"]');
+    await expect(popup.locator("textarea")).toBeVisible();
+    await expect(popup.getByRole("button").first()).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(popup.locator("textarea")).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(trigger).toBeFocused();
+  });
+}
+
 test("hint-bearing chips keep a full coarse-pointer target", async ({
   browser,
   baseURL,
 }) => {
   const context = await browser.newContext({
+    baseURL,
     hasTouch: true,
     viewport: { width: 390, height: 844 },
     reducedMotion: "reduce",
   });
   try {
     const page = await context.newPage();
-    await page.goto(`${baseURL}/dev?visual=chat-composer-reference`, {
+    await page.goto("/dev?visual=chat-composer-reference", {
       waitUntil: "domcontentloaded",
     });
     const section = page.locator(

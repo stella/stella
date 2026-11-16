@@ -10,6 +10,7 @@ import {
   useChatEditor,
 } from "@/components/chat-editor-provider";
 import { ChatInputSurface } from "@/components/chat-input-surface";
+import { pastedTextChipContent } from "@/components/chat-pasted-text-extension";
 import { InlinePill } from "@/components/inline-pill";
 import { useMountEffect } from "@/hooks/use-effect";
 import { useChatDraftStore } from "@/lib/chat-draft-store";
@@ -54,6 +55,26 @@ const mentionDoc = (
 });
 
 const DOCS = {
+  "pasted-reference-hints": {
+    type: "doc",
+    content: [
+      {
+        type: "paragraph",
+        content: [
+          ...pastedTextChipContent({
+            source: "skill",
+            label: LONG_LABEL,
+            text: SHORT_LABEL,
+          }),
+          ...pastedTextChipContent({
+            source: "prompt",
+            label: LONG_LABEL,
+            text: SHORT_LABEL,
+          }),
+        ],
+      },
+    ],
+  },
   "compact-long": mentionDoc(
     "00000000-0000-4000-8000-000000000701",
     LONG_LABEL,
@@ -69,7 +90,7 @@ const DOCS = {
     ` ${LONG_TOKEN}`,
   ),
 } as const satisfies Record<
-  keyof typeof composerReferenceVariants,
+  keyof typeof composerReferenceVariants | "pasted-reference-hints",
   JSONContent
 >;
 
@@ -137,6 +158,12 @@ export const ChatComposerReferencePlayground = () => {
             <DraftComposer state={state} variant={variant} />
           </section>
         ))}
+        <section
+          className="w-75"
+          data-playground-section="pasted-reference-hints"
+        >
+          <DraftComposer state="pasted-reference-hints" variant="compact" />
+        </section>
         <section
           className="flex w-75 flex-col items-start gap-2"
           data-playground-section="inline-pill-hints"

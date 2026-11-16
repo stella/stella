@@ -107,7 +107,7 @@ export const InlinePill = ({
     tooltip === undefined || tooltip === null || tooltip === ""
       ? title
       : tooltip;
-  const hasHint = hint !== undefined && hint !== null && hint !== "";
+  const hasHint = hint !== undefined && hint !== "";
   const chipKind = size === "chip" ? "reference" : undefined;
   // A tooltip-bearing pill must be keyboard-focusable so screen-
   // reader users (and tab users) can pop the placeholder content,
