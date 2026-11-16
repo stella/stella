@@ -1,14 +1,15 @@
 import { Result } from "better-result";
 
+import { envBase } from "@/api/env-base";
 import { HealthCheckError } from "@/api/lib/errors/tagged-errors";
 import { probeDatabase } from "@/api/lib/health/probe-database";
 import { probeDocumentConverter } from "@/api/lib/health/probe-document-converter";
 import { createRedisClient } from "@/api/lib/redis-client";
 import {
   deleteS3ObjectWithSignal,
-  getS3ObjectWithSignal,
   listS3ObjectPage,
   putTemporaryS3ObjectWithSignal,
+  readS3ObjectBounded,
 } from "@/api/lib/s3";
 import { withTimeout } from "@/api/lib/with-timeout";
 
@@ -108,7 +109,12 @@ export const probeObjectStorageReadiness = async (
 
 const objectStorageReadinessProbe = {
   read: async (signal: AbortSignal) => {
-    await getS3ObjectWithSignal(S3_READINESS_KEY, signal);
+    await readS3ObjectBounded({
+      bucket: envBase.S3_BUCKET,
+      key: S3_READINESS_KEY,
+      maxBytes: S3_READINESS_BYTES.byteLength,
+      signal,
+    });
   },
   write: async (signal: AbortSignal) => {
     await putTemporaryS3ObjectWithSignal(
