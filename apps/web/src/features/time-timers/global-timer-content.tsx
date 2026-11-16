@@ -43,34 +43,6 @@ class TimerSnapshotConflictError extends TaggedError(
   runningCount: number;
 }> {}
 
-/**
- * A timer's elapsed time. The one-second clock lives here, not in the header
- * control, so it ticks only while something shows a timer (a running timer in
- * the trigger, or the open popover's list) and only for a running timer: an
- * idle header never re-renders.
- */
-const TimerElapsed = ({
-  className,
-  timer,
-}: {
-  className: string;
-  timer: TimeTimer;
-}) => {
-  const format = useFormatter();
-  const now = useNow(
-    timer.state === "running" ? { updateInterval: 1000 } : {},
-  ).getTime();
-  return (
-    <bdi className={className}>
-      {formatTimerSeconds({
-        seconds: elapsedTimerSeconds(timer, now),
-        formatNumber: (value) =>
-          format.number(value, { minimumIntegerDigits: 2, useGrouping: false }),
-      })}
-    </bdi>
-  );
-};
-
 export const GlobalTimerContent = ({
   workspaceId,
 }: {
@@ -314,5 +286,33 @@ export const GlobalTimerContent = ({
         </Button>
       )}
     </div>
+  );
+};
+
+/**
+ * A timer's elapsed time. The one-second clock lives here, not in the header
+ * control, so it ticks only while something shows a timer (a running timer in
+ * the trigger, or the open popover's list) and only for a running timer: an
+ * idle header never re-renders.
+ */
+const TimerElapsed = ({
+  className,
+  timer,
+}: {
+  className: string;
+  timer: TimeTimer;
+}) => {
+  const format = useFormatter();
+  const now = useNow(
+    timer.state === "running" ? { updateInterval: 1000 } : {},
+  ).getTime();
+  return (
+    <bdi className={className}>
+      {formatTimerSeconds({
+        seconds: elapsedTimerSeconds(timer, now),
+        formatNumber: (value) =>
+          format.number(value, { minimumIntegerDigits: 2, useGrouping: false }),
+      })}
+    </bdi>
   );
 };
