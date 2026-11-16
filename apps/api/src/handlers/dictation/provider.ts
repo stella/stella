@@ -37,7 +37,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { admittedDispatchSignal } from "@/api/lib/rate-limit/model-dispatch-admission";
 import type { ModelDispatchScope } from "@/api/lib/rate-limit/model-dispatch-admission";
 
-export const MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
+const MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
 export const PROVIDER_TIMEOUT_MS = 60_000;
 const RETRY_AFTER_MS = 1000;
 const MAX_SAFE_SECONDS = Number.MAX_SAFE_INTEGER / 1000;
@@ -51,7 +51,7 @@ const MIME_FORMATS = {
   (typeof TRANSCRIPTION_AUDIO_MEDIA_TYPES)[number],
   "wav" | "m4a"
 >;
-export type AudioFormat = (typeof MIME_FORMATS)[keyof typeof MIME_FORMATS];
+type AudioFormat = (typeof MIME_FORMATS)[keyof typeof MIME_FORMATS];
 export const VOCABULARY_STATUS = {
   none: "not-supported",
   "groq-prompt": "applied",
@@ -117,7 +117,7 @@ export const unavailable = () =>
     "model_unavailable",
   );
 
-export const oversize = () =>
+const oversize = () =>
   new HandlerError({
     status: 413,
     code: "audio_too_large",
@@ -125,7 +125,7 @@ export const oversize = () =>
     hint: "Split the recording into smaller audio chunks.",
   });
 
-export const providerFailure = (retryable: boolean) =>
+const providerFailure = (retryable: boolean) =>
   classifyFailure(
     new HandlerError({
       status: 502,
@@ -139,7 +139,7 @@ export const providerFailure = (retryable: boolean) =>
     "provider_unavailable",
   );
 
-export const timeoutFailure = () =>
+const timeoutFailure = () =>
   classifyFailure(
     new HandlerError({
       status: 503,
@@ -341,6 +341,83 @@ export const loadTranscriptionAudio = async (audio: File) => {
   });
 };
 
+type RequestTranscriptionOptions = {
+  /** Sends the audio; the signal ends the request on timeout or abort. */
+  send: (signal: AbortSignal) => Promise<Response>;
+  normalize: (answer: unknown) => Result<TranscriptionResult, HandlerError>;
+  signal: AbortSignal | undefined;
+  scheduleTimeout: WithTimeoutScheduler | undefined;
+};
+
+/**
+ * One request to a transcription provider within the provider timeout: a
+ * refused or throttled request is a provider failure, retryable only when
+ * the provider may recover, and the answer is read capped and normalized.
+ */
+export const requestTranscription = async ({
+  send,
+  normalize,
+  signal,
+  scheduleTimeout,
+}: RequestTranscriptionOptions): Promise<
+  Result<TranscriptionResult, HandlerError>
+> => {
+  const fetched = await Result.tryPromise({
+    try: async () =>
+      await withTimeout(
+        async (requestSignal) => {
+          const response = await send(requestSignal);
+          if (!response.ok) {
+            const failure = providerFailure(
+              response.status === 429 || response.status >= 500,
+            );
+            const cancelled = await Result.tryPromise({
+              try: async () => await response.body?.cancel(),
+              catch: () => failure,
+            });
+            return Result.err(cancelled.isErr() ? cancelled.error : failure);
+          }
+          if (response.body === null) {
+            return Result.err(invalidResponse());
+          }
+          const answer = await readCappedBytes(
+            response.body,
+            MAX_RESPONSE_BYTES,
+          );
+          if (answer === null) {
+            return Result.err(invalidResponse());
+          }
+          const decoded = Result.try({
+            try: (): unknown =>
+              JSON.parse(
+                new TextDecoder("utf-8", { fatal: true }).decode(answer),
+              ),
+            catch: () => invalidResponse(),
+          });
+          if (decoded.isErr()) {
+            return Result.err(decoded.error);
+          }
+          return normalize(decoded.value);
+        },
+        {
+          label: "Audio transcription",
+          timeoutMs: PROVIDER_TIMEOUT_MS,
+          signal,
+          scheduleTimeout,
+        },
+      ),
+    catch: (error) =>
+      TimeoutError.is(error) ||
+      (error instanceof Error && error.name === "TimeoutError")
+        ? timeoutFailure()
+        : providerFailure(true),
+  });
+  if (fetched.isErr()) {
+    return Result.err(fetched.error);
+  }
+  return fetched.value;
+};
+
 type TranscribeAudioOptions = {
   audio: File;
   modelId: string;
@@ -405,77 +482,28 @@ export const transcribeAudio = async ({
   if (Buffer.byteLength(body) > MAX_TRANSCRIPTION_PROVIDER_BODY_BYTES) {
     return Result.err(oversize());
   }
-  const fetched = await Result.tryPromise({
-    try: async () =>
-      await withTimeout(
-        async (requestSignal) => {
-          const response = await fetchProvider(
-            MANAGED_TRANSCRIPTION_URLS[residency],
-            {
-              method: "POST",
-              headers: {
-                authorization: `Bearer ${apiKey}`,
-                "content-type": "application/json",
-              },
-              body,
-              signal: requestSignal,
-              redirect: "error",
-              timeout: { type: "headers", ms: PROVIDER_TIMEOUT_MS },
-            },
-          );
-          if (!response.ok) {
-            const failure = providerFailure(
-              response.status === 429 || response.status >= 500,
-            );
-            const cancelled = await Result.tryPromise({
-              try: async () => await response.body?.cancel(),
-              catch: () => failure,
-            });
-            return Result.err(cancelled.isErr() ? cancelled.error : failure);
-          }
-          if (response.body === null) {
-            return Result.err(invalidResponse());
-          }
-          const answer = await readCappedBytes(
-            response.body,
-            MAX_RESPONSE_BYTES,
-          );
-          if (answer === null) {
-            return Result.err(invalidResponse());
-          }
-          const decoded = Result.try({
-            try: (): unknown =>
-              JSON.parse(
-                new TextDecoder("utf-8", { fatal: true }).decode(answer),
-              ),
-            catch: () => invalidResponse(),
-          });
-          if (decoded.isErr()) {
-            return Result.err(decoded.error);
-          }
-          return normalizeTranscriptionResponse(decoded.value, modelId);
+  const fetched = await requestTranscription({
+    send: async (requestSignal) =>
+      await fetchProvider(MANAGED_TRANSCRIPTION_URLS[residency], {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${apiKey}`,
+          "content-type": "application/json",
         },
-        {
-          label: "Audio transcription",
-          timeoutMs: PROVIDER_TIMEOUT_MS,
-          signal: abortSignal,
-          scheduleTimeout,
-        },
-      ),
-    catch: (error) =>
-      TimeoutError.is(error) ||
-      (error instanceof Error && error.name === "TimeoutError")
-        ? timeoutFailure()
-        : providerFailure(true),
+        body,
+        signal: requestSignal,
+        redirect: "error",
+        timeout: { type: "headers", ms: PROVIDER_TIMEOUT_MS },
+      }),
+    normalize: (answer) => normalizeTranscriptionResponse(answer, modelId),
+    signal: abortSignal,
+    scheduleTimeout,
   });
   if (fetched.isErr()) {
     return Result.err(fetched.error);
   }
-  if (fetched.value.isErr()) {
-    return Result.err(fetched.value.error);
-  }
   return Result.ok({
-    transcript: fetched.value.value,
+    transcript: fetched.value,
     admittedDurationMs: durationMs,
   });
 };

@@ -21,6 +21,8 @@ import { makeM4aAudioBytes } from "@/api/handlers/dictation/audio-fixtures.test-
 import { transcribeWithElevenLabs } from "@/api/handlers/dictation/elevenlabs-provider";
 import { transcribeAudio } from "@/api/handlers/dictation/provider";
 import type { TranscriptionResult } from "@/api/handlers/dictation/provider";
+import type { TranscriptionDeployment } from "@/api/handlers/dictation/transcription-deployment";
+import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -643,7 +645,7 @@ describe("dictation operation request matrix", () => {
   });
 
   test("Scribe v3 is refused without the deployment's key, and to an organization on its own provider", async () => {
-    for (const [deployment, orgAIConfig] of [
+    const cases: [TranscriptionDeployment, OrgAIConfig | null][] = [
       [OPENROUTER_ONLY, null],
       [
         {
@@ -662,7 +664,8 @@ describe("dictation operation request matrix", () => {
           decision: null,
         },
       ],
-    ] as const) {
+    ];
+    for (const [deployment, orgAIConfig] of cases) {
       const f = fixture(1234, 1234, deployment);
       const context = {
         ...f.context,
@@ -703,9 +706,9 @@ describe("dictation operation request matrix", () => {
       },
       web.dependencies,
     );
-    expect(refused.isErr() && refused.error.code).toBe(
-      "transcription_model_unavailable",
-    );
+    expect(refused.isErr() && refused.error).toMatchObject({
+      code: "transcription_model_unavailable",
+    });
     const defaulted = fixture(1234, 1234, deployment);
     const noDefault = await executeDictation(
       {
@@ -716,9 +719,9 @@ describe("dictation operation request matrix", () => {
       },
       defaulted.dependencies,
     );
-    expect(noDefault.isErr() && noDefault.error.code).toBe(
-      "transcription_model_unavailable",
-    );
+    expect(noDefault.isErr() && noDefault.error).toMatchObject({
+      code: "transcription_model_unavailable",
+    });
     const desktop = fixture(1234, 1234, deployment);
     const result = await executeDictation(
       {

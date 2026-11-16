@@ -5,10 +5,10 @@ import { AI_FAILURE_CODES } from "@stll/api-contract";
 import { makeM4aAudioBytes } from "@/api/handlers/dictation/audio-fixtures.test-helper";
 import {
   elevenLabsServes,
-  fetchElevenLabsTranscription,
   normalizeElevenLabsResponse,
   transcribeWithElevenLabs,
 } from "@/api/handlers/dictation/elevenlabs-provider";
+import { fetchElevenLabsTranscription } from "@/api/lib/chat/provider-data-policy";
 import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 
 const MODEL = "elevenlabs-direct/scribe-v3";
@@ -130,7 +130,10 @@ describe("ElevenLabs answers", () => {
 
 describe("ElevenLabs transcription", () => {
   test("sends the chunk as Scribe v3 with the key, language and word timings, and never an OpenRouter model", async () => {
-    const sent: { url: string; init: RequestInit }[] = [];
+    const sent: {
+      url: string;
+      init: Parameters<typeof fetchElevenLabsTranscription>[1];
+    }[] = [];
     const result = await transcribeWithElevenLabs({
       audio: audio(),
       modelId: MODEL,
