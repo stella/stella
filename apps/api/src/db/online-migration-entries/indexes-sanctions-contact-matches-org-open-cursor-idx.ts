@@ -3,6 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "indexes-sanctions-contact-matches-org-open-cursor-idx",
   revision: 220,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     {

@@ -381,6 +381,14 @@ const createRecordedServer = (
     ) {
       return threadPage();
     }
+    // The recorder queues nothing: the chat's queue is empty.
+    if (
+      url.origin === API_ORIGIN &&
+      method === "GET" &&
+      url.pathname === `/v1/chat/threads/${recording.threadId}/queue`
+    ) {
+      return Response.json({ hold: null, items: [] });
+    }
     if (
       url.origin === API_ORIGIN &&
       url.pathname === "/v1/chat/tool-grants/coverage"
@@ -937,11 +945,12 @@ const performAction = async ({
       await act(async () => {
         pendingActions.push(
           Result.tryPromise({
-            try: async () =>
+            try: async () => {
               await live.session().sendMessage({
                 content: action.text,
                 id: toSafeId<"chatMessage">(action.messageId),
-              }),
+              });
+            },
             catch: (cause: unknown) => cause,
           }),
         );
@@ -1214,6 +1223,11 @@ const notRecorded = (reason: string): RecordedCoverage => ({
 const OUTSIDE_THE_CONVERSATION = notRecorded(
   "It changes the page or the thread's settings, not the conversation the server records.",
 );
+/** The queue's own actions: the queue is the server's, with routes of its
+ *  own that the recorder does not drive. */
+const QUEUE_ACTION = notRecorded(
+  "The queue is the server's; the recorder does not drive its routes.",
+);
 
 const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
   "allow-in-conversation": recordedAs(approvedAs("allow-in-conversation")),
@@ -1241,6 +1255,7 @@ const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
   "edit-answer": notRecorded(
     "The recorder drives the chat runtime, not the session hook that edits and reruns an answer.",
   ),
+  "edit-queued-message": QUEUE_ACTION,
   "edit-message": notRecorded(
     "The recorder drives the chat runtime, not the session hook that edits a sent message and runs it again.",
   ),
@@ -1253,6 +1268,7 @@ const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
   ),
   "improve-prompt": OUTSIDE_THE_CONVERSATION,
   "load-older": OUTSIDE_THE_CONVERSATION,
+  "move-queued-message": QUEUE_ACTION,
   "move-to-side": OUTSIDE_THE_CONVERSATION,
   "new-chat": OUTSIDE_THE_CONVERSATION,
   "open-created-document": OUTSIDE_THE_CONVERSATION,
@@ -1261,26 +1277,25 @@ const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
     "Opening the editor only stops a running turn, which the recorder records as its own stop step.",
   ),
   "open-playbook": OUTSIDE_THE_CONVERSATION,
+  "pause-queue": QUEUE_ACTION,
   "refresh-edited-answer": notRecorded(
     "It reloads the canonical answer after a revision write or conflict; the recorder does not drive answer revisions.",
   ),
-  "remove-queued-message": notRecorded(
-    "The recorder has no send queue; it lives in the session hook this replay renders.",
-  ),
+  "remove-queued-message": QUEUE_ACTION,
   "rename-thread": OUTSIDE_THE_CONVERSATION,
+  "replace-with-queued-message": QUEUE_ACTION,
   "resend-without-anonymization": notRecorded(
     "Offered only after the anonymization boundary refuses a turn, which the recorder's raw boundary never does.",
   ),
   "resolve-draft": OUTSIDE_THE_CONVERSATION,
+  "resume-queue": QUEUE_ACTION,
   retry: recordedAs(({ type }) => type === "retry"),
   "run-client-tool": recordedAs(({ type }) => type === "client-tool"),
   "select-matters": OUTSIDE_THE_CONVERSATION,
   "select-model": notRecorded(
     "The recorder scripts one model; a model switch needs a second one.",
   ),
-  queue: notRecorded(
-    "The recorder has no send queue; it lives in the session hook this replay renders.",
-  ),
+  queue: QUEUE_ACTION,
   send: recordedAs(({ type }) => type === "send"),
   "submit-connector-request": notRecorded(
     "The recorder posts text messages only; connector cards submit through their own endpoint.",
@@ -1288,9 +1303,7 @@ const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
   "submit-private-input": notRecorded(
     "The recorder posts text messages only; private input cards submit through their own endpoint.",
   ),
-  "send-queued-message-now": notRecorded(
-    "The recorder has no send queue; it lives in the session hook this replay renders.",
-  ),
+  "send-queued-message-now": QUEUE_ACTION,
   stop: recordedAs(({ type }) => type === "stop"),
   "toggle-anonymization": OUTSIDE_THE_CONVERSATION,
   "toggle-web-search": OUTSIDE_THE_CONVERSATION,

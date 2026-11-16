@@ -3,6 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "indexes-organization-settings-memory-extraction-queue-idx",
   revision: 540,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     {

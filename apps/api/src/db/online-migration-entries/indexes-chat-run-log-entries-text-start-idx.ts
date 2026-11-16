@@ -3,6 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "indexes-chat-run-log-entries-text-start-idx",
   revision: 20,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     {

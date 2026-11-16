@@ -1,10 +1,17 @@
 import { panic, Result } from "better-result";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import { CHAT_TURN_PERMISSIONS } from "@/api/handlers/chat/chat-turn-state";
-import { lockOwnQueueThreadOnTx } from "@/api/handlers/chat/queue/chat-queue-store";
+import {
+  lockOwnQueueThreadOnTx,
+  parseQueuedChatSend,
+} from "@/api/handlers/chat/queue/chat-queue-store";
 import {
   chatQueuedMessageParams,
   chatThreadNotFound,
+  queuedMessageChanged,
   queuedMessageSent,
 } from "@/api/handlers/chat/queue/shared";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -21,16 +28,22 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "assistant_chat" },
   description:
-    "Remove a queued message. Idempotent: a message no longer queued " +
-    "answers as removed, except one that was sent (409 " +
-    "`queued_message_sent`).",
+    "Remove a queued message and answer it as it was queued (`message`), " +
+    "so it can be written again, only at the `revision` you read (409 " +
+    "`queued_message_changed` once it was edited since). Idempotent: a " +
+    "message no longer queued answers as removed with `message: null`, " +
+    "except one that was sent (409 `queued_message_sent`).",
   params: chatQueuedMessageParams,
+  query: v.object({
+    revision: numberFromString(v.pipe(v.number(), v.integer(), v.minValue(0))),
+  }),
 } satisfies HandlerConfig;
 
 const cancelQueuedChatMessage = createSafeRootHandler(
   config,
   async function* ({
     params: { messageId, threadId },
+    query: { revision },
     recordAuditEvent,
     safeDb,
     session,
@@ -49,6 +62,7 @@ const cancelQueuedChatMessage = createSafeRootHandler(
         }
         const removed = await removeQueuedChatMessageOnTx({
           id: messageId,
+          revision,
           threadId,
           tx,
         });
@@ -69,7 +83,7 @@ const cancelQueuedChatMessage = createSafeRootHandler(
     }
     switch (outcome.type) {
       case "removed":
-      case "not-found":
+      case "not-found": {
         announceChatQueueChange({
           organizationId: session.activeOrganizationId,
           userId: user.id,
@@ -77,7 +91,15 @@ const cancelQueuedChatMessage = createSafeRootHandler(
         // Removing the head, or the last message with its hold, may let
         // the queue go.
         ringChatQueue(threadId);
-        return Result.ok({});
+        return Result.ok({
+          message:
+            outcome.type === "removed"
+              ? parseQueuedChatSend(outcome.request).message
+              : null,
+        });
+      }
+      case "changed":
+        return Result.err(queuedMessageChanged());
       case "sent":
         return Result.err(queuedMessageSent());
       default:

@@ -1044,10 +1044,6 @@
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },
   {
-    "id": "apps/web/src/features/chat/hooks/use-chat-session-send-queue.logic.test.ts::<module>::domain:[\"submitted\",\"streaming\"]::1",
-    "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
     "id": "apps/web/src/features/chat/lib/suggested-prompts-availability.test.ts::<module>::domain:[\"client-disconnected\",\"timeout\"]::1",
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },

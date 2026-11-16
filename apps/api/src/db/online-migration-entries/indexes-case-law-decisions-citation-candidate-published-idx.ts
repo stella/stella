@@ -13,6 +13,7 @@ const PUBLISHED_CASE_LAW_DECISION_INDEX_DEFINITION =
 export default {
   id: "indexes-case-law-decisions-citation-candidate-published-idx",
   revision: 260,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     {

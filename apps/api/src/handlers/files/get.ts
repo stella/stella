@@ -4,6 +4,7 @@ import { DOCUMENT_PROPERTIES_MAX_BYTES } from "@stll/api-contract";
 import { resolveEmailMimeType } from "@stll/api-contract/email-mime-types";
 import { classifyFailure } from "@stll/errors";
 import { fetchWithTimeout } from "@stll/fetch";
+import { readBodyWithIdleDeadline } from "@stll/fetch/body-reader";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { env } from "@/api/env";
@@ -28,6 +29,7 @@ import {
 } from "@/api/lib/files/live-version-field";
 import { FILE_READ_URL_EXPIRY_SECONDS } from "@/api/lib/files/read-file";
 import { createFileKey } from "@/api/lib/files/utils";
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -39,6 +41,8 @@ import {
   secureDocumentResponse,
 } from "@/api/lib/secure-document-response";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
+
+const STAMPED_DOWNLOAD_READ_TIMEOUT_MS = 30_000;
 
 type ReadEmailHtmlPreviewHandlerProps = {
   scopedDb: ScopedDb;
@@ -402,14 +406,26 @@ export const stampedDownloadHandler = async ({
     expiresIn: FILE_READ_URL_EXPIRY_SECONDS,
   });
   const response = await fetchWithTimeout(presignedUrl, {
-    timeoutMs: 30_000,
+    timeoutMs: STAMPED_DOWNLOAD_READ_TIMEOUT_MS,
   });
 
   if (!response.ok) {
     return storedFileUnreadable(storedFileUnavailable(response.status));
   }
 
-  const buffer = await response.arrayBuffer();
+  const bytes = await readBodyWithIdleDeadline(response, {
+    idleMs: STAMPED_DOWNLOAD_READ_TIMEOUT_MS,
+    maxBytes:
+      metadata === "strip"
+        ? DOCUMENT_PROPERTIES_MAX_BYTES
+        : FILE_SIZE_LIMIT_BYTES.document,
+  });
+  const buffer =
+    bytes.buffer instanceof ArrayBuffer &&
+    bytes.byteOffset === 0 &&
+    bytes.byteLength === bytes.buffer.byteLength
+      ? bytes.buffer
+      : bytes.slice().buffer;
   const versionStamp = row.versionStamp;
   const verificationCode = row.verificationCode;
   const stampResult = await Result.tryPromise({

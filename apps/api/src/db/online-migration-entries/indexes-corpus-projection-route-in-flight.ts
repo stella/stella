@@ -5,6 +5,7 @@ const INTRODUCED_BY = "20261116020000_corpus_projection_fault_immutable";
 export default {
   id: "indexes-corpus-projection-route-in-flight",
   revision: 1471,
+  lifecycle: "pending",
   type: "indexes",
   values: [
     {

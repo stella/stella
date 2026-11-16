@@ -10,8 +10,10 @@ import {
   useMutation,
   useQueryClient,
 } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
 
 import type {
@@ -30,6 +32,10 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { toSafeId } from "@/lib/safe-id";
 import { createUuid } from "@/lib/uuid";
+import {
+  resourceMutation,
+  resourceQueryOptions,
+} from "@/lib/workspace-realtime";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
 import { legalListKeys } from "@/lib/workspaces/queries/legal-lists";
 
@@ -126,10 +132,22 @@ export const useClaimGapActions = ({
       }),
     );
 
+  const writeRecheck = resourceMutation({
+    mutation: "recheckClaim",
+    queryClient,
+    mutationFn: async (_variables: { workspaceId: string }) =>
+      await recheckClaim(),
+  });
+  const writeLink = resourceMutation({
+    mutation: "recordClaimReview",
+    queryClient,
+    mutationFn: async ({ input }: { workspaceId: string; input: LinkInput }) =>
+      await changeLink(input),
+  });
   const recheckKey = claimRecheckKey({ workspaceId, runId, listId, claimId });
   const recheck = useMutation({
     mutationKey: recheckKey,
-    mutationFn: recheckClaim,
+    mutationFn: async () => await writeRecheck({ workspaceId }),
     onSettled: refresh,
     onError: (error) => notifyUserError(error, t("avt.gap.recheckFailed")),
   });
@@ -139,7 +157,8 @@ export const useClaimGapActions = ({
     // A link or unlink only records what the reviewer points to; the grade
     // reads as out of date until they check the claim again, the one action
     // that calls the model.
-    mutationFn: changeLink,
+    mutationFn: async (input: LinkInput) =>
+      await writeLink({ workspaceId, input }),
     onSettled: refresh,
     onError: (error) => notifyUserError(error, t("avt.gap.linkFailed")),
   });
@@ -157,9 +176,15 @@ export const useClaimGapActions = ({
     useAddFactProgress.getState().record(progressKey, added);
   };
 
-  const addFact = useMutation({
-    mutationKey: ["avt", workspaceId, "claim-add-fact", runId, claimId],
-    mutationFn: async (submitted: AddFactInput) => {
+  const writeFact = resourceMutation({
+    mutation: "addClaimFact",
+    queryClient,
+    mutationFn: async ({
+      input: submitted,
+    }: {
+      workspaceId: string;
+      input: AddFactInput;
+    }) => {
       const previous: AddedFact | undefined =
         useAddFactProgress.getState().progress[progressKey];
       const { statement, source } = previous?.input ?? submitted;
@@ -207,38 +232,14 @@ export const useClaimGapActions = ({
       const { entityId } = added;
       record(added);
       if (added.step === "added") {
-        // The live version at submission rather than a stale pick, read
-        // inside the attempt so the sheet stays busy until it is written.
-        const document = await queryClient.query({
-          ...entityOptions(workspaceId, source.documentId),
-          staleTime: 0,
+        await createFactSource({
+          queryClient,
+          submit,
+          workspaceId,
+          listId,
+          entityId,
+          source,
         });
-        unwrapApiResponse(
-          await submit.run({
-            operation: `list-source-create:${workspaceId}`,
-            body: {
-              listId: toSafeId<"legalList">(listId),
-              itemEntityId: toSafeId<"entity">(entityId),
-              sourceEntityId: toSafeId<"entity">(document.entityId),
-              sourceEntityVersionId: toSafeId<"entityVersion">(
-                document.currentVersionId,
-              ),
-              locator:
-                source.pageNumber === null
-                  ? { type: "document" as const }
-                  : {
-                      type: "pdf-page" as const,
-                      pageNumber: source.pageNumber,
-                    },
-              quote: source.quote,
-            },
-            send: async (body) =>
-              await invokeCapability(
-                "lists.items.sources.create",
-                async (request) => lists["item-sources"].post(body, request),
-              ),
-          }),
-        );
         added = { ...added, step: "sourced" };
         record(added);
       }
@@ -251,6 +252,11 @@ export const useClaimGapActions = ({
       unwrapApiResponse(await postRecheck(added.recheckKey));
       record(null);
     },
+  });
+  const addFact = useMutation({
+    mutationKey: ["avt", workspaceId, "claim-add-fact", runId, claimId],
+    mutationFn: async (input: AddFactInput) =>
+      await writeFact({ workspaceId, input }),
     onSettled: refresh,
     onError: (error) => notifyUserError(error, t("avt.gap.addFactFailed")),
   });
@@ -266,4 +272,62 @@ export const useClaimGapActions = ({
   });
 
   return { recheck, recheckPending, link, addFact, addFactResume: resume };
+};
+
+type CreateFactSourceOptions = {
+  queryClient: QueryClient;
+  submit: ReturnType<typeof useIdempotentSubmit>;
+  workspaceId: string;
+  listId: string;
+  entityId: string;
+  source: AddFactInput["source"];
+};
+
+/** Pin the submitted source to its current version inside the resumable attempt. */
+const createFactSource = async ({
+  queryClient,
+  submit,
+  workspaceId,
+  listId,
+  entityId,
+  source,
+}: CreateFactSourceOptions) => {
+  const lists = api.lists({ workspaceId: toSafeId<"workspace">(workspaceId) });
+  const document = await queryClient.query(
+    resourceQueryOptions(
+      {
+        ...entityOptions(workspaceId, source.documentId),
+        staleTime: 0,
+      },
+      {
+        resources: [RESOURCE_TYPE.ENTITY],
+        scope: { type: "workspace", workspaceId },
+      },
+    ),
+  );
+  unwrapApiResponse(
+    await submit.run({
+      operation: `list-source-create:${workspaceId}`,
+      body: {
+        listId: toSafeId<"legalList">(listId),
+        itemEntityId: toSafeId<"entity">(entityId),
+        sourceEntityId: toSafeId<"entity">(document.entityId),
+        sourceEntityVersionId: toSafeId<"entityVersion">(
+          document.currentVersionId,
+        ),
+        locator:
+          source.pageNumber === null
+            ? { type: "document" as const }
+            : {
+                type: "pdf-page" as const,
+                pageNumber: source.pageNumber,
+              },
+        quote: source.quote,
+      },
+      send: async (body) =>
+        await invokeCapability("lists.items.sources.create", async (request) =>
+          lists["item-sources"].post(body, request),
+        ),
+    }),
+  );
 };

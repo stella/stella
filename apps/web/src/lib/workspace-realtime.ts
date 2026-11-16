@@ -345,6 +345,58 @@ export const RESOURCE_MUTATION_CONTRACTS = {
     ],
     resources: [RESOURCE_TYPE.LEGAL_LIST_VERIFICATION],
   },
+  createTask: {
+    writes: [
+      { type: "handler-route", method: "PUT", route: "/tasks/:workspaceId" },
+    ],
+    resources: [RESOURCE_TYPE.ENTITY, RESOURCE_TYPE.LEGAL_LIST],
+  },
+  createListItemSource: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/lists/:workspaceId/item-sources",
+      },
+    ],
+    resources: [RESOURCE_TYPE.LEGAL_LIST],
+  },
+  recheckClaim: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/lists/:workspaceId/claim-rechecks",
+      },
+    ],
+    resources: [RESOURCE_TYPE.LEGAL_LIST_VERIFICATION],
+  },
+  // A resumed addition executes only the writes its progress has not committed.
+  addClaimFact: {
+    writes: [
+      { type: "handler-route", method: "PUT", route: "/tasks/:workspaceId" },
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/lists/:workspaceId/item-sources",
+      },
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/lists/:workspaceId/claim-reviews",
+      },
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/lists/:workspaceId/claim-rechecks",
+      },
+    ],
+    resources: [
+      RESOURCE_TYPE.ENTITY,
+      RESOURCE_TYPE.LEGAL_LIST,
+      RESOURCE_TYPE.LEGAL_LIST_VERIFICATION,
+    ],
+  },
   acceptRoutineClaims: {
     writes: [
       {
