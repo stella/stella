@@ -48,6 +48,11 @@ const config = {
   permissions: CHAT_TURN_PERMISSIONS,
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "assistant_chat" },
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Stores the message's inline files and answers the queued message's preview, never stored-file bytes.",
+  },
   description:
     "Queue a message in one of your chat threads. It is sent as you, in " +
     "order, once the thread's turn has ended and nothing holds the queue; " +
