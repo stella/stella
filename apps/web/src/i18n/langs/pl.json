@@ -2122,6 +2122,7 @@
     "queuePrompt": "Wyślij, gdy agent skończy",
     "queuedAttachmentCount": "{count, plural, one {# załącznik} few {# załączniki} many {# załączników} other {# załącznika}}",
     "queuedNotice": "W kolejce: zostanie wysłana po zakończeniu bieżącej odpowiedzi",
+    "ranOnModel": "Wykonano na modelu {model}",
     "reasoning": "Rozumowanie",
     "reasoningTokens": "{count, plural, one {# token rozumowania} few {# tokeny rozumowania} many {# tokenów rozumowania} other {# tokenu rozumowania}}",
     "recapLoading": "Podsumowywanie rozmowy…",

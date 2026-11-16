@@ -250,6 +250,7 @@
       },
       "sessionNotResumed": "Agent programistyczny na Twoim komputerze nie mógł wznowić pracy tam, gdzie skończył, dlatego kontynuował na podstawie wiadomości z tego czatu.",
       "steered": "Wysłano podczas pracy agenta",
+      "ranOnModel": "Wykonano na modelu {model}",
       "desktopSettingsSteps": "W stella desktop na swoim komputerze otwórz Ustawienia › Ogólne › Subskrypcje AI."
     },
     "processSummary": {

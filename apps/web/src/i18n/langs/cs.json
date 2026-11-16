@@ -2122,6 +2122,7 @@
     "queuePrompt": "Odeslat, až agent skončí",
     "queuedAttachmentCount": "{count, plural, one {# příloha} few {# přílohy} other {# příloh} many {# přílohy}}",
     "queuedNotice": "Zařazeno: odešle se po dokončení aktuální odpovědi",
+    "ranOnModel": "Běželo na modelu {model}",
     "reasoning": "Uvažování",
     "reasoningTokens": "{count, plural, one {# token uvažování} few {# tokeny uvažování} other {# tokenů uvažování} many {# tokenu uvažování}}",
     "recapLoading": "Shrnutí konverzace…",

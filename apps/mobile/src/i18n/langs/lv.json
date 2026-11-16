@@ -250,6 +250,7 @@
       },
       "sessionNotResumed": "Programmēšanas aģents jūsu datorā nevarēja atsākt no vietas, kur apstājās, tāpēc tas turpināja darbu, balstoties uz šīs tērzēšanas ziņām.",
       "steered": "Nosūtīts aģenta darba laikā",
+      "ranOnModel": "Izpildīts ar modeli {model}",
       "desktopSettingsSteps": "Savā datorā lietotnē stella desktop atveriet sadaļu Iestatījumi › Vispārīgi › AI abonementi."
     },
     "processSummary": {

@@ -250,6 +250,7 @@
       },
       "sessionNotResumed": "The coding agent on your computer could not pick up where it left off, so it continued from the messages in this chat.",
       "steered": "Sent while the agent was working",
+      "ranOnModel": "Ran on {model}",
       "desktopSettingsSteps": "In stella desktop on your computer, open Settings › General › AI subscriptions."
     },
     "processSummary": {

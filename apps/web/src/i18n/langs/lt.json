@@ -2122,6 +2122,7 @@
     "queuePrompt": "Siųsti, kai agentas baigs",
     "queuedAttachmentCount": "{count, plural, one {# priedas} few {# priedai} many {# priedo} other {# priedų}}",
     "queuedNotice": "Eilėje: bus išsiųsta, kai baigsis dabartinis atsakymas",
+    "ranOnModel": "Vykdyta su modeliu {model}",
     "reasoning": "Mąstymas",
     "reasoningTokens": "{count, plural, one {# mąstymo tokenas} few {# mąstymo tokenai} many {# mąstymo tokeno} other {# mąstymo tokenų}}",
     "recapLoading": "Apibendrinamas pokalbis…",
