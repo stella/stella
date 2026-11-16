@@ -1203,9 +1203,9 @@ export const useChatSession = ({
               await writeQueue(async () =>
                 outcome.type === "steered"
                   ? await removeFromQueue(id, {
-                    files: QUEUED_MESSAGE_FILES_ON_REMOVE.delete,
-                    revision: item.revision,
-                  })
+                      files: QUEUED_MESSAGE_FILES_ON_REMOVE.delete,
+                      revision: item.revision,
+                    })
                   : await sendQueuedChatMessageNow(threadRef.threadId, id),
               );
             })(),
@@ -1264,10 +1264,13 @@ export const useChatSession = ({
         update: (current) => withQueuedMessageRemoved({ id, queue: current }),
       });
       detached(
-        writeQueue(async () => await removeFromQueue(id, {
-          files: QUEUED_MESSAGE_FILES_ON_REMOVE.delete,
-          revision: item.revision,
-        })),
+        writeQueue(
+          async () =>
+            await removeFromQueue(id, {
+              files: QUEUED_MESSAGE_FILES_ON_REMOVE.delete,
+              revision: item.revision,
+            }),
+        ),
         "use-chat-session.remove-queued-message",
       );
     },
@@ -1292,10 +1295,11 @@ export const useChatSession = ({
         (async () => {
           const removed = await Result.tryPromise(
             // Its stored files stay: the composer sends them again.
-            async () => await removeFromQueue(id, {
-              files: QUEUED_MESSAGE_FILES_ON_REMOVE.keep,
-              revision: item.revision,
-            }),
+            async () =>
+              await removeFromQueue(id, {
+                files: QUEUED_MESSAGE_FILES_ON_REMOVE.keep,
+                revision: item.revision,
+              }),
           );
           await refreshQueue();
           if (Result.isError(removed)) {
@@ -2373,10 +2377,11 @@ export const useChatSession = ({
         switch (outcome.type) {
           case "steered":
             await writeQueue(
-              async () => await removeFromQueue(steered.id, {
-                files: QUEUED_MESSAGE_FILES_ON_REMOVE.delete,
-                revision: steered.revision,
-              }),
+              async () =>
+                await removeFromQueue(steered.id, {
+                  files: QUEUED_MESSAGE_FILES_ON_REMOVE.delete,
+                  revision: steered.revision,
+                }),
             );
             return;
           case "refused":
