@@ -247,7 +247,8 @@
         "showMore": "Rādīt vairāk"
       },
       "sessionNotResumed": "Programmēšanas aģents jūsu datorā nevarēja atsākt no vietas, kur apstājās, tāpēc tas turpināja darbu, balstoties uz šīs tērzēšanas ziņām.",
-      "steered": "Nosūtīts aģenta darba laikā"
+      "steered": "Nosūtīts aģenta darba laikā",
+      "desktopSettingsSteps": "Savā datorā lietotnē stella desktop atveriet sadaļu Iestatījumi › Vispārīgi › AI abonementi."
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, zero {# pārbaudītu avotu} one {# pārbaudīts avots} other {# pārbaudīti avoti}}",

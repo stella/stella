@@ -247,7 +247,8 @@
         "showMore": "Rodyti daugiau"
       },
       "sessionNotResumed": "Programavimo agentas jūsų kompiuteryje negalėjo grįžti ten, kur sustojo, todėl tęsė darbą remdamasis šio pokalbio žinutėmis.",
-      "steered": "Išsiųsta agentui dirbant"
+      "steered": "Išsiųsta agentui dirbant",
+      "desktopSettingsSteps": "Savo kompiuteryje programoje stella desktop atidarykite skiltį Nustatymai › Bendra › DI prenumeratos."
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# patikrintas šaltinis} few {# patikrinti šaltiniai} many {# patikrinto šaltinio} other {# patikrintų šaltinių}}",

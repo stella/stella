@@ -247,7 +247,8 @@
         "showMore": "Zobraziť viac"
       },
       "sessionNotResumed": "Programovací agent vo vašom počítači nemohol nadviazať tam, kde skončil, preto pokračoval podľa správ v tomto chate.",
-      "steered": "Odoslané počas práce agenta"
+      "steered": "Odoslané počas práce agenta",
+      "desktopSettingsSteps": "V stella desktop vo svojom počítači otvorte Nastavenia › Všeobecné › Predplatné AI."
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# preverený zdroj} few {# preverené zdroje} other {# preverených zdrojov} many {# prevereného zdroja}}",

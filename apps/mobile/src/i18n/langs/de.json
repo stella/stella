@@ -247,7 +247,8 @@
         "showMore": "Mehr anzeigen"
       },
       "sessionNotResumed": "Der Coding-Agent auf Ihrem Computer konnte nicht dort weitermachen, wo er aufgehört hatte. Er hat daher anhand der Nachrichten in diesem Chat weitergearbeitet.",
-      "steered": "Während der Arbeit des Agenten gesendet"
+      "steered": "Während der Arbeit des Agenten gesendet",
+      "desktopSettingsSteps": "Öffnen Sie in stella desktop auf Ihrem Computer Einstellungen › Allgemein › KI-Abonnements."
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# Quelle geprüft} other {# Quellen geprüft}}",

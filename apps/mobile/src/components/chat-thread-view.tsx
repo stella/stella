@@ -44,7 +44,7 @@ import { epochMilliseconds } from "@/connection/clock";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
 import type { Load } from "@/state/api-request";
-import { CHAT_FAILURE_KEYS } from "@/state/chat-failure";
+import { CHAT_FAILURE_KEYS, chatFailureStepsKey } from "@/state/chat-failure";
 import {
   prependOlderPage,
   readChatThread,
@@ -576,6 +576,10 @@ const LiveTurnView = ({
         ? t("answerFailed")
         : t(`failure.${CHAT_FAILURE_KEYS[turn.answer.failure]}`),
   }[status];
+  const steps =
+    status === "failed" && turn.answer.failure !== undefined
+      ? chatFailureStepsKey(turn.answer.failure)
+      : null;
   const uploading =
     !accepted &&
     status === "streaming" &&
@@ -599,6 +603,11 @@ const LiveTurnView = ({
       ) : null}
       {note === undefined ? null : (
         <Text style={[styles.notice, { color: colors.muted }]}>{note}</Text>
+      )}
+      {steps === null ? null : (
+        <Text style={[styles.notice, { color: colors.muted }]}>
+          {t(`localRun.${steps}`)}
+        </Text>
       )}
     </View>
   );
