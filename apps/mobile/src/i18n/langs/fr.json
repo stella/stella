@@ -295,6 +295,32 @@
       "runFull": "L’agent ne peut pas accepter d’autres messages pour le moment.",
       "notTaken": "L’agent n’a pas pu prendre votre message pour le moment.",
       "queuedMessageChanged": "Le message a changé ou n’est plus dans la file d’attente, l’agent ne l’a donc pas reçu."
+    },
+    "queue": {
+      "notice": "En file d’attente : envoi à la fin de la réponse en cours",
+      "prompt": "Envoyer quand l’agent aura terminé",
+      "sendNow": "Envoyer maintenant",
+      "remove": "Annuler le message en file d’attente",
+      "edit": "Modifier",
+      "moveUp": "Monter",
+      "moveDown": "Descendre",
+      "cancel": "Annuler",
+      "attachments": "{count, plural, one {# pièce jointe} many {# pièces jointes} other {# pièces jointes}}",
+      "actions": "Actions du message en file d’attente",
+      "notSent": "Envoi impossible",
+      "pause": "Mettre la file en pause",
+      "resume": "Reprendre la file",
+      "replaceTitle": "Envoyer ce message maintenant ?",
+      "replaceDescription": "Cette conversation attend votre réponse. Envoyer ce message maintenant annule la question ou l’approbation qu’elle attend.",
+      "noLongerQueued": "Ce message n’est plus dans la file d’attente.",
+      "held": {
+        "turn-failed": "File d’attente en pause : la dernière réponse a échoué. Reprenez pour envoyer le message suivant.",
+        "turn-interrupted": "File d’attente en pause : la dernière réponse a été interrompue. Reprenez pour envoyer le message suivant.",
+        "member": "File d’attente en pause.",
+        "send-refused": "File d’attente en pause : le premier message n’a pas pu être envoyé. Modifiez-le ou retirez-le, puis reprenez.",
+        "usage-limit": "File d’attente en pause : votre limite d’utilisation est atteinte. Reprenez une fois qu’elle sera réinitialisée.",
+        "computer-away": "En attente de votre ordinateur : les messages en file d’attente partent dès qu’il se connecte."
+      }
     }
   },
   "tasks": {

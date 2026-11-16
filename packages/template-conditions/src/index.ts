@@ -74,6 +74,13 @@ const toConditionValue = (raw: unknown): ConditionValue => {
   return undefined;
 };
 
+type EvaluationContext = {
+  data: Record<string, unknown>;
+  namedConditions: readonly NamedCondition[] | undefined;
+  resolved: ReadonlySet<string>;
+  depth: number;
+};
+
 /**
  * Build the operand resolver for one evaluation. Only `path` operands need
  * resolving (the evaluator handles literals). A path is first matched against
@@ -82,12 +89,12 @@ const toConditionValue = (raw: unknown): ConditionValue => {
  * against cycles (`resolved`) and runaway chains (`MAX_CONDITION_DEPTH`).
  * Otherwise the path resolves against the fill data.
  */
-const makeResolver = (
-  data: Record<string, unknown>,
-  namedConditions: readonly NamedCondition[] | undefined,
-  resolved: ReadonlySet<string>,
-  depth: number,
-): OperandResolver => {
+const makeResolver = ({
+  data,
+  namedConditions,
+  resolved,
+  depth,
+}: EvaluationContext): OperandResolver => {
   const resolve: OperandResolver = (operand) => {
     // An arithmetic expression over numeric fields, resolved against the same
     // fill bag (`rent * 12`); a non-numeric/unparseable expression is undefined.
@@ -105,25 +112,33 @@ const makeResolver = (
       }
       const next = new Set(resolved);
       next.add(path);
+      const nextContext = {
+        data,
+        namedConditions,
+        resolved: next,
+        depth: depth + 1,
+      };
       // An AST-backed named condition (uses a formula operand) is evaluated
       // directly; a string-backed one re-parses its expression.
       if (named.node) {
-        return evaluateConditionAst(
-          named.node,
-          makeResolver(data, namedConditions, next, depth + 1),
-        );
+        return evaluateConditionAst(named.node, makeResolver(nextContext));
       }
-      return evaluateCondition(
-        named.expression,
-        data,
-        namedConditions,
-        next,
-        depth + 1,
-      );
+      return evaluateConditionExpression(named.expression, nextContext);
     }
     return toConditionValue(resolvePath(path, data));
   };
   return resolve;
+};
+
+const evaluateConditionExpression = (
+  expression: string,
+  context: EvaluationContext,
+): boolean => {
+  const node = parseCondition(expression);
+  if (node === null) {
+    return false;
+  }
+  return evaluateConditionAst(node, makeResolver(context));
 };
 
 /**
@@ -142,18 +157,13 @@ export const evaluateCondition = (
   expression: string,
   data: Record<string, unknown>,
   namedConditions?: readonly NamedCondition[],
-  _resolved: ReadonlySet<string> = new Set(),
-  _depth = 0,
-): boolean => {
-  const node = parseCondition(expression);
-  if (node === null) {
-    return false;
-  }
-  return evaluateConditionAst(
-    node,
-    makeResolver(data, namedConditions, _resolved, _depth),
-  );
-};
+): boolean =>
+  evaluateConditionExpression(expression, {
+    data,
+    namedConditions,
+    resolved: new Set(),
+    depth: 0,
+  });
 
 export {
   CONDITION_RESERVED_WORDS,

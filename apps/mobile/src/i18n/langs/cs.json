@@ -295,6 +295,32 @@
       "runFull": "Agent teď další zprávy nepřijme.",
       "notTaken": "Agent teď vaši zprávu nemohl přijmout.",
       "queuedMessageChanged": "Zpráva se mezitím změnila nebo už není ve frontě, proto ji agent nedostal."
+    },
+    "queue": {
+      "notice": "Zařazeno: odešle se po dokončení aktuální odpovědi",
+      "prompt": "Odeslat, až agent skončí",
+      "sendNow": "Odeslat hned",
+      "remove": "Zrušit zařazenou zprávu",
+      "edit": "Upravit",
+      "moveUp": "Posunout nahoru",
+      "moveDown": "Posunout dolů",
+      "cancel": "Zrušit",
+      "attachments": "{count, plural, one {# příloha} few {# přílohy} other {# příloh} many {# přílohy}}",
+      "actions": "Akce zprávy ve frontě",
+      "notSent": "Nepodařilo se odeslat",
+      "pause": "Pozastavit frontu",
+      "resume": "Obnovit frontu",
+      "replaceTitle": "Odeslat tuto zprávu hned?",
+      "replaceDescription": "Chat čeká na vaši odpověď. Odesláním této zprávy teď zrušíte otázku nebo schválení, na které čeká.",
+      "noLongerQueued": "Tato zpráva už ve frontě není.",
+      "held": {
+        "turn-failed": "Fronta je pozastavená: poslední odpověď selhala. Pokračováním odešlete další zprávu.",
+        "turn-interrupted": "Fronta je pozastavená: poslední odpověď byla přerušena. Pokračováním odešlete další zprávu.",
+        "member": "Fronta je pozastavená.",
+        "send-refused": "Fronta je pozastavená: první zprávu se nepodařilo odeslat. Upravte ji nebo odeberte a pak pokračujte.",
+        "usage-limit": "Fronta je pozastavená: dosáhli jste limitu využití. Pokračujte, až se obnoví.",
+        "computer-away": "Čeká se na váš počítač: zprávy ve frontě se odešlou, jakmile se připojí."
+      }
     }
   },
   "tasks": {

@@ -295,6 +295,32 @@
       "runFull": "Az ügynök most nem fogad több üzenetet.",
       "notTaken": "Az ügynök most nem tudta fogadni az üzenetét.",
       "queuedMessageChanged": "Az üzenet időközben megváltozott vagy már nincs a sorban, ezért az ügynök nem kapta meg."
+    },
+    "queue": {
+      "notice": "Sorba állítva – a jelenlegi válasz befejeztével küldjük el",
+      "prompt": "Küldés, amikor az ügynök végzett",
+      "sendNow": "Küldés most",
+      "remove": "Sorba állított üzenet visszavonása",
+      "edit": "Szerkesztés",
+      "moveUp": "Mozgatás fel",
+      "moveDown": "Mozgatás le",
+      "cancel": "Mégse",
+      "attachments": "{count, plural, one {# melléklet} other {# melléklet}}",
+      "actions": "A sorban álló üzenet műveletei",
+      "notSent": "Nem sikerült elküldeni",
+      "pause": "Sor szüneteltetése",
+      "resume": "Sor folytatása",
+      "replaceTitle": "Elküldi most ezt az üzenetet?",
+      "replaceDescription": "Ez a csevegés az Ön válaszára vár. Ha most elküldi ezt az üzenetet, a kérdés vagy jóváhagyás, amelyre vár, megszűnik.",
+      "noLongerQueued": "Ez az üzenet már nincs a sorban.",
+      "held": {
+        "turn-failed": "A sor szüneteltetve: az utolsó válasz sikertelen volt. Folytassa a következő üzenet elküldéséhez.",
+        "turn-interrupted": "A sor szüneteltetve: az utolsó válasz megszakadt. Folytassa a következő üzenet elküldéséhez.",
+        "member": "A sor szüneteltetve.",
+        "send-refused": "A sor szüneteltetve: az első üzenetet nem sikerült elküldeni. Szerkessze vagy távolítsa el, majd folytassa.",
+        "usage-limit": "A sor szüneteltetve: elérte a használati korlátot. Folytassa, amikor visszaáll.",
+        "computer-away": "Várakozás a számítógépére: a sorban álló üzenetek elmennek, amint csatlakozik."
+      }
     }
   },
   "tasks": {

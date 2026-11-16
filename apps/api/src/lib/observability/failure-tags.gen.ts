@@ -43,6 +43,8 @@ export const FAILURE_TAGS = [
   "BilingualFormattingError",
   "BillingDraftValidationError",
   "BodyByteLimitError",
+  "BrTstParseError",
+  "BrTstResponseError",
   "BufferIntentOwnershipError",
   "BufferIntentWorkspaceUnavailableError",
   "CanaryRateLimitError",

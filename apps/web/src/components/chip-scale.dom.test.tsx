@@ -82,6 +82,21 @@ const CHIP_KINDS = {
     />
   ),
   "slash command": <ChatCommandChip label="/new" />,
+  "case reference with an explicit hint": (
+    <InlinePill tooltip={<strong>{CASE_NUMBER}</strong>} truncate>
+      {CASE_NUMBER}
+    </InlinePill>
+  ),
+  "clickable case reference": (
+    <InlinePill onActivate={() => undefined} truncate>
+      {CASE_NUMBER}
+    </InlinePill>
+  ),
+  "case reference with a title hint": (
+    <InlinePill title="Full matter name from title" truncate>
+      {CASE_NUMBER}
+    </InlinePill>
+  ),
   "case reference": (
     <InlinePill
       leadingIcon={<LandmarkIcon className={CHIP_ICON_CLASS} />}
@@ -117,15 +132,18 @@ for (const [kind, chip] of Object.entries(CHIP_KINDS)) {
     if (shell === null) {
       return;
     }
+    const surface =
+      shell.querySelector('[data-slot="inline-pill-surface"]') ?? shell;
     for (const heightClass of CHIP_HEIGHT_CLASS.split(" ")) {
-      expect(shell.classList.contains(heightClass)).toBe(true);
+      expect(surface.classList.contains(heightClass)).toBe(true);
     }
     for (const control of [shell, ...shell.querySelectorAll("button, a")]) {
       if (!control.matches("button, a")) {
         continue;
       }
+      const target = control === shell && surface !== shell ? surface : control;
       for (const targetClass of CHIP_TOUCH_TARGET_CLASS.split(" ")) {
-        expect(control.classList.contains(targetClass)).toBe(true);
+        expect(target.classList.contains(targetClass)).toBe(true);
       }
     }
     const offending = [shell, ...shell.querySelectorAll("*")].flatMap(
@@ -137,3 +155,15 @@ for (const [kind, chip] of Object.entries(CHIP_KINDS)) {
     expect(offending).toEqual([]);
   });
 }
+
+test.each([undefined, null, "", false])(
+  "a pill without hint or activation stays outside the tab order for %s",
+  (tooltip) => {
+    const view = renderChip(
+      <InlinePill tooltip={tooltip}>{CASE_NUMBER}</InlinePill>,
+    );
+    expect(view.queryByRole("button")).toBeNull();
+    expect(view.getByRole("group").getAttribute("tabindex")).toBeNull();
+    expect(view.container.querySelector("[title]")).toBeNull();
+  },
+);

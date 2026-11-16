@@ -176,16 +176,18 @@ export const PropertyPopover = ({
               }),
             }
           : {};
-      const response = await api
-        .fields({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        ["metadata-batch"].patch({
-          propertyId: toSafeId<"property">(id),
-          flag: action,
-          filters,
-          set,
-          ...(onlyAddedAt !== undefined && { onlyAddedAt }),
-          ...groupParams,
-        });
+      const fieldsApi = api.fields({
+        workspaceId: toSafeId<"workspace">(workspaceId),
+      });
+
+      const response = await fieldsApi["metadata-batch"].patch({
+        propertyId: toSafeId<"property">(id),
+        flag: action,
+        filters,
+        set,
+        ...(onlyAddedAt !== undefined && { onlyAddedAt }),
+        ...groupParams,
+      });
 
       return unwrapApiResponse(response);
     },

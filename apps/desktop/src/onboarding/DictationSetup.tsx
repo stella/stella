@@ -3,6 +3,7 @@ import { useLocale, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { CheckCircle2Icon } from "@stll/ui/icons";
+import { Switch } from "@stll/ui/switch";
 import { Textarea } from "@stll/ui/textarea";
 
 import { PermissionsSection } from "../mainview/PermissionsSection";
@@ -28,8 +29,9 @@ type DictationSetupProps = {
 
 /**
  * Dictation explained in a line, then turned on where it is explained: the
- * switch and the speech model download in one action, the permissions it
- * needs, and a field to dictate into once the model is ready.
+ * switch and the speech model download in one action, AI cleanup with what
+ * it sends, the permissions it needs, and a field to dictate into once the
+ * model is ready.
  */
 export const DictationSetup = ({
   controls,
@@ -59,8 +61,10 @@ export const DictationSetup = ({
 
   return (
     <>
-      <p className="text-muted-foreground mt-1 max-w-md text-sm leading-relaxed text-pretty">
-        {dictationT("description", { shortcut })}
+      <p className="text-muted-foreground mt-1 text-sm leading-relaxed text-pretty">
+        {snapshot.destination === "cloud"
+          ? dictationT("descriptionCloud", { shortcut })
+          : dictationT("description", { shortcut })}
       </p>
       <div className="mt-4 flex flex-col gap-3">
         {ready ? null : (
@@ -68,6 +72,7 @@ export const DictationSetup = ({
             <ModelRow controls={controls} snapshot={snapshot} />
           </div>
         )}
+        <CleanupRow controls={controls} snapshot={snapshot} />
         {snapshot.enabled ? (
           <div className="bg-card overflow-hidden rounded-xl border empty:hidden">
             <PermissionsSection
@@ -132,6 +137,41 @@ export const DictationSetup = ({
         {controls.unread ? <Unread onReload={controls.reload} /> : null}
       </div>
     </>
+  );
+};
+
+/** AI cleanup, on by default: what it does and where the text goes, with
+ *  its switch. The options under it stay in settings. */
+const CleanupRow = ({
+  controls,
+  snapshot,
+}: {
+  controls: DictationControls;
+  snapshot: DictationSnapshot;
+}) => {
+  const dictationT = useTranslations("dictation");
+  return (
+    <div className="bg-card flex items-center justify-between gap-4 rounded-xl border px-4 py-3">
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium">{dictationT("cleanup.title")}</p>
+        <p
+          className="text-muted-foreground mt-1 text-sm leading-relaxed text-pretty"
+          id="onboarding-dictation-cleanup-description"
+        >
+          {snapshot.destination === "cloud"
+            ? dictationT("cleanup.descriptionCloud")
+            : dictationT("cleanup.description")}
+        </p>
+      </div>
+      <Switch
+        aria-describedby="onboarding-dictation-cleanup-description"
+        aria-label={dictationT("cleanup.title")}
+        checked={snapshot.cleanup}
+        onCheckedChange={(enabled) => {
+          void controls.setCleanup(enabled);
+        }}
+      />
+    </div>
   );
 };
 

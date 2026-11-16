@@ -407,14 +407,16 @@ const fetchFileChatThread = async ({
   fieldId,
   workspaceId,
 }: FileChatThreadKey): Promise<FileChatThreadFetchResult> => {
-  const response = await api.chat
-    .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-    ["file-thread"].get({
-      query: {
-        entityId: toSafeId<"entity">(entityId),
-        fieldId: toSafeId<"field">(fieldId),
-      },
-    });
+  const workspaceApi = api.chat.workspaces({
+    workspaceId: toSafeId<"workspace">(workspaceId),
+  });
+
+  const response = await workspaceApi["file-thread"].get({
+    query: {
+      entityId: toSafeId<"entity">(entityId),
+      fieldId: toSafeId<"field">(fieldId),
+    },
+  });
 
   const data = unwrapApiResponse(response);
 
@@ -804,13 +806,15 @@ export const materializeFileChatThread = async ({
   hasDocxEditSurface,
   key,
 }: MaterializeFileChatThreadArgs): Promise<FileChatThreadBinding> => {
-  const response = await api.chat
-    .workspaces({ workspaceId: toSafeId<"workspace">(key.workspaceId) })
-    ["file-thread"].post({
-      entityId: toSafeId<"entity">(key.entityId),
-      fieldId: toSafeId<"field">(key.fieldId),
-      threadId: toSafeId<"chatThread">(draftThreadId),
-    });
+  const workspaceApi = api.chat.workspaces({
+    workspaceId: toSafeId<"workspace">(key.workspaceId),
+  });
+
+  const response = await workspaceApi["file-thread"].post({
+    entityId: toSafeId<"entity">(key.entityId),
+    fieldId: toSafeId<"field">(key.fieldId),
+    threadId: toSafeId<"chatThread">(draftThreadId),
+  });
 
   const data = unwrapApiResponse(response);
   const threadId = toChatThreadId(data.threadId);
@@ -1074,14 +1078,16 @@ type ChatThreadSuggestedPromptsFetched = {
 const fetchThreadSuggestedPrompts = async (
   threadRef: ChatThreadRef,
 ): Promise<ChatThreadSuggestedPromptsFetched> => {
-  const response = await api.chat
-    .threads({ threadId: toSafeId<"chatThread">(threadRef.threadId) })
-    ["suggested-prompts"].post(undefined, {
-      query:
-        threadRef.scope === "workspace"
-          ? { workspaceId: toSafeId<"workspace">(threadRef.workspaceId) }
-          : {},
-    });
+  const threadApi = api.chat.threads({
+    threadId: toSafeId<"chatThread">(threadRef.threadId),
+  });
+
+  const response = await threadApi["suggested-prompts"].post(undefined, {
+    query:
+      threadRef.scope === "workspace"
+        ? { workspaceId: toSafeId<"workspace">(threadRef.workspaceId) }
+        : {},
+  });
 
   if (response.error) {
     getAnalytics().captureError(toAPIError(response.error), {
