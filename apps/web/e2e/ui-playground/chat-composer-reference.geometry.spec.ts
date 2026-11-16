@@ -189,7 +189,7 @@ test("hint-bearing chips keep a full coarse-pointer target", async ({
   baseURL,
 }) => {
   const context = await browser.newContext({
-    baseURL,
+    ...(baseURL === undefined ? {} : { baseURL }),
     hasTouch: true,
     viewport: { width: 390, height: 844 },
     reducedMotion: "reduce",
