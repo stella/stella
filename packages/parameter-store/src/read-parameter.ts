@@ -6,6 +6,7 @@ import {
 import { Result, TaggedError } from "better-result";
 
 import { TimeoutError, withTimeout } from "@stll/concurrency/with-timeout";
+import type { WithTimeoutScheduler } from "@stll/concurrency/with-timeout";
 
 const PARAMETER_READ_TIMEOUT_MS = 5000;
 
@@ -21,6 +22,7 @@ type ReadParameterOptions = {
   name: string;
   decryption: "enabled" | "disabled";
   signal?: AbortSignal;
+  scheduleTimeout?: WithTimeoutScheduler;
   client?: {
     send: (
       command: GetParameterCommand,
@@ -34,6 +36,7 @@ export const readParameter = async ({
   name,
   decryption,
   signal,
+  scheduleTimeout,
   client: injectedClient,
 }: ReadParameterOptions) => {
   const result = await Result.tryPromise({
@@ -50,6 +53,7 @@ export const readParameter = async ({
         {
           label: "parameter_store.read",
           signal,
+          scheduleTimeout,
           timeoutMs: PARAMETER_READ_TIMEOUT_MS,
         },
       ),
