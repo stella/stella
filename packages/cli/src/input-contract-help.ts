@@ -10,13 +10,19 @@ const propertiesOf = (schema: JsonSchema): Record<string, JsonSchema> => {
   if (!isRecord(properties)) {
     return {};
   }
-  const result: Record<string, JsonSchema> = {};
-  for (const [name, child] of Object.entries(properties)) {
-    if (isRecord(child)) {
-      result[name] = child;
-    }
-  }
-  return result;
+  return Object.fromEntries(
+    Object.entries(properties).filter((entry): entry is [string, JsonSchema] =>
+      isRecord(entry[1]),
+    ),
+  );
+};
+
+const propertyOf = (
+  schema: JsonSchema,
+  name: string,
+): JsonSchema | undefined => {
+  const properties = propertiesOf(schema);
+  return Object.hasOwn(properties, name) ? properties[name] : undefined;
 };
 
 const requiredOf = (schema: JsonSchema): ReadonlySet<string> => {
@@ -473,7 +479,7 @@ const schemaAtPath = (
 ): JsonSchema | undefined => {
   let current = schema;
   for (const segment of path.split(".")) {
-    const child = propertiesOf(current)[segment];
+    const child = propertyOf(current, segment);
     if (child === undefined) {
       return undefined;
     }
@@ -489,7 +495,7 @@ const pathRequired = (schema: JsonSchema, path: string): boolean => {
     if (index === segments.length - 1) {
       return requiredAcrossAllOf(parent).has(segment);
     }
-    const child = propertiesOf(parent)[segment];
+    const child = propertyOf(parent, segment);
     if (child === undefined) {
       return false;
     }
@@ -930,24 +936,41 @@ const combineSchemasForExample = (
   for (const keyword of ["minimum", "minLength", "minItems"] as const) {
     const bound = stricterLowerBound(parent[keyword], branch[keyword]);
     if (bound !== undefined) {
-      combined[keyword] = bound;
+      Object.defineProperty(combined, keyword, {
+        value: bound,
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
     }
   }
   for (const keyword of ["maximum", "maxLength", "maxItems"] as const) {
     const bound = stricterUpperBound(parent[keyword], branch[keyword]);
     if (bound !== undefined) {
-      combined[keyword] = bound;
+      Object.defineProperty(combined, keyword, {
+        value: bound,
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
     }
   }
 
   const parentProperties = propertiesOf(parent);
   const properties = { ...parentProperties };
   for (const [name, branchProperty] of Object.entries(propertiesOf(branch))) {
-    const parentProperty = parentProperties[name];
-    properties[name] =
-      parentProperty === undefined
-        ? branchProperty
-        : combineSchemasForExample(parentProperty, branchProperty);
+    const parentProperty = Object.hasOwn(parentProperties, name)
+      ? parentProperties[name]
+      : undefined;
+    Object.defineProperty(properties, name, {
+      value:
+        parentProperty === undefined
+          ? branchProperty
+          : combineSchemasForExample(parentProperty, branchProperty),
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
   }
   if (Object.keys(properties).length > 0) {
     combined["properties"] = properties;
@@ -1028,14 +1051,14 @@ const exampleFor = (schema: JsonSchema): unknown => {
         return candidate;
       }
     }
-    const objectResult = isRecord(result) ? result : {};
+    const exampleEntries = Object.entries(isRecord(result) ? result : {});
     for (const intersection of intersections) {
       const example = exampleFor(intersection);
       if (isRecord(example)) {
-        Object.assign(objectResult, example);
+        exampleEntries.push(...Object.entries(example));
       }
     }
-    return objectResult;
+    return Object.fromEntries(exampleEntries);
   }
   const types = schemaTypes(schema);
   const defaultValue = schema["default"];
@@ -1053,9 +1076,14 @@ const exampleFor = (schema: JsonSchema): unknown => {
   if (describesObject(schema)) {
     const result: Record<string, unknown> = {};
     for (const name of requiredOf(schema)) {
-      const child = propertiesOf(schema)[name];
+      const child = propertyOf(schema, name);
       if (child !== undefined) {
-        result[name] = exampleFor(child);
+        Object.defineProperty(result, name, {
+          value: exampleFor(child),
+          enumerable: true,
+          configurable: true,
+          writable: true,
+        });
       }
     }
     const mapEntry = mapEntrySchemas(schema).at(0);
@@ -1065,7 +1093,12 @@ const exampleFor = (schema: JsonSchema): unknown => {
           ? "key"
           : keyExampleForPattern(mapEntry.keyPattern);
       if (key !== undefined) {
-        result[key] = exampleFor(mapEntry.valueSchema);
+        Object.defineProperty(result, key, {
+          value: exampleFor(mapEntry.valueSchema),
+          enumerable: true,
+          configurable: true,
+          writable: true,
+        });
       }
     }
     return result;
@@ -1108,22 +1141,34 @@ const setExamplePath = ({
   let current = target;
   let currentSchema = schema;
   for (const [index, segment] of segments.entries()) {
-    const childSchema = propertiesOf(currentSchema)[segment];
+    const childSchema = propertyOf(currentSchema, segment);
     if (childSchema === undefined) {
       return;
     }
     if (index === segments.length - 1 && value !== undefined) {
-      current[segment] = value;
+      Object.defineProperty(current, segment, {
+        value,
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
       return;
     }
-    const existing = current[segment];
+    const existing = Object.hasOwn(current, segment)
+      ? current[segment]
+      : undefined;
     if (isRecord(existing)) {
       current = existing;
       currentSchema = childSchema;
       continue;
     }
     const example = value === undefined ? exampleFor(childSchema) : {};
-    current[segment] = example;
+    Object.defineProperty(current, segment, {
+      value: example,
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
     if (isRecord(example)) {
       current = example;
       currentSchema = childSchema;
@@ -1223,7 +1268,7 @@ const discriminatorOf = (
   }
   return [...requiredOf(first)].find((name) =>
     variants.every((variant) => {
-      const child = propertiesOf(variant)[name];
+      const child = propertyOf(variant, name);
       return (
         requiredOf(variant).has(name) &&
         child !== undefined &&
@@ -1238,7 +1283,7 @@ const compactChildShape = (schema: JsonSchema): string => {
   const discriminator = discriminatorOf(variants);
   if (discriminator !== undefined) {
     const values = variants.map((variant) => {
-      const child = propertiesOf(variant)[discriminator];
+      const child = propertyOf(variant, discriminator);
       return child === undefined
         ? ""
         : JSON.stringify(discriminatorValue(child));
@@ -1307,7 +1352,7 @@ export const buildCompactInputUnionHints = ({
     }
     const variants = branches
       .map((variant) => {
-        const child = propertiesOf(variant)[discriminator];
+        const child = propertyOf(variant, discriminator);
         const label =
           child === undefined ? "" : JSON.stringify(discriminatorValue(child));
         return `${discriminator}=${label}: ${compactVariantKeys(variant, discriminator)}`;
