@@ -854,8 +854,9 @@ const hasExplicitWritingDirection = ($: CheerioApi): boolean => {
   const bodyDirection = $("body").attr("dir")?.trim().toLowerCase();
   return (
     (htmlDirection !== undefined &&
-      htmlDirection in EMAIL_WRITING_DIRECTIONS) ||
-    (bodyDirection !== undefined && bodyDirection in EMAIL_WRITING_DIRECTIONS)
+      Object.hasOwn(EMAIL_WRITING_DIRECTIONS, htmlDirection)) ||
+    (bodyDirection !== undefined &&
+      Object.hasOwn(EMAIL_WRITING_DIRECTIONS, bodyDirection))
   );
 };
 
