@@ -29,6 +29,7 @@ import enqueueChatMessage from "@/api/handlers/chat/queue/enqueue";
 import moveQueuedChatMessage from "@/api/handlers/chat/queue/move";
 import pauseChatQueue from "@/api/handlers/chat/queue/pause";
 import readChatQueue from "@/api/handlers/chat/queue/read";
+import readQueuedChatMessage from "@/api/handlers/chat/queue/read-message";
 import replaceQueuedChatMessage from "@/api/handlers/chat/queue/replace";
 import resumeChatQueue from "@/api/handlers/chat/queue/resume";
 import sendQueuedChatMessageNow from "@/api/handlers/chat/queue/send-now";
@@ -145,6 +146,7 @@ export const chatRoute = routes(
       DELETE: resumeChatQueue,
     },
     "/threads/:threadId/queue/:messageId": {
+      GET: readQueuedChatMessage,
       PUT: replaceQueuedChatMessage,
       DELETE: cancelQueuedChatMessage,
     },

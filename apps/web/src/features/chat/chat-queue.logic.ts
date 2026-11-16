@@ -3,7 +3,6 @@ import { panic } from "better-result";
 import { CHAT_SEND_MODE, type ChatSendMode } from "@stll/anonymize-chat";
 import { isChatPastedTextPart } from "@stll/api-contract/chat";
 import {
-  CHAT_QUEUE_PREVIEW_MAX_CHARS,
   CHAT_SEND_QUEUES_INSTEAD_CODE,
   type ChatQueueHoldReason,
 } from "@stll/api-contract/chat-queue";
@@ -12,6 +11,7 @@ import {
   CHAT_TURN_STEERING,
   type ChatThreadSendState,
 } from "@stll/api-contract/chat-send-intent";
+import { DESKTOP_RUNNER_MAX_INPUT_TEXT_LENGTH } from "@stll/api-contract/desktop-runner";
 import { userFileIdFromUrl } from "@stll/api-contract/user-file-url";
 
 import type {
@@ -145,28 +145,55 @@ export const composerDraftOfParts = (
 };
 
 /**
- * The text a running turn can be handed for a message the member sends: text
- * alone, sent raw (a steer hands the text to the computer's harness as is).
- * `null` for any other message, which only goes as a message of its own.
+ * The text a running turn can be handed for a message of `parts`: text alone,
+ * sent raw (a steer hands the text to the computer's harness as is), and no
+ * longer than the steer takes. `null` for any other message, which only goes
+ * as a message of its own.
  */
-export const steerableMessageText = (
-  message: ChatUserMessageInput,
-  options: ChatSendMessageOptions | undefined,
-): string | null => {
-  if (options?.body?.sendMode === CHAT_SEND_MODE.anonymized) {
+const steerableTextOfParts = ({
+  parts,
+  sendMode,
+}: {
+  parts: readonly unknown[];
+  sendMode: ChatSendMode | undefined;
+}): string | null => {
+  if (sendMode === CHAT_SEND_MODE.anonymized || parts.length === 0) {
     return null;
   }
-  const parts = messagePartsOf(message);
   const draft = composerDraftOfParts(parts);
   const text = draft.html.trim();
   return draft.pastedTexts.length === 0 &&
-    draft.storedFiles.length === 0 &&
-    parts.length > 0 &&
-    isTextOnlyMessage(message) &&
-    text !== ""
+    parts.every(isTextPart) &&
+    text !== "" &&
+    text.length <= DESKTOP_RUNNER_MAX_INPUT_TEXT_LENGTH
     ? text
     : null;
 };
+
+const isTextPart = (part: unknown): boolean =>
+  typeof part === "object" &&
+  part !== null &&
+  "type" in part &&
+  (part.type === "text" || isChatPastedTextPart(part));
+
+/** `steerableTextOfParts` of a message the member sends now. */
+export const steerableMessageText = (
+  message: ChatUserMessageInput,
+  options: ChatSendMessageOptions | undefined,
+): string | null =>
+  steerableTextOfParts({
+    parts: messagePartsOf(message),
+    sendMode: options?.body?.sendMode,
+  });
+
+/** `steerableTextOfParts` of a queued message, read whole from the queue. */
+export const steerableQueuedText = ({
+  item,
+  parts,
+}: {
+  item: Pick<ChatQueueItem, "sendMode">;
+  parts: readonly unknown[];
+}): string | null => steerableTextOfParts({ parts, sendMode: item.sendMode });
 
 /**
  * Why a steer left the message queued: what the turn or the API said
@@ -204,39 +231,26 @@ export const isQueueInsteadRefusal = (error: unknown): boolean =>
     hasChatErrorCode(error, code),
   );
 
-/** Whether a message is text alone (pasted text counts as text). */
-const isTextOnlyMessage = (message: ChatUserMessageInput): boolean =>
-  typeof message.content === "string" ||
-  message.content.every(
-    (part) => part.type === "text" || isChatPastedTextPart(part),
-  );
-
 /**
- * The text a running turn can be handed in place of a queued message: a
- * message of text alone, whole in its preview, queued to be sent raw (a
- * steer hands the text to the computer's harness as is). `null` for any
- * other, which only goes as a message of its own.
+ * Whether a running turn may be handed a queued message in its place, as far
+ * as the queue's read tells: text alone, queued to be sent raw. Its text is
+ * read whole before the turn is handed it (`steerableQueuedText`).
  */
-const queuedSteerText = (item: ChatQueueItem): string | null => {
-  const text = item.preview.trim();
-  return item.attachmentCount === 0 &&
-    text !== "" &&
-    item.preview.length < CHAT_QUEUE_PREVIEW_MAX_CHARS &&
-    item.sendMode === CHAT_SEND_MODE.rawOverride
-    ? text
-    : null;
-};
+const mayHandQueuedToTurn = (item: ChatQueueItem): boolean =>
+  item.attachmentCount === 0 &&
+  item.preview.trim() !== "" &&
+  item.sendMode === CHAT_SEND_MODE.rawOverride;
 
 /**
  * What Send now does with a queued message, by what the thread does:
  * - `steer`: a turn on the member's computer that takes a message mid-turn
- *   runs; it is handed the message (`text`) and goes on with it.
+ *   runs; it is handed the message's text, read whole, and goes on with it.
  * - `replace`: a turn waits on the member; Send now ends what it waits on,
  *   which the member confirms first.
  * - `send`: the server sends it next, now, stopping a turn that runs.
  */
 export type QueuedSendNow =
-  { type: "steer"; text: string } | { type: "replace" } | { type: "send" };
+  { type: "steer" } | { type: "replace" } | { type: "send" };
 
 export const queuedSendNow = (
   state: ChatThreadSendState,
@@ -247,13 +261,11 @@ export const queuedSendNow = (
       return { type: "send" };
     case "waiting_on_member":
       return { type: "replace" };
-    case "working": {
-      const text =
-        state.steering === CHAT_TURN_STEERING.steerable
-          ? queuedSteerText(item)
-          : null;
-      return text === null ? { type: "send" } : { type: "steer", text };
-    }
+    case "working":
+      return state.steering === CHAT_TURN_STEERING.steerable &&
+        mayHandQueuedToTurn(item)
+        ? { type: "steer" }
+        : { type: "send" };
     default:
       state satisfies never;
       return panic("Unhandled thread send state");

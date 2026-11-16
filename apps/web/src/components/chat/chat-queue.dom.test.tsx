@@ -264,33 +264,37 @@ const serve = ({ waiting }: { waiting: boolean }) => {
       return Response.json({ message: "Not queued" }, { status: 404 });
     }
     const without = state.order.filter((queued) => queued !== id);
+    // The message as it was queued: its text, and the file its queueing
+    // stored, named by reference.
+    const message = {
+      id,
+      role: "user",
+      parts: [
+        { type: "text", content: textOf(id) },
+        ...(id === FIRST
+          ? [
+              {
+                type: "document",
+                source: {
+                  type: "url",
+                  value: STORED_FILE_URL,
+                  mimeType: "application/pdf",
+                },
+                metadata: { filename: "lease.pdf" },
+              },
+            ]
+          : []),
+      ],
+    };
+    // The message whole, as Edit reads it before removing it.
+    if (method === "GET") {
+      return Response.json({ message, revision: 0 });
+    }
     if (method === "DELETE") {
       state.removedRevisions.push(url.searchParams.get("revision"));
       state.filesOnRemove.push(url.searchParams.get("files"));
       state.order = without;
-      return Response.json({
-        message: {
-          id,
-          role: "user",
-          parts: [
-            { type: "text", content: textOf(id) },
-            // The file its queueing stored, named by reference.
-            ...(id === FIRST
-              ? [
-                  {
-                    type: "document",
-                    source: {
-                      type: "url",
-                      value: STORED_FILE_URL,
-                      mimeType: "application/pdf",
-                    },
-                    metadata: { filename: "lease.pdf" },
-                  },
-                ]
-              : []),
-          ],
-        },
-      });
+      return Response.json({ message });
     }
     if (action === "move") {
       const beforeId = beforeIdOf(body);
@@ -523,7 +527,12 @@ test("Move, Remove and Edit change the server's queue, and Edit hands the messag
   await waitFor(() => {
     expect(shownOrder(page.view.container)).toEqual([textOf(SECOND)]);
   });
-  expect(server.requests.at(-1)).toBe(`DELETE ${QUEUE_PATH}/${FIRST}`);
+  // Read whole (and handed to the composer) before it is removed, so a lost
+  // answer to the removal cannot lose it.
+  expect(server.requests.slice(-2)).toEqual([
+    `GET ${QUEUE_PATH}/${FIRST}`,
+    `DELETE ${QUEUE_PATH}/${FIRST}`,
+  ]);
   expect(server.order).toEqual([SECOND]);
   // Remove deletes the files a message's queueing stored; Edit keeps them,
   // and the composer holds them by reference, to be sent again.

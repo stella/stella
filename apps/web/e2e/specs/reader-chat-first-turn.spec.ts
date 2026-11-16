@@ -149,8 +149,10 @@ test("a fresh reader shows specific copy when the API refuses its first chat que
   await page.route(/\/v1\/chat\/?$/u, async (route) => {
     await respond(
       route,
+      // The code a member route answers a 401 with (the API's
+      // `AUTH_REJECTION_BODY`), under wording the page must not show.
       apiError(401, {
-        code: "unauthorized",
+        code: "permission_denied",
         message: "Private authentication diagnostics",
       }),
     );
@@ -159,12 +161,9 @@ test("a fresh reader shows specific copy when the API refuses its first chat que
   await composer.getByRole("textbox").fill(QUESTION);
   await composer.getByRole("button", { name: "Send message" }).click();
   // Not sent: the question is back in the composer, not in the thread, and
-  // the notice is the sign-in one, never the server's own wording.
+  // the notice is the expired session's, never the server's own wording.
   await expect(
-    page
-      .getByText(messages.errors.api.unauthorized)
-      .or(page.getByText(messages.auth.sessionExpired, { exact: true }))
-      .first(),
+    page.getByText(messages.auth.sessionExpired, { exact: true }),
   ).toBeVisible();
   await expect(composer.getByRole("textbox")).toContainText(QUESTION);
   await expect(

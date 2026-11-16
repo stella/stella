@@ -330,7 +330,7 @@ const openApiSchema = (
   if (!isRecord(node)) {
     return panic("An OpenAPI schema is an object or a boolean");
   }
-  const out: JsonObject = {};
+  const out = new Map<string, unknown>();
   let nullable = false;
   for (const [keyword, value] of Object.entries(node)) {
     if (keyword.startsWith("x-") || ANNOTATION_KEYWORDS.has(keyword)) {
@@ -346,15 +346,18 @@ const openApiSchema = (
       }
       const name = value.slice(COMPONENT_POINTER.length);
       enqueue(name);
-      out[keyword] = `${DEFS_POINTER}${name}`;
+      out.set(keyword, `${DEFS_POINTER}${name}`);
       continue;
     }
     if (SCHEMA_MAP_KEYWORDS.has(keyword)) {
-      out[keyword] = Object.fromEntries(
-        Object.entries(objectAt(value, keyword)).map(([name, schema]) => [
-          name,
-          openApiSchema(schema, enqueue),
-        ]),
+      out.set(
+        keyword,
+        Object.fromEntries(
+          Object.entries(objectAt(value, keyword)).map(([name, schema]) => [
+            name,
+            openApiSchema(schema, enqueue),
+          ]),
+        ),
       );
       continue;
     }
@@ -363,38 +366,38 @@ const openApiSchema = (
       // the short and the long message shape), and the APIs pick a branch by
       // its discriminator, so a value is read as matching at least one.
       const schemas = value.map((schema) => openApiSchema(schema, enqueue));
+      const previousAllOf = out.get("allOf");
+      const existingAllOf = isUnknownArray(previousAllOf) ? previousAllOf : [];
       if (keyword === "allOf") {
-        out[keyword] = [
-          ...schemas,
-          ...(isUnknownArray(out["allOf"]) ? out["allOf"] : []),
-        ];
+        out.set(keyword, [...schemas, ...existingAllOf]);
       } else if (keyword !== "oneOf") {
-        out[keyword] = schemas;
+        out.set(keyword, schemas);
       } else if ("anyOf" in node) {
-        out["allOf"] = [
-          ...(isUnknownArray(out["allOf"]) ? out["allOf"] : []),
-          { anyOf: schemas },
-        ];
+        out.set("allOf", [...existingAllOf, { anyOf: schemas }]);
       } else {
-        out["anyOf"] = schemas;
+        out.set("anyOf", schemas);
       }
       continue;
     }
     if (SCHEMA_KEYWORDS.has(keyword)) {
-      out[keyword] = isUnknownArray(value)
-        ? value.map((schema) => openApiSchema(schema, enqueue))
-        : openApiSchema(value, enqueue);
+      out.set(
+        keyword,
+        isUnknownArray(value)
+          ? value.map((schema) => openApiSchema(schema, enqueue))
+          : openApiSchema(value, enqueue),
+      );
       continue;
     }
     if (keyword === "pattern" && typeof value === "string") {
       if (isUsablePattern(value)) {
-        out[keyword] = value;
+        out.set(keyword, value);
       }
       continue;
     }
-    out[keyword] = value;
+    out.set(keyword, value);
   }
-  return nullable ? withNull(out) : out;
+  const result = Object.fromEntries(out);
+  return nullable ? withNull(result) : result;
 };
 
 const extractOpenApi = (
@@ -595,7 +598,7 @@ const awsShapeSchema = (
   switch (type) {
     case "structure": {
       const members = objectAt(shape["members"], "members");
-      const properties: JsonObject = {};
+      const properties = new Map<string, JsonObject>();
       const bodyNames = new Map<string, string>();
       for (const [name, member] of Object.entries(members)) {
         const spec = objectAt(member, name);
@@ -608,7 +611,7 @@ const awsShapeSchema = (
             ? spec["locationName"]
             : name;
         bodyNames.set(name, jsonName);
-        properties[jsonName] = memberRef(spec);
+        properties.set(jsonName, memberRef(spec));
       }
       const required = isUnknownArray(shape["required"])
         ? shape["required"].flatMap((name) =>
@@ -619,7 +622,7 @@ const awsShapeSchema = (
         : [];
       return {
         type: "object",
-        properties,
+        properties: Object.fromEntries(properties),
         ...(required.length > 0 ? { required } : {}),
         ...(shape["union"] === true
           ? { minProperties: 1, maxProperties: 1 }
