@@ -20,6 +20,7 @@ import {
   NO_DECISION_PASSAGE_NUMBERS,
 } from "@/api/handlers/chat/decision-passage-numbers";
 import { adoptChatLocalRun } from "@/api/handlers/chat/local-run-plan";
+import { createSteeredQueue } from "@/api/handlers/chat/queue/steered-message";
 import {
   produceChatTurn,
   type StreamChatFinishEvent,
@@ -238,6 +239,15 @@ const adoptChatTurn = async ({
     ...(dependencies.runtime === undefined
       ? {}
       : { runtime: dependencies.runtime }),
+    // The adopted run's steer reports settle the queued messages it was
+    // handed, as the starting task's would have.
+    steeredQueue: createSteeredQueue({
+      organizationId,
+      recordAuditEvent: caller.recordAuditEvent,
+      safeDb: caller.safeDb,
+      threadId,
+      userId,
+    }),
     userId,
     workspaceIds: context.refs.opaqueReadWorkspaceIds,
   });

@@ -311,15 +311,39 @@ export type ChatLocalRunSteerEvent = v.InferOutput<
   typeof chatLocalRunSteerEventSchema
 >;
 
+/**
+ * Where a steered message comes from: `composer`, a message the member just
+ * wrote, or `queued`, the queued message `inputId` at the `revision` the
+ * client read. A queued message the turn takes leaves the queue on the
+ * server, in the transaction that handles the run's report, so the queue
+ * never sends it again; one it does not take stays queued.
+ */
+export const CHAT_LOCAL_RUN_STEER_SOURCE = {
+  composer: "composer",
+  queued: "queued",
+} as const;
+
+const chatLocalRunSteerSourceSchema = v.variant("type", [
+  v.strictObject({ type: v.literal(CHAT_LOCAL_RUN_STEER_SOURCE.composer) }),
+  v.strictObject({
+    type: v.literal(CHAT_LOCAL_RUN_STEER_SOURCE.queued),
+    revision: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  }),
+]);
+export type ChatLocalRunSteerSource = v.InferOutput<
+  typeof chatLocalRunSteerSourceSchema
+>;
+
 /** What the chat asks to steer a running local turn with. */
 export const chatLocalRunSteerRequestSchema = v.strictObject({
-  /** The queued message's id, so a repeat steers once. */
+  /** The message's id (a queued one's own), so a repeat steers once. */
   inputId: v.pipe(v.string(), v.uuid()),
   text: v.pipe(
     v.string(),
     v.minLength(1),
     v.maxLength(DESKTOP_RUNNER_MAX_INPUT_TEXT_LENGTH),
   ),
+  source: chatLocalRunSteerSourceSchema,
 });
 export type ChatLocalRunSteerRequest = v.InferOutput<
   typeof chatLocalRunSteerRequestSchema
@@ -333,6 +357,8 @@ export type ChatLocalRunSteerRequest = v.InferOutput<
  *   or after the run ended.
  * - `harness_cannot_steer`: the turn's agent takes no message mid-turn.
  * - `run_full`: the run holds as many commands as one run may.
+ * - `queued_message_changed`: the queued message was edited, sent or
+ *   removed since the revision the request names.
  * - `not_taken`: the agent did not take it; its turn was ending or between
  *   attempts. Only the turn's stream says this, as `refused`.
  */
@@ -341,6 +367,7 @@ const CHAT_LOCAL_RUN_STEER_ROUTE_REFUSALS = [
   "no_run",
   "harness_cannot_steer",
   "run_full",
+  "queued_message_changed",
 ] as const;
 export const CHAT_LOCAL_RUN_STEER_REFUSALS = [
   ...CHAT_LOCAL_RUN_STEER_ROUTE_REFUSALS,

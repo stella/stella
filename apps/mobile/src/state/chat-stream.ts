@@ -14,6 +14,8 @@ import {
   chatLocalRunSteerEventSchema,
   type ChatLocalRunSteerOutcome,
   chatLocalRunSteerOutcomeSchema,
+  type ChatLocalRunSteerRequest,
+  type ChatLocalRunSteerSource,
 } from "@stll/api-contract/chat-run-target";
 import { SSE_SILENCE_BOUND_MS } from "@stll/api-contract/sse-heartbeat";
 
@@ -1036,6 +1038,7 @@ const steerAnswerSchema = v.object({ steer: chatLocalRunSteerOutcomeSchema });
 export const steerChatTurn = async ({
   fetch,
   inputId,
+  messageSource,
   source,
   text,
   threadId,
@@ -1043,17 +1046,24 @@ export const steerChatTurn = async ({
 }: {
   readonly fetch: Fetch;
   readonly inputId: string;
+  /** Where the message comes from; a queued one names the revision read. */
+  readonly messageSource: ChatLocalRunSteerSource;
   readonly source: AccessTokenSource;
   readonly text: string;
   readonly threadId: string;
   readonly turnId: string;
 }): Promise<Result<ChatLocalRunSteerOutcome, ApiError>> =>
   await Result.gen(async function* () {
+    const body = {
+      inputId,
+      text,
+      source: messageSource,
+    } satisfies ChatLocalRunSteerRequest;
     const answered = yield* Result.await(
       requestApi({
         fetch,
         path: `${turnPath(threadId, turnId)}/steer`,
-        body: { inputId, text },
+        body,
         schema: steerAnswerSchema,
         source,
       }),

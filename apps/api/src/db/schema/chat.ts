@@ -921,6 +921,12 @@ export const chatQueuedMessages = p.pgTable(
       .array()
       .notNull()
       .default([]),
+    /**
+     * The revision handed to a running turn as a steer, until the run says
+     * whether it took it: taken, the message leaves the queue at that
+     * revision; refused, the mark is cleared. Null when no steer is open.
+     */
+    steeredRevision: p.integer("steered_revision"),
     /** When a queue sweep last tried this thread's queue; the next sweep tries the oldest first. */
     sweptAt: timestamptz("swept_at"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
