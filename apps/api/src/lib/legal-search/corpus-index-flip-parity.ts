@@ -70,7 +70,10 @@ import {
 } from "@/api/db/schema";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { readBounded } from "@/api/lib/db/read-bounded";
-import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
+import {
+  type CorpusFamily,
+  isActiveCorpusIndexGenerationStatus,
+} from "@/api/lib/legal-search/corpus-generation-contract";
 import { readJurisdictionServingGenerationsTx } from "@/api/lib/legal-search/corpus-index-jurisdiction-serving-store";
 import {
   corpusIndexManifestIsPartial,
@@ -482,7 +485,7 @@ const refused = (
  * The pair a flip of `candidate` would make: the family's serving generation
  * and the candidate. Refused when the read cannot answer it exactly: no
  * generation serves, the candidate is the serving one, the candidate does not
- * take every change (not building), the candidate is partial, or the family
+ * take every change (not active), the candidate is partial, or the family
  * has a jurisdiction-serving pointer. Erasures depend on the generation in
  * the last two cases.
  */
@@ -541,9 +544,14 @@ const readComparablePairTx = async (
     );
   }
   const candidateRow = rows.find((row) => row.generation === candidate);
-  if (candidateRow?.status !== "building") {
+  // The serving generation was refused above, so an active candidate is a
+  // building one.
+  if (
+    candidateRow === undefined ||
+    !isActiveCorpusIndexGenerationStatus(candidateRow.status)
+  ) {
     return refused(
-      `${family}/${candidate} is not a building generation (${candidateRow?.status ?? "not registered"}); only an active generation takes every change`,
+      `${family}/${candidate} is not an active generation (${candidateRow?.status ?? "not registered"}); only an active generation takes every change`,
       "generation_not_active",
     );
   }
