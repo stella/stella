@@ -1649,6 +1649,7 @@
     ],
     "./number-input": ["NumberInput"],
     "./option-color": ["emptyColor", "optionColors", "resolveOptionColor"],
+    "./outcome-screen": ["OutcomeScreen"],
     "./outline-rail": [
       "OUTLINE_CONTROL_MIN_SIZE",
       "OUTLINE_EMPHASIS",
@@ -2098,6 +2099,8 @@
     "MenuItem.variant": ["default", "destructive"],
     "MenuRadioItem.indicator": ["check", "none"],
     "MenuTrigger.appearance": ["caption", "default"],
+    "OutcomeScreen.surface": ["embedded", "page"],
+    "OutcomeScreen.tone": ["error", "success"],
     "OutlineRail.presentation": ["panel", "popover", "rail"],
     "PanelTrigger.side": ["left", "right"],
     "PopoverContent.layer": [
