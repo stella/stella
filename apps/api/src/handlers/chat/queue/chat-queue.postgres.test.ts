@@ -1058,21 +1058,9 @@ const suite = (
     test("a steer is refused a message that carries files", async () => {
       const owner = await seedOwner();
       const threadId = await seedThread(owner);
+      // The mark reads the message's parts alone; no stored file row is
+      // needed (one would also hold the thread against the suite's cleanup).
       const fileId = createSafeId<"userFile">();
-      await database.insert(userFiles).values({
-        fileName: "lease.pdf",
-        id: fileId,
-        mimeType: "application/pdf",
-        s3Key: createUserFileKey({
-          fileId,
-          mimeType: "application/pdf",
-          organizationId: owner.organizationId,
-        }),
-        sha256Hex: "0".repeat(64),
-        sizeBytes: 1,
-        threadId,
-        userId: owner.userId,
-      });
       const id = createSafeId<"chatMessage">();
       const plain = rawSendOf(id, "read the lease");
       await withLock(threadId, owner, async (tx) => {
@@ -1098,7 +1086,7 @@ const suite = (
           },
           threadId,
           tx,
-          uploadedFileIds: [fileId],
+          uploadedFileIds: [],
         });
         await acceptTurnOnTx({
           messageId: createSafeId<"chatMessage">(),
