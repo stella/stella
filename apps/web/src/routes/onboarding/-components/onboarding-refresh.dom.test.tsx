@@ -79,14 +79,23 @@ test("a failed post-create refresh preserves configuration submission and reache
       if (url.pathname.endsWith("/set-active")) {
         return Response.json({ id: "org-created" });
       }
-      if (url.pathname.endsWith("/get-session") && created) {
-        return Response.json(
-          {
-            code: "INTERNAL_SERVER_ERROR",
-            message: "Session could not be read",
-          },
-          { status: 503 },
-        );
+      if (url.pathname.endsWith("/get-session")) {
+        return created
+          ? Response.json(
+              {
+                code: "INTERNAL_SERVER_ERROR",
+                message: "Session could not be read",
+              },
+              { status: 503 },
+            )
+          : Response.json({
+              ...MEMBER_SESSION,
+              session: {
+                ...MEMBER_SESSION.session,
+                activeOrganizationId: null,
+              },
+              user: { ...MEMBER_SESSION.user, detectedCountry: "CZ" },
+            });
       }
       if (url.pathname.endsWith("/practice-jurisdictions")) {
         return Response.json({ success: true });
@@ -118,11 +127,7 @@ test("a failed post-create refresh preserves configuration submission and reache
     defaultOptions: { queries: { retry: false } },
   });
   clients.push(client);
-  client.setQueryData(sessionOptions.queryKey, {
-    ...MEMBER_SESSION,
-    session: { ...MEMBER_SESSION.session, activeOrganizationId: null },
-    user: { ...MEMBER_SESSION.user, detectedCountry: "CZ" },
-  });
+  await client.query(sessionOptions);
   client.setQueryData(nativeToolDeployAvailabilityOptions.queryKey, {
     unavailableNativeToolBackendSlugs: [],
   });
@@ -155,38 +160,30 @@ test("a failed post-create refresh preserves configuration submission and reache
         target: { value: "Practice team" },
       },
     );
-    fireEvent.click(
-      ui.getByRole("button", { name: messages.common.next, exact: true }),
-    );
+    fireEvent.click(ui.getByRole("button", { name: messages.common.next }));
     await ui.findByRole("heading", {
       name: messages.onboarding.jurisdictionTitle,
     });
-    fireEvent.click(
-      ui.getByRole("button", { name: messages.common.next, exact: true }),
-    );
+    fireEvent.click(ui.getByRole("button", { name: messages.common.next }));
     await ui.findByRole("heading", {
       name: messages.onboarding.catalogueTitle,
     });
     fireEvent.click(
       ui.getByRole("button", {
         name: messages.onboarding.skipStep,
-        exact: true,
       }),
     );
     await ui.findByRole("heading", { name: messages.onboarding.aiTitle });
     fireEvent.click(
       ui.getByRole("button", {
         name: messages.onboarding.skipStep,
-        exact: true,
       }),
     );
     await ui.findByRole("heading", { name: messages.onboarding.inviteTitle });
     fireEvent.change(ui.getByPlaceholderText("colleague@example.com"), {
       target: { value: "colleague@example.test" },
     });
-    fireEvent.click(
-      ui.getByRole("button", { name: messages.common.next, exact: true }),
-    );
+    fireEvent.click(ui.getByRole("button", { name: messages.common.next }));
     await ui.findByRole("heading", { name: messages.onboarding.appsTitle });
     await waitFor(() => expect(notice).toHaveBeenCalledTimes(1));
     expect(

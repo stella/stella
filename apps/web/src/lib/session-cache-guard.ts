@@ -3,12 +3,12 @@ import type { Query, QueryClient, QueryKey } from "@tanstack/react-query";
 import { redirect } from "@tanstack/react-router";
 
 import { publicKnowledgeKeys } from "@/features/knowledge/public/public-knowledge-keys";
-import { rootKeys, sessionOptions } from "@/lib/auth-query-options";
 import {
   hasCurrentAuthQueryOwner,
   isAuthBootstrapQuery,
   observeAuthQueryOwner,
-} from "@/lib/auth-query-owner";
+} from "@/lib/account/auth-query-owner";
+import { rootKeys, sessionOptions } from "@/lib/auth-query-options";
 import { detached } from "@/lib/detached";
 import { memberKnowledgeKeys } from "@/lib/knowledge/knowledge-cache";
 import { isAuthFlowPathname } from "@/lib/redirect";

@@ -10,11 +10,11 @@ import { PROFESSIONAL_USE_STATUS } from "@stll/api-contract/professional-use";
 import { memberHasPermissions } from "@stll/permissions";
 import type { PermissionInput } from "@stll/permissions";
 
-import { rootKeys, sessionOptions } from "@/lib/auth-query-options";
 import {
   bindAuthQueryOwner,
   isAuthBootstrapQuery,
-} from "@/lib/auth-query-owner";
+} from "@/lib/account/auth-query-owner";
+import { rootKeys, sessionOptions } from "@/lib/auth-query-options";
 import { STALE_TIME } from "@/lib/consts";
 import type { toAuthClientError } from "@/lib/errors/auth";
 import { readQueryResult } from "@/lib/errors/query-result";
@@ -70,19 +70,21 @@ export const roleOptions = resourceQueryOptions(
     retry: BOOT_QUERY_RETRY,
     queryKey: rootKeys.role,
     queryFn: async ({ client, queryKey, signal }) => {
-      const owner = bindAuthQueryOwner({
-        queryClient: client,
-        queryKey,
-        signal,
-      });
+      const owner = readQueryResult(
+        bindAuthQueryOwner({
+          queryClient: client,
+          queryKey,
+          signal,
+        }),
+      );
       const { authClient } = await import("@/lib/auth-client");
-      owner.assertCurrent();
+      readQueryResult(owner.assertCurrent());
       const { role } = await authClientData(
         await authClient.organization.getActiveMemberRole({
           fetchOptions: { signal },
         }),
       );
-      owner.accept();
+      readQueryResult(owner.accept());
       return role;
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
@@ -99,19 +101,21 @@ export const activeMemberOptions = resourceQueryOptions(
     queryKey: rootKeys.activeMember,
     retry: BOOT_QUERY_RETRY,
     queryFn: async ({ client, queryKey, signal }) => {
-      const owner = bindAuthQueryOwner({
-        queryClient: client,
-        queryKey,
-        signal,
-      });
+      const owner = readQueryResult(
+        bindAuthQueryOwner({
+          queryClient: client,
+          queryKey,
+          signal,
+        }),
+      );
       const { authClient } = await import("@/lib/auth-client");
-      owner.assertCurrent();
+      readQueryResult(owner.assertCurrent());
       const member = await authClientData(
         await authClient.organization.getActiveMember({
           fetchOptions: { signal },
         }),
       );
-      owner.accept();
+      readQueryResult(owner.accept());
       return member;
     },
     staleTime: STALE_TIME.FIVE.MINUTES,

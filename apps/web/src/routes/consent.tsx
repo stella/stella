@@ -28,6 +28,7 @@ import {
 } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
+import { transformUnknownError } from "@/lib/errors/client";
 import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import {
   getOauthHashFragment,
@@ -177,20 +178,21 @@ function ConsentPage() {
     setSubmission({ status: "pending" });
     // The grant binds to the session's active organization when consent is
     // given, so switching here is what decides where the app will work.
-    const outcome = await Result.tryPromise(async () => {
-      try {
-        const { error } = await authClient.organization.setActive({
-          organizationId,
-        });
-        if (error) {
-          throw toAuthClientError(error);
-        }
-      } finally {
-        // A failed request may still have committed. Re-read the organization
-        // Allow would bind to, and surface a failed confirmation read as well.
-        await refreshAuthQueries(queryClient);
-      }
+    const selected = await Result.tryPromise({
+      try: async () =>
+        await authClient.organization.setActive({ organizationId }),
+      catch: transformUnknownError,
     });
+    // A failed request may still have committed. Always confirm the session.
+    const refreshed = await Result.tryPromise({
+      try: async () => await refreshAuthQueries(queryClient),
+      catch: transformUnknownError,
+    });
+    const outcome = refreshed.andThen(() =>
+      selected.andThen(({ error }) =>
+        error ? Result.err(toAuthClientError(error)) : Result.ok(undefined),
+      ),
+    );
     if (outcome.isErr()) {
       setSubmission({ status: "error" });
       notifyUserError(outcome.error, t("consent.error"));

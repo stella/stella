@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { useMutation } from "@tanstack/react-query";
 import { createFileRoute, notFound, redirect } from "@tanstack/react-router";
+import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -18,6 +19,8 @@ import { useInvalidateSession } from "@/hooks/use-invalidate-session";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient } from "@/lib/auth-client";
 import { toAuthClientError } from "@/lib/errors/auth";
+import { transformUnknownError } from "@/lib/errors/client";
+import { readQueryResult } from "@/lib/errors/query-result";
 import { notifyUserError } from "@/lib/errors/user-toast";
 
 import { InvitationRefusal, loadInvitationView } from "./-invitation-view";
@@ -96,12 +99,14 @@ function AcceptInvitation({ invitation }: AcceptInvitationProps) {
         throw toAuthClientError(setActiveError);
       }
 
-      try {
-        await invalidateSession.mutateAsync();
-      } catch (refreshError) {
-        notifyUserError(refreshError, t("errors.actionFailed"));
-        throw refreshError;
+      const refreshed = await Result.tryPromise({
+        try: async () => await invalidateSession.mutateAsync(),
+        catch: transformUnknownError,
+      });
+      if (refreshed.isErr()) {
+        notifyUserError(refreshed.error, t("errors.actionFailed"));
       }
+      readQueryResult(refreshed);
       await navigate({ to: "/workspaces", replace: true });
     },
     onError: (error) => {

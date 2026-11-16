@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { useMutation } from "@tanstack/react-query";
+import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -21,6 +22,8 @@ import { usePulse } from "@/hooks/use-pulse";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient, HTTP_TOO_MANY_REQUESTS } from "@/lib/auth-client";
 import { toAuthClientError } from "@/lib/errors/auth";
+import { transformUnknownError } from "@/lib/errors/client";
+import { readQueryResult } from "@/lib/errors/query-result";
 import { notifyUserError } from "@/lib/errors/user-toast";
 
 type TwoFactorMode = "totp" | "backupCode";
@@ -72,12 +75,14 @@ export const TwoFactorPanel = ({ className }: TwoFactorPanelProps) => {
       // The redirect target's `beforeLoad` (see routes/auth/two-factor.tsx)
       // redirects away as soon as `context.session` resolves, mirroring the
       // email-OTP step (routes/auth/otp.tsx + otp-panel.tsx).
-      try {
-        await invalidateSession.mutateAsync();
-      } catch (refreshError) {
-        notifyUserError(refreshError, t("errors.actionFailed"));
-        throw refreshError;
+      const refreshed = await Result.tryPromise({
+        try: async () => await invalidateSession.mutateAsync(),
+        catch: transformUnknownError,
+      });
+      if (refreshed.isErr()) {
+        notifyUserError(refreshed.error, t("errors.actionFailed"));
       }
+      readQueryResult(refreshed);
     },
     onError: (error) => {
       analytics.captureError(error, {

@@ -52,6 +52,8 @@ import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
+import { transformUnknownError } from "@/lib/errors/client";
+import { readQueryResult } from "@/lib/errors/query-result";
 import {
   notifyAuthClientError,
   notifyUserError,
@@ -345,18 +347,21 @@ const OrganizationList = ({
         throw toAuthClientError(error);
       }
 
-      try {
-        await completeOrganizationFlow({
-          isOauthPostLogin,
-          navigate,
-          queryClient,
-          redirectTo,
-          status: "selected",
-        });
-      } catch (refreshError) {
-        notifyUserError(refreshError, t("errors.actionFailed"));
-        throw refreshError;
+      const refreshed = await Result.tryPromise({
+        try: async () =>
+          await completeOrganizationFlow({
+            isOauthPostLogin,
+            navigate,
+            queryClient,
+            redirectTo,
+            status: "selected",
+          }),
+        catch: transformUnknownError,
+      });
+      if (refreshed.isErr()) {
+        notifyUserError(refreshed.error, t("errors.actionFailed"));
       }
+      readQueryResult(refreshed);
     },
     onError: (error) => {
       analytics.captureError(error, {

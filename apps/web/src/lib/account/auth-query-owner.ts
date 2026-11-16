@@ -1,5 +1,6 @@
 import { CancelledError, hashKey } from "@tanstack/react-query";
 import type { Query, QueryClient, QueryKey } from "@tanstack/react-query";
+import { Result } from "better-result";
 
 import { rootKeys, sessionOptions } from "@/lib/auth-query-options";
 
@@ -69,20 +70,26 @@ export const bindAuthQueryOwner = ({
   queryClient: QueryClient;
   queryKey: QueryKey;
   signal: AbortSignal;
-}): { assertCurrent: () => void; accept: () => void } => {
+}): Result<
+  {
+    assertCurrent: () => Result<void, CancelledError>;
+    accept: () => Result<void, CancelledError>;
+  },
+  CancelledError
+> => {
   observeAuthQueryOwner(queryClient);
   const owner = owners.get(queryClient);
   const session = queryClient.getQueryState(sessionOptions.queryKey);
   const query = queryClient.getQueryCache().find({ queryKey, exact: true });
   if (
     session?.status !== "success" ||
+    owner?.userId === null ||
+    owner?.organizationId === null ||
     owner === undefined ||
-    owner.userId === null ||
-    owner.organizationId === null ||
     query === undefined ||
     signal.aborted
   ) {
-    throw new CancelledError({ revert: false });
+    return Result.err(new CancelledError({ revert: false }));
   }
   const binding = { owner, signal };
   bindings.set(query, binding);
@@ -96,14 +103,19 @@ export const bindAuthQueryOwner = ({
       bindings.get(query) !== binding ||
       queryClient.getQueryCache().find({ queryKey, exact: true }) !== query
     ) {
-      throw new CancelledError({ revert: false });
+      return Result.err(new CancelledError({ revert: false }));
     }
+    return Result.ok(undefined);
   };
-  return {
+  return Result.ok({
     assertCurrent,
     accept: () => {
-      assertCurrent();
+      const current = assertCurrent();
+      if (current.isErr()) {
+        return current;
+      }
       cacheOwners.set(query, owner);
+      return Result.ok(undefined);
     },
-  };
+  });
 };
