@@ -833,6 +833,16 @@ for (const response of ["error", "null", "empty"] as const) {
       await act(async () => {
         root.render(<Card />);
       });
+      const disclosure =
+        [...container.querySelectorAll("button")].find(
+          (button) =>
+            button.getAttribute("aria-label") ===
+            citation.payload.provisionLabel,
+        ) ?? panic("Missing provision disclosure");
+      await act(async () => {
+        disclosure.click();
+      });
+      expect(disclosure.getAttribute("aria-expanded")).toBe("true");
       const toggle =
         [...container.querySelectorAll("button")].find(
           (button) => button.textContent === "Show full provision",
