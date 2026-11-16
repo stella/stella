@@ -186,14 +186,30 @@ export const steerableMessageText = (
     sendMode: options?.body?.sendMode,
   });
 
-/** `steerableTextOfParts` of a queued message, read whole from the queue. */
-export const steerableQueuedText = ({
+/**
+ * What Send now hands a running turn of a queued message read whole: its
+ * text, steered at the revision read. Send now was decided on the queue's
+ * read of the message (`queuedSendNow`); a read of another revision is a
+ * message changed since (on another device, say switched to anonymized), so
+ * `null` sends it next instead, and so does a message read whole that is not
+ * `steerableTextOfParts`.
+ */
+export const queuedSteerOf = ({
   item,
-  parts,
+  read,
 }: {
-  item: Pick<ChatQueueItem, "sendMode">;
-  parts: readonly unknown[];
-}): string | null => steerableTextOfParts({ parts, sendMode: item.sendMode });
+  item: Pick<ChatQueueItem, "revision" | "sendMode">;
+  read: { message: { parts: readonly unknown[] }; revision: number };
+}): { revision: number; text: string } | null => {
+  if (read.revision !== item.revision) {
+    return null;
+  }
+  const text = steerableTextOfParts({
+    parts: read.message.parts,
+    sendMode: item.sendMode,
+  });
+  return text === null ? null : { revision: read.revision, text };
+};
 
 /**
  * Why a steer left the message queued: what the turn or the API said
@@ -235,7 +251,7 @@ export const isQueueInsteadRefusal = (error: unknown): boolean =>
 /**
  * Whether a running turn may be handed a queued message in its place, as far
  * as the queue's read tells: text alone, queued to be sent raw. Its text is
- * read whole before the turn is handed it (`steerableQueuedText`).
+ * read whole before the turn is handed it (`queuedSteerOf`).
  */
 const mayHandQueuedToTurn = (item: ChatQueueItem): boolean =>
   item.attachmentCount === 0 &&
