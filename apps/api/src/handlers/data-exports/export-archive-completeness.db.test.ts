@@ -225,6 +225,7 @@ const TABLE_CLASSIFICATIONS = {
   caseLawStatuteCitationMemberships: RESEARCH_CORPUS_EXCLUSION,
   cellMetadata: FORMAT_SCOPE_EXCLUSION,
   chatBrowserSiteGrants: FORMAT_SCOPE_EXCLUSION,
+  chatCommandReceipts: FORMAT_SCOPE_EXCLUSION,
   chatContentV3BackfillReceipts: FORMAT_SCOPE_EXCLUSION,
   chatLimitReminders: FORMAT_SCOPE_EXCLUSION,
   chatLocalRunStepContents: FORMAT_SCOPE_EXCLUSION,

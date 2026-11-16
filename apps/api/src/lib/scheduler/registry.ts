@@ -80,6 +80,10 @@ import {
   refreshCaseLawSourceArrivalsTask,
 } from "@/api/lib/scheduler/tasks/case-law-source-arrivals-refresh";
 import {
+  SWEEP_CHAT_COMMAND_RECEIPTS_TASK,
+  sweepChatCommandReceipts,
+} from "@/api/lib/scheduler/tasks/chat-command-receipt-retention";
+import {
   SEND_CHAT_LIMIT_REMINDERS_TASK,
   sendChatLimitReminders,
 } from "@/api/lib/scheduler/tasks/chat-limit-reminders";
@@ -319,6 +323,7 @@ const SCHEDULER_TASKS = {
   [REPAIR_CHAT_SEARCH_INDEX_TASK]: repairChatSearchIndex,
   [REPAIR_SEARCH_PROJECTIONS_TASK]: repairSearchProjections,
   [CHAT_THREAD_COMPACTOR_TASK]: compactChatThreads,
+  [SWEEP_CHAT_COMMAND_RECEIPTS_TASK]: sweepChatCommandReceipts,
   [SWEEP_CHAT_RUN_LOGS_TASK]: sweepChatRunLogs,
   [PURGE_CHAT_SECRETS_TASK]: purgeChatSecrets,
   [SWEEP_ACTION_COSTS_TASK]: sweepActionCostRecords,

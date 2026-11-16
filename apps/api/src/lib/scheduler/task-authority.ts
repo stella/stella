@@ -167,6 +167,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "chat-secret-retention.ts",
     "Clears expired encrypted chat payloads while retaining request receipts.",
   ),
+  "chat.sweepCommandReceipts": platform(
+    "chat-command-receipt-retention.ts",
+    "Retention sweep of chat command receipts; reads ids and times only.",
+  ),
   "chat.sweepRunLogs": platform(
     "chat-run-log-retention.ts",
     "Retention sweep of closed run logs.",

@@ -12,8 +12,19 @@ import {
 } from "@stll/api-contract/chat-queue";
 
 import type { Transaction } from "@/api/db/root";
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import {
+  type SafeDb,
+  type SafeDbError,
+  transactionAbortError,
+} from "@/api/db/safe-db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
+import {
+  type ChatCommand,
+  chatCommandReceiptOutcomeOnTx,
+  type ChatCommandReplayedError,
+  insertChatCommandReceiptOnTx,
+  readChatCommandReceiptOutcome,
+} from "@/api/handlers/chat/chat-command-receipts";
 import {
   attachTerminalTurnOutcome,
   chatMessageContentFromMessage,
@@ -1193,6 +1204,8 @@ const runPersistMessage = async ({
 
 type PersistClaimedReplayMessageProps = PersistMessageProps & {
   claim: ChatTurnExecutionClaim;
+  /** The member's answer under their client's id, receipted on the claim. */
+  command?: ChatCommand | undefined;
   persistencePlan: Extract<MessagePersistencePlan, { type: "update" }>;
 };
 
@@ -1225,6 +1238,8 @@ type PersistAcceptedMessageWithClaimProps = PersistMessageProps & {
    *  edit carries its own typed codes. */
   refuseTurn?: ((refusal: ChatTurnRefusal) => HandlerError<409>) | undefined;
   turnAcceptance: ChatTurnAcceptance;
+  /** The member's command under their client's id, receipted on acceptance. */
+  command?: ChatCommand | undefined;
 };
 
 /** The claimed execution of an accepted message, with what accepting it
@@ -1232,6 +1247,12 @@ type PersistAcceptedMessageWithClaimProps = PersistMessageProps & {
 type AcceptedMessageClaim = ChatTurnWrites & {
   execution: ChatTurnExecution;
 };
+
+/** How accepting a message ended under the thread lock. */
+type AcceptedMessageClaimOutcome = Result<
+  AcceptedMessageClaim,
+  HandlerError<409> | ChatCommandReplayedError | SafeDbError
+>;
 
 const CHAT_TURN_REFUSAL_MESSAGE = {
   "history-changed":
@@ -1324,6 +1345,7 @@ const takeTurnSourceOnTx = async ({
  * the message was planned on is the thread's history when the lock is taken.
  */
 export const persistAcceptedMessageWithClaim = async ({
+  command,
   placement,
   plannedOnHistory,
   refuseTurn = refuseChatTurn,
@@ -1331,11 +1353,25 @@ export const persistAcceptedMessageWithClaim = async ({
   turnAcceptance,
   ...persistenceProps
 }: PersistAcceptedMessageWithClaimProps): Promise<
-  Result<AcceptedMessageClaim, HandlerError<409> | SafeDbError>
+  Result<
+    AcceptedMessageClaim,
+    HandlerError | ChatCommandReplayedError | SafeDbError
+  >
 > => {
   const result = await withChatRunPings(
     async (pings) =>
-      await safeDb(async (tx) => {
+      await safeDb(async (tx): Promise<AcceptedMessageClaimOutcome> => {
+        // A retry that lost the race to its own first attempt is refused
+        // below (the thread changed, or its turn runs); the first attempt's
+        // receipt, committed before the thread lock was released, says so.
+        const receipted = async () =>
+          command === undefined
+            ? undefined
+            : await chatCommandReceiptOutcomeOnTx({
+                command,
+                threadId: turnAcceptance.threadId,
+                tx,
+              });
         const reservation = await reservePlannedChatTurnOnTx({
           history: plannedOnHistory,
           pings,
@@ -1343,7 +1379,7 @@ export const persistAcceptedMessageWithClaim = async ({
           tx,
         });
         if (reservation !== "reserved") {
-          return Result.err(refuseTurn(reservation));
+          return Result.err((await receipted()) ?? refuseTurn(reservation));
         }
         const taken = await takeTurnSourceOnTx({
           placement,
@@ -1351,6 +1387,12 @@ export const persistAcceptedMessageWithClaim = async ({
           threadId: turnAcceptance.threadId,
           tx,
         });
+        if (taken !== "taken") {
+          const replayed = await receipted();
+          if (replayed !== undefined) {
+            return Result.err(replayed);
+          }
+        }
         switch (taken) {
           case "taken":
             break;
@@ -1398,6 +1440,17 @@ export const persistAcceptedMessageWithClaim = async ({
         if (execution === null) {
           panic("Newly accepted chat turn lost execution ownership");
         }
+        if (command !== undefined) {
+          await insertChatCommandReceiptOnTx({
+            command,
+            organizationId: turnAcceptance.organizationId,
+            threadId: turnAcceptance.threadId,
+            turnId: execution.id,
+            tx,
+            userId: turnAcceptance.userId,
+            workspaceId: turnAcceptance.workspaceId,
+          });
+        }
         return Result.ok({
           execution,
           superseded: persistenceResult.value.superseded,
@@ -1405,7 +1458,8 @@ export const persistAcceptedMessageWithClaim = async ({
       }),
   );
   if (Result.isError(result)) {
-    return Result.err(result.error);
+    // A receipt id held elsewhere aborts the transaction by throwing.
+    return Result.err(transactionAbortError(result.error));
   }
   if (Result.isError(result.value)) {
     return Result.err(result.value.error);
@@ -1433,15 +1487,19 @@ export const persistAcceptedMessageWithClaim = async ({
  */
 export const persistClaimedReplayMessage = async ({
   claim,
+  command,
   safeDb,
   ...persistenceProps
 }: PersistClaimedReplayMessageProps): Promise<
-  Result<ChatTurnExecution | null, SafeDbError>
+  Result<
+    ChatTurnExecution | null,
+    HandlerError | ChatCommandReplayedError | SafeDbError
+  >
 > => {
   const result = await withClaimedChatTurnExecution({
     claim,
     safeDb,
-    mutate: async ({ pings, tx }) => {
+    mutate: async ({ execution, pings, tx }) => {
       const persistenceResult = await runPersistMessage({
         ...persistenceProps,
         pings,
@@ -1450,13 +1508,39 @@ export const persistClaimedReplayMessage = async ({
       if (Result.isError(persistenceResult)) {
         throw persistenceResult.error;
       }
+      if (command !== undefined) {
+        await insertChatCommandReceiptOnTx({
+          command,
+          organizationId: claim.organizationId,
+          threadId: claim.threadId,
+          turnId: execution.id,
+          tx,
+          userId: claim.userId,
+          workspaceId: claim.workspaceId,
+        });
+      }
     },
   });
   if (Result.isError(result)) {
-    return Result.err(result.error);
+    return Result.err(transactionAbortError(result.error));
   }
   if (result.value === null) {
-    return Result.ok(null);
+    // The turn no longer waits: when this answer's own first attempt took
+    // it, its receipt says so.
+    if (command === undefined) {
+      return Result.ok(null);
+    }
+    const receipted = await readChatCommandReceiptOutcome({
+      command,
+      safeDb,
+      threadId: claim.threadId,
+    });
+    if (Result.isError(receipted)) {
+      return Result.err(receipted.error);
+    }
+    return receipted.value === undefined
+      ? Result.ok(null)
+      : Result.err(receipted.value);
   }
   detached(
     async () =>

@@ -298,7 +298,7 @@ const chatTurnScopeCheck = sql`(
 // Queue rows mirror the turn rows' ownership columns and prove they match
 // the owning thread, with the thread's embedded-data scope, as turns do.
 const chatQueueScopeCheck = (
-  table: "chat_queued_messages" | "chat_queue_holds",
+  table: "chat_queued_messages" | "chat_queue_holds" | "chat_command_receipts",
 ) => sql`(
   ${userCheck} AND
   ${organizationCheck} AND
@@ -1900,6 +1900,27 @@ export const chatQueueHoldPolicies = () => [
     for: "delete",
     to: stella,
     using: queueHoldScopeCheck,
+  }),
+];
+
+const commandReceiptScopeCheck = chatQueueScopeCheck("chat_command_receipts");
+
+/** A receipt is written once and never changed, so it has no update policy. */
+export const chatCommandReceiptPolicies = () => [
+  p.pgPolicy("chat_command_receipt_select", {
+    for: "select",
+    to: stella,
+    using: commandReceiptScopeCheck,
+  }),
+  p.pgPolicy("chat_command_receipt_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: commandReceiptScopeCheck,
+  }),
+  p.pgPolicy("chat_command_receipt_delete", {
+    for: "delete",
+    to: stella,
+    using: commandReceiptScopeCheck,
   }),
 ];
 
