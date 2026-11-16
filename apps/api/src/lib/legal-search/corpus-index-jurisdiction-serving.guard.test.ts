@@ -52,14 +52,12 @@ test("the modules that resolve an index for a read are the pointer's and the dec
   ]);
   // The serving generation of a family, read without the pointer: the store
   // that applies the pointer, the operator tools, and legislation, which has
-  // no pointer. The generation parity report compares whole generations and
-  // refuses a family that has a pointer (`corpus-index-flip-parity.ts`).
+  // no pointer.
   expect(modulesMatching(/\breadServingCorpusIndexGenerationTx\b/u)).toEqual([
     "handlers/legislation/search.ts",
     "lib/legal-search/case-law-serving-flip.ts",
     "lib/legal-search/corpus-index-generation-store.ts",
     "lib/legal-search/corpus-index-group-enrollment-store.ts",
-    "scripts/corpus-generation.ts",
     "scripts/corpus-snippet-compare.ts",
   ]);
   // The generations readers are served from, pointer applied: the read path's

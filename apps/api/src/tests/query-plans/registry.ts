@@ -114,13 +114,13 @@ type QueryPlanEntry = {
   };
 };
 
+/** A generation a flip could move the seeded one's readers to. */
+const FLIP_CANDIDATE_GENERATION = "case_law_v10";
+
 /**
  * A read that resolves a decision's language versions probes that one group,
  * a handful of rows per decision on the page, off the covering group index.
  */
-/** A generation a flip could move the seeded one's readers to. */
-const FLIP_CANDIDATE_GENERATION = "case_law_v10";
-
 const LANGUAGE_GROUP_HEAP_FETCHES = {
   type: "heapFetchBudget",
   rows: 1000,

@@ -6,7 +6,7 @@ import { panic, Result, TaggedError } from "better-result";
  *   bun run src/scripts/corpus-generation.ts status
  *   bun run src/scripts/corpus-generation.ts register --family case_law --generation case_law_v7 [--apply]
  *   bun run src/scripts/corpus-generation.ts serve --family case_law --generation case_law_v7 [--apply]
- *   bun run src/scripts/corpus-generation.ts parity --family case_law --generation case_law_v10 [--exempt-minutes 20] [--coverage]
+ *   bun run src/scripts/corpus-generation.ts parity --family case_law --generation case_law_v10 [--exempt-minutes 20] [--coverage-pages 2000] [--coverage-from <index>:<entity|start>] [--list]
  *
  * `serve` is the primary path; generations are normally registered by the
  * projection coordinator, and `register` covers an environment that has none.
@@ -54,18 +54,14 @@ import {
   readCorpusIndexSearchBaseUrl,
 } from "@/api/lib/legal-search/corpus-index-client";
 import {
-  type CorpusIndexFlipPair,
+  type CorpusIndexFlipCoverageCursor,
   type CorpusIndexFlipPairRefusedError,
+  type CorpusIndexFlipParity,
   type CorpusIndexFlipParityReadError,
-  type CorpusIndexFlipRegressionReading,
-  readCorpusIndexFlipCoveragePageTx,
-  readCorpusIndexFlipRegressionsTx,
-  readCorpusIndexFlipWatermarkTx,
+  readCorpusIndexFlipParity,
 } from "@/api/lib/legal-search/corpus-index-flip-parity";
 import {
-  type CorpusServingGenerationAbsentError,
   lockCorpusIndexGenerationActivationTx,
-  readServingCorpusIndexGenerationTx,
   registerCorpusIndexGenerationTx,
   setServingCorpusIndexGenerationTx,
 } from "@/api/lib/legal-search/corpus-index-generation-store";
@@ -112,6 +108,10 @@ const PARITY_DEFAULT_EXEMPT_MINUTES = 20;
 const PARITY_MAX_EXEMPT_MINUTES = 1440;
 /** Serving copies one coverage transaction reads. */
 const PARITY_COVERAGE_PAGE = 1000;
+/** Coverage pages one run reads by default: two million serving copies. */
+const PARITY_DEFAULT_COVERAGE_PAGES = 2000;
+/** The most coverage pages one run may be asked for. */
+const PARITY_MAX_COVERAGE_PAGES = 20_000;
 
 const USAGE = `Usage: bun run src/scripts/corpus-generation.ts <command> [options]
 
@@ -132,8 +132,14 @@ Options (register, serve, parity):
 Options (parity):
   --exempt-minutes <n>   Serving applies newer than this many minutes are the
                          candidate's expected lag (default ${String(PARITY_DEFAULT_EXEMPT_MINUTES)}).
-  --coverage             Also walk every serving copy for decisions the
-                         generation has no state for; reads the whole family.
+  --coverage-pages <n>   Coverage pages of ${String(PARITY_COVERAGE_PAGE)} serving copies to read
+                         (default ${String(PARITY_DEFAULT_COVERAGE_PAGES)}, at most ${String(PARITY_MAX_COVERAGE_PAGES)}); a walk
+                         that does not reach the end leaves the verdict undecided.
+  --coverage-from <i:e>  Resume a walk at serving index i after entity e (or
+                         "start"); a resumed walk never proves the verdict.
+  --list                 Also print up to 50 decisions of each kind by id.
+
+Exit codes (parity): 0 no regression, 3 regressions, 4 undecided, 1 refused.
 `;
 
 /** Rows `status` and the planners read; the registry holds a handful per family. */
@@ -208,9 +214,7 @@ type LaunchRefusal =
   | CorpusGenerationCensusUnreadableError;
 
 type ParityRefusal =
-  | CorpusServingGenerationAbsentError
-  | CorpusIndexFlipPairRefusedError
-  | CorpusIndexFlipParityReadError;
+  CorpusIndexFlipPairRefusedError | CorpusIndexFlipParityReadError;
 
 type CorpusGenerationRefusal =
   | CorpusGenerationUsageError
@@ -236,7 +240,9 @@ type CorpusGenerationCommand =
       type: "parity";
       target: DeclaredTarget;
       exemptMinutes: number;
-      coverage: boolean;
+      coveragePages: number;
+      coverageFrom: CorpusIndexFlipCoverageCursor | null;
+      listDecisions: boolean;
     };
 
 type GenerationRow = Pick<
@@ -296,7 +302,9 @@ const parseCorpusGenerationCommand = (
           apply: { type: "boolean" },
           "dry-run": { type: "boolean" },
           "exempt-minutes": { type: "string" },
-          coverage: { type: "boolean" },
+          "coverage-pages": { type: "string" },
+          "coverage-from": { type: "string" },
+          list: { type: "boolean" },
         },
       }),
     catch: (cause) =>
@@ -320,7 +328,10 @@ const parseCorpusGenerationCommand = (
     return usageError("--apply and --dry-run contradict each other; pass one.");
   }
   const parityOptions =
-    values["exempt-minutes"] !== undefined || values.coverage === true;
+    values["exempt-minutes"] !== undefined ||
+    values["coverage-pages"] !== undefined ||
+    values["coverage-from"] !== undefined ||
+    values.list === true;
   if (name === "status") {
     return values.family === undefined &&
       values.generation === undefined &&
@@ -330,7 +341,9 @@ const parseCorpusGenerationCommand = (
       : usageError("status takes no options.");
   }
   if (name !== "parity" && parityOptions) {
-    return usageError("--exempt-minutes and --coverage belong to parity.");
+    return usageError(
+      "--exempt-minutes, --coverage-pages, --coverage-from and --list belong to parity.",
+    );
   }
   if (
     name === "parity" &&
@@ -356,17 +369,40 @@ const parseCorpusGenerationCommand = (
     case "serve":
       return Result.ok({ type: "serve", target: target.value, mode });
     case "parity": {
-      const exemptMinutes = parseExemptMinutes(values["exempt-minutes"]);
-      return exemptMinutes === null
-        ? usageError(
-            `--exempt-minutes must be a whole number from 0 to ${String(PARITY_MAX_EXEMPT_MINUTES)}.`,
-          )
-        : Result.ok({
-            type: "parity",
-            target: target.value,
-            exemptMinutes,
-            coverage: values.coverage === true,
-          });
+      const exemptMinutes = parseWholeNumber(
+        values["exempt-minutes"],
+        PARITY_DEFAULT_EXEMPT_MINUTES,
+        PARITY_MAX_EXEMPT_MINUTES,
+      );
+      if (exemptMinutes === null) {
+        return usageError(
+          `--exempt-minutes must be a whole number from 0 to ${String(PARITY_MAX_EXEMPT_MINUTES)}.`,
+        );
+      }
+      const coveragePages = parseWholeNumber(
+        values["coverage-pages"],
+        PARITY_DEFAULT_COVERAGE_PAGES,
+        PARITY_MAX_COVERAGE_PAGES,
+      );
+      if (coveragePages === null) {
+        return usageError(
+          `--coverage-pages must be a whole number from 0 to ${String(PARITY_MAX_COVERAGE_PAGES)}.`,
+        );
+      }
+      const coverageFrom = parseCoverageCursor(values["coverage-from"]);
+      if (coverageFrom === "malformed") {
+        return usageError(
+          "--coverage-from must be <serving index>:<entity id> or <serving index>:start.",
+        );
+      }
+      return Result.ok({
+        type: "parity",
+        target: target.value,
+        exemptMinutes,
+        coveragePages,
+        coverageFrom,
+        listDecisions: values.list === true,
+      });
     }
     default:
       name satisfies never;
@@ -374,17 +410,39 @@ const parseCorpusGenerationCommand = (
   }
 };
 
-const WHOLE_NUMBER = /^\d{1,4}$/u;
+const WHOLE_NUMBER = /^\d{1,5}$/u;
 
-const parseExemptMinutes = (raw: string | undefined): number | null => {
+const parseWholeNumber = (
+  raw: string | undefined,
+  fallback: number,
+  max: number,
+): number | null => {
   if (raw === undefined) {
-    return PARITY_DEFAULT_EXEMPT_MINUTES;
+    return fallback;
   }
   if (!WHOLE_NUMBER.test(raw)) {
     return null;
   }
-  const minutes = Number(raw);
-  return minutes <= PARITY_MAX_EXEMPT_MINUTES ? minutes : null;
+  const value = Number(raw);
+  return value <= max ? value : null;
+};
+
+const COVERAGE_CURSOR =
+  /^(?<index>[a-z0-9_]+):(?<after>start|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/u;
+
+const parseCoverageCursor = (
+  raw: string | undefined,
+): CorpusIndexFlipCoverageCursor | null | "malformed" => {
+  if (raw === undefined) {
+    return null;
+  }
+  const match = COVERAGE_CURSOR.exec(raw);
+  const index = match?.groups?.["index"];
+  const after = match?.groups?.["after"];
+  if (index === undefined || after === undefined) {
+    return "malformed";
+  }
+  return { servingIndexId: index, after: after === "start" ? null : after };
 };
 
 type RowLock = "none" | "update";
@@ -1050,148 +1108,121 @@ const runServe = async (
   }
 };
 
-const describeReading = (
-  reading: CorpusIndexFlipRegressionReading,
+/** Exit codes of `parity`, so a wrapper can gate on the verdict. */
+const PARITY_EXIT = {
+  noRegression: 0,
+  regressions: 3,
+  undecided: 4,
+} as const;
+
+const describeParity = (
+  parity: CorpusIndexFlipParity,
+  listDecisions: boolean,
 ): string[] => {
-  const { walked } = reading;
-  const total = reading.byRoute.reduce((sum, { count }) => sum + count, 0);
+  const { coverage, regressions, verdict } = parity;
+  const { walked } = regressions;
+  const counts =
+    regressions.type === "exact"
+      ? regressions.byRoute
+      : regressions.lowerBoundByRoute;
+  const total = counts.reduce((sum, { count }) => sum + count, 0);
+  const coverageLine = (() => {
+    switch (coverage.type) {
+      case "complete":
+        return `checked: every serving copy walked (${String(coverage.walked)}); ${String(coverage.missing)} without a candidate state`;
+      case "incomplete":
+        return `not checked in full: ${String(coverage.walked)} serving copies walked, ${String(coverage.missing)} without a candidate state; ${
+          coverage.next === null
+            ? "the walk resumed from a cursor, so it proves nothing"
+            : `resume with --coverage-from ${coverage.next.servingIndexId}:${coverage.next.after ?? "start"}`
+        }`;
+      default:
+        coverage satisfies never;
+        return panic("Unhandled flip coverage");
+    }
+  })();
+  const verdictLine = (() => {
+    switch (verdict.type) {
+      case "no_regression":
+        return "verdict: no regression";
+      case "regressions":
+        return `verdict: regressions remain (${String(verdict.missing)} without a candidate state, ${String(verdict.regressions)} not shown or stale)`;
+      case "undecided":
+        return `verdict: undecided (${verdict.reason}); known so far: ${String(verdict.knownMissing)} without a candidate state, ${String(verdict.knownRegressions)} not shown or stale`;
+      default:
+        verdict satisfies never;
+        return panic("Unhandled flip verdict");
+    }
+  })();
   return [
-    `checked: unconverged states of the candidate walked: ${String(walked.pending)} pending, ${String(walked.blocked)} blocked, ${String(walked.absent)} proven gone, ${String(walked.atRisk)} with a delete in flight`,
-    reading.type === "exact"
-      ? `regressions (exact): ${String(total)}`
-      : `regressions (at least; a walk stopped at its cap, so this proves nothing): ${String(total)}`,
-    ...reading.byRoute.map(
+    `checked: compared with ${parity.pair.serving}, which serves ${parity.pair.family}; pending changes younger than ${parity.watermark.toString()} are expected lag`,
+    coverageLine,
+    `checked: unconverged states of the candidate walked: ${String(walked.pending)} pending, ${String(walked.blocked)} blocked, ${String(walked.absent)} proven gone, ${String(walked.atRisk)} with a delete in flight; ${String(regressions.exempt)} exempt as expected lag`,
+    regressions.type === "exact"
+      ? `not shown or stale (exact): ${String(total)}`
+      : `not shown or stale (at least; a walk stopped at its cap, so this proves nothing): ${String(total)}`,
+    ...counts.map(
       ({ route, kind, count }) =>
         `  ${route ?? "(no route)"} ${kind} ${String(count)}`,
     ),
-    ...reading.sample.map(
-      ({ entityId, route, kind, servingEpoch, candidateEpoch }) =>
-        `  e.g. ${entityId} ${route ?? "(no route)"} ${kind}: serving epoch ${String(servingEpoch)}, candidate epoch ${candidateEpoch === null ? "none" : String(candidateEpoch)}`,
-    ),
+    ...(listDecisions
+      ? [
+          ...coverage.sample.map((entityId) => `  no state: ${entityId}`),
+          ...regressions.sample.map(
+            ({ entityId, route, kind, servingEpoch, candidateEpoch }) =>
+              `  ${kind}: ${entityId} ${route ?? "(no route)"}, serving epoch ${String(servingEpoch)}, candidate epoch ${candidateEpoch === null ? "none" : String(candidateEpoch)}`,
+          ),
+        ]
+      : []),
+    verdictLine,
   ];
 };
 
-/** One coverage page in its own short read-only transaction. */
-const readParityCoveragePage = async (
-  withDatabase: WithCorpusDatabase,
-  pair: CorpusIndexFlipPair,
-  servingIndexId: string,
-  after: string | null,
-) => {
-  const page = await withDatabase(
-    ACCESS.read,
-    async (rootDb) =>
-      await withAggregateTransaction(
-        rootDb,
-        async (tx) =>
-          await readCorpusIndexFlipCoveragePageTx(tx, {
-            pair,
-            servingIndexId,
-            after,
-            limit: PARITY_COVERAGE_PAGE,
-          }),
-      ),
-  );
-  return page.isErr() ? Result.err(page.error) : page.value;
+const parityExitCode = ({ verdict }: CorpusIndexFlipParity): number => {
+  switch (verdict.type) {
+    case "no_regression":
+      return PARITY_EXIT.noRegression;
+    case "regressions":
+      return PARITY_EXIT.regressions;
+    case "undecided":
+      return PARITY_EXIT.undecided;
+    default:
+      verdict satisfies never;
+      return panic("Unhandled flip verdict");
+  }
 };
 
 /**
- * Walk every serving copy for decisions the candidate holds no state for,
- * one short read-only transaction per page, index by index.
+ * Read-only: the coverage walk and the regression statement, in the order the
+ * library owns, on one read-only session with a short transaction per page.
+ * Resolves with the exit code its verdict maps to.
  */
-const runParityCoverage = async (
-  { withDatabase, write }: CommandContext,
-  pair: CorpusIndexFlipPair,
-): Promise<Result<number, ParityRefusal | CorpusGenerationLaneBusyError>> => {
-  const indexIds = await withDatabase(
-    ACCESS.read,
-    async (rootDb) =>
-      await withAggregateTransaction(
-        rootDb,
-        async (tx) =>
-          await readCorpusProjectionCensusIndexIdsTx(tx, {
-            family: pair.family,
-            generation: pair.serving,
-          }),
-      ),
-  );
-  if (indexIds.isErr()) {
-    return Result.err(indexIds.error);
-  }
-  let missingTotal = 0;
-  for (const servingIndexId of indexIds.value) {
-    let after: string | null = null;
-    let walked = 0;
-    let missing = 0;
-    for (;;) {
-      // db-await-in-loop: a keyset walk; each page's cursor comes from the one before it
-      const page = await readParityCoveragePage(
-        withDatabase,
-        pair,
-        servingIndexId,
-        after,
-      );
-      if (page.isErr()) {
-        return Result.err(page.error);
-      }
-      walked += page.value.walked;
-      missing += page.value.missing.length;
-      for (const { entityId, servingEpoch } of page.value.missing) {
-        write(
-          `  no state: ${entityId} (serving epoch ${String(servingEpoch)})`,
-        );
-      }
-      if (page.value.next === null) {
-        break;
-      }
-      after = page.value.next;
-    }
-    write(
-      `checked: ${servingIndexId}: ${String(walked)} serving copies, ${String(missing)} without a candidate state`,
-    );
-    missingTotal += missing;
-  }
-  return Result.ok(missingTotal);
-};
-
 const runParity = async (
-  context: CommandContext,
+  { withDatabase, write }: CommandContext,
   {
     target,
     exemptMinutes,
-    coverage,
+    coveragePages,
+    coverageFrom,
+    listDecisions,
   }: Extract<CorpusGenerationCommand, { type: "parity" }>,
-): Promise<Result<void, CorpusGenerationRefusal>> => {
-  const { withDatabase, write } = context;
+): Promise<Result<number, CorpusGenerationRefusal>> => {
   write(`parity ${target.family}/${target.generation} (read only)`);
   write(declaredLine(target));
   const read = await withDatabase(
     ACCESS.read,
     async (rootDb) =>
-      await withAggregateTransaction(rootDb, async (tx) => {
-        const serving = await readServingCorpusIndexGenerationTx(
-          tx,
-          target.family,
-        );
-        if (serving.isErr()) {
-          return Result.err(serving.error);
-        }
-        const pair = {
-          family: target.family,
-          serving: serving.value.generation,
-          candidate: target.generation,
-        } satisfies CorpusIndexFlipPair;
-        const watermark = await readCorpusIndexFlipWatermarkTx(
-          tx,
-          exemptMinutes,
-        );
-        const reading = await readCorpusIndexFlipRegressionsTx(tx, {
-          pair,
-          watermark,
-        });
-        return reading.isErr()
-          ? Result.err(reading.error)
-          : Result.ok({ pair, watermark, reading: reading.value });
+      await readCorpusIndexFlipParity({
+        runInTransaction: async (work) =>
+          await withAggregateTransaction(rootDb, work),
+        family: target.family,
+        candidate: target.generation,
+        exemptMinutes,
+        coverage: {
+          pageSize: PARITY_COVERAGE_PAGE,
+          pageBudget: coveragePages,
+          resumeFrom: coverageFrom,
+        },
       }),
   );
   if (read.isErr()) {
@@ -1200,34 +1231,10 @@ const runParity = async (
   if (read.value.isErr()) {
     return Result.err(read.value.error);
   }
-  const { pair, watermark, reading } = read.value.value;
-  write(
-    `checked: compared with ${pair.serving}, which serves ${pair.family}; its applies after ${watermark.toString()} are exempt`,
-  );
-  for (const line of describeReading(reading)) {
+  for (const line of describeParity(read.value.value, listDecisions)) {
     write(line);
   }
-  const regressions = reading.byRoute.reduce(
-    (sum, { count }) => sum + count,
-    0,
-  );
-  if (!coverage) {
-    write(
-      "not checked: decisions with no candidate state at all; pass --coverage to walk them",
-    );
-    write(
-      `verdict: ${reading.type === "exact" && regressions === 0 ? "no regression among existing candidate states" : "regressions remain"}`,
-    );
-    return Result.ok();
-  }
-  const missing = await runParityCoverage(context, pair);
-  if (missing.isErr()) {
-    return Result.err(missing.error);
-  }
-  write(
-    `verdict: ${reading.type === "exact" && regressions === 0 && missing.value === 0 ? "no regression" : "regressions remain"}`,
-  );
-  return Result.ok();
+  return Result.ok(parityExitCode(read.value.value));
 };
 
 type RunCorpusGenerationOptions = {
@@ -1285,7 +1292,7 @@ export const runCorpusGenerationCommand = async ({
     writeError(`refused (${outcome.error._tag}): ${outcome.error.message}`);
     return 1;
   }
-  return 0;
+  return outcome.value ?? 0;
 };
 
 if (import.meta.main) {

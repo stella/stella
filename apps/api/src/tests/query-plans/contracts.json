@@ -1073,19 +1073,19 @@
         "index": "corpus_index_projection_states_applied_census_idx"
       },
       {
-        "position": "root/3/0/0/0/0/1/0/0",
+        "position": "root/1/0/0/1/0/0",
         "relation": "corpus_index_projection_states",
         "nodeType": "Index Scan",
         "index": "corpus_index_projection_states_pkey"
       },
       {
-        "position": "root/3/0/0/0/1/0/0",
+        "position": "root/1/0/1/0/0",
         "relation": "corpus_index_projection_intents",
         "nodeType": "Index Scan",
         "index": "corpus_index_projection_intents_identity_uidx"
       },
       {
-        "position": "root/3/0/0/1/0",
+        "position": "root/1/1/0",
         "relation": "corpus_index_projection_states",
         "nodeType": "Index Only Scan",
         "index": "corpus_index_projection_states_pkey"

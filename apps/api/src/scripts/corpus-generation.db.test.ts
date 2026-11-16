@@ -867,35 +867,96 @@ describe("corpus generation operator command", () => {
     });
     const before = await registryRows();
 
+    // Both decisions have been served for months: neither is new enough to
+    // be the candidate's expected lag.
+    await db
+      .update(corpusIndexProjectionStates)
+      .set({ createdAt: NOW })
+      .where(eq(corpusIndexProjectionStates.generation, "case_law_v7"));
     const report = await run({
-      args: caseLaw("parity", "case_law_v10", "--coverage"),
+      args: caseLaw("parity", "case_law_v10", "--list"),
     });
     expect(report.err).toBe("");
-    expect(report.code).toBe(0);
+    // Regressions remain: a distinct exit code a wrapper can gate on.
+    expect(report.code).toBe(3);
     expect(report.out).toContain(
       "checked: compared with case_law_v7, which serves case_law",
     );
-    expect(report.out).toContain("regressions (exact): 1");
+    expect(report.out).toContain(
+      "checked: every serving copy walked (2); 1 without a candidate state",
+    );
+    expect(report.out).toContain("not shown or stale (exact): 1");
     expect(report.out).toContain("  case_law_v10_cze not_shown 1");
     expect(report.out).toContain(
-      `  e.g. ${PROJECTED_ENTITY_ID} case_law_v10_cze not_shown: serving epoch 1, candidate epoch none`,
+      `  not_shown: ${PROJECTED_ENTITY_ID} case_law_v10_cze, serving epoch 1, candidate epoch none`,
     );
+    expect(report.out).toContain(`  no state: ${PENDING_ENTITY_ID}`);
     expect(report.out).toContain(
-      `  no state: ${PENDING_ENTITY_ID} (serving epoch 1)`,
+      "verdict: regressions remain (1 without a candidate state, 1 not shown or stale)",
     );
-    expect(report.out).toContain(
-      "checked: case_law_v7_cs_sk: 2 serving copies, 1 without a candidate state",
-    );
-    expect(report.out).toContain("verdict: regressions remain");
     expect(await registryRows()).toEqual(before);
     expect(await auditCounts()).toEqual([]);
 
-    // Without the walk the report says what it did not check.
-    const quick = await run({ args: caseLaw("parity", "case_law_v10") });
-    expect(quick.code).toBe(0);
-    expect(quick.out).toContain(
-      "not checked: decisions with no candidate state at all",
+    // Without --list no decision is printed by id.
+    const summary = await run({ args: caseLaw("parity", "case_law_v10") });
+    expect(summary.code).toBe(3);
+    expect(summary.out).not.toContain(PENDING_ENTITY_ID);
+
+    // Once the candidate holds and shows both decisions, the verdict is proven.
+    await db
+      .delete(corpusIndexProjectionStates)
+      .where(eq(corpusIndexProjectionStates.generation, "case_law_v10"));
+    for (const [entityId, revision] of [
+      [PROJECTED_ENTITY_ID, "0198e331-e578-7000-8000-000000000710"],
+      [PENDING_ENTITY_ID, "0198e331-e578-7000-8000-000000000711"],
+    ] as const) {
+      const id = toSafeId<"corpusIndexProjectionIntent">(revision);
+      // db-await-in-loop: two decisions of the fixture
+      await db.insert(corpusIndexProjectionIntents).values({
+        id,
+        family: "case_law",
+        generation: "case_law_v10",
+        entityId,
+        epoch: 1n,
+        fingerprint: FINGERPRINT,
+        indexId: "case_law_v10_cze",
+        status: "applied",
+        appendStartedAt: NOW,
+        appendCommittedAt: NOW,
+        expectedDocumentCount: 1,
+        appliedAt: NOW,
+      });
+      // db-await-in-loop: as above
+      await db.insert(corpusIndexProjectionStates).values({
+        family: "case_law",
+        generation: "case_law_v10",
+        entityId,
+        desiredAction: "upsert",
+        desiredEpoch: 1n,
+        desiredFingerprint: FINGERPRINT,
+        desiredIndexId: "case_law_v10_cze",
+        appliedAction: "upsert",
+        appliedEpoch: 1n,
+        appliedRevision: id,
+        appliedFingerprint: FINGERPRINT,
+        appliedIndexId: "case_law_v10_cze",
+        appliedAt: NOW,
+      });
+    }
+    const proven = await run({ args: caseLaw("parity", "case_law_v10") });
+    expect(proven.out).toContain("verdict: no regression");
+    expect(proven.code).toBe(0);
+
+    // The same family, with a walk that may not read every copy, decides
+    // nothing: an empty reading is not a proof.
+    const budgeted = await run({
+      args: caseLaw("parity", "case_law_v10", "--coverage-pages", "0"),
+    });
+    expect(budgeted.out).toContain(
+      "resume with --coverage-from case_law_v7_cs_sk:start",
     );
+    expect(budgeted.out).toContain("verdict: undecided (coverage_incomplete)");
+    expect(budgeted.code).toBe(4);
   });
 
   test("parity is refused for a family nothing serves, or for the serving generation itself", async () => {
@@ -910,9 +971,8 @@ describe("corpus generation operator command", () => {
     });
     const absent = await run({ args: caseLaw("parity", "case_law_v10") });
     expect(absent.code).toBe(1);
-    expect(absent.err).toContain(
-      "refused (CorpusServingGenerationAbsentError)",
-    );
+    expect(absent.err).toContain("refused (CorpusIndexFlipPairRefusedError)");
+    expect(absent.err).toContain("No generation serves case_law");
 
     await db
       .update(corpusIndexGenerations)
@@ -931,11 +991,13 @@ describe("corpus generation operator command", () => {
       ["serve", "--family", "statutes", "--generation", "case_law_v7"],
       ["serve", "--family", "case_law"],
       caseLaw("serve", "case_law_v7", "--limit", "1"),
-      caseLaw("serve", "case_law_v7", "--coverage"),
+      caseLaw("serve", "case_law_v7", "--list"),
       caseLaw("parity", "case_law_v10", "--apply"),
       caseLaw("parity", "case_law_v10", "--exempt-minutes", "1441"),
       caseLaw("parity", "case_law_v10", "--exempt-minutes", "-1"),
-      ["status", "--coverage"],
+      caseLaw("parity", "case_law_v10", "--coverage-pages", "20001"),
+      caseLaw("parity", "case_law_v10", "--coverage-from", "case_law_v7_cs_sk"),
+      ["status", "--list"],
     ]) {
       // db-await-in-loop: parsing refuses before any database is opened
       const refused = await run({
