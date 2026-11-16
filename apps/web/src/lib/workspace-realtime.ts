@@ -137,6 +137,26 @@ export const RESOURCE_MUTATION_CONTRACTS = {
     ],
     resources: [RESOURCE_TYPE.USER],
   },
+  addWorkspaceMember: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "PUT",
+        route: "/workspaces/:workspaceId/members",
+      },
+    ],
+    resources: [RESOURCE_TYPE.WORKSPACE],
+  },
+  removeWorkspaceMember: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "DELETE",
+        route: "/workspaces/:workspaceId/members/:userId",
+      },
+    ],
+    resources: [RESOURCE_TYPE.WORKSPACE],
+  },
   // The member's own reminder for when a chat's usage limit resets.
   changeChatLimitReminder: {
     writes: [

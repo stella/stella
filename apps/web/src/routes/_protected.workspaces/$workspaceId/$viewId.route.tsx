@@ -142,7 +142,13 @@ export const Route = createFileRoute(
         return;
       }
 
-      await ensureRouteQueryData(queryClient, overviewOptions(workspaceId));
+      await ensureRouteQueryData(
+        queryClient,
+        overviewOptions({
+          workspaceId,
+          organizationId: context.user.activeOrganizationId,
+        }),
+      );
 
       if (
         !(await isTimeBillingRouteEnabled(queryClient, {

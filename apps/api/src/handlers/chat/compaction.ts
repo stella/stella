@@ -472,7 +472,8 @@ const trimmedModelHistory = (
 };
 
 type CompactChatMessagesOptions = PlanChatCompactionOptions & {
-  onSummaryError?: ((error: HandlerError<500>) => void) | undefined;
+  /** Hears why the history was trimmed instead of summarized. */
+  onSummaryError?: ((error: HandlerError<422 | 500>) => void) | undefined;
   prepareTranscript?:
     | ((transcript: string) => Promise<Result<string, HandlerError<422 | 500>>>)
     | undefined;
@@ -501,6 +502,15 @@ const summaryFailure = ({
   return brand === undefined ? error : classifyFailure(error, brand.reason);
 };
 
+/**
+ * The history a turn carries: its earlier part summarized once it crosses the
+ * trigger. Compaction never fails the turn it serves, on stella or on the
+ * member's computer alike: when the transcript cannot be prepared for the
+ * summarizer, or the summarizer fails, the turn carries the newest history
+ * that fits the trigger (the oldest is cut) and is told so, and the failure
+ * goes to `onSummaryError`. Nothing of the trimmed history crosses a boundary
+ * here; the turn prepares what it sends itself.
+ */
 export const compactChatMessages = async ({
   messages,
   onSummaryError,
@@ -508,12 +518,10 @@ export const compactChatMessages = async ({
   preserveTokens,
   summarizeTranscript,
   triggerTokens = DEFAULT_TRIGGER_TOKENS,
-}: CompactChatMessagesOptions): Promise<
-  Result<CompactedHistory<ChatMessage>, HandlerError<422 | 500>>
-> => {
+}: CompactChatMessagesOptions): Promise<CompactedHistory<ChatMessage>> => {
   const plan = planChatCompaction({ messages, preserveTokens, triggerTokens });
   if (plan.type === "none") {
-    return Result.ok(compacted(messages));
+    return compacted(messages);
   }
 
   const availableParts = messages.map(({ parts }) => parts);
@@ -528,7 +536,8 @@ export const compactChatMessages = async ({
     ? await prepareTranscript(transcript)
     : Result.ok(transcript);
   if (Result.isError(preparedTranscript)) {
-    return Result.err(preparedTranscript.error);
+    onSummaryError?.(preparedTranscript.error);
+    return trimmedChatHistory(messages, triggerTokens);
   }
 
   const summaryResult = await Result.tryPromise({
@@ -538,23 +547,21 @@ export const compactChatMessages = async ({
   });
   if (Result.isError(summaryResult)) {
     onSummaryError?.(summaryResult.error);
-    return Result.ok(trimmedChatHistory(messages, triggerTokens));
+    return trimmedChatHistory(messages, triggerTokens);
   }
 
   const summaryMarkdown = summaryResult.value.trim();
   if (summaryMarkdown.length === 0) {
-    return Result.ok(trimmedChatHistory(messages, triggerTokens));
+    return trimmedChatHistory(messages, triggerTokens);
   }
 
-  return Result.ok(
-    compacted([
-      createCompactionSummaryMessage({
-        summarizedMessageCount: plan.messagesToSummarize.length,
-        summary: summaryMarkdown,
-      }),
-      ...plan.recentMessages,
-    ]),
-  );
+  return compacted([
+    createCompactionSummaryMessage({
+      summarizedMessageCount: plan.messagesToSummarize.length,
+      summary: summaryMarkdown,
+    }),
+    ...plan.recentMessages,
+  ]);
 };
 
 export const compactModelMessages = async ({
@@ -665,7 +672,7 @@ type CompactChatMessagesForModelOptions = PlanChatCompactionOptions & {
   aiAnalytics?: TanStackCompactionAIAnalytics | undefined;
   boundary: ChatThirdPartyBoundary;
   modelId?: string | undefined;
-  onSummaryError?: ((error: HandlerError<500>) => void) | undefined;
+  onSummaryError?: ((error: HandlerError<422 | 500>) => void) | undefined;
   organizationId: SafeId<"organization">;
   admission: ModelDispatchAdmission;
   orgAIConfig: OrgAIConfig | null;
@@ -716,7 +723,7 @@ export const compactChatMessagesForModel = async ({
   tenantWorkspaceIds,
   triggerTokens,
 }: CompactChatMessagesForModelOptions): Promise<
-  Result<CompactedHistory<ChatMessage>, HandlerError<422 | 500>>
+  CompactedHistory<ChatMessage>
 > =>
   await compactChatMessages({
     messages,

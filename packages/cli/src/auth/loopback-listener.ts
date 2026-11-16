@@ -19,6 +19,8 @@ import {
 } from "./constants.js";
 import { LoopbackCallbackError, LoopbackTimeoutError } from "./errors.js";
 import {
+  OUTCOME_FRAGMENT_SLOTS,
+  OUTCOME_PAGE_FRAGMENTS,
   OUTCOME_PAGE_SLOTS,
   OUTCOME_PAGE_TEMPLATES,
 } from "./outcome-page.gen.js";
@@ -37,7 +39,11 @@ export type LoopbackCallback =
  * on the redirect is answered with this, never with success before it.
  */
 export type SignInOutcome =
-  | { readonly kind: "signed_in" }
+  | {
+      readonly kind: "signed_in";
+      /** The signed-in account's email, when the ID token named it. */
+      readonly email?: string;
+    }
   | { readonly kind: "failed"; readonly step: "exchange" | "save" };
 
 export type LoopbackListener = {
@@ -78,10 +84,17 @@ type FailureReason = "redirect" | "exchange" | "save" | "unconfirmed";
 // Only a verified callback carries query text onto the page; every failure
 // page renders fixed text.
 type CallbackPageOptions =
-  | { readonly status: "success"; readonly callback: VerifiedCallback }
+  | {
+      readonly status: "success";
+      readonly callback: VerifiedCallback;
+      readonly email?: string;
+    }
   | { readonly status: "failure"; readonly reason: FailureReason };
 
-const RETRY = `Return to your terminal for details, then run stella auth login to try again.`;
+const CLOSE_TAB_NOTE = "You can close this tab.";
+
+/** The command a failure page offers, set as code under its message. */
+const RETRY_COMMAND = "stella auth login";
 
 const failureText = (
   reason: FailureReason,
@@ -89,22 +102,22 @@ const failureText = (
   switch (reason) {
     case "redirect":
       return {
-        message: `Return to your terminal for details, then try signing in to ${CLIENT_NAME} again.`,
+        message: `${CLIENT_NAME} did not receive a sign-in it could use; your terminal shows why. To try again, run:`,
         title: "Sign-in failed",
       };
     case "exchange":
       return {
-        message: `${CLIENT_NAME} could not finish signing in. ${RETRY}`,
+        message: `${CLIENT_NAME} could not finish signing in; your terminal shows why. To try again, run:`,
         title: "Sign-in failed",
       };
     case "save":
       return {
-        message: `${CLIENT_NAME} could not save your sign-in on this computer. ${RETRY}`,
+        message: `${CLIENT_NAME} could not save your sign-in on this computer; your terminal shows why. To try again, run:`,
         title: "Sign-in not saved",
       };
     case "unconfirmed":
       return {
-        message: `${CLIENT_NAME} did not confirm the sign-in in time. Return to your terminal; if it is not signed in, run stella auth login to try again.`,
+        message: `${CLIENT_NAME} did not confirm the sign-in in time. If your terminal does not show you signed in, run:`,
         title: "Sign-in not confirmed",
       };
     default:
@@ -112,8 +125,6 @@ const failureText = (
       return panic("Unhandled sign-in failure reason");
   }
 };
-
-const CLOSE_TAB_NOTE = "You can close this tab.";
 
 const escapeHtml = (text: string) =>
   text
@@ -131,12 +142,47 @@ const OUTCOME_PAGE_STYLE_HASH = (() => {
   return sha256Base64Url(page.slice(start, page.indexOf("</style>", start)));
 })();
 
-const OUTCOME_SLOT_PATTERN = new RegExp(
-  Object.values(OUTCOME_PAGE_SLOTS)
-    .map((slot) => slot.replaceAll(/[{}]/gu, (brace) => `\\${brace}`))
-    .join("|"),
-  "gu",
-);
+const slotPattern = (slots: Readonly<Record<string, string>>) =>
+  new RegExp(
+    Object.values(slots)
+      .map((slot) => slot.replaceAll(/[{}]/gu, (brace) => `\\${brace}`))
+      .join("|"),
+    "gu",
+  );
+
+const PAGE_SLOT_PATTERN = slotPattern(OUTCOME_PAGE_SLOTS);
+const FRAGMENT_SLOT_PATTERN = slotPattern(OUTCOME_FRAGMENT_SLOTS);
+
+/**
+ * Fills `template` in one pass, so text put into one slot is never read as
+ * another slot. Every value is escaped text or a filled fragment.
+ */
+const fill = (
+  template: string,
+  pattern: RegExp,
+  values: Readonly<Record<string, string>>,
+) => template.replaceAll(pattern, (slot) => values[slot] ?? slot);
+
+/** The facts the success page lists: only what this sign-in already holds. */
+const signedInDetails = (
+  organizationName: string | null,
+  email: string | undefined,
+): string => {
+  const rows = [
+    ...(email ? [["Account", email] as const] : []),
+    ...(organizationName ? [["Organization", organizationName] as const] : []),
+  ].map(([label, value]) =>
+    fill(OUTCOME_PAGE_FRAGMENTS.detailRow, FRAGMENT_SLOT_PATTERN, {
+      [OUTCOME_FRAGMENT_SLOTS.label]: escapeHtml(label),
+      [OUTCOME_FRAGMENT_SLOTS.value]: escapeHtml(value),
+    }),
+  );
+  return rows.length === 0
+    ? ""
+    : fill(OUTCOME_PAGE_FRAGMENTS.details, FRAGMENT_SLOT_PATTERN, {
+        [OUTCOME_FRAGMENT_SLOTS.rows]: rows.join(""),
+      });
+};
 
 /**
  * The outcome page, from the template rendered from `@stll/ui/outcome-screen`
@@ -146,30 +192,42 @@ const OUTCOME_SLOT_PATTERN = new RegExp(
  */
 const renderCallbackPage = (page: CallbackPageOptions) => {
   const ok = page.status === "success";
-  const organizationName = ok ? page.callback.organizationName : null;
   const failure = ok ? null : failureText(page.reason);
-  const title = failure?.title ?? "Signed in to stella";
-  const signedInDescription = organizationName
-    ? `${escapeHtml(CLIENT_NAME)} can now work in <bdi>${escapeHtml(organizationName)}</bdi>. Return to your terminal to continue.`
-    : escapeHtml(`Return to your terminal to continue with ${CLIENT_NAME}.`);
-  const description =
-    failure === null ? signedInDescription : escapeHtml(failure.message);
-  const slots: Record<string, string> = {
-    [OUTCOME_PAGE_SLOTS.lang]: "en",
-    [OUTCOME_PAGE_SLOTS.dir]: "ltr",
-    [OUTCOME_PAGE_SLOTS.title]: escapeHtml(title),
-    [OUTCOME_PAGE_SLOTS.description]: description,
-    [OUTCOME_PAGE_SLOTS.note]: escapeHtml(CLOSE_TAB_NOTE),
-  };
-  // One pass over the template, so text put into one slot is never read as
-  // another slot.
-  const html = OUTCOME_PAGE_TEMPLATES[ok ? "success" : "error"].replaceAll(
-    OUTCOME_SLOT_PATTERN,
-    (slot) => slots[slot] ?? slot,
+  const html = fill(
+    OUTCOME_PAGE_TEMPLATES[ok ? "success" : "error"],
+    PAGE_SLOT_PATTERN,
+    {
+      [OUTCOME_PAGE_SLOTS.lang]: "en",
+      [OUTCOME_PAGE_SLOTS.dir]: "ltr",
+      // A terminal has no colour scheme to pass on; the browser's decides.
+      [OUTCOME_PAGE_SLOTS.theme]: "system",
+      [OUTCOME_PAGE_SLOTS.title]: escapeHtml(
+        failure?.title ?? `${CLIENT_NAME} is signed in`,
+      ),
+      [OUTCOME_PAGE_SLOTS.description]: escapeHtml(
+        failure?.message ?? "Return to your terminal to continue.",
+      ),
+      [OUTCOME_PAGE_SLOTS.details]: ok
+        ? signedInDetails(page.callback.organizationName, page.email)
+        : "",
+      [OUTCOME_PAGE_SLOTS.command]: ok
+        ? ""
+        : fill(OUTCOME_PAGE_FRAGMENTS.command, FRAGMENT_SLOT_PATTERN, {
+            [OUTCOME_FRAGMENT_SLOTS.code]: escapeHtml(RETRY_COMMAND),
+          }),
+      // Once signed in, nothing on the page is left to do; a failure's way
+      // on is the command above.
+      [OUTCOME_PAGE_SLOTS.note]: ok
+        ? fill(OUTCOME_PAGE_FRAGMENTS.note, FRAGMENT_SLOT_PATTERN, {
+            [OUTCOME_FRAGMENT_SLOTS.text]: escapeHtml(CLOSE_TAB_NOTE),
+          })
+        : "",
+    },
   );
 
   return {
-    contentSecurityPolicy: `default-src 'none'; style-src 'sha256-${OUTCOME_PAGE_STYLE_HASH}'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
+    // `img-src data:` admits the inline favicon and nothing else.
+    contentSecurityPolicy: `default-src 'none'; style-src 'sha256-${OUTCOME_PAGE_STYLE_HASH}'; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
     html,
   };
 };
@@ -298,7 +356,11 @@ const sendAnswer = (
       sendCallbackPage(
         held.response,
         200,
-        { callback: held.callback, status: "success" },
+        {
+          callback: held.callback,
+          status: "success",
+          ...(answer.email ? { email: answer.email } : {}),
+        },
         onSent,
       );
       return;

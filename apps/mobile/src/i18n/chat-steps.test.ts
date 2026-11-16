@@ -103,6 +103,7 @@ const WEB_LOCAL_RUN_KEYS = {
   },
   sessionNotResumed: ["chat", "localRun", "sessionNotResumed"],
   steered: ["chat", "tool", "user_message"],
+  ranOnModel: ["chat", "ranOnModel"],
   desktopSettingsSteps: ["chat", "localRun", "desktopSettingsSteps"],
 } as const satisfies WebKeysOf<MobileMessages["chat"]["localRun"]>;
 

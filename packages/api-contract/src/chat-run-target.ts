@@ -1,5 +1,7 @@
 import * as v from "valibot";
 
+import type { CHAT_TRANSPORT_ERROR_CODE } from "@stll/anonymize-chat";
+
 import type { AgentHarness } from "./agent-harness";
 import { apiDateTimeSchema } from "./api-date";
 import {
@@ -396,6 +398,15 @@ export type ChatLocalRunSteerOutcome = v.InferOutput<
 >;
 
 /**
+ * The code an anonymized send refused by the member's computer carries: its
+ * agent reads their matters as they are, so it never runs anonymized.
+ * `@stll/anonymize-chat` owns the code; this is it, bound to the owner's value
+ * at compile time, for a client that reads refusals without that package.
+ */
+export const CHAT_LOCAL_RUN_ANONYMIZED_REFUSAL_CODE =
+  "local_run_anonymized_refusal" satisfies (typeof CHAT_TRANSPORT_ERROR_CODE)["localRunAnonymizedRefusal"];
+
+/**
  * The CUSTOM stream event a turn running on a computer sends while its run
  * waits for the computer to pick it up, once it did, and when that computer
  * goes away mid-turn and is back. The turn stays open while the computer is
@@ -464,6 +475,38 @@ export const chatLocalRunContextSchema = v.strictObject({
 export type ChatLocalRunContext = v.InferOutput<
   typeof chatLocalRunContextSchema
 >;
+
+/**
+ * The run-finished metadata key under which a turn that ran on the member's
+ * computer reports the model it asked for and the one the harness ran it on,
+ * which differ when the provider rerouted the turn (Codex `model/rerouted`,
+ * Claude Code's refusal fallback). The answer keeps both, so it can say it ran
+ * on another model than the one asked for.
+ */
+export const CHAT_LOCAL_RUN_MODEL_METADATA_KEY = "localRunModel";
+
+export const chatLocalRunModelSchema = v.strictObject({
+  requested: localModelSchema,
+  ran: localModelSchema,
+});
+export type ChatLocalRunModel = v.InferOutput<typeof chatLocalRunModelSchema>;
+
+/**
+ * The model an answer ran on when the harness rerouted it away from the one
+ * asked for; `null` when it ran on that one or the answer says nothing valid.
+ */
+export const chatLocalRunReroutedModel = (metadata: unknown): string | null => {
+  if (typeof metadata !== "object" || metadata === null) {
+    return null;
+  }
+  const reported = v.safeParse(
+    chatLocalRunModelSchema,
+    Reflect.get(metadata, CHAT_LOCAL_RUN_MODEL_METADATA_KEY),
+  );
+  return reported.success && reported.output.ran !== reported.output.requested
+    ? reported.output.ran
+    : null;
+};
 
 /**
  * What a turn on a computer tells the chat about the files it handed back, as
