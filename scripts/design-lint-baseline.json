@@ -819,7 +819,6 @@
     "apps/api/src/handlers/uploads/delete.ts": 1,
     "apps/api/src/handlers/uploads/entity-version.ts": 1,
     "apps/api/src/handlers/uploads/update.ts": 3,
-    "apps/api/src/handlers/work-obligations/update.ts": 1,
     "apps/api/src/handlers/workspaces/archive.ts": 1,
     "apps/api/src/handlers/workspaces/correspondence/update.ts": 1,
     "apps/api/src/handlers/workspaces/members/remove.ts": 2,
