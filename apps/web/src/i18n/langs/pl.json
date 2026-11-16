@@ -2172,8 +2172,8 @@
       "placeState": "{place}. {state}",
       "stepsCheck": "Otwieranie stella desktop. Jeśli aplikacja się nie otworzy, otwórz ją na swoim komputerze i sprawdź agenta {harness} w sekcji Ustawienia › Ogólne › Subskrypcje AI.",
       "stepsInstall": "Otwieranie stella desktop. Jeśli aplikacja się nie otworzy, otwórz ją na swoim komputerze i w sekcji Ustawienia › Ogólne wybierz Zainstaluj przy agencie {harness}.",
-      "stepsSignInClaudeCode": "Otwieranie stella desktop. Jeśli aplikacja się nie otworzy, otwórz ją na swoim komputerze i wybierz Ustawienia › Ogólne › Zaloguj się przez Claude.",
-      "stepsSignInCodex": "Otwieranie stella desktop. Jeśli aplikacja się nie otworzy, otwórz ją na swoim komputerze i wybierz Ustawienia › Ogólne › Kontynuuj z ChatGPT.",
+      "stepsSignInClaudeCode": "Otwieranie stella desktop, aby się zalogować. Jeśli aplikacja się nie otworzy, otwórz ją i wybierz Ustawienia › Ogólne › Zaloguj się przez Claude.",
+      "stepsSignInCodex": "Otwieranie stella desktop, aby się zalogować. Jeśli aplikacja się nie otworzy, otwórz ją i wybierz Ustawienia › Ogólne › Kontynuuj z ChatGPT.",
       "yourComputer": "Twój komputer",
       "yourComputerDescription": "Korzysta z Codex lub Claude Code na Twoim komputerze w ramach Twojej własnej subskrypcji. Może odczytywać i zmieniać pliki w folderze tego czatu; uprawnienia określają, co może zrobić bez pytania."
     },

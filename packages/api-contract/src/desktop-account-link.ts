@@ -26,7 +26,9 @@ export const desktopAccountConnectUrl = ({
 
 /**
  * Opens stella desktop's Settings on General at the coding agents' sign-ins
- * and installs: at `harness`'s card, or at all of them when none is named.
+ * and installs: at `harness`'s card, whose sign-in the app then starts when
+ * that agent is installed and signed out, or at all of them (starting
+ * nothing) when none is named.
  * The app accepts exactly these links (`settingsLinks` in the fixtures) and
  * ignores any other, so no free text reaches its window.
  */

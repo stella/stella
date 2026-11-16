@@ -2172,8 +2172,8 @@
       "placeState": "{place}. {state}",
       "stepsCheck": "stella desktop avaneb. Kui see ei avane, ava see oma arvutis ja vaata jaotises Seaded › Üldine › AI-tellimused rida {harness}.",
       "stepsInstall": "stella desktop avaneb. Kui see ei avane, ava see oma arvutis ja vali jaotises Seaded › Üldine rea {harness} juures Installi.",
-      "stepsSignInClaudeCode": "stella desktop avaneb. Kui see ei avane, ava see oma arvutis ja vali Seaded › Üldine › Logi sisse Claude’iga.",
-      "stepsSignInCodex": "stella desktop avaneb. Kui see ei avane, ava see oma arvutis ja vali Seaded › Üldine › Jätka ChatGPT-ga.",
+      "stepsSignInClaudeCode": "stella desktop avaneb sisselogimiseks. Kui see ei avane, ava see ja vali Seaded › Üldine › Logi sisse Claude’iga.",
+      "stepsSignInCodex": "stella desktop avaneb sisselogimiseks. Kui see ei avane, ava see ja vali Seaded › Üldine › Jätka ChatGPT-ga.",
       "yourComputer": "Sinu arvuti",
       "yourComputerDescription": "Kasutab sinu arvutis Codexit või Claude Code'i sinu enda tellimusega. See saab lugeda ja muuta selle vestluse kausta faile; õigused määravad, mida see tohib küsimata teha."
     },

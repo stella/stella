@@ -16,6 +16,7 @@ GlobalRegistrator.register({ url: "http://localhost/" });
 
 const { act, cleanup, fireEvent, render, waitFor } =
   await import("@testing-library/react");
+const { useState } = await import("react");
 const { clearMocks, mockIPC } = await import("@tauri-apps/api/mocks");
 const { emit } = await import("@tauri-apps/api/event");
 const { DesktopIntlProvider, defaultMessages } = await import("../src/i18n");
@@ -47,15 +48,43 @@ const message = (template: string, values: Record<string, string>) =>
 
 type Call = { command: string; args: unknown };
 
+const LINK_FOCUSES = [
+  "agents",
+  "codex",
+  "claude-code",
+] as const satisfies readonly AgentSettingsFocus[];
+
+/** What the native side reports, read again on every status request. */
+type NativeSide = {
+  harnesses: () => unknown;
+  chatGpt?: () => unknown;
+  claudeCode?: () => unknown;
+  /** Runs when a sign-in is started. */
+  onStart?: (command: string) => void;
+};
+
+const SIGNED_OUT_CHATGPT = {
+  state: "signed_out",
+  sessionStored: false,
+  accounts: [],
+};
+
 /**
- * Renders the section over a native side whose harness status is
- * `harnesses()`, read again on every status request, with both
- * subscriptions signed out, and `focus` requested by a settings link.
+ * Renders the section over `native`, with ChatGPT signed out and Claude Code
+ * not installed unless it says otherwise, and `focus` requested by a
+ * settings link. The page clears a request once it is shown, as App does;
+ * `sendLink` requests another.
  */
 const renderSection = (
-  harnesses: () => unknown,
+  native: NativeSide | (() => unknown),
   focus: AgentSettingsFocus | null = null,
 ) => {
+  const {
+    harnesses,
+    chatGpt = () => SIGNED_OUT_CHATGPT,
+    claudeCode = () => ({ state: "not_installed" }),
+    onStart,
+  } = typeof native === "function" ? { harnesses: native } : native;
   const shown: AgentSettingsFocus[] = [];
   const calls: Call[] = [];
   mockIPC(
@@ -63,10 +92,10 @@ const renderSection = (
       calls.push({ command, args });
       switch (command) {
         case "chatgpt_auth_get_status": {
-          return { state: "signed_out", sessionStored: false, accounts: [] };
+          return chatGpt();
         }
         case "claude_code_auth_get_status": {
-          return { state: "not_installed" };
+          return claudeCode();
         }
         case "harness_get_status": {
           const value = harnesses();
@@ -75,6 +104,11 @@ const renderSection = (
           }
           return value;
         }
+        case "chatgpt_auth_start":
+        case "claude_code_auth_start": {
+          onStart?.(command);
+          return null;
+        }
         default: {
           return null;
         }
@@ -82,20 +116,56 @@ const renderSection = (
     },
     { shouldMockEvents: true },
   );
+  // A link arriving again is a click on one of these, outside the section.
+  const Page = () => {
+    const [requested, setRequested] = useState(focus);
+    return (
+      <>
+        {LINK_FOCUSES.map((link) => (
+          <button
+            key={link}
+            onClick={() => {
+              setRequested(link);
+            }}
+            type="button"
+          >
+            {`link ${link}`}
+          </button>
+        ))}
+        <AgentSubscriptionsSection
+          focus={requested}
+          onFocusShown={() => {
+            if (requested !== null) {
+              shown.push(requested);
+            }
+            setRequested(null);
+          }}
+          renderGroup={(content) => <section>{content}</section>}
+        />
+      </>
+    );
+  };
   const view = render(
     <DesktopIntlProvider language="en" messages={defaultMessages}>
-      <AgentSubscriptionsSection
-        focus={focus}
-        onFocusShown={() => {
-          if (focus !== null) {
-            shown.push(focus);
-          }
-        }}
-        renderGroup={(content) => <section>{content}</section>}
-      />
+      <Page />
     </DesktopIntlProvider>,
   );
-  return { ...view, calls, shown };
+  const sendLink = async (next: AgentSettingsFocus) => {
+    fireEvent.click(view.getByRole("button", { name: `link ${next}` }));
+    await act(async () => {
+      await drainReactScheduler();
+    });
+  };
+  /** The sign-ins started so far, by command. */
+  const starts = () =>
+    calls
+      .filter(
+        ({ command }) =>
+          command === "chatgpt_auth_start" ||
+          command === "claude_code_auth_start",
+      )
+      .map(({ command, args }) => ({ command, args }));
+  return { ...view, calls, shown, sendLink, starts };
 };
 
 const statuses = (
@@ -252,7 +322,7 @@ test.each([
 );
 
 test("a settings link's agent card is brought into view, focused and marked once it shows", async () => {
-  const { findByText, shown } = renderSection(
+  const { findByText, shown, starts } = renderSection(
     () => statuses({ state: "not_installed" }, { state: "not_installed" }),
     "claude-code",
   );
@@ -270,4 +340,131 @@ test("a settings link's agent card is brought into view, focused and marked once
   expect(codex?.dataset["agentSettings"]).toBe("codex");
   expect(codex?.dataset["highlighted"]).toBeUndefined();
   expect(shown).toEqual(["claude-code"]);
+  // Nothing to sign in to before Claude Code is installed.
+  expect(starts()).toEqual([]);
 });
+
+const NOT_INSTALLED = () =>
+  statuses({ state: "not_installed" }, { state: "not_installed" });
+
+/** Waits until the link's card was shown, and every effect has run. */
+const settled = async (shown: AgentSettingsFocus[], count = 1) => {
+  await waitFor(() => {
+    expect(shown).toHaveLength(count);
+  });
+  await act(async () => {
+    await drainReactScheduler();
+  });
+};
+
+test("a link to a signed-out ChatGPT starts its sign-in once, and a repeated link while it runs starts nothing", async () => {
+  let chatGpt: unknown = SIGNED_OUT_CHATGPT;
+  const { shown, sendLink, starts } = renderSection(
+    {
+      harnesses: NOT_INSTALLED,
+      chatGpt: () => chatGpt,
+      onStart: () => {
+        chatGpt = { state: "signing_in", sessionStored: false, accounts: [] };
+      },
+    },
+    "codex",
+  );
+  await settled(shown);
+  expect(starts()).toEqual([
+    {
+      command: "chatgpt_auth_start",
+      args: { account: null, newAccount: false },
+    },
+  ]);
+
+  await waitFor(() => {
+    expect(
+      document.body.textContent.includes(
+        defaultMessages.agentSubscriptions.signingIn,
+      ),
+    ).toBe(true);
+  });
+  await sendLink("codex");
+  await settled(shown, 2);
+  expect(starts()).toHaveLength(1);
+});
+
+test("a link to ChatGPT continues as the one account the card offers", async () => {
+  const { shown, starts } = renderSection(
+    {
+      harnesses: NOT_INSTALLED,
+      chatGpt: () => ({
+        state: "needs_reconnect",
+        email: null,
+        sessionStored: true,
+        accounts: [{ id: "account-1", email: "lawyer@example.test" }],
+      }),
+    },
+    "codex",
+  );
+  await settled(shown);
+  expect(starts()).toEqual([
+    {
+      command: "chatgpt_auth_start",
+      args: { account: "account-1", newAccount: false },
+    },
+  ]);
+});
+
+test.each([
+  [
+    "connected",
+    {
+      state: "connected",
+      email: null,
+      plan: null,
+      sessionStored: true,
+      accounts: [],
+    },
+  ],
+  ["signing in", { state: "signing_in", sessionStored: false, accounts: [] }],
+])(
+  "a link to ChatGPT while it is %s only brings the card into view",
+  async (_label, chatGpt) => {
+    const { shown, starts } = renderSection(
+      { harnesses: NOT_INSTALLED, chatGpt: () => chatGpt },
+      "codex",
+    );
+    await settled(shown);
+    expect(starts()).toEqual([]);
+  },
+);
+
+test("a link to the whole group starts no sign-in", async () => {
+  const { shown, starts } = renderSection(
+    {
+      harnesses: NOT_INSTALLED,
+      claudeCode: () => ({ state: "signed_out" }),
+    },
+    "agents",
+  );
+  await settled(shown);
+  expect(starts()).toEqual([]);
+});
+
+test.each([
+  ["signed out", { state: "signed_out" }, 1],
+  ["signed in with an API key", { state: "api_key" }, 1],
+  ["signed in", { state: "signed_in", email: null, plan: null }, 0],
+  ["signing in", { state: "signing_in", signInPage: false }, 0],
+] as const)(
+  "a link to Claude Code %s starts its sign-in only when it needs one",
+  async (_label, claudeCode, expected) => {
+    const { shown, starts } = renderSection(
+      { harnesses: NOT_INSTALLED, claudeCode: () => claudeCode },
+      "claude-code",
+    );
+    await settled(shown);
+    expect(starts()).toEqual(
+      Array.from({ length: expected }, () => ({
+        command: "claude_code_auth_start",
+        args: {},
+      })),
+    );
+  },
+);

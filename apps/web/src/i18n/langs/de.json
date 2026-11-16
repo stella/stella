@@ -2172,8 +2172,8 @@
       "placeState": "{place}. {state}",
       "stepsCheck": "stella desktop wird geöffnet. Falls es sich nicht öffnet, öffnen Sie es auf Ihrem Computer und prüfen Sie {harness} unter Einstellungen › Allgemein › KI-Abonnements.",
       "stepsInstall": "stella desktop wird geöffnet. Falls es sich nicht öffnet, öffnen Sie es auf Ihrem Computer und wählen Sie unter Einstellungen › Allgemein bei {harness} Installieren.",
-      "stepsSignInClaudeCode": "stella desktop wird geöffnet. Falls es sich nicht öffnet, öffnen Sie es auf Ihrem Computer und wählen Sie Einstellungen › Allgemein › Mit Claude anmelden.",
-      "stepsSignInCodex": "stella desktop wird geöffnet. Falls es sich nicht öffnet, öffnen Sie es auf Ihrem Computer und wählen Sie Einstellungen › Allgemein › Weiter mit ChatGPT.",
+      "stepsSignInClaudeCode": "stella desktop wird zur Anmeldung geöffnet. Falls es sich nicht öffnet, öffnen Sie es und wählen Sie Einstellungen › Allgemein › Mit Claude anmelden.",
+      "stepsSignInCodex": "stella desktop wird zur Anmeldung geöffnet. Falls es sich nicht öffnet, öffnen Sie es und wählen Sie Einstellungen › Allgemein › Weiter mit ChatGPT.",
       "yourComputer": "Ihr Computer",
       "yourComputerDescription": "Nutzt Codex oder Claude Code auf Ihrem Computer mit Ihrem eigenen Abo. Es kann Dateien im Ordner dieses Chats lesen und ändern; was es ohne Nachfrage tun darf, legen seine Berechtigungen fest."
     },

@@ -2172,8 +2172,8 @@
       "placeState": "{place}. {state}",
       "stepsCheck": "جارٍ فتح stella desktop. إن لم يُفتح، فافتحه على حاسوبك وتحقّق من {harness} في الإعدادات › عام › اشتراكات الذكاء الاصطناعي.",
       "stepsInstall": "جارٍ فتح stella desktop. إن لم يُفتح، فافتحه على حاسوبك، ثم اختر في الإعدادات › عام زر تثبيت بجوار {harness}.",
-      "stepsSignInClaudeCode": "جارٍ فتح stella desktop. إن لم يُفتح، فافتحه على حاسوبك واختر الإعدادات › عام › تسجيل الدخول باستخدام Claude.",
-      "stepsSignInCodex": "جارٍ فتح stella desktop. إن لم يُفتح، فافتحه على حاسوبك واختر الإعدادات › عام › المتابعة باستخدام ChatGPT.",
+      "stepsSignInClaudeCode": "جارٍ فتح stella desktop لتسجيل الدخول. إن لم يُفتح، فافتحه واختر الإعدادات › عام › تسجيل الدخول باستخدام Claude.",
+      "stepsSignInCodex": "جارٍ فتح stella desktop لتسجيل الدخول. إن لم يُفتح، فافتحه واختر الإعدادات › عام › المتابعة باستخدام ChatGPT.",
       "yourComputer": "حاسوبك",
       "yourComputerDescription": "يستخدم Codex أو Claude Code على حاسوبك باشتراكك الخاص. يمكنه قراءة الملفات وتغييرها في مجلد هذه الدردشة، وتحدد الأذونات ما يمكنه فعله دون أن يسألك."
     },

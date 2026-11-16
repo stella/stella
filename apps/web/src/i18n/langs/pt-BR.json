@@ -2172,8 +2172,8 @@
       "placeState": "{place}. {state}",
       "stepsCheck": "Abrindo o stella desktop. Se ele não abrir, abra-o no seu computador e verifique o {harness} em Configurações › Geral › Assinaturas de IA.",
       "stepsInstall": "Abrindo o stella desktop. Se ele não abrir, abra-o no seu computador e, em Configurações › Geral, escolha Instalar para o {harness}.",
-      "stepsSignInClaudeCode": "Abrindo o stella desktop. Se ele não abrir, abra-o no seu computador e escolha Configurações › Geral › Entrar com o Claude.",
-      "stepsSignInCodex": "Abrindo o stella desktop. Se ele não abrir, abra-o no seu computador e escolha Configurações › Geral › Continuar com o ChatGPT.",
+      "stepsSignInClaudeCode": "Abrindo o stella desktop para entrar. Se ele não abrir, abra-o e escolha Configurações › Geral › Entrar com o Claude.",
+      "stepsSignInCodex": "Abrindo o stella desktop para entrar. Se ele não abrir, abra-o e escolha Configurações › Geral › Continuar com o ChatGPT.",
       "yourComputer": "Seu computador",
       "yourComputerDescription": "Usa o Codex ou o Claude Code no seu computador com a sua própria assinatura. Pode ler e alterar arquivos na pasta deste chat; as permissões definem o que ele pode fazer sem perguntar."
     },

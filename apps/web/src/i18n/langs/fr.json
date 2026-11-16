@@ -2172,8 +2172,8 @@
       "placeState": "{place}. {state}",
       "stepsCheck": "Ouverture de stella desktop. S’il ne s’ouvre pas, ouvrez-le sur votre ordinateur et vérifiez {harness} dans Paramètres › Général › Abonnements IA.",
       "stepsInstall": "Ouverture de stella desktop. S’il ne s’ouvre pas, ouvrez-le sur votre ordinateur et, dans Paramètres › Général, choisissez Installer pour {harness}.",
-      "stepsSignInClaudeCode": "Ouverture de stella desktop. S’il ne s’ouvre pas, ouvrez-le sur votre ordinateur et choisissez Paramètres › Général › Se connecter avec Claude.",
-      "stepsSignInCodex": "Ouverture de stella desktop. S’il ne s’ouvre pas, ouvrez-le sur votre ordinateur et choisissez Paramètres › Général › Continuer avec ChatGPT.",
+      "stepsSignInClaudeCode": "Ouverture de stella desktop pour vous connecter. S’il ne s’ouvre pas, ouvrez-le et choisissez Paramètres › Général › Se connecter avec Claude.",
+      "stepsSignInCodex": "Ouverture de stella desktop pour vous connecter. S’il ne s’ouvre pas, ouvrez-le et choisissez Paramètres › Général › Continuer avec ChatGPT.",
       "yourComputer": "Votre ordinateur",
       "yourComputerDescription": "Utilise Codex ou Claude Code sur votre ordinateur avec votre propre abonnement. Il peut lire et modifier les fichiers du dossier de cette conversation ; ses autorisations fixent ce qu’il peut faire sans demander."
     },

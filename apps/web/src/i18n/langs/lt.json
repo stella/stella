@@ -2172,8 +2172,8 @@
       "placeState": "{place}. {state}",
       "stepsCheck": "Atidaroma stella desktop. Jei programa neatsidaro, atidarykite ją savo kompiuteryje ir patikrinkite agentą {harness} skiltyje Nustatymai › Bendra › DI prenumeratos.",
       "stepsInstall": "Atidaroma stella desktop. Jei programa neatsidaro, atidarykite ją savo kompiuteryje ir skiltyje Nustatymai › Bendra prie agento {harness} pasirinkite Įdiegti.",
-      "stepsSignInClaudeCode": "Atidaroma stella desktop. Jei programa neatsidaro, atidarykite ją savo kompiuteryje ir pasirinkite Nustatymai › Bendra › Prisijungti su Claude.",
-      "stepsSignInCodex": "Atidaroma stella desktop. Jei programa neatsidaro, atidarykite ją savo kompiuteryje ir pasirinkite Nustatymai › Bendra › Tęsti su ChatGPT.",
+      "stepsSignInClaudeCode": "Atidaroma stella desktop prisijungimui. Jei programa neatsidaro, atidarykite ją ir pasirinkite Nustatymai › Bendra › Prisijungti su Claude.",
+      "stepsSignInCodex": "Atidaroma stella desktop prisijungimui. Jei programa neatsidaro, atidarykite ją ir pasirinkite Nustatymai › Bendra › Tęsti su ChatGPT.",
       "yourComputer": "Jūsų kompiuteris",
       "yourComputerDescription": "Naudoja Codex arba Claude Code jūsų kompiuteryje su jūsų pačių prenumerata. Gali skaityti ir keisti šio pokalbio aplanko failus; leidimai nustato, ką jis gali daryti neklausdamas."
     },

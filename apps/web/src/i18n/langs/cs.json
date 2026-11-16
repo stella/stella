@@ -2172,8 +2172,8 @@
       "placeState": "{place}. {state}",
       "stepsCheck": "Otevírá se stella desktop. Pokud se neotevře, otevřete ho ve svém počítači a zkontrolujte agenta {harness} v Nastavení › Obecné › Předplatné AI.",
       "stepsInstall": "Otevírá se stella desktop. Pokud se neotevře, otevřete ho ve svém počítači a v Nastavení › Obecné zvolte u agenta {harness} Nainstalovat.",
-      "stepsSignInClaudeCode": "Otevírá se stella desktop. Pokud se neotevře, otevřete ho ve svém počítači a zvolte Nastavení › Obecné › Přihlásit se přes Claude.",
-      "stepsSignInCodex": "Otevírá se stella desktop. Pokud se neotevře, otevřete ho ve svém počítači a zvolte Nastavení › Obecné › Pokračovat s ChatGPT.",
+      "stepsSignInClaudeCode": "Otevírá se stella desktop k přihlášení. Pokud se neotevře, otevřete ho a zvolte Nastavení › Obecné › Přihlásit se přes Claude.",
+      "stepsSignInCodex": "Otevírá se stella desktop k přihlášení. Pokud se neotevře, otevřete ho a zvolte Nastavení › Obecné › Pokračovat s ChatGPT.",
       "yourComputer": "Váš počítač",
       "yourComputerDescription": "Použije Codex nebo Claude Code ve vašem počítači s vaším vlastním předplatným. Může číst a měnit soubory ve složce tohoto chatu; co smí udělat bez ptaní, určují jeho oprávnění."
     },

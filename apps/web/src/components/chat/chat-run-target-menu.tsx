@@ -309,8 +309,9 @@ const useDesktopSetupSteps = () => {
 /**
  * An agent its computer reports but cannot run yet: signed out, not
  * installed, a version it cannot use, or not available. Choosing it opens
- * stella desktop's Settings at the agent's card; the row then says how to
- * get there by hand. The menu stays open meanwhile.
+ * stella desktop's Settings at the agent's card, where a signed-out agent's
+ * sign-in starts; the row then says how to get there by hand. The menu
+ * stays open meanwhile.
  */
 const DesktopSetupHarnessItem = ({
   option,
