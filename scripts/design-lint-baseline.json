@@ -208,7 +208,7 @@
     "apps/desktop/src/clipboard/ClipboardApp.tsx": 3,
     "apps/desktop/src/clipboard/ClipboardEditor.tsx": 2,
     "apps/desktop/src/mainview/App.tsx": 1,
-    "apps/landing/src/components/react/AnonymizeLiveDemo.tsx": 2,
+    "apps/landing/src/components/react/AnonymizeLiveDemo.tsx": 1,
     "apps/web/src/components/ai-prompt-input/ai-prompt-input.tsx": 1,
     "apps/web/src/components/ai-suggestions/host.tsx": 6,
     "apps/web/src/components/ai-suggestions/review-redline-preview.tsx": 2,
@@ -959,9 +959,7 @@
     "apps/web/src/components/workspaces/table/workspace-table/workspace-table.tsx": 1,
     "packages/decision-reader/src/document-ast-text.tsx": 3
   },
-  "no-native-ui/no-native-textarea": {
-    "apps/landing/src/components/react/AnonymizeLiveDemo.tsx": 1
-  },
+  "no-native-ui/no-native-textarea": {},
   "no-native-ui/no-native-tooltip": {},
   "eslint/complexity": {
     ".oxlint-plugins/no-ambient-nondeterminism.ts": 5,

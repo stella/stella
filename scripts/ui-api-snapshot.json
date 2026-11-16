@@ -161,6 +161,7 @@
       "FrameTitle",
       "GitHubLogoIcon",
       "HexColorPicker",
+      "HighlightedTextarea",
       "HoverCard",
       "HoverCardContent",
       "HoverCardTrigger",
@@ -1135,6 +1136,7 @@
       "FrameTitle"
     ],
     "./hex-color-picker": ["HexColorPicker"],
+    "./highlighted-textarea": ["HighlightedTextarea"],
     "./hooks/use-contained-handler": [
       "containedEventHandler",
       "containedHandler"
@@ -2070,6 +2072,7 @@
     "EntityActionsButton.side": ["bottom", "left", "right", "top"],
     "Form.density": ["compact", "default", "snug"],
     "Form.layout": ["inline", "stack"],
+    "HighlightedTextarea.dir": ["ltr", "rtl"],
     "InlineDropIndicator.position": ["after", "before"],
     "InputGroupAddon.align": [
       "block-end",
