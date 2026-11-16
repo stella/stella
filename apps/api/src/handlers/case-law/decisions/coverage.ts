@@ -46,6 +46,7 @@ import {
   readCompletenessCensusQuery,
   unmeasuredSourceCensus,
 } from "@/api/lib/case-law/completeness-census";
+import { censusCapabilityFor } from "@/api/lib/case-law/completeness-census-capabilities";
 import {
   countryCensusVerdict,
   publisherCensusOf,
@@ -889,6 +890,55 @@ const storedCoverageSchema = v.object({
 type StoredCaseLawCoverage =
   v.InferOutput<typeof storedCoverageSchema> | CaseLawCoverageUnavailable;
 
+/**
+ * A summary stored before the publisher census existed carries neither a
+ * country verdict nor per-source census. It is read as not measured yet,
+ * the same answer a source without observations gives, rather than refused.
+ */
+const withUnmeasuredCensusDefaults = (summary: unknown): unknown => {
+  if (!isRecord(summary) || !isRecord(summary["answer"])) {
+    return summary;
+  }
+  const countries = summary["answer"]["countries"];
+  if (!Array.isArray(countries)) {
+    return summary;
+  }
+  return {
+    ...summary,
+    answer: {
+      ...summary["answer"],
+      countries: countries.map((country: unknown) => {
+        if (!isRecord(country)) {
+          return country;
+        }
+        const sources = country["sources"];
+        return {
+          ...country,
+          censusVerdict: country["censusVerdict"] ?? "unmeasured",
+          sources: Array.isArray(sources)
+            ? sources.map((source: unknown) => {
+                if (
+                  !isRecord(source) ||
+                  source["publisherCensus"] !== undefined ||
+                  typeof source["adapterKey"] !== "string" ||
+                  censusCapabilityFor(source["adapterKey"]) === undefined
+                ) {
+                  return source;
+                }
+                return {
+                  ...source,
+                  publisherCensus: publisherCensusOf(
+                    unmeasuredSourceCensus(source["adapterKey"]),
+                  ),
+                };
+              })
+            : sources,
+        };
+      }),
+    },
+  };
+};
+
 /** What a reader receives: the stored figures and how fresh they are. */
 type CaseLawCoverageResponse =
   | (CaseLawCoverageSnapshot & { freshness: CaseLawCoverageFreshness })
@@ -917,7 +967,10 @@ export const readCaseLawCoverageSummaryQuery = definePublicLawSharedQuery(
     if (!isRecord(row) || row["summary"] === null) {
       return COVERAGE_UNAVAILABLE;
     }
-    const parsed = v.safeParse(storedCoverageSchema, row["summary"]);
+    const parsed = v.safeParse(
+      storedCoverageSchema,
+      withUnmeasuredCensusDefaults(row["summary"]),
+    );
     if (!parsed.success) {
       logger.warn("case_law.coverage.summary_invalid");
       return COVERAGE_UNAVAILABLE;
