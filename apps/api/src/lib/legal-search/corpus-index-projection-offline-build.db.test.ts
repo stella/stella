@@ -11,6 +11,10 @@ import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { dbClock } from "@stll/test-kit/db";
 
+import {
+  CORPUS_SCHEMA_LANE,
+  runUnderCorpusSchemaLane,
+} from "@/api/db/corpus-schema-lane";
 import type { Transaction } from "@/api/db/root";
 import {
   corpusIndexGenerations,
@@ -231,13 +235,23 @@ const transactionRunner =
         `before start transaction ${start}`,
       );
     }
-    const value = await db.transaction(async (tx) => {
-      if (model.repeatableRead) {
-        await tx.execute(sql`SET TRANSACTION ISOLATION LEVEL REPEATABLE READ`);
-      }
-      const result = await operation(asTestRaw<Transaction>(tx));
-      crashIf(model, dies, `commit of transaction ${index}`);
-      return result;
+    // Production's boundary (`createIngestionDb`): every transaction holds
+    // the corpus schema lane shared before the work runs.
+    const value = await runUnderCorpusSchemaLane({
+      database: {
+        transaction: async (fn) =>
+          await db.transaction(
+            fn,
+            model.repeatableRead
+              ? { isolationLevel: "repeatable read" }
+              : undefined,
+          ),
+      },
+      work: async (tx) => {
+        const result = await operation(asTestRaw<Transaction>(tx));
+        crashIf(model, dies, `commit of transaction ${index}`);
+        return result;
+      },
     });
     // The next start transaction is held back: its statement instant, read
     // before it opens, falls that much later.
@@ -1664,20 +1678,32 @@ describe("offline route build", () => {
   });
 
   test("an offline start runs only first in a fresh read committed transaction", async () => {
-    /** The guard's refusal after `prepare`, or null when it lets the start run. */
-    const guard = async (prepare: (tx: Transaction) => Promise<void>) =>
+    /**
+     * The guard's refusal after `prepare`, or null when it lets the start
+     * run; in a bare transaction, or under the corpus schema lane as
+     * production's boundary runs every transaction.
+     */
+    const guard = async (
+      prepare: (tx: Transaction) => Promise<void>,
+      boundary: "bare" | "schema_lane" = "bare",
+    ) =>
       (
         await Result.tryPromise({
-          try: async () =>
-            await db.transaction(async (raw) => {
+          try: async () => {
+            const work = async (raw: unknown) => {
               const tx = asTestRaw<Transaction>(raw);
               await prepare(tx);
               await requireFreshReadCommittedStartTx(tx);
-            }),
+            };
+            await (boundary === "bare"
+              ? db.transaction(work)
+              : runUnderCorpusSchemaLane({ database: db, work }));
+          },
           catch: (cause: unknown) =>
             cause instanceof Error ? cause.message : String(cause),
         })
       ).match({ ok: () => null, err: (message) => message });
+    const laneKey = sql`hashtext(${CORPUS_SCHEMA_LANE.domain}), hashtext(${CORPUS_SCHEMA_LANE.lane})`;
     const model = await newModel(1);
     const entityId = model.entityIds.at(0) ?? panic("No entity");
     expect(await guard(async () => undefined)).toBeNull();
@@ -1706,6 +1732,43 @@ describe("offline route build", () => {
         await tx.execute(sql`SET TRANSACTION ISOLATION LEVEL REPEATABLE READ`);
       }),
     ).toContain("read committed");
+
+    // The corpus schema lane held shared, as every production transaction
+    // holds it, is the one lock let through; anything beside it is not.
+    expect(await guard(async () => undefined, "schema_lane")).toBeNull();
+    expect(
+      await guard(async (tx) => {
+        await tx.execute(
+          sql`SELECT entity_id FROM ${corpusIndexProjectionStates} WHERE entity_id = ${entityId} FOR UPDATE`,
+        );
+      }, "schema_lane"),
+    ).toContain("holds no lock yet");
+    expect(
+      await guard(async (tx) => {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(1, 2)`);
+      }, "schema_lane"),
+    ).toContain("holds no lock yet");
+    expect(
+      await guard(async (tx) => {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock_shared(1, 2)`);
+      }, "schema_lane"),
+    ).toContain("holds no lock yet");
+    // The lane exclusive is refused, alone or beside the shared hold.
+    expect(
+      await guard(async (tx) => {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${laneKey})`);
+      }),
+    ).toContain("holds no lock yet");
+    expect(
+      await guard(async (tx) => {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${laneKey})`);
+      }, "schema_lane"),
+    ).toContain("holds no lock yet");
+    // Whole starts under the lane: every run of this file goes through
+    // `transactionRunner`, which holds the lane as production does.
+    const started = await newModel();
+    const run = await runBuild(started, { ...QUIET_RUN, maxShardRevisions: 8 });
+    expect(run?.progress.started).toBe(ENTITIES);
 
     // A caller whose transactions run in repeatable read starts nothing.
     const refused = await newModel();
