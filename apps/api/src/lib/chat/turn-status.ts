@@ -84,8 +84,8 @@ export const CHAT_TURN_LOG_IS_LIVE = {
  * cannot read the status would accept a second turn on the thread or fail
  * on the row. So every task must read the status (`readers`) and adopt it
  * (`adopters`) one release before any task writes it. A release is named by
- * the repository `VERSION` it was cut at; `adopters` is null until adoption
- * ships. `turn-status-rollout.test.ts` refuses a writer (a `hand-over`
+ * the repository `VERSION` it was cut at (`handlers/chat/turns/adopt.ts` is
+ * the adopter). `turn-status-rollout.test.ts` refuses a writer (a `hand-over`
  * transition outside the state planner) until `VERSION` shows both cut.
  */
 export const CHAT_TURN_HANDED_OVER_ROLLOUT: {
@@ -93,5 +93,5 @@ export const CHAT_TURN_HANDED_OVER_ROLLOUT: {
   adopters: string | null;
 } = {
   readers: "0.9.84",
-  adopters: null,
+  adopters: "0.9.84",
 };
