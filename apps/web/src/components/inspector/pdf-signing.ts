@@ -60,14 +60,16 @@ export const createPdfSigningHandoff = async ({
   stamp,
   workspaceId,
 }: PdfSignableFile & { stamp?: PdfSigningStamp | undefined }) => {
-  const response = await api
-    .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-    ["pdf-signing-handoffs"].post({
-      entityId: toSafeId<"entity">(entityId),
-      fieldId: toSafeId<"field">(fieldId),
-      propertyId: toSafeId<"property">(propertyId),
-      ...(stamp === undefined ? {} : { stamp }),
-    });
+  const entitiesApi = api.entities({
+    workspaceId: toSafeId<"workspace">(workspaceId),
+  });
+
+  const response = await entitiesApi["pdf-signing-handoffs"].post({
+    entityId: toSafeId<"entity">(entityId),
+    fieldId: toSafeId<"field">(fieldId),
+    propertyId: toSafeId<"property">(propertyId),
+    ...(stamp === undefined ? {} : { stamp }),
+  });
 
   return unwrapApiResponse(response);
 };
@@ -85,12 +87,13 @@ const readPdfSigningSession = async ({
   sessionId,
   workspaceId,
 }: PdfSigningSessionRef) => {
-  const response = await api
-    .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-    ["pdf-signing-sessions"]({
-      sessionId: toSafeId<"pdfSigningSession">(sessionId),
-    })
-    .get();
+  const entitiesApi = api.entities({
+    workspaceId: toSafeId<"workspace">(workspaceId),
+  });
+
+  const response = await entitiesApi["pdf-signing-sessions"]({
+    sessionId: toSafeId<"pdfSigningSession">(sessionId),
+  }).get();
 
   return unwrapApiResponse(response) satisfies PdfSigningSessionSnapshot;
 };

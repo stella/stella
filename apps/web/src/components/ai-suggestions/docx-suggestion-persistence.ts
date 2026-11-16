@@ -291,13 +291,13 @@ export const rejectPendingDocxSuggestionsRequest = async ({
   // No chunking: create caps a document's pending rows at the same bound the
   // bulk reject body accepts, so every pending id fits in one request.
   const result = await Result.tryPromise(async () => {
-    const response = await api["docx-suggestions"]({ workspaceId })
-      .entity({ entityId })
-      ["reject-pending"].patch({
-        suggestionIds: suggestionIds.map((id) =>
-          toSafeId<"docxSuggestion">(id),
-        ),
-      });
+    const entityApi = api["docx-suggestions"]({ workspaceId }).entity({
+      entityId,
+    });
+
+    const response = await entityApi["reject-pending"].patch({
+      suggestionIds: suggestionIds.map((id) => toSafeId<"docxSuggestion">(id)),
+    });
     return unwrapApiResponse(response);
   });
   if (Result.isError(result)) {

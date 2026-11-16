@@ -366,14 +366,16 @@ const createDesktopEditHandoff = async ({
   propertyId,
   workspaceId,
 }: OpenFileInDesktopInput) => {
-  const response = await api
-    .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-    ["desktop-edit-handoffs"].post({
-      entityId: toSafeId<"entity">(entityId),
-      ...(force && { force }),
-      linkedAccount,
-      propertyId: toSafeId<"property">(propertyId),
-    });
+  const entitiesApi = api.entities({
+    workspaceId: toSafeId<"workspace">(workspaceId),
+  });
+
+  const response = await entitiesApi["desktop-edit-handoffs"].post({
+    entityId: toSafeId<"entity">(entityId),
+    ...(force && { force }),
+    linkedAccount,
+    propertyId: toSafeId<"property">(propertyId),
+  });
 
   return unwrapApiResponse(response) satisfies DesktopEditHandoff;
 };
@@ -385,12 +387,13 @@ const readDesktopEditHandoffStatus = async ({
   handoffId: string;
   workspaceId: string;
 }) => {
-  const response = await api
-    .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-    ["desktop-edit-handoffs"]({
-      handoffId: toSafeId<"desktopEditHandoff">(handoffId),
-    })
-    .status.get();
+  const entitiesApi = api.entities({
+    workspaceId: toSafeId<"workspace">(workspaceId),
+  });
+
+  const response = await entitiesApi["desktop-edit-handoffs"]({
+    handoffId: toSafeId<"desktopEditHandoff">(handoffId),
+  }).status.get();
 
   return unwrapApiResponse(response);
 };
