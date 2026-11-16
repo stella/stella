@@ -10,6 +10,7 @@ import {
   fields,
   officeFileEvidence,
 } from "@/api/db/schema";
+import { envBase } from "@/api/env-base";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent, encryptContent } from "@/api/lib/content-encryption";
@@ -29,6 +30,7 @@ import {
   officeEvidencePayloadSchema,
 } from "@/api/lib/files/office-evidence-types";
 import { createFileKey } from "@/api/lib/files/utils";
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import {
   admitWork,
   type WorkAdmission,
@@ -37,7 +39,7 @@ import {
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
-import { OBJECT_READ_TIMEOUT_MS, readS3ArrayBuffer } from "@/api/lib/s3";
+import { OBJECT_READ_TIMEOUT_MS, readS3ObjectBounded } from "@/api/lib/s3";
 import { normalizeMimeType } from "@/api/lib/search/extractable-mime-types";
 import { PPTX_MIME_TYPE, XLSX_MIME_TYPE } from "@/api/mime-types";
 
@@ -445,15 +447,20 @@ const createClaimedOfficeEvidence = async ({
   };
   const readResult = await Result.tryPromise({
     try: async () =>
-      await readS3ArrayBuffer(
-        createFileKey({
+      await readS3ObjectBounded({
+        bucket: envBase.S3_BUCKET,
+        key: createFileKey({
           fileId: source.fileId,
           mimeType: source.mimeType,
           organizationId,
           workspaceId,
         }),
-        admission.signal,
-      ),
+        maxBytes: FILE_SIZE_LIMIT_BYTES.document,
+        signal: AbortSignal.any([
+          admission.signal,
+          AbortSignal.timeout(OBJECT_READ_TIMEOUT_MS),
+        ]),
+      }),
     catch: (cause) => cause,
   });
   if (Result.isError(readResult)) {
@@ -464,8 +471,15 @@ const createClaimedOfficeEvidence = async ({
     });
   }
 
+  const bytes = readResult.value;
+  const buffer =
+    bytes.buffer instanceof ArrayBuffer &&
+    bytes.byteOffset === 0 &&
+    bytes.byteLength === bytes.buffer.byteLength
+      ? bytes.buffer
+      : bytes.slice().buffer;
   const extraction = await extractOfficeEvidence(
-    readResult.value,
+    buffer,
     format,
     admission.signal,
   );
