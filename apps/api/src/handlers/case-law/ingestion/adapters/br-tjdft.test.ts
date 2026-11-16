@@ -362,7 +362,7 @@ describe("what a stored decision keeps", () => {
     );
     const named = (decision: IngestionResult) =>
       (decision.judges ?? []).map(
-        ({ role, nameAsPrinted }) => `${role}: ${nameAsPrinted}`,
+        ({ role, nameAsPrinted }) => `${role}: ${nameAsPrinted ?? ""}`,
       );
     expect(named(designado)).toEqual([
       "rapporteur: FERNANDO TAVERNARD",

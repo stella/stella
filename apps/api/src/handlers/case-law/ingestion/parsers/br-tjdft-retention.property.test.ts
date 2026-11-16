@@ -4,13 +4,16 @@ import fc from "fast-check";
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import { brTjdftCompletenessIssues } from "@/api/tests/helpers/br-tjdft-completeness";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
-import { parseBrTjdftDocument } from "./br-tjdft";
+import { parseBrTjdftDocument as uncheckedParseBrTjdftDocument } from "./br-tjdft";
 import {
   expectMarkerRetention,
   injectMarkupMarkers,
   markerPlan,
 } from "./marker-injection.test-helper";
+
+const parseBrTjdftDocument = guardParser(uncheckedParseBrTjdftDocument);
 
 /**
  * The shapes the court's word-processor HTML and text renderings take,
