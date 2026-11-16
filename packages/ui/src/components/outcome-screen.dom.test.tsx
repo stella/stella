@@ -6,8 +6,7 @@ import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 
 GlobalRegistrator.register();
 const { act, cleanup, render } = await import("@testing-library/react");
-const { OUTCOME_CLOSE_FALLBACK_MS, OutcomeScreen } =
-  await import("./outcome-screen");
+const { OutcomeScreen } = await import("./outcome-screen");
 
 afterEach(() => {
   cleanup();
@@ -17,10 +16,10 @@ afterAll(async () => {
   await unregisterDomEnvironment();
 });
 
-// Runs the component's fallback timer past its deadline.
+// Runs well past the short wait a closing tab gets before it counts as open.
 const passFallbackDeadline = () => {
   act(() => {
-    jest.advanceTimersByTime(OUTCOME_CLOSE_FALLBACK_MS + 1);
+    jest.advanceTimersByTime(1000);
   });
 };
 

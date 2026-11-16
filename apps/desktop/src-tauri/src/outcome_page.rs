@@ -85,7 +85,10 @@ mod tests {
       },
     );
     assert!(page.starts_with("<!doctype html>"));
-    assert!(page.contains("<title>ChatGPT&#32;&lt;b&gt;is&lt;&#47;b&gt;&#32;connected</title>"));
+    assert!(
+      page
+        .contains("<title>ChatGPT&#32;&lt;b&gt;is&lt;&#47;b&gt;&#32;connected</title>")
+    );
     assert!(page.contains("data-tone=\"success\""));
     assert!(!page.contains("<b>"));
     // Text that looks like a slot stays text: the note is filled once, where
@@ -108,7 +111,9 @@ mod tests {
     let page = render(OutcomeTone::Error, "ar", &text);
     assert!(page.contains("dir=\"rtl\" lang=\"ar\""));
     assert!(page.contains("data-tone=\"error\""));
-    assert!(render(OutcomeTone::Error, "cs", &text).contains("dir=\"ltr\" lang=\"cs\""));
+    assert!(
+      render(OutcomeTone::Error, "cs", &text).contains("dir=\"ltr\" lang=\"cs\"")
+    );
   }
 
   #[test]

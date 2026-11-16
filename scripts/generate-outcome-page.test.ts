@@ -50,7 +50,7 @@ test("every class the markup uses has a rule, and every token it reads is define
     expect(unstyled).toEqual([]);
 
     const declared = new Set(
-      [...css.matchAll(/(--[\w-]+)\s*:/gu)].map(([, name]) => name),
+      [...css.matchAll(/(?<![\w-])(--[\w-]+)\s*:/gu)].map(([, name]) => name),
     );
     const undefinedTokens = [
       ...new Set(

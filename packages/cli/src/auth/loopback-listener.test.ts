@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { sha256Base64 } from "../sha256.js";
+import { sha256Base64Url } from "../sha256.js";
 import { startLoopbackListener } from "./loopback-listener.js";
 
 describe("startLoopbackListener", () => {
@@ -171,7 +171,10 @@ describe("browser sign-in completion", () => {
       expect(response.headers.get("x-content-type-options")).toBe("nosniff");
       // The CSP admits exactly the page's one stylesheet.
       const styles = await textContent(html, "style");
-      const hash = sha256Base64(styles);
+      // CSP hash sources are standard base64.
+      const hash = Buffer.from(sha256Base64Url(styles), "base64url").toString(
+        "base64",
+      );
       expect(response.headers.get("content-security-policy")).toBe(
         `default-src 'none'; style-src 'sha256-${hash}'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
       );

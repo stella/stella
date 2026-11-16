@@ -429,6 +429,7 @@ mod tests {
 
   #[test]
   fn callback_pages_are_the_filled_outcome_screen() {
+    crate::i18n::init_en();
     for (page, tone, title_key) in [
       (
         CallbackPage::Connected,
@@ -443,7 +444,11 @@ mod tests {
     ] {
       let html = callback_page(page);
       let title = ammonia::clean_text(crate::i18n::t(title_key));
-      assert_ne!(crate::i18n::t(title_key), title_key, "{title_key} is missing");
+      assert_ne!(
+        crate::i18n::t(title_key),
+        title_key,
+        "{title_key} is missing"
+      );
       assert!(html.contains(&format!("<title>{title}</title>")));
       assert!(html.contains(&format!(">{title}</h1>")));
       assert!(html.contains(&format!("data-tone=\"{tone}\"")));

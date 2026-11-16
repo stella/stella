@@ -7,6 +7,3 @@ export const sha256Hex = (input: Sha256Input): string =>
 
 export const sha256Base64Url = (input: Sha256Input): string =>
   createHash("sha256").update(input).digest("base64url");
-
-export const sha256Base64 = (input: Sha256Input): string =>
-  createHash("sha256").update(input).digest("base64");

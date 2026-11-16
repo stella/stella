@@ -17,6 +17,7 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 //   <OutcomeScreen tone="success" title={...} description={...} closeTab={...} />
 
 import {
+  type AstNode,
   elementName,
   everyNode,
   filenameForContext,
@@ -32,6 +33,7 @@ import {
 // close the tab.
 const OUTCOME_OWNERS = [
   "packages/ui/src/components/outcome-screen.tsx",
+  "packages/ui/src/components/outcome-screen-view.tsx",
   "scripts/generate-outcome-page.ts",
   "packages/cli/src/auth/outcome-page.gen.ts",
 ];
