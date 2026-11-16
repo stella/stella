@@ -1024,16 +1024,24 @@ mod tests {
   }
 
   #[test]
-  fn a_listed_model_is_offered_and_an_unknown_answer_is_refused() {
+  fn a_listed_model_is_offered_and_a_malformed_answer_is_refused() {
     let models: CloudModels = serde_json::from_str(
       r#"{"models":[{"id":"mistralai/voxtral-mini-transcribe","displayName":"Voxtral Mini Transcribe"}],"defaultModelId":"mistralai/voxtral-mini-transcribe","unavailable":null}"#,
     )
     .unwrap();
     assert!(models.offers("mistralai/voxtral-mini-transcribe"));
     assert!(!models.offers("openai/whisper-large-v3"));
+    // Fields a newer API adds are read past (see the test above); an answer
+    // without the model list is still refused.
     assert!(
       serde_json::from_str::<CloudModels>(
-        r#"{"models":[],"defaultModelId":null,"unavailable":null,"price":1}"#
+        r#"{"defaultModelId":null,"unavailable":null}"#
+      )
+      .is_err()
+    );
+    assert!(
+      serde_json::from_str::<CloudModels>(
+        r#"{"models":[{"id":"x"}],"defaultModelId":null,"unavailable":null}"#
       )
       .is_err()
     );
