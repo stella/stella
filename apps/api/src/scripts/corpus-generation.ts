@@ -1402,7 +1402,7 @@ const runSeed = async (
       rootDb,
       async (tx) => await readCorpusIndexRouteSeedingsTx(tx, target),
     );
-    for (const route of seedings?.routes ?? []) {
+    for (const route of seedings === null ? [] : seedings.routes) {
       write(
         route.state === "seeded"
           ? `  ${route.indexId}: seeded by pass ${String(route.passNumber)} (${route.jurisdictions.join(", ")})`

@@ -179,7 +179,12 @@ const routesOf = (
   const routes = new Map<string, string[]>();
   for (const jurisdiction of jurisdictions) {
     const indexId = corpusIndexIdFromManifest(manifest, jurisdiction);
-    routes.set(indexId, [...(routes.get(indexId) ?? []), jurisdiction]);
+    const held = routes.get(indexId);
+    if (held === undefined) {
+      routes.set(indexId, [jurisdiction]);
+    } else {
+      held.push(jurisdiction);
+    }
   }
   return routes;
 };
@@ -366,19 +371,18 @@ const completePassTx = async (
     panic(
       `Seeding pass of ${target.family}/${target.generation} not completed`,
     );
-  const captured = routesOf(manifest, pass.routeJurisdictions);
-  const routeIds = pass.routeIndexIds.filter((indexId) =>
-    captured.has(indexId),
-  );
-  if (routeIds.length > 0) {
+  // Every row of a captured jurisdiction was walked, so each index those
+  // jurisdictions route to holds only rows the pass accounted for.
+  const captured = [...routesOf(manifest, pass.routeJurisdictions)];
+  if (captured.length > 0) {
     // audit: skip - derived public corpus seeding bookkeeping
     await tx
       .insert(routeSeedings)
       .values(
-        routeIds.map((indexId) => ({
+        captured.map(([indexId, jurisdictions]) => ({
           ...target,
           indexId,
-          jurisdictions: captured.get(indexId) ?? [],
+          jurisdictions,
           passNumber: pass.passNumber,
           passStartedAt: pass.passStartedAt,
           seededAt,

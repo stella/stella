@@ -30,7 +30,10 @@ import {
   rawDocumentPrefix,
   writeSourceBinary,
 } from "@/api/lib/legal-search/raw-source-storage";
-import { installCorpusProjectionSeedingGuard } from "@/api/tests/helpers/corpus-projection-seeding-guard";
+import {
+  CORPUS_PROJECTION_SEEDING_GUARD_OFF_SETTING,
+  installCorpusProjectionSeedingGuard,
+} from "@/api/tests/helpers/corpus-projection-seeding-guard";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -250,13 +253,20 @@ test("redaction of packed payloads tombstones every address it cannot delete", a
 });
 
 test("redaction erases the decision's publisher files and no other decision's", async () => {
-  await db.insert(caseLawDecisions).values({
-    id: OTHER_DECISION_ID,
-    sourceId: SOURCE_ID,
-    caseNumber: "4 As 4/2008",
-    court: "Nejvyšší správní soud",
-    country: "CZE",
-    language: "cs",
+  // A neighbour decision as data no writer touched since the generation was
+  // registered; the seeding guard stands aside for the fixture only.
+  await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`SELECT set_config(${CORPUS_PROJECTION_SEEDING_GUARD_OFF_SETTING}, 'off', true)`,
+    );
+    await tx.insert(caseLawDecisions).values({
+      id: OTHER_DECISION_ID,
+      sourceId: SOURCE_ID,
+      caseNumber: "4 As 4/2008",
+      court: "Nejvyšší správní soud",
+      country: "CZE",
+      language: "cs",
+    });
   });
   // One file served for both decisions, and one this decision's envelope
   // named before a later observation replaced it.

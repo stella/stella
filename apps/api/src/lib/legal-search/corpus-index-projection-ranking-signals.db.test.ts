@@ -23,7 +23,10 @@ import {
   PARTIAL_OBSERVATION_FIELD,
   PARTIAL_OBSERVATION_KEY,
 } from "@/api/lib/legal-search/partial-observation-sql";
-import { installCorpusProjectionSeedingGuard } from "@/api/tests/helpers/corpus-projection-seeding-guard";
+import {
+  CORPUS_PROJECTION_SEEDING_GUARD_OFF_SETTING,
+  installCorpusProjectionSeedingGuard,
+} from "@/api/tests/helpers/corpus-projection-seeding-guard";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -186,6 +189,18 @@ const advance = async (id: ReturnType<typeof decisionId>) =>
       }),
   );
 
+/** Runs a fixture write with the seeding guard off for its transaction. */
+const standAside = async (
+  work: (tx: Transaction) => Promise<unknown>,
+): Promise<void> => {
+  await inTx(async (tx) => {
+    await tx.execute(
+      sql`SELECT set_config(${CORPUS_PROJECTION_SEEDING_GUARD_OFF_SETTING}, 'off', true)`,
+    );
+    await work(tx);
+  });
+};
+
 test("bootstrap and the canonical lock derive the same projection from the same signals", async () => {
   await inTx(
     async (tx) =>
@@ -197,13 +212,17 @@ test("bootstrap and the canonical lock derive the same projection from the same 
   );
   const bootstrapped = await fingerprintOf(ALONE);
   expect(bootstrapped).not.toBeNull();
-  await db
-    .delete(corpusIndexProjectionStates)
-    .where(eq(corpusIndexProjectionStates.entityId, ALONE));
-  await db
-    .update(caseLawDecisions)
-    .set({ projectionEpoch: 0n })
-    .where(eq(caseLawDecisions.id, ALONE));
+  // Puts the decision back as never projected, which no writer does, so the
+  // seeding guard stands aside for the fixture.
+  await standAside(async (tx) => {
+    await tx
+      .delete(corpusIndexProjectionStates)
+      .where(eq(corpusIndexProjectionStates.entityId, ALONE));
+    await tx
+      .update(caseLawDecisions)
+      .set({ projectionEpoch: 0n })
+      .where(eq(caseLawDecisions.id, ALONE));
+  });
   await advance(ALONE);
   expect(await fingerprintOf(ALONE)).toBe(bootstrapped);
 });
@@ -237,9 +256,13 @@ test("an authority write re-projects a decision only when it moves the bucket", 
 test("a sibling published into a decision's group re-projects it", async () => {
   await advance(ALONE);
   const before = await fingerprintOf(ALONE);
-  await db
-    .insert(caseLawDecisions)
-    .values(decision(decisionId("508"), "group-alone", { language: "cs" }));
+  // The sibling arrives as data; its own seeding is the ingestion writer's.
+  await standAside(
+    async (tx) =>
+      await tx
+        .insert(caseLawDecisions)
+        .values(decision(decisionId("508"), "group-alone", { language: "cs" })),
+  );
   await advance(ALONE);
   expect(await fingerprintOf(ALONE)).not.toBe(before);
 });

@@ -81,6 +81,8 @@ test("the routing primitives are called by the declaration, the write side, the 
     "lib/legal-search/corpus-index-group-contract.ts",
     "lib/legal-search/corpus-index-manifest.ts",
     "lib/legal-search/corpus-index-projection-descriptor.ts",
+    // The seeding walk: which routes a generation has, to record each seeded.
+    "lib/legal-search/corpus-index-route-seeding.ts",
     "scripts/corpus-generation.ts",
   ]);
   expect(modulesMatching(/\bcaseLawIndexIdSql\(/u)).toEqual([
