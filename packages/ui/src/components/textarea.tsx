@@ -113,7 +113,7 @@ const Textarea = ({
   const syncCountOnFormReset = (control: HTMLSpanElement | null) => {
     const textarea = control?.querySelector("textarea");
     const form = textarea?.form;
-    if (!counted || props.value !== undefined || !textarea || !form) {
+    if (!counted || value !== undefined || !textarea || !form) {
       return undefined;
     }
     const handleReset = () => {

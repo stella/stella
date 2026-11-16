@@ -39,14 +39,14 @@ test("keeps controlled editing and forwards native Enter and composition events"
   }[] = [];
   const view = render(
     <Editor
-      onKeyDown={(event) =>
+      onKeyDown={(event) => {
         keys.push({
           key: event.key,
           composing: event.nativeEvent.isComposing,
           shifted: event.shiftKey,
           prevented: event.defaultPrevented,
-        })
-      }
+        });
+      }}
     />,
   );
   const editor = view.getByRole("textbox", {
