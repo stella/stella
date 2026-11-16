@@ -3,9 +3,6 @@ import { chmod, mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { createTestClock } from "@stll/test-kit";
-import type { TestClock } from "@stll/test-kit";
-
 import {
   credentialsFilePath,
   readCredentialFile,
@@ -72,10 +69,9 @@ const startMockProvider = (
 
 describe("resolveAccessToken", () => {
   let configDir: string;
-  let clock: TestClock;
+  const fixtureNow = 1_700_000_000_000;
 
   beforeEach(async () => {
-    clock = createTestClock();
     configDir = await mkdtemp(
       path.join(os.tmpdir(), "stella-cli-resolve-token-test-"),
     );
@@ -119,7 +115,7 @@ describe("resolveAccessToken", () => {
       () => new Response("should not be called", { status: 500 }),
     );
     try {
-      const now = clock.now();
+      const now = fixtureNow;
       await seedCredential(
         buildCredential(provider.serverUrl, { expiresAt: now + 60_000 }),
       );
@@ -154,7 +150,7 @@ describe("resolveAccessToken", () => {
       });
     });
     try {
-      const now = clock.now();
+      const now = fixtureNow;
       await seedCredential(
         buildCredential(provider.serverUrl, { expiresAt: now - 1000 }),
       );
@@ -200,7 +196,7 @@ describe("resolveAccessToken", () => {
         : Response.json({ error: "invalid_grant" }, { status: 400 }),
     );
     try {
-      const now = clock.now();
+      const now = fixtureNow;
       await seedCredential(
         buildCredential(provider.serverUrl, { expiresAt: now - 1000 }),
       );
@@ -231,7 +227,7 @@ describe("resolveAccessToken", () => {
       Response.json({ error: "invalid_grant" }, { status: 400 }),
     );
     try {
-      const now = clock.now();
+      const now = fixtureNow;
       await seedCredential(
         buildCredential(provider.serverUrl, { expiresAt: now - 1000 }),
       );
@@ -256,7 +252,7 @@ describe("resolveAccessToken", () => {
       () => new Response("should not be called", { status: 500 }),
     );
     try {
-      const now = clock.now();
+      const now = fixtureNow;
       await seedCredential(
         buildCredential(provider.serverUrl, {
           expiresAt: now - 1000,
@@ -288,7 +284,7 @@ describe("resolveAccessToken", () => {
       const result = await resolveAccessToken({
         configDir,
         serverUrl: provider.serverUrl,
-        now: clock.now(),
+        now: fixtureNow,
       });
 
       expect(result.status).toBe("unauthenticated");
@@ -331,7 +327,7 @@ describe("resolveAccessToken", () => {
       },
     );
     try {
-      const now = clock.now();
+      const now = fixtureNow;
       await seedCredential(
         buildCredential(provider.serverUrl, { expiresAt: now - 1000 }),
       );
@@ -397,7 +393,7 @@ describe("resolveAccessToken", () => {
       });
     });
     try {
-      const now = clock.now();
+      const now = fixtureNow;
       await seedCredential(
         buildCredential(provider.serverUrl, { expiresAt: now - 1000 }),
       );
@@ -461,7 +457,7 @@ describe("resolveAccessToken", () => {
       });
     });
     try {
-      const now = clock.now();
+      const now = fixtureNow;
       await seedCredential(
         buildCredential(provider.serverUrl, { expiresAt: now - 1000 }),
       );
@@ -518,9 +514,9 @@ describe("resolveAccessToken", () => {
         upsertCredential(concurrent, {
           ...target,
           accessToken: "concurrent-access-token",
-          expiresAt: clock.now() + 60_000,
+          expiresAt: fixtureNow + 60_000,
           refreshToken: "concurrent-refresh-token",
-          updatedAt: clock.now(),
+          updatedAt: fixtureNow,
         }),
       );
       // The stale-generation exchange still "succeeds" at the network
@@ -535,7 +531,7 @@ describe("resolveAccessToken", () => {
       });
     });
     try {
-      const now = clock.now();
+      const now = fixtureNow;
       await seedCredential(
         buildCredential(provider.serverUrl, { expiresAt: now - 1000 }),
       );
@@ -595,9 +591,9 @@ describe("resolveAccessToken", () => {
         upsertCredential(concurrent, {
           ...target,
           accessToken: "winner-access-token",
-          expiresAt: clock.now() + 60_000,
+          expiresAt: fixtureNow + 60_000,
           refreshToken: "winner-refresh-token",
-          updatedAt: clock.now(),
+          updatedAt: fixtureNow,
         }),
       );
       // This (losing) exchange's refresh token is now invalid server-side —
@@ -605,7 +601,7 @@ describe("resolveAccessToken", () => {
       return Response.json({ error: "invalid_grant" }, { status: 400 });
     });
     try {
-      const now = clock.now();
+      const now = fixtureNow;
       await seedCredential(
         buildCredential(provider.serverUrl, { expiresAt: now - 1000 }),
       );
@@ -655,7 +651,7 @@ describe("resolveAccessToken", () => {
         : Response.json({ error: "invalid_grant" }, { status: 400 }),
     );
     try {
-      const now = clock.now();
+      const now = fixtureNow;
       await seedCredential(
         buildCredential(provider.serverUrl, { expiresAt: now - 1000 }),
       );
@@ -705,7 +701,7 @@ describe("resolveAccessToken", () => {
         : Response.json({ error: "invalid_grant" }, { status: 400 });
     });
     try {
-      const now = clock.now();
+      const now = fixtureNow;
       await seedCredential(
         buildCredential(provider.serverUrl, { expiresAt: now - 1000 }),
       );

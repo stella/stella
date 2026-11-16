@@ -4,9 +4,6 @@ import os from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
-import { createTestClock } from "@stll/test-kit";
-import type { TestClock } from "@stll/test-kit";
-
 import {
   readCredentialFile,
   upsertCredential,
@@ -82,10 +79,9 @@ const startMockProvider = (
 
 describe("ensureFreshCredential", () => {
   let configDir: string;
-  let clock: TestClock;
+  const fixtureNow = 1_700_000_000_000;
 
   beforeEach(async () => {
-    clock = createTestClock();
     configDir = await mkdtemp(
       path.join(os.tmpdir(), "stella-cli-refresh-test-"),
     );
@@ -100,13 +96,13 @@ describe("ensureFreshCredential", () => {
       () => new Response("should not be called", { status: 500 }),
     );
     try {
-      const credential = buildCredential({ expiresAt: clock.now() + 60_000 });
+      const credential = buildCredential({ expiresAt: fixtureNow + 60_000 });
       await seedCredential(configDir, credential);
       const result = await ensureFreshCredential({
         configDir,
         credential,
         metadata: provider.metadata,
-        now: clock.now(),
+        now: fixtureNow,
       });
 
       expect(result.status).toBe("ok");
@@ -141,9 +137,9 @@ describe("ensureFreshCredential", () => {
     );
 
     try {
-      const credential = buildCredential({ expiresAt: clock.now() - 1000 });
+      const credential = buildCredential({ expiresAt: fixtureNow - 1000 });
       await seedCredential(configDir, credential);
-      const now = clock.now();
+      const now = fixtureNow;
       const result = await ensureFreshCredential({
         configDir,
         credential,
@@ -177,13 +173,13 @@ describe("ensureFreshCredential", () => {
     );
 
     try {
-      const credential = buildCredential({ expiresAt: clock.now() - 1000 });
+      const credential = buildCredential({ expiresAt: fixtureNow - 1000 });
       await seedCredential(configDir, credential);
       const result = await ensureFreshCredential({
         configDir,
         credential,
         metadata: provider.metadata,
-        now: clock.now(),
+        now: fixtureNow,
       });
 
       expect(result.status).toBe("error");
@@ -202,7 +198,7 @@ describe("ensureFreshCredential", () => {
     );
     try {
       const credential = buildCredential({
-        expiresAt: clock.now() - 1000,
+        expiresAt: fixtureNow - 1000,
         refreshToken: undefined,
       });
       await seedCredential(configDir, credential);
@@ -210,7 +206,7 @@ describe("ensureFreshCredential", () => {
         configDir,
         credential,
         metadata: provider.metadata,
-        now: clock.now(),
+        now: fixtureNow,
       });
 
       expect(result.status).toBe("error");
