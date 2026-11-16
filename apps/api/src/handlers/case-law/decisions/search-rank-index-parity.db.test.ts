@@ -1,7 +1,7 @@
 import type { PGlite } from "@electric-sql/pglite";
 import { panic } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import type { Transaction } from "@/api/db/root";
@@ -453,7 +453,8 @@ test("a decision whose newer upsert is queued, or whose applied copy awaits clea
     .update(corpusIndexProjectionIntents)
     .set({
       status: "cleanup_pending",
-      appendPublishBarrierAt: cleanupAt,
+      // The barrier follows the append it closes.
+      appendPublishBarrierAt: sql`${corpusIndexProjectionIntents.appendStartedAt}`,
       cleanupNotBefore: cleanupAt,
     })
     .where(
