@@ -105,6 +105,7 @@ describe("computeRawUsageMicroUnits", () => {
     "gpt-6-sol": [272_000, 55_400, 110_301],
     "gpt-6-luna": [272_000, 2770, 5516],
     "gpt-6.1-sol": [272_000, 55_400, 110_301],
+    "gpt-6.1-terra": [272_000, 27_700, 55_151],
     "claude-haiku-5-5": [100_000, 1050, 5251],
     "us.anthropic.claude-haiku-5-5": [100_000, 1155, 5776],
   } as const;
@@ -217,16 +218,22 @@ describe("computeRawUsageMicroUnits", () => {
         expect(units).toBeLessThanOrEqual(baseline);
       }
     }
-    // The repeat throttle collapses the run of anomalies into the first one.
-    expect(
-      analytics.exceptions().map((event) => event.properties),
-    ).toMatchObject([
-      {
+    // Repeated values share an issue, while each malformed field owns one.
+    const exceptions = analytics.exceptions();
+    expect(exceptions.map((event) => event.properties)).toMatchObject(
+      fields.map((field) => ({
         "error.class": "TelemetryError",
-        anomaly: "invalid-uncachedInputTokens",
+        anomaly: `invalid-${field}`,
         source: "usage-unit-model",
-      },
-    ]);
+      })),
+    );
+    expect(
+      new Set(
+        exceptions.map(
+          ({ properties }) => properties["$exception_fingerprint"],
+        ),
+      ).size,
+    ).toBe(fields.length);
 
     // +Infinity is an oversized positive count, not an absent one: it must
     // clamp to the ceiling (over-metering), never coerce to zero.
@@ -273,18 +280,23 @@ describe("computeRawUsageMicroUnits", () => {
   test("clamps absurdly large counts instead of overflowing", () => {
     // 2^40 caps every component, so even MAX_SAFE_INTEGER tokens meter
     // to a finite conservative amount with telemetry, never a crash.
+    // Its own model: an anomaly is reported once per model in a process.
     const units = computeRawUsageMicroUnits({
-      modelId: "unknown-model-name",
+      modelId: "unknown-model-clamped",
       uncachedInputTokens: 0,
       outputTokens: Number.MAX_SAFE_INTEGER,
     });
     expect(Number.isSafeInteger(units)).toBe(true);
     expect(units).toBe(2 ** 41);
-    expect(
-      analytics.exceptions().map((event) => event.properties),
-    ).toMatchObject([
-      { anomaly: "invalid-outputTokens", source: "usage-unit-model" },
-    ]);
+    // A model new to the process also reports that it has no rate.
+    expect(analytics.exceptions().map((event) => event.properties)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          anomaly: "invalid-outputTokens",
+          source: "usage-unit-model",
+        }),
+      ]),
+    );
   });
 
   test("keeps rate scaling exact when the intermediate product is unsafe", () => {
@@ -301,35 +313,38 @@ describe("computeRawUsageMicroUnits", () => {
 });
 
 describe("normalizeProviderPromptTokens", () => {
-  test("Anthropic warm cache: cache reads exceed input tokens legitimately", () => {
-    // Production-shaped Anthropic usage on a warm cache: `input_tokens`
-    // excludes cache reads and cache writes, so cached >> input.
-    const normalized = normalizeProviderPromptTokens({
-      provider: "anthropic",
-      modelId: "claude-sonnet-5",
-      promptTokens: 217,
-      cacheReadTokens: 45_082,
-      cacheWriteTokens: 1204,
-    });
-
-    expect(normalized).toEqual({
-      uncachedInputTokens: 217,
-      cacheReadTokens: 45_082,
-      cacheWriteTokens: 1204,
-    });
-    expect(analytics.exceptions()).toEqual([]);
-
-    // End to end: 217 uncached at 200_000/MTok (44), 1204 cache-write at
-    // 250_000/MTok (301), 45_082 cache-read at 20_000/MTok (902), and 1538
-    // output at 1_000_000/MTok (1538).
-    expect(
-      computeRawUsageMicroUnits({
+  test.each(["anthropic", "bedrock"] as const)(
+    "%s cached tokens split out of canonical input",
+    (provider) => {
+      // The adapter adds native input, cache reads and cache writes before
+      // exposing canonical TokenUsage to metering.
+      const normalized = normalizeProviderPromptTokens({
+        provider,
         modelId: "claude-sonnet-5",
-        outputTokens: 1538,
-        ...normalized,
-      }),
-    ).toBe(44 + 301 + 902 + 1538);
-  });
+        promptTokens: 46_503,
+        cacheReadTokens: 45_082,
+        cacheWriteTokens: 1204,
+      });
+
+      expect(normalized).toEqual({
+        uncachedInputTokens: 217,
+        cacheReadTokens: 45_082,
+        cacheWriteTokens: 1204,
+      });
+      expect(analytics.exceptions()).toEqual([]);
+
+      // End to end: 217 uncached at 200_000/MTok (44), 1204 cache-write at
+      // 250_000/MTok (301), 45_082 cache-read at 20_000/MTok (902), and 1538
+      // output at 1_000_000/MTok (1538).
+      expect(
+        computeRawUsageMicroUnits({
+          modelId: "claude-sonnet-5",
+          outputTokens: 1538,
+          ...normalized,
+        }),
+      ).toBe(44 + 301 + 902 + 1538);
+    },
+  );
 
   test("OpenAI subset semantics: cached tokens split out of the prompt total", () => {
     // Production-shaped OpenAI usage: `prompt_tokens` includes
@@ -393,12 +408,15 @@ describe("normalizeProviderPromptTokens", () => {
   });
 
   test("malformed provider counts coerce conservatively and report", () => {
-    const normalized = normalizeProviderPromptTokens({
-      provider: "anthropic",
-      modelId: "claude-sonnet-5-malformed-shape",
+    const counts = {
       promptTokens: Number.NaN,
       cacheReadTokens: -512,
       cacheWriteTokens: 96.4,
+    };
+    const normalized = normalizeProviderPromptTokens({
+      provider: "anthropic",
+      modelId: "claude-sonnet-5-malformed-shape",
+      ...counts,
     });
 
     // NaN and negative meter as 0; fractional rounds up.
@@ -410,8 +428,13 @@ describe("normalizeProviderPromptTokens", () => {
     expect(
       analytics.exceptions().map((event) => event.properties),
     ).toMatchObject([
+      ...Object.keys(counts).map((field) => ({
+        anomaly: `invalid-${field}`,
+        modelId: "claude-sonnet-5-malformed-shape",
+        source: "usage-unit-model",
+      })),
       {
-        anomaly: "invalid-promptTokens",
+        anomaly: "cache-tokens-exceed-included-prompt",
         modelId: "claude-sonnet-5-malformed-shape",
         source: "usage-unit-model",
       },

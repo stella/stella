@@ -15,7 +15,6 @@ import {
   oauthClient,
   oauthConsent,
   oauthRefreshToken,
-  organization,
   user,
 } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
@@ -31,6 +30,10 @@ import {
   refreshOAuthGrant,
   registerOAuthClient,
 } from "@/api/tests/helpers/oauth-grant";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
+import { serveRoutesForTest } from "@/api/tests/helpers/serve-routes";
+
+import rootManifest from "../../../../package.json" with { type: "json" };
 
 const runPostgres = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const tokenSchema = v.looseObject({
@@ -49,14 +52,18 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
   const provider =
     context.getPlugin("oauth-provider") ?? panic("OAuth provider required");
 
+  const routeServer = serveRoutesForTest(meRoute);
   const cleanup: (() => Promise<unknown>)[] = [];
   afterAll(async () => {
+    await routeServer.stop();
     for (const remove of cleanup.toReversed()) {
       await remove();
     }
   });
   beforeAll(() => {
-    expect(provider.version).toBe("1.7.6");
+    expect(provider.version).toBe(
+      rootManifest.catalog["@better-auth/oauth-provider"],
+    );
   });
   const fixture = async () => {
     const browser = await signInHuman(
@@ -70,8 +77,7 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
       headers: browser.headers(),
     });
     cleanup.push(
-      async () =>
-        await rootDb.delete(organization).where(eq(organization.id, firm.id)),
+      async () => await deleteOrganizationsForTest(rootDb, [firm.id]),
     );
     await browser.setActiveOrganization(firm.id);
     const client = await registerOAuthClient(undefined, "none");
@@ -279,7 +285,7 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
         .limit(1);
       const consentId =
         consent.at(0)?.id ?? panic("Connection consent required");
-      const disconnected = await meRoute.handle(
+      const disconnected = await routeServer.fetch(
         new Request(`http://localhost/me/oauth-connections/${consentId}`, {
           method: "DELETE",
           headers: { cookie: browser.cookieHeader() },

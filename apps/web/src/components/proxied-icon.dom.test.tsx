@@ -4,7 +4,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 
@@ -56,7 +56,7 @@ test("icon paths on the same host use distinct proxies and blob images", async (
       </>,
     );
     await waitFor(() =>
-      expect(view.container.querySelectorAll("img")).toHaveLength(2),
+      expect(view.container.querySelectorAll("img").length).toBe(2),
     );
     const sources = [...view.container.querySelectorAll("img")].map((image) =>
       image.getAttribute("src"),
@@ -88,7 +88,7 @@ test("catalogue remote fallbacks render only API-fetched blob URLs", async () =>
   try {
     const view = renderWithQuery(<CatalogueEntryIcon iconUrl={remote} />);
     await waitFor(() =>
-      expect(view.container.querySelector("img")).not.toBeNull(),
+      expect(view.container.querySelector("img") === null).toBe(false),
     );
     const src = view.container.querySelector("img")?.getAttribute("src");
     expect(src?.startsWith("blob:")).toBe(true);

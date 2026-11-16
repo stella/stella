@@ -11,6 +11,7 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
@@ -27,6 +28,8 @@ import {
   withPublisherGateFixture,
 } from "./publisher-request-gate";
 import { fetchPublisher } from "./retry";
+
+const testFetchState = createTestFetch();
 
 // Redis Cluster uses CRC16/XMODEM over the first nonempty hash tag, or the full key.
 const redisKeySlot = (key: string) => {
@@ -125,6 +128,7 @@ const settleMicrotasks = async () => {
 const CONFIG = {
   intervalMs: 500,
   key: "case-law:publisher-gate:cellar-eu",
+  publisherCode: "cellar-eu",
   publisher: "EU Cellar",
   cooldown: "shared",
 } as const;
@@ -151,6 +155,7 @@ describe("default publisher gate fixture isolation", () => {
       const slot = createPublisherRequestSlot({
         intervalMs: 500,
         key,
+        publisherCode: "cellar-eu",
         publisher: key,
       });
       const startedAt = Temporal.Now.instant().epochMilliseconds;
@@ -338,7 +343,7 @@ for (const reply of [-1, 2, "invalid"]) {
       sleep: async () => {},
     });
     expect(await rejectionOf(slot.tryReserve())).toHaveProperty(
-      "message",
+      "cause.message",
       expect.stringContaining("publisher gate returned an invalid wait"),
     );
   });
@@ -350,12 +355,14 @@ test("read-through requests observe competing requests during preparation", asyn
   const intervalMs = PUBLISHER_GATES["justice-sk"].intervalMs;
   let now = 0;
   const sent: number[] = [];
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = asFetchMock(
-    mock(async () => {
-      sent.push(now);
-      return new Response("document");
-    }),
+
+  testFetchState.set(
+    asFetchMock(
+      mock(async () => {
+        sent.push(now);
+        return new Response("document");
+      }),
+    ),
   );
   const request = async () =>
     await fetchPublisher("https://obcan.justice.sk/document.pdf", {
@@ -398,7 +405,7 @@ test("read-through requests observe competing requests during preparation", asyn
     ).toBe("completed");
     expect(sent).toEqual([intervalMs + 100, intervalMs * 2 + 100]);
   } finally {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
   }
 });
 

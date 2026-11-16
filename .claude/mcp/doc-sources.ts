@@ -36,10 +36,6 @@ export const DOC_SOURCES = {
     dependencies: ["@openrouter/sdk"],
     url: "https://openrouter.ai/docs/llms.txt",
   },
-  Elysia: {
-    dependencies: ["elysia", "@elysia/cors", "@elysia/eden"],
-    url: "https://elysiajs.com/llms.txt",
-  },
   Drizzle: {
     dependencies: ["drizzle-orm", "drizzle-kit"],
     url: "https://orm.drizzle.team/llms.txt",
@@ -58,7 +54,6 @@ export const DOC_SOURCES = {
       "@tanstack/ai-openai",
       "@tanstack/ai-openrouter",
       "@tanstack/ai-persistence",
-      "@tanstack/ai-react",
       "@tanstack/ai-sandbox",
       "@tanstack/charts",
       "@tanstack/devtools-vite",
@@ -105,10 +100,6 @@ export const DOC_SOURCES = {
     dependencies: ["react", "react-dom", "@types/react", "@types/react-dom"],
     url: "https://react.dev/llms.txt",
   },
-  ReactEmail: {
-    dependencies: ["@react-email/components", "@react-email/render"],
-    url: "https://react.email/docs/llms.txt",
-  },
   BaseUI: {
     dependencies: ["@base-ui/react"],
     url: "https://base-ui.com/llms.txt",
@@ -150,16 +141,33 @@ export const DOC_SOURCES = {
   },
   Expo: {
     dependencies: [
+      "@expo-google-fonts/dm-sans",
+      "@expo/fingerprint",
+      "@expo/ui",
+      "@expo/vector-icons",
       "expo",
+      "expo-asset",
+      "expo-audio",
       "expo-constants",
+      "expo-crypto",
+      "expo-dev-client",
+      "expo-document-picker",
       "expo-doctor",
+      "expo-file-system",
+      "expo-font",
+      "expo-glass-effect",
+      "expo-notifications",
       "expo-linking",
       "expo-router",
+      "expo-secure-store",
       "expo-status-bar",
       "expo-system-ui",
       "expo-updates",
+      "expo-web-browser",
+      "expo-widgets",
       "react-native-safe-area-context",
       "react-native-screens",
+      "react-native-svg",
     ],
     url: "https://docs.expo.dev/llms.txt",
   },
@@ -181,6 +189,7 @@ export const DOC_SOURCES = {
       "@aws-sdk/client-cloudwatch",
       "@aws-sdk/client-lambda",
       "@aws-sdk/client-s3",
+      "@aws-sdk/client-ssm",
       "@aws-sdk/client-sesv2",
       "@aws-sdk/client-sqs",
       "@aws-sdk/client-sts",
@@ -208,7 +217,7 @@ export const DOC_SOURCES = {
     url: "https://turborepo.dev/llms.txt",
   },
   PostHog: {
-    dependencies: ["posthog-js", "posthog-node"],
+    dependencies: ["posthog-js"],
     url: "https://posthog.com/llms.txt",
   },
   Zustand: {
@@ -219,6 +228,7 @@ export const DOC_SOURCES = {
     dependencies: [
       "oxlint",
       "@oxlint/plugins",
+      "oxc-parser",
       "oxc-transform-react",
       "oxlint-tsgolint",
     ],
@@ -253,7 +263,7 @@ export const DOC_SOURCES = {
     url: "https://fontsource.org/llms.txt",
   },
   Lucide: {
-    dependencies: ["lucide-react"],
+    dependencies: ["lucide-react", "lucide-react-native", "lucide-static"],
     url: "https://lucide.dev/llms.txt",
   },
   Tsdown: {
@@ -272,15 +282,6 @@ export const DOC_SOURCES = {
     dependencies: ["oxlint-tailwindcss"],
     url: "https://oxlint-tailwindcss.pages.dev/llms.txt",
   },
-  OpenTelemetry: {
-    dependencies: [
-      "@opentelemetry/api-logs",
-      "@opentelemetry/exporter-logs-otlp-http",
-      "@opentelemetry/resources",
-      "@opentelemetry/sdk-logs",
-    ],
-    url: "https://opentelemetry.io/llms.txt",
-  },
   GeminiAPI: {
     dependencies: ["@google/genai"],
     url: "https://ai.google.dev/gemini-api/docs/llms.txt",
@@ -292,6 +293,14 @@ export const DOC_SOURCES = {
   Lefthook: {
     dependencies: ["lefthook"],
     url: "https://lefthook.dev/llms.txt",
+  },
+  AgentDevice: {
+    dependencies: ["agent-device"],
+    url: "https://agent-device.dev/llms.txt",
+  },
+  Uniwind: {
+    dependencies: ["uniwind"],
+    url: "https://docs.uniwind.dev/llms.txt",
   },
 } as const satisfies Record<string, DocSource>;
 
@@ -364,12 +373,33 @@ const PROBED_WITHOUT_LLMS_TXT = [
     ["https://pglite.dev/llms.txt", "https://pglite.dev/docs/llms.txt"],
   ],
   [
+    "@emnapi/core",
+    [
+      "https://emnapi.netlify.app/llms.txt",
+      "https://raw.githubusercontent.com/toyobayashi/emnapi/main/llms.txt",
+    ],
+  ],
+  [
+    "@emnapi/runtime",
+    [
+      "https://emnapi.netlify.app/llms.txt",
+      "https://raw.githubusercontent.com/toyobayashi/emnapi/main/llms.txt",
+    ],
+  ],
+  [
     "@firecrawl/anydoc",
     ["https://raw.githubusercontent.com/firecrawl/anydoc/HEAD/llms.txt"],
   ],
   [
     "@formatjs/icu-messageformat-parser",
     ["https://raw.githubusercontent.com/formatjs/formatjs/HEAD/llms.txt"],
+  ],
+  [
+    "@formatjs/intl-pluralrules",
+    [
+      "https://formatjs.github.io/llms.txt",
+      "https://raw.githubusercontent.com/formatjs/formatjs/HEAD/llms.txt",
+    ],
   ],
   [
     "@happy-dom/global-registrator",
@@ -420,12 +450,6 @@ const PROBED_WITHOUT_LLMS_TXT = [
     [
       "https://ooxml.silurus.dev/llms.txt",
       "https://ooxml.silurus.dev/docs/llms.txt",
-    ],
-  ],
-  [
-    "@sinclair/typebox",
-    [
-      "https://raw.githubusercontent.com/sinclairzx81/sinclair-typebox/HEAD/llms.txt",
     ],
   ],
   [
@@ -493,10 +517,6 @@ const PROBED_WITHOUT_LLMS_TXT = [
     "cheerio",
     ["https://cheerio.js.org/llms.txt", "https://cheerio.js.org/docs/llms.txt"],
   ],
-  [
-    "client-zip",
-    ["https://raw.githubusercontent.com/Touffy/client-zip/HEAD/llms.txt"],
-  ],
   ["clsx", ["https://raw.githubusercontent.com/lukeed/clsx/HEAD/llms.txt"]],
   ["cobe", ["https://raw.githubusercontent.com/shuding/cobe/HEAD/llms.txt"]],
   ["diff", ["https://raw.githubusercontent.com/kpdecker/jsdiff/HEAD/llms.txt"]],
@@ -540,9 +560,15 @@ const PROBED_WITHOUT_LLMS_TXT = [
     ["https://raw.githubusercontent.com/redis/ioredis/HEAD/llms.txt"],
   ],
   ["jose", ["https://raw.githubusercontent.com/panva/jose/HEAD/llms.txt"]],
-  ["jszip", ["https://raw.githubusercontent.com/Stuk/jszip/HEAD/llms.txt"]],
   ["katex", ["https://katex.org/llms.txt", "https://katex.org/docs/llms.txt"]],
   ["knip", ["https://knip.dev/llms.txt", "https://knip.dev/docs/llms.txt"]],
+  [
+    "lightningcss",
+    [
+      "https://lightningcss.dev/llms.txt",
+      "https://raw.githubusercontent.com/parcel-bundler/lightningcss/HEAD/llms.txt",
+    ],
+  ],
   [
     "nodemailer",
     ["https://nodemailer.com/llms.txt", "https://nodemailer.com/docs/llms.txt"],
@@ -606,6 +632,13 @@ const PROBED_WITHOUT_LLMS_TXT = [
     "scslre",
     ["https://raw.githubusercontent.com/RunDevelopment/scslre/HEAD/llms.txt"],
   ],
+  [
+    "sharp",
+    [
+      "https://sharp.pixelplumbing.com/llms.txt",
+      "https://raw.githubusercontent.com/lovell/sharp/HEAD/llms.txt",
+    ],
+  ],
   ["sherif", ["https://raw.githubusercontent.com/QuiiBz/sherif/HEAD/llms.txt"]],
   [
     "slimdom",
@@ -637,6 +670,10 @@ const PROBED_WITHOUT_LLMS_TXT = [
     ],
   ],
   [
+    "tsrs",
+    ["https://raw.githubusercontent.com/oxc-project/tsrs/HEAD/llms.txt"],
+  ],
+  [
     "typescript",
     [
       "https://www.typescriptlang.org/llms.txt",
@@ -658,6 +695,13 @@ const PROBED_WITHOUT_LLMS_TXT = [
   [
     "use-debounce",
     ["https://raw.githubusercontent.com/xnimorz/use-debounce/HEAD/llms.txt"],
+  ],
+  [
+    "icu-minify",
+    [
+      "https://raw.githubusercontent.com/amannn/next-intl/HEAD/llms.txt",
+      "https://raw.githubusercontent.com/amannn/next-intl/HEAD/packages/icu-minify/llms.txt",
+    ],
   ],
   [
     "use-intl",
@@ -687,6 +731,25 @@ const noLlmsTxt = ([dependency, urls]: readonly [
 export const DOC_SOURCE_EXCLUSIONS = PROBED_WITHOUT_LLMS_TXT.map(
   noLlmsTxt,
 ).concat(
+  {
+    checkedAt: "2026-11-04T00:00:00.000Z",
+    dependency: "date-holidays",
+    explanation:
+      "https://raw.githubusercontent.com/commenthol/date-holidays/master/llms.txt and https://commenthol.github.io/date-holidays/llms.txt return 404. Use the official API documentation in https://github.com/commenthol/date-holidays#api directly.",
+    expiresAt: "2026-12-04T00:00:00.000Z",
+    reason: "no-llms-txt",
+  },
+  ...["@dnd-kit/core", "@dnd-kit/sortable"].map(
+    (dependency) =>
+      ({
+        checkedAt: "2026-10-28T00:00:00.000Z",
+        dependency,
+        explanation:
+          "https://raw.githubusercontent.com/clauderic/dnd-kit/master/llms.txt returns 404; https://dndkit.com/llms.txt and https://docs.dndkit.com/llms.txt reject retrieval with 403. No retrievable index was found. Use the official legacy API reference at https://dndkit.com/legacy/ directly for the retained Kanban consumer contract.",
+        expiresAt: "2026-11-27T00:00:00.000Z",
+        reason: "no-llms-txt",
+      }) satisfies NoLlmsTxtExclusion,
+  ),
   ...[
     "prosemirror-commands",
     "prosemirror-dropcursor",
@@ -716,6 +779,14 @@ export const DOC_SOURCE_EXCLUSIONS = PROBED_WITHOUT_LLMS_TXT.map(
     explanation:
       "The repository's https://raw.githubusercontent.com/paulmillr/noble-hashes/main/llms.txt returns 404. Use the official README and API declarations at https://github.com/paulmillr/noble-hashes directly; the shared SHA-256 owner uses create(), update() and digest() for bounded browser Blob hashing.",
     expiresAt: "2026-11-23T00:00:00.000Z",
+    reason: "no-llms-txt",
+  },
+  {
+    checkedAt: "2026-10-30T00:00:00.000Z",
+    dependency: "whatwg-fetch",
+    explanation:
+      "https://github.github.io/fetch/llms.txt and the repository's llms.txt return 404. Use the README at https://github.com/JakeChampion/fetch directly; the iOS app's request tests use only its Headers, Request and Response classes, which React Native installs as globals.",
+    expiresAt: "2026-11-27T00:00:00.000Z",
     reason: "no-llms-txt",
   },
   {
@@ -815,6 +886,38 @@ export const DOC_SOURCE_EXCLUSIONS = PROBED_WITHOUT_LLMS_TXT.map(
     reason: "no-llms-txt",
   },
   {
+    checkedAt: "2026-11-10T00:00:00.000Z",
+    dependency: "@tailwindcss/cli",
+    explanation:
+      "https://tailwindcss.com/llms.txt and https://tailwindcss.com/docs/llms.txt return 404. Use the CLI installation guide at https://tailwindcss.com/docs/installation/tailwind-cli directly; the Outlook add-in build runs only its --input, --output and --minify options.",
+    expiresAt: "2026-12-10T00:00:00.000Z",
+    reason: "no-llms-txt",
+  },
+  {
+    checkedAt: "2026-11-10T00:00:00.000Z",
+    dependency: "@types/office-js",
+    explanation:
+      "https://raw.githubusercontent.com/DefinitelyTyped/DefinitelyTyped/HEAD/llms.txt and https://raw.githubusercontent.com/OfficeDev/office-js/HEAD/llms.txt return 404. Use the Outlook add-in API reference at https://learn.microsoft.com/javascript/api/outlook directly, with the declarations in @types/office-js.",
+    expiresAt: "2026-12-10T00:00:00.000Z",
+    reason: "no-llms-txt",
+  },
+  {
+    checkedAt: "2026-11-10T00:00:00.000Z",
+    dependency: "libxml2-wasm",
+    explanation:
+      "https://jameslan.github.io/libxml2-wasm/llms.txt and the repository's llms.txt return 404. Use the API documentation at https://jameslan.github.io/libxml2-wasm/ directly; the Outlook add-in uses it only to validate its manifest against the Office XML schemas.",
+    expiresAt: "2026-12-10T00:00:00.000Z",
+    reason: "no-llms-txt",
+  },
+  {
+    checkedAt: "2026-11-10T00:00:00.000Z",
+    dependency: "mimetext",
+    explanation:
+      "https://muratgozel.github.io/MIMEText/llms.txt and the repository's llms.txt return 404. Use the README at https://github.com/muratgozel/MIMEText directly; the Outlook add-in uses it only to assemble an .eml message from a mail item.",
+    expiresAt: "2026-12-10T00:00:00.000Z",
+    reason: "no-llms-txt",
+  },
+  {
     checkedAt: "2026-10-06T00:00:00.000Z",
     dependency: "playwright-core",
     explanation:
@@ -863,19 +966,19 @@ export const DOC_SOURCE_EXCLUSIONS = PROBED_WITHOUT_LLMS_TXT.map(
     reason: "no-llms-txt",
   },
   {
-    checkedAt: "2026-09-30T00:00:00.000Z",
+    checkedAt: "2026-10-30T00:00:00.000Z",
     dependency: "@standard-schema/spec",
     explanation:
       "https://standardschema.dev/llms.txt returns 404. Use the specification at https://standardschema.dev and the typed interfaces in @standard-schema/spec directly.",
-    expiresAt: "2026-10-30T00:00:00.000Z",
+    expiresAt: "2026-11-29T00:00:00.000Z",
     reason: "no-llms-txt",
   },
   {
-    checkedAt: "2026-10-25T00:00:00.000Z",
+    checkedAt: "2026-10-26T00:00:00.000Z",
     dependency: "mailauth",
     explanation:
       "https://raw.githubusercontent.com/postalsys/mailauth/HEAD/llms.txt returns no llms.txt. The canonical repository has no llms.txt (raw endpoint returns 404). Use the authentication API documentation at https://github.com/postalsys/mailauth directly.",
-    expiresAt: "2026-10-27T00:00:00.000Z",
+    expiresAt: "2026-11-25T00:00:00.000Z",
     reason: "no-llms-txt",
   },
   {
@@ -887,59 +990,51 @@ export const DOC_SOURCE_EXCLUSIONS = PROBED_WITHOUT_LLMS_TXT.map(
     reason: "no-llms-txt",
   },
   {
-    checkedAt: "2026-10-25T00:00:00.000Z",
+    checkedAt: "2026-10-26T00:00:00.000Z",
     dependency: "tldts",
     explanation:
       "https://raw.githubusercontent.com/remusao/tldts/HEAD/llms.txt returns no llms.txt. The canonical repository has no llms.txt (raw endpoint returns 404). Use the domain parsing API documentation at https://github.com/remusao/tldts directly.",
-    expiresAt: "2026-10-27T00:00:00.000Z",
+    expiresAt: "2026-11-25T00:00:00.000Z",
     reason: "no-llms-txt",
   },
   {
-    checkedAt: "2026-09-27T00:00:00.000Z",
+    checkedAt: "2026-10-26T00:00:00.000Z",
     dependency: "ajv",
     explanation:
       "https://ajv.js.org/llms.txt returns 404. Use the API reference at https://ajv.js.org/api.html and the strict-mode rules at https://ajv.js.org/strict-mode.html directly.",
-    expiresAt: "2026-10-27T00:00:00.000Z",
+    expiresAt: "2026-11-25T00:00:00.000Z",
     reason: "no-llms-txt",
   },
   {
-    checkedAt: "2026-10-25T00:00:00.000Z",
+    checkedAt: "2026-10-26T00:00:00.000Z",
     dependency: "ajv-formats",
     explanation:
       "https://ajv.js.org/llms.txt returns no llms.txt. The Ajv project publishes no llms.txt. Use the format list in the README at https://github.com/ajv-validator/ajv-formats directly.",
-    expiresAt: "2026-10-27T00:00:00.000Z",
+    expiresAt: "2026-11-25T00:00:00.000Z",
     reason: "no-llms-txt",
   },
   {
-    checkedAt: "2026-09-27T00:00:00.000Z",
-    dependency: "fast-xml-parser",
-    explanation:
-      "The project publishes no llms.txt (https://naturalintelligence.github.io/fast-xml-parser/llms.txt returns 404). Use the docs at https://github.com/NaturalIntelligence/fast-xml-parser/tree/master/docs and the typed API in its package (src/fxp.d.ts) directly.",
-    expiresAt: "2026-10-27T00:00:00.000Z",
-    reason: "no-llms-txt",
-  },
-  {
-    checkedAt: "2026-10-25T00:00:00.000Z",
+    checkedAt: "2026-10-26T00:00:00.000Z",
     dependency: "cldr-misc-full",
     explanation:
-      "https://raw.githubusercontent.com/unicode-org/cldr-json/HEAD/llms.txt returns no llms.txt. A CLDR JSON data package with no API; the Unicode CLDR project publishes no llms.txt. Use the data layout at https://github.com/unicode-org/cldr-json and the exemplar-character specification at https://unicode.org/reports/tr35/tr35-general.html#Character_Elements directly.",
-    expiresAt: "2026-10-26T00:00:00.000Z",
+      "https://cldr.unicode.org/llms.txt, https://www.unicode.org/llms.txt and the repository llms.txt at https://raw.githubusercontent.com/unicode-org/cldr-json/HEAD/llms.txt return 404. A CLDR JSON data package with no API; the Unicode CLDR project publishes no llms.txt. Use the data layout at https://github.com/unicode-org/cldr-json and the exemplar-character specification at https://unicode.org/reports/tr35/tr35-general.html#Character_Elements directly.",
+    expiresAt: "2026-11-25T00:00:00.000Z",
     reason: "no-llms-txt",
   },
   {
-    checkedAt: "2026-09-26T00:00:00.000Z",
+    checkedAt: "2026-10-26T00:00:00.000Z",
     dependency: "asn1js",
     explanation:
-      "https://asn1js.org/llms.txt returns 404 and the project publishes no other llms.txt. Use the README at https://github.com/PeculiarVentures/asn1.js and the typed API in its package directly.",
-    expiresAt: "2026-10-26T00:00:00.000Z",
+      "https://asn1js.org/llms.txt, https://asn1js.org/llms-full.txt, https://asn1js.org/docs/llms.txt and the repository llms.txt return 404; the project publishes no llms.txt. Use the documentation at https://asn1js.org/docs/api/, the README at https://github.com/PeculiarVentures/ASN1.js and the typed API in its package directly.",
+    expiresAt: "2026-11-25T00:00:00.000Z",
     reason: "no-llms-txt",
   },
   {
-    checkedAt: "2026-09-26T00:00:00.000Z",
+    checkedAt: "2026-10-26T00:00:00.000Z",
     dependency: "pkijs",
     explanation:
-      "https://pkijs.org/llms.txt returns 404 and the project publishes no other llms.txt. Use the documentation at https://pkijs.org/docs/ and the typed API in its package directly.",
-    expiresAt: "2026-10-26T00:00:00.000Z",
+      "https://pkijs.org/llms.txt, https://pkijs.org/llms-full.txt, https://pkijs.org/docs/llms.txt and the repository llms.txt return 404; the project publishes no llms.txt. Use the documentation at https://pkijs.org/docs/installation and https://pkijs.org/docs/api/ and the typed API in its package directly.",
+    expiresAt: "2026-11-25T00:00:00.000Z",
     reason: "no-llms-txt",
   },
   {

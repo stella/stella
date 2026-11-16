@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { DATA_BOX_MESSAGE_MIME_TYPE } from "@stll/api-contract/data-box";
 import { EMAIL_MIME_TYPES } from "@stll/api-contract/email-mime-types";
 
 import {
@@ -29,7 +30,11 @@ describe("classification", () => {
       direct: DIRECT_TEXT_MIME_TYPES,
       email: new Set(Object.keys(EMAIL_MIME_TYPES)),
       office: OFFICE_DOCUMENT_MIME_TYPES,
-      singles: new Set<string>([DOCX_MIME_TYPE, PDF_MIME_TYPE]),
+      singles: new Set<string>([
+        DOCX_MIME_TYPE,
+        PDF_MIME_TYPE,
+        DATA_BOX_MESSAGE_MIME_TYPE,
+      ]),
     };
 
     for (const [name, set] of Object.entries(sets)) {
@@ -50,6 +55,7 @@ describe("classification", () => {
       ...Object.keys(EMAIL_MIME_TYPES),
       DOCX_MIME_TYPE,
       PDF_MIME_TYPE,
+      DATA_BOX_MESSAGE_MIME_TYPE,
     ];
 
     const rejected = classified.filter(

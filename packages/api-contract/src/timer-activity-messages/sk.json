@@ -1,0 +1,11 @@
+{
+  "timer": "Časovač",
+  "running": "Beží",
+  "paused": "Pozastavené",
+  "noMatter": "Bez spisu",
+  "noDescription": "Bez popisu",
+  "more": "{count, plural, one {a # ďalší časovač} few {a # ďalšie časovače} other {a # ďalších časovačov}}",
+  "startedElsewhere": "Na inom zariadení sa spustil časovač",
+  "pause": "Pozastaviť",
+  "resume": "Pokračovať"
+}

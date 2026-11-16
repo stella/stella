@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
-import { vApiDate } from "@stll/api-contract/api-date";
+import { apiDateSchema } from "@stll/api-contract/api-date";
 import { SIGNAL_SEVERITY } from "@stll/api-contract/signals";
 import type { SignalSeverity } from "@stll/api-contract/signals";
 import { failureGradeOf } from "@stll/errors";
@@ -54,20 +54,20 @@ export const deadlineScoutFailureStatus = (
   return "pending";
 };
 
-export const DEADLINE_TEXT_CAP_CHARS = 60_000;
+const DEADLINE_TEXT_CAP_CHARS = 60_000;
 export const DEADLINE_TEXT_MIN_CHARS = 200;
-export const DEADLINE_MIN_CONFIDENCE = 0.6;
-export const DEADLINE_MAX_ITEMS = 10;
-export const DEADLINE_QUOTE_MAX_CHARS = 300;
+const DEADLINE_MIN_CONFIDENCE = 0.6;
+const DEADLINE_MAX_ITEMS = 10;
+const DEADLINE_QUOTE_MAX_CHARS = 300;
 /** Deadlines slightly in the past are still worth surfacing (missed ones). */
-export const DEADLINE_PAST_GRACE_MS = 7 * DAY_IN_MS;
+const DEADLINE_PAST_GRACE_MS = 7 * DAY_IN_MS;
 
 export const deadlineExtractionSchema = v.object({
   deadlines: v.pipe(
     v.array(
       v.object({
         label: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(200)),
-        dueDate: vApiDate,
+        dueDate: apiDateSchema,
         quote: v.pipe(
           v.string(),
           v.trim(),

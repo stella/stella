@@ -40,8 +40,8 @@ describe.serial("soft-law handlers use the supplied fetch capability", () => {
   test("safe outbound wrappers cannot bypass the publisher block latch", async () => {
     expect(
       await lint([
-        'import { safeOutboundFetchBytes as bytes, safeOutboundFetchStream, fetchWithResolvedAddress, fetchStreamWithResolvedAddress } from "@/api/lib/safe-outbound-fetch";',
-        'import * as outbound from "@/api/lib/safe-outbound-fetch";',
+        'import { safeOutboundFetchBytes as bytes, safeOutboundFetchStream, fetchWithResolvedAddress, fetchStreamWithResolvedAddress } from "@/api/lib/auth/authorized-outbound-fetch";',
+        'import * as outbound from "@/api/lib/auth/authorized-outbound-fetch";',
         'await bytes({ url: "https://uoou.gov.cz/document", maxBytes: 1000, timeoutMs: 1000 });',
         'await safeOutboundFetchStream({ url: "https://uoou.gov.cz/document", maxBytes: 1000, timeoutMs: 1000 });',
         "await fetchWithResolvedAddress(options);",
@@ -70,7 +70,7 @@ describe.serial("soft-law handlers use the supplied fetch capability", () => {
       await lint(
         [
           'import { fetchWithTimeout } from "@stll/fetch";',
-          'import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";',
+          'import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";',
           'await fetchWithTimeout("https://uoou.gov.cz/document", { timeoutMs: 1000 });',
           "await safeOutboundFetchBytes({ url: input, maxBytes: 1000, timeoutMs: 1000 });",
         ],
@@ -93,7 +93,7 @@ describe.serial("soft-law handlers use the supplied fetch capability", () => {
           label: `case ${index + 1}: ${JSON.stringify(lintCase)}`,
           result: await lint(
             [
-              'import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";',
+              'import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";',
               'await fetch("https://uoou.gov.cz/document");',
               "await safeOutboundFetchBytes({ url: input, maxBytes: 1000, timeoutMs: 1000 });",
             ],
@@ -108,3 +108,101 @@ describe.serial("soft-law handlers use the supplied fetch capability", () => {
     );
   });
 });
+
+describe.serial(
+  "converter targets require validated settings provenance",
+  () => {
+    const sourcePath = "apps/api/src/lib/files/gotenberg.ts";
+    const imports = [
+      'import { fetchWithTimeout } from "@stll/fetch";',
+      'import { gotenbergConvertTarget as convertTarget } from "@/api/lib/files/converter-settings";',
+      'import { envConverter as configured } from "@/api/env-converter";',
+    ];
+
+    test("accepts unchanged configuration and target aliases", async () => {
+      expect(
+        await lint(
+          [
+            ...imports,
+            "const settings = configured;",
+            "const authorization = basicAuth(settings.GOTENBERG_USERNAME, configured.GOTENBERG_PASSWORD);",
+            "const build = convertTarget;",
+            "const target = build(settings);",
+            "const alias = target;",
+            'alias.searchParams.set("trace", input);',
+            'await fetchWithTimeout(alias, { redirect: "error", timeoutMs: 1000 });',
+            'await fetchWithTimeout(convertTarget(configured), { redirect: "error", timeoutMs: 1000 });',
+          ],
+          sourcePath,
+        ),
+      ).toEqual([]);
+    });
+
+    test("rejects foreign, copied, overridden, spread and reassigned settings", async () => {
+      expect(
+        await lint(
+          [
+            ...imports,
+            'import { envConverter as foreign } from "./foreign-config";',
+            'import { gotenbergConvertTarget as foreignTarget } from "./foreign-builder";',
+            'import { env } from "@/api/env";',
+            'await fetchWithTimeout(convertTarget(input), { redirect: "error", timeoutMs: 1000 });',
+            'await fetchWithTimeout(convertTarget(foreign), { redirect: "error", timeoutMs: 1000 });',
+            'await fetchWithTimeout(foreignTarget(configured), { redirect: "error", timeoutMs: 1000 });',
+            'await fetchWithTimeout(convertTarget({ ...configured }), { redirect: "error", timeoutMs: 1000 });',
+            'await fetchWithTimeout(convertTarget({ ...configured, GOTENBERG_URL: input }), { redirect: "error", timeoutMs: 1000 });',
+            'await fetchWithTimeout(convertTarget(...args), { redirect: "error", timeoutMs: 1000 });',
+            'await fetchWithTimeout(convertTarget(env), { redirect: "error", timeoutMs: 1000 });',
+            "let changed = configured;",
+            "changed = input;",
+            'await fetchWithTimeout(convertTarget(changed), { redirect: "error", timeoutMs: 1000 });',
+          ],
+          sourcePath,
+        ),
+      ).toEqual([7, 8, 9, 10, 11, 12, 13, 16]);
+    });
+
+    test("rejects settings mutated through aliases or escaped containers", async () => {
+      expect(
+        await lint(
+          [
+            ...imports,
+            "const settings = configured;",
+            "settings.GOTENBERG_URL = input;",
+            'await fetchWithTimeout(convertTarget(configured), { redirect: "error", timeoutMs: 1000 });',
+          ],
+          sourcePath,
+        ),
+      ).toEqual([6]);
+      expect(
+        await lint(
+          [
+            ...imports,
+            "const holder = { settings: configured };",
+            "holder.settings.GOTENBERG_URL = input;",
+            'await fetchWithTimeout(convertTarget(configured), { redirect: "error", timeoutMs: 1000 });',
+          ],
+          sourcePath,
+        ),
+      ).toEqual([6]);
+    });
+
+    test("rejects post-construction authority changes and unknown URL consumers", async () => {
+      expect(
+        await lint(
+          [
+            ...imports,
+            "const target = convertTarget(configured);",
+            "const alias = target;",
+            "alias.hostname = input;",
+            'await fetchWithTimeout(target, { redirect: "error", timeoutMs: 1000 });',
+            "const escaped = convertTarget(configured);",
+            "mutate(escaped);",
+            'await fetchWithTimeout(escaped, { redirect: "error", timeoutMs: 1000 });',
+          ],
+          sourcePath,
+        ),
+      ).toEqual([7, 10]);
+    });
+  },
+);

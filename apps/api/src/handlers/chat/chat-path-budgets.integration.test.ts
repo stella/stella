@@ -9,12 +9,12 @@ import {
   test,
 } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import type { Logger } from "drizzle-orm";
-import { AsyncLocalStorage } from "node:async_hooks";
 
 import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
 import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
+import { waitForExternalState } from "@stll/property-testing/external-state";
 
+import { rootDb } from "@/api/db/root";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   chatMessages,
@@ -29,10 +29,16 @@ import getMessages from "@/api/handlers/chat/messages/list";
 import getOlderMessages from "@/api/handlers/chat/older-messages/list";
 import { joinChatTurn, probeChatTurn } from "@/api/handlers/chat/turns/resume";
 import type { ChatPart } from "@/api/handlers/chat/types";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { MAX_CATCHUP_BYTES, MAX_CATCHUP_CHUNKS } from "@/api/lib/chat/run-log";
+import {
+  currentQueryCounter,
+  queryCountLogger,
+  runWithQueryCounter,
+} from "@/api/lib/db-query-counter";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
   createApprovalHarness,
@@ -49,18 +55,26 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 import { withQueryLogger } from "@/api/tests/security/test-utils";
+import { ROOT_POOL_SENTINEL_MESSAGE } from "@/api/tests/test-database-environment";
 
 // What each chat path costs the database and the wire, measured through the
 // real handlers: the send route and `streamChat` with a scripted model behind
 // the adapter seam (`chat-approval-harness.ts`), the thread page, the older
 // page, the rejoin probe and join, and Stop, all against the test database.
+// Statements are counted by the request's own query counter, the seam behind
+// `x-db-queries`, so a path's reads through the root pool or a dedicated
+// session count as much as its member-scoped ones: a budget that sees only
+// one connection misses whatever a path moves to another.
 // Every path runs on a short thread and on a long one and must cost the same
 // SQL on both: a per-message or per-tool-call query (an N+1) fails here
 // however small its absolute cost. Bytes are bounded per page and per streamed
 // delta, never per thread.
 //
-// Calibration: `measured` is what main measured, identical on the short and
-// the long thread. A budget is that measurement plus a small headroom
+// Calibration: `measured` is what main measures, identical on the short and
+// the long thread, and a test holds it to today's measurement
+// (`RECORDED_FIGURE_BANDS`): statement counts exactly, byte figures and
+// timing-dependent counts within a stated band, so a change that moves a
+// figure past its band updates it here. A budget is that measurement plus a small headroom
 // (`withHeadroom`): 10% of the statements, at least one, and 15% of the
 // bytes; a measurement that also depends on timing gets its stated
 // `TIMING_ALLOWANCE` instead. Byte figures hold for this fixture's messages (a text question, an
@@ -85,40 +99,47 @@ const REJOINED_DELTAS = { replayed: 100, snapshotted: 600 } as const;
 
 const CHAT_PATH_BUDGETS = {
   /** The thread page: thread, settings, the newest page, context estimate. */
-  openThread: { measured: { pageBytes: 15_245, statements: 9 } },
+  openThread: { measured: { pageBytes: 15_245, statements: 10 } },
   /** One older page. */
-  olderPage: { measured: { pageBytes: 14_365, statements: 5 } },
+  olderPage: { measured: { pageBytes: 14_365, statements: 6 } },
   /** A send up to its first delivery-log append: the thread and history
-   *  reads, the turn's acceptance and claim, the run's setup. */
-  sendUntilStream: { measured: { statements: 58 } },
+   *  reads, the turn's acceptance (which releases a held queue) and claim,
+   *  the run's setup. */
+  sendUntilStream: { measured: { statements: 64 } },
   /** The streamed answer: delivery-log appends batch deltas, so a delta
    *  costs a share of one append, and its SSE event a fixed frame. */
   streamedText: {
     measured: {
       framingBytesPerDelta: 135,
-      statementsPer100Deltas: 21,
-      statementsPerAppend: 7,
+      statementsPer100Deltas: 24,
+      statementsPerAppend: 8,
     },
   },
   /** The turn's settlement after its last append: the assistant message,
    *  the turn row, the closed log. */
-  settleTurn: { measured: { statements: 10 } },
+  settleTurn: { measured: { statements: 11 } },
   /** The rejoin probe of a running turn. */
   rejoinProbe: { measured: { bytes: 117, statements: 2 } },
   /** Joining a running turn from its start, up to its current tail. */
   rejoinJoin: {
     measured: {
       replayedBytes: 15_166,
-      replayedStatements: 8,
-      snapshotBytes: 3672,
+      replayedStatements: 9,
+      // Native source metadata adds 151 bytes to the compacted snapshot.
+      snapshotBytes: 3823,
       snapshotStatements: 13,
     },
+    // Preserve the pre-migration ceiling: ceil(3672 * 1.15).
+    limits: { snapshotBytes: 4223 },
   },
   /** The Stop route on a running turn. */
   stop: { measured: { statements: 6 } },
 } as const satisfies Record<
   string,
-  { measured: Readonly<Record<string, number>> }
+  {
+    measured: Readonly<Record<string, number>>;
+    limits?: Readonly<Record<string, number>>;
+  }
 >;
 
 /**
@@ -131,6 +152,47 @@ const CHAT_PATH_BUDGETS = {
 const TIMING_ALLOWANCE: Readonly<Record<string, number>> = {
   statementsPer100Deltas: 2,
 };
+
+/**
+ * How far today's measurement may sit from a recorded figure, either side.
+ * Statement counts are the same on every run, so they match exactly.
+ * Byte figures move by a few bytes between runs (two of them have differed
+ * by one), so they hold within 2%.
+ * A timing-dependent count holds within half to twice its record.
+ */
+const RECORDED_FIGURE_BANDS = {
+  bytes: { below: 0.98, above: 1.02 },
+  statements: { below: 1, above: 1 },
+  timing: { below: 0.5, above: 2 },
+} as const;
+
+/** `figure` is `path.name`; its band follows from the name. */
+const recordedFigureBand = (
+  figure: string,
+  recorded: number,
+): readonly [low: number, high: number] => {
+  const name = figure.slice(figure.indexOf(".") + 1);
+  const band = (() => {
+    if (TIMING_ALLOWANCE[name] !== undefined) {
+      return RECORDED_FIGURE_BANDS.timing;
+    }
+    if (/bytes/iu.test(name)) {
+      return RECORDED_FIGURE_BANDS.bytes;
+    }
+    return RECORDED_FIGURE_BANDS.statements;
+  })();
+  return [recorded * band.below, recorded * band.above];
+};
+
+/** Every figure of every path, keyed `path.name`. */
+const figuresByName = (
+  figures: Readonly<Record<string, Readonly<Record<string, number>>>>,
+): ReadonlyMap<string, number> =>
+  new Map(
+    Object.entries(figures).flatMap(([path, values]) =>
+      Object.entries(values).map(([name, value]) => [`${path}.${name}`, value]),
+    ),
+  );
 
 const withHeadroom = (name: string, value: number): number => {
   const allowance = TIMING_ALLOWANCE[name];
@@ -146,26 +208,26 @@ const withHeadroom = (name: string, value: number): number => {
   return panic(`No headroom rule for ${name}`);
 };
 
-/** A path's budgets: each measurement plus its headroom. */
+/** Explicit ceilings stay fixed; other measurements retain their headroom. */
 const budgetOf = <TPath extends keyof typeof CHAT_PATH_BUDGETS>(
   path: TPath,
-): Record<keyof (typeof CHAT_PATH_BUDGETS)[TPath]["measured"], number> =>
-  asTestRaw(
-    Object.fromEntries(
-      Object.entries(CHAT_PATH_BUDGETS[path].measured).map(([name, value]) => [
-        name,
-        withHeadroom(name, value),
-      ]),
-    ),
-  );
+) => {
+  const budget = CHAT_PATH_BUDGETS[path];
+  const measured: Readonly<Record<string, number>> = budget.measured;
+  const limits: Readonly<Record<string, number>> =
+    "limits" in budget ? budget.limits : {};
+  return (
+    name: Extract<keyof (typeof CHAT_PATH_BUDGETS)[TPath]["measured"], string>,
+  ) => {
+    const value = measured[name];
+    if (value === undefined) {
+      return panic(`No ${name} measurement for ${path}`);
+    }
+    return limits[name] ?? withHeadroom(name, value);
+  };
+};
 
 type StatementLog = { statements: string[] };
-const statementStore = new AsyncLocalStorage<StatementLog>();
-const recordingLogger: Logger = {
-  logQuery: (query) => {
-    statementStore.getStore()?.statements.push(query);
-  },
-};
 
 let testDb: TestDatabase;
 let ids: TestIds;
@@ -175,7 +237,7 @@ const seededThreadIds: SafeId<"chatThread">[] = [];
 
 beforeAll(async () => {
   const fixture = await getRlsFixture();
-  testDb = withQueryLogger(fixture.testDb, recordingLogger);
+  testDb = withQueryLogger(fixture.testDb, queryCountLogger);
   ids = fixture.ids;
   scopedDb = asTestRaw<ScopedDb>(
     createScopedDb(testDb, [ids.wsA1, ids.wsA2], ids.orgA, ids.userA1),
@@ -285,21 +347,20 @@ const seedThread = async ({
   return threadId;
 };
 
-/** Runs `operation` with every statement it (and whatever it starts)
- *  issues recorded in its own log. */
+/** Runs `operation` in its own query counter, with every statement it (and
+ *  whatever it awaits) issues on any connection recorded in its log. Work it
+ *  detaches is not its cost, as for a request's `x-db-queries`. */
 const recorded = async <T>(operation: () => Promise<T>) => {
   const log: StatementLog = { statements: [] };
-  const value = await statementStore.run(log, operation);
+  const value = await runWithQueryCounter(async () => {
+    const counter =
+      currentQueryCounter() ?? panic("A recorded operation runs in a counter");
+    counter.onStatement = (statement) => {
+      log.statements.push(statement);
+    };
+    return await operation();
+  });
   return { log, value };
-};
-
-/** Resolves once `log` has stopped growing. */
-const quiescent = async (log: StatementLog) => {
-  let seen = -1;
-  while (seen !== log.statements.length) {
-    seen = log.statements.length;
-    await Bun.sleep(50);
-  }
 };
 
 const isScopeStart = (statement: string) =>
@@ -385,7 +446,7 @@ const measureSend = async ({
   }
   const body = await value.text();
   expect(await harness.awaitSettledTurns(threadId)).toEqual([]);
-  await quiescent(log);
+  await harness.awaitRunsSettled(threadId);
   return { bytes: byteLength(body), ...sendPhasesOf(log.statements) };
 };
 
@@ -410,6 +471,7 @@ const loadThreadPage = async (threadId: SafeId<"chatThread">) => {
       await getMessages.handler(
         asTestRaw<Parameters<typeof getMessages.handler>[0]>({
           ...readerContext(threadId),
+          route: "/v1/chat/threads/:threadId/messages" satisfies ApiRoutePath,
           params: { threadId },
           query: {},
         }),
@@ -435,6 +497,8 @@ const loadOlderPage = async (
       await getOlderMessages.handler(
         asTestRaw<Parameters<typeof getOlderMessages.handler>[0]>({
           ...readerContext(threadId),
+          route:
+            "/v1/chat/threads/:threadId/messages/older" satisfies ApiRoutePath,
           params: { threadId },
           query: { before },
         }),
@@ -530,22 +594,24 @@ const startPausedTurn = async ({
   const drained = response.text();
   // The tool call's arguments are the last thing the run stores before it
   // pauses.
-  for (;;) {
-    const [stored] = await testDb
-      .select({ seq: chatRunLogEntries.seq })
-      .from(chatRunLogEntries)
-      .where(
-        and(
-          eq(chatRunLogEntries.runId, runId),
-          sql`${chatRunLogEntries.chunk}->>'type' = ${EventType.TOOL_CALL_ARGS}`,
-        ),
-      )
-      .limit(1);
-    if (stored !== undefined) {
-      break;
-    }
-    await Bun.sleep(20);
-  }
+  await waitForExternalState({
+    description: "the run stores the tool call's arguments",
+    intervalMs: 20,
+    timeoutMs: 10_000,
+    read: async () =>
+      (
+        await testDb
+          .select({ seq: chatRunLogEntries.seq })
+          .from(chatRunLogEntries)
+          .where(
+            and(
+              eq(chatRunLogEntries.runId, runId),
+              sql`${chatRunLogEntries.chunk}->>'type' = ${EventType.TOOL_CALL_ARGS}`,
+            ),
+          )
+          .limit(1)
+      ).at(0),
+  });
   const [log] = await testDb
     .select({ nextSeq: chatRunLogs.nextSeq })
     .from(chatRunLogs)
@@ -572,7 +638,8 @@ const turnContext = (
     ...readerContext(threadId),
     params: { threadId, turnId },
     query,
-    route: "/v1/chat/threads/:threadId/turns/:turnId/join",
+    route:
+      "/v1/chat/threads/:threadId/turns/:turnId/join" satisfies ApiRoutePath,
   });
 
 const measureRejoin = async ({
@@ -704,6 +771,28 @@ const expectFlatStatements = (
   }
 };
 
+describe("the statement log", () => {
+  // Every connection a path can reach here is either counted or refused: the
+  // test database reports to the request's counter, and the shared root pool
+  // answers with the hermetic sentinel, so a path moved onto it fails here
+  // instead of leaving the budget.
+  test("counts the test database and refuses the root pool", async () => {
+    const { log } = await recorded(async () => {
+      await testDb.execute(sql`select 1 as counted`);
+    });
+    expect(log.statements).toEqual(["select 1 as counted"]);
+    // Awaited directly: a Bun SQL query is a lazy thenable.
+    const refusal = await rootDb.execute(sql`select 1 as refused`).then(
+      () => "answered",
+      (error: unknown) =>
+        error instanceof Error && error.cause instanceof Error
+          ? error.cause.message
+          : String(error),
+    );
+    expect(refusal).toContain(ROOT_POOL_SENTINEL_MESSAGE);
+  });
+});
+
 describe("chat path budgets", () => {
   beforeAll(async () => {
     const harness = createApprovalHarness({ ids, safeDb, scopedDb, testDb });
@@ -731,11 +820,11 @@ describe("chat path budgets", () => {
     const budget = budgetOf("openThread");
     expectFlatStatements(
       ({ openThread }) => openThread.statements,
-      budget.statements,
+      budget("statements"),
     );
     for (const { openThread } of [measured.short, measured.long]) {
       expect(openThread.pageBytes, report).toBeLessThanOrEqual(
-        budget.pageBytes,
+        budget("pageBytes"),
       );
     }
   });
@@ -747,15 +836,15 @@ describe("chat path budgets", () => {
       panic("The long thread has no older page");
     for (const page of measured.long.olderPages) {
       expect(page.statements, report).toBe(first.statements);
-      expect(page.statements, report).toBeLessThanOrEqual(budget.statements);
-      expect(page.bytes, report).toBeLessThanOrEqual(budget.pageBytes);
+      expect(page.statements, report).toBeLessThanOrEqual(budget("statements"));
+      expect(page.bytes, report).toBeLessThanOrEqual(budget("pageBytes"));
     }
   });
 
   test("a send reaches its stream in a fixed number of statements", () => {
     expectFlatStatements(
       ({ send }) => send.beforeStream,
-      budgetOf("sendUntilStream").statements,
+      budgetOf("sendUntilStream")("statements"),
     );
   });
 
@@ -769,14 +858,14 @@ describe("chat path budgets", () => {
         [...new Set(send.appendStatements)].toSorted((a, b) =>
           a < b ? -1 : 1,
         ),
-      budget.statementsPerAppend,
+      budget("statementsPerAppend"),
     );
     for (const { send } of [measured.short, measured.long]) {
       expect(send.statementsPer100Deltas, report).toBeLessThanOrEqual(
-        budget.statementsPer100Deltas,
+        budget("statementsPer100Deltas"),
       );
       expect(send.framingBytesPerDelta, report).toBeLessThanOrEqual(
-        budget.framingBytesPerDelta,
+        budget("framingBytesPerDelta"),
       );
     }
   });
@@ -784,7 +873,7 @@ describe("chat path budgets", () => {
   test("a turn settles in a fixed number of statements", () => {
     expectFlatStatements(
       ({ send }) => send.settlement,
-      budgetOf("settleTurn").statements,
+      budgetOf("settleTurn")("statements"),
     );
   });
 
@@ -796,26 +885,26 @@ describe("chat path budgets", () => {
         rejoin.replayed.probeStatements,
         rejoin.snapshotted.probeStatements,
       ],
-      probe.statements,
+      probe("statements"),
     );
     expectFlatStatements(
       ({ rejoin }) => rejoin.replayed.joinStatements,
-      join.replayedStatements,
+      join("replayedStatements"),
     );
     expectFlatStatements(
       ({ rejoin }) => rejoin.snapshotted.joinStatements,
-      join.snapshotStatements,
+      join("snapshotStatements"),
     );
     for (const { rejoin } of [measured.short, measured.long]) {
       const { replayed, snapshotted } = rejoin;
-      expect(replayed.probeBytes, report).toBeLessThanOrEqual(probe.bytes);
+      expect(replayed.probeBytes, report).toBeLessThanOrEqual(probe("bytes"));
       // Within the bound the join replays the log as stored.
       expect(BigInt(replayed.logEntries), report).toBeLessThanOrEqual(
         MAX_CATCHUP_CHUNKS,
       );
       expect(replayed.catchUpEvents, report).toBe(replayed.logEntries);
       expect(replayed.catchUpBytes, report).toBeLessThanOrEqual(
-        join.replayedBytes,
+        join("replayedBytes"),
       );
       // Past it the join folds the stored prefix into one snapshot.
       expect(BigInt(snapshotted.logEntries), report).toBeGreaterThan(
@@ -825,7 +914,7 @@ describe("chat path budgets", () => {
         MAX_CATCHUP_CHUNKS,
       );
       expect(snapshotted.catchUpBytes, report).toBeLessThanOrEqual(
-        join.snapshotBytes,
+        join("snapshotBytes"),
       );
       for (const { catchUpBytes } of [replayed, snapshotted]) {
         expect(BigInt(catchUpBytes), report).toBeLessThanOrEqual(
@@ -856,13 +945,73 @@ describe("chat path budgets", () => {
     }
   });
 
+  test("every recorded figure is today's measurement", () => {
+    const { long } = measured;
+    const first =
+      long.olderPages.at(0) ?? panic("The long thread has no older page");
+    const today = {
+      openThread: {
+        pageBytes: long.openThread.pageBytes,
+        statements: long.openThread.statements,
+      },
+      olderPage: {
+        pageBytes: Math.max(...long.olderPages.map(({ bytes }) => bytes)),
+        statements: first.statements,
+      },
+      sendUntilStream: { statements: Math.max(...long.send.beforeStream) },
+      streamedText: {
+        framingBytesPerDelta: long.send.framingBytesPerDelta,
+        statementsPer100Deltas: long.send.statementsPer100Deltas,
+        statementsPerAppend: Math.max(...long.send.appendStatements),
+      },
+      settleTurn: { statements: Math.max(...long.send.settlement) },
+      rejoinProbe: {
+        bytes: long.rejoin.replayed.probeBytes,
+        statements: long.rejoin.replayed.probeStatements,
+      },
+      rejoinJoin: {
+        replayedBytes: long.rejoin.replayed.catchUpBytes,
+        replayedStatements: long.rejoin.replayed.joinStatements,
+        snapshotBytes: long.rejoin.snapshotted.catchUpBytes,
+        snapshotStatements: long.rejoin.snapshotted.joinStatements,
+      },
+      stop: { statements: long.rejoin.replayed.stopStatements },
+    } satisfies {
+      [Path in keyof typeof CHAT_PATH_BUDGETS]: Record<
+        keyof (typeof CHAT_PATH_BUDGETS)[Path]["measured"],
+        number
+      >;
+    };
+    const recordedFigures = figuresByName(
+      Object.fromEntries(
+        Object.entries(CHAT_PATH_BUDGETS).map(([path, budget]) => [
+          path,
+          budget.measured,
+        ]),
+      ),
+    );
+    const todayFigures = figuresByName(today);
+    const drifted = [...recordedFigures].flatMap(([figure, record]) => {
+      const value =
+        todayFigures.get(figure) ?? panic(`No measurement for ${figure}`);
+      const [low, high] = recordedFigureBand(figure, record);
+      return value >= low && value <= high
+        ? []
+        : [`${figure}: recorded ${record}, measured ${value}`];
+    });
+    expect(
+      drifted,
+      `update CHAT_PATH_BUDGETS to today's figures; ${report}`,
+    ).toEqual([]);
+  });
+
   test("Stop costs a fixed number of statements", () => {
     expectFlatStatements(
       ({ rejoin }) => [
         rejoin.replayed.stopStatements,
         rejoin.snapshotted.stopStatements,
       ],
-      budgetOf("stop").statements,
+      budgetOf("stop")("statements"),
     );
   });
 });

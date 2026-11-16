@@ -10,7 +10,7 @@ import {
   sql,
 } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { REVIEW_FLAG } from "@stll/api-contract";
 import type { ConditionNode } from "@stll/conditions";
@@ -26,7 +26,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { acquireCellLock } from "@/api/lib/cell-lock";
 import { tConditionNode } from "@/api/lib/conditions/contract";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import {
   buildKanbanGroupCondition,
   tGroupByPropertyId,
@@ -73,25 +73,21 @@ const config = {
     reason: "workspace_schema",
     consumesServices: false,
   },
-  body: t.Object({
-    propertyId: tSafeId("property"),
-    flag: t.UnionEnum([
+  body: v.object({
+    propertyId: resourceIdSchema("property"),
+    flag: v.picklist([
       COLUMN_METADATA_FLAG.verified,
       COLUMN_METADATA_FLAG.locked,
     ]),
-    filters: t.Array(tConditionNode, { maxItems: LIMITS.viewFiltersCount }),
-    set: t.Optional(t.Boolean()),
-    // Undo of a prior mark: only remove flags stamped with this operation
-    // timestamp (returned as `addedAt` from the original mark).
-    onlyAddedAt: t.Optional(t.String()),
-    // When set, scopes the batch to a single grouped-view subtable using the
-    // same group condition the grouped table renders with, so "mark this group
-    // as reviewed" touches exactly the rows that group shows.
-    groupByPropertyId: t.Optional(tGroupByPropertyId),
-    groupValue: t.Optional(t.Nullable(t.String({ maxLength: 1000 }))),
-    // The property's option values, so marking the uncategorized subtable folds
-    // in stale-valued cells the same way the grouped table renders them.
-    optionValues: t.Optional(t.Array(t.String({ maxLength: 1000 }))),
+    filters: v.pipe(
+      v.array(tConditionNode),
+      v.maxLength(LIMITS.viewFiltersCount),
+    ),
+    set: v.optional(v.boolean()),
+    onlyAddedAt: v.optional(v.string()),
+    groupByPropertyId: v.optional(tGroupByPropertyId),
+    groupValue: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(1000)))),
+    optionValues: v.optional(v.array(v.pipe(v.string(), v.maxLength(1000)))),
   }),
 } satisfies WorkspaceHandlerConfig;
 

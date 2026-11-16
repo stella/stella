@@ -1,5 +1,4 @@
 import { panic, TaggedError } from "better-result";
-import { Elysia } from "elysia";
 
 import {
   CAPABILITY_REQUEST_ERROR_CODE,
@@ -7,76 +6,35 @@ import {
 } from "@stll/api-contract/capability-request";
 import { declareFailureClass } from "@stll/errors";
 
+import { toResponse } from "@/api/http/respond";
+import type { Middleware, RouteDefinition } from "@/api/http/route";
+import { status } from "@/api/http/status";
 import { captureRequestError } from "@/api/lib/analytics/capture";
 import { httpError } from "@/api/lib/errors/http-error";
 
-export type MountedRoute = { method: string; path: string; handler: unknown };
-
-export type CapabilityEndpoint = { id: string; handler: unknown };
-
-type CapabilityRouteIndex = ReadonlyMap<string, string>;
-
-const routeKey = ({ method, path }: { method: string; path: string }) =>
-  `${method} ${path}`;
-
-type BuildCapabilityRouteIndexOptions = {
-  routes: readonly MountedRoute[];
-  endpoints: readonly CapabilityEndpoint[];
+/** A catalog capability and the route definition that serves it. */
+export type CapabilityEndpoint = {
+  readonly id: string;
+  readonly definition: RouteDefinition;
 };
 
 /**
- * The catalog capability behind each mounted route, keyed by `METHOD path`.
- * Routes register the endpoint's own handler function, so handler identity
- * ties a route to the capability without a second, hand-kept route table.
+ * The catalog capability of each route definition. A capability's endpoint is
+ * the very definition its route mounts, so object identity ties the two
+ * without a second, hand-kept route table.
  */
-export const buildCapabilityRouteIndex = ({
-  routes,
-  endpoints,
-}: BuildCapabilityRouteIndexOptions): CapabilityRouteIndex => {
-  const idByHandler = new Map<unknown, string>();
-  for (const { id, handler } of endpoints) {
-    const existing = idByHandler.get(handler);
+export const buildCapabilityIndex = (
+  endpoints: readonly CapabilityEndpoint[],
+): ReadonlyMap<RouteDefinition, string> => {
+  const index = new Map<RouteDefinition, string>();
+  for (const { id, definition } of endpoints) {
+    const existing = index.get(definition);
     if (existing !== undefined && existing !== id) {
-      return panic(`capabilities ${existing} and ${id} share one handler`);
+      return panic(`capabilities ${existing} and ${id} share one definition`);
     }
-    idByHandler.set(handler, id);
-  }
-  const index = new Map<string, string>();
-  for (const route of routes) {
-    const id = idByHandler.get(route.handler);
-    if (id !== undefined) {
-      index.set(routeKey(route), id);
-    }
+    index.set(definition, id);
   }
   return index;
-};
-
-type CapabilityRequestOutcome =
-  | { type: "undeclared" }
-  | { type: "matched"; capability: string }
-  | { type: "mismatched"; declared: string; routeCapability: string | null };
-
-type ResolveCapabilityRequestOptions = {
-  declared: string | null;
-  method: string;
-  route: string;
-  index: CapabilityRouteIndex;
-};
-
-export const resolveCapabilityRequest = ({
-  declared,
-  method,
-  route,
-  index,
-}: ResolveCapabilityRequestOptions): CapabilityRequestOutcome => {
-  if (declared === null) {
-    return { type: "undeclared" };
-  }
-  const routeCapability = index.get(routeKey({ method, path: route })) ?? null;
-  if (routeCapability === declared) {
-    return { type: "matched", capability: declared };
-  }
-  return { type: "mismatched", declared, routeCapability };
 };
 
 class CapabilityRequestMismatchError extends TaggedError(
@@ -91,65 +49,56 @@ class CapabilityRequestMismatchError extends TaggedError(
   }
 }
 
-type CapabilityRequestGuardOptions = {
-  mountedRoutes: () => readonly MountedRoute[];
-  loadEndpoints: () => Promise<readonly CapabilityEndpoint[]>;
-};
-
 /**
  * Refuses a request whose declared capability differs from the capability of
  * the route it reached. Requests without the header are unaffected. The index
- * is built once, on the first declaring request, after every route is mounted.
+ * is built once, on the first declaring request.
  */
-export const capabilityRequestGuard = ({
-  mountedRoutes,
-  loadEndpoints,
-}: CapabilityRequestGuardOptions) => {
-  let index: Promise<CapabilityRouteIndex> | undefined;
+export const capabilityRequestGuard = (
+  loadEndpoints: () => Promise<readonly CapabilityEndpoint[]>,
+): Middleware => {
+  let index: Promise<ReadonlyMap<RouteDefinition, string>> | undefined;
   const getIndex = async () =>
     await (index ??= (async () =>
-      buildCapabilityRouteIndex({
-        routes: mountedRoutes(),
-        endpoints: await loadEndpoints(),
-      }))());
+      buildCapabilityIndex(await loadEndpoints()))());
 
-  return new Elysia().onBeforeHandle(
-    { as: "global" },
-    async ({ request, route, set }) => {
-      const declared = request.headers.get(CAPABILITY_REQUEST_HEADER);
-      if (declared === null) {
-        return undefined;
-      }
-      const outcome = resolveCapabilityRequest({
+  return async (ctx, inner) => {
+    const declared = ctx.request.headers.get(CAPABILITY_REQUEST_HEADER);
+    if (declared === null) {
+      return await inner();
+    }
+    const definition = ctx.routeEntry?.definition;
+    const routeCapability =
+      definition === undefined
+        ? null
+        : ((await getIndex()).get(definition) ?? null);
+    if (routeCapability === declared) {
+      return await inner();
+    }
+    captureRequestError(
+      new CapabilityRequestMismatchError({
+        message: "Declared capability does not own the matched route",
         declared,
-        method: request.method,
-        route,
-        index: await getIndex(),
-      });
-      switch (outcome.type) {
-        case "undeclared":
-        case "matched":
-          return undefined;
-        case "mismatched":
-          captureRequestError(
-            new CapabilityRequestMismatchError({
-              message: "Declared capability does not own the matched route",
-              declared: outcome.declared,
-              routeCapability: outcome.routeCapability,
-            }),
-            { request },
-          );
-          set.status = 400;
-          return httpError(
-            "The request names a capability that does not own this route.",
-            CAPABILITY_REQUEST_ERROR_CODE,
-          );
-        default:
-          outcome satisfies never;
-          return panic(
-            `Unhandled capability request outcome: ${String(outcome)}`,
-          );
-      }
-    },
-  );
+        routeCapability,
+      }),
+      {
+        request: ctx.request,
+        fingerprintKey: "capabilityRequestGuard.mismatch",
+        scope: {
+          type: "handler",
+          handlerId: "capabilityRequestGuard.mismatch",
+        },
+      },
+    );
+    return toResponse(
+      status(
+        400,
+        httpError(
+          "The request names a capability that does not own this route.",
+          CAPABILITY_REQUEST_ERROR_CODE,
+        ),
+      ),
+      ctx.set,
+    );
+  };
 };

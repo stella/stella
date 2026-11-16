@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import nodePath from "node:path";
 
 import {
@@ -9,12 +9,28 @@ import {
   PUBLIC_COUNTRY_UNAVAILABLE_STATUS,
 } from "@stll/api-contract/public-country-capability";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import { publicLegislationRoute } from "@/api/handlers/legislation/public-routes";
 import { searchLegislationHandler } from "@/api/handlers/legislation/search";
+import { createHttpApp } from "@/api/http/app";
 import { LIMITS } from "@/api/lib/limits";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
+import { serveForTest } from "@/api/tests/helpers/test-server";
+
+const testState = createTestState({ file: import.meta.path, config: env });
+
+const server = serveForTest(
+  createHttpApp({
+    routes: publicLegislationRoute,
+    middleware: [errorBoundary],
+  }),
+);
+afterAll(async () => {
+  await server.stop();
+});
 
 const repoRoot = nodePath.resolve(import.meta.dir, "../../../../..");
 const readHandlerSource = async (file: string) =>
@@ -41,7 +57,7 @@ describe("public statute routes", () => {
           : [`/law/sitemap/statutes/shard?country=${country.toLowerCase()}`]),
       ];
       for (const url of urls) {
-        const response = await publicLegislationRoute.handle(
+        const response = await server.fetch(
           new Request(`http://localhost${url}`),
         );
         expect(response.status).toBe(PUBLIC_COUNTRY_UNAVAILABLE_STATUS);
@@ -74,7 +90,7 @@ describe("public statute routes", () => {
       },
     });
     for (const request of requests) {
-      const response = await publicLegislationRoute.handle(request);
+      const response = await server.fetch(request);
       expect(response.status, request.url).toBe(
         PUBLIC_COUNTRY_UNAVAILABLE_STATUS,
       );
@@ -91,10 +107,10 @@ describe("public statute routes", () => {
     const restoreRuntimeMode = setRuntimeModeForTesting({
       mode: RUNTIME_MODE.strict,
     });
-    env.FEATURE_PUBLIC_LAW = false;
+    testState.setConfig("FEATURE_PUBLIC_LAW", false);
 
     try {
-      const absent = await publicLegislationRoute.handle(
+      const absent = await server.fetch(
         new Request("http://localhost/law/absent-route"),
       );
       const absentBody = await absent.text();
@@ -104,7 +120,7 @@ describe("public statute routes", () => {
         // Malformed input must not reach validation and answer 422.
         "/law/statutes/search",
       ]) {
-        const response = await publicLegislationRoute.handle(
+        const response = await server.fetch(
           new Request(`http://localhost${path}`),
         );
         // A disabled public surface is indistinguishable from an absent route.
@@ -115,12 +131,12 @@ describe("public statute routes", () => {
       }
     } finally {
       restoreRuntimeMode();
-      env.FEATURE_PUBLIC_LAW = previousFeature;
+      testState.setConfig("FEATURE_PUBLIC_LAW", previousFeature);
     }
   });
 
   test("rejects a document id that is not a UUID before handler execution", async () => {
-    const response = await publicLegislationRoute.handle(
+    const response = await server.fetch(
       new Request("http://localhost/law/statutes/not-a-uuid"),
     );
 
@@ -128,7 +144,7 @@ describe("public statute routes", () => {
   });
 
   test("requires the country a statute listing is scoped to", async () => {
-    const response = await publicLegislationRoute.handle(
+    const response = await server.fetch(
       new Request("http://localhost/law/statutes"),
     );
 
@@ -136,7 +152,7 @@ describe("public statute routes", () => {
   });
 
   test("rejects a point-in-time read with no identifier", async () => {
-    const response = await publicLegislationRoute.handle(
+    const response = await server.fetch(
       new Request("http://localhost/law/statutes/by-eli"),
     );
 
@@ -144,7 +160,7 @@ describe("public statute routes", () => {
   });
 
   test("rejects an asOf that is not a calendar date", async () => {
-    const response = await publicLegislationRoute.handle(
+    const response = await server.fetch(
       new Request(
         "http://localhost/law/statutes/by-eli?eli=CZ%2F2012%2F89&asOf=yesterday",
       ),
@@ -155,7 +171,7 @@ describe("public statute routes", () => {
 
   test("rejects a resolve batch past its limit before handler execution", async () => {
     const work = { country: "CZE", eli: "CZ/2012/89", asOf: "2021-01-01" };
-    const response = await publicLegislationRoute.handle(
+    const response = await server.fetch(
       new Request("http://localhost/law/statutes/resolve", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -174,7 +190,7 @@ describe("public statute routes", () => {
   test("reads `by-slug` as its own route, not as a document id", async () => {
     // Without the ordering in the route file, the literal segment lands on
     // `/statutes/:documentId` and the UUID schema answers 422 instead.
-    const response = await publicLegislationRoute.handle(
+    const response = await server.fetch(
       new Request("http://localhost/law/statutes/by-slug/89-2012-sb"),
     );
 
@@ -184,7 +200,7 @@ describe("public statute routes", () => {
   });
 
   test("rejects a slug read with an asOf that is not a calendar date", async () => {
-    const response = await publicLegislationRoute.handle(
+    const response = await server.fetch(
       new Request(
         "http://localhost/law/statutes/by-slug/89-2012-sb?country=CZE&asOf=yesterday",
       ),
@@ -194,7 +210,7 @@ describe("public statute routes", () => {
   });
 
   test("rejects a slug longer than the column can hold", async () => {
-    const response = await publicLegislationRoute.handle(
+    const response = await server.fetch(
       new Request(
         `http://localhost/law/statutes/by-slug/${"a".repeat(257)}?country=CZE`,
       ),
@@ -204,7 +220,7 @@ describe("public statute routes", () => {
   });
 
   test("rejects a provision-history anchor on a non-UUID document", async () => {
-    const response = await publicLegislationRoute.handle(
+    const response = await server.fetch(
       new Request(
         "http://localhost/law/statutes/not-a-uuid/provisions/p-1/history",
       ),
@@ -214,7 +230,7 @@ describe("public statute routes", () => {
   });
 
   test("rejects a list cursor that is not a title/id pair", async () => {
-    const response = await publicLegislationRoute.handle(
+    const response = await server.fetch(
       new Request(
         "http://localhost/law/statutes?country=CZE&cursor=not-a-cursor",
       ),
@@ -229,7 +245,7 @@ describe("public statute routes", () => {
     // before any data access, so a complaint about the cursor is the proof
     // that the spelling itself was read.
     for (const country of ["CZE", "CZ", "cze", "Česko", "Czech Republic"]) {
-      const response = await publicLegislationRoute.handle(
+      const response = await server.fetch(
         new Request(
           `http://localhost/law/statutes?country=${encodeURIComponent(country)}&cursor=not-a-cursor`,
         ),
@@ -248,7 +264,7 @@ describe("public statute routes", () => {
     ];
 
     for (const url of urls) {
-      const response = await publicLegislationRoute.handle(new Request(url));
+      const response = await server.fetch(new Request(url));
 
       // The reader's own ask, so it names both notations and the
       // jurisdictions this deployment holds statutes for.
@@ -286,7 +302,7 @@ describe("public statute routes", () => {
     expect(source).toContain("legislationPublicReadDb");
     expect(source).not.toContain("scopedDb");
     expect(source).not.toContain("loadSearchConfigs:");
-    const response = await publicLegislationRoute.handle(
+    const response = await server.fetch(
       new Request(
         "http://localhost/law/statutes/search?country=CZE&query=text&cursor=invalid-cursor",
       ),

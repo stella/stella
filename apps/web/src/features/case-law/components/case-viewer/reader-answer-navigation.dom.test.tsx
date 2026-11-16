@@ -7,9 +7,9 @@ import { afterAll, afterEach, expect, mock, test } from "bun:test";
 
 import type { ReaderAnswer } from "@stll/api-contract/reader-answers";
 import { annotationTextAnchors } from "@stll/decision-reader/annotation-anchors";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import { toSafeId } from "@/lib/safe-id";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import {
   attachReaderAnswerMarkers,
@@ -37,10 +37,14 @@ const answer = {
   kind: "explain",
   visibility: "private",
   anchor: {
-    paragraphId: "p-12",
-    quote: "Selected words",
-    startOffset: 0,
-    endOffset: 14,
+    spans: [
+      {
+        paragraphId: "p-12",
+        quote: "Selected words",
+        startOffset: 0,
+        endOffset: 14,
+      },
+    ],
   },
   messages: [
     {
@@ -67,6 +71,7 @@ const ReopenHarness = () => {
   const [revision, setRevision] = useState(0);
   const anchors = annotationTextAnchors(
     readerAnswerAnchors([answer], "Reopen passage answer"),
+    answer.anchor.spans[0].quote,
   );
   return (
     <IntlProvider locale="en" messages={messages}>
@@ -83,7 +88,9 @@ const ReopenHarness = () => {
           });
         }}
       >
-        {anchors.at(0)?.render(answer.anchor.quote)}
+        {anchors.at(0)?.render(answer.anchor.spans[0].quote, {
+          isRangeStart: true,
+        })}
       </div>
       <ReaderAnswerCard
         answer={answer}
@@ -91,7 +98,8 @@ const ReopenHarness = () => {
         active
         openRevision={revision}
         busy={false}
-        citationLabel={() => "¶48"}
+        citationTarget={() => ({ type: "unresolved" })}
+        language="en"
         onOpen={() => undefined}
         onFollowUp={() => undefined}
         onRegenerate={() => undefined}
@@ -165,7 +173,7 @@ test("a foreign citation navigates with both validated decision and paragraph", 
 test("paragraph markers reopen answers when another mark overlaps, and detach cleanly", () => {
   const view = render(
     <article>
-      <p data-anchor="p-12">{answer.anchor.quote}</p>
+      <p data-anchor="p-12">{answer.anchor.spans[0].quote}</p>
     </article>,
   );
   const open = mock(() => undefined);

@@ -3,10 +3,11 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { SquareMinusIcon } from "@stll/ui/icons";
 import { PopoverTrigger } from "@stll/ui/popover";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
+import { PropertyIcon } from "@stll/workspace-ui/property-icon";
 
 import Tooltip from "@/components/tooltip";
-import { PropertyIcon } from "@/components/workspaces/property-helpers";
 import { resolveOptionColor } from "@/components/workspaces/property-utils";
 import { HighlightedText } from "@/components/workspaces/table/find-highlight";
 import type { PropertyOptionColor } from "@/lib/api-contract";
@@ -61,9 +62,9 @@ export const PropertyPopoverTrigger = ({
         className={cn(isValid ? "" : "text-warning")}
         type={property.content.type}
       />
-      <span className="w-0 flex-1 truncate">
+      <TruncatedText className="w-0 flex-1">
         <HighlightedText text={name} />
-      </span>
+      </TruncatedText>
     </Tooltip>
   );
 };
@@ -80,7 +81,7 @@ export const SelectColorIcon = ({ color, className }: SelectColorIconProps) => {
 
   return (
     <span
-      className={cn("block size-4 shrink-0 rounded", className)}
+      className={cn("block size-4 shrink-0 rounded-sm", className)}
       style={{ backgroundColor: resolveOptionColor(color).color }}
     />
   );

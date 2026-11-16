@@ -1,7 +1,6 @@
 import { useCallback } from "react";
 import type { RefCallback, RefObject } from "react";
 
-import { useDebouncedCallback } from "use-debounce";
 import { useShallow } from "zustand/react/shallow";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -20,21 +19,18 @@ export const usePDFFitToWidth = ({
     fitToWidth,
     scaleOffset,
     updateContainerWidth,
-    rerenderAtScale,
     consumePendingScrollAnchor,
   ] = usePDFStore(
     useShallow((s) => [
       s.fitToWidth,
       s.scaleOffset,
       s.updateContainerWidth,
-      s.rerenderAtScale,
       s.consumePendingScrollAnchor,
     ]),
   );
   const effectiveScale = usePDFStore(
     useShallow((s) => s.scale + s.scaleOffset),
   );
-  const debouncedRerender = useDebouncedCallback(rerenderAtScale, 150);
 
   useExternalSyncEffect(() => {
     const anchor = consumePendingScrollAnchor();
@@ -66,6 +62,10 @@ export const usePDFFitToWidth = ({
       );
       const observeTarget = viewport ?? container;
 
+      // Every `observe` reports the current size once, and the viewer
+      // re-attaches this ref whenever its page list changes, so the same
+      // width arrives again and again. The store redraws pages only when the
+      // width changes the scale.
       const observer = new ResizeObserver((entries) => {
         const entry = entries.at(-1);
         if (!entry) {
@@ -78,22 +78,14 @@ export const usePDFFitToWidth = ({
         }
 
         updateContainerWidth(containerWidth, container);
-        debouncedRerender(effectiveScale);
       });
 
       observer.observe(observeTarget);
 
       return () => {
         observer.disconnect();
-        debouncedRerender.cancel();
       };
     },
-    [
-      fitToWidth,
-      scaleOffset,
-      effectiveScale,
-      updateContainerWidth,
-      debouncedRerender,
-    ],
+    [fitToWidth, scaleOffset, updateContainerWidth],
   );
 };

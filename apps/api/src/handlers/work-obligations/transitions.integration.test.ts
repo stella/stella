@@ -19,6 +19,7 @@ import {
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import acknowledgeWorkObligation from "@/api/handlers/work-obligations/acknowledgements/create";
 import transitionWorkObligation from "@/api/handlers/work-obligations/transition";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -85,7 +86,9 @@ const seedOpenWork = async (
       status === WORK_OBLIGATION_STATUS.UNASSIGNED ? null : ids.userA1,
     status,
     acknowledgedAt:
-      status === WORK_OBLIGATION_STATUS.ACTIVE ? new Date() : null,
+      status === WORK_OBLIGATION_STATUS.ACTIVE
+        ? new Date("2026-04-30T09:05:00.000Z")
+        : null,
     acknowledgedByUserId:
       status === WORK_OBLIGATION_STATUS.ACTIVE ? ids.userA1 : null,
     createdByUserId: ids.userA2,
@@ -128,7 +131,7 @@ const seedFlowReviewWork = async () => {
     workspaceId: ids.wsA1,
     ownerUserId: ids.userA1,
     status: WORK_OBLIGATION_STATUS.ACTIVE,
-    acknowledgedAt: new Date(),
+    acknowledgedAt: new Date("2026-04-30T09:05:00.000Z"),
     acknowledgedByUserId: ids.userA1,
     sourceType: WORK_OBLIGATION_SOURCE.FLOW,
     createdByUserId: ids.userA1,
@@ -143,7 +146,7 @@ const seedFlowReviewWork = async () => {
     triggerSource: { type: "manual", userId: ids.userA1 },
     status: "awaiting_review",
     currentStepIndex: 0,
-    startedAt: new Date(),
+    startedAt: new Date("2026-04-30T09:00:00.000Z"),
   });
   await testDb.insert(flowRunSteps).values({
     id: createSafeId<"flowRunStep">(),
@@ -153,7 +156,7 @@ const seedFlowReviewWork = async () => {
     kind: "review-gate",
     status: "awaiting_review",
     reviewTaskEntityId: entityId,
-    startedAt: new Date(),
+    startedAt: new Date("2026-04-30T09:00:00.000Z"),
   });
   return { entityId, runId };
 };
@@ -192,7 +195,8 @@ const acknowledge = async (
     asTestRaw<AcknowledgeContext>({
       ...contextBase(userId),
       params: { workspaceId: ids.wsA1, entityId },
-      route: "/test/work-obligations/acknowledge",
+      route:
+        "/v1/work-obligations/:workspaceId/:entityId/acknowledge" satisfies ApiRoutePath,
     }),
   );
 
@@ -216,7 +220,8 @@ const transition = async (
         ...(options.reason === undefined ? {} : { reason: options.reason }),
       },
       params: { workspaceId: ids.wsA1, entityId },
-      route: "/test/work-obligations/transition",
+      route:
+        "/v1/work-obligations/:workspaceId/:entityId/transition" satisfies ApiRoutePath,
     }),
   );
 

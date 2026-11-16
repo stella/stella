@@ -13,7 +13,7 @@ import fc from "fast-check";
 
 import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
 import type { OrganizationRoleName } from "@stll/auth-model";
-import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -243,7 +243,8 @@ describe("effective-dated rate resolution", () => {
   test(
     "resolves person over role over single within inclusive effective dates",
     async () => {
-      await fc.assert(
+      await assertProperty(
+        "resolves person over role over single within inclusive effective dates",
         fc.asyncProperty(
           entriesArb,
           fc.integer({ min: 0, max: 3650 }),
@@ -280,7 +281,7 @@ describe("effective-dated rate resolution", () => {
             expect(actual).toEqual(expectedResolution(rows, queryDate));
           },
         ),
-        propertyConfig({ numRuns: 60 }),
+        { numRuns: 60 },
       );
     },
     propertyTestTimeout(120_000),

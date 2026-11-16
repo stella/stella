@@ -14,9 +14,9 @@ document_processing_runs.{...entityFeatureWorkspaceGateColumns()}  spread       
 document_processing_runs.id                                        pUuid               pk,not null       document-processing.ts:210
 document_processing_runs.organization_id                           safeOrganizationId  fk,not null       document-processing.ts:211
 document_processing_runs.workspace_id                              safeWorkspaceId     fk,not null       document-processing.ts:214
-document_processing_runs.entity_id                                 safeUuid            not null          document-processing.ts:217
-document_processing_runs.entity_version_id                         safeUuid            not null          document-processing.ts:218
-document_processing_runs.field_id                                  safeUuid            not null          document-processing.ts:219
+document_processing_runs.entity_id                                 safeUuid            fk,not null       document-processing.ts:217
+document_processing_runs.entity_version_id                         safeUuid            fk,not null       document-processing.ts:218
+document_processing_runs.field_id                                  safeUuid            fk,not null       document-processing.ts:219
 document_processing_runs.source_file_id                            uuid                not null          document-processing.ts:221  UUIDv7 stored in `fields.content.id`; deliberately not a table FK.
 document_processing_runs.source_sha256_hex                         varchar             not null          document-processing.ts:222
 document_processing_runs.kind                                      text                not null          document-processing.ts:223

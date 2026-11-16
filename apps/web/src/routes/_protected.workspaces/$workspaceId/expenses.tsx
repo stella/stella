@@ -1,8 +1,9 @@
 import { Suspense, useState } from "react";
 
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
+import { BILLING_MATTER_READ_PERMISSION } from "@stll/permissions";
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
@@ -10,9 +11,10 @@ import { ChevronLeftIcon, ChevronRightIcon } from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
 
 import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormatter, useFormattingLocale } from "@/i18n/formatting-context";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
+import { ensureMemberPermission } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
 import { prefetchRouteQuery } from "@/lib/react-query";
 import {
@@ -30,6 +32,10 @@ export const Route = createFileRoute(
 )({
   beforeLoad: async ({ context, params }) => {
     if (
+      !(await ensureMemberPermission({
+        queryClient: context.queryClient,
+        permissions: BILLING_MATTER_READ_PERMISSION,
+      })) ||
       !(await isTimeBillingRouteEnabled(context.queryClient, {
         userId: context.user.id,
         organizationId: context.user.activeOrganizationId,
@@ -58,7 +64,14 @@ export const Route = createFileRoute(
         context.queryClient,
         expensesOptions(params.workspaceId, { dateFrom, dateTo }),
         (error: unknown) => {
-          getAnalytics().captureError(error);
+          getAnalytics().captureError(error, {
+            fingerprintKey: "workspaces.workspaceId.expenses.loader:failure",
+            scope: {
+              type: "request",
+              method: "GET",
+              routeTemplate: "/_protected/workspaces/$workspaceId/expenses",
+            },
+          });
         },
       ),
       "expenses.prefetch",
@@ -89,8 +102,8 @@ const ExpenseListSkeleton = () => (
           <div className="flex min-w-0 flex-1 flex-col gap-1">
             <div className="flex items-center gap-2">
               <Skeleton className="h-4 w-40" />
-              <Skeleton className="h-4 w-14 rounded" />
-              <Skeleton className="h-4 w-12 rounded" />
+              <Skeleton className="h-4 w-14 rounded-sm" />
+              <Skeleton className="h-4 w-12 rounded-sm" />
             </div>
             <Skeleton className="h-3 w-56" />
           </div>
@@ -104,7 +117,7 @@ const ExpenseListSkeleton = () => (
 function ExpensesPage() {
   const t = useTranslations();
   const format = useFormatter();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const workspaceId = Route.useParams({
     select: (p) => p.workspaceId,
   });

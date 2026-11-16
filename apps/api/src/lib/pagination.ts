@@ -65,7 +65,10 @@ export async function* iterateCursorPages<T>(
 }
 
 export const encodePaginationCursor = (parts: readonly CursorPart[]): string =>
-  Buffer.from(JSON.stringify(parts)).toString("base64url");
+  Buffer.from(JSON.stringify(parts)).toBase64({
+    alphabet: "base64url",
+    omitPadding: true,
+  });
 
 export const decodePaginationCursor = (cursor: string): unknown[] | null => {
   try {
@@ -115,10 +118,10 @@ const hasControlCharacter = (text: string): boolean => {
  *
  * The test is the one property every encoder here shares: base64 of readable
  * text. Deliberately no length rule; `WzIwXQ` (`[20]`) is a whole cursor, and
- * `encodeGlobalSearchCursor` concatenates two base64 payloads around `==`, so
- * no single length class covers the surface. What that costs is that a decimal
- * offset cursor (`10`) falls outside the class: such a surface passes its own
- * predicate rather than being read by this one.
+ * a global search cursor issued behind an offset prefix is two base64 payloads
+ * around `==`, so no single length class covers the surface. What that costs
+ * is that a decimal offset cursor (`10`) falls outside the class: such a
+ * surface passes its own predicate rather than being read by this one.
  */
 export const isIssuablePaginationCursor = (value: string): boolean => {
   if (!CURSOR_ALPHABET.test(value)) {
@@ -157,4 +160,17 @@ export const parseDateTimePaginationCursorPart = (
     return null;
   }
   return new Date(parsed.epochMilliseconds);
+};
+
+/** Preserve PostgreSQL timestamp precision in a self-contained keyset boundary. */
+export const parsePreciseDateTimePaginationCursorPart = (
+  value: unknown,
+): string | null => {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const parsed = Result.try(() => Temporal.Instant.from(value)).unwrapOr(null);
+  return parsed?.toString({ fractionalSecondDigits: 6 }) === value
+    ? value
+    : null;
 };

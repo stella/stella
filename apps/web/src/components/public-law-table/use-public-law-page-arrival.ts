@@ -26,11 +26,17 @@ const focusFirstResult = (region: HTMLElement): boolean => {
  * rows near its scroll position, so after a deep scroll the first row exists
  * only once the table has redrawn at the top; one frame later it does.
  */
-const moveToFirstResult = (region: HTMLElement): void => {
+const moveToFirstResult = (
+  region: HTMLElement,
+  focusOnArrival: "first-result" | "preserve",
+): void => {
   for (const scroller of region.querySelectorAll<HTMLElement>(
     RESULTS_SCROLLER_SELECTOR,
   )) {
     scroller.scrollTop = 0;
+  }
+  if (focusOnArrival === "preserve") {
+    return;
   }
   if (!focusFirstResult(region)) {
     requestAnimationFrame(() => {
@@ -40,6 +46,7 @@ const moveToFirstResult = (region: HTMLElement): void => {
 };
 
 type UsePublicLawPageArrivalInput = {
+  focusOnArrival: "first-result" | "preserve";
   /** The results region: the table and the pager under it. */
   regionRef: RefObject<HTMLElement | null>;
   /**
@@ -51,8 +58,8 @@ type UsePublicLawPageArrivalInput = {
 
 /**
  * A step to another page moves the reader there: once the next page is
- * drawn (including a redirect), its first row is at the top and focused,
- * rather than the reader left at the pager under rows that changed beneath them.
+ * drawn (including a redirect), its first row is at the top. The owning route
+ * chooses whether focus follows the rows or stays on the pager.
  *
  * Only a pager request moves them. A filter, a sort or a fresh
  * arrival also draws a page, and taking focus from the control the reader is
@@ -60,6 +67,7 @@ type UsePublicLawPageArrivalInput = {
  * reader follows a link to a page.
  */
 export const usePublicLawPageArrival = ({
+  focusOnArrival,
   regionRef,
   shownPage,
 }: UsePublicLawPageArrivalInput) => {
@@ -75,9 +83,9 @@ export const usePublicLawPageArrival = ({
     // the end. Clear it before moving focus so later draws cannot reuse it.
     requestedPageRef.current = null;
     if (requested !== null) {
-      moveToFirstResult(region);
+      moveToFirstResult(region, focusOnArrival);
     }
-  }, [regionRef, shownPage]);
+  }, [focusOnArrival, regionRef, shownPage]);
 
   return (page: number) => {
     requestedPageRef.current = page;

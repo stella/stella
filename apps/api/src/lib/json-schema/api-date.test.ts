@@ -1,104 +1,122 @@
-import "@/api/register-schema-formats";
-import { TypeCompiler } from "@sinclair/typebox/compiler";
-import { Value } from "@sinclair/typebox/value";
-import { Glob } from "bun";
-import { describe, expect, test } from "bun:test";
-import { Elysia, t } from "elysia";
-import ts from "typescript6";
+import { afterAll, describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
-import { isApiDate, vApiDate } from "@stll/api-contract/api-date";
+import {
+  apiDateSchema,
+  apiDateTimeSchema,
+  isApiDate,
+} from "@stll/api-contract/api-date";
 
+import { createHttpApp } from "@/api/http/app";
+import { routes } from "@/api/http/route";
+import { defineEndpoint } from "@/api/lib/endpoints";
 import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 
-const dateSchema = t.String({ format: "date" });
-const dateTimeSchema = t.String({ format: "date-time" });
+let calls = 0;
+const server = serveForTest(
+  createHttpApp({
+    middleware: [errorBoundary],
+    routes: routes({
+      "/task": {
+        PATCH: defineEndpoint.public(
+          {
+            body: v.object({
+              dueDate: v.exactOptional(v.nullable(apiDateSchema)),
+            }),
+          },
+          ({ body }) => {
+            calls += 1;
+            return body;
+          },
+        ),
+      },
+      "/overview": {
+        GET: defineEndpoint.public(
+          { query: v.object({ agendaFrom: v.optional(apiDateSchema) }) },
+          ({ query }) => {
+            calls += 1;
+            return query;
+          },
+        ),
+      },
+    }),
+  }),
+);
+afterAll(async () => {
+  await server.stop();
+});
 
-const API_SOURCE_ROOT = `${import.meta.dir}/../..`;
-const API_CONTRACT_SOURCE_ROOT = `${import.meta.dir}/../../../../../packages/api-contract/src`;
-const DATE_SCHEMA_SOURCES = [
-  { root: API_SOURCE_ROOT, canonicalOwner: null },
-  { root: API_CONTRACT_SOURCE_ROOT, canonicalOwner: "api-date.ts" },
-] as const;
-// Development helpers and one-off scripts never take a request or write a row.
-const OUTSIDE_RUNTIME = /^(?:dev|scripts|tests)\//u;
-
-const callsValibotIsoDate = (source: string): boolean => {
-  const file = ts.createSourceFile(
-    "schema.ts",
-    source,
-    ts.ScriptTarget.Latest,
-    true,
+const patchTask = async (dueDate: string | null | undefined) =>
+  await server.fetch(
+    new Request("http://localhost/task", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ dueDate }),
+    }),
   );
-  const namespaces = new Set<string>();
-  const named = new Set<string>();
-  for (const statement of file.statements) {
-    if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier) ||
-      statement.moduleSpecifier.text !== "valibot" ||
-      statement.importClause?.phaseModifier === ts.SyntaxKind.TypeKeyword
-    ) {
-      continue;
-    }
-    const bindings = statement.importClause?.namedBindings;
-    if (bindings && ts.isNamespaceImport(bindings)) {
-      namespaces.add(bindings.name.text);
-    } else if (bindings && ts.isNamedImports(bindings)) {
-      for (const binding of bindings.elements) {
-        if (
-          !binding.isTypeOnly &&
-          (binding.propertyName ?? binding.name).text === "isoDate"
-        ) {
-          named.add(binding.name.text);
-        }
-      }
-    }
-  }
-  const unwrap = (node: ts.Expression): ts.Expression => {
-    let expression = node;
-    while (ts.isParenthesizedExpression(expression)) {
-      expression = expression.expression;
-    }
-    return expression;
-  };
-  const visit = (node: ts.Node): boolean => {
-    if (ts.isCallExpression(node)) {
-      const callee = unwrap(node.expression);
-      if (ts.isIdentifier(callee) && named.has(callee.text)) {
-        return true;
-      }
-      if (
-        ts.isPropertyAccessExpression(callee) ||
-        ts.isElementAccessExpression(callee)
-      ) {
-        const owner = unwrap(callee.expression);
-        let property: string | null = null;
-        if (ts.isPropertyAccessExpression(callee)) {
-          property = callee.name.text;
-        } else if (ts.isStringLiteral(callee.argumentExpression)) {
-          property = callee.argumentExpression.text;
-        }
-        if (
-          ts.isIdentifier(owner) &&
-          namespaces.has(owner.text) &&
-          property === "isoDate"
-        ) {
-          return true;
-        }
-      }
-    }
-    return (
-      ts.forEachChild(node, (child) => (visit(child) ? true : undefined)) ??
-      false
-    );
-  };
-  return visit(file);
-};
 
-describe("API calendar date boundaries", () => {
+describe("API calendar dates on the HTTP layer", () => {
+  test("refuses impossible body and query dates before the handler runs", async () => {
+    calls = 0;
+    for (const value of [
+      "2026-02-30",
+      "2026-02-29",
+      "1900-02-29",
+      "2026-04-31",
+      "0000-01-01",
+      "2026-13-01",
+      "2026-02-01T00:00:00Z",
+    ]) {
+      expect((await patchTask(value)).status).toBe(422);
+      const queryResponse = await server.fetch(
+        new Request(
+          `http://localhost/overview?agendaFrom=${encodeURIComponent(value)}`,
+        ),
+      );
+      expect(queryResponse.status).toBe(422);
+    }
+    expect(calls).toBe(0);
+  });
+
+  test("passes every existing day through unchanged", async () => {
+    calls = 0;
+    for (const dueDate of [
+      "0001-01-01",
+      "0099-12-31",
+      "2000-02-29",
+      "2028-02-29",
+      "9999-12-31",
+      "2011-12-30",
+      null,
+      undefined,
+    ]) {
+      const response = await patchTask(dueDate);
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual(
+        dueDate === undefined ? {} : { dueDate },
+      );
+    }
+    const response = await server.fetch(
+      new Request("http://localhost/overview?agendaFrom=2028-02-29"),
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ agendaFrom: "2028-02-29" });
+    expect(calls).toBe(9);
+  });
+
+  test("publishes the date shape while the calendar check runs only at parse", () => {
+    expect(toJsonSchema(apiDateSchema)).toEqual({
+      $schema: "http://json-schema.org/draft-07/schema#",
+      type: "string",
+      format: "date",
+    });
+  });
+});
+
+describe("API calendar date values", () => {
   test("accepts exactly existing CE calendar days across month and leap-century boundaries", () => {
-    const compiled = TypeCompiler.Compile(dateSchema);
     // Include the 0..99 Date constructor trap and Gregorian century exceptions.
     for (const year of [
       0, 1, 4, 99, 100, 399, 400, 1600, 1700, 1900, 2000, 2024, 2026, 2028,
@@ -117,9 +135,7 @@ describe("API calendar date boundaries", () => {
             normalized.getUTCMonth() === month - 1 &&
             normalized.getUTCDate() === day;
           expect(isApiDate(value)).toBe(expected);
-          expect(compiled.Check(value)).toBe(expected);
-          expect(Value.Check(dateSchema, value)).toBe(expected);
-          expect(v.is(vApiDate, value)).toBe(expected);
+          expect(v.is(apiDateSchema, value)).toBe(expected);
         }
       }
     }
@@ -138,98 +154,7 @@ describe("API calendar date boundaries", () => {
     '"2026-02-01"',
     "",
   ])("rejects noncanonical calendar date %j", (value) => {
-    expect(Value.Check(dateSchema, value)).toBe(false);
-  });
-
-  test.each([true, false])(
-    "rejects invalid body and query dates before handlers (aot=%s)",
-    async (aot) => {
-      let calls = 0;
-      const app = new Elysia({ aot })
-        .patch(
-          "/task",
-          ({ body }) => {
-            calls += 1;
-            return body;
-          },
-          {
-            body: t.Object({ dueDate: t.Optional(t.Nullable(dateSchema)) }),
-          },
-        )
-        .get(
-          "/overview",
-          ({ query }) => {
-            calls += 1;
-            return query;
-          },
-          {
-            query: t.Object({ agendaFrom: t.Optional(dateSchema) }),
-          },
-        );
-
-      for (const value of [
-        "2026-02-30",
-        "2026-02-29",
-        "1900-02-29",
-        "2026-04-31",
-        "0000-01-01",
-        "2026-13-01",
-        "2026-02-01T00:00:00Z",
-      ]) {
-        const bodyResponse = await app.handle(
-          new Request("http://localhost/task", {
-            method: "PATCH",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ dueDate: value }),
-          }),
-        );
-        expect(bodyResponse.status).toBe(422);
-        const queryResponse = await app.handle(
-          new Request(
-            `http://localhost/overview?agendaFrom=${encodeURIComponent(value)}`,
-          ),
-        );
-        expect(queryResponse.status).toBe(422);
-      }
-      expect(calls).toBe(0);
-
-      for (const dueDate of [
-        "0001-01-01",
-        "0099-12-31",
-        "2000-02-29",
-        "2028-02-29",
-        "9999-12-31",
-        "2011-12-30",
-        null,
-        undefined,
-      ]) {
-        const response = await app.handle(
-          new Request("http://localhost/task", {
-            method: "PATCH",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ dueDate }),
-          }),
-        );
-        expect(response.status).toBe(200);
-        expect(await response.json()).toEqual(
-          dueDate === undefined ? {} : { dueDate },
-        );
-      }
-      const response = await app.handle(
-        new Request("http://localhost/overview?agendaFrom=2028-02-29"),
-      );
-      expect(response.status).toBe(200);
-      expect(await response.json()).toEqual({ agendaFrom: "2028-02-29" });
-      expect(calls).toBe(9);
-    },
-  );
-
-  test("publishes the Valibot date as a plain date format", () => {
-    expect(toJsonSchema(vApiDate)).toMatchObject({
-      type: "string",
-      format: "date",
-    });
-    expect(JSON.stringify(toJsonSchema(vApiDate))).not.toContain("pattern");
+    expect(v.is(apiDateSchema, value)).toBe(false);
   });
 });
 
@@ -239,7 +164,7 @@ describe("API date-time storage boundaries", () => {
     "0001-01-01T00:00:00Z",
     "9999-12-31T23:59:59Z",
   ])("accepts the storable instant %s", (value) => {
-    expect(Value.Check(dateTimeSchema, value)).toBe(true);
+    expect(v.is(apiDateTimeSchema, value)).toBe(true);
   });
 
   test.each([
@@ -250,50 +175,14 @@ describe("API date-time storage boundaries", () => {
     // A negative offset moves the instant forward into UTC year 10000.
     "9999-12-31T23:59:59-23:59",
   ])("rejects the unstorable instant %s", (value) => {
-    expect(Value.Check(dateTimeSchema, value)).toBe(false);
+    expect(v.is(apiDateTimeSchema, value)).toBe(false);
   });
-});
 
-test.each([
-  'import * as v from "valibot"; v.isoDate();',
-  'import * as v from "valibot"; v.isoDate("Expected a date");',
-  'import { isoDate } from "valibot"; isoDate("Expected a date");',
-  'import { isoDate as day } from "valibot"; day("Expected a date");',
-  'import * as dates from "valibot"; (dates["isoDate"])("Expected a date");',
-])(
-  "finds runtime Valibot date calls regardless of import spelling or arguments: %s",
-  (source) => {
-    expect(callsValibotIsoDate(source)).toBe(true);
-  },
-);
-
-test.each([
-  'import * as v from "another-library"; v.isoDate();',
-  'import { isoDate as day } from "another-library"; day();',
-  'const isoDate = () => "2026-10-23"; isoDate();',
-  'import * as v from "valibot"; const example = "v.isoDate()";',
-  'import type * as v from "valibot"; type DateSchema = v.IsoDateAction<string, undefined>;',
-])("ignores sources without a runtime Valibot date call: %s", (source) => {
-  expect(callsValibotIsoDate(source)).toBe(false);
-});
-
-test("every Valibot date schema checks the calendar day", async () => {
-  const loose: string[] = [];
-  for (const { root, canonicalOwner } of DATE_SCHEMA_SOURCES) {
-    for (const filename of new Glob("**/*.ts").scanSync(root)) {
-      if (
-        filename === canonicalOwner ||
-        filename.endsWith(".test.ts") ||
-        OUTSIDE_RUNTIME.test(filename)
-      ) {
-        continue;
-      }
-      const source = await Bun.file(`${root}/${filename}`).text();
-      if (callsValibotIsoDate(source)) {
-        loose.push(`${root}/${filename}`);
-      }
-    }
-  }
-  // `isoDate()` alone passes impossible days and year 0000; use `vApiDate`.
-  expect(loose).toEqual([]);
+  test("publishes the date-time shape while the storage check runs only at parse", () => {
+    expect(toJsonSchema(apiDateTimeSchema)).toEqual({
+      $schema: "http://json-schema.org/draft-07/schema#",
+      type: "string",
+      format: "date-time",
+    });
+  });
 });

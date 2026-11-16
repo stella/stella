@@ -236,7 +236,7 @@ export const createLinkIconCache = ({
           if (icon.bytes.byteLength > 65_536) {
             return false;
           }
-          value = `${icon.mime === "image/png" ? "P" : "I"}${Buffer.from(icon.bytes).toString("base64")}`;
+          value = `${icon.mime === "image/png" ? "P" : "I"}${Buffer.from(icon.bytes).toBase64()}`;
           ttl = POSITIVE_TTL;
           break;
         }

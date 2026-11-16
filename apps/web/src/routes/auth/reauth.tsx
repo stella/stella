@@ -1,13 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
-import * as v from "valibot";
 
 import { SIGN_IN_MODE } from "@/components/auth/sign-in-mode";
 import { SignInPanel } from "@/components/auth/sign-in-panel";
 import { redirectToSchema } from "@/lib/redirect";
+import { routeSearchSchema } from "@/route-search-params";
 
 export const Route = createFileRoute("/auth/reauth")({
-  validateSearch: v.object({ redirectTo: redirectToSchema }),
+  validateSearch: routeSearchSchema({ redirectTo: redirectToSchema }),
   component: Reauthenticate,
 });
 

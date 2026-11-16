@@ -11,6 +11,7 @@ import {
   PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD,
   PROFESSIONAL_USE_STATEMENT_VERSION,
 } from "@stll/api-contract/professional-use";
+import { AUTH_SIGN_IN_CODE_UNAVAILABLE_ERROR_CODE } from "@stll/auth-model";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { fetchWithTimeout } from "@stll/fetch";
 import { Button } from "@stll/ui/button";
@@ -20,6 +21,10 @@ import { Input } from "@stll/ui/input";
 import { TextSeparator } from "@stll/ui/separator";
 import { cn } from "@stll/ui/utils";
 
+import {
+  GoogleIcon,
+  MicrosoftIcon,
+} from "@/components/auth/sign-in-brand-marks";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { env } from "@/env";
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
@@ -30,10 +35,11 @@ import { authClient, HTTP_TOO_MANY_REQUESTS } from "@/lib/auth-client";
 import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { queryView } from "@/lib/query-view.logic";
 import { isAcceptInvitationRedirect } from "@/lib/redirect";
 import { emailSchema, schemaFormOptions, toFormErrors } from "@/lib/schema";
-import { useQueryView } from "@/lib/use-query-view";
 
+import type { SocialProvider } from "./access-reset.logic";
 import {
   LAST_USED_BADGE_PILL_CLASS_NAME,
   LAST_USED_BADGE_POSITION_CLASS_NAME,
@@ -50,16 +56,23 @@ import { PasswordSignInOption } from "./password-sign-in-option";
 import { SIGN_IN_MODE } from "./sign-in-mode";
 import type { SignInMode } from "./sign-in-mode";
 import {
+  initialPasswordEntry,
   resolveLastUsedSignInMethod,
   resolveSignInOptions,
   SIGN_IN_METHOD,
   signInMethodVariant,
 } from "./sign-in-panel.logic";
-import type { AuthCapabilities, SignInMethod } from "./sign-in-panel.logic";
+import type {
+  AuthCapabilities,
+  SignInEntryMethod,
+  SignInMethod,
+} from "./sign-in-panel.logic";
 
 type SignInPanelProps = {
   mode?: SignInMode;
   className?: string;
+  /** The method a link asked this page to open with. */
+  entryMethod?: SignInEntryMethod | undefined;
   redirectTo: string;
   showHeading?: boolean;
   onOtpSent?: (payload: {
@@ -69,15 +82,17 @@ type SignInPanelProps = {
   }) => void;
 };
 
-const formSchema = v.strictObject({
-  email: emailSchema(),
-});
+const formSchema = (invalidEmail: string) =>
+  v.strictObject({
+    email: emailSchema(invalidEmail),
+  });
 
-const bootstrapFormSchema = v.strictObject({
-  email: emailSchema(),
-  password: v.string(),
-  bootstrapToken: v.pipe(v.string(), v.trim()),
-});
+const bootstrapFormSchema = (invalidEmail: string) =>
+  v.strictObject({
+    email: emailSchema(invalidEmail),
+    password: v.string(),
+    bootstrapToken: v.pipe(v.string(), v.trim()),
+  });
 
 const authErrorResponseSchema = v.object({
   message: v.optional(v.string()),
@@ -98,6 +113,7 @@ const renderTermsLink = (chunks: ReactNode) => (
 
 const SignInOptionsPanel = ({
   className,
+  entryMethod,
   redirectTo,
   showHeading = true,
   mode = SIGN_IN_MODE.signIn,
@@ -107,14 +123,15 @@ const SignInOptionsPanel = ({
   const t = useTranslations();
   const analytics = useAnalytics();
   const navigate = useNavigate();
-  const [socialLoading, setSocialLoading] = useState<
-    "google" | "microsoft" | null
-  >(null);
+  const [socialLoading, setSocialLoading] = useState<SocialProvider | null>(
+    null,
+  );
   const signInOptions = resolveSignInOptions({
     authCapabilities,
     socialProviderFlags: {
       google: env.VITE_AUTH_GOOGLE,
       microsoft: env.VITE_AUTH_MICROSOFT,
+      apple: env.VITE_AUTH_APPLE,
     },
   });
   const {
@@ -125,6 +142,7 @@ const SignInOptionsPanel = ({
     showReviewPasswordSignIn,
     showGoogle,
     showMicrosoft,
+    showApple,
     showSocialProviders,
     hasAboveEmailOptions,
   } = signInOptions;
@@ -132,6 +150,11 @@ const SignInOptionsPanel = ({
     stored: readLastUsedLoginMethod(),
     options: signInOptions,
   });
+  const [passwordEntry, setPasswordEntry] = useState(() =>
+    initialPasswordEntry({ entryMethod, options: signInOptions }),
+  );
+  const openPasswordEntry = (email: string) =>
+    setPasswordEntry({ type: "open", email });
 
   const handleOtpSent = async (email: string) => {
     if (onOtpSent) {
@@ -145,7 +168,7 @@ const SignInOptionsPanel = ({
     });
   };
 
-  const handleSocialSignIn = async (provider: "google" | "microsoft") => {
+  const handleSocialSignIn = async (provider: SocialProvider) => {
     setSocialLoading(provider);
     const callbackURL = new URL("/auth/organization", window.location.origin);
     const errorCallbackURL = new URL("/auth/error", window.location.origin);
@@ -169,41 +192,18 @@ const SignInOptionsPanel = ({
       return;
     }
 
-    analytics.captureError(toAuthClientError(error));
+    analytics.captureError(toAuthClientError(error), {
+      fingerprintKey: "SignInOptionsPanel.handleSocialSignIn:failure",
+      scope: {
+        type: "handler",
+        handlerId: "SignInOptionsPanel.handleSocialSignIn:failure",
+      },
+    });
     if (error.status !== HTTP_TOO_MANY_REQUESTS) {
       notifyUserError(toAuthClientError(error), t("errors.actionFailed"));
     }
     setSocialLoading(null);
   };
-
-  const form = useForm(
-    schemaFormOptions({
-      schema: formSchema,
-      defaultValues: { email: "" },
-      submitValues: "schema-output",
-      onSubmit: async ({ value }) => {
-        const { error } = await authClient.emailOtp.sendVerificationOtp({
-          email: value.email,
-          type: "sign-in",
-        });
-
-        if (error) {
-          analytics.captureError(toAuthClientError(error));
-          if (error.status !== HTTP_TOO_MANY_REQUESTS) {
-            notifyUserError(toAuthClientError(error), t("errors.actionFailed"));
-          }
-          return;
-        }
-
-        await handleOtpSent(value.email);
-      },
-    }),
-  );
-
-  const { formErrors, dirty } = useSelector(form.store, (s) => ({
-    formErrors: toFormErrors(s.fieldMeta),
-    dirty: !s.isDefaultValue,
-  }));
 
   return (
     <div className={cn("flex w-full max-w-md flex-col gap-8", className)}>
@@ -235,6 +235,13 @@ const SignInOptionsPanel = ({
                   setSocialLoading(null);
                   analytics.captureError(
                     error instanceof Error ? error : new Error(String(error)),
+                    {
+                      fingerprintKey: "SignInOptionsPanel:failure",
+                      scope: {
+                        type: "handler",
+                        handlerId: "SignInOptionsPanel:failure",
+                      },
+                    },
                   );
                 });
               }}
@@ -253,6 +260,38 @@ const SignInOptionsPanel = ({
                   setSocialLoading(null);
                   analytics.captureError(
                     error instanceof Error ? error : new Error(String(error)),
+                    {
+                      fingerprintKey: "SignInOptionsPanel:failure-2",
+                      scope: {
+                        type: "handler",
+                        handlerId: "SignInOptionsPanel:failure-2",
+                      },
+                    },
+                  );
+                });
+              }}
+            />
+          )}
+          {showApple && (
+            <SocialButton
+              disabled={socialLoading !== null}
+              icon={<AppleIcon />}
+              label={t("auth.continueWithApple")}
+              lastUsed={lastUsed}
+              method={SIGN_IN_METHOD.apple}
+              loading={socialLoading === "apple"}
+              onClick={() => {
+                handleSocialSignIn("apple").catch((error: unknown) => {
+                  setSocialLoading(null);
+                  analytics.captureError(
+                    error instanceof Error ? error : new Error(String(error)),
+                    {
+                      fingerprintKey: "SignInOptionsPanel:failure-3",
+                      scope: {
+                        type: "handler",
+                        handlerId: "SignInOptionsPanel:failure-3",
+                      },
+                    },
                   );
                 });
               }}
@@ -271,6 +310,7 @@ const SignInOptionsPanel = ({
       {showLocalPassword && !showBootstrap && (
         <PasswordSignInForm
           autoFocus={!showSocialProviders}
+          defaultEmail=""
           lastUsed={lastUsed}
           redirectTo={redirectTo}
         />
@@ -280,60 +320,27 @@ const SignInOptionsPanel = ({
         <TextSeparator>{t("auth.orSignInWithEmail")}</TextSeparator>
       )}
 
-      {showEmailOtp && (
-        <Form
-          dirty={dirty}
-          onDiscard={() => form.reset()}
-          errors={formErrors}
-          onSubmit={(e) => {
-            e.preventDefault();
-            detached(form.handleSubmit(), "sign-in-panel.submit");
-          }}
-        >
-          <form.Field name="email">
-            {(field) => (
-              <Field className="relative" name={field.name}>
-                <Input
-                  autoFocus={!showSocialProviders && !showLocalPassword}
-                  onBlur={field.handleBlur}
-                  onChange={(e) => field.handleChange(e.target.value)}
-                  placeholder={t("auth.emailPlaceholder")}
-                  size="lg"
-                  type="email"
-                  value={field.state.value}
-                />
-                {lastUsed === SIGN_IN_METHOD.emailOtp && <LastUsedFieldBadge />}
-                <FieldError />
-              </Field>
-            )}
-          </form.Field>
-          <form.Subscribe
-            selector={(s) => ({
-              isSubmitting: s.isSubmitting,
-              canSubmit: s.canSubmit,
-              email: s.values.email,
-            })}
-          >
-            {({ isSubmitting, canSubmit, email }) => (
-              <Button
-                className="w-full"
-                disabled={!canSubmit || email.trim().length === 0}
-                loading={isSubmitting}
-                type="submit"
-                variant={signInMethodVariant({
-                  method: SIGN_IN_METHOD.emailOtp,
-                  lastUsed,
-                  fallback: "default",
-                })}
-              >
-                {t("auth.continueWithEmail")}
-              </Button>
-            )}
-          </form.Subscribe>
-        </Form>
+      {showEmailOtp && passwordEntry.type === "closed" && (
+        <EmailCodeSignInForm
+          autoFocus={!showSocialProviders && !showLocalPassword}
+          lastUsed={lastUsed}
+          onCodeSent={handleOtpSent}
+          onPasswordRequired={openPasswordEntry}
+          onUsePassword={
+            showReviewPasswordSignIn ? openPasswordEntry : undefined
+          }
+        />
       )}
-      {showReviewPasswordSignIn && (
-        <PasswordSignInOption redirectTo={redirectTo} />
+      {passwordEntry.type === "open" && (
+        <PasswordSignInOption
+          email={passwordEntry.email}
+          onUseEmailCode={
+            showEmailOtp
+              ? () => setPasswordEntry({ type: "closed" })
+              : undefined
+          }
+          redirectTo={redirectTo}
+        />
       )}
       <p className="text-foreground-muted text-xs">
         {t.rich("onboarding.termsNotice", {
@@ -346,6 +353,130 @@ const SignInOptionsPanel = ({
         </p>
       )}
     </div>
+  );
+};
+
+/** The email step of code sign-in: asks the server to send the code. */
+const EmailCodeSignInForm = ({
+  autoFocus,
+  lastUsed,
+  onCodeSent,
+  onPasswordRequired,
+  onUsePassword,
+}: {
+  autoFocus: boolean;
+  lastUsed: SignInMethod | null;
+  onCodeSent: (email: string) => Promise<void>;
+  /** The server sends this address no code: it signs in with a password. */
+  onPasswordRequired: (email: string) => void;
+  /** Opens the password form with the address typed so far, where offered. */
+  onUsePassword: ((email: string) => void) | undefined;
+}) => {
+  const t = useTranslations();
+  const analytics = useAnalytics();
+  const form = useForm(
+    schemaFormOptions({
+      schema: formSchema(t("validation.invalidEmail")),
+      defaultValues: { email: "" },
+      submitValues: "schema-output",
+      onSubmit: async ({ value }) => {
+        const { error } = await authClient.emailOtp.sendVerificationOtp({
+          email: value.email,
+          type: "sign-in",
+        });
+
+        if (error?.code === AUTH_SIGN_IN_CODE_UNAVAILABLE_ERROR_CODE) {
+          onPasswordRequired(value.email);
+          return;
+        }
+        if (error) {
+          analytics.captureError(toAuthClientError(error), {
+            fingerprintKey: "EmailCodeSignInForm.onSubmit:failure",
+            scope: {
+              type: "handler",
+              handlerId: "EmailCodeSignInForm.onSubmit:failure",
+            },
+          });
+          if (error.status !== HTTP_TOO_MANY_REQUESTS) {
+            notifyUserError(toAuthClientError(error), t("errors.actionFailed"));
+          }
+          return;
+        }
+
+        await onCodeSent(value.email);
+      },
+    }),
+  );
+
+  const { formErrors, dirty } = useSelector(form.store, (s) => ({
+    formErrors: toFormErrors(s.fieldMeta),
+    dirty: !s.isDefaultValue,
+  }));
+
+  return (
+    <>
+      <Form
+        dirty={dirty}
+        onDiscard={() => form.reset()}
+        errors={formErrors}
+        onSubmit={(e) => {
+          e.preventDefault();
+          detached(form.handleSubmit(), "sign-in-panel.submit");
+        }}
+      >
+        <form.Field name="email">
+          {(field) => (
+            <Field className="relative" name={field.name}>
+              <Input
+                autoFocus={autoFocus}
+                onBlur={field.handleBlur}
+                onChange={(e) => field.handleChange(e.target.value)}
+                placeholder={t("auth.emailPlaceholder")}
+                size="lg"
+                type="email"
+                value={field.state.value}
+              />
+              {lastUsed === SIGN_IN_METHOD.emailOtp && <LastUsedFieldBadge />}
+              <FieldError />
+            </Field>
+          )}
+        </form.Field>
+        <form.Subscribe
+          selector={(s) => ({
+            isSubmitting: s.isSubmitting,
+            canSubmit: s.canSubmit,
+            email: s.values.email,
+          })}
+        >
+          {({ isSubmitting, canSubmit, email }) => (
+            <Button
+              className="w-full"
+              disabled={!canSubmit || email.trim().length === 0}
+              loading={isSubmitting}
+              type="submit"
+              variant={signInMethodVariant({
+                method: SIGN_IN_METHOD.emailOtp,
+                lastUsed,
+                fallback: "default",
+              })}
+            >
+              {t("auth.continueWithEmail")}
+            </Button>
+          )}
+        </form.Subscribe>
+      </Form>
+      {onUsePassword && (
+        <Button
+          className="self-center"
+          onClick={() => onUsePassword(form.state.values.email)}
+          size="sm"
+          type="button"
+          variant="link"
+        >
+          {t("auth.usePassword")}
+        </Button>
+      )}
+    </>
   );
 };
 
@@ -362,7 +493,7 @@ const BootstrapSignUpForm = ({
   const invalidateSession = useInvalidateSession();
   const form = useForm(
     schemaFormOptions({
-      schema: bootstrapFormSchema,
+      schema: bootstrapFormSchema(t("validation.invalidEmail")),
       defaultValues: { email: "", password: "", bootstrapToken: "" },
       submitValues: "schema-output",
       onSubmit: async ({ value }) => {
@@ -378,7 +509,13 @@ const BootstrapSignUpForm = ({
         });
 
         if (error) {
-          analytics.captureError(toAuthClientError(error));
+          analytics.captureError(toAuthClientError(error), {
+            fingerprintKey: "BootstrapSignUpForm.onSubmit:failure",
+            scope: {
+              type: "handler",
+              handlerId: "BootstrapSignUpForm.onSubmit:failure",
+            },
+          });
           if (error.status !== HTTP_TOO_MANY_REQUESTS) {
             notifyUserError(toAuthClientError(error), t("errors.actionFailed"));
           }
@@ -423,6 +560,7 @@ const BootstrapSignUpForm = ({
           {(field) => (
             <SecretCredentialField
               autoComplete="new-password"
+              autoFocus={false}
               field={field}
               placeholder={t("auth.password")}
             />
@@ -432,6 +570,7 @@ const BootstrapSignUpForm = ({
           {(field) => (
             <SecretCredentialField
               autoComplete="one-time-code"
+              autoFocus={false}
               field={field}
               placeholder={t("auth.bootstrapToken")}
             />
@@ -577,7 +716,8 @@ const SocialButton = ({
     {(describedBy) => (
       <Button
         aria-describedby={describedBy}
-        className="w-full min-w-0 shrink max-sm:h-auto max-sm:min-h-10 max-sm:px-2 max-sm:py-2 max-sm:text-[0.95rem] max-sm:leading-tight max-sm:whitespace-normal sm:whitespace-nowrap"
+        layout="wrap"
+        className="w-full min-w-0 shrink items-center justify-center text-center max-sm:px-2 max-sm:text-[0.95rem] max-sm:leading-tight"
         disabled={disabled}
         loading={loading}
         onClick={onClick}
@@ -591,49 +731,23 @@ const SocialButton = ({
   </LastUsedSignInFrame>
 );
 
-const GoogleIcon = () => (
+// Apple's logo in the button's own text colour, as Apple's sign-in button
+// guidelines require for a custom button.
+const AppleIcon = () => (
   <svg
     aria-hidden="true"
     className="size-4"
+    fill="currentColor"
     viewBox="0 0 24 24"
     xmlns="http://www.w3.org/2000/svg"
   >
-    <path
-      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
-      fill="#4285F4"
-    />
-    <path
-      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-      fill="#34A853"
-    />
-    <path
-      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-      fill="#FBBC05"
-    />
-    <path
-      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-      fill="#EA4335"
-    />
-  </svg>
-);
-
-const MicrosoftIcon = () => (
-  <svg
-    aria-hidden="true"
-    className="size-4"
-    viewBox="0 0 21 21"
-    xmlns="http://www.w3.org/2000/svg"
-  >
-    <rect fill="#F25022" height="9" width="9" x="1" y="1" />
-    <rect fill="#7FBA00" height="9" width="9" x="11" y="1" />
-    <rect fill="#00A4EF" height="9" width="9" x="1" y="11" />
-    <rect fill="#FFB900" height="9" width="9" x="11" y="11" />
+    <path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701" />
   </svg>
 );
 
 export const SignInPanel = (props: SignInPanelProps) => {
   const capabilitiesQuery = useQuery(authCapabilitiesOptions);
-  const capabilitiesView = useQueryView(capabilitiesQuery);
+  const capabilitiesView = queryView(capabilitiesQuery);
   if (capabilitiesView.type !== "items") {
     return <QueryViewFeedback view={capabilitiesView} />;
   }

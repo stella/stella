@@ -129,7 +129,7 @@ const unwrap = <T>(result: Result<T, { message: string }>): T => {
   return result.value;
 };
 
-// Roughly 5 chars per repeat / 4 chars per token => ~100k tokens, safely past
+// 5 bytes per repeat / 3 bytes per token => ~133k tokens, safely past
 // the 64k DEFAULT_TRIGGER_TOKENS used by shouldCompactChatMessages.
 const longText = (token: string): string => `${token} `.repeat(80_000);
 

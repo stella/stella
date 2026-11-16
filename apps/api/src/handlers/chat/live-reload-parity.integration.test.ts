@@ -6,12 +6,9 @@ import { eq, inArray } from "drizzle-orm";
 import fc from "fast-check";
 
 import { getOutputTokenLimit } from "@stll/ai-catalog";
+import { CHAT_SEND_QUEUES_INSTEAD_CODE } from "@stll/api-contract/chat-queue";
 import type { ChatToolGrantScope } from "@stll/api-contract/chat-tool-grants";
-import {
-  propertyConfig,
-  propertySeed,
-  propertyTestTimeout,
-} from "@stll/property-testing";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatThreads, chatToolGrants, mcpConnectors } from "@/api/db/schema";
@@ -23,6 +20,8 @@ import {
   ASK_USER_TOOL_NAME,
   CREATE_DOCUMENT_TOOL_NAME,
 } from "@/api/handlers/chat/tools/native-chat-tool-names";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
+import { unwrapStatus } from "@/api/http/status";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -243,9 +242,6 @@ type Ledger = {
   /** How each turn stood when the conversation last settled. */
   outcomes: Map<number, Ledger["latest"]>;
   pending: string[];
-  /** The answers a new message superseded, which the page must hold as the
-   *  thread serves them. */
-  superseded: Set<string>;
   turn: number;
   /** What each turn still waited on when the conversation last settled. */
   waiting: Map<number, CallKind[]>;
@@ -260,7 +256,6 @@ const newLedger = (): Ledger => ({
   latest: "none",
   outcomes: new Map(),
   pending: [],
-  superseded: new Set(),
   turn: 0,
   waiting: new Map(),
 });
@@ -486,31 +481,6 @@ const toolCallIdsOf = (messages: readonly UIMessage[]): string[] =>
 
 const sorted = (values: readonly string[]) => JSON.stringify(values.toSorted());
 
-const placeholderOf = (part: unknown): string[] => {
-  const metadata: unknown =
-    typeof part === "object" && part !== null
-      ? Reflect.get(part, "metadata")
-      : undefined;
-  const placeholder: unknown =
-    typeof metadata === "object" && metadata !== null
-      ? Reflect.get(metadata, "placeholder")
-      : undefined;
-  return typeof placeholder === "string" ? [placeholder] : [];
-};
-
-/** What the thread's page serves of a message beyond what the live/reload
- *  views compare: its stored time and its attachments' placeholders. */
-const servedFieldsOf = (message: UIMessage | undefined) =>
-  message === undefined
-    ? null
-    : {
-        createdAt:
-          message.createdAt === undefined
-            ? null
-            : new Date(message.createdAt).toISOString(),
-        placeholders: message.parts.flatMap(placeholderOf),
-      };
-
 /** The ledger's oracles for the conversation as it now stands. */
 const findLedgerViolations = async (real: Real): Promise<OracleViolation[]> => {
   const { harness, ledger, threadId } = real;
@@ -532,19 +502,7 @@ const findLedgerViolations = async (real: Real): Promise<OracleViolation[]> => {
   const callsMatch =
     JSON.stringify(live) === JSON.stringify(expectedCalls) &&
     JSON.stringify(reloaded) === JSON.stringify(expectedCalls);
-  const unservedSuperseded = [...ledger.superseded].flatMap((id) => {
-    const onPage = servedFieldsOf(
-      real.client.messages().find((message) => message.id === id),
-    );
-    const served = servedFieldsOf(reload.find((message) => message.id === id));
-    return JSON.stringify(onPage) === JSON.stringify(served)
-      ? []
-      : [{ id, live: onPage, reload: served }];
-  });
   return [
-    // A superseded answer the page was sent again holds what the page
-    // serves, not only what the views compare.
-    ...violationsOf(CHAT_ORACLE.liveEqualsReload, unservedSuperseded),
     ...violationsOf(
       CHAT_ORACLE.ledgerPending,
       pendingMatches ? [] : [{ expected: ledger.pending, onScreen, stored }],
@@ -800,42 +758,54 @@ class ResolveCards implements fc.AsyncCommand<Model, Real> {
 }
 
 /**
- * The user types a new message while cards still wait. The message supersedes
- * the awaited interactions: none of them is offered any more, none of their
- * effects ever runs, and the new turn proceeds as any other. A client call
- * still waiting keeps the page busy, so the composer queues instead.
+ * The user types a new message while cards still wait. A plain message never
+ * replaces what a turn waits on: the server refuses it as waiting on the
+ * member and stores nothing, and the page queues it instead (the queue is
+ * the server's, sent once the turn has ended; the harness runs no queue
+ * sender). So the cards still wait and the page is as it was. A client call
+ * still waiting keeps the page busy, so the composer queues at once.
  */
-class SupersedeCards implements fc.AsyncCommand<Model, Real> {
+class MessagePastCards implements fc.AsyncCommand<Model, Real> {
   static readonly allows = (model: Readonly<Model>) =>
     model.pendingKinds.length > 0 && !isBusy(model);
-  readonly runs: readonly RunShape[];
   readonly text: string;
-  constructor(runs: readonly RunShape[], text: string) {
-    this.runs = runs;
+  constructor(text: string) {
     this.text = text;
   }
-  check = SupersedeCards.allows;
+  check = MessagePastCards.allows;
   run = async (model: Model, real: Real) => {
     const failuresBefore = real.ledger.failures;
-    const waiting = new Set(real.ledger.pending);
-    for (const { id, parts } of real.client.messages()) {
-      if (
-        parts.some((part) => part.type === "tool-call" && waiting.has(part.id))
-      ) {
-        real.ledger.superseded.add(id);
-      }
-    }
-    real.ledger.pending = [];
-    real.ledger.turn += 1;
-    real.harness.script(
-      real.threadId,
-      ...planRequests(real.ledger, this.runs, real.nextId, "message"),
+    const storedIds = async () =>
+      (await real.harness.readThreadMessages(real.threadId)).map(
+        ({ id }) => id,
+      );
+    const before = await storedIds();
+    const answer = await real.harness.sendUnchecked(
+      real.harness.sendContext({
+        message: {
+          id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
+          parts: [{ content: this.text, type: "text" }],
+          role: "user",
+        },
+        runId: `run-${Bun.randomUUIDv7()}`,
+        threadId: real.threadId,
+      }),
     );
-    await real.client.sendUserMessage(Bun.randomUUIDv7(), this.text);
-    await approveCardsOnScreen(real);
+    const { code: status, value } = unwrapStatus(answer);
+    expect({
+      code:
+        typeof value === "object" && value !== null && "code" in value
+          ? value.code
+          : undefined,
+      status,
+    }).toEqual({
+      code: CHAT_SEND_QUEUES_INSTEAD_CODE.turnAwaitingMember,
+      status: 409,
+    });
+    expect(await storedIds()).toEqual(before);
     await verify(model, real, { failuresBefore });
   };
-  toString = () => `SupersedeCards(${JSON.stringify(this.runs)})`;
+  toString = () => `MessagePastCards(${JSON.stringify(this.text)})`;
 }
 
 /** The thread's answers, oldest first: one per user turn. */
@@ -844,6 +814,54 @@ const answerIdsOf = async (real: Real): Promise<SafeId<"chatMessage">[]> =>
     ({ id, role }) =>
       role === "assistant" ? [toSafeId<"chatMessage">(id)] : [],
   );
+
+/** Forks the thread at the answer of `turn` and continues on the fork. */
+const forkFrom = async (turn: number, model: Model, real: Real) => {
+  const { ledger } = real;
+  const failuresBefore = ledger.failures;
+  const answers = await answerIdsOf(real);
+  // The fixture must reach the fault: one answer per turn.
+  expect(answers).toHaveLength(ledger.turn);
+  const upToMessageId =
+    answers.at(turn - 1) ?? expect.unreachable(`No answer for turn ${turn}`);
+  const forkThreadId = newThread();
+  const forked = await createForkThread({
+    indexChatThread: async () => undefined,
+  }).handler(
+    asTestRaw<Parameters<ReturnType<typeof createForkThread>["handler"]>[0]>({
+      body: { newThreadId: forkThreadId, upToMessageId },
+      getWorkspaceAccess: async () => null,
+      memberRole: sessionMemberRole("owner"),
+      params: { threadId: real.threadId },
+      query: {},
+      recordAuditEvent: async () => undefined,
+      request: new Request("http://localhost/v1/chat/threads/fork"),
+      route: "/v1/chat/threads/:threadId/fork" satisfies ApiRoutePath,
+      safeDb,
+      session: { activeOrganizationId: ids.orgA },
+      user: { id: ids.userA1 },
+    }),
+  );
+  expect(forked).toMatchObject({ threadId: forkThreadId });
+  const outcome =
+    turn === ledger.turn ? ledger.latest : ledger.outcomes.get(turn);
+  ledger.calls = ledger.calls.filter((call) => call.turn <= turn);
+  for (const later of [...ledger.waiting.keys()].filter((t) => t > turn)) {
+    ledger.waiting.delete(later);
+  }
+  ledger.pending = [];
+  ledger.latest =
+    outcome === undefined || outcome === "awaiting" ? "cancelled" : outcome;
+  ledger.turn = turn;
+  // A conversation grant stays with the thread it was given in.
+  if (ledger.grant === "conversation") {
+    ledger.grant = "none";
+  }
+  real.client.dispose();
+  real.threadId = forkThreadId;
+  real.client = await real.harness.openWebClient(forkThreadId);
+  await verify(model, real, { failuresBefore });
+};
 
 /**
  * "Fork from here" on an answer, which the page offers on every answer but
@@ -862,50 +880,7 @@ class ForkFrom implements fc.AsyncCommand<Model, Real> {
   targetTurn = (model: Readonly<Model>): number =>
     (this.pick % (isBusy(model) ? model.turn - 1 : model.turn)) + 1;
   run = async (model: Model, real: Real) => {
-    const { ledger } = real;
-    const failuresBefore = ledger.failures;
-    const turn = this.targetTurn(model);
-    const answers = await answerIdsOf(real);
-    // The fixture must reach the fault: one answer per turn.
-    expect(answers).toHaveLength(ledger.turn);
-    const upToMessageId =
-      answers.at(turn - 1) ?? expect.unreachable(`No answer for turn ${turn}`);
-    const forkThreadId = newThread();
-    const forked = await createForkThread({
-      indexChatThread: async () => undefined,
-    }).handler(
-      asTestRaw<Parameters<ReturnType<typeof createForkThread>["handler"]>[0]>({
-        body: { newThreadId: forkThreadId, upToMessageId },
-        getWorkspaceAccess: async () => null,
-        memberRole: sessionMemberRole("owner"),
-        params: { threadId: real.threadId },
-        query: {},
-        recordAuditEvent: async () => undefined,
-        request: new Request("http://localhost/v1/chat/threads/fork"),
-        safeDb,
-        session: { activeOrganizationId: ids.orgA },
-        user: { id: ids.userA1 },
-      }),
-    );
-    expect(forked).toMatchObject({ threadId: forkThreadId });
-    const outcome =
-      turn === ledger.turn ? ledger.latest : ledger.outcomes.get(turn);
-    ledger.calls = ledger.calls.filter((call) => call.turn <= turn);
-    for (const later of [...ledger.waiting.keys()].filter((t) => t > turn)) {
-      ledger.waiting.delete(later);
-    }
-    ledger.pending = [];
-    ledger.latest =
-      outcome === undefined || outcome === "awaiting" ? "cancelled" : outcome;
-    ledger.turn = turn;
-    // A conversation grant stays with the thread it was given in.
-    if (ledger.grant === "conversation") {
-      ledger.grant = "none";
-    }
-    real.client.dispose();
-    real.threadId = forkThreadId;
-    real.client = await real.harness.openWebClient(forkThreadId);
-    await verify(model, real, { failuresBefore });
+    await forkFrom(this.targetTurn(model), model, real);
   };
   toString = () => `ForkFrom(${String(this.pick)})`;
 }
@@ -1185,6 +1160,12 @@ const PAGE_STATE = notModelled(
   "It changes what the page sends next, not the conversation.",
 );
 
+/** The queue's own actions: the queue is the server's, sent by a sender the
+ *  harness does not run. */
+const QUEUE_ACTION = notModelled(
+  "The queue is the server's, sent by a sender the harness does not run; chat-queue.postgres.test.ts covers its store and gate.",
+);
+
 const ACTION_COVERAGE: Record<string, ActionCoverage> = {
   "allow-in-conversation": byCommands(
     "ResolveCards (allow-in-conversation), AnswerOnStaleTab",
@@ -1198,6 +1179,9 @@ const ACTION_COVERAGE: Record<string, ActionCoverage> = {
     "ResolveCards (always-allow), AnswerOnStaleTab",
     ResolveCards.allows,
   ),
+  "answer-local-question": notModelled(
+    "Only a run on the member's computer asks it, and the harness runs cloud turns only; local-run-question-card.dom.test.tsx drives it through the page.",
+  ),
   "answer-question": byCommands(
     "ResolveCards, AnswerOnStaleTab",
     ResolveCards.allows,
@@ -1207,8 +1191,14 @@ const ACTION_COVERAGE: Record<string, ActionCoverage> = {
   ),
   "check-saved-private-input": READS_ONLY,
   "check-stored-grant": READS_ONLY,
+  "continue-paused-turn": notModelled(
+    "The harness's turns stay far below the turn budget; the recorded paused-turn conversation covers the pause and its Continue.",
+  ),
   "continue-private-input": notModelled(
     "Private input cards submit through their own endpoint, which the harness does not drive.",
+  ),
+  "continue-connector-request": notModelled(
+    "Connector cards submit through their own endpoint, which the harness does not drive.",
   ),
   copy: READS_ONLY,
   "delete-thread": notModelled(
@@ -1218,47 +1208,61 @@ const ACTION_COVERAGE: Record<string, ActionCoverage> = {
   "edit-answer": notModelled(
     "Edit and rerun lives in the session hook, which the harness does not render.",
   ),
+  "edit-queued-message": QUEUE_ACTION,
+  "edit-message": notModelled(
+    "Editing a sent message lives in the session hook, which the harness does not render; edit-user-message.postgres.test.ts covers the stored history and its reload.",
+  ),
   export: READS_ONLY,
   fork: byCommands("ForkFrom", ForkFrom.allows),
+  "hold-queue-for-message-edit": notModelled(
+    "Holding queued prompts while a message editor is open lives in the session queue, which the harness does not render; user-message-edit-session.dom.test.tsx covers it.",
+  ),
   "improve-prompt": PAGE_STATE,
   "load-older": READS_ONLY,
+  "move-queued-message": QUEUE_ACTION,
   "move-to-side": PAGE_STATE,
   "new-chat": byCommands("LeaveThread", LeaveThread.allows),
   "open-created-document": READS_ONLY,
   "open-draft": READS_ONLY,
-  "open-playbook": READS_ONLY,
-  "refresh-edited-answer": READS_ONLY,
-  "remove-queued-message": notModelled(
-    "The send queue lives in the session hook, which the harness does not render.",
+  "open-message-editor": notModelled(
+    "Opening the editor only stops a running turn, through the same stop the harness models as its own command.",
   ),
+  "open-playbook": READS_ONLY,
+  "pause-queue": QUEUE_ACTION,
+  queue: QUEUE_ACTION,
+  "refresh-edited-answer": READS_ONLY,
+  "remove-queued-message": QUEUE_ACTION,
   "rename-thread": notModelled("It changes the title only."),
+  "replace-with-queued-message": QUEUE_ACTION,
   "resend-without-anonymization": notModelled(
     "Offered only after the anonymization boundary refuses a turn, which the harness's raw boundary never does.",
   ),
   "resolve-draft": notModelled(
     "Saving a draft changes the stored document, not the conversation.",
   ),
+  "resume-queue": QUEUE_ACTION,
   retry: byCommands("ResendLatest", ResendLatest.allows),
   "run-client-tool": byCommands("ResolveCards", ResolveCards.allows),
   "select-matters": PAGE_STATE,
   "select-model": notModelled(
     "The harness scripts one model; a model switch needs a second one.",
   ),
-  // While a turn runs, the composer queues the message; the queue lives in
-  // the session hook, which the harness does not render.
+  // While a turn runs, the composer queues the message; the queue is the
+  // server's, whose sender the harness does not run.
   send: byCommands(
-    "SendUserMessage, StopMidStream, SupersedeCards",
+    "SendUserMessage, StopMidStream, MessagePastCards",
     (model) =>
       SendUserMessage.allows(model) ||
-      SupersedeCards.allows(model) ||
+      MessagePastCards.allows(model) ||
       isBusy(model),
+  ),
+  "submit-connector-request": notModelled(
+    "Connector cards submit through their own endpoint, which the harness does not drive.",
   ),
   "submit-private-input": notModelled(
     "Private input cards submit through their own endpoint, which the harness does not drive.",
   ),
-  "send-queued-message-now": notModelled(
-    "The send queue lives in the session hook, which the harness does not render; the stop it issues is modelled as stop.",
-  ),
+  "send-queued-message-now": QUEUE_ACTION,
   stop: byCommands("StopRunningCall, StopMidStream", StopRunningCall.allows),
   "toggle-anonymization": PAGE_STATE,
   "toggle-web-search": PAGE_STATE,
@@ -1412,8 +1416,8 @@ const pageActionCommandsOf = (runsArb: fc.Arbitrary<RunShape[]>) => [
     )
     .map((quietAt) => new StopMidStream(quietAt)),
   fc
-    .tuple(runsArb, fc.constantFrom("Use the buyer's form", "Start over"))
-    .map(([runs, text]) => new SupersedeCards(runs, text)),
+    .constantFrom("Use the buyer's form", "Start over")
+    .map((text) => new MessagePastCards(text)),
   fc
     .oneof(
       fc
@@ -1430,12 +1434,9 @@ const pageActionCommandsOf = (runsArb: fc.Arbitrary<RunShape[]>) => [
     .map((step) => new OnSecondTab(step)),
 ];
 
-const supersedeCommand = fc
-  .tuple(
-    runsOf(callsArb),
-    fc.constantFrom("Use the buyer's form", "Start over"),
-  )
-  .map(([runs, text]) => new SupersedeCards(runs, text));
+const messagePastCardsCommand = fc
+  .constantFrom("Use the buyer's form", "Start over")
+  .map((text) => new MessagePastCards(text));
 
 const openConversation = async () => {
   // An `always` grant an earlier conversation stored would cover this one.
@@ -1476,21 +1477,17 @@ const closeConversation = async ({ real }: { real: Real }) => {
   await real.harness.close();
 };
 
-const runConversations = async (
+const conversationsProperty = (
   commands: fc.Arbitrary<Iterable<fc.AsyncCommand<Model, Real>>>,
-) => {
-  await fc.assert(
-    fc.asyncProperty(commands, async (sequence) => {
-      const conversation = await openConversation();
-      try {
-        await fc.asyncModelRun(() => conversation, sequence);
-      } finally {
-        await closeConversation(conversation);
-      }
-    }),
-    propertyConfig({ numRuns: 25, seed: propertySeed() }),
-  );
-};
+) =>
+  fc.asyncProperty(commands, async (sequence) => {
+    const conversation = await openConversation();
+    try {
+      await fc.asyncModelRun(() => conversation, sequence);
+    } finally {
+      await closeConversation(conversation);
+    }
+  });
 
 // --- Example cases----------------------------------------------------------
 
@@ -1506,28 +1503,14 @@ const inConversation = async (
   }
 };
 
-/** A message typed while an approval waits is posted and stored. */
-const sendPastAnApproval = async () => {
-  await inConversation(async (model, real) => {
-    await new SendUserMessage(
-      [[{ ...STEP, calls: ["approval"] }]],
-      "Delete the NDA",
-    ).run(model, real);
-    real.harness.script(real.threadId, [
-      { text: "Kept it", toolCalls: [], type: "step" },
-    ]);
-    await real.client.sendUserMessage(Bun.randomUUIDv7(), "Keep it");
-    const users = (await real.harness.readThreadMessages(real.threadId)).filter(
-      ({ role }) => role === "user",
-    );
-    expect({
-      errors: real.client.takeErrors().map(String),
-      users: users.length,
-    }).toEqual({ errors: [], users: 2 });
-  });
-};
-
-const replaceWaiting = async (calls: CallKind[], reasoning: boolean) => {
+/**
+ * A message typed while cards wait leaves them waiting, as stored and on
+ * screen, and a reload reads the same.
+ */
+const keepWaitingPastAMessage = async (
+  calls: CallKind[],
+  reasoning: boolean,
+) => {
   await inConversation(async (model, real) => {
     await new SendUserMessage(
       [[{ ...STEP, calls, reasoning }]],
@@ -1535,32 +1518,8 @@ const replaceWaiting = async (calls: CallKind[], reasoning: boolean) => {
     ).run(model, real);
     // The fixture must reach the fault: every call still waits.
     expect(real.ledger.pending).toHaveLength(calls.length);
-    await new SupersedeCards([TEXT_ANSWER], "Use the buyer's form").run(
-      model,
-      real,
-    );
-    await new ReloadPage().run(model, real);
-    // The next request reads the replaced calls as stored; the replacing
-    // turn must have read them the same way.
-    await new SendUserMessage([TEXT_ANSWER], "Anything else?").run(model, real);
-  });
-};
-
-const resumeAfterReplacing = async () => {
-  await inConversation(async (model, real) => {
-    await new SendUserMessage(
-      [[{ ...STEP, calls: ["ask-user", "approval"] }]],
-      "Draft the NDA",
-    ).run(model, real);
-    await new SupersedeCards(
-      [[{ ...STEP, calls: ["approval", "client"] }]],
-      "Use the buyer's form",
-    ).run(model, real);
-    // The fixture must reach the fault: the replacing turn waits on its own
-    // approval and client call.
-    expect(model.pendingKinds).toEqual(["approval", "client"]);
-    await new ResolveCards(["approve"], [TEXT_ANSWER]).run(model, real);
-    expect(real.ledger.effects).toHaveLength(1);
+    await new MessagePastCards("Use the buyer's form").run(model, real);
+    expect(real.ledger.pending).toHaveLength(calls.length);
     await new ReloadPage().run(model, real);
   });
 };
@@ -2470,8 +2429,12 @@ describe("a conversation's live view", () => {
   test(
     "matches a reload and the ledger after every step of any conversation",
     async () => {
-      await runConversations(
-        fc.commands(conversationCommands, { maxCommands: 6 }),
+      await assertProperty(
+        "matches a reload and the ledger after every step of any conversation",
+        conversationsProperty(
+          fc.commands(conversationCommands, { maxCommands: 6 }),
+        ),
+        { numRuns: 25 },
       );
     },
     propertyTestTimeout(240_000),
@@ -2529,12 +2492,6 @@ describe("a conversation's live view", () => {
     propertyTestTimeout(30_000),
   );
 
-  test(
-    "sends a message typed while an approval waits",
-    sendPastAnApproval,
-    propertyTestTimeout(30_000),
-  );
-
   test.each([
     ["an approval", ["approval"], false],
     ["an ask-user card", ["ask-user"], false],
@@ -2542,16 +2499,10 @@ describe("a conversation's live view", () => {
     // Its signed thinking stays on the one message holding all its calls.
     ["a thought-out mixed batch", ["approval", "ask-user", "approval"], true],
   ] satisfies [string, CallKind[], boolean][])(
-    "lets a new message replace %s that still waits",
+    "keeps %s waiting when a new message is typed",
     async (_label, calls, reasoning) => {
-      await replaceWaiting(calls, reasoning);
+      await keepWaitingPastAMessage(calls, reasoning);
     },
-    propertyTestTimeout(30_000),
-  );
-
-  test(
-    "resumes the new turn's own calls after a message replaced waiting ones",
-    resumeAfterReplacing,
     propertyTestTimeout(30_000),
   );
 
@@ -2728,22 +2679,30 @@ describe("a conversation's live view", () => {
   test(
     "matches a reload and the ledger after every action the page offers",
     async () => {
-      await runConversations(
-        fc.commands(pageActionCommandsOf(runsOf(mixedCallsArb)), {
-          maxCommands: 6,
-        }),
+      await assertProperty(
+        "matches a reload and the ledger after every action the page offers",
+        conversationsProperty(
+          fc.commands(pageActionCommandsOf(runsOf(mixedCallsArb)), {
+            maxCommands: 6,
+          }),
+        ),
+        { numRuns: 25 },
       );
     },
     propertyTestTimeout(240_000),
   );
 
   test(
-    "matches a reload and the ledger when a new message replaces waiting cards",
+    "matches a reload and the ledger when a new message is typed past waiting cards",
     async () => {
-      await runConversations(
-        fc.commands([...conversationCommands, supersedeCommand], {
-          maxCommands: 6,
-        }),
+      await assertProperty(
+        "matches a reload and the ledger when a new message is typed past waiting cards",
+        conversationsProperty(
+          fc.commands([...conversationCommands, messagePastCardsCommand], {
+            maxCommands: 6,
+          }),
+        ),
+        { numRuns: 25 },
       );
     },
     propertyTestTimeout(240_000),

@@ -4,7 +4,7 @@ export default defineConfig({
   entry: ["src/properties.ts", "src/views.ts"],
   format: ["esm"],
   platform: "neutral",
-  dts: true,
+  dts: { generator: "oxc" },
   outDir: "dist",
   clean: true,
 });

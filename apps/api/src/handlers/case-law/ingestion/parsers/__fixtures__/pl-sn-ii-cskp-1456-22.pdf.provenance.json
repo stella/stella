@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "1b315206e954be03f4bb9ef64509ceb23bb7866b043335f65f38738f6a5ad8e0",
+  "sourceUrl": "https://sn.pl/pl/index.php?option=com_ajax&plugin=snproxy&format=json&task=OrzeczeniePlikPdf&id=JF32R5cBZvGrB8P__HFY",
+  "capturedAt": "2026-10-21",
+  "note": "II CSKP 1456/22 (2024-05-09), extracted from the retained pl-sn adapter raw envelope captured on 2026-10-21 (time not recorded); parts.document data[0].data.raw base64. Retained envelope sha256: 7b667b0cd476a71259de75ab0262427edfd8ae00c2ce071691427444f357cd70. No publisher fetch for this fixture."
+}

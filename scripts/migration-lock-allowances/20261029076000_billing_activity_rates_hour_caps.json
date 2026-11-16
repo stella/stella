@@ -1,0 +1,6 @@
+{
+  "add-column": "Nullable UUID, integer, and text columns are catalog-only additions. Constant boundary-state defaults avoid a rewrite; 1s lock_timeout and 5s statement_timeout bound catalog work.",
+  "add-foreign-key": "The optional activity-code reference is installed NOT VALID without scanning rate entries; the gated online phase validates it. Catalog acquisition is bounded by 1s lock_timeout and each statement by 5s statement_timeout.",
+  "add-constraint": "Replacement cap-shape and minute-boundary checks are installed NOT VALID without scanning existing arrangements; the gated online phase validates them. Catalog acquisition is bounded by 1s lock_timeout and each statement by 5s statement_timeout.",
+  "drop-constraint": "The old mode check is removed only after its replacement is installed in the same migration transaction; the replacement retains all prior row invariants and admits hourly minute caps. This is catalog-only work bounded by 1s lock_timeout and 5s statement_timeout."
+}

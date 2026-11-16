@@ -11,6 +11,7 @@ import {
 import { inArray } from "drizzle-orm";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
 import { member, organization, session, user } from "@/api/db/auth-schema";
 import {
@@ -45,11 +46,14 @@ import {
   TWO_FACTOR_SESSION_PATHS,
   withStellaTwoFactorSignInGate,
 } from "@/api/lib/auth";
+import { getAuthEndpointUrl } from "@/api/lib/auth/auth-paths";
+import { SESSION_ABSOLUTE_AGE_MS } from "@/api/lib/auth/session-liveness";
 import { toSafeId } from "@/api/lib/branded-types";
 import { AUTH_RATE_LIMITS } from "@/api/lib/limits";
 import { OAUTH_CLIENT_REGISTRATION_PATH } from "@/api/lib/oauth-loopback-registration";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
-import { createTestState } from "@/api/tests/helpers/test-state";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
@@ -84,6 +88,7 @@ const clientWorkspaceId = workspaceId();
 const memberPersonalWorkspaceId = workspaceId();
 const liveOwnerSessionId = tid();
 const expiredOwnerSessionId = tid();
+const cappedOwnerSessionId = tid();
 const liveMemberSessionId = tid();
 
 testState.beforeAll(async () => {
@@ -118,6 +123,12 @@ testState.beforeAll(async () => {
       createdAt: new Date(),
     },
   ]);
+  for (const organizationId of [orgFull, orgEmpty]) {
+    await recordNewOrganizationAccessState(testDb, {
+      organizationId,
+      now: new Date(),
+    });
+  }
 
   await testDb.insert(member).values([
     {
@@ -162,6 +173,13 @@ testState.beforeAll(async () => {
       id: liveOwnerSessionId,
       token: tid(),
       userId: ownerInFull,
+      expiresAt: new Date("2100-01-01T00:00:00.000Z"),
+    },
+    {
+      id: cappedOwnerSessionId,
+      token: tid(),
+      userId: ownerInFull,
+      createdAt: new Date(Date.now() - SESSION_ABSOLUTE_AGE_MS - 1),
       expiresAt: new Date("2100-01-01T00:00:00.000Z"),
     },
     {
@@ -219,6 +237,7 @@ describe("resolveMemberAuthorization", () => {
     );
 
     expect(authorization).toEqual({
+      billingAccess: false,
       memberId: expect.any(String),
       email: `${ownerInFull}@test.local`,
       role: "owner",
@@ -236,6 +255,7 @@ describe("resolveMemberAuthorization", () => {
       testDb,
     );
     expect(authorization).toEqual({
+      billingAccess: false,
       memberId: expect.any(String),
       email: `${loneMemberInFull}@test.local`,
       role: "member",
@@ -414,6 +434,7 @@ describe("resolveWorkspaceRealtimeAudience", () => {
     const candidates = [
       liveOwnerSessionId,
       expiredOwnerSessionId,
+      cappedOwnerSessionId,
       liveMemberSessionId,
     ];
 
@@ -432,17 +453,24 @@ describe("resolveWorkspaceRealtimeAudience", () => {
 });
 
 describe("resolveUserRealtimeAuthorization", () => {
-  test("returns only live sessions for a current organization member", async () => {
+  test("returns the membership and only the live sessions of a current member", async () => {
     const authorized = await resolveUserRealtimeAuthorization(
       {
         organizationId: orgFull,
-        sessionIds: [liveOwnerSessionId, expiredOwnerSessionId],
+        sessionIds: [
+          liveOwnerSessionId,
+          expiredOwnerSessionId,
+          cappedOwnerSessionId,
+        ],
         userId: ownerInFull,
       },
       testDb,
     );
 
-    expect(authorized).toEqual(new Set([liveOwnerSessionId]));
+    expect(authorized).toEqual({
+      member: true,
+      liveSessionIds: new Set([liveOwnerSessionId]),
+    });
   });
 
   test("refuses live sessions after their organization membership is removed", async () => {
@@ -455,12 +483,28 @@ describe("resolveUserRealtimeAuthorization", () => {
       testDb,
     );
 
-    expect(authorized).toEqual(new Set());
+    expect(authorized).toEqual({ member: false, liveSessionIds: new Set() });
+  });
+
+  test("answers membership for a stream no browser session holds", async () => {
+    for (const sessionIds of [[], [expiredOwnerSessionId]]) {
+      expect(
+        await resolveUserRealtimeAuthorization(
+          { organizationId: orgFull, sessionIds, userId: ownerInFull },
+          testDb,
+        ),
+      ).toEqual({ member: true, liveSessionIds: new Set() });
+    }
+    expect(
+      await resolveUserRealtimeAuthorization(
+        { organizationId: orgEmpty, sessionIds: [], userId: memberInFull },
+        testDb,
+      ),
+    ).toEqual({ member: false, liveSessionIds: new Set() });
   });
 });
 
-// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the matcher under test only reads `ctx.path`; the other HookEndpointContext members (context, headers, ...) are irrelevant here and a full instance is heavy to construct for a pure-function unit test.
-const fakeCtx = (path: string) => ({ path }) as HookEndpointContext;
+const fakeCtx = (path: string) => asTestRaw<HookEndpointContext>({ path });
 
 describe("withStellaTwoFactorSignInGate", () => {
   test("keeps the after-hook (and its original handler) instead of dropping it", () => {
@@ -1074,12 +1118,17 @@ describe("session freshness", () => {
     expect(getAuth().options.session.freshAge).toBe(0);
   });
 
-  test("the other freshness-gated endpoint (unlink-account) stays disabled", () => {
-    // `freshAge: 0` is only safe because the one other freshness-gated endpoint
-    // Better Auth mounts, `/unlink-account`, is not a Stella feature and is
-    // disabled. If it were re-exposed, relaxing freshAge would let an old
-    // session unlink a provider. Keep these two decisions coupled.
-    expect(getAuth().options.disabledPaths).toContain("/unlink-account");
+  test("account unlinking is available through its confirmation gate", () => {
+    expect(getAuth().options.disabledPaths).not.toContain("/unlink-account");
+  });
+
+  test("sign-in method confirmation requires a signed-in account", async () => {
+    const response = await getAuth().handler(
+      new Request(getAuthEndpointUrl("sign-in-methods/send-otp"), {
+        method: "POST",
+      }),
+    );
+    expect(response.status).toBe(401);
   });
 
   test("session cookie cache stays enabled with its pinned revocation window", () => {

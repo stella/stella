@@ -4,13 +4,13 @@ import * as v from "valibot";
 
 import { assertProperty } from "@stll/property-testing";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 import { TOOL_OUTPUT_CONTRACT_DEGRADED_EVENT } from "@/api/lib/chat/tool-output-degrade";
 import { runWithRequestId } from "@/api/lib/observability/request-context";
 import { encodePaginationCursor } from "@/api/lib/pagination";
-import type { McpRequestContext } from "@/api/mcp/context";
 import type { InternalToolSuccess } from "@/api/mcp/tool-types";
 import {
   buildCaseLawDecisionAppUrl,
@@ -31,6 +31,7 @@ import {
   toolDataResult,
   toolNameDistance,
   toolNameKey,
+  toPlainCorpusText,
   toPlainTextSnippet,
   untypedToolDataResult,
   validationErrorResult,
@@ -40,6 +41,7 @@ import {
   defineMcpToolOutput,
   defineProjectedMcpToolOutput,
 } from "@/api/mcp/valibot-tool-definition";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import {
   installRecordingAnalytics,
@@ -51,6 +53,8 @@ import type {
 } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
+const testState = createTestState({ file: import.meta.path, config: env });
+
 // FRONTEND_URL is "http://localhost:3000" (no trailing slash) from
 // the test env preload; getAppBaseUrl() strips any trailing slash.
 const BASE = "http://localhost:3000";
@@ -61,12 +65,12 @@ const COMPACT_DECISION_ID = "AZ3UffUHfIS4J5gK8RuJgA";
 const createWorkspaceGateContext = (
   status: "active" | "archived",
 ): {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   pinnedWorkspaceIds: string[];
 } => {
   const pinnedWorkspaceIds: string[] = [];
   return {
-    context: asTestRaw<McpRequestContext>({
+    context: asTestRaw<AuthorizedMcpRequestContext>({
       accessibleWorkspaceIdSet: new Set([WORKSPACE_ID]),
       accessibleWorkspaceStatusById: new Map([[WORKSPACE_ID, status]]),
       pinServerValidatedWorkspaceId: (
@@ -139,7 +143,6 @@ describe("buildCaseLawDecisionUrl", () => {
 
 describe("buildCaseLawDecisionAppUrl gate", () => {
   let restoreRuntimeMode: () => void = () => undefined;
-  let previousFeaturePublicLaw: boolean;
 
   const input = {
     caseNumber: "1/24",
@@ -151,20 +154,15 @@ describe("buildCaseLawDecisionAppUrl gate", () => {
     slug: "s",
   };
 
-  beforeEach(() => {
-    previousFeaturePublicLaw = env.FEATURE_PUBLIC_LAW;
-  });
-
   afterEach(() => {
     restoreRuntimeMode();
-    env.FEATURE_PUBLIC_LAW = previousFeaturePublicLaw;
   });
 
   test("returns null when public law is disabled outside local development", () => {
     restoreRuntimeMode = setRuntimeModeForTesting({
       mode: RUNTIME_MODE.strict,
     });
-    env.FEATURE_PUBLIC_LAW = false;
+    testState.setConfig("FEATURE_PUBLIC_LAW", false);
 
     expect(buildCaseLawDecisionAppUrl(input)).toBeNull();
   });
@@ -173,7 +171,7 @@ describe("buildCaseLawDecisionAppUrl gate", () => {
     restoreRuntimeMode = setRuntimeModeForTesting({
       mode: RUNTIME_MODE.strict,
     });
-    env.FEATURE_PUBLIC_LAW = true;
+    testState.setConfig("FEATURE_PUBLIC_LAW", true);
 
     expect(buildCaseLawDecisionAppUrl(input)).toBe(
       `${BASE}/law/cze/cases/ns/s`,
@@ -182,7 +180,7 @@ describe("buildCaseLawDecisionAppUrl gate", () => {
 
   test("builds the URL in local development regardless of the feature flag", () => {
     restoreRuntimeMode = setRuntimeModeForTesting({ mode: RUNTIME_MODE.open });
-    env.FEATURE_PUBLIC_LAW = false;
+    testState.setConfig("FEATURE_PUBLIC_LAW", false);
 
     expect(buildCaseLawDecisionAppUrl(input)).toBe(
       `${BASE}/law/cze/cases/ns/s`,
@@ -886,5 +884,74 @@ describe("primary legal citation links", () => {
     } finally {
       restore();
     }
+  });
+});
+
+describe("served corpus text", () => {
+  test("a paragraph the court numbered is served with its number", () => {
+    // The number is structure, not text: without it a paragraph can be
+    // quoted from the served text but not cited.
+    const text = toPlainCorpusText({
+      blocks: [
+        { type: "heading", plainText: "Costs" },
+        { type: "paragraph", plainText: "It follows that…", number: 134 },
+        { type: "paragraph", plainText: "1. A quoted provision." },
+        { type: "paragraph", plainText: "", number: 135 },
+      ],
+      fulltext: null,
+    });
+    expect(text).toBe(
+      "Costs\n\n¶ 134 It follows that…\n\n1. A quoted provision.",
+    );
+  });
+
+  test("a footnote is served under its printed mark, once per note", () => {
+    const note = (label: string, noteId?: string) => ({ label, noteId });
+    expect(
+      toPlainCorpusText({
+        blocks: [
+          { type: "paragraph", plainText: "As stated[1], it holds[2]." },
+          { type: "paragraph", plainText: "See point 2.", note: note("[1]") },
+          {
+            type: "paragraph",
+            plainText: "See the letter",
+            note: note("[2]", "n2"),
+          },
+          {
+            type: "table",
+            plainText: "of 28 May 2021.",
+            note: note("[2]", "n2"),
+          },
+          {
+            type: "paragraph",
+            plainText: "3 Already marked.",
+            note: note("3"),
+          },
+          { type: "paragraph", plainText: "30 days.", note: note("3") },
+        ],
+        fulltext: null,
+      }),
+    ).toBe(
+      [
+        "As stated[1], it holds[2].",
+        "[1] See point 2.",
+        "[2] See the letter",
+        "of 28 May 2021.",
+        "3 Already marked.",
+        "3 30 days.",
+      ].join("\n\n"),
+    );
+  });
+
+  test("a heading or a number that is no paragraph number adds nothing", () => {
+    expect(
+      toPlainCorpusText({
+        blocks: [
+          { type: "heading", plainText: "I.", number: 1 },
+          { type: "paragraph", plainText: "Zero.", number: 0 },
+        ],
+        fulltext: null,
+      }),
+    ).toBe("I.\n\nZero.");
   });
 });

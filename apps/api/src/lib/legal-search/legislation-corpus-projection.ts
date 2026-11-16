@@ -1,10 +1,11 @@
-import { type SQL, sql } from "drizzle-orm";
+import { inArray, type SQL, sql } from "drizzle-orm";
 
 import {
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
   legislationDocuments,
 } from "@/api/db/schema";
+import type { SafeId } from "@/api/lib/branded-types";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import { requireCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
 import type { CorpusProjectionRevision } from "@/api/lib/legal-search/corpus-index-revision-clause";
@@ -62,9 +63,18 @@ export const legislationCorpusAppliedRevision = (generation: string) =>
  * `desired_index_id` from.
  *
  * The lookup is the states table's primary key, `(family, generation,
- * entity_id)`, once per candidate row.
+ * entity_id)`, once per candidate row. The candidate ids are stated on the
+ * states side as well: the generation is a constant, so the planner may run
+ * the lookup as a semi-join driven from the states table, and without the
+ * ids that walks every state of the generation and probes the document for
+ * each. With them either join order reads only the candidates' keys. The
+ * caller's rows must be limited to the same ids, which keeps the predicate
+ * equal to the per-row probe.
  */
-export const currentLegislationCorpusProjection = (generation: string): SQL => {
+export const currentLegislationCorpusProjection = (
+  generation: string,
+  candidateIds: readonly SafeId<"legislationDocument">[],
+): SQL => {
   const routedIndexId = corpusIndexIdSqlFromManifest(
     requireCorpusIndexManifest(LEGISLATION_FAMILY, generation),
     legislationDocuments.country,
@@ -74,6 +84,7 @@ export const currentLegislationCorpusProjection = (generation: string): SQL => {
       FROM ${corpusIndexProjectionStates}
       WHERE ${corpusIndexProjectionStates.family} = ${LEGISLATION_FAMILY}
         AND ${corpusIndexProjectionStates.generation} = ${generation}
+        AND ${inArray(corpusIndexProjectionStates.entityId, [...candidateIds])}
         AND ${corpusIndexProjectionStates.entityId} = ${legislationDocuments.id}
         AND ${corpusIndexProjectionStates.desiredAction} = 'upsert'
         AND ${corpusIndexProjectionStates.appliedAction} = 'upsert'

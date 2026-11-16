@@ -10,7 +10,7 @@ import {
   avtViewAccessStatus,
   isAvtLayoutVisible,
 } from "@/api/lib/auth/feature-access/view-eligibility";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
@@ -29,7 +29,7 @@ const config = {
     consumesServices: false,
   },
   params: workspaceParams({
-    templateId: tSafeId("workspaceViewTemplate"),
+    templateId: resourceIdSchema("workspaceViewTemplate"),
   }),
 } satisfies WorkspaceHandlerConfig;
 

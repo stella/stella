@@ -19,11 +19,6 @@
     "owner": "apps/desktop/src-tauri",
     "reason": "pre-kit census; inject clocks and isolate test state"
   },
-  "apps/desktop/src-tauri/src/feature_access.rs": {
-    "count": 4,
-    "owner": "apps/desktop/src-tauri",
-    "reason": "pre-kit census; inject clocks and isolate test state"
-  },
   "apps/desktop/src-tauri/src/handoff.rs": {
     "count": 11,
     "owner": "apps/desktop/src-tauri",

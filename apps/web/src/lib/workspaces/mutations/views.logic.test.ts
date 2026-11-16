@@ -1,13 +1,16 @@
 import { QueryClient } from "@tanstack/react-query";
-import { beforeAll, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 import type { UnavailableWorkspaceView } from "@stll/api-contract";
+import { createTestState } from "@stll/test-state";
 
 import type { ViewLayout, WorkspaceView } from "@/lib/types";
 
-// `viewsKeys` pulls in the Eden client, which reads the API URL at import time.
-beforeAll(() => {
-  process.env["VITE_API_URL"] ??= "https://api.example.test";
+const state = createTestState({ file: import.meta.path, config: {} });
+
+// `viewsKeys` pulls in the API client, which reads the API URL at import time.
+state.beforeAll(() => {
+  state.setEnvIfAbsent("VITE_API_URL", "https://api.example.test");
 });
 
 const WORKSPACE_ID = "ws_reorder";

@@ -1,23 +1,46 @@
-import { describe, expect, test } from "bun:test";
-import { Elysia } from "elysia";
+import { afterAll, describe, expect, test } from "bun:test";
 
 import { UPLOAD_FILE_MIN_BYTES } from "@stll/api-contract/limits";
 
+import { createHttpApp } from "@/api/http/app";
+import { routes } from "@/api/http/route";
+import { defineEndpoint } from "@/api/lib/endpoints";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 
 import presignUpload from "./create";
 import entityCreateTree from "./entity-create-tree";
 
-const app = new Elysia()
-  .post("/presign", ({ body }) => body, { body: presignUpload.config.body })
-  .post("/tree", ({ body }) => body, { body: entityCreateTree.config.body });
+const server = serveForTest(
+  createHttpApp({
+    middleware: [errorBoundary],
+    routes: routes({
+      "/presign": {
+        POST: defineEndpoint.public(
+          { body: presignUpload.config.body },
+          ({ body }) => body,
+        ),
+      },
+      "/tree": {
+        POST: defineEndpoint.public(
+          { body: entityCreateTree.config.body },
+          ({ body }) => body,
+        ),
+      },
+    }),
+  }),
+);
+afterAll(async () => {
+  await server.stop();
+});
 
 const PROPERTY_ID = "00000000-0000-4000-8000-000000000001";
 const SHA256_HEX = "a".repeat(64);
 
 const post = async (path: string, body: unknown): Promise<number> =>
   (
-    await app.handle(
+    await server.fetch(
       new Request(`http://localhost${path}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -58,4 +81,34 @@ describe("declared upload file size", () => {
       );
     },
   );
+
+  test("an oversize file is refused with its byte limit, not as an invalid field", async () => {
+    const limit = FILE_SIZE_LIMIT_BYTES.document;
+    const issue = { constraint: "maxBytes", limit };
+    const issuesOf = async (path: string, body: unknown): Promise<unknown> => {
+      const response = await server.fetch(
+        new Request(`http://localhost${path}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        }),
+      );
+      return await response.json();
+    };
+
+    expect(
+      await issuesOf("/presign", {
+        purpose: "entity_create",
+        propertyId: PROPERTY_ID,
+        ...file(limit + 1),
+      }),
+    ).toMatchObject({ issues: [{ field: "size", ...issue }] });
+    expect(
+      await issuesOf("/tree", {
+        propertyId: PROPERTY_ID,
+        directories: [],
+        files: [{ key: "0", parentKey: null, ...file(limit + 1) }],
+      }),
+    ).toMatchObject({ issues: [{ field: "files.0.size", ...issue }] });
+  });
 });

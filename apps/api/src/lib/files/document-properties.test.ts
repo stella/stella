@@ -1,11 +1,10 @@
 import { PDF } from "@libpdf/core";
 import { panic } from "better-result";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import JSZip from "jszip";
 
 import { DOCUMENT_PROPERTY_KEYS } from "@stll/api-contract";
 import type { DocumentProperty } from "@stll/api-contract";
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
@@ -31,22 +30,22 @@ const toArrayBuffer = (source: Uint8Array): ArrayBuffer => {
 };
 
 const zipOf = async (entries: Record<string, string>): Promise<ArrayBuffer> => {
-  const zip = new JSZip();
+  const zip = new ZipArchive();
   for (const [path, body] of Object.entries(entries)) {
-    writeZipEntry(zip, path, body);
+    zip.set(path, body);
   }
-  return toArrayBuffer(await zip.generateAsync({ type: "uint8array" }));
+  return toArrayBuffer(await zip.generate({ compression: "store" }));
 };
 
 const odfZipOf = async (
   entries: Record<string, string>,
 ): Promise<ArrayBuffer> => {
-  const zip = new JSZip();
-  writeZipEntry(zip, "mimetype", ODT_MIME_TYPE, { compression: "STORE" });
+  const zip = new ZipArchive();
+  zip.set("mimetype", ODT_MIME_TYPE, { compression: "store" });
   for (const [path, body] of Object.entries(entries)) {
-    writeZipEntry(zip, path, body);
+    zip.set(path, body);
   }
-  return toArrayBuffer(await zip.generateAsync({ type: "uint8array" }));
+  return toArrayBuffer(await zip.generate({ compression: "store" }));
 };
 
 const availableProperties = async (
@@ -261,11 +260,9 @@ describe("scrubDocumentProperties", () => {
     // utf-8, and a lossy decode could drop the very bytes under test.
     let raw = Buffer.from(bytes).toString("latin1");
     if (bytes.at(0) === 0x50 && bytes.at(1) === 0x4b) {
-      const archive = await JSZip.loadAsync(bytes);
+      const archive = await ZipArchive.read(bytes);
       const entries = await Promise.all(
-        Object.values(archive.files).map(
-          async (entry) => await entry.async("string"),
-        ),
+        archive.entries().map(async (entry) => await entry.text()),
       );
       raw = entries.join("\n");
     }
@@ -324,10 +321,8 @@ describe("scrubDocumentProperties", () => {
     const result = await scrubbed(source, DOCX_MIME_TYPE);
 
     await assertNoTrace(result, ["Jane Novak"]);
-    const archive = await new JSZip().loadAsync(result);
-    const preserved = await archive
-      .file("docProps/custom.xml")
-      ?.async("string");
+    const archive = await ZipArchive.read(result);
+    const preserved = await archive.entry("docProps/custom.xml")?.text();
     expect(preserved).toContain("2026/001/015.v3");
     expect(preserved).not.toContain("Secret Client");
   });
@@ -376,14 +371,10 @@ describe("scrubDocumentProperties", () => {
     );
 
     await assertNoTrace(result, ["Jane Novak", "JN", "2024-01-01T00:00:00Z"]);
-    const archive = await new JSZip().loadAsync(result);
-    const core = await archive.file("docProps/core.xml")?.async("string");
-    const scrubbedComments = await archive
-      .file("word/comments.xml")
-      ?.async("string");
-    const scrubbedDocument = await archive
-      .file("word/document.xml")
-      ?.async("string");
+    const archive = await ZipArchive.read(result);
+    const core = await archive.entry("docProps/core.xml")?.text();
+    const scrubbedComments = await archive.entry("word/comments.xml")?.text();
+    const scrubbedDocument = await archive.entry("word/document.xml")?.text();
 
     expect(core).not.toMatch(
       /<(?:cp:revision|cp:lastPrinted|dcterms:(?:created|modified))\b/u,
@@ -437,14 +428,14 @@ describe("scrubDocumentProperties", () => {
       "Generated Provider",
       'initials="GP"',
     ]);
-    const archive = await JSZip.loadAsync(output);
-    expect(await archive.file("xl/comments1.xml")?.async("string")).toContain(
+    const archive = await ZipArchive.read(output);
+    expect(await archive.entry("xl/comments1.xml")?.text()).toContain(
       "Comment body",
     );
-    expect(
-      await archive.file("xl/persons/person.xml")?.async("string"),
-    ).toContain('id="reference-id"');
-    expect(await archive.file("ppt/authors.xml")?.async("string")).toContain(
+    expect(await archive.entry("xl/persons/person.xml")?.text()).toContain(
+      'id="reference-id"',
+    );
+    expect(await archive.entry("ppt/authors.xml")?.text()).toContain(
       'id="reference-id"',
     );
   });
@@ -460,8 +451,8 @@ describe("scrubDocumentProperties", () => {
       ODT_MIME_TYPE,
     );
     await assertNoTrace(output, ["Generated Person"]);
-    const archive = await JSZip.loadAsync(output);
-    expect(await archive.file("content.xml")?.async("string")).toContain(
+    const archive = await ZipArchive.read(output);
+    expect(await archive.entry("content.xml")?.text()).toContain(
       "Comment body",
     );
   });
@@ -807,11 +798,9 @@ describe("writeDocumentProperties", () => {
 
     // A part no reader can find is the same as no part at all, so both
     // manifests must declare it and the relationship id must not collide.
-    const archive = await JSZip.loadAsync(written);
-    const contentTypes = await archive
-      .file("[Content_Types].xml")
-      ?.async("string");
-    const rels = await archive.file("_rels/.rels")?.async("string");
+    const archive = await ZipArchive.read(written);
+    const contentTypes = await archive.entry("[Content_Types].xml")?.text();
+    const rels = await archive.entry("_rels/.rels")?.text();
     expect(contentTypes).toContain("/docProps/core.xml");
     expect(contentTypes).toContain("/docProps/app.xml");
     expect(rels).toContain("docProps/core.xml");

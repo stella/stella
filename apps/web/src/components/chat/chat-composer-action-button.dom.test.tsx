@@ -1,8 +1,9 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import messages from "@/i18n/langs/en.json";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "https://app.example.test" });
 const { act, useSyncExternalStore } = await import("react");
@@ -85,4 +86,26 @@ test("a reattached Stop becomes disabled Send on the same element when its delay
   expect(stop.matches(":disabled")).toBe(true);
   expect(reloads).toBe(1);
   expect(errors).toEqual([]);
+});
+
+test("a stop on its way says Stopping and takes no second click", () => {
+  let stops = 0;
+  const ui = render(
+    <IntlProvider locale="en" messages={messages} timeZone="UTC">
+      <ChatComposerActionButton
+        canSend={false}
+        isGenerating
+        onSend={() => undefined}
+        onStop={() => {
+          stops += 1;
+        }}
+        stopping
+      />
+    </IntlProvider>,
+  );
+  const button = ui.getByRole("button", { name: messages.chat.stopping });
+  expect(button.getAttribute("aria-busy")).toBe("true");
+  expect(button.hasAttribute("disabled")).toBe(true);
+  button.click();
+  expect(stops).toBe(0);
 });

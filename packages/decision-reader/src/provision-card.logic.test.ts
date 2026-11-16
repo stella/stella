@@ -1,15 +1,21 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import {
+  E_SBIRKA_ANCHORS,
+  SLOV_LEX_ANCHORS,
+} from "@stll/legal-ast/statute-anchor-scheme";
 import { normalizeUnicode } from "@stll/text-normalize";
 
 import {
   fullProvisionOutcome,
   informativeProvisionTrail,
   PROVISION_CARD_SCOPE,
+  PROVISION_WORDING_EMPHASIS,
   provisionCardPassage,
   provisionCardScope,
   provisionCardsOf,
+  provisionWordingRuns,
 } from "./provision-card.logic";
 import type { CitedProvisionTarget } from "./reader-types";
 
@@ -113,6 +119,12 @@ const wording = (blockIds: readonly string[]) => ({
   language: "cs",
 });
 
+/** A whole provision read in e-Sbírka's grammar. */
+const czech = (whole: ReturnType<typeof wording>) => ({
+  scheme: E_SBIRKA_ANCHORS,
+  wording: whole,
+});
+
 describe("full provision reads", () => {
   test("only completed reads with text make the full provision available", () => {
     for (const whole of [null, wording([]), wording(["par_226-odst_1"])]) {
@@ -143,6 +155,8 @@ describe("provision cards of one paragraph", () => {
     expect(
       cards.at(0)?.citations.map(({ payload }) => payload.highlightAnchorId),
     ).toEqual(["par_226-odst_1"]);
+    // Both occurrences stay the card's, so either one in a selection finds it.
+    expect(cards.at(0)?.citationIds).toEqual(["a", "b"]);
   });
 
   test("parts of one provision share its card in citation order", () => {
@@ -303,7 +317,7 @@ describe("a provision card's passage", () => {
       ];
       const withoutPart = provisionCardPassage(
         citations,
-        wording(["par_226-odst_1", "par_226-odst_20"]),
+        czech(wording(["par_226-odst_1", "par_226-odst_20"])),
       );
       if (withoutPart.type !== "passage") {
         panic("Expected a full passage");
@@ -316,12 +330,14 @@ describe("a provision card's passage", () => {
       ]);
       const recovered = provisionCardPassage(
         citations,
-        wording([
-          "par_226-odst_1",
-          "par_226-odst_2",
-          "par_226-odst_2-pism_a",
-          "par_226-odst_20",
-        ]),
+        czech(
+          wording([
+            "par_226-odst_1",
+            "par_226-odst_2",
+            "par_226-odst_2-pism_a",
+            "par_226-odst_20",
+          ]),
+        ),
       );
       if (recovered.type !== "passage") {
         panic("Expected a recovered full passage");
@@ -332,8 +348,112 @@ describe("a provision card's passage", () => {
         "par_226-odst_2",
         "par_226-odst_2-pism_a",
       ]);
-      expect(provisionCardPassage(citations, wording([]))).toEqual(
+      expect(provisionCardPassage(citations, czech(wording([])))).toEqual(
         provisionCardPassage(citations),
+      );
+    }
+  });
+
+  test("a cited Slov-Lex letter recovers its points from the full read", () => {
+    const anchorId = "paragraf-15";
+    const letter = "paragraf-15.pismeno-b";
+    const base = target({ part: null });
+    const cited: CitedProvisionTarget = {
+      ...base,
+      payload: {
+        ...base.payload,
+        anchorId,
+        highlightAnchorId: letter,
+        jurisdiction: "SVK",
+        provisionLabel: letter,
+      },
+    };
+    const full = {
+      ...wording([
+        "paragraf-15.pismeno-a",
+        letter,
+        "paragraf-15.pismeno-b.bod-1",
+        "paragraf-15.pismeno-b.bod-1.bod-1a",
+        "paragraf-15.pismeno-c",
+      ]),
+      anchorId,
+    };
+    const passage = provisionCardPassage([{ target: cited, wording: null }], {
+      scheme: SLOV_LEX_ANCHORS,
+      wording: full,
+    });
+    if (passage.type !== "passage") {
+      panic("Expected a full passage");
+    }
+    expect(passage.unavailable).toEqual([]);
+    expect([...passage.cited]).toEqual([
+      letter,
+      "paragraf-15.pismeno-b.bod-1",
+      "paragraf-15.pismeno-b.bod-1.bod-1a",
+    ]);
+  });
+});
+
+describe("a provision card's quoted runs", () => {
+  const blocks = [
+    "par_5-odst_1",
+    "par_5-odst_1-pism_a",
+    "par_5-odst_1-pism_b",
+    "par_5-odst_2",
+    "par_5-odst_3",
+    "par_5-odst_3-pism_a",
+  ].map((anchorId) => ({ anchorId, id: anchorId, text: anchorId }));
+  const runs = (cited: readonly string[]) =>
+    provisionWordingRuns(blocks, new Set(cited)).map(
+      ({ blocks: run, emphasis }) => ({
+        emphasis,
+        ids: run.map(({ id }) => id),
+      }),
+    );
+
+  test("a quote that is all cited, or not cited at all, is one plain unit", () => {
+    const whole = [
+      {
+        emphasis: PROVISION_WORDING_EMPHASIS.plain,
+        ids: blocks.map(({ id }) => id),
+      },
+    ];
+    expect(runs(blocks.map(({ id }) => id))).toEqual(whole);
+    expect(runs([])).toEqual(whole);
+  });
+
+  test("a cited paragraph and its letters are one marked unit beside the context", () => {
+    expect(
+      runs([
+        "par_5-odst_1",
+        "par_5-odst_1-pism_a",
+        "par_5-odst_1-pism_b",
+        "par_5-odst_3-pism_a",
+      ]),
+    ).toEqual([
+      {
+        emphasis: PROVISION_WORDING_EMPHASIS.cited,
+        ids: ["par_5-odst_1", "par_5-odst_1-pism_a", "par_5-odst_1-pism_b"],
+      },
+      {
+        emphasis: PROVISION_WORDING_EMPHASIS.plain,
+        ids: ["par_5-odst_2", "par_5-odst_3"],
+      },
+      {
+        emphasis: PROVISION_WORDING_EMPHASIS.cited,
+        ids: ["par_5-odst_3-pism_a"],
+      },
+    ]);
+  });
+
+  test("runs keep every block once, in order", () => {
+    for (const cited of [
+      [],
+      ["par_5-odst_2"],
+      ["par_5-odst_1", "par_5-odst_3"],
+    ]) {
+      expect(runs(cited).flatMap(({ ids }) => ids)).toEqual(
+        blocks.map(({ id }) => id),
       );
     }
   });

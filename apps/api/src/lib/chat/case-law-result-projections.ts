@@ -2,8 +2,10 @@ import * as v from "valibot";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { caseLawCourtYearSchema } from "@stll/api-contract/case-law-court-year";
+import { DECISION_TYPE_KINDS } from "@stll/api-contract/case-law-decision-types";
 import {
   DECISION_HEADNOTE_KEYWORDS,
+  DECISION_TEXT_AVAILABILITY,
   DECISION_TEXT_WITHHELD_REASON,
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
@@ -23,6 +25,7 @@ import { CASE_LAW_COURT_PROJECTION } from "./case-law-court-projection";
 import {
   passthroughId,
   projectionBranch,
+  publicReadRunningFields,
   publicUrl,
 } from "./projection-fields";
 
@@ -81,7 +84,11 @@ export const searchTotalProjection = v.variant("type", [
   projectionBranch(countedSearchTotalProjection(SEARCH_TOTAL_TYPE.EXACT)),
   projectionBranch(countedSearchTotalProjection(SEARCH_TOTAL_TYPE.ESTIMATE)),
   projectionBranch(
-    v.strictObject({ type: v.literal(SEARCH_TOTAL_TYPE.NOT_COUNTED) }),
+    v.strictObject({
+      type: v.literal(SEARCH_TOTAL_TYPE.NOT_COUNTED),
+      // What an uncounted total means, where a caller would read a number.
+      note: v.optional(v.string()),
+    }),
   ),
 ]);
 
@@ -105,6 +112,7 @@ const caseLawSearchIdentityFields = {
   decisionId: passthroughId(),
   resourceName: passthroughId(),
   decisionType: v.nullable(v.string()),
+  decisionTypeKind: v.nullable(v.picklist(DECISION_TYPE_KINDS)),
   ecli: v.nullable(v.string()),
   language: v.string(),
   // Which of the call's `queries` returned this decision, by index,
@@ -112,13 +120,50 @@ const caseLawSearchIdentityFields = {
   matchedQueries: v.array(v.number()),
   // Passages of the decision that matched, within the scanned window.
   matchingPassages: v.number(),
+  textAvailability: v.picklist(Object.values(DECISION_TEXT_AVAILABILITY)),
   // Whether the decision holds every word of the query, or only some of them
   // (appended after the others when few decisions held every word).
   match: v.picklist(DECISION_SEARCH_MATCHES),
-  // The publisher's own decision URL, which may embed the publisher's
-  // own UUID — never a Stella tenant id, so it is forwarded unchanged.
-  sourceUrl: v.nullable(publicUrl()),
 } as const;
+
+/** One decision on a search page, whether its text may be shown or is withheld. */
+const caseLawSearchResultProjection = v.union([
+  projectionBranch(
+    v.strictObject({
+      ...caseLawSearchIdentityFields,
+      snippet: v.nullable(v.string()),
+      // Classifications are not headnotes; when included, null means none was stated.
+      keywords: v.nullable(
+        v.strictObject({
+          type: v.literal(DECISION_HEADNOTE_KEYWORDS),
+          items: v.array(v.string()),
+          omitted: v.number(),
+        }),
+      ),
+      // Publisher prose uses the expanded reading budget (up to 4000 characters).
+      headnote: v.nullable(
+        v.strictObject({
+          type: v.literal(TEXT_FIELD_TYPE.PRESENT),
+          text: v.string(),
+          truncated: v.boolean(),
+        }),
+      ),
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      ...caseLawSearchIdentityFields,
+      excerpt: v.strictObject({
+        type: v.literal("withheld"),
+        reason: v.literal(DECISION_TEXT_WITHHELD_REASON.SOURCE_LICENCE),
+      }),
+      // The licence that withholds the excerpt withholds the source's
+      // headnote and classifications too.
+      keywords: v.null(),
+      headnote: v.null(),
+    }),
+  ),
+]);
 
 /**
  * search_case_law. Source of truth: `handleSearchCaseLawTool`
@@ -179,49 +224,31 @@ export const SEARCH_CASE_LAW_PROJECTION = v.union([
           ),
         }),
       ),
-      results: v.array(
-        v.union([
-          projectionBranch(
-            v.strictObject({
-              ...caseLawSearchIdentityFields,
-              snippet: v.nullable(v.string()),
-              // Classifications are not headnotes; when included, null means none was stated.
-              keywords: v.nullable(
-                v.strictObject({
-                  type: v.literal(DECISION_HEADNOTE_KEYWORDS),
-                  items: v.array(v.string()),
-                  omitted: v.number(),
-                }),
-              ),
-              // Publisher prose uses the expanded reading budget (up to 4000 characters).
-              headnote: v.nullable(
-                v.strictObject({
-                  type: v.literal(TEXT_FIELD_TYPE.PRESENT),
-                  text: v.string(),
-                  truncated: v.boolean(),
-                }),
-              ),
-            }),
-          ),
-          projectionBranch(
-            v.strictObject({
-              ...caseLawSearchIdentityFields,
-              excerpt: v.strictObject({
-                type: v.literal("withheld"),
-                reason: v.literal(DECISION_TEXT_WITHHELD_REASON.SOURCE_LICENCE),
-              }),
-              // The licence that withholds the excerpt withholds the source's
-              // headnote and classifications too.
-              keywords: v.null(),
-              headnote: v.null(),
-            }),
-          ),
-        ]),
-      ),
+      results: v.array(caseLawSearchResultProjection),
       total: searchTotalProjection,
       // Only on an empty result while the organization has no practice
       // jurisdictions: how to set them.
       nextStep: v.optional(v.string()),
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      ...publicReadRunningFields,
+      // What the phrasings that finished found so far. Never a complete
+      // answer: `status` stays `running`, and `pendingQueries` names the rest.
+      partial: v.nullable(
+        v.strictObject({
+          finishedQueries: v.array(v.string()),
+          pendingQueries: v.array(v.string()),
+          decisions: v.array(
+            v.strictObject({
+              decisionId: passthroughId(),
+              caseNumber: v.string(),
+              decisionDate: v.nullable(v.string()),
+            }),
+          ),
+        }),
+      ),
     }),
   ),
 ]);

@@ -1,10 +1,18 @@
 /** Better Auth version whose logical schema this contract describes. */
-export const BETTER_AUTH_CONTRACT_VERSION = "1.7.6";
+export const BETTER_AUTH_CONTRACT_VERSION = "1.7.19";
 
 export const AUTH_SESSION_STARTUP_HEADER = "x-stella-session-startup";
 
-export const AUTH_SOCIAL_PROVIDER_IDS = ["google", "microsoft"] as const;
+export const AUTH_SOCIAL_PROVIDER_IDS = [
+  "google",
+  "microsoft",
+  "apple",
+] as const;
+export type AuthSocialProviderId = (typeof AUTH_SOCIAL_PROVIDER_IDS)[number];
 export const AUTH_ACCESS_RESET_ERROR_CODE = "confirm_access_reset";
+/** No sign-in code is sent: the account named signs in with a password. */
+export const AUTH_SIGN_IN_CODE_UNAVAILABLE_ERROR_CODE =
+  "sign_in_code_unavailable";
 
 export const ORGANIZATION_ROLE_NAMES = [
   "owner",
@@ -79,6 +87,51 @@ export const BETTER_AUTH_ORGANIZATION_ROLE_GRANTS = {
  * Values that change Better Auth's organization authorization semantics.
  * Hooks, adapters, email delivery, and product-specific options stay local.
  */
+export const ORGANIZATION_SLUG_RULES = {
+  minLength: 1,
+  maxLength: 128,
+  pattern: /^[a-z0-9\x2d]+$/u,
+} as const;
+
+/**
+ * A logo is stored as a small raster data URL the client downscales before
+ * saving, so it renders on every page without a file route. SVG is excluded
+ * because it can carry script.
+ */
+export const ORGANIZATION_LOGO_RULES = {
+  edge: 96,
+  maxLength: 60_000,
+  pattern: /^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/u,
+} as const;
+
+/** Random bytes behind an opaque organization slug. */
+export const ORGANIZATION_OPAQUE_SLUG_BYTES = 10;
+const OPAQUE_SLUG_ALPHABET = "abcdefghijklmnopqrstuvwxyz234567";
+
+/**
+ * The shape of every slug `createOpaqueOrganizationSlug` returns: the `org-`
+ * prefix and one alphabet symbol per random byte.
+ */
+export const OPAQUE_ORGANIZATION_SLUG_PATTERN = /^org-[a-z2-7]{10}$/u;
+
+/**
+ * The opaque `org-` slug shared by organization creation and slug changes.
+ * The source fills this function's own fixed-size buffer, so it cannot change
+ * the identifier's length; organization names never enter the identifier.
+ */
+export const createOpaqueOrganizationSlug = (
+  fillRandom: (bytes: Uint8Array<ArrayBuffer>) => void = (bytes) => {
+    crypto.getRandomValues(bytes);
+  },
+): string => {
+  const bytes = new Uint8Array(ORGANIZATION_OPAQUE_SLUG_BYTES);
+  fillRandom(bytes);
+  const identifier = Array.from(bytes, (byte) =>
+    OPAQUE_SLUG_ALPHABET.charAt(byte % OPAQUE_SLUG_ALPHABET.length),
+  ).join("");
+  return `org-${identifier}`;
+};
+
 export const BETTER_AUTH_ORGANIZATION_OPTIONS = {
   allowUserToCreateOrganization: true,
   cancelPendingInvitationsOnReInvite: false,
@@ -88,6 +141,16 @@ export const BETTER_AUTH_ORGANIZATION_OPTIONS = {
   // An invitation grants access to a firm's matters, so the address it was
   // sent to has to be one the recipient proved they hold.
   requireEmailVerificationOnInvitation: true,
+} as const;
+
+/** Server-managed membership grant; generic member inputs cannot assign it. */
+export const BILLING_ACCESS_MEMBER_FIELDS = {
+  billingAccess: {
+    type: "boolean",
+    required: true,
+    defaultValue: false,
+    input: false,
+  },
 } as const;
 
 /** Adapter switches which must match in every host. */

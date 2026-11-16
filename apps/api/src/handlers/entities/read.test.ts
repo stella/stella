@@ -1,9 +1,10 @@
 import { panic, Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
-import { ElysiaCustomStatusResponse } from "elysia";
 
 import { createReadFilesystemTreeHandler } from "@/api/handlers/entities/filesystem-tree/get";
 import { createReadEntitiesHandler } from "@/api/handlers/entities/list";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
+import { HttpStatusResponse } from "@/api/http/status";
 import { toSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -29,7 +30,7 @@ const createContext = (
     body,
     safeDb: async () => Result.ok([]),
     request: new Request("https://example.test/v1/entities/query"),
-    route: "/v1/entities/:workspaceId/query",
+    route: "/v1/entities/:workspaceId/query" satisfies ApiRoutePath,
   });
 
 describe("entity read handler search", () => {
@@ -157,7 +158,7 @@ describe("entity read handler search", () => {
       const response = await readFilesystemTree.handler(
         createContext({ limit: 10 }),
       );
-      if (response instanceof ElysiaCustomStatusResponse) {
+      if (response instanceof HttpStatusResponse) {
         panic("Filesystem page scaling requires a successful response");
       }
       expect(response.items).toHaveLength(10);

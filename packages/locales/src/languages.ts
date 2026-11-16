@@ -820,6 +820,10 @@ export const UI_LANGUAGES: readonly UiLanguageEntry[] = LANGUAGES.filter(
   (language): language is UiLanguageEntry => language.uiAvailable,
 );
 
+/** The ISO 639-1 base code of a language the app ships UI translations for
+ *  (`"pt"` for the `pt-BR` UI locale). */
+export type UiLanguageCode = UiLanguageEntry["code"];
+
 /** An i18n message-file tag (the regional `pt-BR`, otherwise a base code). */
 export type UiLocale = NonNullable<UiLanguageEntry["uiLocale"]>;
 

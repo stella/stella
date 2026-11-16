@@ -1,5 +1,4 @@
 import { Result } from "better-result";
-import { XMLParser } from "fast-xml-parser";
 import { SaxesParser } from "saxes";
 
 import { isRecord } from "../shared/guards.js";
@@ -82,11 +81,158 @@ const buildEnvelope = ({
   return `<?xml version="1.0" encoding="UTF-8"?><soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"${declarations}><soapenv:Header/><soapenv:Body>${body}</soapenv:Body></soapenv:Envelope>`;
 };
 
-// The parser accepts truncated or mismatched markup and returns what it read,
-// so a cut-off answer must be refused before parsing. The validator throws on
-// the first error.
+type XmlObject = Record<string, unknown>;
+
+type OpenElement = {
+  name: string;
+  attributes: Map<string, string>;
+  children: Map<string, unknown>;
+  /** Text since the last tag, comments included; trimmed when a tag ends it. */
+  pendingText: string;
+  text: string;
+};
+
+/**
+ * A qualified name without its namespace prefix; `null` for a namespace
+ * declaration, which the parsed document does not carry.
+ */
+const unprefixedName = (name: string): string | null => {
+  const parts = name.split(":");
+  if (parts[0] === "xmlns") {
+    return null;
+  }
+  return parts.length === 2 ? (parts[1] ?? name) : name;
+};
+
+const flushText = (element: OpenElement): void => {
+  const text = element.pendingText.trim();
+  element.pendingText = "";
+  if (text.length > 0) {
+    element.text += text;
+  }
+};
+
+type AddChildOptions = {
+  children: Map<string, unknown>;
+  name: string;
+  value: unknown;
+  repeatedElements: ReadonlySet<string>;
+};
+
+const addChild = ({
+  children,
+  name,
+  value,
+  repeatedElements,
+}: AddChildOptions): void => {
+  const existing = children.get(name);
+  if (existing === undefined) {
+    children.set(name, repeatedElements.has(name) ? [value] : value);
+  } else if (Array.isArray(existing)) {
+    existing.push(value);
+  } else {
+    children.set(name, [existing, value]);
+  }
+};
+
+/** An element with neither attributes nor child elements reads as its text. */
+const elementValue = (element: OpenElement): unknown => {
+  if (element.children.size === 0 && element.attributes.size === 0) {
+    return element.text;
+  }
+  return Object.fromEntries([
+    ...element.children,
+    ...element.attributes,
+    ...(element.text.length > 0 ? [["#text", element.text] as const] : []),
+  ]);
+};
+
+type ParsedXmlDocument =
+  { status: "parsed"; document: XmlObject } | { status: "malformed" };
+
+/**
+ * Read a SOAP response in one strict pass. A document that is not well-formed
+ * (truncated, mismatched, an undeclared entity) is refused rather than read
+ * as far as it goes.
+ *
+ * Names lose their namespace prefix, attributes are `@`-prefixed, values stay
+ * strings, text is trimmed (CDATA is kept as written), an element with
+ * neither attributes nor children reads as its text, a name that repeats
+ * becomes an array, and a name in `repeatedElements` is always one.
+ */
+export const parseXmlDocument = (
+  text: string,
+  repeatedElements: ReadonlySet<string>,
+): ParsedXmlDocument => {
+  const root: OpenElement = {
+    name: "",
+    attributes: new Map(),
+    children: new Map(),
+    pendingText: "",
+    text: "",
+  };
+  const stack: OpenElement[] = [root];
+  const errors: Error[] = [];
+  const parser = new SaxesParser();
+  parser.on("error", (error) => {
+    errors.push(error);
+  });
+  parser.on("text", (value) => {
+    const current = stack.at(-1);
+    if (current) {
+      current.pendingText += value;
+    }
+  });
+  parser.on("cdata", (value) => {
+    const current = stack.at(-1);
+    if (!current) {
+      return;
+    }
+    flushText(current);
+    current.text += value;
+  });
+  parser.on("opentag", (tag) => {
+    const parent = stack.at(-1);
+    if (parent) {
+      flushText(parent);
+    }
+    const attributes = new Map<string, string>();
+    for (const [qualifiedName, value] of Object.entries(tag.attributes)) {
+      const name = unprefixedName(qualifiedName);
+      if (name !== null && name !== "") {
+        attributes.set(`@${name}`, value.trim());
+      }
+    }
+    stack.push({
+      name: unprefixedName(tag.name) ?? tag.name,
+      attributes,
+      children: new Map(),
+      pendingText: "",
+      text: "",
+    });
+  });
+  parser.on("closetag", () => {
+    const element = stack.pop();
+    const parent = stack.at(-1);
+    if (!element || !parent) {
+      return;
+    }
+    flushText(element);
+    addChild({
+      children: parent.children,
+      name: element.name,
+      value: elementValue(element),
+      repeatedElements,
+    });
+  });
+  const written = Result.try(() => parser.write(text).close());
+  return written.isErr() || errors.length > 0
+    ? { status: "malformed" }
+    : { status: "parsed", document: Object.fromEntries(root.children) };
+};
+
 export const isWellFormedXml = (text: string): boolean =>
-  Result.try(() => new SaxesParser().write(text).close()).isOk();
+  parseXmlDocument(text, new Set()).status === "parsed";
 
 type SoapResponse = { status: number; contentType: string; text: string };
 
@@ -105,23 +251,17 @@ const readSoapBody = (
   }
   // SOAP forbids document type declarations; refusing them also keeps
   // entity expansion out of the parser.
-  if (DOCUMENT_TYPE_DECLARATION.test(text) || !isWellFormedXml(text)) {
+  const parsed = DOCUMENT_TYPE_DECLARATION.test(text)
+    ? null
+    : parseXmlDocument(text, repeatedElements);
+  if (parsed === null || parsed.status === "malformed") {
     return unavailable({
       reason: "malformed-response",
       message: "The source returned a response that is not well-formed XML",
       detail: httpStatus,
     });
   }
-  const parser = new XMLParser({
-    removeNSPrefix: true,
-    ignoreAttributes: false,
-    attributeNamePrefix: "@",
-    parseTagValue: false,
-    parseAttributeValue: false,
-    isArray: (name) => repeatedElements.has(name),
-  });
-  const parsed: unknown = parser.parse(text);
-  const envelope = isRecord(parsed) ? parsed["Envelope"] : undefined;
+  const envelope = parsed.document["Envelope"];
   const body = isRecord(envelope) ? envelope["Body"] : undefined;
   if (!isRecord(body)) {
     return unavailable({

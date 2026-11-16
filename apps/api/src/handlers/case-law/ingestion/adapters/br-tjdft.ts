@@ -54,36 +54,6 @@ import {
 import { sha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
-import {
-  defineSourceAdapter,
-  EMPTY_AST,
-  encodeSourceRawEnvelope,
-  excludedSourceField,
-  excludedSourceSurface,
-  readStoredRawListing,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  SOURCE_TOTAL_PROBE_FAILURE,
-  sourceTotalProbeFailed,
-  sourceTotalRead,
-  STORED_RAW_REPARSE_REJECTION,
-  storedSourceSurface,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  DecisionJudgeInput,
-  IngestionResult,
-  ReconciliationBuildOutcome,
-  ReconciliationSlicePage,
-  SourceFieldDisposition,
-  SourceRawParts,
-  SourceSurfaceCensus,
-  SourceSurfaceDisposition,
-  SourceTotalCount,
-  StoredRawReparseInput,
-  StoredRawReparseOutcome,
-  SyncPage,
-  UnreadListedItem,
-  UnreadOutcome,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import {
@@ -109,6 +79,37 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@/api/lib/legal-search/ingestion-constants";
+import {
+  defineSourceAdapter,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  excludedSourceField,
+  excludedSourceSurface,
+  PUBLISHER_REQUEST,
+  readStoredRawListing,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  SOURCE_TOTAL_PROBE_FAILURE,
+  sourceTotalProbeFailed,
+  sourceTotalRead,
+  STORED_RAW_REPARSE_REJECTION,
+  storedSourceSurface,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  DecisionJudgeInput,
+  IngestionResult,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  SourceFieldDisposition,
+  SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
+  SourceTotalCount,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
+  SyncPage,
+  UnreadListedItem,
+  UnreadOutcome,
+} from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
@@ -1040,6 +1041,7 @@ const crawlPage = async (
     return Result.ok({
       decisions: [],
       nextCursor: encodeBrTjdftCursor(position),
+      publisherRequest: PUBLISHER_REQUEST.NONE,
     });
   }
   const listing = await search({
@@ -1127,6 +1129,7 @@ const crawlPage = async (
     ...(unreadItems === undefined ? {} : { unreadItems }),
     nextCursor: encodeBrTjdftCursor(next),
     sourceUrl: SEARCH_URL,
+    publisherRequest: PUBLISHER_REQUEST.ANSWERED,
   });
 };
 
@@ -1524,21 +1527,41 @@ const DETAIL_FACETS = [
 
 const SOURCE_FIELDS = [...RECORD_FIELDS, ...DETAIL_FACETS] as const;
 
+type BrTjdftPublisherRecord = Readonly<
+  Record<(typeof SOURCE_FIELDS)[number], unknown>
+>;
+
 const metadataField = (key: string): SourceFieldDisposition => ({
   disposition: "stored",
   target: { type: "metadata", key },
 });
 
-const FACET_OF_RECORD = excludedSourceField(
-  "a facet count over the one-record detail answer, restating a field the record carries and that is stored from it",
-);
+/** A facet count over the one-record detail answer, of the field it names. */
+const facetOf = (
+  pointer:
+    | "nomeRelator"
+    | "nomeRelatorDesignado"
+    | "nomeRevisor"
+    | "descricaoOrgaoJulgador"
+    | "base"
+    | "segredoJustica",
+) =>
+  excludedSourceField({
+    reason: "duplicate_of",
+    justification:
+      "A facet count over the one-record detail answer, restating a field the record carries and that is stored from it.",
+    pointer,
+  });
 
 const BR_TJDFT_SOURCE_FIELDS = {
   base: metadataField("base"),
   subbase: metadataField("subbase"),
-  sequencial: excludedSourceField(
-    "the row's position in one search answer, a listing coordinate that changes with every query",
-  ),
+  sequencial: excludedSourceField({
+    reason: "publisher_noise",
+    justification:
+      "The row's position in one search answer, a listing coordinate that changes with every query.",
+    pointer: "sequencial",
+  }),
   uuid: { disposition: "stored", target: { type: "identity" } },
   identificador: metadataField("recordIdentifier"),
   versao: metadataField("recordVersion"),
@@ -1566,9 +1589,12 @@ const BR_TJDFT_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "textField", key: "headnote" },
   },
-  marcadores: excludedSourceField(
-    "highlight offsets of the query terms in the answer, empty for the empty query the crawl sends; a property of the query, not of the decision",
-  ),
+  marcadores: excludedSourceField({
+    reason: "publisher_noise",
+    justification:
+      "Highlight offsets of the query terms in the answer, empty for the empty query the crawl sends; a property of the query, not of the decision.",
+    pointer: "marcadores",
+  }),
   termosAuxiliares: metadataField("auxiliaryTerms"),
   possuiInteiroTeor: metadataField("hasFullText"),
   inteiroTeor: { disposition: "stored", target: { type: "document" } },
@@ -1584,14 +1610,14 @@ const BR_TJDFT_SOURCE_FIELDS = {
     },
   },
   "agregacoes.classe": metadataField("cnjClass"),
-  "agregacoes.relator": FACET_OF_RECORD,
-  "agregacoes.relatorDesignado": FACET_OF_RECORD,
-  "agregacoes.revisor": FACET_OF_RECORD,
-  "agregacoes.orgaoJulgador": FACET_OF_RECORD,
-  "agregacoes.base": FACET_OF_RECORD,
-  "agregacoes.segredoJustica": FACET_OF_RECORD,
+  "agregacoes.relator": facetOf("nomeRelator"),
+  "agregacoes.relatorDesignado": facetOf("nomeRelatorDesignado"),
+  "agregacoes.revisor": facetOf("nomeRevisor"),
+  "agregacoes.orgaoJulgador": facetOf("descricaoOrgaoJulgador"),
+  "agregacoes.base": facetOf("base"),
+  "agregacoes.segredoJustica": facetOf("segredoJustica"),
 } as const satisfies Record<
-  (typeof SOURCE_FIELDS)[number],
+  keyof BrTjdftPublisherRecord,
   SourceFieldDisposition
 >;
 

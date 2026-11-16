@@ -1,3 +1,4 @@
+// parser-output-unchanged: adds the decision-type availability vocabulary; only cz-uohs sets it, and it bumps its own version.
 // parser-output-unchanged: the decision-date availability marker is derived only from metadata a source sets; sources that never set it parse as before.
 import { panic } from "better-result";
 
@@ -15,6 +16,16 @@ export const TEXT_FIELD_TYPE = {
   ABSENT: "absent",
   PRESENT: "present",
 } as const;
+
+// parser-output-unchanged: Text availability labels describe public reads only; ingestion output is unchanged.
+/** Recorded text presence; licences and read-time failures are separate. */
+export const DECISION_TEXT_AVAILABILITY = {
+  AVAILABLE: "available",
+  METADATA_ONLY: "metadata_only",
+} as const;
+
+export type DecisionTextAvailability =
+  (typeof DECISION_TEXT_AVAILABILITY)[keyof typeof DECISION_TEXT_AVAILABILITY];
 
 export const DECISION_TEXT_WITHHELD_REASON = {
   SOURCE_LICENCE: "source_licence",
@@ -174,6 +185,72 @@ export type DecisionDateAvailability = {
   status: (typeof DECISION_DATE_AVAILABILITY_STATUSES)[number];
 };
 
+/**
+ * Whether the source names a decision's type in words. A source that names it
+ * only by a code (an address in a code list) or not at all declares it in
+ * `metadata.decisionTypeAvailability`, so the absence is a typed marker.
+ */
+export const DECISION_TYPE_AVAILABILITY_STATUSES = [
+  "published",
+  "not-published-by-source",
+] as const;
+
+export type DecisionTypeAvailability = {
+  status: (typeof DECISION_TYPE_AVAILABILITY_STATUSES)[number];
+};
+
+/**
+ * Whether the stored text carries every character the source printed.
+ *
+ * A parser that finds its reading differs from the printed text still stores
+ * and publishes the decision; the difference is stated here, in
+ * `metadata.textFidelity`, beside the raw it can be re-read from. A decision
+ * whose reading matches states nothing.
+ */
+export const DECISION_TEXT_FIDELITY_METADATA_KEY = "textFidelity";
+
+/**
+ * `mismatch`: characters are missing or added. `reordered`: the text carries
+ * exactly the printed characters, in another order.
+ */
+export const DECISION_TEXT_FIDELITY_STATUSES = [
+  "mismatch",
+  "reordered",
+] as const;
+
+export type DecisionTextFidelity = {
+  status: (typeof DECISION_TEXT_FIDELITY_STATUSES)[number];
+  /** Non-space characters the source printed that the text lacks. */
+  missingChars: number;
+  /** Non-space characters the text carries that the source did not print. */
+  extraChars: number;
+  /** Offset in the printed non-space sequence where the reading first departs from it. */
+  firstDifferenceAt: number;
+};
+
+const isCount = (value: unknown): value is number =>
+  typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+
+/**
+ * Counts and offsets are never negative, and a `reordered` text carries the
+ * printed characters exactly, so it misses and adds none.
+ */
+export const isDecisionTextFidelity = (
+  value: unknown,
+): value is DecisionTextFidelity =>
+  typeof value === "object" &&
+  value !== null &&
+  "status" in value &&
+  "missingChars" in value &&
+  "extraChars" in value &&
+  "firstDifferenceAt" in value &&
+  DECISION_TEXT_FIDELITY_STATUSES.some((status) => status === value.status) &&
+  isCount(value.missingChars) &&
+  isCount(value.extraChars) &&
+  isCount(value.firstDifferenceAt) &&
+  (value.status !== "reordered" ||
+    (value.missingChars === 0 && value.extraChars === 0));
+
 export const SK_COURTS_SOURCE_URL_STATUSES = [
   "published",
   "not-published-by-source",
@@ -273,14 +350,15 @@ export const inspectDecisionTextAbsence = (
   if (absence.type === "invalid") {
     return { type: "invalid", reason: "sidecar" };
   }
-  if (version === undefined) {
+  // A null metadata object has no version, so it is always legacy.
+  if (metadata === null || version === undefined) {
     return { type: "legacy" };
   }
   return {
     type: "current",
     missingFields: DECISION_TEXT_FIELD_KEYS.filter(
       (field) =>
-        (metadata?.[field] === null || metadata?.[field] === undefined) &&
+        (metadata[field] === null || metadata[field] === undefined) &&
         !absence.entries.some((entry) => entry.field === field),
     ),
   };

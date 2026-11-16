@@ -24,6 +24,7 @@ import type {
 } from "@/components/ai-suggestions/document-review-basis.logic";
 import {
   mergeStreamedPosition,
+  proposalRefusalMessage,
   REVIEW_PROPOSAL_EVENT,
   streamReviewProposal,
 } from "@/components/ai-suggestions/document-review-proposal-stream";
@@ -147,6 +148,7 @@ type StartReviewArgs = {
   entityId: string;
   fileFieldId: string;
   unexpectedErrorMessage: string;
+  documentsTooLargeMessage: string;
   /** What the proposal is followed by: the run, or the confirm step. */
   startMode: ReviewStartMode;
   /** The picked playbook's enabled positions, when there is one. */
@@ -328,6 +330,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => {
       entityId,
       fileFieldId,
       unexpectedErrorMessage,
+      documentsTooLargeMessage,
       startMode,
       seededPositions,
     }) => {
@@ -502,10 +505,11 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => {
         refusal !== null ||
         proposalStatus === "failed"
       ) {
-        const message =
-          refusal === null
-            ? unexpectedErrorMessage
-            : userErrorMessage(refusal, unexpectedErrorMessage);
+        const message = proposalRefusalMessage({
+          refusal,
+          unexpectedErrorMessage,
+          documentsTooLargeMessage,
+        });
         set((state) => {
           const current = state.sessions[key];
           if (current?.requestId !== requestId) {

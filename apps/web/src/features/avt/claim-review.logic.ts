@@ -5,9 +5,12 @@
  * follows the server's review fold (apps/api lib/lists/verification/
  * review-fold.ts): reopening and resolving a record conflict withdraw an
  * earlier status and override, and clearing a note keeps when one was saved.
+ * Every action adds one event to the claim's history.
  */
 
 import { panic } from "better-result";
+
+import { toSafeId } from "@stll/api-contract/safe-id";
 
 import type {
   ClaimReview,
@@ -26,6 +29,9 @@ export const EMPTY_CLAIM_REVIEW = {
   decidedBy: null,
   reopened: false,
   recordConflictResolution: null,
+  linkedFactIds: [],
+  linksChanged: false,
+  eventCount: 0,
 } as const satisfies ClaimReview;
 
 type PredictionContext = {
@@ -45,7 +51,8 @@ const predictStatus = (
       return { status: null, statusOrigin: null };
     }
     case "reviewed":
-    case "disputed": {
+    case "disputed":
+    case "needs-evidence": {
       return { status, statusOrigin: "single" };
     }
     default: {
@@ -60,7 +67,10 @@ export const predictClaimReview = (
   event: ClaimReviewEvent,
   { at, actorId }: PredictionContext,
 ): ClaimReview => {
-  const review = current ?? EMPTY_CLAIM_REVIEW;
+  const review = {
+    ...(current ?? EMPTY_CLAIM_REVIEW),
+    eventCount: (current?.eventCount ?? 0) + 1,
+  };
   const decided = { decidedAt: at, decidedBy: actorId };
   switch (event.kind) {
     case "status": {
@@ -90,10 +100,31 @@ export const predictClaimReview = (
       return {
         ...review,
         ...decided,
-        recordConflictResolution: event.resolution,
+        // The server answers the id it validated; the prediction brands it alike.
+        recordConflictResolution:
+          event.resolution?.kind === "governed"
+            ? {
+                kind: "governed",
+                factEntityId: toSafeId(event.resolution.factEntityId),
+              }
+            : event.resolution,
         status: null,
         statusOrigin: null,
         override: null,
+      };
+    }
+    // A link decides nothing; the claim's grade moves only once it is
+    // checked again.
+    case "fact-link": {
+      const others = review.linkedFactIds.filter(
+        (id) => id !== event.factEntityId,
+      );
+      return {
+        ...review,
+        linkedFactIds:
+          event.change === "link"
+            ? [...others, toSafeId(event.factEntityId)]
+            : others,
       };
     }
     default: {
@@ -118,6 +149,7 @@ export const predictBulkReviewed = (
     decidedBy: context.actorId,
     status: "reviewed",
     statusOrigin: "bulk",
+    eventCount: review.eventCount + 1,
   };
 };
 

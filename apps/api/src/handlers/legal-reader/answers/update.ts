@@ -85,7 +85,7 @@ const updateReaderAnswer = createSafeRootHandler(
     );
   },
 );
-declareAggregateMutation(updateReaderAnswer.handler, {
+declareAggregateMutation(updateReaderAnswer, {
   type: "aggregate",
   aggregates: ["readerAnswer"],
 });

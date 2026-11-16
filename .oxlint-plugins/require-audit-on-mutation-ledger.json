@@ -485,15 +485,6 @@
     "reason": "Shared public corpus or index maintenance with no tenant actor."
   },
   {
-    "id": "apps/api/src/lib/chat/run-log.ts::createChatRunLog.append",
-    "writes": {
-      "insert:chatRunLogEntries": 1,
-      "insert:chatRunLogs": 1,
-      "update:chatRunLogs": 1
-    },
-    "reason": "Background work state transition; the request that started the work records the audit event."
-  },
-  {
     "id": "apps/api/src/lib/chat/run-log.ts::createChatRunLog.close",
     "writes": {
       "insert:chatRunLogs": 1,
@@ -1070,20 +1061,6 @@
     "reason": "Usage metering or counter row that is itself the accounting record."
   },
   {
-    "id": "apps/api/src/lib/hosted-usage-provider/webhook-store.ts::recordProviderEventReplayAuditInTx",
-    "writes": {
-      "update:hostedUsageWebhookEvents": 1
-    },
-    "reason": "Usage metering or counter row that is itself the accounting record."
-  },
-  {
-    "id": "apps/api/src/lib/hosted-usage-provider/webhook-store.ts::updateWebhookEventResultInTx",
-    "writes": {
-      "update:hostedUsageWebhookEvents": 1
-    },
-    "reason": "Usage metering or counter row that is itself the accounting record."
-  },
-  {
     "id": "apps/api/src/lib/infosoud/agenda-import.ts::importInfoSoudAgendaItems",
     "writes": {
       "insert:entities": 1,
@@ -1245,14 +1222,6 @@
     "reason": "Shared public corpus or index maintenance with no tenant actor."
   },
   {
-    "id": "apps/api/src/lib/legal-search/corpus-index-projection-census-store.ts::repairAppliedCorpusProjectionDriftTx",
-    "writes": {
-      "update:corpusIndexProjectionIntents": 1,
-      "update:corpusIndexProjectionStates": 1
-    },
-    "reason": "Shared public corpus or index maintenance with no tenant actor."
-  },
-  {
     "id": "apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts::chargeExpiredAppendStatesTx",
     "writes": {
       "update:corpusIndexProjectionStates": 1
@@ -1290,7 +1259,7 @@
   {
     "id": "apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts::recoverExpiredCorpusProjectionIntentsTx",
     "writes": {
-      "update:corpusIndexProjectionIntents": 3
+      "update:corpusIndexProjectionIntents": 2
     },
     "reason": "Shared public corpus or index maintenance with no tenant actor."
   },
@@ -1339,14 +1308,6 @@
     "reason": "Shared public corpus or index maintenance with no tenant actor."
   },
   {
-    "id": "apps/api/src/lib/legal-search/corpus-index-projection-erasure-store.ts::advanceCorpusProjectionErasuresTx",
-    "writes": {
-      "update:corpusIndexProjectionIntents": 3,
-      "update:corpusIndexProjectionStates": 2
-    },
-    "reason": "Shared public corpus or index maintenance with no tenant actor."
-  },
-  {
     "id": "apps/api/src/lib/legal-search/corpus-index-projection-revision.ts::pruneCorpusIndexProjectionRevisionsTx",
     "writes": {
       "delete:?": 1
@@ -1362,13 +1323,6 @@
     "reason": "Shared public corpus or index maintenance with no tenant actor."
   },
   {
-    "id": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts::cancelCorpusProjectionReservationTx",
-    "writes": {
-      "update:corpusIndexProjectionIntents": 1
-    },
-    "reason": "Shared public corpus or index maintenance with no tenant actor."
-  },
-  {
     "id": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts::classifyCorpusProjectionReservationFailureTx",
     "writes": {
       "update:corpusIndexProjectionIntents": 1,
@@ -1377,39 +1331,9 @@
     "reason": "Shared public corpus or index maintenance with no tenant actor."
   },
   {
-    "id": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts::commitCorpusProjectionAppendTx",
-    "writes": {
-      "update:corpusIndexProjectionIntents": 3,
-      "update:corpusIndexProjectionStates": 1
-    },
-    "reason": "Shared public corpus or index maintenance with no tenant actor."
-  },
-  {
     "id": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts::continueCorpusProjectionAppendPartTx",
     "writes": {
       "update:corpusIndexProjectionIntents": 1
-    },
-    "reason": "Shared public corpus or index maintenance with no tenant actor."
-  },
-  {
-    "id": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts::prepareCorpusProjectionReplacementsTx",
-    "writes": {
-      "update:corpusIndexProjectionIntents": 1,
-      "update:corpusIndexProjectionStates": 1
-    },
-    "reason": "Shared public corpus or index maintenance with no tenant actor."
-  },
-  {
-    "id": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts::reserveCorpusProjectionIntentsTx",
-    "writes": {
-      "insert:corpusIndexProjectionIntents": 1
-    },
-    "reason": "Shared public corpus or index maintenance with no tenant actor."
-  },
-  {
-    "id": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts::startCorpusProjectionAppendBatchTx",
-    "writes": {
-      "update:corpusIndexProjectionIntents": 3
     },
     "reason": "Shared public corpus or index maintenance with no tenant actor."
   },
@@ -1471,13 +1395,6 @@
       "insert:notifications": 1
     },
     "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
-  },
-  {
-    "id": "apps/api/src/lib/oauth-connections.ts::disconnectOAuthConnectionForUser.try",
-    "writes": {
-      "delete:oauthConsent": 1
-    },
-    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
   },
   {
     "id": "apps/api/src/lib/properties/property-status.ts::markPropertiesFresh",
@@ -1772,7 +1689,6 @@
     "id": "apps/api/src/lib/smoke-session/store.ts::ensureSmokePrincipal",
     "writes": {
       "insert:member": 1,
-      "insert:organization": 1,
       "insert:user": 1
     },
     "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
@@ -1814,23 +1730,9 @@
     "reason": "Usage metering or counter row that is itself the accounting record."
   },
   {
-    "id": "apps/api/src/lib/usage/organization-access-state.ts::endOrganizationEvaluation",
-    "writes": {
-      "update:organizationAccessStates": 1
-    },
-    "reason": "Usage metering or counter row that is itself the accounting record."
-  },
-  {
     "id": "apps/api/src/lib/usage/organization-access-state.ts::recordMissingOrganizationAccessStates",
     "writes": {
       "insert:?": 1
-    },
-    "reason": "Usage metering or counter row that is itself the accounting record."
-  },
-  {
-    "id": "apps/api/src/lib/usage/organization-access-state.ts::recordNewOrganizationAccessState",
-    "writes": {
-      "insert:organizationAccessStates": 1
     },
     "reason": "Usage metering or counter row that is itself the accounting record."
   },

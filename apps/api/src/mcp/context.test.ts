@@ -16,7 +16,7 @@ import {
   bindApprovedMcpAuditContext,
   loadAccessibleMcpWorkspaces,
 } from "@/api/mcp/context";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -96,7 +96,7 @@ describe("MCP registry discovery", () => {
 describe("MCP audit approval", () => {
   test("binds confirmed execution to the authenticated approver", async () => {
     let inserted: Record<string, unknown>[] = [];
-    const context = asTestRaw<McpRequestContext>({
+    const context = asTestRaw<AuthorizedMcpRequestContext>({
       auditExecution: {
         performer: { id: "agent-1", name: "Agent 1", type: "agent" },
         runId: "run-1",

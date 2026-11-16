@@ -250,6 +250,7 @@ const concurrencyModes: Record<
   NonNullable<ConcurrencyProblemsOptions["mode"]>
 > = {
   "disarm-auto-merge.yml": "preserve-events",
+  "merge-group-hold.yml": "preserve-events",
 };
 
 describe("pull request workflow concurrency", () => {
@@ -350,9 +351,7 @@ describe("pull request workflow concurrency", () => {
           (file === "deploy-landing.yml" &&
             group === `deploy-landing-\${{ github.ref }}`) ||
           (file === "manual-checks.yml" &&
-            group === `manual-check-\${{ github.ref }}-\${{ inputs.check }}`) ||
-          (file === "queue-admission.yml" &&
-            group === `queue-admission-\${{ inputs.pr }}`);
+            group === `manual-check-\${{ github.ref }}-\${{ inputs.check }}`);
         if (deliberate) {
           return [];
         }
@@ -723,5 +722,16 @@ test("CI metadata events cannot cancel the code run for the same head", async ()
         event,
       }),
     ).toBe("true");
+  }
+  for (const event of [
+    { ...codeRun.event, action: "auto_merge_enabled" },
+    { ...codeRun.event, action: "labeled", label: { name: "merge-armed" } },
+    { ...codeRun.event, action: "unlabeled", label: { name: "merge-armed" } },
+  ]) {
+    const armed = { ...codeRun, event };
+    expect(await groupFor(file, armed)).toBe("CI Checks-pr-12-head-one-meta");
+    expect(await concurrencyValueFor(file, "cancel-in-progress", armed)).toBe(
+      "false",
+    );
   }
 });

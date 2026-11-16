@@ -3,6 +3,7 @@ import { useTranslations } from "use-intl";
 
 import { stellaToast } from "@stll/ui/toast";
 
+import { getTranslator } from "@/i18n/translator";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient } from "@/lib/auth-client";
 import type { Role } from "@/lib/auth-client";
@@ -39,7 +40,11 @@ export const useRemoveMember = () => {
       await queryClient.invalidateQueries({ queryKey: organizationKeys.all });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useRemoveMember:failure",
+        scope: { type: "handler", handlerId: "useRemoveMember:failure" },
+      });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -50,7 +55,11 @@ type InviteMemberVars = {
   resend?: boolean;
 };
 
-export const useInviteMember = () => {
+/**
+ * `isShownInline` is asked when a failure arrives, not when the request
+ * starts: a form closed in between can no longer show it, so a toast does.
+ */
+export const useInviteMember = (isShownInline: () => boolean = () => false) => {
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
 
@@ -72,7 +81,13 @@ export const useInviteMember = () => {
       await queryClient.invalidateQueries({ queryKey: organizationKeys.all });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useInviteMember:failure",
+        scope: { type: "handler", handlerId: "useInviteMember:failure" },
+      });
+      if (!isShownInline()) {
+        notifyUserError(error, getTranslator()("errors.actionFailed"));
+      }
     },
   });
 };
@@ -89,10 +104,6 @@ export const useCancelInvitation = () => {
       });
 
       if (result.error) {
-        notifyUserError(
-          toAuthClientError(result.error),
-          t("errors.actionFailed"),
-        );
         throw toAuthClientError(result.error);
       }
 
@@ -106,7 +117,11 @@ export const useCancelInvitation = () => {
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useCancelInvitation:failure",
+        scope: { type: "handler", handlerId: "useCancelInvitation:failure" },
+      });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -124,7 +139,13 @@ export const useUpdateMemberRole = (memberId: string) => {
       });
 
       if (result.error) {
-        analytics.captureError(toAuthClientError(result.error));
+        analytics.captureError(toAuthClientError(result.error), {
+          fingerprintKey: "useUpdateMemberRole.mutationFn:failure",
+          scope: {
+            type: "handler",
+            handlerId: "useUpdateMemberRole.mutationFn:failure",
+          },
+        });
         notifyUserError(
           toAuthClientError(result.error),
           t("errors.actionFailed"),

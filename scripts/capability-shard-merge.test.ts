@@ -45,6 +45,50 @@ const fixturePath = (probe: string) =>
   `apps/api/src/handlers/billing-codes/${probe}/list.ts`;
 const capabilityId = (probe: string) => `billing-codes.${probe}.list`;
 
+// A capability runs the definition its REST route serves, so each probe is
+// mounted too. The two probes edit opposite ends of the route module, so
+// their branches merge without touching each other's lines.
+const ROUTES_PATH = "apps/api/src/handlers/billing-codes/routes.ts";
+const ROUTE_TABLE_OPEN = "export const billingCodesRoute = routes(\n  {\n";
+const ROUTE_TABLE_CLOSE = "    },\n  },\n  {\n    prefix:";
+const probeBinding = (probe: string) =>
+  probe.replaceAll(/-(\w)/gu, (_, letter: string) => letter.toUpperCase());
+const probeImport = (probe: string) =>
+  `import ${probeBinding(probe)} from "@/api/handlers/billing-codes/${probe}/list";\n`;
+const probeEntry = (probe: string) =>
+  `    "/${probe}": { GET: ${probeBinding(probe)} },\n`;
+
+const replaceOnce = (source: string, anchor: string, replacement: string) => {
+  if (source.split(anchor).length !== 2) {
+    throw new TypeError(`Route module anchor is not unique: ${anchor}`);
+  }
+  return source.replace(anchor, () => replacement);
+};
+
+const mountProbe = (routes: string, probe: string) =>
+  probe === PROBES[0]
+    ? replaceOnce(
+        probeImport(probe) + routes,
+        ROUTE_TABLE_OPEN,
+        ROUTE_TABLE_OPEN + probeEntry(probe),
+      )
+    : replaceOnce(
+        replaceOnce(
+          routes,
+          "\nexport const billingCodesRoute",
+          `${probeImport(probe)}\nexport const billingCodesRoute`,
+        ),
+        ROUTE_TABLE_CLOSE,
+        `    },\n${probeEntry(probe)}  },\n  {\n    prefix:`,
+      );
+
+const unmountProbe = (routes: string, probe: string) =>
+  replaceOnce(
+    replaceOnce(routes, probeImport(probe), ""),
+    probeEntry(probe),
+    "",
+  );
+
 /** Compare complete directories, including their file census. */
 const shardBytes = (
   checkout: string,
@@ -131,47 +175,65 @@ test.skipIf(!process.env["CI"])(
         path.join(checkout, EXPORTER),
         readFileSync(path.join(REPO_ROOT, EXPORTER)),
       );
-      const stdoutPath = path.join(temporary, "exporter.stdout");
-      const stderrPath = path.join(temporary, "exporter.stderr");
-      writeFileSync(stdoutPath, "");
-      writeFileSync(stderrPath, "");
       let complete: ((exitCode: number) => void) | undefined;
       const env = { ...process.env };
       delete env["CI_GENERATED_SOURCES_MANIFEST"];
-      // Only the two distinct fixture paths change membership; a restored
-      // fixture has identical source. Keep the real module graph warm while
-      // discovery, formatting and drift checks still run on every invocation.
-      const worker = Bun.spawn(
-        [
-          process.execPath,
-          "--env-file=apps/api/.env.example",
-          "-e",
-          `import { createInterface } from "node:readline";
+      // Keep the real module graph warm while discovery, formatting and drift
+      // checks still run on every invocation. A loaded module keeps the source
+      // it was loaded with, so the worker is restarted whenever the route
+      // table that mounts the probes changes.
+      let generation = 0;
+      let stdoutPath = "";
+      let stderrPath = "";
+      const startWorker = () => {
+        generation += 1;
+        stdoutPath = path.join(
+          temporary,
+          `exporter-${String(generation)}.stdout`,
+        );
+        stderrPath = path.join(
+          temporary,
+          `exporter-${String(generation)}.stderr`,
+        );
+        writeFileSync(stdoutPath, "");
+        writeFileSync(stderrPath, "");
+        return Bun.spawn(
+          [
+            process.execPath,
+            "--env-file=apps/api/.env.example",
+            "-e",
+            `import { createInterface } from "node:readline";
 import { exportCapabilityCatalog } from ${JSON.stringify(path.join(checkout, EXPORTER))};
 for await (const mode of createInterface({ input: process.stdin })) {
   if (mode !== "write" && mode !== "check") throw new TypeError("Invalid export mode");
   process.send(await exportCapabilityCatalog(mode));
 }
 process.exit(0);`,
-        ],
-        {
-          cwd: checkout,
-          env,
-          stdin: "pipe",
-          stdout: Bun.file(stdoutPath),
-          stderr: Bun.file(stderrPath),
-          ipc(message: unknown) {
-            if (typeof message !== "number" || complete === undefined) {
-              throw new TypeError("Unexpected exporter response");
-            }
-            complete(message);
-            complete = undefined;
+          ],
+          {
+            cwd: checkout,
+            env,
+            stdin: "pipe",
+            stdout: Bun.file(stdoutPath),
+            stderr: Bun.file(stderrPath),
+            ipc(message: unknown) {
+              if (typeof message !== "number" || complete === undefined) {
+                throw new TypeError("Unexpected exporter response");
+              }
+              complete(message);
+              complete = undefined;
+            },
           },
-        },
-      );
+        );
+      };
+      let worker = startWorker();
       stopExporter = async () => {
         worker.kill();
         await worker.exited;
+      };
+      const restartExporter = async () => {
+        await stopExporter?.();
+        worker = startWorker();
       };
       const generate = async (check = false) => {
         const started = performance.now();
@@ -207,6 +269,12 @@ process.exit(0);`,
           recursive: true,
         });
         writeFileSync(path.join(checkout, fixture), fixtureSource);
+        const routesFile = path.join(checkout, ROUTES_PATH);
+        writeFileSync(
+          routesFile,
+          mountProbe(readFileSync(routesFile, "utf-8"), probe),
+        );
+        await restartExporter();
         await regenerate();
         const catalog = `${CATALOG_DIRECTORY}/${capabilityId(probe)}.json`;
         const dispatch = `${DISPATCH_DIRECTORY}/${capabilityId(probe)}.ts`;
@@ -225,7 +293,7 @@ process.exit(0);`,
         expect(generatedDispatch).toContain('featureId: "time-billing"');
         expect(generatedDispatch).toContain('featureAccess: "required"');
         expectedDispatch.set(dispatch, generatedDispatch);
-        await succeed(["git", "add", fixture, CATALOG_DIRECTORY]);
+        await succeed(["git", "add", fixture, ROUTES_PATH, CATALOG_DIRECTORY]);
         const staged = await succeed([
           "git",
           "diff",
@@ -233,7 +301,7 @@ process.exit(0);`,
           "--name-only",
         ]);
         expect(staged.split("\n").toSorted()).toEqual(
-          [fixture, catalog].toSorted(),
+          [fixture, ROUTES_PATH, catalog].toSorted(),
         );
         await succeed([
           "git",
@@ -261,6 +329,7 @@ process.exit(0);`,
         throw new TypeError("Missing merged tree");
       }
       await succeed(["git", "read-tree", "--reset", "-u", tree]);
+      await restartExporter();
       const mergedCatalogBytes = shardBytes(checkout, [CATALOG_DIRECTORY]);
       await regenerate();
       expect(shardBytes(checkout, [CATALOG_DIRECTORY])).toEqual(
@@ -293,7 +362,11 @@ process.exit(0);`,
       writeFileSync(shard, original);
 
       const removedFixture = path.join(checkout, fixturePath(probe));
+      const routesFile = path.join(checkout, ROUTES_PATH);
+      const mountedRoutes = readFileSync(routesFile, "utf-8");
       rmSync(removedFixture);
+      writeFileSync(routesFile, unmountProbe(mountedRoutes, probe));
+      await restartExporter();
       const stale = await generate(true);
       expect(stale.exitCode).not.toBe(0);
       expect(stale.stderr).toContain(
@@ -308,6 +381,8 @@ process.exit(0);`,
         ),
       ).toBe(false);
       writeFileSync(removedFixture, fixtureSource);
+      writeFileSync(routesFile, mountedRoutes);
+      await restartExporter();
       await regenerate();
       expect(shardBytes(checkout)).toEqual(mergedBytes);
     } finally {
@@ -315,6 +390,7 @@ process.exit(0);`,
       rmSync(temporary, { recursive: true, force: true });
     }
   },
-  // Measured p95 is 57.8 s; this test must export and regenerate the real handler graph.
-  120_000,
+  // This test exports and regenerates the real handler graph, cold once per
+  // route table change; one run took 70 s on a loaded workstation.
+  180_000,
 );

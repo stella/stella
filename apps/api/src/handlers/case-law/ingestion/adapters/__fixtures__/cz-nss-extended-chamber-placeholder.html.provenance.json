@@ -1,0 +1,5 @@
+{
+  "capture": "synthetic",
+  "sha256": "50cf9b5a830b709cdcaeca4128b0162bad14ca4b106f55898e2e3e85f80d197b",
+  "note": "UTF-8 test rendering of the portal N/A sentinel; the fixture helper constructs UTF-16LE responses from this text."
+}

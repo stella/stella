@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
+import { CHAT_LOCAL_RUN_INTERRUPT_REASONS } from "@stll/api-contract/chat-local-run-tool";
 
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import {
@@ -19,11 +20,11 @@ import { toSafeId } from "@/lib/safe-id";
 // fetch it again first, nor upload it with every send.
 //
 // Calibration, measured on a 10-message thread and on a 500-message thread
-// with 200 tool calls: the send body is 4,499 bytes for either (the posted
-// message, twice as the envelope mirrors it, and the page's client tool
-// definitions). Before the envelope dropped the mirrored history it was 5,074
-// and 91,945 bytes. The budget adds about 14% for envelope fields the page
-// adds with context (an active file, matters, a skill), never for history.
+// with 200 tool calls: the send body is 813 bytes for either. Uploading the
+// browser executor's schema made it 6,527 bytes; the API already owns that
+// schema. The envelope mirrors the posted message alone. The established
+// 5 KiB budget reserves room for context (an active file, matters, a skill),
+// never for history or redundant client tool definitions.
 
 const SEND_BUDGET = {
   /** Requests the page makes to send one message. */
@@ -202,7 +203,7 @@ describe("sending a message on a loaded thread", () => {
 // continuation's `parentRunId` and `resume`, `turnIntent`,
 // `truncateAfterMessageId`), which the page builds from its whole message
 // list. From the AG-UI envelope it reads only the correlation: the same
-// thread, run, `parentRunId` and `resume`, `data` equal to `forwardedProps`,
+// thread, run, `parentRunId` and `resume`, any legacy `data` equal to `forwardedProps`,
 // and an envelope message with the posted message's id and role
 // (`hasEnvelopeCorrelationMismatch` in the API's send handler). Each kind must
 // pass that check with an envelope carrying the posted message alone.
@@ -236,15 +237,29 @@ const correlationOf = (body: JsonObject) => {
       isJsonObject(entry) && ANCHOR_ROLES.has(String(entry["role"])),
   );
   return {
-    anchors: anchors.map(
-      (anchor) => `${String(anchor["role"])} ${String(anchor["id"])}`,
-    ),
+    // v1 can split one assistant into ordered wire rows around tool results.
+    // Each extra row must explicitly name that same posted message as its owner.
+    anchors: [
+      ...new Set(
+        anchors.map((anchor) => {
+          const metadata = anchor["metadata"];
+          const tanstack = isJsonObject(metadata)
+            ? metadata["tanstack"]
+            : undefined;
+          const owner =
+            isJsonObject(tanstack) && typeof tanstack["continues"] === "string"
+              ? tanstack["continues"]
+              : anchor["id"];
+          return `${String(anchor["role"])} ${String(owner)}`;
+        }),
+      ),
+    ],
     matches:
       body["threadId"] === forwarded["threadId"] &&
       body["runId"] === forwarded["runId"] &&
       body["parentRunId"] === forwarded["parentRunId"] &&
-      JSON.stringify(body["resume"]) === JSON.stringify(forwarded["resume"]) &&
-      JSON.stringify(body["data"]) === JSON.stringify(forwarded) &&
+      Bun.deepEquals(body["resume"], forwarded["resume"]) &&
+      (body["data"] === undefined || Bun.deepEquals(body["data"], forwarded)) &&
       anchors.some(
         (anchor) =>
           anchor["id"] === message["id"] && anchor["role"] === message["role"],
@@ -373,6 +388,26 @@ const clientToolAnswer =
     },
   ];
 
+const localApproval = (runId: string): ServerEvent[] =>
+  approvalAnswer(runId).map((event) =>
+    event["type"] === "RUN_FINISHED"
+      ? {
+          ...event,
+          outcome: {
+            type: "interrupt",
+            interrupts: [
+              {
+                id: `approval_${APPROVAL_CALL_ID}`,
+                toolCallId: APPROVAL_CALL_ID,
+                reason: CHAT_LOCAL_RUN_INTERRUPT_REASONS.approval,
+                metadata: { kind: "approval", input: APPROVAL_INPUT },
+              },
+            ],
+          },
+        }
+      : event,
+  );
+
 const ASK_CALL_ID = "call-ask";
 const ASK_INPUT = {
   questions: [{ question: "Which side?", reason: "It decides the draft." }],
@@ -467,7 +502,8 @@ const expectEachSendPosts = (
     expect(correlation.matches, report).toBe(true);
     expect(correlation.anchors, report).toEqual([correlation.posted]);
   }
-  for (const [index, { bytes }] of page.posted.entries()) {
+  for (const [index, { body, bytes }] of page.posted.entries()) {
+    expect(body["tools"], report).toEqual([]);
     expect(bytes, report).toBeLessThanOrEqual(
       correlations[index]?.posted.startsWith("assistant ") === true
         ? SEND_BUDGET.continuationBodyBytes
@@ -527,6 +563,101 @@ describe("every kind of send carries only the message it posts", () => {
       });
       resetChatRequestStateForTests();
     }
+  });
+
+  test("approving or denying an unbound local-run command", async () => {
+    for (const approved of [true, false]) {
+      const page = openScriptedPage([localApproval, textAnswer]);
+      await askQuestion(page.runtime);
+      await page.runtime.resolveToolApproval({
+        approved,
+        id: `approval_${APPROVAL_CALL_ID}`,
+      });
+      expectEachSendPosts(page, [
+        `user ${QUESTION_ID}`,
+        `assistant ${ASSISTANT_ID}`,
+      ]);
+      expect(
+        objectAt(page.posted.at(1)?.body ?? {}, "forwardedProps"),
+      ).toMatchObject({
+        parentRunId: page.posted.at(0)?.body["runId"],
+        resume: [
+          {
+            interruptId: `approval_${APPROVAL_CALL_ID}`,
+            payload: { approved },
+            status: "resolved",
+          },
+        ],
+      });
+      const postedMessage = objectAt(
+        objectAt(page.posted.at(1)?.body ?? {}, "forwardedProps"),
+        "message",
+      );
+      expect(postedMessage["parts"]).toContainEqual(
+        expect.objectContaining({
+          type: "tool-call",
+          id: APPROVAL_CALL_ID,
+          name: "save_playbook",
+          input: APPROVAL_INPUT,
+          state: "approval-responded",
+          approval: {
+            id: `approval_${APPROVAL_CALL_ID}`,
+            needsApproval: true,
+            approved,
+          },
+        }),
+      );
+      expect(page.runtime.getSnapshot().error).toBeUndefined();
+      resetChatRequestStateForTests();
+    }
+  });
+
+  test("a missing local approval fails closed and permits a corrected retry", async () => {
+    const page = openScriptedPage([localApproval, textAnswer]);
+    await askQuestion(page.runtime);
+    const pendingMessages = page.runtime.getSnapshot().messages;
+    page.runtime.setMessages(
+      pendingMessages.map((message) => ({
+        ...message,
+        parts: message.parts.filter(
+          (part) => part.type !== "tool-call" || part.id !== APPROVAL_CALL_ID,
+        ),
+      })),
+    );
+    const response = { approved: true, id: `approval_${APPROVAL_CALL_ID}` };
+    await page.runtime.resolveToolApproval(response);
+    expect(page.posted).toHaveLength(1);
+    expect(page.runtime.getSnapshot().error?.message).toBe(
+      "The local-run approval is no longer pending",
+    );
+    expect(page.errors).toHaveLength(1);
+
+    page.runtime.showStoredMessages(pendingMessages);
+    await page.runtime.resolveToolApproval(response);
+    expect(page.posted).toHaveLength(2);
+    expect(correlationOf(page.posted.at(1)?.body ?? {}).matches).toBe(true);
+    expect(page.runtime.getSnapshot().error).toBeUndefined();
+    page.runtime.leave();
+  });
+
+  test("a rejected local approval continuation remains a visible failure", async () => {
+    const page = openScriptedPage([
+      localApproval,
+      () => [{ type: "RUN_ERROR", message: "Continuation rejected" }],
+    ]);
+    await askQuestion(page.runtime);
+    await page.runtime.resolveToolApproval({
+      approved: false,
+      id: `approval_${APPROVAL_CALL_ID}`,
+    });
+    expect(page.posted).toHaveLength(2);
+    expect(page.runtime.getSnapshot().error?.message).toBe(
+      "The local-run approval response was not sent",
+    );
+    expect(page.errors.map(({ message }) => message)).toContain(
+      "The local-run approval response was not sent",
+    );
+    page.runtime.leave();
   });
 
   test("answering an ask-user card", async () => {

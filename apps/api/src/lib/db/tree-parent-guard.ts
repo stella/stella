@@ -96,7 +96,9 @@ export const SELF_REFERENCE_EXEMPTIONS: Readonly<Record<string, string>> = {
   "ai_memories.superseded_by_id":
     "No writer sets it; the column only goes null when the superseding memory is deleted.",
   "invoices.original_invoice_id,workspace_id":
-    "A credit note may only reference a finalized invoice that is not itself a credit note (invoices/document-type.ts, under that row's lock), so the link is one level deep.",
+    "A credit note may only reference a finalized invoice that is not itself a credit note (lib/billing/invoice-document-type.ts, under that row's lock), so the link is one level deep.",
+  "invoices.original_invoice_id,organization_id":
+    "A credit note may only reference a finalized invoice that is not itself a credit note (lib/billing/invoice-document-type.ts, under that row's lock), so the link is one level deep.",
 };
 
 /** The `guard_tree_parent` arguments the tree's trigger must be installed with. */

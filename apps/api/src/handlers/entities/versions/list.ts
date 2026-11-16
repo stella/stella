@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, desc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -12,18 +12,19 @@ import {
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
+import { importOriginOf } from "@/api/lib/uploads/import-origin";
 
 const readVersionsParamsSchema = workspaceParams({
-  entityId: tSafeId("entity"),
+  entityId: resourceIdSchema("entity"),
 });
 
-const readVersionsQuerySchema = t.Object({
-  before: t.Optional(t.String()),
-  filePropertyId: t.Optional(tSafeId("property")),
+const readVersionsQuerySchema = v.object({
+  before: v.optional(v.string()),
+  filePropertyId: v.optional(resourceIdSchema("property")),
 });
 
 type ReadVersionsHandlerProps = {
@@ -75,7 +76,7 @@ export const readVersionFileMetadata = (
     .orderBy(fields.entityVersionId, fields.id)
     .limit(pageSize);
 
-const readVersionsHandler = async function* ({
+export const readVersionsHandler = async function* ({
   safeDb,
   workspaceId,
   entityId,
@@ -173,7 +174,7 @@ const readVersionsHandler = async function* ({
         };
       }
 
-      const pageVersionIds = versions.map((v) => v.id);
+      const pageVersionIds = versions.map((version) => version.id);
 
       // Get finalized sessions for this page to map version → author (for v2+).
       const sessions = await tx
@@ -202,11 +203,11 @@ const readVersionsHandler = async function* ({
       // Collect all unique author user IDs.
       // Priority: version.createdBy > session author > entity.createdBy
       const authorUserIds = new Set<string>();
-      for (const v of versions) {
-        if (v.createdBy) {
-          authorUserIds.add(v.createdBy);
+      for (const version of versions) {
+        if (version.createdBy) {
+          authorUserIds.add(version.createdBy);
         } else {
-          const sessionAuthor = sessionAuthorMap.get(v.id);
+          const sessionAuthor = sessionAuthorMap.get(version.id);
           if (sessionAuthor) {
             authorUserIds.add(sessionAuthor);
           }
@@ -311,22 +312,26 @@ const readVersionsHandler = async function* ({
   }
 
   // Assemble response
-  const versionsList = versions.map((v) => {
-    const sessionAuthorId = sessionAuthorMap.get(v.id);
-    const authorId = v.createdBy ?? sessionAuthorId ?? entity.createdBy;
+  const versionsList = versions.map((version) => {
+    const sessionAuthorId = sessionAuthorMap.get(version.id);
+    const authorId = version.createdBy ?? sessionAuthorId ?? entity.createdBy;
     const authorUser = authorId ? userMap.get(authorId) : null;
-    const file = versionFileMap.get(v.id) ?? null;
+    const file = versionFileMap.get(version.id) ?? null;
 
     return {
-      id: v.id,
-      versionNumber: v.versionNumber,
-      stamp: v.stamp,
-      label: v.label,
-      description: v.description,
-      diffWordsAdded: v.diffWordsAdded,
-      diffWordsRemoved: v.diffWordsRemoved,
-      sourceKind: v.source?.kind ?? null,
-      createdAt: v.createdAt.toISOString(),
+      id: version.id,
+      versionNumber: version.versionNumber,
+      stamp: version.stamp,
+      label: version.label,
+      description: version.description,
+      diffWordsAdded: version.diffWordsAdded,
+      diffWordsRemoved: version.diffWordsRemoved,
+      sourceKind: version.source?.kind ?? null,
+      importOrigin:
+        version.source?.kind === "import"
+          ? importOriginOf(version.source)
+          : null,
+      createdAt: version.createdAt.toISOString(),
       author: authorUser
         ? { id: authorUser.id, name: authorUser.name, image: authorUser.image }
         : null,
@@ -350,7 +355,9 @@ const config = {
     "List one document's version history, newest first, with a before cursor " +
     "for older pages. Each version carries its number, stamp, label, " +
     "description, the words added and removed against its predecessor, its " +
-    "author, and the file attached to it; tombstoned versions are left out. " +
+    "author, the file attached to it, and, for a file imported from another " +
+    "system, its importOrigin (source, id, original dates and author); " +
+    "tombstoned versions are left out. " +
     "The response also names the entity's current version.",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,

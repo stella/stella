@@ -1,8 +1,9 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import englishMessages from "@/i18n/langs/en.json";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "https://app.example.test" });
 const { getFormatter } = await import("@/i18n/i18n-store");
@@ -11,7 +12,7 @@ const { cleanup, fireEvent, render } = await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const { QueryClient, QueryClientProvider, QueryObserver, useQuery } =
   await import("@tanstack/react-query");
-const { useQueryView } = await import("@/lib/use-query-view");
+const { queryView } = await import("@/lib/query-view.logic");
 const { OverviewTimeRead, OverviewTimeTrend } =
   await import("./overview-time-read");
 
@@ -38,7 +39,7 @@ for (const site of ["current-week", "previous-week", "team-week"]) {
       return { totalMinutes: 120, viewerTotalMinutes: 120 };
     };
     const Read = () => {
-      const view = useQueryView(
+      const view = queryView(
         useQuery({ queryKey: [site], queryFn: readSummary }),
       );
       return (
@@ -88,7 +89,7 @@ for (const site of ["current-week", "previous-week", "team-week"]) {
         viewerTotalMinutes: totalMinutes,
       });
       const Read = () => {
-        const view = useQueryView(
+        const view = queryView(
           useQuery({
             queryKey: [site],
             initialData: { totalMinutes, viewerTotalMinutes: totalMinutes },

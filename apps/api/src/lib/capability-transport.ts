@@ -46,13 +46,13 @@ export type CapabilityTransportAlternative =
 /** The body field carrying bytes, for a capability that accepts a file. */
 export type CapabilityFileInput = {
   /**
-   * Body property whose schema is `format: "binary"` (`t.File()`/`t.Files()`).
+   * Body property whose schema is `format: "binary"` (a file, or a list of files).
    * The exporter cross-checks this against the live schema, so it cannot name a
    * field that is not there.
    */
   field: string;
   /**
-   * `false` when the field is `t.Optional(...)`, which means the capability has
+   * `false` when the field is `v.optional(...)`, which means the capability has
    * a fileless mode: it stays invokable over JSON as long as the field is
    * omitted. The exporter cross-checks this against the schema's `required`
    * list, so flipping optionality fails the export until the transport is
@@ -61,9 +61,9 @@ export type CapabilityFileInput = {
   required: boolean;
   /**
    * Media types the handler accepts, as enforced in the handler body (empty when
-   * it accepts any). Not derivable from the schema: `t.File()` carries only a
+   * it accepts any). Not derivable from the schema: a file schema carries only a
    * size cap. The cap itself is not repeated here — it is already in the entry's
-   * `inputSchema` as `maxSize`, and a second copy would be a drift surface.
+   * `inputSchema` as `x-maxBytes`, and a second copy would be a drift surface.
    */
   mediaTypes: readonly string[];
 };

@@ -4,7 +4,7 @@ import type { ComponentProps, ReactNode } from "react";
 
 import { ChevronDownIcon } from "../icons";
 import { cn } from "../lib/utils";
-import { Button } from "./button";
+import { Button, BUTTON_CONTENT } from "./button";
 import { Menu, MenuTrigger } from "./menu";
 import { Popover, PopoverTrigger } from "./popover";
 
@@ -20,9 +20,15 @@ type SplitButtonSharedProps = {
   className?: string;
 };
 
+// Rich primary content names itself through `primaryLabel` and says what it
+// shows: a glyph alone gets that name as its tooltip, visible text gets none.
 type SplitButtonPrimary =
-  | { children: ReactNode; primaryLabel: string }
-  | { children: string; primaryLabel?: never };
+  | {
+      children: ReactNode;
+      primaryContent: (typeof BUTTON_CONTENT)[keyof typeof BUTTON_CONTENT];
+      primaryLabel: string;
+    }
+  | { children: string; primaryContent?: never; primaryLabel?: never };
 
 type SplitButtonProps = SplitButtonSharedProps &
   SplitButtonPrimary &
@@ -39,7 +45,12 @@ type SplitButtonProps = SplitButtonSharedProps &
       }
   );
 
-/** Two independent actions share quiet chrome; only the chevron opens the secondary surface. */
+/**
+ * Two independent actions share quiet chrome; only the chevron opens the
+ * secondary surface. The chrome is quiet, not the glyphs: both halves keep the
+ * foreground colour of every other ghost button, so an enabled split button
+ * never reads as disabled beside its neighbours.
+ */
 export const SplitButton = (props: SplitButtonProps) => {
   const {
     primaryLabel,
@@ -57,11 +68,12 @@ export const SplitButton = (props: SplitButtonProps) => {
   const triggerButton = (
     <Button
       className={cn(
-        "text-muted-foreground group-hover/split:bg-muted group-focus-within/split:bg-muted hover:bg-accent hover:text-foreground active:bg-accent/80 data-popup-open:bg-accent rounded-md [&_svg]:mx-0",
+        "group-hover/split:bg-muted group-focus-within/split:bg-muted hover:bg-accent active:bg-accent/80 data-popup-open:bg-accent rounded-md [&_svg]:mx-0",
         size === "sm" ? "h-7 w-3.5 px-0 sm:h-7" : "h-8 w-4 px-0 sm:h-8",
         "pointer-coarse:min-h-11 pointer-coarse:min-w-11",
       )}
       size="sm"
+      tooltip={menuLabel}
       variant="ghost"
     />
   );
@@ -78,13 +90,18 @@ export const SplitButton = (props: SplitButtonProps) => {
         aria-describedby={primaryDescriptionId}
         aria-label={primaryLabel}
         className={cn(
-          "text-muted-foreground hover:text-foreground active:bg-accent/80 rounded-md [&_svg]:mx-0 [&_svg]:size-3.5 [&_svg:not([class*='size-'])]:size-3.5 sm:[&_svg:not([class*='size-'])]:size-3.5",
+          "active:bg-accent/80 rounded-md [&_svg]:mx-0 [&_svg]:size-3.5 [&_svg:not([class*='size-'])]:size-3.5 sm:[&_svg:not([class*='size-'])]:size-3.5",
           size === "sm" ? "h-7 ps-1.5 pe-0.5 sm:h-7" : "h-8 ps-2 pe-0.5 sm:h-8",
           "pointer-coarse:min-h-11 pointer-coarse:min-w-11",
         )}
         disabled={primaryDisabled}
         onClick={onPrimaryClick}
         size="sm"
+        tooltip={
+          props.primaryContent === BUTTON_CONTENT.icon
+            ? primaryLabel
+            : undefined
+        }
         variant="ghost"
       >
         {children}

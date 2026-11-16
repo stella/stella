@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import type { SQL, TransactionSQL } from "bun";
 import { describe, expect, test } from "bun:test";
 
+import { waitForExternalState } from "@stll/property-testing/external-state";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
@@ -17,21 +18,21 @@ import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { ORGANIZATION_DELETION_FOR_TEST_SQL } from "@/api/tests/helpers/organization-deletion";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
 const waitUntilBlocked = async (observer: SQL, pid: number) => {
-  const deadline = Date.now() + 3000;
-  while (Date.now() < deadline) {
-    const [row] = await observer`
-      SELECT cardinality(pg_blocking_pids(${pid}::int)) > 0 AS blocked`;
-    if (row?.blocked === true) {
-      return;
-    }
-    await Bun.sleep(10);
-  }
-  panic(`backend ${String(pid)} never blocked`);
+  await waitForExternalState({
+    description: `backend ${String(pid)} waits on a lock`,
+    timeoutMs: 3000,
+    read: async () => {
+      const [row] = await observer`
+        SELECT cardinality(pg_blocking_pids(${pid}::int)) > 0 AS blocked`;
+      return row?.blocked === true;
+    },
+  });
 };
 
 const backendPid = async (client: SQL): Promise<number> => {
@@ -262,7 +263,9 @@ describe.skipIf(!runPostgresTests)(
                 first,
                 ...(second === undefined ? [] : [second]),
               ]);
-              await observer`DELETE FROM organization WHERE id = ${fixture.organizationId}`;
+              await observer.unsafe(ORGANIZATION_DELETION_FOR_TEST_SQL("$1"), [
+                fixture.organizationId,
+              ]);
             }
           });
         }, 20_000);
@@ -302,7 +305,9 @@ describe.skipIf(!runPostgresTests)(
             await tx`ALTER TABLE flow_run_steps VALIDATE CONSTRAINT flow_run_steps_review_task_entity_id_entities_id_fk`;
           });
         } finally {
-          await client`DELETE FROM organization WHERE id = ${fixture.organizationId}`;
+          await client.unsafe(ORGANIZATION_DELETION_FOR_TEST_SQL("$1"), [
+            fixture.organizationId,
+          ]);
         }
       });
     }, 20_000);
@@ -434,7 +439,9 @@ describe.skipIf(!runPostgresTests)(
             );
           }
         } finally {
-          await client`DELETE FROM organization WHERE id = ${fixture.organizationId}`;
+          await client.unsafe(ORGANIZATION_DELETION_FOR_TEST_SQL("$1"), [
+            fixture.organizationId,
+          ]);
         }
       });
     }, 20_000);
@@ -498,7 +505,9 @@ describe.skipIf(!runPostgresTests)(
             },
           );
         } finally {
-          await client`DELETE FROM organization WHERE id = ${fixture.organizationId}`;
+          await client.unsafe(ORGANIZATION_DELETION_FOR_TEST_SQL("$1"), [
+            fixture.organizationId,
+          ]);
         }
       });
     }, 20_000);
@@ -560,7 +569,9 @@ describe.skipIf(!runPostgresTests)(
           );
           expect(after).toEqual(before);
         } finally {
-          await client`DELETE FROM organization WHERE id = ${fixture.organizationId}`;
+          await client.unsafe(ORGANIZATION_DELETION_FOR_TEST_SQL("$1"), [
+            fixture.organizationId,
+          ]);
         }
       });
     }, 20_000);
@@ -718,7 +729,9 @@ describe.skipIf(!runPostgresTests)(
             ]);
           }
         } finally {
-          await observer`DELETE FROM organization WHERE id = ${fixture.organizationId}`;
+          await observer.unsafe(ORGANIZATION_DELETION_FOR_TEST_SQL("$1"), [
+            fixture.organizationId,
+          ]);
         }
       });
     }, 20_000);

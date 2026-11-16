@@ -1,3 +1,4 @@
+import { ownEntry } from "@stll/api-contract/own-key";
 import { validateIco as validateAresIco } from "@stll/business-registries/ares";
 /**
  * Registry lookup fields.
@@ -96,6 +97,7 @@ import type {
 import {
   BUSINESS_REGISTRY_DISPATCH,
   executeRegistryLookup,
+  NO_REGISTRY_WEB_SEARCH,
 } from "@/api/lib/business-registries/dispatch";
 
 import {
@@ -199,6 +201,7 @@ export const createDispatchLookupResolver =
       };
     }
     const response = await executeRegistryLookup({
+      loadWebSearch: NO_REGISTRY_WEB_SEARCH,
       handler,
       query,
       observer,
@@ -243,14 +246,15 @@ const wordsFromCode = (value: string): string => value.replaceAll("-", " ");
 const companiesHouseLegalFormName = (value: string | null): string | null =>
   value === null
     ? null
-    : (COMPANIES_HOUSE_LEGAL_FORM_NAMES[value] ?? wordsFromCode(value));
+    : (ownEntry(COMPANIES_HOUSE_LEGAL_FORM_NAMES, value) ??
+      wordsFromCode(value));
 
 const companiesHouseJurisdictionName = (
   value: string | null | undefined,
 ): string | null =>
   value === null || value === undefined
     ? null
-    : (COMPANIES_HOUSE_JURISDICTION_NAMES[value] ??
+    : (ownEntry(COMPANIES_HOUSE_JURISDICTION_NAMES, value) ??
       `${wordsFromCode(value).charAt(0).toUpperCase()}${wordsFromCode(value).slice(1)}`);
 
 const addressText = (hit: BusinessRegistryHit): string | null =>
@@ -411,120 +415,152 @@ const orsrDetailTokens = (
 const lookupTemplateTokens = (
   hit: BusinessRegistryHit,
 ): Record<string, string | null | undefined> => {
-  const tokens: Record<string, string | null | undefined> = {
-    "company name": hit.name,
-    "legal form": hit.legalForm,
-    seat: hit.address?.city ?? null,
-    address: hit.address?.textAddress ?? null,
-    "registry number": hit.id,
-    "postal code": hit.address?.postalCode ?? null,
-    country: hit.address?.country ?? null,
-  };
+  const tokens = new Map<string, string | null | undefined>([
+    ["company name", hit.name],
+    ["legal form", hit.legalForm],
+    ["seat", hit.address?.city ?? null],
+    ["address", hit.address?.textAddress ?? null],
+    ["registry number", hit.id],
+    ["postal code", hit.address?.postalCode ?? null],
+    ["country", hit.address?.country ?? null],
+  ]);
   // Derived from the hit itself, not from `details`: the built-in ARES default
   // uses this token and must still render for a hit carrying no particulars.
   if (hit.registry === "ares") {
-    tokens[ARES_IDENTIFIER_SPACED_TOKEN] = formatAresIdentifierSpaced(hit.id);
+    tokens.set(
+      ARES_IDENTIFIER_SPACED_TOKEN,
+      formatAresIdentifierSpaced(hit.id),
+    );
   }
   // Same for the Slovak IČO, which an ORSR search row carries without any
   // extract particulars. The Slovak grouping is "dd ddd ddd", not the Czech
   // "ddd dd ddd", so the two registries keep separate formatters.
   if (hit.registry === "orsr") {
-    tokens[ORSR_IDENTIFIER_SPACED_TOKEN] = formatOrsrIdentifierSpaced(hit.id);
+    tokens.set(
+      ORSR_IDENTIFIER_SPACED_TOKEN,
+      formatOrsrIdentifierSpaced(hit.id),
+    );
   }
   if (hit.registry === "brreg") {
-    tokens[BRREG_IDENTIFIER_SPACED_TOKEN] = formatBrregIdentifierSpaced(hit.id);
+    tokens.set(
+      BRREG_IDENTIFIER_SPACED_TOKEN,
+      formatBrregIdentifierSpaced(hit.id),
+    );
   }
   if (hit.registry === "companies-house") {
-    tokens["legal form"] = companiesHouseLegalFormName(hit.legalForm);
+    tokens.set("legal form", companiesHouseLegalFormName(hit.legalForm));
   }
   const details = hit.details;
   if (details === undefined) {
-    return tokens;
+    return Object.fromEntries(tokens);
   }
   switch (details.registry) {
     case "ares": {
       const { company } = details;
-      tokens["legal form"] = company.legalForm
-        ? (getAresLegalFormName(company.legalForm) ?? company.legalForm)
-        : null;
-      tokens["share capital"] = company.shareCapital;
-      tokens["court file"] = formatCourtFile(company.courtFile);
-      tokens[ARES_COURT_INSTRUMENTAL_TOKEN] = company.courtFile
-        ? getAresCourtNameInstrumental(company.courtFile.court)
-        : null;
-      tokens[ARES_COURT_GENITIVE_TOKEN] = company.courtFile
-        ? getAresCourtNameGenitive(company.courtFile.court)
-        : null;
-      tokens[ARES_FILE_REFERENCE_TOKEN] =
+      tokens.set(
+        "legal form",
+        company.legalForm
+          ? (getAresLegalFormName(company.legalForm) ?? company.legalForm)
+          : null,
+      );
+      tokens.set("share capital", company.shareCapital);
+      tokens.set("court file", formatCourtFile(company.courtFile));
+      tokens.set(
+        ARES_COURT_INSTRUMENTAL_TOKEN,
+        company.courtFile
+          ? getAresCourtNameInstrumental(company.courtFile.court)
+          : null,
+      );
+      tokens.set(
+        ARES_COURT_GENITIVE_TOKEN,
+        company.courtFile
+          ? getAresCourtNameGenitive(company.courtFile.court)
+          : null,
+      );
+      tokens.set(
+        ARES_FILE_REFERENCE_TOKEN,
         company.courtFile?.section.trim() && company.courtFile.insert.trim()
           ? `${company.courtFile.section.trim()} ${company.courtFile.insert.trim()}`
-          : null;
-      tokens["registered on"] =
+          : null,
+      );
+      tokens.set(
+        "registered on",
         company.dateRegistered === null
           ? null
-          : formatAresDate(company.dateRegistered);
-      tokens["acting clause"] = company.actingClause;
-      tokens["statutory bodies"] = company.statutoryBodies
-        .map(({ organName, members }) =>
-          [
-            organName,
-            ...members.map(({ name, role, address, since }) =>
-              [
-                name,
-                role,
-                address,
-                since ? `od ${formatAresDate(since)}` : null,
-              ]
-                .filter((part) => part !== null && part !== "")
-                .join(", "),
-            ),
-          ].join("\n"),
-        )
-        .join("\n\n");
+          : formatAresDate(company.dateRegistered),
+      );
+      tokens.set("acting clause", company.actingClause);
+      tokens.set(
+        "statutory bodies",
+        company.statutoryBodies
+          .map(({ organName, members }) =>
+            [
+              organName,
+              ...members.map(({ name, role, address, since }) =>
+                [
+                  name,
+                  role,
+                  address,
+                  since ? `od ${formatAresDate(since)}` : null,
+                ]
+                  .filter((part) => part !== null && part !== "")
+                  .join(", "),
+              ),
+            ].join("\n"),
+          )
+          .join("\n\n"),
+      );
       break;
     }
     case "orsr": {
-      Object.assign(tokens, orsrDetailTokens(details.company));
+      for (const [key, value] of Object.entries(
+        orsrDetailTokens(details.company),
+      )) {
+        tokens.set(key, value);
+      }
       break;
     }
     case "krs": {
       const { entity } = details;
-      tokens["seat"] = entity.registeredSeat?.locality ?? null;
-      tokens["registry number"] = entity.krsNumber;
-      tokens["NIP"] = entity.identifiers.nip;
-      tokens["REGON"] = entity.identifiers.regon;
-      tokens["share capital"] =
+      tokens.set("seat", entity.registeredSeat?.locality ?? null);
+      tokens.set("registry number", entity.krsNumber);
+      tokens.set("NIP", entity.identifiers.nip);
+      tokens.set("REGON", entity.identifiers.regon);
+      tokens.set(
+        "share capital",
         entity.shareCapital === null
           ? null
-          : `${entity.shareCapital.amount} ${entity.shareCapital.currency}`;
-      tokens["registered on"] = entity.registeredAt;
+          : `${entity.shareCapital.amount} ${entity.shareCapital.currency}`,
+      );
+      tokens.set("registered on", entity.registeredAt);
       break;
     }
     case "companies-house": {
       const { company } = details;
-      tokens["legal form"] = companiesHouseLegalFormName(company.type);
-      tokens["registry number"] = company.companyNumber;
-      tokens["registered on"] = company.dateOfCreation;
-      tokens["jurisdiction"] = companiesHouseJurisdictionName(
-        company.jurisdiction,
+      tokens.set("legal form", companiesHouseLegalFormName(company.type));
+      tokens.set("registry number", company.companyNumber);
+      tokens.set("registered on", company.dateOfCreation);
+      tokens.set(
+        "jurisdiction",
+        companiesHouseJurisdictionName(company.jurisdiction),
       );
       break;
     }
     case "denue": {
       const { establishment } = details;
-      tokens["registry number"] = establishment.id;
+      tokens.set("registry number", establishment.id);
       break;
     }
     case "brreg": {
       const { entity } = details;
-      tokens["registry number"] = entity.orgnr;
-      tokens["registered on"] = entity.registeredAt;
+      tokens.set("registry number", entity.orgnr);
+      tokens.set("registered on", entity.registeredAt);
       break;
     }
     case "prh": {
       const { company } = details;
-      tokens["registry number"] = company.businessId;
-      tokens["registered on"] = company.registeredAt;
+      tokens.set("registry number", company.businessId);
+      tokens.set("registered on", company.registeredAt);
       break;
     }
     case "recherche-entreprises": {
@@ -533,40 +569,49 @@ const lookupTemplateTokens = (
       // sets it to the matched establishment's SIRET (14 digits) for a branch
       // lookup, falling back to the SIREN — overriding with `company.siren`
       // would drop the SIRET that selected the address.
-      tokens["SIREN"] = company.siren;
-      tokens["SIRET"] = company.matchedEstablishment?.siret ?? null;
-      tokens[SIREN_SPACED_TOKEN] = formatSirenSpaced(company.siren);
-      tokens[SIRET_SPACED_TOKEN] = company.matchedEstablishment
-        ? formatSiretSpaced(company.matchedEstablishment.siret)
-        : null;
-      tokens["head office address"] =
-        company.headOffice?.address?.textAddress ?? null;
-      tokens["registered on"] = company.registeredAt;
+      tokens.set("SIREN", company.siren);
+      tokens.set("SIRET", company.matchedEstablishment?.siret ?? null);
+      tokens.set(SIREN_SPACED_TOKEN, formatSirenSpaced(company.siren));
+      tokens.set(
+        SIRET_SPACED_TOKEN,
+        company.matchedEstablishment
+          ? formatSiretSpaced(company.matchedEstablishment.siret)
+          : null,
+      );
+      tokens.set(
+        "head office address",
+        company.headOffice?.address?.textAddress ?? null,
+      );
+      tokens.set("registered on", company.registeredAt);
       break;
     }
     case "edgar": {
       const { company } = details;
-      tokens["registry number"] = company.cik;
-      tokens["EIN"] = company.ein;
-      tokens[EIN_DASHED_TOKEN] =
-        company.ein === null ? null : formatEinDashed(company.ein);
+      tokens.set("registry number", company.cik);
+      tokens.set("EIN", company.ein);
+      tokens.set(
+        EIN_DASHED_TOKEN,
+        company.ein === null ? null : formatEinDashed(company.ein),
+      );
       break;
     }
     case "gcis": {
       const { company } = details;
-      tokens["registry number"] = company.taxId;
-      tokens["registering authority"] = company.registerOrganization;
-      tokens["registered on"] = company.setupDate;
+      tokens.set("registry number", company.taxId);
+      tokens.set("registering authority", company.registerOrganization);
+      tokens.set("registered on", company.setupDate);
       break;
     }
     case "rpo": {
-      tokens["registered on"] = details.entity.establishedAt;
+      tokens.set("registered on", details.entity.establishedAt);
       break;
     }
     case "vies": {
       const { validation } = details;
-      tokens["VAT number"] =
-        `${validation.vatNumber.country}${validation.vatNumber.vat}`;
+      tokens.set(
+        "VAT number",
+        `${validation.vatNumber.country}${validation.vatNumber.vat}`,
+      );
       break;
     }
     default: {
@@ -575,7 +620,7 @@ const lookupTemplateTokens = (
       return assertNever(details);
     }
   }
-  return tokens;
+  return Object.fromEntries(tokens);
 };
 
 /** Deterministic rendering of the author's format template: [tokens] are
@@ -750,7 +795,12 @@ export const resolveLookupFields = async ({
       // resolves them directly (the base value at `field.path` is a string, so
       // a nested walk would miss `<key>`); duplicate keys keep the last template.
       writeKeyed: (key, value) => {
-        resolved[`${field.path}.${key}`] = value;
+        Object.defineProperty(resolved, `${field.path}.${key}`, {
+          value,
+          enumerable: true,
+          configurable: true,
+          writable: true,
+        });
       },
     });
   }
@@ -874,7 +924,12 @@ export const applyLookupFields = async (
     return resolution.errors.map((e) => e.message).join(" ");
   }
   for (const [key, value] of Object.entries(resolution.values)) {
-    values[key] = value;
+    Object.defineProperty(values, key, {
+      value,
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
   }
   return null;
 };

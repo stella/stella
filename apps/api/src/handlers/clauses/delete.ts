@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { clauses } from "@/api/db/schema";
@@ -9,11 +9,11 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
-const deleteClauseParamsSchema = t.Object({
-  clauseId: tSafeId("clause", { description: "Clause id to delete" }),
+const deleteClauseParamsSchema = v.object({
+  clauseId: resourceIdSchema("clause", { description: "Clause id to delete" }),
 });
 
 type DeleteClauseProps = {

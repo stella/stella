@@ -4,13 +4,19 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
-import { Button } from "@stll/ui/button";
-import { ExternalLinkIcon, MonitorIcon, TerminalIcon } from "@stll/ui/icons";
+import { Button, buttonVariants } from "@stll/ui/button";
+import {
+  ExternalLinkIcon,
+  GlobeIcon,
+  MonitorIcon,
+  TerminalIcon,
+} from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { AIProviderIcon } from "@/components/ai-provider-icons";
 import { AssistantSetup } from "@/components/assistant-setup";
 import { DesktopDownloadButtons } from "@/components/desktop-download-buttons";
+import { useBrowserExtensionStoreUrl } from "@/features/chat/browser-control/use-browser-extension-store-url";
 import { DesktopConnectionStatus } from "@/features/desktop/desktop-connection-status";
 import { useDesktopAccountConnection } from "@/features/desktop/use-desktop-account-connection";
 import { useHydrationSafeDesktopPlatform } from "@/hooks/use-hydration-safe-desktop-platform";
@@ -23,7 +29,7 @@ import { ClipboardWorkflowPreview } from "@/routes/onboarding/-components/clipbo
  * list, the footer button's next-card lookup, and the last-card check,
  * so reordering cards can never desync the walkthrough flow.
  */
-const DOWNLOAD_TARGETS = ["desktop", "assistant"] as const;
+const DOWNLOAD_TARGETS = ["desktop", "assistant", "browser"] as const;
 
 export type DownloadTarget = (typeof DOWNLOAD_TARGETS)[number];
 
@@ -38,7 +44,8 @@ type DownloadStepProps = {
 /**
  * Last wizard step. The desktop app is the one thing set up here; the
  * assistant card only announces the plugin and hands the walkthrough to
- * the docs.
+ * the docs, and the browser card links the store listing where the released
+ * extension connects.
  */
 export const DownloadStep = ({
   onNext,
@@ -47,11 +54,13 @@ export const DownloadStep = ({
   onSelect,
 }: DownloadStepProps) => {
   const t = useTranslations();
+  const browserExtensionStoreUrl = useBrowserExtensionStoreUrl();
+  const targets = DOWNLOAD_TARGETS.filter(
+    (target) => target !== "browser" || browserExtensionStoreUrl !== null,
+  );
   // Footer walkthrough: while a next card exists the primary button
   // advances the highlight; on the last card it lands the user in the app.
-  const nextTarget = DOWNLOAD_TARGETS.at(
-    DOWNLOAD_TARGETS.indexOf(selected) + 1,
-  );
+  const nextTarget = targets.at(targets.indexOf(selected) + 1);
 
   return (
     <>
@@ -77,6 +86,15 @@ export const DownloadStep = ({
           selected={selected === "assistant"}
           title={t("onboarding.mcpCardTitle")}
         />
+        {browserExtensionStoreUrl !== null && (
+          <TargetCard
+            description={t("onboarding.browserExtensionCardDescription")}
+            icon={<GlobeIcon className="text-muted-foreground size-4" />}
+            onSelect={() => onSelect("browser")}
+            selected={selected === "browser"}
+            title={t("settings.connections.browserExtensionTitle")}
+          />
+        )}
       </div>
 
       {/* Below md the wizard hides the whole preview column, which is the
@@ -123,6 +141,8 @@ export const DownloadSetupPreview = ({ target }: DownloadSetupPreviewProps) => {
       return <DesktopSetupPanel />;
     case "assistant":
       return <AssistantPanel />;
+    case "browser":
+      return <BrowserExtensionPanel />;
     default:
       target satisfies never;
       return panic(`Unknown download target: ${String(target)}`);
@@ -144,18 +164,22 @@ const TargetCard = ({
   selected,
   onSelect,
 }: TargetCardProps) => (
-  <button
+  // A no-fill wrapper: the card inside draws the border, the hover tint and a
+  // selected state distinct from hover (foreground border and ring).
+  <Button
     aria-pressed={selected}
+    className="group w-full"
     onClick={onSelect}
-    type="button"
-    className={cn(
-      "rounded-lg border p-4 text-start",
-      selected
-        ? "border-foreground bg-accent/60 ring-foreground/20 ring-1"
-        : "border-border hover:bg-muted/40",
-    )}
+    variant="plain"
   >
-    <div className="flex items-start gap-3">
+    <div
+      className={cn(
+        "flex w-full items-start gap-3 rounded-lg border p-4 text-start",
+        selected
+          ? "border-foreground bg-accent/60 ring-foreground/20 ring-1"
+          : "border-border group-hover:bg-muted/40",
+      )}
+    >
       {/* Fixed to the widest icon (the assistant pair) so titles align. */}
       <span className="mt-0.5 flex w-7 shrink-0 items-center">{icon}</span>
       <div className="min-w-0 flex-1">
@@ -163,7 +187,7 @@ const TargetCard = ({
         <p className="text-muted-foreground mt-1 text-sm">{description}</p>
       </div>
     </div>
-  </button>
+  </Button>
 );
 
 /** Compact Claude and ChatGPT marks for the assistant card's icon slot. */
@@ -233,7 +257,7 @@ const AssistantPanel = () => {
 const DesktopSetupPanel = () => {
   const t = useTranslations();
   const platform = useHydrationSafeDesktopPlatform();
-  const { connect, state } = useDesktopAccountConnection();
+  const { connect, state, switchAccount } = useDesktopAccountConnection();
   const shortcut = platform === "mac" ? "⌘ ⇧ V" : "Ctrl + Shift + V";
   const copyShortcut = platform === "mac" ? "⌘ C" : "Ctrl + C";
 
@@ -255,9 +279,12 @@ const DesktopSetupPanel = () => {
       </p>
       <DesktopDownloadButtons platform={platform} />
       <Button
-        loading={state.status === "connecting"}
+        loading={state.status === "connecting" || state.status === "opening"}
         onClick={() => {
-          detached(connect(), "onboarding-download-step.connect-desktop");
+          detached(
+            connect("explicit"),
+            "onboarding-download-step.connect-desktop",
+          );
         }}
         type="button"
         variant="outline"
@@ -266,10 +293,42 @@ const DesktopSetupPanel = () => {
       </Button>
       <DesktopConnectionStatus
         onRetry={() => {
-          detached(connect(), "onboarding-download-step.connect-desktop");
+          detached(
+            connect("explicit"),
+            "onboarding-download-step.connect-desktop",
+          );
         }}
+        onSwitchAccount={switchAccount}
         state={state}
       />
+    </SetupPanel>
+  );
+};
+
+const BrowserExtensionPanel = () => {
+  const t = useTranslations();
+  const storeUrl = useBrowserExtensionStoreUrl();
+  if (storeUrl === null) {
+    return panic("The browser card is only offered with a store listing");
+  }
+
+  return (
+    <SetupPanel title={t("settings.connections.browserExtensionTitle")}>
+      <p className="text-muted-foreground text-sm leading-relaxed text-pretty">
+        {t("settings.connections.browserExtensionDescription")}
+      </p>
+      <a
+        className={cn(buttonVariants(), "w-full sm:w-fit")}
+        href={sanitizeHref(storeUrl)}
+        rel="noreferrer"
+        target="_blank"
+      >
+        <ExternalLinkIcon />
+        {t("settings.connections.browserExtensionInstall")}
+      </a>
+      <p className="text-muted-foreground text-xs">
+        {t("settings.connections.browserExtensionConnectHint")}
+      </p>
     </SetupPanel>
   );
 };

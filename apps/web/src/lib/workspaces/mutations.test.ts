@@ -1,19 +1,12 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
+
+import { createTestState } from "@stll/test-state";
 
 import type { WorkspaceUpdate } from "@/lib/workspaces/mutations";
 
-const previousApiUrl = process.env["VITE_API_URL"];
-
-beforeAll(() => {
-  process.env["VITE_API_URL"] = previousApiUrl ?? "https://api.example.test";
-});
-
-afterAll(() => {
-  if (previousApiUrl === undefined) {
-    delete process.env["VITE_API_URL"];
-    return;
-  }
-  process.env["VITE_API_URL"] = previousApiUrl;
+const state = createTestState({ file: import.meta.path, config: {} });
+state.beforeAll(() => {
+  state.setEnvIfAbsent("VITE_API_URL", "https://api.example.test");
 });
 
 describe("workspace update cache invalidation", () => {
@@ -55,6 +48,7 @@ describe("workspace update cache invalidation", () => {
       clientId: {
         type: "clientId",
         value: "contact_test",
+        expectedClientId: null,
       },
       color: { type: "color", value: "purple" },
       leadUserId: {
@@ -91,7 +85,16 @@ describe("workspace update cache invalidation", () => {
     const contactId = toSafeId<"contact">("contact_test");
 
     const bodies = [
-      workspaceUpdateBody({ type: "clientId", value: "contact_test" }),
+      workspaceUpdateBody({
+        type: "clientId",
+        value: "contact_test",
+        expectedClientId: null,
+      }),
+      workspaceUpdateBody({
+        type: "clientId",
+        value: "contact_test",
+        expectedClientId: "contact_previous",
+      }),
       workspaceUpdateBody({ type: "color", value: "purple" }),
       workspaceUpdateBody({ type: "color", value: null }),
       workspaceUpdateBody({ type: "leadUserId", value: "user_test" }),
@@ -101,7 +104,11 @@ describe("workspace update cache invalidation", () => {
     ];
 
     expect(bodies).toEqual([
-      { clientId: contactId },
+      { clientId: contactId, expectedClientId: null },
+      {
+        clientId: contactId,
+        expectedClientId: toSafeId<"contact">("contact_previous"),
+      },
       { color: "purple" },
       { color: null },
       { leadUserId: "user_test" },

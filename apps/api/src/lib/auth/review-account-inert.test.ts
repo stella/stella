@@ -2,8 +2,10 @@ import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { organization, twoFactor } from "better-auth/plugins";
 import { Result } from "better-result";
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import * as v from "valibot";
+
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import { authCapabilitiesRoute } from "@/api/handlers/auth/routes";
@@ -12,29 +14,27 @@ import { resolveEmailAndPasswordOptions } from "@/api/lib/auth/password-sign-in-
 import { checkRestrictedAccountOperation } from "@/api/lib/auth/review-account";
 import { createReviewAccountPlugin } from "@/api/lib/auth/review-account-plugin";
 import { narrowReviewOrganizationScopes } from "@/api/lib/auth/review-account-policy";
+import { resolveMachineApiKeySession } from "@/api/mcp/api-key-auth";
 import { authenticateMcpRequest } from "@/api/mcp/auth";
 import { MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
+import { serveRoutesForTest } from "@/api/tests/helpers/serve-routes";
+
+const testState = createTestState({ file: import.meta.path, config: env });
+
+const routeServer = serveRoutesForTest(authCapabilitiesRoute);
 
 const email = "member@example.test";
 const password = "fixture password for tests";
 const unconfigured = { email: undefined, organizationId: undefined };
 
-const previous = {
-  email: env.APP_REVIEW_ACCOUNT_EMAIL,
-  organizationId: env.APP_REVIEW_ORGANIZATION_ID,
-  demoEmail: env.DEMO_ACCOUNT_EMAIL,
-};
-
-beforeAll(() => {
-  env.APP_REVIEW_ACCOUNT_EMAIL = undefined;
-  env.APP_REVIEW_ORGANIZATION_ID = undefined;
-  env.DEMO_ACCOUNT_EMAIL = undefined;
+testState.beforeAll(() => {
+  testState.setConfig("APP_REVIEW_ACCOUNT_EMAIL", undefined);
+  testState.setConfig("APP_REVIEW_ORGANIZATION_ID", undefined);
+  testState.setConfig("DEMO_ACCOUNT_EMAIL", undefined);
 });
 
-afterAll(() => {
-  env.APP_REVIEW_ACCOUNT_EMAIL = previous.email;
-  env.APP_REVIEW_ORGANIZATION_ID = previous.organizationId;
-  env.DEMO_ACCOUNT_EMAIL = previous.demoEmail;
+afterAll(async () => {
+  await routeServer.stop();
 });
 
 /** The same auth setup with and without the review-account plugin. */
@@ -156,7 +156,7 @@ const runScenario = async (localPasswordEnabled: boolean) => {
 
 describe("restricted review account, unconfigured", () => {
   test("capabilities offer no restricted password sign-in", async () => {
-    const response = await authCapabilitiesRoute.handle(
+    const response = await routeServer.fetch(
       new Request("http://localhost/auth/capabilities"),
     );
     const body = v.parse(
@@ -200,6 +200,7 @@ describe("restricted review account, unconfigured", () => {
       ).scopes,
     ).toEqual(scopes);
     const authenticated = await authenticateMcpRequest("credential.fixture", {
+      resolveApiKeySession: resolveMachineApiKeySession,
       verifyToken: async () => ({
         sub: "user_one",
         org_id: "org_any",

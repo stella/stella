@@ -59,6 +59,14 @@ describe("chat compaction queue claim", () => {
     // deliberately never form a checkpoint.
     expect(sql).toContain("thread.used_anonymization = false");
   });
+
+  test("does not snapshot mutable tenant scope into queued work", () => {
+    const { sql } = dialect.sqlToQuery(
+      buildClaimChatCompactionQueueQuery({ leaseExpiresAt, now }),
+    );
+
+    expect(sql).not.toContain("data_workspace_ids");
+  });
 });
 
 describe("chat compaction queue settlement", () => {
@@ -137,13 +145,12 @@ describe("chat compaction queue settlement", () => {
 describe("chat compaction queue row parsing", () => {
   const claimedRow = () => ({
     chatModel: "anthropic::claude-sonnet-4",
-    dataWorkspaceIds: [Bun.randomUUIDv7()],
     organizationId: Bun.randomUUIDv7(),
     threadId: Bun.randomUUIDv7(),
     userId: Bun.randomUUIDv7(),
   });
 
-  test("carries the thread's own tenant, owner and matter scope", () => {
+  test("carries the thread's own tenant and owner", () => {
     const row = claimedRow();
 
     const { malformedRowCount, threads } = parseChatCompactionQueueRows([row]);
@@ -152,9 +159,6 @@ describe("chat compaction queue row parsing", () => {
     expect(threads).toEqual([
       {
         chatModel: row.chatModel,
-        dataWorkspaceIds: row.dataWorkspaceIds.map((id) =>
-          toSafeId<"workspace">(id),
-        ),
         organizationId: toSafeId<"organization">(row.organizationId),
         threadId: toSafeId<"chatThread">(row.threadId),
         userId: toSafeId<"user">(row.userId),
@@ -188,15 +192,6 @@ describe("chat compaction queue row parsing", () => {
     expect(threads.map(({ threadId }) => threadId)).toEqual([
       toSafeId<"chatThread">(valid.threadId),
     ]);
-  });
-
-  test("skips a row with a non-array matter scope", () => {
-    const { malformedRowCount, threads } = parseChatCompactionQueueRows([
-      { ...claimedRow(), dataWorkspaceIds: "not-an-array" },
-    ]);
-
-    expect(malformedRowCount).toBe(1);
-    expect(threads).toEqual([]);
   });
 
   test("skips a row that is not an object at all", () => {

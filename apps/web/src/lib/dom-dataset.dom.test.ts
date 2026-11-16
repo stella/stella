@@ -1,7 +1,7 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, expect, test } from "bun:test";
 
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 GlobalRegistrator.register({ url: "https://app.example.test" });
 
@@ -22,7 +22,7 @@ test.each([
   host.innerHTML = markup;
   const element = host.firstElementChild;
   if (!(element instanceof HTMLElement)) {
-    throw new Error("expected an element");
+    throw new TypeError("expected an element");
   }
 
   expect(Object.hasOwn(element.dataset, "copyExclude")).toBe(true);

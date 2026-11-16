@@ -1,5 +1,5 @@
-import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
 import { corpusFreeTextClause } from "@/api/lib/legal-search/corpus-query";
 import {
@@ -94,7 +94,7 @@ describe("normalizeLegalAlternatives", () => {
     );
 
     expect(normalized).toHaveLength(LEGAL_ALTERNATIVES_LIMITS.terms);
-    expect(Value.Check(tLegalAlternatives, normalized)).toBe(true);
+    expect(v.is(tLegalAlternatives, normalized)).toBe(true);
     // A fixed point: the search normalizes what it receives again.
     expect(
       normalizeLegalAlternatives(normalized, {

@@ -43,6 +43,7 @@ describe("what the results region shows while the page stays put", () => {
       publicLawRowsPhase({
         isLoading: false,
         isPlaceholderData: true,
+        keptRowCount: 3,
         routeState: "pending",
       }),
     ).toBe("skeleton");
@@ -53,6 +54,7 @@ describe("what the results region shows while the page stays put", () => {
       publicLawRowsPhase({
         isLoading: true,
         isPlaceholderData: false,
+        keptRowCount: 3,
         routeState: "loaded",
       }),
     ).toBe("skeleton");
@@ -63,9 +65,32 @@ describe("what the results region shows while the page stays put", () => {
       publicLawRowsPhase({
         isLoading: false,
         isPlaceholderData: true,
+        keptRowCount: 3,
         routeState: "loaded",
       }),
     ).toBe("stale");
+  });
+
+  test("an empty page kept from the previous search waits instead of answering this one", () => {
+    expect(
+      publicLawRowsPhase({
+        isLoading: false,
+        isPlaceholderData: true,
+        keptRowCount: 0,
+        routeState: "loaded",
+      }),
+    ).toBe("skeleton");
+  });
+
+  test("a settled empty page is this search's answer", () => {
+    expect(
+      publicLawRowsPhase({
+        isLoading: false,
+        isPlaceholderData: false,
+        keptRowCount: 0,
+        routeState: "loaded",
+      }),
+    ).toBe("rows");
   });
 
   test("a settled page shows its own rows", () => {
@@ -73,6 +98,7 @@ describe("what the results region shows while the page stays put", () => {
       publicLawRowsPhase({
         isLoading: false,
         isPlaceholderData: false,
+        keptRowCount: 3,
         routeState: "loaded",
       }),
     ).toBe("rows");

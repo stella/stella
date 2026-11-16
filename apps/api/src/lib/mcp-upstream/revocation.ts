@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 
+import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { LoadedMcpConnection } from "@/api/lib/mcp-upstream/connections";
@@ -9,10 +10,7 @@ import {
   oauthRevocationEndpoint,
   revokeOAuthToken,
 } from "@/api/lib/mcp-upstream/oauth";
-import {
-  safeOutboundFetchBytes,
-  validateOutboundFetchTarget,
-} from "@/api/lib/safe-outbound-fetch";
+import { validateOutboundFetchTarget } from "@/api/lib/safe-outbound-fetch";
 
 // One budget for discovery plus both revocation calls. Revocation runs after
 // the local disconnect committed, so it only bounds outbound work.

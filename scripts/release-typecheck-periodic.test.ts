@@ -109,6 +109,8 @@ const assertPeriodic = () => {
         "needs.ci-plan.outputs.release_typecheck_required": required,
         "needs.ci-plan.outputs.trusted": "true",
         "needs.ci-plan.outputs.run_required": "true",
+        // Scheduled main runs keep the queue-only suites.
+        "needs.ci-plan.outputs.heavy_proof": "true",
         "needs.ci-plan.outputs.queue_depth": "full",
       },
     }),

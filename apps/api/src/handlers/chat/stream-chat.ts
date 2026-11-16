@@ -1,7 +1,6 @@
 import {
+  convertMessagesToModelMessages,
   EventType,
-  maxIterations,
-  RUN_CANCEL_REASON,
   uiMessagesToWire,
 } from "@tanstack/ai";
 import type {
@@ -11,6 +10,7 @@ import type {
   ModelMessage,
   RunAgentResumeItem,
   StreamChunk,
+  StreamDurability,
   TokenUsage,
   UIMessage,
 } from "@tanstack/ai";
@@ -32,7 +32,28 @@ import {
   createThirdPartyBoundaryRefusalPayload,
 } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
+import { CHAT_INPUT_REFUSAL_CODE } from "@stll/api-contract";
+import type { ChatContextNotice } from "@stll/api-contract/chat-context-notice";
+import {
+  isApprovedClientCallAwaitingResult,
+  memberWaitsOf,
+} from "@stll/api-contract/chat-member-wait";
+import {
+  CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY,
+  CHAT_LOCAL_RUN_FILES_NOT_SHARED_METADATA_KEY,
+  CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
+  type ChatLocalRunContext,
+  chatLocalRunContextSchema,
+  chatLocalRunFilePartsOf,
+  chatLocalRunFilesNotSharedSchema,
+  chatLocalRunLimitSchema,
+} from "@stll/api-contract/chat-run-target";
+import {
+  desktopRunnerAttachmentPath,
+  MAX_RUN_ATTACHMENTS,
+} from "@stll/api-contract/desktop-runner";
 import { providerDiagnosticSchema } from "@stll/api-contract/provider-setup";
+import type { ChatTurnBudget } from "@stll/chat-limits";
 import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
@@ -41,6 +62,8 @@ import { userFiles } from "@/api/db/schema";
 import type { UsageEventLane } from "@/api/db/schema";
 import type { AnonymizationRefusal } from "@/api/handlers/chat/anonymization-refusal";
 import { refuseAnonymizedCrossing } from "@/api/handlers/chat/anonymization-refusal";
+import { NO_ANSWER_QUOTE_CHECKER } from "@/api/handlers/chat/answer-quote-checks";
+import type { AnswerQuoteChecker } from "@/api/handlers/chat/answer-quote-checks";
 import { modelAcceptsDocumentAttachment } from "@/api/handlers/chat/attachment-modality";
 import {
   chunkCarriesAnswer,
@@ -50,11 +73,11 @@ import {
   applyChatPartPersistenceBudget,
   attachTerminalTurnOutcome,
   classifyChatPartForPersistence,
+  createChatTextPart,
   getAwaitingUserInteraction,
-  getAwaitingUserInteractions,
   getChatAttachmentMimeType,
   getUserFileIdFromAttachmentPart,
-  isApprovedClientCallAwaitingResult,
+  isAnswerFilePart,
   isChatAttachmentPart,
   isChatDocumentPart,
   isChatPart,
@@ -70,15 +93,26 @@ import {
   type ChatRunMode,
 } from "@/api/handlers/chat/chat-schema";
 import {
+  CHAT_TURN_LOOP_STRATEGY,
+  createChatTurnBudget,
+} from "@/api/handlers/chat/chat-turn-budget";
+import type {
+  ChatTurnBudgetRun,
+  ChatTurnPause,
+} from "@/api/handlers/chat/chat-turn-budget";
+import {
   OWNER_LOST_OUTCOME,
   readChatTurnTiming,
   USER_STOP_OUTCOME,
 } from "@/api/handlers/chat/chat-turn-persistence";
-import { CHAT_TURN_OWNER_LOST_REASON } from "@/api/handlers/chat/chat-turn-run";
 import type {
   ChatTurnRun,
   ChatTurnStoredSettlement,
 } from "@/api/handlers/chat/chat-turn-run";
+import {
+  chatTurnRunCutOf,
+  isCutByStopOrOwnerLoss,
+} from "@/api/handlers/chat/chat-turn-run-cut";
 import {
   CUT_SHORT_OUTCOME,
   findHandedOutInteraction,
@@ -89,12 +123,18 @@ import {
   createChatTurnTimingDurability,
   withChatTurnTiming,
 } from "@/api/handlers/chat/chat-turn-timing-stream";
+import { clientVisibleStreamChunk } from "@/api/handlers/chat/client-visible-chat-part";
 import { compactModelMessagesForModel } from "@/api/handlers/chat/compaction";
 import {
   knownDecisionPassageStamper,
   NO_DECISION_PASSAGE_NUMBERS,
 } from "@/api/handlers/chat/decision-passage-numbers";
 import type { DecisionPassageStamper } from "@/api/handlers/chat/decision-passage-numbers";
+import {
+  LOCAL_RUN_OUTPUTS_INSTRUCTIONS,
+  type LocalChatRun,
+  reportsSessionNotResumed,
+} from "@/api/handlers/chat/local-run-chunks";
 import {
   createLoopRecoverySystemPrompt,
   detectModelLoop,
@@ -112,6 +152,7 @@ import {
 } from "@/api/handlers/chat/snapshot-reconciliation";
 import {
   assistantMessageStartChunk,
+  attachSnapshotMessageOwners,
   createTurnMessageIdMapper,
   ensureAssistantMessageStart,
   findDeniedApprovals,
@@ -141,6 +182,7 @@ import {
   reserveThirdPartyBoundarySourcePlaceholders,
 } from "@/api/handlers/chat/third-party-boundary";
 import { sortToolJsonKeys } from "@/api/handlers/chat/tool-json-key-order";
+import { retainToolResultsForModel } from "@/api/handlers/chat/tool-result-retention";
 import type { StellaMcpToolSource } from "@/api/handlers/chat/tools/external-mcp-tools";
 import { resolveChatTurnModel } from "@/api/handlers/chat/turn-model";
 import type { ChatTurnModel } from "@/api/handlers/chat/turn-model";
@@ -151,11 +193,15 @@ import type {
   ChatMessageUsage,
   ChatPart,
   ChatTurnOutcome,
+  ChatTurnSpend,
   ChatTurnTiming,
   PersistableChatMessage,
   PersistableTerminalAssistantMessage,
 } from "@/api/handlers/chat/types";
-import { hydrateFilePart } from "@/api/handlers/chat/upload-files";
+import {
+  canHydrateFilePartAsPlainText,
+  hydrateFilePart,
+} from "@/api/handlers/chat/upload-files";
 import type { VisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
 import type { CachingDecision, OrgAIConfig } from "@/api/lib/ai-config";
 import { resolveCaching } from "@/api/lib/ai-config";
@@ -182,8 +228,11 @@ import {
   type ChatToolMap,
   chatToolMapToArray,
 } from "@/api/lib/chat/chat-tool-types";
-import { createContextNoticeStamp } from "@/api/lib/chat/context-notice";
-import type { ChatContextNotice } from "@/api/lib/chat/context-notice";
+import {
+  type ContextNoticeStamp,
+  createContextNoticeStamp,
+  SESSION_NOT_RESUMED_NOTICE,
+} from "@/api/lib/chat/context-notice";
 import {
   guardMcpToolSource,
   guardModelMessages,
@@ -220,6 +269,7 @@ import {
 } from "@/api/lib/chat/tanstack-chat-runtime";
 import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
 import { ToolCallIdLedger } from "@/api/lib/chat/unique-tool-call-ids";
+import type { LocalRunAttachment } from "@/api/lib/desktop-runner/control";
 import { readPresent, readUnavailable } from "@/api/lib/errors/read-outcome";
 import type { ReadOutcome } from "@/api/lib/errors/read-outcome";
 import {
@@ -233,6 +283,7 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import type { ChatTerminalError } from "@/api/lib/errors/tagged-errors";
 import { errorFingerprint } from "@/api/lib/errors/utils";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -242,14 +293,19 @@ import {
 } from "@/api/lib/observability/provider-error-reason";
 import type { PromptCacheMetricSurface } from "@/api/lib/observability/request-metrics";
 import { emitRequestStage } from "@/api/lib/observability/request-metrics";
+import { observeServerError } from "@/api/lib/observability/server-error-answer";
 import { providerSafeJsonSchemaOptionsForTanStackProvider } from "@/api/lib/provider-safe-json-schema";
 import {
   ActionAdmissionError,
   actionAdmissionRefusal,
 } from "@/api/lib/rate-limit/action-admission";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
+import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import type { SseStreamBinding } from "@/api/lib/sse";
-import { resolveTanStackTextModel } from "@/api/lib/tanstack-ai-generate";
+import {
+  resolveTanStackTextModel,
+  withProviderChatRunRetry,
+} from "@/api/lib/tanstack-ai-generate";
 import {
   modelAcceptsStreamingToolUse,
   validateTanStackDevModelOverride,
@@ -269,7 +325,6 @@ const TIMING_READ_FAILURE = failureSink({
   expected: [],
 });
 
-const MAX_TOOL_STEPS = 100;
 const THIRD_PARTY_BOUNDARY_REFUSAL_MESSAGE =
   "Cannot send this attachment to the AI in anonymized mode because stella cannot extract and anonymize it safely.";
 const STELLA_ANON_RESTORATIONS_EVENT = "stella.anon-restorations";
@@ -351,6 +406,12 @@ type StreamChatProps = {
    */
   runMode: ChatRunMode | undefined;
   sandboxRun: StellaSandboxRunInput | undefined;
+  /**
+   * A turn run by a harness on the member's computer. Its chunks replace the
+   * model's; everything after the source (storing, the run log, approvals)
+   * is the same as for a cloud turn.
+   */
+  localRun?: LocalChatRun | undefined;
   /** Budget lane the pre-flight resolved for this turn. */
   usageLane: UsageEventLane;
   /**
@@ -360,6 +421,12 @@ type StreamChatProps = {
    * wrote is still dropped.
    */
   decisionPassageStamper?: DecisionPassageStamper | undefined;
+  /**
+   * Checks the finished answer's quotations against the decisions it cites,
+   * before the turn is stored or its end is shown, so the live answer and
+   * every reload carry the same result. Without one, the renderer checks.
+   */
+  answerQuoteChecker?: AnswerQuoteChecker | undefined;
   resolveAssistantTextRefs?: ((text: string) => string) | undefined;
   resolveAssistantToolInputRefs?: AssistantToolInputRefResolver | undefined;
   resolveAssistantToolOutputRefs?: AssistantToolOutputRefResolver | undefined;
@@ -384,6 +451,11 @@ type StreamChatProps = {
    */
   threadToolCallIds: readonly string[];
   tools: ChatToolMap;
+  /**
+   * The caps the turn runs under. `CHAT_TURN_BUDGET` for every chat turn;
+   * a test harness narrows it to reach a cap in a few steps.
+   */
+  turnBudget?: ChatTurnBudget | undefined;
   externalMcpToolSource?: StellaMcpToolSource | undefined;
   userId: SafeId<"user">;
   /** What authorized the request this turn answers; its response ends with
@@ -392,16 +464,26 @@ type StreamChatProps = {
   workspaceId: SafeId<"workspace"> | null;
 };
 
-/** A pre-stream rejection retains its settlement code alongside its HTTP body. */
+const CHAT_TURN_REFUSED = failureSink({
+  event: "chat.turn_refused",
+  expected: [],
+});
+
+/**
+ * A pre-stream rejection retains its settlement code alongside its HTTP body.
+ * A 500 is built from its cause, which the request records.
+ */
 export class ChatTurnFailureResponse extends Response {
   readonly failureCode: ChatTurnFailureCode;
   readonly retryable: boolean;
 
   constructor({
+    cause,
     failureCode,
     payload,
     status,
   }: {
+    cause?: unknown;
     failureCode: ChatTurnFailureCode;
     payload: { code?: string; message: string };
     status: 422 | 500;
@@ -410,6 +492,7 @@ export class ChatTurnFailureResponse extends Response {
       headers: { "Content-Type": "application/json" },
       status,
     });
+    observeServerError(status, { sink: CHAT_TURN_REFUSED, cause });
     this.failureCode = failureCode;
     this.retryable = status >= 500;
   }
@@ -508,6 +591,8 @@ const SETTLEMENT_STAGE_OUTCOME = {
   cancelled: "cancelled",
   failed: "failed",
   interrupted: "cancelled",
+  // The run ended as designed, on its budget.
+  paused: "completed",
 } as const satisfies Record<SettlementOutcomeKind, RequestStageOutcome>;
 
 type OutputGeneratorPosition =
@@ -586,10 +671,12 @@ export const streamChat = async ({
   reasoningEffort,
   runMode,
   sandboxRun,
+  localRun,
   usageLane,
   decisionPassageStamper = knownDecisionPassageStamper(
     NO_DECISION_PASSAGE_NUMBERS,
   ),
+  answerQuoteChecker = NO_ANSWER_QUOTE_CHECKER,
   resolveAssistantTextRefs,
   resolveAssistantToolInputRefs,
   resolveAssistantToolOutputRefs,
@@ -604,6 +691,7 @@ export const streamChat = async ({
   threadId,
   threadToolCallIds,
   tools,
+  turnBudget: turnBudgetCaps,
   externalMcpToolSource,
   userId,
   viewer,
@@ -698,7 +786,10 @@ export const streamChat = async ({
     reasoningEffort: turnModelSelection.reasoningEffort,
     task: "chat",
   });
-  run.attributeProvider(primaryModel.provider);
+  // A local turn dispatches no model; the computer's harness answers it.
+  if (localRun === undefined) {
+    run.attributeProvider(primaryModel.provider);
+  }
 
   // Tool schemas are mostly server-built but may include org-configured
   // external MCP tool descriptions, so a hit here is telemetry, not a
@@ -735,7 +826,8 @@ export const streamChat = async ({
   ): boolean =>
     chatTurnRejectsStreamingTools({ model, toolCount: modelTools.length });
 
-  if (modelRejectsImages(primaryModel)) {
+  // The cloud model's input limits do not bind a harness on the computer.
+  if (localRun === undefined && modelRejectsImages(primaryModel)) {
     return {
       type: "refused",
       response: new ChatTurnFailureResponse({
@@ -749,7 +841,7 @@ export const streamChat = async ({
     };
   }
 
-  if (modelRejectsAnyDocument(primaryModel)) {
+  if (localRun === undefined && modelRejectsAnyDocument(primaryModel)) {
     // A plain 422, NOT a third-party-boundary refusal: that code is the sole
     // trigger for the "send without anonymization" retry, which cannot fix a
     // model that simply cannot read the attachment's format.
@@ -758,6 +850,7 @@ export const streamChat = async ({
       response: new ChatTurnFailureResponse({
         failureCode: "unsupported-input",
         payload: {
+          code: CHAT_INPUT_REFUSAL_CODE.documentUnsupported,
           message:
             "This model cannot read one of the attached documents. Remove the attachment or switch to a model that supports it.",
         },
@@ -766,12 +859,13 @@ export const streamChat = async ({
     };
   }
 
-  if (modelRejectsStreamingTools(primaryModel)) {
+  if (localRun === undefined && modelRejectsStreamingTools(primaryModel)) {
     return {
       type: "refused",
       response: new ChatTurnFailureResponse({
         failureCode: "unsupported-input",
         payload: {
+          code: CHAT_INPUT_REFUSAL_CODE.toolsUnsupported,
           message:
             "This model cannot use tools while streaming, so it cannot answer chat questions about your matter. Switch to a model that supports tool use.",
         },
@@ -801,13 +895,23 @@ export const streamChat = async ({
       modelRejectsStreamingTools(resolvedFallbackModel))
       ? null
       : resolvedFallbackModel;
-  const { abortController, deadlineSignal } = run.control;
+  const { deadlineSignal } = run.control;
   const restorationPairs: ChatAnonRestoration[] = [];
   // Set before the turn by the send path's compaction, or during it by a
   // step's own; the answer carries whichever it has.
   const contextNotice = createContextNoticeStamp(
     preflightContextNotice ?? null,
   );
+
+  // One budget for the turn: what its stored message already spent, and what
+  // every attempt of this request adds.
+  const turnBudget = createChatTurnBudget({
+    budget: turnBudgetCaps,
+    owningMessage:
+      owningAssistantMessageId === undefined
+        ? undefined
+        : rawMessages.find(({ id }) => id === owningAssistantMessageId),
+  });
 
   let servedTurnModel: ChatTurnModel = {
     provider: primaryModel.provider,
@@ -824,7 +928,7 @@ export const streamChat = async ({
         : AbortSignal.any([deadlineSignal, run.control.admissionSignal]),
     devModelId: turnModelSelection.modelId,
     onAttemptStarted: contextNotice.beginAttempt,
-    onHistoryTrimmed: contextNotice.record,
+    onContextNotice: contextNotice.record,
     onModelDispatched: (model) => {
       servedTurnModel = {
         provider: model.provider,
@@ -845,6 +949,8 @@ export const streamChat = async ({
     promptCachingEnabled,
     runMode,
     sandboxRun,
+    localRun,
+    chatTurnId: run.execution.id,
     usageLane,
     runId,
     parentRunId,
@@ -865,6 +971,7 @@ export const streamChat = async ({
     threadId,
     // One ledger for the run: every request of it, a fallback's included.
     toolCallIds: new ToolCallIdLedger(threadToolCallIds),
+    turnBudget,
     userId,
     workspaceId,
   });
@@ -878,6 +985,255 @@ export const streamChat = async ({
           yield* attemptStream;
         })();
 
+  const production = produceChatTurn({
+    answerQuoteChecker,
+    contextNotice,
+    decisionPassageStamper,
+    dismissesAwaited: resumeDismissesAwaited(preparedResume),
+    initialMessages: preparedMessageList,
+    latestMessageId,
+    onFinish,
+    organizationId,
+    owningAssistantMessageId,
+    resolveAssistantTextRefs,
+    resolveAssistantToolInputRefs,
+    resolveAssistantToolOutputRefs,
+    resolveAssistantValueRefs,
+    restorationPairs,
+    run,
+    runId,
+    safeDb,
+    source: stream,
+    // A turn on the member's computer was answered by its harness, not by a
+    // cloud model: it names no turn model and its reasoning no provenance.
+    stampAnswer: (message) =>
+      localRun === undefined
+        ? stampReasoningProvenance({
+            message: {
+              ...message,
+              metadata: { ...message.metadata, turnModel: servedTurnModel },
+            },
+            model: {
+              provider: servedTurnModel.provider,
+              modelId: servedTurnModel.model,
+            },
+            initialMessages: rawMessages,
+          })
+        : message,
+    storedHistory,
+    thirdPartyBoundary,
+    threadId,
+    turnBudget,
+    visualOrigin,
+  });
+  emitRequestStage({
+    route: "/v1/chat/:threadId/messages",
+    stage: "request_setup",
+    durationMs: performance.now() - admittedAt,
+    outcome: "completed",
+  });
+  return {
+    type: "streaming",
+    response: run.produce(production.output, production.durability, viewer),
+  };
+};
+
+/** What a turn's production learns of its settlement as its output runs. */
+type TurnProductionSettlement = {
+  event: StreamChatFinishEvent | undefined;
+  source: "not-started" | "started";
+  resumeSnapshot: ChatMessageMetadata["resumeSnapshot"];
+  terminalChunk: StreamChunk | undefined;
+  finished: Promise<unknown> | undefined;
+};
+
+/**
+ * The chunks a turn's viewers and log receive: the visible output, with the
+ * answer's quote check and a cut-short outcome placed before the run's
+ * terminal chunk, which goes last so every earlier chunk stays appendable
+ * under the execution fence.
+ *
+ * @yields The turn's chunks, ending with its terminal one.
+ */
+async function* deliverTurnOutput({
+  answerQuoteChecker,
+  contextNotice,
+  runId,
+  settlement,
+  threadId,
+  timingPhase,
+  visibleOutput,
+}: {
+  answerQuoteChecker: AnswerQuoteChecker;
+  contextNotice: ContextNoticeStamp;
+  runId: string;
+  settlement: TurnProductionSettlement;
+  threadId: SafeId<"chatThread">;
+  timingPhase: { status: "running" | "settled" };
+  visibleOutput: AsyncIterable<StreamChunk>;
+}): AsyncGenerator<StreamChunk> {
+  settlement.source = "started";
+  const finalChunks: StreamChunk[] = [];
+  for await (const visibleChunk of visibleOutput) {
+    for (const chunk of contextNotice.stamp(visibleChunk)) {
+      if (
+        settlement.event !== undefined &&
+        (chunk.type === EventType.RUN_FINISHED ||
+          chunk.type === EventType.RUN_ERROR)
+      ) {
+        if (
+          chunk.type === EventType.RUN_FINISHED &&
+          chunk.outcome?.type === "interrupt"
+        ) {
+          settlement.resumeSnapshot = {
+            resumeState: { threadId, runId },
+            pendingInterrupts: chunk.outcome.interrupts,
+          };
+        }
+        finalChunks.push(chunk);
+        continue;
+      }
+      yield chunk;
+    }
+  }
+  if (settlement.event !== undefined) {
+    const { outcome, responseMessage } = settlement.event;
+    const quoteCheck = await answerQuoteChecker(responseMessage);
+    if (quoteCheck.type === "checked") {
+      const answerQuotes = quoteCheck.checks;
+      settlement.event = {
+        outcome,
+        responseMessage: attachTerminalTurnOutcome({
+          message: toPersistableChatMessage({
+            ...responseMessage,
+            metadata: { ...responseMessage.metadata, answerQuotes },
+          }),
+          turnOutcome: outcome,
+        }),
+      };
+      yield {
+        type: EventType.TEXT_MESSAGE_END,
+        messageId: responseMessage.id,
+        metadata: { answerQuotes },
+      } as const satisfies PublicStreamChunk;
+    }
+  }
+  const terminalEvent = settlement.event;
+  if (
+    terminalEvent !== undefined &&
+    CUT_SHORT_OUTCOME[terminalEvent.outcome.type]
+  ) {
+    // A terminal outcome that differs from the provider finish belongs on
+    // the live message too; otherwise only a reload sees it.
+    yield {
+      type: EventType.TEXT_MESSAGE_END,
+      messageId: terminalEvent.responseMessage.id,
+      metadata: { turnOutcome: terminalEvent.outcome },
+    } as const satisfies PublicStreamChunk;
+  }
+  if (
+    terminalEvent !== undefined &&
+    CUT_SHORT_OUTCOME[terminalEvent.outcome.type]
+  ) {
+    // Interruption is stored as turn data, not a provider error. Close the
+    // durable protocol too: EOF alone makes attached readers reconnect.
+    finalChunks.splice(0, finalChunks.length, {
+      type: EventType.RUN_FINISHED,
+      runId,
+      threadId,
+      outcome: { type: "cancelled" },
+      timestamp: Temporal.Now.instant().epochMilliseconds,
+    });
+  }
+  // The visual transform can flush buffered refs after the source terminal.
+  // Deliver that content before terminalizing, and identify the last terminal
+  // so every earlier iteration remains appendable under the execution fence.
+  settlement.terminalChunk = finalChunks.at(-1);
+  for (const chunk of finalChunks) {
+    if (chunk === settlement.terminalChunk) {
+      timingPhase.status = "settled";
+    }
+    yield chunk;
+  }
+  if (settlement.event !== undefined) {
+    timingPhase.status = "settled";
+  }
+}
+
+/** What a turn's run produces: its chunks, and the log they are kept in. */
+type ChatTurnProduction = {
+  output: AsyncIterable<StreamChunk>;
+  durability: StreamDurability;
+};
+
+type ProduceChatTurnOptions = {
+  /** The run's chunks, from the model or from the member's computer. */
+  source: AsyncIterable<PublicStreamChunk>;
+  run: ChatTurnRun;
+  safeDb: SafeDb;
+  organizationId: SafeId<"organization">;
+  runId: string;
+  threadId: SafeId<"chatThread">;
+  thirdPartyBoundary: ChatThirdPartyBoundary;
+  latestMessageId: string;
+  /** The history the run continues, as its source received it. */
+  initialMessages: ChatMessage[];
+  restorationPairs: ChatAnonRestoration[];
+  owningAssistantMessageId: SafeId<"chatMessage"> | undefined;
+  turnBudget: ChatTurnBudgetRun;
+  contextNotice: ContextNoticeStamp;
+  /** See `ProcessTurnForPersistenceOptions.dismissesAwaited`. */
+  dismissesAwaited: boolean;
+  /** Names who answered the finished turn on its message. */
+  stampAnswer: (
+    message: StreamChatFinishEvent["responseMessage"],
+  ) => StreamChatFinishEvent["responseMessage"];
+  storedHistory: StoredHistory;
+  visualOrigin: Pick<VisualResourceOrigin, "accepts"> | undefined;
+  decisionPassageStamper: DecisionPassageStamper;
+  answerQuoteChecker: AnswerQuoteChecker;
+  resolveAssistantTextRefs: ((text: string) => string) | undefined;
+  resolveAssistantToolInputRefs: AssistantToolInputRefResolver | undefined;
+  resolveAssistantToolOutputRefs: AssistantToolOutputRefResolver | undefined;
+  resolveAssistantValueRefs: AssistantValueRefResolver | undefined;
+  onFinish: StreamChatProps["onFinish"];
+};
+
+/**
+ * Turn a run's source into what the run produces: the chunks its viewers
+ * see, stored in the run's log under the run's execution, with the turn
+ * settled through `onFinish` once the source ends. The same for a turn a
+ * request starts and for one a task adopts, so both store and show a turn
+ * alike; only who delivers the output differs (`ChatTurnRun.produce` or
+ * `ChatTurnRun.pump`).
+ */
+export const produceChatTurn = ({
+  answerQuoteChecker,
+  contextNotice,
+  decisionPassageStamper,
+  dismissesAwaited,
+  initialMessages: preparedMessageList,
+  latestMessageId,
+  onFinish,
+  organizationId,
+  owningAssistantMessageId,
+  resolveAssistantTextRefs,
+  resolveAssistantToolInputRefs,
+  resolveAssistantToolOutputRefs,
+  resolveAssistantValueRefs,
+  restorationPairs,
+  run,
+  runId,
+  safeDb,
+  source,
+  stampAnswer,
+  storedHistory,
+  thirdPartyBoundary,
+  threadId,
+  turnBudget,
+  visualOrigin,
+}: ProduceChatTurnOptions): ChatTurnProduction => {
+  const { abortController, deadlineSignal } = run.control;
   const log = createChatRunLog({
     db: async (callback) => {
       const result = await safeDb(callback);
@@ -890,13 +1246,7 @@ export const streamChat = async ({
     organizationId,
     runId,
   });
-  const settlement: {
-    event: StreamChatFinishEvent | undefined;
-    source: "not-started" | "started";
-    resumeSnapshot: ChatMessageMetadata["resumeSnapshot"];
-    terminalChunk: StreamChunk | undefined;
-    finished: Promise<unknown> | undefined;
-  } = {
+  const settlement: TurnProductionSettlement = {
     source: "not-started",
     resumeSnapshot: undefined,
     terminalChunk: undefined,
@@ -914,7 +1264,7 @@ export const streamChat = async ({
           })
         : new Set<string>(),
     restorationPairs,
-    source: projectVisualPreviewStream(stream),
+    source: projectVisualPreviewStream(source),
     stamper: decisionPassageStamper,
   });
   const timingPhase: { status: "running" | "settled" } = { status: "running" };
@@ -935,29 +1285,19 @@ export const streamChat = async ({
           getRestorableCheckpoint: () => run.restorableCheckpoint,
         }),
     deadlineSignal,
+    dismissesAwaited,
     flushPendingSource: persistenceVisibleStream.flushPending,
     initialMessages: preparedMessageList,
     onFinish: (event) => {
+      const metadata = {
+        ...event.responseMessage.metadata,
+        ...contextNotice.metadata(),
+      };
+      const finished = stampAnswer({ ...event.responseMessage, metadata });
       settlement.event = {
         outcome: event.outcome,
         responseMessage: attachTerminalTurnOutcome({
-          message: toPersistableChatMessage(
-            stampReasoningProvenance({
-              message: {
-                ...event.responseMessage,
-                metadata: {
-                  ...event.responseMessage.metadata,
-                  ...contextNotice.metadata(),
-                  turnModel: servedTurnModel,
-                },
-              },
-              model: {
-                provider: servedTurnModel.provider,
-                modelId: servedTurnModel.model,
-              },
-              initialMessages: rawMessages,
-            }),
-          ),
+          message: toPersistableChatMessage(finished),
           turnOutcome: event.outcome,
         }),
       };
@@ -965,6 +1305,7 @@ export const streamChat = async ({
     owningAssistantMessageId,
     restorationPairs,
     source: persistenceVisibleStream,
+    turnBudget,
   });
   const visibleOutput = transformClientVisibleStream({
     deniedApprovals: findDeniedApprovals(preparedMessageList),
@@ -976,65 +1317,15 @@ export const streamChat = async ({
     storedHistory,
   });
 
-  const output = (async function* () {
-    settlement.source = "started";
-    const finalChunks: StreamChunk[] = [];
-    for await (const visibleChunk of visibleOutput) {
-      for (const chunk of contextNotice.stamp(visibleChunk)) {
-        if (
-          settlement.event !== undefined &&
-          (chunk.type === EventType.RUN_FINISHED ||
-            chunk.type === EventType.RUN_ERROR)
-        ) {
-          if (
-            chunk.type === EventType.RUN_FINISHED &&
-            chunk.outcome?.type === "interrupt"
-          ) {
-            settlement.resumeSnapshot = {
-              resumeState: { threadId, runId },
-              pendingInterrupts: chunk.outcome.interrupts,
-            };
-          }
-          finalChunks.push(chunk);
-          continue;
-        }
-        yield chunk;
-      }
-    }
-    const terminalEvent = settlement.event;
-    if (
-      terminalEvent !== undefined &&
-      CUT_SHORT_OUTCOME[terminalEvent.outcome.type]
-    ) {
-      // Interruption is stored as turn data, not a provider error. Close the
-      // durable protocol too: EOF alone makes attached readers reconnect.
-      yield {
-        type: EventType.TEXT_MESSAGE_END,
-        messageId: terminalEvent.responseMessage.id,
-        metadata: { turnOutcome: terminalEvent.outcome },
-      } as const satisfies PublicStreamChunk;
-      finalChunks.splice(0, finalChunks.length, {
-        type: EventType.RUN_FINISHED,
-        runId,
-        threadId,
-        outcome: { type: "cancelled" },
-        timestamp: Temporal.Now.instant().epochMilliseconds,
-      });
-    }
-    // The visual transform can flush buffered refs after the source terminal.
-    // Deliver that content before terminalizing, and identify the last terminal
-    // so every earlier iteration remains appendable under the execution fence.
-    settlement.terminalChunk = finalChunks.at(-1);
-    for (const chunk of finalChunks) {
-      if (chunk === settlement.terminalChunk) {
-        timingPhase.status = "settled";
-      }
-      yield chunk;
-    }
-    if (settlement.event !== undefined) {
-      timingPhase.status = "settled";
-    }
-  })();
+  const output = deliverTurnOutput({
+    answerQuoteChecker,
+    contextNotice,
+    runId,
+    settlement,
+    threadId,
+    timingPhase,
+    visibleOutput,
+  });
   const finishSettlement = async () => {
     const { event } = settlement;
     if (event === undefined) {
@@ -1077,12 +1368,6 @@ export const streamChat = async ({
     return readPresent(timing.value);
   };
 
-  emitRequestStage({
-    route: "/v1/chat/:threadId/messages",
-    stage: "request_setup",
-    durationMs: performance.now() - admittedAt,
-    outcome: "completed",
-  });
   const providerWaitStartedAt = performance.now();
   const observedOutput = observeChatOutputStages({
     source: output,
@@ -1090,29 +1375,24 @@ export const streamChat = async ({
     getSettlementOutcome: () => settlement.event?.outcome.type,
   });
   return {
-    type: "streaming",
-    response: run.produce(
-      withChatTurnTiming({
-        source: observedOutput,
-        getPhase: () => timingPhase.status,
-        readTiming,
-      }),
-      createChatTurnTimingDurability({
-        log,
-        getTerminal: () =>
-          settlement.event === undefined ||
-          settlement.terminalChunk === undefined
-            ? undefined
-            : {
-                chunk: settlement.terminalChunk,
-                messageId: settlement.event.responseMessage.id,
-              },
-        getPhase: () => timingPhase.status,
-        finishSettlement,
-        readTiming,
-      }),
-      viewer,
-    ),
+    output: withChatTurnTiming({
+      source: observedOutput,
+      getPhase: () => timingPhase.status,
+      readTiming,
+    }),
+    durability: createChatTurnTimingDurability({
+      log,
+      getTerminal: () =>
+        settlement.event === undefined || settlement.terminalChunk === undefined
+          ? undefined
+          : {
+              chunk: settlement.terminalChunk,
+              messageId: settlement.event.responseMessage.id,
+            },
+      getPhase: () => timingPhase.status,
+      finishSettlement,
+      readTiming,
+    }),
   };
 };
 
@@ -1120,6 +1400,7 @@ const thirdPartyBoundaryRefusalResponse = (
   error: AnonymizationRefusal,
 ): ChatTurnFailureResponse =>
   new ChatTurnFailureResponse({
+    cause: error,
     failureCode: error.failureCode,
     payload: createThirdPartyBoundaryRefusalPayload(error.message),
     status: error.status,
@@ -1224,11 +1505,14 @@ export const recordChatAttemptFinish = ({
   state.emptyCompletion = new ChatEmptyCompletionError({
     message: CHAT_EMPTY_COMPLETION_MESSAGE,
   });
-  captureAttemptError(state.emptyCompletion, {
-    modelId: modelInfo.modelId,
-    provider: modelInfo.provider,
-    threadId,
-  });
+  captureAttemptError(
+    state.emptyCompletion,
+    handlerErrorContext("recordChatAttemptFinish.state_emptyCompletion", {
+      modelId: modelInfo.modelId,
+      provider: modelInfo.provider,
+      threadId,
+    }),
+  );
 };
 
 const chatAttemptTerminalError = (
@@ -1367,10 +1651,13 @@ const resolveFallbackTextModel = async ({
     }
     return fallbackModel;
   } catch (error) {
-    captureError(error, {
-      feature: "chat.stream_fallback_resolution",
-      threadId,
-    });
+    captureError(
+      error,
+      handlerErrorContext("chat.resolveFallbackTextModel", {
+        feature: "chat.stream_fallback_resolution",
+        threadId,
+      }),
+    );
     return null;
   }
 };
@@ -1460,7 +1747,8 @@ export type GuardedChatSurfaces = {
 type RunChatAttemptsProps = {
   /** A model attempt is about to run; only the last one answers. */
   onAttemptStarted: () => void;
-  onHistoryTrimmed: (notice: ChatContextNotice) => void;
+  /** What the answer's context left out, as the attempt learns it. */
+  onContextNotice: (notice: ChatContextNotice) => void;
   onModelDispatched: (model: ResolvedTanStackTextModel) => void;
   abortController: AbortController;
   abortSignal: AbortSignal;
@@ -1476,6 +1764,9 @@ type RunChatAttemptsProps = {
   promptCachingEnabled: boolean;
   runMode: ChatRunMode | undefined;
   sandboxRun: StellaSandboxRunInput | undefined;
+  localRun: LocalChatRun | undefined;
+  /** The turn this attempt produces for. */
+  chatTurnId: SafeId<"chatTurn">;
   /** Budget lane the pre-flight resolved for this turn. */
   usageLane: UsageEventLane;
   runId: string;
@@ -1486,6 +1777,8 @@ type RunChatAttemptsProps = {
   thirdPartyBoundary: ChatThirdPartyBoundary;
   threadId: SafeId<"chatThread">;
   toolCallIds: ToolCallIdLedger;
+  /** The turn's budget: every attempt of it, a fallback's included, spends it. */
+  turnBudget: ChatTurnBudgetRun;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
 };
@@ -1495,7 +1788,7 @@ const runChatAttempts = async function* ({
   abortSignal,
   devModelId,
   onAttemptStarted,
-  onHistoryTrimmed,
+  onContextNotice,
   onModelDispatched,
   externalMcpToolSource,
   fallbackModel,
@@ -1508,6 +1801,8 @@ const runChatAttempts = async function* ({
   promptCachingEnabled,
   runMode,
   sandboxRun,
+  localRun,
+  chatTurnId,
   usageLane,
   runId,
   parentRunId,
@@ -1517,9 +1812,31 @@ const runChatAttempts = async function* ({
   thirdPartyBoundary,
   threadId,
   toolCallIds,
+  turnBudget,
   userId,
   workspaceId,
 }: RunChatAttemptsProps): AsyncIterable<PublicStreamChunk> {
+  if (localRun !== undefined) {
+    // The harness on the member's computer answers the turn with the prompt
+    // and history the model would have received. No model is dispatched, so
+    // nothing falls back to one, and its chunks enter the same pipeline.
+    for await (const chunk of localRun.stream({
+      chatRunId: runId,
+      chatTurnId,
+      messages: convertMessagesToModelMessages([...surfaces.messages]),
+      instructions: `${surfaces.system}\n\n${LOCAL_RUN_OUTPUTS_INSTRUCTIONS}`,
+      resume,
+      // The run's own cut: a stop on any task, a lost owner or admission, a
+      // failed production. A local run has no deadline (`ChatTurnRunBound`).
+      abortSignal: abortController.signal,
+    })) {
+      if (reportsSessionNotResumed(chunk)) {
+        onContextNotice(SESSION_NOT_RESUMED_NOTICE);
+      }
+      yield chunk;
+    }
+    return;
+  }
   const primaryState = createChatAttemptState();
   // The caller resolves an explicit agent sandbox before persisting the
   // incoming message. A normal chat never carries a plan, even when the engine
@@ -1531,7 +1848,7 @@ const runChatAttempts = async function* ({
     abortSignal,
     compactionFeature: "chat.step_compaction",
     externalMcpToolSource,
-    onHistoryTrimmed,
+    onHistoryTrimmed: onContextNotice,
     feature: "chat.stream",
     model: primaryModel,
     modelId: devModelId,
@@ -1553,6 +1870,7 @@ const runChatAttempts = async function* ({
     thirdPartyBoundary,
     threadId,
     toolCallIds,
+    turnBudget,
     userId,
     workspaceId,
   });
@@ -1587,7 +1905,7 @@ const runChatAttempts = async function* ({
     abortSignal,
     compactionFeature: "chat.step_compaction_fallback",
     externalMcpToolSource,
-    onHistoryTrimmed,
+    onHistoryTrimmed: onContextNotice,
     feature: "chat.stream_fallback",
     model: fallbackModel,
     modelId: undefined,
@@ -1607,6 +1925,7 @@ const runChatAttempts = async function* ({
     thirdPartyBoundary,
     threadId,
     toolCallIds,
+    turnBudget,
     userId,
     workspaceId,
   });
@@ -1617,10 +1936,13 @@ const runChatAttempts = async function* ({
   }
 };
 
+type ChatCompactionFeature =
+  "chat.step_compaction" | "chat.step_compaction_fallback";
+
 type RunChatAttemptProps = {
   abortController: AbortController;
   abortSignal: AbortSignal;
-  compactionFeature: string;
+  compactionFeature: ChatCompactionFeature;
   /** A step's compaction left earlier history out of the request. */
   onHistoryTrimmed: (notice: ChatContextNotice) => void;
   /** Budget lane this turn's consumption settles against. */
@@ -1653,6 +1975,7 @@ type RunChatAttemptProps = {
   thirdPartyBoundary: ChatThirdPartyBoundary;
   threadId: SafeId<"chatThread">;
   toolCallIds: ToolCallIdLedger;
+  turnBudget: ChatTurnBudgetRun;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
 };
@@ -1684,6 +2007,7 @@ const runChatAttempt = async function* ({
   thirdPartyBoundary,
   threadId,
   toolCallIds,
+  turnBudget,
   userId,
   workspaceId,
 }: RunChatAttemptProps): AsyncIterable<PublicStreamChunk> {
@@ -1761,7 +2085,7 @@ const runChatAttempt = async function* ({
         toolCallIds,
       ),
       messages: preparedMessages,
-      agentLoopStrategy: maxIterations(MAX_TOOL_STEPS),
+      agentLoopStrategy: CHAT_TURN_LOOP_STRATEGY,
       abortController,
       threadId,
       ...(runId === undefined ? {} : { runId }),
@@ -1789,64 +2113,74 @@ const runChatAttempt = async function* ({
           threadId,
         }),
         sandboxMiddleware,
+        turnBudget.middleware,
       ],
     });
     return;
   }
 
-  const stream = streamChatChunks({
-    ...chatAttemptRequestOptions({
-      caching,
-      model,
-      modelTools,
-      task,
-      system: baseSystem,
-      systemLayers,
-      toolCallIds,
-    }),
-    messages: preparedMessages,
-    ...(externalMcpToolSource
-      ? {
-          mcp: {
-            clients: guardedMcpClients({
-              boundary: thirdPartyBoundary,
-              provider: model.provider,
-              source: externalMcpToolSource,
-              tenantWorkspaceIds,
-            }),
-            connection: "close",
-            lazyTools: true,
-          },
-        }
-      : {}),
-    agentLoopStrategy: maxIterations(MAX_TOOL_STEPS),
-    abortController,
-    threadId,
-    ...(runId === undefined ? {} : { runId }),
-    ...(parentRunId === undefined ? {} : { parentRunId }),
-    ...(resume === undefined ? {} : { resume }),
-    middleware: [
-      analytics.middleware,
-      createChatRuntimeMiddleware({
-        abortSignal,
-        baseSystem,
-        caching,
-        compactionAnalytics,
-        compactionFeature,
-        onHistoryTrimmed,
-        model,
-        modelId,
-        organizationId,
-        modelAdmission,
-        orgAIConfig,
-        managedAIResidency,
-        task,
-        state,
-        systemLayers,
-        tenantWorkspaceIds,
+  // The provider request is sent again while the run fails before its
+  // first output; the generation layer owns that retry.
+  const stream = withProviderChatRunRetry({
+    abortSignal,
+    model,
+    open: (retryGuard) =>
+      streamChatChunks({
+        ...chatAttemptRequestOptions({
+          caching,
+          model,
+          modelTools,
+          task,
+          system: baseSystem,
+          systemLayers,
+          toolCallIds,
+        }),
+        messages: preparedMessages,
+        ...(externalMcpToolSource
+          ? {
+              mcp: {
+                clients: guardedMcpClients({
+                  boundary: thirdPartyBoundary,
+                  provider: model.provider,
+                  source: externalMcpToolSource,
+                  tenantWorkspaceIds,
+                }),
+                connection: "close",
+                lazyTools: true,
+              },
+            }
+          : {}),
+        agentLoopStrategy: CHAT_TURN_LOOP_STRATEGY,
+        abortController,
         threadId,
+        ...(runId === undefined ? {} : { runId }),
+        ...(parentRunId === undefined ? {} : { parentRunId }),
+        ...(resume === undefined ? {} : { resume }),
+        middleware: [
+          analytics.middleware,
+          createChatRuntimeMiddleware({
+            abortSignal,
+            baseSystem,
+            caching,
+            compactionAnalytics,
+            compactionFeature,
+            onHistoryTrimmed,
+            model,
+            modelId,
+            organizationId,
+            modelAdmission,
+            orgAIConfig,
+            managedAIResidency,
+            task,
+            state,
+            systemLayers,
+            tenantWorkspaceIds,
+            threadId,
+          }),
+          turnBudget.middleware,
+          retryGuard,
+        ],
       }),
-    ],
   });
 
   for await (const chunk of stream) {
@@ -1918,7 +2252,7 @@ type ChatRuntimeMiddlewareProps = {
   baseSystem: GuardedSystemPrompt;
   caching: CachingDecision;
   compactionAnalytics: TanStackAIAnalyticsCallbacks;
-  compactionFeature: string;
+  compactionFeature: ChatCompactionFeature;
   onHistoryTrimmed: (notice: ChatContextNotice) => void;
   model: ResolvedTanStackTextModel;
   modelId: string | undefined;
@@ -1963,7 +2297,7 @@ const createChatRuntimeMiddleware = ({
           state,
           threadId,
         });
-        return;
+        break;
       case "aborted":
       case "failed":
         return;
@@ -1975,8 +2309,9 @@ const createChatRuntimeMiddleware = ({
   return {
     name: "stella-chat-runtime",
     ...terminalHooks,
-    onChunk: (_ctx, chunk) => {
+    onChunk: (ctx, chunk) => {
       state.producedAnswer ||= chunkCarriesAnswer(chunk);
+      return attachSnapshotMessageOwners(ctx, chunk);
     },
     onConfig: async (ctx, config) => {
       if (ctx.phase !== "beforeModel") {
@@ -2011,10 +2346,14 @@ const createChatRuntimeMiddleware = ({
         }
       }
 
+      // Superseded tool results (earlier page snapshots) shrink before
+      // compaction measures the history, so a browsing turn holds one page
+      // instead of every page.
+      const projectedMessages = retainToolResultsForModel(config.messages);
       const compactedMessages = await compactModelMessagesForModel({
         abortSignal,
         aiAnalytics: compactionAnalytics,
-        messages: config.messages,
+        messages: projectedMessages,
         modelId,
         organizationId,
         admission: modelAdmission,
@@ -2023,12 +2362,15 @@ const createChatRuntimeMiddleware = ({
         task,
         tenantWorkspaceIds,
         onSummaryError: (error) => {
-          captureError(error, {
-            feature: compactionFeature,
-            modelId: model.modelId,
-            provider: model.provider,
-            threadId,
-          });
+          captureError(
+            error,
+            handlerErrorContext(`chat.compactedMessages.${compactionFeature}`, {
+              feature: compactionFeature,
+              modelId: model.modelId,
+              provider: model.provider,
+              threadId,
+            }),
+          );
         },
       });
       if (Result.isError(compactedMessages)) {
@@ -2081,7 +2423,24 @@ type ProcessServerChatStreamProps = {
   onFinish: (event: StreamChatFinishEvent) => Promise<void> | void;
   processor: ChatStreamProcessor;
   source: AsyncIterable<PublicStreamChunk>;
+  /** The turn's budget: a loop it ended settles as `paused`, and every
+   *  terminal message stores what the turn has spent. */
+  turnBudget?: Pick<ChatTurnBudgetRun, "pause" | "spend"> | undefined;
+  /**
+   * Whether the continuation dismissed every interaction the turn awaited
+   * (each resume item `cancelled`). A run that then ends cancelled was
+   * stopped by the member, as a Stop stops it, not cut off.
+   */
+  dismissesAwaited?: boolean | undefined;
 };
+
+/** Whether `resume` dismisses everything it answers; see `dismissesAwaited`. */
+export const resumeDismissesAwaited = (
+  resume: readonly RunAgentResumeItem[] | undefined,
+): boolean =>
+  resume !== undefined &&
+  resume.length > 0 &&
+  resume.every(({ status }) => status === "cancelled");
 
 /**
  * Which abort cut this run. A stop aborts the run's controller with
@@ -2098,16 +2457,23 @@ const chatCutShortOutcome = ({
   abortSignal: AbortSignal;
   deadlineSignal: AbortSignal;
 }): CutShortOutcome => {
-  if (abortSignal.reason === RUN_CANCEL_REASON) {
-    return USER_STOP_OUTCOME;
+  const cut = chatTurnRunCutOf(abortSignal.reason);
+  switch (cut) {
+    case "member-stop":
+      return USER_STOP_OUTCOME;
+    case "owner-lost":
+      return OWNER_LOST_OUTCOME;
+    case "production-failed":
+    case "admission-lost":
+    case "other":
+      return {
+        type: "interrupted",
+        reason: deadlineSignal.aborted ? "timeout" : "client-disconnected",
+      };
+    default:
+      cut satisfies never;
+      return panic(`Unhandled chat turn run cut: ${String(cut)}`);
   }
-  if (abortSignal.reason === CHAT_TURN_OWNER_LOST_REASON) {
-    return OWNER_LOST_OUTCOME;
-  }
-  return {
-    type: "interrupted",
-    reason: deadlineSignal.aborted ? "timeout" : "client-disconnected",
-  };
 };
 
 type RunErrorChunk = Extract<PublicStreamChunk, { type: EventType.RUN_ERROR }>;
@@ -2153,16 +2519,26 @@ export const classifyRunErrorChunk = (chunk: RunErrorChunk): AIErrorKind => {
 // service raised for a configuration state the caller can act on; only an
 // unanticipated shape is logged at ERROR severity and reported as a defect.
 // Fingerprint only — provider error messages can echo request content.
+type ReportStreamFailureOptions = {
+  scope: Parameters<typeof captureError>[1]["scope"];
+  kind: AIErrorKind;
+  fingerprintKey: `chat.${string}`;
+  providerMessage?: string | undefined;
+};
+
 const reportStreamFailure = (
   error: unknown,
-  kind: AIErrorKind,
-  providerMessage?: string,
+  { kind, scope, fingerprintKey, providerMessage }: ReportStreamFailureOptions,
 ): void => {
   if (isAnticipatedAIFailure(error, kind)) {
     return;
   }
   classifyRejectedProviderRequest(error, kind);
-  captureError(error, { kind });
+  captureError(error, {
+    fingerprintKey: `${fingerprintKey}.${kind}`,
+    scope,
+    context: { kind },
+  });
   logger.error(
     "chat.stream_failed",
     sanitizeErrorAttributesForOutput({
@@ -2182,20 +2558,47 @@ const reportStreamFailure = (
 const normalizeRunErrorChunk = (chunk: RunErrorChunk): RunErrorChunk => {
   const error = errorForRunErrorChunk(chunk);
   const kind = classifyRunErrorChunk(chunk);
-  reportStreamFailure(error, kind, chunk.message);
+  reportStreamFailure(error, {
+    scope: { type: "handler", handlerId: "chat.runErrorChunk" },
+    kind,
+    fingerprintKey: "chat.runErrorChunk",
+    providerMessage: chunk.message,
+  });
   const usage = safeTokenUsageFromTerminalChunk(chunk);
+  const providerDiagnostic = providerDiagnosticFromChunk(chunk);
+  const limit =
+    kind === "local_runner_limit_reached"
+      ? localRunLimitFromChunk(chunk)
+      : undefined;
   return {
     type: EventType.RUN_ERROR,
     ...(chunk.timestamp === undefined ? {} : { timestamp: chunk.timestamp }),
     message: kind,
     code: kind,
     ...(usage === undefined ? {} : { usage }),
-    ...(providerDiagnosticFromChunk(chunk) === undefined
+    ...(providerDiagnostic === undefined && limit === undefined
       ? {}
       : {
-          metadata: { providerDiagnostic: providerDiagnosticFromChunk(chunk) },
+          metadata: {
+            ...(providerDiagnostic === undefined ? {} : { providerDiagnostic }),
+            ...(limit === undefined
+              ? {}
+              : { [CHAT_LOCAL_RUN_LIMIT_METADATA_KEY]: limit }),
+          },
         }),
   };
+};
+
+/**
+ * When the usage limit of a computer's harness resets, as the local turn's
+ * own run error carries it (`local-run-chunks.ts`), checked again here.
+ */
+const localRunLimitFromChunk = (chunk: RunErrorChunk) => {
+  const parsed = v.safeParse(
+    chatLocalRunLimitSchema,
+    chunk.metadata?.[CHAT_LOCAL_RUN_LIMIT_METADATA_KEY],
+  );
+  return parsed.success ? parsed.output : undefined;
 };
 
 /**
@@ -2221,6 +2624,7 @@ const awaitsCompleteInput = (interaction: AwaitingInteraction): boolean => {
       return false;
     case "ask-user":
     case "client-tool":
+    case "harness-question":
       return true;
     default:
       interaction satisfies never;
@@ -2328,14 +2732,19 @@ const interruptToolCallIdsOf = (
 const drainedRunOutcome = ({
   abortSignal,
   deadlineSignal,
+  dismissesAwaited,
   finalRunFinishedChunks,
+  pause,
   responseMessage,
   runCancelled,
   toolCallsWithCompleteInput,
 }: {
   abortSignal: AbortSignal;
   deadlineSignal: AbortSignal;
+  dismissesAwaited: boolean;
   finalRunFinishedChunks: readonly PublicStreamChunk[];
+  /** The budget cap that ended the loop, if one did. */
+  pause: ChatTurnPause | null;
   responseMessage: ChatMessage | null;
   runCancelled: boolean;
   toolCallsWithCompleteInput: ReadonlySet<string>;
@@ -2355,8 +2764,11 @@ const drainedRunOutcome = ({
     // source that simply ended. Grading that silence as a completion
     // persists a turn with no answer and no reason; the signal is what says
     // the turn was cut, and which signal says why. A finish whose outcome is
-    // `cancelled` says the same.
-    return chatCutShortOutcome({ abortSignal, deadlineSignal });
+    // `cancelled` says the same; with no signal, after the member dismissed
+    // what the turn awaited, it is their stop.
+    return !abortSignal.aborted && dismissesAwaited
+      ? USER_STOP_OUTCOME
+      : chatCutShortOutcome({ abortSignal, deadlineSignal });
   }
   const openInteraction = getAwaitingUserInteraction(responseMessage);
   if (
@@ -2368,6 +2780,11 @@ const drainedRunOutcome = ({
   }
   if (awaitingUserInteraction !== null) {
     return { type: "awaiting-user", interaction: awaitingUserInteraction };
+  }
+  // A card the user owes keeps the turn first; otherwise a loop the budget
+  // ended waits for the user's next message.
+  if (pause !== null) {
+    return pause;
   }
   return { type: "completed" };
 };
@@ -2401,7 +2818,7 @@ const resolveAdmissionLossOutcome = ({
     processor.processChunk(chunk);
   }
   finalizeResponseProcessor(processor);
-  const interaction = getAwaitingUserInteractions(getResponseMessage()).find(
+  const interaction = memberWaitsOf(getResponseMessage()).find(
     (candidate) =>
       toolCallsWithCompleteInput.has(candidate.toolCallId) &&
       (candidate.type === "approval" || handedOut.has(candidate.toolCallId)),
@@ -2429,11 +2846,7 @@ const resolveAdmissionLossOutcome = ({
 const streamControlSignal = (
   abortSignal: AbortSignal,
   runSignal: AbortSignal,
-) =>
-  runSignal.reason === RUN_CANCEL_REASON ||
-  runSignal.reason === CHAT_TURN_OWNER_LOST_REASON
-    ? runSignal
-    : abortSignal;
+) => (isCutByStopOrOwnerLoss(runSignal) ? runSignal : abortSignal);
 
 type StreamSettlementOptions = Pick<
   ProcessServerChatStreamProps,
@@ -2451,6 +2864,9 @@ type StreamSettlementOptions = Pick<
   rawArgumentsByIncompleteToolCallId: Map<string, string>;
   toolCallsWithCompleteInput: Set<string>;
   getUsage: () => TokenUsage | undefined;
+  getTurnSpend: () => ChatTurnSpend | undefined;
+  /** How full the context of a turn run on the member's computer was. */
+  getLocalRunContext: () => ChatLocalRunContext | undefined;
   announceBeforeFailure: () => StreamChunk[];
   /** Whether the run streamed an answer (see `processServerChatStream`). */
   getProducedAnswer: () => boolean;
@@ -2471,18 +2887,18 @@ const createStreamSettlement = ({
   rawArgumentsByIncompleteToolCallId,
   toolCallsWithCompleteInput,
   getUsage,
+  getTurnSpend,
+  getLocalRunContext,
   getProducedAnswer,
   announceBeforeFailure,
   terminal,
 }: StreamSettlementOptions) => {
+  const admissionCut = () =>
+    chatTurnRunCutOf(abortSignal.reason) === "admission-lost";
   const admissionLost = () =>
-    ActionAdmissionError.is(abortSignal.reason) &&
-    runSignal.reason !== RUN_CANCEL_REASON &&
-    runSignal.reason !== CHAT_TURN_OWNER_LOST_REASON;
+    admissionCut() && !isCutByStopOrOwnerLoss(runSignal);
   const admissionCutByControl = () =>
-    ActionAdmissionError.is(abortSignal.reason) &&
-    (runSignal.reason === RUN_CANCEL_REASON ||
-      runSignal.reason === CHAT_TURN_OWNER_LOST_REASON);
+    admissionCut() && isCutByStopOrOwnerLoss(runSignal);
   const cutShortOutcome = () =>
     chatCutShortOutcome({
       abortSignal: streamControlSignal(abortSignal, runSignal),
@@ -2534,7 +2950,9 @@ const createStreamSettlement = ({
     // between the stream and the persistence processor is a defect in this
     // pipeline, so it must not be graded as an anticipated provider state.
     if (
-      (outcome.type === "completed" || outcome.type === "awaiting-user") &&
+      (outcome.type === "completed" ||
+        outcome.type === "awaiting-user" ||
+        outcome.type === "paused") &&
       getProducedAnswer() &&
       (getResponseMessage()?.parts.length ?? 0) === 0
     ) {
@@ -2558,7 +2976,9 @@ const createStreamSettlement = ({
             outcome,
             producedAnswer: getProducedAnswer(),
             responseMessage,
+            turnSpend: getTurnSpend(),
             usage: getUsage(),
+            localRunContext: getLocalRunContext(),
           })
         : attachTerminalTurnOutcome({
             message: checkpoint,
@@ -2593,13 +3013,20 @@ const createStreamSettlement = ({
   };
 };
 
+type PersistenceRunState = {
+  cancelled: boolean;
+  /** What the turn's provider reported spending. */
+  usage?: TokenUsage | undefined;
+  /** The last run's context report is the one the next turn starts from. */
+  localRunContext?: ChatLocalRunContext | undefined;
+};
+
 type ProcessPersistenceChunkOptions = {
   responseMessageId: SafeId<"chatMessage">;
   sourceChunk: PublicStreamChunk;
   deferredRunFinishedChunks: PublicStreamChunk[];
   processor: ChatStreamProcessor;
-  runState: { cancelled: boolean };
-  recordUsage: (usage: TokenUsage | undefined) => void;
+  runState: PersistenceRunState;
   partProvenance: SnapshotPartReconciler;
 };
 
@@ -2908,7 +3335,6 @@ const processPersistenceChunk = ({
   deferredRunFinishedChunks,
   processor,
   runState,
-  recordUsage,
   partProvenance,
 }: ProcessPersistenceChunkOptions): PersistenceChunkResult => {
   if (
@@ -2970,8 +3396,10 @@ const processPersistenceChunk = ({
       panic("Unhandled TanStack completed stream event");
     }
     if (chunk.usage) {
-      recordUsage(tokenUsageFromTerminalChunk(chunk));
+      runState.usage = tokenUsageFromTerminalChunk(chunk);
     }
+    runState.localRunContext =
+      localRunContextFromChunk(chunk) ?? runState.localRunContext;
     // TanStack's agent loop can emit continuation events after a model
     // run finishes, notably `approval-requested` for a gated server tool.
     // The client already receives RUN_FINISHED only after the source is
@@ -3049,6 +3477,7 @@ const failedRunDetails = ({ chunk, sourceChunk }: FailedRunDetailsOptions) => {
     panic("Unhandled TanStack failed stream event");
   }
   const providerDiagnostic = providerDiagnosticFromChunk(chunk);
+  const limit = localRunLimitFromChunk(chunk);
   return {
     chunk,
     usage: tokenUsageFromTerminalChunk(chunk),
@@ -3056,6 +3485,7 @@ const failedRunDetails = ({ chunk, sourceChunk }: FailedRunDetailsOptions) => {
       type: "failed",
       error: classifyRunErrorChunk(sourceChunk),
       ...(providerDiagnostic === undefined ? {} : { providerDiagnostic }),
+      ...(limit === undefined ? {} : { limitResetsAt: limit.resetsAt }),
     } as const satisfies ChatTurnOutcome,
   };
 };
@@ -3138,16 +3568,17 @@ const readSourceUntilCut = async function* ({
         // cleanup, but let settlement finish while an uncooperative next is
         // still blocked; the race already observes that next's rejection.
         detached(
-          Result.tryPromise(async () => await iterator.return?.()).then(
-            (result) => {
-              if (Result.isError(result)) {
-                observeFailure(result.error, {
-                  sink: SOURCE_CLEANUP_AFTER_CUT_FAILURE,
-                });
-              }
-              return undefined;
-            },
-          ),
+          async () =>
+            Result.tryPromise(async () => await iterator.return?.()).then(
+              (result) => {
+                if (Result.isError(result)) {
+                  observeFailure(result.error, {
+                    sink: SOURCE_CLEANUP_AFTER_CUT_FAILURE,
+                  });
+                }
+                return undefined;
+              },
+            ),
           "chat.source-cleanup-after-cut",
         );
       } else {
@@ -3179,6 +3610,37 @@ const createClientAssistantOwner = (responseMessageId: string) => {
   };
 };
 
+const finalizeCompletedSource = (
+  processor: ChatStreamProcessor,
+  finishedChunks: readonly PublicStreamChunk[],
+): void => {
+  for (const chunk of finishedChunks) {
+    processor.processChunk(chunk);
+  }
+  // The source is drained, so the turn is over. A finish that reports
+  // `tool_calls` leaves the processor waiting for the next iteration of the
+  // agent loop, and an iteration that never comes would leave the assistant
+  // message unfinalized and `onStreamEnd` unfired: the turn a client tool or
+  // an approval is waiting on would read as an empty completion. Finalizing
+  // is what ends the message; it is the same call the SDK makes when it
+  // drives the stream itself, and repeating it later is a no-op.
+  processor.finalizeStream();
+};
+
+const reportCancelledStreamFailure = (
+  error: unknown,
+  kind: AIErrorKind,
+): void => {
+  // Run control cancellation is expected; retain other upstream failures
+  // that arrive during cancellation.
+  if (AIGenerationCancelledError.is(error)) {
+    return;
+  }
+  captureError(
+    error,
+    handlerErrorContext(`chat.processServerChatStream.${kind}`, { kind }),
+  );
+};
 /** The approved client calls a resumed message holds. Their input completed
  *  in the run that asked for approval; the resumed run hands them to the
  *  client without streaming that input again. */
@@ -3191,8 +3653,29 @@ const approvedCallIdsOf = (message: ChatMessage | undefined): Set<string> =>
     ),
   );
 
+/**
+ * The chunks that close a drained run: a paused turn's outcome on the live
+ * message first (the provider finish does not carry it), then the run's
+ * deferred finish.
+ */
+const closingChunks = function* (
+  outcome: ChatTurnOutcome,
+  messageId: string,
+  finished: readonly PublicStreamChunk[],
+): Generator<PublicStreamChunk> {
+  if (outcome.type === "paused") {
+    yield {
+      type: EventType.TEXT_MESSAGE_END,
+      messageId,
+      metadata: { turnOutcome: outcome },
+    } as const satisfies PublicStreamChunk;
+  }
+  yield* finished;
+};
+
 export const processServerChatStream = async function* ({
   abortSignal,
+  dismissesAwaited = false,
   runSignal = abortSignal,
   reportSnapshotFailure,
   getRestorableCheckpoint,
@@ -3204,9 +3687,10 @@ export const processServerChatStream = async function* ({
   onFinish,
   processor,
   source,
+  turnBudget,
 }: ProcessServerChatStreamProps): AsyncIterable<PublicStreamChunk> {
   const deferredRunFinishedChunks: PublicStreamChunk[] = [];
-  const runState = { cancelled: false };
+  const runState: PersistenceRunState = { cancelled: false };
   const responseMessageId = mapMessageId(
     ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL,
   );
@@ -3224,10 +3708,6 @@ export const processServerChatStream = async function* ({
   let producedAnswer = false;
   const rawArgumentsByIncompleteToolCallId = new Map<string, string>();
   const toolCallsWithCompleteInput = approvedCallIdsOf(initialResponseMessage);
-  let usage: TokenUsage | undefined;
-  const recordUsage = (recorded: TokenUsage | undefined) => {
-    usage = recorded;
-  };
   // One accepted turn has exactly one terminal callback. Set before awaiting
   // persistence so a callback failure cannot re-enter and double-write a
   // different outcome from catch/finally.
@@ -3252,7 +3732,9 @@ export const processServerChatStream = async function* ({
     deferredRunFinishedChunks,
     rawArgumentsByIncompleteToolCallId,
     toolCallsWithCompleteInput,
-    getUsage: () => usage,
+    getUsage: () => runState.usage,
+    getLocalRunContext: () => runState.localRunContext,
+    getTurnSpend: () => turnBudget?.spend(),
     getProducedAnswer: () => producedAnswer,
     announceBeforeFailure: clientAssistantOwner.announceBeforeFailure,
     terminal,
@@ -3281,7 +3763,8 @@ export const processServerChatStream = async function* ({
         sourceChunk.type === EventType.RUN_ERROR &&
         (admissionLost() || admissionCutByControl())
       ) {
-        usage = tokenUsageFromTerminalChunk(sourceChunk) ?? usage;
+        runState.usage =
+          tokenUsageFromTerminalChunk(sourceChunk) ?? runState.usage;
         const outcome = admissionCutByControl()
           ? cutShortOutcome()
           : admissionLossOutcome();
@@ -3296,7 +3779,6 @@ export const processServerChatStream = async function* ({
         deferredRunFinishedChunks,
         processor,
         runState,
-        recordUsage,
         partProvenance,
       });
       if (processed.type === "deferred") {
@@ -3317,7 +3799,7 @@ export const processServerChatStream = async function* ({
       yield* resumeChunks;
       if (lifecycle === "failed") {
         const failure = failedRunDetails({ chunk, sourceChunk });
-        usage = failure.usage ?? usage;
+        runState.usage = failure.usage ?? runState.usage;
         await terminalize({
           flushProcessor: true,
           outcome: failure.outcome,
@@ -3340,21 +3822,13 @@ export const processServerChatStream = async function* ({
       return;
     }
     const finalRunFinishedChunks = deferredRunFinishedChunks.splice(0);
-    for (const chunk of finalRunFinishedChunks) {
-      processor.processChunk(chunk);
-    }
-    // The source is drained, so the turn is over. A finish that reports
-    // `tool_calls` leaves the processor waiting for the next iteration of the
-    // agent loop, and an iteration that never comes would leave the assistant
-    // message unfinalized and `onStreamEnd` unfired: the turn a client tool or
-    // an approval is waiting on would read as an empty completion. Finalizing
-    // is what ends the message; it is the same call the SDK makes when it
-    // drives the stream itself, and repeating it later is a no-op.
-    processor.finalizeStream();
+    finalizeCompletedSource(processor, finalRunFinishedChunks);
     const outcome = drainedRunOutcome({
       abortSignal: streamControlSignal(abortSignal, runSignal),
       deadlineSignal,
+      dismissesAwaited,
       finalRunFinishedChunks,
+      pause: turnBudget?.pause() ?? null,
       responseMessage: getResponseMessage(),
       runCancelled: runState.cancelled,
       toolCallsWithCompleteInput,
@@ -3365,7 +3839,7 @@ export const processServerChatStream = async function* ({
       flushProcessor: CUT_SHORT_OUTCOME[outcome.type],
       outcome,
     });
-    yield* finalRunFinishedChunks;
+    yield* closingChunks(outcome, responseMessageId, finalRunFinishedChunks);
   } catch (error) {
     if (admissionLost()) {
       const outcome = admissionLossOutcome();
@@ -3376,18 +3850,18 @@ export const processServerChatStream = async function* ({
     }
     const kind = classifyAIError(error);
     if (abortSignal.aborted) {
-      // Run control cancellation is an expected exit. Keep telemetry for
-      // other upstream failures that arrive during cancellation.
-      if (!AIGenerationCancelledError.is(error)) {
-        captureError(error, { kind });
-      }
+      reportCancelledStreamFailure(error, kind);
       await terminalize({
         flushProcessor: true,
         outcome: cutShortOutcome(),
       });
       return;
     }
-    reportStreamFailure(error, kind);
+    reportStreamFailure(error, {
+      scope: { type: "handler", handlerId: "chat.streamRun" },
+      kind,
+      fingerprintKey: "chat.streamRun",
+    });
     await terminalize({
       flushProcessor: true,
       outcome: { type: "failed", error: kind },
@@ -3413,8 +3887,14 @@ export const processServerChatStream = async function* ({
 
 type ProcessTurnForPersistenceProps = Omit<
   ProcessServerChatStreamProps,
-  "getResponseMessage" | "initialMessages" | "mapMessageId" | "processor"
+  | "getResponseMessage"
+  | "initialMessages"
+  | "mapMessageId"
+  | "processor"
+  | "turnBudget"
 > & {
+  /** Every persisted turn runs under its budget. */
+  turnBudget: Pick<ChatTurnBudgetRun, "pause" | "spend">;
   /** The history the run starts from: the messages it may continue. */
   initialMessages: ChatMessage[];
   owningAssistantMessageId: SafeId<"chatMessage"> | undefined;
@@ -3440,11 +3920,14 @@ const processTurnForPersistence = ({
   const { processor, message } = createStreamMessageCapture({
     initialMessages,
     capture: (streamed) => {
-      const convertedMessage = toChatMessage(streamed, visualOrigin);
+      const convertedMessage = toChatMessage(
+        withLocalRunFileParts(streamed),
+        visualOrigin,
+      );
       return convertedMessage === null
         ? null
         : attachRestorationMetadata({
-            message: convertedMessage,
+            message: attachLocalRunFilesNotShared(convertedMessage, streamed),
             restorationPairs,
           });
     },
@@ -3464,7 +3947,11 @@ type FinishResponseMessageProps = {
   /** Whether the run streamed an answer (see `processServerChatStream`). */
   producedAnswer: boolean;
   responseMessage: ChatMessage | null;
+  /** What the turn has spent of its budget, which a later request of the
+   *  same turn adds to. */
+  turnSpend: ChatTurnSpend | undefined;
   usage: TokenUsage | undefined;
+  localRunContext: ChatLocalRunContext | undefined;
 };
 
 const createTerminalResponseMessage = ({
@@ -3472,7 +3959,9 @@ const createTerminalResponseMessage = ({
   outcome,
   producedAnswer,
   responseMessage,
+  turnSpend,
   usage,
+  localRunContext,
 }: FinishResponseMessageProps): PersistableTerminalAssistantMessage => {
   if (outcome.type === "completed" && !producedAnswer) {
     throw new ChatEmptyCompletionError({
@@ -3506,16 +3995,45 @@ const createTerminalResponseMessage = ({
     usage,
   });
   return attachTerminalTurnOutcome({
-    message: persistableMessage,
+    message:
+      turnSpend === undefined && localRunContext === undefined
+        ? persistableMessage
+        : {
+            ...persistableMessage,
+            metadata: {
+              ...persistableMessage.metadata,
+              ...(turnSpend === undefined ? {} : { turnSpend }),
+              ...(localRunContext === undefined ? {} : { localRunContext }),
+            },
+          },
     turnOutcome: outcome,
   });
+};
+
+/**
+ * The context report of a turn run on the member's computer, as the local
+ * run's own reader checked it (`local-run-chunks.ts`), checked again here.
+ */
+const localRunContextFromChunk = (
+  chunk: Extract<PublicStreamChunk, { type: EventType.RUN_FINISHED }>,
+) => {
+  const parsed = v.safeParse(
+    chatLocalRunContextSchema,
+    chunk.metadata?.[CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY],
+  );
+  return parsed.success ? parsed.output : undefined;
 };
 
 const finalizeResponseProcessor = (processor: ChatStreamProcessor): void => {
   try {
     processor.finalizeStream();
   } catch (error) {
-    captureError(error, { kind: "aborted_stream_finish_failed" });
+    captureError(
+      error,
+      handlerErrorContext("chat.finalizeResponseProcessor", {
+        kind: "aborted_stream_finish_failed",
+      }),
+    );
   }
 };
 
@@ -3788,22 +4306,32 @@ export const transformClientVisibleStream = ({
   source,
   storedHistory,
 }: TransformClientVisibleStreamProps): AsyncIterable<StreamChunk> =>
-  presentStoredHistory({
-    history: storedHistory,
-    source: keepDeniedApprovalsOnScreen({
-      deniedApprovals,
-      source: transformOutgoingStream({
-        boundary: { type: "raw" },
-        initialRestorationPlaceholders: new Set(),
-        resolveAssistantTextRefs,
-        resolveAssistantToolInputRefs,
-        resolveAssistantToolOutputRefs,
-        resolveAssistantValueRefs,
-        restorationPairs: [],
-        source,
+  projectClientVisibleStream(
+    presentStoredHistory({
+      history: storedHistory,
+      source: keepDeniedApprovalsOnScreen({
+        deniedApprovals,
+        source: transformOutgoingStream({
+          boundary: { type: "raw" },
+          initialRestorationPlaceholders: new Set(),
+          resolveAssistantTextRefs,
+          resolveAssistantToolInputRefs,
+          resolveAssistantToolOutputRefs,
+          resolveAssistantValueRefs,
+          restorationPairs: [],
+          source,
+        }),
       }),
     }),
-  });
+  );
+
+const projectClientVisibleStream = async function* (
+  source: AsyncIterable<StreamChunk>,
+): AsyncIterable<StreamChunk> {
+  for await (const chunk of source) {
+    yield clientVisibleStreamChunk(chunk);
+  }
+};
 
 type OutgoingChunkTransformerOptions = {
   boundary: ChatThirdPartyBoundary;
@@ -4877,6 +5405,37 @@ const deanonymizeToolInputText = (
   return typeof deanonymized === "string" ? deanonymized : text;
 };
 
+/**
+ * The answer with the files a local run handed back as its parts: the stream
+ * carries them as metadata (`CHAT_LOCAL_RUN_FILES_METADATA_KEY`), and the stored
+ * message holds them the way every other reader expects a file.
+ */
+const withLocalRunFileParts = (streamed: UIMessage): UIMessage => {
+  const files = chatLocalRunFilePartsOf(streamed.metadata, streamed.parts);
+  return files.length === 0
+    ? streamed
+    : { ...streamed, parts: [...streamed.parts, ...files] };
+};
+
+const attachLocalRunFilesNotShared = (
+  message: ChatMessage,
+  streamed: UIMessage,
+): ChatMessage => {
+  const notShared = v.safeParse(
+    chatLocalRunFilesNotSharedSchema,
+    streamed.metadata?.[CHAT_LOCAL_RUN_FILES_NOT_SHARED_METADATA_KEY],
+  );
+  return notShared.success && notShared.output.length > 0
+    ? {
+        ...message,
+        metadata: {
+          ...message.metadata,
+          [CHAT_LOCAL_RUN_FILES_NOT_SHARED_METADATA_KEY]: notShared.output,
+        },
+      }
+    : message;
+};
+
 const attachRestorationMetadata = ({
   message,
   restorationPairs,
@@ -4977,11 +5536,53 @@ const toChatParts = (
 };
 
 type HydrateMessagesProps = {
+  /**
+   * The turn runs on the member's computer, whose agent gets each file in its
+   * folder. Never with anonymized text, which a raw copy would defeat.
+   */
+  copiesFilesToComputer: boolean;
   messages: ChatMessage[];
   safeDb: SafeDb;
   sendMode: ChatSendMode;
   userId: SafeId<"user">;
 };
+
+const localRunFilePath = (file: Pick<StoredUserFile, "fileName" | "id">) =>
+  desktopRunnerAttachmentPath(file.id, sanitizeFilename(file.fileName));
+
+/**
+ * The attached files of the turn's messages, newest first. Beyond the cap,
+ * older files were copied on the turn that attached them.
+ */
+export const localRunAttachmentsOf = async ({
+  messages,
+  safeDb,
+  userId,
+}: Pick<HydrateMessagesProps, "messages" | "safeDb" | "userId">) =>
+  await Result.gen(async function* () {
+    const files = yield* Result.await(
+      readUserFilesByIds({ messages, safeDb, userId }),
+    );
+    const attachments = new Map<string, LocalRunAttachment>();
+    for (const message of messages.toReversed()) {
+      for (const part of message.parts) {
+        const fileId =
+          isChatAttachmentPart(part) && !isAnswerFilePart(message.role, part)
+            ? getUserFileIdFromAttachmentPart(part)
+            : null;
+        const file = fileId === null ? undefined : files.get(fileId);
+        if (file !== undefined && attachments.size < MAX_RUN_ATTACHMENTS) {
+          attachments.set(file.id, {
+            path: localRunFilePath(file),
+            fileId: file.id,
+            fileName: sanitizeFilename(file.fileName),
+            s3Key: file.s3Key,
+          });
+        }
+      }
+    }
+    return Result.ok([...attachments.values()]);
+  });
 
 type XlsxCacheWrite = {
   file: StoredUserFile;
@@ -5030,6 +5631,7 @@ const persistXlsxCacheWrites = async ({
 };
 
 export const hydrateMessages = async ({
+  copiesFilesToComputer,
   messages,
   safeDb,
   sendMode,
@@ -5050,7 +5652,10 @@ export const hydrateMessages = async ({
       const parts: ChatMessage["parts"] = [];
 
       for (const part of message.parts) {
-        if (!isChatAttachmentPart(part)) {
+        if (
+          !isChatAttachmentPart(part) ||
+          isAnswerFilePart(message.role, part)
+        ) {
           parts.push(part);
           continue;
         }
@@ -5064,6 +5669,19 @@ export const hydrateMessages = async ({
         const userFile = userFilesById.get(fileId);
         if (!userFile) {
           panic("Persisted chat file reference missing user_files row");
+        }
+
+        if (copiesFilesToComputer) {
+          parts.push(
+            createChatTextPart(
+              `Attached file "${userFile.fileName}" is in your folder at ${localRunFilePath(userFile)}.`,
+            ),
+          );
+          // An image or PDF stays out of the run's stored messages: the agent
+          // reads the copy. Text it could not extract without tools stays too.
+          if (!canHydrateFilePartAsPlainText(userFile.mimeType)) {
+            continue;
+          }
         }
 
         const hydratedPart = yield* Result.await(
@@ -5182,7 +5800,7 @@ const collectMessageUserFileIds = (
 
   for (const message of messages) {
     for (const part of message.parts) {
-      if (!isChatAttachmentPart(part)) {
+      if (!isChatAttachmentPart(part) || isAnswerFilePart(message.role, part)) {
         continue;
       }
 

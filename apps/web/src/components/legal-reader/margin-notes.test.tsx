@@ -5,9 +5,9 @@ import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
 import type { DecisionReaderAdapters } from "@stll/decision-reader/reader-adapters";
 import type { CitedProvisionTarget } from "@stll/decision-reader/reader-types";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { MarginItem } from "@/components/legal-reader/margin-notes";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 const { act, cleanup, fireEvent, render, waitFor } =
@@ -85,13 +85,16 @@ const analysisNote: MarginItem = {
 
 const ownComment: MarginItem = {
   author: { image: null, name: "Reader" },
+  createdAt: "2026-09-01T10:00:00.000Z",
   id: "comment-1",
   kind: "comment",
   mine: true,
   onDelete: () => undefined,
   onToggleVisibility: () => undefined,
   startAnchorId: "p-1",
+  targetType: "decision",
   text: "My own words.",
+  updatedAt: "2026-09-01T10:00:00.000Z",
   visibility: "private",
 };
 
@@ -128,7 +131,7 @@ describe("notes drawn in the text's own flow", () => {
 
 const provision = {
   document: {
-    country: "CZ",
+    country: "CZE",
     eli: "/eli/cz/sb/2012/89",
     id: "act-1",
     slug: "civil-code",
@@ -170,7 +173,10 @@ const readerAdapters = {
     "caseLaw.notesFilter.ai": "AI",
     "common.court": "Court",
     "statutes.wordingVersionUnknown": "Wording version unknown",
-    "statutes.openProvision": "Open provision",
+    "common.openInSidePanel": "Open in side panel",
+    "common.openInStella": "Open in stella",
+    "inspector.external.openOriginal": "Open original",
+    "caseLaw.citation.notInStella": "Not in stella yet",
     "statutes.provisionTextUnavailable": "Text not available",
     "statutes.showCitedPartOnly": "Show cited part only",
     "statutes.showFullProvision": "Show full provision",
@@ -183,9 +189,11 @@ const readerAdapters = {
     provisionActText: ({ statuteTitle }) => statuteTitle,
     formatLabelList: (labels) => labels.join(", "),
   },
-  copyPermalink: async () => true,
-  loadProvisionPreview: async () => null,
+  renderPermalinkCopy: ({ render: renderMark }) =>
+    renderMark({ copied: false, copy: () => undefined }),
   openProvision: () => undefined,
+  // oxlint-disable-next-line jsx-a11y/anchor-has-content -- a render element; the peek supplies its content
+  provisionPageLink: ({ payload }) => <a href={`#${payload.anchorId}`} />,
   renderBodyUnavailable: () => null,
   renderDecisionLink: ({ children }) => <span>{children}</span>,
   renderStatuteLink: (props) =>

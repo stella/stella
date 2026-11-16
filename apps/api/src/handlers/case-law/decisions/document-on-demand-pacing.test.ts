@@ -6,7 +6,12 @@ import { assertProperty } from "@stll/property-testing";
 
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { PendingDocument } from "@/api/lib/legal-search/sk-document-backfill";
+import type {
+  DecisionDocumentOutcome,
+  PendingDocument,
+} from "@/api/lib/legal-search/sk-document-backfill";
+import { runWithinRequestLatencyBudget } from "@/api/lib/load/request-latency-budget";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
@@ -19,6 +24,8 @@ import {
   type OnDemandDocumentDeps,
   readThroughDeferredDocument,
 } from "./document-on-demand";
+
+const testFetchState = createTestFetch();
 
 const decision = (): PendingDocument => ({
   id: createSafeId<"caseLawDecision">(),
@@ -92,6 +99,40 @@ test("a read consumes one shared source reservation", async () => {
   expect(reservations()).toBe(1);
 });
 
+test("a deferred read returns metadata when its request budget is spent", async () => {
+  const { deps } = pacedDeps({ tokens: 1 });
+  const fetch = Promise.withResolvers<DecisionDocumentOutcome>();
+  deps.fetchDocument = async () => await fetch.promise;
+  jest.useFakeTimers();
+  let resolved = false;
+  const read = runWithinRequestLatencyBudget(
+    { label: "fetch", budgetMs: 0 },
+    async () =>
+      await readThroughDeferredDocument({
+        decision: decision(),
+        adapterKey: "sk-courts",
+        deps,
+        recordDemand: false,
+      }),
+  ).then((result) => {
+    resolved = true;
+    return result;
+  });
+  try {
+    jest.advanceTimersByTime(1);
+    for (let turn = 0; turn < 40; turn += 1) {
+      await Promise.resolve();
+    }
+    expect(resolved).toBe(true);
+    expect(await read).toBeNull();
+  } finally {
+    fetch.resolve({ status: "claimed" });
+    jest.runAllTimers();
+    await read;
+    jest.useRealTimers();
+  }
+});
+
 for (const state of [{ tokens: 0 }, { tokens: 1, backoff: true }]) {
   test(`source pacing returns metadata and records deferral with ${state.backoff ? "backoff" : "no slot"}`, async () => {
     const { deps, fetched, deferred } = pacedDeps(state);
@@ -160,12 +201,14 @@ for (const mode of ["throws", "rejects", "pending", "connecting"] as const) {
     let gateCalls = 0;
     let resolved = false;
     const recorded: string[] = [];
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = asFetchMock(
-      mock(async () => {
-        requests += 1;
-        return new Response("document");
-      }),
+
+    testFetchState.set(
+      asFetchMock(
+        mock(async () => {
+          requests += 1;
+          return new Response("document");
+        }),
+      ),
     );
     const deps: OnDemandDocumentDeps = {
       recordRequest: async () => {},
@@ -239,7 +282,7 @@ for (const mode of ["throws", "rejects", "pending", "connecting"] as const) {
       jest.advanceTimersByTime(6000);
       expect(requests).toBe(0);
     } finally {
-      globalThis.fetch = originalFetch;
+      testFetchState.restore();
       jest.useRealTimers();
     }
   });

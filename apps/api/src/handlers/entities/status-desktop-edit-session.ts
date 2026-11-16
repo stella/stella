@@ -1,27 +1,28 @@
-import { status, t } from "elysia";
+import * as v from "valibot";
 
+import { status } from "@/api/http/status";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import {
   authorizeDesktopEditSession,
   DESKTOP_EDIT_SESSION_TAKEN_OVER_CODE,
   DESKTOP_EDIT_SESSION_TAKEN_OVER_MESSAGE,
 } from "@/api/lib/desktop-edit-sessions";
 
-export const statusDesktopEditSessionParamsSchema = t.Object({
-  sessionId: tSafeId("desktopEditSession"),
+export const statusDesktopEditSessionParamsSchema = v.object({
+  sessionId: resourceIdSchema("desktopEditSession"),
 });
 
 const SESSION_TOKEN_LENGTH = 64;
 const BEARER_PREFIX = "Bearer ";
 const SESSION_TOKEN_PATTERN = /^[a-f0-9]{64}$/u;
 
-export const statusDesktopEditSessionHeadersSchema = t.Object({
-  authorization: t.Optional(t.String()),
+export const statusDesktopEditSessionHeadersSchema = v.object({
+  authorization: v.optional(v.string()),
 });
 
 type StatusDesktopEditSessionHandlerProps = {
-  headers: { authorization?: string };
+  headers: { authorization?: string | undefined };
   sessionId: SafeId<"desktopEditSession">;
 };
 

@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { resolveCaching } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
@@ -15,7 +15,7 @@ import {
   createSafeRootHandler,
 } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tJsonObject, tSafeId } from "@/api/lib/custom-schema";
+import { jsonObjectSchema, resourceIdSchema } from "@/api/lib/custom-schema";
 import {
   createModelActionAdmitter,
   modelActionRefusal,
@@ -25,12 +25,10 @@ import {
   templateDecideConditionsLogic,
 } from "@/api/lib/templates/template-decide-conditions";
 
-const decideConditionsBodySchema = t.Object({
-  values: tJsonObject,
-});
+const decideConditionsBodySchema = v.object({ values: jsonObjectSchema });
 
-const decideConditionsParamsSchema = t.Object({
-  templateId: tSafeId("template"),
+const decideConditionsParamsSchema = v.object({
+  templateId: resourceIdSchema("template"),
 });
 
 const config = {
@@ -90,7 +88,7 @@ export const createConditionPreviewHandler = ({
           abortSignal: request.signal,
           runDecisions: async ({ fields, values, abortSignal }) => {
             if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
-              return Result.err(storedAIConfigUnreadableError(undefined));
+              return Result.err(storedAIConfigUnreadableError());
             }
             if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.ownKeyRequired) {
               return Result.err(ownAIKeyRequiredError());

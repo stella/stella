@@ -13,6 +13,7 @@ import {
 } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { replayWrite } from "@/api/lib/case-law/replay-write";
 import { liveCaseLawLegacyReferenceSql } from "@/api/lib/legal-search/case-law-legacy-reference-sql";
 import {
   eraseRawDocument,
@@ -23,6 +24,7 @@ import {
   rawDocumentPrefix,
 } from "@/api/lib/legal-search/raw-source-storage";
 import type { RawDocumentErasureIncompleteError } from "@/api/lib/legal-search/raw-source-storage";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { listS3ObjectPage } from "@/api/lib/s3";
 
 /**
@@ -85,10 +87,10 @@ export const enqueueCaseLawRawSweepsTx = async (
     )
     .onConflictDoUpdate({
       target: caseLawRawSweeps.decisionId,
-      set: {
+      ...replayWrite(caseLawRawSweeps, {
         settleAfter: sql`GREATEST(${caseLawRawSweeps.settleAfter}, excluded.settle_after)`,
         nextAttemptAt: sql`LEAST(${caseLawRawSweeps.nextAttemptAt}, excluded.next_attempt_at)`,
-      },
+      }),
     });
 };
 
@@ -436,22 +438,26 @@ export const reconcileCaseLawRawSweeps = async ({
       .limit(limit)
       .for("update", { skipLocked: true });
     if (rows.length > 0) {
-      await tx
-        .update(caseLawRawSweeps)
-        .set({
-          attemptCount: sql`${caseLawRawSweeps.attemptCount} + 1`,
-          nextAttemptAt: sql`GREATEST(
+      const write = replayWrite(caseLawRawSweeps, {
+        attemptCount: sql`${caseLawRawSweeps.attemptCount} + 1`,
+        nextAttemptAt: sql`GREATEST(
             ${caseLawRawSweeps.settleAfter},
             now() + LEAST(
               ${DAY_IN_MS},
               ${RETRY_UNIT_MS} * POWER(2, LEAST(${caseLawRawSweeps.attemptCount}, 11))
             ) * interval '1 millisecond'
           )`,
-        })
+      });
+      await tx
+        .update(caseLawRawSweeps)
+        .set(write.set)
         .where(
-          inArray(
-            caseLawRawSweeps.decisionId,
-            rows.map(({ decisionId }) => decisionId),
+          and(
+            write.setWhere,
+            inArray(
+              caseLawRawSweeps.decisionId,
+              rows.map(({ decisionId }) => decisionId),
+            ),
           ),
         );
     }
@@ -480,11 +486,17 @@ export const reconcileCaseLawRawSweeps = async ({
         : swept;
     if (Result.isError(outcome)) {
       result.failed += 1;
-      captureError(outcome.error, {
-        decisionId: owner.decisionId,
-        prefix: rawDocumentPrefix(documentOwner(owner)),
-        step: "reconcileCaseLawRawSweeps.sweep",
-      });
+      captureError(
+        outcome.error,
+        handlerErrorContext(
+          "legalsearch.reconcileCaseLawRawSweeps.outcome_error",
+          {
+            decisionId: owner.decisionId,
+            prefix: rawDocumentPrefix(documentOwner(owner)),
+            step: "reconcileCaseLawRawSweeps.sweep",
+          },
+        ),
+      );
       continue;
     }
     if (outcome.value.type === "swept") {

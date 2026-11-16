@@ -11,7 +11,13 @@ export default defineConfig({
   ],
   format: ["esm"],
   platform: "neutral",
-  dts: true,
+  // Isolated declarations cannot express the TaggedError base classes, so tsrs emits the declarations.
+  dts: {
+    generator: "tsrs",
+    tsrs: {
+      moduleUrl: import.meta.resolve("tsrs"),
+    },
+  },
   outDir: "dist",
   clean: true,
 });

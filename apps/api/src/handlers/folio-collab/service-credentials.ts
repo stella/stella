@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 
 import { env } from "@/api/env";
+import type { VerifyCaller } from "@/api/lib/api-handlers";
 import {
   authorizeConfiguredBearer,
   type ConfiguredBearerAccess,
@@ -27,7 +28,7 @@ export const toFolioCollabServiceAuthorization = (
   return Result.ok(undefined);
 };
 
-export const authorizeFolioCollabService = (
+const authorizeFolioCollabService = (
   authorizationHeader: string | null,
 ): Result<void, HandlerError<401 | 404>> => {
   const access = authorizeConfiguredBearer({
@@ -36,3 +37,8 @@ export const authorizeFolioCollabService = (
   });
   return toFolioCollabServiceAuthorization(access);
 };
+
+/** A snapshot endpoint's caller: the deployment's collaboration service. */
+export const verifyFolioCollabServiceCaller: VerifyCaller<void> = ({
+  request,
+}) => authorizeFolioCollabService(request.headers.get("authorization"));

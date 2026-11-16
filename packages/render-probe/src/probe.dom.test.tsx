@@ -203,4 +203,38 @@ describe("the render probe", () => {
     );
     expect(report.split("\n")[2]).toStartWith("Row");
   });
+
+  test("a Refresh-style hook wrapper retains renderer registration and commit counting", async () => {
+    const hook: unknown = Reflect.get(
+      globalThis,
+      "__REACT_DEVTOOLS_GLOBAL_HOOK__",
+    );
+    if (typeof hook !== "object" || hook === null) {
+      throw new TypeError("The probe must install a DevTools hook");
+    }
+    const renderers: unknown = Reflect.get(hook, "renderers");
+    expect(renderers instanceof Map).toBe(true);
+    if (!(renderers instanceof Map)) {
+      throw new TypeError("Refresh requires a renderer map");
+    }
+    expect(renderers.size).toBeGreaterThan(0);
+    const previousCommit: unknown = Reflect.get(hook, "onCommitFiberRoot");
+    if (typeof previousCommit !== "function") {
+      throw new TypeError("The probe must install a commit callback");
+    }
+    let refreshCommits = 0;
+    Reflect.set(hook, "onCommitFiberRoot", (...args: unknown[]) => {
+      refreshCommits += 1;
+      Reflect.apply(previousCommit, hook, args);
+    });
+    probe.reset();
+    try {
+      await click("count");
+      expect(refreshCommits).toBe(1);
+      expect(renders()).toEqual({ App: { state: 1 }, Header: { parent: 1 } });
+      expect(Reflect.get(hook, "renderers")).toBe(renderers);
+    } finally {
+      Reflect.set(hook, "onCommitFiberRoot", previousCommit);
+    }
+  });
 });

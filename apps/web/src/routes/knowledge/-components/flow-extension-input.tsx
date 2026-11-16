@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
 import { XIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 
@@ -53,15 +54,15 @@ export const FlowExtensionInput = ({
         <ul className="flex flex-wrap gap-1.5">
           {extensions.map((extension) => (
             <li key={extension}>
-              <button
+              <Button
                 aria-label={`${t("common.remove")} ${extension}`}
-                className="bg-muted hover:bg-muted/70 text-muted-foreground inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs"
                 onClick={() => remove(extension)}
-                type="button"
+                size="xs"
+                variant="secondary"
               >
                 {extension}
                 <XIcon className="size-3" />
-              </button>
+              </Button>
             </li>
           ))}
         </ul>

@@ -1,6 +1,17 @@
 import { panic } from "better-result";
+import { sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
+import type { TransactionOf } from "@/api/db/scoped";
+import { executedRows } from "@/api/lib/db/executed-rows";
+import {
+  READ_BUDGETS,
+  type ReadBudgetId,
+  readBudgetPages,
+  type ScheduledJobReadBudgetId,
+} from "@/api/lib/db/read-budgets";
+import { isRecord } from "@/api/lib/type-guards";
 import {
   explainAsStella,
   type ExplainPlanDocument,
@@ -11,7 +22,9 @@ import {
   withoutAuthorizationSubplans,
 } from "@/api/tests/query-plans/plan-walker";
 
-import type { QueryPerfProfileId } from "./profiles";
+import { analyzePlan } from "./plan-analyzer";
+import type { QueryPerfProfileId, QueryPerfTenantProfileId } from "./profiles";
+import { withQueryPerfRollback } from "./rollback";
 import type { seedQueryPerf } from "./seed";
 import {
   applyPlannerSettings,
@@ -20,12 +33,40 @@ import {
 } from "./settings";
 
 const QUERY_PERF_REPETITIONS = 5;
-export const QUERY_PERF_BUFFER_HEADROOM = 1.25;
-const QUERY_PERF_HANG_MULTIPLIER = 25;
-const QUERY_PERF_HANG_FLOOR_MS = 1000;
+/**
+ * Execution time is only a hang guard: buffers are the budget, and wall time
+ * on a shared runner is not a measurement.
+ */
+const QUERY_PERF_HANG_GUARD_MS = 10_000;
+/** Markers need a material improvement before noisy boundary results remove them. */
+export const OVER_BUDGET_REMOVAL_BAND = 0.15;
 export type QueryPerfMetrics = {
   sharedBlocks: number;
   executionTimeMs: number;
+};
+
+export const sharedBlockSampleProblem = (
+  owner: string,
+  samples: readonly QueryPerfMetrics[],
+) => {
+  const blocks = samples.map(({ sharedBlocks }) => sharedBlocks);
+  const first = blocks.at(0);
+  return first !== undefined && blocks.every((value) => value === first)
+    ? undefined
+    : `${owner} produced non-deterministic shared-block samples: ${blocks.join(", ")}`;
+};
+
+/** A scheduled run costs every statement's buffers and execution time. */
+export const sumMetrics = (
+  measurements: readonly QueryPerfMetrics[],
+): QueryPerfMetrics => {
+  let sharedBlocks = 0;
+  let executionTimeMs = 0;
+  for (const measured of measurements) {
+    sharedBlocks += measured.sharedBlocks;
+    executionTimeMs += measured.executionTimeMs;
+  }
+  return { sharedBlocks, executionTimeMs };
 };
 
 export const median = (values: readonly number[]) => {
@@ -70,37 +111,179 @@ export const metricsFromPlan = (
   return { sharedBlocks: hit + read, executionTimeMs: time };
 };
 
+/** A measurement against its absolute budget; no earlier recording takes part. */
 export const budgetViolations = (
   measured: QueryPerfMetrics,
-  baseline: QueryPerfMetrics,
+  budgetPages: number,
 ) => {
   const violations: {
     kind: "shared-buffer-budget" | "execution-time-hang-guard";
     message: string;
   }[] = [];
-  const bufferBudget = baseline.sharedBlocks * QUERY_PERF_BUFFER_HEADROOM;
-  if (measured.sharedBlocks > bufferBudget) {
+  if (measured.sharedBlocks > budgetPages) {
     violations.push({
       kind: "shared-buffer-budget",
-      message: `shared buffer budget exceeded: measured ${measured.sharedBlocks} > budget ${bufferBudget} (baseline ${baseline.sharedBlocks} × ${QUERY_PERF_BUFFER_HEADROOM})`,
+      message: `shared buffer budget exceeded: measured ${measured.sharedBlocks} > budget ${budgetPages}`,
     });
   }
-  const hangGuard = Math.max(
-    baseline.executionTimeMs * QUERY_PERF_HANG_MULTIPLIER,
-    QUERY_PERF_HANG_FLOOR_MS,
-  );
-  if (measured.executionTimeMs > hangGuard) {
+  if (measured.executionTimeMs > QUERY_PERF_HANG_GUARD_MS) {
     violations.push({
       kind: "execution-time-hang-guard",
-      message: `execution time hang guard exceeded: median ${measured.executionTimeMs} ms > guard ${hangGuard} ms (baseline ${baseline.executionTimeMs} ms × ${QUERY_PERF_HANG_MULTIPLIER}, floor ${QUERY_PERF_HANG_FLOOR_MS} ms)`,
+      message: `execution time hang guard exceeded: ${measured.executionTimeMs} ms > ${QUERY_PERF_HANG_GUARD_MS} ms`,
     });
   }
   return violations;
 };
 
+/**
+ * Why a measurement breaks its budget, if it does. An entry marked over
+ * budget keeps its marker until it is materially under budget.
+ */
+const pageBudgetProblem = (
+  id: ReadBudgetId,
+  sharedBlocks: number,
+): string | undefined => {
+  const budget = READ_BUDGETS[id];
+  const pages = readBudgetPages(id);
+  const over = sharedBlocks > pages;
+  if ("overBudget" in budget) {
+    const removalLine = pages * (1 - OVER_BUDGET_REMOVAL_BAND);
+    return sharedBlocks <= removalLine
+      ? `${id} is marked over budget but measured ${String(sharedBlocks)} <= removal line ${String(removalLine)}; remove its overBudget marker`
+      : undefined;
+  }
+  return over
+    ? `${id}: ${String(sharedBlocks)} pages > budget ${String(pages)}`
+    : undefined;
+};
+
+export const budgetProblem = (id: ReadBudgetId, measured: QueryPerfMetrics) => {
+  const hang = budgetViolations(measured, readBudgetPages(id)).find(
+    (violation) => violation.kind === "execution-time-hang-guard",
+  );
+  return hang === undefined
+    ? pageBudgetProblem(id, measured.sharedBlocks)
+    : `${id}: ${hang.message}`;
+};
+
+export const scheduledJobBudgetProblems = (
+  id: ScheduledJobReadBudgetId,
+  measured: {
+    readMetrics: QueryPerfMetrics;
+    writeMetrics: QueryPerfMetrics;
+    writtenRows: number;
+  },
+) => {
+  const budget = READ_BUDGETS[id];
+  const problems: string[] = [];
+  const hang = budgetViolations(
+    sumMetrics([measured.readMetrics, measured.writeMetrics]),
+    readBudgetPages(id),
+  ).find((violation) => violation.kind === "execution-time-hang-guard");
+  if (hang !== undefined) {
+    problems.push(`${id}: ${hang.message}`);
+  }
+  const readProblem = pageBudgetProblem(id, measured.readMetrics.sharedBlocks);
+  if (readProblem !== undefined) {
+    problems.push(readProblem);
+  }
+  if ("combinedPagesPerRun" in budget) {
+    const combined =
+      measured.readMetrics.sharedBlocks + measured.writeMetrics.sharedBlocks;
+    if (combined > budget.combinedPagesPerRun) {
+      problems.push(
+        `${id}: ${String(combined)} combined pages per run > budget ${String(budget.combinedPagesPerRun)}`,
+      );
+    }
+  }
+  const writes = "writes" in budget ? budget.writes : undefined;
+  if (
+    (measured.writtenRows > 0 || measured.writeMetrics.sharedBlocks > 0) &&
+    writes === undefined
+  ) {
+    problems.push(`${id}: measured writes but declares no write budget`);
+    return problems;
+  }
+  if (writes === undefined) {
+    return problems;
+  }
+  const perRow = measured.writeMetrics.sharedBlocks / measured.writtenRows;
+  if (measured.writtenRows > 0 && perRow > writes.pagesPerWrittenRow) {
+    problems.push(
+      `${id}: ${String(perRow)} write pages per row > budget ${String(writes.pagesPerWrittenRow)}`,
+    );
+  }
+  if (measured.writeMetrics.sharedBlocks > writes.ceilingPagesPerRun) {
+    problems.push(
+      `${id}: ${String(measured.writeMetrics.sharedBlocks)} write pages per run > budget ${String(writes.ceilingPagesPerRun)}`,
+    );
+  }
+  return problems;
+};
+
+/**
+ * A run measured on a scenario and on its twin at twice the corpus size. The
+ * twin may cost a b-tree level more, never a share of the extra rows.
+ */
+const SCALE_TOLERANCE = 1.1;
+const SCALE_SLACK_PAGES = 64;
+
+export const scaleViolations = ({
+  size,
+  double,
+}: {
+  size: number;
+  double: number;
+}) => {
+  const allowed = Math.floor(size * SCALE_TOLERANCE) + SCALE_SLACK_PAGES;
+  return double > allowed
+    ? [
+        `reads grow with the corpus: ${size} pages at one size, ${double} at twice the size (at most ${allowed})`,
+      ]
+    : [];
+};
+
+type ScheduledWriteMeasurement = {
+  writeMetrics: QueryPerfMetrics;
+  writtenRows: number;
+};
+
+/**
+ * Write pages per written row may not grow with the corpus either. The twin's
+ * write pages are scaled to the first run's written rows, then held to the
+ * same tolerance as reads: a b-tree level more, never a share of the extra rows.
+ */
+export const writeScaleViolations = ({
+  size,
+  double,
+}: {
+  size: ScheduledWriteMeasurement;
+  double: ScheduledWriteMeasurement;
+}) => {
+  if (size.writtenRows === 0 || double.writtenRows === 0) {
+    return size.writtenRows === double.writtenRows
+      ? []
+      : [
+          `writes appear at only one size: ${String(size.writtenRows)} rows at one size, ${String(double.writtenRows)} at twice the size`,
+        ];
+  }
+  const scaled = Math.ceil(
+    (double.writeMetrics.sharedBlocks * size.writtenRows) / double.writtenRows,
+  );
+  return scaleViolations({
+    size: size.writeMetrics.sharedBlocks,
+    double: scaled,
+  }).map((violation) =>
+    violation.replace(
+      /^reads grow with the corpus/u,
+      "write pages per written row grow with the corpus",
+    ),
+  );
+};
+
 export const shapeViolations = (
   document: ExplainPlanDocument,
-  profileId: QueryPerfProfileId,
+  profileId: QueryPerfTenantProfileId,
 ) =>
   scanOccurrences(document.Plan).flatMap((scan) => {
     if (scan.relation !== "search_documents") {
@@ -120,21 +303,63 @@ type MeasureQueryPerfOptions = {
   database: GatedTestDb;
   seed: Awaited<ReturnType<typeof seedQueryPerf>>;
   query: SQLWrapper;
+  owner: string;
+  ownerDeadlineMs: number | undefined;
+  profileId: QueryPerfProfileId;
 };
 
+const statementText = (query: SQLWrapper) =>
+  new PgDialect()
+    .sqlToQuery(query.getSQL())
+    .sql.replaceAll(/\s+/gu, " ")
+    .trim();
+
+export const summarize = (
+  samples: readonly QueryPerfMetrics[],
+  plans: readonly ExplainPlanDocument[],
+  owner: string,
+  ownerDeadlineMs: number | undefined,
+  statement: string,
+  profileId: QueryPerfProfileId,
+) => {
+  const lastPlan = plans.at(-1);
+  if (lastPlan === undefined) {
+    return panic("Query perf did not measure a plan");
+  }
+  return {
+    metrics: {
+      sharedBlocks: Math.max(
+        ...samples.map(({ sharedBlocks }) => sharedBlocks),
+      ),
+      executionTimeMs: median(
+        samples.map(({ executionTimeMs }) => executionTimeMs),
+      ),
+    },
+    plan: lastPlan,
+    planViolations: plans.flatMap((document) =>
+      analyzePlan({ document, owner, ownerDeadlineMs, statement, profileId }),
+    ),
+    samples,
+  };
+};
+
+/** One tenant statement as `stella` under row security. */
 export const measureQueryPerf = async ({
   database,
   seed,
   query,
+  owner,
+  ownerDeadlineMs,
+  profileId,
 }: MeasureQueryPerfOptions) => {
   const samples: QueryPerfMetrics[] = [];
-  let lastPlan: ExplainPlanDocument | undefined;
+  const plans: ExplainPlanDocument[] = [];
   for (let sample = 0; sample <= QUERY_PERF_REPETITIONS; sample++) {
     // db-await-in-loop: five sequential warm-cache measurements plus one discarded warmup; concurrency would distort the benchmark.
     const documents = await explainAsStella({
       database: {
         transaction: async (fn) =>
-          await database.transaction(async (tx) => {
+          await withQueryPerfRollback(database, async (tx) => {
             await applyPlannerSettings(tx);
             const value = await fn(tx);
             await assertPlannerSettings(tx);
@@ -152,24 +377,90 @@ export const measureQueryPerf = async ({
     if (document === undefined || documents.length !== 1) {
       return panic("Query perf requires one plan document");
     }
-    lastPlan = document;
+    plans.push(document);
     if (sample !== 0) {
       samples.push(metricsFromPlan(document));
     }
   }
-  if (lastPlan === undefined) {
-    return panic("Query perf did not measure a plan");
-  }
-  return {
-    metrics: {
-      sharedBlocks: Math.max(
-        ...samples.map(({ sharedBlocks }) => sharedBlocks),
-      ),
-      executionTimeMs: median(
-        samples.map(({ executionTimeMs }) => executionTimeMs),
-      ),
-    },
-    plan: lastPlan,
+  return summarize(
     samples,
-  };
+    plans,
+    owner,
+    ownerDeadlineMs,
+    statementText(query),
+    profileId,
+  );
+};
+
+const isExplainPlanDocument = (
+  document: unknown,
+): document is ExplainPlanDocument =>
+  isRecord(document) && isRecord(document["Plan"]);
+
+/** Analyzes one statement inside `tx`, which already holds the planner settings. */
+export const explainOwnerStatement = async (
+  tx: TransactionOf<GatedTestDb>,
+  query: SQLWrapper,
+): Promise<ExplainPlanDocument> => {
+  const row = executedRows(
+    await tx.execute(sql`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${query}`),
+  ).at(0);
+  const plan: unknown = isRecord(row) ? row["QUERY PLAN"] : undefined;
+  if (
+    !Array.isArray(plan) ||
+    plan.length !== 1 ||
+    !plan.every(isExplainPlanDocument)
+  ) {
+    return panic("Could not decode EXPLAIN JSON plan");
+  }
+  return plan.at(0) ?? panic("Could not decode EXPLAIN JSON plan");
+};
+
+/**
+ * One public corpus statement as the fixture's owner, the role scheduled
+ * jobs run as. `build` receives the measuring transaction because statement
+ * builders take the reader's transaction handle.
+ */
+export const measureOwnerStatement = async ({
+  database,
+  build,
+  owner,
+  ownerDeadlineMs,
+  profileId,
+}: {
+  database: GatedTestDb;
+  build: (tx: TransactionOf<GatedTestDb>) => SQLWrapper;
+  owner: string;
+  ownerDeadlineMs: number | undefined;
+  profileId: QueryPerfProfileId;
+}) => {
+  const samples: QueryPerfMetrics[] = [];
+  const plans: ExplainPlanDocument[] = [];
+  let lastStatement = "";
+  for (let sample = 0; sample <= QUERY_PERF_REPETITIONS; sample++) {
+    // db-await-in-loop: sequential warm-cache measurements plus one discarded warmup; concurrency would distort the benchmark.
+    const { document, statement } = await withQueryPerfRollback(
+      database,
+      async (tx) => {
+        await applyPlannerSettings(tx);
+        const query = build(tx);
+        const explained = await explainOwnerStatement(tx, query);
+        await assertPlannerSettings(tx, "owner");
+        return { document: explained, statement: statementText(query) };
+      },
+    );
+    plans.push(document);
+    lastStatement = statement;
+    if (sample !== 0) {
+      samples.push(metricsFromPlan(document));
+    }
+  }
+  return summarize(
+    samples,
+    plans,
+    owner,
+    ownerDeadlineMs,
+    lastStatement,
+    profileId,
+  );
 };

@@ -72,6 +72,12 @@ export const responseOrderProperty = <Scenario>({
         );
         panic(error.message, error);
       }
+      if (inFlight > 0) {
+        const error = new PropertyTestConfigError(
+          `Response-order scenario asserted with ${inFlight} response(s) still delivering; await their completion first`,
+        );
+        panic(error.message, error);
+      }
       if (maxInFlight < 2) {
         const error = new PropertyTestConfigError(
           "Response-order scenario never had two responses in flight, so no order was explored",

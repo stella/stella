@@ -160,6 +160,22 @@ pub fn present_key_panel<R: Runtime>(window: &WebviewWindow<R>) -> bool {
   true
 }
 
+/// Shows an ordinary window as the key window and requests activation for the
+/// app, for windows the user edits in. Unlike `present_key_panel`, the window
+/// keeps its runtime class. Returns false when there is no window handle or
+/// the call is not on the main thread; the caller then falls back to an
+/// activating show.
+pub fn present_activating_window<R: Runtime>(window: &WebviewWindow<R>) -> bool {
+  let Some((main_thread, ns_window)) = ns_window(window) else {
+    return false;
+  };
+  crate::activation::activate_with_key_window(
+    &NSApplication::sharedApplication(main_thread),
+    ns_window,
+  );
+  true
+}
+
 /// Restores a parked panel and makes it key, with the webview still its first
 /// responder: a key panel whose first responder is the panel itself swallows
 /// every keystroke until a mouse event over the webview hands them back.
@@ -226,6 +242,10 @@ pub fn is_panel_presented<R: Runtime>(window: &WebviewWindow<R>) -> bool {
 /// rendering and defeat the parking. Private WebKit setter, hence the
 /// `respondsToSelector` guard; a WebKit without it keeps the default.
 pub fn disable_occlusion_detection<R: Runtime>(window: &WebviewWindow<R>) {
+  #[expect(
+    clippy::let_underscore_must_use,
+    reason = "a webview that is already gone has no occlusion to track"
+  )]
   let _ = window.with_webview(|webview| {
     // SAFETY: `inner` returns a valid WKWebView pointer for the lifetime of
     // the closure, which Tauri runs on the main thread. The selector is only

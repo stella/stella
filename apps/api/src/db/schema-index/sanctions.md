@@ -7,12 +7,12 @@ One line per column: `table.column  builder  flags  file:line  first sentence of
 ## sanctions_sources · `sanctionsSources` · sanctions.ts:43 · rls
 
 ```text
-sanctions_sources.id                           text         pk,not null       sanctions.ts:46
+sanctions_sources.id                           text         pk,fk,not null    sanctions.ts:46
 sanctions_sources.issuer                       text         not null          sanctions.ts:47
 sanctions_sources.licence                      text         null              sanctions.ts:48
 sanctions_sources.marker_url                   text         not null          sanctions.ts:49
-sanctions_sources.active_edition_id            safeUuid     null              sanctions.ts:50
-sanctions_sources.held_edition_id              safeUuid     null              sanctions.ts:51
+sanctions_sources.active_edition_id            safeUuid     fk,null           sanctions.ts:50
+sanctions_sources.held_edition_id              safeUuid     fk,null           sanctions.ts:51
 sanctions_sources.held_guard_code              text         null              sanctions.ts:52
 sanctions_sources.held_at                      timestamptz  null              sanctions.ts:55
 sanctions_sources.held_previous_count          integer      null              sanctions.ts:56
@@ -54,5 +54,5 @@ sanctions_entry_payloads.payload       jsonb  not null     sanctions.ts:181
 ```text
 sanctions_edition_entries.edition_id       safeUuid  fk,not null  sanctions.ts:200
 sanctions_edition_entries.source_entry_id  text      not null     sanctions.ts:203
-sanctions_edition_entries.content_hash     text      not null     sanctions.ts:204
+sanctions_edition_entries.content_hash     text      fk,not null  sanctions.ts:204
 ```

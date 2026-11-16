@@ -1,5 +1,7 @@
 import * as v from "valibot";
 
+import { routeSearchSchema } from "@/route-search-params";
+
 /**
  * What a visitor asked to do with a catalogue template before they had an
  * account, carried through sign-in in the page's `intent` query. A closed
@@ -10,7 +12,7 @@ const TEMPLATE_INTENTS = ["use", "add", "download"] as const;
 
 export type TemplateIntent = (typeof TEMPLATE_INTENTS)[number];
 
-export const templateIntentSearchSchema = v.object({
+export const templateIntentSearchSchema = routeSearchSchema({
   intent: v.fallback(v.optional(v.picklist(TEMPLATE_INTENTS)), undefined),
 });
 
@@ -23,7 +25,7 @@ const STARTER_ID_PATTERN = /^[a-z][a-z0-9-]*$/u;
  * name to look up in the member's own list of ready-made playbooks; one that
  * is not there drops the act.
  */
-export const playbooksIntentSearchSchema = v.object({
+export const playbooksIntentSearchSchema = routeSearchSchema({
   intent: v.fallback(v.optional(v.picklist(["useStarter"])), undefined),
   starter: v.fallback(
     v.optional(

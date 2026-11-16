@@ -4,6 +4,7 @@ import fc from "fast-check";
 import { BYOK_MODEL_OPTIONS, getModelDisplayMetadata } from "@stll/ai-catalog";
 import type { BYOKProvider } from "@stll/ai-catalog";
 import { assertProperty } from "@stll/property-testing";
+import { foldSearchMatchText } from "@stll/text-normalize";
 
 import { getModelPickerView } from "@/components/chat/chat-model-options-menu.logic";
 import type {
@@ -244,14 +245,17 @@ describe("model picker split", () => {
     ]);
   });
 
-  test("trims the query, folds case only, and matches display names rather than providers", () => {
+  test("trims the query, folds case and accents, and matches display names rather than providers", () => {
     const cafe: Model = { maker: "openai", name: "Café" };
     const cafeWithoutAccent: Model = { maker: "google", name: "Cafe" };
 
     expect(view([cafe, cafeWithoutAccent], { query: "  CAFE " })).toMatchObject(
       {
         type: "all",
-        entries: [{ option: { value: "google::Cafe" } }],
+        entries: [
+          { option: { value: "openai::Café" } },
+          { option: { value: "google::Cafe" } },
+        ],
       },
     );
     expect(view([luna, sol], { query: "openai" })).toMatchObject({
@@ -332,7 +336,7 @@ describe("the real catalogue", () => {
   });
 });
 
-test("model picker filtering preserves the previous display-name substring rule", () => {
+test("model picker filtering keeps exactly the folded display-name matches", () => {
   const text = fc
     .array(
       fc.constantFrom(
@@ -357,7 +361,7 @@ test("model picker filtering preserves the previous display-name substring rule"
     .map((parts) => parts.join(""));
 
   assertProperty(
-    "model picker filtering preserves the previous display-name substring rule",
+    "model picker filtering keeps exactly the folded display-name matches",
     fc.property(
       fc.array(
         fc.record({
@@ -377,9 +381,9 @@ test("model picker filtering preserves the previous display-name substring rule"
           query,
           selectedValue: null,
         });
-        const needle = query.trim().toLowerCase().toWellFormed();
+        const needle = foldSearchMatchText(query.trim().toWellFormed());
         const expected = options.filter(({ displayName }) =>
-          displayName.toLowerCase().toWellFormed().includes(needle),
+          foldSearchMatchText(displayName.toWellFormed()).includes(needle),
         );
 
         expect(result.type).toBe("all");

@@ -1,6 +1,8 @@
 import { eq } from "drizzle-orm";
 import * as v from "valibot";
 
+import { workspaceAcceptsWrites } from "@stll/api-contract/workspace-status";
+
 import { schedulerJobs } from "@/api/db/schema";
 import { isScheduledFlowDue } from "@/api/lib/flows/flow-trigger-logic";
 import {
@@ -112,7 +114,7 @@ export const createScheduledFlowTask =
     if (
       !workspace ||
       workspace.organizationId !== definition.organizationId ||
-      workspace.status !== "active"
+      !workspaceAcceptsWrites(workspace.status)
     ) {
       logger.warn("flow.schedule_workspace_unavailable", {
         definitionId,

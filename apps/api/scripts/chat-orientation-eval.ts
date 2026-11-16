@@ -1,3 +1,4 @@
+import { DEFAULT_FILE_PROPERTY_NAME } from "@stll/api-contract/property-policy";
 import { printError } from "@stll/errors";
 /**
  * Chat orientation benchmark: can a (weak) model complete simple workspace
@@ -81,8 +82,6 @@ const DEFAULT_WEB_ORIGIN = "http://localhost:3000";
 const DEFAULT_EMAIL = "test@stella.dev";
 const API_VERSION_PREFIX = "/v1";
 
-/** Matches DEFAULT_FILE_PROPERTY_NAME in apps/web/src/lib/workspaces/mutations.ts. */
-const FILE_PROPERTY_NAME = "Documents";
 /** Web default send mode fallback (resolveChatRequestSendMode); raw keeps
  * fixture names intact so text scoring is not confounded by anonymization. */
 const SEND_MODE = "rawOverride";
@@ -744,7 +743,7 @@ const createFixture = async (client: ApiClient): Promise<Fixture> => {
     body: {
       id: matterId,
       name: matterName,
-      filePropertyName: FILE_PROPERTY_NAME,
+      filePropertyName: DEFAULT_FILE_PROPERTY_NAME,
     },
   });
 

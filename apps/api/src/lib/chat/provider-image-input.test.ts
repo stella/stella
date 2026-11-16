@@ -261,7 +261,7 @@ describe("image input preparation", () => {
               type: "image",
               source: {
                 type: "data",
-                value: Buffer.from(bytes).toString("base64"),
+                value: Buffer.from(bytes).toBase64(),
                 mimeType: "image/jpeg",
               },
             },
@@ -364,6 +364,7 @@ describe("image input preparation", () => {
         for await (const _ of adapter.chatStream({
           model: adapter.model,
           messages: imageMessages(first),
+          threadId: "provider-image-input-thread",
           logger: resolveDebugOption(false),
         })) {
           /* Consume the request. */
@@ -375,6 +376,7 @@ describe("image input preparation", () => {
           chatOptions: {
             model: adapter.model,
             messages: imageMessages(bytes),
+            threadId: "provider-image-input-thread",
             logger: resolveDebugOption(false),
           },
           outputSchema: { type: "object" },
@@ -387,6 +389,7 @@ describe("image input preparation", () => {
       for await (const _ of nextTurn.chatStream({
         model: nextTurn.model,
         messages: imageMessages(first),
+        threadId: "provider-image-input-thread",
         logger: resolveDebugOption(false),
       })) {
         /* Consume the request. */
@@ -427,6 +430,7 @@ describe("image input preparation", () => {
       for await (const _ of adapter.chatStream({
         model: adapter.model,
         messages: imageMessages(bytes),
+        threadId: "provider-image-input-thread",
         logger: resolveDebugOption(false),
       })) {
         /* Consume the request. */
@@ -485,6 +489,7 @@ describe("image input preparation", () => {
       const chatOptions = {
         model: raw.model,
         messages,
+        threadId: "provider-image-input-thread",
         logger: resolveDebugOption(false),
       };
       const structuredOptions = {

@@ -19,7 +19,10 @@ import {
   SetupBadge,
 } from "@/components/catalogue/catalogue-badges";
 import { CatalogueEntryIcon } from "@/components/catalogue/catalogue-entry-icon";
-import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
+import {
+  nativeToolDescriptionKey,
+  nativeToolLabelKey,
+} from "@/components/catalogue/native-tool-label";
 import {
   DownloadAffordance,
   InstallButtonPlaceholder,
@@ -34,6 +37,7 @@ import {
   createToolEntryJsonLd,
 } from "@/lib/public-tools-seo";
 import { PRACTICE_AREA_LABEL_KEY } from "@/lib/tools-catalogue";
+import { routeSearchSchema } from "@/route-search-params";
 
 const AddToStella = lazy(async () => ({
   default: (await import("@/features/knowledge/public/tools/add-to-stella"))
@@ -44,7 +48,7 @@ const AddToStella = lazy(async () => ({
 // degrade to "no install intent", not throw into the router's default
 // error boundary. `v.fallback` swallows the parse failure and yields
 // `undefined`, rendering the page as if the param were absent.
-const searchSchema = v.object({
+const searchSchema = routeSearchSchema({
   install: v.fallback(v.optional(v.literal("1")), undefined),
 });
 
@@ -94,6 +98,10 @@ function PublicToolDetail() {
   const navigate = Route.useNavigate();
   const labelKey = nativeToolLabelKey({ slug: entry.slug, kind: entry.kind });
   const displayName = labelKey ? t(labelKey) : entry.displayName;
+  const descriptionKey = nativeToolDescriptionKey({
+    slug: entry.slug,
+    kind: entry.kind,
+  });
   const homepage = entry.homepage ? sanitizeHref(entry.homepage) : undefined;
 
   return (
@@ -101,11 +109,12 @@ function PublicToolDetail() {
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 p-6">
         <div className="flex items-start gap-3">
           <CatalogueEntryIcon
-            className="text-muted-foreground mt-0.5 shrink-0"
+            className="mt-0.5 shrink-0"
             icon={entry.icon}
             iconUrl={entry.iconUrl ?? null}
             size={32}
             slug={entry.slug}
+            tone="muted"
           />
           <div className="flex min-w-0 flex-col gap-1">
             <div className="flex flex-wrap items-center gap-2">
@@ -121,7 +130,7 @@ function PublicToolDetail() {
         </div>
 
         <p className="text-foreground text-sm" dir="auto">
-          {entry.description}
+          {descriptionKey ? t(descriptionKey) : entry.description}
         </p>
 
         <div className="flex flex-wrap items-center gap-1.5">
@@ -161,7 +170,13 @@ function PublicToolDetail() {
                 onClearInstallIntent={() => {
                   navigate({ replace: true, search: {} }).catch(
                     (error: unknown) => {
-                      getAnalytics().captureError(error);
+                      getAnalytics().captureError(error, {
+                        fingerprintKey: "PublicToolDetail:failure",
+                        scope: {
+                          type: "handler",
+                          handlerId: "PublicToolDetail:failure",
+                        },
+                      });
                     },
                   );
                 }}

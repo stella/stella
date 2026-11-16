@@ -1,0 +1,40 @@
+{
+  "connectLinks": [
+    {
+      "intent": "connect",
+      "apiBaseUrl": "https://api.stll.app",
+      "webOrigin": "https://my.stll.app",
+      "url": "stella://account/connect?apiBaseUrl=https%3A%2F%2Fapi.stll.app&webOrigin=https%3A%2F%2Fmy.stll.app&intent=connect"
+    },
+    {
+      "intent": "switch",
+      "apiBaseUrl": "https://api.stll.app",
+      "webOrigin": "https://my.stll.app",
+      "url": "stella://account/connect?apiBaseUrl=https%3A%2F%2Fapi.stll.app&webOrigin=https%3A%2F%2Fmy.stll.app&intent=switch"
+    }
+  ],
+  "connectionStatuses": [
+    { "payload": { "status": "pending" }, "signed": "pending" },
+    { "payload": { "status": "connected" }, "signed": "connected" },
+    {
+      "payload": { "status": "failed", "reason": "account_conflict" },
+      "signed": "failed:account_conflict"
+    },
+    {
+      "payload": { "status": "failed", "reason": "switch_declined" },
+      "signed": "failed:switch_declined"
+    },
+    {
+      "payload": { "status": "failed", "reason": "declined" },
+      "signed": "failed:declined"
+    },
+    {
+      "payload": { "status": "failed", "reason": "update_required" },
+      "signed": "failed:update_required"
+    },
+    {
+      "payload": { "status": "failed", "reason": "unavailable" },
+      "signed": "failed:unavailable"
+    }
+  ]
+}

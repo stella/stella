@@ -19,8 +19,8 @@ import { schedulerJobRuns, schedulerJobs } from "@/api/db/schema";
 import { logger } from "@/api/lib/observability/logger";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import {
-  SCHEDULER_BACKFILL_CONFIG,
   SCHEDULER_BACKFILL_IDS,
+  schedulerBackfillConfig,
 } from "@/api/lib/scheduler/backfill-config";
 import { runSchedulerOnce } from "@/api/lib/scheduler/runner";
 import type {
@@ -131,7 +131,7 @@ const withFixture = async (
       }: FixtureOptions = {}) => {
         // A resumed worker must start after any hold persisted by earlier runs.
         if (phase === "resumed") {
-          now += SCHEDULER_BACKFILL_CONFIG.holdBackoffCapMs;
+          now += schedulerBackfillConfig().holdBackoffCapMs;
         }
         const events: string[] = [];
         const failures: unknown[] = [];

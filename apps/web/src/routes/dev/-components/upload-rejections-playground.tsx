@@ -4,25 +4,18 @@ import { Button } from "@stll/ui/button";
 import { stellaToast } from "@stll/ui/toast";
 
 import { toAPIError } from "@/lib/errors/api";
+import { validateUploadFileSize } from "@/lib/files/upload-file-validation";
 import { uploadFailureDisposition } from "@/lib/upload-queue";
-import { buildEntityCreatePresignPayload } from "@/lib/workspaces/mutations/create-file-upload-payload.logic";
 import { showUploadFailureToast } from "@/lib/workspaces/mutations/upload-failure-toast";
 
 export const UploadRejectionsPlayground = () => {
   const t = useTranslations();
   const showFailures = () => {
-    const prepared = buildEntityCreatePresignPayload({
-      propertyId: "visual-upload-property",
-      name: "empty.pdf",
-      mimeType: "application/pdf",
-      size: 0,
-      sha256Hex:
-        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    });
-    // The old producer sends size zero and receives this schema rejection;
-    // the current producer rejects the same input locally before presign.
-    const emptyError = prepared.isErr()
-      ? prepared.error
+    // An older client sends size zero and receives this schema rejection; the
+    // current one rejects the same input locally, before any byte is read.
+    const sizeCheck = validateUploadFileSize(0);
+    const emptyError = sizeCheck.isErr()
+      ? sizeCheck.error
       : toAPIError({ status: 422, value: { message: "Invalid request" } });
     const securityError = toAPIError({
       status: 422,

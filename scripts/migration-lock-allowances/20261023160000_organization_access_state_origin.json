@@ -1,0 +1,5 @@
+{
+  "add-column": "The constant text default uses PostgreSQL's fast-default catalog path without rewriting the one-row-per-organization access states; lock acquisition is bounded by 1s and the statement by 5s.",
+  "alter-column": "Changing the column default is catalog-only and leaves the stored fast default of existing rows in place, under 1s lock_timeout and 5s statement_timeout.",
+  "add-constraint": "The origin CHECK is added NOT VALID without scanning rows, under 1s lock_timeout and 5s statement_timeout; the online phase validates it after the schema lock is released."
+}

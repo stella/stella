@@ -2,6 +2,10 @@ import { createContext, use } from "react";
 
 import { panic } from "better-result";
 
+import type {
+  ConnectConnectorDecision,
+  ConnectConnectorOutput,
+} from "@stll/api-contract/chat-connector";
 import type { RequestSecretOutput } from "@stll/api-contract/chat-secret";
 
 import type {
@@ -40,6 +44,13 @@ export type RequestSecretDecision =
  */
 type ChatApprovalContextValue = {
   activeOrganizationId: string;
+  /**
+   * The approvals the thread already waited on when the page opened it
+   * (`ChatRuntime.approvalIdsAwaitedAtOpen`). A card among them never
+   * answers itself, whatever grant or policy covers it: on a reopened thread
+   * only the user's click resumes tool work.
+   */
+  approvalIdsAwaitedAtOpen: ReadonlySet<string>;
   handleAllowInConversation: (
     id: string,
     toolName: ApprovalToolName,
@@ -61,6 +72,18 @@ type ChatApprovalContextValue = {
   continueRequestSecret: (
     toolCallId: string,
     receipt: RequestSecretOutput,
+  ) => PromiseLike<void>;
+  /**
+   * Reports what the user did on a connector card. The server answers
+   * `connected` only for a stored, usable connection and refuses otherwise.
+   */
+  handleConnectConnector: (
+    toolCallId: string,
+    decision: ConnectConnectorDecision,
+  ) => PromiseLike<ConnectConnectorOutput>;
+  continueConnectConnector: (
+    toolCallId: string,
+    receipt: ConnectConnectorOutput,
   ) => PromiseLike<void>;
   secretAvailabilityKey: string;
   resolveSecretTarget: (

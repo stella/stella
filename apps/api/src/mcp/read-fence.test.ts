@@ -2,16 +2,20 @@ import type { CallToolResult } from "@modelcontextprotocol/server";
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { createTestState } from "@stll/test-state";
+
 import { env } from "@/api/env";
 import { toSafeId } from "@/api/lib/branded-types";
 import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
 import type { chargeMcpReadBytes } from "@/api/lib/rate-limit/mcp-read-fence";
 import { MCP_ALL_RESOURCE_SCOPES } from "@/api/mcp/constants";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { createMcpHttpRequestHandler } from "@/api/mcp/server-core";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
 import { handoffLinkResult } from "@/api/mcp/web-handoff-links-core";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { asTestRaw, readTestJson } from "@/api/tests/helpers/test-tool-set";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const organizationId = toSafeId<"organization">("read_org");
 const userId = toSafeId<"user">("read_user");
@@ -60,11 +64,11 @@ const boundary = ({
     getMcpToolRequiredScopesHint: () => undefined,
     handleMcpToolCall: async () => result,
     listMcpTools: async () => [],
-    listMcpResources: () => [],
+    listMcpResources: async () => [],
     readMcpResource: () => ({ contents: [] }),
     recordMcpSessionInitialized: () => undefined,
     resolveMcpSessionContext: async () =>
-      asTestRaw<McpRequestContext>({ organizationId, userId }),
+      asTestRaw<AuthorizedMcpRequestContext>({ organizationId, userId }),
   });
 
 const call = async (
@@ -99,11 +103,11 @@ const call = async (
 
 const withFence = async (run: () => Promise<void>) => {
   const previous = env.FEATURE_MCP_READ_FENCE;
-  env.FEATURE_MCP_READ_FENCE = true;
+  testState.setConfig("FEATURE_MCP_READ_FENCE", true);
   try {
     await run();
   } finally {
-    env.FEATURE_MCP_READ_FENCE = previous;
+    testState.setConfig("FEATURE_MCP_READ_FENCE", previous);
   }
 };
 
@@ -257,7 +261,7 @@ describe("MCP emitted read bytes", () => {
 
   test("flag off preserves output and never consults the fence", async () => {
     const previous = env.FEATURE_MCP_READ_FENCE;
-    env.FEATURE_MCP_READ_FENCE = false;
+    testState.setConfig("FEATURE_MCP_READ_FENCE", false);
     let charges = 0;
     try {
       const result = await call(
@@ -272,7 +276,7 @@ describe("MCP emitted read bytes", () => {
       expect(result.result).toEqual(output);
       expect(charges).toBe(0);
     } finally {
-      env.FEATURE_MCP_READ_FENCE = previous;
+      testState.setConfig("FEATURE_MCP_READ_FENCE", previous);
     }
   });
 
@@ -296,7 +300,7 @@ describe("MCP emitted read bytes", () => {
 
   test("refusals preserve the canonical contract and withhold the read result", async () =>
     withFence(async () => {
-      for (const reason of ["period_exhausted", "unavailable"] as const) {
+      for (const reason of ["period_exhausted", "store_unavailable"] as const) {
         const body = await call(
           boundary({
             chargeReadBytes: async () =>
@@ -310,7 +314,7 @@ describe("MCP emitted read bytes", () => {
         expect(JSON.stringify(body.result)).toContain(
           reason === "period_exhausted"
             ? "action_period_exhausted"
-            : "action_admission_unavailable",
+            : "limiter_store_unavailable",
         );
         expect(JSON.stringify(body.result)).not.toContain("Příloha");
       }

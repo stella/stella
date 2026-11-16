@@ -1,5 +1,4 @@
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import { COUNTRY_INPUT_MAX_CHARS } from "@stll/agent-input";
 import {
@@ -11,7 +10,10 @@ import {
 } from "@stll/api-contract/legislation-expression";
 import { LEGISLATION_LIST_VALIDITIES } from "@stll/api-contract/legislation-status";
 
-import { PAGINATION_CURSOR_MAX_CHARS, tSafeId } from "@/api/lib/custom-schema";
+import {
+  PAGINATION_CURSOR_MAX_CHARS,
+  resourceIdSchema,
+} from "@/api/lib/custom-schema";
 import { tPublicCountryUnavailable } from "@/api/lib/legal-search/public-law-country";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -32,170 +34,136 @@ export const LEGISLATION_DOCUMENT_TYPE_BUCKET_LIMIT =
   LIMITS.legislationDocumentTypeBucketLimit;
 
 const identityFields = {
-  id: tSafeId("legislationDocument"),
+  id: resourceIdSchema("legislationDocument"),
   eli: boundedString(textBytes.eli),
   slug: nullableBoundedString(textBytes.slug),
   title: boundedString(textBytes.title),
   country: boundedString(textBytes.country),
   language: boundedString(textBytes.language),
 };
-const identitySchema = t.Object(identityFields, {
-  additionalProperties: false,
+const identitySchema = v.object(identityFields);
+
+const shelfItemSchema = v.object({
+  ...identityFields,
+  documentType: nullableBoundedString(textBytes.documentType),
+  status: boundedString(textBytes.status),
+  versionValidFrom: nullableBoundedString(DATE_BYTES),
 });
 
-const shelfItemSchema = t.Object(
-  {
-    ...identityFields,
-    documentType: nullableBoundedString(textBytes.documentType),
-    status: boundedString(textBytes.status),
-    versionValidFrom: nullableBoundedString(DATE_BYTES),
-  },
-  { additionalProperties: false },
-);
+const listItemSchema = v.object({
+  ...shelfItemSchema.entries,
+  effectiveDate: nullableBoundedString(textBytes.effectiveDate),
+  versionValidTo: nullableBoundedString(DATE_BYTES),
+  sourceUrl: nullableBoundedString(textBytes.sourceUrl),
+  documentUrl: nullableBoundedString(textBytes.sourceUrl),
+  citationCaseCount: v.union([v.number(), v.null()]),
+  firstVersionValidFrom: nullableBoundedString(DATE_BYTES),
+  amendmentCount: v.number(),
+  lastAmendedOn: nullableBoundedString(DATE_BYTES),
+  validity: v.picklist(LEGISLATION_LIST_VALIDITIES),
+});
 
-const listItemSchema = t.Object(
-  {
-    ...shelfItemSchema.properties,
-    effectiveDate: nullableBoundedString(textBytes.effectiveDate),
-    versionValidTo: nullableBoundedString(DATE_BYTES),
-    sourceUrl: nullableBoundedString(textBytes.sourceUrl),
-    documentUrl: nullableBoundedString(textBytes.sourceUrl),
-    citationCaseCount: t.Union([t.Number(), t.Null()]),
-    firstVersionValidFrom: nullableBoundedString(DATE_BYTES),
-    amendmentCount: t.Number(),
-    lastAmendedOn: nullableBoundedString(DATE_BYTES),
-    validity: t.UnionEnum(LEGISLATION_LIST_VALIDITIES),
-  },
-  { additionalProperties: false },
-);
+export const listStatutesSuccessResponseSchema = v.object({
+  items: v.pipe(
+    v.array(listItemSchema),
+    v.maxLength(LIMITS.legislationListPageSizeMax),
+  ),
+  nextCursor: nullableBoundedString(PAGINATION_CURSOR_MAX_CHARS),
+  limit: v.number(),
+});
 
-export const listStatutesSuccessResponseSchema = t.Object(
-  {
-    items: t.Array(listItemSchema, {
-      maxItems: LIMITS.legislationListPageSizeMax,
-    }),
-    nextCursor: nullableBoundedString(PAGINATION_CURSOR_MAX_CHARS),
-    limit: t.Number(),
-  },
-  { additionalProperties: false },
-);
+export const legislationShelfSuccessResponseSchema = v.object({
+  country: boundedString(textBytes.country),
+  recentlyInForce: v.pipe(
+    v.array(shelfItemSchema),
+    v.maxLength(LIMITS.legislationShelfPerList),
+  ),
+  enteringIntoForce: v.pipe(
+    v.array(shelfItemSchema),
+    v.maxLength(LIMITS.legislationShelfPerList),
+  ),
+});
 
-export const legislationShelfSuccessResponseSchema = t.Object(
-  {
-    country: boundedString(textBytes.country),
-    recentlyInForce: t.Array(shelfItemSchema, {
-      maxItems: LIMITS.legislationShelfPerList,
-    }),
-    enteringIntoForce: t.Array(shelfItemSchema, {
-      maxItems: LIMITS.legislationShelfPerList,
-    }),
-  },
-  { additionalProperties: false },
-);
-
-export const legislationFacetsSuccessResponseSchema = t.Object(
-  {
-    documentType: t.Array(
-      t.Object(
-        {
-          value: boundedString(textBytes.documentType),
-          count: t.Number(),
-        },
-        { additionalProperties: false },
-      ),
-      { maxItems: LEGISLATION_DOCUMENT_TYPE_BUCKET_LIMIT },
+export const legislationFacetsSuccessResponseSchema = v.object({
+  documentType: v.pipe(
+    v.array(
+      v.object({
+        value: boundedString(textBytes.documentType),
+        count: v.number(),
+      }),
     ),
-  },
-  { additionalProperties: false },
-);
+    v.maxLength(LEGISLATION_DOCUMENT_TYPE_BUCKET_LIMIT),
+  ),
+});
 
-const resolvedStatuteSchema = t.Object(
-  {
-    ...identityFields,
-    versionValidFrom: nullableBoundedString(DATE_BYTES),
-    versionValidTo: nullableBoundedString(DATE_BYTES),
-    expressionKind: t.UnionEnum(LEGISLATION_EXPRESSION_KINDS),
-    windowDisposition: t.UnionEnum(LEGISLATION_WINDOW_DISPOSITIONS),
-  },
-  { additionalProperties: false },
-);
+const resolvedStatuteSchema = v.object({
+  ...identityFields,
+  versionValidFrom: nullableBoundedString(DATE_BYTES),
+  versionValidTo: nullableBoundedString(DATE_BYTES),
+  expressionKind: v.picklist(LEGISLATION_EXPRESSION_KINDS),
+  windowDisposition: v.picklist(LEGISLATION_WINDOW_DISPOSITIONS),
+});
 
-export const resolveStatutesSuccessResponseSchema = t.Object(
-  {
-    items: t.Array(
-      t.Object(
-        {
-          // Echoed country accepts the same human input spellings as the request.
-          country: boundedString(COUNTRY_INPUT_MAX_CHARS * 4),
-          eli: boundedString(textBytes.eli),
-          asOf: boundedString(DATE_BYTES),
-          statute: t.Union([resolvedStatuteSchema, t.Null()]),
-          unresolvedReason: t.Union([
-            t.Literal(LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT),
-            tPublicCountryUnavailable.properties.reason,
-            t.Null(),
-          ]),
-          availability: t.Optional(tPublicCountryUnavailable),
-        },
-        { additionalProperties: false },
-      ),
-      { maxItems: LIMITS.legislationResolveWorksMax },
+export const resolveStatutesSuccessResponseSchema = v.object({
+  items: v.pipe(
+    v.array(
+      v.object({
+        country: boundedString(COUNTRY_INPUT_MAX_CHARS * 4),
+        eli: boundedString(textBytes.eli),
+        asOf: boundedString(DATE_BYTES),
+        statute: v.union([resolvedStatuteSchema, v.null()]),
+        unresolvedReason: v.union([
+          v.literal(LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT),
+          tPublicCountryUnavailable.entries.reason,
+          v.null(),
+        ]),
+        availability: v.optional(tPublicCountryUnavailable),
+      }),
     ),
-  },
-  { additionalProperties: false },
-);
+    v.maxLength(LIMITS.legislationResolveWorksMax),
+  ),
+});
 
-export const publisherWindowInconsistentResponseSchema = t.Object(
-  {
-    code: t.Literal(LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT_CODE),
-    message: t.Literal(LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT_MESSAGE),
-    versions: publicInconsistentVersionsSchema,
-  },
-  { additionalProperties: false },
-);
+export const publisherWindowInconsistentResponseSchema = v.object({
+  code: v.literal(LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT_CODE),
+  message: v.literal(LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT_MESSAGE),
+  versions: publicInconsistentVersionsSchema,
+});
 
-export const statuteSitemapShardsSuccessResponseSchema = t.Object(
-  {
-    items: t.Array(
-      t.Object(
-        {
-          bucket: boundedString(3),
-          country: boundedString(textBytes.country),
-          lastmod: boundedString(DATE_BYTES),
-        },
-        { additionalProperties: false },
-      ),
-      { maxItems: LIMITS.statuteSitemapIndexEntryLimit },
+export const statuteSitemapShardsSuccessResponseSchema = v.object({
+  items: v.pipe(
+    v.array(
+      v.object({
+        bucket: boundedString(3),
+        country: boundedString(textBytes.country),
+        lastmod: boundedString(DATE_BYTES),
+      }),
     ),
-    limit: t.Literal(LIMITS.statuteSitemapIndexEntryLimit),
-    nextCursor: t.Null(),
-  },
-  { additionalProperties: false },
-);
+    v.maxLength(LIMITS.statuteSitemapIndexEntryLimit),
+  ),
+  limit: v.literal(LIMITS.statuteSitemapIndexEntryLimit),
+  nextCursor: v.null(),
+});
 
-export const statuteSitemapStatutesSuccessResponseSchema = t.Object(
-  {
-    items: t.Array(
-      t.Object(
-        {
-          country: boundedString(textBytes.country),
-          slug: boundedString(textBytes.slug),
-          lastmod: boundedString(DATE_BYTES),
-        },
-        { additionalProperties: false },
-      ),
-      { maxItems: LIMITS.statuteSitemapShardUrlLimit },
+export const statuteSitemapStatutesSuccessResponseSchema = v.object({
+  items: v.pipe(
+    v.array(
+      v.object({
+        country: boundedString(textBytes.country),
+        slug: boundedString(textBytes.slug),
+        lastmod: boundedString(DATE_BYTES),
+      }),
     ),
-    limit: t.Literal(LIMITS.statuteSitemapShardUrlLimit),
-    nextCursor: t.Null(),
-  },
-  { additionalProperties: false },
-);
+    v.maxLength(LIMITS.statuteSitemapShardUrlLimit),
+  ),
+  limit: v.literal(LIMITS.statuteSitemapShardUrlLimit),
+  nextCursor: v.null(),
+});
 
 // Preserve persisted UUID brands and enum discriminators while bounding display
 // text at the response boundary. Whole statute bodies never enter this projection.
 const projectStatuteCatalogIdentity = <
-  Item extends Static<typeof identitySchema>,
+  Item extends v.InferOutput<typeof identitySchema>,
 >(
   item: Item,
 ) => ({
@@ -207,7 +175,9 @@ const projectStatuteCatalogIdentity = <
   language: truncateTextBytes(item.language, textBytes.language),
 });
 
-const projectStatuteShelfItem = <Item extends Static<typeof shelfItemSchema>>(
+const projectStatuteShelfItem = <
+  Item extends v.InferOutput<typeof shelfItemSchema>,
+>(
   item: Item,
 ) => ({
   ...projectStatuteCatalogIdentity(item),
@@ -217,7 +187,7 @@ const projectStatuteShelfItem = <Item extends Static<typeof shelfItemSchema>>(
 });
 
 export const projectStatuteListItem = (
-  item: Static<typeof listItemSchema>,
+  item: v.InferOutput<typeof listItemSchema>,
 ) => ({
   ...projectStatuteShelfItem(item),
   effectiveDate: nullableText(item.effectiveDate, textBytes.effectiveDate),
@@ -229,7 +199,7 @@ export const projectStatuteListItem = (
 });
 
 const projectResolvedStatute = (
-  item: Static<typeof resolvedStatuteSchema>,
+  item: v.InferOutput<typeof resolvedStatuteSchema>,
 ) => ({
   ...projectStatuteCatalogIdentity(item),
   versionValidFrom: nullableText(item.versionValidFrom, DATE_BYTES),
@@ -237,7 +207,7 @@ const projectResolvedStatute = (
 });
 
 export const projectLegislationFacets = (
-  facets: Static<typeof legislationFacetsSuccessResponseSchema>,
+  facets: v.InferOutput<typeof legislationFacetsSuccessResponseSchema>,
 ) => ({
   documentType: facets.documentType.map((bucket) => ({
     value: truncateTextBytes(bucket.value, textBytes.documentType),
@@ -246,7 +216,7 @@ export const projectLegislationFacets = (
 });
 
 export const projectStatuteSitemapShard = (
-  item: Static<
+  item: v.InferOutput<
     typeof statuteSitemapShardsSuccessResponseSchema
   >["items"][number],
 ) => ({
@@ -256,7 +226,7 @@ export const projectStatuteSitemapShard = (
 });
 
 export const projectStatuteSitemapStatute = (
-  item: Static<
+  item: v.InferOutput<
     typeof statuteSitemapStatutesSuccessResponseSchema
   >["items"][number],
 ) => ({
@@ -266,7 +236,7 @@ export const projectStatuteSitemapStatute = (
 });
 
 export const projectResolveStatutesResponse = (
-  response: Static<typeof resolveStatutesSuccessResponseSchema>,
+  response: v.InferOutput<typeof resolveStatutesSuccessResponseSchema>,
 ) => ({
   items: response.items.map((item) => ({
     ...item,
@@ -294,7 +264,7 @@ export const projectResolveStatutesResponse = (
 });
 
 export const projectInconsistentVersion = (
-  version: Static<
+  version: v.InferOutput<
     typeof publisherWindowInconsistentResponseSchema
   >["versions"][number],
 ) => ({
@@ -312,7 +282,7 @@ export const projectInconsistentVersion = (
 });
 
 export const projectLegislationShelf = (
-  shelf: Static<typeof legislationShelfSuccessResponseSchema>,
+  shelf: v.InferOutput<typeof legislationShelfSuccessResponseSchema>,
 ) => ({
   country: truncateTextBytes(shelf.country, textBytes.country),
   recentlyInForce: shelf.recentlyInForce.map(projectStatuteShelfItem),

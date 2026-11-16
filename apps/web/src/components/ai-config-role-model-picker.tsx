@@ -20,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { AIConfigModelRow } from "@/components/ai-config-model-row";
 import {
@@ -38,6 +39,7 @@ import type {
   RoleModelSelections,
   RoleValue,
 } from "@/components/ai-config-role-models.logic";
+import { matchesComboboxItem } from "@/components/combobox-filter.logic";
 
 type AIConfigRoleModelPickerProps = {
   className?: string;
@@ -163,6 +165,7 @@ export const AIConfigRoleModelPicker = ({
                   <Combobox<ModelSelection>
                     autoHighlight
                     disabled={disabled || !selectedProvider}
+                    filter={matchesComboboxItem}
                     items={modelOptions}
                     itemToStringLabel={(option) => option.modelId}
                     onInputValueChange={(value) => {
@@ -195,9 +198,7 @@ export const AIConfigRoleModelPicker = ({
                             key={`${option.provider}:${option.modelId}`}
                             value={option}
                           >
-                            <span className="block min-w-0 truncate">
-                              {option.modelId}
-                            </span>
+                            <TruncatedText>{option.modelId}</TruncatedText>
                           </ComboboxItem>
                         )}
                       </ComboboxList>

@@ -16,8 +16,8 @@ import {
   beforeAll,
   describe,
   expect,
+  mock,
   setDefaultTimeout,
-  spyOn,
   test,
 } from "bun:test";
 import { and, eq } from "drizzle-orm";
@@ -61,8 +61,13 @@ import {
 } from "@/api/lib/db-query-counter";
 import { MCP_RATE_LIMITS } from "@/api/lib/rate-limit/budget-config";
 import { InMemoryRateLimitContext } from "@/api/lib/rate-limit/rate-limit";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
+
+const testFetchState = createTestFetch();
 
 const baseURL = "https://example.test";
 setDefaultTimeout(120_000);
@@ -156,6 +161,10 @@ beforeAll(async () => {
     slug: "handoff-plugin",
     createdAt: new Date(),
   });
+  await recordNewOrganizationAccessState(db, {
+    organizationId: fixture.organizationId,
+    now: new Date(),
+  });
   await db.insert(member).values({
     id: "plugin-member",
     userId: fixture.userId,
@@ -182,6 +191,10 @@ beforeAll(async () => {
     name: "Browser organization",
     slug: "handoff-browser",
     createdAt: new Date(),
+  });
+  await recordNewOrganizationAccessState(db, {
+    organizationId: toSafeId<"organization">(browserOrganizationId),
+    now: new Date(),
   });
   await db.insert(member).values({
     id: "browser-member",
@@ -713,9 +726,10 @@ describe("MCP link sign-in", () => {
         ),
       { preconnect: globalThis.fetch.preconnect },
     );
-    const tokenExchange = spyOn(globalThis, "fetch").mockImplementation(
-      fetchToken,
-    );
+    const tokenExchange = Object.assign(mock(asFetchMock(fetchToken)), {
+      preconnect: globalThis.fetch.preconnect,
+    });
+    testFetchState.set(tokenExchange);
     let callback: Response;
     try {
       callback = await socialAuth.handler(
@@ -729,7 +743,7 @@ describe("MCP link sign-in", () => {
         ),
       );
     } finally {
-      tokenExchange.mockRestore();
+      testFetchState.restore();
     }
     expect(callback.status).toBe(302);
     const normalCookie = mergeCookies(

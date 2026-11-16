@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { confirmServiceAuthRegistration } from "@/api/lib/agent-auth";
 import { confirmIdJagDelegation } from "@/api/lib/agent-auth-idjag";
@@ -15,8 +15,8 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
  */
 const config = {
   contract: "patch",
-  body: t.Object({
-    user_code: t.String({ minLength: 1, maxLength: 32 }),
+  body: v.object({
+    user_code: v.pipe(v.string(), v.minLength(1), v.maxLength(32)),
   }),
   // Binding an agent client to oneself is an integration the member owns:
   // the agent inherits the confirming user's least-privilege scopes, not

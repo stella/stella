@@ -1,5 +1,6 @@
 // Passive regression fixture for public-law-read-boundary.
 
+import { withPublicReadIo } from "@/api/lib/legal-search/public-read-timeout-context";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
 
 declare const configureExternalReadTransaction: (
@@ -49,3 +50,11 @@ export const publicLawReadDb = async <T>(
     }
     return await fn(tx);
   });
+
+// oxlint-disable-next-line public-law-read-boundary/require-owned-public-read-transport -- fixture: a raw request cannot own public-read settlement
+await fetch("https://example.test/document");
+
+// expect-clean: public-law-read-boundary/require-owned-public-read-transport
+await withPublicReadIo("corpus-index", async (io) =>
+  await io.fetch("https://example.test/document", { timeoutMs: 1000 }, async (response) => await response.text()),
+);

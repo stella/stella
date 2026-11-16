@@ -3,10 +3,13 @@ import { describe, expect, test } from "bun:test";
 
 import type { Block } from "@stll/legal-ast/document-ast";
 
-import { parseBrTjdftDocument } from "@/api/handlers/case-law/ingestion/parsers/br-tjdft";
+import { parseBrTjdftDocument as uncheckedParseBrTjdftDocument } from "@/api/handlers/case-law/ingestion/parsers/br-tjdft";
 import type { BrTjdftDocumentContent } from "@/api/handlers/case-law/ingestion/parsers/br-tjdft";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { brTjdftCompletenessIssues } from "@/api/tests/helpers/br-tjdft-completeness";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+const parseBrTjdftDocument = guardParser(uncheckedParseBrTjdftDocument);
 
 const recordOf = async (name: string): Promise<Record<string, unknown>> => {
   const bytes = new Uint8Array(

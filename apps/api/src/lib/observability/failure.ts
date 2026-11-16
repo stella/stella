@@ -34,6 +34,7 @@ import {
   PG_IDENTIFIER_PROPERTIES,
   readEvidence,
 } from "@/api/lib/observability/failure-evidence";
+import { taggedFailureReason } from "@/api/lib/observability/failure-tag-policy";
 
 // --- Closed code sets ---------------------------------------------------------
 
@@ -187,7 +188,8 @@ export type FrameworkFailure =
   | "request_malformed"
   | "request_validation"
   | "response_invalid"
-  | "route_not_found";
+  | "route_not_found"
+  | "method_not_allowed";
 
 /**
  * AWS SDK service exception names. The name is the exception's code, and it
@@ -321,6 +323,7 @@ export type FailureRule =
   | "handler_status"
   | "infra"
   | "infra_under_panic"
+  | "tag"
   | "unclassified"
   | "unobserved";
 
@@ -502,7 +505,8 @@ const matchesExpectation = (
  *     resolves it;
  *  5. infrastructure evidence anywhere in the chain;
  *  6. what the framework answered;
- *  7. otherwise a defect.
+ *  7. the tagged failure's exhaustive baseline declaration;
+ *  8. otherwise an unclassified defect.
  */
 export const gradeFailure = (
   evidence: FailureEvidence,
@@ -550,6 +554,15 @@ export const gradeFailure = (
 
   if (request.framework !== undefined) {
     return graded(request.framework, "framework", failureIndex);
+  }
+
+  const failureNode = nodes[failureIndex];
+  if (failureNode?.kind === "tagged") {
+    // Library wrappers are not project declarations in the tag policy.
+    if (isTransportWrapper(failureNode)) {
+      return graded("tagged_failure", "tag", failureIndex);
+    }
+    return graded(taggedFailureReason(failureNode.tag), "tag", failureIndex);
   }
 
   return graded("unclassified", "unclassified", failureIndex);
@@ -668,12 +681,12 @@ export const pgIdentityFields = ({
   if (pgNodes.length === 0) {
     return {};
   }
-  const fields: Record<string, string> = {};
+  const fields = new Map<string, string>();
   const sqlState = pgNodes.find(
     (node) => node.sqlState !== undefined,
   )?.sqlState;
   if (sqlState !== undefined) {
-    fields["error.cause.pg_code"] = sqlState;
+    fields.set("error.cause.pg_code", sqlState);
   }
   const driverCode = pgNodes.find(
     (node) =>
@@ -682,17 +695,17 @@ export const pgIdentityFields = ({
       /^ERR_POSTGRES_[A-Z0-9_]{1,64}$/u.test(node.code),
   )?.code;
   if (driverCode !== undefined) {
-    fields["error.cause.pg_driver_code"] = driverCode;
+    fields.set("error.cause.pg_driver_code", driverCode);
   }
   for (const node of pgNodes) {
     for (const property of PG_IDENTIFIER_PROPERTIES) {
       const identifier = node.pgIdentifiers[property];
       if (identifier !== undefined) {
-        fields[`error.cause.pg_${property}`] = identifier;
+        fields.set(`error.cause.pg_${property}`, identifier);
       }
     }
   }
-  return fields;
+  return Object.fromEntries(fields);
 };
 
 /**
@@ -712,11 +725,21 @@ export const identityFields = (
   const fields: Record<string, string> = {
     "error.class": root.className ?? UNKNOWN_ERROR_CLASS,
     "error.code":
-      root.extraction?.["workerErrorClass"] === undefined
-        ? (root.code ?? root.awsName ?? root.tag)
-        : `${root.code ?? root.tag}:${root.extraction["workerErrorClass"]}`,
+      root.timeout?.label ??
+      (root.extraction?.["workerErrorClass"] !== undefined
+        ? `${root.code ?? root.tag}:${root.extraction["workerErrorClass"]}`
+        : (root.code ?? root.awsName ?? root.tag)),
   };
-  const frame = frameValue(root.frame);
+  const rootFrame = frameValue(root.frame);
+  // A deadline fires from a timer, whose stack often holds no caller frame;
+  // then the helper frame stays rather than leaving the field empty.
+  const callerFrame =
+    root.timeout !== undefined &&
+    rootFrame?.includes("packages/concurrency/src/with-timeout.ts:") === true
+      ? frameValue(root.timeout.callerFrame)
+      : undefined;
+  const frame =
+    callerFrame === undefined || callerFrame === "" ? rootFrame : callerFrame;
   if (frame !== undefined) {
     fields["error.frame"] = frame;
   }
@@ -757,6 +780,12 @@ export const systemFields = (
   if (root.syscall !== undefined) {
     fields["error.syscall"] = root.syscall;
   }
+  if (root.timeout !== undefined) {
+    fields["error.timeout.label"] = root.timeout.label;
+    if (root.timeout.timeoutMs !== undefined) {
+      fields["error.timeout.ms"] = String(root.timeout.timeoutMs);
+    }
+  }
   const cause =
     evidence.nodes.at(1) ??
     (evidence.cycleTo === undefined
@@ -770,6 +799,9 @@ export const systemFields = (
     if (causeCode !== undefined) {
       fields["error.cause.code"] = causeCode;
     }
+    if (cause.timeout !== undefined) {
+      fields["error.cause.timeout.label"] = cause.timeout.label;
+    }
   }
   return { ...fields, ...pgIdentityFields(evidence) };
 };
@@ -781,10 +813,10 @@ export const systemFields = (
 export const causeChainAttributes = ({
   nodes,
 }: FailureEvidence): Record<string, FieldValue> => {
-  const attributes: Record<string, FieldValue> = {};
+  const attributes = new Map<string, FieldValue>();
   const root = nodes.at(0);
   if (root === undefined || !isErrorNode(root)) {
-    return attributes;
+    return Object.fromEntries(attributes);
   }
   for (const [index, cause] of causeErrorNodes(
     nodes,
@@ -792,12 +824,12 @@ export const causeChainAttributes = ({
   ).entries()) {
     const depth = index + 1;
     const prefix = depth === 1 ? "error.cause" : `error.cause${depth}`;
-    attributes[`${prefix}.type`] = cause.tag;
+    attributes.set(`${prefix}.type`, cause.tag);
     if (cause.ownStatus !== undefined) {
-      attributes[`${prefix}.status_code`] = cause.ownStatus;
+      attributes.set(`${prefix}.status_code`, cause.ownStatus);
     }
   }
-  return attributes;
+  return Object.fromEntries(attributes);
 };
 
 /** The level-zero numeric status the request records have carried. */
@@ -830,9 +862,9 @@ export const providerStatusFieldsOf = ({
   nodes,
 }: FailureEvidence): Record<string, string> => {
   const found = firstProviderStatus(nodes);
-  return found?.node.providerStatus === undefined
-    ? {}
-    : { "error.provider.status": String(found.node.providerStatus.status) };
+  return found?.node.providerStatus !== undefined
+    ? { "error.provider.status": String(found.node.providerStatus.status) }
+    : {};
 };
 
 export type FingerprintDegradation =
@@ -866,42 +898,42 @@ export const fingerprintDegradation = (
 };
 
 const chainFields = ({ nodes }: FailureEvidence): Fields => {
-  const fields: Fields = {};
+  const fields = new Map<string, FieldValue>();
   for (const [index, node] of nodes.entries()) {
     // Level zero is already carried by the top-level keys.
     if (index === 0) {
       continue;
     }
     const prefix = `error.chain.${index}`;
-    fields[`${prefix}.type`] = node.tag;
+    fields.set(`${prefix}.type`, node.tag);
     const code = safeChainCode(node);
     if (code !== undefined) {
-      fields[`${prefix}.code`] = code;
+      fields.set(`${prefix}.code`, code);
     }
     if (node.errno !== undefined && Number.isInteger(node.errno)) {
-      fields[`${prefix}.errno`] = node.errno;
+      fields.set(`${prefix}.errno`, node.errno);
     }
     if (
       isNodeSystemError(node) &&
       node.syscall !== undefined &&
       SYSCALL_TOKEN.test(node.syscall)
     ) {
-      fields[`${prefix}.syscall`] = node.syscall;
+      fields.set(`${prefix}.syscall`, node.syscall);
     }
     if (node.pgProvenance && node.sqlState !== undefined) {
-      fields[`${prefix}.sqlstate`] = node.sqlState;
+      fields.set(`${prefix}.sqlstate`, node.sqlState);
     }
     const status =
       node.providerStatus?.status ??
       (isHttpStatus(node.ownStatus) ? node.ownStatus : undefined);
     if (status !== undefined) {
-      fields[`${prefix}.status`] = status;
+      fields.set(`${prefix}.status`, status);
     }
     if (node.brand !== undefined) {
-      fields[`${prefix}.brand`] = node.brand.reason;
+      fields.set(`${prefix}.brand`, node.brand.reason);
     }
   }
-  return fields;
+  return Object.fromEntries(fields);
 };
 
 /**
@@ -934,17 +966,17 @@ export const errorFields = (evidence: FailureEvidence): Fields => {
       provider.node.providerStatus.source;
     fields["error.provider.status_depth"] = provider.depth;
   }
-  Object.assign(fields, chainFields(evidence));
-  fields["error.chain_depth"] = nodes.length;
-  fields["error.truncation"] = evidence.truncation;
   const degradation = fingerprintDegradation(evidence);
-  if (degradation !== undefined) {
-    fields["error.fingerprint_degraded"] = degradation;
-  }
-  if (root?.extraction !== undefined) {
-    Object.assign(fields, root.extraction);
-  }
-  return fields;
+  return {
+    ...fields,
+    ...chainFields(evidence),
+    "error.chain_depth": nodes.length,
+    "error.truncation": evidence.truncation,
+    ...(degradation === undefined
+      ? {}
+      : { "error.fingerprint_degraded": degradation }),
+    ...root?.extraction,
+  };
 };
 
 /** The classifier's own fields; always present on an owned record. */

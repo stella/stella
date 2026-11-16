@@ -11,10 +11,10 @@ pdf_signing_sessions.{...entityFeatureGateColumns()}           spread           
 pdf_signing_sessions.{...entityFeatureWorkspaceGateColumns()}  spread                             pdf-signing.ts:114
 pdf_signing_sessions.id                                        pUuid            pk,not null       pdf-signing.ts:115
 pdf_signing_sessions.workspace_id                              safeWorkspaceId  fk,not null       pdf-signing.ts:116
-pdf_signing_sessions.entity_id                                 safeUuid         not null          pdf-signing.ts:119
-pdf_signing_sessions.property_id                               safeUuid         not null          pdf-signing.ts:120
+pdf_signing_sessions.entity_id                                 safeUuid         fk,not null       pdf-signing.ts:119
+pdf_signing_sessions.property_id                               safeUuid         fk,not null       pdf-signing.ts:120
 pdf_signing_sessions.base_version_id                           safeUuid         fk,not null       pdf-signing.ts:121
-pdf_signing_sessions.finalized_version_id                      safeUuid         null              pdf-signing.ts:124
+pdf_signing_sessions.finalized_version_id                      safeUuid         fk,null           pdf-signing.ts:124
 pdf_signing_sessions.created_by                                text             fk,not null       pdf-signing.ts:125
 pdf_signing_sessions.status                                    text             default,not null  pdf-signing.ts:129
 pdf_signing_sessions.close_reason                              text             null              pdf-signing.ts:133

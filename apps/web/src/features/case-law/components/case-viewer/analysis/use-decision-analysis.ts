@@ -6,6 +6,8 @@
  * error the server names. Explicit requests retry failures.
  */
 
+import { useRef } from "react";
+
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 
@@ -18,7 +20,10 @@ import {
   type DecisionAnalysisKey,
   decisionAnalysisOptions,
 } from "@/features/case-law/queries/decision-analysis";
+import { readClientClockMs } from "@/hooks/client-clock";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useTimePassed } from "@/hooks/use-time-passed";
+import { useAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 
 export type AnalysisState =
@@ -100,6 +105,7 @@ export const useDecisionAnalysis = ({
   ...key
 }: UseDecisionAnalysisOptions) => {
   const queryClient = useQueryClient();
+  const analytics = useAnalytics();
   const options = decisionAnalysisOptions(key);
   // Disabled, the observer still reads the cache, so an analysis finished
   // earlier is drawn without asking for a run.
@@ -137,6 +143,98 @@ export const useDecisionAnalysis = ({
       result: query.data,
     });
   })();
+
+  const timingRef = useRef<{
+    key: string;
+    startedAt: number;
+    firstSectionAt: number | null;
+    firstResultSeen: boolean;
+    sent: boolean;
+    fromStore: boolean;
+    leaveTimer: ReturnType<typeof setTimeout> | null;
+  } | null>(null);
+  const timingKey = `${key.decisionId}:${key.decisionUpdatedAt}`;
+  useExternalSyncEffect(() => {
+    if (!enabled) {
+      // The previous setup owns its deferred leave event; a later enable
+      // starts a new visit even when the decision identity is unchanged.
+      timingRef.current = null;
+      return undefined;
+    }
+    const existing = timingRef.current;
+    if (existing === null || existing.key !== timingKey) {
+      timingRef.current = {
+        key: timingKey,
+        startedAt: readClientClockMs(),
+        firstSectionAt: null,
+        firstResultSeen: false,
+        sent: false,
+        fromStore: false,
+        leaveTimer: null,
+      };
+    } else if (existing.leaveTimer !== null) {
+      clearTimeout(existing.leaveTimer);
+      existing.leaveTimer = null;
+    }
+    return () => {
+      const timing = timingRef.current;
+      if (timing === null || timing.key !== timingKey || timing.sent) {
+        return;
+      }
+      timing.leaveTimer = setTimeout(() => {
+        if (timing.sent) {
+          return;
+        }
+        timing.sent = true;
+        analytics.captureCaseLawAnalysisTiming({
+          ms_to_first_section:
+            timing.firstSectionAt === null
+              ? null
+              : Math.round(timing.firstSectionAt - timing.startedAt),
+          ms_to_done: null,
+          outcome: "left",
+          from_store: timing.fromStore,
+        });
+      }, 0);
+    };
+  }, [analytics, enabled, timingKey]);
+
+  useExternalSyncEffect(() => {
+    const timing = timingRef.current;
+    if (
+      !enabled ||
+      timing === null ||
+      timing.key !== timingKey ||
+      timing.sent
+    ) {
+      return;
+    }
+    const now = readClientClockMs();
+    if (!timing.firstResultSeen && query.data !== undefined) {
+      timing.firstResultSeen = true;
+      timing.fromStore = query.data.kind === "done";
+    }
+    const hasSection =
+      state.status === "done" ||
+      (state.status === "generating" && state.tree.length > 0);
+    if (hasSection && timing.firstSectionAt === null) {
+      timing.firstSectionAt = now;
+    }
+    if (state.status !== "done" && state.status !== "error") {
+      return;
+    }
+    timing.sent = true;
+    analytics.captureCaseLawAnalysisTiming({
+      ms_to_first_section:
+        timing.firstSectionAt === null
+          ? null
+          : Math.round(timing.firstSectionAt - timing.startedAt),
+      ms_to_done:
+        state.status === "done" ? Math.round(now - timing.startedAt) : null,
+      outcome: state.status,
+      from_store: timing.fromStore,
+    });
+  }, [analytics, enabled, query.data, state, timingKey]);
 
   const retryTimePassed = useTimePassed(
     state.status === "error" ? analysisRetryAt(state.error) : undefined,

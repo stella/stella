@@ -36,10 +36,12 @@ export const concurrencyExceptionChanges = (
 if (import.meta.main) {
   const filename = ".oxlint-plugins/no-hand-rolled-concurrency-exceptions.json";
   const mergeBase = execFileSync("git", ["merge-base", "HEAD", "origin/main"], {
+    maxBuffer: 2 ** 30,
     encoding: "utf-8",
   }).trim();
   const exists =
     execFileSync("git", ["ls-tree", "--name-only", mergeBase, "--", filename], {
+      maxBuffer: 2 ** 30,
       encoding: "utf-8",
     }).trim().length > 0;
   // The introducing PR establishes the ledger. Subsequent PRs compare exact
@@ -52,6 +54,7 @@ if (import.meta.main) {
         schema,
         JSON.parse(
           execFileSync("git", ["show", `${mergeBase}:${filename}`], {
+            maxBuffer: 2 ** 30,
             encoding: "utf-8",
           }),
         ),

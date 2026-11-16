@@ -1,7 +1,9 @@
 // parser-output-unchanged: imports the document AST from its package owner
+// parser-output-unchanged: front matter is validated against its source paragraphs, the text its validation markup held.
 import type { Block } from "@stll/legal-ast/document-ast";
 
-import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
+// parser-output-unchanged: the candidate check reads the same validateAst verdict; only the logging moved to the pipeline.
+import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";
 
 import { parseHeadmatter } from "./html";
 import type { TextBudget } from "./outcome";
@@ -96,11 +98,14 @@ export const composeFrontMatter = ({
       };
     }
     const added = parsed.text.units.flatMap((unit) => [...unit.blocks]);
-    const validation = validateAndLog(
-      { parser: "courtlistener", caseNumber: `cl-${field}`, language: "en" },
-      parsed.text.validationHtml,
+    // Measured, not logged: the verdict decides whether this field is held,
+    // and the pipeline reports retention for the document it stores.
+    const validation = validateAst(
+      { type: "paragraphs", paragraphs: parsed.text.validationParagraphs },
       added,
-      { sourcePolicy: courtListenerValidationPolicy },
+      {
+        sourcePolicy: courtListenerValidationPolicy,
+      },
     );
     const defects = publishedTextDefects(parsed.text, validation);
     if (defects === null) {

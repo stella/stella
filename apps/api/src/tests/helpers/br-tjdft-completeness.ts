@@ -1,5 +1,4 @@
-import * as cheerio from "cheerio";
-
+import { load } from "@stll/html";
 import type { Block } from "@stll/legal-ast/document-ast";
 
 import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";
@@ -61,7 +60,7 @@ export const brTjdftCompletenessIssues = (
   html: string,
   blocks: Block[],
 ): string[] => {
-  const document = cheerio.load(html);
+  const document = load(html);
   document(BLOCK_EDGES).after(" ");
   return validateAst(html, blocks, { document })
     .issues.map(({ code }) => code)

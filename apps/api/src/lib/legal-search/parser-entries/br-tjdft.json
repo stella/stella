@@ -1,0 +1,11 @@
+{
+  "type": "parser",
+  "name": "BR_TJDFT",
+  "key": "br-tjdft",
+  "parserVersion": 1,
+  "sourceFingerprintVersion": 0,
+  "scope": {
+    "type": "all",
+    "reason": "the source's first parser; there are no stored rows to narrow"
+  }
+}

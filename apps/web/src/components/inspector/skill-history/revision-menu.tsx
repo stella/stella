@@ -9,6 +9,7 @@ import {
   MenuSeparator,
   MenuTrigger,
 } from "@stll/ui/menu";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { useFormatter } from "@/i18n/formatting-context";
@@ -76,7 +77,7 @@ export const RevisionMenu = ({
                   revision.id !== comparedRevisionId && "opacity-0",
                 )}
               />
-              <span className="truncate tabular-nums">
+              <TruncatedText className="tabular-nums">
                 {t("skillHistory.revisionLabel", {
                   author: authorName(revision.createdBy),
                   date: format.dateTime(new Date(revision.createdAt), {
@@ -87,7 +88,7 @@ export const RevisionMenu = ({
                   }),
                   number: String(revision.revisionNumber),
                 })}
-              </span>
+              </TruncatedText>
             </MenuItem>
           ))
         )}

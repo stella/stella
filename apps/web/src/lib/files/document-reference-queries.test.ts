@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-process.env["VITE_API_URL"] ??= "http://localhost:3001";
+import { createTestState } from "@stll/test-state";
+
+const testState = createTestState({ file: import.meta.path, config: {} });
+
+testState.setEnvIfAbsent("VITE_API_URL", "http://localhost:3001");
 
 const { documentReferenceKeys } =
   await import("@/lib/files/document-reference-queries");

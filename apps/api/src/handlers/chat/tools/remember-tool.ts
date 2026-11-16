@@ -66,6 +66,12 @@ type CreateRememberToolProps = {
   // handlers; the audit row commits in the same transaction as the
   // insert.
   recordAuditEvent: AuditRecorder;
+  /**
+   * The transactional memory write, which proves the member's live authority
+   * before inserting. Tests that cover the tool's own scope decisions replace
+   * it; the write itself is covered by its Postgres tests.
+   */
+  persistMemory?: typeof persistExplicitMemory;
   safeDb: SafeDb;
   // Resolve immediately before persistence so matter/entity refs registered by
   // tools or subagents earlier in the same streaming turn are included. User-
@@ -80,8 +86,7 @@ type CreateRememberToolProps = {
   // workspace-scoped memory and for the matter-specific kinds.
   workspaceId: SafeId<"workspace"> | null;
   /** The turn's statuses of the member's accessible matters. */
-  workspaceStatusById:
-    ReadonlyMap<string, AccessibleWorkspace["status"]> | undefined;
+  workspaceStatusById: ReadonlyMap<string, AccessibleWorkspace["status"]>;
 };
 
 type MemoryWriteScopeRequestOptions = Pick<
@@ -118,6 +123,7 @@ export const createRememberTool = ({
   authority,
   organizationId,
   recordAuditEvent,
+  persistMemory = persistExplicitMemory,
   safeDb,
   resolveSourceDataWorkspaceIds,
   toDurableRefText,
@@ -147,9 +153,7 @@ export const createRememberTool = ({
       }
       // Authorized on every call, with the same checks as the REST route.
       const workspaceStatus =
-        workspaceId === null
-          ? undefined
-          : workspaceStatusById?.get(workspaceId);
+        workspaceId === null ? undefined : workspaceStatusById.get(workspaceId);
       const authorizedScope = resolveMemoryWriteScope({
         accessibleWorkspaces:
           workspaceId === null || workspaceStatus === undefined
@@ -213,7 +217,7 @@ export const createRememberTool = ({
       const sourceDataWorkspaceIds = resolveSourceDataWorkspaceIds();
       const insertResult = await safeDb(
         async (tx) =>
-          await persistExplicitMemory({
+          await persistMemory({
             tx,
             recordAuditEvent,
             scope: authorizedScope.value,
@@ -234,6 +238,11 @@ export const createRememberTool = ({
             message: "Failed to save memory.",
             cause: insertResult.error,
           }),
+        );
+      }
+      if (insertResult.value.type === "authority_unavailable") {
+        return Result.err(
+          memoryWriteRefusalChatToolError(insertResult.value.error),
         );
       }
       return Result.ok({ status: "saved" } as const);

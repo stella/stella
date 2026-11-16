@@ -1,10 +1,13 @@
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
+import { TruncatedText } from "@stll/ui/truncated-text";
+
 import { userMessageFallbackText } from "@/components/chat/chat-thread-messages.logic";
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import Tooltip from "@/components/tooltip";
 import { useStickToBottomContext } from "@/hooks/use-stick-to-bottom";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import { getLangDir, useI18nStore } from "@/i18n/i18n-store";
 import { dedupeById } from "@/lib/dedupe-by-id";
 import { buildChatTurnNavigationItems } from "@/routes/_protected.chat/-components/chat-turn-navigator.logic";
@@ -15,7 +18,7 @@ type ChatTurnNavigatorProps = {
 
 export const ChatTurnNavigator = ({ messages }: ChatTurnNavigatorProps) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const lang = useI18nStore((state) => state.lang);
   const { scrollElementRef } = useStickToBottomContext();
   const navigationItems = buildChatTurnNavigationItems({
@@ -70,26 +73,34 @@ export const ChatTurnNavigator = ({ messages }: ChatTurnNavigatorProps) => {
             className="w-[min(36rem,calc(100vw-8rem))] max-w-none text-wrap"
             content={
               <div className="px-2 py-2">
-                <p className="line-clamp-1 text-sm font-medium" dir="auto">
+                <TruncatedText
+                  className="text-sm font-medium"
+                  dir="auto"
+                  hint={false}
+                  render={<p />}
+                >
                   {userPreview}
-                </p>
+                </TruncatedText>
                 {item.assistantPreview && (
-                  <p
-                    className="text-muted-foreground mt-1 line-clamp-2 text-sm leading-5"
+                  <TruncatedText
+                    className="text-muted-foreground mt-1 text-sm leading-5"
                     dir="auto"
+                    hint={false}
+                    lines={2}
+                    render={<p />}
                   >
                     {item.assistantPreview}
-                  </p>
+                  </TruncatedText>
                 )}
               </div>
             }
             key={item.id}
             render={
-              <button
+              <Button
                 aria-label={t("chat.jumpToMessage")}
-                className="focus-visible:ring-ring group relative flex size-11 shrink-0 cursor-pointer items-center rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                className="group relative flex size-11 shrink-0 items-center justify-start"
                 onClick={() => scrollToTurn(item.id)}
-                type="button"
+                variant="plain"
               />
             }
             side={getLangDir(lang) === "rtl" ? "left" : "right"}

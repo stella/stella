@@ -34,9 +34,13 @@ import {
   caseLawAnalysisWriterPolicies,
   caseLawAnalysisWriterReadPolicies,
   caseLawIngestionOnlyPolicies,
+  chatBrowserSiteGrantPolicies,
+  chatLimitReminderPolicies,
   chatMessagePolicies,
   chatMessageRevisionPolicies,
   chatMessageSearchDocumentPolicies,
+  chatQueuedMessagePolicies,
+  chatQueueHoldPolicies,
   chatThreadCompactionPolicies,
   chatThreadNamePolicies,
   chatThreadPolicies,
@@ -78,6 +82,7 @@ import {
   wsOrganizationScopedRequestPolicies,
   wsOrganizationUserPolicies,
   wsPolicies,
+  wsRecordedOrganizationPolicies,
 } from "@/api/db/rls";
 import type {
   BankAccount,
@@ -107,7 +112,10 @@ import type {
   SafeIdType,
 } from "@/api/lib/branded-types";
 import type { ClauseBody } from "@/api/lib/clauses/types";
-import type { DocumentSource } from "@/api/lib/document-source";
+import type {
+  DocumentSource,
+  ImportDocumentSource,
+} from "@/api/lib/document-source";
 import type { TemplateManifest } from "@/api/lib/docx/types";
 import type { AgendaAttendeeType } from "@/api/lib/entity-constants";
 import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
@@ -214,6 +222,8 @@ export type JustificationBlock =
 export type JustificationContent = {
   version: 1;
   blocks: JustificationBlock[];
+  /** Set on a clause summary, whose wording lives only in its citations. */
+  gradeFrom?: "cited-passages";
 };
 
 /** Re-exported so the schema layer keeps one import surface; the agenda member
@@ -345,6 +355,13 @@ export const DESTRUCTIVE_EFFECT_CHUNK_STATUSES = [
 export type DestructiveEffectChunkStatus =
   (typeof DESTRUCTIVE_EFFECT_CHUNK_STATUSES)[number];
 
+export type AccountErasureReport = {
+  retainedMatterContent: {
+    workspaceId: SafeId<"workspace">;
+    reason: "establishment_or_defence_of_legal_claims";
+  }[];
+};
+
 export type AccountDeletionStorageCleanup = {
   s3Keys: string[];
   notBefore?: string;
@@ -352,6 +369,11 @@ export type AccountDeletionStorageCleanup = {
 
 export const tsvector = customType<{ data: string }>({
   dataType: () => "tsvector",
+});
+
+/** A full transaction id, read as its decimal text. */
+export const xid8 = customType<{ data: string }>({
+  dataType: () => "xid8",
 });
 
 export const safeWorkspaceId = (name: string) =>
@@ -532,6 +554,8 @@ export {
   aiMemoryPolicies,
   chatMessagePolicies,
   chatMessageRevisionPolicies,
+  chatQueueHoldPolicies,
+  chatQueuedMessagePolicies,
   chatTurnPolicies,
   chatMessageSearchDocumentPolicies,
   chatThreadCompactionPolicies,
@@ -562,6 +586,8 @@ export {
   orgPolicies,
   orgReadOnlyPolicies,
   savedSearchPolicies,
+  chatLimitReminderPolicies,
+  chatBrowserSiteGrantPolicies,
   chatToolGrantPolicies,
   sharepointConnectionPolicies,
   sharepointOAuthStatePolicies,
@@ -581,6 +607,7 @@ export {
   wsDataScopePolicies,
   wsOrganizationScopedRequestPolicies,
   wsPolicies,
+  wsRecordedOrganizationPolicies,
 };
 
 export type {
@@ -604,6 +631,7 @@ export type {
   DocumentAst,
   DocumentSource,
   EmptyAst,
+  ImportDocumentSource,
   EntityKind,
   FieldContent,
   PersistedChatMessageContent,

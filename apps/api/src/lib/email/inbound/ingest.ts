@@ -1,6 +1,7 @@
 import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
+import { apiDateTimeSchema } from "@stll/api-contract/api-date";
 import type {
   CorrespondenceAuthenticatedSender,
   CorrespondenceAuthentication,
@@ -9,6 +10,7 @@ import type {
   CorrespondenceProvenance,
   ParsedCorrespondence,
 } from "@stll/api-contract/correspondence";
+import { declareFingerprintFields } from "@stll/errors";
 import { createSha256 } from "@stll/sha256/bun";
 
 import type { AttachmentScanVerdict } from "@/api/lib/email/inbound/acceptance";
@@ -56,7 +58,7 @@ export const PARSE_DROP_REASON = {
 >;
 
 const deliveryMetadataSchema = v.strictObject({
-  receivedAt: v.pipe(v.string(), v.isoTimestamp()),
+  receivedAt: apiDateTimeSchema,
   envelope: v.strictObject({
     mailFrom: v.pipe(v.string(), v.maxLength(1024)),
     recipients: v.pipe(
@@ -76,7 +78,11 @@ class InboundIngestError extends TaggedError("InboundIngestError")<{
     | "verification-unavailable"
     | "scan-unavailable"
     | "persistence-unavailable";
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 type ClassifiedDelivery =
   | { status: "drop"; sender: string | null; reason: CorrespondenceDropReason }

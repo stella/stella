@@ -1,6 +1,6 @@
 import type { ModelMessage } from "@tanstack/ai";
 import { panic, Result } from "better-result";
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import { inArray } from "drizzle-orm";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -10,6 +10,7 @@ import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { CHAT_TOOL_POLICY_KIND } from "@stll/api-contract";
 import { CHAT_PROMPT_IMPROVEMENT_STRATEGIES } from "@stll/api-contract/chat";
 import { repoRelativePath } from "@stll/portable-path";
+import { createTestState } from "@stll/test-state";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
@@ -31,6 +32,7 @@ import { applyChatToolPolicy } from "@/api/handlers/chat/tools/tool-policy";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import createSkillComment from "@/api/handlers/skills/comments/create";
 import generateSkillDraft from "@/api/handlers/skills/drafts/generate";
+import draftSkillFromChat from "@/api/handlers/skills/from-chat/draft";
 import createProposalFromComments from "@/api/handlers/skills/proposals/from-comments/create";
 import createSkillResource from "@/api/handlers/skills/resources/create";
 import rewriteSkillResource from "@/api/handlers/skills/resources/rewrite";
@@ -75,7 +77,7 @@ import {
   wireOrgAIConfig,
   wireTool,
 } from "@/api/tests/helpers/provider-wire-contract";
-import { installProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
+import { registerProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
 import type {
   ProviderWireReplay,
   ReplayedRequest,
@@ -87,6 +89,8 @@ import {
 } from "@/api/tests/security/rls-fixture";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 // Every provider request the chat surface builds besides the chat turn
 // (`provider-request-schemas.integration.test.ts`), each through the
@@ -114,30 +118,29 @@ const cassettes = loadProviderWireCassettes();
 let testDb: TestDatabase;
 let ids: TestIds;
 let replay: ProviderWireReplay;
-let previousMockAI: typeof env.USE_MOCK_AI;
-let previousBedrockEndpoint: string | undefined;
+
 const seededThreadIds: SafeId<"chatThread">[] = [];
 
-beforeAll(async () => {
+registerProviderWireReplay({
+  onInstall: (active) => {
+    replay = active;
+  },
+});
+
+testState.beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
-  previousMockAI = env.USE_MOCK_AI;
-  env.USE_MOCK_AI = false;
-  previousBedrockEndpoint = process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"];
-  process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"] =
-    "https://bedrock-runtime.us-east-1.amazonaws.com.cassette.invalid";
-  replay = installProviderWireReplay();
+
+  testState.setConfig("USE_MOCK_AI", false);
+
+  testState.setEnv(
+    "AWS_ENDPOINT_URL_BEDROCK_RUNTIME",
+    "https://bedrock-runtime.us-east-1.amazonaws.com.cassette.invalid",
+  );
 });
 
 afterAll(async () => {
-  replay.restore();
-  env.USE_MOCK_AI = previousMockAI;
-  if (previousBedrockEndpoint === undefined) {
-    delete process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"];
-  } else {
-    process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"] = previousBedrockEndpoint;
-  }
   if (seededThreadIds.length > 0) {
     await testDb
       .delete(chatThreads)
@@ -173,7 +176,13 @@ const boundaryOf = (run: TaskRun) =>
 /** A handler context for the organization's owner. */
 const handlerContext = (
   run: TaskRun,
-  fields: { body?: unknown; params?: unknown; query?: unknown },
+  fields: {
+    body?: unknown;
+    params?: unknown;
+    query?: unknown;
+    /** For a builder that anonymizes through the organization's catalogs. */
+    scopedDb?: ScopedDb;
+  },
 ) =>
   createTestHandlerContext({
     scopedDb: NO_DB,
@@ -391,7 +400,6 @@ const TASK_REQUESTS = {
     run: async (run) => {
       await runChatThreadCompaction({
         abortSignal: AbortSignal.timeout(TASK_REQUEST_TIMEOUT_MS),
-        dataWorkspaceIds: [],
         orgAIConfig: run.orgAIConfig,
         managedAIResidency: "eu" as const,
         organizationId: ids.orgA,
@@ -400,6 +408,8 @@ const TASK_REQUESTS = {
         safeDb: safeDbOf(),
         threadId: await seedThread(),
         triggerTokens: 1,
+        userId: ids.userA1,
+        withStoredContentEgress: async ({ work }) => await work(),
       });
     },
   },
@@ -451,6 +461,28 @@ const TASK_REQUESTS = {
         asTestRaw<Parameters<typeof generateSkillDraft.handler>[0]>(
           handlerContext(run, {
             body: { intent: "Review an NDA against our playbook." },
+          }),
+        ),
+      );
+    },
+  },
+  "skill-from-chat": {
+    file: "handlers/skills/from-chat/draft.ts",
+    task: "short-text",
+    settings: { caching: true, sendMode: false },
+    run: async (run) => {
+      await draftSkillFromChat.handler(
+        asTestRaw<Parameters<typeof draftSkillFromChat.handler>[0]>(
+          handlerContext(run, {
+            body: { threadId: await seedThread() },
+            scopedDb: asTestRaw<ScopedDb>(
+              createScopedDb(
+                testDb,
+                [ids.wsA1, ids.wsA2],
+                ids.orgA,
+                ids.userA1,
+              ),
+            ),
           }),
         ),
       );
@@ -554,6 +586,7 @@ const ROLE_REQUEST_NAMES = Object.keys(TASK_REQUESTS).filter(
  * fails the scan below.
  */
 const OUTSIDE_THE_CHAT_SURFACE: Readonly<Record<string, string>> = {
+  "handlers/ai/email-generation.ts": "Outlook add-in email summary and reply",
   "handlers/ai-autocomplete/stream.ts": "editor autocomplete",
   "handlers/case-law/analysis/generate.ts": "case-law analysis",
   "handlers/case-law/analysis/significance-run.ts": "case-law analysis",

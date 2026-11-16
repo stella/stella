@@ -1,6 +1,6 @@
-import { Value } from "@sinclair/typebox/value";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
 import { parseTimeZoneId, Temporal } from "@stll/time";
 import type { TimeZoneId } from "@stll/time";
@@ -17,14 +17,16 @@ import {
   hasMemberPermission,
   sessionMemberRole,
 } from "@/api/lib/permission-authorization";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { RESEARCH_ADMIN_TOOL_HANDLERS } from "@/api/mcp/research-admin-tools";
 import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 import type { McpToolResponse } from "@/api/mcp/tool-types";
 import { isMcpEgressPlan } from "@/api/mcp/tool-types";
 import { serializeToolResult } from "@/api/mcp/tool-utils";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
+import { settingsSelectFixture } from "./settings-select.fixture";
 import updateOrganizationSettings, {
   updateOrganizationSettingsHandler,
 } from "./update";
@@ -49,14 +51,9 @@ const capturingDb = (stored: StoredSettings): Capture => {
   const writes: Record<string, unknown>[] = [];
   const rows = [stored];
   const tx = asTestRaw<Transaction>({
-    select: () => ({
-      from: () => ({
-        where: () => ({
-          // Awaiting the array yields the rows; `.for("update")` locks them.
-          limit: () => Object.assign([...rows], { for: async () => rows }),
-        }),
-      }),
-    }),
+    select: settingsSelectFixture(() =>
+      rows.map((row) => ({ organizationId, ...row })),
+    ),
     insert: () => ({
       values: () => ({
         onConflictDoNothing: async () => {},
@@ -108,24 +105,25 @@ const mcpContext = (
   memberRole: MemberRole,
   safeDb: SafeDb,
   audits: Parameters<AuditRecorder>[1][],
-): McpRequestContext => ({
-  accessibleWorkspaceIds: [],
-  accessibleWorkspaceIdSet: new Set(),
-  accessibleWorkspaceStatusById: new Map(),
-  accessibleWorkspaces: [],
-  grantedScopes: [],
-  memberRole,
-  organizationId,
-  recordAuditEvent: async (_tx, event) => {
-    audits.push(event);
-  },
-  safeDb,
-  scopedDb: asTestRaw<McpRequestContext["scopedDb"]>(() => {
-    throw new Error("update_organization_settings reads through safeDb");
-  }),
-  userId: toSafeId<"user">("user_1"),
-  userEmail: "admin@example.test",
-});
+): AuthorizedMcpRequestContext =>
+  authorizedMcpContextForTest({
+    accessibleWorkspaceIds: [],
+    accessibleWorkspaceIdSet: new Set(),
+    accessibleWorkspaceStatusById: new Map(),
+    accessibleWorkspaces: [],
+    grantedScopes: [],
+    memberRole,
+    organizationId,
+    recordAuditEvent: async (_tx, event) => {
+      audits.push(event);
+    },
+    safeDb,
+    scopedDb: asTestRaw<AuthorizedMcpRequestContext["scopedDb"]>(() => {
+      throw new Error("update_organization_settings reads through safeDb");
+    }),
+    userId: toSafeId<"user">("user_1"),
+    userEmail: "admin@example.test",
+  });
 
 const toolPayload = (response: McpToolResponse) => {
   if (isMcpEgressPlan(response)) {
@@ -274,7 +272,7 @@ describe("organization time zone REST/MCP/CLI parity", () => {
 
     const long = `Europe/${"x".repeat(60)}`;
     for (const value of ["Europe/Prague", null, "", long]) {
-      const restAccepts = Value.Check(updateOrganizationSettings.config.body, {
+      const restAccepts = v.is(updateOrganizationSettings.config.body, {
         timeZone: value,
       });
       const mcp = await updateOverMcp({ args: { time_zone: value } });
@@ -329,8 +327,10 @@ describe("reading the organization time zone", () => {
         matterNumberingEnabled: false,
         practiceJurisdictions,
         promptCachingEnabled: true,
+        aiInstructions: "",
         managedAIResidency: "eu",
         memoryExtractionEnabled: false,
+        localRunMaxApprovalMode: "full_auto",
         timeMinimumUnitMinutes: 6,
         timeEditWindowDays: 90,
         timeLockedThroughMonth: null,

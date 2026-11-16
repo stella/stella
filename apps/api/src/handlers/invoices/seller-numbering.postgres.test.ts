@@ -2,6 +2,8 @@ import { panic } from "better-result";
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
+import { INVOICE_ISSUE_BLOCKER } from "@stll/api-contract/billing";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
   featureEnrolments,
@@ -16,6 +18,7 @@ import {
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import transitionInvoice from "@/api/handlers/invoices/transition";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -30,6 +33,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 setDefaultTimeout(120_000);
@@ -181,7 +185,7 @@ if (!databaseUrl || !runPostgres) {
     };
     cleanUp(async () => {
       if (orgIds.length > 0) {
-        await db.delete(organization).where(inArray(organization.id, orgIds));
+        await deleteOrganizationsForTest(db, orgIds);
       }
       if (userIds.length > 0) {
         await db.delete(user).where(inArray(user.id, userIds));
@@ -239,10 +243,11 @@ if (!databaseUrl || !runPostgres) {
           memberRole: sessionMemberRole("owner"),
           session: { activeOrganizationId: orgId },
           request: new Request(
-            `https://example.test/v1/workspaces/${wsId}/invoices/${invoiceId}/transition`,
+            `https://example.test/v1/invoices/${wsId}/${invoiceId}/transition`,
             { method: "POST" },
           ),
-          route: "/v1/workspaces/:workspaceId/invoices/:invoiceId/transition",
+          route:
+            "/v1/invoices/:workspaceId/:invoiceId/transition" satisfies ApiRoutePath,
           recordAuditEvent: async (
             _tx: unknown,
             recorded: AuditEvent | AuditEvent[],
@@ -468,8 +473,9 @@ if (!databaseUrl || !runPostgres) {
       expect(await finalize({ scenario, db, invoiceId })).toEqual({
         code: 409,
         response: {
+          code: INVOICE_ISSUE_BLOCKER.numberSeriesMissing,
           message: "No default number series configured for this document type",
-          hint: "Create a number series for this documentType and this seller or all sellers, set it as default, then finalize again.",
+          hint: "Create a number series (number-series.create) for this documentType and this seller or all sellers, set it as default, then finalize again.",
         },
       });
       expect(

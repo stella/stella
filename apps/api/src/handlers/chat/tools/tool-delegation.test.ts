@@ -12,7 +12,8 @@ import { getChatTools } from "@/api/handlers/chat/tools/chat-tools";
 import type { GetChatToolsProps } from "@/api/handlers/chat/tools/chat-tools";
 import { NATIVE_CHAT_TOOL_DELEGATIONS } from "@/api/handlers/chat/tools/tool-delegation";
 import type { ChatToolDelegation } from "@/api/handlers/chat/tools/tool-delegation";
-import { canEditActiveSkill } from "@/api/lib/agent-skills/skills";
+import { canEditActiveSkill } from "@/api/lib/agent-skills/access";
+import { UNBOUND } from "@/api/lib/agent-skills/binding";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
@@ -97,6 +98,7 @@ const registrationProps = (memberRole: MemberRole) =>
       toolName: "sample-skill",
       displayName: "Sample skill",
       description: "Sample instructions",
+      binding: UNBOUND,
       body: "# Sample",
       version: null,
       resources: [{ path: "references/sample.md" }],
@@ -105,6 +107,7 @@ const registrationProps = (memberRole: MemberRole) =>
       excludedChatTools: [],
       // The active-skill resolver supplies this preauthorized field in production.
       editable: canEditActiveSkill({
+        ...UNBOUND,
         memberRole: sessionMemberRole(memberRole),
         origin: "authored",
         scope: "private",

@@ -12,6 +12,7 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import { mcpHandoffSessionsSchema } from "@stll/api-contract/mcp-web-handoff";
+import { BILLING_ACCESS_MEMBER_FIELDS } from "@stll/auth-model";
 import { fetchWithTimeout } from "@stll/fetch";
 import { ac, roles } from "@stll/permissions";
 
@@ -114,7 +115,11 @@ const withOauthQueryFromHash = (ctx: {
 const authClientPlugins = [
   emailOTPClient(),
   lastLoginMethodClient(),
-  organizationClient({ ac, roles }),
+  organizationClient({
+    ac,
+    roles,
+    schema: { member: { additionalFields: BILLING_ACCESS_MEMBER_FIELDS } },
+  }),
   inferAdditionalFields({
     session: {
       originConsentId: { type: "string", required: false },
@@ -122,6 +127,7 @@ const authClientPlugins = [
     user: {
       preferredName: { type: "string", required: false },
       timezoneId: { type: "string" },
+      readerAnswerLanguage: { type: "string", required: false },
       wordEditShortcut: { type: "string", required: false },
       userShortcuts: { type: "string", required: false },
       guideProgress: { type: "string", required: false },
@@ -224,13 +230,13 @@ export const listAuthSessions = async () => {
 
     if (Result.isError(handoffSessionsResult)) {
       getAnalytics().captureError(handoffSessionsResult.error, {
-        type: "detached",
-        operation: "auth.list_sessions.handoffs",
+        fingerprintKey: "auth.listSessions.handoffs:fetch",
+        scope: { type: "handler", handlerId: "auth.listSessions.handoffs" },
       });
     } else if (handoffSessionsResult.value.error) {
       getAnalytics().captureError(handoffSessionsResult.value.error, {
-        type: "detached",
-        operation: "auth.list_sessions.handoffs",
+        fingerprintKey: "auth.listSessions.handoffs:response",
+        scope: { type: "handler", handlerId: "auth.listSessions.handoffs" },
       });
     } else {
       const handoffsResult = v.safeParse(
@@ -248,7 +254,14 @@ export const listAuthSessions = async () => {
             status: 502,
             statusText: "Bad Gateway",
           }),
-          { type: "detached", operation: "auth.list_sessions.handoffs" },
+          {
+            fingerprintKey: "auth.listSessions.handoffs:schema",
+            scope: { type: "handler", handlerId: "auth.listSessions.handoffs" },
+            context: {
+              type: "detached",
+              operation: "auth.list_sessions.handoffs",
+            },
+          },
         );
       }
     }

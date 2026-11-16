@@ -8,7 +8,7 @@
  * organization, within the approval window: content cannot be swapped between
  * the report a human was shown and the one that is sent.
  */
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { timingSafeEqual } from "node:crypto";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import type { FeedbackReportInput } from "@stll/api-contract/feedback";
@@ -38,7 +38,7 @@ const signature = ({
   secret,
   userId,
 }: ApprovalSubject & { expiresAt: number }): string =>
-  createHmac("sha256", secret)
+  new Bun.CryptoHasher("sha256", secret)
     .update(
       [
         APPROVAL_PREFIX,

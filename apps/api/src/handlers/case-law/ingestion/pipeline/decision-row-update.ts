@@ -1,6 +1,8 @@
 import { panic } from "better-result";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, lte, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
+
+import { isDocumentAstInAnyBlockOrder } from "@stll/legal-ast/document-ast";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -13,6 +15,7 @@ import {
   reopenCitationsForKeys,
   reopenCitationsFrom,
   reopenCitationsResolvedTo,
+  settleReopenedCitations,
 } from "@/api/handlers/case-law/citation-resolution";
 import {
   CITATION_SCOPE_METADATA_KEY,
@@ -29,6 +32,7 @@ import { sweepRawWriteLostToErasureTx } from "@/api/handlers/case-law/ingestion/
 import {
   announceDecisionIdentifiers,
   reconcileStableProjection,
+  recordParsedGenerationTx,
 } from "@/api/handlers/case-law/ingestion/pipeline/decision-row-context";
 import type { DecisionRowWrite } from "@/api/handlers/case-law/ingestion/pipeline/decision-row-context";
 import {
@@ -38,8 +42,10 @@ import {
 import { DECISION_ROW_WRITE_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import type { DecisionRowWriteStatus } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { writeDecisionAnchorRedirectsTx } from "@/api/lib/case-law/decision-anchor-redirects";
 import { preserveStoredTextAfterParseFailure } from "@/api/lib/case-law/decision-text";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
+import { decisionFallbackState } from "@/api/lib/case-law/fallback-decision-identity";
 import { rowHoldsDocumentFor } from "@/api/lib/case-law/stored-payload";
 import { corpusContentHash } from "@/api/lib/legal-search/corpus-content-hash";
 import type { ActiveCorpusProjectionSourceLock } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
@@ -124,6 +130,7 @@ type ReplacedDecisionState = NonNullable<
 
 type LockedCitationScopeStateOptions = {
   incomingCarriesDocument: boolean;
+  pendingMirrorPayload: DecisionWritePlan["pendingMirrorPayload"];
   preparedMetadata: DecisionWritePlan["preparedMetadata"];
   replacedState: ReplacedDecisionState | null;
   reusedCitationScopeEnvelope: DecisionWritePlan["reusedCitationScopeEnvelope"];
@@ -131,6 +138,7 @@ type LockedCitationScopeStateOptions = {
 
 const lockedCitationScopeState = ({
   incomingCarriesDocument,
+  pendingMirrorPayload,
   preparedMetadata,
   replacedState,
   reusedCitationScopeEnvelope,
@@ -143,9 +151,13 @@ const lockedCitationScopeState = ({
       JSON.stringify(
         sortDeep(replacedState.metadata?.[CITATION_SCOPE_METADATA_KEY] ?? null),
       ) !== JSON.stringify(sortDeep(reusedCitationScopeEnvelope ?? null)),
-    metadata: preservesDocument
-      ? preserveCitationScopeEnvelope(preparedMetadata, replacedState.metadata)
-      : preparedMetadata,
+    metadata:
+      preservesDocument && pendingMirrorPayload?.astStatus !== "text-only"
+        ? preserveCitationScopeEnvelope(
+            preparedMetadata,
+            replacedState.metadata,
+          )
+        : preparedMetadata,
   };
 };
 
@@ -257,6 +269,37 @@ export const lostRowWriteStatus = async (
  * and (unless guarded) payload, fenced on this observation still owning the
  * row. Reads the state it replaces, under a row lock; the caller runs it.
  */
+type PlannedPayloadFenceOptions = {
+  existing: ExistingDecision;
+  replacesDocumentWithRedirects: boolean;
+  storedPayloadUnchanged: boolean;
+};
+
+/**
+ * The payload this write planned against must still be the row's. A write
+ * that keeps the stored payload compares its pointers; one that records
+ * anchor redirects compares the document they were planned from, so a write
+ * that replaced it in between makes this one plan again rather than leave
+ * that document's anchors unrecorded.
+ */
+const plannedPayloadFence = ({
+  existing,
+  replacesDocumentWithRedirects,
+  storedPayloadUnchanged,
+}: PlannedPayloadFenceOptions): SQL | undefined => {
+  if (storedPayloadUnchanged) {
+    return and(
+      sql`${caseLawDecisions.contentHash} IS NOT DISTINCT FROM ${existing.contentHash}`,
+      sql`${caseLawDecisions.textS3Key} IS NOT DISTINCT FROM ${existing.textS3Key}`,
+      sql`${caseLawDecisions.normalizedS3Key} IS NOT DISTINCT FROM ${existing.normalizedS3Key}`,
+      sql`${caseLawDecisions.astS3Key} IS NOT DISTINCT FROM ${existing.astS3Key}`,
+    );
+  }
+  return replacesDocumentWithRedirects
+    ? sql`${caseLawDecisions.contentHash} IS NOT DISTINCT FROM ${existing.contentHash}`
+    : undefined;
+};
+
 export const describeRowUpdateTx = async (
   tx: CitationGraphTransaction<Transaction>,
   write: DecisionRowWrite,
@@ -280,6 +323,7 @@ export const describeRowUpdateTx = async (
       payloadColumns,
       pendingMirrorPayload,
       preparedMetadata,
+      replacedBlockAnchors,
       reusedCitationScopeEnvelope,
       storedPayloadUnchanged,
     },
@@ -304,6 +348,7 @@ export const describeRowUpdateTx = async (
     : await replacedDecisionState(tx, existing.id);
   const scopeState = lockedCitationScopeState({
     incomingCarriesDocument,
+    pendingMirrorPayload,
     preparedMetadata,
     replacedState,
     reusedCitationScopeEnvelope,
@@ -320,6 +365,11 @@ export const describeRowUpdateTx = async (
     : {
         ...statedDocketColumns,
         sourceDocumentId: persistedSourceDocumentId,
+        ...decisionFallbackState({
+          storage: write.storageIdentity,
+          previous: existing,
+          persistedSourceDocumentId,
+        }).columns,
         ecli: result.ecli,
         court: result.court,
         courtId: result.courtId ?? null,
@@ -398,6 +448,18 @@ export const describeRowUpdateTx = async (
   };
   const where = and(
     eq(caseLawDecisions.id, existing.id),
+    write.inputProvenance.type === "stored"
+      ? and(
+          eq(
+            caseLawDecisions.sourceRawS3Key,
+            write.inputProvenance.sourceRawS3Key,
+          ),
+          or(
+            isNull(caseLawDecisions.parserVersion),
+            lte(caseLawDecisions.parserVersion, result.parserVersion ?? 0),
+          ),
+        )
+      : undefined,
     storedObservationPrecedes({ order: observationOrder }),
     isNull(caseLawDecisions.redactedAt),
     corpusPlan.type === "preserve-stored"
@@ -406,14 +468,11 @@ export const describeRowUpdateTx = async (
           CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
         )
       : undefined,
-    storedPayloadUnchanged
-      ? and(
-          sql`${caseLawDecisions.contentHash} IS NOT DISTINCT FROM ${existing.contentHash}`,
-          sql`${caseLawDecisions.textS3Key} IS NOT DISTINCT FROM ${existing.textS3Key}`,
-          sql`${caseLawDecisions.normalizedS3Key} IS NOT DISTINCT FROM ${existing.normalizedS3Key}`,
-          sql`${caseLawDecisions.astS3Key} IS NOT DISTINCT FROM ${existing.astS3Key}`,
-        )
-      : undefined,
+    plannedPayloadFence({
+      existing,
+      replacesDocumentWithRedirects: replacedBlockAnchors !== null,
+      storedPayloadUnchanged,
+    }),
     pendingMirrorPayload === null
       ? undefined
       : and(
@@ -464,6 +523,9 @@ export const readDocumentlessPayloadStateTx = async (
 /**
  * Reopen the citations this decision's identity change affects: those
  * pointing here, those it makes, and those keyed on its old or new key.
+ * The ones other decisions make are then settled against the identity the
+ * row write has already stored; the ones this decision makes are settled
+ * when its citations are written.
  */
 const reopenMovedIdentityTx = async (
   tx: CitationGraphTransaction<Transaction>,
@@ -478,7 +540,7 @@ const reopenMovedIdentityTx = async (
   // against the identity this decision no longer has, and the announce
   // path deliberately excludes its own links, so nothing else would
   // ever ask about them again.
-  await reopenCitationsResolvedTo(tx, existing.id);
+  const incoming = await reopenCitationsResolvedTo(tx, existing.id);
   // And, when this source writes graph rows, the edges this decision
   // *makes*. Its jurisdiction and date are the resolver's policy and time
   // filters, so moving either changes what those citations may match.
@@ -489,7 +551,7 @@ const reopenMovedIdentityTx = async (
   // no target, so nothing that searches by target can reach it — and
   // this decision leaving its old key is exactly what can make the
   // remaining holder unique.
-  await reopenCitationsForKeys(
+  const keyed = await reopenCitationsForKeys(
     tx,
     [replacedState.citationKey, incomingCitationKey].filter(
       (key) => key !== null,
@@ -506,12 +568,21 @@ const reopenMovedIdentityTx = async (
           candidate.normalizedValue === identifier.normalizedValue,
       ) === index,
   );
-  await announceDecisionIdentifiers(
+  const announced = await announceDecisionIdentifiers(
     tx,
     write,
     existing.id,
     affectedIdentifiers,
   );
+  await settleReopenedCitations(tx, [incoming, keyed, announced]);
+};
+
+type FinishRefreshedRowOptions = {
+  tx: CitationGraphTransaction<Transaction>;
+  write: DecisionRowWrite;
+  existing: ExistingDecision;
+  replacedState: ReplacedDecisionState | null;
+  projectionLock: ActiveCorpusProjectionSourceLock | null;
 };
 
 /**
@@ -519,13 +590,13 @@ const reopenMovedIdentityTx = async (
  * and identifiers are written: reopen what its identity change affects,
  * then rewrite its citations under the citation-graph lock.
  */
-export const finishRefreshedRowTx = async (
-  tx: CitationGraphTransaction<Transaction>,
-  write: DecisionRowWrite,
-  existing: ExistingDecision,
-  replacedState: ReplacedDecisionState | null,
-  projectionLock: ActiveCorpusProjectionSourceLock | null,
-): Promise<DecisionRowWriteStatus> => {
+export const finishRefreshedRowTx = async ({
+  tx,
+  write,
+  existing,
+  replacedState,
+  projectionLock,
+}: FinishRefreshedRowOptions): Promise<DecisionRowWriteStatus> => {
   const {
     observedAt,
     shape: { incomingCarriesDocument },
@@ -545,7 +616,24 @@ export const finishRefreshedRowTx = async (
       ...(write.signal === undefined ? {} : { signal: write.signal }),
     });
     await reconcileStableProjection(tx, write, existing.id, projectionLock);
+    await recordParsedGenerationTx(tx, { write, phase: "row" });
     return DECISION_ROW_WRITE_STATUS.APPLIED;
+  }
+
+  // The document was replaced: record where the anchors it dropped went, so a
+  // link into the old document lands on the same text or reports it gone.
+  const { replacedBlockAnchors, corpusPayload } = write.plan;
+  // Late head matter is stored, so the replacement is read in any block
+  // order, as the replaced document was.
+  if (
+    replacedBlockAnchors !== null &&
+    isDocumentAstInAnyBlockOrder(corpusPayload.ast)
+  ) {
+    await writeDecisionAnchorRedirectsTx(tx, {
+      decisionId: existing.id,
+      replaced: replacedBlockAnchors,
+      current: corpusPayload.ast,
+    });
   }
 
   switch (citations.disposition) {
@@ -573,5 +661,6 @@ export const finishRefreshedRowTx = async (
     ...(write.signal === undefined ? {} : { signal: write.signal }),
   });
   await reconcileStableProjection(tx, write, existing.id, projectionLock);
+  await recordParsedGenerationTx(tx, { write, phase: "row" });
   return DECISION_ROW_WRITE_STATUS.APPLIED;
 };

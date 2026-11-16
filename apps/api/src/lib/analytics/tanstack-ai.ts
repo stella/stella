@@ -7,6 +7,7 @@ import {
 import { Result } from "better-result";
 
 import type { ModelTask } from "@stll/ai-catalog";
+import type { AIErrorKind } from "@stll/api-contract";
 import {
   sanitizeErrorAttributesForOutput,
   sanitizeErrorForOutput,
@@ -38,6 +39,7 @@ import { sanitizeHandoffDiagnosticText } from "@/api/lib/errors/handoff-diagnost
 import { ModelRunError } from "@/api/lib/errors/provider-call-error";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import { emitPromptCacheMetric } from "@/api/lib/observability/request-metrics";
 import type { PromptCacheMetricSurface } from "@/api/lib/observability/request-metrics";
@@ -58,6 +60,7 @@ import { recordUsageEvent } from "@/api/lib/usage/usage-ledger";
 
 import { getServerAnalytics } from "./client";
 import {
+  type AIFailureReason,
   type AnalyticsPrimitive,
   type CountBucket,
   type LatencyBucket,
@@ -85,9 +88,17 @@ type RunAnalyticsState = {
     totalTokens: number;
   };
   usageReported: boolean;
+  /** Each onUsage is a billable call, including retries within one iteration. */
+  usageCalls: number;
   /** What the call that failed reported before it failed, for its
    *  generation record. */
   failedCallUsage: { promptTokens: number; completionTokens: number } | null;
+  /** Structured output reports usage before its terminal chunk. */
+  pendingGeneration: {
+    ctx: ChatMiddlewareContext;
+    iterationStartedAt: number;
+    usage: TokenUsage;
+  } | null;
   /** The provider detail the run error carried, which the error TanStack
    *  hands `onError` no longer holds. */
   runErrorDetail: unknown;
@@ -95,7 +106,7 @@ type RunAnalyticsState = {
 
 /** Which model call reported the usage: one that finished, or one whose run
  *  error carried what the provider reported before it failed. */
-type UsageSource = "failed-call" | "finished-call";
+type UsageSource = "failed-call" | "finished-call" | "pending-call";
 
 export type TanStackAIUsageMetering = {
   actionType: UsageActionType;
@@ -158,6 +169,11 @@ export type TanStackAIAnalyticsCallbacks = {
   ) => TanStackAIAnalyticsCallbacks;
   middleware: ChatMiddleware;
   captureError: (error: unknown) => void;
+};
+
+type TanStackAIFeatureAnalytics = TanStackAIAnalyticsCallbacks & {
+  /** A request refused before any model call: a failure, but no generation. */
+  captureRefusal: (error: unknown) => void;
 };
 
 const SERVER_DISTINCT_ID = "server";
@@ -313,7 +329,7 @@ const recordTanStackConsumption = async ({
   cacheWriteTokens,
   completionTokens,
   config,
-  iteration,
+  usageCallIndex,
   modelInfo,
   runId,
   serviceTier,
@@ -323,7 +339,7 @@ const recordTanStackConsumption = async ({
   cacheWriteTokens: number;
   completionTokens: number;
   config: TanStackAIAnalyticsProps;
-  iteration: number;
+  usageCallIndex: number;
   modelInfo: ResolvedTanStackTextModelInfo;
   runId: string;
   serviceTier: UsageServiceTier;
@@ -361,7 +377,7 @@ const recordTanStackConsumption = async ({
       organizationId: metering.organizationId,
       rawUsageMicroUnits,
       serviceTier: effectiveServiceTier,
-      idempotencyKey: `${config.traceId}:${runId}:${iteration}`,
+      idempotencyKey: `${config.traceId}:${runId}:${usageCallIndex}`,
       traceId: config.traceId,
       userId: metering.userId,
       workspaceId: metering.workspaceId,
@@ -383,18 +399,41 @@ const recordTanStackConsumption = async ({
   });
 
   if (Result.isError(result)) {
-    captureTelemetryError(result.error, {
-      organization_id: metering.organizationId,
-      source: "usage.tanstack_ai",
-      trace_id: config.traceId,
-    });
+    captureTelemetryError(
+      result.error,
+      handlerErrorContext("analytics.recordTanStackConsumption.result_error", {
+        organization_id: metering.organizationId,
+        source: "usage.tanstack_ai",
+        trace_id: config.traceId,
+      }),
+    );
   }
 };
 
-export const createTanStackAIAnalyticsCallbacks = (
-  { analytics = getServerAnalytics(), ...config }: TanStackAIAnalyticsProps,
-  resolvedModel?: Omit<ResolvedTanStackTextModelInfo, "availability">,
-): TanStackAIAnalyticsCallbacks => {
+/**
+ * What a root callbacks instance and every `forModel` descendant share. A
+ * caller binds a model with `forModel`, the descendant's middleware records
+ * a failed run, and the caller's own catch reports the same failure on the
+ * root: both report into one ledger, so the failure is recorded once.
+ */
+type CallbacksFamily = {
+  readonly analytics: ServerAnalytics;
+  readonly generationFailures: GenerationFailureLedger;
+};
+
+/** Failure records the family has made. Only the family root creates it. */
+type GenerationFailureLedger = {
+  /** A failure of this family has been recorded, from any member. */
+  recorded: boolean;
+};
+
+const createFamilyMember = (
+  family: CallbacksFamily,
+  config: Omit<TanStackAIAnalyticsProps, "analytics">,
+  resolvedModel:
+    Omit<ResolvedTanStackTextModelInfo, "availability"> | undefined,
+): TanStackAIFeatureAnalytics => {
+  const { analytics } = family;
   const distinctId = config.distinctId ?? SERVER_DISTINCT_ID;
   const modelTask = config.modelTask ?? "chat";
   // Group attachment is derived centrally so call sites cannot forget it:
@@ -432,13 +471,14 @@ export const createTanStackAIAnalyticsCallbacks = (
       toolCount: 0,
       usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
       usageReported: false,
+      usageCalls: 0,
       failedCallUsage: null,
+      pendingGeneration: null,
       runErrorDetail: undefined,
     };
     runs.set(ctx.runId, created);
     return created;
   };
-  let hasCapturedGenerationError = false;
 
   const resolveAnalyticsModelInfo =
     (): ResolvedTanStackTextModelInfo | null => {
@@ -455,7 +495,10 @@ export const createTanStackAIAnalyticsCallbacks = (
                 selectedModelId,
                 config.orgAIConfig,
                 modelTask,
-                { dataClass: config.dataClass, modelTier: config.modelTier },
+                {
+                  dataClass: config.dataClass,
+                  modelTier: config.modelTier,
+                },
               )
             : getTanStackTextModelInfoForTask(modelTask, config.orgAIConfig, {
                 dataClass: config.dataClass,
@@ -478,17 +521,73 @@ export const createTanStackAIAnalyticsCallbacks = (
       return modelInfo;
     };
 
+  const captureGenerationFailed = ({
+    error,
+    failureReason,
+    failureKind,
+    providerStatus,
+    resolvedModelInfo,
+  }: {
+    error: unknown;
+    failureReason: AIFailureReason;
+    failureKind: AIErrorKind;
+    providerStatus: string | undefined;
+    resolvedModelInfo: ResolvedTanStackTextModelInfo | null;
+  }) => {
+    analytics.capture({
+      distinctId,
+      ...groups,
+      event: SERVER_ANALYTICS_EVENTS.aiGenerationFailed,
+      properties: {
+        ...pickSafeMetadata(config.properties),
+        error_message_kind: "non_standard",
+        error_type: errorTag(error),
+        failure_reason: failureReason,
+        failure_kind: failureKind,
+        ...(providerStatus === undefined
+          ? {}
+          : { provider_status: providerStatus }),
+        feature: config.feature,
+        latency_bucket: bucketLatency(
+          (performance.now() - startedAt) / ONE_SECOND_MS,
+        ),
+        ...(resolvedModelInfo
+          ? {
+              model: resolvedModelInfo.modelId,
+              model_key_source: resolvedModelInfo.keySource,
+              provider: resolvedModelInfo.provider,
+              ...(resolvedModelInfo.region
+                ? { region: resolvedModelInfo.region }
+                : {}),
+            }
+          : {}),
+      },
+    });
+  };
+
+  const captureRefusal = (error: unknown) => {
+    captureGenerationFailed({
+      error,
+      failureReason: "validation",
+      failureKind: "unknown",
+      providerStatus: undefined,
+      resolvedModelInfo: resolveAnalyticsModelInfo(),
+    });
+  };
+
   const captureGenerationError = (
     error: unknown,
     context?: { durationMs: number; run: RunAnalyticsState | undefined },
   ) => {
-    // Each middleware terminal hook owns one run. The catch-path fallback
-    // has no run identity, and the SDK rethrows a different Error instance.
-    // Preserve fallback deduplication without suppressing concurrent runs.
-    if (context === undefined && hasCapturedGenerationError) {
+    // Each middleware terminal hook owns one run, so every failed run is
+    // recorded, concurrent ones included. The catch-path fallback has no run
+    // identity, and the SDK rethrows a different Error instance: it records
+    // only when no member of the family has recorded a failure, since the
+    // run that failed may have been bound by `forModel` on a descendant.
+    if (context === undefined && family.generationFailures.recorded) {
       return;
     }
-    hasCapturedGenerationError = true;
+    family.generationFailures.recorded = true;
     const resolvedModelInfo = resolveAnalyticsModelInfo();
 
     // Classified kinds (quota, billing, retired model, provider outage) are
@@ -548,11 +647,14 @@ export const createTanStackAIAnalyticsCallbacks = (
       logger.warn("tanstack_ai.generation.failed", attributes);
     } else {
       logger.error("tanstack_ai.generation.failed", attributes);
-      captureTelemetryError(error, {
-        feature: config.feature,
-        organization_id: analyticsOrganizationId ?? "",
-        trace_id: config.traceId,
-      });
+      captureTelemetryError(
+        error,
+        handlerErrorContext(`analytics.generation.${config.feature}.${kind}`, {
+          feature: config.feature,
+          organization_id: analyticsOrganizationId ?? "",
+          trace_id: config.traceId,
+        }),
+      );
     }
 
     // Standard-schema failure record for LLM observability: the error class
@@ -588,34 +690,12 @@ export const createTanStackAIAnalyticsCallbacks = (
       },
     });
 
-    analytics.capture({
-      distinctId,
-      ...groups,
-      event: SERVER_ANALYTICS_EVENTS.aiGenerationFailed,
-      properties: {
-        ...pickSafeMetadata(config.properties),
-        error_message_kind: "non_standard",
-        error_type: errorTag(error),
-        failure_reason: "provider",
-        failure_kind: kind,
-        ...(providerStatus === undefined
-          ? {}
-          : { provider_status: providerStatus }),
-        feature: config.feature,
-        latency_bucket: bucketLatency(
-          (performance.now() - startedAt) / ONE_SECOND_MS,
-        ),
-        ...(resolvedModelInfo
-          ? {
-              model: resolvedModelInfo.modelId,
-              model_key_source: resolvedModelInfo.keySource,
-              provider: resolvedModelInfo.provider,
-              ...(resolvedModelInfo.region
-                ? { region: resolvedModelInfo.region }
-                : {}),
-            }
-          : {}),
-      },
+    captureGenerationFailed({
+      error,
+      failureReason: "provider",
+      failureKind: kind,
+      providerStatus,
+      resolvedModelInfo,
     });
   };
 
@@ -655,6 +735,48 @@ export const createTanStackAIAnalyticsCallbacks = (
     });
   };
 
+  const captureSuccessfulUsage = (
+    ctx: ChatMiddlewareContext,
+    usage: TokenUsage,
+    iterationStartedAt: number,
+  ): void => {
+    const resolvedModelInfo = resolveAnalyticsModelInfo();
+    if (!resolvedModelInfo) {
+      return;
+    }
+    const captured = Result.try({
+      try: () =>
+        captureGeneration({
+          ctx,
+          iterationStartedAt,
+          modelInfo: resolvedModelInfo,
+          usage,
+        }),
+      catch: (error) => error,
+    });
+    if (Result.isError(captured)) {
+      captureTelemetryError(
+        captured.error,
+        handlerErrorContext("analytics.meterUsage.captured_error", {
+          source: "analytics.tanstack_ai",
+          trace_id: config.traceId,
+        }),
+      );
+    }
+  };
+
+  const flushPendingGeneration = (run: RunAnalyticsState): void => {
+    const pending = run.pendingGeneration;
+    run.pendingGeneration = null;
+    if (pending) {
+      captureSuccessfulUsage(
+        pending.ctx,
+        pending.usage,
+        pending.iterationStartedAt,
+      );
+    }
+  };
+
   // A fault here must never propagate into the provider stream and take
   // the process down with it. Metering and observability are isolated so
   // an analytics fault cannot drop a billable usage event. A bug loses
@@ -679,12 +801,16 @@ export const createTanStackAIAnalyticsCallbacks = (
     });
     if (Result.isError(usageSnapshot)) {
       // The payload itself is unreadable: neither side effect can use it.
-      captureTelemetryError(usageSnapshot.error, {
-        source: "usage.tanstack_ai",
-        trace_id: config.traceId,
-      });
+      captureTelemetryError(
+        usageSnapshot.error,
+        handlerErrorContext("analytics.meterUsage.usageSnapshot_error", {
+          source: "usage.tanstack_ai",
+          trace_id: config.traceId,
+        }),
+      );
       return;
     }
+    const usageCallIndex = run.usageCalls++;
     run.outputTokens = usageSnapshot.value.completionTokens;
     run.usage.promptTokens += usageSnapshot.value.promptTokens;
     run.usage.completionTokens += usageSnapshot.value.completionTokens;
@@ -736,7 +862,7 @@ export const createTanStackAIAnalyticsCallbacks = (
             cacheWriteTokens,
             completionTokens: usage.completionTokens,
             config,
-            iteration: ctx.iteration,
+            usageCallIndex,
             modelInfo: resolvedModelInfo,
             runId: ctx.runId,
             serviceTier: usageServiceTierFromModelOptions({
@@ -749,10 +875,13 @@ export const createTanStackAIAnalyticsCallbacks = (
         catch: (error) => error,
       });
       if (Result.isError(consumptionArgs)) {
-        captureTelemetryError(consumptionArgs.error, {
-          source: "usage.tanstack_ai",
-          trace_id: config.traceId,
-        });
+        captureTelemetryError(
+          consumptionArgs.error,
+          handlerErrorContext("analytics.meterUsage.consumptionArgs_error", {
+            source: "usage.tanstack_ai",
+            trace_id: config.traceId,
+          }),
+        );
       } else {
         const consumption = recordTanStackConsumption(
           consumptionArgs.value,
@@ -760,11 +889,14 @@ export const createTanStackAIAnalyticsCallbacks = (
           // A rejected deferred settles inside the stream lifecycle;
           // capture it here so it cannot surface as an unhandled
           // rejection there.
-          captureTelemetryError(error, {
-            organization_id: metering.organizationId,
-            source: "usage.tanstack_ai",
-            trace_id: config.traceId,
-          });
+          captureTelemetryError(
+            error,
+            handlerErrorContext("analytics.consumption", {
+              organization_id: metering.organizationId,
+              source: "usage.tanstack_ai",
+              trace_id: config.traceId,
+            }),
+          );
         });
         ctx.defer(consumption);
       }
@@ -779,43 +911,42 @@ export const createTanStackAIAnalyticsCallbacks = (
       };
       return;
     }
-    const captured = Result.try({
-      try: () =>
-        captureGeneration({
-          ctx,
-          iterationStartedAt: run.iterationStartedAt,
-          modelInfo: resolvedModelInfo,
-          usage,
-        }),
-      catch: (error) => error,
-    });
-    if (Result.isError(captured)) {
-      captureTelemetryError(captured.error, {
-        source: "analytics.tanstack_ai",
-        trace_id: config.traceId,
-      });
+    if (source === "pending-call") {
+      // A second billable call can share an iteration (for example a retry).
+      // Flush its predecessor instead of deduplicating by the iteration id.
+      flushPendingGeneration(run);
+      run.pendingGeneration = {
+        ctx: { ...ctx },
+        iterationStartedAt: run.iterationStartedAt,
+        usage: usageSnapshot.value,
+      };
+      return;
     }
+    captureSuccessfulUsage(ctx, usage, run.iterationStartedAt);
   };
 
   return {
     captureError: captureGenerationError,
-    forModel: (model) =>
-      createTanStackAIAnalyticsCallbacks({ ...config, analytics }, model),
+    captureRefusal,
+    forModel: (model) => createFamilyMember(family, config, model),
     usageMetering: config.usageMetering,
     middleware: {
       name: "stella-tanstack-analytics",
-      // Each agent-loop iteration is one model call: `onIteration` marks its
-      // start and `onUsage` closes it, so per-generation latency covers only
-      // that call (the run-level `duration` spans every iteration and tool).
+      // Iterations delimit model turns, while retries can report several
+      // billable calls within one iteration. Usage is never deduplicated by
+      // iteration (the run-level duration spans every iteration and tool).
       onIteration: (ctx) => {
         const run = runState(ctx);
         run.iterationStartedAt = performance.now();
         run.finishReason = null;
         run.providerStopReason = undefined;
         run.outputTokens = undefined;
+        run.failedCallUsage = null;
       },
       onStructuredOutputConfig: (ctx) => {
         const run = runState(ctx);
+        flushPendingGeneration(run);
+        run.failedCallUsage = null;
         run.finishReason = null;
         run.providerStopReason = undefined;
         run.outputTokens = undefined;
@@ -825,17 +956,23 @@ export const createTanStackAIAnalyticsCallbacks = (
           const run = runState(ctx);
           run.finishReason = finishReasonOf(chunk);
           run.providerStopReason = recordedStopReasonOf(chunk);
+          flushPendingGeneration(run);
         }
-        // TanStack reports usage for a finished model call only. A call that
-        // failed after the provider reported usage was billed as well, so its
-        // run error is metered the same way.
+        // v1 calls onUsage for failed calls too. Keep error attribution here;
+        // billing and cache metrics have one owner in onUsage.
         if (chunk.type === EventType.RUN_ERROR) {
-          runState(ctx).runErrorDetail =
+          const run = runState(ctx);
+          run.runErrorDetail =
             chunk.rawEvent ?? providerErrorBody(chunk.message);
-          const usage = tokenUsageFromTerminalChunk(chunk);
+          const usage =
+            tokenUsageFromTerminalChunk(chunk) ?? run.pendingGeneration?.usage;
           if (usage !== undefined) {
-            meterUsage(ctx, usage, "failed-call");
+            run.failedCallUsage = {
+              promptTokens: usage.promptTokens,
+              completionTokens: usage.completionTokens,
+            };
           }
+          run.pendingGeneration = null;
         }
       },
       onAfterToolCall: (ctx) => {
@@ -846,6 +983,10 @@ export const createTanStackAIAnalyticsCallbacks = (
       },
       onError: (ctx, { duration, error }) => {
         const run = runs.get(ctx.runId);
+        if (run?.pendingGeneration) {
+          run.failedCallUsage = run.pendingGeneration.usage;
+          run.pendingGeneration = null;
+        }
         runs.delete(ctx.runId);
         captureGenerationError(withRunErrorDetail(error, run?.runErrorDetail), {
           durationMs: duration,
@@ -854,6 +995,9 @@ export const createTanStackAIAnalyticsCallbacks = (
       },
       onFinish: (ctx, { duration, usage }) => {
         const run = runs.get(ctx.runId);
+        if (run) {
+          flushPendingGeneration(run);
+        }
         runs.delete(ctx.runId);
         // Sum of every iteration's reported usage. TanStack's `onFinish`
         // usage is the LAST iteration's only (`finishedEvent` resets per
@@ -890,8 +1034,31 @@ export const createTanStackAIAnalyticsCallbacks = (
         });
       },
       onUsage: (ctx, usage) => {
-        meterUsage(ctx, usage, "finished-call");
+        const outcome =
+          runState(ctx).failedCallUsage === null
+            ? "finished-call"
+            : "failed-call";
+        meterUsage(
+          ctx,
+          usage,
+          ctx.phase === "structuredOutput" ? "pending-call" : outcome,
+        );
       },
     },
   };
 };
+
+/**
+ * Callbacks for one feature's model calls. `forModel` binds a request to a
+ * resolved model and keeps the family's shared state, so a failure is
+ * recorded once whichever member reports it.
+ */
+export const createTanStackAIAnalyticsCallbacks = ({
+  analytics = getServerAnalytics(),
+  ...config
+}: TanStackAIAnalyticsProps): TanStackAIFeatureAnalytics =>
+  createFamilyMember(
+    { analytics, generationFailures: { recorded: false } },
+    config,
+    undefined,
+  );

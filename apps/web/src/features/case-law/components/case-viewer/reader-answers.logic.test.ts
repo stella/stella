@@ -24,7 +24,11 @@ const answerFixture = (): ReaderAnswer => ({
   mine: true,
   kind: "explain",
   visibility: "private",
-  anchor: { paragraphId: "p1", quote: "quote", startOffset: 0, endOffset: 5 },
+  anchor: {
+    spans: [
+      { paragraphId: "p1", quote: "quote", startOffset: 0, endOffset: 5 },
+    ],
+  },
   createdAt: now,
   updatedAt: now,
   messages: [
@@ -81,7 +85,7 @@ describe("reader answer stream lifecycle", () => {
       invalidCitationCount: 1,
     } as const satisfies ReaderAnswerStreamEvent;
     const result = await consumeReaderAnswerStream({
-      body: streamOf([
+      chunks: streamOf([
         started,
         {
           type: "delta",
@@ -114,7 +118,7 @@ describe("reader answer stream lifecycle", () => {
   test("follow-up appends an assistant and complete replaces deltas with the authoritative payload", async () => {
     let answer = answerFixture();
     const result = await consumeReaderAnswerStream({
-      body: streamOf([
+      chunks: streamOf([
         started,
         { type: "delta", messageId: started.messageId, delta: "draft" },
         {
@@ -147,7 +151,7 @@ describe("reader answer stream lifecycle", () => {
 
   test("returns typed failures for truncated streams and mismatched message ownership", async () => {
     const truncated = await consumeReaderAnswerStream({
-      body: streamOf([started]),
+      chunks: streamOf([started]),
       signal: new AbortController().signal,
       onEvent: () => undefined,
     });
@@ -159,7 +163,7 @@ describe("reader answer stream lifecycle", () => {
       );
     }
     const mismatched = await consumeReaderAnswerStream({
-      body: streamOf([
+      chunks: streamOf([
         started,
         {
           type: "delta",
@@ -188,7 +192,7 @@ describe("reader answer stream lifecycle", () => {
       const events: ReaderAnswerStreamEvent[] = [];
       const lifecycle = { cancelled: false };
       const result = await consumeReaderAnswerStream({
-        body: new ReadableStream<Uint8Array>({
+        chunks: new ReadableStream<Uint8Array>({
           start(controller) {
             controller.enqueue(new TextEncoder().encode(wire));
           },
@@ -215,7 +219,7 @@ describe("reader answer stream lifecycle", () => {
     controller.abort();
     const events: ReaderAnswerStreamEvent[] = [];
     const result = await consumeReaderAnswerStream({
-      body: streamOf([started]),
+      chunks: streamOf([started]),
       signal: controller.signal,
       onEvent: (event) => {
         events.push(event);

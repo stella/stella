@@ -1,22 +1,20 @@
-import { status, t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
+
+import { apiDateTimeSchema } from "@stll/api-contract/api-date";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import { ENTITY_KINDS } from "@/api/db/schema";
-import { entityKindSchema } from "@/api/db/schema-validators";
 import {
   hasSearchQueryOrSelectiveFilter,
   resolveSelectedWorkspaceIds,
 } from "@/api/handlers/search/search";
+import { status } from "@/api/http/status";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId, tUserId } from "@/api/lib/custom-schema";
-import { LIMITS } from "@/api/lib/limits";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
+import { searchFilterFields } from "@/api/lib/search/filter-schema";
 import { searchGlobalFacet } from "@/api/lib/search/index-global";
-import { GLOBAL_SEARCH_RESULT_TYPES } from "@/api/lib/search/types";
 
-const isoDateTime = t.String({ format: "date-time" });
+const isoDateTime = apiDateTimeSchema;
 
 const FACET_NAMES = ["editor", "workspace", "mimeType"] as const;
 
@@ -24,38 +22,32 @@ const FACET_BUCKET_LIMIT_MAX = 50;
 const FACET_BUCKET_LIMIT_DEFAULT = 20;
 const FACET_SEARCH_MAX = 256;
 
-export const searchFacetsBodySchema = t.Object({
-  facet: t.UnionEnum(FACET_NAMES),
-  search: t.String({ maxLength: FACET_SEARCH_MAX, default: "" }),
-  query: t.String({
-    maxLength: LIMITS.searchQueryMaxLength,
-  }),
-  workspaceIds: t.Array(tSafeId("workspace"), { maxItems: 64 }),
-  types: t.Array(t.UnionEnum(GLOBAL_SEARCH_RESULT_TYPES), {
-    maxItems: GLOBAL_SEARCH_RESULT_TYPES.length,
-  }),
-  kinds: t.Optional(
-    t.Array(entityKindSchema, { maxItems: ENTITY_KINDS.length }),
-  ),
-  editedByUserIds: t.Array(tUserId, { maxItems: 64 }),
-  mimeTypes: t.Array(t.String({ minLength: 1, maxLength: 128 })),
-  updatedFrom: t.Optional(isoDateTime),
-  updatedTo: t.Optional(isoDateTime),
-  limit: t.Optional(
-    t.Integer({
-      minimum: 1,
-      maximum: FACET_BUCKET_LIMIT_MAX,
-      default: FACET_BUCKET_LIMIT_DEFAULT,
-    }),
+export const searchFacetsBodySchema = v.object({
+  facet: v.picklist(FACET_NAMES),
+  search: v.optional(v.pipe(v.string(), v.maxLength(FACET_SEARCH_MAX)), ""),
+  ...searchFilterFields,
+  kinds: v.optional(searchFilterFields.kinds),
+  updatedFrom: v.optional(isoDateTime),
+  updatedTo: v.optional(isoDateTime),
+  limit: v.optional(
+    v.pipe(
+      v.number(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(FACET_BUCKET_LIMIT_MAX),
+    ),
+    FACET_BUCKET_LIMIT_DEFAULT,
   ),
 });
 
-type SearchFacetsBody = Static<typeof searchFacetsBodySchema>;
+type SearchFacetsBody = v.InferOutput<typeof searchFacetsBodySchema>;
 
 type SearchFacetsHandlerProps = {
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   accessibleWorkspaceIds: SafeId<"workspace">[];
+  /** The caller's access-token scopes; `undefined` for a browser session. */
+  grantedScopes: readonly string[] | undefined;
   body: SearchFacetsBody;
 };
 
@@ -63,6 +55,7 @@ export const searchFacetsHandler = async ({
   scopedDb,
   organizationId,
   accessibleWorkspaceIds,
+  grantedScopes,
   body,
 }: SearchFacetsHandlerProps) => {
   if (!hasSearchQueryOrSelectiveFilter(body)) {
@@ -93,11 +86,12 @@ export const searchFacetsHandler = async ({
       accessibleWorkspaceIds,
       selectedWorkspaceIds: resolved.ids,
       types,
+      grantedScopes,
       editedByUserIds: body.editedByUserIds,
       mimeTypes: body.mimeTypes,
       updatedFrom: body.updatedFrom,
       updatedTo: body.updatedTo,
-      limit: normalizeTenantPageLimit(body.limit ?? FACET_BUCKET_LIMIT_DEFAULT),
+      limit: normalizeTenantPageLimit(body.limit),
     },
     scopedDb,
   );

@@ -2,7 +2,7 @@ import { useState } from "react";
 
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { TaggedError } from "better-result";
-import { useFormatter, useNow, useTranslations } from "use-intl";
+import { useNow, useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
@@ -27,6 +27,7 @@ import {
 } from "@/features/time-timers/timer.logic";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useFormatter } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
@@ -79,6 +80,13 @@ export const GlobalTimerContent = ({
           message: "Multiple running timers in paginated snapshot",
           runningCount,
         }),
+        {
+          fingerprintKey: "GlobalTimerContent:TimerSnapshotConflictError",
+          scope: {
+            type: "handler",
+            handlerId: "GlobalTimerContent:TimerSnapshotConflictError",
+          },
+        },
       );
     }
   }, [analytics, runningCount]);
@@ -111,6 +119,7 @@ export const GlobalTimerContent = ({
               className="min-h-11"
               variant="ghost"
               aria-label={t("billing.globalTimer.title")}
+              tooltip={t("billing.globalTimer.title")}
             />
           }
         >

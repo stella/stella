@@ -1,10 +1,11 @@
 import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
-import JSZip from "jszip";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
-import { writeZipEntry } from "@stll/docx-utils";
+import { CHAT_INPUT_REFUSAL_CODE } from "@stll/api-contract";
+import { ZipArchive } from "@stll/docx-core/zip";
 import { sha256Hex as legacySha256Hex } from "@stll/sha256/node";
+import { createTestState } from "@stll/test-state";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -20,7 +21,7 @@ import {
   createChatAttachmentPart,
   toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
-import { toSafeId } from "@/api/lib/branded-types";
+import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 import { toDataUrl } from "@/api/lib/data-url";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import type { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
@@ -34,6 +35,7 @@ import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { testFileKey } from "@/api/tests/helpers/file-key";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { createSelectQueryMock } from "@/api/tests/scoped-db-mock";
 
 import {
   canHydrateFilePartAsPlainText,
@@ -42,6 +44,9 @@ import {
   uploadMessageFiles,
   uploadUserFile,
 } from "./upload-files";
+
+const testState = createTestState({ file: import.meta.path, config: env });
+const workerState = testState.forConfig(envDocumentProcessingWorker);
 
 const fileBytes = new TextEncoder().encode("Jan Novak,Acme");
 const IMAGE_PNG_MIME_TYPE = "image/png";
@@ -57,9 +62,8 @@ const requestKeys = (method: "DELETE" | "GET" | "PUT"): string[] =>
 
 /** Minimal DOCX with a heading and a body paragraph, for extraction tests. */
 const makeDocxBytes = async (): Promise<Uint8Array> => {
-  const zip = new JSZip();
-  writeZipEntry(
-    zip,
+  const zip = new ZipArchive();
+  zip.set(
     "word/document.xml",
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
@@ -68,20 +72,36 @@ const makeDocxBytes = async (): Promise<Uint8Array> => {
   <w:p><w:r><w:t>Jan Novak signs here.</w:t></w:r></w:p>
 </w:body></w:document>`,
   );
-  writeZipEntry(
-    zip,
+  zip.set(
     "[Content_Types].xml",
     `<?xml version="1.0" encoding="UTF-8"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="xml" ContentType="application/xml"/>
 </Types>`,
   );
-  return new Uint8Array(await zip.generateAsync({ type: "uint8array" }));
+  return new Uint8Array(await zip.generate({ compression: "store" }));
 };
 const organizationId = toSafeId<"organization">("organization_1");
 const workspaceId = toSafeId<"workspace">("workspace_1");
+const createFileDeletionTx = () =>
+  asTestRaw<Transaction>({
+    select: () => createSelectQueryMock([]),
+    selectDistinct: () => createSelectQueryMock([]),
+  });
+const fileUsageDb = {
+  transaction: async <T>(callback: (tx: Transaction) => Promise<T>) =>
+    await callback(createFileDeletionTx()),
+};
+/** Reserves every object of an upload under `intentIds`, as one call. */
+const reservingAs =
+  (intentIds: SafeId<"pendingUpload">[]) =>
+  async ({ objectKeys }: { objectKeys: readonly string[] }) =>
+    await Promise.resolve(
+      Result.ok(new Map(objectKeys.map((key) => [key, intentIds]))),
+    );
 const uploadDependencies = {
-  reserveChatObjectCleanupIntent: async () => Result.ok([]),
+  organizationFileUsageDb: fileUsageDb,
+  reserveChatObjectCleanupIntents: reservingAs([]),
 };
 
 describe("chat attachment hydration", () => {
@@ -175,7 +195,7 @@ describe("chat attachment hydration", () => {
         metadata: { filename: "scan.pdf" },
         source: {
           type: "data",
-          value: Buffer.from(fileBytes).toString("base64"),
+          value: Buffer.from(fileBytes).toBase64(),
           mimeType: PDF_MIME_TYPE,
         },
         type: "document",
@@ -351,6 +371,9 @@ describe("chat attachment hydration", () => {
     const whereMock = mock(async () => undefined);
     const deleteMock = mock(() => ({ where: whereMock }));
     const tx = {
+      execute: async () => [],
+      select: () => createSelectQueryMock([]),
+      query: { chatThreads: { findFirst: async () => ({ organizationId }) } },
       delete: deleteMock,
       insert: insertMock,
     };
@@ -392,11 +415,13 @@ describe("chat attachment hydration", () => {
     });
 
     expect(Result.isError(result)).toBe(true);
-    // The first attachment landed and was then rolled back out of the store,
-    // leaving only the seeded fixture behind.
+    // Row withdrawal and durable storage cleanup are committed together;
+    // the worker receives the exact stored key.
     expect(requestKeys("PUT")).toHaveLength(1);
-    expect(requestKeys("DELETE")).toEqual(requestKeys("PUT"));
-    expect([...fake.objects.keys()]).toEqual([`${bucket}/${ATTACHMENT_KEY}`]);
+    expect(requestKeys("DELETE")).toEqual([]);
+    expect(valuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({ s3Keys: requestKeys("PUT") }),
+    );
     expect(whereMock).toHaveBeenCalledTimes(1);
     expect(recordAuditEvent).toHaveBeenCalledWith(
       testTx,
@@ -440,8 +465,8 @@ describe("chat attachment hydration", () => {
 
     const result = await uploadUserFile({
       dependencies: {
-        reserveChatObjectCleanupIntent: async () =>
-          Result.ok([cleanupIntentId]),
+        ...uploadDependencies,
+        reserveChatObjectCleanupIntents: reservingAs([cleanupIntentId]),
         settleObjectCleanupIntentsAfterWriter: settleIntents,
       },
       file: {
@@ -484,14 +509,23 @@ describe("chat attachment hydration", () => {
     const thumbnailCleanupIntentId = toSafeId<"pendingUpload">(
       "11111111-1111-4111-8111-111111111115",
     );
-    let reservationCount = 0;
-    const reserveChatObjectCleanupIntent = mock(async () => {
-      reservationCount += 1;
-      if (reservationCount === 1) {
-        return Result.ok([sourceCleanupIntentId]);
-      }
-      return Result.ok([thumbnailCleanupIntentId]);
-    });
+    const reserveChatObjectCleanupIntents = mock(
+      async ({ objectKeys }: { objectKeys: readonly string[] }) =>
+        await Promise.resolve(
+          Result.ok(
+            new Map(
+              objectKeys.map((key, index) => [
+                key,
+                [
+                  index === 0
+                    ? sourceCleanupIntentId
+                    : thumbnailCleanupIntentId,
+                ],
+              ]),
+            ),
+          ),
+        ),
+    );
     const settleIntents = mock(async () => Result.ok(undefined));
     let putCount = 0;
     const putS3ObjectWithSignal = mock(async () => {
@@ -529,13 +563,14 @@ describe("chat attachment hydration", () => {
     );
     const result = await uploadUserFile({
       dependencies: {
+        ...uploadDependencies,
         generateImageThumbnail: async () =>
           Result.ok({
             placeholder: "data:image/png;base64,placeholder",
             webp: new Uint8Array([1]),
           }),
         putS3ObjectWithSignal,
-        reserveChatObjectCleanupIntent,
+        reserveChatObjectCleanupIntents,
         settleObjectCleanupIntentsAfterWriter: settleIntents,
       },
       file: {
@@ -552,6 +587,11 @@ describe("chat attachment hydration", () => {
     });
 
     expect(Result.isError(result)).toBe(true);
+    // The image and its thumbnail are reserved in one call.
+    expect(reserveChatObjectCleanupIntents).toHaveBeenCalledTimes(1);
+    expect(
+      reserveChatObjectCleanupIntents.mock.calls.at(0)?.[0].objectKeys,
+    ).toHaveLength(2);
     expect(putS3ObjectWithSignal).toHaveBeenCalledTimes(2);
     expect(settleIntents).toHaveBeenCalledWith({
       intentIds: [thumbnailCleanupIntentId],
@@ -660,11 +700,11 @@ describe("chat attachment hydration", () => {
         NonNullable<Parameters<typeof writeOrganizationFile>[0]["db"]>
       >({ transaction: async () => ({ status: reservationStatus }) });
       const settleIntents = mock(async () => Result.ok(undefined));
-      const priorFlag = env.FEATURE_FILE_USAGE_LIMITS;
+
       const priorWorkerFlag =
         envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS;
-      env.FEATURE_FILE_USAGE_LIMITS = true;
-      envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = true;
+      testState.setConfig("FEATURE_FILE_USAGE_LIMITS", true);
+      workerState.setConfig("FEATURE_FILE_USAGE_LIMITS", true);
       try {
         const result = await uploadUserFile({
           dependencies: {
@@ -693,9 +733,38 @@ describe("chat attachment hydration", () => {
         expect(result.error).toMatchObject({ status: expectedStatus });
         expect(requestKeys("PUT")).toHaveLength(0);
       } finally {
-        env.FEATURE_FILE_USAGE_LIMITS = priorFlag;
-        envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = priorWorkerFlag;
+        workerState.setConfig("FEATURE_FILE_USAGE_LIMITS", priorWorkerFlag);
       }
     },
   );
+});
+
+describe("attachment refusals", () => {
+  test("an attachment type chat cannot read is refused with its code", async () => {
+    const result = await uploadUserFile({
+      file: {
+        bytes: new TextEncoder().encode("binary"),
+        fileName: "archive.bin",
+        mimeType: "application/octet-stream",
+      },
+      organizationId: toSafeId<"organization">(
+        "11111111-1111-4111-8111-111111111114",
+      ),
+      recordAuditEvent: mock(async () => undefined),
+      safeDb: async () => panic("A refused type reaches no database"),
+      threadId: toSafeId<"chatThread">("11111111-1111-4111-8111-111111111112"),
+      userId: toSafeId<"user">("11111111-1111-4111-8111-111111111113"),
+      workspaceId: toSafeId<"workspace">(
+        "11111111-1111-4111-8111-111111111115",
+      ),
+    });
+
+    if (Result.isOk(result)) {
+      panic("Expected the attachment type to be refused");
+    }
+    expect(result.error).toMatchObject({
+      code: CHAT_INPUT_REFUSAL_CODE.attachmentUnsupported,
+      status: 422,
+    });
+  });
 });

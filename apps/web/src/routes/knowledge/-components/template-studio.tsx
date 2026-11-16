@@ -48,7 +48,7 @@ import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import {
   isTemplateFillDiscoverKey,
   knowledgeKeys,
@@ -694,7 +694,7 @@ export const TemplateStudioPage = ({
         (range) => from < range.to && to > range.from,
       );
       if (intersects) {
-        notifyUserError(undefined, t("templates.studio.noNestedMarkers"));
+        notifyUserProblem(t("templates.studio.noNestedMarkers"));
         return;
       }
       view.dispatch(view.state.tr.insertText(text, from, to).scrollIntoView());
@@ -717,9 +717,9 @@ export const TemplateStudioPage = ({
       // A lookup field's non-default output is addressed by `{{ path.key }}`;
       // the bare `{{ path }}` renders the default (first) format.
       const marker = fieldMarker(
-        options?.formatKey === undefined
-          ? path
-          : `${path}.${options.formatKey}`,
+        options?.formatKey !== undefined
+          ? `${path}.${options.formatKey}`
+          : path,
       );
       view.dispatch(
         view.state.tr.insertText(marker, from, to).scrollIntoView(),
@@ -738,18 +738,26 @@ export const TemplateStudioPage = ({
       }
     });
 
+  type InsertOrWrapBlockOptions = {
+    open: string;
+    close: string;
+    placeholder: string;
+    range?: { from: number; to: number } | undefined;
+    allowInline?: boolean;
+  };
+
   // Block directives must occupy their own paragraph (the fill engine anchors
   // them line-by-line). With a selection, wrap the paragraphs it covers in
   // opener/closer; with a caret, insert opener/body/closer after the current
   // paragraph. Either way the placeholder name ends up selected, so typing
   // renames it immediately.
-  const insertOrWrapBlock = (
-    open: string,
-    close: string,
-    placeholder: string,
-    range?: { from: number; to: number },
+  const insertOrWrapBlock = ({
+    open,
+    close,
+    placeholder,
+    range,
     allowInline = false,
-  ) =>
+  }: InsertOrWrapBlockOptions) =>
     withEditorView((view) => {
       const { state } = view;
       const paragraph = state.schema.nodes["paragraph"];
@@ -842,33 +850,33 @@ export const TemplateStudioPage = ({
   };
 
   const insertCondition = (range?: { from: number; to: number }) =>
-    insertOrWrapBlock(
-      conditionOpenTag(CONDITION_PLACEHOLDER),
-      CONDITION_CLOSE_TAG,
-      CONDITION_PLACEHOLDER,
+    insertOrWrapBlock({
+      open: conditionOpenTag(CONDITION_PLACEHOLDER),
+      close: CONDITION_CLOSE_TAG,
+      placeholder: CONDITION_PLACEHOLDER,
       range,
-      true,
-    );
+      allowInline: true,
+    });
   // Place an already-defined condition by its expression (an empty expr falls
   // back to the generic placeholder, matching a fresh insert).
   const insertExistingCondition = (expr: string) => {
     const conditionExpr = expr.trim() || "condition";
-    insertOrWrapBlock(
-      conditionOpenTag(conditionExpr),
-      CONDITION_CLOSE_TAG,
-      conditionExpr,
-      undefined,
-      true,
-    );
+    insertOrWrapBlock({
+      open: conditionOpenTag(conditionExpr),
+      close: CONDITION_CLOSE_TAG,
+      placeholder: conditionExpr,
+      range: undefined,
+      allowInline: true,
+    });
   };
   const insertLoop = (range?: { from: number; to: number }) =>
-    insertOrWrapBlock(
-      loopOpenTag(LOOP_PLACEHOLDER),
-      LOOP_CLOSE_TAG,
-      LOOP_PLACEHOLDER,
+    insertOrWrapBlock({
+      open: loopOpenTag(LOOP_PLACEHOLDER),
+      close: LOOP_CLOSE_TAG,
+      placeholder: LOOP_PLACEHOLDER,
       range,
-      true,
-    );
+      allowInline: true,
+    });
   const insertClause = () => insertInline(clauseSlotMarker(CLAUSE_PLACEHOLDER));
 
   /** Explicit-click block mirror: wrap the parallel cell's paragraphs in
@@ -880,25 +888,31 @@ export const TemplateStudioPage = ({
     const { selected } = useTemplateStudioStore.getState();
     const expr = selected?.expr.trim() ?? "";
     if (!view || !selected || selected.kind !== kind || expr === "") {
-      notifyUserError(undefined, t("errors.actionFailed"));
+      notifyUserProblem(t("errors.actionFailed"));
       return;
     }
     const sibling = findSiblingCell(view.state, selected.from);
     const range = sibling === null ? null : siblingWrapRange(sibling);
     if (range === null) {
-      notifyUserError(undefined, t("errors.actionFailed"));
+      notifyUserProblem(t("errors.actionFailed"));
       return;
     }
     if (kind === "if") {
-      insertOrWrapBlock(
-        conditionOpenTag(expr),
-        CONDITION_CLOSE_TAG,
-        expr,
+      insertOrWrapBlock({
+        open: conditionOpenTag(expr),
+        close: CONDITION_CLOSE_TAG,
+        placeholder: expr,
         range,
-        true,
-      );
+        allowInline: true,
+      });
     } else {
-      insertOrWrapBlock(loopOpenTag(expr), LOOP_CLOSE_TAG, expr, range, true);
+      insertOrWrapBlock({
+        open: loopOpenTag(expr),
+        close: LOOP_CLOSE_TAG,
+        placeholder: expr,
+        range,
+        allowInline: true,
+      });
     }
   };
 
@@ -944,13 +958,13 @@ export const TemplateStudioPage = ({
     insertExistingField: (path, range) =>
       insertExistingFieldAt(path, { range }),
     insertExistingCondition: (conditionName, range) =>
-      insertOrWrapBlock(
-        conditionOpenTag(conditionName),
-        CONDITION_CLOSE_TAG,
-        conditionName,
+      insertOrWrapBlock({
+        open: conditionOpenTag(conditionName),
+        close: CONDITION_CLOSE_TAG,
+        placeholder: conditionName,
         range,
-        true,
-      ),
+        allowInline: true,
+      }),
     insertClause: (range) =>
       withEditorView((view) => {
         const slotName = slugify(
@@ -1089,11 +1103,11 @@ export const TemplateStudioPage = ({
         useTemplateStudioStore.getState().pendingSlotRenames;
       const projected = await projectSessionIntoDocument();
       if (projected.status === "noEditor") {
-        notifyUserError(undefined, t("templates.saveFailed"));
+        notifyUserProblem(t("templates.saveFailed"));
         return false;
       }
       if (projected.status === "refused") {
-        notifyUserError(undefined, t("templates.saveFailed"), {
+        notifyUserProblem(t("templates.saveFailed"), {
           description:
             projected.refused.reason === "unwritable"
               ? t("templates.studio.fieldSettingBrackets", {
@@ -1107,7 +1121,7 @@ export const TemplateStudioPage = ({
       }
       const bytes = await editor.save();
       if (!bytes) {
-        notifyUserError(undefined, t("templates.saveFailed"));
+        notifyUserProblem(t("templates.saveFailed"));
         return false;
       }
       const file = new File([bytes], fileName, { type: DOCX_MIME });
@@ -1205,7 +1219,7 @@ export const TemplateStudioPage = ({
           // Re-mark dirty so the Save affordance (gated on isDirty) stays live
           // for the retry; the document itself already saved successfully.
           markDirty();
-          notifyUserError(slotRenameError, t("common.error"), {
+          notifyUserError(slotRenameError, t("errors.actionFailed"), {
             description: slotRenameErrorMessage,
           });
         }
@@ -1260,7 +1274,13 @@ export const TemplateStudioPage = ({
       // unmount's store reset.
       return slotRenameErrorMessage === null;
     } catch (error) {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "TemplateStudioPage.handleSave:failure",
+        scope: {
+          type: "handler",
+          handlerId: "TemplateStudioPage.handleSave:failure",
+        },
+      });
       notifyUserError(error, t("templates.saveFailed"));
       return false;
     } finally {
@@ -1315,13 +1335,13 @@ export const TemplateStudioPage = ({
     // Inline-or-block wrap, matching conditions: an inline marker becomes an
     // inline `{% for %}` (the fill engine resolves these), a whole-paragraph
     // marker promotes to its own opener/closer paragraphs.
-    insertOrWrapBlock(
-      loopOpenTag(path),
-      LOOP_CLOSE_TAG,
-      path,
-      { from: marker.from, to: marker.to },
-      true,
-    );
+    insertOrWrapBlock({
+      open: loopOpenTag(path),
+      close: LOOP_CLOSE_TAG,
+      placeholder: path,
+      range: { from: marker.from, to: marker.to },
+      allowInline: true,
+    });
     // The wrap moves the caret into the new opener's placeholder name; park it
     // back inside the item marker so the field face stays open, exactly like
     // wrapFieldInCondition does.
@@ -1820,6 +1840,7 @@ export const TemplateStudioPage = ({
           <Suspense fallback={null}>
             <DocxEditor
               ref={editorRef}
+              accessibleName={name}
               autoOpenReviewSidebar={false}
               className="h-full"
               documentBuffer={docBuffer}

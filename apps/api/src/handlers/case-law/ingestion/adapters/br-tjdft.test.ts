@@ -3,8 +3,6 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import { decodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   assembleBrTjdftDecision,
   BR_TJDFT_PAGE_SIZE,
@@ -21,8 +19,13 @@ import {
 import type { BrTjdftCursor } from "@/api/handlers/case-law/ingestion/adapters/br-tjdft";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/ingestion-types";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
 
 const SEARCH_URL = "https://jurisdf.tjdft.jus.br/api/v1/pesquisa";
 
@@ -139,8 +142,8 @@ const urlOf = (input: string | URL | Request): string => {
 
 const stubPublisher = (respond: (call: Call) => Response) => {
   const calls: Call[] = [];
-  globalThis.fetch = asFetchMock(
-    async (input: string | URL | Request, init?: RequestInit) => {
+  testFetchState.set(
+    asFetchMock(async (input: string | URL | Request, init?: RequestInit) => {
       const body: unknown = JSON.parse(
         typeof init?.body === "string" ? init.body : "{}",
       );
@@ -151,7 +154,7 @@ const stubPublisher = (respond: (call: Call) => Response) => {
       };
       calls.push(call);
       return await Promise.resolve(respond(call));
-    },
+    }),
   );
   return calls;
 };
@@ -199,7 +202,6 @@ const nextCursorOf = (page: Awaited<ReturnType<typeof adapter.fetchPage>>) =>
     ? JSON.parse(page.value.nextCursor ?? "null")
     : panic(`the page failed: ${page.error.message}`);
 
-const originalFetch = globalThis.fetch;
 const originalSleep = Bun.sleep;
 
 beforeEach(() => {
@@ -209,7 +211,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
   Bun.sleep = originalSleep;
 });
 

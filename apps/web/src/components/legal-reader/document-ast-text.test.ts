@@ -8,8 +8,9 @@ import {
   HEADING_CLASS,
 } from "@stll/decision-reader/document-ast-text";
 import type { HeadingLevel } from "@stll/legal-ast/document-ast";
+import { E_SBIRKA_ANCHORS } from "@stll/legal-ast/statute-anchor-scheme";
 
-import { renderReaderFixture as renderToStaticMarkup } from "../../../../../packages/decision-reader/src/decision-text.test";
+import { renderReaderFixture as renderToStaticMarkup } from "../../../../../packages/decision-reader/tests/reader-adapters";
 
 // A statute is navigated by its containers (Část, Hlava, Díl, Oddíl) and
 // read by its sections. The four containers carry the hierarchy; the
@@ -126,6 +127,7 @@ describe("embedded block anchors", () => {
           type: "heading",
         },
         rangesByPieceId: {},
+        statuteAnchors: E_SBIRKA_ANCHORS,
         variant: "statute",
       }),
     );

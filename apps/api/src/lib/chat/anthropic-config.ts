@@ -15,4 +15,7 @@ export const anthropicClientOptions = (
   anthropicWorkspaceId: string | undefined,
 ) => ({
   defaultHeaders: anthropicWorkspaceHeaders(anthropicWorkspaceId),
+  // Stella owns the complete tool list and layered prompts on every request.
+  // Keep optional SDK mid-conversation rewriting out of this boundary.
+  midConversationChannels: false,
 });

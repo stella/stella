@@ -12,7 +12,7 @@
 //     `self.fetch(...)`.
 //   - A call to a binding imported from a fetch-owning module:
 //     `@stll/fetch` (packages/fetch), plus the api's other
-//     HTTP helpers `@/api/lib/safe-outbound-fetch` and
+//     HTTP helpers `@/api/lib/auth/authorized-outbound-fetch` and
 //     `@/api/lib/redirect-fetch`. Modules are matched by import source, so a
 //     local helper that merely spells `fetchSomething` is not a network call
 //     and an aliased import still is.
@@ -20,8 +20,8 @@
 //     shape. The `new *Command(...)` argument is required, so an unrelated
 //     `transport.send(message)` stays out of scope.
 //   - A method call on a binding imported from `@aws-sdk/*`,
-//     `@stll/api-client`, or the Eden client (`@/lib/eden-client` and its
-//     `@/lib/api` barrel, which export `api` / `memoriesApi`), e.g.
+//     `@stll/api-client`, or the browser client (`@/lib/api`, which exports
+//     `api` and `apiClient`), e.g.
 //     `await api.documents({ id }).get()`. Computed access is traversed, so a
 //     generated hyphenated route (`api["copy-to-workspace"].post(...)`) still
 //     resolves to the imported client.
@@ -64,18 +64,14 @@
 
 import { eslintCompatPlugin, type ESTree } from "@oxlint/plugins";
 
+import { createNetworkCallDetector } from "./network-call.ts";
 import {
   getPropertyName,
   isAstNode,
   isIdentifier,
-  isIdentifierReference,
   isPerIterationLoopPosition,
   isResultTryPromiseCallback,
   LOOP_NODE_TYPES,
-  memberPropertyName,
-  resolveChainRootName,
-  resolveImportedExpressionForEnforcement,
-  resolveVariable,
   unwrapExpression,
 } from "./utils.ts";
 
@@ -84,27 +80,6 @@ const FUNCTION_TYPES = new Set([
   "FunctionExpression",
   "ArrowFunctionExpression",
 ]);
-
-// Modules whose exported functions perform an HTTP request. Every binding
-// imported from them counts, so an added helper is covered on the day it
-// ships rather than when someone remembers to list its name.
-const FETCH_MODULES = new Set([
-  "@stll/fetch",
-  "@/api/lib/safe-outbound-fetch",
-  "@/api/lib/redirect-fetch",
-]);
-
-// Modules whose exported objects are remote clients: any method call on one
-// of their bindings is a round-trip.
-const CLIENT_MODULES = new Set([
-  "@stll/api-client",
-  "@/lib/eden-client",
-  "@/lib/api",
-]);
-
-const CLIENT_MODULE_PREFIX = "@aws-sdk/";
-
-const GLOBAL_FETCH_OBJECTS = new Set(["globalThis", "window", "self"]);
 
 const getType = (node: unknown): string | null =>
   isAstNode(node) ? node.type : null;
@@ -118,46 +93,6 @@ const getField = (node: unknown, field: string): unknown => {
 
 const isComputed = (node: unknown): boolean =>
   getField(node, "computed") === true;
-
-const chainRootReference = (
-  value: unknown,
-): ESTree.IdentifierReference | null => {
-  const expression = unwrapExpression(value);
-  if (isIdentifierReference(expression)) {
-    return expression;
-  }
-  if (expression?.type === "CallExpression") {
-    return chainRootReference(expression.callee);
-  }
-  return expression?.type === "MemberExpression"
-    ? chainRootReference(expression.object)
-    : null;
-};
-
-// `<anything>.send(new SomeCommand(...))` — the AWS SDK dispatch shape.
-const isAwsCommandSend = (node: unknown): boolean => {
-  const callee = getField(node, "callee");
-  if (
-    getType(callee) !== "MemberExpression" ||
-    isComputed(callee) ||
-    getPropertyName(getField(callee, "property")) !== "send"
-  ) {
-    return false;
-  }
-  const args = getField(node, "arguments");
-  if (!Array.isArray(args) || args.length === 0) {
-    return false;
-  }
-  const first = unwrapExpression(args[0]);
-  if (getType(first) !== "NewExpression") {
-    return false;
-  }
-  const constructorName = resolveChainRootName(getField(first, "callee"));
-  return constructorName?.endsWith("Command") ?? false;
-};
-
-const isClientModuleSource = (source: string): boolean =>
-  CLIENT_MODULES.has(source) || source.startsWith(CLIENT_MODULE_PREFIX);
 
 // Walk up from an awaited expression to the first per-iteration loop position
 // or function boundary. A `Result.tryPromise` callback is not a boundary: it
@@ -220,56 +155,7 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
-        const isUnboundGlobal = (node: unknown): boolean => {
-          if (!isIdentifierReference(node)) {
-            return false;
-          }
-          const variable = resolveVariable(context, node);
-          return variable === null || variable.defs.length === 0;
-        };
-
-        const isGlobalFetchCallee = (value: unknown): boolean => {
-          const callee = unwrapExpression(value);
-          if (isIdentifier(callee, "fetch")) {
-            return isUnboundGlobal(callee);
-          }
-          if (
-            callee?.type !== "MemberExpression" ||
-            memberPropertyName(callee) !== "fetch"
-          ) {
-            return false;
-          }
-          // `(globalThis as typeof globalThis).fetch` and `globalThis!.fetch`
-          // still name the global receiver.
-          const receiver = unwrapExpression(callee.object);
-          return (
-            isIdentifier(receiver) &&
-            GLOBAL_FETCH_OBJECTS.has(receiver.name) &&
-            isUnboundGlobal(receiver)
-          );
-        };
-
-        const isNetworkCall = (node: unknown): boolean => {
-          if (getType(node) !== "CallExpression") {
-            return false;
-          }
-          if (isGlobalFetchCallee(getField(node, "callee"))) {
-            return true;
-          }
-          if (isAwsCommandSend(node)) {
-            return true;
-          }
-          const root = chainRootReference(node);
-          const imported =
-            root === null
-              ? null
-              : resolveImportedExpressionForEnforcement(context, root);
-          return (
-            imported !== null &&
-            (FETCH_MODULES.has(imported.source) ||
-              isClientModuleSource(imported.source))
-          );
-        };
+        const isNetworkCall = createNetworkCallDetector(context);
 
         const reportAwaitedExpression = (
           node: ESTree.AwaitExpression | ESTree.YieldExpression,

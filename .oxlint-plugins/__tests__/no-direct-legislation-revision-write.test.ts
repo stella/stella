@@ -101,3 +101,107 @@ describe.serial("legislation revision write ownership", () => {
     );
   });
 });
+
+describe.serial("replay revision column plans", () => {
+  const owner =
+    "apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts";
+  const declaration =
+    'import {replayWrite as plan} from "@/api/lib/case-law/replay-write";';
+  const update = "db.update(versions).set(write.set).where(write.setWhere);";
+  test("allows the same explicit partial columns and implicit hooks as literal SETs", async () => {
+    expect(
+      await lint(
+        [
+          declaration,
+          "const write = plan(versions, {projectionEpoch: value});",
+          update,
+        ],
+        owner,
+      ),
+    ).toEqual([]);
+  });
+  test("forbidden revision fields and explicit timestamps stay forbidden through plans", async () => {
+    // The projection owners declare `updatedAt` (they write it back to
+    // itself); an owner that does not declare it stays refused.
+    const undeclaredTimestampOwner =
+      "apps/api/src/handlers/legislation/withdrawal.ts";
+    await Promise.all(
+      [
+        { payload: "{fulltext: text}", lintedAs: owner },
+        { payload: "{metadata: value}", lintedAs: owner },
+        {
+          payload: "{windowDisposition: value, updatedAt: now}",
+          lintedAs: undeclaredTimestampOwner,
+        },
+        {
+          payload:
+            "{windowDisposition: value}, {modifiedAt: {column: versions.updatedAt, value}}",
+          lintedAs: undeclaredTimestampOwner,
+        },
+      ].map(async ({ payload, lintedAs }) => {
+        expect(
+          await lint(
+            [declaration, `const write = plan(versions, ${payload});`, update],
+            lintedAs,
+          ),
+        ).toEqual([4]);
+      }),
+    );
+  });
+  test("SET object spreads never inherit a plan's partial-owner proof", async () => {
+    await Promise.all(
+      [
+        "{...write.set}",
+        "{...write.set,...{fulltext:text}}",
+        "{...write.set,fulltext:text}",
+        "{...opaque,...write.set}",
+        "{...write.set,...opaque}",
+      ].map(async (set) => {
+        expect(
+          await lint(
+            [
+              declaration,
+              "const write = plan(versions,{projectionEpoch:value});",
+              `db.update(versions).set(${set}).where(write.setWhere);`,
+            ],
+            owner,
+          ),
+        ).toEqual([4]);
+      }),
+    );
+  });
+  test("opaque, shadowed, escaped and mutated plans are rejected", async () => {
+    await Promise.all(
+      [
+        "const write = plan(versions, {...payload});",
+        "const write = plan(versions, payload);",
+        "let write = plan(versions, {projectionEpoch: value});",
+        "const write = plan(versions, {projectionEpoch: value}); write.set.fulltext = text;",
+        "const write = plan(versions, {projectionEpoch: value}); Object.assign(write.set, payload);",
+        "const write = plan(versions, {projectionEpoch: value}); write.setWhere.append(sql);",
+        "const write = plan(versions, {projectionEpoch: value}); mutate(write);",
+        "const write = unknown(versions, {projectionEpoch: value});",
+      ].map(async (body) => {
+        expect(await lint([declaration, body, update], owner)).toEqual([4]);
+      }),
+    );
+    expect(
+      await lint(
+        [
+          declaration,
+          `function inner(plan) { const write = plan(versions, {projectionEpoch: value}); ${update} }`,
+        ],
+        owner,
+      ),
+    ).toEqual([3]);
+    expect(
+      await lint(
+        [
+          declaration,
+          `const write = plan(versions, {projectionEpoch: value}); function inner(write) { ${update} }`,
+        ],
+        owner,
+      ),
+    ).toEqual([3]);
+  });
+});

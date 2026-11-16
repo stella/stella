@@ -13,6 +13,8 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { waitForExternalState } from "@stll/property-testing/external-state";
+
 import { buildApiTestCommand } from "./api-test-command";
 import {
   testProcessBudgets,
@@ -235,7 +237,9 @@ const reporterEnv = Object.fromEntries(
 );
 
 test("real Bun test batches produce distinct JUnit artifacts and retain reporter output", async () => {
-  const fixture = createFixture();
+  // Real Bun startup competes with other CI batches; watchdog fixtures below
+  // retain the short 2s budget while this child gets time to load its runner.
+  const fixture = createFixture({ childTimeoutMs: 5000, deadlineMs: 15_000 });
   const junitPaths: string[] = [];
   try {
     for (const label of ["first", "second"]) {
@@ -270,7 +274,10 @@ import { expect, test } from "bun:test";
         identity: { kind: "batch", label, files: [testFile], lane: 0 },
         mode: "buffered",
       });
-      expect(result.exitCode).toBe(0);
+      expect(
+        result.exitCode,
+        `${result.output}\n${fixture.diagnostics.join("")}`,
+      ).toBe(0);
       expect(result.output).toContain("normal fixture stdout");
       expect(result.output).toContain(testName);
       expect(result.output).toContain("(pass)");
@@ -619,10 +626,10 @@ posixTest(
         }
         return Result.try(() => process.kill(pid, 0)).isOk();
       };
-      for (let attempt = 0; attempt < 100 && alive(); attempt += 1) {
-        await Bun.sleep(10);
-      }
-      expect(alive()).toBe(false);
+      await waitForExternalState({
+        description: `worker ${String(pid)} exits`,
+        read: () => !alive(),
+      });
     } finally {
       fixture.cleanup();
     }
@@ -686,10 +693,10 @@ posixTest(
         }
         return Result.try(() => process.kill(pid, 0)).isOk();
       };
-      for (let attempt = 0; attempt < 100 && alive(); attempt += 1) {
-        await Bun.sleep(10);
-      }
-      expect(alive()).toBe(false);
+      await waitForExternalState({
+        description: `worker ${String(pid)} exits`,
+        read: () => !alive(),
+      });
     } finally {
       fixture.cleanup();
     }
@@ -808,15 +815,11 @@ posixTest(
       expect(result.exitCode).toBe(124);
       expect(existsSync(heartbeatPath)).toBe(true);
       const afterLeaderExit = readFileSync(heartbeatPath, "utf-8");
-      const heartbeatDeadline = Date.now() + 1000;
-      while (
-        readFileSync(heartbeatPath, "utf-8") === afterLeaderExit &&
-        Date.now() < heartbeatDeadline
-      ) {
-        await Bun.sleep(20);
-      }
-      const liveHeartbeat = readFileSync(heartbeatPath, "utf-8");
-      expect(liveHeartbeat).not.toBe(afterLeaderExit);
+      await waitForExternalState({
+        description: "the descendant writes a heartbeat after the leader exits",
+        intervalMs: 20,
+        read: () => readFileSync(heartbeatPath, "utf-8") !== afterLeaderExit,
+      });
       fixture.supervisor.dispose();
       await Bun.sleep(100);
       const afterDispose = readFileSync(heartbeatPath, "utf-8");

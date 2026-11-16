@@ -128,12 +128,20 @@ export const configureWindowsSigning = (
   writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
 };
 
-type CommandRunner = (cwd: string, file: string) => void;
+type SignerRun = { cwd: string; file: string; appVersion: string };
+type CommandRunner = (signing: SignerRun) => void;
 
-export const resignWindowsArtifacts = (
-  bundleDir: string,
-  run: CommandRunner,
-): void => {
+type ResignWindowsArtifactsOptions = {
+  bundleDir: string;
+  appVersion: string;
+  run: CommandRunner;
+};
+
+export const resignWindowsArtifacts = ({
+  bundleDir,
+  appVersion,
+  run,
+}: ResignWindowsArtifactsOptions): void => {
   const directories = [
     path.join(bundleDir, "msi"),
     path.join(bundleDir, "nsis"),
@@ -153,13 +161,30 @@ export const resignWindowsArtifacts = (
     );
   }
   for (const installer of installers) {
-    run(path.dirname(installer), path.basename(installer));
+    run({
+      cwd: path.dirname(installer),
+      file: path.basename(installer),
+      appVersion,
+    });
     // Azure changes the binary hash; refresh the updater signature only when Tauri emitted its zip.
     const zip = `${installer}.zip`;
     if (existsSync(zip)) {
-      run(path.dirname(zip), path.basename(zip));
+      run({ cwd: path.dirname(zip), file: path.basename(zip), appVersion });
     }
   }
+};
+
+/** The version `stamp` wrote into the config the bundler built from. */
+const readStampedAppVersion = (configPath: string): string => {
+  const config: unknown = JSON.parse(readFileSync(configPath, "utf-8"));
+  const version =
+    typeof config === "object" && config !== null && "version" in config
+      ? config.version
+      : undefined;
+  if (typeof version !== "string" || version === "") {
+    throw new DesktopReleaseStepError(`${configPath} has no app version`);
+  }
+  return version;
 };
 
 export const desktopArtifacts = (directory: string): string[] => {
@@ -178,9 +203,20 @@ export const desktopArtifacts = (directory: string): string[] => {
   return artifacts.toSorted();
 };
 
-const runTauriSigner: CommandRunner = (cwd, file) => {
+// The trusted comment binds the signature to its release version; clients
+// with `requireSignedVersion` refuse an updater signature without it.
+const runTauriSigner: CommandRunner = ({ cwd, file, appVersion }) => {
   const result = Bun.spawnSync(
-    ["bun", "x", "@tauri-apps/cli", "signer", "sign", file],
+    [
+      "bun",
+      "x",
+      "@tauri-apps/cli",
+      "signer",
+      "sign",
+      "--app-version",
+      appVersion,
+      file,
+    ],
     { cwd, stdout: "inherit", stderr: "inherit" },
   );
   if (result.exitCode !== 0) {
@@ -230,10 +266,11 @@ if (import.meta.main) {
       );
       break;
     case "resign":
-      resignWindowsArtifacts(
-        required(args.at(0), "bundle directory"),
-        runTauriSigner,
-      );
+      resignWindowsArtifacts({
+        bundleDir: required(args.at(0), "bundle directory"),
+        appVersion: readStampedAppVersion("src-tauri/tauri.conf.json"),
+        run: runTauriSigner,
+      });
       break;
     case "upload": {
       const bundle = required(args.at(0), "bundle directory");

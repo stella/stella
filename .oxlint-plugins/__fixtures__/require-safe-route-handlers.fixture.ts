@@ -1,36 +1,38 @@
-// Passive regression fixture for require-safe-route-handlers.
+// Passive regression fixture for require-safe-route-handlers. An imported
+// endpoint is the common allowed case; the rule test covers it, since a
+// fixture importing an endpoint module would load the API.
 
-declare const app: {
-  get: (path: string, handler: unknown) => unknown;
-  post: (path: string, handler: unknown, options?: unknown) => unknown;
+type Definition = {
+  config: Record<string, unknown>;
+  access: string;
+  run: () => Promise<unknown>;
 };
-declare const rawHandler: unknown;
-declare const endpoint: { handler: unknown };
-declare const endpointWithConfig: {
-  config: { body: unknown; permissions: unknown; accountAccess: unknown };
-  handler: unknown;
+declare const routes: (
+  table: Record<string, Record<string, Definition>>,
+) => unknown;
+declare const defineEndpoint: {
+  public: (config: object, handler: () => unknown) => Definition;
 };
+declare const createSafeRootHandler: (
+  config: object,
+  handler: () => unknown,
+) => Definition;
+declare const run: () => Promise<unknown>;
 
-// oxlint-disable-next-line require-safe-route-handlers/require-safe-route-handlers -- fixture: raw handler skips the safe endpoint boundary
-export const rawRoute = app.get("/raw", rawHandler);
+const updateThing = createSafeRootHandler({}, () => ({}));
+
+export const rawRoutes = routes({
+  // oxlint-disable-next-line require-safe-route-handlers/require-safe-route-handlers -- fixture: a thin endpoint skips the safe-handler boundary
+  "/thin": { GET: defineEndpoint.public({}, () => ({})) },
+  // oxlint-disable-next-line require-safe-route-handlers/require-safe-route-handlers -- fixture: a hand-built definition skips every factory
+  "/hand-built": { POST: { config: {}, access: "public", run } },
+});
 
 // expect-clean: require-safe-route-handlers/require-safe-route-handlers
-export const safeRoute = app.post("/safe", endpoint.handler);
+export const safeRoutes = routes({ "/safe": { PATCH: updateThing } });
 
-export const mutableConfigRoute = app.post(
-  "/mutable-config",
-  endpointWithConfig.handler,
-  // oxlint-disable-next-line require-safe-route-handlers/no-direct-handler-config -- fixture: Elysia must not receive the mutable endpoint config object
-  endpointWithConfig.config,
-);
+// oxlint-disable-next-line require-safe-route-handlers/no-direct-handler-config -- fixture: a write through Object.assign escapes the readonly config type
+Object.assign(updateThing.config, { permissions: {} });
 
-export const projectedConfigRoute = app.post(
-  "/projected-config",
-  endpointWithConfig.handler,
-  // expect-clean: require-safe-route-handlers/no-direct-handler-config
-  {
-    body: endpointWithConfig.config.body,
-    permissions: endpointWithConfig.config.permissions,
-    accountAccess: endpointWithConfig.config.accountAccess,
-  },
-);
+// expect-clean: require-safe-route-handlers/no-direct-handler-config
+export const projectedConfig = { ...updateThing.config, access: "public" };

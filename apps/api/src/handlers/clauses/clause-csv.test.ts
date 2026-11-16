@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { createSafeId } from "@/api/lib/branded-types";
 
@@ -37,7 +37,8 @@ describe("clause CSV tags", () => {
   });
 
   test("roundtrips trimmed non-empty tag lists without data loss", () => {
-    fc.assert(
+    assertProperty(
+      "roundtrips trimmed non-empty tag lists without data loss",
       fc.property(
         fc.array(
           fc
@@ -49,7 +50,7 @@ describe("clause CSV tags", () => {
           expect(parseClauseTags(serializeClauseTags(tags))).toEqual(tags);
         },
       ),
-      propertyConfig({ numRuns: 1000 }),
+      { numRuns: 1000 },
     );
   });
 });

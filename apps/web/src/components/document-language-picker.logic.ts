@@ -8,11 +8,9 @@ import {
   DOCUMENT_TRANSLATION_TARGET_LANGUAGES,
   type DocumentTranslationTargetLanguageCode,
 } from "@stll/api-contract/document-translation";
-import { foldToAscii } from "@stll/text-normalize";
-import { containsSearchMatchKey } from "@stll/text-normalize/search-match-key";
+import { createSearchQueryMatcher } from "@stll/text-normalize/search-query-matcher";
 
 const DEFAULT_TARGET_LANG: DocumentTranslationTargetLanguageCode = "EN-GB";
-const FALLBACK_SOURCE_LANG: DocumentTranslationTargetLanguageCode = "CS";
 
 /** UI locales whose code differs from the document-language code. */
 const LOCALE_TO_LANGUAGE = {
@@ -42,38 +40,11 @@ const languageForLocale = (
   return isDocumentTranslationTargetCode(mapped) ? mapped : null;
 };
 
-type DefaultLanguagePair = {
-  source: DocumentTranslationTargetLanguageCode;
-  target: DocumentTranslationTargetLanguageCode;
-};
-
-/**
- * The UI locale is the best guess for the document's language; the target
- * defaults to English unless the source already is.
- */
-export const defaultLanguagePair = (locale: string): DefaultLanguagePair => {
-  const source = languageForLocale(locale) ?? FALLBACK_SOURCE_LANG;
-  const target =
-    source === DEFAULT_TARGET_LANG ? FALLBACK_SOURCE_LANG : DEFAULT_TARGET_LANG;
-  return { source, target };
-};
-
 /** Default a new translation toward the user's UI language when supported. */
 export const defaultTargetLanguage = (
   locale: string,
 ): DocumentTranslationTargetLanguageCode =>
   languageForLocale(locale) ?? DEFAULT_TARGET_LANG;
-
-/**
- * Match key for the picker's typeahead.
- *
- * `foldToAscii` rather than the highlighter's `foldSearchMatchText`: mark
- * stripping alone leaves Polish `ł` standing, so typing "lotewski" would miss
- * "Łotewski" in the pl catalog. Folding also keeps Greek, Cyrillic and Arabic
- * names matchable in their own script.
- */
-const languageMatchKey = (text: string): string =>
-  foldToAscii(text).toLowerCase();
 
 type LanguageQueryCandidate = {
   code: string;
@@ -82,19 +53,13 @@ type LanguageQueryCandidate = {
 
 /**
  * A language matches on its localized name or its code, diacritics-insensitive
- * and anywhere in the string: "brit" finds "English (British)" and "pt" finds
- * both Portuguese entries.
+ * and anywhere in the string: "brit" finds "English (British)", "lotewski"
+ * finds "Łotewski", and "pt" finds both Portuguese entries.
  */
 export const matchesLanguageQuery = (
   { code, label }: LanguageQueryCandidate,
   query: string,
 ): boolean => {
-  const needle = languageMatchKey(query).trim();
-  if (needle.length === 0) {
-    return true;
-  }
-  return (
-    containsSearchMatchKey(languageMatchKey(label), needle) ||
-    containsSearchMatchKey(languageMatchKey(code), needle)
-  );
+  const matches = createSearchQueryMatcher(query);
+  return matches(label) || matches(code);
 };

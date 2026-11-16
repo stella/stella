@@ -19,6 +19,9 @@ const propertyContent = (
   if (type === "money") {
     return { version: 1, type, currency: null };
   }
+  if (type === "record") {
+    return { version: 1, type, shape: { type: "tool-output" } };
+  }
   return { version: 1, type };
 };
 

@@ -1,5 +1,8 @@
+// parser-output-unchanged: registers telemetry fingerprint dimensions without changing error payloads or parser results.
 import { Result, TaggedError } from "better-result";
 import type { SQL } from "drizzle-orm";
+
+import { declareFingerprintFields } from "@stll/errors";
 
 import { setSharedTransactionTimeouts } from "@/api/db/shared-pool-timeouts";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -22,7 +25,11 @@ export type DecisionWriteExtension = (context: {
 
 class DecisionWriteExtensionError extends TaggedError(
   "DecisionWriteExtensionError",
-)<{ message: string; reason: "invalid-deadline" | "closed" | "deadline" }> {}
+)<{ message: string; reason: "invalid-deadline" | "closed" | "deadline" }> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 const DEFAULT_DEADLINE_MS = 1000;
 const MAX_DEADLINE_MS = 10_000;

@@ -19,11 +19,13 @@ import { alias } from "drizzle-orm/pg-core";
 
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import { SCOUT_KEY } from "@stll/api-contract/signals";
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 import { mapWithConcurrency } from "@stll/concurrency";
 import {
   sanitizeErrorAttributesForOutput,
   sanitizeErrorForOutput,
 } from "@stll/errors";
+import type { ExceptionScope } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
 import type { rootDb } from "@/api/db/root";
@@ -112,6 +114,8 @@ import {
   type OrganizationFileUsageError,
   writeOrganizationFile,
 } from "@/api/lib/files/organization-file-usage";
+import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import {
   isLocalDocumentOcrConfigured,
@@ -416,25 +420,22 @@ export const createDocumentProcessingLeaseRenewal = ({
       }
     };
     detached(
-      renewal.then(releaseRenewal, releaseRenewal),
+      async () => renewal.then(releaseRenewal, releaseRenewal),
       "document-processing.lease-heartbeat-release",
     );
-    detached(
-      (async () => {
-        const result = await Result.tryPromise({
-          try: async () =>
-            await withTimeout(async () => await renewal, {
-              label: "document processing lease heartbeat",
-              timeoutMs,
-            }),
-          catch: (cause) => cause,
-        });
-        if (Result.isError(result)) {
-          onError(result.error);
-        }
-      })(),
-      "document-processing.lease-heartbeat-renew",
-    );
+    detached(async () => {
+      const result = await Result.tryPromise({
+        try: async () =>
+          await withTimeout(async () => await renewal, {
+            label: "document processing lease heartbeat",
+            timeoutMs,
+          }),
+        catch: (cause) => cause,
+      });
+      if (Result.isError(result)) {
+        onError(result.error);
+      }
+    }, "document-processing.lease-heartbeat-renew");
   };
 };
 
@@ -510,7 +511,7 @@ const readCurrentDocumentSource = async ({
       and(
         eq(workspaces.id, workspaceId),
         eq(workspaces.organizationId, organizationId),
-        eq(workspaces.status, "active"),
+        eq(workspaces.status, WORKSPACE_STATUS.active),
       ),
     )
     .innerJoin(
@@ -839,7 +840,13 @@ const completeDocumentProcessingRun = async ({
       });
     });
     if (Result.isError(enqueued)) {
-      captureError(enqueued.error, { runId: run.id });
+      captureError(
+        enqueued.error,
+        handlerErrorContext(
+          "lib.completeDocumentProcessingRun.enqueued_error",
+          { runId: run.id },
+        ),
+      );
       logger.error("document_processing.deadline_scout_enqueue_failed", {
         "error.type": errorTag(enqueued.error),
         runId: run.id,
@@ -1316,17 +1323,21 @@ const errorCode = (error: unknown): string => {
 };
 
 type ReportDocumentProcessingRunFailureOptions = {
+  scope: ExceptionScope;
+  fingerprintKey: `documentProcessing.${string}`;
   error: unknown;
   failureCode: string;
   runId: SafeId<"documentProcessingRun">;
 };
 
 const reportDocumentProcessingRunFailure = ({
+  scope,
+  fingerprintKey,
   error,
   failureCode,
   runId,
 }: ReportDocumentProcessingRunFailureOptions): void => {
-  captureError(error, { runId });
+  captureError(error, { scope, fingerprintKey, context: { runId } });
   logger.error(
     "document_processing.run_failed",
     sanitizeErrorAttributesForOutput({
@@ -1389,7 +1400,16 @@ export const markRunFailed = async ({
     );
     return "settled";
   }
-  reportDocumentProcessingRunFailure({ error, failureCode, runId: run.id });
+  reportDocumentProcessingRunFailure({
+    scope: {
+      type: "handler",
+      handlerId: "documentProcessing.settleRunFailure",
+    },
+    fingerprintKey: "documentProcessing.settleRunFailure",
+    error,
+    failureCode,
+    runId: run.id,
+  });
   return "settled";
 };
 
@@ -1775,7 +1795,12 @@ export const tryEnqueueDocumentProcessingRun = async ({
     catch: (cause) => cause,
   });
   if (Result.isError(result)) {
-    captureEnqueueError(result.error, { runId });
+    captureEnqueueError(
+      result.error,
+      handlerErrorContext("tryEnqueueDocumentProcessingRun.result_error", {
+        runId,
+      }),
+    );
     return { runId, status: "failed" };
   }
   return { runId, status: "enqueued" };
@@ -1967,7 +1992,13 @@ export const recoverDocumentDeadlineScoutDispatches = async ({
   });
   for (const result of results) {
     if (Result.isError(result)) {
-      captureError(result.error, { operation: "deadline-scout-dispatch" });
+      captureError(
+        result.error,
+        handlerErrorContext(
+          "lib.recoverDocumentDeadlineScoutDispatches.result_error",
+          { operation: "deadline-scout-dispatch" },
+        ),
+      );
     }
   }
 
@@ -2103,7 +2134,7 @@ const recoverMissingNativeExtractionRuns = async (
       and(
         cursor === null ? undefined : gt(fields.id, cursor),
         lt(entityVersions.createdAt, settledBefore),
-        eq(workspaces.status, "active"),
+        eq(workspaces.status, WORKSPACE_STATUS.active),
         sql`${fields.content}->>'type' = 'file'
           AND ${fields.content}->>'encrypted' = 'false'`,
         notExists(
@@ -2306,6 +2337,45 @@ export const dispatchQueuedDocumentProcessingRuns = async ({
 };
 
 /**
+ * Queued native extraction runs small enough for the API process, oldest
+ * first. Unlike a dispatch this ignores `nextDeliveryAt`: that only spaces
+ * out queue handoffs, and the run's lease decides who processes it.
+ */
+export const readInlineNativeExtractionRuns = async ({
+  database,
+  limit,
+}: {
+  database: typeof rootDb;
+  limit: number;
+}): Promise<{ id: SafeId<"documentProcessingRun"> }[]> => {
+  const now = new Date();
+  return await database
+    .select({ id: documentProcessingRuns.id })
+    .from(documentProcessingRuns)
+    .innerJoin(fields, eq(fields.id, documentProcessingRuns.fieldId))
+    .where(
+      and(
+        eq(documentProcessingRuns.status, "queued"),
+        eq(documentProcessingRuns.kind, "native-extraction"),
+        lt(
+          documentProcessingRuns.attemptCount,
+          DOCUMENT_PROCESSING_MAX_ATTEMPTS,
+        ),
+        or(
+          isNull(documentProcessingRuns.nextAttemptAt),
+          lte(documentProcessingRuns.nextAttemptAt, now),
+        ),
+        sql`(${fields.content}->>'sizeBytes')::bigint <= ${LIMITS.documentProcessingInlineMaxBytes}`,
+      ),
+    )
+    .orderBy(
+      asc(documentProcessingRuns.createdAt),
+      asc(documentProcessingRuns.id),
+    )
+    .limit(limit);
+};
+
+/**
  * A run whose handoff failed is still queued and still nobody else's work:
  * it comes back to this phase on a later tick, so the phase order cannot
  * cover it and the phase reports it itself.
@@ -2385,6 +2455,11 @@ const recoverRetryableOcrFailures = async (
         message: outcome.errorMessage,
       });
       reportDocumentProcessingRunFailure({
+        scope: {
+          type: "handler",
+          handlerId: "documentProcessing.reconcileFailedRun",
+        },
+        fingerprintKey: "documentProcessing.reconcileFailedRun",
         error,
         failureCode: outcome.errorCode,
         runId: run.id,
@@ -2528,7 +2603,13 @@ const recoverFailedSearchIndex = async (
   await runSearchIndexReplayAttempt({
     indexEntity: async () => await dependencies.indexEntity(entityId),
     onFailure: async (error) => {
-      captureError(error, { entityId, runId: id });
+      captureError(
+        error,
+        handlerErrorContext("lib.recoverFailedSearchIndex", {
+          entityId,
+          runId: id,
+        }),
+      );
       const safeError = sanitizeErrorForOutput(error);
       await failDocumentProcessingAttempt({
         database: dependencies.database,
@@ -2658,7 +2739,7 @@ const recoverFailedOcrSearchIndexes = async (
       and(
         eq(workspaces.id, documentProcessingRuns.workspaceId),
         eq(workspaces.organizationId, documentProcessingRuns.organizationId),
-        eq(workspaces.status, "active"),
+        eq(workspaces.status, WORKSPACE_STATUS.active),
       ),
     )
     .where(
@@ -2825,7 +2906,7 @@ const recoverStaleDocumentProcessingRuns = async (
   };
 };
 
-const handleDocumentProcessingFailure = ({
+export const handleDocumentProcessingFailure = ({
   error,
   job,
 }: {
@@ -3115,7 +3196,10 @@ export const handleDocumentProcessingReconcilePhaseFailure = (
     });
     return;
   }
-  captureError(error, { phase });
+  captureError(
+    error,
+    handlerErrorContext(`documentProcessing.reconcile.${phase}`, { phase }),
+  );
   logger.error("document_processing.reconcile_phase_failed", {
     ...errorSystemFields(error),
     phase,
@@ -3166,7 +3250,10 @@ const reconcileDocumentProcessing = async ({
         "error.type": errorTag(error),
       });
     } else {
-      captureError(error);
+      captureError(
+        error,
+        handlerErrorContext("lib.reconcileDocumentProcessing"),
+      );
       logger.error(
         "document_processing.reconcile_failed",
         errorSystemFields(error),
@@ -3222,15 +3309,18 @@ export const initDocumentProcessingWorker = ({ db }: BullMqWorkerContext) => {
     null;
   let closing = false;
   detached(
-    worker.waitUntilReady().then(() => {
-      if (closing) {
+    async () =>
+      worker.waitUntilReady().then(() => {
+        if (closing) {
+          return undefined;
+        }
+        if (ocrConfigured) {
+          readiness = startDocumentOcrWorkerReadiness(
+            envDocumentProcessingWorker.DOCUMENT_OCR_BATCH_INTERVAL_MINUTES,
+          );
+        }
         return undefined;
-      }
-      if (ocrConfigured) {
-        readiness = startDocumentOcrWorkerReadiness();
-      }
-      return undefined;
-    }),
+      }),
     "document-processing.publish-readiness",
   );
 
@@ -3246,18 +3336,19 @@ export const initDocumentProcessingWorker = ({ db }: BullMqWorkerContext) => {
     }
     reconciling = true;
     detached(
-      reconcileDocumentProcessing({
-        onComplete: () => {
-          reconciling = false;
-          if (!closing) {
-            detached(
-              scheduleReconciliation(),
-              "document-processing.schedule-reconciliation",
-            );
-          }
-        },
-        phases: reconciliationPhases,
-      }),
+      async () =>
+        reconcileDocumentProcessing({
+          onComplete: () => {
+            reconciling = false;
+            if (!closing) {
+              detached(
+                async () => scheduleReconciliation(),
+                "document-processing.schedule-reconciliation",
+              );
+            }
+          },
+          phases: reconciliationPhases,
+        }),
       "document-processing.reconcile",
     );
   };

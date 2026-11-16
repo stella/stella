@@ -13,6 +13,7 @@ export const ACTION_WEIGHTS = {
   // mirrors chat/background rather than the heavier document-analysis
   // action types.
   subagent: 1,
+  transcription: 1,
 } as const satisfies Record<UsageActionType, number>;
 
 /** Service-tier multiplier for immediate, queued, and batch work. */

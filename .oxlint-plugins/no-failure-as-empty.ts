@@ -293,6 +293,19 @@ const isValueUsed = (node: AstNode): boolean => {
   if (parent.type === "ExpressionStatement") {
     return false;
   }
+  // `detached(() => work.catch(...), "feature.action")` discards the work's
+  // value exactly as a bare statement does.
+  if (
+    parent.type === "ArrowFunctionExpression" &&
+    parent.body === current &&
+    isAstNode(parent.parent) &&
+    parent.parent.type === "CallExpression" &&
+    isIdentifier(parent.parent.callee, "detached") &&
+    Array.isArray(parent.parent.arguments) &&
+    parent.parent.arguments[0] === parent
+  ) {
+    return false;
+  }
   return !(parent.type === "UnaryExpression" && parent.operator === "void");
 };
 

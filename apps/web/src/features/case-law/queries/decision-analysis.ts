@@ -6,6 +6,7 @@ import {
   CASE_LAW_ANALYSIS_FAILURE_CODES,
   CASE_LAW_ANALYSIS_UNAVAILABLE_CODES,
   type CaseLawAnalysisFailureCode as AnalysisFailureCode,
+  caseLawAnalysisProgressSchema,
   type CaseLawAnalysisUnavailableCode,
 } from "@stll/api-contract";
 import {
@@ -145,8 +146,10 @@ export const parseAnalysisResponse = (
   }
 
   if (status === "generating") {
-    // The run holds only a sentinel on the row; the tree arrives whole.
-    return { status: "generating", tree: [] };
+    const parsed = v.safeParse(caseLawAnalysisProgressSchema, value);
+    return parsed.success
+      ? { status: "generating", tree: parsed.output.partialTree }
+      : null;
   }
 
   if (status === "error") {

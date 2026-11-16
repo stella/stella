@@ -165,7 +165,7 @@ describe("registration query boundaries", () => {
       "",
       "invalid",
       "x".repeat(1025),
-      Buffer.from("{}").toString("base64url"),
+      Buffer.from("{}").toBase64({ alphabet: "base64url", omitPadding: true }),
     ]) {
       expectInvalid({ since, cursor }, cursorError);
     }

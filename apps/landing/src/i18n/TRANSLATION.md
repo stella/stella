@@ -530,9 +530,8 @@ makes `nav.pillars.workspace` hold the same string as `footer.workspace` and
 `nav.products.workspace.eyebrow` in every locale, which is deliberate: the
 pillar names the category, the other two name the product page, and all three
 are one word in English. The keys are listed in `i18n-check-baseline.json`
-under `duplicateValues` for that reason (same precedent as `demo.status` /
-`footer.status`); hoisting one word to `common.*` to serve three unrelated
-surfaces would be worse.
+under `duplicateValues` for that reason; hoisting one word to `common.*` to serve
+three unrelated surfaces would be worse.
 
 The visible consequence is that the workspace pillar's group label and its
 first entry are the same word, stacked: _PRACOVNÍ PROSTOR_ over _Pracovní
@@ -798,6 +797,8 @@ several near-synonyms are explicitly forbidden.
   language-specific string in a component.
 - After editing catalogs: `bun run i18n:sync` (sorts + regenerates types),
   then `bun run i18n:check` must exit 0.
+- `i18n:check` rejects keys unused by `src` and `scripts`. Remove retired
+  messages from every locale rather than adding an unused-key allowance.
 - One concept, one translation: before adding a key, check whether an
   existing key already carries the string (`common.*`, `footer.*`) and
   reuse it.

@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -37,7 +38,7 @@ const createContext = ({
     body,
     safeDb,
     request: new Request("https://example.test/v1/tasks/calendar"),
-    route: "/v1/tasks/:workspaceId/calendar",
+    route: "/v1/tasks/:workspaceId/calendar" satisfies ApiRoutePath,
   });
 
 const baseBody = {
@@ -82,9 +83,9 @@ describe("calendar task handler", () => {
         ],
       ],
     ];
-    const safeDb: Parameters<
-      typeof calendarTasks.handler
-    >[0]["safeDb"] = async <T>() => Result.ok(asTestRaw<T>(results.shift()));
+    const safeDb = asTestRaw<CalendarCtx["safeDb"]>(async () =>
+      Result.ok(results.shift()),
+    );
 
     const result = await calendarTasks.handler(
       createContext({
@@ -129,8 +130,7 @@ describe("calendar task handler", () => {
   });
 
   test("accepts an ordered range with different offsets", async () => {
-    const safeDb: CalendarCtx["safeDb"] = async <T>() =>
-      Result.ok(asTestRaw<T>([]));
+    const safeDb = asTestRaw<CalendarCtx["safeDb"]>(async () => Result.ok([]));
     const result = await calendarTasks.handler(
       createContext({
         body: {

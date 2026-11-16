@@ -1,4 +1,3 @@
-import { Value } from "@sinclair/typebox/value";
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
@@ -87,7 +86,7 @@ const updateResearchColumn = createSafeRootHandler(
         const content = nextContent ?? current.content;
         const changed =
           nextQuestion !== current.question ||
-          !Value.Equal(content, current.content);
+          !Bun.deepEquals(content, current.content);
         if (!changed) {
           return current;
         }

@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
@@ -339,7 +339,8 @@ describe("registry tool input ref hydration", () => {
     };
 
     test("save, persist, and replay on a later turn dehydrate to the same document ids", () => {
-      fc.assert(
+      assertProperty(
+        "save, persist, and replay on a later turn dehydrate to the same document ids",
         fc.property(
           // Each position's sources, as indexes into TARGETS; null leaves the
           // key out, as a position without sources does.
@@ -403,7 +404,7 @@ describe("registry tool input ref hydration", () => {
             ).toEqual(resolvedInput);
           },
         ),
-        propertyConfig({ numRuns: 200 }),
+        { numRuns: 200 },
       );
     });
 

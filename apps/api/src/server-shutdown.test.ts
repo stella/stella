@@ -33,6 +33,12 @@ describe("API service shutdown", () => {
         events.push("http-stop-started");
         await httpStopped.promise;
       },
+      stopChatQueueSender: () => {
+        events.push("chat-queue-sender-stopped");
+      },
+      stopChatTurnAdopter: () => {
+        events.push("chat-turn-adopter-stopped");
+      },
       stopScheduler: () => {
         events.push("scheduler-stopped");
       },
@@ -50,6 +56,8 @@ describe("API service shutdown", () => {
       "http-stop-started",
       "sse-stopped",
       "scheduler-stopped",
+      "chat-queue-sender-stopped",
+      "chat-turn-adopter-stopped",
       "chat-turn-runs-relinquished",
     ]);
   });
@@ -67,6 +75,8 @@ describe("API service shutdown", () => {
         onHttpStopError: () => undefined,
         relinquishChatTurnRuns: async () => await neverRunEnd,
         stopHttp: async () => await never,
+        stopChatQueueSender: () => undefined,
+        stopChatTurnAdopter: () => undefined,
         stopScheduler: () => undefined,
         stopSse: () => undefined,
         timeout: Promise.resolve(),
@@ -123,6 +133,8 @@ describe("API service shutdown", () => {
               throw failure;
             }
           },
+          stopChatQueueSender: () => undefined,
+          stopChatTurnAdopter: () => undefined,
           stopScheduler: () => undefined,
           stopSse: () => undefined,
           timeout: never,

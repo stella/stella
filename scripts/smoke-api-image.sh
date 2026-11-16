@@ -59,8 +59,8 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-postgres_image=${POSTGRES_IMAGE:-postgres:18.6@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336}
-redis_image=${REDIS_IMAGE:-redis:8@sha256:298e5b3bc566bade82f46ad5511777a4a07a294097ce16ada2f6a42be5239df5}
+postgres_image=${POSTGRES_IMAGE:-postgres:18.6@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42}
+redis_image=${REDIS_IMAGE:-redis:8@sha256:1f88291b4c57bdf249f02eb085a8669889b2d2954e91d4de5118a5da6b78dd53}
 # Pull the service images up front, retried: a registry hiccup is not a
 # release failure.
 for service_image in "$postgres_image" "$redis_image"; do
@@ -118,13 +118,14 @@ migrate() {
   # Non-RDS database: online index builds must not wait on EBS metrics or a
   # wall-clock busy window.
   local database_url=${1:-postgres://$database_owner:smoke-only@smoke-postgres:5432/stella}
-  run_probe --env "DATABASE_URL=$database_url" \
+  run_probe --env DEPLOY_ENVIRONMENT=development --env "DATABASE_URL=$database_url" \
     --env DB_LOAD_GATE_EBS_SIGNAL=disabled --env 'DB_LOAD_GATE_BUSY_WINDOWS=[]' \
     "$image_id" bun /app/apps/api/src/db/migrate.js
 }
 
 printf 'Testing immutable local image %s (%s)\n' "$image_ref" "$image_id"
 api_env=(
+  --env DEPLOY_ENVIRONMENT=development
   --env BETTER_AUTH_SECRET=release-smoke-secret-at-least-32-chars
   --env BETTER_AUTH_URL=http://localhost:3001
   --env "CONTENT_ENCRYPTION_KEY=$(openssl rand -hex 32)"
@@ -255,7 +256,7 @@ if grep -qiE 'cannot (find|resolve) (module|package)' <<< "$output" \
 fi
 echo 'PASS: collab reached environment validation'
 
-for entrypoint in /app/document-processing-worker.js /app/backfill.js /app/complete-sk-us-raw.js /app/import-cz-us-roster.js /app/review-account.js; do
+for entrypoint in /app/document-processing-worker.js /app/file-derivative-worker.js /app/backfill-case-law-slugs.js /app/complete-sk-us-raw.js /app/import-cz-us-roster.js /app/review-account.js /app/partner-oauth-client.js; do
   output=$(run_probe "$image_id" timeout 20 bun "$entrypoint" 2>&1 || true)
   if grep -qiE 'cannot (find|resolve) (module|package)' <<< "$output" \
     || ! grep -q 'Invalid environment variables' <<< "$output"; then

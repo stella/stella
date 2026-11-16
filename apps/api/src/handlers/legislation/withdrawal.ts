@@ -13,6 +13,9 @@ import {
   synchronizeLockedCorpusProjectionDesiredStateTx,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { stripDangerousChars } from "@/api/lib/legal-search/corpus-sanitize";
+import { versionChangeWorkKey } from "@/api/lib/legal-search/legislation-version-changes";
+import type { LegislationVersionWork } from "@/api/lib/legal-search/legislation-version-changes";
+import { recoverVersionChanges } from "@/api/lib/legal-search/legislation-version-changes-recovery";
 
 /**
  * Withdrawing stored legislation versions: the tombstone a census writes for
@@ -195,6 +198,7 @@ export const withdrawLegislationVersions = async (
     });
   }
   const outcomes: LegislationWithdrawalOutcome[] = [];
+  const affectedWorks = new Map<string, LegislationVersionWork>();
   for (const raw of withdrawals) {
     const withdrawal = {
       ...raw,
@@ -217,6 +221,28 @@ export const withdrawLegislationVersions = async (
       async (tx) => await withdrawTarget(tx, target.id, withdrawal),
     );
     outcomes.push(outcome);
+    switch (outcome.type) {
+      case "withdrawn":
+      case "unchanged":
+        affectedWorks.set(versionChangeWorkKey(withdrawal), {
+          sourceId: withdrawal.sourceId,
+          eli: withdrawal.eli,
+          language: withdrawal.language,
+        });
+        break;
+      case "stale":
+      case "missing":
+        break;
+      default:
+        outcome satisfies never;
+        panic("Unhandled legislation withdrawal outcome");
+    }
+  }
+  if (affectedWorks.size > 0) {
+    await recoverVersionChanges({
+      db: scopedDb,
+      works: [...affectedWorks.values()],
+    });
   }
   return outcomes;
 };

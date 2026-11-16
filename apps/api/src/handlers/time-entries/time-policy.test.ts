@@ -1,10 +1,15 @@
 import { Result } from "better-result";
 import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
 
+import { TIME_ENTRY_RATE_REQUIRED_CODE } from "@stll/api-contract/time-entries";
+
 import { BILLING_STATUS } from "@/api/db/schema";
 import { deleteTimeEntryHandler } from "@/api/handlers/time-entries/delete";
 import { updateTimeEntryHandler } from "@/api/handlers/time-entries/update";
-import { createTimeEntryHandler } from "@/api/lib/billing/time-entry-insert";
+import {
+  createTimeEntryHandler,
+  prepareTimeEntryInsert,
+} from "@/api/lib/billing/time-entry-insert";
 import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -49,6 +54,81 @@ const entry = {
 afterEach(() => setSystemTime());
 
 describe("time entry policy at API write paths", () => {
+  test("billable creates and edits without a rate return a stable field error", async () => {
+    setSystemTime(new Date("2026-09-01T12:00:00.000Z"));
+    const { safeDb } = createScopedDbMock({
+      query: {
+        organizationSettings: { findFirst: async () => defaultPolicy },
+        timeEntries: { findFirst: async () => entry },
+        rateTables: { findMany: async () => [] },
+      },
+    });
+    const create = await Result.gen(async function* () {
+      return Result.ok(
+        yield* prepareTimeEntryInsert({
+          safeDb,
+          policy: defaultPolicy,
+          canApprove: false,
+          workspaceId,
+          userId,
+          resolvedRate: null,
+          body: {
+            dateWorked: "2026-09-01",
+            timezoneId: "UTC",
+            durationMinutes: 7,
+            narrative: "Work",
+            billable: true,
+          },
+        }),
+      );
+    });
+    const edit = await Result.gen(() =>
+      updateTimeEntryHandler({
+        safeDb,
+        workspaceId,
+        actor: { userId, memberRole: sessionMemberRole("member") },
+        recordAuditEvent: async () => {},
+        body: { id: entryId, billable: true },
+      }),
+    );
+    for (const result of [create, edit]) {
+      expect(result.status).toBe("error");
+      if (result.status === "error") {
+        expect(result.error).toMatchObject({
+          status: 400,
+          code: TIME_ENTRY_RATE_REQUIRED_CODE,
+        });
+      }
+    }
+    const nonBillable = await Result.gen(async function* () {
+      return Result.ok(
+        yield* prepareTimeEntryInsert({
+          safeDb,
+          policy: defaultPolicy,
+          canApprove: false,
+          workspaceId,
+          userId,
+          resolvedRate: null,
+          body: {
+            dateWorked: "2026-09-01",
+            timezoneId: "UTC",
+            durationMinutes: 7,
+            narrative: "Work",
+            billable: false,
+          },
+        }),
+      );
+    });
+    expect(Result.isOk(nonBillable)).toBe(true);
+    if (Result.isOk(nonBillable)) {
+      expect(nonBillable.value).toMatchObject({
+        billable: false,
+        rateAtEntry: 0,
+        currency: "XXX",
+      });
+    }
+  });
+
   test("create rejects a blank narrative only when required", async () => {
     setSystemTime(new Date("2026-09-01T12:00:00.000Z"));
     const { safeDb } = createScopedDbMock({

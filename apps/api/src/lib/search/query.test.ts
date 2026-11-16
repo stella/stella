@@ -4,6 +4,7 @@ import { PgDialect } from "drizzle-orm/pg-core";
 
 import {
   buildPlainSearchTsQuery,
+  buildSearchCandidateTsQuery,
   buildSearchPreviewLocatorTsQuery,
   buildSearchTsQuery,
   fileNameSearchText,
@@ -17,6 +18,37 @@ import {
 } from "@/api/lib/search/query";
 
 describe("search query text", () => {
+  test.each([
+    ["contract NOT negligence", "contract:*"],
+    ['"contract law" AND NOT negligence', "contract:* <-> law:*"],
+    ["contract AND (law OR NOT negligence)", "contract:*"],
+    ["contract OR (law AND NOT negligence)", "(contract:*) | (law:*)"],
+    ["NOT (NOT contract OR negligence)", "contract:*"],
+    ["contract OR NOT negligence", null],
+    ["NOT (NOT contract AND negligence)", null],
+  ] as const)(
+    "candidate query preserves the positive constraint of %s",
+    (query, expected) => {
+      const candidate = buildSearchCandidateTsQuery(query);
+      expect(
+        candidate === null
+          ? null
+          : new PgDialect().sqlToQuery(candidate).params.at(0),
+      ).toBe(expected);
+    },
+  );
+
+  test.each(["contract", '"contract law" AND services', "contract OR law"])(
+    "positive candidate queries retain full semantics: %s",
+    (query) => {
+      const dialect = new PgDialect();
+      const candidate = buildSearchCandidateTsQuery(query);
+      expect(candidate === null ? null : dialect.sqlToQuery(candidate)).toEqual(
+        dialect.sqlToQuery(buildSearchTsQuery(query)),
+      );
+    },
+  );
+
   test("extracts positive preview locator candidates without losing phrases", () => {
     expect(
       getSearchPreviewLocatorCandidates(

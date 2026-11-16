@@ -7,6 +7,8 @@ const exportingUserId = "exporting-user";
 const claimId = createSafeId<"legalListClaim">();
 const runId = createSafeId<"legalListVerificationRun">();
 const workspaceId = createSafeId<"workspace">();
+const entityId = createSafeId<"entity">();
+const fieldId = createSafeId<"field">();
 const createdAt = new Date("2026-10-18T10:00:00.000Z");
 const updatedAt = new Date("2026-10-18T11:00:00.000Z");
 
@@ -18,6 +20,8 @@ const claimComment = (userId: string) => ({
   workspaceId,
   verificationRunId: runId,
   verificationClaimId: claimId,
+  entityId: null,
+  pageTextSha256: null,
   groupId: null,
   kind: "comment" as const,
   visibility: "shared" as const,
@@ -27,10 +31,38 @@ const claimComment = (userId: string) => ({
   startOffset: 0,
   endOffset: 5,
   quote: "Claim",
+  quotePrefix: "",
+  quoteSuffix: "",
   body: "The author's comment",
   createdAt,
   updatedAt,
 });
+
+const sharedDocumentHighlight = {
+  id: createSafeId<"legalReaderAnnotation">(),
+  userId: exportingUserId,
+  targetType: "matter-document" as const,
+  targetId: fieldId,
+  workspaceId,
+  verificationRunId: null,
+  verificationClaimId: null,
+  entityId,
+  pageTextSha256: "a".repeat(64),
+  groupId: null,
+  kind: "highlight" as const,
+  visibility: "shared" as const,
+  color: "yellow" as const,
+  style: "highlight" as const,
+  blockAnchorId: "page-2",
+  startOffset: 4,
+  endOffset: 19,
+  quote: "deliver the goods",
+  quotePrefix: "The seller shall ",
+  quoteSuffix: " within thirty days.",
+  body: null,
+  createdAt,
+  updatedAt,
+} satisfies Parameters<typeof projectPrivateAnnotationForAccountExport>[0];
 
 describe("claim comments in a personal-data response", () => {
   test("includes the author's shared comment and its claim linkage", () => {
@@ -44,6 +76,8 @@ describe("claim comments in a personal-data response", () => {
       workspaceId,
       verificationRunId: runId,
       verificationClaimId: claimId,
+      entityId: null,
+      pageTextSha256: null,
       groupId: null,
       kind: "comment",
       visibility: "shared",
@@ -53,9 +87,40 @@ describe("claim comments in a personal-data response", () => {
       startOffset: 0,
       endOffset: 5,
       quote: "Claim",
+      quotePrefix: "",
+      quoteSuffix: "",
       body: "The author's comment",
       createdAt: createdAt.toISOString(),
       updatedAt: updatedAt.toISOString(),
     });
+  });
+});
+
+describe("matter document marks in a personal-data response", () => {
+  test("includes the author's shared mark with its document and page anchor", () => {
+    expect(
+      projectPrivateAnnotationForAccountExport(sharedDocumentHighlight),
+    ).toMatchObject({
+      targetType: "matter-document",
+      targetId: fieldId,
+      entityId,
+      pageTextSha256: "a".repeat(64),
+      quotePrefix: sharedDocumentHighlight.quotePrefix,
+      quoteSuffix: sharedDocumentHighlight.quoteSuffix,
+      blockAnchorId: "page-2",
+      visibility: "shared",
+    });
+  });
+
+  test("leaves out a shared public-law note, which stays organization data", () => {
+    expect(
+      projectPrivateAnnotationForAccountExport({
+        ...sharedDocumentHighlight,
+        targetType: "decision",
+        workspaceId: null,
+        entityId: null,
+        pageTextSha256: null,
+      }),
+    ).toBeUndefined();
   });
 });

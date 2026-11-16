@@ -33,7 +33,7 @@ import type {
 } from "@/components/versions/version-list";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
@@ -90,7 +90,7 @@ export const OutdatedChanges = ({
     }
     setDiff({ status: "loading" });
     const requested = await Result.tryPromise(async () =>
-      unwrapEden(
+      unwrapApiResponse(
         await api
           .clauses({ clauseId: toSafeId<"clause">(clauseId) })
           .versions({ versionId: toSafeId<"clauseVersion">(versionId) })
@@ -110,7 +110,7 @@ export const OutdatedChanges = ({
     }
     setSummary({ status: "loading" });
     const requested = await Result.tryPromise(async () =>
-      unwrapEden(
+      unwrapApiResponse(
         await api
           .clauses({ clauseId: toSafeId<"clause">(clauseId) })
           .versions({ versionId: toSafeId<"clauseVersion">(versionId) })

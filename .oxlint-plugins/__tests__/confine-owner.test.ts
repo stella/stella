@@ -363,6 +363,42 @@ const lint = async (sourcePath: string) =>
     sourcePath,
   });
 
+test("provider clients are built only by the model factory, dynamic imports included", async () => {
+  const entry = OWNERSHIP.find(
+    ({ id }) => id === "provider-client-construction",
+  );
+  expect(entry).toBeDefined();
+  const sources = [
+    'const genai = await import("@google/genai");',
+    'const { GoogleGenAI } = await import("@google/genai");',
+    'const OpenAIClient = (await import("openai")).default;',
+    'const { createOpenaiChat } = await import("@tanstack/ai-openai");',
+    'import { Mistral } from "@mistralai/mistralai";',
+  ];
+  const source = sources.join("\n");
+  const options = { ruleOptions: { entries: [entry] } };
+  expect(
+    await lintSingleRule("confine-owner", source, {
+      ...options,
+      sourcePath: "apps/api/src/lib/new-request.ts",
+    }),
+  ).toEqual([1, 2, 3, 4, 5]);
+  expect(
+    await lintSingleRule("confine-owner", source, {
+      ...options,
+      sourcePath: "apps/api/src/lib/tanstack-ai-models.ts",
+    }),
+  ).toEqual([]);
+  // Reading a type builds no client.
+  expect(
+    await lintSingleRule(
+      "confine-owner",
+      'import type { GeminiTextProviderOptions } from "@tanstack/ai-gemini";',
+      { ...options, sourcePath: "apps/api/src/lib/new-request.ts" },
+    ),
+  ).toEqual([]);
+});
+
 test("provider receipt persistence remains confined to its owner", async () => {
   const entry = OWNERSHIP.find(({ id }) => id === "provider-event-records");
   expect(entry).toBeDefined();
@@ -457,9 +493,9 @@ describe.serial("confine-owner function-call rows", () => {
 describe.serial("corpus hit ownership rows", () => {
   const source = [
     "extractId(hit);",
-    'import { candidateDecisionRowsStatement } from "@/api/handlers/case-law/decisions/search";',
+    'import { unresolvedCandidateDecisionRowsStatement } from "@/api/handlers/case-law/decisions/search";',
     'import { rehydrateCorpusIndexProviderCandidatesStatement } from "@/api/lib/legal-search/corpus-index-provider";',
-    'import { pageDecisionRowsStatement } from "@/api/handlers/case-law/decisions/search";',
+    'import { unresolvedPageDecisionRowsStatement } from "@/api/handlers/case-law/decisions/search";',
     "",
   ].join("\n");
   const ruleOptions = { entries: OWNERSHIP };

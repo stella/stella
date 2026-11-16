@@ -247,6 +247,7 @@ export const App = () => {
       <main className="flex flex-1 overflow-hidden">
         <DocxEditor
           ref={editorRef}
+          accessibleName={fileName}
           document={documentBuffer ? null : currentDocument}
           documentBuffer={documentBuffer}
           author="Folio User"
@@ -318,6 +319,7 @@ export const App = () => {
           onClick={handleZoomOut}
           disabled={zoom <= ZOOM_MIN}
           title="Zoom out"
+          tooltip="Zoom out"
         >
           <MinusIcon />
         </Button>
@@ -336,6 +338,7 @@ export const App = () => {
           onClick={handleZoomIn}
           disabled={zoom >= ZOOM_MAX}
           title="Zoom in"
+          tooltip="Zoom in"
         >
           <PlusIcon />
         </Button>

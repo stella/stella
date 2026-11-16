@@ -7,20 +7,15 @@ import {
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { chatKeys } from "@/features/chat/chat-query-contract";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 
-const TIME_BILLING_FEATURE_ID = "time-billing";
-
-// Takes a plain string: time billing is the only self-serve feature today, so
-// the endpoint's id type is that one literal, but the list is the contract and
-// the next feature must not be treated as this one.
-const isTimeBillingFeature = (featureId: string): boolean =>
-  featureId === TIME_BILLING_FEATURE_ID;
+type SelfServeFeatureId = "time-billing" | "local-agents";
 
 type FeatureEnrolmentsCaller = {
   userId: string;
@@ -34,7 +29,7 @@ export const featureEnrolmentsOptions = ({
   queryOptions({
     queryKey: ["feature-enrolments", userId, organizationId] as const,
     queryFn: async ({ signal }) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api["organization-settings"]["feature-enrolments"].get({
           fetch: { signal },
         }),
@@ -42,7 +37,7 @@ export const featureEnrolmentsOptions = ({
   });
 
 /** The endpoint lists only self-serve features offered by this deployment. */
-export const useTimeBillingEnrolment = () => {
+export const useFeatureEnrolment = (featureId: SelfServeFeatureId) => {
   const user = useAuthenticatedUser();
   const t = useTranslations();
   const queryClient = useQueryClient();
@@ -50,13 +45,13 @@ export const useTimeBillingEnrolment = () => {
     userId: user.id,
     organizationId: user.activeOrganizationId,
   });
-  const view = useQueryView(useQuery(options));
+  const view = queryView(useQuery(options));
   const mutation = useMutation({
     mutationFn: async (enrolled: boolean) => {
       const endpoint = api["organization-settings"]["feature-enrolments"]({
-        featureId: TIME_BILLING_FEATURE_ID,
+        featureId,
       });
-      return unwrapEden(
+      return unwrapApiResponse(
         enrolled ? await endpoint.put() : await endpoint.delete(),
       );
     },
@@ -69,7 +64,7 @@ export const useTimeBillingEnrolment = () => {
           current && {
             ...current,
             features: current.features.map((feature) =>
-              isTimeBillingFeature(feature.featureId)
+              feature.featureId === featureId
                 ? { ...feature, enrolled }
                 : feature,
             ),
@@ -92,6 +87,9 @@ export const useTimeBillingEnrolment = () => {
             organizationId: user.activeOrganizationId,
           }).queryKey,
         }),
+        queryClient.invalidateQueries({
+          queryKey: chatKeys.localRunners(user.activeOrganizationId),
+        }),
       ]);
     },
   });
@@ -102,8 +100,8 @@ export const useTimeBillingEnrolment = () => {
       return { feature: undefined, mutation, view };
     case "items":
       return {
-        feature: view.items.features.find((feature) =>
-          isTimeBillingFeature(feature.featureId),
+        feature: view.items.features.find(
+          (feature) => feature.featureId === featureId,
         ),
         mutation,
         view,

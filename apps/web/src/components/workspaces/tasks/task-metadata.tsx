@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
@@ -10,10 +12,16 @@ import {
   SelectPopup,
   SelectTrigger,
 } from "@stll/ui/select";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { DatePickerPopover as DatePickerPopoverBase } from "@/components/date-picker-popover";
 import type { DatePickerPopoverProps as DatePickerPopoverBaseProps } from "@/components/date-picker-popover";
+import {
+  MEMBER_CHOICE,
+  MemberCombobox,
+  workspaceMemberOptionsFromView,
+} from "@/components/member-combobox";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { UserIdentity } from "@/components/user-avatar";
 import {
@@ -27,8 +35,10 @@ import {
   TASK_STATUSES,
   WORK_TYPES,
 } from "@/components/workspaces/tasks/task-detail-constants";
-import { useLocale } from "@/i18n/formatting-context";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { usePermissions } from "@/hooks/use-permissions";
+import { useFormattingLocale } from "@/i18n/formatting-context";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import {
   useAddTaskAssignee,
   useRemoveTaskAssignee,
@@ -86,7 +96,7 @@ export const StatusSelect = ({ value, onChange }: StatusSelectProps) => {
         size="sm"
       >
         <StatusIcon status={value} />
-        <span className="truncate">{t(`statusValues.${value}`)}</span>
+        <TruncatedText>{t(`statusValues.${value}`)}</TruncatedText>
       </SelectTrigger>
       <SelectPopup>
         {TASK_STATUSES.map((s) => (
@@ -119,7 +129,7 @@ export const PrioritySelect = ({ value, onChange }: PrioritySelectProps) => {
         size="sm"
       >
         <PriorityIcon priority={value} />
-        <span className="truncate">{t(`priorityValues.${value}`)}</span>
+        <TruncatedText>{t(`priorityValues.${value}`)}</TruncatedText>
       </SelectTrigger>
       <SelectPopup>
         {TASK_PRIORITIES.map((p) => (
@@ -152,7 +162,7 @@ export const WorkTypeSelect = ({ value, onChange }: WorkTypeSelectProps) => {
         className="h-7 min-h-7 min-w-0 gap-1 border-none bg-transparent px-1.5 shadow-none"
         size="sm"
       >
-        <span className="truncate">{t(`workTypeValues.${value}`)}</span>
+        <TruncatedText>{t(`workTypeValues.${value}`)}</TruncatedText>
       </SelectTrigger>
       <SelectPopup>
         {WORK_TYPES.map((type) => (
@@ -188,7 +198,7 @@ export const ItemTypeSelect = ({
         className="h-7 min-h-7 min-w-0 border-none bg-transparent px-1.5 shadow-none"
         size="sm"
       >
-        <span className="truncate">{t(ITEM_TYPE_TRANSLATION_KEYS[value])}</span>
+        <TruncatedText>{t(ITEM_TYPE_TRANSLATION_KEYS[value])}</TruncatedText>
       </SelectTrigger>
       <SelectPopup>
         {LIST_ITEM_TYPES.map((itemType) => (
@@ -214,7 +224,7 @@ const hasDeletedAccount = (deletedAt: string | null | undefined): boolean =>
 export const DatePickerPopover = (props: DatePickerPopoverProps) => {
   const t = useTranslations("tasks");
   const tCommon = useTranslations("common");
-  const locale = useLocale();
+  const locale = useFormattingLocale();
 
   return (
     <DatePickerPopoverBase
@@ -241,7 +251,6 @@ type OwnerPickerProps = {
     id: string;
     name: string | null;
     image: string | null;
-    deletedAt?: string | null;
   } | null;
   reason: string;
   disabled?: boolean;
@@ -258,71 +267,43 @@ export const OwnerPicker = ({
   const t = useTranslations("tasks");
   const tCommon = useTranslations("common");
   const membersQuery = useQuery(workspaceMembersOptions(workspaceId));
-  const membersView = useQueryView(membersQuery);
-  useQueryViewError(membersView);
-  const members = membersView.type === "items" ? membersView.items : undefined;
-  const selectableMembers = members?.filter(
-    (member) => member.user && member.user.id !== owner?.id,
-  );
+  const membersView = queryView(membersQuery);
+  useQueryViewError(membersView, "OwnerPicker:query");
+  const members = workspaceMemberOptionsFromView(membersView);
+  // A handover needs its reason first; a task without an owner takes one
+  // without.
+  const awaitingReason = owner !== null && reason.trim().length === 0;
+  // An owner whose account is gone is not offered, but the field still names
+  // them until someone takes over.
+  const ownerFallback =
+    owner !== null && !members.some((member) => member.userId === owner.id)
+      ? {
+          userId: owner.id,
+          name: owner.name ?? t("deletedAccount"),
+          email: null,
+          image: owner.image,
+        }
+      : null;
 
   return (
-    <Popover>
-      <PopoverTrigger
-        render={
-          <button
-            className="hover:bg-muted flex min-h-11 w-full items-center gap-1.5 rounded-md px-1.5 text-sm"
-            disabled={disabled}
-            type="button"
-          />
-        }
-      >
-        {owner ? (
-          <UserIdentity
-            as="span"
-            avatarClassName="size-4 shrink-0 text-3xs"
-            className="gap-1.5"
-            deleted={hasDeletedAccount(owner.deletedAt)}
-            image={owner.image}
-            name={owner.name ?? t("deletedAccount")}
-            nameClassName="text-sm font-normal"
-          />
-        ) : (
-          <span className="text-muted-foreground">{tCommon("unassigned")}</span>
-        )}
-      </PopoverTrigger>
-      <PopoverPopup className="w-64" padding="sm" side="bottom">
-        <QueryViewFeedback view={membersView} />
-        <div className="flex flex-col gap-2">
-          <div className="flex max-h-56 flex-col overflow-y-auto">
-            {selectableMembers?.map((member) => {
-              const candidate = member.user;
-              if (!candidate) {
-                return null;
-              }
-              return (
-                <button
-                  className="hover:bg-muted flex min-h-11 items-center gap-2 rounded-md px-2 py-1.5 text-sm disabled:opacity-50"
-                  disabled={owner !== null && reason.trim().length === 0}
-                  key={candidate.id}
-                  onClick={() => {
-                    onChange(candidate.id);
-                  }}
-                  type="button"
-                >
-                  <UserIdentity
-                    as="span"
-                    avatarClassName="size-5 text-3xs"
-                    image={candidate.image}
-                    name={candidate.name}
-                    nameClassName="text-sm font-normal"
-                  />
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </PopoverPopup>
-    </Popover>
+    <div className="flex w-full flex-col gap-1">
+      <QueryViewFeedback view={membersView} />
+      <MemberCombobox
+        choice={{ type: MEMBER_CHOICE.member }}
+        disabled={disabled === true || awaitingReason}
+        label={t("owner")}
+        members={members}
+        onValueChange={(userId) => {
+          if (userId === null || userId === owner?.id) {
+            return;
+          }
+          onChange(userId);
+        }}
+        placeholder={tCommon("unassigned")}
+        selectedFallback={ownerFallback}
+        value={owner?.id ?? null}
+      />
+    </div>
   );
 };
 
@@ -349,17 +330,18 @@ export const AssigneePicker = ({
   const t = useTranslations("tasks");
   const tCommon = useTranslations("common");
   const membersQuery = useQuery(workspaceMembersOptions(workspaceId));
-  const membersView = useQueryView(membersQuery);
-  useQueryViewError(membersView);
-  const members = membersView.type === "items" ? membersView.items : undefined;
+  const membersView = queryView(membersQuery);
+  useQueryViewError(membersView, "AssigneePicker:query");
+  const [addOpen, setAddOpen] = useState(false);
+  const canAssign = usePermissions({ entity: ["update"] });
 
   const assignedIds = new Set(assignees.map((a) => a.user.id));
 
   const addAssignee = useAddTaskAssignee(workspaceId);
   const removeAssignee = useRemoveTaskAssignee(workspaceId);
 
-  const unassignedMembers = members?.filter(
-    (m) => m.user && !assignedIds.has(m.user.id),
+  const unassignedMembers = workspaceMemberOptionsFromView(membersView).filter(
+    (member) => !assignedIds.has(member.userId),
   );
 
   return (
@@ -379,67 +361,57 @@ export const AssigneePicker = ({
             nameClassName="text-sm font-normal"
           />
           {hasDeletedAccount(a.user.deletedAt) ? (
-            <span className="bg-muted text-muted-foreground text-3xs rounded px-1.5 py-0.5">
+            <span className="bg-muted text-muted-foreground text-3xs rounded-sm px-1.5 py-0.5">
               {t("deletedAccount")}
             </span>
           ) : null}
-          <Button
-            aria-label={tCommon("remove")}
-            className="size-5 opacity-0 transition-opacity group-hover/assignee:opacity-100"
-            disabled={removeAssignee.isPending}
-            onClick={() => removeAssignee.mutate({ taskId, userId: a.user.id })}
-            size="icon-xs"
-            variant="ghost"
-          >
-            <XIcon className="size-3" />
-          </Button>
+          {canAssign && (
+            <Button
+              aria-label={tCommon("remove")}
+              className="size-5 opacity-0 transition-opacity group-hover/assignee:opacity-100 pointer-coarse:opacity-100"
+              disabled={removeAssignee.isPending}
+              onClick={() =>
+                removeAssignee.mutate({ taskId, userId: a.user.id })
+              }
+              size="icon-xs"
+              variant="ghost"
+            >
+              <XIcon className="size-3" />
+            </Button>
+          )}
         </div>
       ))}
-      {unassignedMembers && unassignedMembers.length > 0 && (
-        <Popover>
-          <PopoverTrigger
-            render={
-              <button
-                className="text-muted-foreground hover:bg-muted hover:text-foreground flex h-7 items-center gap-1.5 rounded-md px-1.5 text-sm"
-                type="button"
-              />
-            }
-          >
-            <PlusIcon className="size-3.5" />
-            <span>{t("addAssignee")}</span>
+      {canAssign && unassignedMembers.length > 0 && (
+        <Popover onOpenChange={setAddOpen} open={addOpen}>
+          <PopoverTrigger render={<Button variant="plain" />}>
+            <span className="text-muted-foreground hover:bg-muted hover:text-foreground flex h-7 items-center gap-1.5 rounded-md px-1.5 text-sm">
+              <PlusIcon className="size-3.5" />
+              <span>{t("addAssignee")}</span>
+            </span>
           </PopoverTrigger>
-          <PopoverPopup padding="xs" side="bottom">
-            <div className="flex w-48 flex-col">
-              {unassignedMembers.map((m) => {
-                const user = m.user;
-                if (!user) {
-                  return null;
-                }
-                return (
-                  <button
-                    className="hover:bg-muted flex items-center gap-2 rounded-md px-2 py-1.5 text-sm"
-                    key={user.id}
-                    onClick={() =>
-                      addAssignee.mutate({ taskId, userId: user.id })
-                    }
-                    type="button"
-                  >
-                    <UserIdentity
-                      as="span"
-                      avatarClassName="size-5 text-3xs"
-                      image={user.image}
-                      name={user.name.trim() || tCommon("unknownUser")}
-                      nameClassName="text-sm font-normal"
-                    />
-                  </button>
-                );
-              })}
+          <PopoverPopup padding="sm" side="bottom">
+            <div className="w-72">
+              <MemberCombobox
+                autoFocus
+                choice={{ type: MEMBER_CHOICE.member }}
+                label={t("addAssignee")}
+                members={unassignedMembers}
+                onValueChange={(userId) => {
+                  if (userId === null) {
+                    return;
+                  }
+                  addAssignee.mutate({ taskId, userId });
+                  setAddOpen(false);
+                }}
+                placeholder={tCommon("searchMembers")}
+                value={null}
+              />
             </div>
           </PopoverPopup>
         </Popover>
       )}
       {assignees.length === 0 &&
-        (!unassignedMembers || unassignedMembers.length === 0) && (
+        (!canAssign || unassignedMembers.length === 0) && (
           <span className="text-muted-foreground px-1.5 text-sm">
             {t("noAssignees")}
           </span>

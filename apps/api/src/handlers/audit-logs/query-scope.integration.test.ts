@@ -9,9 +9,11 @@ import {
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
+import { AUDIT_PERFORMER_FILTER } from "@stll/api-contract/audit-log";
+
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
-import { auditLogs, workspaces } from "@/api/db/schema";
+import { auditLogs, entities, workspaces } from "@/api/db/schema";
 import { createMembershipSafeDb, createSafeDb } from "@/api/db/scoped";
 import {
   AUDIT_ACTION,
@@ -21,6 +23,7 @@ import {
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { TENANT_SYSTEM_ACTOR } from "@/api/lib/system-audit/actors";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -39,6 +42,7 @@ let ids: TestIds;
 let safeDb: SafeDb;
 
 const seededWorkspaceIds: SafeId<"workspace">[] = [];
+const seededEntityIds: SafeId<"entity">[] = [];
 
 const seededAuditLogIds: SafeId<"auditLog">[] = [];
 
@@ -134,6 +138,9 @@ afterAll(async () => {
   await testDb
     .delete(auditLogs)
     .where(inArray(auditLogs.id, seededAuditLogIds));
+  if (seededEntityIds.length > 0) {
+    await testDb.delete(entities).where(inArray(entities.id, seededEntityIds));
+  }
   if (seededWorkspaceIds.length > 0) {
     await testDb
       .delete(workspaces)
@@ -278,6 +285,179 @@ describe("audit log compliance filter", () => {
     for (const item of page.items) {
       expect(item.actor).not.toContain("User B1");
       expect(item.actor).not.toContain(`${ids.userB1}@test.local`);
+    }
+  });
+
+  test("the performer filter separates people from background services, and services read by name", async () => {
+    const actor = TENANT_SYSTEM_ACTOR.sanctionsMonitoringBackfill;
+    const resourceId = Bun.randomUUIDv7();
+    await createBackgroundAuditRecorder({
+      organizationId: ids.orgA,
+      workspaceId: null,
+      userId: actor,
+      execution: {
+        performer: {
+          type: "service",
+          id: actor,
+          name: "Sanctions monitoring backfill",
+        },
+        trigger: { type: "system", source: actor },
+      },
+    })(asTestRaw<Transaction>(testDb), {
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.CONTACT_DIRECTORY,
+      resourceId,
+      changes: { status: { old: "completed", new: "pending" } },
+    });
+    const [serviceRow] = await testDb
+      .select({ id: auditLogs.id })
+      .from(auditLogs)
+      .where(eq(auditLogs.resourceId, resourceId));
+    const serviceRowId =
+      serviceRow?.id ?? panic("service fixture wrote no row");
+
+    try {
+      const ofInterest = (items: readonly { id: SafeId<"auditLog"> }[]) =>
+        items
+          .map((item) => item.id)
+          .filter((id) => id === serviceRowId || id === rowOrganizationLevel);
+
+      const people = await readPage({
+        performer: AUDIT_PERFORMER_FILTER.people,
+      });
+      expect(ofInterest(people.items)).toEqual([rowOrganizationLevel]);
+
+      const automations = await readPage({
+        performer: AUDIT_PERFORMER_FILTER.automations,
+      });
+      expect(ofInterest(automations.items)).toEqual([serviceRowId]);
+      const service = automations.items.find(
+        (item) => item.id === serviceRowId,
+      );
+      expect(service?.actor).toBe("Sanctions monitoring backfill");
+      expect(service?.performerType).toBe("service");
+
+      const everyone = await readPage({});
+      expect(ofInterest(everyone.items).toSorted()).toEqual(
+        [serviceRowId, rowOrganizationLevel].toSorted(),
+      );
+    } finally {
+      await testDb.delete(auditLogs).where(eq(auditLogs.id, serviceRowId));
+    }
+  });
+
+  test("a live document resolves its name only inside an authorized matter", async () => {
+    const readable = toSafeId<"entity">(Bun.randomUUIDv7());
+    const hidden = toSafeId<"entity">(Bun.randomUUIDv7());
+    await testDb.insert(entities).values([
+      {
+        id: readable,
+        workspaceId: ids.wsA1,
+        kind: "task",
+        name: "Readable audit entity",
+        status: "open",
+      },
+      {
+        id: hidden,
+        workspaceId: ids.wsA2,
+        kind: "task",
+        name: "Hidden audit entity",
+        status: "open",
+      },
+    ]);
+    seededEntityIds.push(readable, hidden);
+    const recorder = createBackgroundAuditRecorder({
+      organizationId: ids.orgA,
+      workspaceId: null,
+      userId: ids.userA1,
+      execution: {
+        performer: { type: "user", id: ids.userA1 },
+        trigger: { type: "direct" },
+      },
+    });
+    for (const resourceId of [readable, hidden]) {
+      await recorder(asTestRaw<Transaction>(testDb), {
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+        resourceId,
+      });
+    }
+    const seeded = await testDb
+      .select({ id: auditLogs.id })
+      .from(auditLogs)
+      .where(inArray(auditLogs.resourceId, [readable, hidden]));
+    seededAuditLogIds.push(...seeded.map(({ id }) => id));
+
+    const reader = asTestRaw<SafeDb>(
+      createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+    );
+    const page = await readPage({}, reader);
+    expect(
+      page.items.find((item) => item.resourceId === readable)?.resource,
+    ).toEqual({
+      kind: AUDIT_RESOURCE_TYPE.ENTITY,
+      id: readable,
+      name: "Readable audit entity",
+      available: true,
+    });
+    expect(
+      page.items.find((item) => item.resourceId === hidden)?.resource,
+    ).toEqual({
+      kind: AUDIT_RESOURCE_TYPE.ENTITY,
+      id: hidden,
+      name: null,
+      available: false,
+    });
+  });
+
+  test("resource names never cross organization or matter access", async () => {
+    const recorder = createBackgroundAuditRecorder({
+      organizationId: ids.orgA,
+      workspaceId: null,
+      userId: ids.userA1,
+      execution: {
+        performer: { type: "user", id: ids.userA1 },
+        trigger: { type: "direct" },
+      },
+    });
+    for (const resourceId of [ids.wsA2, ids.wsB1]) {
+      await recorder(asTestRaw<Transaction>(testDb), {
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,
+        resourceId,
+      });
+    }
+    const seeded = await testDb
+      .select({ id: auditLogs.id })
+      .from(auditLogs)
+      .where(inArray(auditLogs.resourceId, [ids.wsA2, ids.wsB1]));
+    seededAuditLogIds.push(...seeded.map(({ id }) => id));
+
+    const reader = asTestRaw<SafeDb>(
+      createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+    );
+    const page = await readPage({}, reader);
+    const hiddenResourceIds = new Set<string>([ids.wsA2, ids.wsB1]);
+    const hiddenResources = page.items.filter((item) =>
+      hiddenResourceIds.has(item.resourceId),
+    );
+    expect(hiddenResources).toHaveLength(2);
+    for (const item of hiddenResources) {
+      expect(item.resource).toEqual({
+        kind: AUDIT_RESOURCE_TYPE.WORKSPACE,
+        id: item.resourceId,
+        name: null,
+        available: false,
+      });
+    }
+
+    const hiddenNames = await testDb
+      .select({ name: workspaces.name })
+      .from(workspaces)
+      .where(inArray(workspaces.id, [ids.wsA2, ids.wsB1]));
+    const response = JSON.stringify(page);
+    for (const { name } of hiddenNames) {
+      expect(response).not.toContain(name);
     }
   });
 });

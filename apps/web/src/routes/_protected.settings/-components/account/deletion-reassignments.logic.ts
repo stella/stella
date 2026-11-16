@@ -1,7 +1,8 @@
 type AccountDeletionReassignmentsOptions = {
   tasks: readonly { entityId: string; workspaceId: string }[];
   members: readonly { workspaceId: string; userId: string }[];
-  reassignments: Readonly<Record<string, string>>;
+  /** Task entity id to the member taking it over; null leaves it unassigned. */
+  reassignments: Readonly<Record<string, string | null>>;
 };
 
 export const validAccountDeletionReassignments = ({

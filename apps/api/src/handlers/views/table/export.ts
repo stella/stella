@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
@@ -16,7 +16,7 @@ import {
 // oxlint-disable-next-line no-restricted-imports -- export boundary: brands field ids returned by queryEntities (server-validated, workspace-scoped) to re-hydrate their justifications from Postgres
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { queryEntities } from "@/api/lib/entities/query-entities";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -67,10 +67,8 @@ const config = {
         "no capability returns a view's rendered row set; views.list describes the view, not its rows",
     },
   },
-  params: workspaceParams({ viewId: tSafeId("workspaceView") }),
-  query: t.Object({
-    format: t.Union([t.Literal("csv"), t.Literal("xlsx"), t.Literal("docx")]),
-  }),
+  params: workspaceParams({ viewId: resourceIdSchema("workspaceView") }),
+  query: v.object({ format: v.picklist(["csv", "xlsx", "docx"]) }),
 } satisfies WorkspaceHandlerConfig;
 
 const exportTableView = createSafeHandler(

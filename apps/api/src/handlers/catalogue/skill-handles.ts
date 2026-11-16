@@ -1,48 +1,108 @@
-import { Result } from "better-result";
-
-import type { AgentSkillInvocation, AgentSkillOrigin } from "@/api/db/schema";
-import { requireEditableSkillOrigin } from "@/api/lib/agent-skills/origin";
+import type { agentSkills } from "@/api/db/schema";
+import {
+  canManageSkill,
+  canReadActiveSkillBody,
+} from "@/api/lib/agent-skills/access";
 import type { SafeId } from "@/api/lib/branded-types";
+import { hasManagementPermission } from "@/api/lib/permission-authorization";
+import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
+import type {
+  UnbackedProjectionKeys,
+  UnprojectedColumns,
+} from "@/api/lib/projection-totality";
 
-type CatalogueSkillHandleRow = {
-  enabled: boolean;
-  id: SafeId<"agentSkill">;
-  invocation: AgentSkillInvocation;
-  origin: AgentSkillOrigin;
-  scope: "private" | "team";
-  slug: string;
-  userId: string;
-};
+type CatalogueSkillHandleRow = Pick<
+  typeof agentSkills.$inferSelect,
+  | "boundClientId"
+  | "boundWorkspaceId"
+  | "enabled"
+  | "id"
+  | "invocation"
+  | "origin"
+  | "scope"
+  | "slug"
+  | "userId"
+>;
+
+// The selected columns either supply handles or decide their eligibility and
+// precedence. Classify against the full table so a schema addition forces a decision.
+const UNPROJECTED_SKILL_HANDLE_COLUMNS = [
+  // Tenant scope is already enforced by the catalogue query.
+  "organizationId",
+  // Display name comes from the curated catalogue entry.
+  "name",
+  // Display description comes from the curated catalogue entry.
+  "description",
+  // Release version is not needed to resolve installed handles.
+  "version",
+  // Licensing belongs to the catalogue entry, not the installed handle.
+  "license",
+  // Compatibility belongs to the catalogue entry, not the installed handle.
+  "compatibility",
+  // Tool configuration remains server-side and is not exposed through handles.
+  "metadata",
+  // Installation provenance does not affect handle eligibility.
+  "sourceUrl",
+  // Body integrity is checked when the skill is read or edited.
+  "contentHash",
+  // Skill content is not part of catalogue handles.
+  "body",
+  // Slash-command discovery owns command handles separately.
+  "command",
+  // Installation time does not affect handle eligibility.
+  "createdAt",
+  // Edit bookkeeping does not affect handle eligibility.
+  "updatedAt",
+] as const satisfies readonly (keyof typeof agentSkills.$inferSelect)[];
+
+type MissingSkillHandleColumn = UnprojectedColumns<
+  typeof agentSkills.$inferSelect,
+  CatalogueSkillHandleRow,
+  (typeof UNPROJECTED_SKILL_HANDLE_COLUMNS)[number]
+>;
+type UnexpectedSkillHandleColumn = UnbackedProjectionKeys<
+  typeof agentSkills.$inferSelect,
+  CatalogueSkillHandleRow,
+  (typeof UNPROJECTED_SKILL_HANDLE_COLUMNS)[number]
+>;
+
+true satisfies MissingSkillHandleColumn extends never ? true : never;
+true satisfies UnexpectedSkillHandleColumn extends never ? true : never;
 
 type ResolveCatalogueSkillHandleMapsArgs = {
-  canManageTeamSkills: boolean;
+  memberRole: AuthorizedMemberRole;
   rows: readonly CatalogueSkillHandleRow[];
   userId: SafeId<"user">;
 };
 
 export const resolveCatalogueSkillHandleMaps = ({
-  canManageTeamSkills,
+  memberRole,
   rows,
   userId,
 }: ResolveCatalogueSkillHandleMapsArgs) => {
+  const preferTeam = hasManagementPermission(memberRole, {
+    agentSkill: ["delete"],
+  });
   const visibleRowBySlug = selectCatalogueSkillRows({
     isCandidate: () => true,
-    preferTeam: canManageTeamSkills,
+    preferTeam,
     rows,
   });
   const installedSkillRowBySlug = selectCatalogueSkillRows({
-    isCandidate: (row) => row.scope === "private" || canManageTeamSkills,
-    preferTeam: canManageTeamSkills,
+    isCandidate: (skill) =>
+      canManageSkill({ memberRole, skill, spends: "delete", userId }),
+    preferTeam,
     rows,
   });
   const chatSkillRowBySlug = selectCatalogueSkillRows({
     isCandidate: (row) =>
-      canUseCatalogueSkillAsChatContext({
-        canManageTeamSkills,
-        row,
+      canReadActiveSkillBody({
+        ...row,
+        memberRole,
+        skillUserId: row.userId,
         userId,
       }),
-    preferTeam: canManageTeamSkills,
+    preferTeam,
     rows,
   });
 
@@ -98,30 +158,6 @@ const shouldPreferCatalogueSkillRow = ({
   }
 
   return preferTeam ? row.scope === "team" : row.scope === "private";
-};
-
-const canUseCatalogueSkillAsChatContext = ({
-  canManageTeamSkills,
-  row,
-  userId,
-}: {
-  canManageTeamSkills: boolean;
-  row: CatalogueSkillHandleRow;
-  userId: SafeId<"user">;
-}) => {
-  if (row.scope === "private") {
-    return row.userId === userId;
-  }
-
-  if (row.enabled) {
-    return true;
-  }
-
-  if (!canManageTeamSkills) {
-    return false;
-  }
-
-  return !Result.isError(requireEditableSkillOrigin(row.origin));
 };
 
 const mapSkillIdsBySlug = (

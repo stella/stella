@@ -1,7 +1,8 @@
 import type { TimeEntrySource } from "./billing";
 import type { EntityContextReference } from "./entity-reference";
 
-export type TimeEntryStatus = "draft" | "approved" | "billed" | "written_off";
+export type TimeEntryStatus =
+  "draft" | "submitted" | "approved" | "billed" | "written_off";
 
 export type { TimeEntrySource } from "./billing";
 
@@ -18,7 +19,10 @@ export type TimeEntry = {
   narrative: string;
   narrativeLanguage: string | null;
   noCharge: boolean;
-  rateAtEntry: number;
+  /** Null when the caller lacks monetary visibility. */
+  rateAtEntry: number | null;
+  /** Why an approver returned the entry to draft; cleared once approved. */
+  returnComment: string | null;
   source: TimeEntrySource;
   status: TimeEntryStatus;
   taskCode: string | null;
@@ -70,6 +74,7 @@ export type TimeEntrySuggestionEvidence =
       id: string;
       title: string;
       messageCount: number;
+      signals: TimeEntrySuggestionSignalIdentity[];
     }
   | {
       type: "resource";
@@ -77,7 +82,14 @@ export type TimeEntrySuggestionEvidence =
       resourceType: string;
       name: string | null;
       actions: string[];
+      signals: TimeEntrySuggestionSignalIdentity[];
     };
+
+export type TimeEntrySuggestionSignalIdentity = {
+  source: "chat_message" | "audit_log";
+  resourceId: string;
+  timestamp: string;
+};
 
 export type TimeEntrySuggestion = {
   /** Stable identity of the cluster for the day: survives later signals extending it. */
@@ -85,6 +97,10 @@ export type TimeEntrySuggestion = {
   startedAt: string;
   endedAt: string;
   durationMinutes: number;
+  /** Raw activity remaining after recorded timer windows are removed. */
+  engagedMinutes: number;
+  alreadyCovered: boolean;
+  billableByDefault: boolean;
   signalCount: number;
   evidence: TimeEntrySuggestionEvidence[];
 };
@@ -93,6 +109,7 @@ export type TimeEntrySuggestionsResponse = {
   date: string;
   /** Sum of suggested minutes still awaiting a decision. */
   activeMinutes: number;
+  loggedMinutes: number;
   items: TimeEntrySuggestion[];
 };
 

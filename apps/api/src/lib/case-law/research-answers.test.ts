@@ -4,7 +4,7 @@ import * as v from "valibot";
 
 import { CASE_LAW_RESEARCH_ANSWER_TYPES } from "@stll/api-contract";
 import type { CaseLawResearchAnswerType } from "@stll/api-contract";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import type { FieldContent } from "@/api/db/schema-validators";
 import {
@@ -26,7 +26,8 @@ const passage = fc.record({
 
 describe("selecting passages within a budget", () => {
   test("stays within budget, keeps order, and cites each anchor once", () => {
-    fc.assert(
+    assertProperty(
+      "stays within budget, keeps order, and cites each anchor once",
       fc.property(
         fc.array(passage, { maxLength: 40 }),
         fc.integer({ min: 0, max: 3000 }),
@@ -60,7 +61,7 @@ describe("selecting passages within a budget", () => {
           }
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 
@@ -269,7 +270,8 @@ const CONTENT_BY_KIND = {
 
 describe("a decision that does not state the answer", () => {
   test("is not_stated for every kind, with the run's reasoning kept", () => {
-    fc.assert(
+    assertProperty(
+      "is not_stated for every kind, with the run's reasoning kept",
       fc.property(
         fc.constantFrom(...CASE_LAW_RESEARCH_ANSWER_TYPES),
         fc.string({ maxLength: 40 }),
@@ -295,7 +297,7 @@ describe("a decision that does not state the answer", () => {
           });
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 });
@@ -366,7 +368,8 @@ describe("parsing the model's answers", () => {
         ),
       );
 
-    fc.assert(
+    assertProperty(
+      "every question ends answered, not stated or failed, whatever the model returns",
       fc.property(scenario, ([columnIds, output]) => {
         const asked = columnIds.map((columnId) => question(columnId, yesNo));
         const parsed = parseResearchAnswers({
@@ -388,7 +391,7 @@ describe("parsing the model's answers", () => {
           expect(entry.outcome.answer.type).toBe("single-select");
         }
       }),
-      propertyConfig(),
+      {},
     );
   });
 });

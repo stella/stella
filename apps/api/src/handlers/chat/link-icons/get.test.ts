@@ -1,36 +1,53 @@
 import { expect, test } from "bun:test";
-import Elysia from "elysia";
 
 import getLinkIcon from "@/api/handlers/chat/link-icons/get";
 import getExactIcon from "@/api/handlers/chat/link-icons/get-exact";
+import type { LinkIconOutcome } from "@/api/handlers/chat/link-icons/outcome";
 import { linkIconBody } from "@/api/handlers/chat/link-icons/response";
-import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
+import { createHttpApp } from "@/api/http/app";
+import { responseCachePolicy } from "@/api/http/cache";
+import { routes } from "@/api/http/route";
+import { defineEndpoint } from "@/api/lib/endpoints";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
+import { serveForTest } from "@/api/tests/helpers/test-server";
+
+const serveIconRoutes = () =>
+  serveForTest(
+    createHttpApp({
+      routes: routes({
+        "/chat/link-icons/exact": { GET: getExactIcon },
+        "/chat/link-icons/:hostname": { GET: getLinkIcon },
+      }),
+      middleware: [responseCachePolicy, errorBoundary],
+    }),
+  );
+
+/** One route answering `outcome` the way the icon handlers do. */
+const serveOutcome = (outcome: LinkIconOutcome) =>
+  serveForTest(
+    createHttpApp({
+      routes: routes({
+        "/": {
+          GET: defineEndpoint.public({}, ({ set }) =>
+            linkIconBody(outcome, set),
+          ),
+        },
+      }),
+      middleware: [responseCachePolicy, errorBoundary],
+    }),
+  );
 
 test("favicon bytes require an authenticated chat principal", async () => {
-  const app = new Elysia()
-    .use(workspaceAccessMacro)
-    .use(permissionMacro)
-    .guard({ validateAuth: true })
-    .get("/chat/link-icons/:hostname", getLinkIcon.handler, {
-      params: getLinkIcon.config.params,
-      permissions: getLinkIcon.config.permissions,
-    });
-  const response = await app.handle(
+  await using server = serveIconRoutes();
+  const response = await server.fetch(
     new Request("http://localhost/chat/link-icons/example.com"),
   );
   expect(response.status).toBe(401);
 });
 
 test("exact icon bytes require an authenticated chat principal", async () => {
-  const app = new Elysia()
-    .use(workspaceAccessMacro)
-    .use(permissionMacro)
-    .guard({ validateAuth: true })
-    .get("/chat/link-icons/exact", getExactIcon.handler, {
-      query: getExactIcon.config.query,
-      permissions: getExactIcon.config.permissions,
-    });
-  const response = await app.handle(
+  await using server = serveIconRoutes();
+  const response = await server.fetch(
     new Request(
       "http://localhost/chat/link-icons/exact?url=https%3A%2F%2Fexample.com%2Ficon.png",
     ),
@@ -39,9 +56,8 @@ test("exact icon bytes require an authenticated chat principal", async () => {
 });
 
 test("missing icons have a typed fallback and private nosniff headers", async () => {
-  const response = await new Elysia()
-    .get("/", ({ set }) => linkIconBody({ type: "no-icon" }, set))
-    .handle(new Request("http://localhost/"));
+  await using server = serveOutcome({ type: "no-icon" });
+  const response = await server.fetch(new Request("http://localhost/"));
   expect(await response.json()).toEqual({ type: "no-icon" });
   expect(response.headers.get("x-content-type-options")).toBe("nosniff");
   expect(response.headers.get("cache-control")).toContain("private");
@@ -49,11 +65,11 @@ test("missing icons have a typed fallback and private nosniff headers", async ()
 
 test("verified bytes retain their MIME and never expose the origin URL", async () => {
   const bytes = new Uint8Array([1, 2, 3]);
-  const response = await new Elysia()
-    .get("/", ({ set }) =>
-      linkIconBody({ type: "icon", icon: { bytes, mime: "image/png" } }, set),
-    )
-    .handle(new Request("http://localhost/"));
+  await using server = serveOutcome({
+    type: "icon",
+    icon: { bytes, mime: "image/png" },
+  });
+  const response = await server.fetch(new Request("http://localhost/"));
   expect(new Uint8Array(await response.arrayBuffer())).toEqual(bytes);
   expect(response.headers.get("content-type")).toBe("image/png");
   expect(response.headers.get("x-content-type-options")).toBe("nosniff");
@@ -61,9 +77,8 @@ test("verified bytes retain their MIME and never expose the origin URL", async (
 });
 
 test("temporary icon refusals are never cached by the browser", async () => {
-  const response = await new Elysia()
-    .get("/", ({ set }) => linkIconBody({ type: "temporary" }, set))
-    .handle(new Request("http://localhost/"));
+  await using server = serveOutcome({ type: "temporary" });
+  const response = await server.fetch(new Request("http://localhost/"));
   expect(await response.json()).toEqual({ type: "temporary" });
   expect(response.headers.get("cache-control")).toContain("no-store");
 });

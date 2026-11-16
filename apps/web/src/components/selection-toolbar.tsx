@@ -2,12 +2,14 @@ import { useState } from "react";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 
+import { holdReferencePeeks } from "@stll/decision-reader/reference-peek-layering";
 import { cn } from "@stll/ui/utils";
 
 import {
   SELECTION_TOOLBAR_EDGE_MARGIN_PX,
   selectionToolbarPosition,
 } from "@/components/selection-toolbar.logic";
+import { useMountEffect } from "@/hooks/use-effect";
 
 type SelectionToolbarProps = {
   /** The selected words (or the clicked mark) the bar floats over, in
@@ -29,9 +31,13 @@ type SelectionToolbarProps = {
 
 /**
  * The floating bar over selected text, shared by the document reader's
- * mark-up bar and the chat's selection actions. It owns placement only:
- * reading the selection and choosing the actions stay with each host,
- * because what counts as a selection differs between them.
+ * mark-up bar, the PDF viewer's selection bar and the chat's selection
+ * actions. It owns placement only: reading the selection and choosing the
+ * actions stay with each host, because what counts as a selection differs
+ * between them. The actions they share live in `selection-toolbar-actions`.
+ *
+ * While it is mounted no reference peek opens and an open one closes: the
+ * bar the reader asked for wins (see `reference-peek-layering`).
  */
 export const SelectionToolbar = ({
   anchorRect,
@@ -43,6 +49,7 @@ export const SelectionToolbar = ({
   onAttach,
 }: SelectionToolbarProps) => {
   const [barSize, setBarSize] = useState({ width: 0, height: 0 });
+  useMountEffect(holdReferencePeeks);
   const attachBar = (node: HTMLDivElement | null) => {
     onAttach?.(node);
     if (node === null) {

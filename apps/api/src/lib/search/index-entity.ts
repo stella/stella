@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { eq, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
+import { EmptyFilter } from "drizzle-orm/relations";
 
 import { documentReferenceBase } from "@stll/api-contract";
 import { compareCodeUnit } from "@stll/collation";
@@ -16,7 +17,9 @@ import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { loadCurrentExtractedContentsForSearchIndex } from "@/api/lib/document-content-provenance";
 import { docxReviewMarkupToSearchText } from "@/api/lib/docx-review-markup";
+import { recordText } from "@/api/lib/fields/record-text";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { createCursorPage, iterateCursorPages } from "@/api/lib/pagination";
 import { isoToRegconfig } from "@/api/lib/search/detect-language";
 import { syncWorkspaceSearchActivity } from "@/api/lib/search/index-global";
@@ -105,6 +108,8 @@ const extractFieldText = (content: FieldContent): string => {
       return `${content.amountCents} ${content.currency}`;
     case "person":
       return content.name;
+    case "record":
+      return recordText(content.state);
     case "file":
       return content.fileName ? fileNameSearchText(content.fileName) : "";
     case "error":
@@ -206,7 +211,7 @@ const buildSearchDocument = async (
       where: {
         entityId: { eq: entityId },
         workspaceId: { eq: entity.workspaceId },
-        versionNumber: cursor === null ? undefined : { lt: Number(cursor) },
+        versionNumber: cursor === null ? EmptyFilter : { lt: Number(cursor) },
       },
       // Include tombstones: a deleted newer version must prevent legacy text
       // from being attributed to a promoted older version.
@@ -298,7 +303,10 @@ const buildSearchDocument = async (
     // Decryption fails when CONTENT_ENCRYPTION_KEY was
     // added or rotated after this content was stored.
     // Keep the last complete projection until re-extraction fixes it.
-    captureError(error, { entityId });
+    captureError(
+      error,
+      handlerErrorContext("search.buildSearchDocument", { entityId }),
+    );
     throw error;
   }
 

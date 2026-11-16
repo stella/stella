@@ -13,6 +13,7 @@ import {
   createDocumentCompareHandler,
   mapCompareDocxError,
 } from "@/api/handlers/documents/compare";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -286,6 +287,9 @@ const createHarness = ({
   const context = asTestRaw<Ctx>({
     body: {
       filePropertyId: propertyId,
+      // Parsed bodies carry the schema defaults.
+      mode: "strict",
+      granularity: "word",
       selection: {
         type: previous ? "previous" : "versions",
         ...(previous
@@ -301,10 +305,12 @@ const createHarness = ({
     },
     params: { workspaceId, documentId },
     request: new Request("http://localhost/documents/compare"),
-    route: "/documents/:workspaceId/document/:documentId/compare",
+    route:
+      "/v1/documents/:workspaceId/document/:documentId/compare" satisfies ApiRoutePath,
     safeDb,
     scopedDb,
-    session: { activeOrganizationId: organizationId },
+    // A credential without a browser session, such as an agent's.
+    session: { activeOrganizationId: organizationId, id: null },
     workspaceId,
     user: { id: userId },
     recordAuditEvent: asTestRaw<AuditRecorder>(auditRecorder),
@@ -485,11 +491,11 @@ describe("documents.compare", () => {
 
       const redlineBuffer = copyToArrayBuffer(persisted.buffer);
       const accepting = await FolioDocxReviewer.fromBuffer(redlineBuffer);
-      expect(accepting.acceptAll()).toBeGreaterThan(0);
+      expect(accepting.acceptAll().resolved).toBeGreaterThan(0);
       expect(await bodyText(await accepting.toBuffer())).toBe(targetText);
 
       const rejecting = await FolioDocxReviewer.fromBuffer(redlineBuffer);
-      expect(rejecting.rejectAll()).toBeGreaterThan(0);
+      expect(rejecting.rejectAll().resolved).toBeGreaterThan(0);
       expect(await bodyText(await rejecting.toBuffer())).toBe(baseText);
     },
   );
@@ -608,7 +614,7 @@ describe("documents.compare", () => {
       recordAuditEvent: harness.auditRecorder,
       source: {
         kind: "background",
-        reason: "document comparison without a request session",
+        reason: "requested with a credential that has no browser session",
       },
       userId: harness.context.user.id,
     });

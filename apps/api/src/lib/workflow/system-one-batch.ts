@@ -195,7 +195,12 @@ export const splitPropertiesForSystemOne = (
   const systemOne: AIBatchProperty[] = [];
   const generative: AIBatchProperty[] = [];
   for (const property of properties) {
-    if (isSystemOneAnswerable(property.content)) {
+    // System One cites one block, and a graded clause needs every block that
+    // qualifies it.
+    if (
+      property.answerShape === "value" &&
+      isSystemOneAnswerable(property.content)
+    ) {
       systemOne.push(property);
       continue;
     }
@@ -244,6 +249,7 @@ export type SystemOneOutcomeResult = {
   output: WorkflowDataOutput;
   /** Properties outside the typed plan. */
   fallbackPropertyIds: SafeId<"property">[];
+  refusedPropertyIds: SafeId<"property">[];
 };
 
 /**
@@ -260,6 +266,7 @@ export const outputFromSystemOneOutcomes = ({
 > => {
   const output: WorkflowDataOutput = {};
   const fallbackPropertyIds: SafeId<"property">[] = [];
+  const refusedPropertyIds: SafeId<"property">[] = [];
   for (const property of properties) {
     const outcome = outcomes.get(property.id);
     if (outcome === undefined) {
@@ -270,6 +277,7 @@ export const outputFromSystemOneOutcomes = ({
       case "undecided":
         switch (outcome.reason) {
           case "refusal":
+            refusedPropertyIds.push(property.id);
             break;
           case "failed":
           case "no-backend":
@@ -309,5 +317,5 @@ export const outputFromSystemOneOutcomes = ({
     }
     output[property.id] = { answer: null, justification: [] };
   }
-  return Result.ok({ output, fallbackPropertyIds });
+  return Result.ok({ output, fallbackPropertyIds, refusedPropertyIds });
 };

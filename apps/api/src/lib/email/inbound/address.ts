@@ -13,7 +13,7 @@ class InboundAddressError extends TaggedError("InboundAddressError")<{
 
 export const generateInboundAddressToken = (principal: CredentialPrincipal) => {
   requireSessionCredentialIssuer("inboundEmail", principal);
-  return randomBytes(TOKEN_BYTES).toString("hex");
+  return randomBytes(TOKEN_BYTES).toHex();
 };
 
 // Only a case-normalized envelope recipient routes mail; display names, suffix matches,

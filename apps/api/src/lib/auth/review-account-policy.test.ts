@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { createTestState } from "@stll/test-state";
+
 import { env } from "@/api/env";
 import { ACCOUNT_ACCESS } from "@/api/lib/api-handlers";
 import { checkRestrictedAccountOperation } from "@/api/lib/auth/review-account";
@@ -14,6 +16,8 @@ import {
   REVIEW_ACCOUNT_POLICY,
 } from "@/api/lib/auth/review-account-policy";
 import { MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const reviewEmail = "review@example.test";
 const organizationId = "org_review";
@@ -106,6 +110,7 @@ describe("restricted review account policy", () => {
 
 describe("restricted review account auth endpoints", () => {
   test.each([
+    ["/v1/organizations", "POST", REVIEW_ACCOUNT_OPERATION.createOrganization],
     [
       "/organization/create",
       "POST",
@@ -222,39 +227,27 @@ describe("restricted review account scopes", () => {
 
 describe("restricted account operations", () => {
   test("each declared account access refuses exactly its restricted accounts", () => {
-    const previous = {
-      demoEmail: env.DEMO_ACCOUNT_EMAIL,
-      reviewEmail: env.APP_REVIEW_ACCOUNT_EMAIL,
-      reviewOrganization: env.APP_REVIEW_ORGANIZATION_ID,
-    };
-    env.DEMO_ACCOUNT_EMAIL = "limited@example.test";
-    env.APP_REVIEW_ACCOUNT_EMAIL = reviewEmail;
-    env.APP_REVIEW_ORGANIZATION_ID = organizationId;
-    try {
-      const allowed = Object.fromEntries(
-        Object.values(ACCOUNT_ACCESS).map((accountAccess) => [
-          accountAccess,
-          ["limited@example.test", reviewEmail, "member@example.test"].filter(
-            (email) =>
-              Result.isOk(
-                checkRestrictedAccountOperation(email, accountAccess),
-              ),
-          ),
-        ]),
-      );
-      expect(allowed).toEqual({
-        [ACCOUNT_ACCESS.sandbox]: [
-          "limited@example.test",
-          reviewEmail,
-          "member@example.test",
-        ],
-        [ACCOUNT_ACCESS.standard]: [reviewEmail, "member@example.test"],
-        [ACCOUNT_ACCESS.accountControl]: ["member@example.test"],
-      });
-    } finally {
-      env.DEMO_ACCOUNT_EMAIL = previous.demoEmail;
-      env.APP_REVIEW_ACCOUNT_EMAIL = previous.reviewEmail;
-      env.APP_REVIEW_ORGANIZATION_ID = previous.reviewOrganization;
-    }
+    testState.setConfig("DEMO_ACCOUNT_EMAIL", "limited@example.test");
+    testState.setConfig("APP_REVIEW_ACCOUNT_EMAIL", reviewEmail);
+    testState.setConfig("APP_REVIEW_ORGANIZATION_ID", organizationId);
+
+    const allowed = Object.fromEntries(
+      Object.values(ACCOUNT_ACCESS).map((accountAccess) => [
+        accountAccess,
+        ["limited@example.test", reviewEmail, "member@example.test"].filter(
+          (email) =>
+            Result.isOk(checkRestrictedAccountOperation(email, accountAccess)),
+        ),
+      ]),
+    );
+    expect(allowed).toEqual({
+      [ACCOUNT_ACCESS.sandbox]: [
+        "limited@example.test",
+        reviewEmail,
+        "member@example.test",
+      ],
+      [ACCOUNT_ACCESS.standard]: [reviewEmail, "member@example.test"],
+      [ACCOUNT_ACCESS.accountControl]: ["member@example.test"],
+    });
   });
 });

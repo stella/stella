@@ -1,0 +1,5 @@
+{
+  "capture": "synthetic",
+  "note": "Synthetic values preserve the SOAP structure and value types observed in a public ADIS company response. No source values retained.",
+  "sha256": "f86c7d10571bdb335ea0582420a74ef95bfa517a29d896b8a89590e9e8d455fe"
+}

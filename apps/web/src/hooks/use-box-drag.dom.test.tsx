@@ -1,8 +1,9 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import type { BoxDragAdjustment } from "@/hooks/use-box-drag";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 
@@ -131,6 +132,61 @@ test("ignores secondary buttons and retains the adjustment mode chosen at drag s
   });
   fireEvent.pointerMove(button, { clientX: 20, clientY: 10, pointerId: 7 });
   expect(button.textContent).toBe("0.300,0.200");
+});
+
+const FromHarness = () => {
+  const [point, setPoint] = useState({ x: 0, y: 0 });
+  const { startDrag, ...handlers } = useBoxDrag({
+    adjust: ({
+      box: start,
+      delta,
+    }: BoxDragAdjustment<typeof point, "draw">) => ({
+      x: start.x + delta.x,
+      y: start.y + delta.y,
+    }),
+    box: point,
+    onChange: setPoint,
+  });
+  return (
+    <div data-testid="surface">
+      <button
+        {...handlers}
+        onPointerDown={(event) => {
+          const surface = event.currentTarget.parentElement;
+          if (surface) {
+            // Where the press landed, which no render has seen yet.
+            startDrag(event, {
+              from: { x: 0.5, y: 0.25 },
+              mode: "draw",
+              surface,
+            });
+          }
+        }}
+        type="button"
+      >
+        {`${point.x.toFixed(3)},${point.y.toFixed(3)}`}
+      </button>
+    </div>
+  );
+};
+
+test("a drag can start from a box the caller names instead of the rendered one", () => {
+  const view = render(<FromHarness />);
+  const button = view.getByRole("button");
+  Object.assign(button, { setPointerCapture: () => undefined });
+  Object.assign(view.getByTestId("surface"), {
+    getBoundingClientRect: () => new DOMRect(0, 0, 200, 100),
+  });
+
+  fireEvent.pointerDown(button, {
+    button: 0,
+    clientX: 0,
+    clientY: 0,
+    pointerId: 7,
+  });
+  fireEvent.pointerMove(button, { clientX: 20, clientY: 10, pointerId: 7 });
+
+  expect(button.textContent).toBe("0.600,0.350");
 });
 
 test("a collapsed surface produces no displacement", () => {

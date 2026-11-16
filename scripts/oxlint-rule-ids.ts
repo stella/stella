@@ -47,7 +47,7 @@ export const builtinRules = (): BuiltinRule[] => {
       "-f",
       "json",
     ],
-    { stdio: ["ignore", descriptor, "pipe"] },
+    { maxBuffer: 2 ** 30, stdio: ["ignore", descriptor, "pipe"] },
   );
   closeSync(descriptor);
   const text =

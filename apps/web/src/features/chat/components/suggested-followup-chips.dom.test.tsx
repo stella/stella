@@ -1,9 +1,10 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, mock, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import messages from "@/i18n/langs/en.json";
 import { noopAnalytics } from "@/lib/analytics/noop";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "https://app.example.test/chat" });
 const { cleanup, fireEvent, render, waitFor } =
@@ -73,7 +74,7 @@ test("reports each shown set once and the selected chip without prompt text", as
   expect(JSON.stringify(captured)).not.toContain("private prompt");
 });
 
-test("wraps follow-ups without horizontal overflow and preserves full labels", () => {
+test("keeps follow-ups on one scrolling row and preserves full labels", () => {
   const longLabel = "A follow-up prompt long enough to truncate";
   const view = render(
     <AnalyticsContext.Provider value={noopAnalytics}>
@@ -89,7 +90,14 @@ test("wraps follow-ups without horizontal overflow and preserves full labels", (
     </AnalyticsContext.Provider>,
   );
   const group = view.getByRole("group");
-  expect(group.className).toContain("flex-wrap");
-  expect(group.className).not.toContain("overflow-x");
-  expect(view.getByText(longLabel).title).toBe(longLabel);
+  expect(group.className).toContain("flex-nowrap");
+  expect(group.className).not.toContain("flex-wrap");
+  expect(group.closest(".overflow-x-auto")).not.toBeNull();
+  // The whole label stays in its chip and names it; a truncated label
+  // slides into view on hover or focus (suggested-actions.dom.test.tsx).
+  const label = view.getByText(longLabel);
+  expect(label.dataset["reveal"]).toBe("rest");
+  expect(view.getByRole("button", { name: longLabel }).contains(label)).toBe(
+    true,
+  );
 });

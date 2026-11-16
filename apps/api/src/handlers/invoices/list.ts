@@ -1,10 +1,22 @@
 import { Result } from "better-result";
-import { and, asc, eq } from "drizzle-orm";
-import { t } from "elysia";
+import { and, asc } from "drizzle-orm";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
+import { withBillingRead } from "@stll/permissions";
 
 import { invoices } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
-import { tPaginationCursor } from "@/api/lib/custom-schema";
+import {
+  invoicePaidAmountSql,
+  invoicePaymentAmounts,
+} from "@/api/lib/billing/invoice-payments";
+import {
+  invoiceMatterShare,
+  invoiceTouchesMatter,
+} from "@/api/lib/billing/invoice-scope";
+import { invoiceListMoneyResponse } from "@/api/lib/billing/response-schemas";
+import { paginationCursorSchema } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -12,16 +24,22 @@ import { createCursorPage } from "@/api/lib/pagination";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedInvoiceId } from "@/api/lib/safe-id-boundaries";
 
-const readInvoicesQuerySchema = t.Object({
-  limit: t.Optional(
-    t.Integer({
-      minimum: 1,
-      maximum: LIMITS.invoicesPageSizeMax,
-      description: "Max invoices to return",
-    }),
+const readInvoicesQuerySchema = v.object({
+  limit: v.optional(
+    v.pipe(
+      numberFromString(
+        v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(1),
+          v.maxValue(LIMITS.invoicesPageSizeMax),
+        ),
+      ),
+      v.description("Max invoices to return"),
+    ),
   ),
-  cursor: t.Optional(
-    tPaginationCursor({
+  cursor: v.optional(
+    paginationCursorSchema({
       description:
         "Opaque cursor from a previous list_invoices call to fetch the next page",
     }),
@@ -35,13 +53,14 @@ const invoiceCursor = createTimestampIdCursorCodec({
 
 const readInvoices = createSafeHandler(
   {
+    moneyResponse: invoiceListMoneyResponse,
     contract: "patch",
     description:
       "List a matter's invoices oldest first with cursor pagination, " +
       "returning each invoice's number (null before numbering), document type, original invoice id, reference, status, dates, currency, language, " +
-      "and total, but not its line items. Use invoices.get to read the " +
+      "total, and paid and outstanding amounts, but not its line items. Use invoices.get to read the " +
       "attached time entries and expenses.",
-    permissions: { workspace: ["read"] },
+    permissions: withBillingRead({ workspace: ["read"] }),
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },
     mcp: { type: "tool", name: "list_invoices" },
@@ -52,7 +71,7 @@ const readInvoices = createSafeHandler(
     const limit = normalizeTenantPageLimit(
       query.limit ?? LIMITS.invoicesPageSizeDefault,
     );
-    const conditions = [eq(invoices.workspaceId, workspaceId)];
+    const conditions = [invoiceTouchesMatter(invoices, workspaceId)];
 
     if (query.cursor) {
       const cursor = invoiceCursor.decode(query.cursor);
@@ -78,6 +97,8 @@ const readInvoices = createSafeHandler(
       safeDb((tx) =>
         tx
           .select({
+            clientId: invoices.clientId,
+            matterShare: invoiceMatterShare(invoices, workspaceId),
             id: invoices.id,
             invoiceNumber: invoices.invoiceNumber,
             documentType: invoices.documentType,
@@ -89,6 +110,7 @@ const readInvoices = createSafeHandler(
             currency: invoices.currency,
             language: invoices.language,
             totalAmount: invoices.totalAmount,
+            paidAmount: invoicePaidAmountSql(invoices),
             billingMode: invoices.billingMode,
             flatFeeAmount: invoices.flatFeeAmount,
             createdAt: invoices.createdAt,
@@ -112,6 +134,8 @@ const readInvoices = createSafeHandler(
     return Result.ok({
       ...page,
       items: page.items.map((row) => ({
+        clientId: row.clientId,
+        matterShare: row.matterShare,
         id: row.id,
         invoiceNumber: row.invoiceNumber,
         documentType: row.documentType,
@@ -123,6 +147,7 @@ const readInvoices = createSafeHandler(
         currency: row.currency,
         language: row.language,
         totalAmount: row.totalAmount,
+        ...invoicePaymentAmounts(row),
         billingMode: row.billingMode,
         flatFeeAmount: row.flatFeeAmount,
         createdAt: row.createdAt.toISOString(),

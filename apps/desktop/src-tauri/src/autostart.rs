@@ -3,13 +3,9 @@
 // than the plugin's template offers.
 
 use tauri::AppHandle;
-use tauri_plugin_autostart::ManagerExt;
 
 pub fn enable(app: &AppHandle) -> Result<(), String> {
-  app
-    .autolaunch()
-    .enable()
-    .map_err(|err| format!("autostart enable failed: {err}"))?;
+  crate::local_store::enable_autostart(app)?;
 
   #[cfg(target_os = "macos")]
   launch_agent::abandon_process_group(app)?;
@@ -44,8 +40,10 @@ mod launch_agent {
       plist::Value::Boolean(true),
     );
 
-    plist::to_file_xml(&path, &agent)
-      .map_err(|err| format!("launch agent {} not writable: {err}", path.display()))
+    let mut bytes = Vec::new();
+    plist::to_writer_xml(&mut bytes, &agent)
+      .map_err(|err| format!("launch agent serialization failed: {err}"))?;
+    crate::local_store::write_private_atomic(&path, &bytes)
   }
 
   // Mirrors the autostart plugin's launch agent location:

@@ -5,12 +5,14 @@ import { IntlProvider } from "use-intl";
 
 import { DocxEditor } from "@stll/folio-react";
 import { getFolioMessages } from "@stll/folio-react/messages";
+import { Button } from "@stll/ui/button";
 
 // A real Word .docx (Y Combinator's post-money SAFE, published free to use) so
 // the hero opens on a genuine, richly-formatted legal document rather than a
 // markdown approximation — folio loads it through its `documentBuffer` path,
 // preserving the original Word formatting. Served from public/samples.
 const SAMPLE_DOCX_URL = "/samples/safe.docx";
+const SAMPLE_DOCX_NAME = "safe.docx";
 
 // folio's own canonical English strings for the "folio" namespace its
 // toolbar/dialogs read via `useTranslations("folio")` (from
@@ -95,6 +97,7 @@ export const EditorLiveDemo = () => {
           <DocxEditor
             className="folio-docx-preview h-full"
             documentBuffer={sample.documentBuffer}
+            accessibleName={SAMPLE_DOCX_NAME}
             // Fit the page to the embed width so the SAFE never overflows and
             // clips on the right; folio re-fits as the hero frame resizes.
             initialZoom="fit-width"
@@ -148,17 +151,9 @@ const SamplePlaceholder = ({ onRetry, status }: SamplePlaceholderProps) => {
       style={{ color: "var(--muted-foreground)" }}
     >
       <p>The sample document could not be loaded.</p>
-      <button
-        type="button"
-        onClick={onRetry}
-        className="inline-flex min-h-11 items-center rounded-[0.625rem] px-4 font-medium"
-        style={{
-          border: "1px solid var(--border)",
-          color: "var(--foreground)",
-        }}
-      >
+      <Button onClick={onRetry} size="xl" variant="outline">
         Try again
-      </button>
+      </Button>
     </div>
   );
 };

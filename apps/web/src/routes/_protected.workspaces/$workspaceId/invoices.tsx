@@ -12,17 +12,28 @@ import {
 } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { BILLING_MATTER_READ_PERMISSION } from "@stll/permissions";
 import { Button } from "@stll/ui/button";
 import { PlusIcon } from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@stll/ui/table";
 import { cn } from "@stll/ui/utils";
 
 import { formatCurrencyAmount } from "@/components/billing/format-currency";
 import { usePermissions } from "@/hooks/use-permissions";
 import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
+import { ensureMemberPermission } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
 import { invoicesInfiniteOptions } from "@/lib/workspaces/queries/invoices";
 import { InvoiceExportMenu } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-export-menu";
+import { isPartiallyPaid } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-payments.logic";
 import { InvoiceStatusBadge } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-status-badge";
 
 export const Route = createFileRoute(
@@ -30,6 +41,10 @@ export const Route = createFileRoute(
 )({
   beforeLoad: async ({ context, params }) => {
     if (
+      !(await ensureMemberPermission({
+        queryClient: context.queryClient,
+        permissions: BILLING_MATTER_READ_PERMISSION,
+      })) ||
       !(await isTimeBillingRouteEnabled(context.queryClient, {
         userId: context.user.id,
         organizationId: context.user.activeOrganizationId,
@@ -103,10 +118,13 @@ type InvoiceColumn = {
   id: string;
   header: () => ReactNode;
   cell: (invoice: InvoiceListItem) => ReactNode;
-  // Header and data cell classes, kept on the column so alignment cannot drift
-  // between the live row and the skeleton row.
-  headClassName?: string;
-  cellClassName?: string;
+  // Alignment and cell presentation, kept on the column so they cannot drift
+  // between the header, the live row and the skeleton row.
+  align?: "start" | "end";
+  numeric?: boolean;
+  tone?: "muted";
+  // Free text that wraps onto more lines instead of widening the table.
+  wrap?: boolean;
   // Skeleton placeholder for this column. Defaults to a left-aligned bar.
   skeletonCell?: () => ReactNode;
 };
@@ -120,45 +138,56 @@ const useInvoiceColumns = (): InvoiceColumn[] => {
     {
       id: "invoiceNumber",
       header: () => t("billing.invoices.invoiceNumber"),
-      cell: (invoice) =>
-        invoice.invoiceNumber ?? t("billing.invoices.statuses.draft"),
-      cellClassName: "font-medium",
+      cell: (invoice) => (
+        <span className="font-medium">
+          {invoice.invoiceNumber ?? t("billing.invoices.statuses.draft")}
+        </span>
+      ),
       skeletonCell: () => <Skeleton className="h-4 w-24" />,
     },
     {
       id: "status",
       header: () => t("common.status"),
-      cell: (invoice) => <InvoiceStatusBadge status={invoice.status} />,
+      cell: (invoice) => (
+        <InvoiceStatusBadge
+          partiallyPaid={isPartiallyPaid(invoice)}
+          status={invoice.status}
+        />
+      ),
       skeletonCell: () => <Skeleton className="h-5 w-16 rounded-md" />,
     },
     {
       id: "invoiceDate",
       header: () => t("billing.invoices.invoiceDate"),
       cell: (invoice) => invoice.invoiceDate,
-      cellClassName: "tabular-nums",
+      align: "start",
+      numeric: true,
       skeletonCell: () => <Skeleton className="h-4 w-20" />,
     },
     {
       id: "dueDate",
       header: () => t("billing.invoices.dueDate"),
       cell: (invoice) => invoice.dueDate ?? "—",
-      cellClassName: "text-muted-foreground tabular-nums",
+      align: "start",
+      numeric: true,
+      tone: "muted",
       skeletonCell: () => <Skeleton className="h-4 w-20" />,
     },
     {
       id: "totalAmount",
       header: () => t("billing.invoices.totalAmount"),
       cell: (invoice) =>
-        formatCurrencyAmount(invoice.totalAmount, invoice.currency),
-      headClassName: "text-end",
-      cellClassName: "text-end tabular-nums",
+        formatCurrencyAmount(invoice.matterShare, invoice.currency),
+      align: "end",
+      numeric: true,
       skeletonCell: () => <Skeleton className="ms-auto h-4 w-20" />,
     },
     {
       id: "reference",
       header: () => t("common.reference"),
       cell: (invoice) => invoice.reference ?? "—",
-      cellClassName: "text-muted-foreground",
+      tone: "muted",
+      wrap: true,
       skeletonCell: () => <Skeleton className="h-4 w-16" />,
     },
   ];
@@ -179,22 +208,36 @@ type InvoicesTableShellProps = {
 // caller renders (real data or skeleton placeholders).
 const InvoicesTableShell = ({ columns, children }: InvoicesTableShellProps) => (
   <div className="overflow-auto rounded-lg border">
-    <table className="w-full text-sm">
-      <thead>
-        <tr className="bg-muted/50 text-muted-foreground border-b text-start">
+    <Table inset="card" scroll="parent">
+      <TableHeader surface="muted">
+        <TableRow>
           {columns.map((column) => (
-            <th
-              className={cn("px-4 py-2 font-medium", column.headClassName)}
-              key={column.id}
-            >
+            <TableHead align={column.align} key={column.id}>
               {column.header()}
-            </th>
+            </TableHead>
           ))}
-        </tr>
-      </thead>
-      <tbody>{children}</tbody>
-    </table>
+        </TableRow>
+      </TableHeader>
+      <TableBody>{children}</TableBody>
+    </Table>
   </div>
+);
+
+const InvoiceCell = ({
+  column,
+  children,
+}: {
+  column: InvoiceColumn;
+  children: ReactNode;
+}) => (
+  <TableCell
+    align={column.align}
+    className={cn(column.wrap && "whitespace-normal")}
+    numeric={column.numeric}
+    tone={column.tone}
+  >
+    {column.wrap ? <span className="leading-5">{children}</span> : children}
+  </TableCell>
 );
 
 // Placeholder rows generated from the same column model as the live table, so
@@ -207,20 +250,17 @@ const InvoicesTableSkeleton = () => {
     <div className="flex flex-col gap-3">
       <InvoicesTableShell columns={columns}>
         {SKELETON_ROW_KEYS.slice(0, SKELETON_ROW_COUNT).map((rowKey) => (
-          <tr className="border-b last:border-0" key={rowKey}>
+          <TableRow key={rowKey}>
             {columns.map((column) => (
-              <td
-                className={cn("px-4 py-2.5", column.cellClassName)}
-                key={column.id}
-              >
+              <InvoiceCell column={column} key={column.id}>
                 {column.skeletonCell ? (
                   column.skeletonCell()
                 ) : (
                   <Skeleton className="h-4 w-3/5" />
                 )}
-              </td>
+              </InvoiceCell>
             ))}
-          </tr>
+          </TableRow>
         ))}
       </InvoicesTableShell>
     </div>
@@ -247,8 +287,8 @@ const InvoicesList = ({ workspaceId }: { workspaceId: string }) => {
     <div className="flex flex-col gap-3">
       <InvoicesTableShell columns={columns}>
         {invoices.map((invoice) => (
-          <tr
-            className="hover:bg-muted/30 cursor-pointer border-b last:border-0"
+          <TableRow
+            className="cursor-pointer"
             key={invoice.id}
             onClick={() => {
               detached(
@@ -264,14 +304,11 @@ const InvoicesList = ({ workspaceId }: { workspaceId: string }) => {
             }}
           >
             {columns.map((column) => (
-              <td
-                className={cn("px-4 py-2.5", column.cellClassName)}
-                key={column.id}
-              >
+              <InvoiceCell column={column} key={column.id}>
                 {column.cell(invoice)}
-              </td>
+              </InvoiceCell>
             ))}
-          </tr>
+          </TableRow>
         ))}
       </InvoicesTableShell>
       {hasNextPage && (

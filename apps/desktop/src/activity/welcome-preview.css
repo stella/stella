@@ -10,7 +10,7 @@
   [data-activity-preview-duration-after] {
     animation: activity-preview-duration-in 200ms ease-out 1.8s both;
   }
-  [data-activity-preview] [data-activity-segment] {
+  [data-activity-preview] [data-slot="day-calendar-block"] {
     animation: activity-preview-appear 200ms ease-out both;
   }
   [data-activity-preview-totals] li {

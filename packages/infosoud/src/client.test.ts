@@ -54,9 +54,15 @@ const getRequestPath = (input: URL | Request | string): string => {
  */
 const patchSignalListenerCounts = (
   signal: AbortSignal,
-): { addCount: () => number; removeCount: () => number } => {
+): {
+  addCount: () => number;
+  removeCount: () => number;
+  /** Resolves once the first listener is registered. */
+  listening: Promise<undefined>;
+} => {
   let adds = 0;
   let removes = 0;
+  const listening = Promise.withResolvers<undefined>();
   // Bind off EventTarget.prototype (what AbortSignal's listener methods
   // actually resolve to at runtime), not off `signal.addEventListener`
   // directly: AbortSignal narrows addEventListener/removeEventListener to an
@@ -76,6 +82,7 @@ const patchSignalListenerCounts = (
   ): void => {
     adds += 1;
     originalAdd(type, listener, options);
+    listening.resolve(undefined);
   };
   signal.removeEventListener = (
     type: string,
@@ -86,32 +93,11 @@ const patchSignalListenerCounts = (
     originalRemove(type, listener, options);
   };
 
-  return { addCount: () => adds, removeCount: () => removes };
-};
-
-type WaitForConditionProps = {
-  condition: () => boolean;
-  timeoutMs?: number;
-};
-
-// Poll a condition that is GUARANTEED to become true under correct behaviour
-// (e.g. "the queued caller has registered its abort listener"). The timeout
-// is a bug guard, not an observation window: it only fires when the property
-// under test is actually broken, so it is set generously rather than tuned to
-// expected wall-clock progress.
-const waitForCondition = async ({
-  condition,
-  timeoutMs = 5000,
-}: WaitForConditionProps): Promise<void> => {
-  const deadline = Date.now() + timeoutMs;
-  while (!condition()) {
-    if (Date.now() > deadline) {
-      throw new Error("Condition was not met before timeout.");
-    }
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, 1);
-    });
-  }
+  return {
+    addCount: () => adds,
+    removeCount: () => removes,
+    listening: listening.promise,
+  };
 };
 
 const createCaseSearchResponse = (overrides: Record<string, unknown> = {}) => ({
@@ -733,7 +719,7 @@ describe("InfoSoudClient", () => {
     });
 
     const abortController = new AbortController();
-    const { addCount } = patchSignalListenerCounts(abortController.signal);
+    const { listening } = patchSignalListenerCounts(abortController.signal);
 
     // First call runs immediately; the second and third queue behind it. The
     // second is aborted while queued, so it must reject without fetching and
@@ -759,7 +745,7 @@ describe("InfoSoudClient", () => {
     // second call's task, which short-circuits on the pre-task
     // signal.throwIfAborted() check and never exercises a genuine mid-wait
     // cancellation.
-    await waitForCondition({ condition: () => addCount() > 0 });
+    await listening;
     abortController.abort();
 
     let abortError: unknown;

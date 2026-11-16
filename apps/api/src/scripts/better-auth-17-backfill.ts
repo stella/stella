@@ -30,7 +30,7 @@ import {
   type BetterAuthAuditCommandError,
   readBetterAuthAuditBaseline,
   readBetterAuthTrustedIdentityMap,
-} from "@/api/scripts/better-auth-migration-audit";
+} from "@/api/scripts/better-auth-migration-audit-command";
 import {
   BETTER_AUTH_AUDIT_MODES,
   BetterAuthAuditError,

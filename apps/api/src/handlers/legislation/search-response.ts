@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import type { Static } from "elysia";
+import type * as v from "valibot";
 
 import {
   LEGISLATION_SEARCH_MATCH_TYPES,
@@ -18,7 +18,7 @@ import {
 
 // The response projection owns display truncation; corpus storage retains the
 // official text. Applying it after retrieval keeps both backends identical.
-type LegislationSearchHit = Static<
+type LegislationSearchHit = v.InferOutput<
   typeof searchLegislationSuccessResponseSchema
 >["items"][number];
 type TextField = {

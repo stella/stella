@@ -4,6 +4,12 @@ import { containedEventHandler } from "../hooks/use-contained-handler";
 import { cn } from "../lib/utils";
 import { KANBAN_CARD_STICKY_TOP_CLASS } from "./sticky-lane";
 
+export type KanbanCardSelectionModifiers = {
+  /** Cmd on macOS, Ctrl elsewhere. */
+  meta: boolean;
+  shift: boolean;
+};
+
 export type KanbanCardShellProps = {
   children: ReactNode;
   /** Proposed work stays visually distinct until a person accepts it. */
@@ -48,6 +54,15 @@ export type KanbanCardShellProps = {
   stickyHeader?: Exclude<ReactNode, boolean>;
   /** Marks the card whose detail is currently open. */
   active?: boolean | undefined;
+  /** Marks the card as part of the board's multi-selection. */
+  selected?: boolean | undefined;
+  /**
+   * A Cmd/Ctrl- or Shift-click on a card that opens something: changes the
+   * board's selection instead of opening the card. Omit on a board without
+   * selection, and every click opens.
+   */
+  onSelectionClick?:
+    ((modifiers: KanbanCardSelectionModifiers) => void) | undefined;
   /**
    * Opens the card. Omit for a card with nothing to open: the shell then
    * renders a plain region instead of a button, so a card that does nothing
@@ -80,7 +95,9 @@ export const KanbanCardShell = ({
   actionsVisibility = "always",
   stickyHeader,
   active,
+  selected,
   onOpen,
+  onSelectionClick,
   bodyRef,
   dragRef,
   className,
@@ -113,13 +130,15 @@ export const KanbanCardShell = ({
         // Published on the group so the hover overlay can answer it: a finger
         // never hovers, and an open card is how it reaches the same actions.
         data-active={active ? "true" : undefined}
+        data-kanban-card=""
+        data-selected={selected ? "true" : undefined}
         ref={dragRef}
       >
         <div
           className={cn(
             CARD_CLASS,
             appearance === "proposal" && "border-dashed",
-            active && ACTIVE_CLASS,
+            cardRingClass({ active, selected }),
             className,
           )}
           ref={bodyRef}
@@ -136,6 +155,8 @@ export const KanbanCardShell = ({
       // Published on the group so the hover overlay can answer it: a finger
       // never hovers, and an open card is how it reaches the same actions.
       data-active={active ? "true" : undefined}
+      data-kanban-card=""
+      data-selected={selected ? "true" : undefined}
       ref={dragRef}
     >
       <div
@@ -143,10 +164,27 @@ export const KanbanCardShell = ({
           CARD_CLASS,
           appearance === "proposal" && "border-dashed",
           "cursor-pointer hover:shadow-md",
-          active && ACTIVE_CLASS,
+          cardRingClass({ active, selected }),
           className,
         )}
-        onClick={containedEventHandler(onOpen)}
+        onClick={containedEventHandler((event) => {
+          const modifiers = {
+            meta: event.metaKey || event.ctrlKey,
+            shift: event.shiftKey,
+          };
+          if (onSelectionClick && (modifiers.meta || modifiers.shift)) {
+            onSelectionClick(modifiers);
+            return;
+          }
+          onOpen();
+        })}
+        onMouseDown={containedEventHandler((event) => {
+          // Shift-click would otherwise extend the page's text selection
+          // across every card between the two clicks.
+          if (onSelectionClick && event.shiftKey) {
+            event.preventDefault();
+          }
+        })}
         onKeyDown={(event) => {
           if (event.key !== "Enter" && event.key !== " ") {
             return;
@@ -170,6 +208,21 @@ const CARD_CLASS =
   "bg-card relative block w-full rounded-lg border p-3 text-start shadow-xs";
 
 const ACTIVE_CLASS = "ring-primary/30 ring-2";
+
+const SELECTED_CLASS = "ring-primary ring-2";
+
+type CardRingState = {
+  active: boolean | undefined;
+  selected: boolean | undefined;
+};
+
+/** Selection outranks the open card: both draw a ring, and only one fits. */
+const cardRingClass = ({ active, selected }: CardRingState) => {
+  if (selected) {
+    return SELECTED_CLASS;
+  }
+  return active ? ACTIVE_CLASS : undefined;
+};
 
 /**
  * The card's own surface repeated on the pinned row, so the rest of the card

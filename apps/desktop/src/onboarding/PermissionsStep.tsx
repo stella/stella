@@ -16,8 +16,11 @@ export const PermissionsStep = ({
   snapshot,
 }: StepProps) => {
   const t = useTranslations("onboarding");
+  // Activity and Dictation ask for their own beside what they enable.
   const rows = PERMISSIONS.filter(
-    (permission) => !snapshot.activityPermissions.includes(permission),
+    (permission) =>
+      !snapshot.activityPermissions.includes(permission) &&
+      !snapshot.dictationPermissions.includes(permission),
   );
   return (
     <>

@@ -1,4 +1,6 @@
 import { useCallback, useRef, useState, useSyncExternalStore } from "react";
+
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 /**
  * VersionsFacet — version history rendered inside the inspector
  * tab. Switching versions swaps the file shown in the SAME
@@ -9,15 +11,14 @@ import { useCallback, useRef, useState, useSyncExternalStore } from "react";
  * the selection). Document comparison opens as a subview here so
  * version operations stay owned by one inspector facet.
  */
-
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate, useRouterState } from "@tanstack/react-router";
+import { useNavigate, useRouter } from "@tanstack/react-router";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ArrowLeftIcon } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { CompareVersionsPanel } from "@/components/inspector/compare-versions-panel";
@@ -31,12 +32,17 @@ import { DOCX_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { fileContentQueryKey } from "@/lib/files/file-metadata-query.logic";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { filesQueryRoot } from "@/lib/files/file-metadata-query.logic";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import {
   entityVersionsOptions,
   fetchOlderVersions,
 } from "@/lib/workspaces/queries/entity-versions";
+import {
+  getCurrentWorkspaceDocument,
+  useWorkspaceViewParams,
+} from "@/lib/workspaces/use-workspace-view-params";
 
 type VersionsFacetProps = {
   workspaceId: string;
@@ -53,9 +59,8 @@ export const VersionsFacet = ({
 }: VersionsFacetProps) => {
   const t = useTranslations();
   const navigate = useNavigate();
-  const pathname = useRouterState({
-    select: (state) => state.location.pathname,
-  });
+  const router = useRouter();
+  const viewParams = useWorkspaceViewParams(workspaceId);
   const openFileForEntity = useInspectorTabsStore((s) => s.openFileForEntity);
   const dataQuery = useQuery(
     entityVersionsOptions({
@@ -64,8 +69,8 @@ export const VersionsFacet = ({
       filePropertyId: currentFilePropertyId,
     }),
   );
-  const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  const dataView = queryView(dataQuery);
+  useQueryViewError(dataView, "VersionsFacet:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
 
   // Accumulated list seeded from the query's newest page and extended
@@ -148,7 +153,10 @@ export const VersionsFacet = ({
       // it for telemetry and surface a toast. Keep the cursor but flag
       // the error so auto-loading pauses (the manual button retries)
       // instead of looping the request.
-      getAnalytics().captureError(result.error);
+      getAnalytics().captureError(result.error, {
+        fingerprintKey: "VersionsFacet:failure",
+        scope: { type: "handler", handlerId: "VersionsFacet:failure" },
+      });
       setLoadOlderError(true);
       notifyUserError(result.error, t("common.somethingWentWrong"));
       return;
@@ -213,27 +221,14 @@ export const VersionsFacet = ({
     // intentionally do NOT navigate — the user picked a
     // version from sidepeek and expects to stay where they
     // are.
-    // Detect "we're on the document route" by structure, not
-    // by entityId-as-segment: the path is
-    // `/workspaces/{workspaceId}/{viewId}/document` where
-    // viewId is the view selector (typically "all"), not the
-    // entity id. The previous literal `${entityId}` check
-    // never matched in normal navigation, so version switches
-    // skipped the URL sync.
-    const onDocumentRoute = new RegExp(
-      `^/workspaces/${workspaceId}/[^/]+/document(?:/|$|\\?)`,
-      "u",
-    ).test(pathname);
+    const onDocumentRoute =
+      getCurrentWorkspaceDocument(router.state.matches)?.workspaceId ===
+      workspaceId;
     if (onDocumentRoute) {
-      // Pull the current viewId out of the path (typically
-      // "all") instead of swapping it for entityId — the
-      // route lives under whichever view the user opened it
-      // from, the entity is identified by the search param.
-      const segments = pathname.split("/");
-      const currentViewId = segments[3] ?? "all";
+      // The route stays under whichever view the user opened it from.
       await navigate({
         to: "/workspaces/$workspaceId/$viewId/document",
-        params: { workspaceId, viewId: currentViewId },
+        params: viewParams,
         replace: true,
         search: (prev) => ({
           ...prev,
@@ -264,7 +259,7 @@ export const VersionsFacet = ({
             variant="ghost"
           >
             <DirectionalIcon className="size-4" icon={ArrowLeftIcon} />
-            <span className="truncate">{t("fileDetail.versionHistory")}</span>
+            <TruncatedText>{t("fileDetail.versionHistory")}</TruncatedText>
           </Button>
         </div>
         <CompareVersionsPanel
@@ -293,6 +288,7 @@ export const VersionsFacet = ({
         loadOlderError={loadOlderError}
         versions={accumulated}
         workspaceId={workspaceId}
+        compareNeedsDocx={!canCompare && accumulated.length >= 2}
         onCompareVersions={canCompare ? () => setView("compare") : undefined}
         onLoadOlder={loadOlder}
         onSwitchVersion={handleSwitchVersion}
@@ -321,10 +317,17 @@ export const useSelectedFileVersionMissing = ({
       return false;
     }
 
-    const error = queryClient.getQueryState(
-      fileContentQueryKey({ workspaceId, fieldId }),
-    )?.error;
-    return APIError.is(error) && error.status === 404;
+    // Each viewer reads the file under a key of its own (display, text, email).
+    return queryClient
+      .getQueryCache()
+      .findAll({ queryKey: filesQueryRoot() })
+      .some(
+        ({ queryKey, state: { error } }) =>
+          queryKey.includes(workspaceId) &&
+          queryKey.includes(fieldId) &&
+          APIError.is(error) &&
+          error.status === 404,
+      );
   }, [enabled, fieldId, queryClient, workspaceId]);
   const isMissing = useSyncExternalStore(subscribe, getSnapshot, () => false);
 

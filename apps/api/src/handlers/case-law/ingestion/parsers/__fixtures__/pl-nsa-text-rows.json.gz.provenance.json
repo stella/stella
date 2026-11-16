@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "19c956ed0b2af5b1d59722031439be39defdac1b62c5e604dfcd7bb0e4157861",
+  "sourceUrl": "https://huggingface.co/datasets/JuDDGES/pl-nsa/tree/595f2301210eb513c392b437153aa2c5f6683240/data",
+  "capturedAt": "2026-10-25T20:10:00.000Z",
+  "note": "8 whole rows of revision 595f2301210eb513c392b437153aa2c5f6683240, read with hyparquet from shards 3, 4, 34, 39, 40, 41 and 44; each keeps its shard and row, timestamps as ISO instants. Rows chosen for line breaks inside sentences, page numbers after the closing rule, a page footer inside a sentence, and article numbers with superscripts in spaced, primed, proper and merged forms."
+}

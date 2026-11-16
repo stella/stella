@@ -97,8 +97,11 @@ test("web sources generate once across compiler tasks and restore until source i
     expect(task["dependsOn"]).toContain("generate:api-types");
     expect(task["dependsOn"]).toContain("generate:route-tree");
     consumerTasks[`@stll/web#${consumer}`] = {
+      // The fixture holds only the generation tasks; the message catalog and
+      // the Tailwind cache are not part of what it checks.
       dependsOn: task["dependsOn"].filter(
-        (dependency) => dependency !== "generate:messages",
+        (dependency) =>
+          dependency !== "generate:messages" && dependency !== "tailwind-cache",
       ),
     };
   }

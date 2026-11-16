@@ -4,12 +4,13 @@ import { DECISION_JUDGE_ROLES } from "@stll/api-contract/case-law-judges";
 
 import {
   DECISION_JUDGE_ROLE_LABELS,
-  decisionJudgeKey,
+  decisionBenchSeats,
   dissentingJudges,
   orderDecisionJudges,
   portraitAttributions,
 } from "@/features/case-law/decision-judges";
 import type { DecisionJudge } from "@/features/case-law/decision-judges";
+import { toSafeId } from "@/lib/safe-id";
 
 const judge = (overrides: Partial<DecisionJudge>): DecisionJudge => ({
   judgeId: null,
@@ -65,13 +66,49 @@ describe("the bench of a decision", () => {
     );
   });
 
-  test("separates two judges of the same decision the roster does not know", () => {
-    const unmatched = [
+  test("draws a judge the roster knows once, captioned with each part they played", () => {
+    const svaton = toSafeId<"caseLawJudge">(
+      "00000000-0000-4000-8000-000000000001",
+    );
+    const seats = decisionBenchSeats([
+      judge({ name: "Hulmák Milan", role: "panel-member" }),
+      judge({
+        judgeId: svaton,
+        name: "Jan Svatoň",
+        portrait: portrait("Ústavní soud"),
+        role: "presiding",
+      }),
+      judge({ judgeId: svaton, name: "Jan Svatoň", role: "rapporteur" }),
+    ]);
+
+    expect(seats).toEqual([
+      {
+        key: `judge:${svaton}`,
+        name: "Jan Svatoň",
+        portrait: portrait("Ústavní soud"),
+        roles: ["rapporteur", "presiding"],
+      },
+      {
+        key: "name:Hulmák Milan",
+        name: "Hulmák Milan",
+        portrait: null,
+        roles: ["panel-member"],
+      },
+    ]);
+  });
+
+  test("a name the roster does not know is one person within a decision, and two names are two", () => {
+    const seats = decisionBenchSeats([
       judge({ name: "Nováková Jana", role: "rapporteur" }),
       judge({ name: "Nováková Jana", role: "dissenting" }),
-    ];
+      judge({ name: "Dvořák Petr", role: "dissenting" }),
+    ]);
 
-    expect(new Set(unmatched.map(decisionJudgeKey)).size).toBe(2);
+    expect(seats.map(({ name, roles }) => ({ name, roles }))).toEqual([
+      { name: "Nováková Jana", roles: ["rapporteur", "dissenting"] },
+      { name: "Dvořák Petr", roles: ["dissenting"] },
+    ]);
+    expect(new Set(seats.map(({ key }) => key)).size).toBe(seats.length);
   });
 
   test("the byline names only who wrote separately", () => {

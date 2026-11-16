@@ -22,6 +22,12 @@ const SELLER: InvoiceExportSeller = {
   homeCurrency: "CZK",
 };
 
+const DEFAULT_MATTER = {
+  id: "0192d6a4-7c1e-7b55-9a3e-2f1b6c8d4e99",
+  name: "Převod obchodního podílu",
+  reference: "2026-0042",
+};
+
 type LineSeed = Partial<InvoiceExportLine> &
   Pick<InvoiceExportLine, "description" | "netAmountMinor">;
 
@@ -33,11 +39,13 @@ const line = (seed: LineSeed, position: number): InvoiceExportLine => {
   );
   return {
     position,
+    matter: DEFAULT_MATTER,
     quantity: "1.0000",
     unit: null,
     unitPriceMinor: seed.netAmountMinor,
     vatRateBps,
     vatTreatment: "domestic_vat",
+    exemptionReason: null,
     source: "manual",
     date: null,
     timekeeper: null,
@@ -74,6 +82,7 @@ export const exportRecord = (seed: RecordSeed): InvoiceExportRecord => {
     id: "0192d6a4-7c1e-7b55-9a3e-2f1b6c8d4e01",
     documentType,
     originalNumber: null,
+    originalIssueDate: null,
     status: "finalized",
     issueDate: "2026-09-30",
     taxableSupplyDate: "2026-09-30",
@@ -82,11 +91,7 @@ export const exportRecord = (seed: RecordSeed): InvoiceExportRecord => {
     currency: "CZK",
     reference: null,
     notes: null,
-    matter: {
-      id: "0192d6a4-7c1e-7b55-9a3e-2f1b6c8d4e99",
-      name: "Převod obchodního podílu",
-      reference: "2026-0042",
-    },
+    scope: { type: "matter", matter: DEFAULT_MATTER },
     seller: SELLER,
     buyer: {
       name: "Zelená louka a.s.",
@@ -136,6 +141,7 @@ export const CREDIT_NOTE = exportRecord({
   number: "20260017",
   documentType: "credit_note",
   originalNumber: "20260016",
+  originalIssueDate: "2026-09-30",
   dueDate: null,
   lines: [
     {

@@ -10,13 +10,21 @@ import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
 
-import { queryHighlightTokens, wordPrefixMatchEnd } from "./query-marks";
+import { textAnchorSegmentOwnsRange } from "./document-ast-text";
+import {
+  queryFindPhrase,
+  queryFindTokens,
+  queryMarkRanges,
+  wordPrefixMatchEnd,
+  wordSpans,
+} from "./query-marks";
 import { createReaderSearchIndex, searchReaderIndex } from "./reader-search";
 import type { ReaderSearchMatchRange, SearchResults } from "./reader-search";
 
 /**
- * Letters the reader folds (case, diacritics, Greek final sigma, Arabic
- * variants and digits, an astral letter, a decomposed mark), next to the
+ * Letters the reader folds (case, diacritics, letters that fold to two,
+ * ligatures, Greek final sigma, Arabic variants and digits, an astral letter,
+ * a decomposed mark, a character that folds around a separator), next to the
  * separators it splits on.
  */
 const CHARACTERS = [
@@ -32,6 +40,11 @@ const CHARACTERS = [
   "Č",
   "é",
   "ß",
+  "ẞ",
+  "ﬁ",
+  "Æ",
+  "ł",
+  "½",
   "İ",
   "Σ",
   "σ",
@@ -64,6 +77,10 @@ const WORDS = [
   "Ábčd",
   "e\u0301abc",
   "\u{10348}abc",
+  "Straße",
+  "STRASSE",
+  "ﬁnále",
+  "Łódź",
   "ΣΟΦΟΣ",
   "σοφος",
   "أحمد",
@@ -99,7 +116,7 @@ const queryArb = fc.oneof(
   fc
     .array(
       fc
-        .tuple(fc.constantFrom(...WORDS), fc.integer({ min: 2, max: 12 }))
+        .tuple(fc.constantFrom(...WORDS), fc.integer({ min: 1, max: 12 }))
         .map(([word, length]) => word.slice(0, length)),
       { minLength: 1, maxLength: 3 },
     )
@@ -107,22 +124,76 @@ const queryArb = fc.oneof(
   textArb,
 );
 
-/** The scan the index replaced, over the index's own folded text. */
+/**
+ * The typed phrase found by sliding it over each piece's folded words: every
+ * word but the last equal to the typed one, the last a prefix, and a run that
+ * starts inside the run before it left to that one.
+ */
+const phraseScanResults = (
+  index: ReturnType<typeof createReaderSearchIndex>,
+  query: string,
+): SearchResults => {
+  const phrase = queryFindPhrase(query);
+  const rangesByPieceId: Record<string, ReaderSearchMatchRange[]> = {};
+  let matchCount = 0;
+  if (phrase.length < 2 || queryFindTokens(query).length === 0) {
+    return { matchCount, rangesByPieceId };
+  }
+  for (const piece of index.pieces) {
+    const { endMap, startMap, text } = piece.folded;
+    const words = wordSpans(text);
+    let position = 0;
+    while (position + phrase.length <= words.length) {
+      const window = words.slice(position, position + phrase.length);
+      const matches = window.every(({ end, start }, offset) => {
+        const word = text.slice(start, end);
+        const typed = phrase[offset] ?? "";
+        return offset === phrase.length - 1
+          ? word.startsWith(typed)
+          : word === typed;
+      });
+      const first = window.at(0);
+      const last = window.at(-1);
+      if (!matches || first === undefined || last === undefined) {
+        position += 1;
+        continue;
+      }
+      const start = startMap[first.start];
+      const end = endMap[last.end - 1];
+      if (start !== undefined && end !== undefined) {
+        const ranges = rangesByPieceId[piece.id] ?? [];
+        ranges.push({ end, matchIndex: matchCount, start, type: "search" });
+        rangesByPieceId[piece.id] = ranges;
+        matchCount += 1;
+      }
+      position += phrase.length;
+    }
+  }
+  return { matchCount, rangesByPieceId };
+};
+
+/** The phrase where the text uses it, else the word scan. */
 const scanResults = (
   index: ReturnType<typeof createReaderSearchIndex>,
   query: string,
 ): SearchResults => {
-  const [foldedQuery] = createReaderSearchIndex([
-    { id: "q", text: query },
-  ]).pieces;
-  const tokens = queryHighlightTokens(foldedQuery?.normalized.text ?? "");
+  const phrase = phraseScanResults(index, query);
+  return phrase.matchCount > 0 ? phrase : wordScanResults(index, query);
+};
+
+/** The word scan the index replaced, over the index's own folded text. */
+const wordScanResults = (
+  index: ReturnType<typeof createReaderSearchIndex>,
+  query: string,
+): SearchResults => {
+  const tokens = queryFindTokens(query);
   const rangesByPieceId: Record<string, ReaderSearchMatchRange[]> = {};
   let matchCount = 0;
   if (tokens.length === 0) {
     return { matchCount, rangesByPieceId };
   }
   for (const piece of index.pieces) {
-    const { endMap, startMap, text } = piece.normalized;
+    const { endMap, startMap, text } = piece.folded;
     let position = 0;
     while (position < text.length) {
       const end = wordPrefixMatchEnd(text, position, tokens);
@@ -150,6 +221,36 @@ const scanResults = (
 };
 
 describe("indexed reader search", () => {
+  test("random citation run splits preserve its text and choose one badge owner", () => {
+    const citation = "sp.\u00a0zn. II. ÚS 1852/22";
+    assertProperty(
+      "random citation run splits preserve its text and choose one badge owner",
+      fc.property(
+        fc.uniqueArray(fc.integer({ min: 1, max: citation.length - 1 }), {
+          maxLength: citation.length - 1,
+        }),
+        (generatedCuts) => {
+          const cuts = [
+            0,
+            ...generatedCuts.toSorted((a, b) => a - b),
+            citation.length,
+          ];
+          const runs = cuts.slice(0, -1).map((start, index) => ({
+            start,
+            text: citation.slice(start, cuts[index + 1]),
+          }));
+
+          expect(runs.map(({ text }) => text).join("")).toBe(citation);
+          expect(
+            runs.filter(({ start }) =>
+              textAnchorSegmentOwnsRange({ start: 0 }, start),
+            ),
+          ).toHaveLength(1);
+        },
+      ),
+    );
+  });
+
   test("indexed search marks exactly what a scan of the folded text marks", () => {
     assertProperty(
       "indexed search marks exactly what a scan of the folded text marks",
@@ -158,6 +259,34 @@ describe("indexed reader search", () => {
         expect(searchReaderIndex(index, query)).toEqual(
           scanResults(index, query),
         );
+      }),
+    );
+  });
+
+  /**
+   * The results table marks a headnote with `queryMarkRanges`; the reader
+   * marks the decision with its index. Same text, same query, same runs.
+   */
+  test("the reader's find marks exactly what a headnote mark marks", () => {
+    assertProperty(
+      "the reader's find marks exactly what a headnote mark marks",
+      fc.property(piecesArb, queryArb, (pieces, query) => {
+        const index = createReaderSearchIndex(pieces);
+        // A headnote marks words; the reader's find marks a phrase the text
+        // uses, which the property above pins.
+        if (phraseScanResults(index, query).matchCount > 0) {
+          return;
+        }
+        const { rangesByPieceId } = searchReaderIndex(index, query);
+        const tokens = queryFindTokens(query);
+        for (const piece of pieces) {
+          expect(
+            (rangesByPieceId[piece.id] ?? []).map(({ end, start }) => ({
+              end,
+              start,
+            })),
+          ).toEqual(queryMarkRanges(piece.text, tokens));
+        }
       }),
     );
   });
@@ -171,5 +300,8 @@ describe("indexed reader search", () => {
     const scanned = scanResults(index, "abc");
     expect(scanned.matchCount).toBeGreaterThan(1);
     expect(searchReaderIndex(index, "abc")).toEqual(scanned);
+    const phrase = phraseScanResults(index, "abc abc");
+    expect(phrase.matchCount).toBeGreaterThan(0);
+    expect(searchReaderIndex(index, "abc abc")).toEqual(phrase);
   });
 });

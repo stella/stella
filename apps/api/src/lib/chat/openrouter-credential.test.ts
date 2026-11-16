@@ -1,7 +1,8 @@
 import { STSClient } from "@aws-sdk/client-sts";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import * as v from "valibot";
+
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import {
@@ -13,7 +14,10 @@ import {
   resetMetricLineSinkForTesting,
   setMetricLineSinkForTesting,
 } from "@/api/lib/observability/request-metrics";
+import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const POLICY_ID = "fixture-policy";
 const AUDIENCE = "https://openrouter.ai";
@@ -112,7 +116,9 @@ const createHarness = ({
   exchangeReplies = [],
   exchangeFetcher,
   random = () => 0,
-  timeoutMs = 100,
+  // The deadline runs on a real timer while the fixture clock is fake, so the
+  // default leaves room for a loaded machine; timeout tests pass their own.
+  timeoutMs = 30_000,
 }: {
   configuration?: ProviderOptions["configuration"];
   clock?: ReturnType<typeof createClock>;
@@ -213,7 +219,7 @@ const createHarness = ({
       clock.advance(delayMs);
     },
     random,
-    timeoutMs, // timeout: fixture default, elapsed only on the fake clock
+    timeoutMs, // timeout: fixture default (real timer), shortened only by timeout tests
   });
   return {
     provider,
@@ -233,53 +239,99 @@ const createHarness = ({
   };
 };
 
-const originalWifEnvironment = () => ({
-  OPENROUTER_API_KEY: env.OPENROUTER_API_KEY,
-  OPENROUTER_WIF_POLICY_ID: env.OPENROUTER_WIF_POLICY_ID,
-  OPENROUTER_WIF_AUDIENCE: env.OPENROUTER_WIF_AUDIENCE,
-  OPENROUTER_WIF_STS_REGION: env.OPENROUTER_WIF_STS_REGION,
-});
-
-const restoreWifEnvironment = (
-  previous: ReturnType<typeof originalWifEnvironment>,
-) => {
-  env.OPENROUTER_API_KEY = previous.OPENROUTER_API_KEY;
-  env.OPENROUTER_WIF_POLICY_ID = previous.OPENROUTER_WIF_POLICY_ID;
-  env.OPENROUTER_WIF_AUDIENCE = previous.OPENROUTER_WIF_AUDIENCE;
-  env.OPENROUTER_WIF_STS_REGION = previous.OPENROUTER_WIF_STS_REGION;
-};
-
 describe("managed OpenRouter credentials", () => {
   test("static credentials win over WIF and unavailable configuration refuses", async () => {
-    const previous = originalWifEnvironment();
-    env.OPENROUTER_API_KEY = "fixture-static-key";
-    env.OPENROUTER_WIF_POLICY_ID = POLICY_ID;
-    env.OPENROUTER_WIF_AUDIENCE = AUDIENCE;
-    env.OPENROUTER_WIF_STS_REGION = REGION;
-    try {
-      const harness = createHarness({
-        configuration: getManagedOpenRouterConfiguration,
-      });
-      const staticResult = await harness.provider.get();
-      expect(staticResult).toEqual(Result.ok("fixture-static-key"));
-      expect(harness.stsClients).toBe(0);
-      expect(harness.exchangeCalls).toBe(0);
+    testState.setConfig("OPENROUTER_API_KEY", "fixture-static-key");
+    testState.setConfig("OPENROUTER_WIF_POLICY_ID", POLICY_ID);
+    testState.setConfig("OPENROUTER_WIF_AUDIENCE", AUDIENCE);
+    testState.setConfig("OPENROUTER_WIF_STS_REGION", REGION);
 
-      env.OPENROUTER_API_KEY = undefined;
-      env.OPENROUTER_WIF_POLICY_ID = undefined;
-      env.OPENROUTER_WIF_AUDIENCE = undefined;
-      env.OPENROUTER_WIF_STS_REGION = undefined;
-      expect(getManagedOpenRouterConfiguration()).toEqual({
-        type: "unavailable",
-      });
-      managedUnavailable(
-        await createHarness({
-          configuration: getManagedOpenRouterConfiguration,
-        }).provider.get(),
-      );
-    } finally {
-      restoreWifEnvironment(previous);
-    }
+    const harness = createHarness({
+      configuration: () =>
+        getManagedOpenRouterConfiguration(MANAGED_MODEL_TIER.standard),
+    });
+    const staticResult = await harness.provider.get();
+    expect(staticResult).toEqual(Result.ok("fixture-static-key"));
+    expect(harness.stsClients).toBe(0);
+    expect(harness.exchangeCalls).toBe(0);
+
+    testState.setConfig("OPENROUTER_API_KEY", undefined);
+    testState.setConfig("OPENROUTER_WIF_POLICY_ID", undefined);
+    testState.setConfig("OPENROUTER_WIF_AUDIENCE", undefined);
+    testState.setConfig("OPENROUTER_WIF_STS_REGION", undefined);
+    expect(
+      getManagedOpenRouterConfiguration(MANAGED_MODEL_TIER.standard),
+    ).toEqual({
+      type: "unavailable",
+    });
+    managedUnavailable(
+      await createHarness({
+        configuration: () =>
+          getManagedOpenRouterConfiguration(MANAGED_MODEL_TIER.standard),
+      }).provider.get(),
+    );
+  });
+
+  test("keeps fast and standard static credentials isolated", () => {
+    testState.setConfig("OPENROUTER_API_KEY", "standard-key");
+    testState.setConfig("OPENROUTER_FAST_TIER_API_KEY", "fast-key");
+
+    expect(
+      getManagedOpenRouterConfiguration(MANAGED_MODEL_TIER.standard),
+    ).toEqual({ type: "static", apiKey: "standard-key" });
+    expect(getManagedOpenRouterConfiguration(MANAGED_MODEL_TIER.fast)).toEqual({
+      type: "static",
+      apiKey: "fast-key",
+    });
+
+    testState.setConfig("OPENROUTER_FAST_TIER_API_KEY", undefined);
+    expect(getManagedOpenRouterConfiguration(MANAGED_MODEL_TIER.fast)).toEqual({
+      type: "unavailable",
+    });
+  });
+
+  test("selects the tier-specific federation policy", () => {
+    testState.setConfig("OPENROUTER_API_KEY", undefined);
+    testState.setConfig("OPENROUTER_FAST_TIER_API_KEY", undefined);
+    testState.setConfig("OPENROUTER_WIF_POLICY_ID", "standard-policy");
+    testState.setConfig("OPENROUTER_FAST_TIER_WIF_POLICY_ID", "fast-policy");
+    testState.setConfig("OPENROUTER_WIF_AUDIENCE", AUDIENCE);
+    testState.setConfig("OPENROUTER_WIF_STS_REGION", REGION);
+
+    expect(
+      getManagedOpenRouterConfiguration(MANAGED_MODEL_TIER.standard),
+    ).toMatchObject({ type: "federated", policyId: "standard-policy" });
+    expect(
+      getManagedOpenRouterConfiguration(MANAGED_MODEL_TIER.fast),
+    ).toMatchObject({ type: "federated", policyId: "fast-policy" });
+  });
+
+  test("keeps federated token caches independent between tiers", async () => {
+    const standard = createHarness({
+      configuration: () => ({
+        type: "federated",
+        policyId: "standard-policy",
+        audience: AUDIENCE,
+        region: REGION,
+      }),
+      exchangeReplies: [successExchange("standard-token")],
+    });
+    const fast = createHarness({
+      configuration: () => ({
+        type: "federated",
+        policyId: "fast-policy",
+        audience: AUDIENCE,
+        region: REGION,
+      }),
+      exchangeReplies: [successExchange("fast-token")],
+    });
+
+    expect(await standard.provider.get()).toEqual(Result.ok("standard-token"));
+    expect(await fast.provider.get()).toEqual(Result.ok("fast-token"));
+    expect(await standard.provider.get()).toEqual(Result.ok("standard-token"));
+    expect(await fast.provider.get()).toEqual(Result.ok("fast-token"));
+    expect(standard.exchangeCalls).toBe(1);
+    expect(fast.exchangeCalls).toBe(1);
   });
 
   test("requests a 900 second RS256 token for the configured audience and STS region", async () => {
@@ -649,30 +701,14 @@ describe("managed OpenRouter credentials", () => {
       });
       expect(telemetry).not.toContain(JWT);
       expect(telemetry).not.toContain(ACCESS_TOKEN);
-      const metricSchema = v.object({
-        _aws: v.object({
-          CloudWatchMetrics: v.array(
-            v.object({
-              Dimensions: v.array(v.array(v.string())),
-              Metrics: v.array(v.object({ Name: v.string() })),
-            }),
-          ),
-        }),
-      });
-      const dimensions = lines.flatMap((line) =>
-        v
-          .parse(metricSchema, JSON.parse(line))
-          ._aws.CloudWatchMetrics.map((metric) => metric.Dimensions),
+      expect(lines.map((line) => JSON.parse(line))).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ OpenRouterTokenExchange: 1 }),
+        ]),
       );
-      expect(dimensions).toContainEqual([["outcome"]]);
-      expect(dimensions).toContainEqual([[]]);
-      expect(
-        dimensions.every(
-          (value) =>
-            JSON.stringify(value) === JSON.stringify([["outcome"]]) ||
-            JSON.stringify(value) === JSON.stringify([[]]),
-        ),
-      ).toBe(true);
+      for (const line of lines) {
+        expect(JSON.parse(line)).not.toHaveProperty("_aws");
+      }
     } finally {
       resetMetricLineSinkForTesting();
       logger.restore();

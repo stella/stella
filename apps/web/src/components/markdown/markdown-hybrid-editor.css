@@ -32,7 +32,11 @@
   --vscode-editorWidget-foreground: var(--popover-foreground);
   --vscode-editorWidget-border: var(--border);
   --vscode-widget-border: var(--border);
-  --vscode-widget-shadow: rgb(0 0 0 / 0.16);
+  --vscode-widget-shadow: color-mix(
+    in srgb,
+    var(--color-black) 16%,
+    transparent
+  );
 
   --vscode-input-background: var(--background);
   --vscode-input-foreground: var(--foreground);

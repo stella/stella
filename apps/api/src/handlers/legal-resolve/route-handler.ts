@@ -1,15 +1,12 @@
-import type { TSchema } from "@sinclair/typebox";
-import { t } from "elysia";
+import { Result } from "better-result";
+import * as v from "valibot";
 
 import type { LegalResolveResponse } from "@stll/api-contract/legal-resolve";
 
-import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
+import type { TokenHandlerConfig, VerifyCaller } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS } from "@/api/lib/api-handlers";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { tPublicLawCountry } from "@/api/lib/legal-search/public-law-country";
-import {
-  permissiveRouteSchema,
-  validatePostAuth,
-} from "@/api/lib/permissive-route-schema";
 
 import type { authorizeLegalResolveRequest } from "./authorization";
 
@@ -21,23 +18,30 @@ export type GetLegalResolveAuthorization = (
   request: Request,
 ) => Promise<LegalResolveAuthorization>;
 
-export type LegalResolveRouteResponse =
-  | LegalResolveResponse
-  | { error: "access_unavailable" | "missing_scope" | "unauthorized" };
+type LegalResolveRefusal = Exclude<
+  LegalResolveAuthorization,
+  { status: 200 }
+>["body"]["error"];
+
+/** Told the answer a resolve request produced, so the route can audit its outcome. */
+export type LegalResolveResolved = (
+  request: Request,
+  response: LegalResolveResponse,
+) => void;
+
+/** What a verified legal resolve credential proves: the caller and its admitted read. */
+export type LegalResolveCaller = Pick<
+  Extract<LegalResolveAuthorization, { status: 200 }>,
+  "admission" | "session"
+>;
 
 const legalResolveResponseSchema = {
-  200: t.Any(),
-  401: t.Object({ error: t.Literal("unauthorized") }),
-  403: t.Object({
-    error: t.Literal("missing_scope"),
-  }),
-  429: t.String(),
-  503: t.Object({ error: t.Literal("access_unavailable") }),
+  200: v.unknown(),
+  401: v.object({ error: v.literal("unauthorized") }),
+  403: v.object({ error: v.literal("missing_scope") }),
+  429: v.string(),
+  503: v.object({ error: v.literal("access_unavailable") }),
 };
-
-const legalResolveParamsSchema = t.Object({
-  country: tPublicLawCountry,
-});
 
 export const legalResolveBaseConfig = {
   contract: "patch",
@@ -47,44 +51,46 @@ export const legalResolveBaseConfig = {
     reason: "Returns public-law protocol responses to an authorized client.",
   },
   mcp: { type: "internal", reason: "auth_plumbing" },
-  params: permissiveRouteSchema({ keys: ["country"] }),
+  params: v.object({ country: tPublicLawCountry }),
   response: legalResolveResponseSchema,
 } satisfies TokenHandlerConfig;
 
-type PrepareLegalResolveRequestOptions<TQuery extends TSchema> = {
-  getAuthorization: GetLegalResolveAuthorization;
-  params: unknown;
-  query: unknown;
-  querySchema: TQuery;
-  request: Request;
-  set: { status?: number | string };
+/**
+ * The refusal message never reaches the client: the declared response schema
+ * for each refusal status keeps only its OAuth-style `error`.
+ */
+const REFUSAL_MESSAGES: Readonly<Record<LegalResolveRefusal, string>> = {
+  unauthorized: "Unauthorized",
+  missing_scope: "Missing scope",
+  access_unavailable: "Access unavailable",
 };
 
-export const prepareLegalResolveRequest = async <TQuery extends TSchema>({
-  getAuthorization,
-  params,
-  query,
-  querySchema,
-  request,
-  set,
-}: PrepareLegalResolveRequestOptions<TQuery>) => {
-  const authorization = await getAuthorization(request);
-  if (authorization.status !== 200) {
-    set.status = authorization.status;
-    return { status: "rejected" as const, body: authorization.body };
-  }
-  const validatedParams = validatePostAuth(legalResolveParamsSchema, params);
-  if (!validatedParams.ok) {
-    return { status: "invalid" as const, message: validatedParams.message };
-  }
-  const validatedQuery = validatePostAuth(querySchema, query);
-  if (!validatedQuery.ok) {
-    return { status: "invalid" as const, message: validatedQuery.message };
-  }
-  return {
-    status: "ready" as const,
-    authorization,
-    params: validatedParams.value,
-    query: validatedQuery.value,
+/** A legal resolve route's caller: the bearer credential, verified once per request. */
+export const verifyLegalResolveCaller =
+  (
+    getAuthorization: GetLegalResolveAuthorization,
+  ): VerifyCaller<LegalResolveCaller> =>
+  async ({ request }) => {
+    const authorization = await getAuthorization(request);
+    if (authorization.status !== 200) {
+      const message = REFUSAL_MESSAGES[authorization.body.error];
+      return Result.err(
+        authorization.status === 503
+          ? new HandlerError({
+              status: 503,
+              code: "access_unavailable",
+              message,
+              error: authorization.body.error,
+            })
+          : new HandlerError({
+              status: authorization.status,
+              message,
+              error: authorization.body.error,
+            }),
+      );
+    }
+    return Result.ok({
+      admission: authorization.admission,
+      session: authorization.session,
+    });
   };
-};

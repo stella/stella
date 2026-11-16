@@ -184,6 +184,12 @@ const enforcementCell = (enforcement: OwnershipEnforcement): string => {
       );
       return `read \`${columns.join("`, `")}\`, including implicit full-row selections`;
     }
+    case "table-column-write": {
+      const columns = enforcement.columns.map(
+        (column) => `${enforcement.table}.${column}`,
+      );
+      return `write \`${columns.join("`, `")}\` in an insert, update or conflict set`;
+    }
     case "status-set": {
       return "lifecycle updates, conflict sets and visible SQL assignments; lint errors plus measured per-file backlog and shrink-only ratchet";
     }
@@ -226,7 +232,7 @@ const renderOwnershipTable = (entries: readonly OwnershipEntry[]): string => {
     })
     .map(
       ({ id, capability, owner, summary, enforcement }) =>
-        `| \`${id}\` — ${capability} | ${owner.map((entryPath) => `\`${entryPath}\``).join(", ")} | ${enforcementCell(enforcement)}${allowedCell(enforcement)} | ${summary} |`,
+        `| \`${id}\` — ${capability} | ${owner.map((entryPath) => `\`${entryPath}\``).join(", ")} | ${enforcementCell(enforcement)}${allowedCell(enforcement)} | ${typeof summary === "function" ? summary() : summary} |`,
     );
   return `| Capability | Owner | Enforcement | Summary |
 | --- | --- | --- | --- |
@@ -331,10 +337,10 @@ const main = async (argv: readonly string[]): Promise<number> => {
     await import("./schema-introspection.ts");
   const problems = [
     ...validateOwnership(OWNERSHIP, REPO_ROOT),
-    ...validateSchemaIntrospection({
+    ...(await validateSchemaIntrospection({
       entries: SCHEMA_INTROSPECTION,
       repoRoot: REPO_ROOT,
-    }),
+    })),
   ];
   for (const { path: file, contents } of artifacts) {
     const absolute = path.join(REPO_ROOT, file);

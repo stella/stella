@@ -1007,7 +1007,7 @@ export default eslintCompatPlugin({
         type: "problem",
         messages: {
           queryState:
-            "Query data requires its error state. Pass the result to useQueryView from @/lib/use-query-view, or handle and preserve its error/status. Query binding: {{key}}.",
+            "Query data requires its error state. Pass the result to queryView from @/lib/query-view.logic, or handle and preserve its error/status. Query binding: {{key}}.",
         },
         schema: [
           {

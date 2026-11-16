@@ -27,3 +27,13 @@ describe("version refresh route boundary", () => {
     );
   });
 });
+
+test("keeps root-route not-found translations inside the application providers", async () => {
+  const rootRouteSource = await Bun.file(
+    nodePath.resolve(import.meta.dir, "../routes/__root.tsx"),
+  ).text();
+  expect(rootRouteSource).toContain("notFoundComponent: RootNotFoundComponent");
+  expect(rootRouteSource).toMatch(
+    /function RootNotFoundComponent[\s\S]*?<AppProviders[\s\S]*?<DefaultNotFoundComponent \/>[\s\S]*?<\/AppProviders>/u,
+  );
+});

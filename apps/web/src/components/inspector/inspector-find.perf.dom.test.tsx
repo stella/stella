@@ -19,8 +19,8 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
-
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { E_SBIRKA_ANCHORS } from "@stll/legal-ast/statute-anchor-scheme";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 
@@ -275,6 +275,7 @@ const READER_TEXTS = {
       language="cs"
       masthead={null}
       provisionCitationCounts={new Map()}
+      statuteAnchors={E_SBIRKA_ANCHORS}
       statuteTitle="Zákon"
       versionCount={1}
       versionValidFrom={null}

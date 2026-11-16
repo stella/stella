@@ -1,3 +1,5 @@
+import { isDeclinedChatToolCall } from "@stll/api-contract/chat";
+
 import type {
   ChatUITools,
   RegisteredChatUIToolCallPart,
@@ -20,9 +22,9 @@ export type SpawnSubagentsCallStatus =
   (typeof SPAWN_SUBAGENTS_CALL_STATUS)[keyof typeof SPAWN_SUBAGENTS_CALL_STATUS];
 
 // `approval-requested` waits on the user, so nothing executes yet;
-// `approval-responded` hands off into execution unless the answer was a
-// decline (see `getSpawnSubagentsCallStatus`). `error` is terminal: a call
-// hydrated in that state never produces output.
+// `approval-responded` hands off into execution. `error` is terminal: a call
+// hydrated in that state never produces output. A declined call reads as
+// declined whatever its state (see `getSpawnSubagentsCallStatus`).
 export const SPAWN_SUBAGENTS_CALL_STATUS_BY_STATE = {
   "awaiting-input": SPAWN_SUBAGENTS_CALL_STATUS.running,
   "input-streaming": SPAWN_SUBAGENTS_CALL_STATUS.running,
@@ -43,15 +45,15 @@ type SpawnSubagentsCallStatusInput = {
 };
 
 /**
- * A declined approval is `approval-responded` with `approved: false`, and it
- * stays in that state for good: nothing runs after it, so it must not read as
- * execution in progress.
+ * A declined approval (`isDeclinedChatToolCall`) never runs, so it must read
+ * neither as execution in progress nor as a failure, although it is stored
+ * settled as an error.
  */
 export const getSpawnSubagentsCallStatus = ({
   approval,
   state,
 }: SpawnSubagentsCallStatusInput): SpawnSubagentsCallStatus =>
-  state === "approval-responded" && approval?.approved === false
+  isDeclinedChatToolCall({ approval, type: "tool-call" })
     ? SPAWN_SUBAGENTS_CALL_STATUS.declined
     : SPAWN_SUBAGENTS_CALL_STATUS_BY_STATE[state];
 

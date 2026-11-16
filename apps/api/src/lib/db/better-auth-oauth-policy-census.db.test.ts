@@ -91,7 +91,7 @@ test("startup initializes only a pristine Better Auth database", async () => {
         await captureCensusRejection(
           ensureBetterAuthOAuthPolicy(transaction, EXPECTED_RESOURCES),
         ),
-      ).toMatchObject({ failedChecks: ["resources-match"] });
+      ).toMatchObject({ failedChecks: ["resources-cover-policy"] });
       const resourcesAfterRejection = await transaction.execute(sql`
         SELECT identifier FROM oauth_resource
       `);
@@ -143,7 +143,7 @@ test("startup rejects incomplete Better Auth OAuth resource migrations", async (
           assertBetterAuthOAuthPolicyCensus(transaction, EXPECTED_RESOURCES),
         ),
       ).toMatchObject({
-        failedChecks: ["resources-match"],
+        failedChecks: ["resources-cover-policy"],
         message: "Better Auth OAuth policy migration is incomplete",
       });
       await transaction.execute(sql`
@@ -162,23 +162,46 @@ test("startup rejects incomplete Better Auth OAuth resource migrations", async (
         ),
       ).toMatchObject({ failedChecks: ["clients-linked"] });
 
+      // A newer release's audience, and the only link of a client that newer
+      // release registered, belong to that release's policy. This code does
+      // not serve them, and the auth adapter hides them from it, so the boot
+      // that has to run beside that release accepts them.
       await transaction.insert(oauthResource).values({
-        allowedScopes: ["stella:unexpected"],
-        id: "startup-census-unexpected-resource",
-        identifier: "https://startup-census.example.invalid/unexpected",
-        name: "Unexpected resource",
+        allowedScopes: ["stella:newer"],
+        id: "startup-census-newer-resource",
+        identifier: "https://startup-census.example.invalid/newer",
+        name: "Newer resource",
       });
-      await transaction.insert(oauthClientResource).values({
-        clientId: "startup-census-client",
-        id: "startup-census-unexpected-link",
-        resourceId: "https://startup-census.example.invalid/unexpected",
+      await transaction.insert(oauthClient).values({
+        clientId: "startup-census-newer-client",
+        id: "startup-census-newer-client-row",
+        redirectUris: ["https://client.example.invalid/callback"],
       });
-      const unexpectedLink = await captureCensusRejection(
+      await transaction.insert(oauthClientResource).values([
+        {
+          clientId: "startup-census-client",
+          id: "startup-census-newer-link",
+          resourceId: "https://startup-census.example.invalid/newer",
+        },
+        {
+          clientId: "startup-census-newer-client",
+          id: "startup-census-newer-client-link",
+          resourceId: "https://startup-census.example.invalid/newer",
+        },
+      ]);
+      await assertBetterAuthOAuthPolicyCensus(transaction, EXPECTED_RESOURCES);
+
+      // A configured resource this code needs still has to be there.
+      await transaction.execute(sql`
+        DELETE FROM oauth_resource
+         WHERE identifier = ${EXPECTED_RESOURCES[1].identifier}
+      `);
+      const missingResource = await captureCensusRejection(
         assertBetterAuthOAuthPolicyCensus(transaction, EXPECTED_RESOURCES),
       );
-      expect(unexpectedLink).toBeInstanceOf(BetterAuthOAuthPolicyCensusError);
-      expect(unexpectedLink).toMatchObject({
-        failedChecks: ["resources-match", "links-use-configured-resources"],
+      expect(missingResource).toBeInstanceOf(BetterAuthOAuthPolicyCensusError);
+      expect(missingResource).toMatchObject({
+        failedChecks: ["resources-cover-policy"],
       });
 
       transaction.rollback();
@@ -196,26 +219,41 @@ const CONFIGURED_RESOURCES = buildBetterAuthOAuthResources(
 
 /**
  * Stored scope sets for every configured resource, keyed by what the row holds.
- * Only `configured` passes: the deploy repair has upgraded every `predecessor`
- * row, so one still stored means the repair did not run.
+ * A row passes when it holds every configured scope: what a newer release
+ * added beside them (a scope this code has never heard of, or one this code
+ * configures on another audience) is that release's policy, which this code
+ * narrows away before it grants anything. A row missing any configured scope
+ * fails: the deploy repair has upgraded every `predecessor` row, so one still
+ * stored means the repair did not run.
  */
 const STORED_SCOPE_SETS = {
   configured: (allowedScopes: readonly string[]) => [...allowedScopes],
+  "configured plus a scope a newer release added": (
+    allowedScopes: readonly string[],
+  ) => [...allowedScopes, "stella:newer_release_scope"],
+  "configured plus every configured scope of every audience": () => [
+    ...new Set(
+      CONFIGURED_RESOURCES.flatMap((resource) => resource.allowedScopes),
+    ),
+  ],
   predecessor: (allowedScopes: readonly string[]) =>
     predecessorOAuthResourceScopes(allowedScopes),
-  "configured plus an unknown scope": (allowedScopes: readonly string[]) => [
-    ...allowedScopes,
-    "stella:unexpected",
-  ],
   "predecessor plus only offline_access": (
     allowedScopes: readonly string[],
   ) => [...predecessorOAuthResourceScopes(allowedScopes), "offline_access"],
   "configured without one resource scope": (allowedScopes: readonly string[]) =>
     allowedScopes.slice(1),
+  "configured without one scope, plus a newer one": (
+    allowedScopes: readonly string[],
+  ) => [...allowedScopes.slice(1), "stella:newer_release_scope"],
   empty: () => [],
 } as const;
 
-const ACCEPTED_SCOPE_SETS = new Set<string>(["configured"]);
+const ACCEPTED_SCOPE_SETS = new Set<string>([
+  "configured",
+  "configured plus a scope a newer release added",
+  "configured plus every configured scope of every audience",
+]);
 
 const givenStoredResources = async (
   transaction: TestDatabaseTransaction,
@@ -259,7 +297,9 @@ test.each(Object.entries(STORED_SCOPE_SETS))(
           expect(outcome).toBeNull();
         } else {
           expect(outcome).toBeInstanceOf(BetterAuthOAuthPolicyCensusError);
-          expect(outcome).toMatchObject({ failedChecks: ["resources-match"] });
+          expect(outcome).toMatchObject({
+            failedChecks: ["resources-cover-policy"],
+          });
         }
         transaction.rollback();
       });
@@ -283,7 +323,7 @@ test("the boot census rejects a predecessor row beside configured rows", async (
         await captureCensusRejection(
           assertBetterAuthOAuthPolicyCensus(transaction, CONFIGURED_RESOURCES),
         ),
-      ).toMatchObject({ failedChecks: ["resources-match"] });
+      ).toMatchObject({ failedChecks: ["resources-cover-policy"] });
       transaction.rollback();
     });
   } catch (error) {

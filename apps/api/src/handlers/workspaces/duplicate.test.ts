@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
+import { createTestState } from "@stll/test-state";
+
 import { member } from "@/api/db/auth-schema";
 import {
   auditLogs,
@@ -20,6 +22,7 @@ import {
 import type { FieldContent, PropertyContent } from "@/api/db/schema-validators";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -44,6 +47,8 @@ import {
 } from "@/api/tests/scoped-db-mock";
 
 import { createDuplicateWorkspace } from "./duplicate";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const requestNativeExtractionRunsMock = mock(
   async ({ requests }: { requests: readonly unknown[] }) =>
@@ -147,15 +152,18 @@ const readDuplicatedWorkspaceId = (result: unknown): SafeId<"workspace"> => {
   throw new Error("Expected the duplicate to return a workspace id");
 };
 
-let previousLegalListsFlag = env.FEATURE_LEGAL_LISTS;
 beforeEach(() => {
-  previousLegalListsFlag = env.FEATURE_LEGAL_LISTS;
-  env.FEATURE_LEGAL_LISTS = true;
+  enqueueDocumentProcessingRunMock.mockClear();
+  enqueueEntitySearchRepairsMock.mockClear();
+  enqueueWorkspaceSearchRepairsMock.mockClear();
+  flushEntitySearchRepairsMock.mockClear();
+  flushWorkspaceSearchRepairsMock.mockClear();
+  requestNativeExtractionRunsMock.mockClear();
+  testState.setConfig("FEATURE_LEGAL_LISTS", true);
   fake = startFakeS3();
 });
 
 afterEach(() => {
-  env.FEATURE_LEGAL_LISTS = previousLegalListsFlag;
   fake.stop();
 });
 
@@ -221,7 +229,7 @@ const createContext = ({
     orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
     managedAIResidency: "eu" as const,
     request: recorderBindings.request,
-    route: "/v1/workspaces/:workspaceId/duplicate",
+    route: "/v1/workspaces/:workspaceId/duplicate" satisfies ApiRoutePath,
     session: {
       activeOrganizationId: recorderBindings.organizationId,
     },

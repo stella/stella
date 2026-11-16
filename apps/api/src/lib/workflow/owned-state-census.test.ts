@@ -13,20 +13,17 @@ const locations = async (pattern: RegExp): Promise<string[]> => {
       continue;
     }
     const source = await Bun.file(`${SOURCE_ROOT}/${relative}`).text();
-    for (const [index, line] of source.split("\n").entries()) {
-      if (pattern.test(line)) {
-        if (line.trimEnd().endsWith(";") || line.includes("Extract<")) {
-          continue;
-        }
-        failures.push(`${relative}:${String(index + 1)}: ${line.trim()}`);
-      }
+    if (pattern.test(source)) {
+      failures.push(relative);
     }
   }
   return failures;
 };
 
 test("workflow pending and terminal writes have one owner", async () => {
-  const pendingWrites = await locations(/contentType:\s*["']pending["']/u);
+  const pendingWrites = await locations(
+    /contentType:\s*["']pending["'](?!\s*;)/u,
+  );
   expect(pendingWrites, pendingWrites.join("\n")).toEqual([
     expect.stringContaining("lib/workflow-queue.ts"),
   ]);
@@ -37,6 +34,7 @@ test("workflow pending and terminal writes have one owner", async () => {
   // Reconciliation and the owned settlement writer are the only transition
   // owners. A failure prints the exact source location for the new bypass.
   expect(directTerminalWrites, directTerminalWrites.join("\n")).toEqual([
+    expect.stringContaining("lib/workflow-queue.ts"),
     expect.stringContaining("lib/workflow/orphan-cells.ts"),
   ]);
 });

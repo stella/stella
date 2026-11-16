@@ -10,6 +10,10 @@ import {
 } from "bun:test";
 
 import {
+  chatBackgroundTasksChangedRealtimeEvent,
+  chatQueueChangedRealtimeEvent,
+  chatRunsChangedRealtimeEvent,
+  chatThreadsChangedRealtimeEvent,
   type DesktopEditSessionRealtimeEvent,
   newNotificationRealtimeEvent,
   type OrganizationRealtimeEvent,
@@ -38,13 +42,16 @@ import { realtimeAuthorizers } from "@/api/lib/auth";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
+  type QueryCounter,
   queryCountLogger,
+  runOutsideQueryCounter,
   runWithQueryCounter,
 } from "@/api/lib/db-query-counter";
 import {
   desktopEditSessionCloseSignal,
   isDesktopEditSessionCloseSignal,
 } from "@/api/lib/desktop-edit-session-notifications";
+import { LIMITS } from "@/api/lib/limits";
 import {
   broadcast,
   broadcastSessionEvent,
@@ -56,6 +63,7 @@ import {
   subscribeUser,
 } from "@/api/lib/sse";
 import { createSseBroadcastPublisher } from "@/api/lib/sse-broadcast";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import {
   initAgentAuthTestDb,
   releaseAgentAuthTestDb,
@@ -124,7 +132,13 @@ const FANOUT_CASES: { [C in RealtimeChannel]: readonly ChannelEvent[C][] } = {
     },
   ],
   organization: [resourceSetUpdatedRealtimeEvent(RESOURCE_TYPE.ENTITY)],
-  user: [newNotificationRealtimeEvent()],
+  user: [
+    newNotificationRealtimeEvent(),
+    chatBackgroundTasksChangedRealtimeEvent(),
+    chatQueueChangedRealtimeEvent(),
+    chatRunsChangedRealtimeEvent(),
+    chatThreadsChangedRealtimeEvent(),
+  ],
   session: [
     {
       type: REALTIME_EVENT_TYPE.TAKEOVER_REQUESTED,
@@ -206,6 +220,12 @@ let testDb: TestDatabase;
 /** Redis stand-in: a publish reaches every attached subscriber callback. */
 const subscriberCallbacks = new Set<(message: string) => void>();
 let redisPublishes = 0;
+/**
+ * One counter per Redis delivery. A real subscriber receives the message on
+ * its own connection, outside the publisher's context, so its statements
+ * (the audience reauthorization) are counted there and added to the publish.
+ */
+const deliveryCounters: Readonly<QueryCounter>[] = [];
 
 type FakeSubscriberClient = {
   close: ReturnType<typeof mock>;
@@ -236,7 +256,12 @@ const loopbackPublisher = createSseBroadcastPublisher({
     publish: async (_channel, message) => {
       redisPublishes += 1;
       for (const deliver of subscriberCallbacks) {
-        deliver(message);
+        runOutsideQueryCounter(() => {
+          runWithQueryCounter((counter) => {
+            deliveryCounters.push(counter);
+            deliver(message);
+          });
+        });
       }
       return subscriberCallbacks.size;
     },
@@ -249,11 +274,20 @@ type Audience = {
   workspaceId: SafeId<"workspace">;
 };
 
-/** Each seeded member's live sign-in; every stream is opened on it. */
-const sessionOf = new Map<SafeId<"user">, string>();
+/**
+ * Live sign-ins per seeded member: enough that a member's largest stream set
+ * stays within the streams one session may hold.
+ */
+const SESSIONS_PER_MEMBER = Math.ceil(
+  (LARGE_AUDIENCE + 1) / LIMITS.sseStreamsPerSession,
+);
 
-const sessionFor = (userId: SafeId<"user">): string => {
-  const sessionId = sessionOf.get(userId);
+/** Each seeded member's live sign-ins; every stream is opened on one of them. */
+const sessionsOf = new Map<SafeId<"user">, string[]>();
+
+const sessionFor = (userId: SafeId<"user">, index = 0): string => {
+  const sessionIds = sessionsOf.get(userId) ?? [];
+  const sessionId = sessionIds.at(index % SESSIONS_PER_MEMBER);
   if (sessionId === undefined) {
     throw new Error(`No session was seeded for ${userId}`);
   }
@@ -262,7 +296,7 @@ const sessionFor = (userId: SafeId<"user">): string => {
 
 /**
  * One organization with one matter and `size` members assigned to it, each
- * signed in on one live session.
+ * signed in on SESSIONS_PER_MEMBER live sessions.
  */
 const seedAudience = async (size: number): Promise<Audience> => {
   const organizationId = toSafeId<"organization">(`org_${Bun.randomUUIDv7()}`);
@@ -276,6 +310,10 @@ const seedAudience = async (size: number): Promise<Audience> => {
     slug: `fan-out-${organizationId.slice(-12)}`,
     createdAt: new Date(),
   });
+  await recordNewOrganizationAccessState(testDb, {
+    organizationId,
+    now: new Date(),
+  });
   await testDb.insert(user).values(
     userIds.map((id) => ({
       id,
@@ -284,15 +322,17 @@ const seedAudience = async (size: number): Promise<Audience> => {
       emailVerified: true,
     })),
   );
-  const sessions = userIds.map((userId) => ({
-    id: `session_${Bun.randomUUIDv7()}`,
-    token: Bun.randomUUIDv7(),
-    userId,
-    expiresAt: new Date(Date.now() + 86_400_000),
-  }));
+  const sessions = userIds.flatMap((userId) =>
+    Array.from({ length: SESSIONS_PER_MEMBER }, () => ({
+      id: `session_${Bun.randomUUIDv7()}`,
+      token: Bun.randomUUIDv7(),
+      userId,
+      expiresAt: new Date(Date.now() + 86_400_000),
+    })),
+  );
   await testDb.insert(session).values(sessions);
   for (const row of sessions) {
-    sessionOf.set(row.userId, row.id);
+    sessionsOf.set(row.userId, [...(sessionsOf.get(row.userId) ?? []), row.id]);
   }
   await testDb.insert(member).values(
     userIds.map((userId) => ({
@@ -385,10 +425,10 @@ const userStreams = ({
   count,
   signal,
 }: UserStreamsOptions) =>
-  Array.from({ length: count }, () =>
+  Array.from({ length: count }, (_unused, index) =>
     subscribeUser({
       organizationId,
-      sessionId: sessionFor(userId),
+      holder: { id: sessionFor(userId, index), kind: "session" },
       signal,
       userId,
     }),
@@ -452,6 +492,8 @@ type Subscribers = {
 type ChannelHarness<C extends RealtimeChannel> = {
   /** Statements one publish may issue, whatever the audience size. */
   statementsPerPublish: number;
+  /** The largest audience the channel admits, when below LARGE_AUDIENCE. */
+  largestAudience?: number;
   open: (
     shape: { entitled: number; excluded: boolean },
     signal: AbortSignal,
@@ -493,19 +535,42 @@ const HARNESSES: { [C in RealtimeChannel]: ChannelHarness<C> } = {
       broadcast(audience.workspaceId, event);
     },
   },
-  // Every open matter stream of the organization; the event carries no
-  // content, so it reaches them without a membership read.
+  // Every open matter stream and every user stream of the organization, so a
+  // tab with no matter open still hears it; the event carries no content, so
+  // it reaches them without a membership read. Excluded: another
+  // organization's matter and user streams, including the same person's tab
+  // on that organization.
   organization: {
     statementsPerPublish: 0,
     delivery: () => "frame",
     open: async ({ entitled, excluded }, signal) => ({
-      entitled: workspaceStreams({ target: audience, count: entitled, signal }),
+      entitled: [
+        ...userStreams({
+          userId: userAt(audience, 0),
+          organizationId: audience.organizationId,
+          count: Math.ceil(entitled / 2),
+          signal,
+        }),
+        ...workspaceStreams({
+          target: audience,
+          count: Math.floor(entitled / 2),
+          signal,
+        }),
+      ],
       excluded: excluded
-        ? workspaceStreams({
-            target: otherOrganization,
-            count: LARGE_AUDIENCE,
-            signal,
-          })
+        ? [
+            ...workspaceStreams({
+              target: otherOrganization,
+              count: LARGE_AUDIENCE,
+              signal,
+            }),
+            ...userStreams({
+              userId: userAt(audience, 0),
+              organizationId: otherOrganization.organizationId,
+              count: LARGE_AUDIENCE,
+              signal,
+            }),
+          ]
         : [],
     }),
     publish: (event) => {
@@ -551,6 +616,7 @@ const HARNESSES: { [C in RealtimeChannel]: ChannelHarness<C> } = {
   // clients.
   session: {
     statementsPerPublish: 0,
+    largestAudience: LIMITS.desktopEditSessionStreams,
     delivery: (event) =>
       isDesktopEditSessionCloseSignal(event) ? "closed" : "frame",
     open: async ({ entitled, excluded }) => ({
@@ -611,6 +677,7 @@ const measurePublish = async <C extends RealtimeChannel>({
   const entitled = subscribers.entitled.map((stream) => stream.getReader());
   const excluded = subscribers.excluded.map((stream) => stream.getReader());
   const publishesBefore = redisPublishes;
+  const deliveriesBefore = deliveryCounters.length;
   const encode = spyOn(TextEncoder.prototype, "encode");
   try {
     const { reads, statements } = await runWithQueryCounter(async (counter) => {
@@ -620,6 +687,9 @@ const measurePublish = async <C extends RealtimeChannel>({
       );
       return { reads: received, statements: counter.count };
     });
+    const deliveryStatements = deliveryCounters
+      .slice(deliveriesBefore)
+      .reduce((total, counter) => total + counter.count, 0);
     const sseFrameEncodes = encode.mock.calls.filter(isSseFrameEncode).length;
     return {
       entitled: reads.map(({ done }) => (done ? "closed" : "frame")),
@@ -629,7 +699,7 @@ const measurePublish = async <C extends RealtimeChannel>({
       ),
       redisPublishes: redisPublishes - publishesBefore,
       sseFrameEncodes,
-      statements,
+      statements: statements + deliveryStatements,
     };
   } finally {
     encode.mockRestore();
@@ -689,11 +759,12 @@ describe("one live-update publish costs the same for 1 and for 50 subscribers", 
         excluded: false,
       },
     });
+    const largeAudience = harness.largestAudience ?? LARGE_AUDIENCE;
     const many = await measurePublish({
       channel,
       event,
       shape: {
-        entitled: LARGE_AUDIENCE,
+        entitled: largeAudience,
         excluded: false,
       },
     });
@@ -704,7 +775,7 @@ describe("one live-update publish costs the same for 1 and for 50 subscribers", 
     expectDeliveredOnce({
       measurement: many,
       delivery,
-      audienceSize: LARGE_AUDIENCE,
+      audienceSize: largeAudience,
     });
     const frameBytes = single.frames.map((frame) => frame.byteLength);
     expect(frameBytes.every((bytes) => bytes > 0)).toBe(true);

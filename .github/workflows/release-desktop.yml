@@ -9,8 +9,8 @@ defaults:
     shell: bash
 
 # Build, sign, and publish the Tauri desktop app for each release tag.
-# Runs after release.yml succeeds so the GitHub Release object already
-# exists; this workflow only adds desktop installers + the updater
+# Runs after release.yml's production promotion succeeds, including a run
+# with failed publication jobs; adds desktop installers + the updater
 # manifest to it. Skipped automatically (for STABLE tags as well as
 # prereleases) when nothing the desktop actually ships changed since
 # the previous same-channel release, so backend-only releases don't
@@ -22,8 +22,8 @@ defaults:
 # /releases/latest/download deep links never 404 and in-app updaters see no
 # spurious update.
 #
-# Builds Windows + macOS in parallel. Windows uses Azure Trusted
-# Signing; macOS uses a Developer ID Application cert + App Store
+# Builds Windows (x64 and ARM64) + macOS in parallel. Windows uses Azure
+# Trusted Signing; macOS uses a Developer ID Application cert + App Store
 # Connect API key for notarization.
 
 on:
@@ -47,26 +47,16 @@ concurrency:
 
 jobs:
   resolve:
-    # Only a successful Release Artifacts run may trigger the desktop
-    # publication path. Release Artifacts publishes the GitHub Release only
-    # after production promotion is verified, so a failed run leaves a draft;
-    # accepting `failure` here would attach installers to that draft and
-    # reach the CDN publication steps below. Manual dispatch remains
-    # available for recovery, but its stable path is gated by the post-build
-    # production verification job.
-    #
-    # Skip `cancelled` (a newer release.yml run replaced it; that newer run
-    # will trigger us instead) and `skipped` (release.yml never actually ran,
-    # so there's nothing for us to release).
-    #
+    # A successful production promotion authorizes this ref even when another
+    # publication job failed. The resolve step verifies the upstream job receipt.
     # A workflow_run trigger is accepted only from this repository's own
     # release workflow, started by a tag push or a manual dispatch. The tag
     # comes from that run's release manifest, never its head branch (a
     # dispatched run reports main). Signing builds restore no caches.
     if: >-
-      github.event_name == 'workflow_dispatch'
-      || (github.event.workflow_run.conclusion == 'success'
-      && github.event.workflow_run.head_repository.full_name == github.repository
+      (github.event_name == 'workflow_dispatch'
+      && github.ref == 'refs/heads/main')
+      || (github.event.workflow_run.head_repository.full_name == github.repository
       && github.event.workflow_run.path == '.github/workflows/release.yml'
       && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event))
     runs-on: ubuntu-24.04
@@ -119,6 +109,7 @@ jobs:
           persist-credentials: false
 
       - name: Resolve release ref
+        timeout-minutes: 5
         id: ref
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -126,6 +117,7 @@ jobs:
           RELEASE_INPUT: ${{ inputs.release_ref }}
           UPSTREAM_RUN_ID: ${{ github.event.workflow_run.id }}
         run: |
+          cp scripts/check-release-publication-source.sh "$RUNNER_TEMP/check-release-publication-source.sh"
           REF=$(bash scripts/desktop-release-ref.sh "$RELEASE_INPUT" "$UPSTREAM_RUN_ID")
 
           # Pattern must stay aligned with scripts/release-channel.sh
@@ -171,10 +163,27 @@ jobs:
             exit 1
           fi
 
-          git fetch --no-tags origin "refs/tags/${REF}:refs/tags/${REF}" main:refs/remotes/origin/main
-          if ! git merge-base --is-ancestor "$RELEASE_SHA" origin/main; then
-            echo "::error::Release tag $REF is not reachable from protected main"
-            exit 1
+          bash "${GITHUB_WORKSPACE}/scripts/retry.sh" git fetch --no-tags origin "refs/tags/${REF}:refs/tags/${REF}"
+          if [[ -n "$UPSTREAM_RUN_ID" ]]; then
+            receipt_status=0
+            bash "$RUNNER_TEMP/check-release-publication-source.sh" "$UPSTREAM_RUN_ID" "$REF" "$RELEASE_SHA" || receipt_status=$?
+            case "$receipt_status" in
+              0) ;;
+              1)
+                echo "::notice::No production promotion receipt for $REF; no desktop publication."
+                exit 0
+                ;;
+              *)
+                # An unreadable receipt must not pass as a run with nothing to publish.
+                echo "::error::The production promotion receipt for $REF could not be read"
+                exit 1
+                ;;
+            esac
+          else
+            [[ "$REF" != *-* ]] || { echo 'Desktop publication requires a stable promoted ref' >&2; exit 1; }
+            # Manual recovery must target the commit production currently serves.
+            served=$(bash scripts/retry.sh curl --fail --silent --show-error https://api.stll.app/ready | jq -er '.commit')
+            [[ "$served" == "$RELEASE_SHA" ]] || { echo 'Production is not serving the requested release' >&2; exit 1; }
           fi
 
           if ! bash "$GH_RETRY_SCRIPT" release view "$REF" >/dev/null; then
@@ -196,6 +205,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Checkout
+        if: steps.ref.outputs.value != ''
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Pin to the resolved commit SHA to eliminate tag/branch
@@ -206,21 +216,15 @@ jobs:
           persist-credentials: false
 
       - name: Decide whether desktop changed since previous tag
+        if: steps.ref.outputs.value != ''
         id: diff
         env:
           CURRENT_TAG: ${{ steps.ref.outputs.value }}
           EVENT_NAME: ${{ github.event_name }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Manual dispatch is the rebuild escape hatch (e.g. re-running
-          # a release whose signing job failed), so it never skips.
-          # Mirrors ci.yml's dispatch-forces-checks behaviour.
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
-            echo "Manual dispatch; forcing a desktop build."
-            {
-              echo "should_build=true"
-              echo "previous_tag="
-            } >> "$GITHUB_OUTPUT"
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -233,7 +237,7 @@ jobs:
   build:
     needs: resolve
     if: ${{ needs.resolve.outputs.should_build == 'true' }}
-    name: Build ${{ matrix.os }}
+    name: Build ${{ matrix.target }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     permissions:
@@ -250,8 +254,16 @@ jobs:
             target: x86_64-pc-windows-msvc
             rust_targets: x86_64-pc-windows-msvc
             install_timeout_minutes: 30
+          # Cross-compiled on the x64 runner: the frontend build and signing
+          # tools stay x64 and only the Rust binary targets ARM64. Build
+          # scripts run on x64, so its crates are fetched too.
+          - os: windows
+            runner: windows-latest
+            target: aarch64-pc-windows-msvc
+            rust_targets: aarch64-pc-windows-msvc,x86_64-pc-windows-msvc
+            install_timeout_minutes: 30
           - os: macos
-            runner: macos-14
+            runner: macos-15
             install_timeout_minutes: 5
             # Tauri builds a universal binary by lipoing the two
             # native-arch outputs together; rustup needs the two real
@@ -323,9 +335,9 @@ jobs:
           NPM_TOKEN: ""
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
-          toolchain: 1.99.0
+          toolchain: 1.99.1
           targets: ${{ matrix.rust_targets }}
 
       # The locked crates for every target download once, retried as a unit;
@@ -383,7 +395,7 @@ jobs:
       # ─── macOS: Developer ID + App Store Connect notarization ─
       - name: Import Apple Developer ID certificate into temporary keychain
         if: matrix.os == 'macos'
-        uses: apple-actions/import-codesign-certs@77ba2a2a8f5cfc8c405ebf3159f767c323e238f9 # v7.1.0
+        uses: apple-actions/import-codesign-certs@288b8ec97b82c66b6f2a6baaf7acc8dfbcbe331c # v7.2.0
         with:
           p12-file-base64: ${{ secrets.APPLE_CERTIFICATE }}
           p12-password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -447,6 +459,50 @@ jobs:
             --test-requirement="$expected_requirement" \
             "${app_bundles[0]}"
 
+      # The PKCS #11 helper is signed before Tauri bundles the app, with its
+      # own entitlements (the desktop's build:pkcs11-helper script), and
+      # bundled as is; the app's signature seals it and Tauri notarizes both.
+      # Only the helper may load libraries signed by another team.
+      - name: Verify PKCS #11 helper signature
+        if: matrix.os == 'macos'
+        working-directory: apps/desktop
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          if [[ ! -f src-tauri/Pkcs11HelperEntitlements.plist ]]; then
+            echo "This release predates the PKCS #11 helper."
+            exit 0
+          fi
+          shopt -s nullglob
+          app_bundles=(src-tauri/target/"$TARGET"/release/bundle/macos/*.app)
+          app="${app_bundles[0]}"
+          helper="$app/Contents/MacOS/stella-pkcs11-helper"
+          if [[ ! -f "$helper" ]]; then
+            echo "::error::The app bundle has no PKCS #11 helper"
+            exit 1
+          fi
+          codesign --verify --strict --verbose=2 \
+            --test-requirement='=anchor apple generic and certificate leaf[subject.OU] = "4N3QVH454C"' \
+            "$helper"
+          # Read whole, then searched: `grep -q` closing a pipe early would
+          # fail the producer under pipefail.
+          helper_details=$(codesign --display --verbose=2 "$helper" 2>&1)
+          if ! grep -q 'flags=.*runtime' <<<"$helper_details"; then
+            echo "::error::The PKCS #11 helper is not signed with the hardened runtime"
+            exit 1
+          fi
+          entitlement=com.apple.security.cs.disable-library-validation
+          helper_entitlements=$(codesign --display --entitlements - --xml "$helper" 2>/dev/null)
+          if ! grep -q "$entitlement" <<<"$helper_entitlements"; then
+            echo "::error::The PKCS #11 helper lacks $entitlement"
+            exit 1
+          fi
+          app_entitlements=$(codesign --display --entitlements - --xml "$app" 2>/dev/null)
+          if grep -q "$entitlement" <<<"$app_entitlements"; then
+            echo "::error::The app itself must not carry $entitlement"
+            exit 1
+          fi
+
       - name: Build styled DMG without Finder automation
         if: matrix.os == 'macos'
         working-directory: apps/desktop
@@ -489,6 +545,24 @@ jobs:
           APPLE_API_KEY_PATH: ${{ runner.temp }}/apple-api.p8
         run: |
           printf '%s' "$APPLE_API_KEY_BASE64" | base64 -d > "$APPLE_API_KEY_PATH"
+          # Stapling and validation fetch the ticket from Apple's servers.
+          # Both are idempotent: a dropped connection (NSURLErrorDomain) is
+          # retried up to three attempts; any other failure fails at once.
+          stapler() {
+            local dmg="$1" action="$2" attempt output
+            for attempt in 1 2 3; do
+              if output=$(xcrun stapler "$action" "$dmg" 2>&1); then
+                printf '%s\n' "$output"
+                return 0
+              fi
+              printf '%s\n' "$output" >&2
+              if ((attempt == 3)) || ! grep -q 'NSURLErrorDomain' <<< "$output"; then
+                return 1
+              fi
+              echo "stapler $action: network error on attempt $attempt/3; retrying in $((attempt * 20))s" >&2
+              sleep $((attempt * 20))
+            done
+          }
           bundle_dir="src-tauri/target/${{ matrix.target }}/release/bundle"
           for dmg in "$bundle_dir"/dmg/*.dmg; do
             [[ -f "$dmg" ]] || continue
@@ -501,8 +575,8 @@ jobs:
               --key-id   "$APPLE_API_KEY_ID" \
               --issuer   "$APPLE_API_ISSUER" \
               --wait --timeout 30m
-            xcrun stapler staple "$dmg"
-            xcrun stapler validate "$dmg"
+            stapler "$dmg" staple
+            stapler "$dmg" validate
           done
 
       - name: Rename artifacts to stable, version-less filenames
@@ -513,7 +587,7 @@ jobs:
         # Stella-windows-x64-setup.exe` regardless of the release
         # version. The .sig files for updater archives keep their
         # ordering so latest.json continues to find them.
-        run: bash scripts/rename-desktop-artifacts.sh "apps/desktop/src-tauri/target/${{ matrix.target }}/release/bundle"
+        run: bash scripts/rename-desktop-artifacts.sh "apps/desktop/src-tauri/target/${{ matrix.target }}/release/bundle" "${{ matrix.target }}"
 
       - name: Upload installers to GitHub Release
         env:
@@ -624,8 +698,9 @@ jobs:
         run: |
           echo "::add-mask::$BUCKET"
           echo "::add-mask::$DIST_ID"
-          account_id="$(printf '%s' "$BUCKET" | grep -oE '[0-9]{12}' | head -n1 || true)"
-          [ -n "$account_id" ] && echo "::add-mask::$account_id"
+          if [[ "$BUCKET" =~ [0-9]{12} ]]; then
+            echo "::add-mask::${BASH_REMATCH[0]}"
+          fi
 
       - name: Mirror latest.json to downloads CDN
         env:
@@ -779,3 +854,43 @@ jobs:
       - name: Promote release to latest
         timeout-minutes: 10
         run: bash scripts/promote-desktop-release.sh
+
+  release-complete:
+    needs:
+      [
+        resolve,
+        build,
+        verify-production,
+        manifest,
+        promote-latest,
+        carry-forward,
+      ]
+    if: ${{ always() && needs.resolve.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require all release jobs to complete
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        # The verdict is computed before it is read, so an unreadable needs
+        # record fails the job instead of reading as "nothing failed".
+        run: |
+          set -euo pipefail
+          unfinished=$(jq -nr '
+            input
+            | .resolve.outputs as $release
+            | to_entries[]
+            | select(.key != "resolve")
+            | select(if $release.should_build == "true" then
+                .key != "carry-forward"
+                and ($release.channel == "prod" or (.key != "verify-production" and .key != "promote-latest"))
+              else .key == "carry-forward" and $release.channel == "prod" end)
+            | select(.value.result != "success")
+            | [.key, .value.result] | @tsv' <<< "$NEEDS")
+          failed=0
+          while IFS=$'\t' read -r job result; do
+            [[ -n "$job" ]] || continue
+            echo "::error::Required desktop release job $job ended $result"
+            failed=1
+          done <<< "$unfinished"
+          exit "$failed"

@@ -2,14 +2,16 @@ import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { afterAll, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
+
+import { createTestState } from "@stll/test-state";
 
 import messages from "@/i18n/langs/en.json";
 import { ChatThreadTestRouter } from "@/lib/chat-thread-test-router";
 
-const previousApiUrl = process.env["VITE_API_URL"];
-process.env["VITE_API_URL"] = previousApiUrl ?? "https://api.example.test";
+const state = createTestState({ file: import.meta.path, config: {} });
+state.setEnvIfAbsent("VITE_API_URL", "https://api.example.test");
 
 const { StreamdownMentionLink } =
   await import("@/components/chat/streamdown-mention-link");
@@ -19,14 +21,6 @@ const { seedReferenceHints } =
   await import("@/components/references/reference-hints");
 const { mentionAttrsToHref, mentionTagAttrs, referenceFromMentionAttrs } =
   await import("@/components/references/reference.logic");
-
-afterAll(() => {
-  if (previousApiUrl === undefined) {
-    delete process.env["VITE_API_URL"];
-    return;
-  }
-  process.env["VITE_API_URL"] = previousApiUrl;
-});
 
 const MATTER_ID = "0dc54d0c-10d7-501d-897e-e801dbd0998c";
 const TASK_ID = "c09ec856-d945-5ecc-82e3-bb5382165f34";
@@ -58,17 +52,32 @@ const render = (queryClient: QueryClient, children: ReactNode) =>
   );
 
 /** The pill's content (glyph and label), without the element that differs
- * between a clickable and a static chip. */
+ * between a clickable and a static chip. A clickable chip is a plain Button
+ * around the pill, so its content sits one span deeper. The label's hint id
+ * comes from its place in the rendered tree, so it is left out. */
 const chipContent = (html: string): string => {
   const match =
-    /^<(?:span|button)[^>]*data-reference-type="entity"[^>]*>(?<inner>.*)<\/(?:span|button)>$/su.exec(
+    /^<(?<tag>span|button)[^>]*data-reference-type="entity"[^>]*>(?<inner>.*)<\/\k<tag>>$/su.exec(
       html,
     );
-  if (match?.groups?.["inner"] === undefined) {
+  const inner = match?.groups?.["inner"];
+  if (inner === undefined) {
     throw new Error(`Not a reference chip: ${html}`);
   }
-  return match.groups["inner"];
+  if (match?.groups?.["tag"] !== "button") {
+    return withoutGeneratedIds(inner);
+  }
+  const pill = /^<span[^>]*>(?<body>.*)<\/span>$/su.exec(inner)?.groups?.[
+    "body"
+  ];
+  if (pill === undefined) {
+    throw new Error(`Not a pill inside a chip button: ${inner}`);
+  }
+  return withoutGeneratedIds(pill);
 };
+
+const withoutGeneratedIds = (html: string): string =>
+  html.replaceAll(/ id="base-ui-[^"]*"/gu, "");
 
 const sessionClient = () => {
   const queryClient = new QueryClient();

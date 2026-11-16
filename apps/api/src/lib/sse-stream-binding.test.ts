@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
-import { sseResponse, sweepBoundStreams } from "@/api/lib/sse";
+import {
+  memberSessionStreamBinding,
+  sseResponse,
+  sweepBoundStreams,
+} from "@/api/lib/sse";
 import type { SseSessionLivenessReader, SseStreamBinding } from "@/api/lib/sse";
 
 const encoder = new TextEncoder();
@@ -153,5 +157,29 @@ describe("an event stream bound to the credential that opened it", () => {
 
     expect(owners).toEqual(["00000000-0000-7000-8000-0000000000b2"]);
     expect(await read(stream)).toBe("<done>");
+  });
+});
+
+describe("a member handler's stream binding", () => {
+  test("a browser session binds the stream to that session", () => {
+    expect(
+      memberSessionStreamBinding({
+        session: { id: "s1" },
+        user: { id: OWNER },
+      }),
+    ).toEqual({ kind: "session", sessionId: "s1", userId: OWNER });
+  });
+
+  test("an app's credential binds the stream in place of its session id", () => {
+    const stream: SseStreamBinding = {
+      kind: "credential",
+      revalidate: async () => await Promise.resolve(true),
+    };
+    expect(
+      memberSessionStreamBinding({
+        session: { id: "oauth-client:app", stream },
+        user: { id: OWNER },
+      }),
+    ).toBe(stream);
   });
 });

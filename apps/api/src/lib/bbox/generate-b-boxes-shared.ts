@@ -1,5 +1,5 @@
 import { PDF } from "@libpdf/core";
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import type {
@@ -13,6 +13,7 @@ import type { BBoxItem } from "@/api/lib/bbox/ai-prompts";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import type { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
+import { recordText } from "@/api/lib/fields/record-text";
 import { createFileKey } from "@/api/lib/files/utils";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
@@ -176,6 +177,8 @@ const getFieldContentAsString = (content?: FieldContent) => {
       return `${content.amountCents} ${content.currency}`;
     case "person":
       return content.name;
+    case "record":
+      return recordText(content.state);
     case "error":
     case "pending":
     case "unsupported":
@@ -183,7 +186,8 @@ const getFieldContentAsString = (content?: FieldContent) => {
     case "clip":
       return null;
     default:
-      return null;
+      content satisfies never;
+      return panic(`Unhandled content: ${String(content)}`);
   }
 };
 

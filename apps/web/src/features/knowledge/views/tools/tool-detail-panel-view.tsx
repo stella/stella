@@ -17,9 +17,13 @@ import {
   UserIcon,
   XIcon,
 } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
-import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
+import {
+  nativeToolDescriptionKey,
+  nativeToolLabelKey,
+} from "@/components/catalogue/native-tool-label";
 import Tooltip from "@/components/tooltip";
 import type { KnowledgeToolDetail } from "@/features/knowledge/views/tools/tools-seam";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
@@ -46,6 +50,11 @@ export const ToolDetailPanelView = ({
   const isFirstParty = tool.author === "stella";
   const homepageUrl = sanitizeHref(tool.homepage ?? tool.authorUrl);
   const labelKey = nativeToolLabelKey({ slug: tool.slug, kind: tool.kind });
+  const descriptionKey = nativeToolDescriptionKey({
+    slug: tool.slug,
+    kind: tool.kind,
+  });
+  const description = descriptionKey ? t(descriptionKey) : tool.description;
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col">
@@ -56,10 +65,12 @@ export const ToolDetailPanelView = ({
         )}
       >
         <h2
-          className="text-foreground min-w-0 truncate text-sm font-semibold"
+          className="text-foreground min-w-0 text-sm font-semibold"
           dir="auto"
         >
-          {labelKey ? t(labelKey) : tool.displayName}
+          <TruncatedText>
+            {labelKey ? t(labelKey) : tool.displayName}
+          </TruncatedText>
         </h2>
         {homepageUrl && (
           <a
@@ -86,11 +97,11 @@ export const ToolDetailPanelView = ({
       </header>
 
       <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-3 py-4">
-        {tool.description && (
+        {description && (
           <Section title={t("onboarding.catalogueDetailAbout")}>
             {/* Remount per entry so expanded/overflow state starts fresh
                 (the panel itself is not remounted per selection). */}
-            <ExpandableText key={tool.description} text={tool.description} />
+            <ExpandableText key={description} text={description} />
           </Section>
         )}
 
@@ -191,7 +202,7 @@ const ExpandableText = ({ text }: { text: string }) => {
   // line-clamp height. A ResizeObserver keeps it correct across font
   // loads, panel animation, and width changes.
   const textRef = useCallback(
-    (el: HTMLParagraphElement | null) => {
+    (el: HTMLElement | null) => {
       if (expanded || !el) {
         return undefined;
       }
@@ -210,15 +221,16 @@ const ExpandableText = ({ text }: { text: string }) => {
 
   return (
     <div className="flex flex-col items-start gap-1.5">
-      <p
-        className={cn(
-          "text-foreground text-sm leading-relaxed text-pretty",
-          !expanded && "line-clamp-5",
-        )}
+      {/* Show more is the way to the rest of the text, so no hint. */}
+      <TruncatedText
+        className="text-foreground text-sm leading-relaxed text-pretty"
+        hint={false}
+        lines={expanded ? "none" : 5}
         ref={textRef}
+        render={<p />}
       >
         {text}
-      </p>
+      </TruncatedText>
       {(overflowing || expanded) && (
         <Button
           className="text-muted-foreground h-auto p-0"
@@ -272,9 +284,12 @@ const Field = ({ icon: Icon, ariaLabel, value }: FieldProps) => {
             aria-hidden="true"
             className="text-muted-foreground size-4 shrink-0"
           />
-          <span className="text-foreground min-w-0 truncate text-sm font-medium">
+          <TruncatedText
+            className="text-foreground text-sm font-medium"
+            hint={false}
+          >
             {value}
-          </span>
+          </TruncatedText>
         </div>
       }
     />
@@ -299,9 +314,12 @@ const AuthorField = ({ ariaLabel, authorUrl, value }: AuthorFieldProps) => {
         aria-hidden="true"
         className="text-muted-foreground size-4 shrink-0"
       />
-      <span className="text-foreground min-w-0 truncate text-sm font-medium">
+      <TruncatedText
+        className="text-foreground text-sm font-medium"
+        hint={false}
+      >
         {value}
-      </span>
+      </TruncatedText>
       {safeAuthorUrl && (
         <ExternalLinkIcon
           aria-hidden="true"

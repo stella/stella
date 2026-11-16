@@ -4,13 +4,18 @@ import { createFileRoute, redirect, useLocation } from "@tanstack/react-router";
 import * as v from "valibot";
 
 import { SignInPanel } from "@/components/auth/sign-in-panel";
+import { SIGN_IN_ENTRY_METHOD } from "@/components/auth/sign-in-panel.logic";
 import {
   getOauthHashFragment,
+  getSignedOauthQuery,
   getSignedOauthQueryFromHash,
+  hasOauthPrompt,
   hasSignedOauthQuery,
 } from "@/lib/oauth-provider";
 import { pageTitle } from "@/lib/page-title";
 import { normalizeRedirectTo } from "@/lib/redirect";
+import { routeSearchSchema } from "@/route-search-params";
+import { routePresentation } from "@/routes/-route-presentation";
 
 const DevQuickStartButton = import.meta.env.DEV
   ? React.lazy(async () => {
@@ -20,14 +25,31 @@ const DevQuickStartButton = import.meta.env.DEV
     })
   : null;
 
-const searchSchema = v.object({
+const searchSchema = routeSearchSchema({
   redirectTo: v.optional(v.pipe(v.string(), v.transform(normalizeRedirectTo))),
+  // A link can open the page on the password form (`?method=password`).
+  method: v.optional(v.literal(SIGN_IN_ENTRY_METHOD.password)),
 });
 
 export const Route = createFileRoute("/auth/")({
+  staticData: { presentation: routePresentation({ type: "none" }) },
   validateSearch: searchSchema,
   beforeLoad: ({ context, location, search }) => {
     if (context.session) {
+      // A client that asks for a fresh sign-in gets the form even with a
+      // session; the provider resumes the request for whoever signs in.
+      if (
+        hasOauthPrompt(
+          getSignedOauthQuery({
+            hash: location.hash,
+            searchStr: location.searchStr,
+          }),
+          "login",
+        )
+      ) {
+        return;
+      }
+
       const oauthRedirectTo = getOauthPostLoginRedirectTo({
         hash: location.hash,
         searchStr: location.searchStr,
@@ -56,6 +78,7 @@ function LoginOrSignup() {
   const defaultRedirectTo = Route.useSearch({
     select: (s) => s.redirectTo ?? "/",
   });
+  const entryMethod = Route.useSearch({ select: (s) => s.method });
   const location = useLocation({
     select: ({ hash, searchStr }) => ({ hash, searchStr }),
   });
@@ -63,7 +86,7 @@ function LoginOrSignup() {
 
   return (
     <div className="flex w-full max-w-md flex-col gap-4">
-      <SignInPanel redirectTo={redirectTo} />
+      <SignInPanel entryMethod={entryMethod} redirectTo={redirectTo} />
       {DevQuickStartButton === null ? null : (
         <React.Suspense fallback={null}>
           <DevQuickStartButton redirectTo={redirectTo} />

@@ -23,10 +23,11 @@
  */
 
 import { panic } from "better-result";
-import * as cheerio from "cheerio";
-import { type AnyNode, type Element, isTag, isText } from "domhandler";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import { load } from "@stll/html";
+import type * as cheerio from "@stll/html";
+import { type AnyNode, type Element, isTag, isText } from "@stll/html/nodes";
 import type {
   Block,
   DocumentAst,
@@ -34,6 +35,7 @@ import type {
   TableBlock,
   TableCell,
 } from "@stll/legal-ast/document-ast";
+import { positionalBlockAnchor } from "@stll/legal-ast/stable-block-anchors";
 
 import { isExcludedHtmlTag } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
@@ -198,7 +200,10 @@ const isPrintedTitle = (runs: readonly Run[]): boolean => {
 
 const nextIds = (state: ParseState) => {
   const index = state.blocks.length + 1;
-  return { id: `b${index}`, anchorId: `p-${index}` };
+  return {
+    id: `b${index}`,
+    anchorId: positionalBlockAnchor({ kind: "p", ordinal: index }),
+  };
 };
 
 const pushRunsBlock = (
@@ -704,7 +709,7 @@ export const parseBrTjdftDocument = ({
   decisionType,
   sourceUrl,
 }: ParseBrTjdftDocumentInput): ParseBrTjdftDocumentOutput => {
-  const $ = cheerio.load(content.type === "html" ? content.text : "");
+  const $ = load(content.type === "html" ? content.text : "");
   const state: ParseState = {
     $,
     blocks: [],

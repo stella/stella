@@ -24,12 +24,15 @@ import {
 } from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { Separator } from "@stll/ui/separator";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { PropertyIcon } from "@stll/workspace-ui/property-icon";
 
 import { questionAiCellState } from "@/components/workspaces/ai-cell-state.logic";
 import { AiColumnRunButton } from "@/components/workspaces/ai-column-run-controls";
 import {
   aiColumnRunMenu,
+  aiColumnRunReveal,
   aiColumnRunScope,
 } from "@/components/workspaces/ai-column-run.logic";
 import { PinProperty } from "@/components/workspaces/properties/pin-property";
@@ -105,7 +108,7 @@ export const QuestionColumnPopover = ({
   const primaryRun = aiColumnRunMenu(scopedStates).at(0);
 
   return (
-    <div className="flex h-full items-center gap-1 pe-1">
+    <div className="flex h-full items-center gap-1 pe-2">
       <Popover modal onOpenChange={setIsOpen} open={isOpen}>
         <PopoverTrigger
           className="hover:bg-accent flex h-full min-w-0 flex-1 items-center gap-1.5 ps-2 pe-3 text-start"
@@ -116,9 +119,12 @@ export const QuestionColumnPopover = ({
             className="size-3.5 shrink-0"
             type={question.content.type}
           />
-          <span className="w-0 flex-1 truncate" title={question.question}>
-            {question.question}
-          </span>
+          <Tooltip>
+            <TooltipTrigger render={<span className="w-0 min-w-0 flex-1" />}>
+              <TruncatedText hint={false}>{question.question}</TruncatedText>
+            </TooltipTrigger>
+            <TooltipPopup>{question.question}</TooltipPopup>
+          </Tooltip>
           {isNew && (
             <span className="bg-primary/10 text-primary shrink-0 rounded-sm px-1 text-xs">
               {t("caseLaw.research.newQuestionColumn")}
@@ -230,7 +236,10 @@ export const QuestionColumnPopover = ({
       {may("run") && questions !== null && (
         <AiColumnRunButton
           scope={scope}
-          hasNotRun={scopedStates.some((state) => state.type === "not_run")}
+          reveal={aiColumnRunReveal({
+            states: scopedStates,
+            menuOpen: isOpen,
+          })}
           disabled={
             questions.isRunning || scope.count === 0 || primaryRun === undefined
           }

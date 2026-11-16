@@ -29,15 +29,14 @@ import {
   resolveScopedGate,
 } from "@/api/lib/workflow/materialize-playbook-run";
 import type { MaterializePlaybookRunResult } from "@/api/lib/workflow/materialize-playbook-run";
-import type { PlaybookScope } from "@/api/lib/workflow/playbook-positions";
 import { PLAYBOOK_RUN_PROJECTION } from "@/api/lib/workflow/playbook-run-projection";
 import type { McpRequestContext } from "@/api/mcp/context";
 
-/** The live definition a run starts from: what to pin when it was never
- *  approved, plus the scope that gates which documents it reaches. */
-type PlaybookDefinitionForRun = PlaybookDefinitionForPin & {
-  scope: PlaybookScope | null;
-};
+/** The live definition a run starts from. The pin resolves it to the
+ *  approved snapshot when one exists, scope included, so the run's document
+ *  gate and materialized columns read the scope off the pin below, never the
+ *  live definition. */
+type PlaybookDefinitionForRun = PlaybookDefinitionForPin;
 
 export type OpenPlaybookRunArgs = {
   tx: Transaction;
@@ -78,14 +77,16 @@ export const openPlaybookRun = async ({
   // Findings are pinned to the version they were measured against, so every
   // surface resolves the same approved snapshot rather than reading the live
   // definition — and the columns below are materialized from that snapshot too,
-  // so a table cell and a finding never disagree about the standard.
+  // so a table cell and a finding never disagree about the standard. The
+  // document gate reads the pin's scope for the same reason: a scope edited
+  // after approval must not redirect a run still pinned to that approval.
   const playbook = resolvePlaybookPin({ definition, latestApprovedVersion });
 
   const gateResult = await resolveScopedGate({
     tx,
     workspaceId,
     organizationId,
-    scope: definition.scope,
+    scope: playbook.definitionSnapshot.scope,
   });
   if (!gateResult.ok) {
     return gateResult;
@@ -101,7 +102,7 @@ export const openPlaybookRun = async ({
       organizationId,
       playbookId: definition.id,
       positions: playbook.definitionSnapshot.positions.items,
-      scope: definition.scope,
+      scope: playbook.definitionSnapshot.scope,
       recordAuditEvent,
       auditMetadata: { ...auditMetadata, projection },
     });

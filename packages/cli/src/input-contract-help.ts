@@ -10,13 +10,19 @@ const propertiesOf = (schema: JsonSchema): Record<string, JsonSchema> => {
   if (!isRecord(properties)) {
     return {};
   }
-  const result: Record<string, JsonSchema> = {};
-  for (const [name, child] of Object.entries(properties)) {
-    if (isRecord(child)) {
-      result[name] = child;
-    }
-  }
-  return result;
+  return Object.fromEntries(
+    Object.entries(properties).filter((entry): entry is [string, JsonSchema] =>
+      isRecord(entry[1]),
+    ),
+  );
+};
+
+const propertyOf = (
+  schema: JsonSchema,
+  name: string,
+): JsonSchema | undefined => {
+  const properties = propertiesOf(schema);
+  return Object.hasOwn(properties, name) ? properties[name] : undefined;
 };
 
 const requiredOf = (schema: JsonSchema): ReadonlySet<string> => {
@@ -473,7 +479,7 @@ const schemaAtPath = (
 ): JsonSchema | undefined => {
   let current = schema;
   for (const segment of path.split(".")) {
-    const child = propertiesOf(current)[segment];
+    const child = propertyOf(current, segment);
     if (child === undefined) {
       return undefined;
     }
@@ -489,7 +495,7 @@ const pathRequired = (schema: JsonSchema, path: string): boolean => {
     if (index === segments.length - 1) {
       return requiredAcrossAllOf(parent).has(segment);
     }
-    const child = propertiesOf(parent)[segment];
+    const child = propertyOf(parent, segment);
     if (child === undefined) {
       return false;
     }
@@ -499,24 +505,48 @@ const pathRequired = (schema: JsonSchema, path: string): boolean => {
 };
 
 const characterForClass = (characterClass: string): string | undefined => {
-  if (characterClass.includes("0-9")) {
+  if (characterClass.includes("0-9") || characterClass.includes("\\d")) {
     return "0";
   }
   if (characterClass.includes("A-Z")) {
     return "A";
   }
-  if (characterClass.includes("a-z")) {
+  if (characterClass.includes("a-z") || characterClass.includes("\\w")) {
     return "a";
   }
   return characterClass.at(0);
 };
 
-const patternExample = (pattern: string): string | undefined => {
-  if (!pattern.startsWith("^") || !pattern.endsWith("$")) {
-    return undefined;
+/** The index of the `)` closing the group opened at `open`. */
+const groupEnd = (body: string, open: number): number | undefined => {
+  let depth = 0;
+  for (let index = open; index < body.length; index += 1) {
+    const character = body[index];
+    if (character === "\\") {
+      index += 1;
+    } else if (character === "[") {
+      const end = body.indexOf("]", index + 1);
+      if (end === -1) {
+        return undefined;
+      }
+      index = end;
+    } else if (character === "(") {
+      depth += 1;
+    } else if (character === ")") {
+      depth -= 1;
+      if (depth === 0) {
+        return index;
+      }
+    }
   }
+  return undefined;
+};
 
-  const body = pattern.slice(1, -1);
+// One candidate string: each token, groups included, repeated as often as
+// its quantifier's minimum (once for `+` and `?`, never for `*`).
+// Alternation, wildcards and lookarounds give no candidate; the caller still
+// tests the candidate against the compiled pattern.
+const patternBodyExample = (body: string): string | undefined => {
   const tokens: string[] = [];
   for (let index = 0; index < body.length; index += 1) {
     const character = body[index];
@@ -541,19 +571,42 @@ const patternExample = (pattern: string): string | undefined => {
       if (escaped === undefined) {
         return undefined;
       }
-      token = escaped === "d" ? "0" : escaped;
+      if (escaped === "d") {
+        token = "0";
+      } else if (escaped === "w") {
+        token = "a";
+      } else {
+        token = escaped;
+      }
       index += 1;
-    } else if ("().|".includes(character)) {
+    } else if (character === "(") {
+      const end = groupEnd(body, index);
+      if (end === undefined) {
+        return undefined;
+      }
+      let inner = body.slice(index + 1, end);
+      if (inner.startsWith("?:")) {
+        inner = inner.slice(2);
+      } else if (inner.startsWith("?")) {
+        return undefined;
+      }
+      const groupExample = patternBodyExample(inner);
+      if (groupExample === undefined) {
+        return undefined;
+      }
+      token = groupExample;
+      index = end;
+    } else if (").|".includes(character)) {
       return undefined;
     } else {
       token = character;
     }
 
     const remainder = body.slice(index + 1);
-    const exact = /^\{(\d+)\}/u.exec(remainder);
-    if (exact !== null) {
-      tokens.push(token.repeat(Number(exact[1])));
-      index += exact[0].length;
+    const counted = /^\{(\d+)(?:,\d*)?\}/u.exec(remainder);
+    if (counted !== null) {
+      tokens.push(token.repeat(Number(counted[1])));
+      index += counted[0].length;
       continue;
     }
     if (remainder.startsWith("+")) {
@@ -572,8 +625,17 @@ const patternExample = (pattern: string): string | undefined => {
     }
     tokens.push(token);
   }
+  return tokens.join("");
+};
 
-  const example = tokens.join("");
+const patternExample = (pattern: string): string | undefined => {
+  if (!pattern.startsWith("^") || !pattern.endsWith("$")) {
+    return undefined;
+  }
+  const example = patternBodyExample(pattern.slice(1, -1));
+  if (example === undefined) {
+    return undefined;
+  }
   const compiled = compileSchemaPattern(pattern);
   if (compiled.status === "invalid") {
     return undefined;
@@ -874,24 +936,41 @@ const combineSchemasForExample = (
   for (const keyword of ["minimum", "minLength", "minItems"] as const) {
     const bound = stricterLowerBound(parent[keyword], branch[keyword]);
     if (bound !== undefined) {
-      combined[keyword] = bound;
+      Object.defineProperty(combined, keyword, {
+        value: bound,
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
     }
   }
   for (const keyword of ["maximum", "maxLength", "maxItems"] as const) {
     const bound = stricterUpperBound(parent[keyword], branch[keyword]);
     if (bound !== undefined) {
-      combined[keyword] = bound;
+      Object.defineProperty(combined, keyword, {
+        value: bound,
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
     }
   }
 
   const parentProperties = propertiesOf(parent);
   const properties = { ...parentProperties };
   for (const [name, branchProperty] of Object.entries(propertiesOf(branch))) {
-    const parentProperty = parentProperties[name];
-    properties[name] =
-      parentProperty === undefined
-        ? branchProperty
-        : combineSchemasForExample(parentProperty, branchProperty);
+    const parentProperty = Object.hasOwn(parentProperties, name)
+      ? parentProperties[name]
+      : undefined;
+    Object.defineProperty(properties, name, {
+      value:
+        parentProperty === undefined
+          ? branchProperty
+          : combineSchemasForExample(parentProperty, branchProperty),
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
   }
   if (Object.keys(properties).length > 0) {
     combined["properties"] = properties;
@@ -972,14 +1051,14 @@ const exampleFor = (schema: JsonSchema): unknown => {
         return candidate;
       }
     }
-    const objectResult = isRecord(result) ? result : {};
+    const exampleEntries = Object.entries(isRecord(result) ? result : {});
     for (const intersection of intersections) {
       const example = exampleFor(intersection);
       if (isRecord(example)) {
-        Object.assign(objectResult, example);
+        exampleEntries.push(...Object.entries(example));
       }
     }
-    return objectResult;
+    return Object.fromEntries(exampleEntries);
   }
   const types = schemaTypes(schema);
   const defaultValue = schema["default"];
@@ -997,9 +1076,14 @@ const exampleFor = (schema: JsonSchema): unknown => {
   if (describesObject(schema)) {
     const result: Record<string, unknown> = {};
     for (const name of requiredOf(schema)) {
-      const child = propertiesOf(schema)[name];
+      const child = propertyOf(schema, name);
       if (child !== undefined) {
-        result[name] = exampleFor(child);
+        Object.defineProperty(result, name, {
+          value: exampleFor(child),
+          enumerable: true,
+          configurable: true,
+          writable: true,
+        });
       }
     }
     const mapEntry = mapEntrySchemas(schema).at(0);
@@ -1009,7 +1093,12 @@ const exampleFor = (schema: JsonSchema): unknown => {
           ? "key"
           : keyExampleForPattern(mapEntry.keyPattern);
       if (key !== undefined) {
-        result[key] = exampleFor(mapEntry.valueSchema);
+        Object.defineProperty(result, key, {
+          value: exampleFor(mapEntry.valueSchema),
+          enumerable: true,
+          configurable: true,
+          writable: true,
+        });
       }
     }
     return result;
@@ -1052,22 +1141,34 @@ const setExamplePath = ({
   let current = target;
   let currentSchema = schema;
   for (const [index, segment] of segments.entries()) {
-    const childSchema = propertiesOf(currentSchema)[segment];
+    const childSchema = propertyOf(currentSchema, segment);
     if (childSchema === undefined) {
       return;
     }
     if (index === segments.length - 1 && value !== undefined) {
-      current[segment] = value;
+      Object.defineProperty(current, segment, {
+        value,
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
       return;
     }
-    const existing = current[segment];
+    const existing = Object.hasOwn(current, segment)
+      ? current[segment]
+      : undefined;
     if (isRecord(existing)) {
       current = existing;
       currentSchema = childSchema;
       continue;
     }
     const example = value === undefined ? exampleFor(childSchema) : {};
-    current[segment] = example;
+    Object.defineProperty(current, segment, {
+      value: example,
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
     if (isRecord(example)) {
       current = example;
       currentSchema = childSchema;
@@ -1167,7 +1268,7 @@ const discriminatorOf = (
   }
   return [...requiredOf(first)].find((name) =>
     variants.every((variant) => {
-      const child = propertiesOf(variant)[name];
+      const child = propertyOf(variant, name);
       return (
         requiredOf(variant).has(name) &&
         child !== undefined &&
@@ -1182,7 +1283,7 @@ const compactChildShape = (schema: JsonSchema): string => {
   const discriminator = discriminatorOf(variants);
   if (discriminator !== undefined) {
     const values = variants.map((variant) => {
-      const child = propertiesOf(variant)[discriminator];
+      const child = propertyOf(variant, discriminator);
       return child === undefined
         ? ""
         : JSON.stringify(discriminatorValue(child));
@@ -1251,7 +1352,7 @@ export const buildCompactInputUnionHints = ({
     }
     const variants = branches
       .map((variant) => {
-        const child = propertiesOf(variant)[discriminator];
+        const child = propertyOf(variant, discriminator);
         const label =
           child === undefined ? "" : JSON.stringify(discriminatorValue(child));
         return `${discriminator}=${label}: ${compactVariantKeys(variant, discriminator)}`;

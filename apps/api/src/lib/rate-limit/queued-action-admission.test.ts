@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { DelayedError } from "bullmq";
 import { describe, expect, test } from "bun:test";
 
+import { createTestState } from "@stll/test-state";
+
 import { env } from "@/api/env";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
@@ -17,6 +19,8 @@ import {
   runQueuedKickoff,
 } from "./queued-action-admission";
 
+const testState = createTestState({ file: import.meta.path, config: env });
+
 const organizationId = toSafeId<"organization">("queued_org");
 const userId = toSafeId<"user">("queued_user");
 const admissionPolicy = {
@@ -28,7 +32,12 @@ const periodPolicy = { periodMs: 86_400_000, limit: 10 };
 
 describe("queued action admission", () => {
   test("defers a busy or unavailable background job without running it even after repeated starts", async () => {
-    for (const reason of ["busy", "unavailable"] as const) {
+    for (const reason of [
+      "busy",
+      "store_unavailable",
+      "organization_state_unreadable",
+      "lease_lost",
+    ] as const) {
       for (const attemptsStarted of [1, 7, 21]) {
         let ran = false;
         const delays: { timestamp: number; token: string | undefined }[] = [];
@@ -254,21 +263,17 @@ describe("queued action admission", () => {
   });
 
   test("feature flag off runs a queued kickoff without opening admission storage", async () => {
-    const previous = env.FEATURE_ACTION_ADMISSION;
-    env.FEATURE_ACTION_ADMISSION = false;
-    try {
-      expect(
-        await runQueuedKickoff({
-          organizationId,
-          userId,
-          actionKind: QUEUED_ACTION_KIND.flow,
-          logicalPhaseId: "manual-run:request-1",
-          run: async () => "completed",
-        }),
-      ).toBe("completed");
-    } finally {
-      env.FEATURE_ACTION_ADMISSION = previous;
-    }
+    testState.setConfig("FEATURE_ACTION_ADMISSION", false);
+
+    expect(
+      await runQueuedKickoff({
+        organizationId,
+        userId,
+        actionKind: QUEUED_ACTION_KIND.flow,
+        logicalPhaseId: "manual-run:request-1",
+        run: async () => "completed",
+      }),
+    ).toBe("completed");
   });
 
   test("queued kickoff sends its stable phase identity to admission", async () => {
@@ -306,8 +311,7 @@ describe("queued action admission", () => {
   });
 
   test("a deferred period refusal rejects kickoff before enqueue", async () => {
-    const previous = env.FEATURE_ACTION_ADMISSION;
-    env.FEATURE_ACTION_ADMISSION = true;
+    testState.setConfig("FEATURE_ACTION_ADMISSION", true);
     let enqueued = false;
     const admission: typeof withActionAdmission = async (options) =>
       await withActionAdmission({
@@ -325,25 +329,22 @@ describe("queued action admission", () => {
           },
         },
       });
-    try {
-      expect(
-        await runQueuedKickoff({
-          organizationId,
-          userId,
-          actionKind: QUEUED_ACTION_KIND.flow,
-          logicalPhaseId: "refused-run",
-          periodReservation: "on-acceptance",
-          admission,
-          run: async (_signal, reservePeriod) => {
-            await reservePeriod();
-            enqueued = true;
-          },
-        }).catch((error: unknown) => error),
-      ).toBeInstanceOf(ActionAdmissionError);
-      expect(enqueued).toBe(false);
-    } finally {
-      env.FEATURE_ACTION_ADMISSION = previous;
-    }
+
+    expect(
+      await runQueuedKickoff({
+        organizationId,
+        userId,
+        actionKind: QUEUED_ACTION_KIND.flow,
+        logicalPhaseId: "refused-run",
+        periodReservation: "on-acceptance",
+        admission,
+        run: async (_signal, reservePeriod) => {
+          await reservePeriod();
+          enqueued = true;
+        },
+      }).catch((error: unknown) => error),
+    ).toBeInstanceOf(ActionAdmissionError);
+    expect(enqueued).toBe(false);
   });
 
   test("holds the admission lease until planning and enqueue work settles", async () => {
@@ -401,7 +402,7 @@ describe("queued action admission", () => {
       send: async (_command: string, args: string[]) => {
         if (args.at(0)?.includes("ZREMRANGEBYSCORE")) {
           if (active === 1) {
-            return 0;
+            return [0, 1000];
           }
           active += 1;
           return 1;

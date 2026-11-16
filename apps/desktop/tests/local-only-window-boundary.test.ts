@@ -82,6 +82,19 @@ const commandFunctions = (source: string) =>
     ),
   ].map((match) => ({ name: match[1] ?? "", parameters: match[2] ?? "" }));
 
+const commandPermission = (command: string) =>
+  `allow-${command.replaceAll("_", "-")}`;
+
+/** Every command a feature's owner modules declare. */
+const featureCommands = async (feature: (typeof LOCAL_ONLY_FEATURES)[number]) =>
+  (
+    await Promise.all(
+      feature.commandOwners.map(async ({ module }) =>
+        commandFunctions(await readNative(module)).map(({ name }) => name),
+      ),
+    )
+  ).flat();
+
 describe("local-only data stays in the feature's own windows", () => {
   test("activity clipboard access is confined to the explicit copy command", async () => {
     const files = (await readdir(path.join(NATIVE_ROOT, "src"))).filter(
@@ -133,15 +146,15 @@ describe("local-only data stays in the feature's own windows", () => {
   test.each(featureCases)(
     "%s commands are granted only to its windows",
     async (_id, feature) => {
-      const prefixes = feature.commandOwners.map(({ prefix }) =>
-        permissionPrefix(prefix),
+      const owned = new Set(
+        (await featureCommands(feature)).map(commandPermission),
       );
       const windows = new Set<string>(feature.windows);
       let grants = 0;
       for (const { capability, file } of await capabilities()) {
         const permissions = stringArray(capability["permissions"], file);
         const granted = permissions.filter((permission) =>
-          prefixes.some((prefix) => permission.startsWith(prefix)),
+          owned.has(permission),
         );
         if (granted.length === 0) {
           continue;
@@ -154,6 +167,57 @@ describe("local-only data stays in the feature's own windows", () => {
       expect(grants).toBeGreaterThan(0);
     },
   );
+
+  test("every granted local-only command belongs to a feature's owner module", async () => {
+    const prefixes = LOCAL_ONLY_FEATURES.flatMap((feature) =>
+      feature.commandOwners.flatMap((owner) =>
+        owner.prefixes.map(permissionPrefix),
+      ),
+    );
+    const owned = new Set(
+      (await Promise.all(LOCAL_ONLY_FEATURES.map(featureCommands)))
+        .flat()
+        .map(commandPermission),
+    );
+    for (const { capability, file } of await capabilities()) {
+      for (const permission of stringArray(capability["permissions"], file)) {
+        if (prefixes.some((prefix) => permission.startsWith(prefix))) {
+          expect(owned, `${file}: ${permission}`).toContain(permission);
+        }
+      }
+    }
+  });
+
+  test("the Settings window reaches activity settings, never the timeline", async () => {
+    const featureById = (id: string) => {
+      const feature = LOCAL_ONLY_FEATURES.find(
+        (candidate) => candidate.id === id,
+      );
+      if (!feature) {
+        throw new TypeError(`Missing local-only feature: ${id}`);
+      }
+      return feature;
+    };
+    const settings = await featureCommands(featureById("activity_settings"));
+    const timeline = await featureCommands(featureById("activity"));
+    const capability = parseJson(await readNative("capabilities/default.json"));
+    if (!isRecord(capability)) {
+      throw new TypeError("Invalid default capability");
+    }
+    expect(stringArray(capability["windows"], "default.json")).toEqual([
+      "main",
+    ]);
+    const granted = new Set(
+      stringArray(capability["permissions"], "default.json"),
+    );
+    expect(timeline).toContain("activity_get_day");
+    for (const command of timeline) {
+      expect(granted, command).not.toContain(commandPermission(command));
+    }
+    expect(granted).toContain(commandPermission("activity_get_settings"));
+    expect(settings).toContain("activity_get_settings");
+    expect(settings).not.toContain("activity_get_day");
+  });
 
   test.each(featureCases)(
     "every %s command requires a verified caller",
@@ -172,7 +236,10 @@ describe("local-only data stays in the feature's own windows", () => {
           manifestCommands.toSorted(),
         );
         for (const { name, parameters } of commands) {
-          expect(name.startsWith(owner.prefix), name).toBe(true);
+          expect(
+            owner.prefixes.some((prefix) => name.startsWith(prefix)),
+            name,
+          ).toBe(true);
           expect(parameters, name).toMatch(caller);
         }
       }
@@ -288,9 +355,14 @@ describe("local-only data stays in the feature's own windows", () => {
     if (!isRecord(updater)) {
       throw new TypeError("plugins.updater is required");
     }
-    expect(Object.keys(updater).toSorted()).toEqual(["endpoints", "pubkey"]);
+    expect(Object.keys(updater).toSorted()).toEqual([
+      "endpoints",
+      "pubkey",
+      "requireSignedVersion",
+    ]);
     expect(typeof updater["pubkey"]).toBe("string");
     expect(String(updater["pubkey"]).length).toBeGreaterThan(0);
+    expect(updater["requireSignedVersion"]).toBe(true);
     const endpoints = stringArray(updater["endpoints"], "endpoints");
     expect(endpoints.length).toBeGreaterThan(0);
     for (const endpoint of endpoints) {

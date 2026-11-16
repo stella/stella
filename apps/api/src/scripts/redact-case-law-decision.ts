@@ -98,6 +98,11 @@ await runScriptWithErrorOutput(async () => {
               : corpus,
         };
       }
+      case "superseded":
+        return {
+          exitCode: 1,
+          message: `Decision ${decisionIdArg} observation superseded; no redaction applied.`,
+        };
       case "not-found":
         return { exitCode: 1, message: `Decision ${decisionIdArg} not found.` };
       case "corpus-objects-remain": {

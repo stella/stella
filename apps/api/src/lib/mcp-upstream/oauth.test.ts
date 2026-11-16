@@ -1,10 +1,11 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
 
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   bindDiscoveredMetadata,
   buildAuthorizeUrl,
@@ -19,8 +20,10 @@ import {
   getMcpOAuthRedirectUri,
   getOAuthEndpointOrigins,
   MCP_OAUTH_INVALID_GRANT_CODE,
+  MCP_OAUTH_REFRESH_REFUSED_CODE,
   oauthDomainsMatch,
   refreshOAuthToken,
+  registerOAuthClient,
   tokenExpiresAt,
   validateApprovedOAuthIssuer,
 } from "@/api/lib/mcp-upstream/oauth";
@@ -33,8 +36,12 @@ import {
   canonicalMcpResourceUrl,
   mcpResourceMatchesConnector,
 } from "@/api/lib/mcp-upstream/url-safety";
+import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
+import { readEvidence } from "@/api/lib/observability/failure-evidence";
+import { SafeOutboundFetchError } from "@/api/lib/safe-outbound-fetch";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
+const OAUTH_SINK = failureSink({ event: "test.mcp_oauth", expected: [] });
 const connectorUrl = "https://mcp.example.com/rpc";
 const issuer = "https://as.example.com";
 const outboundPermit = grantThirdPartyOutboundPermit();
@@ -493,10 +500,15 @@ describe("upstream metadata binding", () => {
 });
 
 test("classifies refresh outcomes from the token endpoint", async () => {
-  for (const [status, error, definitive] of [
-    [400, "invalid_grant", true],
-    [503, "temporarily_unavailable", false],
-    [400, "invalid_client", false],
+  for (const [status, error, code] of [
+    [400, "invalid_grant", MCP_OAUTH_INVALID_GRANT_CODE],
+    [503, "temporarily_unavailable", "upstream_unavailable"],
+    [429, "slow_down", "upstream_unavailable"],
+    [408, "request_timeout", "upstream_unavailable"],
+    [400, "invalid_client", MCP_OAUTH_REFRESH_REFUSED_CODE],
+    [401, "unauthorized_client", MCP_OAUTH_REFRESH_REFUSED_CODE],
+    // A successful answer that is not a token breaks the contract: reported, not retried.
+    [200, "not_a_token", undefined],
   ] as const) {
     const transport = discoveryTransport();
     const metadata = await discoverOAuthMetadata({
@@ -517,7 +529,7 @@ test("classifies refresh outcomes from the token endpoint", async () => {
           Result.ok({
             body: new TextEncoder().encode(JSON.stringify({ error })).buffer,
             headers: new Headers(),
-            ok: false,
+            ok: status < 400,
             status,
           }),
       },
@@ -530,11 +542,172 @@ test("classifies refresh outcomes from the token endpoint", async () => {
     });
     expect(Result.isError(result)).toBe(true);
     if (Result.isError(result)) {
-      expect(result.error.code === MCP_OAUTH_INVALID_GRANT_CODE).toBe(
-        definitive,
-      );
+      expect(result.error.code).toBe(code);
+      expect(result.error.status).toBe(code === undefined ? 500 : 502);
     }
   }
+});
+
+describe("a third party's answer at its OAuth endpoints", () => {
+  const answering = (status: number, body: string) => ({
+    ...discoveryTransport().dependencies,
+    safeOutboundFetchBytes: async () =>
+      Result.ok({
+        body: new TextEncoder().encode(body).buffer,
+        headers: new Headers(),
+        ok: status < 400,
+        status,
+      }),
+  });
+  const dynamicClientMetadata = async () => {
+    const metadata = await discoverOAuthMetadata({
+      rawMcpUrl: connectorUrl,
+      permit: outboundPermit,
+      dependencies: discoveryTransport().dependencies,
+    });
+    if (Result.isError(metadata)) {
+      return panic("Fixture metadata did not resolve");
+    }
+    return metadata.value;
+  };
+  const register = async (
+    status: number,
+    body: string,
+  ): Promise<Result<unknown, HandlerError<502>>> => {
+    const metadata = await dynamicClientMetadata();
+    return await registerOAuthClient({
+      metadata: {
+        ...metadata,
+        authorizationServer: {
+          ...metadata.authorizationServer,
+          registration_endpoint: `${issuer}/register`,
+        },
+      },
+      permit: outboundPermit,
+      dependencies: answering(status, body),
+      connectorSlug: "example",
+      redirectUri: "https://app.example.com/callback",
+      requestedScopes: [],
+    });
+  };
+  const exchange = async (
+    status: number,
+    body: string,
+  ): Promise<Result<unknown, HandlerError<502>>> =>
+    await exchangeAuthorizationCode({
+      metadata: await dynamicClientMetadata(),
+      permit: outboundPermit,
+      dependencies: answering(status, body),
+      clientId: "client",
+      clientSecret: null,
+      code: "code",
+      codeVerifier: "verifier",
+      responseIssuer: undefined,
+      redirectUri: "https://app.example.com/callback",
+    });
+
+  for (const [name, call] of [
+    ["registration", register],
+    ["code exchange", exchange],
+  ] as const) {
+    test(`a refused ${name} grades as the upstream, not a defect here`, async () => {
+      const result = await call(400, '{"error":"invalid_request"}');
+      if (!Result.isError(result)) {
+        panic("Expected a refusal");
+      }
+      expect(result.error.code).toBe("upstream_unavailable");
+      expect(
+        gradeFailure(readEvidence(result.error), OAUTH_SINK),
+      ).toMatchObject({ reason: "upstream_unavailable", grade: "transient" });
+    });
+
+    test(`a ${name} answer that breaks the contract stays reported`, async () => {
+      const result = await call(200, '{"unexpected":true}');
+      if (!Result.isError(result)) {
+        panic("Expected a contract failure");
+      }
+      expect(result.error.code).toBe("internal_error");
+    });
+  }
+
+  for (const [failure, error, code] of [
+    [
+      "a URL the outbound policy rejects",
+      new SafeOutboundFetchError({ message: "URL host is not allowed" }),
+      "internal_error",
+    ],
+    [
+      "a response over the size limit",
+      new SafeOutboundFetchError({
+        message: "Response body exceeded size limit",
+      }),
+      "internal_error",
+    ],
+    [
+      "a request that timed out",
+      new SafeOutboundFetchError({ message: "Request timed out" }),
+      "upstream_unavailable",
+    ],
+    [
+      "a transport failure",
+      new SafeOutboundFetchError({
+        message: "Outbound request failed",
+        cause: new Error("connection reset"),
+      }),
+      "upstream_unavailable",
+    ],
+  ] as const) {
+    test(`${failure} at the token endpoint answers ${code}`, async () => {
+      const result = await exchangeAuthorizationCode({
+        metadata: await dynamicClientMetadata(),
+        permit: outboundPermit,
+        dependencies: {
+          ...discoveryTransport().dependencies,
+          safeOutboundFetchBytes: async () => Result.err(error),
+        },
+        clientId: "client",
+        clientSecret: null,
+        code: "code",
+        codeVerifier: "verifier",
+        responseIssuer: undefined,
+        redirectUri: "https://app.example.com/callback",
+      });
+      if (!Result.isError(result)) {
+        panic("Expected a failure");
+      }
+      expect(result.error.code).toBe(code);
+    });
+  }
+
+  test("an authorization server without dynamic registration is its own state", async () => {
+    const result = await registerOAuthClient({
+      metadata: await dynamicClientMetadata(),
+      permit: outboundPermit,
+      dependencies: discoveryTransport().dependencies,
+      connectorSlug: "example",
+      redirectUri: "https://app.example.com/callback",
+      requestedScopes: [],
+    });
+    if (!Result.isError(result)) {
+      panic("Expected no registration");
+    }
+    expect(result.error.code).toBe("upstream_unavailable");
+  });
+
+  test("a refused token refresh grades as the upstream", () => {
+    expect(
+      gradeFailure(
+        readEvidence(
+          new HandlerError({
+            status: 502,
+            code: MCP_OAUTH_REFRESH_REFUSED_CODE,
+            message: "Failed to refresh MCP access token",
+          }),
+        ),
+        OAUTH_SINK,
+      ),
+    ).toMatchObject({ reason: "upstream_unavailable", grade: "transient" });
+  });
 });
 
 describe("authorization response metadata", () => {

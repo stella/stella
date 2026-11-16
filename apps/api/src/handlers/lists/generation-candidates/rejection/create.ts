@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   legalListGenerationCandidates,
@@ -11,17 +11,18 @@ import { legalListRealtimeUpdates } from "@/api/handlers/realtime-resource-sets"
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 
-const bodySchema = t.Object({
-  listId: tSafeId("legalList"),
-  runId: tSafeId("legalListGenerationRun"),
-  candidateId: tSafeId("legalListGenerationCandidate"),
+const bodySchema = v.object({
+  listId: resourceIdSchema("legalList"),
+  runId: resourceIdSchema("legalListGenerationRun"),
+  candidateId: resourceIdSchema("legalListGenerationCandidate"),
 });
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   featureAccess: { type: "required", featureId: LEGAL_LISTS_FEATURE_ID },
   description:
     "Reject one pending candidate of a generation run so it is never turned " +

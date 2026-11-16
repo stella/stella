@@ -8,8 +8,6 @@ import { AlertTriangleIcon, XIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { cn } from "@stll/ui/utils";
 
-import Tooltip from "@/components/tooltip";
-
 const DELIMITERS = /[,;\n\t]/u;
 
 const getDomain = (email: string) => email.split("@")[1]?.toLowerCase() ?? "";
@@ -189,20 +187,16 @@ export const InviteStep = ({
                   <BidiText as="span" direction="ltr">
                     {email}
                   </BidiText>
-                  <Tooltip
-                    content={t("common.remove")}
-                    render={
-                      <button
-                        aria-label={t("common.remove")}
-                        className="text-muted-foreground hover:text-foreground"
-                        disabled={isSubmitting}
-                        onClick={() => removeEmail(email)}
-                        type="button"
-                      >
-                        <XIcon className="size-3" />
-                      </button>
-                    }
-                  />
+                  <Button
+                    aria-label={t("common.remove")}
+                    disabled={isSubmitting}
+                    onClick={() => removeEmail(email)}
+                    size="inline"
+                    tooltip={t("common.remove")}
+                    variant="muted"
+                  >
+                    <XIcon className="size-3" />
+                  </Button>
                 </span>
               );
             })}

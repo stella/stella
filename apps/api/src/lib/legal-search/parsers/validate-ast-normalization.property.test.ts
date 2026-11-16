@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
-import * as cheerio from "cheerio";
 import fc from "fast-check";
 
+import { load } from "@stll/html";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
 
@@ -50,9 +50,9 @@ test("validation normalization matches with and without a supplied document", ()
         const html = `<p>${escapeHtml(source)}</p>`;
         const blocks = blocksFor(ast);
 
-        expect(
-          validateAst(html, blocks, { document: cheerio.load(html) }),
-        ).toEqual(validateAst(html, blocks));
+        expect(validateAst(html, blocks, { document: load(html) })).toEqual(
+          validateAst(html, blocks),
+        );
       },
     ),
   );

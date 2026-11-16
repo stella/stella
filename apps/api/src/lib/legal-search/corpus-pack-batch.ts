@@ -3,6 +3,7 @@ import { panic, Result } from "better-result";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { corpusMemberLayout } from "@/api/env-base";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { StoredCorpusValidationError } from "@/api/lib/errors/tagged-errors";
 import {
   enqueueCaseLawCorpusUploadIntentCleanups,
   reserveCaseLawCorpusUploadIntents,
@@ -11,6 +12,7 @@ import type {
   CaseLawCorpusUploadReservationInput,
   CaseLawCorpusUploadReservations,
 } from "@/api/lib/legal-search/case-law-corpus-upload-intents";
+import { prepareCorpusAst } from "@/api/lib/legal-search/corpus-ast";
 import {
   formatCorpusLocation,
   parseCorpusLocation,
@@ -99,7 +101,9 @@ export type CorpusPackBatchOutcomes = Map<
 >;
 
 export type CorpusPackBatch = {
-  enqueue: (entry: CorpusPackBatchEntry) => void;
+  enqueue: (
+    entry: CorpusPackBatchEntry,
+  ) => Result<void, StoredCorpusValidationError>;
   /**
    * Write the batch and settle its rows. Every enqueued decision appears in
    * the result, so a caller can fold the outcomes back into its own. A
@@ -444,7 +448,7 @@ export const openCorpusPackBatch = ({
     const written: PlannedEntry[] = [];
     const abandoned: SafeId<"caseLawCorpusUploadIntent">[] = [];
     for (const entry of group) {
-      const stored = await Result.tryPromise({
+      const attempt = await Result.tryPromise({
         try: async () =>
           await writeObjects(
             {
@@ -460,6 +464,7 @@ export const openCorpusPackBatch = ({
           ),
         catch: (cause) => cause,
       });
+      const stored = attempt.andThen((outcome) => outcome);
       if (Result.isOk(stored)) {
         written.push(entry);
         continue;
@@ -519,7 +524,21 @@ export const openCorpusPackBatch = ({
 
   return {
     enqueue: (entry) => {
-      entries.push(entry);
+      const prepared = prepareCorpusAst({
+        ast: entry.payload.ast,
+        fallbackText: entry.payload.text,
+      });
+      if (prepared.isErr()) {
+        return prepared;
+      }
+      entries.push({
+        ...entry,
+        payload: {
+          ...entry.payload,
+          ast: prepared.value.ast,
+        },
+      });
+      return Result.ok(undefined);
     },
     flush: async () =>
       await Result.tryPromise({

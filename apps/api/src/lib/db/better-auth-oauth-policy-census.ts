@@ -24,8 +24,7 @@ export type BetterAuthOAuthPolicyTransactionalDatabase =
 
 const BETTER_AUTH_OAUTH_POLICY_CHECKS = {
   CLIENTS_LINKED: "clients-linked",
-  LINKS_USE_CONFIGURED_RESOURCES: "links-use-configured-resources",
-  RESOURCES_MATCH: "resources-match",
+  RESOURCES_COVER_POLICY: "resources-cover-policy",
 } as const;
 
 type BetterAuthOAuthPolicyCheck =
@@ -33,8 +32,7 @@ type BetterAuthOAuthPolicyCheck =
 
 type BetterAuthOAuthPolicyCensusRow = {
   clientsLinked: boolean;
-  linksUseConfiguredResources: boolean;
-  resourcesMatch: boolean;
+  resourcesCoverPolicy: boolean;
 };
 
 export class BetterAuthOAuthPolicyCensusError extends TaggedError(
@@ -50,15 +48,13 @@ const parseCensusRow = (
   if (
     !isRecord(value) ||
     typeof value["clientsLinked"] !== "boolean" ||
-    typeof value["linksUseConfiguredResources"] !== "boolean" ||
-    typeof value["resourcesMatch"] !== "boolean"
+    typeof value["resourcesCoverPolicy"] !== "boolean"
   ) {
     return null;
   }
   return {
     clientsLinked: value["clientsLinked"],
-    linksUseConfiguredResources: value["linksUseConfiguredResources"],
-    resourcesMatch: value["resourcesMatch"],
+    resourcesCoverPolicy: value["resourcesCoverPolicy"],
   };
 };
 
@@ -67,18 +63,14 @@ const requiredBooleanRow = (value: unknown, key: string): boolean | null =>
 
 const failedCensusChecks = ({
   clientsLinked,
-  linksUseConfiguredResources,
-  resourcesMatch,
+  resourcesCoverPolicy,
 }: BetterAuthOAuthPolicyCensusRow): BetterAuthOAuthPolicyCheck[] => {
   const failed: BetterAuthOAuthPolicyCheck[] = [];
-  if (!resourcesMatch) {
-    failed.push(BETTER_AUTH_OAUTH_POLICY_CHECKS.RESOURCES_MATCH);
+  if (!resourcesCoverPolicy) {
+    failed.push(BETTER_AUTH_OAUTH_POLICY_CHECKS.RESOURCES_COVER_POLICY);
   }
   if (!clientsLinked) {
     failed.push(BETTER_AUTH_OAUTH_POLICY_CHECKS.CLIENTS_LINKED);
-  }
-  if (!linksUseConfiguredResources) {
-    failed.push(BETTER_AUTH_OAUTH_POLICY_CHECKS.LINKS_USE_CONFIGURED_RESOURCES);
   }
   return failed;
 };
@@ -87,6 +79,17 @@ const failedCensusChecks = ({
  * Fail closed before readiness when the migration-owned OAuth policy is not
  * usable by Better Auth 1.7. The query returns only booleans: startup logs
  * never expose client identifiers, resource rows, or counts.
+ *
+ * The stored policy must cover this code's policy, not equal it: every
+ * configured resource exists, is enabled, carries its configured name and
+ * holds at least its configured scopes. A later release's migrate step adds
+ * scopes and resources this code does not define, and the previous release
+ * still has to boot beside them (expand/contract), so extra scopes, extra
+ * resources and client links to those resources pass. Tolerating them widens
+ * nothing this code issues: the auth adapter narrows every stored resource to
+ * this code's own policy before the provider reads it
+ * (`withConfiguredOAuthResources`), so a stored scope or resource this code
+ * does not configure is never granted by it.
  */
 export const assertBetterAuthOAuthPolicyCensus = async (
   database: BetterAuthOAuthPolicyDatabase,
@@ -111,17 +114,14 @@ export const assertBetterAuthOAuthPolicyCensus = async (
     SELECT NOT EXISTS (
              SELECT 1
                FROM expected_resource expected
-               FULL OUTER JOIN oauth_resource actual
+               LEFT JOIN oauth_resource actual
                  ON actual.identifier = expected.identifier
-              WHERE expected.identifier IS NULL
-                 OR actual.identifier IS NULL
+              WHERE actual.identifier IS NULL
                  OR actual.name IS DISTINCT FROM expected.name
-                 OR ARRAY(
-                      SELECT unnest(actual.allowed_scopes)
-                      ORDER BY 1
-                    ) IS DISTINCT FROM expected.allowed_scopes
+                 OR actual.allowed_scopes IS NULL
+                 OR NOT (expected.allowed_scopes <@ actual.allowed_scopes)
                  OR actual.disabled IS DISTINCT FROM false
-           ) AS "resourcesMatch",
+           ) AS "resourcesCoverPolicy",
            NOT EXISTS (
              SELECT 1
                FROM oauth_client client
@@ -130,14 +130,7 @@ export const assertBetterAuthOAuthPolicyCensus = async (
                   FROM oauth_client_resource link
                  WHERE link.client_id = client.client_id
               )
-           ) AS "clientsLinked",
-           NOT EXISTS (
-             SELECT 1
-               FROM oauth_client_resource link
-               LEFT JOIN expected_resource expected
-                 ON expected.identifier = link.resource_id
-              WHERE expected.identifier IS NULL
-           ) AS "linksUseConfiguredResources"
+           ) AS "clientsLinked"
   `);
   const row = parseCensusRow(executedRows(result).at(0));
   if (row === null) {

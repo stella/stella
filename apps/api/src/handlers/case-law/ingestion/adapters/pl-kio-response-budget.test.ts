@@ -1,8 +1,7 @@
 import { expect, test } from "bun:test";
-import * as cheerio from "cheerio";
 import fc from "fast-check";
-import { adapter } from "parse5-htmlparser2-tree-adapter";
 
+import { htmlTreeAdapter as adapter, load } from "@stll/html";
 import { assertProperty } from "@stll/property-testing";
 
 import { hasPlKioAttributeBudget } from "./pl-kio-attribute-budget";
@@ -99,6 +98,29 @@ test("overlapping tag candidates exhaust linear work before parsing", () => {
   );
 });
 
+test("work on a loaded document after its parse is not charged to the publisher's budget", async () => {
+  // A 27-page ruling converted from print: its markup builds 8,049 of the
+  // 10,000 allocations, and AST validation then parses one fragment per
+  // `<br>` it replaces with a space, 1,286 of them.
+  const html = new TextDecoder().decode(
+    Bun.gunzipSync(
+      new Uint8Array(
+        await Bun.file(
+          new URL("__fixtures__/pl-kio-content-420.html.gz", import.meta.url),
+        ).arrayBuffer(),
+      ),
+    ),
+  );
+  const read = readTestHtml(html);
+  if (read.type !== "accepted") {
+    throw new TypeError(`Expected the ruling's markup to fit: ${read.type}`);
+  }
+  const $ = read.document;
+  expect($("br").length).toBeGreaterThan(1000);
+  $("br").replaceWith(" ");
+  expect($("br").length).toBe(0);
+});
+
 test("duplicate names count before the parser can discard them", () => {
   const html = `<div ${"a ".repeat(PL_KIO_HTML_BUDGET.maxAttributesPerTag + 1)}>`;
   expect(hasPlKioAttributeBudget(html, PL_KIO_HTML_BUDGET)).toBe(false);
@@ -144,7 +166,7 @@ test("pl-kio.attribute-prescan-upper-bound: accepted scans bound parse5 across m
       if (!hasPlKioAttributeBudget(html, limits)) {
         return;
       }
-      cheerio.load(html, {
+      load(html, {
         treeAdapter: {
           ...adapter,
           createElement: (...args) => {

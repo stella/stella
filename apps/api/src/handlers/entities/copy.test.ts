@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
+import type { Transaction } from "@/api/db/root";
 import {
   documentCounters,
   entities,
@@ -11,11 +12,13 @@ import {
 } from "@/api/db/schema";
 import type { FieldContent, PropertyContent } from "@/api/db/schema-validators";
 import { envBase } from "@/api/env-base";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createFileKey } from "@/api/lib/file-key";
+import { deleteOrganizationFilesWithSignal } from "@/api/lib/files/delete-organization-file";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { DOCUMENT_TYPE_CLASSIFIER_ROLE } from "@/api/lib/properties/create-schema";
 import { isRecord } from "@/api/lib/type-guards";
@@ -25,7 +28,10 @@ import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+import {
+  createScopedDbMock,
+  createSelectQueryMock,
+} from "@/api/tests/scoped-db-mock";
 
 import { createCopyToWorkspace } from "./copy";
 
@@ -54,7 +60,19 @@ const syncWorkspaceSearchActivityMock = mock(async () => {});
 const enqueueImageThumbnailOrMarkFailedMock = mock(async () => undefined);
 const enqueuePdfDerivativeOrMarkFailedMock = mock(async () => undefined);
 
+const createFileDeletionTx = () =>
+  asTestRaw<Transaction>({
+    select: () => createSelectQueryMock([]),
+    selectDistinct: () => createSelectQueryMock([]),
+  });
 const copyToWorkspace = createCopyToWorkspace({
+  deleteCopiedObjects: async (keys, signal) =>
+    await deleteOrganizationFilesWithSignal(keys, signal, {
+      fileUsageDb: {
+        transaction: async <T>(callback: (tx: Transaction) => Promise<T>) =>
+          await callback(createFileDeletionTx()),
+      },
+    }),
   enqueueDocumentProcessingRun: enqueueDocumentProcessingRunMock,
   enqueueEntitySearchRepairs: enqueueEntitySearchRepairsMock,
   enqueueImageThumbnailOrMarkFailed: enqueueImageThumbnailOrMarkFailedMock,
@@ -204,6 +222,13 @@ afterEach(() => {
 });
 
 beforeEach(() => {
+  enqueueDocumentProcessingRunMock.mockClear();
+  enqueueEntitySearchRepairsMock.mockClear();
+  enqueueImageThumbnailOrMarkFailedMock.mockClear();
+  enqueuePdfDerivativeOrMarkFailedMock.mockClear();
+  flushEntitySearchRepairsMock.mockClear();
+  requestNativeExtractionRunsMock.mockClear();
+  syncWorkspaceSearchActivityMock.mockClear();
   analytics = installRecordingAnalytics();
   fake = startFakeS3();
   seedSourceObject(sourceFileId, sourceFileMimeType);
@@ -241,7 +266,9 @@ const createContext = ({
     organizationId,
     workspaceId: sourceWorkspaceId,
     userId,
-    request: new Request("https://example.test/v1/entities/copy-to-workspace"),
+    request: new Request(
+      `https://example.test/v1/entities/${sourceWorkspaceId}/copy-to-workspace`,
+    ),
     server: null,
   };
   const createBoundAuditRecorder: CopyToWorkspaceContext["createAuditRecorder"] =
@@ -267,7 +294,7 @@ const createContext = ({
       sourceFieldId,
     },
     request: sourceRecorderBindings.request,
-    route: "/v1/workspaces/:workspaceId/entities/copy-to-workspace",
+    route: "/v1/entities/:workspaceId/copy-to-workspace" satisfies ApiRoutePath,
     getWorkspaceAccess: async (workspaceId: SafeId<"workspace">) =>
       workspaceId === targetWorkspaceIdArg ? resolvedTargetWorkspace : null,
     safeDb,
@@ -1350,6 +1377,13 @@ describe("copy-to-workspace", () => {
       },
       $count: async () => 0,
       select: (selection: unknown) => {
+        // The cell companions a move carries: none in this source.
+        if (
+          isRecord(selection) &&
+          ("metadata" in selection || "fileFieldIds" in selection)
+        ) {
+          return { from: () => ({ where: async () => [] }) };
+        }
         if (
           isRecord(selection) &&
           ("entityId" in selection || "entityVersionId" in selection)
@@ -1389,11 +1423,10 @@ describe("copy-to-workspace", () => {
             },
           };
         }
-        selectCallCount += 1;
-
         return {
-          from: (table: unknown) =>
-            table === entityVersions
+          from: (table: unknown) => {
+            selectCallCount += 1;
+            return table === entityVersions
               ? {
                   // The code carry reads the source rows FOR UPDATE.
                   where: () => ({
@@ -1417,7 +1450,8 @@ describe("copy-to-workspace", () => {
                     }
                     throw new Error("unexpected lookup");
                   },
-                },
+                };
+          },
         };
       },
       insert: (table: unknown) => ({

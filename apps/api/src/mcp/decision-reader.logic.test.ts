@@ -199,7 +199,10 @@ describe("decision reader bounded pages", () => {
     for (const cursor of [
       "",
       "invalid",
-      Buffer.from('[{"phase":"blocks","offset":-1}]').toString("base64url"),
+      Buffer.from('[{"phase":"blocks","offset":-1}]').toBase64({
+        alphabet: "base64url",
+        omitPadding: true,
+      }),
     ]) {
       expect(decodeReaderCursor(cursor)).toBeNull();
     }

@@ -119,3 +119,46 @@ test("the retry workflow agrees with retryDecision", async () => {
     expect(retried).toBe(retryDecision(fixture.jobs, fixture.attempt).retry);
   }
 });
+
+// The job also reconciles metadata mirrors, which must follow every attempt's
+// outcome, so the retry conditions stay on the retry step.
+test("every pull request completion of CI Checks starts the job", () => {
+  const source: unknown = Bun.YAML.parse(
+    readFileSync(
+      new URL("../.github/workflows/ci-runner-loss-retry.yml", import.meta.url),
+      "utf-8",
+    ),
+  );
+  const parsed = v.parse(
+    v.object({ jobs: v.object({ retry: v.object({ if: v.string() }) }) }),
+    source,
+  );
+  const condition = new Script(
+    parsed.jobs.retry.if.replaceAll(
+      "contains(fromJSON('[\"pull_request\"]'), github.event.workflow_run.event)",
+      "github.event.workflow_run.event === 'pull_request'",
+    ),
+  );
+  const starts = (conclusion: string, attempt: number) =>
+    condition.runInNewContext({
+      github: {
+        repository: "owner/repository",
+        event: {
+          workflow_run: {
+            head_repository: { full_name: "owner/repository" },
+            path: ".github/workflows/ci.yml",
+            event: "pull_request",
+            conclusion,
+            run_attempt: attempt,
+          },
+        },
+      },
+    });
+  for (const conclusion of ["failure", "success", "cancelled"]) {
+    for (const attempt of [1, 2]) {
+      expect(starts(conclusion, attempt), `${conclusion}/${attempt}`).toBe(
+        true,
+      );
+    }
+  }
+});

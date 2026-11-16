@@ -1,0 +1,5 @@
+{
+  "capture": "synthetic",
+  "note": "Synthetic values preserve the fields and primitive types observed in a public BRREG entity response. No source values retained.",
+  "sha256": "18d06d8072b2129756e5dbdc4e462790017fbdd13b42ff9b3356faf97577c5df"
+}

@@ -38,7 +38,11 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { COMMON_TIMEZONES } from "@/lib/timezones";
 
-import { accessResetProviders, socialProviderName } from "./access-reset.logic";
+import {
+  accessResetProviders,
+  isSocialProvider,
+  socialProviderName,
+} from "./access-reset.logic";
 import type { SocialProvider } from "./access-reset.logic";
 
 const renderEmail = (chunks: ReactNode) => (
@@ -160,7 +164,10 @@ export const OTPPanel = ({
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "OTPPanel:failure",
+        scope: { type: "handler", handlerId: "OTPPanel:failure" },
+      });
     },
   });
 
@@ -228,7 +235,13 @@ export const OTPPanel = ({
           return;
         })
         .catch((error: unknown) => {
-          analytics.captureError(error);
+          analytics.captureError(error, {
+            fingerprintKey: "OTPPanel.mutationFn:failure",
+            scope: {
+              type: "handler",
+              handlerId: "OTPPanel.mutationFn:failure",
+            },
+          });
         });
 
       await invalidateSession.mutateAsync();
@@ -237,6 +250,10 @@ export const OTPPanel = ({
     onError: (error) => {
       analytics.captureError(
         AlreadyToastedError.is(error) ? error.cause : error,
+        {
+          fingerprintKey: "OTPPanel:failure-2",
+          scope: { type: "handler", handlerId: "OTPPanel:failure-2" },
+        },
       );
       // Only the structured sign-in error already toasted a message in the
       // mutationFn (marked by AlreadyToastedError); every other throw
@@ -266,7 +283,7 @@ export const OTPPanel = ({
               identity: renderEmail,
               providers: resetConfirmation.providers
                 .map((provider) => {
-                  if (provider === "google" || provider === "microsoft") {
+                  if (isSocialProvider(provider)) {
                     return socialProviderName(provider);
                   }
                   if (provider === "credential") {

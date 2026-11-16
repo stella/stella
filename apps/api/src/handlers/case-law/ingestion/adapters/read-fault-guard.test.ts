@@ -74,6 +74,7 @@ import {
   plUokikFixture,
   skCourtsFixture,
   skUsFixture,
+  ukFclFixture,
 } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 import {
   buildWithFault,
@@ -87,10 +88,13 @@ import {
   recordFetchStages,
   type RefusalOutcome,
 } from "@/api/tests/helpers/read-fault-drivers";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 import { readPublisherText } from "./publisher-read";
+
+const testFetchState = createTestFetch();
 
 /**
  * What drives each adapter's reads. Total over the adapter keys, so a source
@@ -124,6 +128,7 @@ const READ_FAULT_COVERAGE = {
   [ADAPTER_KEYS.AT_FINDOK]: atFindokFixture,
   [ADAPTER_KEYS.EU_ECJ]: euEcjFixture,
   [ADAPTER_KEYS.HU_BHGY]: huBhgyFixture,
+  [ADAPTER_KEYS.UK_FCL]: ukFclFixture,
   [ADAPTER_KEYS.PL_KIS]: plKisFixture,
   [ADAPTER_KEYS.PL_UODO]: plUodoFixture,
   [ADAPTER_KEYS.PL_UOKIK]: plUokikFixture,
@@ -141,7 +146,6 @@ const recorded: Readonly<Record<string, string>> = baseline.rows;
 const writing = process.env["READ_FAULT_BASELINE"] === "write";
 const observedRows = new Map<string, string>();
 
-const originalFetch = globalThis.fetch;
 beforeAll(() => {
   // Retry backoff and publisher pacing would only slow the faulted builds.
   spyOn(Bun, "sleep").mockImplementation(async () => {
@@ -149,7 +153,7 @@ beforeAll(() => {
   });
 });
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
 });
 afterAll(() => {
   mock.restore();
@@ -280,8 +284,10 @@ test("a removed adapter cannot leave a stale row", () => {
 
 const PUBLISHER = "https://publisher.invalid/document/1";
 const servedDocument = () => {
-  globalThis.fetch = asFetchMock(
-    async () => await Promise.resolve(new Response("<p>decision text</p>")),
+  testFetchState.set(
+    asFetchMock(
+      async () => await Promise.resolve(new Response("<p>decision text</p>")),
+    ),
   );
 };
 
@@ -361,12 +367,14 @@ test("a read through readPublisherText surfaces every fault", async () => {
 
 const NOTICE = "https://publisher.invalid/notice/1";
 const servedDocumentAndNotice = () => {
-  globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-    const href = input instanceof Request ? input.url : String(input);
-    return await Promise.resolve(
-      new Response(href === NOTICE ? "<notice/>" : "<p>decision text</p>"),
-    );
-  });
+  testFetchState.set(
+    asFetchMock(async (input: string | URL | Request) => {
+      const href = input instanceof Request ? input.url : String(input);
+      return await Promise.resolve(
+        new Response(href === NOTICE ? "<notice/>" : "<p>decision text</p>"),
+      );
+    }),
+  );
 };
 const readInit = {
   adapterKey: ADAPTER_KEYS.CZ_NSS,

@@ -1,5 +1,6 @@
 import { Result, TaggedError } from "better-result";
 
+import { LIMITER_STORE_UNAVAILABLE } from "@stll/api-contract/action-admission";
 import { Temporal } from "@stll/time";
 
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
@@ -20,13 +21,15 @@ import {
   type ScheduleTimeout,
   withCommandTimeout,
 } from "@/api/lib/rate-limit/redis-command-timeout";
+import { LimiterStoreUnavailableError } from "@/api/lib/rate-limit/store-unavailable";
 import { createRedisClient } from "@/api/lib/redis-client";
 import { type CoordinationKey, coordinationKey } from "@/api/lib/redis-keys";
+import { isUnknownArray } from "@/api/lib/type-guards";
 
 const REQUEST_KEY_SEPARATOR = "\u001f";
 const REDIS_COMMAND_TIMEOUT_MS = 500;
 const REFUND_PROVENANCE_CLEANUP_INTERVAL_MS = 60_000;
-const FAIL_CLOSED_COUNT = Number.MAX_SAFE_INTEGER;
+const LOCAL_LIMIT_EXCEEDED_COUNT = Number.MAX_SAFE_INTEGER;
 
 // Every increment attempt is tagged with a client-generated attempt id
 // (ARGV[2]) that the script records for refundable attempts, independent of
@@ -228,27 +231,24 @@ export class RedisRateLimitContext implements ReadableRateLimitContext {
           "1",
           redisRateLimitKey(counterKey),
         ]);
-        if (
-          Array.isArray(reply) &&
-          reply.length === 2 &&
-          Number(reply.at(0)) === 0 &&
-          Number(reply.at(1)) === -1
-        ) {
-          return null;
-        }
-        if (
-          Array.isArray(reply) &&
-          reply.length === 2 &&
-          Number(reply.at(0)) === 0 &&
-          Number.isFinite(Number(reply.at(1))) &&
-          Number(reply.at(1)) >= 0
-        ) {
-          const nextReset = new Date(now + Number(reply.at(1)));
-          return {
-            count: 0,
-            nextReset,
-            start: nextReset.getTime() - this.durationMs,
-          };
+        if (isUnknownArray(reply) && reply.length === 2) {
+          const [count, ttlMs] = reply;
+          if (count === 0 && ttlMs === -1) {
+            return null;
+          }
+          if (
+            count === 0 &&
+            typeof ttlMs === "number" &&
+            Number.isSafeInteger(ttlMs) &&
+            ttlMs >= 0
+          ) {
+            const nextReset = new Date(now + ttlMs);
+            return {
+              count: 0,
+              nextReset,
+              start: nextReset.getTime() - this.durationMs,
+            };
+          }
         }
         return parseIncrementReply(reply, this.durationMs, now);
       },
@@ -257,21 +257,21 @@ export class RedisRateLimitContext implements ReadableRateLimitContext {
     if (Result.isOk(result)) {
       return result.value;
     }
-    this.onRedisError(result.error, "read");
     if (this.failurePolicy === "fail_open_local") {
+      this.onRedisError(result.error, "read");
       this.onLocalFallback?.();
       const counter = this.fallback.read(counterKey);
       return counter &&
         this.localMax !== undefined &&
         counter.count > this.localMax
-        ? { ...counter, count: FAIL_CLOSED_COUNT }
+        ? { ...counter, count: LOCAL_LIMIT_EXCEEDED_COUNT }
         : counter;
     }
-    return {
-      count: FAIL_CLOSED_COUNT,
-      nextReset: new Date(now + this.durationMs),
-      start: now,
-    };
+    throw new LimiterStoreUnavailableError({
+      message: LIMITER_STORE_UNAVAILABLE.message,
+      operation: "read",
+      cause: result.error,
+    });
   }
 
   async increment(
@@ -307,7 +307,9 @@ export class RedisRateLimitContext implements ReadableRateLimitContext {
       catch: (error: unknown) => error,
     });
     if (Result.isError(redisResult)) {
-      this.onRedisError(redisResult.error, "increment");
+      if (this.failurePolicy === "fail_open_local") {
+        this.onRedisError(redisResult.error, "increment");
+      }
       if (requestId !== null) {
         if (TimeoutError.is(redisResult.error)) {
           // The client gave up waiting, but the EVAL may already have
@@ -338,15 +340,15 @@ export class RedisRateLimitContext implements ReadableRateLimitContext {
           this.localMax !== undefined &&
           fallbackCounter.count > this.localMax
         ) {
-          return { ...fallbackCounter, count: FAIL_CLOSED_COUNT };
+          return { ...fallbackCounter, count: LOCAL_LIMIT_EXCEEDED_COUNT };
         }
         return fallbackCounter;
       }
-      return {
-        count: FAIL_CLOSED_COUNT,
-        nextReset: new Date(now + effectiveDuration),
-        start: now,
-      };
+      throw new LimiterStoreUnavailableError({
+        message: LIMITER_STORE_UNAVAILABLE.message,
+        operation: "increment",
+        cause: redisResult.error,
+      });
     }
     if (requestId !== null) {
       this.refundProvenanceByRequest.set(requestId, {
@@ -593,17 +595,19 @@ const parseIncrementReply = (
   durationMs: number,
   now: number,
 ): RateLimitCounter => {
-  if (!Array.isArray(reply) || reply.length !== 2) {
+  if (!isUnknownArray(reply) || reply.length !== 2) {
     throw new RedisRateLimitReplyError({
       message: "Redis returned an invalid rate-limit counter reply",
       reply,
     });
   }
-  const count = Number(reply.at(0));
-  const ttlMs = Number(reply.at(1));
+  const count = reply.at(0);
+  const ttlMs = reply.at(1);
   if (
-    !Number.isFinite(count) ||
-    !Number.isFinite(ttlMs) ||
+    typeof count !== "number" ||
+    typeof ttlMs !== "number" ||
+    !Number.isSafeInteger(count) ||
+    !Number.isSafeInteger(ttlMs) ||
     count < 1 ||
     ttlMs < 0
   ) {

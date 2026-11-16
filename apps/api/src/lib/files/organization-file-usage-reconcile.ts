@@ -18,6 +18,7 @@ import {
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { MaintenanceDb } from "@/api/lib/db/maintenance-db";
+import { deleteOrganizationFilesWithSignal } from "@/api/lib/files/delete-organization-file";
 import {
   commitOrganizationFilesBytes,
   FILE_RESERVATION_ABANDON_DELAY_MS,
@@ -156,8 +157,7 @@ const matchesReferencedReservation = async ({
   }
   if (head.checksumSHA256 !== null) {
     return Result.ok(
-      Buffer.from(head.checksumSHA256, "base64").toString("hex") ===
-        expectedSha256Hex,
+      Buffer.from(head.checksumSHA256, "base64").toHex() === expectedSha256Hex,
     );
   }
   const { hashS3ObjectSha256WithSignal } = await import("@/api/lib/s3");
@@ -213,8 +213,7 @@ export const reconcileAbandonedOrganizationFileReservations = async ({
         }),
     );
     const { headObject } = await import("@/api/lib/s3-presign");
-    const { deleteS3ObjectWithSignal, isMissingS3ObjectError } =
-      await import("@/api/lib/s3");
+    const { isMissingS3ObjectError } = await import("@/api/lib/s3");
     const recoveryWriteId = Bun.randomUUIDv7();
     const claims =
       candidates.length === 0
@@ -294,6 +293,7 @@ export const reconcileAbandonedOrganizationFileReservations = async ({
           });
     const toCommit = [];
     const toRelease = [];
+    const toDelete = [];
     let committed = 0;
     let deleted = 0;
     let released = 0;
@@ -337,12 +337,17 @@ export const reconcileAbandonedOrganizationFileReservations = async ({
         committed += 1;
         continue;
       }
-      await deleteS3ObjectWithSignal(
-        candidate.objectKey,
+      toDelete.push(reservation);
+    }
+    // One fenced, chunked deletion for every abandoned object of the sweep.
+    if (toDelete.length > 0) {
+      yield* await deleteOrganizationFilesWithSignal(
+        toDelete.map(({ objectKey }) => objectKey),
         signal ?? AbortSignal.timeout(30_000),
+        { fileUsageDb: db },
       );
-      toRelease.push(reservation);
-      deleted += 1;
+      toRelease.push(...toDelete);
+      deleted += toDelete.length;
     }
     const settled = yield* await commitOrganizationFilesBytes(toCommit, db);
     committed -= settled.busyObjectKeys.length;

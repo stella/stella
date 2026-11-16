@@ -1,31 +1,42 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { API_CALENDAR_DATE_CHECK } from "@stll/api-contract/api-date";
+import { BILLING_CODE_MAX_LENGTH } from "@stll/api-contract/billing";
+import { BILLING_MATTER_READ_PERMISSION } from "@stll/permissions";
 
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { resolveRate } from "@/api/lib/billing/rates";
-import { tUserId, withDescription } from "@/api/lib/custom-schema";
+import { rateResolutionMoneyResponse } from "@/api/lib/billing/response-schemas";
+import { userIdSchema, withDescription } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { validateOrgUserId } from "@/api/lib/validated-org-user-id";
 
-const resolveRateQuerySchema = t.Object({
-  userId: withDescription(tUserId, "User ID to resolve the rate for"),
-  date: t.String({
-    format: "date",
-    description: "Date to resolve the rate on (ISO YYYY-MM-DD)",
-  }),
+const resolveRateQuerySchema = v.object({
+  activityCode: v.optional(
+    v.pipe(v.string(), v.maxLength(BILLING_CODE_MAX_LENGTH)),
+  ),
+  userId: withDescription(userIdSchema, "User ID to resolve the rate for"),
+  date: v.pipe(
+    v.string(),
+    v.isoDate(),
+    API_CALENDAR_DATE_CHECK,
+    v.description("Date to resolve the rate on (ISO YYYY-MM-DD)"),
+  ),
 });
 
 const resolveRateHandler = createSafeHandler(
   {
+    moneyResponse: rateResolutionMoneyResponse,
     contract: "patch",
     description:
       "Resolve the effective hourly rate for a user on a given date in a " +
-      "matter, using the matter's default rate table (user-specific rate " +
-      "first, then the organization role, then the table default). Returns the hourly rate in integer " +
+      "matter, using the default rate table: user plus activity, role plus activity, " +
+      "activity, user, role, then table default. Effective dates apply throughout. Returns the hourly rate in integer " +
       "minor currency units (e.g. cents) and the currency, or nulls when no " +
       "rate applies.",
-    permissions: { rate: ["read"] },
+    permissions: BILLING_MATTER_READ_PERMISSION,
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },
     mcp: { type: "tool", name: "resolve_rate" },
@@ -59,6 +70,7 @@ const resolveRateHandler = createSafeHandler(
       workspaceId,
       userId: validatedUserId,
       dateWorked: query.date,
+      activityCode: query.activityCode,
     });
 
     return Result.ok(result ?? { hourlyRate: null, currency: null });

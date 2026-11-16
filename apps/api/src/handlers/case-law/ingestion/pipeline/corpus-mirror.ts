@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
@@ -8,15 +8,19 @@ import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawDecisions,
 } from "@/api/db/schema";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
-import { segmentDecision } from "@/api/handlers/case-law/ingestion/segmenter";
 import type { SafeId } from "@/api/lib/branded-types";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
+import type { decisionFallbackState } from "@/api/lib/case-law/fallback-decision-identity";
 import {
   pgPayloadCarriesDocumentFor,
   rowHoldsDocumentFor,
 } from "@/api/lib/case-law/stored-payload";
 import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
+import type { StoredCorpusValidationError } from "@/api/lib/errors/tagged-errors";
+import {
+  prepareCorpusAst,
+  type PreparedCorpusAst,
+} from "@/api/lib/legal-search/corpus-ast";
 import {
   corpusMirrorColumns,
   corpusPayloadDisposition,
@@ -26,7 +30,11 @@ import type {
   CorpusPayload,
   WriteCorpusResult,
 } from "@/api/lib/legal-search/corpus-storage";
-import type { DecisionSection } from "@/api/lib/legal-search/document-types";
+
+export {
+  caseLawCanonicalPayload,
+  decisionSections,
+} from "@/api/lib/legal-search/decision-payload";
 
 /**
  * Where this decision's canonical payload ends up.
@@ -119,7 +127,19 @@ export const settleCaseLawCorpusMirrorTx = async ({
  * not a decision column fails to typecheck where `storedRowDiffers` reads it
  * off the table.
  */
+const FALLBACK_COMPARED_COLUMN_TYPES = {
+  fallbackIdentityKey: "text",
+  fallbackCohortKey: "text",
+  fallbackContentHash: "text",
+  fallbackPublicationHash: "text",
+  fallbackDocumentHash: "text",
+} as const satisfies Record<
+  keyof ReturnType<typeof decisionFallbackState>["columns"],
+  "text"
+>;
+
 const REFRESH_COMPARED_COLUMN_TYPES = {
+  ...FALLBACK_COMPARED_COLUMN_TYPES,
   caseNumber: "text",
   caseNumberType: "text",
   citationKey: "text",
@@ -136,6 +156,7 @@ const REFRESH_COMPARED_COLUMN_TYPES = {
   sourceUrl: "text",
   documentUrl: "text",
   parserVersion: "smallint",
+  extractionWarnings: "jsonb",
   fulltext: "text",
   sections: "jsonb",
   documentAst: "jsonb",
@@ -144,6 +165,16 @@ const REFRESH_COMPARED_COLUMN_TYPES = {
   normalizedS3Key: "text",
   astS3Key: "text",
   contentHash: "text",
+  nssReporterNumber: "text",
+  nssReporterYear: "text",
+  nssReporterIssue: "text",
+  nssKeywordSearchCode: "text",
+  nssRegistryCaseNumber: "text",
+  nssRegistryReferral: "text",
+  nssRegistryReferralDate: "text",
+  nssRegistryAgainstCases: "text",
+  nssRegistryStatus: "text",
+  nssRegistryAnnotation: "text",
 } as const;
 
 type RefreshComparedColumn = keyof typeof REFRESH_COMPARED_COLUMN_TYPES;
@@ -234,6 +265,7 @@ type PendingMirrorPayload = Pick<
   CorpusWritePayload,
   "ast" | "sections" | "text"
 > & {
+  astStatus: PreparedCorpusAst["type"];
   sourceObservationHash: string | null;
   sourceObservationOrder: bigint | null;
 };
@@ -241,7 +273,7 @@ type PendingMirrorPayload = Pick<
 export const loadPendingMirrorPayload = async (
   decisionId: SafeId<"caseLawDecision">,
   scopedDb: ScopedDb,
-): Promise<PendingMirrorPayload> => {
+): Promise<Result<PendingMirrorPayload, StoredCorpusValidationError>> => {
   const row = await scopedDb((tx) =>
     tx.query.caseLawDecisions.findFirst({
       where: { id: { eq: decisionId } },
@@ -249,6 +281,7 @@ export const loadPendingMirrorPayload = async (
         documentAst: true,
         fulltext: true,
         sections: true,
+        parserVersion: true,
         sourceObservationHash: true,
         sourceObservationOrder: true,
       },
@@ -257,13 +290,22 @@ export const loadPendingMirrorPayload = async (
   if (!row) {
     panic("Pending case-law corpus mirror disappeared");
   }
-  return {
+  const prepared = prepareCorpusAst({
     ast: row.documentAst,
+    fallbackText: row.fulltext,
+    parserVersion: row.parserVersion ?? undefined,
+  });
+  if (prepared.isErr()) {
+    return prepared;
+  }
+  return Result.ok({
+    astStatus: prepared.value.type,
+    ast: prepared.value.ast,
     sections: row.sections,
     sourceObservationHash: row.sourceObservationHash,
     sourceObservationOrder: row.sourceObservationOrder,
     text: row.fulltext,
-  };
+  });
 };
 
 /**
@@ -277,24 +319,6 @@ export const loadPendingMirrorPayload = async (
  * second derivation elsewhere would hash a different document than the one
  * this pipeline stores.
  */
-export const decisionSections = (result: IngestionResult): DecisionSection[] =>
-  result.sections ?? (result.fulltext ? segmentDecision(result.fulltext) : []);
-
-/**
- * The canonical payload a result stores, in the shape the content hash is
- * taken over. Exported so a caller comparing a re-parse against what is
- * already stored asks the same question the corpus write does.
- */
-export const caseLawCanonicalPayload = (
-  result: IngestionResult,
-): CorpusPayload => {
-  const sections = decisionSections(result);
-  return {
-    ast: result.documentAst,
-    sections: sections.length > 0 ? sections : null,
-    text: result.fulltext ?? null,
-  };
-};
 
 export const planCorpusWrite = (mode: CorpusStorageMode): CorpusWritePlan => {
   switch (mode) {

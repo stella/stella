@@ -1,13 +1,15 @@
 import { Result } from "better-result";
 import { and, desc, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import { legalListGenerationRuns } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import {
-  tPaginationCursor,
-  tSafeId,
+  paginationCursorSchema,
+  resourceIdSchema,
   workspaceParams,
 } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
@@ -18,22 +20,28 @@ import { createCursorPage } from "@/api/lib/pagination";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedLegalListGenerationRunId } from "@/api/lib/safe-id-boundaries";
 
-const paramsSchema = workspaceParams({ listId: tSafeId("legalList") });
-const querySchema = t.Object({
-  limit: t.Optional(
-    t.Integer({
-      minimum: 1,
-      maximum: LIMITS.legalListGenerationRunsPageSizeMax,
-    }),
+const paramsSchema = workspaceParams({ listId: resourceIdSchema("legalList") });
+const querySchema = v.object({
+  limit: v.optional(
+    numberFromString(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(1),
+        v.maxValue(LIMITS.legalListGenerationRunsPageSizeMax),
+      ),
+    ),
   ),
-  cursor: t.Optional(tPaginationCursor()),
+  cursor: v.optional(paginationCursorSchema()),
 });
 const config = {
   contract: "patch",
   featureAccess: { type: "required", featureId: LEGAL_LISTS_FEATURE_ID },
   description:
     "List one list's generation runs, newest first, with cursor pagination: " +
-    "each run's status, its instruction, and its created, updated, and " +
+    "each run's status, who produces its candidates (an external client or " +
+    "stella), the item type a stella run proposes, why a failed run " +
+    "failed, its instruction, and its created, updated, started, and " +
     "completed timestamps.",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
@@ -85,9 +93,13 @@ const readGenerations = createSafeHandler(
           .select({
             id: legalListGenerationRuns.id,
             status: legalListGenerationRuns.status,
+            producer: legalListGenerationRuns.producer,
+            itemType: legalListGenerationRuns.itemType,
+            errorCode: legalListGenerationRuns.errorCode,
             instruction: legalListGenerationRuns.instruction,
             createdAt: legalListGenerationRuns.createdAt,
             updatedAt: legalListGenerationRuns.updatedAt,
+            startedAt: legalListGenerationRuns.startedAt,
             completedAt: legalListGenerationRuns.completedAt,
             createdAtCursor:
               generationCursor.cursorValue.as("created_at_cursor"),

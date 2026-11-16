@@ -12,14 +12,14 @@ import {
   CASE_LAW_DECISION_SLUG_ALLOCATION_ATTEMPTS,
   createCaseLawDecisionSlugCandidate,
 } from "@/api/handlers/case-law/decisions/slug";
-import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   absentDecisionTextFields,
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
+import { EMPTY_AST } from "@/api/lib/legal-search/ingestion-types";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
 import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
@@ -79,13 +79,15 @@ const recordingDb = (
 const newLog = (): TransactionLog => ({ started: 0, failures: [] });
 
 const ingest = async (input: IngestionResult, scoped: ScopedDb = scopedDb) =>
-  await processDecision({
-    input,
-    observationOrder: 1n,
-    sourceId,
-    scopedDb: scoped,
-    observedAt: new Date("2026-07-31T12:00:00.000Z"),
-  });
+  (
+    await processDecision({
+      input,
+      observationOrder: 1n,
+      sourceId,
+      scopedDb: scoped,
+      observedAt: new Date("2026-07-31T12:00:00.000Z"),
+    })
+  ).unwrap();
 
 const storedSlug = async (
   where: SQL | undefined,
@@ -146,7 +148,8 @@ describe("case-law decision slug allocation", () => {
     await ingest(decisionAt("0T/42/2019", "golden-1"));
     await ingest(decisionAt("0T/42/2019", "golden-2"));
     await ingest(decisionAt("0T/42/2019", "golden-3"));
-    // No publisher id: the identity is the docket and language.
+    // No publisher id: the identity is the decision's fallback state, so
+    // decisions sharing a docket draw different candidate ladders.
     await ingest(decisionAt("0T/42/2019", undefined, "cs"));
     await ingest(decisionAt("Nds 12/2021 – č. 4", "golden-4"));
     await ingest(decisionAt("NDS-12-2021-C-4", "golden-5"));
@@ -167,7 +170,7 @@ describe("case-law decision slug allocation", () => {
       "golden-1": "0t-42-2019",
       "golden-2": "0t-42-2019-482dd3cda1eb1de8",
       "golden-3": "0t-42-2019-31499a06d7f572d0",
-      "cs-docket": "0t-42-2019-5246e47db421409f",
+      "cs-docket": "0t-42-2019-f8ac15e663613342",
       "golden-4": "nds-12-2021-c-4",
       "golden-5": "nds-12-2021-c-4-311d08e9361bdc6e",
     });

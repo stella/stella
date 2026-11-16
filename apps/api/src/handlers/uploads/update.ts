@@ -1,3 +1,29 @@
+import { panic, Result } from "better-result";
+import type { Err } from "better-result";
+import { and, eq, sql } from "drizzle-orm";
+
+import { API_FILE_SECURITY_REJECTED_ERROR_CODE } from "@stll/api-contract";
+import type { ApiFileSecurityRejectionDetails } from "@stll/api-contract";
+import { sha256Base64ToHex } from "@stll/sha256";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
+
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import { pendingUploads } from "@/api/db/schema";
+import type { PendingUploadFinalizedResult } from "@/api/db/schema";
+import { envBase } from "@/api/env-base";
+import { entityUploadRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { finalizeAgentSkill } from "@/api/handlers/uploads/agent-skill";
+import { finalizeEntityVersion } from "@/api/handlers/uploads/entity-version";
+import {
+  authorizeUploadConsent,
+  authorizeUploadPurpose,
+  uploadRoutePermission,
+} from "@/api/handlers/uploads/permissions";
+import { captureError } from "@/api/lib/analytics/capture";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
+import type { AuditRecorder } from "@/api/lib/audit-log";
+import type { SafeId } from "@/api/lib/branded-types";
 /**
  * Finalize a presigned upload. Runs the claim FSM, verifies what
  * the client uploaded against what they declared, scans the bytes,
@@ -17,32 +43,7 @@
  * can re-claim it because both `claimed_at` and the row's status
  * are atomically compared in the WHERE.
  */
-import { panic, Result } from "better-result";
-import type { Err } from "better-result";
-import { and, eq, sql } from "drizzle-orm";
-
-import { API_FILE_SECURITY_REJECTED_ERROR_CODE } from "@stll/api-contract";
-import type { ApiFileSecurityRejectionDetails } from "@stll/api-contract";
-import { sha256Base64ToHex } from "@stll/sha256";
-import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
-
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
-import { pendingUploads } from "@/api/db/schema";
-import type { PendingUploadFinalizedResult } from "@/api/db/schema";
-import { envBase } from "@/api/env-base";
-import { entityUploadRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { finalizeAgentSkill } from "@/api/handlers/uploads/agent-skill";
-import { finalizeEntityVersion } from "@/api/handlers/uploads/entity-version";
-import {
-  authorizeUploadPurpose,
-  uploadRoutePermission,
-} from "@/api/handlers/uploads/permissions";
-import { captureError } from "@/api/lib/analytics/capture";
-import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
-import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import type { AuditRecorder } from "@/api/lib/audit-log";
-import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   FileScanRejectedError,
@@ -51,13 +52,14 @@ import {
 import { observeScanFailures } from "@/api/lib/file-scan/scan-upload-handler";
 import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
 import { LIMITS } from "@/api/lib/limits";
+import { DOCUMENT_BYTES_ADMISSION } from "@/api/lib/load/document-bytes-admission";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { getS3, readS3ObjectBounded } from "@/api/lib/s3";
 import type { HeadObjectResult, S3PresignError } from "@/api/lib/s3-presign";
 import { headObject, S3ObjectMissingError } from "@/api/lib/s3-presign";
 import { finalizeEntityCreate } from "@/api/lib/uploads/entity-create";
-import { UPLOAD_FINALIZE_ADMISSION } from "@/api/lib/uploads/finalize-admission";
 import { promoteTmpObjectWithUsage } from "@/api/lib/uploads/promote-tmp-object";
 import {
   FINALIZE_CLAIM_TIMEOUT_MS,
@@ -68,7 +70,7 @@ import {
 } from "@/api/lib/uploads/runtime";
 
 const finalizeParamsSchema = workspaceParams({
-  uploadId: tSafeId("pendingUpload"),
+  uploadId: resourceIdSchema("pendingUpload"),
 });
 
 const config = {
@@ -193,6 +195,13 @@ const finalizeUpload = createSafeHandler(
     if (Result.isError(authorization)) {
       return Result.err(authorization.error);
     }
+    const consent = authorizeUploadConsent({
+      grantedScopes: session.grantedScopes,
+      purpose: pending.purpose,
+    });
+    if (Result.isError(consent)) {
+      return Result.err(consent.error);
+    }
     // A finished upload answers with its stored result at once; only work
     // that still has to read the file waits for capacity.
     const replay = replayTerminalUpload(pending);
@@ -205,9 +214,9 @@ const finalizeUpload = createSafeHandler(
     // comes before the claim: waiting for capacity never runs the reclaim
     // clock, and a request that is not admitted in time leaves the row as it
     // was, so the retry can claim it at once.
-    const release = await UPLOAD_FINALIZE_ADMISSION.acquire(
+    const release = await DOCUMENT_BYTES_ADMISSION.acquire(
       pending.declaredSize,
-      LIMITS.uploadFinalizeAdmissionWaitMs,
+      LIMITS.documentBytesAdmissionWaitMs,
     );
     if (release === null) {
       return Result.err(
@@ -220,7 +229,7 @@ const finalizeUpload = createSafeHandler(
     try {
       logger.info("uploads.finalize_admitted", {
         declaredBytes: pending.declaredSize,
-        inFlightBytes: UPLOAD_FINALIZE_ADMISSION.inUseBytes(),
+        inFlightBytes: DOCUMENT_BYTES_ADMISSION.inUseBytes(),
       });
       return yield* claimAndFinalize({
         organizationId: session.activeOrganizationId,
@@ -498,13 +507,39 @@ const deleteStagedUploadObjects = async ({
   stage,
   uploadId,
   workspaceId,
-}: StagedUploadKeyProps & { stage: string }) => {
+}: StagedUploadKeyProps & { stage: "tmp-cleanup-after-reject" }) => {
   for (const key of tmpUploadKeys({ organizationId, uploadId, workspaceId })) {
     await getS3()
       .delete(key)
       .catch((deleteError: unknown) =>
-        captureError(deleteError, { key, stage, uploadId }),
+        captureError(
+          deleteError,
+          handlerErrorContext(`uploads.cleanup.${stage}`, {
+            key,
+            stage,
+            uploadId,
+          }),
+        ),
       );
+  }
+};
+
+const observePostPromotion = async (
+  afterPromote: () => void,
+  uploadId: SafeId<"pendingUpload">,
+) => {
+  const postPromoteResult = await Result.tryPromise(async () => {
+    afterPromote();
+    await Promise.resolve();
+  });
+  if (Result.isError(postPromoteResult)) {
+    captureError(
+      postPromoteResult.error,
+      handlerErrorContext("uploads.runFinalize.postPromoteResult_error", {
+        uploadId,
+        stage: "post-promote",
+      }),
+    );
   }
 };
 
@@ -719,26 +754,20 @@ const runFinalize = async function* ({
 
   const afterPromote = purposeOk.value.afterPromote;
   if (afterPromote) {
-    const postPromoteResult = await Result.tryPromise(async () => {
-      afterPromote();
-      await Promise.resolve();
-    });
-    if (Result.isError(postPromoteResult)) {
-      captureError(postPromoteResult.error, {
-        uploadId: claimed.id,
-        stage: "post-promote",
-      });
-    }
+    await observePostPromotion(afterPromote, claimed.id);
   }
 
   // 6. Tmp cleanup. Bucket lifecycle catches anything we miss.
   await getS3()
     .delete(tmpKey)
     .catch((deleteError: unknown) =>
-      captureError(deleteError, {
-        uploadId: claimed.id,
-        stage: "tmp-cleanup-after-promote",
-      }),
+      captureError(
+        deleteError,
+        handlerErrorContext("uploads.runFinalize.deleteError", {
+          uploadId: claimed.id,
+          stage: "tmp-cleanup-after-promote",
+        }),
+      ),
     );
 
   return Result.ok({ finalizedResult: purposeOk.value.finalizedResult });

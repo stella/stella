@@ -1,9 +1,11 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 import { normalizeUnicode } from "@stll/text-normalize";
 
+import { statuteGazetteAbbreviation } from "./statute-gazette";
 import { foldStatuteQuery, parseStatuteQuery } from "./statute-query-intent";
 
 const number = fc.integer({ min: 1, max: 99_999 });
@@ -52,7 +54,11 @@ describe("statute query parser properties", () => {
             { country: "svk", suffix: "", collection: "zz" } as const,
             { country: "svk", suffix: " Z. z.", collection: "zz" } as const,
           ),
-          (n, y, { country, suffix, collection }) => {
+          (n, y, { country, suffix: requestedSuffix, collection }) => {
+            const suffix =
+              requestedSuffix === ""
+                ? ""
+                : ` ${statuteGazetteAbbreviation(collection, y) ?? panic("Generated gazette collection has no spelling")}`;
             const parsed = parseStatuteQuery(country, `${n}/${y}${suffix}`);
             expect(parsed).toEqual({
               type: "act",
@@ -109,7 +115,9 @@ test(
         fc.integer({ min: 1, max: 9999 }),
         (n, y, section) => {
           for (const country of ["cze", "svk"] as const) {
-            const suffix = country === "cze" ? "Sb." : "Z. z.";
+            const suffix =
+              statuteGazetteAbbreviation(country === "cze" ? "sb" : "zz", y) ??
+              panic("Generated gazette collection has no spelling");
             for (const [marker, expected] of [
               ["§", "§"],
               ["par.", "par."],

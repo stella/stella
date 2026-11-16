@@ -73,15 +73,17 @@ describe("visual sandbox runtime asset", () => {
     expect(source).toContain("treemap");
     expect(source).not.toMatch(/<\/script|<!--/iu);
     expect(
-      inspectBrowserRuntimeSafety(readFileSync(runtimePath, "utf-8")).problems,
+      (await inspectBrowserRuntimeSafety(readFileSync(runtimePath, "utf-8")))
+        .problems,
     ).toEqual([]);
-    const { problems, templateWrites } = inspectBrowserRuntimeSafety(source);
+    const { problems, templateWrites } =
+      await inspectBrowserRuntimeSafety(source);
     expect(problems).toEqual([]);
     // The library's SVG reconciliation must actually be inspected.
     expect(templateWrites).toBeGreaterThan(0);
   });
 
-  test("detects code generation and markup writes outside template parsing", () => {
+  test("detects code generation and markup writes outside template parsing", async () => {
     for (const source of [
       "eval('1')",
       "new Function('return 1')",
@@ -91,12 +93,14 @@ describe("visual sandbox runtime asset", () => {
       "const t=document.createElement('template');t['innerHTML']='x'",
     ]) {
       expect(
-        inspectBrowserRuntimeSafety(source).problems.length,
+        (await inspectBrowserRuntimeSafety(source)).problems.length,
       ).toBeGreaterThan(0);
     }
     expect(
-      inspectBrowserRuntimeSafety(
-        "function parse(document,markup){const t=document.createElement('template');t.innerHTML=markup;return t.content}",
+      (
+        await inspectBrowserRuntimeSafety(
+          "function parse(document,markup){const t=document.createElement('template');t.innerHTML=markup;return t.content}",
+        )
       ).problems,
     ).toEqual([]);
   });

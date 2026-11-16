@@ -18,32 +18,6 @@ type Messages = {
     "getCli": "Get the CLI";
     "startFree": "Start free";
   };
-  "demo": {
-    "addView": "Add view";
-    "askStella": "Ask stella";
-    "close": "Close";
-    "documentType": "Document type";
-    "documents": "Documents";
-    "dueDate": "Due date";
-    "files": "Files";
-    "filter": "Filter";
-    "matters": "Matters";
-    "notes": "Notes";
-    "overview": "Overview";
-    "sectionBody": "Captured directly from the running product. What you see here is what you use.";
-    "sectionLabel": "The actual product";
-    "sectionTitle": "stella, as it is.";
-    "sort": "Sort";
-    "source": "Source";
-    "sources": "Sources";
-    "status": "Status";
-    "statusActive": "Active";
-    "statusClosed": "Closed";
-    "statusInReview": "In review";
-    "statusOnHold": "On hold";
-    "table": "Table";
-    "todos": "Todos";
-  };
   "footer": {
     "agent": "AI agent";
     "anonymization": "Anonymization";
@@ -59,7 +33,6 @@ type Messages = {
     "privacy": "Privacy";
     "publicData": "Public data";
     "resources": "Resources";
-    "sourceCode": "Source code";
     "status": "Status";
     "support": "Support";
     "tabularReview": "Tabular review";
@@ -93,8 +66,6 @@ type Messages = {
   };
   "nav": {
     "aiFactSheet": "AI fact sheet";
-    "aiFactSheetBlurb": "stella in machine-readable form.";
-    "beta": "Beta";
     "blog": "Blog";
     "changelog": "Changelog";
     "chooseLanguage": "Choose a language";
@@ -152,7 +123,7 @@ type Messages = {
         "title": "Legal data, ready for your work.";
       };
       "tabular-review": {
-        "blurb": "Ask questions across a whole document set and get structured answers back as a table in the matter — sortable, filterable, and traceable to the source text. Built for due diligence, discovery, and research.";
+        "blurb": "Ask questions across a whole document set and get structured answers back as a table in the matter, sortable, filterable, and traceable to the source text. Built for due diligence, discovery, and research.";
         "discover": "Discover Tabular Review";
         "eyebrow": "Tabular Review";
         "title": "Turn a pile of documents into a table you can review.";
@@ -663,7 +634,7 @@ type Messages = {
           "title": "Built for scale";
         };
         "5": {
-          "body": "Take the table with you in standard formats — no lock-in on your own work product.";
+          "body": "Take the table with you in standard formats: no lock-in on your own work product.";
           "title": "Export anywhere";
         };
       };
@@ -687,7 +658,7 @@ type Messages = {
       "metaDescription": "Ask questions across a whole document set and get structured answers as a sortable, source-traceable table. Built for due diligence, discovery, and research.";
       "metaTitle": "Tabular document review for due diligence | stella";
       "quickAnswer": {
-        "answer": "You point Tabular Review at a set of documents in a matter and define columns as questions — for example 'governing law', 'termination notice period', or 'change-of-control clause'. stella extracts an answer for each document into a table you can sort, filter, and export, with every cell linked back to the passage it came from.";
+        "answer": "You point Tabular Review at a set of documents in a matter and define columns as questions, for example 'governing law', 'termination notice period', or 'change-of-control clause'. stella extracts an answer for each document into a table you can sort, filter, and export, with every cell linked back to the passage it came from.";
         "question": "How does Tabular Review work?";
       };
       "sections": {

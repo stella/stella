@@ -1,5 +1,5 @@
-import { Column, getColumnTable, getTableName, is, sql } from "drizzle-orm";
-import type { AnyColumn, SQL, Table } from "drizzle-orm";
+import { sql } from "drizzle-orm";
+import type { AnyColumn, SQL } from "drizzle-orm";
 
 import type { ChatTurnTiming } from "@stll/api-contract/chat";
 
@@ -8,6 +8,7 @@ import {
   CHAT_TURN_TIMING_DISPOSITION,
 } from "@/api/lib/chat/turn-status";
 import type { ChatTurnStatus } from "@/api/lib/chat/turn-status";
+import { outerColumnReference } from "@/api/lib/db/outer-column-reference";
 
 const timingStatuses = (
   disposition: (typeof CHAT_TURN_TIMING_DISPOSITION)[ChatTurnStatus],
@@ -35,16 +36,12 @@ export const messageTurnTiming = ({
   threadId,
   fallbackTurnId,
 }: MessageTurnTimingOptions) => {
-  // Drizzle strips Column qualification in a single-table selection. Explicit
-  // identifiers keep the inner aggregate correlated to the outer row.
-  const outerReference = (value: AnyColumn | SQL) =>
-    is(value, Column)
-      ? sql`${sql.identifier(getTableName(getColumnTable<Table>(value)))}.${sql.identifier(value.name)}`
-      : value;
-  const message = outerReference(messageId);
-  const thread = outerReference(threadId);
+  const message = outerColumnReference(messageId);
+  const thread = outerColumnReference(threadId);
   const fallback =
-    fallbackTurnId === undefined ? undefined : outerReference(fallbackTurnId);
+    fallbackTurnId === undefined
+      ? undefined
+      : outerColumnReference(fallbackTurnId);
   const elapsedMs = sql`floor(extract(epoch from (statement_timestamp() - max(active_started_at))) * 1000)`;
   return sql<ChatTurnTiming | null>`(
     select case

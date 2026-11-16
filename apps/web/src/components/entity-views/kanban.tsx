@@ -29,7 +29,7 @@ import { useFormatter } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import type { ViewLayout } from "@/lib/types";
@@ -164,7 +164,7 @@ export const EntityViewKanban = ({
         workspaceId: toSafeId<"workspace">(entry.workspaceId),
       });
       if (entry.entity.status !== status) {
-        unwrapEden(
+        unwrapApiResponse(
           await taskApi.patch({ taskId: toSafeId<"entity">(entityId), status }),
         );
       }
@@ -173,7 +173,7 @@ export const EntityViewKanban = ({
         sourceLane !== undefined &&
         sourceLane !== targetLane
       ) {
-        unwrapEden(
+        unwrapApiResponse(
           await taskApi.assignees.move.post({
             taskId: toSafeId<"entity">(entityId),
             fromUserId:
@@ -184,13 +184,16 @@ export const EntityViewKanban = ({
       }
     });
     if (result.isErr()) {
-      analytics.captureError(result.error);
+      analytics.captureError(result.error, {
+        fingerprintKey: "EntityViewKanban.move:failure",
+        scope: { type: "handler", handlerId: "EntityViewKanban.move:failure" },
+      });
       notifyUserError(result.error, t("common.unexpectedError"));
     }
     await invalidateTaskQueries({
       queryClient,
       workspaceId: entry.workspaceId,
-      taskId: entityId,
+      taskIds: [entityId],
     });
     pendingRef.current.delete(entityId);
     setPending(new Set(pendingRef.current));
@@ -351,8 +354,12 @@ const EntityViewKanbanCell = ({
     elementRef: ref,
     name: group?.label ?? "",
     enabled,
-    canDrop,
-    onDrop,
+    canDrop: (card) => canDrop(card.entityId),
+    onDrop: (cards) => {
+      for (const card of cards) {
+        onDrop(card.entityId, card.subgroupValue);
+      }
+    },
   });
   return (
     <div ref={ref} className="min-h-24">

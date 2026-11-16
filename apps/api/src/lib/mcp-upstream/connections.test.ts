@@ -771,6 +771,7 @@ describe("MCP upstream connection lifecycle", () => {
           Result.err(
             new HandlerError({
               status: 502,
+              code: "internal_error",
               message: "MCP OAuth metadata discovery did not complete",
             }),
           ),
@@ -970,6 +971,7 @@ describe("MCP upstream connection lifecycle", () => {
       Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "Token endpoint unavailable",
         }),
       );

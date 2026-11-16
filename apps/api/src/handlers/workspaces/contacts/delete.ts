@@ -4,16 +4,19 @@ import { and, eq } from "drizzle-orm";
 import type { SafeDb } from "@/api/db/safe-db";
 import { workspaceContacts } from "@/api/db/schema";
 import { workspaceContactRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture, detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-queue";
+import { requireNoHold } from "@/api/lib/workspaces/legal-holds/holds";
+import { legalHoldRefusal } from "@/api/lib/workspaces/legal-holds/refusal";
 
 const config = {
   contract: "patch",
@@ -25,11 +28,14 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   realtime: workspaceContactRealtimeUpdates,
   mcp: { type: "covered", by: "link_matter_contact" },
-  params: workspaceParams({ workspaceContactId: tSafeId("workspaceContact") }),
+  params: workspaceParams({
+    workspaceContactId: resourceIdSchema("workspaceContact"),
+  }),
 } satisfies WorkspaceHandlerConfig;
 
 export type DeleteWorkspaceContactHandlerProps = {
   safeDb: SafeDb;
+  organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   workspaceContactId: SafeId<"workspaceContact">;
   recordAuditEvent: AuditRecorder;
@@ -40,12 +46,21 @@ export type DeleteWorkspaceContactHandlerProps = {
 // and search-index writes.
 export const deleteWorkspaceContactHandler = async function* ({
   safeDb,
+  organizationId,
   workspaceId,
   workspaceContactId,
   recordAuditEvent,
 }: DeleteWorkspaceContactHandlerProps) {
   const deletedRows = yield* Result.await(
     safeDb(async (tx) => {
+      const hold = await requireNoHold({
+        tx,
+        organizationId,
+        target: { type: "matter", workspaceId },
+      });
+      if (hold.isErr()) {
+        return hold;
+      }
       const rows = await tx
         .delete(workspaceContacts)
         .where(
@@ -82,10 +97,13 @@ export const deleteWorkspaceContactHandler = async function* ({
         await enqueueWorkspaceSearchRepairs(tx, [workspaceId]);
       }
 
-      return rows;
+      return Result.ok(rows);
     }),
   );
-  const deleted = deletedRows.at(0);
+  if (deletedRows.isErr()) {
+    return Result.err(legalHoldRefusal(deletedRows.error));
+  }
+  const deleted = deletedRows.value.at(0);
 
   if (!deleted) {
     return Result.err(
@@ -93,7 +111,17 @@ export const deleteWorkspaceContactHandler = async function* ({
     );
   }
 
-  flushWorkspaceSearchRepairs([workspaceId]).catch(captureError);
+  detached(
+    async () =>
+      flushWorkspaceSearchRepairs([workspaceId]).catch(
+        createErrorCapture(
+          handlerErrorContext(
+            "deleteWorkspaceContactHandler.flushWorkspaceSearchRepairs",
+          ),
+        ),
+      ),
+    "contacts-delete.flush-workspace-search-repairs",
+  );
 
   return Result.ok({ id: deleted.id });
 };
@@ -102,12 +130,14 @@ const deleteWorkspaceContact = createSafeHandler(
   config,
   async function* ({
     safeDb,
+    session,
     workspaceId,
     params: { workspaceContactId },
     recordAuditEvent,
   }) {
     return yield* deleteWorkspaceContactHandler({
       safeDb,
+      organizationId: session.activeOrganizationId,
       workspaceId,
       workspaceContactId,
       recordAuditEvent,

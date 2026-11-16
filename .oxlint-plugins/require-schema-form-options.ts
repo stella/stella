@@ -110,7 +110,7 @@ export default eslintCompatPlugin({
         type: "problem",
         messages: {
           requireOptions:
-            "Create forms with schemaFormOptions({ schema, defaultValues, submitValues, onSubmit }) directly. Choose 'schema-output' or 'raw' explicitly; the helper owns dynamic validation and submission normalization.",
+            "Create forms with schemaFormOptions({ schema, defaultValues, submitValues, onSubmit }) from @/lib/schema, passed directly to useForm. Choose 'schema-output' or 'raw' explicitly; the helper owns dynamic validation and submission normalization. Define trimming and casing per field in the schema.",
           customHook:
             "Custom TanStack form hooks must preserve the schemaFormOptions contract. Extend the central form owner before introducing another form factory.",
         },

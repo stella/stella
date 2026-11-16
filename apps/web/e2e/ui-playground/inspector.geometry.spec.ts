@@ -63,10 +63,12 @@ const readGeometry = async (page: Page): Promise<PaneGeometry[]> => {
         !(section instanceof HTMLElement) ||
         !(viewport instanceof HTMLElement)
       ) {
-        throw new Error("inspector pane bench is missing its scroll viewport");
+        throw new TypeError(
+          "inspector pane bench is missing its scroll viewport",
+        );
       }
       if (!(rail instanceof HTMLElement)) {
-        throw new Error("inspector pane bench is missing its tab rail");
+        throw new TypeError("inspector pane bench is missing its tab rail");
       }
       return {
         paneWidth: Number(section.dataset["paneWidth"]),
@@ -141,7 +143,7 @@ test("a table too wide for the column scrolls inside its own box", async ({
     const table = narrow?.querySelector("table");
     const box = table?.parentElement;
     if (!(box instanceof HTMLElement)) {
-      throw new Error("inspector pane bench is missing its table");
+      throw new TypeError("inspector pane bench is missing its table");
     }
     return {
       overflowX: getComputedStyle(box).overflowX,

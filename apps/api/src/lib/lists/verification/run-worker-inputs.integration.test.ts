@@ -12,11 +12,15 @@ import {
   beforeEach,
   describe,
   expect,
+  type Mock,
+  mock,
   setDefaultTimeout,
   spyOn,
   test,
 } from "bun:test";
 import { eq } from "drizzle-orm";
+
+import { createTestState } from "@stll/test-state";
 
 import { member, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -35,11 +39,12 @@ import {
   releaseRlsFixture,
 } from "@/api/tests/security/rls-fixture";
 
+const testState = createTestState({ file: import.meta.path, config: env });
+
 setDefaultTimeout(120_000);
 
 const { testDb, ids } = await getRlsFixture();
-const previousGrants = env.API_FEATURE_ACCESS_GRANTS;
-const previousDeployment = env.FEATURE_LEGAL_LISTS;
+
 const database = asTestRaw<RlsDatabase<Transaction>>(testDb);
 
 const originalOrganizationMember = (
@@ -73,7 +78,7 @@ const actor = createRootRunActor(
   database,
 );
 
-const readSpy = spyOn(documentText, "readVerificationDocument");
+let readSpy: Mock<typeof documentText.readVerificationDocument>;
 
 const readRun = async () =>
   (
@@ -85,11 +90,12 @@ const readRun = async () =>
   ).at(0);
 
 beforeEach(async () => {
-  env.FEATURE_LEGAL_LISTS = true;
-  env.API_FEATURE_ACCESS_GRANTS = {
+  readSpy = spyOn(documentText, "readVerificationDocument");
+  testState.setConfig("FEATURE_LEGAL_LISTS", true);
+  testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
     "legal-lists": [{ type: "organization", organizationId: ids.orgA }],
     "list-verification": [{ type: "organization", organizationId: ids.orgA }],
-  };
+  });
   await testDb
     .update(user)
     .set({ emailVerified: true })
@@ -116,6 +122,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  mock.restore();
   await testDb
     .delete(legalListVerificationRuns)
     .where(eq(legalListVerificationRuns.id, runId));
@@ -130,8 +137,6 @@ afterEach(async () => {
 });
 
 afterAll(async () => {
-  env.API_FEATURE_ACCESS_GRANTS = previousGrants;
-  env.FEATURE_LEGAL_LISTS = previousDeployment;
   readSpy.mockRestore();
   await releaseRlsFixture();
 });

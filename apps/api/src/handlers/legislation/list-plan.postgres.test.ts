@@ -16,7 +16,10 @@ import {
   withGatedTestClients,
 } from "@/api/tests/gated-test-database";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { explainRoot } from "@/api/tests/query-plans/plan-walker";
+import {
+  explainRoot,
+  indexedAccessPaths,
+} from "@/api/tests/query-plans/plan-walker";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const WORKS = 500;
@@ -82,12 +85,16 @@ const assertAmendmentProbe = (root: Record<string, unknown>) => {
   expect(indexes).toHaveLength(1);
   const index =
     indexes.at(0) ?? panic("The amendment count has no canonical work index");
-  if (index["Node Type"] === "Bitmap Index Scan") {
-    expect(scan["Node Type"]).toBe("Bitmap Heap Scan");
-  } else {
-    expect(index["Node Type"]).toBe("Index Scan");
-    expect(scan).toBe(index);
-  }
+  // The work scan is the work index's access path: the index scan itself, or
+  // the heap scan over its bitmap.
+  expect(
+    indexedAccessPaths(count, "legislation_documents").filter(
+      ({ node, accessKind, branches }) =>
+        node === scan &&
+        accessKind !== "index-only" &&
+        branches.every(({ indexName }) => indexName === WORK_INDEX),
+    ),
+  ).toHaveLength(1);
   const condition = index["Index Cond"];
   if (typeof condition !== "string") {
     panic("The amendment count has no index condition");
@@ -118,6 +125,7 @@ const assertListPage = async (
   );
   const explained = await db.execute(
     sql`EXPLAIN (ANALYZE, BUFFERS, VERBOSE, FORMAT JSON) ${statement.getSQL()}`,
+    "objects",
   );
   assertAmendmentProbe(explainRoot(explained));
   const rows = await statement;
@@ -146,10 +154,13 @@ describe.skipIf(!enabled)(
           }
           await db.execute(sql`SET search_path TO ${schema}, public`);
           // LIKE copies the production index definition but assigns a fixture name.
-          const indexes = await db.execute(sql`SELECT indexname FROM pg_indexes
+          const indexes = await db.execute(
+            sql`SELECT indexname FROM pg_indexes
           WHERE schemaname = ${schemaName} AND tablename = 'legislation_documents'
             AND indexdef LIKE '%(source_id, eli, version_valid_from, language)%'
-            AND indexdef NOT LIKE 'CREATE UNIQUE%'`);
+            AND indexdef NOT LIKE 'CREATE UNIQUE%'`,
+            "objects",
+          );
           expect(indexes).toHaveLength(1);
           const indexName = indexes.at(0)?.["indexname"];
           if (typeof indexName !== "string") {
@@ -159,10 +170,12 @@ describe.skipIf(!enabled)(
             await db.execute(sql`ALTER INDEX ${schema}.${sql.identifier(indexName)}
             RENAME TO ${sql.identifier(WORK_INDEX)}`);
           }
-          const trigramIndexes =
-            await db.execute(sql`SELECT indexname FROM pg_indexes
+          const trigramIndexes = await db.execute(
+            sql`SELECT indexname FROM pg_indexes
           WHERE schemaname = ${schemaName} AND tablename = 'legislation_documents'
-            AND indexdef LIKE '%gin%eli%gin_trgm_ops%'`);
+            AND indexdef LIKE '%gin%eli%gin_trgm_ops%'`,
+            "objects",
+          );
           expect(trigramIndexes).toHaveLength(1);
           const trigramIndexName = trigramIndexes.at(0)?.["indexname"];
           if (typeof trigramIndexName !== "string") {
@@ -269,6 +282,7 @@ describe.skipIf(!enabled)(
                   .limit(PAGE_SIZE + 1);
             const explained = await db.execute(
               sql`EXPLAIN (ANALYZE, BUFFERS, VERBOSE, FORMAT JSON) ${statement.getSQL()}`,
+              "objects",
             );
             const root = explainRoot(explained);
             expect(

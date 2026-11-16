@@ -1,6 +1,7 @@
-import * as cheerio from "cheerio";
-import type { Cheerio, CheerioAPI } from "cheerio";
-import type { AnyNode } from "domhandler";
+import type { Cheerio, CheerioAPI } from "@stll/html";
+import { type AnyNode, createElement, createText } from "@stll/html/nodes";
+
+import { load } from "@stll/html";
 
 import {
   isExcludedHtmlTag,
@@ -8,8 +9,14 @@ import {
   visibleHtmlText,
 } from "../../apps/api/src/handlers/case-law/ingestion/parsers/shared-inlines";
 
-const $ = cheerio.load("<table><tr><td>Visible</td></tr></table>");
-const table = $("table");
+const $ = load("<table><tr><td>Visible</td></tr></table>");
+const table = $(
+  createElement("table", {}, [
+    createElement("tr", {}, [
+      createElement("td", {}, [createText("Visible")]),
+    ]),
+  ]),
+);
 declare const tag: string;
 
 // oxlint-disable-next-line no-raw-parser-html/no-raw-parser-html -- raw text retains invisible HTML

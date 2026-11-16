@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
+import { createTestState } from "@stll/test-state";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
@@ -21,9 +22,9 @@ import transitionWorkObligation from "@/api/handlers/work-obligations/transition
 import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { updateTaskHandler } from "@/api/lib/tasks/update-task";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { handleMcpToolCall } from "@/api/mcp/tools";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { flowReviewGateFixture } from "@/api/tests/helpers/flow-review-gate";
 import {
   createTestHandlerContext,
@@ -33,6 +34,7 @@ import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
+const testState = createTestState({ file: import.meta.path, config: env });
 const TASK_ENTRIES = [
   "task update",
   "obligation transition",
@@ -92,7 +94,7 @@ const taskAction = async ({
       }
       return result.value;
     };
-    const context = {
+    const context = authorizedMcpContextForTest({
       accessibleWorkspaceIds: [f.workspaceId],
       accessibleWorkspaceIdSet: new Set([f.workspaceId]),
       accessibleWorkspaceStatusById: new Map([
@@ -107,7 +109,7 @@ const taskAction = async ({
       scopedDb,
       userId: f.userId,
       userEmail: `${f.userId}@example.test`,
-    } satisfies McpRequestContext;
+    });
     const result = await handleMcpToolCall({
       toolName: "save_task",
       args: {
@@ -115,7 +117,7 @@ const taskAction = async ({
         status: taskStatus,
         name: "Changed review task",
         due_date: "2026-10-10",
-        add_assignee_user_id: f.userId,
+        assignee: f.userId,
       },
       context,
     });
@@ -309,7 +311,7 @@ if (!databaseUrl || !enabled) {
             assignment.push({ propertyId, content });
           }
           const previousGovernedWorkflow = env.FEATURE_GOVERNED_WORKFLOW;
-          env.FEATURE_GOVERNED_WORKFLOW = true;
+          testState.setConfig("FEATURE_GOVERNED_WORKFLOW", true);
           const pid = async (client: typeof first) => {
             const rows = await client.db.execute<{ pid: number }>(
               sql`SELECT pg_backend_pid() AS pid`,
@@ -499,7 +501,10 @@ if (!databaseUrl || !enabled) {
             );
             expect(f.enqueued).toEqual([]);
           } finally {
-            env.FEATURE_GOVERNED_WORKFLOW = previousGovernedWorkflow;
+            testState.setConfig(
+              "FEATURE_GOVERNED_WORKFLOW",
+              previousGovernedWorkflow,
+            );
             try {
               await Promise.all(pending);
             } finally {
@@ -518,7 +523,7 @@ if (!databaseUrl || !enabled) {
         });
         const before = await f.read();
         const previousGovernedWorkflow = env.FEATURE_GOVERNED_WORKFLOW;
-        env.FEATURE_GOVERNED_WORKFLOW = true;
+        testState.setConfig("FEATURE_GOVERNED_WORKFLOW", true);
         try {
           expect(
             await taskAction({
@@ -545,7 +550,10 @@ if (!databaseUrl || !enabled) {
           expect(completionNotices).toEqual([]);
           expect(f.enqueued).toEqual([]);
         } finally {
-          env.FEATURE_GOVERNED_WORKFLOW = previousGovernedWorkflow;
+          testState.setConfig(
+            "FEATURE_GOVERNED_WORKFLOW",
+            previousGovernedWorkflow,
+          );
           await f.cleanup();
         }
       });

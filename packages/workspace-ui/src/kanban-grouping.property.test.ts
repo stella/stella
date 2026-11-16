@@ -11,7 +11,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 import type { KanbanGroupOption, KanbanSchema } from "@stll/ui/kanban";
 import {
   getKanbanGroupingPropertyId,
@@ -52,7 +52,8 @@ const rowArb: fc.Arbitrary<Row> = fc.record({
 
 describe("kanban grouping invariants", () => {
   test("the board scope is a subsequence of its input: no row is invented, duplicated, or reordered", () => {
-    fc.assert(
+    assertProperty(
+      "the board scope is a subsequence of its input: no row is invented, duplicated, or reordered",
       fc.property(
         fc.array(rowArb),
         fc.constantFrom(...GROUP_BY_IDS),
@@ -70,12 +71,13 @@ describe("kanban grouping invariants", () => {
           }
         },
       ),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 
   test("the group-by id round-trips through the resolved grouping", () => {
-    fc.assert(
+    assertProperty(
+      "the group-by id round-trips through the resolved grouping",
       fc.property(fc.constantFrom(...GROUP_BY_IDS), (groupBy) => {
         const resolved = getKanbanGroupingPropertyId(
           resolveKanbanGrouping({ groupBy, schema }),
@@ -84,12 +86,13 @@ describe("kanban grouping invariants", () => {
 
         expect(resolved).toBe(known ? groupBy : null);
       }),
-      propertyConfig({ numRuns: 100 }),
+      { numRuns: 100 },
     );
   });
 
   test("the uncategorized bucket comes last, exactly once, after every option in order", () => {
-    fc.assert(
+    assertProperty(
+      "the uncategorized bucket comes last, exactly once, after every option in order",
       fc.property(
         fc.array(fc.string({ minLength: 1 }).map(option)),
         fc.string({ minLength: 1 }),
@@ -107,7 +110,7 @@ describe("kanban grouping invariants", () => {
           );
         },
       ),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 });

@@ -28,6 +28,7 @@ import {
   createTestHandlerContext,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 /** The fixed page the list scenario reads, whatever the claim holds. */
 const PAGE_SIZE = 10;
@@ -217,9 +218,7 @@ export const seedClaimCommentScaling = async ({
     tenant,
     commentIds,
     cleanup: async () => {
-      await db
-        .delete(organization)
-        .where(eq(organization.id, tenant.organizationId));
+      await deleteOrganizationsForTest(db, [tenant.organizationId]);
       await db.delete(user).where(eq(user.id, tenant.userId));
     },
   };
@@ -240,7 +239,7 @@ export const claimCommentScalingScenarios = [
   {
     name: "claim comment list",
     expectedRows: PAGE_SIZE,
-    handler: listClaimComments.handler,
+    definition: listClaimComments,
     measure: async ({ db, tenant }: ClaimCommentScalingFixture) =>
       await runWithMeasuredQueryCounter(async (counter) => {
         const response = await listClaimComments.handler(
@@ -269,7 +268,7 @@ export const claimCommentScalingScenarios = [
   {
     name: "claim comment create",
     expectedRows: 1,
-    handler: createClaimComment.handler,
+    definition: createClaimComment,
     measure: async ({ db, tenant }: ClaimCommentScalingFixture) =>
       await runWithMeasuredQueryCounter(async (counter) => {
         const response = await createComment(db, tenant);
@@ -285,7 +284,7 @@ export const claimCommentScalingScenarios = [
   {
     name: "claim comment update",
     expectedRows: 1,
-    handler: updateClaimComment.handler,
+    definition: updateClaimComment,
     measure: async (fixture: ClaimCommentScalingFixture) =>
       await runWithMeasuredQueryCounter(async (counter) => {
         const response = await updateClaimComment.handler(
@@ -312,7 +311,7 @@ export const claimCommentScalingScenarios = [
   {
     name: "claim comment delete",
     expectedRows: 1,
-    handler: deleteClaimComment.handler,
+    definition: deleteClaimComment,
     measure: async (fixture: ClaimCommentScalingFixture) =>
       await runWithMeasuredQueryCounter(async (counter) => {
         const response = await deleteClaimComment.handler(

@@ -19,10 +19,12 @@ import {
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import createNumberSeries from "@/api/handlers/number-series/create";
 import updateNumberSeries from "@/api/handlers/number-series/update";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { allocateNumber } from "@/api/lib/billing/number-series";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { enrolTimeBilling } from "@/api/tests/helpers/time-billing-enrolment";
 import {
@@ -173,7 +175,7 @@ describe("number series allocation", () => {
           method: "PATCH",
         },
       ),
-      route: "/v1/number-series/:numberSeriesId",
+      route: "/v1/number-series/:numberSeriesId" satisfies ApiRoutePath,
       safeDb: createSafeDb(testDb, [], ids.orgA, ids.userA1),
       session: { activeOrganizationId: ids.orgA },
       memberRole: sessionMemberRole("owner"),
@@ -240,7 +242,7 @@ describe("number series allocation", () => {
         request: new Request("https://example.test/v1/number-series", {
           method: "POST",
         }),
-        route: "/v1/number-series",
+        route: "/v1/number-series" satisfies ApiRoutePath,
         safeDb: createSafeDb(testDb, [], ids.orgA, ids.userA1),
         session: { activeOrganizationId: ids.orgA },
         memberRole: sessionMemberRole("owner"),
@@ -296,17 +298,13 @@ describe("number series allocation", () => {
           (error: unknown) => error,
         );
       expect(deletionError).toMatchObject({ cause: { code: "23503" } });
-      await testDb
-        .delete(organization)
-        .where(eq(organization.id, organizationId));
+      await deleteOrganizationsForTest(testDb, [organizationId]);
     } finally {
       await testDb.delete(numberSeries).where(eq(numberSeries.id, seriesId));
       await testDb
         .delete(sellerProfiles)
         .where(eq(sellerProfiles.id, sellerProfileId));
-      await testDb
-        .delete(organization)
-        .where(eq(organization.id, organizationId));
+      await deleteOrganizationsForTest(testDb, [organizationId]);
     }
   });
 

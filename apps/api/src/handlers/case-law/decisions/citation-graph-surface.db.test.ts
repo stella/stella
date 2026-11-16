@@ -24,6 +24,7 @@ import {
   listIncomingDecisionCitations,
   listOutgoingDecisionCitations,
 } from "@/api/lib/case-law/decision-citations";
+import { readDecisionWork } from "@/api/lib/case-law/decision-work";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import type {
   CaseLawSurfaceCountries,
@@ -274,7 +275,7 @@ test("the reader's citation pages answer to the subject's surface", async () => 
       const options = {
         tx: subject.tx,
         cursor: undefined,
-        decisionId: subject.id,
+        work: await readDecisionWork(subject.tx, subject.id),
         countries: subject.countries,
       };
       const [outgoing, incoming] = await Promise.all([

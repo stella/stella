@@ -1,6 +1,7 @@
+import { Button } from "@stll/ui/button";
 import { cn } from "@stll/ui/utils";
 
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import { getFirstWeekday, getWeekendDays } from "@/i18n/week";
 import { appToday } from "@/lib/local-iso-date";
 
@@ -36,7 +37,7 @@ export const CalendarYearGrid = ({
   dots,
   onMonthClick,
 }: CalendarYearGridProps) => {
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const firstWeekday = getFirstWeekday(locale);
   const weekend = getWeekendDays(locale);
 
@@ -109,46 +110,42 @@ const MiniMonth = ({
   });
 
   return (
-    <button
-      className={cn(
-        "flex flex-col rounded-lg px-2 pt-1.5 pb-2",
-        "hover:bg-accent/40 text-start",
-      )}
-      onClick={onClick}
-      type="button"
-    >
-      <span
-        className={cn(
-          "mb-1.5 text-[13px] font-semibold",
-          isCurrent && "text-primary",
-        )}
-      >
-        {label}
+    <Button onClick={onClick} variant="plain">
+      <span className="hover:bg-accent/40 flex w-full flex-col rounded-lg px-2 pt-1.5 pb-2">
+        <span
+          className={cn(
+            "mb-1.5 text-[13px] font-semibold",
+            isCurrent && "text-primary",
+          )}
+        >
+          {label}
+        </span>
+
+        {/* Weekday headers */}
+        <div className="mb-0.5 grid grid-cols-7 gap-px">
+          {weekdayLabels.map((wd, i) => (
+            <span
+              className={cn(
+                "text-3xs text-center leading-4",
+                "text-foreground-muted",
+                weekend.has((firstWeekday + i) % 7) &&
+                  "text-foreground-disabled",
+              )}
+              key={wd}
+            >
+              {wd}
+            </span>
+          ))}
+        </div>
+
+        {/* Day grid */}
+        <div className="grid grid-cols-7 gap-px">
+          {days.map((day) => (
+            <MiniDay day={day} dots={dotsByDate.get(day.date)} key={day.date} />
+          ))}
+        </div>
       </span>
-
-      {/* Weekday headers */}
-      <div className="mb-0.5 grid grid-cols-7 gap-px">
-        {weekdayLabels.map((wd, i) => (
-          <span
-            className={cn(
-              "text-3xs text-center leading-4",
-              "text-foreground-muted",
-              weekend.has((firstWeekday + i) % 7) && "text-foreground-disabled",
-            )}
-            key={wd}
-          >
-            {wd}
-          </span>
-        ))}
-      </div>
-
-      {/* Day grid */}
-      <div className="grid grid-cols-7 gap-px">
-        {days.map((day) => (
-          <MiniDay day={day} dots={dotsByDate.get(day.date)} key={day.date} />
-        ))}
-      </div>
-    </button>
+    </Button>
   );
 };
 

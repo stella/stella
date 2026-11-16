@@ -1,10 +1,16 @@
+// parser-output-unchanged: source-fields-cz: Inventory-only target changes leave parsed decisions unchanged.
+// parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
 // parser-output-unchanged: array partitions use the shared owner with identical items and boundaries; parsed content is unchanged.
 // parser-output-unchanged: Read scope passes through the gate; successful decision text and parsing are unchanged.
 import { panic, Result, TaggedError } from "better-result";
-import * as cheerio from "cheerio";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { classifyFailure } from "@stll/errors";
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
+// parser-output-unchanged: imports ingestion bindings directly from their existing owner.
+import { load } from "@stll/html";
+import type * as cheerio from "@stll/html";
 import { DECISION_IDENTIFIER_MAX_COUNT } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
 // parser-output-unchanged: imports the document AST from its package owner
@@ -18,36 +24,7 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
-import {
-  decodeSourceRawEnvelope,
-  defineSourceAdapter,
-  EMPTY_AST,
-  encodeSourceRawEnvelope,
-  excludedSourceField,
-  excludedSourceSurface,
-  isPersistableSourceDocumentId,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  SOURCE_TOTAL_PROBE_FAILURE,
-  sourceTotalProbeFailed,
-  sourceTotalRead,
-  STORED_RAW_REPARSE_REJECTION,
-  storedSourceSurface,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  EmptyAst,
-  IngestionResult,
-  ListingIdentity,
-  ReconciliationBuildOutcome,
-  ReconciliationSlicePage,
-  ReconciliationSlicePageOptions,
-  SourceFieldDisposition,
-  SourceRawParts,
-  SourceSurfaceCensus,
-  SourceSurfaceDisposition,
-  StoredRawReparseInput,
-  StoredRawReparseOutcome,
-  SyncPage,
-} from "@/api/handlers/case-law/ingestion/adapter";
+import { czUsOpeningBench } from "@/api/handlers/case-law/ingestion/adapters/cz-us-bench";
 import {
   fetchNalus,
   NALUS_REQUEST_INTERVAL_MS,
@@ -96,10 +73,41 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
-import type {
-  DecisionJudgeInput,
-  RawIngestionResult,
+import {
+  decodeSourceRawEnvelope,
+  defineSourceAdapter,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  excludedSourceSurface,
+  isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  SOURCE_TOTAL_PROBE_FAILURE,
+  sourceTotalProbeFailed,
+  sourceTotalRead,
+  STORED_RAW_REPARSE_REJECTION,
+  storedSourceSurface,
 } from "@/api/lib/legal-search/ingestion-types";
+import type {
+  CzechDeclinedDecisionJudge,
+  DecisionJudgeInput,
+  EmptyAst,
+  IngestionResult,
+  ListingIdentity,
+  PrintedDecisionJudge,
+  RawIngestionResult,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
+  SourceFieldDisposition,
+  SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
+  SyncPage,
+} from "@/api/lib/legal-search/ingestion-types";
+import { reflowPrintedText } from "@/api/lib/legal-search/parsers/hard-wrapped-lines";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
@@ -481,17 +489,18 @@ const fieldAboveAbstractMinimum = (field: TextField): TextField => {
 /**
  * Project one publisher cell to text without erasing its block breaks. NALUS
  * separates abstract paragraphs and headings with paired `<br>` elements;
- * Cheerio's `.text()` drops both and welds the blocks together.
+ * Cheerio's `.text()` drops both and welds the blocks together. The legal
+ * sentence of a typewriter-era decision has a `<br>` at every printed line,
+ * and those lines are joined back into its paragraphs.
  */
 const supplementText = ($: cheerio.CheerioAPI, selector: string): string => {
   const cells: string[] = [];
   $(selector).each((_, element) => {
     const cell = $(element).clone();
     cell.find("br").replaceWith("\n");
-    const text = visibleHtmlText(cell)
-      .replaceAll(/\r\n?/gu, "\n")
-      .split("\n")
-      .map((line) => line.trim())
+    const text = reflowPrintedText(
+      visibleHtmlText(cell).replaceAll(/\r\n?/gu, "\n").split("\n"),
+    )
       .join("\n")
       .replaceAll(/\n{3,}/gu, "\n\n")
       .trim();
@@ -510,7 +519,7 @@ const supplementText = ($: cheerio.CheerioAPI, selector: string): string => {
 const extractAbstract = (
   html: string,
 ): Required<Pick<DecisionTextFields, "abstract" | "legalSentence">> => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   return {
     abstract: fieldAboveAbstractMinimum(
       sourceTextField(
@@ -666,8 +675,13 @@ const DETAIL_FIELD_BY_LABEL = new Map<string, NalusDetailFieldKey>(
  */
 const RECORD_CARD_SELECTOR = "table.recordCardTable";
 
-/** Repeats inside one value cell, as the court separates them. */
-const DETAIL_VALUE_SEPARATOR = /<br\s*\/?>/giu;
+/**
+ * Repeats inside one value cell, as the court separates them: line breaks
+ * between judges or petitioners, list items between the acts a decision
+ * touches. Taking a list's text whole would run one act's last provision
+ * into the next act's number (`§ 35 odst.2` + `20/1966 Sb.`).
+ */
+const DETAIL_VALUE_SEPARATOR = /<br\s*\/?>|<\/li\s*>/giu;
 
 const detailText = (text: string): string =>
   text.replaceAll(" ", " ").replace(/\s+/gu, " ").trim();
@@ -716,7 +730,7 @@ const emptyDetailFields = (): Record<NalusDetailFieldKey, string[]> => ({
  * indistinguishable from a decision the court states nothing about.
  */
 export const parseNalusDetail = (html: string): NalusDetailFields | null => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   const rows = ownTableRows($(RECORD_CARD_SELECTOR));
   if (rows.length === 0) {
     return null;
@@ -737,7 +751,7 @@ export const parseNalusDetail = (html: string): NalusDetailFields | null => {
       ...(cells.eq(1).html() ?? "")
         .split(DETAIL_VALUE_SEPARATOR)
         .map((part) =>
-          detailText(visibleHtmlText(cheerio.load(part, null, false).root())),
+          detailText(visibleHtmlText(load(part, null, false).root())),
         )
         .filter((part) => part.length > 0),
     );
@@ -758,7 +772,7 @@ const listNalusSourceFields = (parts: SourceRawParts): readonly string[] => {
   if (recordCard === undefined) {
     return [];
   }
-  const $ = cheerio.load(recordCard);
+  const $ = load(recordCard);
   const labels: string[] = [];
   ownTableRows($(RECORD_CARD_SELECTOR)).each((_, row) => {
     const cells = $(row).children("td");
@@ -777,8 +791,13 @@ const listNalusSourceFields = (parts: SourceRawParts): readonly string[] => {
  * what the roster is matched on: honorifics differ between the court's own
  * pages and change over a career.
  */
-const detailJudges = (fields: NalusDetailFields): DecisionJudgeInput[] =>
-  [
+const detailJudges = (
+  fields: NalusDetailFields | null,
+): PrintedDecisionJudge[] => {
+  if (fields === null) {
+    return [];
+  }
+  return [
     ...fields.rapporteur.map((name) => ({
       role: DECISION_JUDGE_ROLE.RAPPORTEUR,
       nameAsPrinted: stripAcademicTitles(name),
@@ -788,6 +807,41 @@ const detailJudges = (fields: NalusDetailFields): DecisionJudgeInput[] =>
       nameAsPrinted: stripAcademicTitles(name),
     })),
   ].filter(({ nameAsPrinted }) => nameAsPrinted.length > 0);
+};
+
+type DecisionJudgesOptions = {
+  recordCard: ParsedRecordCard;
+  bench: readonly CzechDeclinedDecisionJudge[];
+};
+
+/**
+ * Everyone the decision names: the bench its opening sentence states, then
+ * the record card's rapporteur and dissenters. The card and the sentence both
+ * name the rapporteur and the roster resolves the two to one row; the bench
+ * comes first so that row carries the roster's spelling, the one the rest of
+ * the bench is shown in, rather than the card's surname-first one.
+ *
+ * Absent when the card could not be read, so the judges already stored stay
+ * as they are; a card the court says it does not hold leaves the sentence as
+ * the only statement, and a sentence naming nobody then states nothing.
+ */
+const decisionJudges = ({
+  recordCard,
+  bench,
+}: DecisionJudgesOptions): DecisionJudgeInput[] | undefined => {
+  switch (recordCard.state) {
+    case CZ_US_RECORD_CARD_STATE.READ:
+      return [...bench, ...detailJudges(recordCard.fields)];
+    case CZ_US_RECORD_CARD_STATE.ABSENT:
+      return bench.length === 0 ? undefined : [...bench];
+    case CZ_US_RECORD_CARD_STATE.UNAVAILABLE:
+      return undefined;
+    default: {
+      recordCard satisfies never;
+      return panic(`Unhandled record card state: ${String(recordCard)}`);
+    }
+  }
+};
 
 /** Record-card fields the row carries under their own metadata keys. */
 const DETAIL_METADATA_KEYS = [
@@ -862,14 +916,23 @@ const parallelCitationIdentifiers = ({
  * they are the two roles of one list, which is why the result carries
  * `judges` rather than a field per role.
  */
+type NalusPublisherRecord = Readonly<Record<NalusDetailLabel, unknown>>;
+
 const NALUS_SOURCE_FIELDS = {
   "Identifikátor evropské judikatury": {
     disposition: "stored",
     target: { type: "result", key: "ecli" },
   },
-  "Název soudu": excludedSourceField(
-    "the publisher naming itself; the deciding court is resolved from the record's own ECLI, because this database also republishes other courts' decisions",
-  ),
+  "Název soudu": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "detail",
+      path: [],
+      reason:
+        "The record card retains the publisher court label and stated retrieval address exactly, independently of canonical court and URL resolution",
+    },
+  },
   "Spisová značka": {
     disposition: "stored",
     target: { type: "result", key: "caseNumber" },
@@ -962,10 +1025,17 @@ const NALUS_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "metadata", key: "note" },
   },
-  "URL adresa": excludedSourceField(
-    "the retrieval address of the document the row already stores as sourceUrl",
-  ),
-} as const satisfies Record<NalusDetailLabel, SourceFieldDisposition>;
+  "URL adresa": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "detail",
+      path: [],
+      reason:
+        "The record card retains the publisher court label and stated retrieval address exactly, independently of canonical court and URL resolution",
+    },
+  },
+} as const satisfies Record<keyof NalusPublisherRecord, SourceFieldDisposition>;
 
 /**
  * The record card as it reached the build.
@@ -1035,10 +1105,13 @@ const parseDecisionPage = ({
     extractLabel(html, "lblPopularName") ?? detail?.popularName.at(0);
   const bodyText = extractDocContentText(html);
   const fulltext = extractFulltext(bodyText);
-  const judges = detail === null ? undefined : detailJudges(detail);
+  const judges = decisionJudges({
+    recordCard,
+    bench: czUsOpeningBench(bodyText ?? ""),
+  });
   // The stored facts row reads one name; the roles live on `judges`, and
   // both spell it the way the roster is matched on.
-  const judge = judges?.find(
+  const judge = detailJudges(detail).find(
     ({ role }) => role === DECISION_JUDGE_ROLE.RAPPORTEUR,
   )?.nameAsPrinted;
 
@@ -1513,7 +1586,7 @@ const rollingPageDigest = (digest: string, page: SearchPage): string =>
   );
 
 const hiddenField = (html: string, name: string): string | undefined =>
-  cheerio.load(html)(`#${name}`).attr("value");
+  load(html)(`#${name}`).attr("value");
 
 /**
  * Stable publisher-visible fields for an anomalous row that exposes neither
@@ -1636,7 +1709,7 @@ const parseResultPage = ({
     });
   }
 
-  const $ = cheerio.load(html);
+  const $ = load(html);
   const listed: ListedDecision[] = [];
   ownTableRows($("table"))
     .filter(".resultData0, .resultData1")
@@ -1965,7 +2038,7 @@ const fetchSearchPage = async ({
   });
   if (submit.status !== 302 || !redirectsToResults(submit)) {
     if (submit.ok) {
-      const $ = cheerio.load(await submit.text());
+      const $ = load(await submit.text());
       const noResults = visibleHtmlText($("#ctl00_MainContent_lbError")).trim();
       const resultsDisabled =
         $("#ctl00_bResults").attr("disabled") === "disabled";
@@ -2257,7 +2330,7 @@ const czUsSourceHash = (payloads: CzUsSourceHashInput) => {
   const detail = payloads.detail?.replace(
     /<input\b(?:[^>"']|"[^"]*"|'[^']*')*>/giu,
     (input) => {
-      const $ = cheerio.load(input);
+      const $ = load(input);
       const field = $("input");
       return field.attr("type")?.toLowerCase() === "hidden" &&
         /^__(?:VIEWSTATE(?:GENERATOR|FIELDCOUNT|\d+)?|EVENTVALIDATION)$/iu.test(
@@ -3270,7 +3343,11 @@ export const czUsAdapter = defineSourceAdapter({
             // Every closed availability day is accounted for, so there is
             // nothing to list and no request to spend. An unchanged cursor is
             // how this pipeline reads a source with nothing left.
-            return { decisions: [], nextCursor: makeCursor(state) };
+            return {
+              decisions: [],
+              publisherRequest: PUBLISHER_REQUEST.NONE,
+              nextCursor: makeCursor(state),
+            };
           }
           state = rearmed;
         }
@@ -3285,6 +3362,7 @@ export const czUsAdapter = defineSourceAdapter({
           if (state.page > 0 && error instanceof SearchPageDriftError) {
             return {
               decisions: [],
+              publisherRequest: PUBLISHER_REQUEST.ANSWERED,
               nextCursor: makeCursor(restartSlice(state)),
             };
           }
@@ -3294,6 +3372,7 @@ export const czUsAdapter = defineSourceAdapter({
           if (state.pass === CRAWL_PASS.VERIFY) {
             return {
               decisions: [],
+              publisherRequest: PUBLISHER_REQUEST.ANSWERED,
               nextCursor: makeCursor(
                 afterUnconfirmedSlice(state, now, "listing-now-empty"),
               ),
@@ -3301,6 +3380,7 @@ export const czUsAdapter = defineSourceAdapter({
           }
           return {
             decisions: [],
+            publisherRequest: PUBLISHER_REQUEST.ANSWERED,
             nextCursor: makeCursor(nextSlice(state, now)),
           };
         }
@@ -3311,6 +3391,7 @@ export const czUsAdapter = defineSourceAdapter({
           if (!sliceComplete) {
             return {
               decisions: [],
+              publisherRequest: PUBLISHER_REQUEST.ANSWERED,
               nextCursor: makeCursor({
                 ...state,
                 page: state.page + 1,
@@ -3321,6 +3402,7 @@ export const czUsAdapter = defineSourceAdapter({
           if (digest !== state.expectedDigest) {
             return {
               decisions: [],
+              publisherRequest: PUBLISHER_REQUEST.ANSWERED,
               nextCursor: makeCursor(
                 afterUnconfirmedSlice(state, now, "digest-mismatch"),
               ),
@@ -3328,6 +3410,7 @@ export const czUsAdapter = defineSourceAdapter({
           }
           return {
             decisions: [],
+            publisherRequest: PUBLISHER_REQUEST.ANSWERED,
             nextCursor: makeCursor(nextSlice(state, now)),
           };
         }
@@ -3341,6 +3424,7 @@ export const czUsAdapter = defineSourceAdapter({
           return {
             decisions,
             itemBuildFailures,
+            publisherRequest: PUBLISHER_REQUEST.ANSWERED,
             nextCursor: makeCursor({
               ...state,
               pass: CRAWL_PASS.VERIFY,
@@ -3354,6 +3438,7 @@ export const czUsAdapter = defineSourceAdapter({
         return {
           decisions,
           itemBuildFailures,
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
           nextCursor: makeCursor({
             ...state,
             page: state.page + 1,

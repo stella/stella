@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { FLOW_RUN_INPUT_ENTITIES_MAX } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
@@ -18,20 +18,22 @@ import {
 } from "@stll/ui/select";
 import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { RunSizeConfirmDialog } from "@/components/usage/run-size-confirm-dialog";
 import { runSizeConfirmationDetail } from "@/components/usage/run-size-confirmation";
 import type { RunSizeConfirmationDetail } from "@/components/usage/run-size-confirmation";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useFormatter } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { FLOW_PICKER_LIMIT, flowsOptions } from "@/lib/knowledge/queries";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView } from "@/lib/use-query-view";
 import { entitySummariesOptions } from "@/lib/workspaces/queries/entities";
 import { flowRunsKeys } from "@/lib/workspaces/queries/flow-runs";
 
@@ -65,7 +67,7 @@ export const RunLauncher = ({
   const flowsDataQuery = useQuery(
     flowsOptions(organizationId, FLOW_PICKER_LIMIT),
   );
-  const flowsDataView = useQueryView(flowsDataQuery, {
+  const flowsDataView = queryView(flowsDataQuery, {
     isEmpty: (data) => "items" in data && data.items.length === 0,
   });
   const flowsData =
@@ -191,7 +193,9 @@ export const RunLauncher = ({
           )}
           {filteredEntities === undefined && entitiesFailed && (
             <div className="flex items-center gap-2 p-2 text-xs">
-              <span className="text-muted-foreground">{t("common.error")}</span>
+              <span className="text-muted-foreground">
+                {t("common.loadFailed")}
+              </span>
               <Button
                 onClick={() =>
                   detached(refetchEntities(), "flows.retry-run-entities")
@@ -209,15 +213,15 @@ export const RunLauncher = ({
             </p>
           )}
           {filteredEntities?.map((entity) => (
-            <label className="flex items-center gap-2 text-sm" key={entity.id}>
+            <Label className="flex" key={entity.id}>
               <Checkbox
                 checked={selectedEntityIds.includes(entity.id)}
                 onCheckedChange={(checked) => toggleEntity(entity.id, checked)}
               />
-              <span className="truncate" dir="auto">
+              <TruncatedText className="text-sm font-normal" dir="auto">
                 {entity.name}
-              </span>
-            </label>
+              </TruncatedText>
+            </Label>
           ))}
         </div>
         {exceedsInputEntitiesLimit && (

@@ -9,12 +9,12 @@ import {
 } from "@stll/fetch/publisher";
 import { sha256Hex } from "@stll/sha256/bun";
 
+import { fetchStreamWithResolvedAddress } from "@/api/lib/auth/authorized-outbound-fetch";
 import {
   grantThirdPartyOutboundPermit,
   type ThirdPartyOutboundPermit,
 } from "@/api/lib/auth/third-party-outbound-permit";
 import {
-  fetchStreamWithResolvedAddress,
   OUTBOUND_PROTOCOL_POLICY,
   validateOutboundFetchTarget,
 } from "@/api/lib/safe-outbound-fetch";

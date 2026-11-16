@@ -1,7 +1,7 @@
 import { StreamProcessor } from "@tanstack/ai";
 import type { UIMessage } from "@tanstack/ai-client";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import {
   existsSync,
   readdirSync,
@@ -10,6 +10,9 @@ import {
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
+
+import { buildCreateDocumentDownloadFileName } from "@stll/api-contract/chat-create-document";
+import { CHAT_TURN_BUDGET } from "@stll/chat-limits";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatThreads } from "@/api/db/schema";
@@ -20,6 +23,7 @@ import {
   ASK_USER_TOOL_NAME,
   CREATE_DOCUMENT_TOOL_NAME,
 } from "@/api/handlers/chat/tools/native-chat-tool-names";
+import type { ChatTurnOutcome } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -75,7 +79,6 @@ export const registerRecordedConversationSuite = (
   let ids: TestIds;
   let safeDb: SafeDb;
   let scopedDb: ScopedDb;
-  const seededThreadIds: SafeId<"chatThread">[] = [];
 
   beforeAll(async () => {
     const fixture = await getRlsFixture();
@@ -119,11 +122,6 @@ export const registerRecordedConversationSuite = (
   });
 
   afterAll(async () => {
-    if (seededThreadIds.length > 0) {
-      await testDb
-        .delete(chatThreads)
-        .where(inArray(chatThreads.id, seededThreadIds));
-    }
     await releaseRlsFixture();
   });
 
@@ -147,7 +145,9 @@ export const registerRecordedConversationSuite = (
     /** The user reloads the page. */
     | { type: "reload" }
     /** Retry on the latest answer. */
-    | { type: "retry" };
+    | { type: "retry" }
+    /** Continue on an answer paused on its turn budget: the message it sends. */
+    | { messageId: string; text: string; type: "continue" };
 
   type RecordedStep = {
     action: RecordedAction;
@@ -161,6 +161,20 @@ export const registerRecordedConversationSuite = (
     steps: RecordedStep[];
     threadId: string;
   };
+
+  const EXPECTED_FAILED_OUTCOME_SCENARIOS = new Set([
+    "error-before-first-chunk",
+    "retry",
+  ]);
+
+  const assistantMessagesOf = (page: RecordedPage) =>
+    asTestRaw<
+      {
+        metadata?: { turnOutcome?: ChatTurnOutcome };
+        parts?: unknown[];
+        role?: string;
+      }[]
+    >(page.messages).filter(({ role }) => role === "assistant");
 
   // --- Scenarios ---------------------------------------------------------------
 
@@ -343,12 +357,6 @@ return { id: document.entityId, name: document.name };`;
         import.meta.url,
       ).href
     );
-    const draft: unknown = await import(
-      new URL(
-        "../../../../web/src/components/chat/create-document-draft.logic.ts",
-        import.meta.url,
-      ).href
-    );
     const { name, source } = asTestRaw<{ name: string; source: string }>(
       JSON.parse(DRAFT_ARGUMENTS),
     );
@@ -360,9 +368,6 @@ return { id: document.entityId, name: document.name };`;
         | { fixes: unknown[]; status: "ok"; warnings: unknown[] }
         | { status: "error" };
     }>(compiler);
-    const { buildCreateDocumentDownloadFileName } = asTestRaw<{
-      buildCreateDocumentDownloadFileName: (name: string) => string;
-    }>(draft);
     const compiled = compileCreateDocumentSourceToDocument(source, {
       titleFallback: name,
     });
@@ -378,6 +383,16 @@ return { id: document.entityId, name: document.name };`;
       fixes: compiled.fixes,
       warnings: compiled.warnings,
     };
+  };
+
+  /** What the web app's Continue sends, in the recording's language. */
+  const continueText = async (): Promise<string> => {
+    const catalog: unknown = await import(
+      new URL("../../../../web/src/i18n/langs/en.json", import.meta.url).href
+    );
+    return asTestRaw<{
+      default: { chat: { turnPaused: { continue: string } } };
+    }>(catalog).default.chat.turnPaused.continue;
   };
 
   /**
@@ -580,6 +595,54 @@ return { id: document.entityId, name: document.name };`;
           await recorder.client.resend();
         });
       },
+      // The turn reaches its budget at a step boundary and pauses; nothing
+      // runs until the user's Continue sends the next message.
+      "paused-turn": async (recorder) => {
+        recorder.harness.limitTurnBudget(recorder.threadId, {
+          maxToolCalls: 2,
+          maxPromptTokens: CHAT_TURN_BUDGET.maxPromptTokens,
+        });
+        await send(recorder, "List every template", [
+          asks([plainCall("call-1")]),
+          asks([plainCall("call-2")], "Some lists are long"),
+        ]);
+        const pausedPage = recorder.steps.at(-1)?.exchanges.at(-1)?.page;
+        if (pausedPage === undefined) {
+          expect.unreachable("The paused step must record its page");
+        }
+        const pausedMessage = assistantMessagesOf(pausedPage).at(-1);
+        expect(pausedMessage?.metadata?.turnOutcome).toEqual({
+          type: "paused",
+          reason: "tool-calls",
+          toolCalls: 2,
+        });
+        expect(
+          asTestRaw<{ output?: unknown; type?: string }[]>(
+            pausedMessage?.parts ?? [],
+          ).filter(
+            ({ output, type }) => type === "tool-call" && output !== undefined,
+          ),
+        ).toHaveLength(2);
+        recorder.harness.script(recorder.threadId, [
+          answers("Listed every template"),
+        ]);
+        const text = await continueText();
+        const messageId = Bun.randomUUIDv7();
+        await step(
+          recorder,
+          { messageId, text, type: "continue" },
+          async () => {
+            await recorder.client.sendUserMessage(messageId, text);
+          },
+        );
+        const completedPage = recorder.steps.at(-1)?.exchanges.at(-1)?.page;
+        if (completedPage === undefined) {
+          expect.unreachable("The Continue step must record its page");
+        }
+        expect(
+          assistantMessagesOf(completedPage).at(-1)?.metadata?.turnOutcome,
+        ).toEqual({ type: "completed" });
+      },
       "error-before-first-chunk": async (recorder) => {
         await send(recorder, "Draft the NDA", [
           { message: "Scripted provider failure", type: "fail-before-output" },
@@ -611,33 +674,6 @@ return { id: document.entityId, name: document.name };`;
           recorder.threadId,
         );
         await send(recorder, "Thanks", [answers("Anything else?")]);
-      },
-      // The user types past a card that still waits: the new message replaces
-      // the waiting turn.
-      "supersede-approval": async (recorder) => {
-        await send(recorder, "Delete the NDA", [
-          asks([approvalCall("call-1")]),
-        ]);
-        await send(recorder, "Keep it and draft a new one", [
-          answers("Drafted"),
-        ]);
-      },
-      // The replacing turn asks for the same tool, and the user allows it for the
-      // conversation: the replaced card stays unanswered.
-      "supersede-approval-then-grant": async (recorder) => {
-        await send(recorder, "Delete the NDA", [
-          asks([approvalCall("call-1")]),
-        ]);
-        await send(recorder, "Delete the older copy instead", [
-          asks([approvalCall("call-2")]),
-        ]);
-        await approve(recorder, "call-2", "allow-in-conversation", [
-          answers("Deleted the older copy"),
-        ]);
-      },
-      "supersede-ask-user": async (recorder) => {
-        await send(recorder, "Draft the NDA", [asks([askUserCall("call-1")])]);
-        await send(recorder, "Use the buyer's form", [answers("Drafted")]);
       },
       "connection-drop": async (recorder) => {
         const continued = Promise.withResolvers<undefined>();
@@ -723,34 +759,37 @@ return { id: document.entityId, name: document.name };`;
   ): Promise<{ failure: unknown; recording: RecordedConversation }> => {
     const harness = createApprovalHarness({ ids, safeDb, scopedDb, testDb });
     const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
-    seededThreadIds.push(threadId);
-    const exchanges = harness.recordThread(threadId);
-    const initialPage = await harness.readPage(threadId);
-    const client = await harness.openWebClient(threadId);
-    const recorder: Recorder = {
-      client,
-      exchanges,
-      harness,
-      steps: [],
-      threadId,
-    };
-    let failure: unknown;
     try {
-      await run(recorder);
-      // The recording keeps what the page saw; which target each stored ref
-      // names in each request is only visible to the server, so it is checked
-      // here, on every scenario.
-      harness.expectStableRefs(threadId);
-    } catch (error) {
-      failure = error;
+      const exchanges = harness.recordThread(threadId);
+      const initialPage = await harness.readPage(threadId);
+      const client = await harness.openWebClient(threadId);
+      const recorder: Recorder = {
+        client,
+        exchanges,
+        harness,
+        steps: [],
+        threadId,
+      };
+      let failure: unknown;
+      try {
+        await run(recorder);
+        // The recording keeps what the page saw; which target each stored ref
+        // names in each request is only visible to the server, so it is checked
+        // here, on every scenario.
+        harness.expectStableRefs(threadId);
+      } catch (error) {
+        failure = error;
+      } finally {
+        recorder.client.dispose();
+      }
+      return {
+        failure,
+        recording: { initialPage, scenario, steps: recorder.steps, threadId },
+      };
     } finally {
-      recorder.client.dispose();
       await harness.close();
+      await testDb.delete(chatThreads).where(eq(chatThreads.id, threadId));
     }
-    return {
-      failure,
-      recording: { initialPage, scenario, steps: recorder.steps, threadId },
-    };
   };
 
   const checkRecording = async (
@@ -763,12 +802,26 @@ return { id: document.entityId, name: document.name };`;
     // A message the page never posted is a finding, never a recording: writing
     // it would make the committed file expect the page to drop it.
     const unposted = recording.steps.flatMap(({ action, exchanges }, index) =>
-      (action.type === "send" || action.type === "retry") &&
+      (action.type === "send" ||
+        action.type === "retry" ||
+        action.type === "continue") &&
       exchanges.length === 0
         ? [`step ${String(index + 1)} (${action.type})`]
         : [],
     );
     expect(unposted).toEqual([]);
+    const failedOutcomes = recording.steps.flatMap(({ exchanges }, index) =>
+      exchanges.flatMap(({ page }) =>
+        assistantMessagesOf(page).flatMap(({ metadata }) =>
+          metadata?.turnOutcome?.type === "failed"
+            ? [`step ${String(index + 1)}`]
+            : [],
+        ),
+      ),
+    );
+    if (!EXPECTED_FAILED_OUTCOME_SCENARIOS.has(scenario)) {
+      expect(failedOutcomes).toEqual([]);
+    }
     // A scenario step that failed is the finding, not a stale file.
     expect(failure).toBeUndefined();
     if (process.env[WRITE_ENV] === "1") {
@@ -802,11 +855,13 @@ return { id: document.entityId, name: document.name };`;
           }
         }
       }
+      // Only orphans fail here: each scenario's own test requires its file,
+      // and a scenario of a suite that has not run yet has none to compare.
       expect(
-        readdirSync(FIXTURE_DIR)
-          .filter((name) => name.endsWith(RECORDING_EXTENSION))
-          .toSorted(),
-      ).toEqual(recordedFilenames.toSorted());
+        readdirSync(FIXTURE_DIR).filter(
+          (name) => name.endsWith(RECORDING_EXTENSION) && !recordings.has(name),
+        ),
+      ).toEqual([]);
     });
   });
 };

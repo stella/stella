@@ -9,16 +9,31 @@ import {
   prefetchRouteQuery,
 } from "@/lib/react-query";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
+import { routePresentation } from "@/routes/-route-presentation";
 import { ChatHistoryPage } from "@/routes/_protected.chat/-components/chat-history-page";
 import { chatHistorySearchSchema } from "@/routes/_protected.chat/-components/chat-history.logic";
 import type { ChatHistorySearch } from "@/routes/_protected.chat/-components/chat-history.logic";
 
 export const Route = createFileRoute("/_protected/chat/history")({
+  staticData: {
+    presentation: routePresentation({
+      type: "label",
+      labelKey: "common.history",
+      to: "/chat/history",
+    }),
+  },
   validateSearch: chatHistorySearchSchema,
   loaderDeps: ({ search }) => ({ matter: search.matter, q: search.q }),
   loader: ({ context, deps }) => {
     const onPrefetchError = (error: unknown) => {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "chat.history.loader.onPrefetchError:failure",
+        scope: {
+          type: "request",
+          method: "GET",
+          routeTemplate: "/_protected/chat/history",
+        },
+      });
     };
     detached(
       Promise.all([

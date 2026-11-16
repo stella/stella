@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -85,7 +86,7 @@ let scopedDb: ScopedDb;
 const corpus = {
   mode: "off",
   write: async () =>
-    await Promise.resolve({
+    Result.ok({
       type: "skipped-empty" as const,
       written: null,
       contentHash: "0".repeat(64),
