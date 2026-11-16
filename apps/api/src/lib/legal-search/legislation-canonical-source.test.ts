@@ -38,11 +38,13 @@ describe("canonical legislation payload source", () => {
 
 /**
  * AST column reads belong to the version reader and the projection material
- * reader. Ingestion writes the pointer while planning the object write.
+ * reader. Ingestion writes the pointer while planning the object write, and
+ * the storage backfill copies a document's inline AST to object storage.
  */
 const LEGISLATION_AST_COLUMN_OWNERS = [
   "handlers/legislation/ingestion.ts",
   "lib/legal-search/corpus-index-projection-materials.ts",
+  "lib/legal-search/legislation-corpus-storage-backfill.ts",
   "lib/legal-search/legislation-version-blocks.ts",
 ] as const;
 

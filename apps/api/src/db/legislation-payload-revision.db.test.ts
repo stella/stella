@@ -18,6 +18,7 @@ import {
   legislationWorkChanges,
 } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
+import { CORPUS_PROJECTION_SEEDING_GUARD_TRIGGER } from "@/api/tests/helpers/corpus-projection-seeding-guard";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 /**
@@ -702,6 +703,14 @@ describe("work changes", () => {
 
     await db
       .transaction(async (tx) => {
+        // ALTER TABLE refuses a table with pending deferred trigger events,
+        // so the seeding guard checks this transaction's rows as they are
+        // written instead of at commit.
+        await tx.execute(
+          sql.raw(
+            `SET CONSTRAINTS ${CORPUS_PROJECTION_SEEDING_GUARD_TRIGGER} IMMEDIATE`,
+          ),
+        );
         await tx.insert(legislationDocuments).values(BASE_ROW);
         await tx.delete(legislationWorkChanges).where(sql`true`);
         await tx.execute(sql.raw(`CREATE ROLE ${owner} NOLOGIN`));
