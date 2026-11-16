@@ -4,13 +4,16 @@ import { useRef } from "react";
 import type * as React from "react";
 
 import { Field as FieldPrimitive } from "@base-ui/react/field";
-import { mergeProps } from "@base-ui/react/merge-props";
 
 import { cn } from "../lib/utils";
 
 /** An editor whose visible text is supplied by a matching highlighted layer. */
 const HighlightedTextarea = ({
   className,
+  id,
+  name,
+  disabled,
+  value,
   dir,
   highlightedContent,
   onScroll,
@@ -43,19 +46,30 @@ const HighlightedTextarea = ({
         ref={backdropRef}
       >
         {highlightedContent}
+        {value.endsWith("\n") ? "\u200b" : null}
       </div>
       <FieldPrimitive.Control
-        render={(defaultProps) => (
+        id={id}
+        name={name}
+        disabled={disabled}
+        value={value}
+        render={
           <textarea
             className={cn(
               TEXT_LAYER_CLASS,
-              "caret-foreground absolute inset-0 border-0 bg-transparent text-transparent outline-none [-webkit-text-fill-color:transparent]",
+              "caret-foreground ring-ring absolute inset-0 border-0 bg-transparent text-transparent outline-none [-webkit-text-fill-color:transparent] focus-visible:ring-2 focus-visible:ring-inset",
             )}
             data-slot="highlighted-textarea-editor"
             dir={dir}
-            {...mergeProps(defaultProps, props, { onScroll: syncScroll })}
-          />
-        )}
+            {...props}
+            defaultValue={undefined}
+            style={undefined}
+            wrap={undefined}
+            onScroll={syncScroll}
+          >
+            {null}
+          </textarea>
+        }
       />
     </div>
   );
@@ -64,7 +78,7 @@ const HighlightedTextarea = ({
 // Both layers must use exactly the same text metrics and wrapping. Direction
 // is inherited together from the wrapper, never inferred for just one layer.
 const TEXT_LAYER_CLASS =
-  "m-0 h-full w-full resize-none p-4 font-sans text-sm leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]";
+  "m-0 h-full w-full resize-none scrollbar-stable p-4 font-sans text-sm leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]";
 
 type HighlightedTextareaProps = Omit<
   React.ComponentProps<"textarea">,

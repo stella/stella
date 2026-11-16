@@ -4,7 +4,6 @@ import { useState } from "react";
 import type * as React from "react";
 
 import { Field as FieldPrimitive } from "@base-ui/react/field";
-import { mergeProps } from "@base-ui/react/merge-props";
 
 import { useContentDir } from "../hooks/use-content-dir";
 import { CONTROL_SIZE } from "../lib/control-size";
@@ -56,6 +55,11 @@ type TextareaProps = React.ComponentProps<"textarea"> & {
 
 const Textarea = ({
   className,
+  id,
+  name,
+  disabled,
+  value,
+  defaultValue,
   size = CONTROL_SIZE.default,
   appearance = "default",
   unstyled = false,
@@ -89,14 +93,13 @@ const Textarea = ({
     : fieldEditorClass;
   const contentDir = useContentDir({
     dir,
-    value: props.value,
-    defaultValue: props.defaultValue,
+    value,
+    defaultValue,
   });
   const [typedLength, setTypedLength] = useState(() =>
-    textLength(props.defaultValue),
+    textLength(defaultValue),
   );
-  const length =
-    props.value === undefined ? typedLength : textLength(props.value);
+  const length = value === undefined ? typedLength : textLength(value);
   const counted = showCount && props.maxLength !== undefined;
   const handleChange: NonNullable<TextareaProps["onChange"]> = (event) => {
     contentDir.trackValue(event.currentTarget.value);
@@ -150,7 +153,12 @@ const Textarea = ({
       ref={syncCountOnFormReset}
     >
       <FieldPrimitive.Control
-        render={(defaultProps) => (
+        id={id}
+        name={name}
+        disabled={disabled}
+        value={value}
+        defaultValue={defaultValue}
+        render={
           <textarea
             className={cn(
               editorClass,
@@ -170,11 +178,12 @@ const Textarea = ({
                 "max-h-[calc(var(--textarea-max-rows)*1lh+var(--textarea-pt)+var(--textarea-pb))] min-h-0 max-sm:min-h-0",
             )}
             data-slot="textarea"
-            {...mergeProps(defaultProps, props, { onChange: handleChange })}
+            {...props}
+            onChange={handleChange}
             dir={contentDir.dir}
             style={textareaStyle}
           />
-        )}
+        }
       />
       {counted ? (
         // Readable by assistive technology, so the current count is not

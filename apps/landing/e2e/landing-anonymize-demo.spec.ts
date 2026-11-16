@@ -206,3 +206,55 @@ test.describe("before the engine loads", () => {
     await expect(root.locator(DEMO_SELECTORS.status)).toHaveText(/warming up/u);
   });
 });
+
+// The editor owns native scrolling; the highlighted layer must reserve the same
+// text width and the final empty line on platforms with classic scrollbars.
+test("highlighted editor keeps wrapping and final-line scrolling aligned", async ({
+  page,
+}) => {
+  await page.goto(DEMO_URL, { waitUntil: "domcontentloaded" });
+  const textarea = page.locator(DEMO_SELECTORS.textarea);
+  await expect
+    .poll(
+      async () => (await page.evaluate(readDemoState, DEMO_SELECTORS)).status,
+      { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_90_SECONDS_MS },
+    )
+    .toMatch(/detected/u);
+  await page.addStyleTag({
+    content: `
+    #anon-demo-textarea, [data-slot="highlighted-textarea-backdrop"] { scrollbar-width: auto; }
+    #anon-demo-textarea::-webkit-scrollbar, [data-slot="highlighted-textarea-backdrop"]::-webkit-scrollbar { width: 17px; height: 17px; }
+  `,
+  });
+  const text = `${Array.from(
+    { length: 30 },
+    (_, index) =>
+      `Line ${index}: words that wrap across the shared editor and highlighted layer.`,
+  ).join("\n")}\n`;
+  await textarea.fill(text);
+  await textarea.evaluate((editor: HTMLTextAreaElement) => {
+    editor.scrollTop = editor.scrollHeight;
+    editor.dispatchEvent(new Event("scroll"));
+  });
+  await expect
+    .poll(
+      async () =>
+        await textarea.evaluate((editor: HTMLTextAreaElement) => {
+          const backdrop = editor
+            .closest('[data-slot="highlighted-textarea"]')
+            ?.querySelector('[data-slot="highlighted-textarea-backdrop"]');
+          return {
+            overflowing: editor.scrollHeight > editor.clientHeight,
+            widthMatches: backdrop?.clientWidth === editor.clientWidth,
+            heightMatches: backdrop?.scrollHeight === editor.scrollHeight,
+            scrollMatches: backdrop?.scrollTop === editor.scrollTop,
+          };
+        }),
+    )
+    .toEqual({
+      overflowing: true,
+      widthMatches: true,
+      heightMatches: true,
+      scrollMatches: true,
+    });
+});

@@ -118,3 +118,62 @@ test("inherits surrounding direction without assigning content-dependent directi
   expect(editor.getAttribute("dir")).toBeNull();
   expect(owner?.parentElement?.getAttribute("dir")).toBe("rtl");
 });
+
+test("only the hidden backdrop completes a trailing blank line", () => {
+  const view = render(
+    <HighlightedTextarea
+      aria-label="Draft"
+      highlightedContent={"Line\n"}
+      onChange={() => undefined}
+      value={"Line\n"}
+    />,
+  );
+  const backdrop = () =>
+    view.container.querySelector('[data-slot="highlighted-textarea-backdrop"]')
+      ?.textContent;
+  expect(backdrop()).toBe("Line\n\u200b");
+  expect(view.getByRole("textbox", { name: "Draft" })).toHaveProperty(
+    "value",
+    "Line\n",
+  );
+  view.rerender(
+    <HighlightedTextarea
+      aria-label="Draft"
+      highlightedContent="Line"
+      onChange={() => undefined}
+      value="Line"
+    />,
+  );
+  expect(backdrop()).toBe("Line");
+  expect(view.getByRole("textbox", { name: "Draft" })).toHaveProperty(
+    "value",
+    "Line",
+  );
+});
+
+test("wider native props cannot replace the owned layers", () => {
+  const wider = {
+    children: "Other",
+    defaultValue: "Other",
+    style: { padding: 99 },
+    wrap: "off" as const,
+  };
+  const view = render(
+    <HighlightedTextarea
+      {...wider}
+      aria-label="Draft"
+      highlightedContent="Current"
+      onChange={() => undefined}
+      value="Current"
+    />,
+  );
+  const editor = view.getByRole("textbox", { name: "Draft" });
+  expect(editor).toHaveProperty("value", "Current");
+  expect(editor.textContent).toBe("Current");
+  expect(editor.getAttribute("style")).toBeNull();
+  expect(editor.getAttribute("wrap")).toBeNull();
+  expect(
+    view.container.querySelector('[data-slot="highlighted-textarea-backdrop"]')
+      ?.textContent,
+  ).toBe("Current");
+});
