@@ -42,6 +42,7 @@ import {
 } from "@/lib/public-tools-launch";
 import { isPublicStatutePageCountry } from "@/lib/statutes/statute-route";
 import {
+  createPublicCrawlRules,
   publicCrawlRobotsLines,
   publicLawHubSitemapPaths,
 } from "@/public-crawl-policy";
@@ -427,12 +428,14 @@ export const createRobotsTxt = ({
     env.VITE_PUBLIC_APP_URL,
   ).toString();
 
-  const allowLines = publicCrawlRobotsLines({
-    publicKnowledgeCrawlAllowed,
-    publicLawCrawlAllowed,
-    publicToolsCrawlAllowed,
-    toolsBasePath: publicToolsBasePath(),
-  });
+  const allowLines = publicCrawlRobotsLines(
+    createPublicCrawlRules({
+      publicKnowledgeCrawlAllowed,
+      publicLawCrawlAllowed,
+      publicToolsCrawlAllowed,
+      toolsBasePath: publicToolsBasePath(),
+    }),
+  );
 
   return `${[
     "User-agent: *",

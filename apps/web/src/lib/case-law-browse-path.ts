@@ -1,5 +1,6 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { CASE_LAW_BROWSE_MAX_PAGES } from "@stll/api-contract/case-law-browse-hubs";
 import { createCaseLawDecisionSlug } from "@stll/api-contract/case-law-decision-route";
 import { Temporal } from "@stll/time";
@@ -78,7 +79,7 @@ export const createCaseLawBrowsePath = (
   countryParam: string,
   target: CaseLawBrowseTarget,
 ): `/law/${string}` => {
-  const court = `/law/${countryParam}/courts/${target.court}`;
+  const court: `/law/${string}` = `/law/${countryParam}/courts/${target.court}`;
   switch (target.level) {
     case "court":
       return `/law/${countryParam}/courts/${target.court}`;
@@ -98,6 +99,14 @@ const YEAR = /^[1-9]\d{3}$/u;
 const TWO_DIGITS = /^\d{2}$/u;
 const PAGE = /^[2-9]\d*$|^[1-9]\d+$/u;
 
+/** A segment the patterns above admitted, as its number. */
+const segmentNumber = (segment: string): number => {
+  const parsed = parseIntegerToken(segment, { sign: "unsigned" });
+  return Result.isOk(parsed)
+    ? parsed.value
+    : panic("An admitted segment is a number");
+};
+
 const readPage = (segments: readonly string[]): number | null => {
   if (segments.length === 0) {
     return 1;
@@ -109,7 +118,7 @@ const readPage = (segments: readonly string[]): number | null => {
   if (!PAGE.test(value)) {
     return null;
   }
-  const page = Number(value);
+  const page = segmentNumber(value);
   return page <= CASE_LAW_BROWSE_MAX_PAGES ? page : null;
 };
 
@@ -130,14 +139,14 @@ export const parseCaseLawBrowseSplat = (
   if (!YEAR.test(second)) {
     return null;
   }
-  const year = Number(second);
+  const year = segmentNumber(second);
   if (third === undefined) {
     return { level: "year", court, year };
   }
   if (!TWO_DIGITS.test(third)) {
     return null;
   }
-  const month = Number(third);
+  const month = segmentNumber(third);
   if (month < 1 || month > 12) {
     return null;
   }
@@ -150,7 +159,7 @@ export const parseCaseLawBrowseSplat = (
   if (!TWO_DIGITS.test(fourth)) {
     return null;
   }
-  const day = Number(fourth);
+  const day = segmentNumber(fourth);
   if (day < 1 || day > daysInMonth(year, month)) {
     return null;
   }

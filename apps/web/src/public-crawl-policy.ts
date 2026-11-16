@@ -196,32 +196,21 @@ export const isPublicLawUrlIndexable = (
 };
 
 /**
- * robots.txt's path rules, from the same table. A crawlable subtree allows
- * its query-free URLs only: the `Disallow: <subtree>/*?` line is longer than
- * the subtree's `Allow`, so it wins under longest-match precedence.
+ * robots.txt's path rules for the rules `createPublicCrawlRules` built. A law
+ * subtree allows its query-free URLs only: the `Disallow: <subtree>/*?` line
+ * is longer than the subtree's `Allow`, so it wins under longest-match
+ * precedence.
  */
 export const publicCrawlRobotsLines = (
-  options: PublicCrawlOptions,
-): string[] => {
-  const lawPaths = new Set<string>(
-    createPublicCrawlRules({
-      publicKnowledgeCrawlAllowed: false,
-      publicLawCrawlAllowed: options.publicLawCrawlAllowed,
-      publicToolsCrawlAllowed: false,
-      toolsBasePath: options.toolsBasePath,
-    }).map(({ path }) => path),
-  );
-  return createPublicCrawlRules(options).flatMap(({ path, scope }) => {
+  rules: readonly PublicCrawlRule[],
+): string[] =>
+  rules.flatMap(({ path, scope }) => {
     if (scope === "exact") {
       return [`Allow: ${path}$`];
     }
-    const queryRule =
-      lawPaths.has(path) && path.startsWith("/law/")
-        ? [`Disallow: ${path}/*?`]
-        : [];
+    const queryRule = path.startsWith("/law/") ? [`Disallow: ${path}/*?`] : [];
     return [...queryRule, `Allow: ${path}/`, `Allow: ${path}$`];
   });
-};
 
 /**
  * The law sitemap's static entries: each public jurisdiction's hub and its

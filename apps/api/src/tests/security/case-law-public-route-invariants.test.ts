@@ -160,6 +160,8 @@ const CITATION_AUTHORITY_FILE =
  * empty check: a route that quietly disappeared fails this list instead.
  */
 const PUBLIC_CASE_LAW_ROUTES = [
+  "GET /case/browse/calendar",
+  "GET /case/browse/courts",
   "GET /case/coverage",
   "GET /case/decisions",
   "GET /case/decisions/:decisionId",

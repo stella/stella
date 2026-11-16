@@ -67,11 +67,11 @@ export const createPublicHead = ({
   type,
 }: PublicHeadInput) => {
   const canonicalUrl = createPublicCanonicalUrl(path);
-  const variantLinks =
+  const variantLinks: LinkHTMLAttributes<HTMLLinkElement>[] =
     canonicalPath === null
       ? []
       : [{ rel: "canonical", href: createPublicCanonicalUrl(canonicalPath) }];
-  const links =
+  const links: LinkHTMLAttributes<HTMLLinkElement>[] =
     indexing === "noindex"
       ? variantLinks
       : [

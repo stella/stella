@@ -142,7 +142,6 @@ export const latestDecisionsResponseSchema = v.object({
   v.GenericSchema
 >);
 export const browseCourtsResponseSchema = v.object({
-  country: identity.country,
   courts: v.pipe(
     v.array(identity.court),
     v.maxLength(LIMITS.caseLawBrowseCourtsMax),

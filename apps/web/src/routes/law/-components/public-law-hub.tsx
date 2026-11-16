@@ -130,7 +130,7 @@ export const CaseLawBrowsePager = ({
             className="bg-muted inline-flex min-h-11 items-center rounded-md px-3 text-sm"
             key={page}
           >
-            {t("common.page", { page })}
+            {t("common.page", { page: String(page) })}
           </span>
         ) : (
           <CaseLawBrowseLink
@@ -138,7 +138,7 @@ export const CaseLawBrowsePager = ({
             key={page}
             target={{ ...target, page }}
           >
-            {t("common.page", { page })}
+            {t("common.page", { page: String(page) })}
           </CaseLawBrowseLink>
         ),
       )}

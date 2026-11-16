@@ -4,9 +4,9 @@ import {
 } from "@stll/api-contract/case-law-launch-readiness";
 
 /** The legal database's host; its law pages carry their own robots.txt and sitemap. */
-export const PUBLIC_LAW_ORIGIN = "https://my.stll.app";
+const PUBLIC_LAW_ORIGIN = "https://my.stll.app";
 
-export type PublicLawHubLink = { href: string; name: string };
+type PublicLawHubLink = { href: string; name: string };
 
 /**
  * One link per jurisdiction whose case-law pages are public, from the same

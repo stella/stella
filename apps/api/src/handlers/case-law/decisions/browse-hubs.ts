@@ -6,6 +6,7 @@ import {
   PUBLIC_CASE_LAW_PAGE_COUNTRIES,
   publicCaseLawPageCountry,
 } from "@stll/api-contract/case-law-launch-readiness";
+import { numberFromString } from "@stll/api-contract/http-input";
 import { Temporal } from "@stll/time";
 
 import { readAdmittedCourtPage } from "@/api/handlers/case-law/decisions/shelf-courts";
@@ -32,28 +33,19 @@ export const listBrowseCourtsQuerySchema = v.object({
   country: tPublicLawCountry,
 });
 
-const yearSchema = v.pipe(
-  v.string(),
-  v.maxLength(4),
-  v.regex(/^\d{4}$/u),
-  v.transform(Number),
-  v.minValue(1000),
-  v.maxValue(9999),
-);
-const monthSchema = v.pipe(
-  v.string(),
-  v.maxLength(2),
-  v.regex(/^\d{1,2}$/u),
-  v.transform(Number),
-  v.minValue(1),
-  v.maxValue(12),
-);
-
 export const readBrowseCalendarQuerySchema = v.object({
   country: tPublicLawCountry,
-  court: v.pipe(v.string(), v.minLength(1), v.maxLength(512)),
-  year: v.optional(yearSchema),
-  month: v.optional(monthSchema),
+  court: v.pipe(v.string(), v.maxLength(512)),
+  year: v.optional(
+    numberFromString(
+      v.pipe(v.number(), v.integer(), v.minValue(1000), v.maxValue(9999)),
+    ),
+  ),
+  month: v.optional(
+    numberFromString(
+      v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(12)),
+    ),
+  ),
 });
 
 type ReadBrowseCalendarQuery = v.InferOutput<
@@ -129,7 +121,6 @@ export const listBrowseCourtsHandler = async (
     limit: LIMITS.caseLawBrowseCourtsMax,
   });
   return {
-    country: admitted.country,
     courts: page.courts,
     truncated: page.more,
   };
