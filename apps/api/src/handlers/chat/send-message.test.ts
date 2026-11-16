@@ -2454,14 +2454,17 @@ describe("assistant turn settlement", () => {
     // The fixture reached the fault: the follow-up's write threw.
     expect(followUpFailures).toBe(1);
     // The stored completion stays the turn's outcome.
+    // The stored update holds SQL expressions, which do not serialize; the
+    // status it wrote is the finding.
     const violations = violationsOf(
       CHAT_ORACLE.persistedTurnOutcome,
-      turnUpdates.filter(
-        (update) =>
-          typeof update === "object" &&
-          update !== null &&
-          "status" in update &&
-          update.status === "failed",
+      turnUpdates.flatMap((update) =>
+        typeof update === "object" &&
+        update !== null &&
+        "status" in update &&
+        update.status === "failed"
+          ? [{ status: update.status }]
+          : [],
       ),
     );
     if (violations.length > 0) {
