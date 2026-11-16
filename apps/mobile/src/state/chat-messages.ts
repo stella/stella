@@ -7,6 +7,11 @@ import {
   chatContextNoticeSchema,
 } from "@stll/api-contract/chat-context-notice";
 import type { ChatContextNotice } from "@stll/api-contract/chat-context-notice";
+import {
+  CHAT_RUN_TARGET_KIND,
+  type ChatRunTarget,
+  chatRunTargetSchema,
+} from "@stll/api-contract/chat-run-target";
 
 import type { Fetch } from "@/connection/http";
 import type { AccessTokenSource } from "@/connection/session";
@@ -129,6 +134,8 @@ export type ChatMessagesPage = {
   readonly pendingInput: PendingInput | null;
   /** On the thread's latest page, when its latest answer failed. */
   readonly retry: ChatRetry | null;
+  /** Where the thread's turns run: on stella's model path, or a computer. */
+  readonly runTargetKind: ChatRunTarget["kind"];
 };
 
 type StoredMessage = v.InferOutput<typeof messageSchema>;
@@ -247,6 +254,10 @@ const toPage = (
   olderCursor: page.olderCursor,
   activeTurnId: page.activeTurnId,
   usedAnonymization: page.usedAnonymization,
+  // A thread that never chose where it runs runs on stella's model path.
+  runTargetKind: v.is(chatRunTargetSchema, page.runTarget)
+    ? page.runTarget.kind
+    : CHAT_RUN_TARGET_KIND.cloud,
   pendingInput: latest
     ? pendingInputOf({
         message: page.messages.at(-1),

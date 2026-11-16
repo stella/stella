@@ -2,6 +2,8 @@ import { panic, Result, TaggedError } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, inArray, TransactionRollbackError } from "drizzle-orm";
 
+import { createTestState } from "@stll/test-state";
+
 import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
@@ -36,6 +38,8 @@ import {
   type RecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
 
+const testState = createTestState({ file: import.meta.path, config: env });
+
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const SECRET = "provider-contract-fixture-secret";
@@ -60,11 +64,14 @@ const withFixture = async (
   };
   const analytics = installRecordingAnalytics();
   const logs = installRecordingLogger();
-  env.FEATURE_USAGE = true;
-  env.HOSTED_USAGE_WEBHOOK_SECRET = SECRET;
-  env.HOSTED_USAGE_WEBHOOK_SECRET_PREVIOUS = undefined;
-  env.HOSTED_USAGE_PROVIDER = "polar";
-  env.HOSTED_USAGE_PROVIDER_API_VERSION = DEFAULT_POLAR_API_VERSION;
+  testState.setConfig("FEATURE_USAGE", true);
+  testState.setConfig("HOSTED_USAGE_WEBHOOK_SECRET", SECRET);
+  testState.setConfig("HOSTED_USAGE_WEBHOOK_SECRET_PREVIOUS", undefined);
+  testState.setConfig("HOSTED_USAGE_PROVIDER", "polar");
+  testState.setConfig(
+    "HOSTED_USAGE_PROVIDER_API_VERSION",
+    DEFAULT_POLAR_API_VERSION,
+  );
   try {
     await withGatedTestClients(databaseUrl, async ({ openClient }) => {
       try {
@@ -79,11 +86,14 @@ const withFixture = async (
       }
     });
   } finally {
-    env.FEATURE_USAGE = previous.feature;
-    env.HOSTED_USAGE_WEBHOOK_SECRET = previous.secret;
-    env.HOSTED_USAGE_WEBHOOK_SECRET_PREVIOUS = previous.previousSecret;
-    env.HOSTED_USAGE_PROVIDER = previous.kind;
-    env.HOSTED_USAGE_PROVIDER_API_VERSION = previous.version;
+    testState.setConfig("FEATURE_USAGE", previous.feature);
+    testState.setConfig("HOSTED_USAGE_WEBHOOK_SECRET", previous.secret);
+    testState.setConfig(
+      "HOSTED_USAGE_WEBHOOK_SECRET_PREVIOUS",
+      previous.previousSecret,
+    );
+    testState.setConfig("HOSTED_USAGE_PROVIDER", previous.kind);
+    testState.setConfig("HOSTED_USAGE_PROVIDER_API_VERSION", previous.version);
     analytics.restore();
     logs.restore();
   }

@@ -1,4 +1,5 @@
 import { describe, expect, it, test } from "bun:test";
+import path from "node:path";
 
 const MODES = ["draft", "final"] as const;
 const LABELS: readonly string[] = ["a", "b"];
@@ -71,3 +72,20 @@ describe.each(PAIRS)(
     });
   },
 );
+
+// Runtime table spreading and contextual callback inference are separate
+// contracts. Compile this same canary under the repository's configuration so
+// removing the literal parameter types cannot turn it into a runtime-only test.
+test("the shared configuration typechecks readonly each callback inference", () => {
+  const compiled = Bun.spawnSync(
+    [
+      process.execPath,
+      "check",
+      "--no-pretty",
+      "--all",
+      `--project=${path.join(import.meta.dir, "tsconfig.json")}`,
+    ],
+    { stdout: "pipe", stderr: "pipe" },
+  );
+  expect(compiled.exitCode, compiled.stderr.toString()).toBe(0);
+});

@@ -451,7 +451,11 @@ export const changeOrganizationSlug = async ({
           !membership ||
           !isMemberRole(membership.role) ||
           !hasMemberPermission(
-            withCurrentMemberRole(memberRole, membership.role),
+            withCurrentMemberRole({
+              authority: memberRole,
+              role: membership.role,
+              billingAccess: membership.billingAccess,
+            }),
             {
               organization: ["update"],
             },

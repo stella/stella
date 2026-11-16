@@ -1,16 +1,15 @@
 import { Result } from "better-result";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
+
+import { createTestState } from "@stll/test-state";
 
 import { runAgentClientCredentialBatch } from "@/api/agent-auth/credential-storage";
 import { env } from "@/api/env";
 
-let priorStorageSetting = false;
+const testState = createTestState({ file: import.meta.path, config: env });
+
 beforeEach(() => {
-  priorStorageSetting = env.AGENT_CLIENT_STORAGE_V1_ENABLED;
-  env.AGENT_CLIENT_STORAGE_V1_ENABLED = true;
-});
-afterEach(() => {
-  env.AGENT_CLIENT_STORAGE_V1_ENABLED = priorStorageSetting;
+  testState.setConfig("AGENT_CLIENT_STORAGE_V1_ENABLED", true);
 });
 
 describe("agent client storage run boundaries", () => {
@@ -21,7 +20,7 @@ describe("agent client storage run boundaries", () => {
   };
 
   test("does not access storage before the write setting is enabled", async () => {
-    env.AGENT_CLIENT_STORAGE_V1_ENABLED = false;
+    testState.setConfig("AGENT_CLIENT_STORAGE_V1_ENABLED", false);
     expect(
       (
         await runAgentClientCredentialBatch({

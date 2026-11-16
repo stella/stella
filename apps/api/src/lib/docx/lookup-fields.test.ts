@@ -1890,6 +1890,24 @@ describe("built-in party clauses", () => {
     expect(renderLookupOutput(null, hit)).not.toContain("incorporated");
   });
 
+  test.each(["__proto__", "constructor", "toString"])(
+    "companies-house treats inherited member %s as an unknown wire code",
+    (code) => {
+      const hit = companiesHouseHit(code, null);
+      hit.details.company.type = code;
+      expect(renderLookupTemplate("[legal form]|[jurisdiction]", hit)).toBe(
+        `${code}|${code.charAt(0).toUpperCase()}${code.slice(1)}`,
+      );
+      const { details: _details, ...withoutDetails } = hit;
+      expect(
+        renderLookupTemplate("[legal form]", {
+          ...withoutDetails,
+          legalForm: code,
+        }),
+      ).toBe(code);
+    },
+  );
+
   test.each([
     [
       "llp",

@@ -107,7 +107,7 @@ const MCP_ANONYMIZED_EXCLUSION_REASONS = [
   "personal_register_data",
 ] as const;
 
-export type McpAnonymizedExclusionReason =
+type McpAnonymizedExclusionReason =
   (typeof MCP_ANONYMIZED_EXCLUSION_REASONS)[number];
 
 /**
@@ -165,7 +165,7 @@ export type McpToolAnnotationReasons = Readonly<{
 
 export type McpReadClass = "tenant" | "public" | "both";
 
-export type McpReadClassResolver = (
+type McpReadClassResolver = (
   args: unknown,
 ) => McpReadClass | undefined | Promise<McpReadClass | undefined>;
 
@@ -215,7 +215,7 @@ export type McpToolAccessBranch =
       accountAccess: AccountAccess;
     };
 
-export type McpToolDestructiveBehavior =
+type McpToolDestructiveBehavior =
   | { type: "always" }
   | {
       type: "input-discriminator";
@@ -338,7 +338,7 @@ export const MCP_CLI_TOOL_SCOPES: readonly McpCliToolScope[] = Object.values(
   MCP_CLI_TOOL_SCOPE_BY_RESOURCE_SCOPE,
 ).filter((scope): scope is McpCliToolScope => scope !== null);
 
-export type McpCliDiscriminatorSubcommand = {
+type McpCliDiscriminatorSubcommand = {
   command: string;
   destructive?: boolean;
   include?: readonly string[];
@@ -501,7 +501,7 @@ export type McpStructuredTextField = {
  * metadata back into the payload. Windowing runs after anonymization so an
  * entity name can never be split across a window edge.
  */
-export type McpStructuredWindow = {
+type McpStructuredWindow = {
   surface: WindowedReadSurface;
   apply: (window: TextWindowResult) => void;
   cursor: string | undefined;
@@ -535,7 +535,7 @@ export type InternalToolStructuredError = {
   | { code: Exclude<McpErrorCode, "internal_error"> }
 );
 
-export type InternalToolTextError = {
+type InternalToolTextError = {
   type: "text";
   message: string;
 };
@@ -692,9 +692,8 @@ export type HandlerOutputsMatchByName<
 
 export type AssertTrue<TValue extends true> = TValue;
 
-export type McpToolHandlerMap<
-  TDefinitions extends readonly McpToolDefinition[],
-> = Readonly<Record<TDefinitions[number]["name"], McpToolHandler>>;
+type McpToolHandlerMap<TDefinitions extends readonly McpToolDefinition[]> =
+  Readonly<Record<TDefinitions[number]["name"], McpToolHandler>>;
 
 export type McpToolOutputContractMap<
   TDefinitions extends readonly McpToolDefinition[],

@@ -246,7 +246,8 @@
         "loadFailed": "Konnte nicht geladen werden.",
         "showMore": "Mehr anzeigen"
       },
-      "sessionNotResumed": "Der Coding-Agent auf Ihrem Computer konnte nicht dort weitermachen, wo er aufgehört hatte. Er hat daher anhand der Nachrichten in diesem Chat weitergearbeitet."
+      "sessionNotResumed": "Der Coding-Agent auf Ihrem Computer konnte nicht dort weitermachen, wo er aufgehört hatte. Er hat daher anhand der Nachrichten in diesem Chat weitergearbeitet.",
+      "steered": "Während der Arbeit des Agenten gesendet"
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# Quelle geprüft} other {# Quellen geprüft}}",
@@ -285,6 +286,14 @@
       "sendErrorQuotaExhausted": "Das Kontingent des KI-Anbieters ist ausgeschöpft. Versuchen Sie es in einer Minute erneut, oder wenden Sie sich an Ihren Arbeitsbereichs-Admin.",
       "sendErrorStreamIncomplete": "Die Antwort der KI wurde abgebrochen, bevor sie fertig war. Versuchen Sie es erneut.",
       "sendErrorTurnTooLarge": "Diese Antwort ist zu umfangreich geworden, um vollständig übermittelt zu werden. Senden Sie eine neue Nachricht, um fortzufahren."
+    },
+    "steerPrompt": "An den Agenten senden, während er arbeitet",
+    "steerRefused": {
+      "turnNotRunning": "Der Agent arbeitet gerade nicht.",
+      "noRun": "Der Agent läuft gerade nicht auf Ihrem Computer.",
+      "cannotSteer": "Dieser Agent nimmt während der Arbeit keine Nachrichten an.",
+      "runFull": "Der Agent nimmt gerade keine weiteren Nachrichten an.",
+      "notTaken": "Der Agent konnte Ihre Nachricht gerade nicht annehmen."
     }
   },
   "tasks": {

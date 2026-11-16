@@ -291,7 +291,7 @@ export class TelemetryError extends TaggedError("TelemetryError")<{
   cause?: unknown;
 }> {}
 
-export const USAGE_LIMIT_EXCEEDED_REASONS = [
+const USAGE_LIMIT_EXCEEDED_REASONS = [
   "no_entitlement",
   "usage_limit_exceeded",
   "entitlement_inactive",

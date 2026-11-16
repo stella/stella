@@ -1,16 +1,10 @@
 import { SQL } from "bun";
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  describe,
-  expect,
-  test,
-} from "bun:test";
+import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
+import { createTestState } from "@stll/test-state";
 
 import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -33,6 +27,8 @@ import type {
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
+const testState = createTestState({ file: import.meta.path, config: env });
+
 const TEST_SECRET = "test-webhook-secret-deadbeefcafe";
 
 type SignedRequestOptions = {
@@ -44,15 +40,18 @@ const withWebhookConfig = async (fn: () => Promise<void>): Promise<void> => {
   const previousFeatureUsage = env.FEATURE_USAGE;
   const previousSecret = env.HOSTED_USAGE_WEBHOOK_SECRET;
   const previousSecretPrevious = env.HOSTED_USAGE_WEBHOOK_SECRET_PREVIOUS;
-  env.FEATURE_USAGE = true;
-  env.HOSTED_USAGE_WEBHOOK_SECRET = TEST_SECRET;
-  env.HOSTED_USAGE_WEBHOOK_SECRET_PREVIOUS = undefined;
+  testState.setConfig("FEATURE_USAGE", true);
+  testState.setConfig("HOSTED_USAGE_WEBHOOK_SECRET", TEST_SECRET);
+  testState.setConfig("HOSTED_USAGE_WEBHOOK_SECRET_PREVIOUS", undefined);
   try {
     await fn();
   } finally {
-    env.FEATURE_USAGE = previousFeatureUsage;
-    env.HOSTED_USAGE_WEBHOOK_SECRET = previousSecret;
-    env.HOSTED_USAGE_WEBHOOK_SECRET_PREVIOUS = previousSecretPrevious;
+    testState.setConfig("FEATURE_USAGE", previousFeatureUsage);
+    testState.setConfig("HOSTED_USAGE_WEBHOOK_SECRET", previousSecret);
+    testState.setConfig(
+      "HOSTED_USAGE_WEBHOOK_SECRET_PREVIOUS",
+      previousSecretPrevious,
+    );
   }
 };
 
@@ -103,7 +102,7 @@ describe("receiveHostedUsageWebhook — ignored event records", () => {
   const runTransaction: WebhookTransactionRunner = async (fn) =>
     await db.transaction(async (tx) => await fn(asTestRaw<Transaction>(tx)));
 
-  beforeAll(async () => {
+  testState.beforeAll(async () => {
     client = await createTestPglite();
     db = drizzle({ client });
   });

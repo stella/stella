@@ -19,13 +19,18 @@ export const replaceResolvedValue = (
   value: RichPatchValue,
 ): void => {
   if (Object.hasOwn(values, path)) {
-    values[path] = value;
+    Object.defineProperty(values, path, {
+      value,
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
     return;
   }
   const segments = path.split(".");
   let current: Record<string, unknown> = values;
   for (const segment of segments.slice(0, -1)) {
-    const next = current[segment];
+    const next = Object.hasOwn(current, segment) ? current[segment] : undefined;
     if (!isRecord(next)) {
       return;
     }
@@ -33,6 +38,11 @@ export const replaceResolvedValue = (
   }
   const leaf = segments.at(-1);
   if (leaf !== undefined) {
-    current[leaf] = value;
+    Object.defineProperty(current, leaf, {
+      value,
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
   }
 };

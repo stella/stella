@@ -278,7 +278,6 @@
     "workspaces.properties.chipMulti",
     "workspaces.properties.chipNumber",
     "workspaces.properties.chipText",
-    "workspaces.properties.text",
     "workspaces.team",
     "workspaces.views.layouts.calendar"
   ],
@@ -994,11 +993,6 @@
       "es",
       "fr",
       "pt-BR"
-    ],
-    "workspaces.properties.text": [
-      "cs",
-      "de",
-      "sk"
     ],
     "workspaces.sections.parties": [
       "fr"
