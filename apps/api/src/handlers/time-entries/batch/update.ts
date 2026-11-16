@@ -269,7 +269,9 @@ const batchUpdate = createSafeHandler(
               options: {
                 from: [BILLING_STATUS.DRAFT, BILLING_STATUS.SUBMITTED],
                 to: BILLING_STATUS.APPROVED,
-                guard: and(condition, approvable),
+                guard:
+                  and(condition, approvable) ??
+                  panic("Batch approval eligibility predicate must exist"),
                 set: {
                   approvedByUserId: user.id,
                   approvedAt: now,
