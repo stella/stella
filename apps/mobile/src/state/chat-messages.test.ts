@@ -140,32 +140,28 @@ describe("what a thread shows of a stored message", () => {
   });
 
   test("names the files the person attached, and shows a message of files alone", () => {
+    const parts = [
+      {
+        type: "document",
+        source: {
+          type: "url",
+          value: "userfile://f1",
+          mimeType: "application/pdf",
+        },
+        metadata: { filename: "Lease.pdf" },
+      },
+      {
+        type: "image",
+        source: {
+          type: "url",
+          value: "userfile://f2",
+          mimeType: "image/png",
+        },
+        metadata: { filename: "Stamp.png" },
+      },
+    ];
     expect(
-      toChatEntry({
-        id: "m2",
-        role: "user",
-        createdAt: CREATED_AT,
-        parts: [
-          {
-            type: "document",
-            source: {
-              type: "url",
-              value: "userfile://f1",
-              mimeType: "application/pdf",
-            },
-            metadata: { filename: "Lease.pdf" },
-          },
-          {
-            type: "image",
-            source: {
-              type: "url",
-              value: "userfile://f2",
-              mimeType: "image/png",
-            },
-            metadata: { filename: "Stamp.png" },
-          },
-        ],
-      }),
+      toChatEntry({ id: "m2", role: "user", createdAt: CREATED_AT, parts }),
     ).toEqual({
       id: "m2",
       role: "user",
@@ -178,7 +174,20 @@ describe("what a thread shows of a stored message", () => {
       ],
       drafts: [],
       contextNotice: null,
+      // Kept as stored, so an edit sends the files back as they are.
+      parts,
     });
+  });
+
+  test("keeps no parts on an answer, which cannot be edited", () => {
+    expect(
+      toChatEntry({
+        id: "a2",
+        role: "assistant",
+        createdAt: CREATED_AT,
+        parts: [{ type: "text", content: "Done." }],
+      })?.parts,
+    ).toBeUndefined();
   });
 
   test("draws a message sent from here with its files' names, not their bytes", () => {

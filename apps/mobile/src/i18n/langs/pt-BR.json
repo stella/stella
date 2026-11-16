@@ -322,6 +322,39 @@
         "usage-limit": "Fila pausada: você atingiu seu limite de uso. Retome quando ele for redefinido.",
         "computer-away": "Aguardando seu computador: as mensagens na fila são enviadas assim que ele se conectar."
       }
+    },
+    "edit": {
+      "action": "Editar",
+      "title": "Editar mensagem",
+      "input": "Mensagem editada",
+      "notice": "Ao enviar, esta mensagem e todas as mensagens depois dela serão substituídas.",
+      "cancel": "Cancelar",
+      "refused": "Não foi possível editar a mensagem. O chat agora mostra o que está salvo; tente novamente quando nenhuma resposta estiver em andamento.",
+      "refusedHistoryChanged": "O chat mudou enquanto a edição era enviada. Ele agora mostra o que está salvo; envie a edição novamente.",
+      "refusedTargetMissing": "Esta mensagem não está mais no chat, então não pode ser editada.",
+      "localFiles": {
+        "computer": {
+          "failed": "A ação de desfazer não terminou no seu computador. Alguns arquivos podem já ter sido alterados, então verifique a pasta do chat.",
+          "folderBusy": "Uma execução no seu computador está usando esta pasta. Tente novamente quando ela terminar.",
+          "noCheckpoint": "Seu computador não tem uma cópia salva dos arquivos de antes desta etapa, então nada foi desfeito.",
+          "updateForEarlier": "Atualize o stella desktop para desfazer alterações de mensagens anteriores."
+        },
+        "conversationRestarts": "O agente recomeça a partir do texto deste chat, porque a resposta anterior a esta mensagem não terminou.",
+        "expired": "Seu computador não respondeu a tempo. Tente novamente.",
+        "option": "Desfazer também as alterações nos arquivos desde esta mensagem",
+        "optionHint": "Isso também desfaz as alterações que você mesmo fez na pasta.",
+        "pending": "Desfazendo alterações nos arquivos do seu computador",
+        "refused": {
+          "alreadyUndone": "Essas alterações nos arquivos já foram desfeitas.",
+          "desktopOffline": "Seu computador está offline. Abra o aplicativo de desktop do stella e tente novamente.",
+          "desktopUpdateRequired": "O aplicativo de desktop do stella no seu computador é antigo demais para desfazer alterações. Atualize-o e tente novamente.",
+          "folderShared": "Outro chat trabalhou nesta pasta desde esta mensagem.",
+          "noSavedCopy": "Seu computador não guardou uma cópia da pasta de antes desta mensagem: ela era grande ou lenta demais para salvar, ou cópias mais novas a substituíram.",
+          "severalFolders": "Mensagens posteriores rodaram em outro computador ou em outra pasta.",
+          "threadBusy": "Este chat ainda está trabalhando. Tente novamente quando ele terminar."
+        },
+        "restored": "Alterações nos arquivos desfeitas"
+      }
     }
   },
   "tasks": {

@@ -336,6 +336,21 @@ export const API_OAUTH_ROUTES = {
     handler: "apps/api/src/handlers/chat/turns/steer.ts",
     uncataloged: "realtime_stream",
   },
+  // Editing a chat from one of the person's own messages: what the edit does
+  // on their computer, and the undo of the file changes made there since,
+  // which the edit may ask first. Both open only the caller's own message.
+  "GET /v1/chat/threads/:threadId/messages/:messageId/local-files/undo": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/chat/messages/local-files-undo.ts",
+    exportName: "readLocalFilesUndo",
+    uncataloged: "chat_thread_ui",
+  },
+  "POST /v1/chat/threads/:threadId/messages/:messageId/local-files/undo": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/chat/messages/local-files-undo.ts",
+    exportName: "undoLocalFiles",
+    uncataloged: "chat_thread_ui",
+  },
   // Which chats are working or waiting on the person, for the chats list.
   "GET /v1/chat/runs/active": {
     scope: "stella:chat",

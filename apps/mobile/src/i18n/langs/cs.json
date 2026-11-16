@@ -322,6 +322,39 @@
         "usage-limit": "Fronta je pozastavená: dosáhli jste limitu využití. Pokračujte, až se obnoví.",
         "computer-away": "Čeká se na váš počítač: zprávy ve frontě se odešlou, jakmile se připojí."
       }
+    },
+    "edit": {
+      "action": "Upravit",
+      "title": "Upravit zprávu",
+      "input": "Upravená zpráva",
+      "notice": "Odesláním nahradíte tuto zprávu i všechny zprávy po ní.",
+      "cancel": "Zrušit",
+      "refused": "Zprávu se nepodařilo upravit. Chat teď ukazuje uložený stav, zkuste to znovu, až žádná odpověď neběží.",
+      "refusedHistoryChanged": "Chat se během odesílání úpravy změnil. Teď ukazuje uložený stav, odešlete úpravu znovu.",
+      "refusedTargetMissing": "Tato zpráva už v chatu není, takže ji nelze upravit.",
+      "localFiles": {
+        "computer": {
+          "failed": "Vrácení změn se ve vašem počítači nedokončilo. Některé soubory už mohly být změněny, proto zkontrolujte složku chatu.",
+          "folderBusy": "Tuto složku ve vašem počítači právě používá jiný běh. Zkuste to znovu, až skončí.",
+          "noCheckpoint": "Váš počítač nemá uloženou kopii souborů z doby před tímto krokem, takže se nic nevrátilo.",
+          "updateForEarlier": "Aktualizujte stella desktop, abyste mohli vracet změny z dřívějších zpráv."
+        },
+        "conversationRestarts": "Agent začne znovu z textu tohoto chatu, protože odpověď před touto zprávou nebyla dokončena.",
+        "expired": "Váš počítač neodpověděl včas. Zkuste to znovu.",
+        "option": "Vrátit také změny souborů od této zprávy",
+        "optionHint": "Vrátí se i změny, které jste ve složce provedli sami.",
+        "pending": "Vracení změn souborů ve vašem počítači",
+        "refused": {
+          "alreadyUndone": "Tyto změny souborů už byly vráceny.",
+          "desktopOffline": "Váš počítač je offline. Otevřete desktopovou aplikaci stella a zkuste to znovu.",
+          "desktopUpdateRequired": "Desktopová aplikace stella ve vašem počítači je příliš stará na vrácení změn. Aktualizujte ji a zkuste to znovu.",
+          "folderShared": "V této složce od této zprávy pracoval jiný chat.",
+          "noSavedCopy": "Váš počítač neuchoval kopii složky z doby před touto zprávou: byla příliš velká nebo se ukládala příliš pomalu, nebo ji nahradily novější kopie.",
+          "severalFolders": "Pozdější zprávy běžely na jiném počítači nebo v jiné složce.",
+          "threadBusy": "Tento chat ještě pracuje. Zkuste to znovu, až skončí."
+        },
+        "restored": "Změny souborů vráceny"
+      }
     }
   },
   "tasks": {

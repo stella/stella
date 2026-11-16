@@ -322,6 +322,39 @@
         "usage-limit": "Front je pozastavený: dosiahli ste limit využitia. Pokračujte, keď sa obnoví.",
         "computer-away": "Čaká sa na váš počítač: správy vo fronte sa odošlú, keď sa pripojí."
       }
+    },
+    "edit": {
+      "action": "Upraviť",
+      "title": "Upraviť správu",
+      "input": "Upravená správa",
+      "notice": "Odoslaním nahradíte túto správu aj všetky správy po nej.",
+      "cancel": "Zrušiť",
+      "refused": "Správu sa nepodarilo upraviť. Chat teraz ukazuje uložený stav, skúste to znova, keď nebeží žiadna odpoveď.",
+      "refusedHistoryChanged": "Chat sa počas odosielania úpravy zmenil. Teraz ukazuje uložený stav, odošlite úpravu znova.",
+      "refusedTargetMissing": "Táto správa už v chate nie je, preto ju nemožno upraviť.",
+      "localFiles": {
+        "computer": {
+          "failed": "Vrátenie zmien sa vo vašom počítači nedokončilo. Niektoré súbory už mohli byť zmenené, preto skontrolujte priečinok chatu.",
+          "folderBusy": "Tento priečinok vo vašom počítači práve používa iný beh. Skúste to znova, keď skončí.",
+          "noCheckpoint": "Váš počítač nemá uloženú kópiu súborov spred tohto kroku, takže sa nič nevrátilo.",
+          "updateForEarlier": "Aktualizujte stella desktop, aby ste mohli vracať zmeny zo skorších správ."
+        },
+        "conversationRestarts": "Agent začne odznova z textu tohto chatu, pretože odpoveď pred touto správou sa nedokončila.",
+        "expired": "Váš počítač neodpovedal včas. Skúste to znova.",
+        "option": "Vrátiť aj zmeny súborov od tejto správy",
+        "optionHint": "Vrátia sa aj zmeny, ktoré ste v priečinku urobili sami.",
+        "pending": "Vracanie zmien súborov vo vašom počítači",
+        "refused": {
+          "alreadyUndone": "Tieto zmeny súborov už boli vrátené.",
+          "desktopOffline": "Váš počítač je offline. Otvorte desktopovú aplikáciu stella a skúste to znova.",
+          "desktopUpdateRequired": "Desktopová aplikácia stella vo vašom počítači je príliš stará na vrátenie zmien. Aktualizujte ju a skúste to znova.",
+          "folderShared": "V tomto priečinku od tejto správy pracoval iný chat.",
+          "noSavedCopy": "Váš počítač neuchoval kópiu priečinka spred tejto správy: bol príliš veľký alebo sa ukladal príliš pomaly, alebo ju nahradili novšie kópie.",
+          "severalFolders": "Neskoršie správy bežali na inom počítači alebo v inom priečinku.",
+          "threadBusy": "Tento chat ešte pracuje. Skúste to znova, keď skončí."
+        },
+        "restored": "Zmeny súborov vrátené"
+      }
     }
   },
   "tasks": {

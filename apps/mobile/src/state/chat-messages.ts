@@ -86,6 +86,12 @@ export type ChatEntry = {
   readonly failure?: AIErrorKind;
   /** What the answer's context left out, as the web says it too. */
   readonly contextNotice: ChatContextNotice | null;
+  /**
+   * A stored message of the person's: its parts as the thread stores them,
+   * which an edit sends back. Absent on an answer and on a message still
+   * being sent from here.
+   */
+  readonly parts?: readonly unknown[];
 };
 
 const contextNoticeMetadataSchema = v.object({
@@ -136,6 +142,11 @@ export type ChatMessagesPage = {
   readonly retry: ChatRetry | null;
   /** Where the thread's turns run: on stella's model path, or a computer. */
   readonly runTargetKind: ChatRunTarget["kind"];
+  /**
+   * The computer target the thread's turns run on, when they run on the
+   * person's computer: what an edit names, as a regeneration does.
+   */
+  readonly localRunTarget: LocalRunTarget | undefined;
 };
 
 type StoredMessage = v.InferOutput<typeof messageSchema>;
@@ -190,6 +201,7 @@ export const toChatEntry = (message: StoredMessage): ChatEntry | undefined => {
         ? (contextNoticeIn(message.metadata) ?? null)
         : null,
     ...(failure === undefined ? {} : { failure }),
+    ...(message.role === "user" ? { parts: message.parts } : {}),
   };
 };
 
@@ -258,6 +270,7 @@ const toPage = (
   runTargetKind: v.is(chatRunTargetSchema, page.runTarget)
     ? page.runTarget.kind
     : CHAT_RUN_TARGET_KIND.cloud,
+  localRunTarget: localRunTargetOf(page.runTarget),
   pendingInput: latest
     ? pendingInputOf({
         message: page.messages.at(-1),

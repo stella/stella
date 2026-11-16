@@ -29,6 +29,7 @@ import { ChatDraftDocuments } from "@/components/chat-draft-document";
 import { ChatInputCard } from "@/components/chat-input-card";
 import type { InputNotice } from "@/components/chat-input-card";
 import { ChatMessage } from "@/components/chat-message";
+import { useMessageEdit } from "@/components/chat-message-edit";
 import { ChatQueueList } from "@/components/chat-queue-list";
 import type { QueueThreadState } from "@/components/chat-queue-list";
 import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
@@ -44,6 +45,7 @@ import { epochMilliseconds } from "@/connection/clock";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
 import type { Load } from "@/state/api-request";
+import { shownBeforeEdit } from "@/state/chat-edit";
 import { CHAT_FAILURE_KEYS, chatFailureStepsKey } from "@/state/chat-failure";
 import {
   prependOlderPage,
@@ -67,6 +69,7 @@ const EMPTY_PAGE: ChatMessagesPage = {
   pendingInput: null,
   retry: null,
   runTargetKind: CHAT_RUN_TARGET_KIND.cloud,
+  localRunTarget: undefined,
 };
 
 /**
@@ -212,6 +215,9 @@ const ThreadMessages = ({
   const [older, setOlder] = useState<PagingState>("idle");
   const [anonymized, setAnonymized] = useState(firstPage.usedAnonymization);
   const [runTargetKind, setRunTargetKind] = useState(firstPage.runTargetKind);
+  const [localRunTarget, setLocalRunTarget] = useState(
+    firstPage.localRunTarget,
+  );
   const [pending, setPending] = useState(firstPage.pendingInput);
   const [retry, setRetry] = useState(firstPage.retry);
   const [inputNotice, setInputNotice] = useState<InputNotice>();
@@ -221,26 +227,12 @@ const ThreadMessages = ({
     anonymized,
     matterId,
     onSettled: async () => {
-      const latest = await readChatThread({
-        fetch,
-        matterId,
-        source,
-        threadId,
-      });
-      if (Result.isOk(latest)) {
-        setEntries((loaded) => prependOlderPage(latest.value.entries, loaded));
-        setAnonymized(latest.value.usedAnonymization);
-        setRunTargetKind(latest.value.runTargetKind);
-        setPending(latest.value.pendingInput);
-        setRetry(latest.value.retry);
-        setInputNotice(undefined);
-        return true;
+      // Unread, the answer stays as it streamed until the next refresh.
+      if ((await showStoredThread()) === null) {
+        return false;
       }
-      if (latest.error._tag === "SignedOutError") {
-        end(source);
-      }
-      // Otherwise the answer stays as it streamed until the next refresh.
-      return false;
+      setInputNotice(undefined);
+      return true;
     },
     source,
     threadId,
@@ -255,8 +247,8 @@ const ThreadMessages = ({
   });
   // A turn that resumes a paused message adds to it, so the stored message
   // stays; any other live turn stands in for its stored copy, and for the
-  // failed answer it replaces.
-  const shown = entries.filter(
+  // failed answer it replaces, an edit for every message from the edited one.
+  const shown = shownBeforeEdit(entries, live?.truncates).filter(
     (entry) =>
       entry.id === live?.continues ||
       (entry.id !== live?.answer.messageId &&
@@ -271,6 +263,14 @@ const ThreadMessages = ({
       : () => {
           turn.regenerate(retry);
         };
+
+  const messageOf = (entry: ChatEntry) => (
+    <ChatMessage
+      entry={entry}
+      onLongPress={edits.longPressOf(entry)}
+      onRetry={retryFor(entry)}
+    />
+  );
 
   /**
    * Answers what the paused turn waits for. When the server does not take
@@ -293,6 +293,7 @@ const ThreadMessages = ({
     setEntries((loaded) => prependOlderPage(latest.value.entries, loaded));
     setAnonymized(latest.value.usedAnonymization);
     setRunTargetKind(latest.value.runTargetKind);
+    setLocalRunTarget(latest.value.localRunTarget);
     setPending(latest.value.pendingInput);
     setRetry(latest.value.retry);
     return latest.value;
@@ -343,6 +344,15 @@ const ThreadMessages = ({
   };
 
   const steerOffered = isSteerOfferedOnPhone(turn.busy, runTargetKind);
+
+  const edits = useMessageEdit({
+    localRunTarget,
+    onRefused: showStoredThread,
+    setEntries,
+    source,
+    threadId,
+    turn,
+  });
 
   const loadOlder = async () => {
     if (cursor === null || older === "loading") {
@@ -460,51 +470,54 @@ const ThreadMessages = ({
         }
         renderItem={({ item }) =>
           item.drafts.length === 0 ? (
-            <ChatMessage entry={item} onRetry={retryFor(item)} />
+            messageOf(item)
           ) : (
             // The drafts the answer wrote follow it, each opening its pages.
             <View style={styles.live}>
-              <ChatMessage entry={item} onRetry={retryFor(item)} />
+              {messageOf(item)}
               <ChatDraftDocuments drafts={item.drafts} />
             </View>
           )
         }
       />
       <View style={screenStyles.readable}>
-        {markFailure === null ? null : (
-          <View style={styles.markFailure}>
-            <WriteFailureNotice
-              failure={markFailure}
-              message={t("markReadFailed")}
-            />
-          </View>
-        )}
-        <ChatQueueList
-          onEdit={(text) => {
-            composer.current?.handBack(text);
-          }}
-          onSentByServer={followServerTurn}
-          source={source}
-          steerQueued={turn.steerQueued}
-          thread={queueThreadOf({
-            busy: turn.busy,
-            steerOffered,
-            waiting: pending !== null,
-          })}
-          threadId={threadId}
-        />
-        <ChatComposer
-          busy={turn.busy}
-          canStop={turn.canStop}
-          handle={composer}
-          onQueue={turn.queue}
-          onSend={turn.send}
-          onSteer={steerOffered ? turn.steer : undefined}
-          onStop={turn.stop}
-          sendError={turn.sendError}
-          shareId={undefined}
-          steerRefusal={turn.steerRefusal}
-        />
+        {edits.form}
+        <View style={edits.form === null ? undefined : styles.hidden}>
+          {markFailure === null ? null : (
+            <View style={styles.markFailure}>
+              <WriteFailureNotice
+                failure={markFailure}
+                message={t("markReadFailed")}
+              />
+            </View>
+          )}
+          <ChatQueueList
+            onEdit={(text) => {
+              composer.current?.handBack(text);
+            }}
+            onSentByServer={followServerTurn}
+            source={source}
+            steerQueued={turn.steerQueued}
+            thread={queueThreadOf({
+              busy: turn.busy,
+              steerOffered,
+              waiting: pending !== null,
+            })}
+            threadId={threadId}
+          />
+          <ChatComposer
+            busy={turn.busy}
+            canStop={turn.canStop}
+            handle={composer}
+            onQueue={turn.queue}
+            onSend={turn.send}
+            onSteer={steerOffered ? turn.steer : undefined}
+            onStop={turn.stop}
+            sendError={turn.sendError}
+            shareId={undefined}
+            steerRefusal={turn.steerRefusal}
+          />
+        </View>
       </View>
     </View>
   );
@@ -622,6 +635,9 @@ const styles = StyleSheet.create({
   },
   fill: {
     flex: 1,
+  },
+  hidden: {
+    display: "none",
   },
   greeting: {
     alignItems: "center",
