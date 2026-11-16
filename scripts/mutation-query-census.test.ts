@@ -868,3 +868,186 @@ test("transparent options spreads retain reads and eager writes without blessing
     }).toEqual({ factory, unresolved: true });
   }
 });
+
+test("promise chains retain the executing reader and its bound query options", () => {
+  const census = inspectMutationQuerySources([
+    {
+      file: "apps/web/src/chained-reader.ts",
+      text: `
+        import { QueryClient } from "@tanstack/react-query";
+        import { api } from "@/api";
+        const client = new QueryClient();
+        const load = (options) => client.query(options).then(value => value).finally(() => {});
+        load({ queryKey: ["documents"], queryFn: () => api.documents.get() });
+      `,
+    },
+  ]);
+  const reader = census.readers.find(({ callee }) => callee === "load");
+  expect(reader).toMatchObject({
+    kind: "wrapper",
+    key: { staticPrefix: ["documents"] },
+    routes: [{ route: "/documents", method: "get" }],
+    wrapperOf: ["apps/web/src/chained-reader.ts:load:client.query"],
+    unresolved: [],
+  });
+});
+
+test("a chained request remains a write of its actual mutation owner", () => {
+  const census = inspectMutationQuerySources([
+    {
+      file: "apps/web/src/chained-write.ts",
+      text: `
+        import { useMutation } from "@tanstack/react-query";
+        import { api } from "@/api";
+        useMutation({ mutationFn: () => api.documents.post({ name: "Draft" }).then(response => response) });
+      `,
+    },
+  ]);
+  expect(census.mutations).toHaveLength(1);
+  expect(census.mutations.at(0)?.writes).toMatchObject([
+    { route: "/documents", method: "post" },
+  ]);
+});
+
+test("a receiver preparation retains eager effects without executing its returned callback", () => {
+  const census = inspectMutationQuerySources([
+    {
+      file: "apps/web/src/prepared-receiver.ts",
+      text: `
+        import { useMutation } from "@tanstack/react-query";
+        import { api } from "@/api";
+        const prepare = () => {
+          api.audit.post({ event: "prepared" });
+          return () => api.uninvoked.post({});
+        };
+        const usePrepared = () => {
+          prepare().bind(null);
+          return useMutation({ mutationFn: () => api.documents.post({}) });
+        };
+        usePrepared();
+      `,
+    },
+  ]);
+  const wrapper = census.mutations.find(
+    ({ callee }) => callee === "usePrepared",
+  );
+  expect(wrapper?.ownWrites).toMatchObject([
+    { route: "/audit", method: "post" },
+  ]);
+  expect(wrapper?.ownWrites).toHaveLength(1);
+  expect(wrapper?.writes.map(({ route }) => route).toSorted()).toEqual([
+    "/audit",
+    "/documents",
+  ]);
+});
+
+test("an immediately invoked receiver binds options before following a query chain", () => {
+  const census = inspectMutationQuerySources([
+    {
+      file: "apps/web/src/invoked-reader.ts",
+      text: `
+        import { QueryClient } from "@tanstack/react-query";
+        import { api } from "@/api";
+        const client = new QueryClient();
+        const load = () => ((options) => client.query(options))({
+          queryKey: ["bound"], queryFn: () => api.documents.get(),
+        }).then(value => value);
+        load();
+      `,
+    },
+  ]);
+  expect(census.readers.find(({ callee }) => callee === "load")).toMatchObject({
+    key: { staticPrefix: ["bound"] },
+    routes: [{ route: "/documents", method: "get" }],
+    unresolved: [],
+  });
+});
+
+test("a canonical mutation factory cannot own a chained write in its eager options", () => {
+  const census = inspectMutationQuerySources([
+    {
+      file: "apps/web/src/lib/workspace-realtime.ts",
+      text: `export const resourceMutation = (options) => options;`,
+    },
+    {
+      file: "apps/web/src/eager-factory.ts",
+      text: `
+        import { useMutation } from "@tanstack/react-query";
+        import { resourceMutation } from "./lib/workspace-realtime";
+        import { api } from "@/api";
+        const useSave = () => {
+          const write = resourceMutation({
+            queryClient: api.audit.post({}).then(value => value),
+            mutationFn: () => api.documents.post({}),
+          });
+          return useMutation({ mutationFn: write });
+        };
+        useSave();
+      `,
+    },
+  ]);
+  const wrapper = census.mutations.find(({ callee }) => callee === "useSave");
+  expect(wrapper?.ownWrites).toMatchObject([
+    { route: "/audit", method: "post" },
+  ]);
+  expect(wrapper?.ownWrites).toHaveLength(1);
+});
+
+test("chaining an ambiguous query receiver does not make it a recognized client", () => {
+  const census = inspectMutationQuerySources([
+    {
+      file: "apps/web/src/shadowed-reader.ts",
+      text: `
+        import { QueryClient } from "@tanstack/react-query";
+        const client = new QueryClient();
+        const load = (client) => client.query({ queryKey: ["unknown"], queryFn: externalRead }).then(value => value);
+        load(otherClient);
+      `,
+    },
+  ]);
+  expect(
+    census.readers.find(({ callee }) => callee === "client.query")?.unresolved,
+  ).toContainEqual({
+    reason: "unresolved-query-client-receiver",
+    expression: "client.query",
+    file: "apps/web/src/shadowed-reader.ts",
+  });
+});
+
+test("operation consumers still inspect callbacks returned by ordinary option factories", () => {
+  const census = inspectMutationQuerySources([
+    {
+      file: "apps/web/src/returned-options.ts",
+      text: `
+        import { useMutation, useQuery } from "@tanstack/react-query";
+        import { api } from "@/api";
+        const options = () => ({ queryKey: ["documents"], queryFn: () => api.documents.get() });
+        const write = () => {
+          return async () => {
+            await api.uploads({ workspaceId }).presign.post({});
+            await api.uploads({ workspaceId })({ uploadId }).abort.post({});
+            await api.uploads({ workspaceId })({ uploadId }).finalize.post({});
+          };
+        };
+        useQuery(options());
+        useMutation({ mutationFn: write() });
+      `,
+    },
+  ]);
+  const reader = census.readers.find(({ callee }) => callee === "useQuery");
+  const mutation = census.mutations.find(
+    ({ callee }) => callee === "useMutation",
+  );
+  expect({
+    routes: reader?.routes,
+    ownWrites: mutation?.ownWrites,
+  }).toMatchObject({
+    routes: [{ route: "/documents", method: "get" }],
+    ownWrites: [
+      { route: "/uploads/:workspaceId/presign", method: "post" },
+      { route: "/uploads/:workspaceId/:uploadId/abort", method: "post" },
+      { route: "/uploads/:workspaceId/:uploadId/finalize", method: "post" },
+    ],
+  });
+  expect(mutation?.ownWrites).toHaveLength(3);
+});
