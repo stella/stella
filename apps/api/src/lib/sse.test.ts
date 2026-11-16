@@ -3,6 +3,7 @@ import {
   beforeEach,
   describe,
   expect,
+  jest,
   type Mock,
   mock,
   spyOn,
@@ -16,6 +17,7 @@ import {
   resourceUpdatedRealtimeEvent,
   type WorkspaceRealtimeEvent,
 } from "@stll/api-contract";
+import { createTestClock, settledWithin } from "@stll/test-kit";
 
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
@@ -42,6 +44,7 @@ import {
   SSEBroadcastError,
   type SseBroadcastPublisher,
 } from "@/api/lib/sse-broadcast";
+import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 beforeEach(async () => {
   setIntervalSpy = spyOn(globalThis, "setInterval");
@@ -194,24 +197,20 @@ let clientsCreatedDuringImport = 0;
 let redisClientsCreatedDuringImport = 0;
 let intervalsStartedDuringImport = 0;
 
-// Let the fire-and-forget subscribe promise inside startSse settle. A timer
-// turn drains the whole pending microtask queue, so this does not depend on
-// how many `await` points the module's attach path happens to have — counting
-// ticks silently under-drains the moment that chain grows. `Bun.sleep` is used
-// rather than `setTimeout` so the tests that stub the global timer still get a
-// real turn. The delay is 0, so a pending attach retry (200 ms at the shortest)
-// never fires inside it.
+// The test clock drains the pending promise chain without moving time or
+// firing the subscriber's retry timer. Counting microtasks would couple the
+// tests to the number of awaits in the asynchronous attach path.
 const settlePendingWork = async (): Promise<void> => {
-  await Bun.sleep(0);
+  await createTestClock().advance(0);
 };
 
 const observeStreamRead = async (stream: ReadableStream) => {
   const reader = stream.getReader();
   try {
-    return await Promise.race([
-      reader.read(),
-      Bun.sleep(100).then(() => "test-deadline" as const),
-    ]);
+    return await settledWithin(reader.read(), {
+      description: "SSE stream result",
+      timeoutMs: HAPPY_PATH_TIMEOUT_MS,
+    });
   } finally {
     // swallow-ok: finally cancels the observation reader without masking its original read result or failure
     await reader.cancel().catch(() => undefined);
@@ -924,10 +923,6 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
         }),
       );
       const received = await observeStreamRead(stream);
-      expect(received).not.toBe("test-deadline");
-      if (received === "test-deadline") {
-        return;
-      }
       expect(decode(received.value)).toContain("publish-rejected");
     } finally {
       controller.abort();
@@ -1220,129 +1215,107 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
 });
 
 describe("startSse: subscriber attach retry", () => {
-  test("a transient attach failure is retried and the subscriber attaches", async () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
     createdClients.length = 0;
-    // First attach attempt fails; the bounded backoff retry must attach.
-    subscribeFailuresRemaining = 1;
+    subscribeBehavior = "resolve";
+  });
 
+  afterEach(() => {
+    stopSse();
+    subscribeFailuresRemaining = 0;
+    closeFailuresRemaining = 0;
+    jest.useRealTimers();
+  });
+
+  // Each retry must wait its full backoff, then create exactly one client.
+  // Drain the asynchronous attach outcome before advancing the next deadline.
+  const advanceRetries = async (delays: readonly number[]): Promise<void> => {
+    const [delay, ...remaining] = delays;
+    if (delay === undefined) {
+      return;
+    }
+    const clientsBefore = createdClients.length;
+    jest.advanceTimersByTime(delay - 1);
+    await settlePendingWork();
+    expect(createdClients).toHaveLength(clientsBefore);
+    jest.advanceTimersByTime(1);
+    await settlePendingWork();
+    expect(createdClients).toHaveLength(clientsBefore + 1);
+    await advanceRetries(remaining);
+  };
+
+  test("a transient attach failure is retried and the subscriber attaches", async () => {
+    subscribeFailuresRemaining = 1;
     startTestSse();
     await settlePendingWork();
 
-    // The first attempt created a client, failed, and closed it.
     expect(createdClients).toHaveLength(1);
     expect(createdClients[0]?.close).toHaveBeenCalledTimes(1);
+    await advanceRetries([200]);
 
-    // Wait past the first backoff delay (200ms) so the retry can run.
-    await Bun.sleep(300);
-    await settlePendingWork();
-
-    // A second client was created for the retry and stayed attached.
-    expect(createdClients).toHaveLength(2);
     const attached = createdClients[1];
     expect(attached?.subscribe).toHaveBeenCalledTimes(1);
     expect(attached?.close).not.toHaveBeenCalled();
 
-    // Stopping now closes the attached retry client exactly once.
     stopSse();
     expect(attached?.close).toHaveBeenCalledTimes(1);
-
     await settlePendingWork();
-    subscribeFailuresRemaining = 0;
   });
 
   test("keeps retrying at the capped interval and recovers after a long outage", async () => {
-    createdClients.length = 0;
-    subscribeBehavior = "resolve";
-    // Fail the 5-step ramp plus 35 steady attempts (40 failures), then attach.
-    // Proves retries continue indefinitely deep into the steady phase, so an
-    // outage far longer than the ramp still self-heals when Redis recovers —
-    // and, with the timer-scheduled driver, without any recursive/awaited
-    // attempt chain building up.
+    // Fail the five-step ramp plus 35 steady attempts, then attach.
     subscribeFailuresRemaining = 40;
-
-    // Zero out the retry backoff so 41 attempts run fast: each attempt's timer
-    // fires on the next macrotask instead of after the real ramp/steady delay.
-    // The drain below uses the real setTimeout captured here.
-    const realSetTimeout = globalThis.setTimeout;
-    // A timer stub that fires the callback promptly, ignoring the delay. Matching
-    // Bun's full overloaded setTimeout type adds no test value, so assert it.
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test-only timer stub
-    const immediateSetTimeout = ((callback: (...args: unknown[]) => void) =>
-      realSetTimeout(callback, 0)) as typeof globalThis.setTimeout;
-    const timeoutSpy = spyOn(globalThis, "setTimeout").mockImplementation(
-      immediateSetTimeout,
-    );
-
     startTestSse();
+    await settlePendingWork();
+    expect(createdClients).toHaveLength(1);
 
-    // Drain macrotasks until the subscriber attaches; bounded recursion (not a
-    // loop) so no await sits inside a loop and a stuck run cannot hang forever.
-    const drainUntilAttached = async (remaining: number): Promise<void> => {
-      if (createdClients.at(-1)?.subscribedLive === true || remaining <= 0) {
-        return;
-      }
-      await new Promise<void>((resolve) => {
-        realSetTimeout(resolve, 0);
-      });
-      await drainUntilAttached(remaining - 1);
-    };
-    await drainUntilAttached(300);
+    await advanceRetries([
+      200,
+      500,
+      1000,
+      2000,
+      ...Array.from({ length: 36 }, () => 5000),
+    ]);
 
-    // 41 clients: 40 failed attach attempts (well past the 5-step ramp) + the
-    // one that finally subscribed.
     expect(createdClients).toHaveLength(41);
     const attached = createdClients.at(-1);
     expect(attached?.subscribedLive).toBe(true);
     expect(attached?.subscribe).toHaveBeenCalledTimes(1);
     expect(attached?.close).not.toHaveBeenCalled();
 
-    timeoutSpy.mockRestore();
-    subscribeFailuresRemaining = 0;
-    stopSse();
+    // Recovery leaves no retry armed, even after another steady interval.
+    jest.advanceTimersByTime(5000);
     await settlePendingWork();
+    expect(createdClients).toHaveLength(41);
   });
 
   test("a failed attach whose cleanup close() also throws still schedules the next attempt", async () => {
-    createdClients.length = 0;
-    subscribeBehavior = "resolve";
-    // The first 3 attach attempts fail AND their cleanup close() throws. The
-    // retry scheduling must survive the throwing close, so a 4th attempt runs
-    // and attaches — otherwise a single unlucky close would leave the instance
-    // permanently deaf.
     subscribeFailuresRemaining = 3;
     closeFailuresRemaining = 3;
-
-    const realSetTimeout = globalThis.setTimeout;
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test-only timer stub
-    const immediateSetTimeout = ((callback: (...args: unknown[]) => void) =>
-      realSetTimeout(callback, 0)) as typeof globalThis.setTimeout;
-    const timeoutSpy = spyOn(globalThis, "setTimeout").mockImplementation(
-      immediateSetTimeout,
-    );
-
     startTestSse();
+    await settlePendingWork();
+    expect(createdClients).toHaveLength(1);
 
-    const drainUntilAttached = async (remaining: number): Promise<void> => {
-      if (createdClients.at(-1)?.subscribedLive === true || remaining <= 0) {
-        return;
-      }
-      await new Promise<void>((resolve) => {
-        realSetTimeout(resolve, 0);
-      });
-      await drainUntilAttached(remaining - 1);
-    };
-    await drainUntilAttached(100);
+    await advanceRetries([200, 500, 1000]);
 
-    // 4 clients: 3 failed attempts (each whose close() threw) + the attach.
     expect(createdClients).toHaveLength(4);
     expect(createdClients.at(-1)?.subscribedLive).toBe(true);
-    // All three throwing closes were consumed, proving they actually ran.
     expect(closeFailuresRemaining).toBe(0);
+  });
 
-    timeoutSpy.mockRestore();
-    subscribeFailuresRemaining = 0;
-    closeFailuresRemaining = 0;
-    stopSse();
+  test("stopping during backoff cancels the pending attach attempt", async () => {
+    subscribeFailuresRemaining = 1;
+    startTestSse();
     await settlePendingWork();
+    expect(createdClients).toHaveLength(1);
+
+    jest.advanceTimersByTime(199);
+    stopSse();
+    jest.advanceTimersByTime(5000);
+    await settlePendingWork();
+
+    expect(createdClients).toHaveLength(1);
+    expect(createdClients[0]?.close).toHaveBeenCalledTimes(1);
   });
 });
