@@ -214,7 +214,7 @@ export const REPLAY_WRITER_REGISTRY = [
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row-update.ts",
-    line: 484,
+    line: 485,
     kind: "pending",
   },
   {

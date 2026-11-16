@@ -446,6 +446,7 @@ test.each([
         (
           await lockCaseLawDecisionSnapshot({
             tx,
+            decisions: caseLawDecisions,
             decisionId: duplicate,
             holdsDocument: rowHoldsDocumentFor(caseLawDecisions),
           })

@@ -77,6 +77,7 @@ const replacedDecisionState = async (
 } | null> => {
   const rows = await lockCaseLawDecisionSnapshot({
     tx,
+    decisions: caseLawDecisions,
     decisionId: id,
     holdsDocument: rowHoldsDocumentFor(caseLawDecisions),
   });

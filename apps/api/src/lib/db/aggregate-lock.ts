@@ -37,12 +37,11 @@ import type {
   OnlineMigrationParam,
 } from "@/api/db/online-migration-connection";
 import type { Transaction } from "@/api/db/root";
-import type { InvoiceStatus } from "@/api/db/schema";
+import type { caseLawDecisions, InvoiceStatus } from "@/api/db/schema";
 import {
   billingArrangements,
   billingCodes,
   caseLawDecisionIdentifiers,
-  caseLawDecisions,
   caseLawReplayBatches,
   caseLawSources,
   chatThreads,
@@ -2660,6 +2659,8 @@ export const lockCaseLawDecisionRows = async ({
 
 type CaseLawDecisionSnapshotOptions = {
   tx: Pick<Transaction, "select">;
+  /** The base table, passed in so this owner names no case-law relation itself. */
+  decisions: typeof caseLawDecisions;
   decisionId: SafeId<"caseLawDecision">;
   /** The storage slice supplies its document-presence policy without a dependency cycle. */
   holdsDocument: SQL<boolean>;
@@ -2668,22 +2669,23 @@ type CaseLawDecisionSnapshotOptions = {
 /** Lock and read a decision's pre-refresh identity and payload state together. */
 export const lockCaseLawDecisionSnapshot = async ({
   tx,
+  decisions,
   decisionId,
   holdsDocument,
 }: CaseLawDecisionSnapshotOptions) =>
   await tx
     .select({
-      citationKey: caseLawDecisions.citationKey,
-      country: caseLawDecisions.country,
-      court: caseLawDecisions.court,
-      docketFamilyKey: caseLawDecisions.docketFamilyKey,
-      language: caseLawDecisions.language,
-      decisionDate: caseLawDecisions.decisionDate,
+      citationKey: decisions.citationKey,
+      country: decisions.country,
+      court: decisions.court,
+      docketFamilyKey: decisions.docketFamilyKey,
+      language: decisions.language,
+      decisionDate: decisions.decisionDate,
       holdsDocument,
-      metadata: caseLawDecisions.metadata,
+      metadata: decisions.metadata,
     })
-    .from(caseLawDecisions)
-    .where(eq(caseLawDecisions.id, decisionId))
+    .from(decisions)
+    .where(eq(decisions.id, decisionId))
     .for("update")
     .limit(1);
 /** Hold every summary endpoint in one ordered batch before checking revisions. */
