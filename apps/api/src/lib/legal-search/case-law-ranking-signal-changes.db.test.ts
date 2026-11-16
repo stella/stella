@@ -27,7 +27,6 @@ import {
   PARTIAL_OBSERVATION_FIELD,
   PARTIAL_OBSERVATION_KEY,
 } from "@/api/lib/legal-search/partial-observation-sql";
-import { installCorpusProjectionSeedingGuard } from "@/api/tests/helpers/corpus-projection-seeding-guard";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -94,7 +93,6 @@ const setAuthority = async (
 // timeout: builds the PGlite schema from every migration.
 beforeAll(async () => {
   client = await createTestPglite();
-  await installCorpusProjectionSeedingGuard(client);
   db = drizzle({ client });
 }, 120_000);
 

@@ -24,6 +24,7 @@ import {
   ROLLOUT_CASE_LAW_WHOLE_RELATIONS,
 } from "@/api/lib/public-law-relations";
 import { readPgliteTestSnapshotPath } from "@/api/tests/env";
+import { installCorpusProjectionSeedingGuard } from "@/api/tests/helpers/corpus-projection-seeding-guard";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createSchemaPglite,
@@ -942,6 +943,8 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
     await installPgliteCorrespondenceSources(tx);
   });
   await installPgliteLegalHoldDeleteBackstop(db);
+  // On by default: every suite that commits a canonical row is checked.
+  await installCorpusProjectionSeedingGuard(client);
 
   return client;
 };

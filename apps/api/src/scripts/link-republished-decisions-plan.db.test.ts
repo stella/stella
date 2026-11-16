@@ -25,10 +25,7 @@ import {
   selectRepublishedDecisionReport,
   SOURCE_AUTHORITY,
 } from "@/api/scripts/link-republished-decisions-plan";
-import {
-  CORPUS_PROJECTION_SEEDING_GUARD_OFF_SETTING,
-  installCorpusProjectionSeedingGuard,
-} from "@/api/tests/helpers/corpus-projection-seeding-guard";
+import { CORPUS_PROJECTION_SEEDING_GUARD_OFF_SETTING } from "@/api/tests/helpers/corpus-projection-seeding-guard";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
@@ -42,7 +39,6 @@ const retiredId = createSafeId<"caseLawDecision">();
 beforeAll(
   async () => {
     client = await createTestPglite();
-    await installCorpusProjectionSeedingGuard(client);
     db = drizzle({ client });
     await db.insert(caseLawSources).values([
       { id: courtSource, adapterKey: ADAPTER_KEYS.PL_TK, name: "Court" },

@@ -9,12 +9,23 @@
  *
  * A writer that seeds some generations and not others, or leaves a settled row
  * without states, would make the seeding fact lie without failing anything
- * else. Installed in every suite that runs a canonical writer (ingestion and
- * its settle transactions, batch reconcile, retirement, the ranking-signal
- * drain, withdrawal and erasure, legislation ingestion, the repair scripts),
- * it fails the commit that breaks the rule.
+ * else. The guard is on by default in every test database: the PGlite build
+ * behind `createTestPglite` installs it, and so does the Postgres suites'
+ * preparation after it migrates the shared database. It fails the commit
+ * that breaks the rule, in whichever suite the writer runs.
+ *
+ * It checks that states exist, not that they are current: a writer that
+ * changes a projection input of a row that already has states is caught by
+ * the ownership rule on those columns (`scripts/ownership/
+ * case-law-projectability-write.ts`, `legislation-projectability-write.ts`)
+ * where its write is visible to it, and by its own suite's assertions.
+ *
+ * A suite that cannot keep the rule opts out with a written reason
+ * (`optOutOfCorpusProjectionSeedingGuard`); a fixture that stands one row up
+ * as pre-existing data sets the off switch for its own transaction.
  */
 import type { PGlite } from "@electric-sql/pglite";
+import { panic } from "better-result";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import { CORPUS_INDEX_ACTIVE_GENERATION_STATUSES } from "@/api/lib/legal-search/corpus-generation-contract";
@@ -25,6 +36,7 @@ import {
 import { CORPUS_ROW_PROJECTABLE } from "@/api/lib/legal-search/corpus-projectability";
 
 const GUARD_FUNCTION = "test_corpus_projection_seeding_guard";
+const STATEMENT_BREAK = "-- statement break";
 
 /**
  * Set to `off` with `set_config(..., true)` inside one transaction, only by a
@@ -54,18 +66,30 @@ const partialScopes = (): string => {
     : `(g.generation NOT IN (${partial.join(", ")}) OR (g.generation, v_country) IN (VALUES ${pairs.join(", ")}))`;
 };
 
-export const installCorpusProjectionSeedingGuard = async (
-  client: PGlite,
-): Promise<void> => {
+/**
+ * The guard's function and triggers. The function runs as its owner, so a
+ * writer role that may not read the generation registry or the states is
+ * still checked.
+ */
+export const corpusProjectionSeedingGuardStatements = (): string[] =>
+  corpusProjectionSeedingGuardSql()
+    .split(STATEMENT_BREAK)
+    .map((statement) => statement.trim().replace(/;$/u, ""))
+    .filter((statement) => statement.length > 0);
+
+const corpusProjectionSeedingGuardSql = (): string => {
   const active = CORPUS_INDEX_ACTIVE_GENERATION_STATUSES.map(quoted).join(", ");
   const dialect = new PgDialect();
   const projectable = {
     case_law: dialect.sqlToQuery(CORPUS_ROW_PROJECTABLE.case_law).sql,
     legislation: dialect.sqlToQuery(CORPUS_ROW_PROJECTABLE.legislation).sql,
   };
-  await client.exec(`
+  return `
     CREATE OR REPLACE FUNCTION ${GUARD_FUNCTION}() RETURNS trigger
-    LANGUAGE plpgsql AS $$
+    LANGUAGE plpgsql
+    SECURITY DEFINER
+    SET search_path = public, pg_catalog
+    AS $$
     DECLARE
       v_family text;
       v_country text;
@@ -137,17 +161,49 @@ export const installCorpusProjectionSeedingGuard = async (
       RETURN NULL;
     END;
     $$;
+    ${STATEMENT_BREAK}
     DROP TRIGGER IF EXISTS ${GUARD_FUNCTION} ON case_law_decisions;
+    ${STATEMENT_BREAK}
     CREATE CONSTRAINT TRIGGER ${GUARD_FUNCTION}
       AFTER INSERT OR UPDATE OF projection_epoch, country, corpus_mirror_status
       ON case_law_decisions
       DEFERRABLE INITIALLY DEFERRED
       FOR EACH ROW EXECUTE FUNCTION ${GUARD_FUNCTION}();
+    ${STATEMENT_BREAK}
     DROP TRIGGER IF EXISTS ${GUARD_FUNCTION} ON legislation_documents;
+    ${STATEMENT_BREAK}
     CREATE CONSTRAINT TRIGGER ${GUARD_FUNCTION}
       AFTER INSERT OR UPDATE OF projection_epoch, country, content_hash
       ON legislation_documents
       DEFERRABLE INITIALLY DEFERRED
       FOR EACH ROW EXECUTE FUNCTION ${GUARD_FUNCTION}();
-  `);
+  `;
+};
+
+/** Install the guard; the test database builds call this, suites do not. */
+export const installCorpusProjectionSeedingGuard = async (
+  client: Pick<PGlite, "exec">,
+): Promise<void> => {
+  await client.exec(
+    corpusProjectionSeedingGuardStatements()
+      .map((statement) => `${statement};`)
+      .join("\n"),
+  );
+};
+
+/**
+ * Turn the guard off for the rest of this PGlite session (the whole suite).
+ * The reason is the review record: say which writer the suite runs and why
+ * it cannot keep the all-or-none rule.
+ */
+export const optOutOfCorpusProjectionSeedingGuard = async (
+  client: Pick<PGlite, "query">,
+  { reason }: { reason: string },
+): Promise<void> => {
+  if (reason.trim().length < 20) {
+    panic("A seeding guard opt-out needs a written reason");
+  }
+  await client.query("SELECT set_config($1, 'off', false)", [
+    CORPUS_PROJECTION_SEEDING_GUARD_OFF_SETTING,
+  ]);
 };

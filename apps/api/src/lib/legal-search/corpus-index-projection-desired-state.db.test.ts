@@ -27,10 +27,7 @@ import {
   synchronizeLockedCaseLawProjectionBatchTx,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { advanceCorpusProjectionErasuresTx } from "@/api/lib/legal-search/corpus-index-projection-erasure-store";
-import {
-  CORPUS_PROJECTION_SEEDING_GUARD_OFF_SETTING,
-  installCorpusProjectionSeedingGuard,
-} from "@/api/tests/helpers/corpus-projection-seeding-guard";
+import { CORPUS_PROJECTION_SEEDING_GUARD_OFF_SETTING } from "@/api/tests/helpers/corpus-projection-seeding-guard";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -54,7 +51,6 @@ let db: ReturnType<typeof drizzle>;
 
 beforeAll(async () => {
   client = await createTestPglite();
-  await installCorpusProjectionSeedingGuard(client);
   db = drizzle({
     client,
     logger: {

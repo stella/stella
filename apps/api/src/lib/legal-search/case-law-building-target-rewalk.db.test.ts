@@ -28,10 +28,7 @@ import {
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { ensureCorpusProjectionDesiredStateTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
-import {
-  CORPUS_PROJECTION_SEEDING_GUARD_OFF_SETTING,
-  installCorpusProjectionSeedingGuard,
-} from "@/api/tests/helpers/corpus-projection-seeding-guard";
+import { CORPUS_PROJECTION_SEEDING_GUARD_OFF_SETTING } from "@/api/tests/helpers/corpus-projection-seeding-guard";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -82,7 +79,6 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   client = await createTestPglite(seededSnapshot);
-  await installCorpusProjectionSeedingGuard(client);
   db = drizzle({ client });
   await db.insert(caseLawSources).values({
     id: SOURCE_ID,
