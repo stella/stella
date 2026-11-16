@@ -3465,6 +3465,7 @@
       "legalHoldActive": "Das Löschen ist gesperrt, da diese Unterlagen aufbewahrt werden müssen.",
       "legalSourceEntityLimitReached": "Diese Akte hat das Limit für Einträge erreicht, daher konnte das Dokument nicht erstellt werden.",
       "legalSourceFilePropertyMissing": "In dieser Akte fehlt eine Dateieigenschaft, daher konnte das Dokument nicht erstellt werden.",
+      "localRunAnonymizedRefusal": "Der Coding-Agent auf Ihrem Computer liest Ihre Dokumente so, wie sie sind, daher kann eine Nachricht an ihn nicht anonymisiert werden. Senden Sie sie ohne Anonymisierung.",
       "matterContactCapacityExceeded": "Diese Akte enthält mehr Kontakte, als angezeigt werden können. Entfernen Sie sichtbare Kontaktverknüpfungen, um die übrigen Kontakte anzuzeigen.",
       "matterContactCapacityReached": "Diese Akte hat die Höchstzahl an Kontakten erreicht. Entfernen Sie eine Kontaktverknüpfung, bevor Sie einen weiteren Kontakt hinzufügen.",
       "mcpAuthorizationApprovalRequired": "Ein Administrator muss diesen Connector genehmigen, bevor Sie eine Verbindung herstellen können.",
