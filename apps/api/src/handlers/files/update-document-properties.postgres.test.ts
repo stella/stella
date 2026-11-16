@@ -26,6 +26,7 @@ import {
   responseByteStream,
 } from "@/api/tests/helpers/response-byte-stream";
 import { storedDocumentConsumerFixture } from "@/api/tests/helpers/stored-document-consumer";
+import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 import { updateDocumentProperties } from "./update-document-properties";
 
@@ -231,7 +232,7 @@ describe.skipIf(!enabled)("document property writes bound source reads", () => {
       });
       await settledWithin(bodyCancelled.promise, {
         description: "the SDK closing the unfinished response body",
-        timeoutMs: 1000,
+        timeoutMs: HAPPY_PATH_TIMEOUT_MS,
       });
       expect(
         await rootDb
