@@ -27,6 +27,10 @@ import {
   synchronizeLockedCaseLawProjectionBatchTx,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { advanceCorpusProjectionErasuresTx } from "@/api/lib/legal-search/corpus-index-projection-erasure-store";
+import {
+  CORPUS_PROJECTION_SEEDING_GUARD_OFF_SETTING,
+  installCorpusProjectionSeedingGuard,
+} from "@/api/tests/helpers/corpus-projection-seeding-guard";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -50,6 +54,7 @@ let db: ReturnType<typeof drizzle>;
 
 beforeAll(async () => {
   client = await createTestPglite();
+  await installCorpusProjectionSeedingGuard(client);
   db = drizzle({
     client,
     logger: {
@@ -586,15 +591,21 @@ test("a court correction on a court-partitioned decision replaces its desired pr
   const usaDecisionId = toSafeId<"caseLawDecision">(
     "0198e331-e578-7000-8000-000000000105",
   );
-  await db.insert(caseLawDecisions).values({
-    id: usaDecisionId,
-    sourceId: CASE_LAW_SOURCE_ID,
-    caseNumber: "No. 19-1392",
-    court: "Supreme Court of the United States",
-    courtId: "scotus",
-    country: "USA",
-    language: "en",
-    contentHash: "c".repeat(64),
+  // A decision that predates the generation; the reconcile below seeds it.
+  await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`SELECT set_config(${CORPUS_PROJECTION_SEEDING_GUARD_OFF_SETTING}, 'off', true)`,
+    );
+    await tx.insert(caseLawDecisions).values({
+      id: usaDecisionId,
+      sourceId: CASE_LAW_SOURCE_ID,
+      caseNumber: "No. 19-1392",
+      court: "Supreme Court of the United States",
+      courtId: "scotus",
+      country: "USA",
+      language: "en",
+      contentHash: "c".repeat(64),
+    });
   });
   const subject = { family: "case_law", entityId: usaDecisionId } as const;
   const reconcile = async () =>
@@ -688,19 +699,25 @@ test("bounded reconciliation matches single-row repair and remains a fixed point
 });
 
 test("projection repair statements stay constant from two to twenty decisions", async () => {
-  const decisions = await db
-    .insert(caseLawDecisions)
-    .values(
-      Array.from({ length: 20 }, (_, index) => ({
-        sourceId: CASE_LAW_SOURCE_ID,
-        caseNumber: `batch-${String(index)}`,
-        court: "Nejvyšší správní soud",
-        country: "CZE",
-        language: "cs",
-        contentHash: "c".repeat(64),
-      })),
-    )
-    .returning({ id: caseLawDecisions.id });
+  // Decisions that predate the generation; the repair below seeds them.
+  const decisions = await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`SELECT set_config(${CORPUS_PROJECTION_SEEDING_GUARD_OFF_SETTING}, 'off', true)`,
+    );
+    return await tx
+      .insert(caseLawDecisions)
+      .values(
+        Array.from({ length: 20 }, (_, index) => ({
+          sourceId: CASE_LAW_SOURCE_ID,
+          caseNumber: `batch-${String(index)}`,
+          court: "Nejvyšší správní soud",
+          country: "CZE",
+          language: "cs",
+          contentHash: "c".repeat(64),
+        })),
+      )
+      .returning({ id: caseLawDecisions.id });
+  });
   const count = async (decisionIds: SafeId<"caseLawDecision">[]) => {
     statements.length = 0;
     await db.transaction(async (raw) => {

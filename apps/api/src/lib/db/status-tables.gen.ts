@@ -362,6 +362,7 @@ export const ENUM_COLUMNS = {
     "time_billing_format",
     "type",
   ],
+  corpus_index_generation_seeding_passes: ["family"],
   corpus_index_generations: ["family"],
   corpus_index_group_enrollments: ["contract_version", "family"],
   corpus_index_group_withdrawals: ["family"],
@@ -379,6 +380,7 @@ export const ENUM_COLUMNS = {
     "family",
     "last_failure_kind",
   ],
+  corpus_index_route_seedings: ["family"],
   correspondence: [
     "channel",
     "direction",

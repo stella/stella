@@ -6,7 +6,7 @@
  * writes nothing.
  */
 import { afterEach, beforeAll, beforeEach, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -28,6 +28,10 @@ import {
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { ensureCorpusProjectionDesiredStateTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
+import {
+  CORPUS_PROJECTION_SEEDING_GUARD_OFF_SETTING,
+  installCorpusProjectionSeedingGuard,
+} from "@/api/tests/helpers/corpus-projection-seeding-guard";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -78,6 +82,7 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   client = await createTestPglite(seededSnapshot);
+  await installCorpusProjectionSeedingGuard(client);
   db = drizzle({ client });
   await db.insert(caseLawSources).values({
     id: SOURCE_ID,
@@ -98,13 +103,20 @@ beforeEach(async () => {
     language,
     contentHash: "a".repeat(64),
   });
-  await db
-    .insert(caseLawDecisions)
-    .values([
-      decision(CZE_FIRST, "CZE", "cs", "4 As 3/2008"),
-      decision(CZE_SECOND, "CZE", "cs", "4 As 4/2008"),
-      decision(POL_DECISION, "POL", "pl", "III SA/Wa 1/2026"),
-    ]);
+  // Decisions that predate the building generation: the rows its rewalk
+  // exists to find, so the seeding guard stands aside for the fixture.
+  await inTx(async (tx) => {
+    await tx.execute(
+      sql`SELECT set_config(${CORPUS_PROJECTION_SEEDING_GUARD_OFF_SETTING}, 'off', true)`,
+    );
+    await tx
+      .insert(caseLawDecisions)
+      .values([
+        decision(CZE_FIRST, "CZE", "cs", "4 As 3/2008"),
+        decision(CZE_SECOND, "CZE", "cs", "4 As 4/2008"),
+        decision(POL_DECISION, "POL", "pl", "III SA/Wa 1/2026"),
+      ]);
+  });
   // The serving generation already holds every decision, as it does in
   // production: the bootstrap of v8 is long complete.
   for (const entityId of [CZE_FIRST, CZE_SECOND, POL_DECISION]) {

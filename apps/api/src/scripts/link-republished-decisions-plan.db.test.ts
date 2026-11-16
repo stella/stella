@@ -25,6 +25,10 @@ import {
   selectRepublishedDecisionReport,
   SOURCE_AUTHORITY,
 } from "@/api/scripts/link-republished-decisions-plan";
+import {
+  CORPUS_PROJECTION_SEEDING_GUARD_OFF_SETTING,
+  installCorpusProjectionSeedingGuard,
+} from "@/api/tests/helpers/corpus-projection-seeding-guard";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
@@ -38,6 +42,7 @@ const retiredId = createSafeId<"caseLawDecision">();
 beforeAll(
   async () => {
     client = await createTestPglite();
+    await installCorpusProjectionSeedingGuard(client);
     db = drizzle({ client });
     await db.insert(caseLawSources).values([
       { id: courtSource, adapterKey: ADAPTER_KEYS.PL_TK, name: "Court" },
@@ -1039,34 +1044,41 @@ test("reverse prioritizes a reversible pair and refuses erased or unrestorable p
       retiredId: reversibleRetiredId,
     },
   ];
-  await db.insert(caseLawDecisions).values(
-    pairs.flatMap((pair, index) => {
-      const { docket } = pair;
-      const common = {
-        country: "POL",
-        court: `Reverse fixture court ${String(index)}`,
-        language: "pl",
-        caseNumber: `RV ${String(index)}/26`,
-        docketFamilyKey: docket,
-        decisionDate: "2026-05-06",
-        decisionType: "wyrok",
-      };
-      return [
-        {
-          ...common,
-          id: pair.canonicalId,
-          sourceId: courtSource,
-          sourceDocumentId: `${docket}-court`,
-        },
-        {
-          ...common,
-          id: pair.retiredId,
-          sourceId: republisherSource,
-          sourceDocumentId: `${docket}-republisher`,
-        },
-      ];
-    }),
-  );
+  // Pairs that predate the generation an earlier test registered: data no
+  // writer touched since, so the seeding guard stands aside for the fixture.
+  await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`SELECT set_config(${CORPUS_PROJECTION_SEEDING_GUARD_OFF_SETTING}, 'off', true)`,
+    );
+    await tx.insert(caseLawDecisions).values(
+      pairs.flatMap((pair, index) => {
+        const { docket } = pair;
+        const common = {
+          country: "POL",
+          court: `Reverse fixture court ${String(index)}`,
+          language: "pl",
+          caseNumber: `RV ${String(index)}/26`,
+          docketFamilyKey: docket,
+          decisionDate: "2026-05-06",
+          decisionType: "wyrok",
+        };
+        return [
+          {
+            ...common,
+            id: pair.canonicalId,
+            sourceId: courtSource,
+            sourceDocumentId: `${docket}-court`,
+          },
+          {
+            ...common,
+            id: pair.retiredId,
+            sourceId: republisherSource,
+            sourceDocumentId: `${docket}-republisher`,
+          },
+        ];
+      }),
+    );
+  });
   await db.insert(caseLawDecisionSourceIdentities).values(
     pairs.flatMap((pair) => [
       {

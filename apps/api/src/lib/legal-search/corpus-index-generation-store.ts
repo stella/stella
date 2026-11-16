@@ -1,10 +1,11 @@
 import { panic, Result, TaggedError } from "better-result";
-import { and, eq, or, sql } from "drizzle-orm";
+import { and, eq, inArray, or, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import {
   caseLawSources,
   corpusIndexGenerations,
+  corpusIndexGenerationSeedingPasses,
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
   legislationSources,
@@ -173,6 +174,32 @@ const requireActiveGenerationTarget = (
 };
 
 /**
+ * Forget a generation's seeding as it leaves the active set: from here on the
+ * desired writers stop projecting every change into it, so a seeding pass it
+ * completed no longer describes it. The route rows cascade. Every transition
+ * out of `building` or `serving` calls this in its own transaction, under the
+ * registry row lock the seeding walk share-locks.
+ */
+const forgetCorpusIndexGenerationSeedingTx = async (
+  tx: Transaction,
+  family: CorpusFamily,
+  generations: readonly string[],
+): Promise<void> => {
+  if (generations.length === 0) {
+    return;
+  }
+  // audit: skip - derived public corpus seeding bookkeeping
+  await tx
+    .delete(corpusIndexGenerationSeedingPasses)
+    .where(
+      and(
+        eq(corpusIndexGenerationSeedingPasses.family, family),
+        inArray(corpusIndexGenerationSeedingPasses.generation, generations),
+      ),
+    );
+};
+
+/**
  * Return a retiring generation to the build set before a rollback. Plane must
  * reconcile and prove this generation again before it can become serving.
  */
@@ -337,6 +364,14 @@ export const setServingCorpusIndexGenerationTx = async (
         eq(corpusIndexGenerations.status, "serving"),
       ),
     );
+  // The serving row was locked for update above, so it is the one demoted.
+  await forgetCorpusIndexGenerationSeedingTx(
+    tx,
+    target.family,
+    rows
+      .filter(({ status }) => status === "serving")
+      .map(({ generation }) => generation),
+  );
   const promoted = await tx
     .update(corpusIndexGenerations)
     .set({ status: "serving", updatedAt: sql`clock_timestamp()` })
@@ -420,6 +455,9 @@ export const beginCorpusIndexGenerationRebuildTx = async (
       `Corpus generation rebuild lost its target: ${target.family}/${target.generation}`,
     );
   }
+  await forgetCorpusIndexGenerationSeedingTx(tx, target.family, [
+    target.generation,
+  ]);
 };
 
 type CorpusIndexGenerationRebuildStep =

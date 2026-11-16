@@ -30,6 +30,7 @@ import {
   rawDocumentPrefix,
   writeSourceBinary,
 } from "@/api/lib/legal-search/raw-source-storage";
+import { installCorpusProjectionSeedingGuard } from "@/api/tests/helpers/corpus-projection-seeding-guard";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -62,6 +63,7 @@ let fakeS3: FakeS3;
 beforeAll(async () => {
   fakeS3 = startFakeS3();
   client = await createTestPglite();
+  await installCorpusProjectionSeedingGuard(client);
   db = drizzle({ client });
   scopedDb = asTestRaw<ScopedDb>(
     async (callback: (tx: typeof db) => Promise<unknown>) =>

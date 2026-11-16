@@ -29,6 +29,7 @@ export * from "./schema/sanctions";
 export * from "./schema/sanctions-monitoring";
 export * from "./schema/corpus-index-generations";
 export * from "./schema/corpus-index-projections";
+export * from "./schema/corpus-index-seedings";
 export * from "./schema/lists";
 export * from "./schema/chat";
 export * from "./schema/chat-secrets";

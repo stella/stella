@@ -64,6 +64,8 @@ export type CorpusIndexProjectionBootstrapResult =
       generation: string;
       claimedCount: number;
       seededCount: number;
+      /** Canonical ids the page accounted for, seeded or already seeded. */
+      walkedCount: number;
       entityIds: readonly SafeId<"caseLawDecision">[];
       nextAfterEntityId: SafeId<"caseLawDecision">;
     }
@@ -73,6 +75,8 @@ export type CorpusIndexProjectionBootstrapResult =
       generation: string;
       claimedCount: number;
       seededCount: number;
+      /** Canonical ids the page accounted for, seeded or already seeded. */
+      walkedCount: number;
       entityIds: readonly SafeId<"legislationDocument">[];
       nextAfterEntityId: SafeId<"legislationDocument">;
     }
@@ -223,6 +227,7 @@ type CorpusBootstrapPage<TEntityId extends string> =
       status: "advanced";
       claimedCount: number;
       seededCount: number;
+      walkedCount: number;
       entityIds: TEntityId[];
       nextAfterEntityId: TEntityId;
     };
@@ -304,6 +309,7 @@ const runCorpusBootstrapPage = async <
   // would make a keyset cursor strand it indefinitely.
   const rows: TRow[] = [];
   let pageEndEntityId: TEntityId | undefined;
+  let walkedCount = 0;
   for (const candidate of candidates) {
     if (!seededEntityIds.has(candidate.documentId)) {
       if (rows.length === seedLimit) {
@@ -319,6 +325,7 @@ const runCorpusBootstrapPage = async <
       rows.push(row);
     }
     pageEndEntityId = candidate.documentId;
+    walkedCount += 1;
   }
   if (pageEndEntityId === undefined) {
     return { status: "busy" };
@@ -328,6 +335,7 @@ const runCorpusBootstrapPage = async <
       status: "advanced",
       claimedCount: 0,
       seededCount: 0,
+      walkedCount,
       entityIds: [],
       nextAfterEntityId: pageEndEntityId,
     };
@@ -375,6 +383,7 @@ const runCorpusBootstrapPage = async <
     status: "advanced",
     claimedCount: rows.length,
     seededCount: inserted.length,
+    walkedCount,
     entityIds,
     nextAfterEntityId: pageEndEntityId,
   };
@@ -707,6 +716,7 @@ export const bootstrapCorpusProjectionDesiredStateBatchTx = async (
         generation,
         claimedCount: page.claimedCount,
         seededCount: page.seededCount,
+        walkedCount: page.walkedCount,
         entityIds: page.entityIds,
         nextAfterEntityId: page.nextAfterEntityId,
       };
@@ -728,6 +738,7 @@ export const bootstrapCorpusProjectionDesiredStateBatchTx = async (
         generation,
         claimedCount: page.claimedCount,
         seededCount: page.seededCount,
+        walkedCount: page.walkedCount,
         entityIds: page.entityIds,
         nextAfterEntityId: page.nextAfterEntityId,
       };

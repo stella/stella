@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { asc, eq, inArray } from "drizzle-orm";
+import { asc, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
@@ -38,6 +38,10 @@ import {
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { ensureCorpusProjectionDesiredStateTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { storeDecisionIdentifiersInMetadata } from "@/api/lib/legal-search/decision-identifier-metadata";
+import {
+  CORPUS_PROJECTION_SEEDING_GUARD_OFF_SETTING,
+  installCorpusProjectionSeedingGuard,
+} from "@/api/tests/helpers/corpus-projection-seeding-guard";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
@@ -70,6 +74,7 @@ const checkpoint = async () =>
 
 beforeAll(async () => {
   client = await createTestPglite();
+  await installCorpusProjectionSeedingGuard(client);
   db = drizzle({ client });
   await db.insert(caseLawSources).values({
     id: sourceId,
@@ -122,6 +127,23 @@ beforeAll(async () => {
 afterAll(async () => {
   await client.close();
 });
+
+/**
+ * A decision as production holds it from before a rule change: data no
+ * writer has touched since, standing beside a generation an earlier test
+ * registered. The seeding guard stands aside for the fixture only; the
+ * backfill's own writes stay guarded.
+ */
+const standUpDecision = async (
+  values: typeof caseLawDecisions.$inferInsert,
+): Promise<void> => {
+  await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`SELECT set_config(${CORPUS_PROJECTION_SEEDING_GUARD_OFF_SETTING}, 'off', true)`,
+    );
+    await tx.insert(caseLawDecisions).values(values);
+  });
+};
 
 test("resumes committed pages and converges to an exact replay-safe projection", async () => {
   let interrupted = false;
@@ -345,7 +367,7 @@ test("a completed backfill re-derives identifiers a key rule change moved", asyn
   // number keyed verbatim, closing dot included. The current rule keys it
   // without, so a completed receipt must not stand over the stale row.
   const reporterDecisionId = createSafeId<"caseLawDecision">();
-  await db.insert(caseLawDecisions).values({
+  await standUpDecision({
     id: reporterDecisionId,
     sourceId,
     caseNumber: "EBH.2015.K.38.",
@@ -414,7 +436,7 @@ test("a declared alias keyed by its jurisdiction's rule is not counted as drift"
     type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
     value: "347 U.S. Rep. 483",
   } as const;
-  await db.insert(caseLawDecisions).values({
+  await standUpDecision({
     id: usaDecisionId,
     sourceId,
     caseNumber: "No. 1",
@@ -488,7 +510,7 @@ test("a completed pass waits for its cooldown and then restarts", async () => {
 
 test("advances past malformed decisions but bounds non-converging retries", async () => {
   const malformedDecisionId = createSafeId<"caseLawDecision">();
-  await db.insert(caseLawDecisions).values({
+  await standUpDecision({
     id: malformedDecisionId,
     sourceId,
     caseNumber: "   ",

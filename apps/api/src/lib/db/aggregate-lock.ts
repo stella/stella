@@ -47,6 +47,7 @@ import {
   chatThreads,
   contacts,
   corpusIndexGenerations,
+  corpusIndexGenerationSeedingPasses,
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
   documentReviewRuns,
@@ -4149,6 +4150,54 @@ export const corpusProjectionReservationQueue = (
       skipLocked: true,
     });
 };
+
+type CorpusIndexGenerationKey = { family: CorpusFamily; generation: string };
+
+/**
+ * One generation's registry row, share-locked. Every lifecycle transition
+ * locks the row for update before it changes the status, so the generation
+ * stays in its status until this transaction ends. The seeding walk takes it
+ * first, then its pass (`lockCorpusIndexGenerationSeedingPass`).
+ */
+export const lockCorpusIndexGenerationShared = async (
+  tx: Transaction,
+  { family, generation }: CorpusIndexGenerationKey,
+) =>
+  (
+    await tx
+      .select()
+      .from(corpusIndexGenerations)
+      .where(
+        and(
+          eq(corpusIndexGenerations.family, family),
+          eq(corpusIndexGenerations.generation, generation),
+        ),
+      )
+      .limit(1)
+      .for("share")
+  ).at(0);
+
+/**
+ * One generation's seeding pass, locked for update after the registry row,
+ * so two walkers of one generation never advance the same pass.
+ */
+export const lockCorpusIndexGenerationSeedingPass = async (
+  tx: Transaction,
+  { family, generation }: CorpusIndexGenerationKey,
+) =>
+  (
+    await tx
+      .select()
+      .from(corpusIndexGenerationSeedingPasses)
+      .where(
+        and(
+          eq(corpusIndexGenerationSeedingPasses.family, family),
+          eq(corpusIndexGenerationSeedingPasses.generation, generation),
+        ),
+      )
+      .limit(1)
+      .for("update")
+  ).at(0);
 
 /**
  * State rows precede their revisions in the projection lock order. Settling a

@@ -52,6 +52,7 @@ import {
   synchronizeLockedCaseLawProjectionBatchTx,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { readReservedCorpusProjectionMaterialsTx } from "@/api/lib/legal-search/corpus-index-projection-materials";
+import { installCorpusProjectionSeedingGuard } from "@/api/tests/helpers/corpus-projection-seeding-guard";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -172,6 +173,7 @@ const reset = async (): Promise<void> => {
 // timeout: builds the PGlite schema from every migration.
 beforeAll(async () => {
   client = await createTestPglite();
+  await installCorpusProjectionSeedingGuard(client);
   db = drizzle({ client });
 }, 120_000);
 

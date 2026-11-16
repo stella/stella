@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 5,
+  "reason": "The seeding walk's bookkeeping in corpus-index-route-seeding.ts (start a pass, advance its cursor, complete it, mark its routes) and the deletion of a generation's pass when it leaves the active set in corpus-index-generation-store.ts: derived from the public corpus projection, rewritten on every page of a walk over millions of rows, with no tenant data and no actor. An audit row per page would record nothing a person did."
+}

@@ -144,6 +144,10 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   "corpus_index_jurisdiction_serving",
   // Withdrawal history is read by requests and appended only by ingestion.
   "corpus_index_group_withdrawals",
+  // Seeding facts: request code may read whether a route is seeded; only the
+  // seeding walk and the generation's lifecycle write them.
+  "corpus_index_generation_seeding_passes",
+  "corpus_index_route_seedings",
   // Mutation revisions are appended and pruned only by ingestion triggers;
   // request code may read the current proof watermark.
   "corpus_index_projection_revisions",
