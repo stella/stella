@@ -1513,13 +1513,6 @@
   },
   {
     "file": "apps/api/src/lib/web-search/jina.ts",
-    "function": "module/createJinaFetcher",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/lib/web-search/jina.ts",
     "function": "module/validateJinaKey",
     "kind": "numeric-timeout",
     "count": 1,
