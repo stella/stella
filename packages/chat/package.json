@@ -62,15 +62,15 @@
     "@types/hast": "^3.0.5",
     "better-result": "catalog:",
     "linkify-it": "6.1.0",
-    "tldts": "7.4.19",
+    "tldts": "7.4.21",
     "valibot": "catalog:",
     "zod": "^4.6.6"
   },
   "devDependencies": {
     "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
-    "@tiptap/core": "^3.33.0",
-    "@tiptap/pm": "^3.33.0",
+    "@tiptap/core": "^3.33.1",
+    "@tiptap/pm": "^3.33.1",
     "@types/react": "catalog:react19",
     "bun-types": "catalog:",
     "fast-check": "catalog:",
