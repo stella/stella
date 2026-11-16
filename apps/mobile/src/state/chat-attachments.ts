@@ -3,6 +3,7 @@ import {
   isChatFileMimeType,
 } from "@stll/api-contract/chat-file-types";
 import type { ChatFileMimeType } from "@stll/api-contract/chat-file-types";
+import { CHAT_LOCAL_RUN_ANONYMIZED_REFUSAL_CODE } from "@stll/api-contract/chat-run-target";
 import { CHAT_CONTEXT_FILE_MAX_BYTES } from "@stll/chat-limits";
 
 import type { ApiError } from "@/state/api-request";
@@ -210,14 +211,52 @@ export const attachmentParts = (files: readonly ReadyFile[]) =>
     metadata: { filename: file.name },
   }));
 
-/** Why a message was refused: a file the server would not take, or anything else. */
-export type SendRefusal = "failed" | "file-refused" | "file-not-anonymizable";
+/**
+ * Why a message was refused: a file the server would not take, an anonymized
+ * message to the agent on the member's computer, or anything else.
+ */
+export type SendRefusal =
+  | "failed"
+  | "file-refused"
+  | "file-not-anonymizable"
+  | "local-run-not-anonymizable";
+
+/**
+ * How a draft's text goes: as the thread sends it (anonymized once the thread
+ * has sent anonymized text), or as written, which the member picks after a
+ * refusal that only sending it as written gets past.
+ */
+export type DraftSendMode = "as-thread" | "as-written";
+
+/**
+ * Whether sending the draft as written gets it past `refusal`: the agent on
+ * the member's computer never runs anonymized, so the web's "Send without
+ * anonymization" is the way on.
+ */
+export const asWrittenGetsPast = (refusal: SendRefusal | undefined): boolean =>
+  refusal === "local-run-not-anonymizable";
+
+/** Whether the draft is sent anonymized. */
+export const sendsAnonymized = ({
+  mode,
+  threadAnonymized,
+}: {
+  readonly mode: DraftSendMode;
+  /** The thread has sent anonymized text before. */
+  readonly threadAnonymized: boolean;
+}): boolean => mode === "as-thread" && threadAnonymized;
 
 export const sendRefusal = (
   error: ApiError,
   withFiles: boolean,
 ): SendRefusal => {
   const status = error._tag === "ApiRequestError" ? error.status : undefined;
+  if (
+    error._tag === "ApiRequestError" &&
+    error.code === CHAT_LOCAL_RUN_ANONYMIZED_REFUSAL_CODE
+  ) {
+    return "local-run-not-anonymizable";
+  }
   if (!withFiles) {
     return "failed";
   }

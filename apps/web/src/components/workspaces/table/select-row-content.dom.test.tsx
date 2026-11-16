@@ -525,7 +525,7 @@ describe("every shared selection-column host", () => {
       test(`${host} (${contentMode}): the number, the checkbox and the row's cells share one first line`, async () => {
         const { view } = await renderHost({ host, contentMode });
         const number = view.getByText("1");
-        expect(number.dataset["slot"]).toBe("table-row-number");
+        expect(number.dataset["slot"]).toBe("checkbox-cell-label");
         const numberClasses = number.className.split(" ");
         const firstLine = Object.values(ROW_FIRST_LINE).find(({ slot }) =>
           numberClasses.includes(slot),
@@ -557,6 +557,23 @@ describe("every shared selection-column host", () => {
         }
       });
     }
+    test(`${host}: Enter toggles once without opening the row, including Shift ranges`, async () => {
+      const { view, assertNotOpened } = await renderHost({ host });
+      const first = view.getByRole("checkbox", { name: "1" });
+      expect(first.tagName).toBe("BUTTON");
+      expect(first.getAttribute("type")).toBe("button");
+      expect(fireEvent.keyDown(first, { key: "Enter" })).toBe(false);
+      expect(first.getAttribute("aria-checked")).toBe("true");
+      fireEvent.keyDown(view.getByRole("checkbox", { name: "4" }), {
+        key: "Enter",
+        shiftKey: true,
+      });
+      expect(view.getAllByRole("checkbox", { checked: true })).toHaveLength(4);
+      fireEvent.keyDown(first, { key: "Enter" });
+      expect(first.getAttribute("aria-checked")).toBe("false");
+      expect(view.getAllByRole("checkbox", { checked: true })).toHaveLength(3);
+      assertNotOpened();
+    });
     test(`${host}: checkbox clicks toggle once and shift-click selects a range`, async () => {
       const { view, assertNotOpened } = await renderHost({ host });
       const first = view.getByRole("checkbox", { name: "1" });

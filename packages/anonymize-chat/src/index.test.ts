@@ -12,9 +12,8 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 import {
   buildChatAnonPipelineConfig,
   CHAT_SEND_MODE,
-  CHAT_TRANSPORT_ERROR_CODE,
+  CHAT_TRANSPORT_ERROR_CODES,
   ChatAnonInputLimitError,
-  createThirdPartyBoundaryRefusalPayload,
   DEFAULT_CHAT_ANON_ENTITY_LABELS,
   findChatAnonPlaceholders,
   FORCED_SENSITIVE_VALUE_MAX_LENGTH,
@@ -73,21 +72,19 @@ describe("chat anonymization pipeline contract", () => {
   });
 
   test("parses only the shared chat transport error payload shape", () => {
-    const payload = createThirdPartyBoundaryRefusalPayload("blocked");
+    for (const code of CHAT_TRANSPORT_ERROR_CODES) {
+      const payload = { code, message: "blocked" };
 
-    expect(parseChatTransportErrorPayload(payload)).toEqual({
-      code: CHAT_TRANSPORT_ERROR_CODE.thirdPartyBoundaryRefusal,
-      message: "blocked",
-    });
-    expect(parseChatTransportErrorMessage(JSON.stringify(payload))).toEqual(
-      payload,
-    );
-    expect(isThirdPartyBoundaryRefusalPayload(payload)).toBe(true);
-    expect(
-      isThirdPartyBoundaryRefusalError(
-        new Error(JSON.stringify(createThirdPartyBoundaryRefusalPayload("x"))),
-      ),
-    ).toBe(true);
+      expect(parseChatTransportErrorPayload(payload)).toEqual(payload);
+      expect(parseChatTransportErrorMessage(JSON.stringify(payload))).toEqual(
+        payload,
+      );
+      // Every refusal the transport names offers to send without anonymization.
+      expect(isThirdPartyBoundaryRefusalPayload(payload)).toBe(true);
+      expect(
+        isThirdPartyBoundaryRefusalError(new Error(JSON.stringify(payload))),
+      ).toBe(true);
+    }
     expect(
       parseChatTransportErrorPayload({ code: "other", message: "x" }),
     ).toBe(null);

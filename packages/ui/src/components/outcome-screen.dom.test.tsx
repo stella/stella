@@ -86,15 +86,65 @@ test("a counterpart joins stella's tile through the connector; without one the b
   ).toBe("error");
 });
 
-test("an embedded outcome leaves the page and its wordmark to the layout", () => {
+test("a page owns the viewport; an embedded outcome leaves it to the layout", () => {
   const page = render(<OutcomeScreen title="Declined" tone="success" />);
-  expect(page.container.querySelector("main footer svg")).not.toBeNull();
+  expect(page.container.querySelector("main [role=status]")).not.toBeNull();
+  // The mark in the tile signs the page; nothing repeats it below.
+  expect(
+    page.container.querySelectorAll("svg[viewBox='0 0 40 41']"),
+  ).toHaveLength(1);
   cleanup();
   const embedded = render(
     <OutcomeScreen surface="embedded" title="Declined" tone="success" />,
   );
   expect(embedded.container.querySelector("main")).toBeNull();
-  expect(embedded.container.querySelector("footer")).toBeNull();
+});
+
+test("the facts sit on one surface, each value its own bidi run, and none is drawn when there are none", () => {
+  const view = render(
+    <OutcomeScreen
+      details={[
+        { label: "Account", value: "person@example.com" },
+        { label: "Organization", value: "Harbrook & Partners" },
+      ]}
+      title="Signed in to stella"
+      tone="success"
+    />,
+  );
+  const surfaces = view.container.querySelectorAll(
+    "[data-slot=outcome-details]",
+  );
+  expect(surfaces).toHaveLength(1);
+  expect(surfaces[0]?.tagName).toBe("DL");
+  expect(
+    [...view.container.querySelectorAll("dt")].map((term) => term.textContent),
+  ).toEqual(["Account", "Organization"]);
+  expect(
+    [...view.container.querySelectorAll("dd > bdi")].map(
+      (value) => value.textContent,
+    ),
+  ).toEqual(["person@example.com", "Harbrook & Partners"]);
+  cleanup();
+
+  const empty = render(
+    <OutcomeScreen details={[]} title="Signed in" tone="success" />,
+  );
+  expect(
+    empty.container.querySelector("[data-slot=outcome-details]"),
+  ).toBeNull();
+});
+
+test("a command to run is set as code that reads left to right", () => {
+  const view = render(
+    <OutcomeScreen
+      command="stella auth login"
+      title="Sign-in failed"
+      tone="error"
+    />,
+  );
+  const code = view.container.querySelector("code[data-slot=outcome-command]");
+  expect(code?.textContent).toBe("stella auth login");
+  expect(code?.getAttribute("dir")).toBe("ltr");
 });
 
 test("closing the tab tells the opener first, and falls back once when the browser keeps it", () => {
