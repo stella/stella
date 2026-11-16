@@ -17,7 +17,7 @@ test("preview identity retains organization, user and sorted batch without chang
     userId: "user",
     workspaceIds,
   });
-  expect(options.queryKey).toEqual([
+  expect([...options.queryKey]).toEqual([
     "workspace-member-previews",
     "organization",
     "user",

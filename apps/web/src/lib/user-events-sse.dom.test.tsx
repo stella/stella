@@ -13,6 +13,9 @@ import {
 } from "@stll/api-contract";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
+import { toSafeId } from "@/lib/safe-id";
+import type { WorkspaceMemberPreview } from "@/lib/workspaces/queries/workspace-member-previews";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/contacts" });
 
 /** One fake stream per `new EventSource`, so a test can push frames into it. */
@@ -385,15 +388,34 @@ test.each(["event", "reconnect"])(
         workspaceIds,
       });
       let reads = 0;
+      const response = (
+        total: number,
+      ): { previews: WorkspaceMemberPreview[] } => ({
+        previews: workspaceIds.map((id) => ({
+          workspaceId: toSafeId<"workspace">(id),
+          total,
+          members:
+            total === 0
+              ? []
+              : [
+                  {
+                    userId: toSafeId<"user">(userId),
+                    name: "Member",
+                    email: "member@example.test",
+                    image: null,
+                  },
+                ],
+        })),
+      });
       // Model the server's changing answer; the real option factory owns identity.
       const read = async () => {
         reads += 1;
-        return revision;
+        return response(revision);
       };
       const owned = {
         queryKey: options.queryKey,
         meta: options.meta,
-        initialData: 0,
+        initialData: response(0),
         staleTime: Infinity,
         queryFn: read,
       };
@@ -404,7 +426,8 @@ test.each(["event", "reconnect"])(
         client.getQueryCache().build(client, owned);
       }
       return {
-        data: () => client.getQueryData(options.queryKey),
+        data: () =>
+          client.getQueryData(options.queryKey)?.previews.at(0)?.total,
         stale: () => client.getQueryState(options.queryKey)?.isInvalidated,
         reads: () => reads,
       };
