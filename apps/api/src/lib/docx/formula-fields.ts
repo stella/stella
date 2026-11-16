@@ -41,7 +41,7 @@ const deleteSubmittedValue = (
   const segments = path.split(".");
   let current: Record<string, unknown> = values;
   for (const segment of segments.slice(0, -1)) {
-    const next = current[segment];
+    const next = Object.hasOwn(current, segment) ? current[segment] : undefined;
     if (!isRecord(next)) {
       return;
     }
@@ -92,7 +92,12 @@ export const resolveFormulaFields = ({
     deleteSubmittedValue(values, field.path);
     const result = evaluateNumericExpression(formula, values);
     if (result !== undefined) {
-      values[field.path] = String(result);
+      Object.defineProperty(values, field.path, {
+        value: String(result),
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
     }
   }
 };

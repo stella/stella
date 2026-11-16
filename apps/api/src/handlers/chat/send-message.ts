@@ -25,6 +25,7 @@ import {
 import { CONNECT_CONNECTOR_TOOL_NAME } from "@stll/api-contract/chat-connector";
 import type { ConnectableMcpConnectorCatalog } from "@stll/api-contract/chat-connector";
 import { memberWaitsOf } from "@stll/api-contract/chat-member-wait";
+import { CHAT_QUEUE_ERROR_CODE } from "@stll/api-contract/chat-queue";
 import {
   CHAT_LOCAL_RUN_WEB_SEARCH_BY_HARNESS,
   CHAT_RUN_TARGET_KIND,
@@ -56,6 +57,7 @@ import {
   toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
 import {
+  CHAT_MEMBER_MESSAGE_PLACEMENT,
   finalizeAssistantTurn,
   persistAcceptedMessageWithClaim,
   persistClaimedReplayMessage,
@@ -119,7 +121,10 @@ import {
   isChatTurnRunIdTaken,
   startChatTurnRun,
 } from "@/api/handlers/chat/chat-turn-persistence";
-import type { ChatTurnExecution } from "@/api/handlers/chat/chat-turn-persistence";
+import type {
+  ChatTurnExecution,
+  ChatTurnSource,
+} from "@/api/handlers/chat/chat-turn-persistence";
 import {
   CHAT_TURN_BOUNDARY_MODE,
   ChatTurnRun,
@@ -555,7 +560,7 @@ type ClaimedChatTurnOwnership =
       failure: { code: ChatTurnFailureCode; retryable: boolean };
       owningAssistantMessage?: PersistableChatMessage | undefined;
     }
-  | { status: "handed-over" };
+  | { status: "with-run" };
 
 type ChatSendLifecycleOptions = {
   ownership?: ChatTurnOwnership;
@@ -757,7 +762,7 @@ export class ChatSendLifecycle {
         return signal.aborted;
       case "preflight":
       case "failure-pending":
-      case "handed-over":
+      case "with-run":
         return false;
       default:
         return panic(this.claimedTurn satisfies never);
@@ -961,7 +966,7 @@ export class ChatSendLifecycle {
         workspaceId: this.options.workspaceId,
       },
     });
-    this.claimedTurn = { status: "handed-over" };
+    this.claimedTurn = { status: "with-run" };
     this.releaseClaim();
     this.connectorsHandedOff = connectors !== undefined;
     return run;
@@ -1133,7 +1138,7 @@ export class ChatSendLifecycle {
                   }),
             };
           case "unclaimed":
-          case "handed-over":
+          case "with-run":
             return undefined;
           default:
             this.claimedTurn satisfies never;
@@ -1193,7 +1198,7 @@ export class ChatSendLifecycle {
       }
     } finally {
       this.releaseClaim();
-      if (this.claimedTurn.status !== "handed-over") {
+      if (this.claimedTurn.status !== "with-run") {
         await this.admission?.release();
       }
     }
@@ -1396,6 +1401,8 @@ const keepThreadRunTarget = async ({
 };
 
 type AcceptIncomingTurnOptions = {
+  /** Who asked for the turn: the member, or their queue sending for them. */
+  source: ChatTurnSource;
   accessibleSet: ReadonlySet<string>;
   accessibleWorkspaceIds: SafeId<"workspace">[];
   body: ChatSendRequest;
@@ -1415,6 +1422,7 @@ type AcceptIncomingTurnOptions = {
 
 /** Persists the incoming message and establishes the turn's durable owner. */
 const acceptIncomingTurn = async ({
+  source,
   accessibleSet,
   accessibleWorkspaceIds,
   body,
@@ -1621,12 +1629,24 @@ const acceptIncomingTurn = async ({
       latestMessagePlan.persistencePlan.type !== "none"
         ? createChatTurnAcceptance({
             organizationId,
+            source,
             threadId: body.threadId,
             userId,
             userMessageId: parsedMessage.message.id,
             workspaceId,
           })
         : undefined;
+    // A queued message is sent only as a new turn that takes it from the
+    // queue; one that would not store a new turn is not the queue's to send.
+    if (source.type === "queue" && turnAcceptance === undefined) {
+      return Result.err(
+        new HandlerError({
+          status: 409,
+          code: CHAT_QUEUE_ERROR_CODE.notDue,
+          message: "The queued message is not the next one the queue may send",
+        }),
+      );
+    }
     const persistenceProps = {
       acceptedSendMode: body.sendMode,
       recordAuditEvent,
@@ -1715,6 +1735,10 @@ const acceptIncomingTurn = async ({
     } else {
       const persistenceResult = await persistAcceptedMessageWithClaim({
         ...persistenceProps,
+        placement:
+          isEdit || isExplicitRegeneration
+            ? CHAT_MEMBER_MESSAGE_PLACEMENT.rewrite
+            : CHAT_MEMBER_MESSAGE_PLACEMENT.append,
         plannedOnHistory,
         ...(isEdit ? { refuseTurn: refuseChatUserMessageEditTurn } : {}),
         turnAcceptance,
@@ -2903,6 +2927,10 @@ export const createSendMessage = (
         yield* Result.await(lifecycle.checkAdmission());
 
         const acceptedTurnResult = await acceptIncomingTurn({
+          source:
+            session.startedFromQueue === undefined
+              ? { type: "member" }
+              : { type: "queue", ...session.startedFromQueue },
           managedAIResidency,
           accessibleSet,
           accessibleWorkspaceIds,
@@ -3109,6 +3137,10 @@ export const createSendMessage = (
           toolWorkspaceIds,
           workspaceStatusById,
         });
+        // A turn the server started from the member's queue says so on
+        // every event its tools record.
+        const chatAuditSource =
+          session.startedFromQueue === undefined ? "chat" : "chat_queue";
         // Reads the assistant makes without an approval, such as a skill
         // loaded by `load-skill`.
         const recordReadAuditEvent = createAuditRecorder({
@@ -3121,7 +3153,7 @@ export const createSendMessage = (
             trigger: {
               type: "user_dispatch",
               userId: user.id,
-              source: "chat",
+              source: chatAuditSource,
               sourceId: body.threadId,
             },
             runId: parsedMessage.message.id,
@@ -3208,7 +3240,7 @@ export const createSendMessage = (
               trigger: {
                 type: "user_dispatch",
                 userId: user.id,
-                source: "chat",
+                source: chatAuditSource,
                 sourceId: body.threadId,
               },
               runId: parsedMessage.message.id,

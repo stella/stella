@@ -8,6 +8,8 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { SignJWT } from "jose";
 
+import { AUTH_SIGN_IN_CODE_UNAVAILABLE_ERROR_CODE } from "@stll/auth-model";
+
 import { resolveEmailAndPasswordOptions } from "@/api/lib/auth/password-sign-in-options";
 import {
   createReviewAccountDatabaseHooks,
@@ -313,6 +315,43 @@ describe("restricted review account password sign-in", () => {
     const response = await postAuth(auth, "/sign-in/email", {
       email: otherEmail,
       password,
+    });
+    expect(response.status).toBe(200);
+  });
+
+  test("asks for the password when a sign-in code is requested for the review address", async () => {
+    const auth = await createReviewAuth();
+    const context = await auth.$context;
+    const requestCode = async (email: string, type: string) =>
+      await postAuth(auth, "/email-otp/send-verification-otp", { email, type });
+
+    expect(
+      await answer(await requestCode("Review@Example.Test", "sign-in")),
+    ).toEqual({
+      status: 409,
+      body: {
+        code: AUTH_SIGN_IN_CODE_UNAVAILABLE_ERROR_CODE,
+        message: "This account signs in with a password.",
+      },
+    });
+    expect(
+      await context.internalAdapter.findVerificationValue(
+        `sign-in-otp-${reviewEmail}`,
+      ),
+    ).toBeNull();
+    // Every other address still gets its code.
+    expect((await requestCode(otherEmail, "sign-in")).status).toBe(200);
+    // Only the sign-in code changes its answer: recovery stays refused.
+    expect((await requestCode(reviewEmail, "forget-password")).status).toBe(
+      403,
+    );
+  });
+
+  test("emails the review address a sign-in code when the local password form is on the page", async () => {
+    const auth = await createReviewAuth({ localPasswordEnabled: true });
+    const response = await postAuth(auth, "/email-otp/send-verification-otp", {
+      email: reviewEmail,
+      type: "sign-in",
     });
     expect(response.status).toBe(200);
   });

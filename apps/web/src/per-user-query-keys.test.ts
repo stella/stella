@@ -337,6 +337,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
       "An uncached rewrite proposal; its thread lookup is owner-filtered.",
   },
   "chat/older-messages/list.ts": { kind: "owned-id", reason: OWNED_THREAD },
+  "chat/queue/read.ts": { kind: "owned-id", reason: OWNED_THREAD },
   "chat/read-file-thread.ts": {
     kind: "keyed",
     calls: ['api.chat.workspaces()["file-thread"].get'],
@@ -967,6 +968,10 @@ const AUTH_CLIENT_READS: Record<string, PerUserRead> = {
     calls: ["authClient.listSessions", "listAuthSessions"],
     files: ["lib/auth-client.ts", "lib/account/queries.ts"],
     keys: () => [sessionsOptions(USER).queryKey],
+  },
+  "authClient.organization.getActiveMember": {
+    kind: "session",
+    reason: "the signed-in member's own membership grants",
   },
   "authClient.organization.getActiveMemberRole": {
     kind: "session",

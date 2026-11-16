@@ -31,8 +31,20 @@ const release = resolvePromotedRelease(
 
 const tagRef = `refs/tags/${release}`;
 if (git(["rev-parse", "--verify", "--quiet", tagRef]).exitCode !== 0) {
-  // A shallow or tagless checkout fetches just this tag.
-  const fetched = git(["fetch", "--no-tags", "origin", `+${tagRef}:${tagRef}`]);
+  // A shallow or tagless checkout fetches just this tag, retrying a
+  // transient network failure like every other CI fetch.
+  const fetched = Bun.spawnSync(
+    [
+      "bash",
+      "scripts/retry.sh",
+      "git",
+      "fetch",
+      "--no-tags",
+      "origin",
+      `+${tagRef}:${tagRef}`,
+    ],
+    { stdout: "pipe", stderr: "pipe" },
+  );
   if (fetched.exitCode !== 0) {
     fail(`could not read ${release}: ${fetched.stderr.toString().trim()}`);
   }

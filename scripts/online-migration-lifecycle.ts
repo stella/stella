@@ -5,6 +5,14 @@
  * runs against already holds that work. Newer entries stay `pending`. An entry
  * whose work code depends on at once may be finalized earlier only through a
  * reasoned exemption, and an exemption lapses once the release carries it.
+ *
+ * The comparison reads the entry module, not the definitions it imports (a
+ * repair or index defined in a shared module). That bound is deliberate:
+ * `finalized` work is what `migrate` builds inside the deploy, the path every
+ * entry took before lifecycles existed, so a definition changed behind an
+ * unchanged entry still runs before the new release serves; at worst the
+ * deploy waits for it. Only `pending` work moves after the rollout, and an
+ * entry is pending until a promoted release carries it.
  */
 
 export const LIFECYCLE_LINE = /^[ \t]*lifecycle: "(pending|finalized)",\r?\n/mu;

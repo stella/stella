@@ -220,6 +220,76 @@ test("one canonical mutation advances every active family generation once", asyn
   expect(after.at(0)?.fingerprint).not.toBe(before.at(0)?.fingerprint);
 });
 
+test("every active generation's desired epoch is a reading of the one canonical projection epoch", async () => {
+  // The flip parity read compares two generations' applied epochs
+  // (`corpus-index-flip-parity.ts`): sound only while no generation numbers
+  // epochs of its own. A writer that bumps one generation by itself fails here.
+  await db.insert(corpusIndexGenerations).values({
+    family: "case_law",
+    generation: "case_law_v7",
+    cluster: "q09",
+    manifestDigest: corpusIndexManifestDigest(
+      CORPUS_INDEX_MANIFESTS.case_law_v7,
+    ),
+    status: "building",
+  });
+  const subject = {
+    family: "case_law",
+    entityId: CASE_LAW_DECISION_ID,
+  } as const;
+  for (const generation of ["case_law_v5", "case_law_v7"] as const) {
+    // db-await-in-loop: two generations, each seeded the way bootstrap seeds it
+    await db.transaction(
+      async (tx) =>
+        await ensureCorpusProjectionDesiredStateTx(
+          asTestRaw<Transaction>(tx),
+          subject,
+          generation,
+        ),
+    );
+  }
+  const epochsAgree = async () => {
+    const [decision] = await db
+      .select({ epoch: caseLawDecisions.projectionEpoch })
+      .from(caseLawDecisions)
+      .where(eq(caseLawDecisions.id, CASE_LAW_DECISION_ID));
+    const desired = await db
+      .select({
+        generation: corpusIndexProjectionStates.generation,
+        epoch: corpusIndexProjectionStates.desiredEpoch,
+      })
+      .from(corpusIndexProjectionStates)
+      .where(eq(corpusIndexProjectionStates.entityId, CASE_LAW_DECISION_ID))
+      .orderBy(corpusIndexProjectionStates.generation);
+    return {
+      canonical: decision?.epoch ?? panic("The decision has no epoch"),
+      desired,
+    };
+  };
+  const seeded = await epochsAgree();
+  expect(seeded.desired).toEqual([
+    { generation: "case_law_v5", epoch: seeded.canonical },
+    { generation: "case_law_v7", epoch: seeded.canonical },
+  ]);
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(caseLawDecisions)
+      .set({ court: "Ústavní soud" })
+      .where(eq(caseLawDecisions.id, CASE_LAW_DECISION_ID));
+    await advanceCorpusProjectionDesiredStateTx(
+      asTestRaw<Transaction>(tx),
+      subject,
+    );
+  });
+  const advanced = await epochsAgree();
+  expect(advanced.canonical).not.toBe(seeded.canonical);
+  expect(advanced.desired).toEqual([
+    { generation: "case_law_v5", epoch: advanced.canonical },
+    { generation: "case_law_v7", epoch: advanced.canonical },
+  ]);
+});
+
 test("redistribution revocation becomes an erase desired state", async () => {
   const subject = {
     family: "legislation",

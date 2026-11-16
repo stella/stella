@@ -42,7 +42,10 @@ unchanged; `bun scripts/check-online-migration-lifecycle.ts` (run by
 in the same release (for example an `ON CONFLICT` arbiter index) may be
 finalized early only through a reasoned entry in
 `scripts/online-migration-lifecycle-exemptions.json`; the exemption lapses
-once the release carries the entry.
+once the release carries the entry. The check compares the entry module, not
+definitions it imports from shared modules: a finalized entry is built by
+`migrate` inside the deploy, so a changed definition behind it still runs
+before the new release serves.
 
 `migrate` builds every entry by default. `migrate --online=finalized` builds
 only finalized entries and leaves pending ones to be built after the rollout.

@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 import { gunzipSync } from "node:zlib";
 
+import { load } from "@stll/html";
+
 import { buildCzNssDecision as uncheckedBuildCzNssDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
 import type { EnrolledAdapterFixture } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
@@ -16,14 +18,52 @@ const fixtures = new URL(
 
 export const nssRecoveryReference = "5 As 140/2014-76";
 
+const DETAIL_FIXTURE = new URL(
+  "cz-nss-extended-chamber-detail.html.gz",
+  fixtures,
+);
+
+/**
+ * What the recorded detail page states under each field, read straight off
+ * the page: every value cell's text, in page order, a cell nested in another
+ * of the same field counted once. The source-value oracle for the publisher
+ * fields the decision keeps.
+ */
+const statedDetailValues = (html: string): Record<string, string[]> => {
+  const $ = load(html);
+  const stated: Record<string, string[]> = {};
+  for (const element of $("[data-field-id]").toArray()) {
+    const field = $(element).attr("data-field-id");
+    if (field !== undefined) {
+      stated[field] ??= [];
+    }
+  }
+  for (const cell of $(".det-textval").toArray()) {
+    const owner = $(cell).closest("[data-field-id]");
+    const field = owner.attr("data-field-id");
+    const nested = $(cell)
+      .parents(".det-textval")
+      .toArray()
+      .some((parent) => $(parent).closest("[data-field-id]").is(owner));
+    if (field === undefined || nested) {
+      continue;
+    }
+    (stated[field] ??= []).push($(cell).text().replaceAll(/\s+/gu, " ").trim());
+  }
+  return stated;
+};
+
+const recordedDetailHtml = gunzipSync(
+  await Bun.file(DETAIL_FIXTURE).bytes(),
+).toString("utf-8");
+
 export const nssRecoveryFixture = (
   pdfResponse?: () => Response,
 ): EnrolledAdapterFixture => ({
+  rawFieldValues: statedDetailValues(recordedDetailHtml),
   buildDecision: async () => {
     const [detail, listing, placeholder, pdf] = await Promise.all([
-      Bun.file(
-        new URL("cz-nss-extended-chamber-detail.html.gz", fixtures),
-      ).bytes(),
+      Bun.file(DETAIL_FIXTURE).bytes(),
       Bun.file(
         new URL("cz-nss-extended-chamber-registry.html.gz", fixtures),
       ).bytes(),

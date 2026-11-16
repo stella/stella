@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
 import type { Transaction } from "@/api/db/root";
+import type { SafeId } from "@/api/lib/branded-types";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import type {
   CorpusIndexClient,
@@ -14,6 +15,7 @@ import type { CorpusProjectionAppendWorkScope } from "@/api/lib/legal-search/cor
 import {
   type AcceptedCorpusProjectionAppendProof,
   proveAcceptedCorpusProjectionAppendsTx,
+  readCommittedCorpusProjectionRevisionsTx,
   readProvableCorpusProjectionAppendsTx,
 } from "@/api/lib/legal-search/corpus-index-projection-store";
 import type { IngestionTransactionRunner } from "@/api/lib/replay-safe-ingestion";
@@ -183,4 +185,94 @@ export const executeCorpusProjectionProofCycle = async <
     claimed: revisions.length,
     ...countProofOutcomes(outcomes),
   };
+};
+
+type ProjectionRevision = SafeId<"corpusIndexProjectionIntent">;
+
+/**
+ * Where each named revision stands after one proof of them. `outcomes` are
+ * the proof's decisions over the revisions that were past their barrier; a
+ * census that failed decided nothing, so they wait like `unpublished` ones.
+ */
+export type CorpusProjectionRevisionProofResult = {
+  outcomes: AcceptedCorpusProjectionAppendProof[];
+  /** Committed, with a barrier still ahead: not censused. */
+  unpublished: ProjectionRevision[];
+  /** Committed and past their barrier, but the census did not answer. */
+  censusFailed: ProjectionRevision[];
+  censusError: CorpusIndexError | null;
+  /** No longer committed: decided, erased or recovered by another actor. */
+  settled: ProjectionRevision[];
+};
+
+type ProveCorpusProjectionRevisionsOptions = {
+  runInTransaction: ProjectionTransactionRunner;
+  client: Pick<CorpusIndexClient, "aggregate">;
+  family: CorpusFamily;
+  generation: string;
+  indexId: string;
+  /** At most one census of revisions, all of `indexId`. */
+  revisions: readonly ProjectionRevision[];
+  /** Deterministic database-test clock; production reads PostgreSQL. */
+  testNow?: Date | undefined;
+};
+
+/**
+ * One proof of the revisions a caller names: the same census and the same
+ * settling transaction as the proof cycle, over a set the caller chose
+ * instead of the index's oldest barriers. The read dates the census by the
+ * database clock, so an offline revision's inexact count is final only when
+ * its indexer had certainly ended before the census looked.
+ */
+export const proveCorpusProjectionRevisions = async ({
+  runInTransaction,
+  client,
+  family,
+  generation,
+  indexId,
+  revisions,
+  testNow,
+}: ProveCorpusProjectionRevisionsOptions): Promise<CorpusProjectionRevisionProofResult> => {
+  const committed = await runInTransaction(
+    async (tx) =>
+      await readCommittedCorpusProjectionRevisionsTx(tx, {
+        family,
+        generation,
+        indexId,
+        revisions,
+        testNow,
+      }),
+  );
+  const result: CorpusProjectionRevisionProofResult = {
+    outcomes: [],
+    unpublished: committed.unpublished,
+    censusFailed: [],
+    censusError: null,
+    settled: committed.settled,
+  };
+  if (committed.provable.length === 0) {
+    return result;
+  }
+  const census = await proveCorpusProjectionRevisionsPresent({
+    client,
+    indexId,
+    expected: committed.provable,
+  });
+  if (census.isErr()) {
+    return {
+      ...result,
+      censusFailed: committed.provable.map(({ revision }) => revision),
+      censusError: census.error,
+    };
+  }
+  const outcomes = await runInTransaction(
+    async (tx) =>
+      await proveAcceptedCorpusProjectionAppendsTx(tx, {
+        indexId,
+        census: census.value,
+        timing: { type: "after_barrier", censusStart: committed.censusStart },
+        testNow,
+      }),
+  );
+  return { ...result, outcomes };
 };

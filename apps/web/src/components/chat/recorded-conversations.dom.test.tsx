@@ -381,6 +381,14 @@ const createRecordedServer = (
     ) {
       return threadPage();
     }
+    // The recorder queues nothing: the chat's queue is empty.
+    if (
+      url.origin === API_ORIGIN &&
+      method === "GET" &&
+      url.pathname === `/v1/chat/threads/${recording.threadId}/queue`
+    ) {
+      return Response.json({ hold: null, items: [] });
+    }
     if (
       url.origin === API_ORIGIN &&
       url.pathname === "/v1/chat/tool-grants/coverage"
@@ -930,37 +938,24 @@ const performAction = async ({
 }) => {
   switch (action.type) {
     case "send": {
-      // A plain send never replaces a turn that waits on the member: it is
-      // queued, and "Send now" on it sends it over the wait, as the recorded
-      // conversation did.
-      const overWait = live.session().turnAwaitsMember;
+      // A recorded send never goes over a turn that waits on the member: the
+      // server refuses that, and the page queues it instead.
+      expect(live.session().turnAwaitsMember).toBe(false);
       // What the composer hands the session on submit.
       await act(async () => {
         pendingActions.push(
           Result.tryPromise({
-            try: async () =>
+            try: async () => {
               await live.session().sendMessage({
                 content: action.text,
                 id: toSafeId<"chatMessage">(action.messageId),
-              }),
+              });
+            },
             catch: (cause: unknown) => cause,
           }),
         );
         await sleep(0);
       });
-      if (overWait) {
-        const queued = live
-          .session()
-          .queuedMessages.find(
-            ({ message }) => message.id === action.messageId,
-          );
-        expect(queued).toBeDefined();
-        act(() => {
-          if (queued !== undefined) {
-            live.session().sendQueuedMessageNow(queued.id);
-          }
-        });
-      }
       return;
     }
     case "approve": {
@@ -1228,6 +1223,11 @@ const notRecorded = (reason: string): RecordedCoverage => ({
 const OUTSIDE_THE_CONVERSATION = notRecorded(
   "It changes the page or the thread's settings, not the conversation the server records.",
 );
+/** The queue's own actions: the queue is the server's, with routes of its
+ *  own that the recorder does not drive. */
+const QUEUE_ACTION = notRecorded(
+  "The queue is the server's; the recorder does not drive its routes.",
+);
 
 const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
   "allow-in-conversation": recordedAs(approvedAs("allow-in-conversation")),
@@ -1255,6 +1255,7 @@ const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
   "edit-answer": notRecorded(
     "The recorder drives the chat runtime, not the session hook that edits and reruns an answer.",
   ),
+  "edit-queued-message": QUEUE_ACTION,
   "edit-message": notRecorded(
     "The recorder drives the chat runtime, not the session hook that edits a sent message and runs it again.",
   ),
@@ -1267,6 +1268,7 @@ const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
   ),
   "improve-prompt": OUTSIDE_THE_CONVERSATION,
   "load-older": OUTSIDE_THE_CONVERSATION,
+  "move-queued-message": QUEUE_ACTION,
   "move-to-side": OUTSIDE_THE_CONVERSATION,
   "new-chat": OUTSIDE_THE_CONVERSATION,
   "open-created-document": OUTSIDE_THE_CONVERSATION,
@@ -1275,26 +1277,25 @@ const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
     "Opening the editor only stops a running turn, which the recorder records as its own stop step.",
   ),
   "open-playbook": OUTSIDE_THE_CONVERSATION,
+  "pause-queue": QUEUE_ACTION,
   "refresh-edited-answer": notRecorded(
     "It reloads the canonical answer after a revision write or conflict; the recorder does not drive answer revisions.",
   ),
-  "remove-queued-message": notRecorded(
-    "The recorder has no send queue; it lives in the session hook this replay renders.",
-  ),
+  "remove-queued-message": QUEUE_ACTION,
   "rename-thread": OUTSIDE_THE_CONVERSATION,
+  "replace-with-queued-message": QUEUE_ACTION,
   "resend-without-anonymization": notRecorded(
     "Offered only after the anonymization boundary refuses a turn, which the recorder's raw boundary never does.",
   ),
   "resolve-draft": OUTSIDE_THE_CONVERSATION,
+  "resume-queue": QUEUE_ACTION,
   retry: recordedAs(({ type }) => type === "retry"),
   "run-client-tool": recordedAs(({ type }) => type === "client-tool"),
   "select-matters": OUTSIDE_THE_CONVERSATION,
   "select-model": notRecorded(
     "The recorder scripts one model; a model switch needs a second one.",
   ),
-  queue: notRecorded(
-    "The recorder has no send queue; it lives in the session hook this replay renders.",
-  ),
+  queue: QUEUE_ACTION,
   send: recordedAs(({ type }) => type === "send"),
   "submit-connector-request": notRecorded(
     "The recorder posts text messages only; connector cards submit through their own endpoint.",
@@ -1302,9 +1303,7 @@ const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
   "submit-private-input": notRecorded(
     "The recorder posts text messages only; private input cards submit through their own endpoint.",
   ),
-  "send-queued-message-now": notRecorded(
-    "The recorder has no send queue; it lives in the session hook this replay renders.",
-  ),
+  "send-queued-message-now": QUEUE_ACTION,
   stop: recordedAs(({ type }) => type === "stop"),
   "toggle-anonymization": OUTSIDE_THE_CONVERSATION,
   "toggle-web-search": OUTSIDE_THE_CONVERSATION,
@@ -1313,14 +1312,6 @@ const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
 const SCENARIOS = readdirSync(FIXTURE_DIR)
   .filter((file) => file.endsWith(RECORDING_EXTENSION))
   .map((file) => file.slice(0, -RECORDING_EXTENSION.length));
-/** Conversations where a new message replaces a turn that still waits on a
- *  card. */
-const SUPERSEDE_SCENARIOS = new Set([
-  "supersede-approval",
-  "supersede-approval-then-grant",
-  "supersede-ask-user",
-]);
-
 /** A stored interrupt without a readable binding kind. */
 const UNBOUND_INTERRUPT = "unbound";
 
@@ -1392,39 +1383,6 @@ describe("a recorded conversation, rendered", () => {
       recorded.toSorted(compareCodeUnit),
     );
   });
-
-  test.each([...SUPERSEDE_SCENARIOS])(
-    "%s sends the new message and never answers the replaced card",
-    async (scenario) => {
-      const { recording, server } = await replay(scenario);
-      const sends = recording.steps.flatMap(({ action }) =>
-        action.type === "send" ? [action.messageId] : [],
-      );
-      const replaced = storedToolCalls(recording).find(
-        ({ id }) => id === "call-1",
-      );
-      // The fixture must reach the fault: a second message typed while
-      // call-1 waited.
-      expect(sends).toHaveLength(2);
-      expect(replaced).toBeDefined();
-      const posted = JSON.stringify(server.posted.map(({ body }) => body));
-      expect(posted).toContain(sends.at(1) ?? "");
-      const answered = server.posted.flatMap(({ body }) =>
-        resumedInterrupts(body),
-      );
-      expect(
-        answered.filter((id) => id === replaced?.approval?.id),
-        finding(RENDER_ORACLE.grantAnswersOnce, scenario),
-      ).toEqual([]);
-      // The replaced card shows what the server stored and offers nothing.
-      const shown = readScreen(document.body);
-      expect(shown.actionable).not.toContain("call-1");
-      expect(shown.actionable).not.toContain("ask-user-1");
-      if (replaced?.approval !== undefined) {
-        expect(shown.denied).toContain("call-1");
-      }
-    },
-  );
 
   test("a conversation grant answers each matching approval exactly once, without a click", async () => {
     const { recording, server } = await replay("conversation-grant");

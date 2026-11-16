@@ -74,6 +74,7 @@ const dependenciesFor = (reason?: ApiKeyRefusalReason) => {
   const resolveAuthorization = mock<ResolveCredentialMemberAuthorization>(
     async () => ({
       role: "member",
+      billingAccess: false,
       memberId: "member-one",
       email: "test@example.test",
       workspace: null,

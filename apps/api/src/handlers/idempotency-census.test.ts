@@ -65,6 +65,37 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
+  // A queued message's id is its client-minted idempotency key: a repeated
+  // enqueue answers the stored row or "already sent". A replacement names the
+  // revision it read, and the queue's other changes answer its current state.
+  "POST /v1/chat/threads/:threadId/queue": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "PUT /v1/chat/threads/:threadId/queue/:messageId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "DELETE /v1/chat/threads/:threadId/queue/:messageId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/chat/threads/:threadId/queue/:messageId/move": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/chat/threads/:threadId/queue/:messageId/send-now": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "PUT /v1/chat/threads/:threadId/queue/hold": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "DELETE /v1/chat/threads/:threadId/queue/hold": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "DELETE /v1/clause-categories/:categoryId": {
     type: "non-replay",
     reason: "current-state",
@@ -1137,6 +1168,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     reason: "current-state",
   },
   "PUT /v1/organization-settings/feature-enrolments/:featureId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "PUT /v1/organization-settings/members/:memberId/billing": {
     type: "non-replay",
     reason: "current-state",
   },
