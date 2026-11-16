@@ -52,7 +52,7 @@ type WriteProjectedCorpusColumnsInput =
 /** The source lock of one canonical row, or null when the row is gone. */
 const lockRowSourceTx = async (
   tx: Transaction,
-  input: Pick<WriteProjectedCorpusColumnsInput, "family" | "id">,
+  input: WriteProjectedCorpusColumnsInput,
 ): Promise<{ lock: ActiveCorpusProjectionSourceLock | null } | null> => {
   if (input.family === "case_law") {
     const row = (
