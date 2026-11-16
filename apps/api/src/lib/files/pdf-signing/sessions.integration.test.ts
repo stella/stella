@@ -572,7 +572,7 @@ describe("pdf signing finalization attempts", () => {
     "%s records one current cancellation and leaves repeats unchanged",
     async (owner) => {
       const { sessionId } = await seedHandoff();
-      const safeDb = createSafeDb(db, [ids.wsA1], ids.orgA, ids.userA1);
+      const safeDb = createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1);
       const request = new Request("https://example.test/pdf-signing-session");
       const audit = createAuditRecorder({
         organizationId: ids.orgA,
@@ -602,7 +602,12 @@ describe("pdf signing finalization attempts", () => {
                   status: "active",
                 }),
                 getActiveWorkspaceIds: async () => [ids.wsA1],
-                scopedDb: createScopedDb(db, [ids.wsA1], ids.orgA, ids.userA1),
+                scopedDb: createScopedDb(
+                  testDb,
+                  [ids.wsA1],
+                  ids.orgA,
+                  ids.userA1,
+                ),
                 orgAIConfig: null,
                 orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
                 managedAIResidency: "eu",
