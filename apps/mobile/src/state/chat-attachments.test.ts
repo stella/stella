@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { CHAT_LOCAL_RUN_ANONYMIZED_REFUSAL_CODE } from "@stll/api-contract/chat-run-target";
+
 import { ApiRequestError } from "./api-request";
 import {
   admitPickedFiles,
@@ -226,7 +228,7 @@ describe("sending files", () => {
     const refused = new ApiRequestError({
       message: "refused",
       status: 422,
-      code: "local_run_anonymized_refusal",
+      code: CHAT_LOCAL_RUN_ANONYMIZED_REFUSAL_CODE,
     });
     for (const withFiles of [false, true]) {
       expect(sendRefusal(refused, withFiles)).toBe(

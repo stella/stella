@@ -3,6 +3,7 @@ import {
   isChatFileMimeType,
 } from "@stll/api-contract/chat-file-types";
 import type { ChatFileMimeType } from "@stll/api-contract/chat-file-types";
+import { CHAT_LOCAL_RUN_ANONYMIZED_REFUSAL_CODE } from "@stll/api-contract/chat-run-target";
 import { CHAT_CONTEXT_FILE_MAX_BYTES } from "@stll/chat-limits";
 
 import type { ApiError } from "@/state/api-request";
@@ -211,13 +212,6 @@ export const attachmentParts = (files: readonly ReadyFile[]) =>
   }));
 
 /**
- * The server's refusal of an anonymized message to the coding agent on the
- * member's computer, which reads their documents as they are
- * (`CHAT_TRANSPORT_ERROR_CODE.localRunAnonymizedRefusal`).
- */
-const LOCAL_RUN_ANONYMIZED_REFUSAL = "local_run_anonymized_refusal";
-
-/**
  * Why a message was refused: a file the server would not take, an anonymized
  * message to the agent on the member's computer, or anything else.
  */
@@ -259,7 +253,7 @@ export const sendRefusal = (
   const status = error._tag === "ApiRequestError" ? error.status : undefined;
   if (
     error._tag === "ApiRequestError" &&
-    error.code === LOCAL_RUN_ANONYMIZED_REFUSAL
+    error.code === CHAT_LOCAL_RUN_ANONYMIZED_REFUSAL_CODE
   ) {
     return "local-run-not-anonymizable";
   }
