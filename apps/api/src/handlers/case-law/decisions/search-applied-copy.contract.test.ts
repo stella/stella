@@ -308,11 +308,10 @@ describe.skipIf(!runEngineTests)(
           }),
         ),
       );
-      const recorded = fixtures.flatMap((fixture) =>
-        fixture.state.type === "none"
-          ? []
-          : [{ fixture, state: fixture.state }],
-      );
+      const recorded = fixtures.flatMap((fixture) => {
+        const state: StateShape = fixture.state;
+        return state.type === "none" ? [] : [{ fixture, state }];
+      });
       await db.insert(corpusIndexProjectionIntents).values(
         recorded.map(({ fixture, state }) => ({
           id: state.revision,
