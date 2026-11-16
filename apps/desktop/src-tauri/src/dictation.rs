@@ -431,6 +431,22 @@ pub fn cleanup_enabled(app: &AppHandle) -> bool {
   app.state::<DictationState>().update(|inner| inner.cleanup)
 }
 
+/// Starts a dictation: marks it recording and reads the speech model under
+/// the lock the model's removal takes, so a removal either sees the dictation
+/// and refuses, or has already marked the model missing and none is used.
+pub fn start_recording(app: &AppHandle) -> Option<PathBuf> {
+  let model = change(app, |inner| {
+    inner.phase = Phase::Recording;
+    if inner.model == ModelState::Missing {
+      None
+    } else {
+      installed_model()
+    }
+  });
+  show_phase_in_tray(app, Phase::Recording);
+  model
+}
+
 pub fn set_phase(app: &AppHandle, phase: Phase) {
   change(app, |inner| inner.phase = phase);
   show_phase_in_tray(app, phase);
