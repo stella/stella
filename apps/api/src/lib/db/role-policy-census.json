@@ -1631,6 +1631,46 @@
   },
   {
     "schema": "public",
+    "table": "case_law_decision_reviews",
+    "policy": "case_law_global_access",
+    "command": "SELECT",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "true",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "case_law_decision_reviews",
+    "policy": "case_law_ingestion_access",
+    "command": "ALL",
+    "roles": ["stella_ingestion"],
+    "permissive": "PERMISSIVE",
+    "using": "true",
+    "withCheck": "true"
+  },
+  {
+    "schema": "public",
+    "table": "case_law_decision_reviews",
+    "policy": "case_law_reader_access",
+    "command": "SELECT",
+    "roles": ["stella_caselaw_reader"],
+    "permissive": "PERMISSIVE",
+    "using": "true",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "case_law_decision_reviews",
+    "policy": "public_law_reader_access",
+    "command": "SELECT",
+    "roles": ["stella_public_law_reader"],
+    "permissive": "PERMISSIVE",
+    "using": "true",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
     "table": "case_law_decision_source_identities",
     "policy": "case_law_ingestion_access",
     "command": "ALL",
