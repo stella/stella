@@ -1,9 +1,14 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import { caseLawDecisions, legislationDocuments } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
+import {
+  type TimestampCasToken,
+  timestampMatchesCasToken,
+} from "@/api/lib/db/timestamp-cas";
 import {
   type ActiveCorpusProjectionSourceLock,
   lockActiveCorpusProjectionSourceByIdTx,
@@ -127,6 +132,10 @@ export const writeProjectedCorpusColumnsTx = async (
   if (recorded.length === 0) {
     return false;
   }
+  if (input.family === "case_law") {
+    // The content hash and pointers are inputs of a decision's derived state.
+    await runDecisionWriteExtension(tx, input.id);
+  }
   if (source.lock !== null) {
     await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
       lock: source.lock,
@@ -158,15 +167,28 @@ export const lockCaseLawProjectabilitySourcesTx = async (
     .where(inArray(caseLawDecisions.id, [...decisionIds]))
     .orderBy(caseLawDecisions.sourceId)
     .limit(decisionIds.length);
-  let lock: ActiveCorpusProjectionSourceLock | null = null;
-  for (const { sourceId } of sources) {
-    // db-await-in-loop: one share lock per distinct source of a bounded page, in id order.
-    lock = await lockActiveCorpusProjectionSourceByIdTx(tx, {
-      family: "case_law",
-      sourceId,
-    });
+  return await lockCaseLawSourcesInOrderTx(
+    tx,
+    sources.map(({ sourceId }) => sourceId),
+  );
+};
+
+/** Share-lock each source in id order; the lock proof is per family. */
+const lockCaseLawSourcesInOrderTx = async (
+  tx: Transaction,
+  sourceIds: readonly SafeId<"caseLawSource">[],
+  offset = 0,
+  lock: ActiveCorpusProjectionSourceLock | null = null,
+): Promise<ActiveCorpusProjectionSourceLock | null> => {
+  const sourceId = sourceIds.at(offset);
+  if (sourceId === undefined) {
+    return lock;
   }
-  return lock;
+  const next = await lockActiveCorpusProjectionSourceByIdTx(tx, {
+    family: "case_law",
+    sourceId,
+  });
+  return await lockCaseLawSourcesInOrderTx(tx, sourceIds, offset + 1, next);
 };
 
 /**
@@ -189,4 +211,68 @@ export const projectCaseLawDecisionsTx = async (
     subject: { family: "case_law", entityId: id },
   });
   await projectCaseLawDecisionsTx(tx, lock, ids, offset + 1);
+};
+
+/** What a corpus write stored for a row: its object keys and content hash. */
+type StoredCorpusWrite = {
+  textKey: string;
+  sectionsKey: string;
+  astKey: string;
+  contentHash: string;
+};
+
+/**
+ * Record a row's first corpus write: its object keys and content hash, only
+ * while the row still has no recorded write and is as the caller read it
+ * (`updatedAtToken`), so a concurrent ingestion refresh that wrote newer keys
+ * is never pointed back at a stale payload. Projects the row in the same
+ * transaction. Returns whether the compare-and-set held.
+ */
+export const recordFirstCorpusWriteTx = async (
+  tx: Transaction,
+  input:
+    | {
+        family: "case_law";
+        id: SafeId<"caseLawDecision">;
+        written: StoredCorpusWrite;
+        updatedAtToken: TimestampCasToken;
+      }
+    | {
+        family: "legislation";
+        id: SafeId<"legislationDocument">;
+        written: StoredCorpusWrite;
+        updatedAtToken: TimestampCasToken;
+      },
+): Promise<boolean> => {
+  const columns = {
+    textS3Key: input.written.textKey,
+    normalizedS3Key: input.written.sectionsKey,
+    astS3Key: input.written.astKey,
+    contentHash: input.written.contentHash,
+  };
+  return input.family === "case_law"
+    ? await writeProjectedCorpusColumnsTx(tx, {
+        family: "case_law",
+        id: input.id,
+        columns,
+        where: and(
+          isNull(caseLawDecisions.textS3Key),
+          timestampMatchesCasToken(
+            caseLawDecisions.updatedAt,
+            input.updatedAtToken,
+          ),
+        ),
+      })
+    : await writeProjectedCorpusColumnsTx(tx, {
+        family: "legislation",
+        id: input.id,
+        columns,
+        where: and(
+          isNull(legislationDocuments.textS3Key),
+          timestampMatchesCasToken(
+            legislationDocuments.updatedAt,
+            input.updatedAtToken,
+          ),
+        ),
+      });
 };

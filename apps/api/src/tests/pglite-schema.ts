@@ -1912,7 +1912,7 @@ export const installPgliteFindingDecisionHistory = async (
   }
 };
 
-export const CORPUS_INDEX_ROUTE_SEEDINGS_MIGRATION_PATH = nodePath.join(
+const CORPUS_INDEX_ROUTE_SEEDINGS_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20261116123000_corpus_index_route_seedings",
   "migration.sql",

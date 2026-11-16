@@ -13,7 +13,7 @@ import {
   timestampCasToken,
   timestampMatchesCasToken,
 } from "@/api/lib/db/timestamp-cas";
-import { writeProjectedCorpusColumnsTx } from "@/api/lib/legal-search/corpus-projectability-write";
+import { recordFirstCorpusWriteTx } from "@/api/lib/legal-search/corpus-projectability-write";
 import { writeCorpusDocument } from "@/api/lib/legal-search/corpus-storage";
 import type {
   DecisionSection,
@@ -189,30 +189,15 @@ const backfillRow = async (
     }
     const result = outcome.written;
 
-    // The pointers and the content hash are projection inputs, so the
-    // owner records them and projects the row in the same transaction.
+    // The keys and the content hash are projection inputs: the owner
+    // records them under the compare-and-set and projects the row.
     const recorded = await ingestionDb(
       async (tx) =>
-        await writeProjectedCorpusColumnsTx(tx, {
+        await recordFirstCorpusWriteTx(tx, {
           family: "case_law",
           id: row.id,
-          columns: {
-            textS3Key: result.textKey,
-            normalizedS3Key: result.sectionsKey,
-            astS3Key: result.astKey,
-            contentHash: result.contentHash,
-          },
-          // Compare-and-set on the selected row state: a concurrent
-          // ingestion refresh may have written newer keys, and an
-          // unconditional update would point the row back at the stale
-          // backfill payload.
-          where: and(
-            isNull(caseLawDecisions.textS3Key),
-            timestampMatchesCasToken(
-              caseLawDecisions.updatedAt,
-              row.updatedAtToken,
-            ),
-          ),
+          written: result,
+          updatedAtToken: row.updatedAtToken,
         }),
     );
 
@@ -279,30 +264,15 @@ const backfillLegislationRow = async (
     }
     const result = outcome.written;
 
-    // The pointers and the content hash are projection inputs, so the
-    // owner records them and projects the row in the same transaction.
+    // The keys and the content hash are projection inputs: the owner
+    // records them under the compare-and-set and projects the row.
     const recorded = await ingestionDb(
       async (tx) =>
-        await writeProjectedCorpusColumnsTx(tx, {
+        await recordFirstCorpusWriteTx(tx, {
           family: "legislation",
           id: row.id,
-          columns: {
-            textS3Key: result.textKey,
-            normalizedS3Key: result.sectionsKey,
-            astS3Key: result.astKey,
-            contentHash: result.contentHash,
-          },
-          // Compare-and-set on the selected row state: a concurrent
-          // ingestion refresh may have written newer keys, and an
-          // unconditional update would point the row back at the stale
-          // backfill payload.
-          where: and(
-            isNull(legislationDocuments.textS3Key),
-            timestampMatchesCasToken(
-              legislationDocuments.updatedAt,
-              row.updatedAtToken,
-            ),
-          ),
+          written: result,
+          updatedAtToken: row.updatedAtToken,
         }),
     );
 

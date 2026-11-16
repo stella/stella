@@ -37,7 +37,10 @@ import {
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { CORPUS_ROW_PROJECTABLE } from "@/api/lib/legal-search/corpus-projectability";
 
-const GUARD_FUNCTION = "test_corpus_projection_seeding_guard";
+/** The guard's function and its trigger on both canonical tables. */
+export const CORPUS_PROJECTION_SEEDING_GUARD_TRIGGER =
+  "test_corpus_projection_seeding_guard";
+const GUARD_FUNCTION = CORPUS_PROJECTION_SEEDING_GUARD_TRIGGER;
 const STATEMENT_BREAK = "-- statement break";
 
 /**
@@ -205,7 +208,7 @@ export const optOutOfCorpusProjectionSeedingGuard = async (
   if (reason.trim().length < 20) {
     panic("A seeding guard opt-out needs a written reason");
   }
-  await client.query("SELECT set_config($1, 'off', false)", [
-    CORPUS_PROJECTION_SEEDING_GUARD_OFF_SETTING,
-  ]);
+  await client.query(
+    "SELECT set_config('stella_test.corpus_projection_seeding_guard', 'off', false)",
+  );
 };
