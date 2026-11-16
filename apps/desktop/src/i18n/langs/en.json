@@ -624,7 +624,9 @@
       "unavailableRegion": "stella AI does not offer transcription in your organization’s region yet.",
       "unavailableProvider": "Your organization’s AI provider does not offer transcription.",
       "unavailable": "stella AI transcription is unavailable right now.",
-      "model": "Transcription model"
+      "model": "Transcription model",
+      "outsideRegion": "Outside your region",
+      "outsideRegionNote": "This model processes audio outside your organization’s region."
     },
     "language": {
       "title": "Dictation language",

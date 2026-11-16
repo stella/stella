@@ -624,7 +624,9 @@
       "unavailableRegion": "stella AI bietet in der Region Ihrer Organisation noch keine Umwandlung an.",
       "unavailableProvider": "Der KI-Anbieter Ihrer Organisation bietet keine Umwandlung an.",
       "unavailable": "Die Umwandlung mit stella AI ist gerade nicht verfügbar.",
-      "model": "Umwandlungsmodell"
+      "model": "Umwandlungsmodell",
+      "outsideRegion": "Außerhalb Ihrer Region",
+      "outsideRegionNote": "Dieses Modell verarbeitet Audio außerhalb der Region Ihrer Organisation."
     },
     "language": {
       "title": "Diktiersprache",
