@@ -27,6 +27,7 @@ import {
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import { resumeChatAfterLimit } from "@/api/handlers/chat/limit-reminder/limit-resume";
 import { readLimitedLatestTurn } from "@/api/handlers/chat/limit-reminder/shared";
+import { status } from "@/api/http/status";
 import { recordAccountProfessionalUse } from "@/api/lib/auth/professional-use";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -566,6 +567,140 @@ const suite = (
         .from(chatTurns)
         .where(eq(chatTurns.threadId, chat.threadId));
       expect(turns).toEqual([{ id: chat.firstTurnId }]);
+    });
+  });
+
+  describe("a resend refused after the reset", () => {
+    /** A member's chat on their computer, asking to continue after its limit. */
+    const seedLocalResume = async () => {
+      const owner = await seedOwner();
+      const accepted = await recordAccountProfessionalUse({
+        userId: owner.userId,
+        source: PROFESSIONAL_USE_ACCEPTANCE_SOURCE.interactive,
+      });
+      expect(accepted.isOk()).toBe(true);
+      const chat = await seedThread(owner, [
+        { limitResetsAt: at(-60 * 1000), status: "failed" },
+      ]);
+      await database
+        .update(chatThreads)
+        .set({
+          chatLocalRunTarget: {
+            kind: "local",
+            harness: "codex",
+            model: "gpt-5.5",
+            approvals: "ask",
+            reasoningEffort: null,
+          },
+        })
+        .where(eq(chatThreads.id, chat.threadId));
+      await remind(
+        owner,
+        chat.threadId,
+        chat.firstTurnId,
+        at(-60 * 1000),
+        CHAT_LIMIT_RESET_ACTION.continue,
+      );
+      return { chat, owner };
+    };
+
+    /** The resumed turn the send accepted, then settled as failed. */
+    const acceptRefusedTurn = async (
+      owner: Owner,
+      chat: { threadId: SafeId<"chatThread">; firstTurnId: SafeId<"chatTurn"> },
+    ) => {
+      expect(await takeResume(chat.threadId, chat.firstTurnId)).toBe("taken");
+      const [stopped] = await database
+        .select({ userMessageId: chatTurns.userMessageId })
+        .from(chatTurns)
+        .where(eq(chatTurns.id, chat.firstTurnId));
+      const answerId = createSafeId<"chatMessage">();
+      await database.insert(chatMessages).values({
+        content: toPersistedChatMessageContentV3({ data: [] }),
+        createdAt: now,
+        id: answerId,
+        role: "assistant",
+        threadId: chat.threadId,
+        userId: owner.userId,
+        workspaceId: null,
+      });
+      await database.insert(chatTurns).values({
+        assistantMessageId: answerId,
+        createdAt: now,
+        failureCode: "boundary-refusal",
+        failureRetryable: false,
+        id: createSafeId<"chatTurn">(),
+        organizationId: owner.organizationId,
+        settledAt: now,
+        status: "failed",
+        threadId: chat.threadId,
+        userId: owner.userId,
+        userMessageId:
+          stopped?.userMessageId ?? panic("The stopped turn has a message"),
+        workspaceId: null,
+      });
+    };
+
+    const resumeRefused = async (
+      owner: Owner,
+      chat: { threadId: SafeId<"chatThread">; firstTurnId: SafeId<"chatTurn"> },
+      send: () => Promise<void>,
+    ) =>
+      await resumeChatAfterLimit({
+        dependencies: {
+          discard: discardChatLimitResume,
+          now: () => now,
+          routeLocalRun: async () =>
+            Result.ok({ type: "harness_unavailable", report: null }),
+          send: async () => {
+            await send();
+            return status(503, {
+              code: "service_unavailable",
+              message: "Action admission is unavailable",
+            });
+          },
+          signal: new AbortController().signal,
+        },
+        due: {
+          organizationId: owner.organizationId,
+          threadId: chat.threadId,
+          turnId: chat.firstTurnId,
+          userId: owner.userId,
+        },
+      });
+
+    test("before its acceptance, a refusal that may pass keeps the request for the next sweep", async () => {
+      const { chat, owner } = await seedLocalResume();
+
+      const outcome = await resumeRefused(owner, chat, async () => {});
+
+      expect(outcome).toEqual({ type: "retry-later" });
+      expect(await remindersOf([chat.threadId])).toEqual([
+        {
+          threadId: chat.threadId,
+          onReset: CHAT_LIMIT_RESET_ACTION.continue,
+        },
+      ]);
+      expect(await filedFor([chat.threadId])).toEqual([]);
+    });
+
+    test("after its acceptance took the request, the member is told once", async () => {
+      const { chat, owner } = await seedLocalResume();
+
+      const outcome = await resumeRefused(
+        owner,
+        chat,
+        async () => await acceptRefusedTurn(owner, chat),
+      );
+
+      expect(outcome).toEqual({ type: "ended", end: "notify" });
+      expect(await remindersOf([chat.threadId])).toEqual([]);
+      expect(await filedFor([chat.threadId])).toEqual([
+        {
+          entityId: chat.threadId,
+          kind: NOTIFICATION_KIND.LOCAL_RUN_LIMIT_RESET,
+        },
+      ]);
     });
   });
 

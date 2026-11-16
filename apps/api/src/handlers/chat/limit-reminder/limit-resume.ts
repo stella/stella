@@ -31,6 +31,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import {
   type ChatLimitResumeEnd,
   endChatLimitResumeOnTx,
+  endRefusedChatLimitResumeOnTx,
 } from "@/api/lib/chat/limit-reset-notification";
 import { chatRunTargetOf } from "@/api/lib/chat/run-target";
 import { resolveServerStartedMember } from "@/api/lib/chat/server-started-member";
@@ -422,7 +423,35 @@ export const resumeChatAfterLimit = async ({
     return { type: "started" };
   }
   const refusal = limitResumeRefusalDisposition(answer);
-  return refusal.type === "ended" ? await end(refusal.end) : refusal;
+  if (refusal.type === "not-due") {
+    return refusal;
+  }
+  // The refusal may have come after the send's acceptance took the request:
+  // what is still stored decides whether to try again or tell the member.
+  const ended = await caller.safeDb(async (tx) =>
+    (await lockChatThreadForTurnOnTx({ threadId, tx }))
+      ? await endRefusedChatLimitResumeOnTx({
+          due,
+          transient: refusal.type === "retry-later",
+          tx,
+        })
+      : ({ type: "not-due" } as const),
+  );
+  if (ended.isErr()) {
+    return retryLater("end", ended.error);
+  }
+  switch (ended.value.type) {
+    case "kept":
+      return { type: "retry-later" };
+    case "not-due":
+      return { type: "not-due" };
+    case "ended":
+      pingNotificationRecipients(ended.value.pings);
+      return { type: "ended", end: "notify" };
+    default:
+      ended.value satisfies never;
+      return panic("Unhandled refused limit resume");
+  }
 };
 
 /**

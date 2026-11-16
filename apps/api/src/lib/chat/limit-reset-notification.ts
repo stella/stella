@@ -53,6 +53,14 @@ export const notifyChatLimitResetOnTx = async (
   const waiting = due.filter(
     ({ threadId, turnId }) => latestTurnOf.get(threadId) === turnId,
   );
+  return await fileChatLimitResetNotificationsOnTx(tx, waiting);
+};
+
+/** File the limit reset notification of each request, by its turn, once. */
+const fileChatLimitResetNotificationsOnTx = async (
+  tx: Transaction,
+  waiting: readonly DueChatLimitReminder[],
+): Promise<NotificationPing[]> => {
   if (waiting.length === 0) {
     return [];
   }
@@ -119,4 +127,77 @@ export const endChatLimitResumeOnTx = async ({
     )
     .returning(DUE_CHAT_LIMIT_REMINDER_COLUMNS);
   return end === "notify" ? await notifyChatLimitResetOnTx(tx, ended) : [];
+};
+
+/** What became of a request to continue a chat whose resend was refused. */
+export type RefusedChatLimitResumeEnd =
+  /** Still stored, after a refusal that may pass: the next sweep tries again. */
+  | { type: "kept" }
+  /** The member is told the limit reset. */
+  | { type: "ended"; pings: NotificationPing[] }
+  /** Taken by a turn that started, or cancelled: nothing to do. */
+  | { type: "not-due" };
+
+/**
+ * End the request to continue the chat after the resend the member asked for
+ * was refused. A refusal before the send's acceptance leaves the request
+ * stored: one that may pass on its own (`transient`) keeps it for the next
+ * sweep, any other ends it in the notification. A refusal after the
+ * acceptance took it (the admission or the computer refusing the new turn,
+ * which the chat then shows as failed) leaves nothing to retry or end, so the
+ * member is told now; the turn's key keeps that to once. A request taken by a
+ * turn that is running, or cancelled, is left alone. Runs on the member's own
+ * connection; the caller holds the thread lock.
+ */
+export const endRefusedChatLimitResumeOnTx = async ({
+  due,
+  transient,
+  tx,
+}: {
+  due: DueChatLimitReminder;
+  transient: boolean;
+  tx: Transaction;
+}): Promise<RefusedChatLimitResumeEnd> => {
+  const { threadId, turnId } = due;
+  const [stored] = await tx
+    .select({ turnId: chatLimitReminders.turnId })
+    .from(chatLimitReminders)
+    .where(
+      and(
+        eq(chatLimitReminders.threadId, threadId),
+        eq(chatLimitReminders.turnId, turnId),
+        eq(chatLimitReminders.onReset, CHAT_LIMIT_RESET_ACTION.continue),
+      ),
+    )
+    .limit(1);
+  if (stored !== undefined) {
+    return transient
+      ? { type: "kept" }
+      : {
+          type: "ended",
+          pings: await endChatLimitResumeOnTx({
+            end: "notify",
+            threadId,
+            turnId,
+            tx,
+          }),
+        };
+  }
+  const [latest] = await tx
+    .select({ id: chatTurns.id, status: chatTurns.status })
+    .from(chatTurns)
+    .where(eq(chatTurns.threadId, threadId))
+    .orderBy(...NEWEST_CHAT_TURN_FIRST)
+    .limit(1);
+  if (
+    latest === undefined ||
+    latest.id === turnId ||
+    latest.status !== "failed"
+  ) {
+    return { type: "not-due" };
+  }
+  return {
+    type: "ended",
+    pings: await fileChatLimitResetNotificationsOnTx(tx, [due]),
+  };
 };
