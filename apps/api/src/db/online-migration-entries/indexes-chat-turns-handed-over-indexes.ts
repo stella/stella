@@ -8,7 +8,7 @@ import { CHAT_TURN_HANDED_OVER_UNIQUE_INDEXES } from "../online-unique-indexes";
  */
 export default {
   id: "indexes-chat-turns-handed-over-indexes",
-  revision: 1468,
+  revision: 1480,
   type: "indexes",
   values: [
     ...CHAT_TURN_HANDED_OVER_UNIQUE_INDEXES,
