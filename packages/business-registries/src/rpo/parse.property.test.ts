@@ -15,7 +15,7 @@ import {
   forEachRegistryMutation,
   registryExtras,
   registryString,
-} from "../shared/property-test-helpers.test.js";
+} from "../shared/tests/test-helpers.js";
 import { lookupByIco, searchByName } from "./client.js";
 import {
   entityUrl,

@@ -140,6 +140,7 @@ import {
   withQueuedMessageMoved,
   withQueuedMessageRemoved,
 } from "@/features/chat/chat-queue.logic";
+import { chatErrorTranslationKey } from "@/features/chat/chat-request-error";
 import {
   type ChatRuntime,
   type ChatSendMessageOptions,
@@ -201,13 +202,14 @@ import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import {
   APIError,
+  chatRefusal,
   internalToolErrorMessage,
   toAPIError,
   unwrapApiResponse,
 } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { readQueryResult } from "@/lib/errors/query-result";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { fileOptions } from "@/lib/files/queries";
 import {
   isPlaybookDraftViewPayload,
@@ -912,6 +914,29 @@ export const useChatSession = ({
     [draftManager, threadRef],
   );
 
+  /**
+   * Say why a message the server refused before storing it was not sent,
+   * while the composer holds it again: in the words the thread used for a
+   * failed request.
+   */
+  const notifySendRefused = useCallback(
+    (refused: Error) => {
+      // The server's refusal is found beneath the transport's wrapping: its
+      // message, as the thread showed it, unless a notice of its own (an
+      // expired session, an admission refusal) says more.
+      const refusal = chatRefusal(refused);
+      const copy = chatErrorTranslationKey(refused);
+      if (refusal !== null) {
+        notifyUserError(refusal, refusal.message);
+      } else if (copy === "chat.sendError") {
+        notifyUserError(refused, t(copy));
+      } else {
+        notifyUserProblem(t(copy));
+      }
+    },
+    [t],
+  );
+
   // A new chat's first message was sent before the page existed (the landing
   // page, `/new`, Ask AI); this page takes it from the runtime. Refused before
   // the server stored it, it goes back into this chat's composer, like any
@@ -927,12 +952,12 @@ export const useChatSession = ({
         if (settled.type === "sent") {
           return;
         }
-        notifyUserError(settled.error, t("chat.sendError"));
+        notifySendRefused(settled.error);
         restoreIntoComposer(handoff.message);
       })(),
       "use-chat-session.settle-route-handoff",
     );
-  }, [chat, restoreIntoComposer, t]);
+  }, [chat, notifySendRefused, restoreIntoComposer]);
 
   /**
    * Queue `message` at the end of the chat's queue, as it would be sent now
@@ -1156,12 +1181,13 @@ export const useChatSession = ({
       if (isQueueInsteadRefusal(acceptance.error)) {
         return await enqueueMessage(message, options);
       }
-      notifyUserError(acceptance.error, t("chat.sendError"));
+      notifySendRefused(acceptance.error);
       return CHAT_SEND_KEPT;
     },
     [
       chat,
       enqueueMessage,
+      notifySendRefused,
       notifySteerRefused,
       readQueue,
       resolveToolApproval,

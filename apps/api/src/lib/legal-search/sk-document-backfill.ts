@@ -218,7 +218,7 @@ export type SkDocumentRetentionCheck = (input: {
 }) => void;
 
 /** What one gated download established. */
-export type SkDocumentRead =
+type SkDocumentRead =
   ReadOutcome<Response> | { type: "refused-target"; reason: string };
 
 export type FetchPdfBytesOptions = {
@@ -954,7 +954,7 @@ export const loadPendingDocuments = async ({
  * How this store reaches object storage, or null where corpus storage is
  * off and the Postgres columns are the whole of it.
  */
-export const corpusBackfillTransfer = (): CorpusTransfer | null =>
+const corpusBackfillTransfer = (): CorpusTransfer | null =>
   corpusStorageMode === "off" ? null : deployedCorpusTransfer();
 
 export type StoreBackfilledDocumentOptions = {

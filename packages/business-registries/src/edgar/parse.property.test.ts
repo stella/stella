@@ -12,7 +12,7 @@ import {
   nullableRegistryString,
   registryMutation,
   registryString,
-} from "../shared/property-test-helpers.test.js";
+} from "../shared/tests/test-helpers.js";
 import { lookupByCik } from "./client.js";
 import { parseAddress, parseSubmission } from "./parse.js";
 import type {

@@ -28,6 +28,11 @@ import {
   renewChatTurnExecutionLease,
 } from "@/api/handlers/chat/chat-turn-persistence";
 import type { ChatTurnExecution } from "@/api/handlers/chat/chat-turn-persistence";
+import {
+  CHAT_TURN_OWNER_LOST_REASON,
+  CHAT_TURN_PRODUCTION_FAILED_REASON,
+  isCutByStopOrOwnerLoss,
+} from "@/api/handlers/chat/chat-turn-run-cut";
 import type { ChatTurnFailureCode } from "@/api/handlers/chat/chat-turn-state";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import type {
@@ -220,13 +225,6 @@ const CHAT_TURN_RUN_HEARTBEAT = {
   renewEvery: 4,
 } as const satisfies ChatTurnRunHeartbeat;
 
-/**
- * The abort reason of a run that no longer owns its turn: its lease was lost,
- * or its process is shutting down. It ends the turn as `owner-lost`.
- */
-export const CHAT_TURN_OWNER_LOST_REASON = "stella.chat-turn.owner-lost";
-const CHAT_TURN_PRODUCTION_FAILED_REASON = "stella.chat-turn.production-failed";
-
 const DURABILITY_FAILED_SINK = failureSink({
   event: "chat.turn.durability_failed",
   expected: [],
@@ -396,8 +394,12 @@ type ChatTurnRunHeartbeatHandle = {
   stop: () => void;
 };
 
+/**
+ * Where a run stands: handed its turn and not yet producing (`ready`),
+ * producing under its heartbeat, or over.
+ */
 type ChatTurnRunState =
-  | { status: "handed-over" }
+  | { status: "ready" }
   | { status: "producing"; heartbeat: ChatTurnRunHeartbeatHandle }
   | { status: "settled" };
 
@@ -547,7 +549,7 @@ export class ChatTurnRun {
   private readonly options: ChatTurnRunOptions;
   private readonly ownership: ChatTurnOwnership;
   private readonly settledResolvers = Promise.withResolvers<ChatTurnRunEnd>();
-  private state: ChatTurnRunState = { status: "handed-over" };
+  private state: ChatTurnRunState = { status: "ready" };
   private stored = false;
   private continuationProduction: "not-started" | "started" = "not-started";
   private upstream:
@@ -639,8 +641,7 @@ export class ChatTurnRun {
     if (
       this.continuationProduction !== "not-started" ||
       !this.control.admissionSignal?.aborted ||
-      this.control.abortController.signal.reason === RUN_CANCEL_REASON ||
-      this.control.abortController.signal.reason === CHAT_TURN_OWNER_LOST_REASON
+      isCutByStopOrOwnerLoss(this.control.abortController.signal)
     ) {
       return undefined;
     }
@@ -701,7 +702,7 @@ export class ChatTurnRun {
     durability: StreamDurability,
     viewer: SseStreamBinding,
   ): Response {
-    if (this.state.status !== "handed-over") {
+    if (this.state.status !== "ready") {
       return panic(`A chat turn run cannot produce once ${this.state.status}`);
     }
     this.state = { status: "producing", heartbeat: this.startHeartbeat() };
@@ -855,7 +856,7 @@ export class ChatTurnRun {
         ctx: { threadId: owner.threadId },
       });
     }
-    if (status !== "handed-over") {
+    if (status !== "ready") {
       return;
     }
     await this.closeConnectors();
@@ -939,7 +940,7 @@ export class ChatTurnRun {
    * controller is already aborted, so the run would never store its outcome.
    */
   private abort(reason: string): void {
-    if (this.state.status === "handed-over") {
+    if (this.state.status === "ready") {
       this.pendingAbort ??= reason;
       return;
     }

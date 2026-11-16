@@ -1803,6 +1803,8 @@
         "column:public.legal_list_item_sources.verified_at:UPDATE:GRANTOR:census_admin:GRANTABLE:false",
         "column:public.legal_list_item_sources.verified_by:UPDATE:EFFECTIVE",
         "column:public.legal_list_item_sources.verified_by:UPDATE:GRANTOR:census_admin:GRANTABLE:false",
+        "column:public.member.billing_access:UPDATE:EFFECTIVE",
+        "column:public.member.billing_access:UPDATE:GRANTOR:census_admin:GRANTABLE:false",
         "column:public.member.last_active_workspace_id:UPDATE:EFFECTIVE",
         "column:public.member.last_active_workspace_id:UPDATE:GRANTOR:census_admin:GRANTABLE:false",
         "column:public.user.created_at:SELECT:EFFECTIVE",

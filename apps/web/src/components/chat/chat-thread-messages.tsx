@@ -15,7 +15,6 @@ import type { PluggableList } from "unified";
 import { useTranslations } from "use-intl";
 
 import { isThirdPartyBoundaryRefusalError } from "@stll/anonymize-chat";
-import { AI_FAILURE_CODES } from "@stll/api-contract";
 import {
   isChatPastedTextPart,
   UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE,
@@ -189,11 +188,7 @@ import {
   CHAT_QUEUE_HOLD_NOTICE_KEYS,
   queueMoveTarget,
 } from "@/features/chat/chat-queue.logic";
-import {
-  CHAT_REQUEST_ERROR_TRANSLATION_KEYS,
-  type ChatRequestError,
-  findChatRequestError,
-} from "@/features/chat/chat-request-error";
+import { chatErrorTranslationKey } from "@/features/chat/chat-request-error";
 import type { ChatActivitySession } from "@/features/chat/chat-runtime";
 import type { ChatComputerWait } from "@/features/chat/desktop-launch.logic";
 import type { NewestLocalTurn } from "@/features/chat/queries";
@@ -209,11 +204,7 @@ import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { dedupeById } from "@/lib/dedupe-by-id";
 import { detached } from "@/lib/detached";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
-import {
-  AI_FAILURE_ERROR_KEYS,
-  aiErrorKindFromMessage,
-} from "@/lib/errors/ai-failure";
-import type { AIFailureTranslationKey } from "@/lib/errors/ai-failure";
+import { aiErrorKindFromMessage } from "@/lib/errors/ai-failure";
 import { chatRefusal, isDisplayableAPIError } from "@/lib/errors/api";
 import { providerDiagnosticFromThrown } from "@/lib/errors/provider-diagnostic";
 import { ClientTelemetryError } from "@/lib/errors/telemetry";
@@ -1338,28 +1329,6 @@ const ElapsedSince = ({ since }: { since: string }) => {
       </span>
     </>
   );
-};
-
-type ChatErrorTranslationKey =
-  | AIFailureTranslationKey
-  | "chat.sendErrorAnonymizationBlocked"
-  | "chat.sendError"
-  | (typeof CHAT_REQUEST_ERROR_TRANSLATION_KEYS)[ChatRequestError["kind"]];
-
-const chatErrorTranslationKey = (error: Error): ChatErrorTranslationKey => {
-  const requestError = findChatRequestError(error);
-  if (requestError !== undefined) {
-    return CHAT_REQUEST_ERROR_TRANSLATION_KEYS[requestError.kind];
-  }
-  if (isThirdPartyBoundaryRefusalError(error)) {
-    return "chat.sendErrorAnonymizationBlocked";
-  }
-  // An unknown kind keeps the chat's own copy, which points to support.
-  const kind = aiErrorKindFromMessage(error.message);
-  if (kind !== undefined && kind !== "unknown") {
-    return AI_FAILURE_ERROR_KEYS[AI_FAILURE_CODES[kind]];
-  }
-  return "chat.sendError";
 };
 
 /**

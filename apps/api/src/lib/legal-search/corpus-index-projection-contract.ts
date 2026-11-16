@@ -40,6 +40,34 @@ export const CORPUS_INDEX_APPEND_DELIVERIES = [
 ] as const;
 
 /**
+ * What a failure of a committed offline revision can be charged to, recorded
+ * with the commit and read by every prover, so the outcome never depends on
+ * which process decides the revision.
+ *
+ * - `documents`: the indexer ran to its own verdict on the file (it ingested,
+ *   or failed on what the file held). The usual rules apply: a revision
+ *   alone in its request is charged, and one withdrawn from a request of
+ *   several halves its next request.
+ * - `killed`: a request of several revisions killed at its deadline. Too
+ *   large for the rate or held up by one revision, nobody can tell: a
+ *   withdrawal halves the next request and charges nobody, and a retirement
+ *   leaves the entity batched.
+ * - `none`: nothing about the documents is known (refused, never delivered,
+ *   a failure outside the indexer, or a start that expired unrecorded).
+ *   Nobody is charged and no request is halved.
+ *
+ * An ingest revision carries none: its request's own outcome decides.
+ */
+export const CORPUS_INDEX_APPEND_FAULTS = [
+  "documents",
+  "killed",
+  "none",
+] as const;
+
+export type CorpusIndexAppendFault =
+  (typeof CORPUS_INDEX_APPEND_FAULTS)[number];
+
+/**
  * The most revisions one offline request, one indexer file, may hold. A run
  * pays a process start, a commit and the merges at its exit whatever it
  * carries, so a request should be as large as its bytes allow (the batch

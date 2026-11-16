@@ -2,10 +2,10 @@
   "type": "parser",
   "name": "PL_UODO",
   "key": "pl-uodo",
-  "parserVersion": 20,
+  "parserVersion": 21,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",
-    "reason": "Dependency patch tracking only: @tanstack/ai is reached through the desktop runner wire schema in transaction infrastructure, not parser execution. No parser-owned value changes; the matching no-stored-row-effect declaration requires no replay."
+    "reason": "Retain the publisher's excluded fields in the stored record instead of naming them as exclusions."
   }
 }

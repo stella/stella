@@ -1,11 +1,15 @@
 import { afterAll, describe, expect, test } from "bun:test";
 
 import { TimeoutError } from "@stll/concurrency/with-timeout";
+import { createTestState } from "@stll/test-state";
 
+import { envBase } from "@/api/env-base";
 import type {
   ReadinessDependency,
   ReadinessProbes,
 } from "@/api/lib/health/readiness";
+
+const testState = createTestState({ file: import.meta.path, config: envBase });
 
 /** The commands the fake server below has been asked to answer. */
 const receivedCommands: string[] = [];
@@ -33,8 +37,8 @@ const fakeRedis = Bun.listen({
   },
 });
 
-// Read at import by the connection module the probe builds its client through.
-process.env["REDIS_URL"] = `redis://127.0.0.1:${fakeRedis.port}`;
+// The client reads validated configuration, which another suite may have loaded.
+testState.setConfig("REDIS_URL", `redis://127.0.0.1:${fakeRedis.port}`);
 
 const {
   API_READINESS_DEPENDENCIES,

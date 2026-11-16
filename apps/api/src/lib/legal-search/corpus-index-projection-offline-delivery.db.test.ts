@@ -106,6 +106,10 @@ const OFFLINE_DELIVERY_MIGRATION_URL = new URL(
   "../../../drizzle/20261115130000_corpus_projection_offline_delivery/migration.sql",
   import.meta.url,
 );
+const OFFLINE_FAULT_MIGRATION_URL = new URL(
+  "../../../drizzle/20261115220000_corpus_projection_offline_fault/migration.sql",
+  import.meta.url,
+);
 
 type IntentId = SafeId<"corpusIndexProjectionIntent">;
 
@@ -611,6 +615,13 @@ const applyCommand = async (model: Model, next: Command) => {
             async (tx) =>
               await recordAcceptedCorpusProjectionAppendsTx(tx, {
                 accepted: batch.leases,
+                delivery: {
+                  type: "offline_indexer",
+                  fault:
+                    batch.run.ended === "killed" && batch.leases.length > 1
+                      ? "killed"
+                      : "documents",
+                },
                 testNow: recordedAt,
               }),
           );
@@ -1298,7 +1309,7 @@ const deliveryRound = async (model: Model) => {
 };
 
 describe("offline request caps", () => {
-  test("a refused shard leaves its entities batched and uncharged, in requests of half its size", async () => {
+  test("a shard whose process died after its start leaves its entities batched and uncharged, and halves nothing", async () => {
     const model = await newModel();
     await runCommands(model, [
       { type: "batch", crash: "after_start", reject: false, startDelayMs: 0 },
@@ -1318,10 +1329,18 @@ describe("offline request caps", () => {
       expect(state.workStatus).toBe("retry_scheduled");
       expect((await stateOf(state.entityId)).failureAttempts).toBe(0);
     }
+    // The sweep committed them as `none`: nothing about their documents is
+    // known, so their next request is as large as any.
+    for (const intent of await readIntents(model.entityIds)) {
+      expect((await intentOf(intent.id)).appendFault).toBe("none");
+    }
     model.offsetMs += 60_000;
     const caps = await capsOfPending(model);
     expect([...caps.values()]).toEqual(
-      Array.from({ length: ENTITIES_PER_RUN }, () => ENTITIES_PER_RUN / 2),
+      Array.from(
+        { length: ENTITIES_PER_RUN },
+        () => CORPUS_INDEX_OFFLINE_REQUEST_MAX_REVISIONS,
+      ),
     );
     await deliveryRound(model);
     for (const state of await readStates(model.entityIds)) {
@@ -1364,6 +1383,42 @@ describe("offline request caps", () => {
         reject: false,
         startDelayMs: 0,
       },
+    ]);
+    // A batch that survived the cut records what started as an indexer run
+    // over its documents that published nothing.
+    const started = await db
+      .select({
+        intentId: corpusIndexProjectionIntents.id,
+        leaseToken: corpusIndexProjectionIntents.leaseToken,
+        documentCount: corpusIndexProjectionIntents.expectedDocumentCount,
+      })
+      .from(corpusIndexProjectionIntents)
+      .where(
+        and(
+          inArray(corpusIndexProjectionIntents.entityId, model.entityIds),
+          eq(corpusIndexProjectionIntents.status, "append_started"),
+        ),
+      );
+    const recordedAt = await now(model);
+    await db.transaction(
+      async (tx) =>
+        await recordAcceptedCorpusProjectionAppendsTx(
+          asTestRaw<Transaction>(tx),
+          {
+            accepted: started.map(
+              ({ intentId, leaseToken, documentCount }) => ({
+                intentId,
+                leaseToken: leaseToken ?? panic("Started without a lease"),
+                documentCount:
+                  documentCount ?? panic("Started without a count"),
+              }),
+            ),
+            delivery: { type: "offline_indexer", fault: "documents" },
+            testNow: recordedAt,
+          },
+        ),
+    );
+    await runCommands(model, [
       { type: "advance", ms: LEASE_MS + ENDED_AFTER_MS },
       { type: "sweep" },
       { type: "prove", crash: { type: "none" } },
@@ -1677,6 +1732,7 @@ describe("offline settlement", () => {
                 documentCount: 2,
               },
             ],
+            delivery: { type: "offline_indexer", fault: "documents" },
             testNow: recordedAt,
           },
         ),
@@ -1726,6 +1782,7 @@ describe("offline settlement", () => {
                 documentCount: 1,
               },
             ],
+            delivery: { type: "offline_indexer", fault: "documents" },
             testNow: recordedAt,
           },
         ),
@@ -1799,29 +1856,107 @@ describe("offline settlement", () => {
     ]);
   });
 
-  test("a partial offline revision goes to cleanup and isolates its entity uncharged", async () => {
-    const model = await newModel();
-    const leases = await reserve(model, 2);
-    const startedAt = await now(model);
-    await startWholeRequest(
-      leases.map((lease) => ({ lease, expectedDocumentCount: 3 })),
-      startedAt,
-    );
-    const [partial, exact] = leases;
-    if (partial === undefined || exact === undefined) {
-      panic("Expected two leases");
-    }
-    model.engine.published.set(partial.intentId, 2);
-    model.engine.published.set(exact.intentId, 3);
-    model.offsetMs += LEASE_MS + ENDED_AFTER_MS;
-    await applyCommand(model, { type: "sweep" });
-    expect(await prove(model)).toMatchObject({ applied: 1, retired: 1 });
-    expect((await intentOf(exact.intentId)).status).toBe("applied");
-    expect((await intentOf(partial.intentId)).status).toBe("cleanup_pending");
-    const state = await stateOf(partial.entityId);
-    expect(state.appendMode).toBe("single");
-    expect(state.failureAttempts).toBe(0);
-  });
+  test.each([
+    {
+      committedBy: "the indexer's verdict",
+      fault: "documents",
+      appendMode: "single",
+      nextCap: CORPUS_INDEX_OFFLINE_REQUEST_MAX_REVISIONS,
+    },
+    {
+      committedBy: "a kill of the run",
+      fault: "killed",
+      appendMode: "batchable",
+      nextCap: 1,
+    },
+    {
+      committedBy: "the sweep",
+      fault: "none",
+      appendMode: "batchable",
+      nextCap: CORPUS_INDEX_OFFLINE_REQUEST_MAX_REVISIONS,
+    },
+  ] as const)(
+    "a partial offline revision committed by $committedBy goes to cleanup uncharged, its entity $appendMode, its next request at most $nextCap",
+    async ({ fault, appendMode, nextCap }) => {
+      const model = await newModel();
+      const leases = await reserve(model, 2);
+      const startedAt = await now(model);
+      await startWholeRequest(
+        leases.map((lease) => ({ lease, expectedDocumentCount: 3 })),
+        startedAt,
+      );
+      const [partial, exact] = leases;
+      if (partial === undefined || exact === undefined) {
+        panic("Expected two leases");
+      }
+      model.engine.published.set(partial.intentId, 2);
+      model.engine.published.set(exact.intentId, 3);
+      if (fault !== "none") {
+        const recordedAt = await now(model);
+        await db.transaction(
+          async (tx) =>
+            await recordAcceptedCorpusProjectionAppendsTx(
+              asTestRaw<Transaction>(tx),
+              {
+                accepted: leases.map(({ intentId, leaseToken }) => ({
+                  intentId,
+                  leaseToken,
+                  documentCount: 3,
+                })),
+                delivery: { type: "offline_indexer", fault },
+                testNow: recordedAt,
+              },
+            ),
+        );
+      }
+      model.offsetMs += LEASE_MS + ENDED_AFTER_MS;
+      await applyCommand(model, { type: "sweep" });
+      expect((await intentOf(partial.intentId)).appendFault).toBe(fault);
+      expect(await prove(model)).toMatchObject({ applied: 1, retired: 1 });
+      expect((await intentOf(exact.intentId)).status).toBe("applied");
+      expect((await intentOf(partial.intentId)).status).toBe("cleanup_pending");
+      // Shared with another, a partial count says only that one of them may
+      // be at fault: only a delivery its indexer ran to a verdict isolates
+      // the entity, and nobody is charged.
+      const state = await stateOf(partial.entityId);
+      expect(state.appendMode).toBe(appendMode);
+      expect(state.failureAttempts).toBe(0);
+      // Retired from a killed request it halves like a withdrawal from one;
+      // from a verdict it went to single requests; after a crash nothing is
+      // known, so nothing halves.
+      const caps = await db.transaction(
+        async (tx) =>
+          await readCorpusProjectionOfflineRequestCapsTx(
+            asTestRaw<Transaction>(tx),
+            [{ ...partial, intentId: exact.intentId }],
+          ),
+      );
+      expect([...caps.values()]).toEqual([nextCap]);
+      // The revision the same request applied exactly, later cleaned up by an
+      // exact repair at its epoch, was delivered in full: it halves nothing.
+      await db.execute(sql`
+        UPDATE corpus_index_projection_states SET work_status = 'repair_scheduled'
+        WHERE entity_id = ${exact.entityId}
+      `);
+      await db.execute(sql`
+        UPDATE corpus_index_projection_intents
+        SET status = 'cleanup_pending',
+            cleanup_not_before = append_publish_barrier_at
+        WHERE id = ${exact.intentId}
+      `);
+      expect((await intentOf(exact.intentId)).status).toBe("cleanup_pending");
+      const repairedCaps = await db.transaction(
+        async (tx) =>
+          await readCorpusProjectionOfflineRequestCapsTx(
+            asTestRaw<Transaction>(tx),
+            [{ ...exact, intentId: partial.intentId }],
+          ),
+      );
+      expect([...repairedCaps.values()]).toEqual([
+        CORPUS_INDEX_OFFLINE_REQUEST_MAX_REVISIONS,
+      ]);
+    },
+  );
 
   test("the absent census reads withdrawn revisions, and one it observes reopens", async () => {
     const model = await newModel();
@@ -1884,29 +2019,43 @@ describe("offline settlement", () => {
 });
 
 describe("offline delivery guards", () => {
-  test("the migration's checks are the ones the schema declares", async () => {
-    // The test database is pushed from the schema; production gets these
-    // checks from the migration. Replace each schema check with the
-    // migration's own clause and compare PostgreSQL's reading of both.
-    const migration = await Bun.file(OFFLINE_DELIVERY_MIGRATION_URL).text();
-    const clauses = [
-      ...migration.matchAll(
-        /ADD CONSTRAINT "([a-z_]+)"\s+(CHECK \([\s\S]*?\)) NOT VALID(?=,\s*(?:ADD|DROP) |;)/gu,
-      ),
-    ].map(([, name, check]) => ({
-      name: name ?? panic("A migration check has no name"),
-      check: check ?? panic("A migration check has no clause"),
-    }));
-    expect(clauses.map(({ name }) => name).toSorted()).toEqual([
-      "corpus_index_projection_intents_append_delivery_shape",
-      "corpus_index_projection_intents_append_delivery_values",
-      "corpus_index_projection_intents_status_shape",
-      "corpus_index_projection_intents_status_values",
-    ]);
-    const definitions = async (tx: TestTransaction) =>
-      new Map(
-        (
-          await tx.execute<{ name: string; definition: string }>(sql`
+  test.each([
+    {
+      migrationUrl: OFFLINE_DELIVERY_MIGRATION_URL,
+      names: [
+        "corpus_index_projection_intents_append_delivery_shape",
+        "corpus_index_projection_intents_append_delivery_values",
+        "corpus_index_projection_intents_status_shape",
+        "corpus_index_projection_intents_status_values",
+      ],
+    },
+    {
+      migrationUrl: OFFLINE_FAULT_MIGRATION_URL,
+      names: [
+        "corpus_index_projection_intents_append_fault_shape",
+        "corpus_index_projection_intents_append_fault_values",
+      ],
+    },
+  ])(
+    "the migration's checks are the ones the schema declares: $names",
+    async ({ migrationUrl, names }) => {
+      // The test database is pushed from the schema; production gets these
+      // checks from the migration. Replace each schema check with the
+      // migration's own clause and compare PostgreSQL's reading of both.
+      const migration = await Bun.file(migrationUrl).text();
+      const clauses = [
+        ...migration.matchAll(
+          /ADD CONSTRAINT "([a-z_]+)"\s+(CHECK \([\s\S]*?\)) NOT VALID(?=,\s*(?:ADD|DROP) |;)/gu,
+        ),
+      ].map(([, name, check]) => ({
+        name: name ?? panic("A migration check has no name"),
+        check: check ?? panic("A migration check has no clause"),
+      }));
+      expect(clauses.map(({ name }) => name).toSorted()).toEqual([...names]);
+      const definitions = async (tx: TestTransaction) =>
+        new Map(
+          (
+            await tx.execute<{ name: string; definition: string }>(sql`
             SELECT conname AS name, pg_get_constraintdef(oid) AS definition
             FROM pg_constraint
             WHERE conrelid = 'corpus_index_projection_intents'::regclass
@@ -1915,33 +2064,34 @@ describe("offline delivery guards", () => {
                 sql`, `,
               )})
           `)
-        ).rows.map(({ name, definition }) => [
-          name,
-          definition.replace(/ NOT VALID$/u, ""),
-        ]),
-      );
-    const compared = await rejectionOf(
-      db.transaction(async (tx) => {
-        const fromSchema = await definitions(tx);
-        await tx.execute(
-          sql.raw(
-            `ALTER TABLE "corpus_index_projection_intents" ${clauses
-              .flatMap(({ name, check }) => [
-                `DROP CONSTRAINT "${name}"`,
-                `ADD CONSTRAINT "${name}" ${check} NOT VALID`,
-              ])
-              .join(", ")}`,
-          ),
+          ).rows.map(({ name, definition }) => [
+            name,
+            definition.replace(/ NOT VALID$/u, ""),
+          ]),
         );
-        const fromMigration = await definitions(tx);
-        expect(fromSchema.size).toBe(clauses.length);
-        expect(fromMigration).toEqual(fromSchema);
-        // Leave the shared database as the schema pushed it.
-        return panic("compared");
-      }),
-    );
-    expect(String(compared)).toContain("compared");
-  });
+      const compared = await rejectionOf(
+        db.transaction(async (tx) => {
+          const fromSchema = await definitions(tx);
+          await tx.execute(
+            sql.raw(
+              `ALTER TABLE "corpus_index_projection_intents" ${clauses
+                .flatMap(({ name, check }) => [
+                  `DROP CONSTRAINT "${name}"`,
+                  `ADD CONSTRAINT "${name}" ${check} NOT VALID`,
+                ])
+                .join(", ")}`,
+            ),
+          );
+          const fromMigration = await definitions(tx);
+          expect(fromSchema.size).toBe(clauses.length);
+          expect(fromMigration).toEqual(fromSchema);
+          // Leave the shared database as the schema pushed it.
+          return panic("compared");
+        }),
+      );
+      expect(String(compared)).toContain("compared");
+    },
+  );
 
   test("only an offline revision can be withdrawn, and its delivery never changes", async () => {
     const model = await newModel();
@@ -1970,6 +2120,7 @@ describe("offline delivery guards", () => {
                 documentCount: 1,
               },
             ],
+            delivery: { type: "ingest_api" },
             testNow: recordedAt,
           },
         ),
@@ -2030,5 +2181,47 @@ describe("offline delivery guards", () => {
     expect(await rejected(db.execute(offlineStart(sql`1`)))).toBe(
       "no rejection",
     );
+  });
+
+  test("what a committed offline revision's failure is charged to never changes", async () => {
+    const model = await newModel();
+    const { lease } = await startOffline(model, 1);
+    const recordedAt = await now(model);
+    await db.transaction(
+      async (tx) =>
+        await recordAcceptedCorpusProjectionAppendsTx(
+          asTestRaw<Transaction>(tx),
+          {
+            accepted: [
+              {
+                intentId: lease.intentId,
+                leaseToken: lease.leaseToken,
+                documentCount: 1,
+              },
+            ],
+            delivery: { type: "offline_indexer", fault: "documents" },
+            testNow: recordedAt,
+          },
+        ),
+    );
+    expect((await intentOf(lease.intentId)).appendFault).toBe("documents");
+    const rejected = await db
+      .execute(
+        sql`
+        UPDATE corpus_index_projection_intents SET append_fault = 'none'
+        WHERE id = ${lease.intentId}
+      `,
+      )
+      .then(
+        () => "no rejection",
+        (error: unknown) =>
+          error instanceof Error
+            ? `${error.message} ${String(error.cause)}`
+            : String(error),
+      );
+    expect(rejected).toContain(
+      "corpus index append fault is immutable once committed",
+    );
+    expect((await intentOf(lease.intentId)).appendFault).toBe("documents");
   });
 });

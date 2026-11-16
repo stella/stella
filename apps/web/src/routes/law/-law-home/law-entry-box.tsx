@@ -4,12 +4,10 @@ import { Button } from "@stll/ui/button";
 import {
   COMPOSER_BOX_CLASS,
   COMPOSER_BOX_FOCUS_CLASS,
-  COMPOSER_CONTROL_BUTTON_SIZE,
   COMPOSER_LARGE_ACTION_ROW_CLASS,
   COMPOSER_LARGE_EDITOR_CLASS,
   COMPOSER_LARGE_TEXT_WELL_CLASS,
   COMPOSER_LEADING_GROUP_CLASS,
-  COMPOSER_SEND_BUTTON_CLASS,
   COMPOSER_TEXT_CLASS,
   ComposerStatusRow,
 } from "@stll/ui/composer";
@@ -105,14 +103,12 @@ export const LawEntryBox = ({
             <div className="flex items-center gap-0.5">
               <Button
                 aria-label={searchLabel}
-                className={cn(
-                  COMPOSER_SEND_BUTTON_CLASS,
-                  trimmed.length === 0 && "opacity-50",
-                )}
+                className={cn(trimmed.length === 0 && "opacity-50")}
                 disabled={trimmed.length === 0}
-                size={COMPOSER_CONTROL_BUTTON_SIZE}
+                size="icon-round"
                 tooltip={searchLabel}
                 type="submit"
+                variant="composer"
               >
                 <SearchIcon className="size-3.5" />
               </Button>
