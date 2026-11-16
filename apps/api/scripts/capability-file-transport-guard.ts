@@ -33,7 +33,6 @@ import {
   type CatalogTransport,
   isCatalogTransportInvocable,
 } from "../../../packages/cli/src/generate-capability-tree";
-import { computeLedgerDiff } from "./capability-description-guard";
 import { buildCapabilityCatalog } from "./export-capability-catalog";
 import { REPO_ROOT } from "./lib/enumerate-safe-handlers";
 
@@ -51,6 +50,54 @@ export const findSuppressedIds = (entries: readonly CatalogEntry[]): string[] =>
     .filter(({ transport }) => !isCatalogTransportInvocable(transport))
     .map(({ id }) => id)
     .toSorted();
+
+export type LedgerDiff = {
+  /** Suppressed capabilities absent from the ledger: new debt. */
+  unledgered: string[];
+  /** Ledger entries whose capability is invocable again: the line must go. */
+  invocable: string[];
+  /** Ledger entries naming a capability that is not in the catalog at all. */
+  unknown: string[];
+  /** Ledger entries that are out of order or duplicated. */
+  malformed: string[];
+};
+
+type LedgerDiffInput = {
+  suppressed: readonly string[];
+  ledger: readonly string[];
+  catalogIds: readonly string[];
+};
+
+/**
+ * The full ledger comparison. Pure so the self-test and the unit suite can
+ * exercise every branch without touching the filesystem.
+ */
+export const computeLedgerDiff = ({
+  suppressed,
+  ledger,
+  catalogIds,
+}: LedgerDiffInput): LedgerDiff => {
+  const suppressedSet = new Set(suppressed);
+  const ledgerSet = new Set(ledger);
+  const catalogSet = new Set(catalogIds);
+
+  const unledgered = suppressed.filter((id) => !ledgerSet.has(id)).toSorted();
+  const invocable = ledger
+    .filter((id) => catalogSet.has(id) && !suppressedSet.has(id))
+    .toSorted();
+  const unknown = ledger.filter((id) => !catalogSet.has(id)).toSorted();
+
+  // A ledger that is unsorted or holds a duplicate produces noisy diffs and can
+  // hide a line during review, so the file's own shape is part of the contract.
+  const sorted = [...ledger].toSorted();
+  const malformed =
+    ledger.length === new Set(ledger).size &&
+    ledger.every((id, index) => id === sorted[index])
+      ? []
+      : [...new Set(ledger)].toSorted();
+
+  return { unledgered, invocable, unknown, malformed };
+};
 
 /** The repository catalog, derived in memory from the live handler graph. */
 export const readRepositoryCatalog = async (): Promise<CatalogEntry[]> => {
@@ -96,8 +143,8 @@ const runCheck = async (): Promise<number> => {
     return 1;
   }
   const suppressed = findSuppressedIds(entries);
-  const { unledgered, described, unknown, malformed } = computeLedgerDiff({
-    undescribed: suppressed,
+  const { unledgered, invocable, unknown, malformed } = computeLedgerDiff({
+    suppressed,
     ledger: await readLedger(),
     catalogIds: entries.map(({ id }) => id).toSorted(),
   });
@@ -108,7 +155,7 @@ const runCheck = async (): Promise<number> => {
     ),
     report(
       `these ledger entries are invocable over the generic transport again. Delete their lines from ${LEDGER_FILE}:`,
-      described,
+      invocable,
     ),
     report(
       `these ledger entries name a capability that is not in the catalog. Delete their lines from ${LEDGER_FILE}:`,
