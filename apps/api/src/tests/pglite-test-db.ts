@@ -60,6 +60,7 @@ import {
   installPgliteLegalHoldDeleteBackstop,
   installPgliteLegislationExpressionIdentity,
   installPgliteLegislationPayloadRevision,
+  installPgliteMatterTimerPresence,
   installPgliteModelRunBudgets,
   installPgliteOrganizationDeleteOwnerGuard,
   installPgliteOrganizationMemberCapacity,
@@ -888,6 +889,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteFlowTransitions(db);
   await installPgliteWorkspaceAccessObjects(db);
   await installPgliteInvoiceObjects(db);
+  await installPgliteMatterTimerPresence(db);
   await db.transaction(async (tx) => {
     await installPgliteEntityFeatureGateMaintenance(tx);
   });

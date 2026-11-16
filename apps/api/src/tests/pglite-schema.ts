@@ -1862,6 +1862,28 @@ export const installPgliteInvoiceObjects = async (
   }
 };
 
+/** Install current timer presence from its production migration after schema push. */
+export const installPgliteMatterTimerPresence = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261116153000_matter_timer_presence",
+      "migration.sql",
+    ),
+  )
+    .map(executableSql)
+    .filter((statement) =>
+      /^(?:CREATE FUNCTION|REVOKE ALL ON FUNCTION|GRANT EXECUTE ON FUNCTION)/u.test(
+        statement,
+      ),
+    );
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
 /** Install filing-year semantics from the committed function migration. */
 export const installPgliteDecisionDocketFilingYear = async (
   db: PgliteSchemaDb,
