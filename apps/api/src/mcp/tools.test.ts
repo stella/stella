@@ -57,6 +57,7 @@ import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 import { waitFor } from "@stll/test-kit";
+import { createTestState } from "@stll/test-state";
 import { slugify } from "@stll/text-normalize";
 
 import {
@@ -202,6 +203,8 @@ import {
   renderResult as renderCliResult,
 } from "../../../../packages/cli/src/output.ts";
 import { parsePayload as parseCliPayload } from "../../../../packages/cli/src/run-leaf-command.ts";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 beforeEach(() => {
   anonymizeTextFieldsMock.mockReset();
@@ -5045,14 +5048,14 @@ describe("OpenAI-compatible MCP tools", () => {
     run: () => Promise<void>,
   ) => {
     const previousFeaturePublicLaw = env.FEATURE_PUBLIC_LAW;
-    env.FEATURE_PUBLIC_LAW = featurePublicLaw;
+    testState.setConfig("FEATURE_PUBLIC_LAW", featurePublicLaw);
     const restoreRuntimeMode = setRuntimeModeForTesting({
       mode: localDevOpen ? RUNTIME_MODE.open : RUNTIME_MODE.strict,
     });
     try {
       await run();
     } finally {
-      env.FEATURE_PUBLIC_LAW = previousFeaturePublicLaw;
+      testState.setConfig("FEATURE_PUBLIC_LAW", previousFeaturePublicLaw);
       restoreRuntimeMode();
     }
   };
@@ -12933,16 +12936,16 @@ describe("OpenAI-compatible MCP tools", () => {
   ) => {
     const previousTimeBilling = env.FEATURE_TIME_BILLING;
     const previousUsage = env.FEATURE_USAGE;
-    env.FEATURE_TIME_BILLING = featureTimeBilling;
-    env.FEATURE_USAGE = featureUsage;
+    testState.setConfig("FEATURE_TIME_BILLING", featureTimeBilling);
+    testState.setConfig("FEATURE_USAGE", featureUsage);
     const restoreRuntimeMode = setRuntimeModeForTesting({
       mode: localDevOpen ? RUNTIME_MODE.open : RUNTIME_MODE.strict,
     });
     try {
       await run();
     } finally {
-      env.FEATURE_TIME_BILLING = previousTimeBilling;
-      env.FEATURE_USAGE = previousUsage;
+      testState.setConfig("FEATURE_TIME_BILLING", previousTimeBilling);
+      testState.setConfig("FEATURE_USAGE", previousUsage);
       restoreRuntimeMode();
     }
   };

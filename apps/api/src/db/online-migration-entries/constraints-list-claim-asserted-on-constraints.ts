@@ -4,6 +4,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "constraints-list-claim-asserted-on-constraints",
   revision: 1452,
+  lifecycle: "pending",
   type: "constraints",
   values: [...LIST_CLAIM_ASSERTED_ON_CONSTRAINTS],
 } satisfies OnlineMigrationEntry;

@@ -18,6 +18,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { replayWrite } from "@/api/lib/case-law/replay-write";
 import { ACTIVE_CHAT_TURN_STATUSES } from "@/api/lib/chat/turn-status";
 import { lockChatThreadForTurnOnTx } from "@/api/lib/db/aggregate-lock";
+import { executedRows } from "@/api/lib/db/executed-rows";
+import { isRecord } from "@/api/lib/type-guards";
 
 /**
  * When a thread's queue may send, and the writes that keep it consistent
@@ -90,20 +92,30 @@ const closePositionGapOnTx = async ({
 };
 
 export type QueuedMessageRemoval =
-  | { type: "removed"; request: unknown }
+  | {
+      type: "removed";
+      request: unknown;
+      /** The chat files the enqueue stored for it. */
+      uploadedFileIds: SafeId<"userFile">[];
+    }
+  | { type: "changed" }
   | { type: "sent" }
   | { type: "not-found" };
 
 /**
- * Remove a queued message, keeping positions 1..n and the hold only while
- * something is queued. The caller holds the thread lock.
+ * Remove a queued message at the revision the caller read, keeping positions
+ * 1..n and the hold only while something is queued. One edited since
+ * (another revision) stays and answers `changed`. The caller holds the
+ * thread lock.
  */
 export const removeQueuedChatMessageOnTx = async ({
   id,
+  revision,
   threadId,
   tx,
 }: {
   id: SafeId<"chatMessage">;
+  revision: number;
   threadId: SafeId<"chatThread">;
   tx: Transaction;
 }): Promise<QueuedMessageRemoval> => {
@@ -114,20 +126,39 @@ export const removeQueuedChatMessageOnTx = async ({
       and(
         eq(chatQueuedMessages.id, id),
         eq(chatQueuedMessages.threadId, threadId),
+        eq(chatQueuedMessages.revision, revision),
       ),
     )
     .returning({
       position: chatQueuedMessages.position,
       request: chatQueuedMessages.request,
+      uploadedFileIds: chatQueuedMessages.uploadedFileIds,
     });
   if (removed === undefined) {
+    const queued = await tx
+      .select({ id: chatQueuedMessages.id })
+      .from(chatQueuedMessages)
+      .where(
+        and(
+          eq(chatQueuedMessages.id, id),
+          eq(chatQueuedMessages.threadId, threadId),
+        ),
+      )
+      .limit(1);
+    if (queued.length > 0) {
+      return { type: "changed" };
+    }
     return (await wasSentOnTx({ id, threadId, tx }))
       ? { type: "sent" }
       : { type: "not-found" };
   }
   await closePositionGapOnTx({ position: removed.position, threadId, tx });
   await dropHoldOfEmptyQueueOnTx({ threadId, tx });
-  return { type: "removed", request: removed.request };
+  return {
+    type: "removed",
+    request: removed.request,
+    uploadedFileIds: removed.uploadedFileIds,
+  };
 };
 
 export type ChatQueueHoldWrite =
@@ -179,9 +210,11 @@ export const holdChatQueueOnTx = async ({
   })();
   // Owner columns come from the thread, and the row is written only while
   // the thread has a queued message.
+  // The table is named in the text so the conflict target reads as this
+  // table's key, not a chat turn's (scripts/check-online-index-dependencies.ts).
   // audit: skip — a hold records why queued messages wait; the turn or refusal that caused it is recorded where it happened
   await tx.execute(sql`
-    INSERT INTO ${chatQueueHolds} (
+    INSERT INTO chat_queue_holds (
       thread_id, organization_id, workspace_id, user_id, reason,
       turn_id, queued_message_id, refusal_code
     )
@@ -207,6 +240,67 @@ export const releaseChatQueueOnTx = async ({
 }): Promise<void> => {
   // audit: skip — releasing a hold changes no stored content; the send or resume that released it is the record
   await tx.delete(chatQueueHolds).where(eq(chatQueueHolds.threadId, threadId));
+};
+
+/**
+ * Whether a member's new message may start a turn now: `admitted`, or why it
+ * waits. A plain message never replaces a turn that waits on the member, and
+ * never goes ahead of messages queued before it that nothing holds (the queue
+ * sends those as soon as the thread is free). A held queue does not stop it:
+ * the member's message is their next word, so it releases the hold and the
+ * queue waits behind its turn.
+ */
+export type MemberMessageAdmission =
+  "admitted" | "turn-awaiting-member" | "queued-ahead";
+
+/**
+ * Admit a member's new message, releasing a held queue in the same statement
+ * when it is admitted. The caller holds the thread lock and has refused a
+ * running turn; a refusal changes nothing.
+ */
+export const admitMemberMessageOnTx = async ({
+  threadId,
+  tx,
+}: {
+  threadId: SafeId<"chatThread">;
+  tx: Transaction;
+}): Promise<MemberMessageAdmission> => {
+  // One statement on the send path: the waiting turn is read once, the hold
+  // is released only when no turn waits, and a queue the statement did not
+  // release was not held.
+  // audit: skip — releasing a hold changes no stored content; the message it admits is audited in this transaction
+  const row = executedRows(
+    await tx.execute(sql`
+      WITH awaiting AS (
+        SELECT EXISTS (
+          SELECT 1 FROM ${chatTurns}
+          WHERE ${chatTurns.threadId} = ${threadId}
+            AND ${chatTurns.status} = 'awaiting-user'
+        ) AS yes
+      ), released AS (
+        DELETE FROM ${chatQueueHolds}
+        WHERE ${chatQueueHolds.threadId} = ${threadId}
+          AND NOT (SELECT yes FROM awaiting)
+        RETURNING ${chatQueueHolds.threadId}
+      )
+      SELECT
+        (SELECT yes FROM awaiting) AS awaiting,
+        EXISTS (SELECT 1 FROM released) AS released,
+        EXISTS (
+          SELECT 1 FROM ${chatQueuedMessages}
+          WHERE ${chatQueuedMessages.threadId} = ${threadId}
+        ) AS queued
+    `),
+  ).at(0);
+  if (!isRecord(row)) {
+    return panic("The member message admission returned no row");
+  }
+  if (row["awaiting"] === true) {
+    return "turn-awaiting-member";
+  }
+  return row["queued"] === true && row["released"] !== true
+    ? "queued-ahead"
+    : "admitted";
 };
 
 /** The next queued message, as stored. */
@@ -358,7 +452,12 @@ export const takeQueuedChatMessageOnTx = async ({
   if (!(await isDueHeadOnTx({ id, revision, threadId, tx }))) {
     return "not-due";
   }
-  const removed = await removeQueuedChatMessageOnTx({ id, threadId, tx });
+  const removed = await removeQueuedChatMessageOnTx({
+    id,
+    revision,
+    threadId,
+    tx,
+  });
   return removed.type === "removed" ? "taken" : "not-due";
 };
 

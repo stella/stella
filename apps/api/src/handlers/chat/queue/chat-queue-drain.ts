@@ -24,7 +24,8 @@ import type sendMessage from "@/api/handlers/chat/send-message";
 import { createResponseSet } from "@/api/http/context";
 import { status, unwrapStatus } from "@/api/http/status";
 import type { SafeId } from "@/api/lib/branded-types";
-import { resolveQueuedTurnMember } from "@/api/lib/chat/queued-turn-member";
+import { announceChatQueueChange } from "@/api/lib/chat/chat-queue-announcement";
+import { resolveServerStartedMember } from "@/api/lib/chat/server-started-member";
 import { lockChatThreadForTurnOnTx } from "@/api/lib/db/aggregate-lock";
 import {
   type ChatQueueHoldWrite,
@@ -122,11 +123,10 @@ const sendNextQueuedChatMessage = async ({
   if (due === null) {
     return { type: "not-due" };
   }
-  const member = await resolveQueuedTurnMember({
+  const member = await resolveServerStartedMember({
     organizationId: due.organizationId,
     userId: due.userId,
-    threadId,
-    queuedMessageId: due.id,
+    work: { type: "queued-send", threadId, queuedMessageId: due.id },
     signal: dependencies.signal,
   });
   if (Result.isError(member)) {
@@ -136,11 +136,13 @@ const sendNextQueuedChatMessage = async ({
     });
     return { type: "retry-later" };
   }
+  const owner = { organizationId: due.organizationId, userId: due.userId };
   const holdUnavailable = async (): Promise<ChatQueueSendOutcome> => {
     await holdChatQueueOfUnavailableMember({
       head: { id: due.id, revision: due.revision },
       threadId,
     });
+    announceChatQueueChange(owner);
     return { type: "held", reason: CHAT_QUEUE_HOLD_REASON.sendRefused };
   };
   if (member.value.type === "unavailable") {
@@ -194,9 +196,11 @@ const sendNextQueuedChatMessage = async ({
       });
       return { type: "retry-later" };
     }
-    return held.value === "held"
-      ? { type: "held", reason: write.reason }
-      : { type: "not-due" };
+    if (held.value !== "held") {
+      return { type: "not-due" };
+    }
+    announceChatQueueChange(owner);
+    return { type: "held", reason: write.reason };
   };
 
   const { runTarget } = send;

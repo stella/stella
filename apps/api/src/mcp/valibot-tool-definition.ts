@@ -68,17 +68,18 @@ type ValibotMcpToolDefinition<TDefinition extends ValibotMcpToolInput> = Omit<
 const appendGuidance = (
   schema: Record<string, unknown>,
   annotation: AgentInputNormalizationAnnotation,
-): void => {
+): Record<string, unknown> => {
   const description = schema["description"];
-  Object.assign(
-    schema,
-    agentInputNormalizationMetadata(
+  return {
+    ...schema,
+    ...agentInputNormalizationMetadata(
       annotation,
       typeof description === "string" ? description : undefined,
     ),
-  );
+  };
 };
 
+/** Rebuild only branches containing the declared path; absence stays explicit. */
 const annotateSchemaPath = ({
   schema,
   path,
@@ -87,50 +88,60 @@ const annotateSchemaPath = ({
   schema: Record<string, unknown>;
   path: readonly string[];
   annotation: AgentInputNormalizationAnnotation;
-}): boolean => {
+}): Record<string, unknown> | undefined => {
   const segment = path.at(0);
   if (segment === undefined) {
-    appendGuidance(schema, annotation);
-    return true;
+    return appendGuidance(schema, annotation);
   }
-  let found = false;
+  let annotated: Record<string, unknown> | undefined;
   for (const keyword of ["anyOf", "oneOf", "allOf"] as const) {
     const branches = schema[keyword];
-    if (!Array.isArray(branches)) {
+    if (!isUnknownArray(branches)) {
       continue;
     }
-    for (const branch of branches) {
-      if (isSchemaRecord(branch)) {
-        found =
-          annotateSchemaPath({ schema: branch, path, annotation }) || found;
-      }
+    const updated = branches.map((branch) =>
+      isSchemaRecord(branch)
+        ? annotateSchemaPath({ schema: branch, path, annotation })
+        : undefined,
+    );
+    if (updated.some((branch) => branch !== undefined)) {
+      annotated = {
+        ...(annotated ?? schema),
+        [keyword]: branches.map((branch, index) => updated[index] ?? branch),
+      };
     }
   }
   if (segment === "[]") {
     const items = schema["items"];
-    return isSchemaRecord(items)
-      ? annotateSchemaPath({
-          schema: items,
-          path: path.slice(1),
-          annotation,
-        }) || found
-      : found;
+    const updated = isSchemaRecord(items)
+      ? annotateSchemaPath({ schema: items, path: path.slice(1), annotation })
+      : undefined;
+    return updated === undefined
+      ? annotated
+      : { ...(annotated ?? schema), items: updated };
   }
   const arraySegment = segment.endsWith("[]");
   const propertyName = arraySegment ? segment.slice(0, -2) : segment;
   const properties = schema["properties"];
-  const property = isSchemaRecord(properties) ? properties[propertyName] : null;
+  if (!isSchemaRecord(properties) || !Object.hasOwn(properties, propertyName)) {
+    return annotated;
+  }
+  const property = properties[propertyName];
   if (!isSchemaRecord(property)) {
-    return found;
+    return annotated;
   }
   // Resolve the property before its items so nullable arrays traverse their union.
-  return (
-    annotateSchemaPath({
-      schema: property,
-      path: arraySegment ? ["[]", ...path.slice(1)] : path.slice(1),
-      annotation,
-    }) || found
-  );
+  const updated = annotateSchemaPath({
+    schema: property,
+    path: arraySegment ? ["[]", ...path.slice(1)] : path.slice(1),
+    annotation,
+  });
+  return updated === undefined
+    ? annotated
+    : {
+        ...(annotated ?? schema),
+        properties: { ...properties, [propertyName]: updated },
+      };
 };
 
 /**
@@ -200,18 +211,19 @@ const applyInputNormalizationPlan = (
   if (plan === undefined) {
     return schema;
   }
+  let annotatedSchema = schema;
   for (const [path, annotation] of Object.entries(plan)) {
-    if (
-      !annotateSchemaPath({
-        schema,
-        path: path.split("."),
-        annotation,
-      })
-    ) {
+    const annotated = annotateSchemaPath({
+      schema: annotatedSchema,
+      path: path.split("."),
+      annotation,
+    });
+    if (annotated === undefined) {
       return panic(`Agent input normalization path does not exist: ${path}`);
     }
+    annotatedSchema = { ...annotated, type: schema.type };
   }
-  return schema;
+  return annotatedSchema;
 };
 
 const deriveMcpInputSchema = (
@@ -548,7 +560,7 @@ const mergeObjectUnion = (
     }
   }
 
-  const properties: Record<string, unknown> = {};
+  const properties = new Map<string, unknown>();
   for (const name of propertyNames) {
     const schemas = objectBranches.flatMap((branch) => {
       const branchProperties = branch["properties"];
@@ -557,7 +569,7 @@ const mergeObjectUnion = (
         : undefined;
       return isSchemaRecord(property) ? [property] : [];
     });
-    properties[name] = combineSchemas(schemas, compaction);
+    properties.set(name, combineSchemas(schemas, compaction));
   }
 
   const required = [...propertyNames].filter((name) =>
@@ -569,7 +581,7 @@ const mergeObjectUnion = (
 
   return {
     type: "object",
-    properties,
+    properties: Object.fromEntries(properties),
     ...(required.length === 0 ? {} : { required }),
     ...(objectBranches.every(
       (branch) => branch["additionalProperties"] === false,
@@ -593,31 +605,41 @@ const simplifyMcpOutputSchema = (
   }: Required<Pick<McpOutputSchemaOptions, "compaction">> &
     Pick<McpOutputSchemaOptions, "objectUnionDisposition">,
 ): Record<string, unknown> => {
-  const simplified: Record<string, unknown> = {};
+  const entries = new Map<string, unknown>();
   for (const [key, value] of Object.entries(schema)) {
     if (SCHEMA_MAP_KEYWORDS.has(key) && isSchemaRecord(value)) {
-      const mapped: Record<string, unknown> = {};
+      const mapped = new Map<string, unknown>();
       for (const [name, nested] of Object.entries(value)) {
-        mapped[name] = isSchemaRecord(nested)
-          ? simplifyMcpOutputSchema(nested, { compaction })
-          : nested;
+        mapped.set(
+          name,
+          isSchemaRecord(nested)
+            ? simplifyMcpOutputSchema(nested, { compaction })
+            : nested,
+        );
       }
-      simplified[key] = mapped;
+      entries.set(key, Object.fromEntries(mapped));
       continue;
     }
     if (Array.isArray(value)) {
-      simplified[key] = value.map((nested: unknown) =>
-        isSchemaRecord(nested)
-          ? simplifyMcpOutputSchema(nested, { compaction })
-          : nested,
+      entries.set(
+        key,
+        value.map((nested: unknown) =>
+          isSchemaRecord(nested)
+            ? simplifyMcpOutputSchema(nested, { compaction })
+            : nested,
+        ),
       );
       continue;
     }
-    simplified[key] = isSchemaRecord(value)
-      ? simplifyMcpOutputSchema(value, { compaction })
-      : value;
+    entries.set(
+      key,
+      isSchemaRecord(value)
+        ? simplifyMcpOutputSchema(value, { compaction })
+        : value,
+    );
   }
 
+  const simplified = Object.fromEntries(entries);
   const alternatives = simplified["anyOf"];
   if (!Array.isArray(alternatives) || !alternatives.every(isSchemaRecord)) {
     return simplified;
@@ -635,17 +657,18 @@ const simplifyMcpOutputSchema = (
   ) {
     return { ...siblings, ...literalList };
   }
-  if (combined.length !== alternatives.length) {
-    simplified["anyOf"] = combined;
-  }
+  const normalized =
+    combined.length !== alternatives.length
+      ? { ...simplified, anyOf: combined }
+      : simplified;
   // The omission envelope must remain an alternative to the normal output,
   // rather than making both branches' required fields optional.
   if (objectUnionDisposition === "preserve") {
-    return simplified;
+    return normalized;
   }
   const merged = mergeObjectUnion(combined, compaction);
   if (merged === undefined) {
-    return simplified;
+    return normalized;
   }
   return { ...siblings, ...merged };
 };
@@ -674,37 +697,46 @@ const compactMcpOutputSchema = (
     return { type: "object", additionalProperties: true };
   }
 
-  const compacted: Record<string, unknown> = {};
+  const compacted = new Map<string, unknown>();
   for (const [key, value] of Object.entries(schema)) {
     if (SCHEMA_MAP_KEYWORDS.has(key) && isSchemaRecord(value)) {
-      const mapped: Record<string, unknown> = {};
+      const mapped = new Map<string, unknown>();
       for (const [name, nested] of Object.entries(value)) {
-        mapped[name] = isSchemaRecord(nested)
-          ? compactMcpOutputSchema(nested, { depth: depth + 1 })
-          : nested;
+        mapped.set(
+          name,
+          isSchemaRecord(nested)
+            ? compactMcpOutputSchema(nested, { depth: depth + 1 })
+            : nested,
+        );
       }
-      compacted[key] = mapped;
+      compacted.set(key, Object.fromEntries(mapped));
       continue;
     }
     if (Array.isArray(value)) {
-      compacted[key] = value.map((nested: unknown) =>
-        isSchemaRecord(nested)
-          ? compactMcpOutputSchema(nested, {
-              // Root alternatives describe the same instance as their parent.
-              depth:
-                key === "anyOf" && objectUnionDisposition === "preserve"
-                  ? depth
-                  : depth + 1,
-            })
-          : nested,
+      compacted.set(
+        key,
+        value.map((nested: unknown) =>
+          isSchemaRecord(nested)
+            ? compactMcpOutputSchema(nested, {
+                // Root alternatives describe the same instance as their parent.
+                depth:
+                  key === "anyOf" && objectUnionDisposition === "preserve"
+                    ? depth
+                    : depth + 1,
+              })
+            : nested,
+        ),
       );
       continue;
     }
-    compacted[key] = isSchemaRecord(value)
-      ? compactMcpOutputSchema(value, { depth: depth + 1 })
-      : value;
+    compacted.set(
+      key,
+      isSchemaRecord(value)
+        ? compactMcpOutputSchema(value, { depth: depth + 1 })
+        : value,
+    );
   }
-  return compacted;
+  return Object.fromEntries(compacted);
 };
 
 /**
@@ -754,26 +786,36 @@ const isNullSchema = (schema: unknown): boolean =>
 const nullableAsTypeArray = (
   schema: Record<string, unknown>,
 ): Record<string, unknown> => {
-  const rewritten: Record<string, unknown> = {};
+  const entries = new Map<string, unknown>();
   for (const [key, value] of Object.entries(schema)) {
     if (SCHEMA_MAP_KEYWORDS.has(key) && isSchemaRecord(value)) {
-      rewritten[key] = Object.fromEntries(
-        Object.entries(value).map(([name, nested]): [string, unknown] => [
-          name,
-          isSchemaRecord(nested) ? nullableAsTypeArray(nested) : nested,
-        ]),
+      entries.set(
+        key,
+        Object.fromEntries(
+          Object.entries(value).map(([name, nested]): [string, unknown] => [
+            name,
+            isSchemaRecord(nested) ? nullableAsTypeArray(nested) : nested,
+          ]),
+        ),
       );
       continue;
     }
     if (Array.isArray(value)) {
-      rewritten[key] = value.map((nested: unknown) =>
-        isSchemaRecord(nested) ? nullableAsTypeArray(nested) : nested,
+      entries.set(
+        key,
+        value.map((nested: unknown) =>
+          isSchemaRecord(nested) ? nullableAsTypeArray(nested) : nested,
+        ),
       );
       continue;
     }
-    rewritten[key] = isSchemaRecord(value) ? nullableAsTypeArray(value) : value;
+    entries.set(
+      key,
+      isSchemaRecord(value) ? nullableAsTypeArray(value) : value,
+    );
   }
 
+  const rewritten = Object.fromEntries(entries);
   const { anyOf, ...siblings } = rewritten;
   if (!Array.isArray(anyOf) || anyOf.length !== 2) {
     return rewritten;

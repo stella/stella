@@ -220,6 +220,8 @@ TruncatedText.
 ### Button Variants (CVA)
 
 - **default:** primary foreground on primary background
+- **composer:** background text on foreground fill, retaining the primary
+  action's border, shadows and pressed treatment
 - **destructive:** destructive colours
 - **destructive-outline:** the outline box with destructive text and a
   destructive tint on hover
@@ -243,6 +245,7 @@ TruncatedText.
 Sizes: `default` (h-9), `sm` (h-8, small type), `xs` (h-7, small
 type), `lg` (h-10), `xl` (h-11), `chip` (a 28px pill beside the
 composer's round controls), `icon` and `icon-*` (square),
+`icon-round` (a fixed 28px circle with a 44px touch target),
 `icon-2xs` (a 16px glyph action in a dense row; the touch target
 still grows to 44px under a coarse pointer), `row` (a menu-list row),
 `inline` (a short action inside a line of text: no height, padding or
@@ -332,8 +335,8 @@ it, and add it here in the same change that adds it to `packages/ui`.
 - `Button` `focusRing`: `inside`, `outside`
 - `Button`, `ButtonTextRun` `layout`: `wrap`
 - `Button` `shape`: `box`, `round`
-- `Button`, `Toggle`, `ToggleGroup`, `ToggleGroupItem` `size`: `chip`, `default`, `icon`, `icon-2xs`, `icon-lg`, `icon-sm`, `icon-xl`, `icon-xs`, `inline`, `lg`, `row`, `sm`, `touch`, `xl`, `xs`
-- `Button` `variant`: `default`, `destructive`, `destructive-ghost`, `destructive-outline`, `ghost`, `link`, `muted`, `muted-destructive`, `outline`, `plain`, `secondary`
+- `Button`, `Toggle`, `ToggleGroup`, `ToggleGroupItem` `size`: `chip`, `default`, `icon`, `icon-2xs`, `icon-lg`, `icon-round`, `icon-sm`, `icon-xl`, `icon-xs`, `inline`, `lg`, `row`, `sm`, `touch`, `xl`, `xs`
+- `Button` `variant`: `composer`, `default`, `destructive`, `destructive-ghost`, `destructive-outline`, `ghost`, `link`, `muted`, `muted-destructive`, `outline`, `plain`, `secondary`
 - `ButtonTextRun` `variant`: `link`, `plain`
 - `ColorPicker`, `EntityActionsButton`, `SortableHead`, `TableCell`, `TableHead` `align`: `center`, `end`, `start`
 - `ColorPicker`, `EntityActionsButton` `side`: `bottom`, `left`, `right`, `top`

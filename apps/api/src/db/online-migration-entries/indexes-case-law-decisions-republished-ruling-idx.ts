@@ -3,6 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "indexes-case-law-decisions-republished-ruling-idx",
   revision: 190,
+  lifecycle: "finalized",
   type: "indexes",
   // Bounded cross-publisher ruling lookup before a decision insert.
   values: [

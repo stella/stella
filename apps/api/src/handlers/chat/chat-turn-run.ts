@@ -28,6 +28,11 @@ import {
   renewChatTurnExecutionLease,
 } from "@/api/handlers/chat/chat-turn-persistence";
 import type { ChatTurnExecution } from "@/api/handlers/chat/chat-turn-persistence";
+import {
+  CHAT_TURN_OWNER_LOST_REASON,
+  CHAT_TURN_PRODUCTION_FAILED_REASON,
+  isCutByStopOrOwnerLoss,
+} from "@/api/handlers/chat/chat-turn-run-cut";
 import type { ChatTurnFailureCode } from "@/api/handlers/chat/chat-turn-state";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import type {
@@ -220,13 +225,6 @@ const CHAT_TURN_RUN_HEARTBEAT = {
   renewEvery: 4,
 } as const satisfies ChatTurnRunHeartbeat;
 
-/**
- * The abort reason of a run that no longer owns its turn: its lease was lost,
- * or its process is shutting down. It ends the turn as `owner-lost`.
- */
-export const CHAT_TURN_OWNER_LOST_REASON = "stella.chat-turn.owner-lost";
-const CHAT_TURN_PRODUCTION_FAILED_REASON = "stella.chat-turn.production-failed";
-
 const DURABILITY_FAILED_SINK = failureSink({
   event: "chat.turn.durability_failed",
   expected: [],
@@ -328,12 +326,16 @@ export const countChatTurnSettlement = (
 
 /**
  * What a run's persistence left on the turn row: the outcome it stored, which
- * a stop that won the race may have turned into `cancelled`, or nothing,
- * because another execution or the reaper settled the turn first. Only a
- * stored outcome is counted, so the count matches the durable row.
+ * a stop that won the race may have turned into `cancelled`, nothing,
+ * because another execution or the reaper settled the turn first, or the
+ * failure the run stored instead (`fail`) because the outcome could not be.
+ * Only a stored outcome is counted here, so the count matches the durable
+ * row; `fail` counts its own.
  */
 export type ChatTurnStoredSettlement =
-  { type: "stored"; outcome: ChatTurnOutcome } | { type: "not-owned" };
+  | { type: "stored"; outcome: ChatTurnOutcome }
+  | { type: "not-owned" }
+  | { type: "failed-instead" };
 
 /** The turn a run produces for, and what storing its failure needs. */
 type ChatTurnRunOwner = {
@@ -396,8 +398,12 @@ type ChatTurnRunHeartbeatHandle = {
   stop: () => void;
 };
 
+/**
+ * Where a run stands: handed its turn and not yet producing (`ready`),
+ * producing under its heartbeat, or over.
+ */
 type ChatTurnRunState =
-  | { status: "handed-over" }
+  | { status: "ready" }
   | { status: "producing"; heartbeat: ChatTurnRunHeartbeatHandle }
   | { status: "settled" };
 
@@ -547,7 +553,7 @@ export class ChatTurnRun {
   private readonly options: ChatTurnRunOptions;
   private readonly ownership: ChatTurnOwnership;
   private readonly settledResolvers = Promise.withResolvers<ChatTurnRunEnd>();
-  private state: ChatTurnRunState = { status: "handed-over" };
+  private state: ChatTurnRunState = { status: "ready" };
   private stored = false;
   private continuationProduction: "not-started" | "started" = "not-started";
   private upstream:
@@ -639,8 +645,7 @@ export class ChatTurnRun {
     if (
       this.continuationProduction !== "not-started" ||
       !this.control.admissionSignal?.aborted ||
-      this.control.abortController.signal.reason === RUN_CANCEL_REASON ||
-      this.control.abortController.signal.reason === CHAT_TURN_OWNER_LOST_REASON
+      isCutByStopOrOwnerLoss(this.control.abortController.signal)
     ) {
       return undefined;
     }
@@ -701,40 +706,57 @@ export class ChatTurnRun {
     durability: StreamDurability,
     viewer: SseStreamBinding,
   ): Response {
-    if (this.state.status !== "handed-over") {
+    return eagerlyDeliverTurn(
+      withSseHeartbeat(this.startProducing(output, durability), viewer),
+      this.options.onDeliveryStalled,
+    );
+  }
+
+  /**
+   * Start producing `output` with nobody watching it: a turn this task took
+   * over from one that stopped. The producer drains into the log exactly as
+   * it does once a viewer of `produce` leaves, and pages join the log as they
+   * join any turn they did not start.
+   */
+  async pump(
+    output: AsyncIterable<StreamChunk>,
+    durability: StreamDurability,
+  ): Promise<void> {
+    await this.startProducing(output, durability).body?.cancel();
+  }
+
+  private startProducing(
+    output: AsyncIterable<StreamChunk>,
+    durability: StreamDurability,
+  ): Response {
+    if (this.state.status !== "ready") {
       return panic(`A chat turn run cannot produce once ${this.state.status}`);
     }
     this.state = { status: "producing", heartbeat: this.startHeartbeat() };
     // Building the response starts its pump, which pulls the stream first.
-    const response = eagerlyDeliverTurn(
-      withSseHeartbeat(
-        toServerSentEventsResponse(
-          this.options.admission === undefined
-            ? output
-            : this.trackUpstream(output),
-          {
-            // Run control cuts the provider; delivery drains its terminal events.
-            durability: {
-              adapter: reportDeliveryFailuresByKind(durability, (failure) => {
-                // The run log reports its own refusals; any other failure
-                // (the store's) reaches the stream only as its kind.
-                if (!ChatRunLogRefusedError.is(failure.cause)) {
-                  observeFailure(failure.cause, {
-                    sink: DURABILITY_FAILED_SINK,
-                    ctx: { threadId: this.options.owner.threadId },
-                  });
-                }
-                if (this.deliveryFailure === "unknown") {
-                  this.deliveryFailure = failure.kind;
-                }
-              }),
-            },
-            headers: { [CHAT_TURN_ID_HEADER]: this.execution.id },
-          },
-        ),
-        viewer,
-      ),
-      this.options.onDeliveryStalled,
+    const response = toServerSentEventsResponse(
+      this.options.admission === undefined
+        ? output
+        : this.trackUpstream(output),
+      {
+        // Run control cuts the provider; delivery drains its terminal events.
+        durability: {
+          adapter: reportDeliveryFailuresByKind(durability, (failure) => {
+            // The run log reports its own refusals; any other failure
+            // (the store's) reaches the stream only as its kind.
+            if (!ChatRunLogRefusedError.is(failure.cause)) {
+              observeFailure(failure.cause, {
+                sink: DURABILITY_FAILED_SINK,
+                ctx: { threadId: this.options.owner.threadId },
+              });
+            }
+            if (this.deliveryFailure === "unknown") {
+              this.deliveryFailure = failure.kind;
+            }
+          }),
+        },
+        headers: { [CHAT_TURN_ID_HEADER]: this.execution.id },
+      },
     );
     if (this.pendingAbort !== undefined) {
       this.abort(this.pendingAbort);
@@ -762,15 +784,27 @@ export class ChatTurnRun {
       const checkpoint = this.restorableCheckpoint;
       if (checkpoint === undefined) {
         const settlement = await persist();
-        this.stored = true;
-        if (settlement.type === "stored") {
-          const { outcome } = settlement;
-          this.countSettlement(
-            outcome.type,
-            outcome.type === "failed"
-              ? AI_ERROR_FAILURE_CODE[outcome.error]
-              : null,
-          );
+        switch (settlement.type) {
+          case "stored": {
+            this.stored = true;
+            const { outcome } = settlement;
+            this.countSettlement(
+              outcome.type,
+              outcome.type === "failed"
+                ? AI_ERROR_FAILURE_CODE[outcome.error]
+                : null,
+            );
+            break;
+          }
+          case "not-owned":
+            this.stored = true;
+            break;
+          case "failed-instead":
+            // `fail` recorded whether the failure was stored.
+            break;
+          default:
+            settlement satisfies never;
+            panic("Unhandled chat turn settlement");
         }
       } else {
         const restored = await this.restoreCheckpoint(checkpoint);
@@ -855,7 +889,7 @@ export class ChatTurnRun {
         ctx: { threadId: owner.threadId },
       });
     }
-    if (status !== "handed-over") {
+    if (status !== "ready") {
       return;
     }
     await this.closeConnectors();
@@ -939,7 +973,7 @@ export class ChatTurnRun {
    * controller is already aborted, so the run would never store its outcome.
    */
   private abort(reason: string): void {
-    if (this.state.status === "handed-over") {
+    if (this.state.status === "ready") {
       this.pendingAbort ??= reason;
       return;
     }

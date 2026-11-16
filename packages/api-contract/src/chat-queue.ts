@@ -38,6 +38,19 @@ export const CHAT_QUEUE_HOLD_REASON = {
   computerAway: "computer-away",
 } as const satisfies Record<string, ChatQueueHoldReason>;
 
+/**
+ * What removing a queued message does with the chat files its enqueue stored
+ * for it: `delete` them (Remove), or `keep` them for the composer the message
+ * goes back to (Edit), which sends them again by reference.
+ */
+export const QUEUED_MESSAGE_FILES_ON_REMOVE = {
+  delete: "delete",
+  keep: "keep",
+} as const;
+
+export type QueuedMessageFilesOnRemove =
+  (typeof QUEUED_MESSAGE_FILES_ON_REMOVE)[keyof typeof QUEUED_MESSAGE_FILES_ON_REMOVE];
+
 /** Error codes the queue's routes answer with. */
 export const CHAT_QUEUE_ERROR_CODE = {
   /** The thread already holds `CHAT_QUEUE_LIMIT` queued messages. */
@@ -46,8 +59,10 @@ export const CHAT_QUEUE_ERROR_CODE = {
   sent: "queued_message_sent",
   /** The message changed since the revision the request names. */
   changed: "queued_message_changed",
-  /** A queued attachment must already be a stored file of the member. */
+  /** An edit's attachment must already be a stored file of the member. */
   inlineFile: "queued_message_inline_file",
+  /** The message has a part a chat message cannot store. */
+  invalid: "queued_message_invalid",
   /** The message is not the next one the queue may send now. */
   notDue: "queued_message_not_due",
   /** No such message is queued in the thread. */
@@ -58,6 +73,25 @@ export const CHAT_QUEUE_ERROR_CODE = {
 
 export type ChatQueueErrorCode =
   (typeof CHAT_QUEUE_ERROR_CODE)[keyof typeof CHAT_QUEUE_ERROR_CODE];
+
+/**
+ * Why the server refused a member's new message without storing anything of
+ * it. A plain send never replaces a turn and never jumps the queue: the
+ * client queues the message instead (`POST .../queue`, same message id), so
+ * it goes once what is ahead of it is done. Replacing a turn that waits on
+ * the member stays an explicit action: Send now on a queued message.
+ */
+export const CHAT_SEND_QUEUES_INSTEAD_CODE = {
+  /** A turn of the thread still runs. */
+  turnRunning: "chat_turn_running",
+  /** A turn of the thread waits on the member: a question, an approval. */
+  turnAwaitingMember: "chat_turn_awaiting_member",
+  /** Messages are queued in the thread and nothing holds them: they go first. */
+  queuedAhead: "chat_queued_ahead",
+} as const;
+
+export type ChatSendQueuesInsteadCode =
+  (typeof CHAT_SEND_QUEUES_INSTEAD_CODE)[keyof typeof CHAT_SEND_QUEUES_INSTEAD_CODE];
 
 /**
  * Why sending a queued message as the member was refused before anything of

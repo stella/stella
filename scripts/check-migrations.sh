@@ -32,6 +32,9 @@ CHANGED_FILES="$(git diff --name-only "$BASE_REF"...HEAD)"
 # deletion or renaming of a migration already present at the merge base.
 bun scripts/check-migration-order.ts "$BASE_REF"
 bun scripts/check-migration-locks.ts --base "$BASE_REF"
+# An online migration entry is finalized only once the promoted release
+# carries it unchanged.
+bun scripts/check-online-migration-lifecycle.ts
 
 MIGRATION_SQL_FILES=()
 

@@ -7,6 +7,7 @@ import {
 export default {
   id: "indexes-session-prior-token-hash-idx",
   revision: 330,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     onlineUniqueIndexDefinition(

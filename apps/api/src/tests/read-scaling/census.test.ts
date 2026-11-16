@@ -23,7 +23,10 @@ import { chatLocalFilesUndoScalingScenario } from "./chat-local-files-undo";
 import { chatLocalRunStepContentScalingScenario } from "./chat-local-run-step-content";
 import { chatLocalRunnersScalingScenario } from "./chat-local-runners";
 import { chatMcpAppBundleScalingScenario } from "./chat-mcp-app-bundle";
-import { chatQueueReadScalingScenario } from "./chat-queue";
+import {
+  chatQueuedMessageReadScalingScenario,
+  chatQueueReadScalingScenario,
+} from "./chat-queue";
 import { chatPinnedThreadsScalingScenario } from "./chat-threads";
 import { claimCommentScalingScenarios } from "./claim-comments";
 import { reviewHistoryScalingScenarios } from "./claim-review-history";
@@ -54,6 +57,7 @@ import { exactIconScalingScenario } from "./link-icons";
 import { matterVocabularyScalingScenario } from "./matter-vocabulary";
 import mcpLedger from "./mcp-scaling-ledger.json";
 import { mcpScalingScenarios } from "./mcp-scenarios";
+import { memberBillingScalingScenario } from "./member-billing-access";
 import { memberCandidatesScalingScenario } from "./member-candidates";
 import { memberRoleScalingScenario } from "./member-role";
 import { mobileClientMetadataScalingScenario } from "./mobile-client-metadata";
@@ -97,6 +101,7 @@ const measuredApiScenarios = [
   verifyQuoteApiScalingScenario,
   ...readScalingScenarios,
   ...writeScalingScenarios,
+  memberBillingScalingScenario,
   exactIconScalingScenario,
   decisionSummaryScalingScenario,
   decisionAnchorRedirectsScalingScenario,
@@ -111,6 +116,7 @@ const measuredApiScenarios = [
   chatPinnedThreadsScalingScenario,
   chatLimitReminderScalingScenario,
   chatQueueReadScalingScenario,
+  chatQueuedMessageReadScalingScenario,
   browserSiteGrantsScalingScenario,
   conflictCheckListScalingScenario,
   conflictCheckReadScalingScenario,

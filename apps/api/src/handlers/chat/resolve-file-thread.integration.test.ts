@@ -173,23 +173,23 @@ const materialize = async (
     ids.userA1,
   );
   return await scopedDb(async (tx) =>
-    createFileChatThread(
-      asTestRaw<Transaction>(tx),
-      {
+    createFileChatThread({
+      tx: asTestRaw<Transaction>(tx),
+      input: {
         entityId: ids.entityA1,
         fieldId: ids.fileFieldA1,
         organizationId: ids.orgA,
         userId: ids.userA1,
         workspaceId: ids.wsA1,
       },
-      async () => {
+      recordAuditEvent: async () => {
         // Audit rows are covered by the handler-level tests; the adoption
         // logic under test never branches on them.
       },
-      null,
-      false,
+      orgAIConfig: null,
+      webSearchAvailable: false,
       requestedThreadId,
-    ),
+    }),
   );
 };
 

@@ -18,6 +18,7 @@ import {
 import { detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { announceChatQueueChange } from "@/api/lib/chat/chat-queue-announcement";
 import { ringChatQueue } from "@/api/lib/chat/chat-queue-doorbell";
 import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
@@ -103,7 +104,11 @@ const sendQueuedChatMessageNow = createSafeRootHandler(
                 .where(
                   and(
                     eq(chatTurns.threadId, threadId),
-                    inArray(chatTurns.status, ["running", "awaiting-user"]),
+                    inArray(chatTurns.status, [
+                      "running",
+                      "awaiting-user",
+                      "handed-over",
+                    ]),
                   ),
                 )
                 .limit(1)
@@ -141,6 +146,11 @@ const sendQueuedChatMessageNow = createSafeRootHandler(
         outcome satisfies never;
         return panic("Unhandled send-now outcome");
     }
+    // The message moved first and the hold went, whatever the turn does.
+    announceChatQueueChange({
+      organizationId: session.activeOrganizationId,
+      userId: user.id,
+    });
     const { plan } = outcome;
     switch (plan.type) {
       case "next":

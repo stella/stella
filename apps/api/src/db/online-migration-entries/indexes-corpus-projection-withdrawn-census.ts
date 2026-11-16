@@ -5,6 +5,7 @@ const INTRODUCED_BY = "20261115130000_corpus_projection_offline_delivery";
 export default {
   id: "indexes-corpus-projection-withdrawn-census",
   revision: 1466,
+  lifecycle: "pending",
   type: "indexes",
   values: [
     {

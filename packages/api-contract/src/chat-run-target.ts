@@ -326,14 +326,44 @@ export type ChatLocalRunSteerRequest = v.InferOutput<
 >;
 
 /**
- * Whether the running turn will be steered: `queued` once the computer was
- * handed the message (the turn's stream then says whether it took it),
- * `unavailable` when this turn cannot be steered and the chat sends the
- * message the usual way.
+ * Why a message was not steered into a turn:
+ * - `turn_not_running`: the turn is not running; it waits on the member or
+ *   it ended.
+ * - `no_run`: the turn has no run on a computer, before its computer took it
+ *   or after the run ended.
+ * - `harness_cannot_steer`: the turn's agent takes no message mid-turn.
+ * - `run_full`: the run holds as many commands as one run may.
+ * - `not_taken`: the agent did not take it; its turn was ending or between
+ *   attempts. Only the turn's stream says this, as `refused`.
  */
-export const CHAT_LOCAL_RUN_STEER_OUTCOMES = ["queued", "unavailable"] as const;
-export type ChatLocalRunSteerOutcome =
-  (typeof CHAT_LOCAL_RUN_STEER_OUTCOMES)[number];
+const CHAT_LOCAL_RUN_STEER_ROUTE_REFUSALS = [
+  "turn_not_running",
+  "no_run",
+  "harness_cannot_steer",
+  "run_full",
+] as const;
+export const CHAT_LOCAL_RUN_STEER_REFUSALS = [
+  ...CHAT_LOCAL_RUN_STEER_ROUTE_REFUSALS,
+  "not_taken",
+] as const;
+export type ChatLocalRunSteerRefusal =
+  (typeof CHAT_LOCAL_RUN_STEER_REFUSALS)[number];
+
+/**
+ * Whether the running turn will be steered: `queued` once the computer was
+ * handed the message (the turn's stream then says whether it took it), or
+ * `refused` with why, before anything reached the computer.
+ */
+export const chatLocalRunSteerOutcomeSchema = v.variant("type", [
+  v.strictObject({ type: v.literal("queued") }),
+  v.strictObject({
+    type: v.literal("refused"),
+    reason: v.picklist(CHAT_LOCAL_RUN_STEER_ROUTE_REFUSALS),
+  }),
+]);
+export type ChatLocalRunSteerOutcome = v.InferOutput<
+  typeof chatLocalRunSteerOutcomeSchema
+>;
 
 /**
  * The CUSTOM stream event a turn running on a computer sends while its run

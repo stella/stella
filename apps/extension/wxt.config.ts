@@ -12,7 +12,7 @@ if (!/^\d+\.\d+\.\d+(?:-(?:rc|beta|alpha)\.\d+)?$/u.test(releaseVersion)) {
 }
 // Chrome accepts only numeric versions; prerelease builds retain their label.
 const chromeVersion = releaseVersion.replace(/-.*$/u, "");
-const EXTENSION_ICONS = {
+export const EXTENSION_ICONS = {
   16: "icon/16.png",
   32: "icon/32.png",
   48: "icon/48.png",
@@ -23,12 +23,6 @@ export default defineConfig({
   imports: false,
   hooks: {
     "build:publicAssets": (_wxt, files) => {
-      files.push({
-        absoluteSrc: fileURLToPath(
-          new URL("../landing/public/brand/stella-symbol.svg", import.meta.url),
-        ),
-        relativeDest: "brand/stella-symbol.svg",
-      });
       for (const [size, relativeDest] of Object.entries(EXTENSION_ICONS)) {
         files.push({
           absoluteSrc: fileURLToPath(

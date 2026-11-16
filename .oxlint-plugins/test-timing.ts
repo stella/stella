@@ -101,6 +101,7 @@ import {
   isIdentifier,
   isIdentifierReference,
   memberPropertyName,
+  patternKeyFor,
   resolveImportedExpressionForEnforcement,
   resolveVariable,
   type ScopeContext,
@@ -714,6 +715,56 @@ const OWNED_TIMEOUT_HELPERS: ReadonlySet<string> = new Set([
   "propertyTestTimeout",
 ]);
 
+// The fixture forwards beforeAll's timeout to Bun; moving setup into it
+// must retain the same timeout budget, including through extracted methods.
+const testStateBinding = (
+  context: ScopeContext,
+  input: unknown,
+  seen = new Set<unknown>(),
+): "fixture" | "beforeAll" | null => {
+  const node = unwrapExpression(input);
+  if (!isAstNode(node) || seen.has(node)) {
+    return null;
+  }
+  seen.add(node);
+  if (node.type === "CallExpression") {
+    const factory = resolveImportedExpressionForEnforcement(
+      context,
+      node.callee,
+    );
+    return factory?.source === "@stll/test-state" &&
+      factory.imported === "createTestState"
+      ? "fixture"
+      : null;
+  }
+  if (node.type === "MemberExpression") {
+    return memberPropertyName(node) === "beforeAll" &&
+      testStateBinding(context, node.object, seen) === "fixture"
+      ? "beforeAll"
+      : null;
+  }
+  if (!isIdentifierReference(node)) {
+    return null;
+  }
+  const variable = resolveVariable(context, node);
+  const initializer = variable === null ? null : stableInitializer(variable);
+  const definition = variable?.defs.at(0);
+  if (initializer === null || !isAstNode(definition?.node)) {
+    return null;
+  }
+  const source = testStateBinding(context, initializer, seen);
+  const pattern = definition.node.id;
+  if (isIdentifier(pattern)) {
+    return source;
+  }
+  return isAstNode(pattern) &&
+    pattern.type === "ObjectPattern" &&
+    source === "fixture" &&
+    patternKeyFor(pattern, definition.name) === "beforeAll"
+    ? "beforeAll"
+    : null;
+};
+
 // The `bun:test` export a call's callee chain reaches through member and call
 // modifiers (`test.each(table)`, `test.if(condition)`, `bt.test.serial`).
 const bunTestExport = (
@@ -922,7 +973,11 @@ const raisedTimeout = (
   call: AstNode,
 ): RaisedTimeout | null => {
   const args = Array.isArray(call.arguments) ? call.arguments : [];
-  const name = bunTestExport(context, call.callee);
+  const name =
+    bunTestExport(context, call.callee) ??
+    (testStateBinding(context, call.callee) === "beforeAll"
+      ? "beforeAll"
+      : null);
   if (name === "setDefaultTimeout") {
     return raisesTimeout(context, args.at(0))
       ? { node: call, pattern: "setDefaultTimeout" }

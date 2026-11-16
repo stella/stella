@@ -7,6 +7,7 @@ import {
 export default {
   id: "indexes-playbook-definitions-org-starter-id-uidx",
   revision: 620,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     onlineUniqueIndexDefinition(

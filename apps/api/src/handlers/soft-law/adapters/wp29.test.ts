@@ -448,3 +448,30 @@ describe("WP29 official source shapes", () => {
     );
   });
 });
+
+test.each([
+  {
+    file: "wp29-transparency.html.gz",
+    field: "newsroom-asset-size",
+    part: "source-page-1",
+  },
+  {
+    file: "wp29-archive.html.gz",
+    field: "archive-asset-size",
+    part: "source-page-0",
+  },
+] as const)(
+  "WP29 captured $field is accounted for by its actual retained $part",
+  async ({ file, field, part }) => {
+    const html = await fixture(file);
+    const observed = wp29Adapter.sourceFields.listSourceFields({
+      [part]: html,
+    });
+    expect(observed).toContain(field);
+    const disposition = wp29Adapter.sourceFields.fields[field];
+    expect(disposition).toMatchObject({
+      disposition: "stored",
+      target: { type: "raw", part, path: [] },
+    });
+  },
+);

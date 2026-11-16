@@ -15,6 +15,7 @@ import {
 import { CHAT_CONTEXT_FILE_MAX_MEGABYTES } from "@stll/chat-limits";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
+import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
   chatThreads,
@@ -307,6 +308,119 @@ export const deleteUploadedChatFiles = async ({
     requestIds: checked.value.requestIds,
   });
   return Result.ok();
+};
+
+/**
+ * What `deleteChatFilesOnTx` did: deleted the files, with the cleanup to hand
+ * to its worker after commit (`handOffChatFileCleanup`), or nothing, because
+ * a legal hold keeps the thread's files.
+ */
+type ChatFilesDeletion =
+  | {
+      type: "deleted";
+      cleanup: SafeId<"entityDeletionCleanupRequest">[];
+    }
+  | { type: "held" };
+
+/**
+ * Delete chat files `fileIds` of the member's thread in `tx`: their rows, and
+ * a durable instruction to remove their stored objects. Under a legal hold on
+ * the thread the files stay with it.
+ */
+export const deleteChatFilesOnTx = async ({
+  fileIds,
+  organizationId,
+  recordAuditEvent,
+  threadId,
+  tx,
+  userId,
+  workspaceId,
+}: {
+  fileIds: readonly SafeId<"userFile">[];
+  organizationId: SafeId<"organization">;
+  recordAuditEvent: AuditRecorder;
+  threadId: SafeId<"chatThread">;
+  tx: Transaction;
+  userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace"> | null;
+}): Promise<ChatFilesDeletion> => {
+  if (fileIds.length === 0) {
+    return { type: "deleted", cleanup: [] };
+  }
+  const hold = await requireNoHold({
+    tx,
+    organizationId,
+    target: { type: "thread", threadId },
+  });
+  if (hold.isErr()) {
+    return { type: "held" };
+  }
+  const files = await tx
+    .select({
+      id: userFiles.id,
+      s3Key: userFiles.s3Key,
+      thumbnailFileId: userFiles.thumbnailFileId,
+    })
+    .from(userFiles)
+    .where(
+      and(
+        inArray(userFiles.id, [...fileIds]),
+        eq(userFiles.threadId, threadId),
+        eq(userFiles.userId, userId),
+      ),
+    );
+  if (files.length === 0) {
+    return { type: "deleted", cleanup: [] };
+  }
+  const requestId = createSafeId<"entityDeletionCleanupRequest">();
+  await tx.insert(entityDeletionCleanupRequests).values({
+    id: requestId,
+    organizationId,
+    workspaceId,
+    s3Keys: files
+      .flatMap((file) =>
+        file.thumbnailFileId
+          ? [
+              file.s3Key,
+              createUserFileThumbnailKey({
+                sourceKey: file.s3Key,
+                thumbnailFileId: file.thumbnailFileId,
+                organizationId,
+                uploaderUserId: userId,
+              }),
+            ]
+          : [file.s3Key],
+      )
+      .filter((key) => key !== null),
+  });
+  await tx.delete(userFiles).where(
+    inArray(
+      userFiles.id,
+      files.map((file) => file.id),
+    ),
+  );
+  await recordAuditEvent(
+    tx,
+    files.map((file) => ({
+      action: AUDIT_ACTION.DELETE,
+      resourceType: AUDIT_RESOURCE_TYPE.CHAT_FILE,
+      resourceId: file.id,
+      workspaceId,
+      metadata: { threadId, s3Key: file.s3Key },
+    })),
+  );
+  return { type: "deleted", cleanup: [requestId] };
+};
+
+/** Hand the committed cleanup of `deleteChatFilesOnTx` to its worker. */
+export const handOffChatFileCleanup = async (
+  requestIds: readonly SafeId<"entityDeletionCleanupRequest">[],
+): Promise<void> => {
+  await handoffCommittedEntityDeletionCleanupBatch({
+    captureDeliveryError: captureError,
+    enqueueCleanup: enqueueEntityDeletionCleanup,
+    requestIds: [...requestIds],
+  });
 };
 
 type HydrateFilePartProps = {

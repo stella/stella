@@ -38,6 +38,9 @@ export type ChatQueueItem = {
   preview: string;
   attachmentCount: number;
   runTarget: QueuedChatSend["runTarget"] | null;
+  /** Whether it goes anonymized; a client hands a running turn only a
+   *  message queued to be sent raw. */
+  sendMode: QueuedChatSend["sendMode"];
   createdAt: Date;
 };
 
@@ -93,6 +96,7 @@ const itemOfRow = (row: {
     preview: text.slice(0, CHAT_QUEUE_PREVIEW_MAX_CHARS),
     attachmentCount: send.message.parts.filter(isChatAttachmentPart).length,
     runTarget: send.runTarget ?? null,
+    sendMode: send.sendMode,
     createdAt: row.createdAt,
   };
 };
@@ -148,23 +152,29 @@ export const readChatQueueOnTx = async ({
 };
 
 export type EnqueueOutcome =
-  { type: "queued"; item: ChatQueueItem } | { type: "full" } | { type: "sent" };
+  | { type: "queued"; item: ChatQueueItem }
+  | { type: "already-queued"; item: ChatQueueItem }
+  | { type: "full" }
+  | { type: "sent" };
 
 /**
- * Queue `send` at the end of the thread's queue under `id`. Idempotent on
- * `id`: a message already queued answers as queued, one already sent as
- * sent. The caller holds the thread lock.
+ * Queue `send` at the end of the thread's queue under `id`, with the chat
+ * files its enqueue stored (`uploadedFileIds`). Idempotent on `id`: a
+ * message already queued answers as already queued (keeping the files it was
+ * queued with), one already sent as sent. The caller holds the thread lock.
  */
 export const enqueueChatMessageOnTx = async ({
   id,
   send,
   threadId,
   tx,
+  uploadedFileIds,
 }: {
   id: SafeId<"chatMessage">;
   send: QueuedChatSend;
   threadId: SafeId<"chatThread">;
   tx: Transaction;
+  uploadedFileIds: readonly SafeId<"userFile">[];
 }): Promise<EnqueueOutcome> => {
   const existing = (
     await tx
@@ -179,7 +189,7 @@ export const enqueueChatMessageOnTx = async ({
       .limit(1)
   ).at(0);
   if (existing !== undefined) {
-    return { type: "queued", item: itemOfRow(existing) };
+    return { type: "already-queued", item: itemOfRow(existing) };
   }
   if (await wasSentOnTx({ id, threadId, tx })) {
     return { type: "sent" };
@@ -218,6 +228,7 @@ export const enqueueChatMessageOnTx = async ({
       threadId,
       position: queued + 1,
       request: send,
+      uploadedFileIds: [...uploadedFileIds],
     })
     .returning(QUEUE_ROW_COLUMNS);
   return inserted === undefined
@@ -253,6 +264,37 @@ export const readQueuedChatMessageRevisionOnTx = async ({
       )
       .limit(1)
   ).at(0)?.revision;
+
+/** Queued message `id` whole, with its revision, or none when it is not
+ *  queued. */
+export const readQueuedChatSendOnTx = async ({
+  id,
+  threadId,
+  tx,
+}: {
+  id: SafeId<"chatMessage">;
+  threadId: SafeId<"chatThread">;
+  tx: Transaction;
+}): Promise<{ revision: number; send: QueuedChatSend } | undefined> => {
+  const row = (
+    await tx
+      .select({
+        request: chatQueuedMessages.request,
+        revision: chatQueuedMessages.revision,
+      })
+      .from(chatQueuedMessages)
+      .where(
+        and(
+          eq(chatQueuedMessages.id, id),
+          eq(chatQueuedMessages.threadId, threadId),
+        ),
+      )
+      .limit(1)
+  ).at(0);
+  return row === undefined
+    ? undefined
+    : { revision: row.revision, send: parseQueuedChatSend(row.request) };
+};
 
 /**
  * Replace a queued message's send, only at the revision the member last saw.

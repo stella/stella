@@ -62,6 +62,16 @@ export type ChatTurnState =
       userMessageId: SafeId<"chatMessage">;
     }
   | {
+      /** By when another task must adopt the turn, or it ends `owner-lost`. */
+      adoptBy: Date;
+      /** The answer so far, stored when the turn was released. */
+      assistantMessageId: SafeId<"chatMessage">;
+      id: SafeId<"chatTurn">;
+      status: "handed-over";
+      threadId: SafeId<"chatThread">;
+      userMessageId: SafeId<"chatMessage">;
+    }
+  | {
       assistantMessageId: SafeId<"chatMessage">;
       completedAt: Date;
       id: SafeId<"chatTurn">;
@@ -126,6 +136,7 @@ export const chatTurnViewOf = (state: ChatTurnState): ChatTurnView => {
     case "awaiting-user":
     case "completed":
     case "failed":
+    case "handed-over":
     case "running":
       return { id: state.id, status: state.status };
     default:
@@ -147,6 +158,11 @@ export type ChatTurnTransition =
         type: ChatTurnInteractionType;
       };
       type: "await-user";
+    }
+  | {
+      adoptBy: Date;
+      assistantMessageId: SafeId<"chatMessage">;
+      type: "hand-over";
     }
   | {
       assistantMessageId: SafeId<"chatMessage">;
@@ -290,6 +306,7 @@ export const planChatTurnTransition = (
           return interruptedTurn(state, transition);
         case "await-user":
         case "complete":
+        case "hand-over":
         case "resume":
           return rejectedTransition(state, transition);
         default:
@@ -305,6 +322,18 @@ export const planChatTurnTransition = (
               id: state.id,
               interaction: transition.interaction,
               status: "awaiting-user",
+              threadId: state.threadId,
+              userMessageId: state.userMessageId,
+            },
+            type: "applied",
+          };
+        case "hand-over":
+          return {
+            state: {
+              adoptBy: transition.adoptBy,
+              assistantMessageId: transition.assistantMessageId,
+              id: state.id,
+              status: "handed-over",
               threadId: state.threadId,
               userMessageId: state.userMessageId,
             },
@@ -344,7 +373,28 @@ export const planChatTurnTransition = (
         case "await-user":
         case "complete":
         case "fail":
+        case "hand-over":
         case "interrupt":
+        case "start":
+          return rejectedTransition(state, transition);
+        default:
+          transition satisfies never;
+          return panic(`Unhandled transition: ${String(transition)}`);
+      }
+    // Released by its owner: another task adopts it (`resume`), the member
+    // stops it, or nobody adopts it by its lease (`interrupt`).
+    case "handed-over":
+      switch (transition.type) {
+        case "resume":
+          return runningTurn(state, transition);
+        case "cancel":
+          return cancelledTurn(state, transition);
+        case "interrupt":
+          return interruptedTurn(state, transition);
+        case "await-user":
+        case "complete":
+        case "fail":
+        case "hand-over":
         case "start":
           return rejectedTransition(state, transition);
         default:

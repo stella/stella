@@ -7,6 +7,7 @@ import type { AnyPgTable } from "drizzle-orm/pg-core";
 
 import {
   BETTER_AUTH_CORE_SCHEMA,
+  BILLING_ACCESS_MEMBER_FIELDS,
   compareBetterAuthSchema,
 } from "@stll/auth-model";
 import type {
@@ -308,6 +309,12 @@ const HOST_SESSION_FIELDS = normalizeRuntimeFields(SESSION_LIFETIME_FIELDS, {
 });
 
 const HOST_MEMBER_FIELDS = {
+  ...normalizeRuntimeFields(BILLING_ACCESS_MEMBER_FIELDS, {
+    billingAccess: {
+      databaseDefault: { kind: "literal", value: false },
+      databaseNotNull: true,
+    },
+  }),
   lastActiveWorkspaceId: hostField("lastActiveWorkspaceId", "string", {
     input: "server-managed",
     returned: false,

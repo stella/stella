@@ -187,7 +187,7 @@ export const createUserMessageEditSessions = (createId: () => string) => {
 export const userMessageEditHandoff = (
   edit: UserMessageEdit,
 ): {
-  composer: { html: string; pastedTexts: string[] };
+  composer: { html: string; pastedTexts: string[]; storedFiles: [] };
   storedFiles: (string | undefined)[];
 } => {
   const pastedTexts: string[] = [];
@@ -199,7 +199,10 @@ export const userMessageEditHandoff = (
       storedFiles.push(part.metadata?.filename);
     }
   }
-  return { composer: { html: edit.html, pastedTexts }, storedFiles };
+  return {
+    composer: { html: edit.html, pastedTexts, storedFiles: [] },
+    storedFiles,
+  };
 };
 
 /** The notice for each code the server refuses an edit with. */

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { DrizzleQueryError } from "drizzle-orm";
 
 import { RESOURCE_TYPE, resourceRef, toResourceName } from "@stll/api-contract";
+import { createTestState } from "@stll/test-state";
 
 import {
   createSearchSummaryChatThread,
@@ -22,17 +23,19 @@ import {
 } from "@/api/tests/helpers/mock-root-db";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
-process.env["REDIS_URL"] ??= "redis://localhost:6379";
-process.env["EMAIL_PROVIDER"] ??= "smtp";
-process.env["SMTP_HOST"] ??= "localhost";
-process.env["SMTP_PORT"] ??= "1025";
-process.env["TRANSACTIONAL_EMAIL_FROM"] ??= "test@example.com";
-process.env["FRONTEND_URL"] ??= "http://localhost:3000";
-process.env["BETTER_AUTH_SECRET"] ??= "x".repeat(32);
-process.env["BETTER_AUTH_URL"] ??= "http://localhost:3001";
-process.env["GOTENBERG_URL"] ??= "http://localhost:3002";
-process.env["GOTENBERG_USERNAME"] ??= "test";
-process.env["GOTENBERG_PASSWORD"] ??= "test";
+const testState = createTestState({ file: import.meta.path, config: {} });
+
+testState.setEnvIfAbsent("REDIS_URL", "redis://localhost:6379");
+testState.setEnvIfAbsent("EMAIL_PROVIDER", "smtp");
+testState.setEnvIfAbsent("SMTP_HOST", "localhost");
+testState.setEnvIfAbsent("SMTP_PORT", "1025");
+testState.setEnvIfAbsent("TRANSACTIONAL_EMAIL_FROM", "test@example.com");
+testState.setEnvIfAbsent("FRONTEND_URL", "http://localhost:3000");
+testState.setEnvIfAbsent("BETTER_AUTH_SECRET", "x".repeat(32));
+testState.setEnvIfAbsent("BETTER_AUTH_URL", "http://localhost:3001");
+testState.setEnvIfAbsent("GOTENBERG_URL", "http://localhost:3002");
+testState.setEnvIfAbsent("GOTENBERG_USERNAME", "test");
+testState.setEnvIfAbsent("GOTENBERG_PASSWORD", "test");
 
 const searchGlobalMock = mock();
 const upsertSearchDocumentMock = mock(async () => undefined);

@@ -14,6 +14,7 @@ import { compareCodeUnit } from "@stll/collation";
 export const EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS: ReadonlySet<string> =
   new Set([
     "src/db/contacts-rls-maintenance.postgres.test.ts",
+    "src/db/data-export-owner-policy.postgres.test.ts",
     "src/db/entity-feature-gate-maintenance.postgres.test.ts",
     "src/db/entity-feature-search-budget.postgres.test.ts",
     "src/db/online-repairs-beside-writer.postgres.test.ts",
@@ -31,6 +32,7 @@ export const EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS: ReadonlySet<string> =
     "src/lib/lists/sanctions/monitoring-migrations.postgres.test.ts",
     "src/lib/lists/sanctions/monitoring-roles.postgres.test.ts",
     "src/lib/scheduler/tasks/registration-retention.postgres.test.ts",
+    "src/tests/query-perf/scheduled-run.postgres.test.ts",
   ]);
 
 /** Suites that clone the worker runner’s idle, fully migrated source database. */

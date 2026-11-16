@@ -4,6 +4,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "indexes-case-law-decisions-country-date-published-idx",
   revision: 240,
+  lifecycle: "finalized",
   type: "indexes",
   values: [SITEMAP_RANGE_INDEX],
 } satisfies OnlineMigrationEntry;

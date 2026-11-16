@@ -1,5 +1,7 @@
 import { afterAll, describe, expect, test } from "bun:test";
 
+import { createTestState } from "@stll/test-state";
+
 import {
   AGENT_AUTH_CLAIM_PATH,
   AGENT_AUTH_CONFIRM_PATH,
@@ -17,6 +19,8 @@ import {
 import { createHttpApp } from "@/api/http/app";
 import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { serveForTest } from "@/api/tests/helpers/test-server";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const server = serveForTest(
   createHttpApp({ routes: agentAuthRoute, middleware: [errorBoundary] }),
@@ -52,13 +56,13 @@ describe("agent-auth manifest route", () => {
     try {
       // Dark-launched off: the manifest must not advertise a flow the
       // identity route 403s and the AS metadata hides.
-      env.FEATURE_AGENT_ID_JAG = false;
+      testState.setConfig("FEATURE_AGENT_ID_JAG", false);
       expect(await readManifest()).not.toContain("identity_assertion");
 
-      env.FEATURE_AGENT_ID_JAG = true;
+      testState.setConfig("FEATURE_AGENT_ID_JAG", true);
       expect(await readManifest()).toContain("identity_assertion");
     } finally {
-      env.FEATURE_AGENT_ID_JAG = original;
+      testState.setConfig("FEATURE_AGENT_ID_JAG", original);
     }
   });
 

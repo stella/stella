@@ -149,8 +149,10 @@ test("a fresh reader shows specific copy when the API refuses its first chat que
   await page.route(/\/v1\/chat\/?$/u, async (route) => {
     await respond(
       route,
+      // The code a member route answers a 401 with (the API's
+      // `AUTH_REJECTION_BODY`), under wording the page must not show.
       apiError(401, {
-        code: "unauthorized",
+        code: "permission_denied",
         message: "Private authentication diagnostics",
       }),
     );
@@ -158,16 +160,19 @@ test("a fresh reader shows specific copy when the API refuses its first chat que
   const composer = await openFreshReader(page);
   await composer.getByRole("textbox").fill(QUESTION);
   await composer.getByRole("button", { name: "Send message" }).click();
-  await expect(page.locator('[data-slot="docked-chat-thread"]')).toContainText(
-    messages.errors.api.unauthorized,
-  );
+  // Not sent: the question is back in the composer, not in the thread, and
+  // the notice is the expired session's, never the server's own wording.
   await expect(
-    page.getByRole("button", { name: "Resend", exact: true }),
+    page.getByText(messages.auth.sessionExpired, { exact: true }),
   ).toBeVisible();
+  await expect(composer.getByRole("textbox")).toContainText(QUESTION);
   await expect(
     page.locator('[data-slot="docked-chat-thread"]'),
-  ).not.toContainText(messages.chat.sendError);
+  ).not.toContainText(QUESTION);
   await expect(
-    page.locator('[data-slot="docked-chat-thread"]'),
-  ).not.toContainText("Private authentication diagnostics");
+    page.getByText(messages.chat.sendError, { exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByText("Private authentication diagnostics"),
+  ).toHaveCount(0);
 });

@@ -105,6 +105,7 @@ import enqueueChatMessage from "@/api/handlers/chat/queue/enqueue";
 import moveQueuedChatMessage from "@/api/handlers/chat/queue/move";
 import pauseChatQueue from "@/api/handlers/chat/queue/pause";
 import readChatQueue from "@/api/handlers/chat/queue/read";
+import readQueuedChatMessage from "@/api/handlers/chat/queue/read-message";
 import replaceQueuedChatMessage from "@/api/handlers/chat/queue/replace";
 import resumeChatQueue from "@/api/handlers/chat/queue/resume";
 import sendQueuedChatMessageNow from "@/api/handlers/chat/queue/send-now";
@@ -2989,7 +2990,9 @@ const isolationCases: IsolationCase[] = [
       expect(getStatusCode(result)).toBe(404);
     },
     expectPositive: (result) => {
-      expect(result).toEqual({ steer: "unavailable" });
+      expect(result).toEqual({
+        steer: { type: "refused", reason: "turn_not_running" },
+      });
     },
   },
   {
@@ -3175,6 +3178,28 @@ const isolationCases: IsolationCase[] = [
           { id: chatQueuedFirstB, position: 1, preview: "First" },
           { id: chatQueuedSecondB, position: 2, preview: "Second" },
         ],
+      }),
+  },
+  {
+    name: "chat queued message read",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(readQueuedChatMessage, workspaceA, {
+        params: { messageId: chatQueuedFirstB, threadId: chatQueueThreadB },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(readQueuedChatMessage, sameUserWorkspaceB, {
+        params: { messageId: chatQueuedFirstB, threadId: chatQueueThreadB },
+      }),
+    expectDenied: (result) => {
+      expect(getStatusCode(result)).toBe(404);
+    },
+    expectPositive: (result) =>
+      expect(result).toMatchObject({
+        message: {
+          id: chatQueuedFirstB,
+          parts: [{ type: "text", content: "First" }],
+        },
+        revision: 0,
       }),
   },
   {
@@ -3366,6 +3391,7 @@ const isolationCases: IsolationCase[] = [
     runAAgainstB: async ({ workspaceA }) => ({
       response: await runHandler(cancelQueuedChatMessage, workspaceA, {
         params: { threadId: chatQueueThreadB, messageId: chatQueuedSecondB },
+        query: { files: "delete", revision: 0 },
       }),
       queue: await chatQueueOfB(),
     }),
@@ -3375,6 +3401,7 @@ const isolationCases: IsolationCase[] = [
         sameUserWorkspaceB,
         {
           params: { threadId: chatQueueThreadB, messageId: chatQueuedSecondB },
+          query: { files: "delete", revision: 0 },
         },
       );
       return {
@@ -3395,7 +3422,9 @@ const isolationCases: IsolationCase[] = [
     },
     expectPositive: (result) =>
       expect(result).toEqual({
-        response: {},
+        response: {
+          message: queuedSendOf(chatQueuedSecondB, "Second").message,
+        },
         ids: [chatQueuedThirdB, chatQueuedFirstB],
       }),
   },
