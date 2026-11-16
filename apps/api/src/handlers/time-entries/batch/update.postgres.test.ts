@@ -289,7 +289,11 @@ if (!databaseUrl || !runPostgres) {
                   };
                 }
                 const value: unknown = Reflect.get(target, property, target);
-                return typeof value === "function" ? value.bind(target) : value;
+                if (typeof value !== "function") {
+                  return value;
+                }
+                const bound: unknown = value.bind(target);
+                return bound;
               },
             });
             return await batchUpdate.handler(
