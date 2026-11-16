@@ -834,8 +834,9 @@ for (const response of ["error", "null", "empty"] as const) {
         root.render(<Card />);
       });
       const toggle =
-        container.querySelector<HTMLButtonElement>("button[aria-expanded]") ??
-        panic("Missing provision toggle");
+        [...container.querySelectorAll("button")].find(
+          (button) => button.textContent === "Show full provision",
+        ) ?? panic("Missing full provision toggle");
       await act(async () => {
         toggle.click();
       });
