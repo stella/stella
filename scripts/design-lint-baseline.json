@@ -659,17 +659,13 @@
     "packages/ui/src/data-table/schema.ts": 1,
     "packages/ui/src/lib/slot.tsx": 1,
     "scripts/check-cli-release-coupling.ts": 1,
-    "scripts/check-migration-order.ts": 1,
     "scripts/codemod-icons.ts": 2,
-    "scripts/crawl-posture.ts": 1,
-    "scripts/db-await-in-loop.ts": 1,
     "scripts/migration-catalog.ts": 2,
     "scripts/network-baseline-scope.ts": 1,
     "scripts/oxlint-rule-ids.ts": 1,
     "scripts/rc-bailouts.ts": 1,
     "scripts/sql-perf-baseline.ts": 2,
-    "scripts/tanstack-drift.ts": 3,
-    "scripts/typecheck-baseline.ts": 2
+    "scripts/tanstack-drift.ts": 3
   },
   "exhaustive-union-map/exhaustive-union-map": {
     "apps/api/src/bullmq-queue-hosts.ts": 1,
