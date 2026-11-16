@@ -46,6 +46,7 @@ macro_rules! with_stella_commands {
       dictation::dictation_get_cloud_models => "dictation_get_cloud_models",
       dictation::dictation_set_cloud_model => "dictation_set_cloud_model",
       dictation::dictation_download_model => "dictation_download_model",
+      dictation::dictation_remove_model => "dictation_remove_model",
       clipboard_shortcut::shortcut_get_snapshot => "shortcut_get_snapshot",
       clipboard_shortcut::shortcut_check => "shortcut_check",
       clipboard_shortcut::shortcut_pause => "shortcut_pause",

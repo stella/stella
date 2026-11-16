@@ -4,8 +4,9 @@ import type * as v from "valibot";
 import {
   defaultTranscriptionModelId,
   isTranscriptionModelId,
-  TRANSCRIPTION_MODELS,
+  transcriptionEndpointFor,
 } from "@stll/ai-catalog/transcription";
+import type { TranscriptionEndpoint } from "@stll/ai-catalog/transcription";
 import { AI_FAILURE_CODES } from "@stll/api-contract";
 import {
   MAX_TRANSCRIPTION_AUDIO_SECONDS,
@@ -91,12 +92,20 @@ type DictationIdentity = {
 };
 
 type UsageCaller = DictationIdentity &
-  Pick<MemberCaller, "safeDb" | "recordAuditEvent" | "managedAIResidency">;
+  Pick<MemberCaller, "safeDb" | "recordAuditEvent"> & {
+    /** The endpoint that served the audio, whose price is billed. */
+    readonly transcriptionEndpoint: TranscriptionEndpoint;
+  };
 
 /** What transcription reads from its caller, whichever credential proved it. */
 export type DictationCaller = Readonly<OrgSettingsForAuth> &
   DictationIdentity &
-  Pick<MemberCaller, "safeDb" | "recordAuditEvent" | "getWorkspaceAccess">;
+  Pick<MemberCaller, "safeDb" | "recordAuditEvent" | "getWorkspaceAccess"> & {
+    /** A caller that shows members which models leave the region may send
+     *  a model the region does not serve to the global endpoint. Only a
+     *  model named in the request goes there; a default never does. */
+    readonly allowOutsideRegion?: boolean;
+  };
 type PreflightOptions = {
   caller: UsageCaller;
   isByok: boolean;
@@ -161,15 +170,12 @@ const settleUsage = async ({
   workspaceId,
   isByok,
 }: SettleOptions): Promise<Result<void, SafeDbError | HandlerError<503>>> => {
-  if (
-    !isTranscriptionModelId(result.modelId) ||
-    caller.managedAIResidency === null
-  ) {
+  if (!isTranscriptionModelId(result.modelId)) {
     return Result.err(managedProviderUnavailable("openrouter"));
   }
   const units = transcriptionUsageUnits({
     modelId: result.modelId,
-    residency: caller.managedAIResidency,
+    residency: caller.transcriptionEndpoint,
     durationMs: result.durationMs,
     isByok,
   });
@@ -258,11 +264,14 @@ export const executeDictation = async (
       residency === null ? undefined : defaultTranscriptionModelId(residency);
     const modelId =
       residency === null ? undefined : (body.modelId ?? regionalDefault);
-    if (
-      residency === null ||
-      modelId === undefined ||
-      TRANSCRIPTION_MODELS[modelId].residency[residency].status !== "available"
-    ) {
+    const endpoint =
+      residency === null || modelId === undefined
+        ? undefined
+        : transcriptionEndpointFor(modelId, residency, {
+            outsideRegion:
+              ctx.allowOutsideRegion === true && body.modelId !== undefined,
+          });
+    if (modelId === undefined || endpoint === undefined) {
       return Result.err(
         classifyFailure(
           new HandlerError({
@@ -309,7 +318,7 @@ export const executeDictation = async (
       session,
       user,
       recordAuditEvent: ctx.recordAuditEvent,
-      managedAIResidency: residency,
+      transcriptionEndpoint: endpoint,
     };
     yield* Result.await(
       dependencies.preflight({
@@ -317,7 +326,7 @@ export const executeDictation = async (
         isByok,
         required: transcriptionUsageUnits({
           modelId,
-          residency,
+          residency: endpoint,
           durationMs: maximumDurationMs,
           isByok,
         }).unitsConsumed,
@@ -335,7 +344,7 @@ export const executeDictation = async (
         language: body.language,
         vocabulary: body.vocabulary,
         apiKey: credential.apiKey,
-        residency,
+        residency: endpoint,
         scope: {
           admission,
           organizationId: session.activeOrganizationId,

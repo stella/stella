@@ -66,8 +66,11 @@ const stressResponse = (
       return schema["pattern"] === UUID_PATTERN || schema["format"] === "uuid"
         ? "00000000-0000-4000-8000-000000000000"
         : text;
-    case "number":
     case "integer":
+      return typeof schema["minimum"] === "number"
+        ? schema["minimum"]
+        : Number.MAX_SAFE_INTEGER;
+    case "number":
       return typeof schema["minimum"] === "number"
         ? schema["minimum"]
         : Number.MAX_VALUE;

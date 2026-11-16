@@ -113,6 +113,20 @@ export const backfillEntrypoints = {
       after,
     });
   },
+  "legislation-corpus-storage": (options: ParserOptions) => {
+    const { args, integer, uuid } = readArguments(options);
+    const after = uuid("after");
+    return withRuntime({
+      name: `legislation-corpus-storage:${after ?? "start"}`,
+      tableName: "legislation_documents",
+      // Documents written at once, each paying three object PUTs outside
+      // the transaction.
+      initialSize: integer("page", 4),
+      limit: integer("limit", 100_000),
+      apply: readApplyFlag(args),
+      after,
+    });
+  },
   "legislation-version-changes": (options: ParserOptions) => {
     const { args, integer, after } = readArguments(options);
     return withRuntime({

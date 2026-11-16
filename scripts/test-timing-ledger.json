@@ -375,21 +375,6 @@
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
   {
-    "id": "no-real-time-wait::apps/api/src/lib/sse.test.ts::<module>::Bun.sleep",
-    "count": 1,
-    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
-  },
-  {
-    "id": "no-real-time-wait::apps/api/src/lib/sse.test.ts::observeStreamRead::Bun.sleep",
-    "count": 1,
-    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
-  },
-  {
-    "id": "no-real-time-wait::apps/api/src/lib/sse.test.ts::settlePendingWork::Bun.sleep",
-    "count": 1,
-    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
-  },
-  {
     "id": "no-real-time-wait::apps/api/src/lib/tanstack-ai-provider-retry.test.ts::<module>::Bun.sleep",
     "count": 1,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
@@ -3206,11 +3191,6 @@
   },
   {
     "id": "no-unreasoned-timeout::apps/api/src/lib/organization-member-assignments.db.test.ts::<module>::setDefaultTimeout",
-    "count": 1,
-    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
-  },
-  {
-    "id": "no-unreasoned-timeout::apps/api/src/lib/public-law-census-grants.postgres.test.ts::<module>::test timeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },

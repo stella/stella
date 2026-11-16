@@ -88,6 +88,10 @@ export const ENUM_COLUMN_ROLES = {
     doctrinal_treatment: ATTRIBUTE,
     polarity_source: ATTRIBUTE,
   },
+  case_law_completeness_census: {
+    outcome: ATTRIBUTE,
+    scope_status: ATTRIBUTE,
+  },
   case_law_corpus_pack_refs: {
     kind: ATTRIBUTE,
   },
@@ -215,6 +219,9 @@ export const ENUM_COLUMN_ROLES = {
     contract_version: ATTRIBUTE,
     family: ATTRIBUTE,
   },
+  corpus_index_generation_seeding_passes: {
+    family: ATTRIBUTE,
+  },
   corpus_index_group_withdrawals: {
     family: ATTRIBUTE,
   },
@@ -243,6 +250,9 @@ export const ENUM_COLUMN_ROLES = {
     family: ATTRIBUTE,
     pass_expectation: ATTRIBUTE,
     revoke_reason: ATTRIBUTE,
+  },
+  corpus_index_route_seedings: {
+    family: ATTRIBUTE,
   },
   correspondence: {
     channel: ATTRIBUTE,

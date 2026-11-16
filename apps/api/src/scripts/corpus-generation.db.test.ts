@@ -19,11 +19,15 @@ import {
 import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { createScriptBackfillRuntime } from "@/api/db/backfill-runtime";
 import type { Transaction } from "@/api/db/root";
 import {
+  caseLawDecisions,
+  caseLawSources,
   corpusIndexGenerations,
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
+  databaseBackfillStates,
   systemAuditRuns,
 } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -34,6 +38,7 @@ import {
 import { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
 import { readServingCorpusIndexGenerationTx } from "@/api/lib/legal-search/corpus-index-generation-store";
 import {
+  CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
   requireCorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
@@ -41,6 +46,7 @@ import type { CorpusIndexProjectionConvergenceStatus } from "@/api/lib/legal-sea
 import {
   CorpusGenerationLaneBusyError,
   runCorpusGenerationCommand,
+  seedRunExit,
   type WithCorpusDatabase,
 } from "@/api/scripts/corpus-generation";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -267,11 +273,15 @@ const testDatabase =
     }
   };
 
+/** What the seed command's page runtime reads of database load. */
+type SeedingLoad = { verdict: "normal" | "stop"; pageSize?: number };
+
 type RunOptions = {
   args: readonly string[];
   engine?: EngineState;
   database?: WithCorpusDatabase;
   searchEndpoint?: string | null;
+  seeding?: SeedingLoad;
 };
 
 type RunOutcome = { code: number; out: string; err: string };
@@ -281,12 +291,26 @@ const run = async ({
   engine = engineWith([]),
   database = testDatabase(),
   searchEndpoint = SEARCH_ENDPOINT,
+  seeding = { verdict: "normal" },
 }: RunOptions): Promise<RunOutcome> => {
   const out: string[] = [];
   const err: string[] = [];
   const code = await runCorpusGenerationCommand({
     args,
     withDatabase: database,
+    withSeedingDatabase: async (work) => await work(rootHandle()),
+    seedingBrake: {
+      createRuntime: (options) =>
+        createScriptBackfillRuntime({
+          ...options,
+          initialSize: seeding.pageSize ?? options.initialSize,
+          readVerdict: async () => ({ kind: seeding.verdict, signals: [] }),
+          // Embedded PostgreSQL owns one session; there is no slot to share.
+          slot: { tryAcquire: async () => true, release: () => {} },
+        }),
+      // A held page stops the run at once instead of waiting.
+      maxWaitMs: 0,
+    },
     searchEndpoint: () => searchEndpoint,
     indexClient: () => ({
       aggregate: async ({ indexId, query }) => {
@@ -1007,5 +1031,154 @@ describe("corpus generation operator command", () => {
       expect(refused.code).toBe(1);
       expect(refused.err).toContain("Usage:");
     }
+  });
+
+  test("a seed run exits with the code of the reason it stopped", async () => {
+    const manifest = CORPUS_INDEX_MANIFESTS.case_law_v10;
+    const sourceId = toSafeId<"caseLawSource">(
+      "0198e331-e578-7000-8000-000000000890",
+    );
+    const seed = async (load: SeedingLoad, ...flags: string[]) =>
+      await run({
+        args: caseLaw("seed", "case_law_v10", ...flags),
+        seeding: load,
+      });
+    await db
+      .delete(databaseBackfillStates)
+      .where(sql`${databaseBackfillStates.name} LIKE 'corpus-seeding:%'`);
+    try {
+      // Not registered: refused, nothing walked.
+      const unregistered = await seed({ verdict: "normal" });
+      expect(unregistered.code).toBe(1);
+      expect(unregistered.err).toContain("not registered");
+
+      await db.insert(corpusIndexGenerations).values({
+        family: "case_law",
+        generation: "case_law_v10",
+        cluster: manifest.cluster,
+        manifestDigest: corpusIndexManifestDigest(manifest),
+        status: "building",
+      });
+      // Not yet projectable, so held by no generation: the walk passes them.
+      await db.insert(caseLawSources).values({
+        id: sourceId,
+        adapterKey: "seed-exit-codes",
+        name: "Seed exit codes",
+      });
+      await db.insert(caseLawDecisions).values(
+        [1, 2].map((n) => ({
+          id: toSafeId<"caseLawDecision">(
+            `0198e331-e578-7000-8000-00000000089${String(n)}`,
+          ),
+          sourceId,
+          caseNumber: `${String(n)} As 1/2026`,
+          court: "Nejvyšší správní soud",
+          country: "CZE",
+          language: "cs",
+          corpusMirrorStatus: "pending" as const,
+        })),
+      );
+
+      const braked = await seed({ verdict: "stop" });
+      expect(braked.code).toBe(6);
+      expect(braked.out).toContain("paused by the database-load brake");
+      // The hold the brake left on the run's checkpoint has run out.
+      await db
+        .delete(databaseBackfillStates)
+        .where(sql`${databaseBackfillStates.name} LIKE 'corpus-seeding:%'`);
+
+      const budget = await seed(
+        { verdict: "normal", pageSize: 1 },
+        "--pages",
+        "1",
+      );
+      expect(budget.code).toBe(5);
+      expect(budget.out).toContain("page budget spent");
+
+      const seeded = await seed({ verdict: "normal" });
+      expect(seeded.code).toBe(0);
+      expect(seeded.out).toContain("every route of the generation is seeded");
+    } finally {
+      await db
+        .delete(caseLawDecisions)
+        .where(eq(caseLawDecisions.sourceId, sourceId));
+      await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
+      await db
+        .delete(databaseBackfillStates)
+        .where(sql`${databaseBackfillStates.name} LIKE 'corpus-seeding:%'`);
+    }
+  });
+
+  test("a seed run held by a writer, or outrun by a new route, has its own exit code", () => {
+    const target = { family: "case_law", generation: "case_law_v10" } as const;
+    const pass = {
+      number: 1,
+      startedAt: new Date(0),
+      routes: ["case_law_v10_cs"],
+      afterEntityId: null,
+      walked: 0,
+      seeded: 0,
+      deferred: 0,
+      completedAt: null,
+    };
+    const routes = [
+      {
+        indexId: "case_law_v10_cs",
+        jurisdictions: ["CZE"],
+        state: "seeded" as const,
+        passNumber: 1,
+        seededAt: new Date(0),
+      },
+    ];
+    const exit = (
+      outcome: Parameters<typeof seedRunExit>[0]["outcome"],
+      seedings: Parameters<typeof seedRunExit>[0]["seedings"],
+      paused = false,
+    ) => {
+      const lines: string[] = [];
+      const code = seedRunExit({
+        target,
+        paused,
+        outcome,
+        seedings,
+        write: (line) => {
+          lines.push(line);
+        },
+      });
+      return { code: code.isOk() ? code.value : 1, lines };
+    };
+
+    expect(exit({ type: "busy", pass }, { pass, routes }).code).toBe(7);
+    expect(
+      exit(
+        { type: "completed", pass },
+        {
+          pass,
+          routes: [
+            ...routes,
+            {
+              indexId: "case_law_v10_hu",
+              jurisdictions: ["HUN"],
+              state: "unseeded",
+              reason: "never_walked",
+            },
+          ],
+        },
+      ).code,
+    ).toBe(8);
+    expect(exit({ type: "completed", pass }, { pass, routes }).code).toBe(0);
+    expect(
+      exit({ type: "advanced", pass, walked: 1, seeded: 0 }, { pass, routes })
+        .code,
+    ).toBe(5);
+    // A brake pause after some pages is still a pause, not a spent budget.
+    expect(
+      exit(
+        { type: "advanced", pass, walked: 1, seeded: 0 },
+        { pass, routes },
+        true,
+      ).code,
+    ).toBe(6);
+    expect(exit({ type: "inactive", status: "retiring" }, null).code).toBe(1);
   });
 });

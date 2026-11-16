@@ -202,7 +202,8 @@ describe("consent success", () => {
     expect(markup).toContain(VERIFIED_MARK);
     expect(markup).not.toContain(UNVERIFIED_MARK);
     expect(markup).toContain("Connected to Claude");
-    expect(markup).toContain(en.consent.returnToAgent);
+    expect(markup).toContain("Taking you back to Claude.");
+    expect(markup).toContain('role="status"');
   });
 
   test("an unverified client keeps the neutral mark and its claimed name", () => {

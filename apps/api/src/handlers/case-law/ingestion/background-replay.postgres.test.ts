@@ -71,6 +71,10 @@ import {
   openGatedTestDatabase,
   withGatedTestClients,
 } from "@/api/tests/gated-test-database";
+import {
+  guardPostgresSuiteSeeding,
+  insertProjectedFixtureDecisions,
+} from "@/api/tests/helpers/corpus-projection-seeding-guard-postgres";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { OFF_REPLAY_ENROLMENT_FIXTURE } from "@/api/tests/helpers/replay-enrolment";
 import { runReplayTickFixture } from "@/api/tests/helpers/replay-tick";
@@ -146,7 +150,11 @@ if (!databaseUrl || !enabled) {
   });
 } else {
   describe("background replay ownership and durable batch boundaries", () => {
-    const { db, cleanUp } = openGatedTestDatabase(databaseUrl);
+    const database = openGatedTestDatabase(databaseUrl);
+    // A generation of the suite's own, so the replay writer is held to the
+    // seeding rule.
+    guardPostgresSuiteSeeding(database, { generations: ["case_law_v10"] });
+    const { db, cleanUp } = database;
     const scopedDb: ScopedDb = async (callback) =>
       await db.transaction(callback);
     const sources: BackgroundReplaySource[] = [];
@@ -196,7 +204,8 @@ if (!databaseUrl || !enabled) {
       const ids = Array.from({ length: 3 }, () =>
         createSafeId<"caseLawDecision">(),
       ).toSorted(compareCodeUnit);
-      await db.insert(caseLawDecisions).values(
+      await insertProjectedFixtureDecisions(
+        db,
         ids.map((id, index) => ({
           id,
           sourceId: source.id,

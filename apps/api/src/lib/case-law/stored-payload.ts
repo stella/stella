@@ -1,3 +1,4 @@
+// parser-output-unchanged: Adds the shared current-supplement merge predicate; existing decision document predicates and parser output are unchanged.
 /**
  * One definition of "this decision holds a document", shared by
  * everything that has to decide whether a payload is safe to overwrite,
@@ -69,6 +70,18 @@ export const rowHoldsDocumentFor = (
     and ${notInArray(table.contentHash, [...EMPTY_CORPUS_CONTENT_HASHES])}
   )
 )`;
+
+/** A supplement is placed only when its judgment includes the current source version. */
+export const supplementIsMergedFor = ({
+  decisionId,
+  sourceHash,
+  mergedSourceHash,
+}: {
+  decisionId: Column;
+  sourceHash: Column;
+  mergedSourceHash: Column;
+}): SQL<boolean> =>
+  sql<boolean>`coalesce(${decisionId} is not null and ${mergedSourceHash} = ${sourceHash}, false)`;
 
 /**
  * Public reads cannot inspect the normalized corpus key. Confirm the readable

@@ -4,6 +4,7 @@ import { and, asc, countDistinct, eq, inArray, sql } from "drizzle-orm";
 import fc from "fast-check";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
+import { USER_FILE_URL_PREFIX } from "@stll/api-contract/user-file-url";
 import { assertProperty } from "@stll/property-testing";
 import { createTestClock } from "@stll/test-kit";
 
@@ -1052,6 +1053,70 @@ const suite = (
         { id: anonymized, revision: 0, steeredRevision: null },
         { id: switched, revision: 1, steeredRevision: null },
       ]);
+    });
+
+    test("a steer is refused a message that carries files", async () => {
+      const owner = await seedOwner();
+      const threadId = await seedThread(owner);
+      // The mark reads the message's parts alone; no stored file row is
+      // needed (one would also hold the thread against the suite's cleanup).
+      const fileId = createSafeId<"userFile">();
+      const id = createSafeId<"chatMessage">();
+      const plain = rawSendOf(id, "read the lease");
+      await withLock(threadId, owner, async (tx) => {
+        await enqueueChatMessageOnTx({
+          id,
+          send: {
+            ...plain,
+            message: {
+              ...plain.message,
+              parts: [
+                ...plain.message.parts,
+                {
+                  type: "document",
+                  source: {
+                    type: "url",
+                    value: `${USER_FILE_URL_PREFIX}${fileId}`,
+                    mimeType: "application/pdf",
+                  },
+                  metadata: { filename: "lease.pdf" },
+                },
+              ],
+            },
+          },
+          threadId,
+          tx,
+          uploadedFileIds: [],
+        });
+        await acceptTurnOnTx({
+          messageId: createSafeId<"chatMessage">(),
+          owner,
+          threadId,
+          tx,
+        });
+      });
+      await setTurnStatus({ owner, status: "running", threadId });
+      // Queued raw at the revision named, but a steer hands over its text
+      // alone, and a taken steer would remove the message with its files.
+      expect(
+        await withLock(
+          threadId,
+          owner,
+          async (tx) =>
+            await markSteeredQueuedMessageOnTx({
+              id,
+              revision: 0,
+              threadId,
+              tx,
+            }),
+        ),
+      ).toBe("has-files");
+      expect(
+        await database
+          .select({ steeredRevision: chatQueuedMessages.steeredRevision })
+          .from(chatQueuedMessages)
+          .where(eq(chatQueuedMessages.id, id)),
+      ).toEqual([{ steeredRevision: null }]);
     });
 
     test("a refusal the sender met outside the lock holds only a head still due", async () => {
