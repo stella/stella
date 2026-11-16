@@ -50,7 +50,7 @@ export const messageActions = (entry: ChatEntry): readonly MessageAction[] =>
  * A file or pasted text the edited message carries on as it was stored:
  * its part, and the name and type its chip shows.
  */
-export type KeptAttachment = {
+type KeptAttachment = {
   readonly key: string;
   readonly name: string;
   readonly mimeType: string;
@@ -173,7 +173,7 @@ export const shownBeforeEdit = (
   truncates === undefined ? entries : entriesBefore(entries, truncates);
 
 /** Why the server did not take an edit, as the form says it. */
-export type EditRefusal = "refused" | "history-changed" | "target-missing";
+type EditRefusal = "refused" | "history-changed" | "target-missing";
 
 const EDIT_REFUSALS = {
   [CHAT_MESSAGE_EDIT_ERROR_CODE.historyChanged]: "history-changed",
@@ -225,7 +225,7 @@ const REFUSAL_KEYS = {
 type RefusalKey = `refused.${(typeof REFUSAL_KEYS)[ChatLocalFilesUndoRefusal]}`;
 
 /** Under `chat.edit.localFiles`: why an undo the form asked for did not restore the folder. */
-export type LocalFilesProblemKey =
+type LocalFilesProblemKey =
   | RefusalKey
   | `computer.${(typeof COMPUTER_REASON_KEYS)[ChatLocalFilesUndoComputerRefusal]}`
   | "expired";
@@ -255,7 +255,7 @@ export type LocalFilesUndoProblem = Exclude<
   { type: "restored" } | { type: "abandoned" }
 >;
 
-export const localFilesProblemKey = (
+const localFilesProblemKey = (
   problem: LocalFilesUndoProblem,
 ): LocalFilesProblemKey => {
   switch (problem.type) {

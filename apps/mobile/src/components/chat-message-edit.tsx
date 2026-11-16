@@ -59,7 +59,7 @@ export type EditOutcome =
  * answer: an accepted edit closes the form, a refusal keeps it with its
  * notice.
  */
-export const ChatMessageEdit = ({
+const ChatMessageEdit = ({
   busy,
   entry,
   onCancel,

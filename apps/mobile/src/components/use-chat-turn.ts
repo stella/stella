@@ -79,7 +79,7 @@ type StoredLink = {
  * the edit runs, the parts it is sent with, and the computer target of a
  * thread whose turns run on the person's computer.
  */
-export type ChatEdit = {
+type ChatEdit = {
   readonly question: ChatEntry;
   readonly parts: readonly unknown[];
   readonly runTarget: LocalRunTarget | undefined;
