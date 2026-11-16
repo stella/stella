@@ -598,21 +598,21 @@
   },
   "dictation": {
     "title": "Dictado",
-    "description": "Mantén pulsado {shortcut} y habla. El texto aparece en la aplicación que estás usando. La voz se transcribe en este ordenador y no se guarda. Con la corrección con IA activada, el texto transcrito, no el audio, se envía a través de stella al proveedor de IA de tu organización para corregir errores y formato; stella no lo guarda.",
+    "description": "Mantén pulsado {shortcut} y habla. El texto aparece en la aplicación que estás usando. La voz se transcribe en este ordenador y no se guarda.",
     "descriptionCloud": "Mantenga pulsado {shortcut} y hable. El texto aparece en la aplicación que está usando. stella AI transcribe la voz y stella no la guarda.",
     "cleanup": {
       "title": "Corregir con IA",
-      "description": "La voz se sigue transcribiendo en este ordenador y el audio nunca sale de él. Con la corrección activada, el texto transcrito se envía a través de stella al proveedor de IA de tu organización para corregir errores de reconocimiento y aplicar la puntuación y el formato dictados, como «nueva línea» o «negrita». stella no lo guarda. La corrección también recibe el tipo de aplicación en la que dictas, como el correo o un chat, para que el texto encaje en ella.",
-      "descriptionCloud": "Con la corrección activada, stella AI también corrige los errores de reconocimiento del texto transcrito y aplica la puntuación y el formato dictados, como «nueva línea» o «negrita». La corrección también recibe el tipo de aplicación en la que dictas, como el correo o un chat, para que el texto encaje en ella."
+      "description": "Corrige errores de reconocimiento y el formato dictado, como «nueva línea» o «negrita», y adapta el texto a la aplicación, como el correo. Solo el texto, no el audio, se envía a través de stella al proveedor de IA de tu organización; stella no lo guarda.",
+      "descriptionCloud": "stella AI también corrige errores de reconocimiento y el formato dictado, como «nueva línea» o «negrita», y adapta el texto a la aplicación, como el correo."
     },
     "context": {
       "windowTitle": {
         "title": "Compartir el título de la ventana con la corrección con IA",
-        "description": "La corrección también recibe el título de la ventana en la que dictas, para distinguir, por ejemplo, un contrato de una nota interna. Los títulos de las ventanas pueden contener nombres de clientes o de asuntos. El título se envía a través de stella al proveedor de IA de tu organización, y stella no lo guarda."
+        "description": "Ayuda a distinguir un contrato de una nota interna. Los títulos de ventana pueden contener nombres de clientes o asuntos."
       },
       "textBeforeCursor": {
         "title": "Compartir el texto antes del cursor con la corrección con IA",
-        "description": "La corrección también recibe hasta {limit, number} caracteres antes del cursor, para que el dictado continúe el texto que escribes. Así se envía parte del documento en el que estás a través de stella al proveedor de IA de tu organización, y stella no la guarda."
+        "description": "Hasta {limit, number} caracteres del documento en el que estás, para que el dictado encaje con lo que escribes."
       }
     },
     "keptInHistory": "Cada dictado también se guarda en el historial del portapapeles de este ordenador.",
@@ -624,16 +624,21 @@
       "unavailableRegion": "stella AI aún no ofrece transcripción en la región de su organización.",
       "unavailableProvider": "El proveedor de IA de su organización no ofrece transcripción.",
       "unavailable": "La transcripción con stella AI no está disponible en este momento.",
-      "model": "Modelo de transcripción"
+      "model": "Modelo de transcripción",
+      "outsideRegion": "Fuera de tu región",
+      "outsideRegionNote": "Este modelo procesa el audio fuera de la región de tu organización."
     },
     "language": {
       "title": "Idioma del dictado",
-      "description": "La voz se reconoce en este idioma y la corrección mantiene el texto en él. Automático usa los idiomas de la interfaz y los teclados de este ordenador.",
+      "description": "Automático usa los idiomas de la pantalla y los teclados de este ordenador.",
       "automatic": "Automático",
       "automaticWith": "Automático ({languages})",
       "noResults": "No se encontraron idiomas"
     },
     "modelNeeded": "El modelo de voz se ejecuta en este ordenador.",
+    "modelInstalled": "El modelo de voz ({size} MB) está en este ordenador.",
+    "removeModel": "Eliminar",
+    "removeFailed": "No se pudo eliminar el modelo de voz. Inténtalo de nuevo.",
     "download": "Descargar ({size} MB)",
     "downloading": "Descargando el modelo de voz: {percent} %",
     "downloadFailed": "No se pudo descargar el modelo de voz.",
@@ -716,6 +721,11 @@
     "howDocumentsBody": "Elija Abrir en un documento de stella. Al guardar, la edición vuelve a stella como una nueva versión.",
     "howClipboard": "Portapapeles",
     "howClipboardBody": "Copie como siempre y pulse {shortcut} para elegir entre lo que ha copiado.",
+    "howSigning": "Firmar PDF",
+    "howSigningBodyMac": "Elige «Firmar con stella desktop» en un PDF de stella. Tu certificado se queda en tu llavero o en tu tarjeta inteligente, y el PDF firmado vuelve a stella como una nueva versión.",
+    "howSigningBodyPc": "Elige «Firmar con stella desktop» en un PDF de stella. Tu certificado se queda en tu almacén de certificados o en tu tarjeta inteligente, y el PDF firmado vuelve a stella como una nueva versión.",
+    "howDictation": "Dictado",
+    "howDictationBody": "Mantén pulsado un atajo y habla; el texto aparece en la aplicación que estás usando. Puedes activarlo en un paso posterior.",
     "howActivity": "Actividad",
     "howActivityBody": "Vea en qué se le fue el día y conviértalo en borradores de entradas de tiempo. Desactivada hasta que la inicie.",
     "activityTitle": "Así funciona Actividad",
@@ -825,9 +835,10 @@
       "storage": "No se pudo leer ni guardar la conexión en este ordenador."
     },
     "callbackConnectedTitle": "ChatGPT está conectado",
-    "callbackConnectedBody": "Puedes cerrar esta pestaña y volver a stella.",
+    "callbackConnectedBody": "Vuelve a stella. Las solicitudes de IA ya usan tu plan de ChatGPT.",
     "callbackNotConnectedTitle": "ChatGPT no se ha conectado",
     "callbackNotConnectedBody": "Vuelve a stella para ver qué ha pasado e inténtalo de nuevo.",
+    "callbackCloseTab": "Puedes cerrar esta pestaña.",
     "claudeCode": {
       "title": "Claude Code",
       "description": "Usa tu suscripción de Claude para los agentes locales en stella. El uso se descuenta de tu plan de Claude, aparte de tu suscripción a stella.",

@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { createTestState } from "@stll/test-state";
+
 import { env } from "@/api/env";
 import { envApiServerSchema } from "@/api/env-schema";
 import getTemplatePack from "@/api/handlers/template-packs/get";
@@ -9,9 +11,11 @@ import { createHttpApp } from "@/api/http/app";
 import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { serveForTest } from "@/api/tests/helpers/test-server";
 
+const testState = createTestState({ file: import.meta.path, config: env });
+
 const withGate = async (enabled: boolean, request: Request) => {
   const previous = env.FEATURE_TEMPLATE_PACKS;
-  env.FEATURE_TEMPLATE_PACKS = enabled;
+  testState.setConfig("FEATURE_TEMPLATE_PACKS", enabled);
   try {
     await using server = serveForTest(
       createHttpApp({
@@ -21,7 +25,7 @@ const withGate = async (enabled: boolean, request: Request) => {
     );
     return await server.fetch(request);
   } finally {
-    env.FEATURE_TEMPLATE_PACKS = previous;
+    testState.setConfig("FEATURE_TEMPLATE_PACKS", previous);
   }
 };
 

@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { PanelRightIcon } from "@stll/ui/icons";
 import {
   InspectorDock,
@@ -52,7 +53,7 @@ export const PublicInspectorRail = ({
                 />
               }
             >
-              <PanelRightIcon className="size-4" />
+              <DirectionalIcon className="size-4" icon={PanelRightIcon} />
             </Tooltip>
           }
         />

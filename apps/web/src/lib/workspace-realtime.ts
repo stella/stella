@@ -5,6 +5,7 @@ import {
   type QueryClient,
   type QueryKey,
 } from "@tanstack/react-query";
+import type { updateUser } from "better-auth/api";
 import type { OrganizationCreator } from "better-auth/plugins";
 import { panic, Result } from "better-result";
 
@@ -19,6 +20,7 @@ import {
 } from "@stll/api-contract";
 
 import { getAnalytics } from "@/lib/analytics/provider";
+import { sessionOptions } from "@/lib/auth-query-options";
 import { detached } from "@/lib/detached";
 import {
   fileContentByFieldQueryRoot,
@@ -66,6 +68,10 @@ type ResourceReads =
   | {
       resources: readonly [ResourceType, ...ResourceType[]];
       scope: ResourceQueryScopeIdentity;
+      organizationReads?: {
+        organizationId: string;
+        resources: readonly [ResourceType, ...ResourceType[]];
+      };
       /**
        * Writes of this client that update the reader's cached data in place
        * (an optimistic write the server's answer confirms), so their commit
@@ -93,6 +99,13 @@ type AuthPluginEndpointWrite<
   route: ReturnType<OrganizationCreator>["endpoints"][TEndpoint]["path"];
 };
 
+type AuthCoreUserUpdateWrite = {
+  type: "auth-core-endpoint";
+  endpoint: "updateUser";
+  method: ReturnType<typeof updateUser>["options"]["method"];
+  route: ReturnType<typeof updateUser>["path"];
+};
+
 declare module "@tanstack/react-query" {
   // oxlint-disable-next-line typescript/consistent-type-definitions -- module augmentation requires an interface for declaration merging
   interface Register {
@@ -113,6 +126,17 @@ export const resourceQueryOptions = <
 });
 
 export const RESOURCE_MUTATION_CONTRACTS = {
+  updateUser: {
+    writes: [
+      {
+        type: "auth-core-endpoint",
+        endpoint: "updateUser",
+        method: "POST",
+        route: "/update-user",
+      } satisfies AuthCoreUserUpdateWrite,
+    ],
+    resources: [RESOURCE_TYPE.USER],
+  },
   // The member's own reminder for when a chat's usage limit resets.
   changeChatLimitReminder: {
     writes: [
@@ -225,6 +249,18 @@ export const RESOURCE_MUTATION_CONTRACTS = {
       RESOURCE_TYPE.MCP_CONNECTOR,
     ],
   },
+  // An owner or admin sets a member's additional billing visibility; the
+  // member list and every member's permission reads refresh.
+  updateMemberBillingAccess: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "PUT",
+        route: "/organization-settings/members/:memberId/billing",
+      },
+    ],
+    resources: [RESOURCE_TYPE.ORGANIZATION, RESOURCE_TYPE.USER],
+  },
   // An administrator turns the decision model on or off for verification
   // verdicts; the organization's AI configuration read shows the switch.
   updateVerificationDecisionModel: {
@@ -333,6 +369,58 @@ export const RESOURCE_MUTATION_CONTRACTS = {
     ],
     resources: [RESOURCE_TYPE.LEGAL_LIST_VERIFICATION],
   },
+  createTask: {
+    writes: [
+      { type: "handler-route", method: "PUT", route: "/tasks/:workspaceId" },
+    ],
+    resources: [RESOURCE_TYPE.ENTITY, RESOURCE_TYPE.LEGAL_LIST],
+  },
+  createListItemSource: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/lists/:workspaceId/item-sources",
+      },
+    ],
+    resources: [RESOURCE_TYPE.LEGAL_LIST],
+  },
+  recheckClaim: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/lists/:workspaceId/claim-rechecks",
+      },
+    ],
+    resources: [RESOURCE_TYPE.LEGAL_LIST_VERIFICATION],
+  },
+  // A resumed addition executes only the writes its progress has not committed.
+  addClaimFact: {
+    writes: [
+      { type: "handler-route", method: "PUT", route: "/tasks/:workspaceId" },
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/lists/:workspaceId/item-sources",
+      },
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/lists/:workspaceId/claim-reviews",
+      },
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/lists/:workspaceId/claim-rechecks",
+      },
+    ],
+    resources: [
+      RESOURCE_TYPE.ENTITY,
+      RESOURCE_TYPE.LEGAL_LIST,
+      RESOURCE_TYPE.LEGAL_LIST_VERIFICATION,
+    ],
+  },
   acceptRoutineClaims: {
     writes: [
       {
@@ -346,6 +434,7 @@ export const RESOURCE_MUTATION_CONTRACTS = {
 } as const;
 
 type ResourceMutationName = keyof typeof RESOURCE_MUTATION_CONTRACTS;
+type PrimaryResourceMutationName = Exclude<ResourceMutationName, "updateUser">;
 
 /**
  * The variable naming the one entity a contract changes, if it names one.
@@ -362,12 +451,12 @@ type ChangedEntityVariable<TMutation extends ResourceMutationName> =
     : never;
 
 type OrganizationResourceMutationName = {
-  [TMutation in ResourceMutationName]: [
+  [TMutation in PrimaryResourceMutationName]: [
     ChangedEntityVariable<TMutation>,
   ] extends [never]
     ? TMutation
     : never;
-}[ResourceMutationName];
+}[PrimaryResourceMutationName];
 
 type ResourceMutationOptions<
   TMutation extends ResourceMutationName,
@@ -380,6 +469,12 @@ type ResourceMutationOptions<
   /** The write. Arguments after the variables (an idempotent submission's
    *  replay request) reach it unchanged. */
   mutationFn: (variables: TVariables, ...rest: TRest) => Promise<TData>;
+};
+
+type OrganizationProjectionMutationScope = {
+  type: "organization-projection";
+  organizationId: string | null;
+  userId: string | null;
 };
 
 type ResourceMutationScope =
@@ -465,7 +560,7 @@ const workspaceMutationScope = (
  * the entity collections, never every cached entity detail.
  */
 export function resourceMutation<
-  TMutation extends ResourceMutationName,
+  TMutation extends PrimaryResourceMutationName,
   TVariables extends { workspaceId: string } & Record<
     ChangedEntityVariable<TMutation>,
     string
@@ -487,16 +582,42 @@ export function resourceMutation<
     scope: { type: "organization" };
   },
 ): (variables: TVariables) => Promise<TData>;
+export function resourceMutation<TData, TVariables>(
+  options: ResourceMutationOptions<"updateUser", TVariables, TData> & {
+    scope: OrganizationProjectionMutationScope;
+  },
+): (variables: TVariables) => Promise<TData>;
 export function resourceMutation<TVariables, TData, TRest extends unknown[]>({
   mutation,
   queryClient,
   mutationFn,
   scope,
 }: ResourceMutationOptions<ResourceMutationName, TVariables, TData, TRest> & {
-  scope?: { type: "workspace" } | { type: "organization" };
+  scope?:
+    | { type: "workspace" }
+    | { type: "organization" }
+    | OrganizationProjectionMutationScope;
 }): (variables: TVariables, ...rest: TRest) => Promise<TData> {
   return async (variables: TVariables, ...rest: TRest) => {
     const data = await mutationFn(variables, ...rest);
+    if (scope?.type === "organization-projection") {
+      const session = queryClient.getQueryData(sessionOptions.queryKey);
+      if (
+        scope.organizationId !== null &&
+        session?.user.id === scope.userId &&
+        session.session.activeOrganizationId === scope.organizationId
+      ) {
+        await invalidateResourceQueries(
+          queryClient,
+          organizationResourceQueryActions({
+            queryClient,
+            organizationId: scope.organizationId,
+            resources: RESOURCE_MUTATION_CONTRACTS[mutation].resources,
+          }),
+        );
+      }
+      return data;
+    }
     await invalidateAfterResourceMutation({
       mutation,
       queryClient,
@@ -752,7 +873,7 @@ const getResourceQueryScopeKeys = (
  */
 type ResourceQueryInvalidation = {
   queryKey: QueryKey;
-  match: "prefix" | "entity-collections";
+  match: "prefix" | "exact" | "entity-collections";
 };
 
 /**
@@ -916,6 +1037,36 @@ const registeredResourceQueryActions = ({
       queryKey,
     }));
 
+/** Secondary dependencies name their owning organization independently of a
+ * query's workspace. They never inherit the legacy organization-wide match. */
+export const organizationResourceQueryActions = ({
+  queryClient,
+  organizationId,
+  resources,
+}: {
+  queryClient: QueryClient;
+  organizationId: string;
+  resources: readonly ResourceType[];
+}): { queryKey: QueryKey; match: "exact" }[] =>
+  queryClient
+    .getQueryCache()
+    .findAll({
+      predicate: ({ meta }) => {
+        const reads = meta?.resourceReads;
+        if (!reads || "type" in reads) {
+          return false;
+        }
+        const organization = reads.organizationReads;
+        return (
+          organization?.organizationId === organizationId &&
+          organization.resources.some((resource) =>
+            resources.includes(resource),
+          )
+        );
+      },
+    })
+    .map(({ queryKey }) => ({ queryKey, match: "exact" }));
+
 const deduplicateInvalidations = (
   invalidations: readonly ResourceQueryInvalidation[],
 ): ResourceQueryInvalidation[] => {
@@ -939,6 +1090,7 @@ const invalidationReaches = (
 ): boolean => {
   switch (match) {
     case "prefix":
+    case "exact":
       return true;
     case "entity-collections":
       return isEntityCollectionQueryKey(queryKey);
@@ -962,6 +1114,7 @@ const invalidateResourceQueries = async (
         invalidations.map(async ({ queryKey, match }) => {
           await queryClient.invalidateQueries({
             queryKey,
+            exact: match === "exact",
             predicate: (query) => invalidationReaches(match, query.queryKey),
             refetchType: "none",
           });
@@ -985,7 +1138,7 @@ const invalidateResourceQueries = async (
       predicate: (query) =>
         invalidations.some(
           ({ queryKey, match }) =>
-            matchQuery({ queryKey }, query) &&
+            matchQuery({ queryKey, exact: match === "exact" }, query) &&
             invalidationReaches(match, query.queryKey),
         ),
     }),

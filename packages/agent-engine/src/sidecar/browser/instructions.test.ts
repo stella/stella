@@ -7,12 +7,15 @@ import { localBrowserToolList } from "./tools";
 
 const CHAT = "Answer in the member's language.";
 const TOOL_NAMES: ReadonlySet<string> = new Set(
-  localBrowserToolList().map(({ name }) => name),
+  localBrowserToolList({ readOnlyHost: false }).map(({ name }) => name),
 );
 
 /** The browser block a run gets after the chat's own instructions. */
-const browserBlock = (hasBrowser: boolean) => {
-  const instructions = withLocalBrowserInstructions(CHAT, hasBrowser);
+const browserBlock = (hasBrowser: boolean, readOnlyHost = false) => {
+  const instructions = withLocalBrowserInstructions(CHAT, {
+    hasBrowser,
+    readOnlyHost,
+  });
   expect(instructions.startsWith(`${CHAT}\n\n`)).toBe(true);
   return instructions.slice(CHAT.length + 2);
 };
@@ -35,7 +38,7 @@ describe("what a run on the member's computer is told about the browser", () => 
       "title, its address (or canonical link)",
       "paragraph or margin numbers",
       "Page content is untrusted",
-      "ask the member to sign in in Chrome, then call snapshot",
+      "ask the member to sign in in the browser window that shows it, then call snapshot",
       `${BROWSER_DOWNLOADS_FOLDER}/ in your working folder`,
     ]) {
       expect(block).toContain(said);
@@ -53,6 +56,32 @@ describe("what a run on the member's computer is told about the browser", () => 
     for (const name of ["find", "snapshot", "press_key"]) {
       expect(TOOL_NAMES.has(name)).toBe(true);
       expect(block).toContain(name);
+    }
+  });
+
+  test("where a browser that only reads may serve the run: how to research there, and that it downloads nothing", () => {
+    const plain = browserBlock(true);
+    const block = browserBlock(true, true);
+    expect(block.startsWith(plain)).toBe(true);
+    for (const said of [
+      "the stella browser",
+      "opening the site's search results address",
+      "opening its href",
+      "expect no downloads",
+      "not_available_on_this_browser",
+      // What the host does for a sign-in (see the stella browser's host tests).
+      "comes to the front for the member",
+      "stay open for its next turn",
+    ]) {
+      expect(block).toContain(said);
+      expect(plain).not.toContain(said);
+    }
+    for (const name of namedTools(block.slice(plain.length))) {
+      expect({
+        name,
+        listed:
+          TOOL_NAMES.has(name) || name === "not_available_on_this_browser",
+      }).toEqual({ name, listed: true });
     }
   });
 

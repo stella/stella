@@ -217,6 +217,7 @@ const seedAwaitingTurn = async (skillCallParts: ChatPart[]) => {
   });
 
   const acceptance = createChatTurnAcceptance({
+    source: { type: "member" },
     organizationId: ids.orgA,
     threadId,
     userId: ids.userA1,

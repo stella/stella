@@ -220,6 +220,8 @@ TruncatedText.
 ### Button Variants (CVA)
 
 - **default:** primary foreground on primary background
+- **composer:** background text on foreground fill, retaining the primary
+  action's border, shadows and pressed treatment
 - **destructive:** destructive colours
 - **destructive-outline:** the outline box with destructive text and a
   destructive tint on hover
@@ -243,6 +245,7 @@ TruncatedText.
 Sizes: `default` (h-9), `sm` (h-8, small type), `xs` (h-7, small
 type), `lg` (h-10), `xl` (h-11), `chip` (a 28px pill beside the
 composer's round controls), `icon` and `icon-*` (square),
+`icon-round` (a fixed 28px circle with a 44px touch target),
 `icon-2xs` (a 16px glyph action in a dense row; the touch target
 still grows to 44px under a coarse pointer), `row` (a menu-list row),
 `inline` (a short action inside a line of text: no height, padding or
@@ -293,6 +296,8 @@ When a screen needs a look the components lack, add it once here and in
 | Long reference that wraps with running text                        | `ButtonTextRun`                                                                        |
 | Current choice in a set                                            | `Button selected`, or a `ToggleGroup` for exclusive options                            |
 | Filter tabs, view modes, density                                   | `ToggleGroup` + `ToggleGroupItem` (a segmented tray)                                   |
+| Full-width inspector action row                                    | `Button size="inspector-row" variant="ghost"`                                          |
+| Quiet caption that opens a menu or popover                         | `MenuTrigger` / `PopoverTrigger` `appearance="caption"`                                |
 | A button that stays pressed                                        | `Toggle`                                                                               |
 | Setting row with a switch                                          | `SwitchField` (`label`, `description`); `Switch size="sm"`                             |
 | Keyboard shortcut                                                  | `Kbd keys={["mod", "K"]}` (platform spelling); `MenuShortcut`, `TooltipPopup shortcut` |
@@ -307,6 +312,7 @@ When a screen needs a look the components lack, add it once here and in
 | Borderless field in a line of text                                 | `Input inline`, `Textarea inline` (one class: `INLINE_FIELD_CLASS_NAME`)               |
 | Fixed-height text area in a row or cell                            | `Textarea fieldSizing="fixed"`                                                         |
 | Number with a unit; stepping number                                | `NumberInput suffix`; it reads as a spin button with its bounds                        |
+| Screen a finished flow ends on (connected, signed in, declined)    | `OutcomeScreen` (`tone`, `counterpart`, `closeTab`); never a hand-built page           |
 | A small control renders small type itself; do not add `text-xs` to |
 | a `sm` button, select, or input.                                   |
 
@@ -332,8 +338,8 @@ it, and add it here in the same change that adds it to `packages/ui`.
 - `Button` `focusRing`: `inside`, `outside`
 - `Button`, `ButtonTextRun` `layout`: `wrap`
 - `Button` `shape`: `box`, `round`
-- `Button`, `Toggle`, `ToggleGroup`, `ToggleGroupItem` `size`: `chip`, `default`, `icon`, `icon-2xs`, `icon-lg`, `icon-sm`, `icon-xl`, `icon-xs`, `inline`, `lg`, `row`, `sm`, `touch`, `xl`, `xs`
-- `Button` `variant`: `default`, `destructive`, `destructive-ghost`, `destructive-outline`, `ghost`, `link`, `muted`, `muted-destructive`, `outline`, `plain`, `secondary`
+- `Button`, `Toggle`, `ToggleGroup`, `ToggleGroupItem` `size`: `chip`, `default`, `icon`, `icon-2xs`, `icon-lg`, `icon-round`, `icon-sm`, `icon-xl`, `icon-xs`, `inline`, `inspector-row`, `lg`, `row`, `sm`, `touch`, `xl`, `xs`
+- `Button` `variant`: `composer`, `default`, `destructive`, `destructive-ghost`, `destructive-outline`, `ghost`, `link`, `muted`, `muted-destructive`, `outline`, `plain`, `secondary`
 - `ButtonTextRun` `variant`: `link`, `plain`
 - `ColorPicker`, `EntityActionsButton`, `SortableHead`, `TableCell`, `TableHead` `align`: `center`, `end`, `start`
 - `ColorPicker`, `EntityActionsButton` `side`: `bottom`, `left`, `right`, `top`
@@ -354,10 +360,12 @@ it, and add it here in the same change that adds it to `packages/ui`.
 - `DropdownMenuCheckboxItem`, `MenuCheckboxItem` `variant`: `default`, `switch`
 - `DropdownMenuItem`, `MenuItem` `variant`: `default`, `destructive`
 - `DropdownMenuRadioItem`, `MenuRadioItem` `indicator`: `check`, `none`
+- `DropdownMenuTrigger`, `MenuTrigger`, `PopoverTrigger` `appearance`: `caption`, `default`
 - `Form` `density`: `compact`, `default`, `snug`
 - `Form` `layout`: `inline`, `stack`
 - `InlineDropIndicator` `position`: `after`, `before`
 - `InputGroupAddon` `align`: `block-end`, `block-start`, `inline-end`, `inline-start`
+- `InputGroupTextarea`, `Textarea` `appearance`: `composer`, `default`
 - `InputGroupTextarea`, `Textarea` `fieldSizing`: `content`, `fixed`
 - `InspectorDock` `mount`: `content`, `shell-end`
 - `InspectorEntityTab` `inactiveIcon`: `dim`, `legible`
@@ -376,6 +384,8 @@ it, and add it here in the same change that adds it to `packages/ui`.
 - `Loader` `size`: `lg`, `md`, `sm`
 - `Loader` `variant`: `decorative`, `status`
 - `MatterIcon` `variant`: `all`, `none`
+- `OutcomeScreen` `surface`: `embedded`, `page`
+- `OutcomeScreen` `tone`: `error`, `success`
 - `OutlineRail` `presentation`: `panel`, `popover`, `rail`
 - `PanelTrigger`, `Sidebar` `side`: `left`, `right`
 - `PopoverContent`, `PopoverPopup` `padding`: `default`, `md`, `none`, `sm`, `xs`

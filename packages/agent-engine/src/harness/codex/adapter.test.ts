@@ -138,22 +138,33 @@ const harnessFor = (
       backgroundErrors.push(error);
     },
   });
-  /** Messages the fake server received, in order. */
-  const received = (): {
+  type ReceivedMessage = {
     method?: string;
     id?: unknown;
     params?: unknown;
     result?: unknown;
     error?: unknown;
-  }[] =>
+  };
+  /** Messages the fake server received, in order. */
+  const received = (): ReceivedMessage[] =>
     readFileSync(logPath, "utf-8")
       .split("\n")
       .filter((line) => line !== "")
-      .map((line) => JSON.parse(line))
-      .filter((entry) => entry.received !== undefined)
-      .map((entry) => entry.received);
-  const startup = () =>
-    JSON.parse(readFileSync(logPath, "utf-8").split("\n")[0] ?? "{}").startup;
+      .flatMap((line) => {
+        const entry: { received?: ReceivedMessage } = JSON.parse(line);
+        return entry.received === undefined ? [] : [entry.received];
+      });
+  const startup = () => {
+    const first: {
+      startup: {
+        codexHome?: unknown;
+        cwd?: unknown;
+        packageCache?: unknown;
+        path?: unknown;
+      };
+    } = JSON.parse(readFileSync(logPath, "utf-8").split("\n")[0] ?? "{}");
+    return first.startup;
+  };
   return { adapter, codexHome, workspaceDir, logPath, received, startup };
 };
 
@@ -965,6 +976,31 @@ describe("Codex adapter over a stdio app-server", () => {
           event.type === "text.completed" && event.messageId === "m-steer",
       ),
     ).toBeGreaterThan(settled);
+    expect(terminal(events)?.type).toBe("turn.completed");
+  });
+
+  test("a steer sent with a declined approval joins the turn that asked", async () => {
+    const inputId = crypto.randomUUID();
+    const { events, received } = await run("steered_over_approval", {
+      onEvent: async (event, turn) => {
+        if (event.type !== "approval.requested") {
+          return;
+        }
+        const declined = await turn.respond({
+          type: "approval",
+          requestId: event.request.requestId,
+          decision: "deny",
+        });
+        expect(Result.isOk(declined)).toBe(true);
+        expect(
+          await turn.steer({ inputId, text: "Also check the annex." }),
+        ).toEqual(Result.ok());
+      },
+    });
+    expect(received().map(({ method }) => method)).toContain("turn/steer");
+    expect(events.filter(({ type }) => type === "input.settled")).toEqual([
+      { type: "input.settled", inputId, status: "accepted" },
+    ]);
     expect(terminal(events)?.type).toBe("turn.completed");
   });
 

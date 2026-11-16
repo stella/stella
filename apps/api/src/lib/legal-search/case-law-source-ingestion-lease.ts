@@ -11,7 +11,7 @@ import { ConcurrentModificationError } from "@/api/lib/errors/tagged-errors";
 
 const SOURCE_INGESTION_LEASE_MS = 60 * 60 * 1000;
 
-export type CaseLawSourceLeasePurpose =
+type CaseLawSourceLeasePurpose =
   (typeof caseLawSources.$inferSelect)["ingestionLeasePurpose"];
 
 export type CaseLawSourceIngestionLease = {

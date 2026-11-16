@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/legal-search/corpus-index-projection-offline-build.ts",
+  "delta": 5,
+  "reason": "The offline route build is a sequential walk by design: the run loop ends a pass, proves what is due and checks its stop conditions once per shard, the fill loop reserves one byte-bounded page at a time, and the final proof drain waits for the next decidable revision. Running these concurrently would break the lock and transaction order the delivery layer requires; every directive names its bound."
+}

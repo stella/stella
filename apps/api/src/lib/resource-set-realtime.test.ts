@@ -10,6 +10,7 @@ import {
 import { resourceMutationDigest } from "@stll/api-contract/realtime-mutation-digest";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import createClaimRecheck from "@/api/handlers/lists/verifications/claim-rechecks/create";
 import { status } from "@/api/http/status";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import {
@@ -312,6 +313,41 @@ describe("a matter handler's declared resource sets", () => {
       },
     ]);
   });
+
+  for (const outcome of ["committed", "replayed", "refused"] as const) {
+    test(`claim recheck ${outcome} follows its declared verification broadcast boundary`, async () => {
+      const { announcements, announce } = recorder();
+      const endpoint = createSafeHandler(
+        { ...baseConfig, realtime: createClaimRecheck.config.realtime },
+        async function* () {
+          expect(announcements).toEqual([]);
+          return outcome === "refused"
+            ? Result.err(
+                new HandlerError({ status: 409, message: "Claim changed" }),
+              )
+            : Result.ok({ replayed: outcome === "replayed" });
+        },
+        { announce },
+      );
+      const result = await endpoint.handler(asTestRaw(requestContext()));
+      expect(result).toEqual(
+        outcome === "refused"
+          ? expect.objectContaining({ code: 409 })
+          : { replayed: outcome === "replayed" },
+      );
+      expect(announcements).toEqual(
+        outcome === "refused"
+          ? []
+          : [
+              {
+                audience: "workspace",
+                id: WORKSPACE_ID,
+                type: RESOURCE_TYPE.LEGAL_LIST_VERIFICATION,
+              },
+            ],
+      );
+    });
+  }
 
   test("a typed refusal announces nothing", async () => {
     const { announcements, announce } = recorder();

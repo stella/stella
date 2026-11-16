@@ -5,6 +5,7 @@ import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { CHAT_INPUT_REFUSAL_CODE } from "@stll/api-contract";
 import { ZipArchive } from "@stll/docx-core/zip";
 import { sha256Hex as legacySha256Hex } from "@stll/sha256/node";
+import { createTestState } from "@stll/test-state";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -43,6 +44,9 @@ import {
   uploadMessageFiles,
   uploadUserFile,
 } from "./upload-files";
+
+const testState = createTestState({ file: import.meta.path, config: env });
+const workerState = testState.forConfig(envDocumentProcessingWorker);
 
 const fileBytes = new TextEncoder().encode("Jan Novak,Acme");
 const IMAGE_PNG_MIME_TYPE = "image/png";
@@ -696,11 +700,11 @@ describe("chat attachment hydration", () => {
         NonNullable<Parameters<typeof writeOrganizationFile>[0]["db"]>
       >({ transaction: async () => ({ status: reservationStatus }) });
       const settleIntents = mock(async () => Result.ok(undefined));
-      const priorFlag = env.FEATURE_FILE_USAGE_LIMITS;
+
       const priorWorkerFlag =
         envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS;
-      env.FEATURE_FILE_USAGE_LIMITS = true;
-      envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = true;
+      testState.setConfig("FEATURE_FILE_USAGE_LIMITS", true);
+      workerState.setConfig("FEATURE_FILE_USAGE_LIMITS", true);
       try {
         const result = await uploadUserFile({
           dependencies: {
@@ -729,8 +733,7 @@ describe("chat attachment hydration", () => {
         expect(result.error).toMatchObject({ status: expectedStatus });
         expect(requestKeys("PUT")).toHaveLength(0);
       } finally {
-        env.FEATURE_FILE_USAGE_LIMITS = priorFlag;
-        envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = priorWorkerFlag;
+        workerState.setConfig("FEATURE_FILE_USAGE_LIMITS", priorWorkerFlag);
       }
     },
   );

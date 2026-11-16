@@ -91,7 +91,7 @@ describe.skipIf(!enabled)("fallback decision identity (postgres)", () => {
         ).toEqual(before);
         expect(
           (
-            await client.unsafe(
+            await client.unsafe<unknown[]>(
               "SELECT 1 FROM pg_indexes WHERE schemaname=$1 AND indexname=$2",
               [schema, FALLBACK_IDENTITY_INDEX_NAME],
             )
@@ -101,7 +101,7 @@ describe.skipIf(!enabled)("fallback decision identity (postgres)", () => {
         await client.unsafe(
           `CREATE UNIQUE INDEX previous_fallback ON ${table} (source_id,case_number,language) WHERE source_document_id IS NULL`,
         );
-        const docketIndexes = await client.unsafe(
+        const docketIndexes = await client.unsafe<{ indexname: unknown }[]>(
           "SELECT indexname FROM pg_indexes WHERE schemaname=$1 AND indexdef LIKE '%(source_id, case_number, language)%'",
           [schema],
         );
@@ -180,7 +180,9 @@ describe.skipIf(!enabled)("fallback decision identity (postgres)", () => {
             PG_ERROR.UNIQUE_VIOLATION,
           );
         }
-        expect((await client.unsafe(`SELECT id FROM ${table}`)).length).toBe(5);
+        expect(
+          (await client.unsafe<unknown[]>(`SELECT id FROM ${table}`)).length,
+        ).toBe(5);
       } finally {
         await client.unsafe("SET search_path TO public");
         await client.unsafe(`DROP SCHEMA "${schema}" CASCADE`);

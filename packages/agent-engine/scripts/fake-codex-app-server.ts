@@ -341,6 +341,8 @@ const continuation = (outcome: FakeStep[]): FakeStep[] => [
 /** What the approval scenarios answer once the command ran. */
 const FAKE_APPROVED_ANSWER = "Removed draft.md.";
 const FAKE_DENIED_ANSWER = "Left it in place.";
+/** What `steered_over_approval` answers the message steered over its request. */
+const FAKE_STEERED_OVER_APPROVAL = "Left the draft and checked the annex.";
 
 /** The command the approval scenarios ask to run, and the request for it. */
 const removeDraft = (reason: string | null): FakeStep[] => [
@@ -1085,6 +1087,36 @@ export const FAKE_SCENARIOS = {
     item("completed", agentMessage("m-steer", "Checked the annex as well.")),
     completed(),
   ],
+  /**
+   * A command asks for approval; the member declines it with a message
+   * steered into the turn, and the turn answers the message.
+   */
+  steered_over_approval: [
+    ...freshTurn(),
+    ...removeDraft("Deletes a file"),
+    {
+      byDecision: {
+        // Approved, the message never follows: the turn answers as
+        // `approval_outcome` does.
+        approved: [
+          item("completed", agentMessage("m-2", FAKE_APPROVED_ANSWER)),
+          completed(),
+        ],
+        denied: [
+          { expect: "turn/steer", result: { turnId: FAKE_TURN_ID } },
+          item("completed", {
+            ...command("call-rm", "declined"),
+            command: "rm draft.md",
+          }),
+          item(
+            "completed",
+            agentMessage("m-steer", FAKE_STEERED_OVER_APPROVAL),
+          ),
+          completed(),
+        ],
+      },
+    },
+  ],
   /** The turn is no longer the active one when the steer arrives. */
   steer_refused: [
     ...freshTurn(),
@@ -1802,6 +1834,12 @@ const playBrowse = async ({ threadStart, write, log }: PlayBrowseOptions) => {
   });
   // Kept on this computer, for the test to see what the agent read.
   log({ pageCanaries: browsed.read });
+  if (browsed.notes !== undefined) {
+    log({ readScenario: browsed.notes });
+  }
+  if (browsed.continued !== undefined) {
+    log({ continuedScenario: browsed.continued });
+  }
   const notifyItem = (phase: "started" | "completed", body: object) => {
     write({
       method: `item/${phase}`,

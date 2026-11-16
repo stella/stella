@@ -7,6 +7,7 @@ import {
 export default {
   id: "indexes-legal-reader-answer-messages-answer-sequence-idx",
   revision: 690,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     onlineUniqueIndexDefinition(

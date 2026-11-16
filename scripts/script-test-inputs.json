@@ -54,6 +54,7 @@
       "scripts/check-release-dependency-audit.sh"
     ],
     "scripts/check-release-receipt-coverage.test.ts": ["**"],
+    "scripts/check-release-source-on-main.test.ts": ["**"],
     "scripts/check-repeated-sql-fingerprints-ledger.test.ts": ["**"],
     "scripts/check-resolutions-only-change.test.ts": ["**"],
     "scripts/check-rust-test-determinism.test.ts": ["**"],
@@ -67,6 +68,7 @@
     "scripts/check-test-state-baseline.test.ts": ["**"],
     "scripts/check-tracked-cloud-reports.test.ts": ["**"],
     "scripts/check-tracked-symlinks.test.ts": ["**"],
+    "scripts/check-workflow-pr-write-token.test.ts": ["**"],
     "scripts/child-output-buffer.test.ts": ["**"],
     "scripts/ci-affected-selection.test.ts": ["**"],
     "scripts/ci-api-bootstrap.test.ts": ["**"],
@@ -161,6 +163,7 @@
     "scripts/global-rule-inputs.test.ts": ["**"],
     "scripts/hook-dependencies.test.ts": ["**"],
     "scripts/hooks-no-type-aware.test.ts": ["**"],
+    "scripts/hosted-buildx-cleanup.test.ts": ["**"],
     "scripts/install-packed-cli.test.ts": ["**"],
     "scripts/ledger-membership.test.ts": ["**"],
     "scripts/legal-atlas-image-scope.test.ts": ["**"],
@@ -275,6 +278,14 @@
     "scripts/status-write-shapes.test.ts": ["**"],
     "scripts/stylelint.test.ts": ["**"],
     "scripts/suppression-waivers.test.ts": ["**"],
+    "scripts/tanstack-drift.test.ts": [
+      "apps/api/src/tests/helpers/recorded-conversation-suites.ts",
+      "packages/fetch/src/body-reader.ts",
+      "packages/fetch/src/connection-failure.ts",
+      "packages/fetch/src/index.ts",
+      "packages/fetch/src/race-abort.ts",
+      "scripts/tanstack-drift.ts"
+    ],
     "scripts/test-subject-reachability.test.ts": ["**"],
     "scripts/toast-error-census.test.ts": ["**"],
     "scripts/tsdown-declaration-tools.test.ts": ["**"],
@@ -301,6 +312,7 @@
     "scripts/workflow-steps.test.ts": ["**"]
   },
   "noTrackedInputs": {
+    "scripts/oxlint-rule-ids.test.ts": "Exercises plugin aliases and canonicalization with in-memory rule fixtures; does not invoke the filesystem-backed rule catalog.",
     "scripts/query-perf-baseline.test.ts": "Uses only temporary fixtures and its static import closure."
   }
 }

@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { readFileSync } from "node:fs";
 
@@ -8,6 +8,7 @@ import type {
   ParsedCorrespondence,
 } from "@stll/api-contract/correspondence";
 import { compareCodeUnit } from "@stll/collation";
+import { createTestState } from "@stll/test-state";
 
 import { member, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -44,6 +45,8 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
+const testState = createTestState({ file: import.meta.path, config: env });
+
 let testDb: TestDatabase;
 let ids: TestIds;
 const migration = readFileSync(
@@ -60,7 +63,7 @@ const forcedTables = [
   ...migration.matchAll(/ALTER TABLE "([^"]+)" FORCE ROW LEVEL SECURITY/gu),
 ].map(([, table]) => table ?? panic("Missing forced RLS table name capture"));
 
-beforeAll(async () => {
+testState.beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
@@ -438,61 +441,57 @@ describe("matter correspondence", () => {
   });
 
   test("rotates and revokes the per-matter inbound address", async () => {
-    const previousDomain = env.INBOUND_MAIL_DOMAIN;
-    env.INBOUND_MAIL_DOMAIN = "inbound.example.test";
-    try {
-      const common = {
-        safeDb: safeDbFor(ids.userA1, ids.wsA1),
-        workspaceId: ids.wsA1,
-        memberRole: sessionMemberRole("owner"),
-        request: new Request("https://api.example.test/v1/correspondence"),
-        route:
-          "/v1/workspaces/:workspaceId/correspondence/address" satisfies ApiRoutePath,
-        session: { activeOrganizationId: ids.orgA },
-        user: { id: ids.userA1 },
-        recordAuditEvent: recorderFor(ids.userA1, ids.wsA1),
-      };
-      const first = expectSuccess(
-        await createMatterInboundAddress.handler(
-          asTestRaw<Parameters<typeof createMatterInboundAddress.handler>[0]>(
-            common,
-          ),
-        ),
-      );
-      const second = expectSuccess(
-        await createMatterInboundAddress.handler(
-          asTestRaw<Parameters<typeof createMatterInboundAddress.handler>[0]>(
-            common,
-          ),
-        ),
-      );
-      expect(first.address).not.toBe(second.address);
-      expect(first.address).toMatch(/^[a-f0-9]{64}@inbound\.example\.test$/u);
-      expect(second.address).toMatch(/^[a-f0-9]{64}@inbound\.example\.test$/u);
-      const active = expectSuccess(
-        await getMatterInboundAddress.handler(
-          asTestRaw<Parameters<typeof getMatterInboundAddress.handler>[0]>(
-            common,
-          ),
-        ),
-      );
-      expect(active.address).toBe(second.address);
-      await revokeMatterInboundAddress.handler(
-        asTestRaw<Parameters<typeof revokeMatterInboundAddress.handler>[0]>(
+    testState.setConfig("INBOUND_MAIL_DOMAIN", "inbound.example.test");
+
+    const common = {
+      safeDb: safeDbFor(ids.userA1, ids.wsA1),
+      workspaceId: ids.wsA1,
+      memberRole: sessionMemberRole("owner"),
+      request: new Request("https://api.example.test/v1/correspondence"),
+      route:
+        "/v1/workspaces/:workspaceId/correspondence/address" satisfies ApiRoutePath,
+      session: { activeOrganizationId: ids.orgA },
+      user: { id: ids.userA1 },
+      recordAuditEvent: recorderFor(ids.userA1, ids.wsA1),
+    };
+    const first = expectSuccess(
+      await createMatterInboundAddress.handler(
+        asTestRaw<Parameters<typeof createMatterInboundAddress.handler>[0]>(
           common,
         ),
-      );
-      const revoked = expectSuccess(
-        await getMatterInboundAddress.handler(
-          asTestRaw<Parameters<typeof getMatterInboundAddress.handler>[0]>(
-            common,
-          ),
+      ),
+    );
+    const second = expectSuccess(
+      await createMatterInboundAddress.handler(
+        asTestRaw<Parameters<typeof createMatterInboundAddress.handler>[0]>(
+          common,
         ),
-      );
-      expect(revoked.address).toBeNull();
-    } finally {
-      env.INBOUND_MAIL_DOMAIN = previousDomain;
-    }
+      ),
+    );
+    expect(first.address).not.toBe(second.address);
+    expect(first.address).toMatch(/^[a-f0-9]{64}@inbound\.example\.test$/u);
+    expect(second.address).toMatch(/^[a-f0-9]{64}@inbound\.example\.test$/u);
+    const active = expectSuccess(
+      await getMatterInboundAddress.handler(
+        asTestRaw<Parameters<typeof getMatterInboundAddress.handler>[0]>(
+          common,
+        ),
+      ),
+    );
+    expect(active.address).toBe(second.address);
+    await revokeMatterInboundAddress.handler(
+      asTestRaw<Parameters<typeof revokeMatterInboundAddress.handler>[0]>(
+        common,
+      ),
+    );
+    const revoked = expectSuccess(
+      await getMatterInboundAddress.handler(
+        asTestRaw<Parameters<typeof getMatterInboundAddress.handler>[0]>(
+          common,
+        ),
+      ),
+    );
+    expect(revoked.address).toBeNull();
   });
   test("keeps asserted originals separate from authenticated delivery and direct-message dedup", async () => {
     const authenticatedSender = {

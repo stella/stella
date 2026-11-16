@@ -8632,14 +8632,6 @@
         "job": "measure-1"
       }
     },
-    "src/handlers/dev/routes.contract.test.ts": {
-      "peakMb": 211,
-      "baselineMb": 211,
-      "source": {
-        "runId": "43667897818",
-        "job": "measure-2"
-      }
-    },
     "src/handlers/dictation/audio-duration.test.ts": {
       "peakMb": 196,
       "baselineMb": 196,
@@ -15062,14 +15054,6 @@
       "source": {
         "runId": "43667897818",
         "job": "measure-1"
-      }
-    },
-    "src/lib/chat/ai-data-policy.contract.test.ts": {
-      "peakMb": 211,
-      "baselineMb": 211,
-      "source": {
-        "runId": "43667897818",
-        "job": "measure-2"
       }
     },
     "src/lib/chat/anthropic-config.test.ts": {
@@ -24624,14 +24608,6 @@
         "job": "measure-1"
       }
     },
-    "src/lib/usage/action-costs/observer-contract.test.ts": {
-      "peakMb": 211,
-      "baselineMb": 211,
-      "source": {
-        "runId": "43667897818",
-        "job": "measure-2"
-      }
-    },
     "src/lib/usage/action-costs/report-query.test.ts": {
       "peakMb": 196,
       "baselineMb": 196,
@@ -26566,14 +26542,6 @@
       "source": {
         "runId": "43667897818",
         "job": "measure-1"
-      }
-    },
-    "src/mcp/tool-types.test.ts": {
-      "peakMb": 211,
-      "baselineMb": 211,
-      "source": {
-        "runId": "43667897818",
-        "job": "measure-2"
       }
     },
     "src/mcp/tool-utils.test.ts": {

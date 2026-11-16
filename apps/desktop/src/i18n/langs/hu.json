@@ -598,21 +598,21 @@
   },
   "dictation": {
     "title": "Diktálás",
-    "description": "Tartsa lenyomva a(z) {shortcut} billentyűt, és beszéljen. A szöveg a használt alkalmazásban jelenik meg. A beszéd átírása ezen a számítógépen történik, és nem kerül tárolásra. Ha az AI-javítás be van kapcsolva, az átírt szöveg – nem a hang – a stellán keresztül a szervezete AI-szolgáltatójához kerül a hibák és a formázás javítására; a stella nem tárolja.",
+    "description": "Tartsa lenyomva a(z) {shortcut} billentyűt, és beszéljen. A szöveg a használt alkalmazásban jelenik meg. A beszéd átírása ezen a számítógépen történik, és nem kerül tárolásra.",
     "descriptionCloud": "Tartsa lenyomva a(z) {shortcut} billentyűt, és beszéljen. A szöveg abban az alkalmazásban jelenik meg, amelyet éppen használ. A beszédet a stella AI írja át, és a stella nem tárolja.",
     "cleanup": {
       "title": "Javítás AI-jal",
-      "description": "A beszéd átírása továbbra is ezen a számítógépen történik, a hang soha nem hagyja el. Ha a javítás be van kapcsolva, az átírt szöveg a stellán keresztül a szervezete AI-szolgáltatójához kerül, amely kijavítja a felismerési hibákat, és alkalmazza a kimondott írásjeleket és formázást, például „új sor” vagy „félkövér”. A stella nem tárolja. A javítás azt is megkapja, milyen típusú alkalmazásba diktál, például e-mailbe vagy csevegésbe, hogy a szöveg illeszkedjen hozzá.",
-      "descriptionCloud": "Ha a javítás be van kapcsolva, a stella AI az átírt szöveg felismerési hibáit is kijavítja, és alkalmazza a kimondott írásjeleket és formázást, például „új sor” vagy „félkövér”. A javítás azt is megkapja, milyen típusú alkalmazásba diktál, például e-mailbe vagy csevegésbe, hogy a szöveg illeszkedjen hozzá."
+      "description": "Kijavítja a felismerési hibákat és a kimondott formázást, például „új sor” vagy „félkövér”, és az alkalmazáshoz igazítja a szöveget, például e-mailhez. Csak a szöveg – nem a hang – kerül a stellán keresztül a szervezete AI-szolgáltatójához; a stella nem tárolja.",
+      "descriptionCloud": "A stella AI emellett kijavítja a felismerési hibákat és a kimondott formázást, például „új sor” vagy „félkövér”, és az alkalmazáshoz igazítja a szöveget, például e-mailhez."
     },
     "context": {
       "windowTitle": {
         "title": "Az ablak címének megosztása az AI-javítással",
-        "description": "A javítás annak az ablaknak a címét is megkapja, amelybe diktál, hogy meg tudja különböztetni például a szerződést a belső feljegyzéstől. Az ablakok címe ügyfelek nevét vagy ügyek megnevezését is tartalmazhatja. A cím a stellán keresztül a szervezete AI-szolgáltatójához kerül, és a stella nem tárolja."
+        "description": "Segít megkülönböztetni a szerződést a feljegyzéstől. Az ablakcímek ügyfél- vagy ügyneveket tartalmazhatnak."
       },
       "textBeforeCursor": {
         "title": "A kurzor előtti szöveg megosztása az AI-javítással",
-        "description": "A javítás a kurzor előtti legfeljebb {limit, number} karaktert is megkapja, hogy a diktátum folytassa az éppen írt szöveget. Így annak a dokumentumnak egy része, amelyben éppen dolgozik, a stellán keresztül a szervezete AI-szolgáltatójához kerül, és a stella nem tárolja."
+        "description": "Legfeljebb {limit, number} karakter abból a dokumentumból, amelyben dolgozik, hogy a diktálás illeszkedjen az íráshoz."
       }
     },
     "keptInHistory": "Minden diktátum ezen a számítógépen a vágólap előzményeibe is bekerül.",
@@ -624,16 +624,21 @@
       "unavailableRegion": "A stella AI a szervezete régiójában még nem kínál átírást.",
       "unavailableProvider": "A szervezete AI-szolgáltatója nem kínál átírást.",
       "unavailable": "A stella AI átírás most nem érhető el.",
-      "model": "Átírási modell"
+      "model": "Átírási modell",
+      "outsideRegion": "A régióján kívül",
+      "outsideRegionNote": "Ez a modell a szervezete régióján kívül dolgozza fel a hangot."
     },
     "language": {
       "title": "Diktálás nyelve",
-      "description": "A beszéd felismerése ezen a nyelven történik, és a javítás ezen a nyelven hagyja a szöveget. Az automatikus beállítás a számítógép megjelenítési és billentyűzetnyelveit használja.",
+      "description": "Az Automatikus a számítógép megjelenítési és billentyűzetnyelveit használja.",
       "automatic": "Automatikus",
       "automaticWith": "Automatikus ({languages})",
       "noResults": "Nem található nyelv"
     },
     "modelNeeded": "A beszédmodell ezen a számítógépen fut.",
+    "modelInstalled": "A beszédmodell ({size} MB) ezen a számítógépen van.",
+    "removeModel": "Eltávolítás",
+    "removeFailed": "A beszédmodellt nem sikerült eltávolítani. Próbálja újra.",
     "download": "Letöltés ({size} MB)",
     "downloading": "A beszédmodell letöltése: {percent}%",
     "downloadFailed": "A beszédmodellt nem sikerült letölteni.",
@@ -716,6 +721,11 @@
     "howDocumentsBody": "Egy stella-dokumentumnál válassza a Megnyitás lehetőséget. Mentéskor a módosítás új verzióként kerül vissza a stellába.",
     "howClipboard": "Vágólap",
     "howClipboardBody": "Másoljon a szokásos módon, majd nyomja le ezt: {shortcut}, és válasszon a kimásoltak közül.",
+    "howSigning": "PDF-ek aláírása",
+    "howSigningBodyMac": "Egy stellában lévő PDF-nél válassza az „Aláírás a stella desktoppal” lehetőséget. A tanúsítvány a kulcskarikán vagy az intelligens kártyán marad, az aláírt PDF pedig új verzióként kerül vissza a stellába.",
+    "howSigningBodyPc": "Egy stellában lévő PDF-nél válassza az „Aláírás a stella desktoppal” lehetőséget. A tanúsítvány a tanúsítványtárolóban vagy az intelligens kártyán marad, az aláírt PDF pedig új verzióként kerül vissza a stellába.",
+    "howDictation": "Diktálás",
+    "howDictationBody": "Tartson lenyomva egy billentyűparancsot és beszéljen, a szöveg a használt alkalmazásban jelenik meg. Egy későbbi lépésben kapcsolhatja be.",
     "howActivity": "Tevékenység",
     "howActivityBody": "Nézze meg, mire ment el a napja, és készítsen belőle időbejegyzés-piszkozatokat. Kikapcsolva, amíg el nem indítja.",
     "activityTitle": "Így működik a Tevékenység",
@@ -789,7 +799,7 @@
     }
   },
   "agentSubscriptions": {
-    "title": "MI-előfizetések",
+    "title": "AI-előfizetések",
     "chatGpt": "ChatGPT",
     "description": "Használja ChatGPT-csomagját a stella MI-kéréseihez. A használat a ChatGPT-csomagját terheli, a stella-előfizetésétől külön.",
     "continueWithChatGpt": "Folytatás a ChatGPT-vel",
@@ -825,9 +835,10 @@
       "storage": "A kapcsolatot nem sikerült beolvasni vagy menteni ezen a számítógépen."
     },
     "callbackConnectedTitle": "A ChatGPT csatlakoztatva",
-    "callbackConnectedBody": "Bezárhatja ezt a lapot, és visszatérhet a stellába.",
+    "callbackConnectedBody": "Térjen vissza a stellába. Az MI-kérések mostantól a ChatGPT-csomagját használják.",
     "callbackNotConnectedTitle": "A ChatGPT nem csatlakozott",
     "callbackNotConnectedBody": "Térjen vissza a stellába, nézze meg, mi történt, és próbálja újra.",
+    "callbackCloseTab": "Ezt a lapot bezárhatja.",
     "claudeCode": {
       "title": "Claude Code",
       "description": "Használja Claude-előfizetését a stella helyi ügynökeihez. A használat a Claude-csomagját terheli, a stella-előfizetésétől külön.",

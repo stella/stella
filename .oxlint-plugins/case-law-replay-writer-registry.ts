@@ -9,7 +9,7 @@ export type ReplayWriterOwner = {
 export const REPLAY_WRITER_REGISTRY = [
   {
     file: "apps/api/src/db/root.ts",
-    line: 716,
+    line: 761,
     kind: "pending",
   },
   {
@@ -224,12 +224,12 @@ export const REPLAY_WRITER_REGISTRY = [
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row.ts",
-    line: 434,
+    line: 442,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row.ts",
-    line: 452,
+    line: 460,
     kind: "pending",
   },
   {
@@ -392,26 +392,6 @@ export const REPLAY_WRITER_REGISTRY = [
   {
     file: "apps/api/src/lib/legal-search/corpus-index-generation-store.ts",
     line: 407,
-    kind: "pending",
-  },
-  {
-    file: "apps/api/src/lib/legal-search/sk-document-backfill.ts",
-    line: 1131,
-    kind: "pending",
-  },
-  {
-    file: "apps/api/src/lib/legal-search/sk-document-backfill.ts",
-    line: 1309,
-    kind: "pending",
-  },
-  {
-    file: "apps/api/src/lib/legal-search/sk-document-backfill.ts",
-    line: 1422,
-    kind: "pending",
-  },
-  {
-    file: "apps/api/src/lib/legal-search/sk-document-backfill.ts",
-    line: 1502,
     kind: "pending",
   },
 ] as const satisfies readonly ReplayWriterOwner[];

@@ -5,9 +5,9 @@ import { SquareMinusIcon } from "@stll/ui/icons";
 import { PopoverTrigger } from "@stll/ui/popover";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
+import { PropertyIcon } from "@stll/workspace-ui/property-icon";
 
 import Tooltip from "@/components/tooltip";
-import { PropertyIcon } from "@/components/workspaces/property-helpers";
 import { resolveOptionColor } from "@/components/workspaces/property-utils";
 import { HighlightedText } from "@/components/workspaces/table/find-highlight";
 import type { PropertyOptionColor } from "@/lib/api-contract";

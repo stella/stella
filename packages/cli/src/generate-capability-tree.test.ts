@@ -759,9 +759,9 @@ describe("insertCapabilities: against the real curated tree + catalog", () => {
         return;
       }
       const record: Record<string, unknown> = { ...node };
-      const branches = record["anyOf"];
+      const anyOf = record["anyOf"];
+      const branches: unknown[] = Array.isArray(anyOf) ? anyOf : [];
       if (
-        Array.isArray(branches) &&
         branches.some(
           (branch) =>
             typeof branch === "object" &&

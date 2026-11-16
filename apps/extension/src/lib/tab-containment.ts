@@ -1,13 +1,13 @@
 import { panic } from "better-result";
 
 import { BROWSER_CONTROL_LIMITS } from "@stll/api-contract/browser-control";
+import { NON_PUBLIC_SECURE_URL_PATTERNS } from "@stll/browser-page/origin-policy";
 
 import {
   CONTROL_TRANSPORT,
   type ControlTransport,
   readControlHolder,
 } from "./control-holder";
-import { NON_PUBLIC_SECURE_URL_PATTERNS } from "./origin-policy";
 import { BROWSER_CONTAINED_TABS_STORAGE_KEY } from "./storage-keys";
 import { STELLA_HOSTNAMES } from "./trusted-origin";
 

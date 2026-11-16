@@ -4,6 +4,7 @@ import fc from "fast-check";
 import { assertProperty } from "@stll/property-testing";
 
 import { evaluateCondition, MAX_CONDITION_DEPTH } from "./index";
+import type { NamedCondition } from "./index";
 
 const BOOLEAN_PATHS = ["isUK", "hasLicense", "nested.approved"] as const;
 const NUMBER_PATHS = ["amount", "threshold"] as const;
@@ -395,4 +396,101 @@ describe("evaluateCondition property checks", () => {
       { numRuns: 500 },
     );
   });
+
+  test("mixed named chains preserve the depth bound and independent sibling resolutions", () => {
+    assertProperty(
+      "mixed named chains preserve the depth bound and independent sibling resolutions",
+      fc.property(
+        fc.array(fc.constantFrom("expression", "node"), {
+          minLength: 1,
+          maxLength: MAX_CONDITION_DEPTH + 2,
+        }),
+        fc.boolean(),
+        (backings, value) => {
+          const conditions = namedChain(backings);
+          const expected = value && backings.length <= MAX_CONDITION_DEPTH;
+          expect(evaluateCondition("c0 and c0", { value }, conditions)).toBe(
+            expected,
+          );
+          expect(evaluateCondition("c0", { value: !value }, conditions)).toBe(
+            !value && backings.length <= MAX_CONDITION_DEPTH,
+          );
+          expect(
+            evaluateCondition(
+              "c0",
+              { value: true },
+              namedChain(backings, "c0"),
+            ),
+          ).toBe(false);
+        },
+      ),
+      { numRuns: 200 },
+    );
+  });
+
+  test.each([
+    MAX_CONDITION_DEPTH - 1,
+    MAX_CONDITION_DEPTH,
+    MAX_CONDITION_DEPTH + 1,
+  ])("named chains preserve the exact boundary at %i references", (length) => {
+    for (const backing of ["expression", "node", "mixed"] as const) {
+      const backings = Array.from({ length }, (_, index) => {
+        if (backing === "mixed") {
+          return index % 2 === 0 ? "expression" : "node";
+        }
+        return backing;
+      });
+      expect(
+        evaluateCondition("c0 and c0", { value: true }, namedChain(backings)),
+      ).toBe(length <= MAX_CONDITION_DEPTH);
+    }
+  });
+
+  test("negation still inverts a blocked recursive reference", () => {
+    const stringCycle: NamedCondition[] = [
+      { name: "self", expression: "not self" },
+    ];
+    const astCycle: NamedCondition[] = [
+      {
+        name: "self",
+        expression: "self",
+        node: {
+          type: "group",
+          combinator: "and",
+          negated: true,
+          children: [
+            {
+              type: "predicate",
+              operand: { type: "path", path: "self" },
+              op: "is_truthy",
+            },
+          ],
+        },
+      },
+    ];
+    expect(evaluateCondition("self", {}, stringCycle)).toBe(true);
+    expect(evaluateCondition("self", {}, astCycle)).toBe(true);
+  });
 });
+
+const namedChain = (
+  backings: readonly ("expression" | "node")[],
+  terminal = "value",
+): NamedCondition[] =>
+  backings.map((backing, index) => {
+    const name = `c${index}`;
+    const target = index + 1 === backings.length ? terminal : `c${index + 1}`;
+    if (backing === "expression") {
+      return { name, expression: target };
+    }
+    return {
+      name,
+      // The opposite value makes evaluating the text instead of the AST fail.
+      expression: "not value",
+      node: {
+        type: "predicate",
+        operand: { type: "path", path: target },
+        op: "is_truthy",
+      },
+    };
+  });

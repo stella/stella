@@ -1379,7 +1379,7 @@ export class SidecarHost {
     // it, or ends it.
     const taken = run.live;
     run.live = null;
-    const browser = this.browserFor(message, run, taken);
+    const browser = this.browserFor(message, run, taken, config.apiOrigin);
     const started = await adapter.value.startTurn({
       runId: message.runId,
       threadId: message.threadId,
@@ -1391,10 +1391,10 @@ export class SidecarHost {
       toolPath: message.toolPath,
       model: message.model,
       reasoningEffort: message.reasoningEffort,
-      instructions: withLocalBrowserInstructions(
-        message.instructions,
-        browser !== null,
-      ),
+      instructions: withLocalBrowserInstructions(message.instructions, {
+        hasBrowser: browser !== null,
+        readOnlyHost: this.options.browser?.readOnlyHost === true,
+      }),
       policy: message.policy,
       mcp: binding.value,
       browser,
@@ -1415,12 +1415,15 @@ export class SidecarHost {
     message: SidecarRunStart,
     run: HeldRun,
     taken: LiveFolder | null,
+    /** The account the run started for: its browser stays that account's. */
+    accountOrigin: string,
   ) {
     const browser = this.options.browser;
     if (browser === null) {
       return null;
     }
     const browserRun = {
+      accountOrigin,
       runId: message.runId,
       threadId: message.threadId,
       approvals: message.policy.approvals,

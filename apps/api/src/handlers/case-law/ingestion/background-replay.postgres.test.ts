@@ -9,6 +9,7 @@ import {
   type HeavyWorkKind,
 } from "@stll/db-load-gate/slot";
 import { waitForExternalState } from "@stll/property-testing/external-state";
+import { createTestState } from "@stll/test-state";
 
 import {
   CORPUS_SCHEMA_LANE_LOCK_SQL,
@@ -70,9 +71,15 @@ import {
   openGatedTestDatabase,
   withGatedTestClients,
 } from "@/api/tests/gated-test-database";
+import {
+  guardPostgresSuiteSeeding,
+  insertProjectedFixtureDecisions,
+} from "@/api/tests/helpers/corpus-projection-seeding-guard-postgres";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { OFF_REPLAY_ENROLMENT_FIXTURE } from "@/api/tests/helpers/replay-enrolment";
 import { runReplayTickFixture } from "@/api/tests/helpers/replay-tick";
+
+const testState = createTestState({ file: import.meta.path, config: {} });
 
 /** A replayed raw key is reported only when the reserved batch has one. */
 const replayedKeyOf = (key: string | null) =>
@@ -143,7 +150,11 @@ if (!databaseUrl || !enabled) {
   });
 } else {
   describe("background replay ownership and durable batch boundaries", () => {
-    const { db, cleanUp } = openGatedTestDatabase(databaseUrl);
+    const database = openGatedTestDatabase(databaseUrl);
+    // A generation of the suite's own, so the replay writer is held to the
+    // seeding rule.
+    guardPostgresSuiteSeeding(database, { generations: ["case_law_v10"] });
+    const { db, cleanUp } = database;
     const scopedDb: ScopedDb = async (callback) =>
       await db.transaction(callback);
     const sources: BackgroundReplaySource[] = [];
@@ -193,7 +204,8 @@ if (!databaseUrl || !enabled) {
       const ids = Array.from({ length: 3 }, () =>
         createSafeId<"caseLawDecision">(),
       ).toSorted(compareCodeUnit);
-      await db.insert(caseLawDecisions).values(
+      await insertProjectedFixtureDecisions(
+        db,
         ids.map((id, index) => ({
           id,
           sourceId: source.id,
@@ -1248,9 +1260,9 @@ if (!databaseUrl || !enabled) {
         const oldEnabled = process.env["CASE_LAW_REPLAY_ENABLED"];
         const oldKill = process.env["CASE_LAW_REPLAY_KILL_SWITCH"];
         const oldDisabled = process.env["CASE_LAW_REPLAY_DISABLED_SOURCES"];
-        process.env["CASE_LAW_REPLAY_ENABLED"] = "true";
-        process.env["CASE_LAW_REPLAY_KILL_SWITCH"] = "false";
-        process.env["CASE_LAW_REPLAY_DISABLED_SOURCES"] = "";
+        testState.setEnv("CASE_LAW_REPLAY_ENABLED", "true");
+        testState.setEnv("CASE_LAW_REPLAY_KILL_SWITCH", "false");
+        testState.setEnv("CASE_LAW_REPLAY_DISABLED_SOURCES", "");
         const fake = startReplayFixtureStorage();
         const rawKey = rawSourcePayloadKey({
           owner: {
@@ -1368,19 +1380,19 @@ if (!databaseUrl || !enabled) {
         } finally {
           fake.stop();
           if (oldEnabled === undefined) {
-            delete process.env["CASE_LAW_REPLAY_ENABLED"];
+            testState.deleteEnv("CASE_LAW_REPLAY_ENABLED");
           } else {
-            process.env["CASE_LAW_REPLAY_ENABLED"] = oldEnabled;
+            testState.setEnv("CASE_LAW_REPLAY_ENABLED", oldEnabled);
           }
           if (oldKill === undefined) {
-            delete process.env["CASE_LAW_REPLAY_KILL_SWITCH"];
+            testState.deleteEnv("CASE_LAW_REPLAY_KILL_SWITCH");
           } else {
-            process.env["CASE_LAW_REPLAY_KILL_SWITCH"] = oldKill;
+            testState.setEnv("CASE_LAW_REPLAY_KILL_SWITCH", oldKill);
           }
           if (oldDisabled === undefined) {
-            delete process.env["CASE_LAW_REPLAY_DISABLED_SOURCES"];
+            testState.deleteEnv("CASE_LAW_REPLAY_DISABLED_SOURCES");
           } else {
-            process.env["CASE_LAW_REPLAY_DISABLED_SOURCES"] = oldDisabled;
+            testState.setEnv("CASE_LAW_REPLAY_DISABLED_SOURCES", oldDisabled);
           }
           await db
             .delete(databaseBackfillStates)

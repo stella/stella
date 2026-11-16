@@ -2635,6 +2635,43 @@ export const readChatRunForRequest = async (
 
 type ChatTurnRunOptions = { owner: RunOwner; chat: ChatRunBinding };
 
+/** The run a handed-over chat turn reads on, and where its last reader stopped. */
+export type HandedOverChatRun = {
+  readonly runId: string;
+  readonly harness: AgentHarness;
+  /** Where the released reader stopped; the adopter reads on after it. */
+  readonly chatReadSeq: number;
+};
+
+/**
+ * The run of chat turn `chat.turnId`, in whatever state the gateway holds it:
+ * a run that finished or was lost while nobody read it still has its last
+ * messages to read. `null` when the turn has no run for this member.
+ */
+export const readHandedOverChatRun = async (
+  db: Pick<DesktopRunnerDb, "select">,
+  { owner, chat }: ChatTurnRunOptions,
+): Promise<HandedOverChatRun | null> =>
+  (
+    await db
+      .select({
+        runId: runs.runId,
+        harness: runs.harness,
+        chatReadSeq: runs.chatReadSeq,
+      })
+      .from(runs)
+      .where(
+        and(
+          eq(runs.chatThreadId, chat.threadId),
+          eq(runs.chatTurnId, chat.turnId),
+          eq(runs.userId, owner.userId),
+          eq(runs.organizationId, owner.organizationId),
+        ),
+      )
+      // A turn starts one run; a paused one is answered on the same run.
+      .limit(1)
+  ).at(0) ?? null;
+
 /** A chat turn's run that is still going, and whether it can be steered. */
 export type SteerableChatRun = {
   readonly runId: string;

@@ -736,8 +736,8 @@
       "behaviour": "A stop that ends a turn waiting on the user stores the same outcome on the turn and on its message.",
       "status": "active",
       "file": "src/handlers/chat/chat-turn-persistence.ts",
-      "search": "      reason: planned.state.reason,",
-      "replace": "      reason: \"superseded\",",
+      "search": "      outcome: { reason: planned.state.reason, type: \"cancelled\" },",
+      "replace": "      outcome: { reason: \"superseded\", type: \"cancelled\" },",
       "scenario": {
         "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
         "test": "stops a client call the page still runs"
@@ -1199,8 +1199,8 @@
       "behaviour": "A completed turn's follow-ups run after its settlement, so one that throws is reported and never marks the stored turn failed.",
       "status": "active",
       "file": "src/handlers/chat/send-message.ts",
-      "search": "                      persist: async () =>\n                        await persistStreamedAssistantTurn(event),",
-      "replace": "                      persist: async () =>\n                        await persistStreamedAssistantTurn(event).then(async (settled) => { if (Result.isOk(settled) && settled.value.followUps !== null) { await runCompletedTurnFollowUps(run, settled.value.followUps); } return settled; }),",
+      "search": "                        await persistStreamedTurn({\n                          context: settlementContext,\n                          event,\n                        }),",
+      "replace": "                        await persistStreamedTurn({\n                          context: settlementContext,\n                          event,\n                        }).then(async (settled) => { if (Result.isOk(settled) && settled.value.followUps !== null) { await runCompletedTurnFollowUps(run, settled.value.followUps); } return settled; }),",
       "scenario": {
         "file": "src/handlers/chat/send-message.test.ts",
         "test": "keeps a completed turn completed when a follow-up throws"

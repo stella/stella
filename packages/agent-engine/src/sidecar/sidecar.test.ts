@@ -133,7 +133,10 @@ const fakeEntries = (fakeLog: string): Record<string, unknown>[] =>
     ? readFileSync(fakeLog, "utf-8")
         .split("\n")
         .filter((line) => line !== "")
-        .map((line) => JSON.parse(line))
+        .map((line) => {
+          const entry: Record<string, unknown> = JSON.parse(line);
+          return entry;
+        })
     : [];
 
 const place = (): Place => {
@@ -154,9 +157,12 @@ const place = (): Place => {
         ? readFileSync(fakeLog, "utf-8")
             .split("\n")
             .filter((line) => line !== "")
-            .map((line) => JSON.parse(line))
-            .filter((entry) => entry.received !== undefined)
-            .map((entry) => entry.received)
+            .flatMap((line) => {
+              const entry: {
+                received?: ReturnType<Place["received"]>[number];
+              } = JSON.parse(line);
+              return entry.received === undefined ? [] : [entry.received];
+            })
         : [],
     startups: () =>
       fakeEntries(fakeLog).flatMap(({ startup }) =>
@@ -2314,6 +2320,57 @@ describe("holder limits and timers", () => {
     });
     return { at, server };
   };
+
+  test("answers a desktop that connects the moment the secret appears, while its browser tools still start", async () => {
+    const at = place();
+    // A Chrome profile: the extension's host is registered as the holder starts.
+    const home = path.join(at.root, "home");
+    mkdirSync(path.join(home, ".config", "google-chrome"), { recursive: true });
+    const secretFile = path.join(at.dir, HOLDER_SECRET_FILE);
+    // Looked for on every turn of the event loop while the holder starts.
+    const appeared = new Promise<null>((resolve) => {
+      const look = () => {
+        if (existsSync(secretFile)) {
+          resolve(null);
+          return;
+        }
+        setImmediate(look);
+      };
+      setImmediate(look);
+    });
+    const starting = startHolderServer({
+      dir: at.dir,
+      endpoint: at.endpoint,
+      sidecarVersion: "1.4.0",
+      environment: { PATH: process.env["PATH"] ?? "" },
+      idleExitMs: 60_000,
+      helloTimeoutMs: 5000,
+      unackedRetentionMs: 60_000,
+      processGrantTimeoutMs: 60_000,
+      browser: {
+        command: ["/usr/bin/true"],
+        extraExtensionIds: [],
+        home,
+        platform: "linux",
+        stellaBrowser: null,
+      },
+      limits: { maxMessages: 1000, maxBytes: 1024 * 1024 },
+      protocolLog: { type: "set", setting: "off" },
+    });
+    cleanups.unshift(async () => {
+      const started = await starting;
+      if (Result.isOk(started)) {
+        started.value.holder.stop();
+        await started.value.exited;
+      }
+    });
+    await appeared;
+    const client = await connect(at.endpoint);
+    client.send(helloMessage(at));
+    expect(await client.waitFor(is("hello"))).toMatchObject({
+      type: "hello",
+    });
+  });
 
   for (const limits of [
     { name: "messages", maxMessages: 3, maxBytes: 1024 * 1024 },

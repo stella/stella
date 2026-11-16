@@ -235,6 +235,7 @@ RUN bun build \
     apps/api/src/scripts/apply-reviewed-citation-labels.ts \
     apps/api/src/scripts/corpus-generation.ts \
     apps/api/src/scripts/corpus-snippet-compare.ts \
+    apps/api/src/scripts/drain-pending-online-units.ts \
     apps/api/src/scripts/image-smoke-model-ingress.ts \
     apps/api/src/scripts/image-smoke.ts
 # Dedicated durable document-processing worker. Deploy the same image with

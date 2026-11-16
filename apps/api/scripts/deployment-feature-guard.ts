@@ -153,6 +153,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "A chat's background task count is mounted on every deployment; it is above 0 only once the member's local-agents feature let a run start on their computer",
   ],
   [
+    "/v1/chat/threads/:threadId/queue",
+    "A member's queue of messages for their own chat is mounted on every deployment that serves chat; a queued message is sent through the send's own checks",
+  ],
+  [
     "/v1/chat/threads/:threadId/local-run-steps",
     "Reading what a step of a local run produced is mounted on every deployment; there is content only once the member's local-agents feature let a run start on their computer",
   ],

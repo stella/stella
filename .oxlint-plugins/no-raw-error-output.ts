@@ -37,6 +37,11 @@ const API_FAILURE_FORMATTERS = new Set([
   "shadowGradeFields",
   "systemFields",
 ]);
+const API_HANDLER_FAILURE_FORMATTERS = new Set([
+  "requestErrorStatusFields",
+  "causeChainAttributes",
+]);
+const API_SHADOW_FORMATTERS = new Set(["shadowFields"]);
 const SAFE_TRANSFORMS = new Set([
   "sanitizeErrorForOutput",
   "sanitizeErrorAttributesForOutput",
@@ -153,6 +158,24 @@ const isSafeTransform = (context: RuleContext, node: AstNode): boolean => {
       ],
       names: API_ERROR_FORMATTERS,
     }) ||
+    isImportedFrom({
+      context,
+      node: callee,
+      modules: [
+        (moduleId) =>
+          moduleId.endsWith("apps/api/src/lib/observability/failure"),
+      ],
+      names: API_HANDLER_FAILURE_FORMATTERS,
+    }) ||
+    isImportedFrom({
+      context,
+      node: callee,
+      modules: [
+        (moduleId) =>
+          moduleId.endsWith("apps/api/src/lib/observability/failure-shadow"),
+      ],
+      names: API_SHADOW_FORMATTERS,
+    }) ||
     isOwnedSafeProjection(
       context,
       callee,
@@ -206,7 +229,22 @@ const isOwnedSafeProjection = (
     names.has(node.name)
   ) {
     const variable = resolveVariable(context, node);
-    return variable !== null && variable.defs.length > 0;
+    const definition = variable?.defs.at(0)?.node;
+    const declaration = isAstNode(definition) ? definition.parent : null;
+    const exported = isAstNode(declaration) ? declaration.parent : null;
+    return (
+      variable !== null &&
+      stableInitializer(variable)?.type === "ArrowFunctionExpression" &&
+      isAstNode(definition) &&
+      definition.type === "VariableDeclarator" &&
+      isAstNode(declaration) &&
+      declaration.type === "VariableDeclaration" &&
+      declaration.kind === "const" &&
+      isAstNode(exported) &&
+      exported.type === "ExportNamedDeclaration" &&
+      isAstNode(exported.parent) &&
+      exported.parent.type === "Program"
+    );
   }
   return false;
 };

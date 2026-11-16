@@ -16,7 +16,7 @@ import { MarkdownView } from "@/components/markdown-view";
 import { ThreadMatter } from "@/components/thread-matter";
 import { APP_VARIANT } from "@/env";
 import type { SentFile } from "@/state/chat-attachments";
-import { CHAT_FAILURE_KEYS } from "@/state/chat-failure";
+import { CHAT_FAILURE_KEYS, chatFailureStepsKey } from "@/state/chat-failure";
 import type { ChatEntry } from "@/state/chat-messages";
 import { plainText } from "@/state/markdown";
 
@@ -86,6 +86,8 @@ export const ChatMessage = ({
             );
           case "subagent":
             return <AnswerSubagent block={block} key={block.key} />;
+          case "steered":
+            return <SteeredMessage key={block.key} text={block.text} />;
           default:
             block satisfies never;
             return panic("Unhandled answer block");
@@ -99,7 +101,10 @@ export const ChatMessage = ({
   );
 };
 
-/** Why an answer failed, and a way to ask again when the thread offers one. */
+/**
+ * Why an answer failed, where to fix it when that is in stella desktop, and
+ * a way to ask again when the thread offers one.
+ */
 const FailedAnswer = ({
   failure,
   onRetry,
@@ -108,14 +113,32 @@ const FailedAnswer = ({
   onRetry: (() => void) | undefined;
 }) => {
   const t = useTranslations("chat");
+  const steps = chatFailureStepsKey(failure);
   return (
     <View className="items-start gap-2">
       <Text variant="error">{t(`failure.${CHAT_FAILURE_KEYS[failure]}`)}</Text>
+      {steps === null ? null : (
+        <Text variant="caption">{t(`localRun.${steps}`)}</Text>
+      )}
       {onRetry === undefined ? null : (
         <Button onPress={onRetry} variant="outline">
           {t("resend")}
         </Button>
       )}
+    </View>
+  );
+};
+
+/**
+ * A message the person sent while a coding agent worked, inside the answer
+ * where the agent took it, as their own words rather than a step.
+ */
+const SteeredMessage = ({ text }: { text: string }) => {
+  const t = useTranslations("chat");
+  return (
+    <View className="bg-secondary gap-1 rounded-lg px-2.5 py-2">
+      <Text variant="caption">{t("localRun.steered")}</Text>
+      <Text>{text}</Text>
     </View>
   );
 };

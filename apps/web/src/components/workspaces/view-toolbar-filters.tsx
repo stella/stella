@@ -43,6 +43,7 @@ import {
 } from "@stll/ui/select";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { ViewFilterButton, ViewFilterChip } from "@stll/ui/view-toolbar";
+import { PropertyIcon } from "@stll/workspace-ui/property-icon";
 
 import type {
   ConditionOperator,
@@ -67,16 +68,12 @@ import {
   SingleSelectValue,
 } from "@/components/workspaces/conditions/condition-select-values";
 import { SelectColorIcon } from "@/components/workspaces/properties/shared";
-import { PropertyIcon } from "@/components/workspaces/property-helpers";
 import { WORK_TYPES } from "@/components/workspaces/tasks/task-detail-constants";
 import { filterFieldsByLabel } from "@/components/workspaces/view-toolbar-filters.logic";
 import type { TranslationKey } from "@/i18n/types";
 import type { WorkspaceProperty } from "@/lib/types";
 
-import {
-  ADVANCED_FILTER_POPUP_CLASS_NAME,
-  AdvancedFilterEditor,
-} from "./advanced-filter-editor";
+import { AdvancedFilterEditor } from "./advanced-filter-editor";
 
 /** A filter value's text as the number its field shows; empty or unreadable
  *  text shows an empty field. */
@@ -483,7 +480,7 @@ const AdvancedFilterChip = ({
       </PopoverTrigger>
       <PopoverPopup
         align="start"
-        className={ADVANCED_FILTER_POPUP_CLASS_NAME}
+        className="w-[44rem] max-w-[92vw]"
         padding="none"
       >
         <AdvancedFilterEditor

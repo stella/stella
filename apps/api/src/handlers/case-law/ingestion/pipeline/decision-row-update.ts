@@ -577,18 +577,26 @@ const reopenMovedIdentityTx = async (
   await settleReopenedCitations(tx, [incoming, keyed, announced]);
 };
 
+type FinishRefreshedRowOptions = {
+  tx: CitationGraphTransaction<Transaction>;
+  write: DecisionRowWrite;
+  existing: ExistingDecision;
+  replacedState: ReplacedDecisionState | null;
+  projectionLock: ActiveCorpusProjectionSourceLock | null;
+};
+
 /**
  * Finish a refreshed row in the row write's transaction, after its columns
  * and identifiers are written: reopen what its identity change affects,
  * then rewrite its citations under the citation-graph lock.
  */
-export const finishRefreshedRowTx = async (
-  tx: CitationGraphTransaction<Transaction>,
-  write: DecisionRowWrite,
-  existing: ExistingDecision,
-  replacedState: ReplacedDecisionState | null,
-  projectionLock: ActiveCorpusProjectionSourceLock | null,
-): Promise<DecisionRowWriteStatus> => {
+export const finishRefreshedRowTx = async ({
+  tx,
+  write,
+  existing,
+  replacedState,
+  projectionLock,
+}: FinishRefreshedRowOptions): Promise<DecisionRowWriteStatus> => {
   const {
     observedAt,
     shape: { incomingCarriesDocument },

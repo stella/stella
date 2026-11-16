@@ -426,6 +426,14 @@ const writeDecisionRow = async (
           existing,
         );
         if (payloadState === undefined || payloadState.holdsDocument) {
+          // The description update above commits with this status, and its
+          // columns (the country among them) are projection inputs.
+          await reconcileStableProjection(
+            tx,
+            write,
+            existing.id,
+            projectionLock,
+          );
           return await lostRowWriteStatus(tx, write, existing.id, {
             payloadFenced: false,
           });
@@ -470,13 +478,13 @@ const writeDecisionRow = async (
         await writeDecisionJudges(tx, write, existing.id);
       }
 
-      return await finishRefreshedRowTx(
+      return await finishRefreshedRowTx({
         tx,
         write,
         existing,
         replacedState,
         projectionLock,
-      );
+      });
     }
 
     if (inputProvenance.type === "stored") {

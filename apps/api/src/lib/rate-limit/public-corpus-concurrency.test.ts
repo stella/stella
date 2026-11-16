@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { createTestState } from "@stll/test-state";
+
 import { env } from "@/api/env";
 import { createHttpApp } from "@/api/http/app";
 import { routes } from "@/api/http/route";
@@ -16,6 +18,8 @@ import { serveForTest } from "@/api/tests/helpers/test-server";
 import type { TestServer } from "@/api/tests/helpers/test-server";
 
 import { publicCorpusConcurrencyLimit } from "./public-corpus-concurrency";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const searchPaths = [
   { method: "GET", path: "/v1/law/statutes/search" },
@@ -298,9 +302,10 @@ describe("public corpus active request capacity", () => {
   });
 
   test("dedicated-pool search and aggregate retain independent class ceilings below the total cap", async () => {
-    const previous = env.PUBLIC_LAW_DATABASE_URL;
-    env.PUBLIC_LAW_DATABASE_URL =
-      "postgres://readonly:password@localhost/corpus";
+    testState.setConfig(
+      "PUBLIC_LAW_DATABASE_URL",
+      "postgres://readonly:password@localhost/corpus",
+    );
     await using fixture = createCapacityApp();
     const { server, pending } = fixture;
     const running = Array.from(
@@ -329,7 +334,6 @@ describe("public corpus active request capacity", () => {
         job.finish();
       }
       await Promise.all(running);
-      env.PUBLIC_LAW_DATABASE_URL = previous;
     }
   });
   for (const [routeClass, paths] of [
@@ -582,39 +586,32 @@ describe("public corpus active request capacity", () => {
   });
 
   test("the validated development switch skips capacity admission", async () => {
-    const previous = env.E2E_DISABLE_AUTH_RATE_LIMIT;
     const disconnect = disconnectBeforeAdmission();
     await using fixture = createCapacityApp([disconnect.stage]);
     const { server, observations, nextJob } = fixture;
-    env.E2E_DISABLE_AUTH_RATE_LIMIT = true;
-    try {
-      expect(
-        (
-          await server.fetch(
-            request({ method: "GET", path: "/v1/law/statutes" }),
-          )
-        ).status,
-      ).toBe(200);
-      // An aborted request, which admission would refuse, still runs.
-      const cancellation = new AbortController();
-      const sent = outcomeOf(
-        server.fetch(
-          new Request(request(searchPaths[0], cancellation.signal), {
-            headers: { [DISCONNECT_FIRST_HEADER]: "1" },
-          }),
-        ),
-      );
-      const started = nextJob();
-      await disconnect.arrived;
-      cancellation.abort();
-      expect(await sent).toBe("AbortError");
-      // The bypass still executes ordinary handler work.
-      const job = await started;
-      job.finish();
-      expect((await disconnect.served).status).toBe(200);
-      expect(observations).toEqual([]);
-    } finally {
-      env.E2E_DISABLE_AUTH_RATE_LIMIT = previous;
-    }
+    testState.setConfig("E2E_DISABLE_AUTH_RATE_LIMIT", true);
+
+    expect(
+      (await server.fetch(request({ method: "GET", path: "/v1/law/statutes" })))
+        .status,
+    ).toBe(200);
+    // An aborted request, which admission would refuse, still runs.
+    const cancellation = new AbortController();
+    const sent = outcomeOf(
+      server.fetch(
+        new Request(request(searchPaths[0], cancellation.signal), {
+          headers: { [DISCONNECT_FIRST_HEADER]: "1" },
+        }),
+      ),
+    );
+    const started = nextJob();
+    await disconnect.arrived;
+    cancellation.abort();
+    expect(await sent).toBe("AbortError");
+    // The bypass still executes ordinary handler work.
+    const job = await started;
+    job.finish();
+    expect((await disconnect.served).status).toBe(200);
+    expect(observations).toEqual([]);
   });
 });

@@ -192,11 +192,7 @@ const ChatThreadDomPage = ({
             onOpenPlaybook={session.handleOpenPlaybook}
             onContinuePausedTurn={session.continuePausedTurn}
             onResend={session.resendLatestMessage}
-            queuedMessageActions={{
-              remove: session.removeQueuedMessage,
-              sendNow: session.sendQueuedMessageNow,
-            }}
-            queuedMessages={session.queuedMessages}
+            queue={session.queue}
             streamdownComponents={session.streamdownComponents}
             threadRef={threadRef}
             userMessageEdit={userMessageEdit}

@@ -412,7 +412,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "openWorldHint": "Read case-law coverage is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Case-law availability by jurisdiction/source: held decision-year ranges, last sync, awaiting-text counts, recorded gaps, courts. Check before concluding a decision is missing. Listed countries not yet admitted and without coverage return status unavailable with reason.",
+    "description": "Check held case-law years, sync, pending text, courts and reconciled knownGaps before claiming missing data. publisherCensus: unknown/none-recorded/known; publisher/stored/text counts (slice memberships may overlap). Unmeasured cannot prove completeness. Unadmitted countries return unavailable.",
     "annotations": {
       "title": "Read case-law coverage",
       "destructiveHint": false,
@@ -8019,7 +8019,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "openWorldHint": "Read case-law coverage is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Case-law availability by jurisdiction/source: held decision-year ranges, last sync, awaiting-text counts, recorded gaps, courts. Check before concluding a decision is missing. Listed countries not yet admitted and without coverage return status unavailable with reason.",
+    "description": "Check held case-law years, sync, pending text, courts and reconciled knownGaps before claiming missing data. publisherCensus: unknown/none-recorded/known; publisher/stored/text counts (slice memberships may overlap). Unmeasured cannot prove completeness. Unadmitted countries return unavailable.",
     "annotations": {
       "title": "Read case-law coverage",
       "destructiveHint": false,
@@ -16362,7 +16362,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "openWorldHint": "Read case-law coverage is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Case-law availability by jurisdiction/source: held decision-year ranges, last sync, awaiting-text counts, recorded gaps, courts. Check before concluding a decision is missing. Listed countries not yet admitted and without coverage return status unavailable with reason.",
+    "description": "Check held case-law years, sync, pending text, courts and reconciled knownGaps before claiming missing data. publisherCensus: unknown/none-recorded/known; publisher/stored/text counts (slice memberships may overlap). Unmeasured cannot prove completeness. Unadmitted countries return unavailable.",
     "annotations": {
       "title": "Read case-law coverage",
       "destructiveHint": false,
@@ -18733,7 +18733,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
       "openWorldHint": "Read case-law coverage is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Case-law availability by jurisdiction/source: held decision-year ranges, last sync, awaiting-text counts, recorded gaps, courts. Check before concluding a decision is missing. Listed countries not yet admitted and without coverage return status unavailable with reason.",
+    "description": "Check held case-law years, sync, pending text, courts and reconciled knownGaps before claiming missing data. publisherCensus: unknown/none-recorded/known; publisher/stored/text counts (slice memberships may overlap). Unmeasured cannot prove completeness. Unadmitted countries return unavailable.",
     "annotations": {
       "title": "Read case-law coverage",
       "destructiveHint": false,

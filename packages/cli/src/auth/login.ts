@@ -183,6 +183,14 @@ const awaitManualCode = async (
   });
 };
 
+type AwaitAuthorizationCodeOptions = {
+  io: Io;
+  authorizeUrl: string;
+  redirectUri: string;
+  listener: Awaited<ReturnType<typeof startLoopbackListener>>;
+  expectedState: string;
+};
+
 /**
  * Waits for the loopback callback, falling back to manual paste if the
  * listener never fires. `redirectUri` must be whichever URI was actually
@@ -190,13 +198,15 @@ const awaitManualCode = async (
  * the portless default when no listener could be started) — the token
  * endpoint later requires an exact match (RFC 6749 S4.1.3).
  */
-const awaitAuthorizationCode = async (
-  io: Io,
-  authorizeUrl: string,
-  redirectUri: string,
-  listener: Awaited<ReturnType<typeof startLoopbackListener>>,
-  expectedState: string,
-): Promise<Result<AuthorizationCode, CliAuthError>> => {
+const awaitAuthorizationCode = async ({
+  io,
+  authorizeUrl,
+  redirectUri,
+  listener,
+  expectedState,
+}: AwaitAuthorizationCodeOptions): Promise<
+  Result<AuthorizationCode, CliAuthError>
+> => {
   io.print("Opening the stella sign-in page in your browser:");
   io.print(`  ${authorizeUrl}`);
   // Awaiting is safe (and required to react to a failed launch): the loopback
@@ -379,7 +389,13 @@ export const login = async (
     });
 
     const authorization = yield* Result.await(
-      awaitAuthorizationCode(io, authorizeUrl, redirectUri, listener, state),
+      awaitAuthorizationCode({
+        io,
+        authorizeUrl,
+        redirectUri,
+        listener,
+        expectedState: state,
+      }),
     );
 
     const credential = await redeemForCredential({

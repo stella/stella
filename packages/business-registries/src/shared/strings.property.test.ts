@@ -7,8 +7,8 @@ import {
   propertyTestTimeout,
 } from "@stll/property-testing";
 
-import { registryValue } from "./property-test-helpers.test.js";
 import { trimToNull } from "./strings.js";
+import { registryValue } from "./tests/test-helpers.js";
 
 describe("optional registry strings", () => {
   test(

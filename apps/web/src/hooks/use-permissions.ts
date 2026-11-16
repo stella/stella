@@ -1,10 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
+import { memberHasPermissions } from "@stll/permissions";
 import type { PermissionInput } from "@stll/permissions";
 
-import { authClient } from "@/lib/auth-client";
-import { roleOptions } from "@/lib/auth-queries";
+import { activeMemberOptions, roleOptions } from "@/lib/auth-queries";
 import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
 import { resourceQueryOptions } from "@/lib/workspace-realtime";
@@ -26,12 +26,35 @@ export const usePermissions = (permissions: PermissionInput): boolean => {
   );
   useQueryViewError(roleView, "usePermissions:query");
 
+  const needsMemberGrant =
+    permissions.billing?.includes("read") === true &&
+    roleView.type === "items" &&
+    !memberHasPermissions({
+      role: roleView.items,
+      billingAccess: false,
+      permissions,
+    });
+  const memberView = queryView(
+    useQuery({
+      ...resourceQueryOptions(activeMemberOptions, {
+        resources: [RESOURCE_TYPE.USER, RESOURCE_TYPE.ORGANIZATION],
+        scope: { type: "organization" },
+      }),
+      enabled: needsMemberGrant,
+    }),
+  );
+  useQueryViewError(memberView, "usePermissions:member-query");
+
   if (roleView.type !== "items" || roleView.refetchError !== undefined) {
     return false;
   }
 
-  return authClient.organization.checkRolePermission({
+  return memberHasPermissions({
     role: roleView.items,
+    billingAccess:
+      memberView.type === "items" &&
+      memberView.refetchError === undefined &&
+      memberView.items.billingAccess,
     permissions,
   });
 };

@@ -4,6 +4,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "indexes-case-law-population-projection-activity-idx",
   revision: 2,
+  lifecycle: "finalized",
   type: "indexes",
   values: [COURT_ACTIVITY_LATEST_INDEX],
 } satisfies OnlineMigrationEntry;

@@ -12,7 +12,7 @@ import type { RegistryFormatClause } from "./format-clauses.js";
 import {
   nullableRegistryString,
   registryString,
-} from "./shared/property-test-helpers.test.js";
+} from "./shared/tests/test-helpers.js";
 
 test("required particulars resolve only from supplied tokens and preserve fixed clauses", () => {
   assertProperty(

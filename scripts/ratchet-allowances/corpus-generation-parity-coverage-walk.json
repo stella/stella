@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/legal-search/corpus-index-flip-parity.ts",
+  "delta": 1,
+  "reason": "The flip parity coverage walk is a keyset walk over a generation's applied copies: each page's cursor is the previous page's last entity, so the pages cannot be issued together. Each page is its own short read-only transaction on purpose, so a walk over millions of copies never holds one snapshot open; each page is bounded by its page size and the walk by a page budget."
+}

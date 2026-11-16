@@ -22,6 +22,11 @@ export default {
         reason: "Hands the upgrade request to the gateway.",
       },
       {
+        path: "apps/api/src/handlers/chat/queue/chat-queue-sender.ts",
+        reason:
+          "Checks a queued message bound for the member's computer finds one connected before sending it.",
+      },
+      {
         path: "apps/api/src/handlers/chat/local-run-plan.ts",
         reason:
           "Routes a chat turn bound for the member's computer through the control and reads its run back.",

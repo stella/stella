@@ -10,6 +10,9 @@ export const AUTH_SOCIAL_PROVIDER_IDS = [
 ] as const;
 export type AuthSocialProviderId = (typeof AUTH_SOCIAL_PROVIDER_IDS)[number];
 export const AUTH_ACCESS_RESET_ERROR_CODE = "confirm_access_reset";
+/** No sign-in code is sent: the account named signs in with a password. */
+export const AUTH_SIGN_IN_CODE_UNAVAILABLE_ERROR_CODE =
+  "sign_in_code_unavailable";
 
 export const ORGANIZATION_ROLE_NAMES = [
   "owner",
@@ -138,6 +141,16 @@ export const BETTER_AUTH_ORGANIZATION_OPTIONS = {
   // An invitation grants access to a firm's matters, so the address it was
   // sent to has to be one the recipient proved they hold.
   requireEmailVerificationOnInvitation: true,
+} as const;
+
+/** Server-managed membership grant; generic member inputs cannot assign it. */
+export const BILLING_ACCESS_MEMBER_FIELDS = {
+  billingAccess: {
+    type: "boolean",
+    required: true,
+    defaultValue: false,
+    input: false,
+  },
 } as const;
 
 /** Adapter switches which must match in every host. */

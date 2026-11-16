@@ -2,7 +2,6 @@ import { Result } from "better-result";
 import {
   afterAll,
   afterEach,
-  beforeAll,
   beforeEach,
   describe,
   expect,
@@ -11,6 +10,8 @@ import {
   test,
 } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
+
+import { createTestState } from "@stll/test-state";
 
 import { stella } from "@/api/db/rls";
 import type { Transaction } from "@/api/db/root";
@@ -63,6 +64,8 @@ import {
 } from "@/api/tests/security/rls-fixture";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 beforeEach(() => {
   broadcastMock.mockReset();
@@ -262,7 +265,7 @@ describe("createEntityFromBuffer", () => {
     const priorFlag = env.FEATURE_FILE_USAGE_LIMITS;
     const priorWorkerFlag =
       envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS;
-    env.FEATURE_FILE_USAGE_LIMITS = true;
+    testState.setConfig("FEATURE_FILE_USAGE_LIMITS", true);
     envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = false;
     fake.failNext({ method: "PUT", code: "AccessDenied", status: 403 });
     try {
@@ -285,7 +288,7 @@ describe("createEntityFromBuffer", () => {
       expect(processExtractionMock).not.toHaveBeenCalled();
       expect(intentStatuses).toEqual(["scanning"]);
     } finally {
-      env.FEATURE_FILE_USAGE_LIMITS = priorFlag;
+      testState.setConfig("FEATURE_FILE_USAGE_LIMITS", priorFlag);
       envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = priorWorkerFlag;
     }
   });
@@ -770,7 +773,7 @@ describe("service-owned buffer publication in the database", () => {
       afterCreate,
     });
 
-  beforeAll(async () => {
+  testState.beforeAll(async () => {
     const fixture = await getRlsFixture();
     db = fixture.testDb;
     ids = fixture.ids;

@@ -155,7 +155,7 @@ test("feature grants boot logs only the discarded count and exposes known grants
     .toString()
     .trim()
     .split("\n")
-    .map((line) => JSON.parse(line));
+    .map((line): unknown => JSON.parse(line));
   expect(records).toEqual([
     {
       severity: "ERROR",

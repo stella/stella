@@ -158,7 +158,7 @@ import { outsideRetainedMatters } from "@/api/lib/workspaces/legal-holds/retaine
 // before this extraction.
 //
 // Steps that delete or clear a user-owned table's reference to `user` also
-// export a `*_TABLES` constant listing the Drizzle tables they cover. These
+// declare a `*_TABLES` constant listing the Drizzle tables they cover. These
 // constants are combined into `ACCOUNT_DELETION_MANUAL_TABLES` at the
 // bottom of this file, which the account-deletion coverage guard
 // (`account-deletion-coverage.test.ts`) uses to verify that every table
@@ -249,7 +249,7 @@ export type RevokeAuthCredentialsParams = {
   email: string;
 };
 
-export const REVOKE_AUTH_CREDENTIALS_TABLES = [
+const REVOKE_AUTH_CREDENTIALS_TABLES = [
   account,
   session,
   twoFactor,
@@ -288,7 +288,7 @@ export const revokeAuthCredentialsAndInvitations = async ({
   await tx.delete(invitation).where(eq(invitation.email, email));
 };
 
-export const REVOKE_OAUTH_TOKENS_TABLES = [
+const REVOKE_OAUTH_TOKENS_TABLES = [
   mcpWebHandoff,
   oauthAccessToken,
   oauthRefreshToken,
@@ -345,7 +345,7 @@ export const deleteConnectedCredentialsAndOAuthState = async (
     .where(eq(agentDelegation.userId, currentUserId));
 };
 
-export const CLEAR_WORKSPACE_LEAD_ROLE_TABLES = [
+const CLEAR_WORKSPACE_LEAD_ROLE_TABLES = [
   workspaces,
 ] as const satisfies readonly PgTable[];
 
@@ -423,7 +423,7 @@ export const selectActiveTaskAssignments = async (
     )
     .limit(LIMITS.accountDeletionTaskAssignmentsMax + 1);
 
-export const REASSIGN_ACTIVE_TASKS_TABLES = [
+const REASSIGN_ACTIVE_TASKS_TABLES = [
   correspondence,
   correspondenceFilers,
   correspondenceAllowedSenders,
@@ -840,7 +840,7 @@ const erasableChatThreads = (
         ]),
   );
 
-export const RESET_FOLIO_COLLAB_USER_STATE_TABLES = [
+const RESET_FOLIO_COLLAB_USER_STATE_TABLES = [
   folioCollabRoomTokens,
   folioCollabRooms,
 ] as const satisfies readonly PgTable[];
@@ -1051,7 +1051,7 @@ export type DeleteDesktopEditSessionsParams = {
   retainedWorkspaceIds: readonly SafeId<"workspace">[];
 };
 
-export const DELETE_DESKTOP_EDIT_SESSIONS_TABLES = [
+const DELETE_DESKTOP_EDIT_SESSIONS_TABLES = [
   desktopEditSessions,
   desktopEditHandoffs,
 ] as const satisfies readonly PgTable[];
@@ -1156,7 +1156,7 @@ export type DeletePendingUploadsParams = {
   retainedWorkspaceIds: readonly SafeId<"workspace">[];
 };
 
-export const DELETE_PENDING_UPLOADS_TABLES = [
+const DELETE_PENDING_UPLOADS_TABLES = [
   pendingUploads,
 ] as const satisfies readonly PgTable[];
 
@@ -1222,7 +1222,7 @@ export type DeleteFileComparisonUploadsParams = {
   s3KeysToDelete: string[];
 };
 
-export const DELETE_FILE_COMPARISON_UPLOADS_TABLES = [
+const DELETE_FILE_COMPARISON_UPLOADS_TABLES = [
   fileComparisonUploads,
 ] as const satisfies readonly PgTable[];
 
@@ -1265,7 +1265,7 @@ export type DeleteUserFilesParams = {
   retainedWorkspaceIds: readonly SafeId<"workspace">[];
 };
 
-export const DELETE_USER_FILES_TABLES = [
+const DELETE_USER_FILES_TABLES = [
   userFiles,
   accountExports,
 ] as const satisfies readonly PgTable[];
@@ -1365,7 +1365,7 @@ export const deleteUserFiles = async ({
   return exportObjects.at(0)?.notBefore ?? null;
 };
 
-export const DELETE_CHAT_THREADS_TABLES = [
+const DELETE_CHAT_THREADS_TABLES = [
   fileChatThreads,
   chatThreads,
 ] as const satisfies readonly PgTable[];
@@ -1400,7 +1400,7 @@ export const deleteChatThreadsAndFileLinks = async ({
     );
 };
 
-export const DELETE_PERSONAL_AI_MEMORIES_TABLES = [
+const DELETE_PERSONAL_AI_MEMORIES_TABLES = [
   aiMemories,
 ] as const satisfies readonly PgTable[];
 
@@ -1447,7 +1447,7 @@ export const deletePersonalAiMemories = async ({
     .where(and(eq(aiMemories.createdBy, userId), erasableMemory));
 };
 
-export const DELETE_WORKSPACE_VIEW_TEMPLATES_TABLES = [
+const DELETE_WORKSPACE_VIEW_TEMPLATES_TABLES = [
   workspaceViewTemplates,
   agentSkills,
 ] as const satisfies readonly PgTable[];
@@ -1465,7 +1465,7 @@ export const deletePersonalWorkspaceViewTemplatesAndAgentSkills = async (
   await tx.delete(agentSkills).where(eq(agentSkills.userId, currentUserId));
 };
 
-export const DELETE_BILLING_RATES_TABLES = [
+const DELETE_BILLING_RATES_TABLES = [
   rateEntries,
 ] as const satisfies readonly PgTable[];
 

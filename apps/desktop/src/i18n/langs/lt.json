@@ -598,21 +598,21 @@
   },
   "dictation": {
     "title": "Diktavimas",
-    "description": "Laikykite {shortcut} ir kalbėkite. Tekstas atsiras naudojamoje programoje. Kalba perrašoma šiame kompiuteryje ir nesaugoma. Įjungus DI taisymą, perrašytas tekstas (ne garsas) per stella siunčiamas jūsų organizacijos DI teikėjui, kad būtų ištaisytos klaidos ir formatavimas; stella jo nesaugo.",
+    "description": "Laikykite {shortcut} ir kalbėkite. Tekstas atsiras naudojamoje programoje. Kalba perrašoma šiame kompiuteryje ir nesaugoma.",
     "descriptionCloud": "Laikykite {shortcut} ir kalbėkite. Tekstas atsiras programoje, kurią naudojate. Kalbą paverčia tekstu stella AI, o stella jos nesaugo.",
     "cleanup": {
       "title": "Taisyti su DI",
-      "description": "Kalba ir toliau paverčiama tekstu šiame kompiuteryje, o garsas niekada jo nepalieka. Įjungus taisymą, gautas tekstas per stella siunčiamas jūsų organizacijos DI teikėjui, kuris ištaiso atpažinimo klaidas ir pritaiko padiktuotus skyrybos ženklus bei formatavimą, pavyzdžiui, „nauja eilutė“ arba „paryškinti“. stella jo nesaugo. Taisymui taip pat perduodama, į kokios rūšies programą diktuojate, pavyzdžiui, el. paštą ar pokalbių programą, kad tekstas jai tiktų.",
-      "descriptionCloud": "Įjungus taisymą, stella AI taip pat ištaiso gauto teksto atpažinimo klaidas ir pritaiko padiktuotus skyrybos ženklus bei formatavimą, pavyzdžiui, „nauja eilutė“ arba „paryškinti“. Taisymui taip pat perduodama, į kokios rūšies programą diktuojate, pavyzdžiui, el. paštą ar pokalbių programą, kad tekstas jai tiktų."
+      "description": "Ištaiso atpažinimo klaidas ir padiktuotą formatavimą, pavyzdžiui, „nauja eilutė“ arba „paryškinti“, ir pritaiko tekstą programai, pavyzdžiui, el. paštui. Per stella jūsų organizacijos DI teikėjui siunčiamas tik tekstas, ne garsas; stella jo nesaugo.",
+      "descriptionCloud": "stella AI taip pat ištaiso atpažinimo klaidas ir padiktuotą formatavimą, pavyzdžiui, „nauja eilutė“ arba „paryškinti“, ir pritaiko tekstą programai, pavyzdžiui, el. paštui."
     },
     "context": {
       "windowTitle": {
         "title": "Bendrinti lango pavadinimą su DI taisymu",
-        "description": "Taisymui perduodamas ir lango, į kurį diktuojate, pavadinimas, kad būtų galima atskirti, pavyzdžiui, sutartį nuo vidinio pranešimo. Langų pavadinimuose gali būti klientų vardų ar bylų pavadinimų. Pavadinimas per stella siunčiamas jūsų organizacijos DI teikėjui, o stella jo nesaugo."
+        "description": "Padeda atskirti sutartį nuo pastabos. Langų pavadinimuose gali būti klientų ar bylų pavadinimų."
       },
       "textBeforeCursor": {
         "title": "Bendrinti tekstą prieš žymeklį su DI taisymu",
-        "description": "Taisymui perduodama ir iki {limit, number} simbolių prieš žymeklį, kad padiktuotas tekstas tęstų rašomą tekstą. Taip dalis dokumento, kuriame esate, per stella siunčiama jūsų organizacijos DI teikėjui, o stella jos nesaugo."
+        "description": "Iki {limit, number} simbolių iš dokumento, kuriame esate, kad diktuojamas tekstas derėtų prie to, ką rašote."
       }
     },
     "keptInHistory": "Kiekvienas diktavimas taip pat išsaugomas šio kompiuterio iškarpinės istorijoje.",
@@ -624,16 +624,21 @@
       "unavailableRegion": "stella AI jūsų organizacijos regione dar nesiūlo kalbos pavertimo tekstu.",
       "unavailableProvider": "Jūsų organizacijos DI paslaugų teikėjas nesiūlo kalbos pavertimo tekstu.",
       "unavailable": "Pavertimas naudojant stella AI šiuo metu nepasiekiamas.",
-      "model": "Pavertimo modelis"
+      "model": "Pavertimo modelis",
+      "outsideRegion": "Už jūsų regiono ribų",
+      "outsideRegionNote": "Šis modelis garsą apdoroja už jūsų organizacijos regiono ribų."
     },
     "language": {
       "title": "Diktavimo kalba",
-      "description": "Diktavimas atpažįstamas šia kalba, o taisant tekstas paliekamas šia kalba. Automatiškai naudojamos šio kompiuterio rodymo ir klaviatūrų kalbos.",
+      "description": "Automatinis naudoja šio kompiuterio ekrano ir klaviatūrų kalbas.",
       "automatic": "Automatiškai",
       "automaticWith": "Automatiškai ({languages})",
       "noResults": "Kalbų nerasta"
     },
     "modelNeeded": "Kalbos modelis veikia šiame kompiuteryje.",
+    "modelInstalled": "Kalbos modelis ({size} MB) yra šiame kompiuteryje.",
+    "removeModel": "Pašalinti",
+    "removeFailed": "Kalbos modelio pašalinti nepavyko. Bandykite dar kartą.",
     "download": "Atsisiųsti ({size} MB)",
     "downloading": "Atsisiunčiamas kalbos modelis: {percent} %",
     "downloadFailed": "Kalbos modelio atsisiųsti nepavyko.",
@@ -716,6 +721,11 @@
     "howDocumentsBody": "Prie dokumento stella pasirinkite Atidaryti. Išsaugojus pakeitimas grįžta į stella kaip nauja versija.",
     "howClipboard": "Iškarpinė",
     "howClipboardBody": "Kopijuokite kaip įprasta, tada paspauskite {shortcut} ir pasirinkite iš to, ką nukopijavote.",
+    "howSigning": "PDF pasirašymas",
+    "howSigningBodyMac": "Prie PDF stella pasirinkite „Pasirašyti su stella desktop“. Sertifikatas lieka jūsų raktinėje arba lustinėje kortelėje, o pasirašytas PDF grįžta į stella kaip nauja versija.",
+    "howSigningBodyPc": "Prie PDF stella pasirinkite „Pasirašyti su stella desktop“. Sertifikatas lieka jūsų sertifikatų saugykloje arba lustinėje kortelėje, o pasirašytas PDF grįžta į stella kaip nauja versija.",
+    "howDictation": "Diktavimas",
+    "howDictationBody": "Laikykite sparčiąjį klavišą ir kalbėkite – tekstas atsiras naudojamoje programoje. Įjungti galėsite viename iš tolesnių žingsnių.",
     "howActivity": "Veikla",
     "howActivityBody": "Pažiūrėkite, kur dingo jūsų diena, ir paverskite ją laiko įrašų juodraščiais. Išjungta, kol jos nepaleisite.",
     "activityTitle": "Kaip veikia Veikla",
@@ -825,9 +835,10 @@
       "storage": "Šiame kompiuteryje nepavyko nuskaityti ar išsaugoti ryšio."
     },
     "callbackConnectedTitle": "ChatGPT prijungtas",
-    "callbackConnectedBody": "Galite uždaryti šį skirtuką ir grįžti į stellą.",
+    "callbackConnectedBody": "Grįžkite į stellą. DI užklausos dabar naudoja jūsų ChatGPT planą.",
     "callbackNotConnectedTitle": "ChatGPT neprijungtas",
     "callbackNotConnectedBody": "Grįžkite į stellą, pažiūrėkite, kas nutiko, ir bandykite dar kartą.",
+    "callbackCloseTab": "Šį skirtuką galite uždaryti.",
     "claudeCode": {
       "title": "Claude Code",
       "description": "Naudokite savo Claude prenumeratą vietiniams agentams stelloje. Naudojimas skaičiuojamas pagal jūsų Claude planą, atskirai nuo stellos prenumeratos.",

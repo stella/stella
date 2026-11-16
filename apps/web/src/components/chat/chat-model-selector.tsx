@@ -19,7 +19,6 @@ import { cn } from "@stll/ui/utils";
 import type { ProviderValue } from "@/components/ai-config-role-models.logic";
 import { AIProviderIcon } from "@/components/ai-provider-icons";
 import {
-  CHAT_MODEL_MENU_POPUP_CLASS_NAME,
   ChatModelOptionsMenu,
   chatRunOnTarget,
   type ComposerModelsMenuProps,
@@ -262,7 +261,7 @@ export const ChatModelSelector = ({
         </MenuTrigger>
         <MenuPopup
           align="start"
-          className={CHAT_MODEL_MENU_POPUP_CLASS_NAME}
+          className="w-[min(32rem,calc(100vw-2rem))] max-w-(--available-width)"
           side="top"
           sideOffset={6}
         >

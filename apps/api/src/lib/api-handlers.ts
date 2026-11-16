@@ -9,11 +9,14 @@ import {
   RESOURCE_MUTATION_ID_HEADER,
 } from "@stll/api-contract";
 import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
+import type { Money } from "@stll/api-contract/billing-money";
 import type { ACCOUNT_EXPORT_SCOPES } from "@stll/api-contract/mcp";
 import type { ORGANIZATION_CREATE_SCOPE } from "@stll/api-contract/organization-create";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import { resourceMutationDigest } from "@stll/api-contract/realtime-mutation-digest";
 import type { FailureGrade } from "@stll/errors";
+import type { CentsAmount } from "@stll/money";
+import { BILLING_MATTER_READ_PERMISSION } from "@stll/permissions";
 import type { PermissionInput } from "@stll/permissions";
 
 import { safeDbFromScoped } from "@/api/db/safe-db";
@@ -32,7 +35,7 @@ import type {
 } from "@/api/http/route";
 import { decodeRouteInput, routeContext } from "@/api/http/route-input";
 import type { RawParams, RouteContext } from "@/api/http/route-input";
-import { HttpStatusResponse, status } from "@/api/http/status";
+import { HttpStatusResponse, status, unwrapStatus } from "@/api/http/status";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import {
   memberAssignmentRequiredError,
@@ -56,6 +59,7 @@ import type {
   WorkspaceCaller,
 } from "@/api/lib/auth/member-caller";
 import { checkRestrictedAccountOperation } from "@/api/lib/auth/review-account";
+import { hasVisibleMoney } from "@/api/lib/billing/money-response";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CapabilityTransport } from "@/api/lib/capability-transport";
 import { workspaceSegmentSchema } from "@/api/lib/custom-schema";
@@ -491,6 +495,8 @@ export type HandlerConfig = InputSchema &
   ContentDeliveryDisposition &
   CapabilityAccess &
   CapabilityTransportDisposition & {
+    /** Money-only response schema; the common egress checks it on every transport. */
+    moneyResponse?: AnySchema;
     permissions: PermissionInput;
     accountAccess: AccountAccess;
     /** Finite API-owned transport deadline for a generated capability command. */
@@ -1239,6 +1245,77 @@ type FiniteHandlerGuard<TResult> = [Extract<TResult, Response>] extends [never]
   ? unknown
   : never;
 
+/** Bounded recursion keeps the handler boundary from erasing monetary result types. */
+type ContainsMoney<T, Depth extends readonly unknown[] = []> = unknown extends T
+  ? false
+  : Depth["length"] extends 8
+    ? false
+    : T extends CentsAmount | Money
+      ? true
+      : T extends
+            | string
+            | number
+            | boolean
+            | bigint
+            | null
+            | undefined
+            | Date
+            | Response
+        ? false
+        : T extends readonly (infer Item)[]
+          ? ContainsMoney<Item, [...Depth, unknown]>
+          : T extends object
+            ? {
+                [K in keyof T]: ContainsMoney<T[K], [...Depth, unknown]>;
+              }[keyof T]
+            : false;
+
+type MoneyShapeMatches<T, Schema, Depth extends readonly unknown[] = []> =
+  T extends HttpStatusResponse<infer _Code, infer Body>
+    ? MoneyShapeMatches<Body, Schema, Depth>
+    : Depth["length"] extends 8
+      ? true
+      : true extends ContainsMoney<T>
+        ? Schema extends { readonly wrapped: infer Wrapped }
+          ? MoneyShapeMatches<T, Wrapped, Depth>
+          : NonNullable<T> extends CentsAmount | Money
+            ? Schema extends v.GenericSchema
+              ? NonNullable<v.InferOutput<Schema>> extends Money
+                ? true
+                : false
+              : false
+            : NonNullable<T> extends readonly (infer Item)[]
+              ? Schema extends { readonly item: infer ItemSchema }
+                ? MoneyShapeMatches<Item, ItemSchema, [...Depth, unknown]>
+                : false
+              : Schema extends { readonly entries: infer Entries }
+                ? false extends {
+                    [K in keyof NonNullable<T>]: true extends ContainsMoney<
+                      NonNullable<T>[K]
+                    >
+                      ? K extends keyof Entries
+                        ? MoneyShapeMatches<
+                            NonNullable<T>[K],
+                            Entries[K],
+                            [...Depth, unknown]
+                          >
+                        : false
+                      : true;
+                  }[keyof NonNullable<T>]
+                  ? false
+                  : true
+                : false
+        : true;
+
+type MoneyResponseGuard<TConfig, TResult> =
+  true extends ContainsMoney<TResult>
+    ? TConfig extends { moneyResponse: infer Schema }
+      ? MoneyShapeMatches<TResult, Schema> extends true
+        ? unknown
+        : { unclassifiedMoneyFields: never }
+      : { moneyResponseSchemaRequired: never }
+    : unknown;
+
 type NonJsonReplayPayload<T> =
   T extends HttpStatusResponse<infer _Code, infer Body>
     ? NonJsonReplayPayload<Body>
@@ -1515,6 +1592,26 @@ export const runCheckedScopedHandler = async <
               ...(authorize === undefined
                 ? {}
                 : { authorize: async () => await authorize(ctx) }),
+              checkResponse: (body) => {
+                const memberRole = readAuthorizedMemberRole(ctx);
+                if (
+                  memberRole === null ||
+                  (!hasMemberPermission(
+                    memberRole,
+                    BILLING_MATTER_READ_PERMISSION,
+                  ) &&
+                    hasVisibleMoney(config.moneyResponse, body))
+                ) {
+                  return Result.err(
+                    new HandlerError({
+                      status: 403,
+                      code: API_ERROR_CODE.forbidden,
+                      message: "Forbidden",
+                    }),
+                  );
+                }
+                return Result.ok(undefined);
+              },
               scopedDb: ctx.scopedDb,
               organizationId: ctx.session.activeOrganizationId,
               userId: ctx.user.id,
@@ -1807,6 +1904,15 @@ const createSafeScopedHandler = <
             // Response state belongs to the request; handler data belongs to this execution.
             await runCheckedScopedHandler(operation, usageLane, ctx.set),
         );
+        if (
+          !hasMemberPermission(memberRole, BILLING_MATTER_READ_PERMISSION) &&
+          hasVisibleMoney(config.moneyResponse, unwrapStatus(result).value)
+        ) {
+          return toSafeStatusResponse(403, {
+            code: API_ERROR_CODE.forbidden,
+            message: "Forbidden",
+          });
+        }
         // The transaction has settled; realtime delivery cannot change its result.
         if (
           config.realtime !== undefined &&
@@ -2282,7 +2388,8 @@ export const createSafeRootHandler = <
 >(
   config: TConfig,
   handler: SafeHandlerFn<RootHandlerContext<TConfig>, TResult> &
-    ConfiguredFiniteHandlerGuard<TConfig, TResult>,
+    ConfiguredFiniteHandlerGuard<TConfig, TResult> &
+    NoInfer<MoneyResponseGuard<TConfig, TResult>>,
   ...dependencies: "idempotency" extends keyof TConfig
     ? [
         dependencies: HandlerAdmissionDependencies<
@@ -2316,7 +2423,8 @@ export const createSafeHandler = <
 >(
   config: TConfig,
   handler: SafeHandlerFn<WorkspaceHandlerContext<TConfig>, TResult> &
-    ConfiguredFiniteHandlerGuard<TConfig, TResult>,
+    ConfiguredFiniteHandlerGuard<TConfig, TResult> &
+    NoInfer<MoneyResponseGuard<TConfig, TResult>>,
   dependencies?: HandlerAdmissionDependencies<WorkspaceHandlerContext<TConfig>>,
 ): SafeHandlerDefinition<
   TConfig,
@@ -2793,7 +2901,7 @@ const logAndCaptureSafeError = ({
     requestState: { answeredStatus: statusCode },
   });
 
-  const attributes: Record<string, string | number | boolean> = {
+  const diagnosticAttributes = {
     "http.method": request.method,
     "http.route": route,
     "http.status_code": statusCode,
@@ -2801,45 +2909,38 @@ const logAndCaptureSafeError = ({
       reqCtx ? performance.now() - reqCtx.startTime : 0,
     ),
     "error.type": errorTag(error),
+    ...requestErrorStatusFields(evidence),
+    ...causeChainAttributes(evidence),
+
+    // Every answered failure is un-diagnosable without this: the message and
+    // stack are redacted from every sink, leaving only `error.type`. The
+    // diagnostic identity (class, stable code and source positions) is non-PII
+    // and uses keys that survive the logger's redaction, so a failure always
+    // carries a code location. A 4xx needs it at least as much as a panic —
+    // `error.type` reads `HandlerError` at every one of the dozens of sites
+    // that reject a request payload, so the frame is the only thing that says
+    // which rejection fired.
+    ...identityFields(evidence),
   };
-
-  Object.assign(attributes, requestErrorStatusFields(evidence));
-  Object.assign(attributes, causeChainAttributes(evidence));
-
-  // Every answered failure is un-diagnosable without this: the message and
-  // stack are redacted from every sink, leaving only `error.type`. The
-  // diagnostic identity (class, stable code and source positions) is non-PII
-  // and uses keys that survive the logger's redaction, so a failure always
-  // carries a code location. A 4xx needs it at least as much as a panic —
-  // `error.type` reads `HandlerError` at every one of the dozens of sites
-  // that reject a request payload, so the frame is the only thing that says
-  // which rejection fired.
-  Object.assign(attributes, identityFields(evidence));
 
   const privateInputRequest = /\/chat\/threads\/[^/]+\/secrets\/[^/]+$/u.test(
     new URL(request.url).pathname,
   );
-  if (isLocalDevOpen() && env.DEBUG_UNREDACTED_ERRORS && !privateInputRequest) {
-    Object.assign(attributes, unredactedErrorFields(error));
-  }
-
-  if (reqCtx?.requestId) {
-    attributes["request.id"] = reqCtx.requestId;
-  }
-
-  if (reqCtx?.posthogDistinctId) {
-    attributes["posthogDistinctId"] = reqCtx.posthogDistinctId;
-  }
-
-  if (reqCtx?.sessionId) {
-    attributes["sessionId"] = reqCtx.sessionId;
-  }
-
-  if (reqCtx?.organizationId) {
-    attributes["enduser.organization_id"] = reqCtx.organizationId;
-  }
-
-  Object.assign(attributes, shadowFields(grading));
+  const attributes: Record<string, string | number | boolean> = {
+    ...diagnosticAttributes,
+    ...(isLocalDevOpen() && env.DEBUG_UNREDACTED_ERRORS && !privateInputRequest
+      ? unredactedErrorFields(error)
+      : {}),
+    ...(reqCtx?.requestId ? { "request.id": reqCtx.requestId } : {}),
+    ...(reqCtx?.posthogDistinctId
+      ? { posthogDistinctId: reqCtx.posthogDistinctId }
+      : {}),
+    ...(reqCtx?.sessionId ? { sessionId: reqCtx.sessionId } : {}),
+    ...(reqCtx?.organizationId
+      ? { "enduser.organization_id": reqCtx.organizationId }
+      : {}),
+    ...shadowFields(grading),
+  };
 
   // Operator feature refusals retain 503 on the wire while remaining an
   // expected warning. Other server failures take their grade's severity.

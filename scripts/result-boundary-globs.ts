@@ -274,6 +274,10 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
 ] as const;
 
 export const RESULT_BOUNDARY_GLOBS = [
+  // The page script runs serialised inside a web page and may reference
+  // nothing outside itself, so it cannot import better-result; its catches
+  // turn a DOM parse that throws into a fallback value.
+  "packages/browser-page/src/page-script.ts",
   // Adapter definitions return typed stored-read failures; the existing replay
   // callback protocol consumes those failures through Promise rejection.
   "apps/api/src/lib/legal-search/stored-raw-reparse-boundary.ts",
@@ -558,6 +562,11 @@ export const RESULT_CONVENTION_OPT_OUTS = [
     reason:
       "Chrome extension library: tab-executor is the boundary that maps chrome.* rejections to protocol error codes. Enrol once chrome.* calls sit behind Result.tryPromise.",
     unit: "apps/extension/src/lib",
+  },
+  {
+    reason:
+      "Shared page code of the browser hosts, moved here from the extension library unchanged. Enrol it with that library; the page script itself is a boundary module.",
+    unit: "packages/browser-page/src",
   },
   { reason: "unreviewed", unit: "apps/landing/src" },
   { reason: "unreviewed", unit: "apps/landing/src/components" },

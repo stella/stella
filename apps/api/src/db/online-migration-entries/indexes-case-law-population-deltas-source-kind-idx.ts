@@ -3,6 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "indexes-case-law-population-deltas-source-kind-idx",
   revision: 1,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     {

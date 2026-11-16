@@ -15,6 +15,7 @@ import { REVIEW_COLUMN_GRANTS_BY_RELATION } from "./case-law/review-column-grant
 export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
   caseLawCitationDoctrineReviews: "case_law_citation_doctrine_reviews",
   caseLawCitations: "case_law_citations",
+  caseLawCompletenessCensus: "case_law_completeness_census",
   caseLawWithdrawalStatus: "case_law_withdrawal_status",
   caseLawCorpusTombstones: "case_law_corpus_tombstones",
   caseLawCourtDirectoryRanks: "case_law_court_directory_ranks",
@@ -69,10 +70,6 @@ export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
 
 export type PublicLawRelation =
   (typeof PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT)[keyof typeof PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT];
-
-export const PUBLIC_CASE_LAW_SCHEMA_IMPORTS = Object.keys(
-  PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT,
-).filter((schemaImport) => schemaImport.startsWith("caseLaw"));
 
 /** How this release relates to a column's grant. */
 export type PublicLawColumnGrant = "required" | "permitted";
@@ -130,6 +127,16 @@ export const DOCTRINE_COLUMN_GRANTS_BY_RELATION = {
     citation_key: "permitted",
     doctrinal_treatment: "permitted",
     evidence_quote: "permitted",
+  },
+} as const satisfies PublicLawColumnGrantsByRelation;
+
+export const CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION = {
+  case_law_citations: {
+    polarity_rule_id: "permitted",
+    polarity_source: "permitted",
+    polarity_classifier_version: "permitted",
+    polarity_evidence_windows: "permitted",
+    cited_part: "permitted",
   },
 } as const satisfies PublicLawColumnGrantsByRelation;
 
@@ -332,6 +339,7 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     DOCTRINE_COLUMN_GRANTS_BY_RELATION.case_law_citation_doctrine_reviews,
   case_law_citations: {
     ...DOCTRINE_COLUMN_GRANTS_BY_RELATION.case_law_citations,
+    ...CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION.case_law_citations,
     id: "required",
     citing_decision_id: "required",
     cited_decision_id: "required",
@@ -497,6 +505,11 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     added_last_week: "required",
     counted_at: "required",
   },
+  case_law_completeness_census: Object.fromEntries(
+    Object.keys(
+      CENSUS_COLUMN_GRANTS_BY_RELATION.case_law_completeness_census,
+    ).map((column) => [column, "required"] as const),
+  ),
   legislation_facet_refreshes: {
     singleton: "required",
     refreshed_at: "required",

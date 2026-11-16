@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 1,
+  "reason": "Admitting a member's new message releases a held chat queue in the same statement that checks for a turn waiting on the member and for messages queued ahead. Releasing a hold changes no stored content; the message it admits is audited in the acceptance transaction, as the release it replaces was."
+}

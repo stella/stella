@@ -5,6 +5,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   FileTextIcon,
   MessageSquareIcon,
@@ -183,7 +184,7 @@ export const InspectorRail = ({
           }
           side="left"
         >
-          <PanelRightIcon className="size-4" />
+          <DirectionalIcon className="size-4" icon={PanelRightIcon} />
         </Tooltip>
       }
     >
@@ -536,7 +537,8 @@ const TaskVerticalTab = ({
   ...props
 }: VerticalTabProps & { tab: Extract<InspectorTab, { type: "task" }> }) => {
   const t = useTranslations();
-  const taskQuery = useQuery(taskTabDetailOptions(tab));
+  const organizationId = useAuthenticatedUser().activeOrganizationId;
+  const taskQuery = useQuery(taskTabDetailOptions(tab, organizationId));
   const taskView = queryView(taskQuery);
   useQueryViewError(taskView, "TaskVerticalTab:query");
   const label =

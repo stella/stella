@@ -5,6 +5,7 @@ import { describe, expect, jest, mock, spyOn, test } from "bun:test";
 
 import { BYOK_DEFAULT_MODELS } from "@stll/ai-catalog";
 import { sleep } from "@stll/concurrency/sleep";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import { MANAGED_AI_RESIDENCIES } from "@/api/lib/chat/ai-data-policy";
@@ -21,6 +22,8 @@ import {
   shutdownApiServices,
 } from "@/api/server-shutdown";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const testFetchState = createTestFetch();
 
@@ -40,17 +43,8 @@ const structuredOptions = {
   },
 };
 
-const saveSettings = () => ({
-  FEATURE_MANAGED_PROVIDER_CHECKS: env.FEATURE_MANAGED_PROVIDER_CHECKS,
-  MANAGED_PROVIDER_CHECK_INTERVAL_MS: env.MANAGED_PROVIDER_CHECK_INTERVAL_MS,
-  MANAGED_PROVIDER_CHECK_TIMEOUT_MS: env.MANAGED_PROVIDER_CHECK_TIMEOUT_MS,
-  OPENROUTER_API_KEY: env.OPENROUTER_API_KEY,
-});
-
 describe("managed request catalog checks", () => {
   test("disabled checks make no catalog requests", async () => {
-    const previous = saveSettings();
-
     const fetchSpy = Object.assign(
       mock(globalThis.fetch).mockRejectedValue(
         new TypeError("Unexpected catalog request"),
@@ -59,7 +53,7 @@ describe("managed request catalog checks", () => {
     );
     testFetchState.set(fetchSpy);
     try {
-      env.FEATURE_MANAGED_PROVIDER_CHECKS = false;
+      testState.setConfig("FEATURE_MANAGED_PROVIDER_CHECKS", false);
       const close = await startManagedProviderChecks();
       expect(fetchSpy).not.toHaveBeenCalled();
       for (const residency of MANAGED_AI_RESIDENCIES) {
@@ -69,12 +63,10 @@ describe("managed request catalog checks", () => {
     } finally {
       testFetchState.restore();
       testFetchState.restore();
-      Object.assign(env, previous);
     }
   });
 
   test("refreshes availability through the bounded scheduler and drains on close", async () => {
-    const previous = saveSettings();
     const originalFetch = globalThis.fetch;
     const scheduled: {
       options?: Parameters<typeof startNonOverlappingInterval>[0];
@@ -86,7 +78,7 @@ describe("managed request catalog checks", () => {
     let heldRequests = 0;
     const held = Promise.withResolvers<() => Response>();
     const heldStarted = Promise.withResolvers<undefined>();
-    Object.assign(env, {
+    testState.patchConfig({
       FEATURE_MANAGED_PROVIDER_CHECKS: true,
       MANAGED_PROVIDER_CHECK_INTERVAL_MS: 53_000,
       MANAGED_PROVIDER_CHECK_TIMEOUT_MS: 17,
@@ -166,15 +158,13 @@ describe("managed request catalog checks", () => {
     } finally {
       await close?.();
       testFetchState.restore();
-      Object.assign(env, previous);
     }
   });
 
   test("startup checks both hosts and guards every request path before transport", async () => {
-    const previous = saveSettings();
     const originalFetch = globalThis.fetch;
     const requests: string[] = [];
-    Object.assign(env, {
+    testState.patchConfig({
       FEATURE_MANAGED_PROVIDER_CHECKS: true,
       MANAGED_PROVIDER_CHECK_INTERVAL_MS: 53_000,
       MANAGED_PROVIDER_CHECK_TIMEOUT_MS: 37,
@@ -291,7 +281,6 @@ describe("managed request catalog checks", () => {
     } finally {
       await close?.();
       testFetchState.restore();
-      Object.assign(env, previous);
     }
   });
 });
@@ -301,9 +290,8 @@ for (const residency of MANAGED_AI_RESIDENCIES) {
     for (const enabled of [false, true]) {
       for (const dataClass of ["customer", "public_corpus"] as const) {
         test(`managed ${residency} ${path} refuses debug logging of provider failures with checks ${enabled} and ${dataClass}`, async () => {
-          const previous = saveSettings();
           const originalFetch = globalThis.fetch;
-          const previousDebug = process.env["OPENROUTER_DEBUG"];
+
           const logSpy = spyOn(console, "log").mockImplementation(() => {});
           const groupSpy = spyOn(console, "group").mockImplementation(() => {});
           const groupEndSpy = spyOn(console, "groupEnd").mockImplementation(
@@ -322,7 +310,7 @@ for (const residency of MANAGED_AI_RESIDENCIES) {
             },
           });
           let requests = 0;
-          Object.assign(env, {
+          testState.patchConfig({
             FEATURE_MANAGED_PROVIDER_CHECKS: enabled,
             MANAGED_PROVIDER_CHECK_INTERVAL_MS: 53_000,
             MANAGED_PROVIDER_CHECK_TIMEOUT_MS: 37,
@@ -330,7 +318,7 @@ for (const residency of MANAGED_AI_RESIDENCIES) {
           });
           const requestBodies: unknown[] = [];
           let close: (() => Promise<void>) | undefined;
-          process.env["OPENROUTER_DEBUG"] = "true";
+          testState.setEnv("OPENROUTER_DEBUG", "true");
           testFetchState.set(
             Object.assign(
               async (
@@ -351,7 +339,8 @@ for (const residency of MANAGED_AI_RESIDENCIES) {
                 );
                 requestBodies.push(await request.json());
                 requests++;
-                // The first response exercises the 5xx body; the next ends SDK retries.
+                // The first request answers with a 5xx body, the second with a
+                // 4xx one; the SDK sends each once.
                 return Response.json(
                   {
                     error: {
@@ -387,27 +376,29 @@ for (const residency of MANAGED_AI_RESIDENCIES) {
               modelOptions: { models: ["fixture/fallback"] },
             };
             const structured = { ...structuredOptions, chatOptions: options };
-            if (path === "structured") {
-              const result = await Result.tryPromise({
-                try: async () => await adapter.structuredOutput(structured),
-                catch: (error) => error,
-              });
-              expect(result.isErr()).toBe(true);
-            } else {
-              const chunks = [];
-              const stream =
-                path === "chat"
-                  ? adapter.chatStream(options)
-                  : adapter.structuredOutputStream?.(structured);
-              if (stream === undefined) {
-                panic(
-                  "Provider adapter did not expose structured output streaming.",
-                );
+            for (const _status of [503, 400]) {
+              if (path === "structured") {
+                const result = await Result.tryPromise({
+                  try: async () => await adapter.structuredOutput(structured),
+                  catch: (error) => error,
+                });
+                expect(result.isErr()).toBe(true);
+              } else {
+                const chunks = [];
+                const stream =
+                  path === "chat"
+                    ? adapter.chatStream(options)
+                    : adapter.structuredOutputStream?.(structured);
+                if (stream === undefined) {
+                  panic(
+                    "Provider adapter did not expose structured output streaming.",
+                  );
+                }
+                for await (const chunk of stream) {
+                  chunks.push(chunk);
+                }
+                expect(chunks.at(-1)?.type).toBe(EventType.RUN_ERROR);
               }
-              for await (const chunk of stream) {
-                chunks.push(chunk);
-              }
-              expect(chunks.at(-1)?.type).toBe(EventType.RUN_ERROR);
             }
             expect(requests).toBe(2);
             for (const body of requestBodies) {
@@ -421,12 +412,6 @@ for (const residency of MANAGED_AI_RESIDENCIES) {
             groupSpy.mockRestore();
             groupEndSpy.mockRestore();
             testFetchState.restore();
-            if (previousDebug === undefined) {
-              delete process.env["OPENROUTER_DEBUG"];
-            } else {
-              process.env["OPENROUTER_DEBUG"] = previousDebug;
-            }
-            Object.assign(env, previous);
           }
         });
       }
@@ -436,7 +421,7 @@ for (const residency of MANAGED_AI_RESIDENCIES) {
 
 test("termination aborts stalled catalog requests within the service deadline", async () => {
   jest.useFakeTimers();
-  const previous = saveSettings();
+
   const originalFetch = globalThis.fetch;
   const scheduled: {
     options?: Parameters<typeof startNonOverlappingInterval>[0];
@@ -448,7 +433,7 @@ test("termination aborts stalled catalog requests within the service deadline", 
   let requests = 0;
   let httpStopped = false;
   let close: (() => Promise<void>) | undefined;
-  Object.assign(env, {
+  testState.patchConfig({
     FEATURE_MANAGED_PROVIDER_CHECKS: true,
     MANAGED_PROVIDER_CHECK_INTERVAL_MS: 53_000,
     MANAGED_PROVIDER_CHECK_TIMEOUT_MS: 30_000,
@@ -499,6 +484,8 @@ test("termination aborts stalled catalog requests within the service deadline", 
       stopHttp: async () => {
         httpStopped = true;
       },
+      stopChatQueueSender: () => undefined,
+      stopChatTurnAdopter: () => undefined,
       stopScheduler: () => undefined,
       stopSse: () => undefined,
       timeout: sleep(deadlineMs),
@@ -515,7 +502,7 @@ test("termination aborts stalled catalog requests within the service deadline", 
     releaseClose.resolve(undefined);
     await close?.();
     testFetchState.restore();
-    Object.assign(env, previous);
+
     jest.useRealTimers();
   }
 });

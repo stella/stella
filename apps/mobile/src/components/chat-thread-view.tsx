@@ -1,4 +1,4 @@
-import { Suspense, use, useState, useTransition } from "react";
+import { Suspense, use, useRef, useState, useTransition } from "react";
 
 import { Result } from "better-result";
 import {
@@ -10,14 +10,27 @@ import {
 } from "react-native";
 import { useTranslations } from "use-intl";
 
+import {
+  CHAT_RUN_TARGET_KIND,
+  type ChatRunTarget,
+} from "@stll/api-contract/chat-run-target";
+import {
+  CHAT_MEMBER_SEND_ACTION,
+  CHAT_SEND_INTENT,
+  CHAT_TURN_STEERING,
+  chatSendIntent,
+} from "@stll/api-contract/chat-send-intent";
 import { StellaMark } from "@stll/ui/stella-mark";
 import { Text } from "@stll/ui/text";
 
 import { ChatComposer } from "@/components/chat-composer";
+import type { ChatComposerHandle } from "@/components/chat-composer";
 import { ChatDraftDocuments } from "@/components/chat-draft-document";
 import { ChatInputCard } from "@/components/chat-input-card";
 import type { InputNotice } from "@/components/chat-input-card";
 import { ChatMessage } from "@/components/chat-message";
+import { ChatQueueList } from "@/components/chat-queue-list";
+import type { QueueThreadState } from "@/components/chat-queue-list";
 import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
 import { PagingFooter, RetryButton } from "@/components/retry-button";
 import type { PagingState } from "@/components/retry-button";
@@ -31,7 +44,7 @@ import { epochMilliseconds } from "@/connection/clock";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
 import type { Load } from "@/state/api-request";
-import { CHAT_FAILURE_KEYS } from "@/state/chat-failure";
+import { CHAT_FAILURE_KEYS, chatFailureStepsKey } from "@/state/chat-failure";
 import {
   prependOlderPage,
   readChatThread,
@@ -53,6 +66,7 @@ const EMPTY_PAGE: ChatMessagesPage = {
   usedAnonymization: false,
   pendingInput: null,
   retry: null,
+  runTargetKind: CHAT_RUN_TARGET_KIND.cloud,
 };
 
 /**
@@ -197,9 +211,11 @@ const ThreadMessages = ({
   const [cursor, setCursor] = useState(firstPage.olderCursor);
   const [older, setOlder] = useState<PagingState>("idle");
   const [anonymized, setAnonymized] = useState(firstPage.usedAnonymization);
+  const [runTargetKind, setRunTargetKind] = useState(firstPage.runTargetKind);
   const [pending, setPending] = useState(firstPage.pendingInput);
   const [retry, setRetry] = useState(firstPage.retry);
   const [inputNotice, setInputNotice] = useState<InputNotice>();
+  const composer = useRef<ChatComposerHandle>(null);
   const turn = useChatTurn({
     activeTurnId: firstPage.activeTurnId,
     anonymized,
@@ -214,6 +230,7 @@ const ThreadMessages = ({
       if (Result.isOk(latest)) {
         setEntries((loaded) => prependOlderPage(latest.value.entries, loaded));
         setAnonymized(latest.value.usedAnonymization);
+        setRunTargetKind(latest.value.runTargetKind);
         setPending(latest.value.pendingInput);
         setRetry(latest.value.retry);
         setInputNotice(undefined);
@@ -261,6 +278,26 @@ const ThreadMessages = ({
    * longer waits for this one, and the run that answer started is followed;
    * a turn still waiting keeps its card, which says the answer failed.
    */
+  /**
+   * Reads the thread again and shows it as stored; `null` when it could not
+   * be read (a lost sign-in ends the session).
+   */
+  const showStoredThread = async () => {
+    const latest = await readChatThread({ fetch, matterId, source, threadId });
+    if (Result.isError(latest)) {
+      if (latest.error._tag === "SignedOutError") {
+        end(source);
+      }
+      return null;
+    }
+    setEntries((loaded) => prependOlderPage(latest.value.entries, loaded));
+    setAnonymized(latest.value.usedAnonymization);
+    setRunTargetKind(latest.value.runTargetKind);
+    setPending(latest.value.pendingInput);
+    setRetry(latest.value.retry);
+    return latest.value;
+  };
+
   const answer = (reply: PendingAnswer) => {
     if (pending === null || pending.type === "elsewhere") {
       return;
@@ -273,25 +310,12 @@ const ThreadMessages = ({
       },
       onRefused: () => {
         void (async () => {
-          const latest = await readChatThread({
-            fetch,
-            matterId,
-            source,
-            threadId,
-          });
-          if (Result.isError(latest)) {
-            if (latest.error._tag === "SignedOutError") {
-              end(source);
-              return;
-            }
+          const latest = await showStoredThread();
+          if (latest === null) {
             setInputNotice("failed");
             return;
           }
-          const { activeTurnId, entries: stored, pendingInput } = latest.value;
-          setEntries((loaded) => prependOlderPage(stored, loaded));
-          setAnonymized(latest.value.usedAnonymization);
-          setPending(pendingInput);
-          setRetry(latest.value.retry);
+          const { activeTurnId, pendingInput } = latest;
           if (isSamePendingInput(asked, pendingInput)) {
             setInputNotice("failed");
             return;
@@ -304,6 +328,21 @@ const ThreadMessages = ({
       },
     });
   };
+
+  /**
+   * The server sent a queued message as a turn this phone did not start:
+   * the thread is read again and that turn followed.
+   */
+  const followServerTurn = () => {
+    void (async () => {
+      const activeTurnId = (await showStoredThread())?.activeTurnId ?? null;
+      if (activeTurnId !== null) {
+        turn.follow(activeTurnId, undefined);
+      }
+    })();
+  };
+
+  const steerOffered = isSteerOfferedOnPhone(turn.busy, runTargetKind);
 
   const loadOlder = async () => {
     if (cursor === null || older === "loading") {
@@ -353,9 +392,11 @@ const ThreadMessages = ({
             busy={turn.busy}
             canStop={turn.canStop}
             onSend={turn.send}
+            onSteer={undefined}
             onStop={turn.stop}
             sendError={turn.sendError}
             shareId={shareId}
+            steerRefusal={undefined}
           />
         </View>
       </View>
@@ -438,18 +479,75 @@ const ThreadMessages = ({
             />
           </View>
         )}
+        <ChatQueueList
+          onEdit={(text) => {
+            composer.current?.handBack(text);
+          }}
+          onSentByServer={followServerTurn}
+          source={source}
+          steerQueued={turn.steerQueued}
+          thread={queueThreadOf({
+            busy: turn.busy,
+            steerOffered,
+            waiting: pending !== null,
+          })}
+          threadId={threadId}
+        />
         <ChatComposer
           busy={turn.busy}
           canStop={turn.canStop}
+          handle={composer}
+          onQueue={turn.queue}
           onSend={turn.send}
+          onSteer={steerOffered ? turn.steer : undefined}
           onStop={turn.stop}
           sendError={turn.sendError}
           shareId={undefined}
+          steerRefusal={turn.steerRefusal}
         />
       </View>
     </View>
   );
 };
+
+/**
+ * Whether the phone offers to hand a draft to the turn answering now: where
+ * a plain send steers it (`chatSendIntent`). The phone reads no runner list,
+ * so a turn on the member's computer counts as one that takes messages; a
+ * harness that does not is refused by the steer route, and the draft comes
+ * back with the reason.
+ */
+/** What the thread is doing, as Send now on a queued message reads it. */
+const queueThreadOf = ({
+  busy,
+  steerOffered,
+  waiting,
+}: {
+  busy: boolean;
+  steerOffered: boolean;
+  waiting: boolean;
+}): QueueThreadState => {
+  if (busy) {
+    return steerOffered ? "steerable" : "working";
+  }
+  return waiting ? "waiting" : "idle";
+};
+
+const isSteerOfferedOnPhone = (
+  busy: boolean,
+  runTargetKind: ChatRunTarget["kind"],
+): boolean =>
+  busy &&
+  chatSendIntent(
+    {
+      type: "working",
+      steering:
+        runTargetKind === CHAT_RUN_TARGET_KIND.local
+          ? CHAT_TURN_STEERING.steerable
+          : CHAT_TURN_STEERING.notSteerable,
+    },
+    CHAT_MEMBER_SEND_ACTION.send,
+  ) === CHAT_SEND_INTENT.steer;
 
 /**
  * The turn answering now: the message sent from here, and the answer as it
@@ -478,6 +576,10 @@ const LiveTurnView = ({
         ? t("answerFailed")
         : t(`failure.${CHAT_FAILURE_KEYS[turn.answer.failure]}`),
   }[status];
+  const steps =
+    status === "failed" && turn.answer.failure !== undefined
+      ? chatFailureStepsKey(turn.answer.failure)
+      : null;
   const uploading =
     !accepted &&
     status === "streaming" &&
@@ -501,6 +603,11 @@ const LiveTurnView = ({
       ) : null}
       {note === undefined ? null : (
         <Text style={[styles.notice, { color: colors.muted }]}>{note}</Text>
+      )}
+      {steps === null ? null : (
+        <Text style={[styles.notice, { color: colors.muted }]}>
+          {t(`localRun.${steps}`)}
+        </Text>
       )}
     </View>
   );

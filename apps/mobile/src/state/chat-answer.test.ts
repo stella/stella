@@ -96,6 +96,35 @@ const commandStep = (
 });
 
 describe("a coding agent's steps in an answer on the phone", () => {
+  test("a message steered into the turn shows as the person's words where the agent took it, between its steps", () => {
+    expect(
+      answerBlocks([
+        command("before"),
+        call({
+          id: "steer_1",
+          name: "user_message",
+          input: { text: "Also check the annex." },
+          output: { status: "delivered" },
+        }),
+        command("after"),
+      ]),
+    ).toEqual([
+      {
+        type: "steps",
+        key: "0",
+        steps: [commandStep("before")],
+        work: new Map([["computation", 1]]),
+      },
+      { type: "steered", key: "steered:1", text: "Also check the annex." },
+      {
+        type: "steps",
+        key: "2",
+        steps: [commandStep("after")],
+        work: new Map([["computation", 1]]),
+      },
+    ]);
+  });
+
   test("a subagent is a row of its own holding the steps it took, with a count and one status", () => {
     expect(
       answerBlocks([
@@ -351,6 +380,8 @@ describe("a coding agent's steps in an answer on the phone", () => {
             return block.steps.flatMap(markerOf);
           case "subagent":
             return block.description === null ? [] : [block.description];
+          case "steered":
+            return [];
           default:
             block satisfies never;
             return [];
