@@ -588,7 +588,6 @@
     "apps/api/src/lib/observability/observe-failure.ts": 1,
     "apps/api/src/lib/observability/request-context.ts": 1,
     "apps/api/src/lib/pick-defined.ts": 1,
-    "apps/api/src/lib/provider-safe-json-schema.ts": 6,
     "apps/api/src/lib/safe-outbound-fetch.ts": 1,
     "apps/api/src/lib/search/detect-language.ts": 1,
     "apps/api/src/lib/style-set-editor.ts": 1,
