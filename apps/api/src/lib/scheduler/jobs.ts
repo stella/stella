@@ -759,7 +759,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 10 * 60 * 1000 },
     task: SWEEP_CHAT_COMMAND_RECEIPTS_TASK,
-    reads: "unmeasured",
+    reads: { budget: "scheduled.chat.sweepCommandReceipts" },
   },
   {
     description: "Delete expired closed chat run logs",
