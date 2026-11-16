@@ -20,7 +20,11 @@ import type {
   ConnectConnectorOutput,
 } from "@stll/api-contract/chat-connector";
 import { buildCreateDocumentDownloadFileName } from "@stll/api-contract/chat-create-document";
-import { CHAT_QUEUE_ERROR_CODE } from "@stll/api-contract/chat-queue";
+import {
+  CHAT_QUEUE_ERROR_CODE,
+  QUEUED_MESSAGE_FILES_ON_REMOVE,
+  type QueuedMessageFilesOnRemove,
+} from "@stll/api-contract/chat-queue";
 import { requiresPerCallChatApproval } from "@stll/api-contract/chat-secret";
 import type { RequestSecretOutput } from "@stll/api-contract/chat-secret";
 import {
@@ -129,7 +133,6 @@ import {
   updateCachedChatQueue,
 } from "@/features/chat/chat-queue";
 import {
-  canQueueMessage,
   CHAT_STEER_REFUSAL_MESSAGES,
   type ChatSteerRefusal,
   composerDraftOfParts,
@@ -824,11 +827,18 @@ export const useChatSession = ({
   /** Remove queued message `id` at the `revision` this page read: one
    *  edited since stays queued (the server refuses the removal). */
   const removeFromQueue = useCallback(
-    async (id: string, revision: number) => {
+    async (
+      id: string,
+      {
+        files,
+        revision,
+      }: { files: QueuedMessageFilesOnRemove; revision: number },
+    ) => {
       removedHereRef.current.add(id);
       const removed = await Result.tryPromise(
         async () =>
           await removeQueuedChatMessage({
+            files,
             messageId: id,
             revision,
             threadId: threadRef.threadId,
@@ -973,10 +983,6 @@ export const useChatSession = ({
       message: ChatUserMessageInput,
       options?: ChatSendMessageOptions,
     ): Promise<ChatSendOutcome> => {
-      if (!canQueueMessage(message)) {
-        stellaToast.warning(t("chat.queue.filesNotQueued"));
-        return CHAT_SEND_KEPT;
-      }
       const send = queuedChatSendOf(
         chat,
         message,
@@ -1260,7 +1266,10 @@ export const useChatSession = ({
                 // Removed at the revision the turn was handed: one edited
                 // since stays queued.
                 steered && read !== null
-                  ? await removeFromQueue(id, read.revision)
+                  ? await removeFromQueue(id, {
+                      files: QUEUED_MESSAGE_FILES_ON_REMOVE.delete,
+                      revision: read.revision,
+                    })
                   : await sendQueuedChatMessageNow(threadRef.threadId, id),
               );
             })(),
@@ -1319,7 +1328,13 @@ export const useChatSession = ({
         update: (current) => withQueuedMessageRemoved({ id, queue: current }),
       });
       detached(
-        writeQueue(async () => await removeFromQueue(id, item.revision)),
+        writeQueue(
+          async () =>
+            await removeFromQueue(id, {
+              files: QUEUED_MESSAGE_FILES_ON_REMOVE.delete,
+              revision: item.revision,
+            }),
+        ),
         "use-chat-session.remove-queued-message",
       );
     },
@@ -1358,8 +1373,13 @@ export const useChatSession = ({
             composerDraftOfParts(whole.value.message.parts),
           );
           // At the revision put into the composer: one edited since stays.
+          // Its stored files stay too: the composer sends them again.
           await writeQueue(
-            async () => await removeFromQueue(id, whole.value.revision),
+            async () =>
+              await removeFromQueue(id, {
+                files: QUEUED_MESSAGE_FILES_ON_REMOVE.keep,
+                revision: whole.value.revision,
+              }),
           );
         })(),
         "use-chat-session.edit-queued-message",
@@ -2422,7 +2442,11 @@ export const useChatSession = ({
         switch (outcome.type) {
           case "steered":
             await writeQueue(
-              async () => await removeFromQueue(steered.id, steered.revision),
+              async () =>
+                await removeFromQueue(steered.id, {
+                  files: QUEUED_MESSAGE_FILES_ON_REMOVE.delete,
+                  revision: steered.revision,
+                }),
             );
             return;
           case "refused":

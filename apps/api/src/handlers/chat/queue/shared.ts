@@ -49,3 +49,10 @@ export const queuedMessageInlineFile = () =>
     code: CHAT_QUEUE_ERROR_CODE.inlineFile,
     message: "Upload a queued message's files before queueing it",
   });
+
+export const queuedMessageInvalid = () =>
+  new HandlerError({
+    status: 422,
+    code: CHAT_QUEUE_ERROR_CODE.invalid,
+    message: "The queued message has a part a message cannot store",
+  });
