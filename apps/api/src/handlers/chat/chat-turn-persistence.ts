@@ -525,9 +525,12 @@ const interruptExpiredRunningChatTurnOnTx = async ({
       ...CHAT_RUN_OWNER_COLUMNS,
       // The answer so far a handed-over turn held. A subquery in RETURNING
       // reads the statement's snapshot, so it sees the row before this write.
+      // The outer row is named by its table: drizzle renders a column of the
+      // updated table unqualified here, which the subquery would read as its
+      // own.
       handedOverMessageId: sql<SafeId<"chatMessage"> | null>`(
         SELECT held.assistant_message_id FROM chat_turns AS held
-        WHERE held.id = ${chatTurns.id} AND held.status = 'handed-over'
+        WHERE held.id = chat_turns.id AND held.status = 'handed-over'
       )`,
       id: chatTurns.id,
       runId: chatTurns.runId,
