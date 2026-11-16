@@ -2117,6 +2117,7 @@
     "queuePrompt": "Enviar quando o agente terminar",
     "queuedAttachmentCount": "{count, plural, one {# anexo} many {# anexos} other {# anexos}}",
     "queuedNotice": "Na fila: será enviada quando a resposta atual terminar",
+    "ranOnModel": "Executado com {model}",
     "reasoning": "Raciocínio",
     "reasoningTokens": "{count, plural, one {# token de raciocínio} other {# tokens de raciocínio} many {# tokens de raciocínio}}",
     "recapLoading": "Resumindo a conversa…",

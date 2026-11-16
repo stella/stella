@@ -2117,6 +2117,7 @@
     "queuePrompt": "Send when the agent finishes",
     "queuedAttachmentCount": "{count, plural, one {# attachment} other {# attachments}}",
     "queuedNotice": "Queued: sends when the current response finishes",
+    "ranOnModel": "Ran on {model}",
     "reasoning": "Reasoning trace",
     "reasoningTokens": "{count, plural, one {# reasoning token} other {# reasoning tokens}}",
     "recapLoading": "Recapping the conversation…",

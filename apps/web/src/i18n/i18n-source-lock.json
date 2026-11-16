@@ -1674,6 +1674,7 @@
   "chat.queuePrompt": "Send when the agent finishes",
   "chat.queuedAttachmentCount": "{count, plural, one {# attachment} other {# attachments}}",
   "chat.queuedNotice": "Queued: sends when the current response finishes",
+  "chat.ranOnModel": "Ran on {model}",
   "chat.reasoning": "Reasoning trace",
   "chat.reasoningTokens": "{count, plural, one {# reasoning token} other {# reasoning tokens}}",
   "chat.recapLoading": "Recapping the conversation…",

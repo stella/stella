@@ -2117,6 +2117,7 @@
     "queuePrompt": "Senden, wenn der Agent fertig ist",
     "queuedAttachmentCount": "{count, plural, one {# Anhang} other {# Anhänge}}",
     "queuedNotice": "Eingereiht – wird gesendet, sobald die aktuelle Antwort abgeschlossen ist",
+    "ranOnModel": "Ausgeführt mit {model}",
     "reasoning": "Argumentation",
     "reasoningTokens": "{count, plural, one {# Argumentations-Token} other {# Argumentations-Tokens}}",
     "recapLoading": "Unterhaltung wird zusammengefasst…",

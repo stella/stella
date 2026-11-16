@@ -42,11 +42,14 @@ import {
   CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY,
   CHAT_LOCAL_RUN_FILES_NOT_SHARED_METADATA_KEY,
   CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
+  CHAT_LOCAL_RUN_MODEL_METADATA_KEY,
   type ChatLocalRunContext,
   chatLocalRunContextSchema,
   chatLocalRunFilePartsOf,
   chatLocalRunFilesNotSharedSchema,
   chatLocalRunLimitSchema,
+  type ChatLocalRunModel,
+  chatLocalRunModelSchema,
 } from "@stll/api-contract/chat-run-target";
 import {
   desktopRunnerAttachmentPath,
@@ -2867,6 +2870,8 @@ type StreamSettlementOptions = Pick<
   getTurnSpend: () => ChatTurnSpend | undefined;
   /** How full the context of a turn run on the member's computer was. */
   getLocalRunContext: () => ChatLocalRunContext | undefined;
+  /** The models a turn run on the member's computer asked for and ran on. */
+  getLocalRunModel: () => ChatLocalRunModel | undefined;
   announceBeforeFailure: () => StreamChunk[];
   /** Whether the run streamed an answer (see `processServerChatStream`). */
   getProducedAnswer: () => boolean;
@@ -2889,6 +2894,7 @@ const createStreamSettlement = ({
   getUsage,
   getTurnSpend,
   getLocalRunContext,
+  getLocalRunModel,
   getProducedAnswer,
   announceBeforeFailure,
   terminal,
@@ -2979,6 +2985,7 @@ const createStreamSettlement = ({
             turnSpend: getTurnSpend(),
             usage: getUsage(),
             localRunContext: getLocalRunContext(),
+            localRunModel: getLocalRunModel(),
           })
         : attachTerminalTurnOutcome({
             message: checkpoint,
@@ -3019,6 +3026,8 @@ type PersistenceRunState = {
   usage?: TokenUsage | undefined;
   /** The last run's context report is the one the next turn starts from. */
   localRunContext?: ChatLocalRunContext | undefined;
+  /** The last run's models: a later run of the turn may have been rerouted. */
+  localRunModel?: ChatLocalRunModel | undefined;
 };
 
 type ProcessPersistenceChunkOptions = {
@@ -3400,6 +3409,8 @@ const processPersistenceChunk = ({
     }
     runState.localRunContext =
       localRunContextFromChunk(chunk) ?? runState.localRunContext;
+    runState.localRunModel =
+      localRunModelFromChunk(chunk) ?? runState.localRunModel;
     // TanStack's agent loop can emit continuation events after a model
     // run finishes, notably `approval-requested` for a gated server tool.
     // The client already receives RUN_FINISHED only after the source is
@@ -3734,6 +3745,7 @@ export const processServerChatStream = async function* ({
     toolCallsWithCompleteInput,
     getUsage: () => runState.usage,
     getLocalRunContext: () => runState.localRunContext,
+    getLocalRunModel: () => runState.localRunModel,
     getTurnSpend: () => turnBudget?.spend(),
     getProducedAnswer: () => producedAnswer,
     announceBeforeFailure: clientAssistantOwner.announceBeforeFailure,
@@ -3952,6 +3964,7 @@ type FinishResponseMessageProps = {
   turnSpend: ChatTurnSpend | undefined;
   usage: TokenUsage | undefined;
   localRunContext: ChatLocalRunContext | undefined;
+  localRunModel: ChatLocalRunModel | undefined;
 };
 
 const createTerminalResponseMessage = ({
@@ -3962,6 +3975,7 @@ const createTerminalResponseMessage = ({
   turnSpend,
   usage,
   localRunContext,
+  localRunModel,
 }: FinishResponseMessageProps): PersistableTerminalAssistantMessage => {
   if (outcome.type === "completed" && !producedAnswer) {
     throw new ChatEmptyCompletionError({
@@ -3996,7 +4010,9 @@ const createTerminalResponseMessage = ({
   });
   return attachTerminalTurnOutcome({
     message:
-      turnSpend === undefined && localRunContext === undefined
+      turnSpend === undefined &&
+      localRunContext === undefined &&
+      localRunModel === undefined
         ? persistableMessage
         : {
             ...persistableMessage,
@@ -4004,6 +4020,7 @@ const createTerminalResponseMessage = ({
               ...persistableMessage.metadata,
               ...(turnSpend === undefined ? {} : { turnSpend }),
               ...(localRunContext === undefined ? {} : { localRunContext }),
+              ...(localRunModel === undefined ? {} : { localRunModel }),
             },
           },
     turnOutcome: outcome,
@@ -4020,6 +4037,20 @@ const localRunContextFromChunk = (
   const parsed = v.safeParse(
     chatLocalRunContextSchema,
     chunk.metadata?.[CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY],
+  );
+  return parsed.success ? parsed.output : undefined;
+};
+
+/**
+ * The models a turn run on the member's computer asked for and ran on, as the
+ * local run's own reader checked them (`local-run-chunks.ts`), checked again.
+ */
+const localRunModelFromChunk = (
+  chunk: Extract<PublicStreamChunk, { type: EventType.RUN_FINISHED }>,
+) => {
+  const parsed = v.safeParse(
+    chatLocalRunModelSchema,
+    chunk.metadata?.[CHAT_LOCAL_RUN_MODEL_METADATA_KEY],
   );
   return parsed.success ? parsed.output : undefined;
 };

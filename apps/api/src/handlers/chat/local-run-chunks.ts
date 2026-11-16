@@ -42,6 +42,7 @@ import {
   CHAT_LOCAL_RUN_FILES_METADATA_KEY,
   CHAT_LOCAL_RUN_FILES_NOT_SHARED_METADATA_KEY,
   CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
+  CHAT_LOCAL_RUN_MODEL_METADATA_KEY,
   CHAT_LOCAL_RUN_QUESTION_TOOL,
   CHAT_LOCAL_RUN_STEER_EVENT,
   CHAT_LOCAL_RUN_STEER_TOOL,
@@ -51,6 +52,7 @@ import {
   type ChatLocalRunHarness,
   type ChatLocalRunLimit,
   chatLocalRunLimitSchema,
+  chatLocalRunModelSchema,
   chatLocalRunSteerCallId,
   type ChatLocalRunSteerEvent,
   type ChatLocalRunSteerInput,
@@ -468,27 +470,37 @@ const MESSAGE_METADATA_EVENTS: ReadonlySet<string> = new Set([
   EventType.REASONING_MESSAGE_END,
 ]);
 
+/** What a finished run reports to the answer, each under its own key. */
+const RUN_FINISHED_REPORTS: ReadonlyMap<string, v.GenericSchema> = new Map([
+  [CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY, chatLocalRunContextSchema],
+  [CHAT_LOCAL_RUN_MODEL_METADATA_KEY, chatLocalRunModelSchema],
+]);
+
 /**
- * A finished run's context report as the chat reads it: under its one key
- * only when it is a valid report. A desktop is not trusted, so anything else
- * under the key is dropped.
+ * A finished run's reports (its context, the models it asked for and ran on)
+ * as the chat reads them: each under its key only when it is valid. A desktop
+ * is not trusted, so anything else under those keys is dropped.
  */
-const withCheckedContext = (
+const withCheckedReports = (
   chunk: Extract<PublicStreamChunk, { type: EventType.RUN_FINISHED }>,
-) => {
-  if (chunk.metadata?.[CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY] !== undefined) {
-    const { [CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY]: reported, ...metadata } =
-      chunk.metadata;
-    const parsed = v.safeParse(chatLocalRunContextSchema, reported);
-    return {
-      ...chunk,
-      metadata: parsed.success
-        ? { ...metadata, [CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY]: parsed.output }
-        : metadata,
-    };
-  }
-  return chunk;
-};
+) =>
+  chunk.metadata === undefined
+    ? chunk
+    : {
+        ...chunk,
+        metadata: Object.fromEntries(
+          Object.entries(chunk.metadata).flatMap(
+            ([key, value]): [string, unknown][] => {
+              const schema = RUN_FINISHED_REPORTS.get(key);
+              if (schema === undefined) {
+                return [[key, value]];
+              }
+              const parsed = v.safeParse(schema, value);
+              return parsed.success ? [[key, parsed.output]] : [];
+            },
+          ),
+        ),
+      };
 
 /**
  * Each call one read saw open: the tool name its first start gave it, and
@@ -812,7 +824,7 @@ const asChatChunk = (
   }
   if (chunk.type === EventType.RUN_FINISHED) {
     return {
-      ...withCheckedContext(chunk),
+      ...withCheckedReports(chunk),
       runId: chatRunId,
       threadId,
       ...(chunk.outcome?.type === "interrupt"

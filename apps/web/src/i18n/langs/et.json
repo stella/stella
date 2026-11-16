@@ -2117,6 +2117,7 @@
     "queuePrompt": "Saada, kui agent on lõpetanud",
     "queuedAttachmentCount": "{count, plural, one {# manus} other {# manust}}",
     "queuedNotice": "Järjekorras: saadetakse, kui praegune vastus on valmis",
+    "ranOnModel": "Töötas mudelil {model}",
     "reasoning": "Arutlus",
     "reasoningTokens": "{count, plural, one {# arutlustoken} other {# arutlustokenit}}",
     "recapLoading": "Vestlus võetakse kokku…",
