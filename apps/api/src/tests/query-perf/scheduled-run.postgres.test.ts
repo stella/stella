@@ -25,7 +25,7 @@ import { flowReviewGateFixture } from "@/api/tests/helpers/flow-review-gate";
 
 import { seedDataExportScenario } from "./data-export-seed";
 import { withQueryPerfFixture } from "./fixture";
-import { scaleViolations } from "./measurement";
+import { scaleViolations, scheduledJobBudgetProblems } from "./measurement";
 import { measureScheduledJobRun } from "./scheduled-run";
 import { QUERY_PERF_CONNECTION_SETTINGS } from "./settings";
 
@@ -251,6 +251,14 @@ describe.skipIf(!enabled)("scheduled export measurement (postgres)", () => {
               },
             },
           });
+          if (heapState === "vacuumed") {
+            expect(
+              scheduledJobBudgetProblems(
+                "scheduled.dataExports.maintain",
+                measured,
+              ),
+            ).toEqual([]);
+          }
           expect(
             measured.planViolations.filter(
               ({ kind }) =>

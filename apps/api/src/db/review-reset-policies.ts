@@ -10,10 +10,16 @@ export const reviewResetOwnerCheck = (
 ) => sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = ${sql.raw(`'public.${tableName}'::regclass`)})
     AND organization_id = nullif(current_setting('${sql.raw(REVIEW_RESET_ORGANIZATION_SETTING)}', true), '')`;
 
-export const reviewResetOwnerPolicies = (tableName: string) => {
-  const scope = reviewResetOwnerCheck(tableName);
-  return [
-    pgPolicy("review_reset_owner_select", { for: "select", using: scope }),
-    pgPolicy("review_reset_owner_delete", { for: "delete", using: scope }),
-  ];
-};
+export const reviewResetOwnerDeletePolicy = (tableName: string) =>
+  pgPolicy("review_reset_owner_delete", {
+    for: "delete",
+    using: reviewResetOwnerCheck(tableName),
+  });
+
+export const reviewResetOwnerPolicies = (tableName: string) => [
+  pgPolicy("review_reset_owner_select", {
+    for: "select",
+    using: reviewResetOwnerCheck(tableName),
+  }),
+  reviewResetOwnerDeletePolicy(tableName),
+];

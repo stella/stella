@@ -2,7 +2,7 @@ import type { DataExportPlanRecord } from "@/api/lib/data-export/archive-plan";
 import type { DataExportProblemRecord } from "@/api/lib/data-export/problem-schema";
 import { DATA_EXPORT_VERSION_SCOPE_VALUES } from "@/api/lib/data-export/version-scope";
 
-import { reviewResetOwnerPolicies } from "../review-reset-policies";
+import { reviewResetOwnerDeletePolicy } from "../review-reset-policies";
 import {
   jsonb,
   organization,
@@ -170,7 +170,8 @@ export const organizationDataExports = p.pgTable(
     // Row-level security is forced, so the table owner needs its own
     // policies: the review reset clears the table by organization, and the
     // maintenance sweep reads and updates exports across organizations.
-    ...reviewResetOwnerPolicies("organization_data_exports"),
+    // Maintenance SELECT already includes every owner row the reset can read.
+    reviewResetOwnerDeletePolicy("organization_data_exports"),
     p.pgPolicy("maintenance_owner_select", {
       for: "select",
       // Keep statement-constant authorization out of per-row equality estimates.
