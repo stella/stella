@@ -8,6 +8,7 @@ import {
 } from "@stll/api-contract/chat-limit-reminder";
 import { CHAT_QUEUE_HOLD_REASON } from "@stll/api-contract/chat-queue";
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
+import { compareCodeUnit } from "@stll/collation";
 import { createTestClock } from "@stll/test-kit";
 
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -392,7 +393,7 @@ const suite = (
         takeResume(chat.threadId, chat.firstTurnId),
       ]);
 
-      expect(taken.toSorted()).toEqual(["not-due", "taken"]);
+      expect(taken.toSorted(compareCodeUnit)).toEqual(["not-due", "taken"]);
     });
 
     test("the resumer tries a request only within its window; the reminder sweep notifies the rest", async () => {
@@ -438,11 +439,15 @@ const suite = (
       await takeDueChatLimitReminders({ database, now });
 
       expect(
-        (await filedFor(all)).map(({ entityId }) => entityId).toSorted(),
-      ).toEqual([continueOverdue, notifyNow].toSorted());
+        (await filedFor(all))
+          .map(({ entityId }) => entityId)
+          .toSorted(compareCodeUnit),
+      ).toEqual([continueOverdue, notifyNow].toSorted(compareCodeUnit));
       expect(
-        (await remindersOf(all)).map(({ threadId }) => threadId).toSorted(),
-      ).toEqual([continueNow, continueLater].toSorted());
+        (await remindersOf(all))
+          .map(({ threadId }) => threadId)
+          .toSorted(compareCodeUnit),
+      ).toEqual([continueNow, continueLater].toSorted(compareCodeUnit));
     });
 
     test("a request that will not start notifies once, and one for a member who cannot act notifies nothing", async () => {
