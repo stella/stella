@@ -184,7 +184,9 @@ export const recordCompletenessCensus = async (
       .onConflictDoUpdate({
         target: [census.sourceId, census.slice],
         set: observation,
-        setWhere: sql`${census.observedAt} <= ${options.observedAt.toISOString()}::timestamptz`,
+        // An older observation never replaces a newer one; both sides are
+        // the stored column type, so no JavaScript Date precision is involved.
+        setWhere: sql`${census.observedAt} <= excluded.observed_at`,
       });
   });
 };
