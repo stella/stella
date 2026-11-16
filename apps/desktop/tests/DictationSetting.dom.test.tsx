@@ -112,22 +112,25 @@ test("offers AI cleanup, on by default, with a truthful description", async () =
   });
   expect(toggle.getAttribute("aria-checked")).toBe("true");
   const description = getByText(defaultMessages.dictation.cleanup.description);
-  expect(description.textContent).toContain("audio never leaves it");
+  expect(description.textContent).toContain("not the audio");
   expect(description.textContent).toContain(
     "through stella to your organization’s AI provider",
   );
+  expect(description.textContent).toContain("stella does not store it");
   expect(description.textContent).not.toContain("stella AI");
 });
 
-test("the dictation description says where text goes while cleanup is on", async () => {
+test("the dictation description says speech stays on this computer and leaves cleanup to its own row", async () => {
   const { container } = await renderSetting(ENABLED_SNAPSHOT);
 
   const description = container.querySelector("#dictation-description");
   expect(description?.textContent).toContain("transcribed on this computer");
-  expect(description?.textContent).toContain(
-    "the transcribed text, not the audio, is sent through stella to your organization’s AI provider",
-  );
-  expect(description?.textContent).toContain("stella does not store it");
+  expect(description?.textContent).toContain("is not stored");
+  expect(description?.textContent).not.toContain("AI provider");
+  // Where the text goes is said once, on the switch that sends it.
+  expect(
+    container.querySelector("#dictation-cleanup-description")?.textContent,
+  ).toContain("through stella to your organization’s AI provider");
 });
 
 test("turning cleanup off asks the native side and shows its answer", async () => {
@@ -228,8 +231,6 @@ test("says dictations are kept in clipboard history only while it keeps them", a
   expect(off.queryByText(defaultMessages.dictation.keptInHistory)).toBeNull();
 });
 
-const THROUGH_STELLA = "through stella to your organization’s AI provider";
-
 test("offers the context switches under cleanup, off by default, with what they send", async () => {
   const { getByRole, getByText } = await renderSetting(ENABLED_SNAPSHOT);
   const { windowTitle, textBeforeCursor } = defaultMessages.dictation.context;
@@ -238,15 +239,14 @@ test("offers the context switches under cleanup, off by default, with what they 
     const toggle = getByRole("switch", { name: title });
     expect(toggle.getAttribute("aria-checked")).toBe("false");
   }
-  const titleCopy = getByText(windowTitle.description).textContent;
-  expect(titleCopy).toContain("client or matter names");
-  expect(titleCopy).toContain(THROUGH_STELLA);
-  expect(titleCopy).toContain("stella does not store it");
-  const textCopy = getByText(/characters before the cursor/u).textContent;
+  // Each says what it adds; where it goes is said once, by cleanup above.
+  expect(getByText(windowTitle.description).textContent).toContain(
+    "client or matter names",
+  );
+  const textCopy = getByText(
+    /characters of the document you are in/u,
+  ).textContent;
   expect(textCopy).toContain("1,000 characters");
-  expect(textCopy).toContain("part of the document you are in");
-  expect(textCopy).toContain(THROUGH_STELLA);
-  expect(textCopy).toContain("stella does not store it");
 });
 
 test("hides the context switches while cleanup is off", async () => {
