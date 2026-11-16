@@ -470,12 +470,6 @@ const MESSAGE_METADATA_EVENTS: ReadonlySet<string> = new Set([
   EventType.REASONING_MESSAGE_END,
 ]);
 
-/** What a finished run reports to the answer, each under its own key. */
-const RUN_FINISHED_REPORTS: ReadonlyMap<string, v.GenericSchema> = new Map([
-  [CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY, chatLocalRunContextSchema],
-  [CHAT_LOCAL_RUN_MODEL_METADATA_KEY, chatLocalRunModelSchema],
-]);
-
 /**
  * A finished run's reports (its context, the models it asked for and ran on)
  * as the chat reads them: each under its key only when it is valid. A desktop
@@ -483,24 +477,30 @@ const RUN_FINISHED_REPORTS: ReadonlyMap<string, v.GenericSchema> = new Map([
  */
 const withCheckedReports = (
   chunk: Extract<PublicStreamChunk, { type: EventType.RUN_FINISHED }>,
-) =>
-  chunk.metadata === undefined
-    ? chunk
-    : {
-        ...chunk,
-        metadata: Object.fromEntries(
-          Object.entries(chunk.metadata).flatMap(
-            ([key, value]): [string, unknown][] => {
-              const schema = RUN_FINISHED_REPORTS.get(key);
-              if (schema === undefined) {
-                return [[key, value]];
-              }
-              const parsed = v.safeParse(schema, value);
-              return parsed.success ? [[key, parsed.output]] : [];
-            },
-          ),
-        ),
-      };
+) => {
+  if (chunk.metadata === undefined) {
+    return chunk;
+  }
+  const {
+    [CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY]: reportedContext,
+    [CHAT_LOCAL_RUN_MODEL_METADATA_KEY]: reportedModel,
+    ...metadata
+  } = chunk.metadata;
+  const context = v.safeParse(chatLocalRunContextSchema, reportedContext);
+  const model = v.safeParse(chatLocalRunModelSchema, reportedModel);
+  return {
+    ...chunk,
+    metadata: {
+      ...metadata,
+      ...(context.success
+        ? { [CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY]: context.output }
+        : {}),
+      ...(model.success
+        ? { [CHAT_LOCAL_RUN_MODEL_METADATA_KEY]: model.output }
+        : {}),
+    },
+  };
+};
 
 /**
  * Each call one read saw open: the tool name its first start gave it, and
