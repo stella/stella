@@ -322,9 +322,11 @@ const sendMessageCommonProperties = {
    */
   runMode: v.exactOptional(v.literal(CHAT_RUN_MODE.agent)),
   /**
-   * Where this turn runs. Absent or `cloud` keeps stella's own model path;
-   * `local` hands the turn to a harness on one of the member's computers and
-   * is refused, never rerouted, when no computer can take it.
+   * Where this turn runs. Absent runs it where its thread runs (the thread's
+   * stored target; stella's own models for a new thread). `cloud` keeps
+   * stella's own model path; `local` hands the turn to a harness on one of the
+   * member's computers and is refused, never rerouted, when no computer can
+   * take it.
    */
   runTarget: v.exactOptional(chatRunTargetSchema),
   userContext: v.exactOptional(userContextSchema),

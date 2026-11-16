@@ -1671,6 +1671,36 @@
   },
   {
     "schema": "public",
+    "table": "case_law_decision_reviews",
+    "policy": "case_law_global_access",
+    "command": "SELECT",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "true",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "case_law_decision_reviews",
+    "policy": "case_law_ingestion_access",
+    "command": "ALL",
+    "roles": ["stella_ingestion"],
+    "permissive": "PERMISSIVE",
+    "using": "true",
+    "withCheck": "true"
+  },
+  {
+    "schema": "public",
+    "table": "case_law_decision_reviews",
+    "policy": "public_law_reader_access",
+    "command": "SELECT",
+    "roles": ["stella_public_law_reader"],
+    "permissive": "PERMISSIVE",
+    "using": "true",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
     "table": "case_law_decision_source_identities",
     "policy": "case_law_ingestion_access",
     "command": "ALL",
@@ -13247,6 +13277,16 @@
     "roles": ["public"],
     "permissive": "PERMISSIVE",
     "using": "((CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('time_timers'::regclass)::oid))) AND ((organization_id)::text = NULLIF(current_setting('app.correspondence_review_reset_organization_id'::text, true), ''::text)))",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "time_timers",
+    "policy": "time_timers_owner_select",
+    "command": "SELECT",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('time_timers'::regclass)::oid)))",
     "withCheck": null
   },
   {

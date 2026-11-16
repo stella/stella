@@ -79,6 +79,10 @@ import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { parseCachedDecisionAst } from "@/api/lib/case-law/decision-ast-normalization";
 import { normalizePublicDecisionLanguage } from "@/api/lib/case-law/decision-language";
 import { DECISION_READ_STATUS } from "@/api/lib/case-law/decision-read-vocabulary";
+import {
+  readDecisionReviews,
+  requireDecisionReviews,
+} from "@/api/lib/case-law/decision-reviews";
 import { readPreferredLanguageVersionIds } from "@/api/lib/case-law/language-alternates";
 import {
   type CaseLawProvisionFilter,
@@ -3808,6 +3812,9 @@ const decisionStaticFields = ({
   }
   return {
     ...(includedFields.has("details")
+      ? { appealReviews: read.appealReviews }
+      : {}),
+    ...(includedFields.has("details")
       ? {
           url: links.url,
           ...(links.source_url === undefined
@@ -4505,6 +4512,15 @@ const handleReadCaseLawCitationsTool: TypedMcpToolHandler<
 
   return toolDataResult(
     projectionPayload(READ_CASE_LAW_CITATIONS_PROJECTION, {
+      appealReviews: requireDecisionReviews(
+        await (
+          context.testDependencies?.readDecisionReviews ?? readDecisionReviews
+        )({
+          decisionIds: [read.decisionId],
+          caseLawDb: caseLawPublicReadDb,
+        }),
+        read.decisionId,
+      ),
       doctrineAvailability: read.page.doctrineAvailability,
       ...(doctrine === undefined ? {} : { doctrine }),
       ...(polarity === undefined ? {} : { polarity }),
@@ -4514,7 +4530,7 @@ const handleReadCaseLawCitationsTool: TypedMcpToolHandler<
             passageQuery,
             scannedCitations: read.page.scannedCitations,
           }),
-      decisionId,
+      decisionId: read.decisionId,
       direction,
       nextCursor: read.page.nextCursor,
       citations: read.page.items.map((item) => ({

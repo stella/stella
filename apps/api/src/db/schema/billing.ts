@@ -30,6 +30,7 @@ import {
   invoicePaymentOwnerBackfillPolicies,
   invoicePolicies,
   timeEntryPolicies,
+  timeTimerOwnerReadPolicy,
 } from "@/api/db/rls";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -436,6 +437,7 @@ export const timeTimers = p.pgTable(
   },
   (table) => [
     ...reviewResetOwnerPolicies("time_timers"),
+    timeTimerOwnerReadPolicy(),
     p.foreignKey({
       columns: [table.workspaceId, table.organizationId],
       foreignColumns: [workspaces.id, workspaces.organizationId],

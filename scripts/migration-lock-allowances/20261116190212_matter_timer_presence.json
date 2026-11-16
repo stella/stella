@@ -1,0 +1,3 @@
+{
+  "create-policy": "Additive owner-only SELECT policy on existing time_timers; request-role row visibility and all write grants stay unchanged. CREATE POLICY takes ACCESS EXCLUSIVE until transaction end. Lock acquisition is bounded by lock_timeout 1s and each statement by statement_timeout 5s, not a 5s total transaction bound. Remaining statements only create the function and privileges without scanning or rewriting rows. Contention timeout rolls back the migration for its normal retry."
+}

@@ -154,6 +154,7 @@ type DecisionWorkspaceDecision = Pick<
   PublicCaseLawDecision,
   | keyof DecisionDocumentState
   | "caseNumber"
+  | "appealReviews"
   | "caseNumberType"
   | "country"
   | "court"

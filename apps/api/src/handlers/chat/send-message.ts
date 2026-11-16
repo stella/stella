@@ -311,6 +311,7 @@ import {
   chatRunTargetOf,
   sameChatRunTarget,
   storedChatRunTarget,
+  turnRunTarget,
 } from "@/api/lib/chat/run-target";
 import {
   type ChatThreadNamesRead,
@@ -1263,13 +1264,13 @@ const keepThreadRunTarget = async ({
   recordAuditEvent: AuditRecorder;
   /** Whether the turn was routed to a computer; a cloud turn keeps it as is. */
   routedLocally: boolean;
-  runTarget: ChatRunTarget | undefined;
+  runTarget: ChatRunTarget;
   safeDb: SafeDb;
   thread: ChatThreadState;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
 }) => {
-  if (!routedLocally || runTarget === undefined) {
+  if (!routedLocally) {
     return Result.ok();
   }
   const runsOn = storedChatRunTarget(runTarget);
@@ -2389,9 +2390,11 @@ export const createSendMessage = (
         return Result.err(storedAIConfigUnreadableError());
       }
 
-      const body = transportBody.forwardedProps;
-      const parentRunId = "parentRunId" in body ? body.parentRunId : undefined;
-      const resume = "resume" in body ? body.resume : undefined;
+      const requestedBody = transportBody.forwardedProps;
+      const parentRunId =
+        "parentRunId" in requestedBody ? requestedBody.parentRunId : undefined;
+      const resume =
+        "resume" in requestedBody ? requestedBody.resume : undefined;
       let acceptedLifecycle: ChatSendLifecycle | undefined = undefined;
       const isClientConnectionAborted = () =>
         acceptedLifecycle === undefined
@@ -2424,8 +2427,8 @@ export const createSendMessage = (
         );
       }
 
-      yield* assertDevModelOverride(body.devModelId, orgAIConfig);
-      if (parentRunId === body.runId) {
+      yield* assertDevModelOverride(requestedBody.devModelId, orgAIConfig);
+      if (parentRunId === requestedBody.runId) {
         return Result.err(
           new HandlerError({
             status: 400,
@@ -2467,7 +2470,7 @@ export const createSendMessage = (
       const scope = yield* resolveChatScope({
         admitted: "active",
         getWorkspaceAccess,
-        workspaceId: body.workspaceId,
+        workspaceId: requestedBody.workspaceId,
       });
 
       const workspaceId =
@@ -2477,7 +2480,7 @@ export const createSendMessage = (
       // the thread.
       yield* Result.await(
         authorizeRequestedUserMessageEdit({
-          body,
+          body: requestedBody,
           organizationId: session.activeOrganizationId,
           safeDb,
           userId: user.id,
@@ -2525,7 +2528,7 @@ export const createSendMessage = (
       // expected to discover relevant matters via the readonly
       // Stella API instead of being preloaded with thousands of IDs.
       const requestedContextMatterIds = normalizeOptionalArray(
-        body.contextMatterIds,
+        requestedBody.contextMatterIds,
       );
       const accessibleSet = new Set<string>(accessibleWorkspaceIds);
       if (!requestedContextMatterIds.every((id) => accessibleSet.has(id))) {
@@ -2558,9 +2561,9 @@ export const createSendMessage = (
         hasActiveDocxFileClient,
       } = resolveChatDocumentClients({
         activeFileSupportsDocxEdits:
-          body.activeFile?.supportsDocxEdits === true,
-        hasActiveDraft: body.activeDraft !== undefined,
-        hasActiveTemplate: body.activeTemplate !== undefined,
+          requestedBody.activeFile?.supportsDocxEdits === true,
+        hasActiveDraft: requestedBody.activeDraft !== undefined,
+        hasActiveTemplate: requestedBody.activeTemplate !== undefined,
       });
       // Per-turn DOCX-edit review-mode setting: which of the two mutually
       // exclusive `suggest_changes` variants (client-executed queue for
@@ -2572,13 +2575,14 @@ export const createSendMessage = (
       // the apply variant requests approval, and the composer selection may
       // have changed since the call was issued.
       const editApplyMode = hasSuggestChangesApprovalResponse(
-        body.message.parts,
+        requestedBody.message.parts,
       )
         ? CHAT_EDIT_APPLY_MODE.auto
-        : (body.editApplyMode ?? DEFAULT_CHAT_EDIT_APPLY_MODE);
+        : (requestedBody.editApplyMode ?? DEFAULT_CHAT_EDIT_APPLY_MODE);
       const docxEditRepresentation =
-        body.docxEditRepresentation ?? DEFAULT_DOCX_EDIT_REPRESENTATION;
-      const activeFile = body.activeFile;
+        requestedBody.docxEditRepresentation ??
+        DEFAULT_DOCX_EDIT_REPRESENTATION;
+      const activeFile = requestedBody.activeFile;
       const activeFileEntity =
         activeFile?.supportsDocxEdits === true && workspaceId !== null
           ? yield* Result.await(
@@ -2598,10 +2602,10 @@ export const createSendMessage = (
       // request rebuilds the schema from the then-current version, so an old
       // pending call fails validation instead of applying to a newer document.
       const activeFileForTools =
-        body.activeFile === undefined
+        requestedBody.activeFile === undefined
           ? undefined
           : {
-              ...body.activeFile,
+              ...requestedBody.activeFile,
               ...(activeFileEntity !== undefined &&
               activeFileEntity.currentVersionId !== null
                 ? { currentVersionId: activeFileEntity.currentVersionId }
@@ -2610,15 +2614,26 @@ export const createSendMessage = (
       const validationThreadState = yield* Result.await(
         readThreadValidationState({
           caseLawDb: dependencies.caseLawDb,
-          initialActiveSkill: body.activeSkill,
-          messageId: body.message.id,
+          initialActiveSkill: requestedBody.activeSkill,
+          messageId: requestedBody.message.id,
           organizationId: session.activeOrganizationId,
           safeDb,
-          threadId: body.threadId,
+          threadId: requestedBody.threadId,
           userId: user.id,
           workspaceId,
         }),
       );
+      // Every decision below reads where the turn runs from here, so a send
+      // that names no target (the phone's, a queued one) runs where its
+      // thread runs, exactly as one that restates it.
+      const body = {
+        ...requestedBody,
+        runTarget: turnRunTarget({
+          requested: requestedBody.runTarget,
+          agentSandboxRequested: requestedBody.runMode === CHAT_RUN_MODE.agent,
+          thread: validationThreadState.runTarget,
+        }),
+      };
       // Validation only builds tool schemas and never shows the model a ref;
       // the registry that does is built once this request owns the turn.
       const validationRefRegistry = createChatRefRegistry(
@@ -3455,7 +3470,7 @@ export const createSendMessage = (
               // closes any validation-only load.
               const run = lifecycle.startRun(
                 externalMcpTools,
-                body.runTarget?.kind ?? CHAT_RUN_TARGET_KIND.cloud,
+                body.runTarget.kind,
               );
               try {
                 const settlementContext = {
