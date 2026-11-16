@@ -222,6 +222,14 @@ export const corpusIndexProjectionIntents = p.pgTable(
       .index("corpus_index_projection_intents_offline_start_idx")
       .on(t.family, t.generation, t.indexId, t.appendStartedAt)
       .where(sql`${t.appendDelivery} = 'offline_indexer'`),
+    // A route's revisions in flight (started, or committed and undecided):
+    // whether an offline build of the route may call it drained, and when
+    // the first of them becomes decidable, read without the generation's
+    // other routes.
+    p
+      .index("corpus_index_projection_intents_route_in_flight_idx")
+      .on(t.family, t.generation, t.indexId)
+      .where(sql`${t.status} IN ('append_started', 'append_committed')`),
     // The absent census's other half: withdrawn revisions the engine must not
     // hold either, read beside the settled ones by the same page.
     p
