@@ -173,7 +173,8 @@ export const organizationDataExports = p.pgTable(
     ...reviewResetOwnerPolicies("organization_data_exports"),
     p.pgPolicy("maintenance_owner_select", {
       for: "select",
-      using: DATA_EXPORT_OWNER_CHECK,
+      // Keep statement-constant authorization out of per-row equality estimates.
+      using: sql`(SELECT ${DATA_EXPORT_OWNER_CHECK})`,
     }),
     p.pgPolicy("maintenance_owner_update", {
       for: "update",
