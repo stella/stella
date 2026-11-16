@@ -101,7 +101,7 @@ const fetchArchiveFile = async ({
       await withTimeout(
         async (signal): Promise<FetchedFile> => {
           const response = await fetchWithTimeout(presignedUrl, {
-            timeoutMs: FETCH_TIMEOUT_MS,
+            timeout: { type: "headers", ms: FETCH_TIMEOUT_MS },
             signal,
           });
           if (!response.ok) {
