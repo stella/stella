@@ -9,10 +9,12 @@
  *
  * A writer that seeds some generations and not others, or leaves a settled row
  * without states, would make the seeding fact lie without failing anything
- * else. The guard is on by default in every test database: the PGlite build
- * behind `createTestPglite` installs it, and so does the Postgres suites'
- * preparation after it migrates the shared database. It fails the commit
- * that breaks the rule, in whichever suite the writer runs.
+ * else. The guard is on by default in every PGlite test database (the build
+ * behind `createTestPglite` installs it), so it fails the commit that breaks
+ * the rule in whichever suite the writer runs. It is not installed in the
+ * Postgres suites' shared database: there a generation one suite registers
+ * is active for every other suite running at the same time, so the guard
+ * would fail unrelated fixtures rather than writers.
  *
  * It checks that states exist, not that they are current: a writer that
  * changes a projection input of a row that already has states is caught by
@@ -71,7 +73,7 @@ const partialScopes = (): string => {
  * writer role that may not read the generation registry or the states is
  * still checked.
  */
-export const corpusProjectionSeedingGuardStatements = (): string[] =>
+const corpusProjectionSeedingGuardStatements = (): string[] =>
   corpusProjectionSeedingGuardSql()
     .split(STATEMENT_BREAK)
     .map((statement) => statement.trim().replace(/;$/u, ""))
@@ -88,7 +90,7 @@ const corpusProjectionSeedingGuardSql = (): string => {
     CREATE OR REPLACE FUNCTION ${GUARD_FUNCTION}() RETURNS trigger
     LANGUAGE plpgsql
     SECURITY DEFINER
-    SET search_path = public, pg_catalog
+    SET search_path = public, pg_catalog, pg_temp
     AS $$
     DECLARE
       v_family text;

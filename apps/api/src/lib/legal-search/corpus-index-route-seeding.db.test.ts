@@ -651,8 +651,8 @@ test("a generation resumed from retiring comes back unseeded, even with a pass w
     passStartedAt: new Date("2026-11-01T00:00:00Z"),
     routeIndexIds: CASE_LAW_V5_ROUTES,
     routeJurisdictions: ["CZE"],
-    walkedCount: 2n,
-    seededCount: 2n,
+    walkedCount: 2,
+    seededCount: 2,
     completedAt: new Date("2026-11-01T01:00:00Z"),
   });
   await inTx(
@@ -676,10 +676,11 @@ const OWNERSHIP_ROLLED_BACK = "seeding ownership change rolled back";
  * maintenance lane's root handle owns them in production. The ownership
  * change rolls back with the transaction.
  */
-const asOrdinaryOwner = async (work: (tx: Transaction) => Promise<void>) => {
+type PgliteTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+const asOrdinaryOwner = async (work: (tx: PgliteTx) => Promise<void>) => {
   const outcome = await db
-    .transaction(async (raw) => {
-      const tx = asTestRaw<Transaction>(raw);
+    .transaction(async (tx) => {
       for (const statement of [
         `DO $$ BEGIN
            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'seeding_test_owner') THEN

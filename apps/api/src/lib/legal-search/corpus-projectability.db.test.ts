@@ -268,8 +268,8 @@ test("the redaction tombstone backfill projects every decision it tombstones as 
     [1, 2].map((n) => ({
       decisionId: decisionId(n),
       generation: "case_law_v1",
-      operation: "redact",
-      status: "succeeded",
+      operation: "redact" as const,
+      status: "succeeded" as const,
     })),
   );
   await db.insert(schedulerJobs).values({
