@@ -394,7 +394,7 @@ type QueueView = Awaited<ReturnType<typeof openPage>>["view"];
 /** Opens the "…" menu of the queued message with `text` and clicks `label`. */
 const chooseAction = async (view: QueueView, text: string, label: string) => {
   const bubble =
-    view.getByText(text).closest('[data-slot="entity-actions"]') ??
+    view.getByText(text).closest<HTMLElement>('[data-slot="entity-actions"]') ??
     panic(`No actions around ${text}`);
   fireEvent.click(
     within(bubble).getByRole("button", { name: messages.chat.queue.actions }),

@@ -69,13 +69,13 @@ describe("the stella browser's protocol client", () => {
     const send: (
       method: string,
       params: object,
-    ) => ReturnType<typeof client.send> = (method, params) => {
+    ) => ReturnType<typeof client.send> = async (method, params) => {
       const sending: ReturnType<typeof client.send> = Reflect.apply(
         client.send,
         undefined,
         [method, params],
       );
-      return sending;
+      return await sending;
     };
     for (const method of [
       "Runtime.enable",
