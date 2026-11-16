@@ -7078,6 +7078,13 @@
       "downloadPdf": "Download as PDF",
       "downloadSearchablePdf": "Searchable PDF",
       "downloadWithComments": "Download with comments",
+      "duplicateUpload": {
+        "description": "{count, plural, one {# file is identical to a document this matter already holds.} other {# files are identical to documents this matter already holds.}} Choose what to do with each.",
+        "matchedDocument": "Identical to <bdi>{documentName}</bdi>",
+        "skip": "Skip this file",
+        "title": "Already in this matter",
+        "uploadAnyway": "Upload anyway"
+      },
       "emptyFile": "The file is empty.",
       "fileTooLarge": "The file is larger than {limit, number} MB.",
       "includeReferenceNumber": "Include reference number",

@@ -7078,6 +7078,13 @@
       "downloadPdf": "Letöltés PDF-ként",
       "downloadSearchablePdf": "Kereshető PDF",
       "downloadWithComments": "Letöltés megjegyzésekkel",
+      "duplicateUpload": {
+        "description": "{count, plural, one {# fájl megegyezik egy dokumentummal, amely már szerepel ebben az ügyben.} other {# fájl megegyezik olyan dokumentumokkal, amelyek már szerepelnek ebben az ügyben.}} Válassza ki, mi történjen mindegyikkel.",
+        "matchedDocument": "Megegyezik ezzel: <bdi>{documentName}</bdi>",
+        "skip": "A fájl kihagyása",
+        "title": "Már szerepel ebben az ügyben",
+        "uploadAnyway": "Feltöltés mindenképp"
+      },
       "emptyFile": "A fájl üres.",
       "fileTooLarge": "A fájl nagyobb, mint {limit, number} MB.",
       "includeReferenceNumber": "Hivatkozási szám hozzáadása",

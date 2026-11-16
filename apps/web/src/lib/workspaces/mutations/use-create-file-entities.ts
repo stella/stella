@@ -29,6 +29,8 @@ import {
 } from "@/lib/files/attached-template-upload-preflight";
 import { resolveDocumentReferenceMatches } from "@/lib/files/document-reference-queries";
 import { useDocumentReferenceUploadStore } from "@/lib/files/document-reference-upload-store";
+import { resolveExactDuplicates } from "@/lib/files/exact-duplicate-queries";
+import { useExactDuplicateUploadStore } from "@/lib/files/exact-duplicate-upload-store";
 import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { toSafeId } from "@/lib/safe-id";
 import { UploadQueue } from "@/lib/upload-queue";
@@ -684,6 +686,58 @@ const withoutUploadInputFiles = (
   };
 };
 
+/**
+ * Ask about files whose exact bytes the matter already holds, then upload
+ * the ones the user did not skip.
+ */
+const useUploadAfterDuplicateCheck = (workspaceId: string) => {
+  const analytics = useAnalytics();
+  const askAboutDuplicateFiles = useExactDuplicateUploadStore(
+    (store) => store.ask,
+  );
+
+  return async (
+    input: CreateFileEntitiesInput,
+    upload: (input: CreateFileEntitiesInput) => void,
+  ): Promise<void> => {
+    const duplicates = await resolveExactDuplicates({
+      files: uploadInputFiles(input),
+      workspaceId,
+      onError: (error) =>
+        analytics.captureError(error, {
+          fingerprintKey: "useUploadAfterDuplicateCheck:failure",
+          scope: {
+            type: "handler",
+            handlerId: "useUploadAfterDuplicateCheck:failure",
+          },
+        }),
+    });
+
+    if (duplicates.length === 0) {
+      upload(input);
+      return;
+    }
+
+    askAboutDuplicateFiles({
+      duplicates,
+      onResolved: (uploadAnywayFiles) => {
+        const kept = new Set(uploadAnywayFiles);
+        const remaining = withoutUploadInputFiles(
+          input,
+          new Set(
+            duplicates
+              .map(({ file }) => file)
+              .filter((file) => !kept.has(file)),
+          ),
+        );
+        if (hasUploadInputItems(remaining)) {
+          upload(remaining);
+        }
+      },
+    });
+  };
+};
+
 export const useCreateFileEntities = (workspaceId: string) => {
   const t = useTranslations();
   const { activeOrganizationId } = useAuthenticatedUser();
@@ -695,6 +749,7 @@ export const useCreateFileEntities = (workspaceId: string) => {
   const askAboutReferencedFiles = useDocumentReferenceUploadStore(
     (store) => store.ask,
   );
+  const uploadAfterDuplicateCheck = useUploadAfterDuplicateCheck(workspaceId);
 
   const ensureFileProperty = async (): Promise<string> => {
     let propertyId = properties.find((p) => p.content.type === "file")?.id;
@@ -836,7 +891,7 @@ export const useCreateFileEntities = (workspaceId: string) => {
     });
 
     if (referenced.length === 0) {
-      mutate(input);
+      await uploadAfterDuplicateCheck(input, mutate);
       return;
     }
 
@@ -851,7 +906,10 @@ export const useCreateFileEntities = (workspaceId: string) => {
         );
         const remaining = withoutUploadInputFiles(input, filedAsVersions);
         if (hasUploadInputItems(remaining)) {
-          mutate(remaining);
+          detached(
+            uploadAfterDuplicateCheck(remaining, mutate),
+            "use-create-file-entities.duplicate-check",
+          );
         }
       },
       onCancelled: () => {

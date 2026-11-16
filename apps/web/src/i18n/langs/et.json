@@ -7078,6 +7078,13 @@
       "downloadPdf": "Laadi alla PDF-ina",
       "downloadSearchablePdf": "Otsitav PDF",
       "downloadWithComments": "Laadi alla koos kommentaaridega",
+      "duplicateUpload": {
+        "description": "{count, plural, one {# fail on identne dokumendiga, mis on selles toimikus juba olemas.} other {# faili on identsed dokumentidega, mis on selles toimikus juba olemas.}} Valige, mida igaühega teha.",
+        "matchedDocument": "Identne dokumendiga <bdi>{documentName}</bdi>",
+        "skip": "Jäta see fail vahele",
+        "title": "Juba selles toimikus olemas",
+        "uploadAnyway": "Laadi siiski üles"
+      },
       "emptyFile": "Fail on tühi.",
       "fileTooLarge": "Fail on suurem kui {limit, number} MB.",
       "includeReferenceNumber": "Lisa viitenumber",

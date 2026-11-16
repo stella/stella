@@ -7078,6 +7078,13 @@
       "downloadPdf": "Baixar como PDF",
       "downloadSearchablePdf": "PDF pesquisável",
       "downloadWithComments": "Baixar com comentários",
+      "duplicateUpload": {
+        "description": "{count, plural, one {# arquivo é idêntico a um documento que este caso já contém.} other {# arquivos são idênticos a documentos que este caso já contém.}} Escolha o que fazer com cada um.",
+        "matchedDocument": "Idêntico a <bdi>{documentName}</bdi>",
+        "skip": "Ignorar este arquivo",
+        "title": "Já está neste caso",
+        "uploadAnyway": "Enviar mesmo assim"
+      },
       "emptyFile": "O arquivo está vazio.",
       "fileTooLarge": "O arquivo é maior que {limit, number} MB.",
       "includeReferenceNumber": "Incluir número de referência",

@@ -65,6 +65,7 @@ import {
 import { AttachedTemplateUploadDialog } from "@/components/workspaces/attached-template-upload-dialog";
 import { CreateMatterDialog } from "@/components/workspaces/create-matter-dialog";
 import { DocumentReferenceUploadDialog } from "@/components/workspaces/document-reference-upload-dialog";
+import { ExactDuplicateUploadDialog } from "@/components/workspaces/exact-duplicate-upload-dialog";
 import { useGlobalChatMentionRegistration } from "@/features/chat/hooks/use-global-chat-mention-registration";
 import { MakeSkillReviewDialog } from "@/features/chat/make-skill-review-dialog";
 import { PlaybookPaneLeaveConfirmation } from "@/features/knowledge/playbook-editor/playbook-pane-leave-confirmation";
@@ -310,6 +311,7 @@ export const ProtectedAppFrame = ({
                 <MakeSkillReviewDialog />
                 <AttachedTemplateUploadDialog />
                 <DocumentReferenceUploadDialog />
+                <ExactDuplicateUploadDialog />
                 <ShortcutEchoHud />
                 <KeyboardShortcutsDialog />
               </ChatEditorProvider>

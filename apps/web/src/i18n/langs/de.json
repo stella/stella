@@ -7078,6 +7078,13 @@
       "downloadPdf": "Als PDF herunterladen",
       "downloadSearchablePdf": "Durchsuchbare PDF",
       "downloadWithComments": "Mit Kommentaren herunterladen",
+      "duplicateUpload": {
+        "description": "{count, plural, one {# Datei ist mit einem Dokument identisch, das diese Akte bereits enthält.} other {# Dateien sind mit Dokumenten identisch, die diese Akte bereits enthält.}} Wählen Sie für jede Datei aus, was geschehen soll.",
+        "matchedDocument": "Identisch mit <bdi>{documentName}</bdi>",
+        "skip": "Diese Datei überspringen",
+        "title": "Bereits in dieser Akte vorhanden",
+        "uploadAnyway": "Trotzdem hochladen"
+      },
       "emptyFile": "Die Datei ist leer.",
       "fileTooLarge": "Die Datei ist größer als {limit, number} MB.",
       "includeReferenceNumber": "Aktenzeichen einfügen",

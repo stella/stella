@@ -6,6 +6,8 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 import { validateEntityCreateCapacity } from "@/api/lib/uploads/entity-create";
+import { findExactDuplicates } from "@/api/lib/uploads/exact-duplicates";
+import { documentUploadFileFields } from "@/api/lib/uploads/file-metadata-schema";
 
 const bodySchema = v.object({
   entityCount: v.pipe(
@@ -16,6 +18,13 @@ const bodySchema = v.object({
   ),
   propertyId: v.optional(v.nullable(resourceIdSchema("property"))),
   parentId: v.optional(v.nullable(resourceIdSchema("entity"))),
+  /** Hashes of the files about to be uploaded, to learn which the matter already holds. */
+  sha256Hexes: v.optional(
+    v.pipe(
+      v.array(documentUploadFileFields.sha256Hex),
+      v.maxLength(LIMITS.entitiesCount),
+    ),
+  ),
 });
 
 // Answers whether the upload that follows would fit, so it asks for the grant
@@ -43,7 +52,18 @@ const preflightEntityCreate = createSafeHandler(
       return validation;
     }
 
-    return Result.ok({ ok: true });
+    const duplicates = yield* Result.await(
+      safeDb(
+        async (tx) =>
+          await findExactDuplicates({
+            tx,
+            workspaceId,
+            sha256Hexes: body.sha256Hexes ?? [],
+          }),
+      ),
+    );
+
+    return Result.ok({ ok: true, duplicates });
   },
 );
 
