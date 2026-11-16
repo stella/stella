@@ -1014,6 +1014,7 @@ test("bound scope adapters must return their sole resource mutation promise", ()
     "async (input) => await write({ workspaceId, input })",
     "(input) => { return write({ workspaceId, input }); }",
     "async function(input) { return await write({ workspaceId, input }); }",
+    "function save(input) { return write({ workspaceId, input }); }",
   ]) {
     expect({ adapter, findings: violations(fixture(adapter)) }).toEqual({
       adapter,
@@ -1028,6 +1029,8 @@ test("bound scope adapters must return their sole resource mutation promise", ()
     "(input) => { api.entities({ workspaceId }).rename.patch(input); return write({ workspaceId, input }); }",
     "(input) => write({ workspaceId, input: api.entities({ workspaceId }).rename.patch(input) })",
     "(write) => write({ workspaceId, input })",
+    "function write(input) { return write({ workspaceId, input }); }",
+    "async function write(input) { return await write({ workspaceId, input }); }",
     "(input) => write({ workspaceId, input: input[getKey()] })",
     "(input) => write({ workspaceId, input: input.taskId() })",
     "(input = api.entities({ workspaceId }).rename.patch({})) => write({ workspaceId, input })",
@@ -1038,4 +1041,32 @@ test("bound scope adapters must return their sole resource mutation promise", ()
       covered: false,
     });
   }
+});
+
+test("a parameter factory shadows its function expression's tagged return", () => {
+  const sources = [
+    ...validSources.slice(0, 2),
+    {
+      file: "apps/web/src/features.ts",
+      text: `import { useQuery } from "@tanstack/react-query";
+        import { resourceQueryOptions } from "@/lib/workspace-realtime";
+        import { RESOURCE_TYPE } from "@stll/api-contract";
+        export const build = function options(options) {
+          useQuery(options());
+          return resourceQueryOptions(
+            {queryKey: ["owned"], queryFn: async () => []},
+            {resources: [RESOURCE_TYPE.ENTITY], scope: {type: "organization"}},
+          );
+        };`,
+    },
+  ];
+  const census = inspectMutationQuerySources(sources);
+  const reader = census.readers.find(({ callee }) => callee === "useQuery");
+  expect(reader).toBeDefined();
+  if (!reader) {
+    throw new TypeError("Fixture must contain its executing query reader");
+  }
+  expect(violations(sources).map(({ id }) => id)).toContain(
+    `${reader.id}:reader`,
+  );
 });

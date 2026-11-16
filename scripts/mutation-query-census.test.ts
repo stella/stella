@@ -1051,3 +1051,95 @@ test("operation consumers still inspect callbacks returned by ordinary option fa
   });
   expect(mutation?.ownWrites).toHaveLength(3);
 });
+
+test("consecutive parameter calls retain identical direct and bound route ownership", () => {
+  const inspect = (declaration: string, receiver: string) =>
+    inspectMutationQuerySources([
+      {
+        file: "apps/web/src/receiver.ts",
+        text: `import { api } from "@/lib/api";
+      import { queryOptions, useMutation } from "@tanstack/react-query";
+      ${declaration}
+      export const read = queryOptions({ queryKey: ["items"], queryFn: () => ${receiver}.items.get() });
+      export const save = () => useMutation({ mutationFn: () => ${receiver}.items.post({}) });`,
+      },
+    ]);
+  const routes = (census: ReturnType<typeof inspect>) =>
+    [
+      ...census.readers.flatMap(({ routes: reads }) => reads),
+      ...census.mutations.flatMap(({ writes }) => writes),
+    ].map(({ route, method }) => ({ route, method }));
+  const direct = routes(inspect("", "api.lists({ workspaceId })({ listId })"));
+  expect(direct).toEqual([
+    { route: "/lists/:workspaceId/:listId/items", method: "get" },
+    { route: "/lists/:workspaceId/:listId/items", method: "post" },
+  ]);
+  for (const receiver of [
+    "api.lists({ workspaceId })({ listId })",
+    "(api.lists({ workspaceId }))({ listId })",
+    'api["lists"]({ workspaceId })({ listId })',
+  ]) {
+    expect(routes(inspect(`const list = ${receiver};`, "list"))).toEqual(
+      direct,
+    );
+  }
+  for (const declaration of [
+    "const list = api.lists({ workspaceId }).get()({ listId });",
+    "const list = api.lists({ workspaceId })({ listId }).post({});",
+    "const list = await api.lists({ workspaceId })({ listId }).get();",
+    "const list = opaqueFactory({ workspaceId })({ listId });",
+    "const list = api.lists({ workspaceId })({ listId })[method]();",
+  ]) {
+    expect({
+      declaration,
+      routes: routes(inspect(declaration, "list")),
+    }).toEqual({ declaration, routes: [] });
+  }
+});
+
+test("named function self-bindings cannot inherit the outer mutation's writes", () => {
+  const inspect = (adapter: string) =>
+    inspectMutationQuerySources([
+      {
+        file: "apps/web/src/adapter.ts",
+        text: `import { api } from "@/lib/api";
+      import { useMutation } from "@tanstack/react-query";
+      const write = (input) => api.entities({ workspaceId }).rename.patch(input);
+      export const save = () => useMutation({mutationFn: ${adapter}});`,
+      },
+    ]);
+  expect(
+    inspect("function save(input) { return write(input); }")
+      .mutations.flatMap(({ writes }) => writes)
+      .map(({ route }) => route),
+  ).toEqual(["/entities/:workspaceId/rename"]);
+  for (const adapter of [
+    "function write(input) { return write(input); }",
+    "async function write(input) { return await write(input); }",
+  ]) {
+    const census = inspect(adapter);
+    expect({
+      adapter,
+      writes: census.mutations.flatMap(({ writes }) => writes),
+    }).toEqual({ adapter, writes: [] });
+    expect(
+      census.mutations.flatMap(({ unresolved }) => unresolved).length,
+    ).toBeGreaterThan(0);
+  }
+});
+
+test("a named function's callback parameter takes precedence over its self-binding", () => {
+  const census = inspectMutationQuerySources([
+    {
+      file: "apps/web/src/adapter.ts",
+      text: `import { api } from "@/lib/api";
+      import { useMutation } from "@tanstack/react-query";
+      const adapter = function write(write) { api.audit.post({}); return write(); };
+      const request = () => api.entities({ workspaceId }).rename.patch({});
+      export const save = () => useMutation({mutationFn: () => adapter(request)});`,
+    },
+  ]);
+  expect(
+    census.mutations.flatMap(({ writes }) => writes).map(({ route }) => route),
+  ).toEqual(["/audit", "/entities/:workspaceId/rename"]);
+});

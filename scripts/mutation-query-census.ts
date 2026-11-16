@@ -99,10 +99,15 @@ const constBindingValue = ({ node, value }: Binding): ts.Node | undefined =>
     ? value
     : undefined;
 
-const isRouteSegmentCall = (node: ts.CallExpression): boolean =>
-  ts.isPropertyAccessExpression(node.expression) ||
-  (ts.isElementAccessExpression(node.expression) &&
-    ts.isStringLiteral(node.expression.argumentExpression));
+const isRouteSegmentCall = (node: ts.CallExpression): boolean => {
+  const callee = unwrap(node.expression);
+  return (
+    ts.isPropertyAccessExpression(callee) ||
+    (ts.isCallExpression(callee) && isRouteSegmentCall(callee)) ||
+    (ts.isElementAccessExpression(callee) &&
+      ts.isStringLiteral(callee.argumentExpression))
+  );
+};
 
 const isApiRequestCall = (node: ts.CallExpression): boolean =>
   API_CLIENT_REQUEST_METHODS.has(callName(node.expression) ?? "");
@@ -320,6 +325,14 @@ const indexModule = ({ file, text }: SourceInput): Module => {
           }
         }
       }
+    }
+    if (ts.isFunctionExpression(node) && node.name) {
+      bindings.push({
+        name: node.name.text,
+        node,
+        value: node,
+        scope: node,
+      });
     }
     if (ts.isFunctionDeclaration(node) && node.name) {
       bindings.push({
