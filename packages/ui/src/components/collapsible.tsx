@@ -54,11 +54,11 @@ const CollapsiblePanel = ({
 }: CollapsiblePrimitive.Panel.Props) => (
   <CollapsiblePrimitive.Panel
     className={cn(
-      // The accordion panel's motion: Base UI measures the content into
-      // `--collapsible-panel-height` and the box eases between it and 0. A
-      // class that sets `display` must not undo a plain `hidden`, so only
-      // `until-found` keeps the box.
-      "h-(--collapsible-panel-height) min-w-0 overflow-hidden transition-[height] duration-200 ease-in-out data-ending-style:h-0 data-starting-style:h-0 motion-reduce:transition-none [&[hidden]:not([hidden=until-found])]:hidden",
+      // Motion and its temporary clipping belong to the theme's panel
+      // keyframes. Settled-open content can extend beyond the panel (for
+      // example, a document's hanging permalink). Plain hidden must still
+      // remove the box; hidden-until-found retains the searchable content.
+      "h-(--collapsible-panel-height) min-w-0 data-ending-style:h-0 data-starting-style:h-0 [&[hidden]:not([hidden=until-found])]:hidden",
       className,
     )}
     data-slot="collapsible-panel"

@@ -1,0 +1,48 @@
+/* Base UI owns measurement, interruption, initial-open suppression, and
+ * beforematch. Keyframes clip for their entire active lifetime; no forward
+ * fill leaves settled-open content and its focus rings free to overflow. */
+[data-slot="collapsible-panel"] {
+  overflow: hidden;
+  animation-duration: 200ms;
+  animation-timing-function: ease-in-out;
+  animation-fill-mode: none;
+}
+
+[data-slot="collapsible-panel"][data-open] {
+  overflow: visible;
+  animation-name: stella-collapsible-open;
+}
+
+[data-slot="collapsible-panel"][data-closed] {
+  animation-name: stella-collapsible-close;
+}
+
+@keyframes stella-collapsible-open {
+  from {
+    height: 0;
+    overflow: hidden;
+  }
+  to {
+    height: var(--collapsible-panel-height);
+    overflow: hidden;
+  }
+}
+
+@keyframes stella-collapsible-close {
+  from {
+    height: var(--collapsible-panel-height);
+    overflow: hidden;
+  }
+  to {
+    height: 0;
+    overflow: hidden;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-slot="collapsible-panel"],
+  [data-slot="collapsible-panel"][data-open],
+  [data-slot="collapsible-panel"][data-closed] {
+    animation: none;
+  }
+}
