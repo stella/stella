@@ -45,13 +45,19 @@ const workspaceSources = (directory: string) =>
 test("namespace source inventory retains authored files without reading ignored build outputs", () => {
   const directory = mkdtempSync(path.join(tmpdir(), "emf-source-inventory-"));
   try {
-    execFileSync("git", ["init", "--quiet"], { cwd: directory });
+    execFileSync("git", ["init", "--quiet"], {
+      cwd: directory,
+      maxBuffer: 1024 * 1024,
+    });
     mkdirSync(path.join(directory, "apps/api/generated"), { recursive: true });
     mkdirSync(path.join(directory, "packages/example"), { recursive: true });
     writeFileSync(path.join(directory, ".gitignore"), "apps/api/generated/\n");
     const tracked = "apps/api/generated/tracked.ts";
     writeFileSync(path.join(directory, tracked), "export {};\n");
-    execFileSync("git", ["add", "--force", "--", tracked], { cwd: directory });
+    execFileSync("git", ["add", "--force", "--", tracked], {
+      cwd: directory,
+      maxBuffer: 1024 * 1024,
+    });
     const local = "packages/example/new source\nfile.tsx";
     writeFileSync(path.join(directory, local), "export {};\n");
     const output = path.join(directory, "apps/api/generated/transient.ts");
