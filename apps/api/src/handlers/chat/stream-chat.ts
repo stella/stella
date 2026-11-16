@@ -1402,6 +1402,7 @@ export const produceChatTurn = ({
     output: withChatTurnTiming({
       source: observedOutput,
       getPhase: () => timingPhase.status,
+      isReleased: () => settlement.release !== undefined,
       readTiming,
     }),
     durability: createChatTurnTimingDurability({

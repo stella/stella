@@ -210,6 +210,7 @@ describe("active timing through the real SDK message processor", () => {
           runEnd,
         ]),
         getPhase: () => "settled",
+        isReleased: () => false,
         readTiming: async () => readPresent(++reads === 1 ? running : finished),
       })) {
         const encodedEvent = JSON.stringify(chunk);
@@ -241,6 +242,7 @@ describe("active timing through the real SDK message processor", () => {
     for await (const chunk of withChatTurnTiming({
       source: chunksOf([runStart, starts[0], runEnd]),
       getPhase: () => "settled",
+      isReleased: () => false,
       readTiming: async () => readPresent(++reads === 1 ? running : null),
     })) {
       const encodedEvent = JSON.stringify(chunk);
@@ -260,6 +262,7 @@ describe("active timing through the real SDK message processor", () => {
     for await (const chunk of withChatTurnTiming({
       source: chunksOf([runStart, childStart, childEnd, starts[0], runEnd]),
       getPhase: () => "settled",
+      isReleased: () => false,
       readTiming: async () => readPresent(++reads === 1 ? running : finished),
     })) {
       events.push(chunk);
@@ -289,6 +292,7 @@ describe("active timing at iteration and snapshot boundaries", () => {
     for await (const chunk of withChatTurnTiming({
       source: chunksOf([runStart, snapshot]),
       getPhase: () => "running",
+      isReleased: () => false,
       readTiming: async () => {
         reads++;
         return readPresent(running);
@@ -336,6 +340,7 @@ describe("active timing at iteration and snapshot boundaries", () => {
             yield runEnd;
           })(),
           getPhase: () => phase,
+          isReleased: () => false,
           readTiming: async () => {
             reads++;
             return readPresent(
@@ -444,6 +449,7 @@ describe("active timing at iteration and snapshot boundaries", () => {
         }
       })(),
       getPhase: () => phase,
+      isReleased: () => false,
       readTiming: async () => readPresent(++reads <= 2 ? running : finished),
     })) {
       const encodedEvent = JSON.stringify(chunk);
@@ -495,6 +501,7 @@ describe("active timing at iteration and snapshot boundaries", () => {
         runEnd,
       ]),
       getPhase: () => "settled",
+      isReleased: () => false,
       readTiming: async () => readPresent(++reads <= 2 ? running : finished),
     })) {
       const encodedEvent = JSON.stringify(chunk);
@@ -545,6 +552,7 @@ describe("active timing at iteration and snapshot boundaries", () => {
         },
       ]),
       getPhase: () => "settled",
+      isReleased: () => false,
       readTiming: async () => readPresent(++reads === 1 ? running : finished),
     })) {
       const encodedEvent = JSON.stringify(chunk);
@@ -564,6 +572,7 @@ test("duplicate terminal receipts emit settled timing exactly once", async () =>
   for await (const chunk of withChatTurnTiming({
     source: chunksOf([runStart, starts[0], runEnd, runEnd]),
     getPhase: () => "settled",
+    isReleased: () => false,
     readTiming: async () => readPresent(++reads === 1 ? running : finished),
   })) {
     if (chunk.type === EventType.TEXT_MESSAGE_END) {
@@ -599,6 +608,7 @@ test("a cut-short source settles after draining without a terminal event", async
       phase = "settled";
     })(),
     getPhase: () => phase,
+    isReleased: () => false,
     readTiming: async () => readPresent(++reads === 1 ? running : finished),
   })) {
     capture.processor.processChunk(structuredClone(chunk));
@@ -634,6 +644,7 @@ test("a failed final timing read clears the live anchor without losing the answe
       runEnd,
     ]),
     getPhase: () => "settled",
+    isReleased: () => false,
     readTiming: async () =>
       ++reads === 1
         ? readPresent(running)
@@ -671,6 +682,7 @@ for (const batchSize of [1, 2, 32]) {
           runEnd,
         ]),
         getPhase: () => "settled",
+        isReleased: () => false,
         readTiming: async () => readPresent(running),
       }),
       {
@@ -761,6 +773,7 @@ for (const exit of ["drained", "thrown"] as const) {
         withChatTurnTiming({
           source: source(),
           getPhase: () => state,
+          isReleased: () => false,
           readTiming: async () =>
             readPresent(state === "running" ? running : finished),
         }),
@@ -903,6 +916,7 @@ test.each(["throw after terminal"] as const)(
       withChatTurnTiming({
         source: source(),
         getPhase: () => phase.status,
+        isReleased: () => false,
         readTiming: async () =>
           readPresent(phase.status === "running" ? running : finished),
       }),
@@ -975,6 +989,7 @@ for (const start of starts) {
         },
       ]),
       getPhase: () => "running",
+      isReleased: () => false,
       readTiming: async () => readPresent(running),
     })[Symbol.asyncIterator]();
     await iterator.next();
@@ -1025,6 +1040,7 @@ test.each(["running", "settled"] as const)(
       for await (const chunk of withChatTurnTiming({
         source: source(),
         getPhase: () => phase,
+        isReleased: () => false,
         readTiming: async () =>
           readPresent(phase === "running" ? running : finished),
       })) {
@@ -1081,6 +1097,7 @@ test("reasoning block ids do not replace the announced assistant timing owner", 
     withChatTurnTiming({
       source: chunksOf([runStart, starts[0], ...reasoningStarts, runEnd]),
       getPhase: () => "settled",
+      isReleased: () => false,
       readTiming: async () => readPresent(finished),
     }),
   );

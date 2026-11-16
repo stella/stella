@@ -19,6 +19,11 @@ type WithChatTurnTimingArgs = {
   source: AsyncIterable<StreamChunk>;
   readTiming: () => Promise<ReadOutcome<ChatTurnTiming | null>>;
   getPhase: () => "running" | "settled";
+  /**
+   * Whether the run released its turn to another task: its message goes on
+   * under the adopter, so it gets no final timing here.
+   */
+  isReleased: () => boolean;
 };
 
 const timingMetadata = (outcome: ReadOutcome<ChatTurnTiming | null>) => {
@@ -48,6 +53,7 @@ export const withChatTurnTiming = async function* ({
   source,
   readTiming,
   getPhase,
+  isReleased,
 }: WithChatTurnTimingArgs): AsyncIterable<StreamChunk> {
   let assistantMessageId: string | undefined;
   let settledTiming: Promise<ReadOutcome<ChatTurnTiming | null>> | undefined;
@@ -179,7 +185,9 @@ export const withChatTurnTiming = async function* ({
       }
       yield chunk;
     }
-    yield* emitSettledTiming();
+    if (!isReleased()) {
+      yield* emitSettledTiming();
+    }
   } finally {
     if (sourceState === "reading") {
       await iterator.return?.();
