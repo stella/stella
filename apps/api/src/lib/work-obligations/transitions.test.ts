@@ -88,6 +88,12 @@ describe("resolveWorkObligationTransition", () => {
             ? "allowed"
             : "invalid_status",
         );
+        if (resolution.type === "allowed") {
+          expect(resolution.move).toEqual({
+            from: resolution.from,
+            to: resolution.nextStatus,
+          });
+        }
       }
     }
   });
@@ -105,6 +111,10 @@ describe("resolveWorkObligationTransition", () => {
     expect(resolution).toEqual({
       type: "allowed",
       eventType: WORK_OBLIGATION_TRANSITIONS.complete.eventType,
+      move: {
+        from: WORK_OBLIGATION_TRANSITIONS.complete.from,
+        to: WORK_OBLIGATION_TRANSITIONS.complete.to,
+      },
       from: WORK_OBLIGATION_TRANSITIONS.complete.from,
       nextStatus: WORK_OBLIGATION_TRANSITIONS.complete.to,
       taskStatus: WORK_OBLIGATION_TRANSITIONS.complete.taskStatus,
@@ -122,6 +132,10 @@ describe("resolveWorkObligationTransition", () => {
         expect(resolution).toEqual({
           type: "allowed",
           eventType: WORK_OBLIGATION_TRANSITIONS.reopen.eventType,
+          move: {
+            from: WORK_OBLIGATION_TRANSITIONS.reopen.from,
+            to: reopenedWorkObligationStatus(ownership),
+          },
           from: WORK_OBLIGATION_TRANSITIONS.reopen.from,
           nextStatus: reopenedWorkObligationStatus(ownership),
           taskStatus: WORK_OBLIGATION_TRANSITIONS.reopen.taskStatus,
