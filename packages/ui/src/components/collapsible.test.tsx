@@ -26,17 +26,6 @@ describe("Collapsible", () => {
     expect(markup).toContain("Arguments");
   });
 
-  test("the panel exposes its height without permanent clipping", () => {
-    const markup = renderToStaticMarkup(
-      <Collapsible defaultOpen>
-        <CollapsibleTrigger>Hide details</CollapsibleTrigger>
-        <CollapsiblePanel>Arguments</CollapsiblePanel>
-      </Collapsible>,
-    );
-    expect(markup).toContain("h-(--collapsible-panel-height)");
-    expect(markup).not.toContain("overflow-hidden");
-  });
-
   test("an open panel is announced by its trigger", () => {
     const markup = renderToStaticMarkup(
       <Collapsible defaultOpen>

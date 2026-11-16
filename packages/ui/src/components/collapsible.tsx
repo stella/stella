@@ -38,8 +38,8 @@ const CollapsibleTrigger = ({
 /**
  * The disclosed content. It adds no padding or type, so opening it reveals
  * content at the rhythm of the surface around it, as a native `<details>`
- * does. Its height eases open and shut with the accordion's timing, so the
- * two disclosures move alike; under reduced motion it snaps.
+ * does. Layout changes directly: opening content fades in for 200ms,
+ * closing hides it immediately, and reduced motion skips the fade.
  *
  * Closed, the content stays in the document. Once mounted it is
  * `hidden="until-found"` (as a native `<details>` keeps it), so find-in-page
@@ -54,11 +54,10 @@ const CollapsiblePanel = ({
 }: CollapsiblePrimitive.Panel.Props) => (
   <CollapsiblePrimitive.Panel
     className={cn(
-      // Motion and its temporary clipping belong to the theme's panel
-      // keyframes. Settled-open content can extend beyond the panel (for
-      // example, a document's hanging permalink). Plain hidden must still
-      // remove the box; hidden-until-found retains the searchable content.
-      "h-(--collapsible-panel-height) min-w-0 data-ending-style:h-0 data-starting-style:h-0 [&[hidden]:not([hidden=until-found])]:hidden",
+      // The theme owns the opacity-only reveal. Open content can extend
+      // beyond the panel, including a document's hanging permalink.
+      // Plain hidden removes the box; hidden-until-found keeps it searchable.
+      "min-w-0 [&[hidden]:not([hidden=until-found])]:hidden",
       className,
     )}
     data-slot="collapsible-panel"

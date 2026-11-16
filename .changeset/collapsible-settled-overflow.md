@@ -2,4 +2,4 @@
 "@stll/ui": patch
 ---
 
-Keep Collapsible content clipped during its height animation while allowing settled-open content, hanging controls, and focus rings to extend beyond the panel.
+Let open Collapsible content, hanging controls, and focus rings extend beyond the panel. Use an opacity-only opening reveal with immediate layout changes and closing, preserving hidden-until-found and reduced-motion behavior.
