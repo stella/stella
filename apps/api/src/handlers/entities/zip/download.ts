@@ -5,6 +5,7 @@ import { compareCodeUnit } from "@stll/collation";
 import { streamWithConcurrency } from "@stll/concurrency";
 import { createZipStream } from "@stll/docx-core/zip/stream";
 import { fetchWithTimeout } from "@stll/fetch";
+import { readBodyWithIdleDeadline } from "@stll/fetch/body-reader";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { entities, entityVersions, fields } from "@/api/db/schema";
@@ -27,11 +28,13 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey } from "@/api/lib/files/utils";
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { getS3 } from "@/api/lib/s3";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { secureDocumentResponse } from "@/api/lib/secure-document-response";
+import { withTimeout } from "@/api/lib/with-timeout";
 
 const downloadZipParamsSchema = workspaceParams({
   entityId: resourceIdSchema("entity"),
@@ -45,6 +48,7 @@ const FETCH_TIMEOUT_MS = 30_000;
 const ERROR_MANIFEST_NAME = "_DOWNLOAD ERRORS.txt";
 
 type DownloadZipHandlerProps = {
+  signal: AbortSignal;
   safeDb: SafeDb;
   entityId: SafeId<"entity">;
   organizationId: SafeId<"organization">;
@@ -62,6 +66,64 @@ type ArchiveFile = {
 type FetchedFile =
   | { type: "file"; path: string; data: Uint8Array }
   | { type: "error"; path: string; fileId: string };
+
+type FetchArchiveFileOptions = {
+  file: ArchiveFile;
+  organizationId: SafeId<"organization">;
+  workspaceId: SafeId<"workspace">;
+  signal: AbortSignal;
+};
+
+const fetchArchiveFile = async ({
+  file,
+  organizationId,
+  workspaceId,
+  signal: requestSignal,
+}: FetchArchiveFileOptions): Promise<FetchedFile> => {
+  const key = createFileKey({
+    organizationId,
+    workspaceId,
+    fileId: file.fileId,
+    mimeType: file.mimeType,
+  });
+  const presignedUrl = getS3().presign(key, {
+    expiresIn: PRESIGN_TTL_SECONDS,
+  });
+  // A failed file becomes an entry in the archive's error manifest, so
+  // the failure itself carries nothing further.
+  const failed: FetchedFile = {
+    type: "error",
+    path: file.path,
+    fileId: file.fileId,
+  };
+  const fetched = await Result.tryPromise(
+    async () =>
+      await withTimeout(
+        async (signal): Promise<FetchedFile> => {
+          const response = await fetchWithTimeout(presignedUrl, {
+            timeout: { type: "headers", ms: FETCH_TIMEOUT_MS },
+            signal,
+          });
+          if (!response.ok) {
+            await response.body?.cancel();
+            return failed;
+          }
+          const data = await readBodyWithIdleDeadline(response, {
+            idleMs: FETCH_TIMEOUT_MS,
+            maxBytes: FILE_SIZE_LIMIT_BYTES.document,
+            signal,
+          });
+          return { type: "file", path: file.path, data };
+        },
+        {
+          label: "ZIP entry storage read",
+          timeoutMs: FETCH_TIMEOUT_MS,
+          signal: requestSignal,
+        },
+      ),
+  );
+  return fetched.unwrapOr(failed);
+};
 
 /**
  * Collect every descendant of `parentId` with the fields needed to
@@ -92,6 +154,7 @@ const collectDescendants = async (
 const ZIP_FETCH_KEY = "zip.archiveEntries";
 
 const downloadZipHandler = async function* ({
+  signal: requestSignal,
   safeDb,
   entityId,
   organizationId,
@@ -240,42 +303,6 @@ const downloadZipHandler = async function* ({
 
   // --- Everything below runs lazily, as the response stream is consumed.
 
-  const fetchFile = async (file: ArchiveFile): Promise<FetchedFile> => {
-    const key = createFileKey({
-      organizationId,
-      workspaceId,
-      fileId: file.fileId,
-      mimeType: file.mimeType,
-    });
-    const presignedUrl = getS3().presign(key, {
-      expiresIn: PRESIGN_TTL_SECONDS,
-    });
-    // A failed file becomes an entry in the archive's error manifest, so
-    // the failure itself carries nothing further.
-    const failed: FetchedFile = {
-      type: "error",
-      path: file.path,
-      fileId: file.fileId,
-    };
-    const response = await Result.tryPromise(
-      async () =>
-        await fetchWithTimeout(presignedUrl, { timeoutMs: FETCH_TIMEOUT_MS }),
-    );
-    if (Result.isError(response) || !response.value.ok) {
-      return failed;
-    }
-    // Annotated so the unbounded-body read below stays visible to
-    // no-unbounded-response-body.
-    const storageResponse: Response = response.value;
-    const data = await Result.tryPromise(
-      async () => new Uint8Array(await storageResponse.arrayBuffer()),
-    );
-    if (Result.isError(data)) {
-      return failed;
-    }
-    return { type: "file", path: file.path, data: data.value };
-  };
-
   const archiveEntries = async function* () {
     for (const folderPath of folderPaths) {
       yield { path: `${folderPath}/` };
@@ -286,7 +313,13 @@ const downloadZipHandler = async function* ({
     for await (const result of streamWithConcurrency({
       items: files,
       limit: FETCH_CONCURRENCY,
-      operation: fetchFile,
+      operation: async (file) =>
+        await fetchArchiveFile({
+          file,
+          organizationId,
+          workspaceId,
+          signal: requestSignal,
+        }),
     })) {
       if (result.type === "error") {
         failedPaths.push(result.path);
@@ -353,8 +386,16 @@ const config = {
 
 const downloadZip = createSafeHandler(
   config,
-  async function* ({ safeDb, session, workspaceId, params, recordAuditEvent }) {
+  async function* ({
+    safeDb,
+    session,
+    workspaceId,
+    params,
+    recordAuditEvent,
+    request,
+  }) {
     return yield* downloadZipHandler({
+      signal: request.signal,
       safeDb,
       entityId: params.entityId,
       organizationId: session.activeOrganizationId,
