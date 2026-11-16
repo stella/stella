@@ -631,7 +631,6 @@
     "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-utils.ts": 1,
     "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/report-export-tracking.logic.ts": 1,
     "apps/web/src/routes/auth/-components/dev-quick-start-runtime.ts": 1,
-    "apps/web/src/routes/knowledge/-components/template-studio-inspector.tsx": 4,
     "apps/web/src/routes/knowledge/-components/template-studio-model.ts": 1,
     "apps/web/src/routes/onboarding/-components/steps/ai-step.tsx": 1,
     "packages/agent-engine/src/bun-docker/provider.ts": 1,
