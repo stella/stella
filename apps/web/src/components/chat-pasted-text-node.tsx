@@ -144,6 +144,7 @@ export const ChatPastedTextNode = (props: NodeViewProps) => {
           aria-label={t("chat.pastedText.expand")}
           className="inline-flex max-w-full cursor-pointer align-middle select-none"
           contentEditable={false}
+          tooltip={chipLabel}
           type="button"
         >
           <ReferenceChip

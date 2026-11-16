@@ -394,24 +394,4 @@ export const REPLAY_WRITER_REGISTRY = [
     line: 407,
     kind: "pending",
   },
-  {
-    file: "apps/api/src/lib/legal-search/sk-document-backfill.ts",
-    line: 1131,
-    kind: "pending",
-  },
-  {
-    file: "apps/api/src/lib/legal-search/sk-document-backfill.ts",
-    line: 1309,
-    kind: "pending",
-  },
-  {
-    file: "apps/api/src/lib/legal-search/sk-document-backfill.ts",
-    line: 1422,
-    kind: "pending",
-  },
-  {
-    file: "apps/api/src/lib/legal-search/sk-document-backfill.ts",
-    line: 1502,
-    kind: "pending",
-  },
 ] as const satisfies readonly ReplayWriterOwner[];

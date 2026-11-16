@@ -2,10 +2,10 @@
   "type": "parser",
   "name": "BR_TST",
   "key": "br-tst",
-  "parserVersion": 1,
+  "parserVersion": 2,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",
-    "reason": "the source's first parser; there are no stored rows to narrow"
+    "reason": "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts; the canonical AST and publisher metadata do not change."
   }
 }

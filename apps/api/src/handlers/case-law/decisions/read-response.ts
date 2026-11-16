@@ -6,6 +6,8 @@ import { extractionWarningsSchema } from "@stll/api-contract/case-law-extraction
 import { DECISION_JUDGE_ROLES } from "@stll/api-contract/case-law-judges";
 import { decisionReviewsSchema } from "@stll/api-contract/case-law-reviews";
 import {
+  DECISION_TEXT_INCOMPLETE_REASONS,
+  DECISION_TEXT_WITHHELD_REASON,
   TEXT_ABSENCE_REASONS,
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
@@ -72,6 +74,8 @@ const DECISION_READER_TEXT_BYTES = {
     | "citationsNextCursor"
     | "courtTier"
     | "documentAstSource"
+    | "textIncompleteReason"
+    | "textWithheldReason"
   >,
   number
 >;
@@ -169,6 +173,10 @@ const caseFileDocumentSchema = v.object({
 >);
 
 export const readDecisionSuccessResponseSchema = v.object({
+  textIncompleteReason: v.nullable(
+    v.picklist([...DECISION_TEXT_INCOMPLETE_REASONS]),
+  ),
+  textWithheldReason: v.nullable(v.enum(DECISION_TEXT_WITHHELD_REASON)),
   documentPending: v.boolean(),
   hasDocument: v.boolean(),
   documentReadFailed: v.boolean(),

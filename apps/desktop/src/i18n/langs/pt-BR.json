@@ -598,21 +598,21 @@
   },
   "dictation": {
     "title": "Ditado",
-    "description": "Segure {shortcut} e fale. O texto aparece no aplicativo que você está usando. A fala é transcrita neste computador e não é armazenada. Com a revisão por IA ativada, o texto transcrito, não o áudio, é enviado pela stella ao provedor de IA da sua organização para corrigir erros e formatação; a stella não o armazena.",
+    "description": "Segure {shortcut} e fale. O texto aparece no aplicativo que você está usando. A fala é transcrita neste computador e não é armazenada.",
     "descriptionCloud": "Mantenha {shortcut} pressionado e fale. O texto aparece no aplicativo que você está usando. A fala é transcrita pela stella AI e não é armazenada pela stella.",
     "cleanup": {
       "title": "Revisar com IA",
-      "description": "A fala continua sendo transcrita neste computador, e o áudio nunca sai dele. Com a revisão ativada, o texto transcrito é enviado pela stella ao provedor de IA da sua organização para corrigir erros de reconhecimento e aplicar a pontuação e a formatação ditadas, como “nova linha” ou “negrito”. A stella não o armazena. A revisão também recebe o tipo de aplicativo em que você dita, como e-mail ou chat, para que o texto combine com ele.",
-      "descriptionCloud": "Com a revisão ativada, a stella AI também corrige erros de reconhecimento no texto transcrito e aplica a pontuação e a formatação ditadas, como “nova linha” ou “negrito”. A revisão também recebe o tipo de aplicativo em que você dita, como e-mail ou chat, para que o texto combine com ele."
+      "description": "Corrige erros de reconhecimento e a formatação ditada, como “nova linha” ou “negrito”, e adapta o texto ao aplicativo, como e-mail. Só o texto, não o áudio, é enviado pela stella ao provedor de IA da sua organização; a stella não o armazena.",
+      "descriptionCloud": "A stella AI também corrige erros de reconhecimento e a formatação ditada, como “nova linha” ou “negrito”, e adapta o texto ao aplicativo, como e-mail."
     },
     "context": {
       "windowTitle": {
         "title": "Compartilhar o título da janela com a revisão por IA",
-        "description": "A revisão também recebe o título da janela em que você dita, para distinguir, por exemplo, um contrato de uma nota interna. Títulos de janela podem conter nomes de clientes ou de casos. O título é enviado pela stella ao provedor de IA da sua organização, e a stella não o armazena."
+        "description": "Ajuda a distinguir um contrato de um memorando. Títulos de janela podem conter nomes de clientes ou casos."
       },
       "textBeforeCursor": {
         "title": "Compartilhar o texto antes do cursor com a revisão por IA",
-        "description": "A revisão também recebe até {limit, number} caracteres antes do cursor, para que o ditado continue o texto que você está escrevendo. Assim, parte do documento em que você está é enviada pela stella ao provedor de IA da sua organização, e a stella não a armazena."
+        "description": "Até {limit, number} caracteres do documento em que você está, para que o ditado combine com o que você escreve."
       }
     },
     "keptInHistory": "Cada ditado também fica guardado no histórico da área de transferência deste computador.",
@@ -630,12 +630,15 @@
     },
     "language": {
       "title": "Idioma do ditado",
-      "description": "A fala é reconhecida neste idioma, e a revisão mantém o texto nele. Automático usa os idiomas da interface e dos teclados deste computador.",
+      "description": "Automático usa os idiomas de exibição e de teclado deste computador.",
       "automatic": "Automático",
       "automaticWith": "Automático ({languages})",
       "noResults": "Nenhum idioma encontrado"
     },
     "modelNeeded": "O modelo de voz é executado neste computador.",
+    "modelInstalled": "O modelo de fala ({size} MB) está neste computador.",
+    "removeModel": "Remover",
+    "removeFailed": "Não foi possível remover o modelo de fala. Tente novamente.",
     "download": "Baixar ({size} MB)",
     "downloading": "Baixando o modelo de voz: {percent}%",
     "downloadFailed": "Não foi possível baixar o modelo de voz.",
@@ -718,6 +721,11 @@
     "howDocumentsBody": "Escolha Abrir em um documento na stella. Ao salvar, a edição volta para a stella como uma nova versão.",
     "howClipboard": "Área de transferência",
     "howClipboardBody": "Copie como de costume e pressione {shortcut} para escolher entre o que você copiou.",
+    "howSigning": "Assinar PDFs",
+    "howSigningBodyMac": "Escolha “Assinar com o stella desktop” em um PDF na stella. Seu certificado fica nas suas chaves ou no seu cartão inteligente, e o PDF assinado volta para a stella como uma nova versão.",
+    "howSigningBodyPc": "Escolha “Assinar com o stella desktop” em um PDF na stella. Seu certificado fica no seu repositório de certificados ou no seu cartão inteligente, e o PDF assinado volta para a stella como uma nova versão.",
+    "howDictation": "Ditado",
+    "howDictationBody": "Segure um atalho e fale; o texto aparece no aplicativo que você está usando. Você pode ativá-lo em uma etapa seguinte.",
     "howActivity": "Atividade",
     "howActivityBody": "Veja para onde foi o seu dia e transforme-o em rascunhos de lançamentos de horas. Desativada até você iniciá-la.",
     "activityTitle": "Como funciona a Atividade",
@@ -827,9 +835,10 @@
       "storage": "Não foi possível ler nem salvar a conexão neste computador."
     },
     "callbackConnectedTitle": "O ChatGPT está conectado",
-    "callbackConnectedBody": "Você pode fechar esta guia e voltar para o stella.",
+    "callbackConnectedBody": "Volte para o stella. As solicitações de IA agora usam seu plano do ChatGPT.",
     "callbackNotConnectedTitle": "O ChatGPT não foi conectado",
     "callbackNotConnectedBody": "Volte para o stella para ver o que aconteceu e tente de novo.",
+    "callbackCloseTab": "Você pode fechar esta aba.",
     "claudeCode": {
       "title": "Claude Code",
       "description": "Use sua assinatura do Claude para os agentes locais no stella. O uso é descontado do seu plano do Claude, separado da sua assinatura do stella.",

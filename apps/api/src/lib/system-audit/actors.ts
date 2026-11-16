@@ -79,6 +79,7 @@ export const SYSTEM_RUN_ACTOR_COUNTS = {
     "resolvedReviews",
     "extractionVersions",
   ],
+  "system:case-law-citation-form-repair": ["attempted", "applied", "skipped"],
   "system:case-law-background-replay": [
     "attempted",
     "applied",

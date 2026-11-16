@@ -37,8 +37,10 @@ const config = {
     "the queue once the turn took it. `refused` with a `reason`: " +
     "`turn_not_running`, `no_run` (no run on a computer yet, or it ended), " +
     "`harness_cannot_steer`, `run_full`, or `queued_message_changed` (the " +
-    "queued message was edited, sent or removed since); queue the message " +
-    "as the next one. A turn outside the thread, or one you cannot see, is " +
+    "queued message was edited, sent or removed since, is queued to be " +
+    "sent anonymized, which a turn on a computer never is, or carries " +
+    "files, which a steer does not hand over); queue the message as the " +
+    "next one. A turn outside the thread, or one you cannot see, is " +
     "a 404.",
   permissions: CHAT_TURN_PERMISSIONS,
   accountAccess: ACCOUNT_ACCESS.sandbox,
@@ -75,7 +77,10 @@ const markQueuedSteer = async ({
   threadId,
   userId,
 }: QueuedSteerMark): Promise<
-  Result<"marked" | "changed" | "unqueued", SafeDbError>
+  Result<
+    "marked" | "changed" | "not-raw" | "has-files" | "unqueued",
+    SafeDbError
+  >
 > => {
   switch (source.type) {
     case CHAT_LOCAL_RUN_STEER_SOURCE.composer:
@@ -138,8 +143,20 @@ const steerChatTurn = createSafeRootHandler(
         userId: user.id,
       }),
     );
-    if (marked === "changed") {
-      return answer({ type: "refused", reason: "queued_message_changed" });
+    switch (marked) {
+      case "marked":
+      case "unqueued":
+        break;
+      // A message queued anonymized, or one with files, is refused like one
+      // changed since: the turn is never handed its text raw, nor its text
+      // without its files; the member's client sends it next instead.
+      case "changed":
+      case "not-raw":
+      case "has-files":
+        return answer({ type: "refused", reason: "queued_message_changed" });
+      default:
+        marked satisfies never;
+        return panic("Unhandled queued steer mark");
     }
     const steered = await getDesktopRunnerControl().control.steerChatTurn({
       owner: { userId: user.id, organizationId },

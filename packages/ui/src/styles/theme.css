@@ -154,6 +154,28 @@
   --animate-toast-countdown: toast-countdown 1s linear forwards;
   /* A list item settling into place; callers stagger it by index. */
   --animate-rise: rise 240ms ease-out both;
+  /* OutcomeScreen: the line between the two tiles draws once, then the
+     status badge settles onto it. Transform and opacity only. */
+  --animate-outcome-connector: outcome-connector 200ms ease-out both;
+  --animate-outcome-badge: outcome-badge 200ms ease-out 120ms both;
+  @keyframes outcome-connector {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(1);
+    }
+  }
+  @keyframes outcome-badge {
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
   /* StatusMark: the running arc turns (paused, never reset, when it stops);
      under reduced motion a running ring breathes instead. Its state
      changes are transitions, owned by the component. */

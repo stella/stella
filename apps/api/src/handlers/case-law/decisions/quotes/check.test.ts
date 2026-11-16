@@ -25,6 +25,8 @@ const readOf = () =>
     documentPending: false,
     documentReadFailed: false,
     documentUnavailable: false,
+    textWithheldReason: null,
+    textIncompleteReason: null,
     hasDocument: true,
     resolution: { type: DECISION_READ_RESOLUTION.DIRECT },
     caseNumber: "1 Test 1/2026",

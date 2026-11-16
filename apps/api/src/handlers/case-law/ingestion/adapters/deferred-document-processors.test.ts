@@ -5,7 +5,10 @@ import {
   listAdapters,
   listDeferredDocumentDrains,
 } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
-import { DEFERRED_DOCUMENT_PROCESSORS } from "@/api/handlers/case-law/ingestion/adapters/deferred-document-processors";
+import {
+  DEFERRED_DOCUMENT_PROCESSORS,
+  DEFERRED_DOCUMENT_READERS,
+} from "@/api/handlers/case-law/ingestion/adapters/deferred-document-processors";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   DEFERRED_DOCUMENT_ADAPTER_KEYS,
@@ -85,6 +88,17 @@ describe("deferred-document adapters", () => {
     } of listDeferredDocumentDrains()) {
       expect(registered.has(adapterKey)).toBe(true);
       expect(processDocument).toBe(DEFERRED_DOCUMENT_PROCESSORS[adapterKey]);
+    }
+  });
+
+  test("every deferred key has a transient reader", () => {
+    const registered = new Set(listAdapters().map(({ key }) => key));
+    expect(Object.keys(DEFERRED_DOCUMENT_READERS).toSorted()).toEqual(
+      [...DEFERRED_DOCUMENT_ADAPTER_KEYS].toSorted(),
+    );
+    for (const adapterKey of DEFERRED_DOCUMENT_ADAPTER_KEYS) {
+      expect(registered.has(adapterKey)).toBe(true);
+      expect(typeof DEFERRED_DOCUMENT_READERS[adapterKey]).toBe("function");
     }
   });
 });

@@ -259,10 +259,11 @@ export const DESKTOP_RUNNER_SERVER_MESSAGE = {
 
 /**
  * How a folder restore ended on the computer: done, no checkpoint for the
- * run, a newer checkpoint not undone yet, a run using the folder, or a
- * failure that left the folder as it was before the restore. A restore asked
- * again after it was done answers `restored` again without touching the
- * folder.
+ * run, a run using the folder, or a failure that left the folder as it was
+ * before the restore. A restore asked again after it was done, or of a
+ * checkpoint an earlier one's restore undid, answers `restored` without
+ * touching the folder. `not_newest` (a newer checkpoint not undone yet) comes
+ * only from a desktop from before any kept checkpoint could be restored.
  */
 export const DESKTOP_RUNNER_FOLDER_RESTORE_REFUSALS = [
   "no_checkpoint",

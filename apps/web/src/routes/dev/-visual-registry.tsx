@@ -4,6 +4,8 @@ import type { ComponentType, ReactElement, ReactNode } from "react";
 import { panic } from "better-result";
 import * as v from "valibot";
 
+import { cn } from "@stll/ui/utils";
+
 import { routeSearchSchema } from "@/route-search-params";
 
 import { visualRegistry } from "./-visual-metadata";
@@ -315,7 +317,11 @@ type FixtureSectionProps = {
 
 export const FixtureSection = ({ visual, children }: FixtureSectionProps) => (
   <section
-    className="bg-background flex min-h-0 flex-1 flex-col"
+    className={cn(
+      "bg-background flex flex-1 flex-col",
+      // Plain fixtures grow in the page; pane layouts own bounded scroll areas.
+      visualRegistry[visual].layout !== "plain" && "min-h-0",
+    )}
     data-playground-section={`fixture:${visual}`}
   >
     <header className="text-muted-foreground shrink-0 px-4 py-2 text-xs">

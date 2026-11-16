@@ -35,6 +35,8 @@ const decision = {
   documentPending: false,
   documentReadFailed: false,
   documentUnavailable: false,
+  textIncompleteReason: null,
+  textWithheldReason: null,
   documentUrl: null,
   ecli: null,
   fulltext:

@@ -17,6 +17,7 @@ import {
   CASE_LAW_DECISION_VIEWS,
   caseLawDecisionViewGrantStatement,
   CENSUS_COLUMN_GRANTS_BY_RELATION,
+  CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION,
   PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
   publicLawColumnPairs,
   ROLLOUT_CASE_LAW_SOURCE_COLUMNS,
@@ -347,9 +348,12 @@ const CORPUS_PROJECTION_REVISION_TABLE_SQL = quoteSqlIdentifier(
  */
 const PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE: ReadonlySet<string> =
   new Set(
-    publicLawColumnPairs(CENSUS_COLUMN_GRANTS_BY_RELATION).map(
-      ({ relation, column }) => `${relation}.${column}`,
-    ),
+    [
+      CENSUS_COLUMN_GRANTS_BY_RELATION,
+      CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION,
+    ]
+      .flatMap(publicLawColumnPairs)
+      .map(({ relation, column }) => `${relation}.${column}`),
   );
 
 const decisionColumnNames = new Set(

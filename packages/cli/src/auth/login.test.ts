@@ -192,9 +192,25 @@ const driveCallback =
     );
   };
 
-const pageHeading = (page: BrowserPage | undefined): string =>
-  /<h1>(?<heading>[^<]*)<\/h1>/u.exec(page?.html ?? "")?.groups?.["heading"] ??
-  "";
+/**
+ * The heading of the page's outcome region when it shows `tone`, read as a
+ * browser parses it; empty when the page shows another outcome.
+ */
+const outcomeHeading = async (
+  page: BrowserPage | undefined,
+  tone: "success" | "error",
+) => {
+  let heading = "";
+  await new HTMLRewriter()
+    .on(`[data-slot=outcome][data-tone=${tone}] > h1`, {
+      text: (chunk) => {
+        heading += chunk.text;
+      },
+    })
+    .transform(new Response(page?.html ?? ""))
+    .text();
+  return heading;
+};
 
 /** A minimal fake process: captures stdout, optionally pre-feeds a stdin line. */
 const makeProcess = (stdinLine?: string) => {
@@ -641,7 +657,9 @@ describe("login orchestration", () => {
         expect(Result.isOk(result)).toBe(true);
         const page = await browserPages.at(0);
         expect(page?.status).toBe(200);
-        expect(pageHeading(page)).toBe("Signed in to stella");
+        expect(await outcomeHeading(page, "success")).toBe(
+          "Signed in to stella",
+        );
         expect(browserAnsweredBeforeExchange).toBe(false);
         expect(await credentialsWhenShown).toBe(1);
       } finally {
@@ -669,7 +687,7 @@ describe("login orchestration", () => {
         expect(Result.isError(result)).toBe(true);
         const page = await browserPages.at(0);
         expect(page?.status).toBe(500);
-        expect(pageHeading(page)).toBe("Sign-in failed");
+        expect(await outcomeHeading(page, "error")).toBe("Sign-in failed");
         expect(page?.html).toContain(
           "stella CLI could not finish signing in. Return to your terminal for details, then run stella auth login to try again.",
         );
@@ -697,7 +715,7 @@ describe("login orchestration", () => {
         expect(provider.counts.token).toBe(1);
         const page = await browserPages.at(0);
         expect(page?.status).toBe(500);
-        expect(pageHeading(page)).toBe("Sign-in not saved");
+        expect(await outcomeHeading(page, "error")).toBe("Sign-in not saved");
         expect(page?.html).toContain(
           "stella CLI could not save your sign-in on this computer.",
         );

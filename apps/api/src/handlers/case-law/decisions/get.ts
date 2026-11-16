@@ -28,6 +28,7 @@ import {
 } from "@/api/handlers/case-law/decisions/citations";
 import { DECISION_NOT_FOUND } from "@/api/handlers/case-law/decisions/public-subject";
 import { readServedDecisionAst } from "@/api/handlers/case-law/decisions/served-ast";
+import { decisionTextCompletionReasons } from "@/api/handlers/case-law/decisions/text-completion";
 import { DECISION_JUDGE_ROLE_RANK } from "@/api/handlers/case-law/judges/consts";
 import { judgePortraitPath } from "@/api/handlers/case-law/judges/portrait";
 import { status } from "@/api/http/status";
@@ -440,6 +441,18 @@ const decisionPayloadReaders = (
     }),
 });
 
+type ReadOwnReviewsOptions = Omit<
+  Parameters<typeof readDecisionReviewsWithin>[0],
+  "decisionIds"
+> & { decisionId: SafeId<"caseLawDecision"> };
+
+/** The procedural reviews of the decision being read, and of it alone. */
+const readOwnReviews = async ({ decisionId, ...read }: ReadOwnReviewsOptions) =>
+  requireDecisionReviews(
+    await readDecisionReviewsWithin({ ...read, decisionIds: [decisionId] }),
+    decisionId,
+  );
+
 export const readDecisionHandler = definePublicLawSharedQuery(
   PUBLIC_LAW_SHARED_QUERY.caseLawDecisionRead,
   async ({
@@ -509,11 +522,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
             countries: subject.countries,
           }),
       listCaseFileDocuments({ tx, decision, cursor: caseFileCursor }),
-      readDecisionReviewsWithin({
-        tx,
-        decisionIds: [decisionId],
-        countries: subject.countries,
-      }),
+      readOwnReviews({ tx, decisionId, countries: subject.countries }),
     ]);
 
     if (caseFile === false) {
@@ -618,6 +627,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
     });
 
     return {
+      ...decisionTextCompletionReasons({ type: "eligible" }),
       documentPending,
       hasDocument: decision.hasDocument,
       documentReadFailed,
@@ -641,7 +651,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
       decisionDate: decision.decisionDate,
       decisionType: decision.decisionType,
       citationCount: decision.citationCount,
-      appealReviews: requireDecisionReviews(reviews, decisionId),
+      appealReviews: reviews,
       documentAst,
       extractionWarnings: decision.extractionWarnings,
       sections,

@@ -1582,6 +1582,33 @@
               "citationText": {
                 "type": ["string", "null"]
               },
+              "textIncompleteReason": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "absent_ast",
+                      "gate_failed",
+                      "text_changed",
+                      "missing_text"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "evidenceIncompleteReason": {
+                "anyOf": [
+                  {
+                    "enum": ["missing_privileges", "missing_evidence"],
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
               "textWithheldReason": {
                 "anyOf": [
                   {
@@ -1615,6 +1642,26 @@
                   }
                 ]
               },
+              "polarityEvidence": {
+                "type": ["object", "null"],
+                "additionalProperties": true
+              },
+              "citedPart": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "majority",
+                      "dissent",
+                      "concurrence",
+                      "not-stated"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
               "decision": {
                 "type": ["object", "null"],
                 "additionalProperties": true
@@ -1635,9 +1682,13 @@
             "required": [
               "citationId",
               "citationText",
+              "textIncompleteReason",
+              "evidenceIncompleteReason",
               "textWithheldReason",
               "polarity",
               "doctrine",
+              "polarityEvidence",
+              "citedPart",
               "decision",
               "extractionWarnings",
               "passage"
