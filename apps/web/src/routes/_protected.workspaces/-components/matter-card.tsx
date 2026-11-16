@@ -27,6 +27,7 @@ import Tooltip from "@/components/tooltip";
 import { MatterContextMenu } from "@/components/workspaces/matter-context-menu";
 import { TeamAvatars } from "@/features/workspaces/team-avatars";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { draggable } from "@/lib/drag-and-drop/element-registration";
 import { useMatterNumberingEnabled } from "@/lib/organization/use-matter-numbering";
 import { queryView } from "@/lib/query-view.logic";
@@ -62,6 +63,7 @@ export const MatterCard = ({
   hideClientName,
 }: MatterCardProps) => {
   const t = useTranslations();
+  const user = useAuthenticatedUser();
   const showMatterNumber = useMatterNumberingEnabled();
   const cardRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -71,7 +73,10 @@ export const MatterCard = ({
   const [previewOpen, setPreviewOpen] = useState(false);
 
   const previewQuery = useQuery({
-    ...overviewOptions(workspace.id),
+    ...overviewOptions({
+      workspaceId: workspace.id,
+      organizationId: user.activeOrganizationId,
+    }),
     enabled: matterCardPreviewEnabled(workspace.status, previewEnabled),
   });
   const previewView = queryView(previewQuery);
