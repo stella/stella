@@ -141,6 +141,12 @@ const SCENARIO_GENERATIONS = [
   rows: number;
 }[];
 
+/** The quiet generation an indexed case-law search's candidates are held in. */
+export const CASE_LAW_SEARCH_GENERATION = "case_law_v5";
+/** One scan round's candidates, as the corpus index returns them. */
+export const CASE_LAW_SEARCH_CANDIDATE_COUNT = 300;
+const CASE_LAW_SEARCH_SOURCE_ID = "01990000-00a5-7000-8000-000000000001";
+
 export const LEGISLATION_GENERATION = "legislation_v2";
 const LEGISLATION_INDEX_ID = "legislation_v2_cze";
 const LEGISLATION_WORKS = 20_000;
@@ -738,6 +744,25 @@ export const seedCorpusReadBudgets = async (database: GatedTestDb) =>
         `01990000-00a2-7000-8000-${(work * LEGISLATION_VERSIONS_PER_WORK).toString(16).padStart(12, "0")}`,
       ),
     );
+    // One scan round of an indexed case-law search: published decisions the
+    // quiet generation holds an applied copy of, spread over its states as a
+    // common term's hits are.
+    await database.execute(sql`INSERT INTO case_law_sources (id, adapter_key, name, enabled)
+      VALUES (${CASE_LAW_SEARCH_SOURCE_ID}::uuid, 'query-perf-search', 'Search candidate fixture', false)`);
+    const searchStates = Array.from(
+      { length: CASE_LAW_SEARCH_CANDIDATE_COUNT },
+      (_, index) => ((index * 197) % CORPUS_SCENARIO_ROWS) + 1,
+    );
+    await database.execute(sql`INSERT INTO case_law_decisions
+      (id, source_id, case_number, country, court, language)
+      SELECT ${sql.raw(uuidOf(`8${generationPrefix(CASE_LAW_SEARCH_GENERATION).slice(1)}`, "i"))},
+        ${CASE_LAW_SEARCH_SOURCE_ID}::uuid, 'search-' || i::text, 'CZE', 'Nejvyšší soud', 'cs'
+      FROM unnest(${sql.raw(`ARRAY[${searchStates.join(",")}]`)}::integer[]) AS i`);
+    const caseLawSearchCandidateIds = searchStates.map((state) =>
+      toSafeId<"caseLawDecision">(
+        `01990000-8${generationPrefix(CASE_LAW_SEARCH_GENERATION).slice(1)}-7000-8000-${state.toString(16).padStart(12, "0")}`,
+      ),
+    );
     const quoteSourceId = toSafeId<"caseLawSource">(
       "01990000-00a3-7000-8000-000000000001",
     );
@@ -761,6 +786,7 @@ export const seedCorpusReadBudgets = async (database: GatedTestDb) =>
     });
     return {
       candidateIds,
+      caseLawSearchCandidateIds,
       completionSourceId: COMPLETION_SOURCE_ID,
       quoteDecisionId,
       replaySourceId: REPLAY_SOURCE_ID,

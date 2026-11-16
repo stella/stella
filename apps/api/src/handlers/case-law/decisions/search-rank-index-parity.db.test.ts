@@ -1,6 +1,7 @@
 import type { PGlite } from "@electric-sql/pglite";
 import { panic } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
+import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import type { Transaction } from "@/api/db/root";
@@ -18,12 +19,13 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import type { ServableCaseLawCopy as ServableCopy } from "@/api/lib/legal-search/case-law-indexed-candidates";
 import { CITATION_AUTHORITY_BUCKET_MAX_ERROR } from "@/api/lib/legal-search/case-law-ranking-signals";
+import type { CorpusIndexHit } from "@/api/lib/legal-search/corpus-index-client";
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
-import type { ScannedProjection } from "@/api/lib/legal-search/corpus-index-pagination";
 import { buildCaseLawProjectionDocuments } from "@/api/lib/legal-search/corpus-index-projection-builder";
 import { readCaseLawRankingSignals } from "@/api/lib/legal-search/corpus-index-projection-ranking-signals";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
@@ -107,8 +109,25 @@ const FIXTURES: readonly Fixture[] = [
 
 let client: PGlite;
 let caseLawDb: CaseLawPublicReadDb;
+/** Transactions the suite's reader opened. */
+let reads = 0;
 const ids = FIXTURES.map(() => createSafeId<"caseLawDecision">());
-const projections = new Map<string, ScannedProjection>();
+/** The copy the engine holds for each decision, and that copy's passage. */
+const projections = new Map<
+  string,
+  { revision: string; fields: CorpusIndexHit }
+>();
+
+/** As the scan answers it: the passage of each copy Postgres applied. */
+const appliedProjections = (
+  appliedById: ReadonlyMap<string, { revision: string }>,
+): ReadonlyMap<string, CorpusIndexHit> =>
+  new Map(
+    [...appliedById].flatMap(([id, { revision }]) => {
+      const held = projections.get(id);
+      return held?.revision === revision ? [[id, held.fields] as const] : [];
+    }),
+  );
 
 // timeout: builds the PGlite schema, then projects every fixture decision.
 beforeAll(async () => {
@@ -116,13 +135,15 @@ beforeAll(async () => {
   const db = drizzle({ client });
   const readDb = async <T>(
     fn: (tx: CaseLawPublicReadTransaction) => Promise<T>,
-  ) =>
-    await withPublicLawReaderRole(db, async (roleTx) => {
+  ) => {
+    reads += 1;
+    return await withPublicLawReaderRole(db, async (roleTx) => {
       // SAFETY: the role transaction supplies the select surface the reads use.
       // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test handle stands in for a transaction
       const tx = roleTx as unknown as CaseLawPublicReadTransaction;
       return await fn(tx);
     });
+  };
   // SAFETY: brand-only wrapper; the reads never inspect the marker.
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the branded handle carries no behaviour
   caseLawDb = readDb as unknown as CaseLawPublicReadDb;
@@ -249,7 +270,7 @@ const rank = async (
     caseLawDb,
     courtWeights: courtWeightMapFromSeed(),
     generation: GENERATION,
-    indexedProjections: indexed ? projections : undefined,
+    indexed: indexed ? { appliedProjections, servable: new Map() } : undefined,
   });
 
 test("the index ranks a candidate set as the database does, within the bucket bound", async () => {
@@ -259,7 +280,7 @@ test("the index ranks a candidate set as the database does, within the bucket bo
     const candidates = ids.map((id) => ({ id, score: next() }));
     // db-await-in-loop: forty independent trials, each one ranking twice.
     const database = await rank(candidates, false);
-    // db-await-in-loop: the indexed ranking reads no database at all.
+    // db-await-in-loop: forty independent trials; one keyed read each.
     const indexed = await rank(candidates, true);
 
     // The same decisions stand, fold the same way, may recur the same way,
@@ -320,5 +341,101 @@ test("a hit without a well-formed signal set is excluded, not ranked on a guess"
     expect(indexed.ranked.map(({ id }) => id)).toEqual([second]);
   } finally {
     projections.set(first, original);
+  }
+});
+
+test("an indexed ranking stands only on the copy Postgres records as applied", async () => {
+  const db = drizzle({ client });
+  const [applied, stale, erased, unapplied] = ids;
+  if (
+    applied === undefined ||
+    stale === undefined ||
+    erased === undefined ||
+    unapplied === undefined
+  ) {
+    return panic("Fixture ids missing");
+  }
+  const staleOriginal = projections.get(stale) ?? panic("No projection");
+  const [unappliedState] = await db
+    .select()
+    .from(corpusIndexProjectionStates)
+    .where(eq(corpusIndexProjectionStates.entityId, unapplied));
+  if (unappliedState === undefined) {
+    return panic("Fixture state missing");
+  }
+  // The engine still answers with a copy Postgres superseded, carrying the
+  // signals that copy was written with; Postgres queued an erasure for another
+  // decision; a third was never applied at all. The index holds a copy of each.
+  projections.set(stale, {
+    revision: createSafeId<"corpusIndexProjectionIntent">(),
+    fields: { ...staleOriginal.fields, citation_authority_bucket: 0 },
+  });
+  await db
+    .update(corpusIndexProjectionStates)
+    .set({
+      desiredAction: "erase",
+      desiredEpoch: 2n,
+      desiredFingerprint: null,
+      desiredIndexId: null,
+    })
+    .where(eq(corpusIndexProjectionStates.entityId, erased));
+  await db
+    .delete(corpusIndexProjectionStates)
+    .where(eq(corpusIndexProjectionStates.entityId, unapplied));
+  try {
+    const candidates = [applied, stale, erased, unapplied].map((id, at) => ({
+      id,
+      score: 1 - at / 10,
+    }));
+    const servable = new Map<string, ServableCopy | null>();
+    const indexed = await rehydrateCaseLawCandidates({
+      body: { country: "CZE", query: "index parity" },
+      candidates,
+      caseLawDb,
+      courtWeights: courtWeightMapFromSeed(),
+      generation: GENERATION,
+      indexed: { appliedProjections, servable },
+    });
+    const database = await rank(candidates, false);
+    expect(indexed.ranked.map(({ id }) => id)).toEqual([applied]);
+    expect([...indexed.revisionById.keys()]).toEqual([applied]);
+    // The wide read refuses the erased and the unapplied decision too; it
+    // serves the superseded one from its applied copy, which the scan has not
+    // reached yet.
+    expect(new Set(database.ranked.map(({ id }) => id))).toEqual(
+      new Set([applied, stale]),
+    );
+    expect([...servable.keys()].toSorted()).toEqual(
+      [applied, stale, erased, unapplied].toSorted(),
+    );
+    // A later round reaches the applied copy: the decision ranks on it, and
+    // ids already resolved are not read again.
+    projections.set(stale, staleOriginal);
+    const readsBefore = reads;
+    const later = await rehydrateCaseLawCandidates({
+      body: { country: "CZE", query: "index parity" },
+      candidates,
+      caseLawDb,
+      courtWeights: courtWeightMapFromSeed(),
+      generation: GENERATION,
+      indexed: { appliedProjections, servable },
+    });
+    expect(reads).toBe(readsBefore);
+    expect(new Set(later.ranked.map(({ id }) => id))).toEqual(
+      new Set([applied, stale]),
+    );
+    expect(later.revisionById.get(stale)).toBe(staleOriginal.revision);
+  } finally {
+    projections.set(stale, staleOriginal);
+    await db
+      .update(corpusIndexProjectionStates)
+      .set({
+        desiredAction: "upsert",
+        desiredEpoch: 1n,
+        desiredFingerprint: FINGERPRINT,
+        desiredIndexId: corpusIndexId(GENERATION, "CZE"),
+      })
+      .where(eq(corpusIndexProjectionStates.entityId, erased));
+    await db.insert(corpusIndexProjectionStates).values(unappliedState);
   }
 });

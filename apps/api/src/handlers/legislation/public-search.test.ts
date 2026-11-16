@@ -108,7 +108,7 @@ const runTimedSearch = async (
           })),
           {
             excludedGroups: new Set(),
-            scannedProjections: () => new Map(),
+            appliedProjections: () => new Map(),
             selectAppliedCandidates: () => {
               clock += 13;
               rankings += 1;
@@ -133,7 +133,7 @@ const runTimedSearch = async (
           })),
           {
             excludedGroups: new Set(),
-            scannedProjections: () => new Map(),
+            appliedProjections: () => new Map(),
             selectAppliedCandidates: () => {
               clock += 13;
               rankings += 1;

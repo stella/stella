@@ -189,6 +189,7 @@ import {
 import {
   CASE_LAW_RANKING_SCAN_FIELDS,
   indexedCaseLawCandidateRow,
+  type ServableCaseLawCopy,
 } from "@/api/lib/legal-search/case-law-indexed-candidates";
 import {
   canonicalCorpusJson,
@@ -199,7 +200,10 @@ import {
   type CorpusHitDispositionCounter,
   createCorpusHitDispositionCounter,
 } from "@/api/lib/legal-search/corpus-hit-telemetry";
-import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
+import {
+  type CorpusIndexHit,
+  getCorpusIndexClient,
+} from "@/api/lib/legal-search/corpus-index-client";
 import { DECISION_TIMESTAMP_FIELD } from "@/api/lib/legal-search/corpus-index-config";
 import type { ServingCorpusIndexGeneration } from "@/api/lib/legal-search/corpus-index-generation-store";
 import {
@@ -218,7 +222,6 @@ import type {
   CorpusCandidateRankingInput,
   CorpusIndexScanReport,
   CorpusIndexScanTransport,
-  ScannedProjection,
 } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
   emptyCorpusIndexScan,
@@ -232,6 +235,7 @@ import {
   requireCaseLawDecisionCountField,
 } from "@/api/lib/legal-search/corpus-index-read-contract";
 import {
+  type CorpusAppliedProjection,
   type CorpusProjectionRevision,
   corpusRevisionClause,
 } from "@/api/lib/legal-search/corpus-index-revision-clause";
@@ -1982,30 +1986,175 @@ type CandidateDecisionRow = Awaited<
   ReturnType<typeof candidateDecisionRowsQuery>
 >["rows"][number];
 
+type ServableCandidateRevisionsOptions = {
+  body: CaseLawNonProvisionRowFilterBody;
+  generation: string;
+  ids: readonly SafeId<"caseLawDecision">[];
+};
+
 /**
- * The candidate rows of a generation that stores the ranking signals, read
- * off the scanned passages. The row shape is the database read's, so the
- * blend, the fold and the cursor groups run unchanged on either source; a
- * hit without a well-formed signal set is excluded like a row the database
- * did not return.
+ * Which candidates of a generation that stores the ranking signals the page
+ * read would serve, and the copy it would serve each from: the page read's own
+ * admission (`caseLawNonProvisionRowFilters` under `indexed`) and its applied
+ * revision, and nothing else. The blend reads its signals off the hits of that
+ * copy, so this is the database half of every indexed ranking.
+ *
+ * Keyed and bounded: one statement per scan round for the ids that round
+ * reached first, each id probing the published decision, its source and its
+ * projection state by primary key. A requested id the read does not return is
+ * reported excluded.
  */
-const indexedCandidateDecisionRows = (
-  projections: ReadonlyMap<string, ScannedProjection>,
-  ids: readonly string[],
-  generation: string,
-) =>
-  partitionReturnedCorpusRecords<CandidateDecisionRow>(
-    ids.map((id) => {
-      const projection = projections.get(id);
-      return {
-        id,
-        row:
-          projection === undefined
-            ? null
-            : indexedCaseLawCandidateRow(id, projection, generation),
-      };
-    }),
+export const servableCandidateRevisionsStatement = (
+  tx: CaseLawPublicReadTransaction,
+  { body, generation, ids }: ServableCandidateRevisionsOptions,
+) => {
+  const requestedIds = sql`(SELECT unnest(ARRAY[${sql.join(
+    ids.map((id) => sql`${id}::uuid`),
+    sql`, `,
+  )}]::uuid[]) AS id) AS requested`;
+  const servableRows = tx
+    .select({
+      id: publishedCaseLawDecisions.id,
+      appliedRevision:
+        caseLawCorpusAppliedRevision(generation).as("applied_revision"),
+      appliedGeneration:
+        caseLawCorpusServingGeneration(generation).as("applied_generation"),
+    })
+    .from(publishedCaseLawDecisions)
+    .innerJoin(
+      caseLawSources,
+      eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
+    )
+    .where(
+      and(
+        inArray(publishedCaseLawDecisions.id, [...ids]),
+        ...caseLawNonProvisionRowFilters(body, generation, "indexed"),
+      ),
+    )
+    .limit(ids.length)
+    .as("servable_candidates");
+  return tx
+    .select({ id: sql<string>`requested.id`, row: getColumns(servableRows) })
+    .from(requestedIds)
+    .leftJoin(servableRows, sql`requested.id = ${servableRows.id}`)
+    .limit(ids.length);
+};
+
+const servableCandidateRevisionsQuery = async (
+  tx: CaseLawPublicReadTransaction,
+  options: ServableCandidateRevisionsOptions,
+) => {
+  const records = await servableCandidateRevisionsStatement(tx, options);
+  return partitionReturnedCorpusRecords<ServableCaseLawCopy>(
+    records.map(({ id, row }) => ({
+      id,
+      row:
+        row === null || row.appliedRevision === null
+          ? null
+          : {
+              id: row.id,
+              appliedRevision: row.appliedRevision,
+              appliedGeneration: row.appliedGeneration,
+            },
+    })),
   );
+};
+
+/**
+ * What a request has learned about the copies PostgreSQL serves: the copy for
+ * each id the keyed read admitted, null for an id it did not. Read once per
+ * id, so a scan's later rounds probe only the ids they reach first.
+ */
+type ServableCaseLawCopies = Map<string, ServableCaseLawCopy | null>;
+
+/** The scan's accessor for the hits of the applied copies, and nothing else. */
+type AppliedCorpusProjections = (
+  appliedById: ReadonlyMap<string, CorpusAppliedProjection>,
+) => ReadonlyMap<string, CorpusIndexHit>;
+
+type IndexedCandidateRowsOptions = {
+  appliedProjections: AppliedCorpusProjections;
+  body: CaseLawNonProvisionRowFilterBody;
+  caseLawDb: CaseLawPublicReadDb;
+  candidates: readonly { id: string }[];
+  generation: string;
+  hitDispositions: CorpusHitDispositionCounter;
+  hydrated: HydratedDecisionRows;
+  servable: ServableCaseLawCopies;
+  timeDbRead: TimeDbRead;
+};
+
+/**
+ * The candidate rows of a generation that stores the ranking signals: the
+ * copy PostgreSQL serves each candidate from (`servableCandidateRevisionsQuery`),
+ * and the signals read off that copy's best scanned passage. The row shape is
+ * the database read's, so the blend, the fold and the cursor groups run
+ * unchanged on either source.
+ *
+ * A candidate PostgreSQL does not serve is recorded null and never ranks. A
+ * served candidate whose applied copy the scan has not reached yet stays
+ * unrecorded: only a stale copy of it matched so far, and a later round may
+ * reach the applied one. A hit without a well-formed signal set is excluded
+ * like a row the database did not return.
+ */
+const readIndexedCandidateRows = async ({
+  appliedProjections,
+  body,
+  caseLawDb,
+  candidates,
+  generation,
+  hitDispositions,
+  hydrated,
+  servable,
+  timeDbRead,
+}: IndexedCandidateRowsOptions): Promise<void> => {
+  const unread = candidates
+    .filter((candidate) => !servable.has(candidate.id))
+    .map((candidate) => toSafeId<"caseLawDecision">(candidate.id));
+  if (unread.length > 0) {
+    const read = await timeDbRead(
+      async () =>
+        await caseLawDb(
+          async (tx) =>
+            await servableCandidateRevisionsQuery(tx, {
+              body,
+              generation,
+              ids: unread,
+            }),
+        ),
+    );
+    recordCorpusRehydrationDispositions(read.dispositions, hitDispositions);
+    for (const id of unread) {
+      servable.set(id, null);
+    }
+    for (const copy of read.rows) {
+      servable.set(String(copy.id), copy);
+    }
+  }
+  const copies = candidates.flatMap((candidate) => {
+    const copy = servable.get(candidate.id);
+    if (copy === null) {
+      hydrated.set(candidate.id, null);
+    }
+    return copy === null || copy === undefined || hydrated.has(candidate.id)
+      ? []
+      : [copy];
+  });
+  const fieldsById = appliedProjections(caseLawAppliedProjections(copies));
+  const malformed: { id: string; type: "excluded" }[] = [];
+  for (const copy of copies) {
+    const fields = fieldsById.get(copy.id);
+    if (fields === undefined) {
+      continue;
+    }
+    const row = indexedCaseLawCandidateRow(copy, fields);
+    if (row === null) {
+      malformed.push({ id: copy.id, type: "excluded" });
+    }
+    hydrated.set(copy.id, row);
+  }
+  recordCorpusRehydrationDispositions(malformed, hitDispositions);
+};
 
 /**
  * Everything a result card shows, read only for the ids the page emits. The
@@ -2186,11 +2335,18 @@ type RehydrateCaseLawCandidatesOptions = CorpusCandidateRankingInput & {
   /** The request's record of rows read so far; only ids absent from it are read. */
   hydrated?: HydratedDecisionRows | undefined;
   /**
-   * The scanned passages of a generation that stores the ranking signals on
-   * every passage: the candidate rows are read off them instead of from
-   * PostgreSQL (`indexedCaseLawCandidateRow`). Absent: the database read.
+   * A generation that stores the ranking signals on every passage: the
+   * candidate rows are the keyed read of the copies PostgreSQL serves plus
+   * the signals on those copies' scanned passages (`readIndexedCandidateRows`)
+   * instead of the wide database read. Absent: the database read.
    */
-  indexedProjections?: ReadonlyMap<string, ScannedProjection> | undefined;
+  indexed?:
+    | {
+        appliedProjections: AppliedCorpusProjections;
+        /** The request's record of servable copies, shared by its scans. */
+        servable: ServableCaseLawCopies;
+      }
+    | undefined;
   timeDbRead?: TimeDbRead | undefined;
   hitDispositions?: CorpusHitDispositionCounter | undefined;
   excludedGroups?: ReadonlySet<string> | undefined;
@@ -2295,7 +2451,7 @@ export const rehydrateCaseLawCandidates = async (
  * dropped because the serving index has not applied it.
  */
 export const rehydrateNamedCaseLawDecisions = async (
-  options: RehydrateCaseLawCandidatesOptions,
+  options: Omit<RehydrateCaseLawCandidatesOptions, "indexed">,
 ) => await rehydrateAdmitting("published", options);
 
 const rehydrateAdmitting = async (
@@ -2308,42 +2464,52 @@ const rehydrateAdmitting = async (
     courtWeights,
     generation,
     hydrated = new Map(),
-    indexedProjections,
+    indexed,
     timeDbRead = untimedDbRead,
     hitDispositions = createCorpusHitDispositionCounter(),
     excludedGroups = new Set(),
   }: RehydrateCaseLawCandidatesOptions,
 ) => {
-  const ids = candidates
-    .filter((candidate) => !hydrated.has(candidate.id))
-    .map((candidate) => toSafeId<"caseLawDecision">(candidate.id));
-  const readCandidateRows = async () => {
-    if (ids.length === 0) {
-      return { rows: [], dispositions: [] };
+  if (indexed === undefined) {
+    const ids = candidates
+      .filter((candidate) => !hydrated.has(candidate.id))
+      .map((candidate) => toSafeId<"caseLawDecision">(candidate.id));
+    const read =
+      ids.length === 0
+        ? { rows: [], dispositions: [] }
+        : await timeDbRead(
+            async () =>
+              await caseLawDb(
+                async (tx) =>
+                  await candidateDecisionRowsQuery(tx, {
+                    admission,
+                    body,
+                    generation,
+                    ids,
+                  }),
+              ),
+          );
+    recordCorpusRehydrationDispositions(read.dispositions, hitDispositions);
+    for (const id of ids) {
+      hydrated.set(id, null);
     }
-    if (indexedProjections !== undefined) {
-      return indexedCandidateDecisionRows(indexedProjections, ids, generation);
+    for (const row of read.rows) {
+      hydrated.set(String(row.id), row);
     }
-    return await timeDbRead(
-      async () =>
-        await caseLawDb(
-          async (tx) =>
-            await candidateDecisionRowsQuery(tx, {
-              admission,
-              body,
-              generation,
-              ids,
-            }),
-        ),
-    );
-  };
-  const read = await readCandidateRows();
-  recordCorpusRehydrationDispositions(read.dispositions, hitDispositions);
-  for (const id of ids) {
-    hydrated.set(id, null);
-  }
-  for (const row of read.rows) {
-    hydrated.set(String(row.id), row);
+  } else if (admission === "indexed") {
+    await readIndexedCandidateRows({
+      appliedProjections: indexed.appliedProjections,
+      body,
+      caseLawDb,
+      candidates,
+      generation,
+      hitDispositions,
+      hydrated,
+      servable: indexed.servable,
+      timeDbRead,
+    });
+  } else {
+    return panic("Named decisions are never ranked off the index");
   }
 
   const byId = new Map<string, CandidateDecisionRow>();
@@ -3078,11 +3244,12 @@ const settledRelaxedTopUp = <Hits>(
 
 /**
  * Whether a search blends its candidates from the engine's hits. A
- * generation that stores the ranking signals answers the blend from its own
- * hits, so the candidates cost no database read; only the page is read. A
- * filter the engine cannot apply (a provision, a category, a legal sentence)
- * and a read spanning another generation's indexes keep the database read,
- * which decides them per row.
+ * generation that stores the ranking signals answers the blend from the hits
+ * of the copies PostgreSQL serves, so the candidates cost one keyed read of
+ * which copy that is instead of the wide row read; the page is read as
+ * always. A filter the engine cannot apply (a provision, a category, a legal
+ * sentence) and a read spanning another generation's indexes keep the wide
+ * read, which decides them per row.
  */
 const caseLawIndexRanking = ({
   body,
@@ -3094,9 +3261,7 @@ const caseLawIndexRanking = ({
   indexId: string;
 }): {
   scanFields: readonly string[] | undefined;
-  projections: (
-    scanned: () => ReadonlyMap<string, ScannedProjection>,
-  ) => ReadonlyMap<string, ScannedProjection> | undefined;
+  fromIndex: boolean;
 } => {
   const fromIndex =
     corpusIndexRankingSignals(
@@ -3108,12 +3273,10 @@ const caseLawIndexRanking = ({
     body.docketRegisters === undefined &&
     body.senate === undefined &&
     !indexId.includes(",");
-  return fromIndex
-    ? {
-        scanFields: CASE_LAW_RANKING_SCAN_FIELDS,
-        projections: (scanned) => scanned(),
-      }
-    : { scanFields: undefined, projections: () => undefined };
+  return {
+    scanFields: fromIndex ? CASE_LAW_RANKING_SCAN_FIELDS : undefined,
+    fromIndex,
+  };
 };
 
 export const searchCorpusIndexDecisions = async (
@@ -3167,6 +3330,7 @@ export const searchCorpusIndexDecisions = async (
   // whose index copy is not current. Together they count the candidates the
   // whole request read, once each.
   const hydrated: HydratedDecisionRows = new Map();
+  const servable: ServableCaseLawCopies = new Map();
   const namedHydrated: HydratedDecisionRows = new Map();
   let pageRowsRead = 0;
   // The concurrent phase's two numbers, zero until it runs: a request answered
@@ -3508,7 +3672,7 @@ export const searchCorpusIndexDecisions = async (
       // walks windows the request's own cursor never named.
       rankCandidates: async (
         candidates,
-        { excludedGroups, selectAppliedCandidates, scannedProjections },
+        { excludedGroups, selectAppliedCandidates, appliedProjections },
       ) => {
         const ranking = await rehydrateCaseLawCandidates({
           hitDispositions,
@@ -3519,7 +3683,9 @@ export const searchCorpusIndexDecisions = async (
           courtWeights,
           generation,
           hydrated,
-          indexedProjections: indexRanking.projections(scannedProjections),
+          indexed: indexRanking.fromIndex
+            ? { appliedProjections, servable }
+            : undefined,
           excludedGroups,
           timeDbRead: async (run) =>
             await dbTimer.time(CASE_LAW_SEARCH_DB_READ.candidates, run),

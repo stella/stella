@@ -180,32 +180,38 @@ export type CorpusCandidateRankingInput =
  */
 type CorpusIndexRankingScope = {
   excludedGroups: ReadonlySet<string>;
-  /** Resolve physical hits after the existing SQL read, before blending or folding. */
+  /**
+   * The one place an engine hit becomes servable: given the revision
+   * Postgres records as applied for each candidate, the candidates ranked by
+   * the best passage of that copy. A candidate Postgres records no applied
+   * copy for, or whose applied copy the scan has not reached, is not
+   * returned, so a stale, withdrawn or never-applied copy the index still
+   * holds can neither rank a decision nor surface it.
+   */
   selectAppliedCandidates: SelectAppliedCorpusCandidates;
   /**
-   * For each candidate, the revision and the stored fields of the passage the
-   * scan reached it by first. A ranker that reads its signals off the hits
-   * instead of the database reads them here.
+   * The stored fields of each candidate's best passage of the copy Postgres
+   * records as applied, for a ranker that reads its signals off the hits
+   * instead of the database. Keyed by the same applied revisions as
+   * `selectAppliedCandidates`, and nothing else: no hit of another copy is
+   * reachable from the scope, so signals can only be read off the copy the
+   * reader is served.
    */
-  scannedProjections: () => ReadonlyMap<string, ScannedProjection>;
-};
-
-/** A candidate's earliest-scanned passage: its copy and what the hit carried. */
-export type ScannedProjection = {
-  revision: string | null;
-  fields: CorpusIndexHit;
+  appliedProjections: (
+    appliedById: ReadonlyMap<string, CorpusAppliedProjection>,
+  ) => ReadonlyMap<string, CorpusIndexHit>;
 };
 
 const rankingScopeOf = (
   cursor: SearchCursor | null,
   passages: Pick<
     ReturnType<typeof appliedPassages>,
-    "selectCandidates" | "projections"
+    "selectCandidates" | "appliedProjections"
   >,
 ): CorpusIndexRankingScope => ({
   excludedGroups: new Set(cursor?.excludedGroups),
   selectAppliedCandidates: passages.selectCandidates,
-  scannedProjections: passages.projections,
+  appliedProjections: passages.appliedProjections,
 });
 
 /**
@@ -281,7 +287,7 @@ type CorpusIndexSearchPageInput<TContext> = {
   extractId: (hit: CorpusIndexHit) => string | null;
   /**
    * Stored fields the scored transport reads beside the scan's own, for a
-   * ranker that reads them off `scannedProjections`. The native transport
+   * ranker that reads them off `appliedProjections`. The native transport
    * returns whole stored documents and needs none.
    */
   scanFields?: readonly string[] | undefined;
@@ -1093,16 +1099,10 @@ const appliedPassages = () => {
     candidates,
     passageClauseById,
     bestScoreById,
-    projections: (): ReadonlyMap<string, ScannedProjection> =>
-      new Map(
-        [...passages].map(([id, revisions]) => {
-          const [revision, { best }] =
-            [...revisions].toSorted(
-              ([, left], [, right]) => left.best.position - right.best.position,
-            )[0] ?? panic("A scanned candidate holds no passage");
-          return [id, { revision, fields: best.fields }];
-        }),
-      ),
+    appliedProjections: (
+      appliedById: ReadonlyMap<string, CorpusAppliedProjection>,
+    ): ReadonlyMap<string, CorpusIndexHit> =>
+      new Map(applied(appliedById).map(({ id, best }) => [id, best.fields])),
     record: (passage: ScannedPassage): boolean => {
       const { id, revision } = passage;
       if (

@@ -27,6 +27,7 @@ import {
 import { listDecisionsPageQuery } from "@/api/handlers/case-law/decisions/list";
 import {
   decisionIdsByIdentityQuery,
+  servableCandidateRevisionsStatement,
   unresolvedCandidateDecisionRowsStatement,
   unresolvedPageDecisionRowsStatement,
 } from "@/api/handlers/case-law/decisions/search";
@@ -448,6 +449,25 @@ export const QUERY_PLAN_REGISTRY = [
     seed: "case-law",
     heapFetchMitigation: LANGUAGE_GROUP_HEAP_FETCHES,
     contract: planContracts["case-law.search-candidate-rows"],
+  },
+  {
+    // The keyed read of an indexed ranking, once per scan round: which copy
+    // Postgres serves each candidate from, by primary-key probes only.
+    id: "case-law.search-servable-candidate-revisions",
+    class: "page",
+    role: "public-law-reader",
+    build: (tx) =>
+      servableCandidateRevisionsStatement(tx, {
+        body: { country: sampleCountry },
+        generation: QUERY_PLAN_SAMPLE.caseLaw.generation,
+        ids: QUERY_PLAN_SAMPLE.caseLaw.candidateIds,
+      }),
+    seed: "case-law",
+    heapFetchMitigation: {
+      type: "batched",
+      pageSize: LIMITS.corpusIndexSearchCandidateLimit,
+    },
+    contract: planContracts["case-law.search-servable-candidate-revisions"],
   },
   {
     id: PUBLIC_LAW_SHARED_QUERY.caseLawCorpusIndexRehydration,

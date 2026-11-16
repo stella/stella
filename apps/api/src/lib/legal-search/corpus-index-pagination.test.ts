@@ -75,7 +75,14 @@ let responseBody: unknown;
  * single-window cases.
  */
 let engineHits:
-  { document_id: string; anchor_id?: string; chunk_id?: string }[] | null;
+  | {
+      document_id: string;
+      anchor_id?: string;
+      chunk_id?: string;
+      /** The copy the hit belongs to; the applied one when absent. */
+      projection_revision?: string;
+    }[]
+  | null;
 let requestBodies: Record<string, unknown>[];
 /**
  * Wall time the fake engine spends on every request. Zero by default, so only
@@ -176,7 +183,8 @@ beforeEach(() => {
         num_hits: engineHits.length,
         hits: window.map((hit) => ({
           ...hit,
-          projection_revision: testRevisionOf(hit.document_id),
+          projection_revision:
+            hit.projection_revision ?? testRevisionOf(hit.document_id),
         })),
         snippets: window.map((hit) => ({ text: [`snip ${hit.document_id}`] })),
       }),
@@ -2614,4 +2622,183 @@ test("two sequential scans report as one, with every count added", () => {
     highlightRounds: 3,
   });
   expect(sumCorpusIndexScans(strict, emptyCorpusIndexScan())).toEqual(strict);
+});
+
+describe("copies Postgres does not record as applied never surface", () => {
+  const documentId = (index: number) =>
+    `copy-${String(index).padStart(5, "0")}`;
+  /** A copy of the document other than the applied one: stale or unapplied. */
+  const otherRevisionOf = (id: string) => testRevisionOf(`${id}#other`);
+
+  type Copy = "applied" | "other";
+
+  /**
+   * The cursor chain over an engine holding `hits`, ranked through the scope's
+   * one servable check against the applied revisions in `applied`.
+   */
+  const readChain = async (applied: ReadonlySet<string>, limit: number) => {
+    const recurring = recurringFixtureIdentities();
+    const pages: { ids: string[]; reach: string }[] = [];
+    let cursor: SearchCursor | null = null;
+    for (let page = 0; page < 400; page += 1) {
+      const parsedCursor: SearchCursor | null = cursor;
+      // Each cursor page needs the previous page's cursor.
+      const read = await readCorpusIndexSearchPage({
+        scanTransport: NATIVE_SCAN_TRANSPORT,
+        observer: "unobserved",
+        cluster: "q09",
+        indexId: "case_law_v10_cze",
+        query: "text:smlouva",
+        limit,
+        order: RELEVANCE_ORDER,
+        parsedCursor,
+        snippetFields: ["text"],
+        projectionRevisionField: "projection_revision",
+        extractId: (hit: CorpusIndexHit) =>
+          typeof hit["document_id"] === "string" ? hit["document_id"] : null,
+        extractSnippet: () => null,
+        unseenScoreUpperBound: (score) => score,
+        rankCandidates: async (
+          probes,
+          { excludedGroups, selectAppliedCandidates },
+        ) => {
+          const candidates = selectAppliedCandidates(
+            testAppliedProjectionsFor(
+              probes.filter(({ id }) => applied.has(id)),
+            ),
+          );
+          const shown = candidates.filter(
+            ({ id }) => !excludedGroups.has(corpusSearchGroupToken(id)),
+          );
+          return {
+            context: null,
+            groups: shown
+              .filter(({ id }) => recurring.has(id))
+              .map(({ id }) => corpusSearchGroupToken(id)),
+            ranked: shown.map((candidate) => ({
+              id: candidate.id,
+              score: candidate.score,
+              lexicalScore: candidate.score,
+              citationAuthority: 0,
+            })),
+            revisionById: testRevisionsFor(shown),
+          };
+        },
+      });
+      pages.push({
+        ids: read.pageRanked.map((hit) => hit.id),
+        reach: read.reach,
+      });
+      if (read.nextCursor === null) {
+        break;
+      }
+      cursor = read.nextCursor;
+    }
+    return pages;
+  };
+
+  /**
+   * The independent oracle: the documents Postgres serves that the engine
+   * holds an applied copy of, each placed by its first applied hit.
+   */
+  const oracle = (applied: ReadonlySet<string>) => {
+    const placed: string[] = [];
+    for (const hit of engineHits ?? []) {
+      if (
+        applied.has(hit.document_id) &&
+        (hit.projection_revision ?? testRevisionOf(hit.document_id)) ===
+          testRevisionOf(hit.document_id) &&
+        !placed.includes(hit.document_id)
+      ) {
+        placed.push(hit.document_id);
+      }
+    }
+    return placed;
+  };
+
+  test("the cursor chain is exactly the applied copies' order, however many other copies the engine holds", async () => {
+    await assertProperty(
+      "the cursor chain is exactly the applied copies' order, however many other copies the engine holds",
+      fc.asyncProperty(
+        fc.array(
+          fc.record({
+            // Whether Postgres records any applied copy (none: never applied,
+            // withdrawn, or erased with its delete not settled).
+            served: fc.boolean(),
+            copies: fc.array(fc.constantFrom<Copy>("applied", "other"), {
+              minLength: 1,
+              maxLength: 5,
+            }),
+          }),
+          { minLength: 10, maxLength: 140 },
+        ),
+        fc.array(fc.nat(), { minLength: 700, maxLength: 700 }),
+        fc.integer({ min: 1, max: 25 }),
+        async (documents, order, limit) => {
+          const placed = documents.flatMap(({ copies }, index) =>
+            copies.map((copy) => ({
+              document_id: documentId(index),
+              projection_revision:
+                copy === "applied"
+                  ? testRevisionOf(documentId(index))
+                  : otherRevisionOf(documentId(index)),
+            })),
+          );
+          // An arbitrary interleaving: a stale copy may outrank the applied one.
+          engineHits = placed
+            .map((hit, at) => ({ hit, key: order.at(at) ?? at }))
+            .toSorted((left, right) => left.key - right.key)
+            .map(({ hit }) => hit);
+          const applied = new Set(
+            documents.flatMap(({ served }, index) =>
+              served ? [documentId(index)] : [],
+            ),
+          );
+
+          const pages = await readChain(applied, limit);
+          const chain = pages.flatMap(({ ids }) => ids);
+
+          // Every page is reached and full until the last, and the chain is
+          // the oracle: nothing unapplied, nothing twice, nothing missed, in
+          // the order of the applied copies.
+          expect(
+            pages.every(({ reach }) => reach === SEARCH_PAGE_REACH.REACHED),
+          ).toBe(true);
+          expect(
+            pages.slice(0, -1).every(({ ids }) => ids.length === limit),
+          ).toBe(true);
+          expect(chain).toEqual(oracle(applied));
+        },
+      ),
+      { numRuns: 40 },
+    );
+  });
+
+  test("a window of other copies past the round cap continues the chain rather than ending it", async () => {
+    // More stale copies than the scan reads in one page, ahead of every
+    // applied one: the first page holds nothing, and says so without ending.
+    const flood =
+      LIMITS.corpusIndexSearchMaxRounds *
+        LIMITS.corpusIndexSearchCandidateLimit +
+      50;
+    engineHits = [
+      ...Array.from({ length: flood }, (_, index) => ({
+        document_id: documentId(index),
+        projection_revision: otherRevisionOf(documentId(index)),
+      })),
+      ...Array.from({ length: 30 }, (_, index) => ({
+        document_id: documentId(flood + index),
+      })),
+    ];
+    const applied = new Set(
+      Array.from({ length: flood + 30 }, (_, index) => documentId(index)),
+    );
+
+    const pages = await readChain(applied, 10);
+
+    expect(pages[0]?.ids).toEqual([]);
+    expect(pages[0]?.reach).toBe(SEARCH_PAGE_REACH.REACHED);
+    expect(pages.flatMap(({ ids }) => ids)).toEqual(oracle(applied));
+    expect(oracle(applied)).toHaveLength(30);
+  });
 });
