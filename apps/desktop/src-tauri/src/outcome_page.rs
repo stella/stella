@@ -259,7 +259,9 @@ mod tests {
 
   #[test]
   fn a_page_without_facts_or_note_draws_neither() {
+    // A description without slot-like text, so any `{{…}}` left is a slot.
     let html = render(&OutcomePage {
+      description: "Return to stella.",
       note: None,
       ..page(&[])
     });
