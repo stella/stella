@@ -110,7 +110,7 @@ export const CORPUS_INDEX_FLIP_WALK_CAP = 10_000;
 const CORPUS_INDEX_FLIP_SAMPLE_MAX = 50;
 
 /** Serving copies one coverage page reads at most. */
-export const CORPUS_INDEX_FLIP_COVERAGE_PAGE_MAX = 5000;
+const CORPUS_INDEX_FLIP_COVERAGE_PAGE_MAX = 5000;
 
 export class CorpusIndexFlipPairRefusedError extends TaggedError(
   "CorpusIndexFlipPairRefusedError",
