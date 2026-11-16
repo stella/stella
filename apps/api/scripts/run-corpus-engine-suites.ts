@@ -71,6 +71,10 @@ export const CORPUS_ENGINE_TEST_SUITES = [
     file: "src/lib/legal-search/corpus-index-query-features.contract.test.ts",
     metastore: CORPUS_ENGINE_METASTORE.file,
   },
+  {
+    file: "src/lib/legal-search/corpus-index-incarnation.contract.test.ts",
+    metastore: CORPUS_ENGINE_METASTORE.file,
+  },
 ] as const satisfies readonly {
   file: string;
   metastore: CorpusEngineMetastore;
