@@ -1316,9 +1316,7 @@
     "scripts/ratchet.ts": 1,
     "scripts/suppression-waivers.ts": 1
   },
-  "eslint/max-params": {
-    "packages/template-conditions/src/index.ts": 1
-  },
+  "eslint/max-params": {},
   "react/no-children-prop": {},
   "eslint/no-unexpected-multiline": {
     "apps/web/src/components/docx/use-collaboration-version-publisher.ts": 2,
