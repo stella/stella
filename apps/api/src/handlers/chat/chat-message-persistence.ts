@@ -914,10 +914,12 @@ export const persistHandedOverChatTurn = async ({
         userId,
         workspaceId,
       });
-      return ended.map((): HandedOverChatTurn => ({
-        type: "stopped",
-        outcome: settlement.outcome,
-      }));
+      return Result.isError(ended)
+        ? Result.err(ended.error)
+        : Result.ok<HandedOverChatTurn>({
+            type: "stopped",
+            outcome: settlement.outcome,
+          });
     }
     const answer = handedOverAssistantMessage({
       owningAssistantMessage,
@@ -937,10 +939,14 @@ export const persistHandedOverChatTurn = async ({
       userId,
       workspaceId,
     });
-    return released.map(({ released: turn }): HandedOverChatTurn => ({
-      type: "handed-over",
-      turn: turn ?? panic("A stored release names no released turn"),
-    }));
+    return Result.isError(released)
+      ? Result.err(released.error)
+      : Result.ok<HandedOverChatTurn>({
+          type: "handed-over",
+          turn:
+            released.value.released ??
+            panic("A stored release names no released turn"),
+        });
   });
 };
 
