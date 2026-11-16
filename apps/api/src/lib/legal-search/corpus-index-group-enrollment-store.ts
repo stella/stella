@@ -50,6 +50,7 @@ import {
   corpusIndexManifestDigest,
   requireCorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
+import { revokeCorpusIndexRouteProofTx } from "@/api/lib/legal-search/corpus-index-route-proof-store";
 import { quoteCorpusValue } from "@/api/lib/legal-search/corpus-query";
 import { CORPUS_READ_TARGET_IDENTITY_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
 
@@ -233,6 +234,18 @@ export const attestCorpusIndexGroupEnrollmentTx = async (
     )
     .returning({ indexGroup: corpusIndexGroupEnrollments.indexGroup });
   if (attested.length === 1) {
+    // A new attestation vouches for the index as it is now, which a pass
+    // started before it never walked: only a pass started after it proves
+    // the route, so the revocation lives here, in the attesting transaction.
+    await revokeCorpusIndexRouteProofTx(
+      tx,
+      {
+        family: group.manifest.family,
+        generation: group.manifest.generation,
+        indexId: group.indexId,
+      },
+      "group_attested",
+    );
     return;
   }
   const readiness = await readRegisteredGroupReadinessTx(tx, group);
@@ -336,6 +349,17 @@ export const withdrawCorpusIndexGroupEnrollmentTx = async (
     actor,
     reason: statedReason.slice(0, WITHDRAWAL_REASON_LIMIT),
   });
+  // The index may be recreated or changed while the group is withdrawn, so
+  // the route's proof ends with the attestation, in the same transaction.
+  await revokeCorpusIndexRouteProofTx(
+    tx,
+    {
+      family: group.manifest.family,
+      generation: group.manifest.generation,
+      indexId: group.indexId,
+    },
+    "group_withdrawn",
+  );
   return true;
 };
 

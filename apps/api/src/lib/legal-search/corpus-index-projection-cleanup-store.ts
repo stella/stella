@@ -80,6 +80,7 @@ import {
   CORPUS_PROJECTION_LEASE_MIN_MS,
   corpusProjectionDeliveredTogether,
 } from "@/api/lib/legal-search/corpus-index-projection-store";
+import { revokeCorpusIndexRouteProofTx } from "@/api/lib/legal-search/corpus-index-route-proof-store";
 import { logger } from "@/api/lib/observability/logger";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
@@ -1661,6 +1662,17 @@ export const reopenCorpusProjectionCleanupTx = async (
     )
   ) {
     return panic("Corpus projection cleanup reopen identities changed");
+  }
+  // A revision recorded as gone was found in the engine, so whatever proved
+  // the route no longer does. The index id names one generation, so the
+  // reopened revisions share one route.
+  const [identity] = identities;
+  if (rows.length > 0 && identity !== undefined) {
+    await revokeCorpusIndexRouteProofTx(
+      tx,
+      { family: identity.family, generation: identity.generation, indexId },
+      "absent_drift",
+    );
   }
   return rows.length;
 };

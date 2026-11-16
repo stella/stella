@@ -1978,7 +1978,12 @@
         "$TURBO_ROOT$/packages/api-contract/src/desktop-registry.ts",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-rpc.gen.ts",
         "$TURBO_ROOT$/packages/ui/generated/outcome-page.success.gen.html",
-        "$TURBO_ROOT$/packages/ui/generated/outcome-page.error.gen.html"
+        "$TURBO_ROOT$/packages/ui/generated/outcome-page.error.gen.html",
+        "$TURBO_ROOT$/packages/ui/generated/outcome-page.details.gen.html",
+        "$TURBO_ROOT$/packages/ui/generated/outcome-page.detail-row.gen.html",
+        "$TURBO_ROOT$/packages/ui/generated/outcome-page.note.gen.html",
+        "$TURBO_ROOT$/packages/ui/generated/outcome-page.control.gen.html",
+        "$TURBO_ROOT$/packages/ui/generated/outcome-page.button-label.gen.html"
       ]
     },
     // Repository-wide tooling guards: these suites walk apps/*, packages/* and

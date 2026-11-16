@@ -243,6 +243,14 @@ export const ENUM_COLUMN_ROLES = {
     family: ATTRIBUTE,
     last_failure_kind: ATTRIBUTE,
   },
+  // The expectation is a walk position (a pass moves present -> absent -> present,
+  // and a revocation restarts it at present) and the reason a fact about the
+  // last revocation: any value may follow any other.
+  corpus_index_route_proofs: {
+    family: ATTRIBUTE,
+    pass_expectation: ATTRIBUTE,
+    revoke_reason: ATTRIBUTE,
+  },
   corpus_index_route_seedings: {
     family: ATTRIBUTE,
   },

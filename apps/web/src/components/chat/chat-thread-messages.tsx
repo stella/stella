@@ -87,6 +87,7 @@ import {
   ChatMessageActionsScope,
 } from "@/components/chat/chat-message-actions-menu";
 import { CHAT_PENDING_TEXT_CLASS } from "@/components/chat/chat-pending-text";
+import { ChatRanOnModel } from "@/components/chat/chat-ran-on-model";
 import { ChatRenderErrorBoundary } from "@/components/chat/chat-render-error-boundary";
 import {
   ChatRichMessagePart,
@@ -573,6 +574,7 @@ export const ChatThreadMessages = ({
                                 timing={message.metadata?.turnTiming}
                               />
                             )}
+                            <ChatRanOnModel metadata={message.metadata} />
                             <AssistantAnswerMetadata
                               message={message}
                               workspaceId={workspaceId}
