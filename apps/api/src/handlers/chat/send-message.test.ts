@@ -81,6 +81,22 @@ import type {
 } from "./types";
 import type { UploadedChatFile } from "./upload-files";
 
+/**
+ * Whether a mocked turn lookup is acceptance's check for a live turn (a
+ * running one, or one handed over and not yet adopted), which these threads
+ * never hold.
+ */
+const asksForLiveTurn = (status: unknown): boolean => {
+  if (typeof status !== "object" || status === null) {
+    return false;
+  }
+  const eq: unknown = Reflect.get(status, "eq");
+  const among: unknown = Reflect.get(status, "in");
+  return (
+    eq === "running" || (Array.isArray(among) && among.includes("running"))
+  );
+};
+
 const testState = createTestState({ file: import.meta.path, config: env });
 
 let webSearchProviderLoadHook: (() => void) | undefined;
@@ -1129,12 +1145,8 @@ describe("send message disconnect handling", () => {
               }),
             },
             chatTurns: {
-              findFirst: async ({
-                where,
-              }: {
-                where?: { status?: { eq?: string } };
-              }) =>
-                where?.status?.eq === "running" ? undefined : { id: turnId },
+              findFirst: async ({ where }: { where?: { status?: unknown } }) =>
+                asksForLiveTurn(where?.status) ? undefined : { id: turnId },
             },
             organizationSettings: { findFirst: async () => null },
           },
@@ -1247,12 +1259,8 @@ describe("send message disconnect handling", () => {
               }),
             },
             chatTurns: {
-              findFirst: async ({
-                where,
-              }: {
-                where?: { status?: { eq?: string } };
-              }) =>
-                where?.status?.eq === "running" ? undefined : { id: turnId },
+              findFirst: async ({ where }: { where?: { status?: unknown } }) =>
+                asksForLiveTurn(where?.status) ? undefined : { id: turnId },
             },
             organizationSettings: { findFirst: findOrganizationSettings },
           },
@@ -1343,12 +1351,8 @@ describe("send message disconnect handling", () => {
               }),
             },
             chatTurns: {
-              findFirst: async ({
-                where,
-              }: {
-                where?: { status?: { eq?: string } };
-              }) =>
-                where?.status?.eq === "running" ? undefined : { id: turnId },
+              findFirst: async ({ where }: { where?: { status?: unknown } }) =>
+                asksForLiveTurn(where?.status) ? undefined : { id: turnId },
             },
             organizationSettings: { findFirst: async () => null },
           },
@@ -1468,12 +1472,8 @@ describe("send message disconnect handling", () => {
               }),
             },
             chatTurns: {
-              findFirst: async ({
-                where,
-              }: {
-                where?: { status?: { eq?: string } };
-              }) =>
-                where?.status?.eq === "running" ? undefined : { id: turnId },
+              findFirst: async ({ where }: { where?: { status?: unknown } }) =>
+                asksForLiveTurn(where?.status) ? undefined : { id: turnId },
             },
             organizationSettings: { findFirst: async () => null },
           },
@@ -1682,11 +1682,9 @@ describe("send message disconnect handling", () => {
                   findFirst: async ({
                     where,
                   }: {
-                    where?: { status?: { eq?: string } };
+                    where?: { status?: unknown };
                   }) =>
-                    where?.status?.eq === "running"
-                      ? undefined
-                      : { id: turnId },
+                    asksForLiveTurn(where?.status) ? undefined : { id: turnId },
                 },
                 organizationSettings: { findFirst: async () => null },
               },
@@ -1776,20 +1774,8 @@ describe("send message disconnect handling", () => {
             chatMessages: { findFirst: async () => null },
             chatThreadCompactions: { findFirst: async () => null },
             chatTurns: {
-              findFirst: async ({
-                where,
-              }: {
-                where?: { status?: unknown };
-              }) => {
-                const status = where?.status;
-                const queriedStatus =
-                  typeof status === "object" &&
-                  status !== null &&
-                  "eq" in status
-                    ? status.eq
-                    : undefined;
-                return queriedStatus === "running" ? undefined : { id: turnId };
-              },
+              findFirst: async ({ where }: { where?: { status?: unknown } }) =>
+                asksForLiveTurn(where?.status) ? undefined : { id: turnId },
             },
             chatThreads: {
               findFirst: async () => ({
@@ -2218,12 +2204,8 @@ describe("assistant turn settlement", () => {
             }),
           },
           chatTurns: {
-            findFirst: async ({
-              where,
-            }: {
-              where?: { status?: { eq?: string } };
-            }) =>
-              where?.status?.eq === "running" ? undefined : { id: turnId },
+            findFirst: async ({ where }: { where?: { status?: unknown } }) =>
+              asksForLiveTurn(where?.status) ? undefined : { id: turnId },
           },
           organizationSettings: { findFirst: async () => null },
         },
