@@ -141,6 +141,10 @@ import {
   withQueuedMessageRemoved,
 } from "@/features/chat/chat-queue.logic";
 import {
+  CHAT_REQUEST_ERROR_TRANSLATION_KEYS,
+  findChatRequestError,
+} from "@/features/chat/chat-request-error";
+import {
   type ChatRuntime,
   type ChatSendMessageOptions,
   type ChatUserMessageInput,
@@ -207,7 +211,7 @@ import {
 } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { readQueryResult } from "@/lib/errors/query-result";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { fileOptions } from "@/lib/files/queries";
 import {
   isPlaybookDraftViewPayload,
@@ -1134,7 +1138,16 @@ export const useChatSession = ({
       if (isQueueInsteadRefusal(acceptance.error)) {
         return await enqueueMessage(message, options);
       }
-      notifyUserError(acceptance.error, t("chat.sendError"));
+      // The composer holds the message again; the notice says why it was
+      // not sent, as specifically as the request's failure tells.
+      const requestError = findChatRequestError(acceptance.error);
+      if (requestError === undefined) {
+        notifyUserError(acceptance.error, t("chat.sendError"));
+      } else {
+        notifyUserProblem(
+          t(CHAT_REQUEST_ERROR_TRANSLATION_KEYS[requestError.kind]),
+        );
+      }
       return CHAT_SEND_KEPT;
     },
     [
