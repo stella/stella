@@ -915,7 +915,6 @@ export const QUERY_PLAN_REGISTRY = [
           candidate: FLIP_CANDIDATE_GENERATION,
         },
         {
-          servingIndexId: `${QUERY_PLAN_SAMPLE.caseLaw.generation}_cs_sk`,
           after: null,
           limit: 1000,
         },

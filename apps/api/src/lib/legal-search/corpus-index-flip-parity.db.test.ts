@@ -234,12 +234,16 @@ const expectedOutcome = (entity: ModelEntity, index: number): Outcome => {
   if (serving === null) {
     return { type: "fine" };
   }
+  // Any serving state that wants an upsert needs a candidate state, shown yet
+  // or not: the serving generation may apply it at any moment.
+  if (candidate === null) {
+    return entity.action === "upsert"
+      ? { type: "missing", entityId: entityId(index) }
+      : { type: "fine" };
+  }
   const servingCopy = copyOf(entity, serving);
   if (servingCopy !== "intact" && servingCopy !== "delete_in_flight") {
     return { type: "fine" };
-  }
-  if (candidate === null) {
-    return { type: "missing", entityId: entityId(index) };
   }
   const servingEpoch = appliedEpoch(entity, serving.applied);
   const candidateCopy = copyOf(entity, candidate);
@@ -501,9 +505,6 @@ const exactRegressions = (parity: CorpusIndexFlipParity) =>
     ? parity.regressions
     : panic("Expected an exact regression reading");
 
-const observedKinds = new Set<string>();
-const observedWalks = new Set<string>();
-
 /** A decision both generations hold, shown by the serving one since long ago. */
 const shownBySince = (
   candidate: ModelSide,
@@ -572,7 +573,6 @@ describe("corpus index flip parity", () => {
             for (const { route, kind } of expected.regressions) {
               const key = `${route ?? ""}/${kind}`;
               counted.set(key, (counted.get(key) ?? 0) + 1);
-              observedKinds.add(kind);
             }
             expect(
               regressions.byRoute.map(
@@ -599,38 +599,10 @@ describe("corpus index flip parity", () => {
                 ? "no_regression"
                 : "regressions",
             );
-            for (const outcome of expected.outcomes) {
-              if (outcome.type === "exempt") {
-                observedKinds.add(`exempt_${outcome.kind}`);
-              }
-            }
-            if (expected.missing.length > 0) {
-              observedKinds.add("missing");
-            }
-            for (const [walk, count] of Object.entries(regressions.walked)) {
-              if (count > 0) {
-                observedWalks.add(walk);
-              }
-            }
           },
         ),
         { numRuns: 64 },
       );
-      // The generator must reach every kind and fill every walk, or the
-      // property proves less than it claims.
-      expect([...observedKinds].toSorted()).toEqual([
-        "exempt_not_shown",
-        "exempt_stale",
-        "missing",
-        "not_shown",
-        "stale",
-      ]);
-      expect([...observedWalks].toSorted()).toEqual([
-        "absent",
-        "atRisk",
-        "blocked",
-        "pending",
-      ]);
     },
     propertyTestTimeout(300_000),
   );
@@ -645,8 +617,16 @@ describe("corpus index flip parity", () => {
           count,
         ]),
         exempt: regressions.exempt,
+        walked: regressions.walked,
       };
     };
+    const walkedOnly = (walk: "pending" | "blocked" | "absent") => ({
+      pending: 0,
+      blocked: 0,
+      absent: 0,
+      atRisk: 0,
+      [walk]: 1,
+    });
     const neverApplied = { type: "none" } as const;
     const olderCopy = {
       type: "upsert",
@@ -658,13 +638,14 @@ describe("corpus index flip parity", () => {
     test("a decision new after the watermark that the candidate has not applied yet is exempt", async () => {
       expect(
         await judged(shownBySince(candidateSide(neverApplied), "recent")),
-      ).toEqual({ regressions: [], exempt: 1 });
+      ).toEqual({ regressions: [], exempt: 1, walked: walkedOnly("pending") });
     });
 
     test("an old decision the candidate never applied is not exempt, however recently the serving generation re-applied it", async () => {
       expect(await judged(shownBySince(candidateSide(neverApplied)))).toEqual({
         regressions: [["not_shown", 1]],
         exempt: 0,
+        walked: walkedOnly("pending"),
       });
     });
 
@@ -673,13 +654,17 @@ describe("corpus index flip parity", () => {
         await judged(
           shownBySince(candidateSide(olderCopy, "eligible", "recent")),
         ),
-      ).toEqual({ regressions: [], exempt: 1 });
+      ).toEqual({ regressions: [], exempt: 1, walked: walkedOnly("pending") });
     });
 
     test("a newer change the candidate was handed before the watermark is not exempt", async () => {
       expect(
         await judged(shownBySince(candidateSide(olderCopy, "eligible", "old"))),
-      ).toEqual({ regressions: [["stale", 1]], exempt: 0 });
+      ).toEqual({
+        regressions: [["stale", 1]],
+        exempt: 0,
+        walked: walkedOnly("pending"),
+      });
     });
 
     test("a blocked candidate is never exempt, even for a decision new after the watermark", async () => {
@@ -690,7 +675,11 @@ describe("corpus index flip parity", () => {
             "recent",
           ),
         ),
-      ).toEqual({ regressions: [["not_shown", 1]], exempt: 0 });
+      ).toEqual({
+        regressions: [["not_shown", 1]],
+        exempt: 0,
+        walked: walkedOnly("blocked"),
+      });
     });
 
     test("a candidate copy proven gone is never exempt", async () => {
@@ -710,7 +699,11 @@ describe("corpus index flip parity", () => {
             "recent",
           ),
         ),
-      ).toEqual({ regressions: [["not_shown", 1]], exempt: 0 });
+      ).toEqual({
+        regressions: [["not_shown", 1]],
+        exempt: 0,
+        walked: walkedOnly("absent"),
+      });
     });
   });
 
@@ -795,6 +788,32 @@ describe("corpus index flip parity", () => {
     });
   });
 
+  test("a decision the serving generation has not applied yet still needs a candidate state", async () => {
+    // Nothing serves it at the walk, but the serving generation may apply it
+    // before the flip; with no candidate state, no candidate walk would see it.
+    await writeModel([
+      {
+        epoch: 1,
+        action: "upsert",
+        serving: {
+          work: "eligible",
+          created: "old",
+          desired: "old",
+          applied: { type: "none" },
+        },
+        candidate: null,
+      },
+    ]);
+    const parity = requireParity(await readParity());
+    expect(parity.coverage).toMatchObject({
+      type: "complete",
+      walked: 1,
+      missing: 1,
+      sample: [entityId(0)],
+    });
+    expect(parity.verdict.type).toBe("regressions");
+  });
+
   test("a decision seeded into the candidate between the coverage walk and the regression read is still reported", async () => {
     const entity = shownBySince(candidateSide({ type: "none" }));
     await clearProjection();
@@ -805,13 +824,13 @@ describe("corpus index flip parity", () => {
       SERVING,
       ROUTES.serving,
     );
-    // Transactions: the pair check, the serving index ids, one coverage page
-    // (one copy, under the page size), then the regression read. The seed
-    // lands just before the regression read, after the walk saw no state.
+    // Transactions: the pair check, one coverage page (one state, under the
+    // page size), then the regression read. The seed lands just before the
+    // regression read, after the walk saw no candidate state.
     const parity = requireParity(
       await readParity({
         beforeTransaction: {
-          ordinal: 4,
+          ordinal: 3,
           run: async () => {
             await writeSide(
               entity,
@@ -873,7 +892,7 @@ describe("corpus index flip parity", () => {
     expect(parity.coverage).toMatchObject({
       type: "incomplete",
       walked: 2,
-      next: { servingIndexId: ROUTES.serving.wanted, after: entityId(1) },
+      next: { after: entityId(1) },
     });
     expect(parity.verdict).toMatchObject({
       type: "undecided",

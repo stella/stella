@@ -883,7 +883,7 @@ describe("corpus generation operator command", () => {
       "checked: compared with case_law_v7, which serves case_law",
     );
     expect(report.out).toContain(
-      "checked: every serving copy walked (2); 1 without a candidate state",
+      "checked: every serving state walked (2); 1 without a candidate state",
     );
     expect(report.out).toContain("not shown or stale (exact): 1");
     expect(report.out).toContain("  case_law_v10_cze not_shown 1");
@@ -952,9 +952,7 @@ describe("corpus generation operator command", () => {
     const budgeted = await run({
       args: caseLaw("parity", "case_law_v10", "--coverage-pages", "0"),
     });
-    expect(budgeted.out).toContain(
-      "resume with --coverage-from case_law_v7_cs_sk:start",
-    );
+    expect(budgeted.out).toContain("resume with --coverage-from start");
     expect(budgeted.out).toContain("verdict: undecided (coverage_incomplete)");
     expect(budgeted.code).toBe(4);
   });
@@ -997,6 +995,7 @@ describe("corpus generation operator command", () => {
       caseLaw("parity", "case_law_v10", "--exempt-minutes", "-1"),
       caseLaw("parity", "case_law_v10", "--coverage-pages", "20001"),
       caseLaw("parity", "case_law_v10", "--coverage-from", "case_law_v7_cs_sk"),
+      caseLaw("parity", "case_law_v10", "--coverage-from", "end"),
       ["status", "--list"],
     ]) {
       // db-await-in-loop: parsing refuses before any database is opened

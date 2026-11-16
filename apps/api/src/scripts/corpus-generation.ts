@@ -6,7 +6,7 @@ import { panic, Result, TaggedError } from "better-result";
  *   bun run src/scripts/corpus-generation.ts status
  *   bun run src/scripts/corpus-generation.ts register --family case_law --generation case_law_v7 [--apply]
  *   bun run src/scripts/corpus-generation.ts serve --family case_law --generation case_law_v7 [--apply]
- *   bun run src/scripts/corpus-generation.ts parity --family case_law --generation case_law_v10 [--exempt-minutes 20] [--coverage-pages 2000] [--coverage-from <index>:<entity|start>] [--list]
+ *   bun run src/scripts/corpus-generation.ts parity --family case_law --generation case_law_v10 [--exempt-minutes 20] [--coverage-pages 2000] [--coverage-from <entity|start>] [--list]
  *
  * `serve` is the primary path; generations are normally registered by the
  * projection coordinator, and `register` covers an environment that has none.
@@ -135,8 +135,8 @@ Options (parity):
   --coverage-pages <n>   Coverage pages of ${String(PARITY_COVERAGE_PAGE)} serving copies to read
                          (default ${String(PARITY_DEFAULT_COVERAGE_PAGES)}, at most ${String(PARITY_MAX_COVERAGE_PAGES)}); a walk
                          that does not reach the end leaves the verdict undecided.
-  --coverage-from <i:e>  Resume a walk at serving index i after entity e (or
-                         "start"); a resumed walk never proves the verdict.
+  --coverage-from <e>    Resume a walk after serving entity e (or "start");
+                         a resumed walk never proves the verdict.
   --list                 Also print up to 50 decisions of each kind by id.
 
 Exit codes (parity): 0 no regression, 3 regressions, 4 undecided, 1 refused.
@@ -391,9 +391,7 @@ const parseCorpusGenerationCommand = (
       }
       const coverageFrom = parseCoverageCursor(values["coverage-from"]);
       if (coverageFrom === "malformed") {
-        return usageError(
-          "--coverage-from must be <serving index>:<entity id> or <serving index>:start.",
-        );
+        return usageError("--coverage-from must be an entity id or start.");
       }
       return Result.ok({
         type: "parity",
@@ -428,7 +426,7 @@ const parseWholeNumber = (
 };
 
 const COVERAGE_CURSOR =
-  /^(?<index>[a-z0-9_]+):(?<after>start|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/u;
+  /^(?<after>start|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/u;
 
 const parseCoverageCursor = (
   raw: string | undefined,
@@ -437,12 +435,11 @@ const parseCoverageCursor = (
     return null;
   }
   const match = COVERAGE_CURSOR.exec(raw);
-  const index = match?.groups?.["index"];
   const after = match?.groups?.["after"];
-  if (index === undefined || after === undefined) {
+  if (after === undefined) {
     return "malformed";
   }
-  return { servingIndexId: index, after: after === "start" ? null : after };
+  return { after: after === "start" ? null : after };
 };
 
 type RowLock = "none" | "update";
@@ -1129,12 +1126,12 @@ const describeParity = (
   const coverageLine = (() => {
     switch (coverage.type) {
       case "complete":
-        return `checked: every serving copy walked (${String(coverage.walked)}); ${String(coverage.missing)} without a candidate state`;
+        return `checked: every serving state walked (${String(coverage.walked)}); ${String(coverage.missing)} without a candidate state`;
       case "incomplete":
-        return `not checked in full: ${String(coverage.walked)} serving copies walked, ${String(coverage.missing)} without a candidate state; ${
+        return `not checked in full: ${String(coverage.walked)} serving states walked, ${String(coverage.missing)} without a candidate state; ${
           coverage.next === null
             ? "the walk resumed from a cursor, so it proves nothing"
-            : `resume with --coverage-from ${coverage.next.servingIndexId}:${coverage.next.after ?? "start"}`
+            : `resume with --coverage-from ${coverage.next.after ?? "start"}`
         }`;
       default:
         coverage satisfies never;
