@@ -707,7 +707,7 @@ describe("send message disconnect handling", () => {
       );
       const cleanup = lifecycle.cleanup();
       await settlementStarted.promise;
-      const relinquishing = ownership.relinquish();
+      const relinquishing = ownership.relinquish({ type: "end" });
       expect(
         await Promise.race([
           leaseShortened.promise.then(() => true),

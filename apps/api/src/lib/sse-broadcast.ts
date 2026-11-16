@@ -74,6 +74,16 @@ type RedisPayload =
       id: string;
       userId?: string | undefined;
       originInstanceId?: string | undefined;
+    }
+  | {
+      /** A chat turn was released for another API task to adopt. */
+      scope: "chat-turn-handover";
+      /** The turn id. */
+      id: string;
+      organizationId: string;
+      threadId: string;
+      userId: string;
+      originInstanceId?: string | undefined;
     };
 
 /**
@@ -113,7 +123,8 @@ export const parseRedisPayload = (raw: string): RedisPayload | null => {
     scope !== "workspace-access-revoked" &&
     scope !== "user" &&
     scope !== "user-access-revoked" &&
-    scope !== "mcp-tool-projection"
+    scope !== "mcp-tool-projection" &&
+    scope !== "chat-turn-handover"
   ) {
     return null;
   }
@@ -125,6 +136,24 @@ export const parseRedisPayload = (raw: string): RedisPayload | null => {
     "originInstanceId" in parsed && typeof parsed.originInstanceId === "string"
       ? parsed.originInstanceId
       : undefined;
+
+  if (scope === "chat-turn-handover") {
+    return "organizationId" in parsed &&
+      typeof parsed.organizationId === "string" &&
+      "threadId" in parsed &&
+      typeof parsed.threadId === "string" &&
+      "userId" in parsed &&
+      typeof parsed.userId === "string"
+      ? {
+          scope,
+          id: parsed.id,
+          organizationId: parsed.organizationId,
+          threadId: parsed.threadId,
+          userId: parsed.userId,
+          originInstanceId,
+        }
+      : null;
+  }
 
   if (scope === "mcp-tool-projection") {
     if (!("userId" in parsed)) {
@@ -343,6 +372,29 @@ export const createSseBroadcastPublisher = ({
       await publishRedisPayload({
         scope: "mcp-tool-projection",
         id: organizationId,
+        userId,
+        originInstanceId: options.originInstanceId,
+      });
+    },
+    publishChatTurnHandover: async (
+      {
+        organizationId,
+        threadId,
+        turnId,
+        userId,
+      }: {
+        organizationId: SafeId<"organization">;
+        threadId: SafeId<"chatThread">;
+        turnId: SafeId<"chatTurn">;
+        userId: SafeId<"user">;
+      },
+      options: { originInstanceId?: string | undefined } = {},
+    ): Promise<void> => {
+      await publishRedisPayload({
+        scope: "chat-turn-handover",
+        id: turnId,
+        organizationId,
+        threadId,
         userId,
         originInstanceId: options.originInstanceId,
       });

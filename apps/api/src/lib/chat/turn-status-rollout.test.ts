@@ -63,11 +63,25 @@ test("no task writes handed-over before every task of an earlier release reads a
   expect({
     adoptersCut: adopters !== null && atLeast(cut, adopters),
     readersCut: atLeast(cut, readers),
+    writersNamed: CHAT_TURN_HANDED_OVER_ROLLOUT.writers !== null,
     writers: named,
-  }).toEqual({ adoptersCut: true, readersCut: true, writers: named });
+  }).toEqual({
+    adoptersCut: true,
+    readersCut: true,
+    writersNamed: true,
+    writers: named,
+  });
 });
 
 test("the adopters ship no earlier than the readers", () => {
   const { adopters, readers } = CHAT_TURN_HANDED_OVER_ROLLOUT;
   expect(adopters === null || atLeast(adopters, readers)).toBe(true);
+});
+
+test("the writers ship in a release after the adopters", () => {
+  const { adopters, writers } = CHAT_TURN_HANDED_OVER_ROLLOUT;
+  expect(
+    writers === null ||
+      (adopters !== null && atLeast(writers, adopters) && writers !== adopters),
+  ).toBe(true);
 });

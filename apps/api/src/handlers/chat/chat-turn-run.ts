@@ -16,6 +16,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { reportDeliveryFailuresByKind } from "@/api/handlers/chat/chat-delivery-failure";
 import {
   persistFailedChatTurn,
+  persistHandedOverChatTurn,
   persistTerminalAssistantTurn,
 } from "@/api/handlers/chat/chat-message-persistence";
 import type { PersistMessageProps } from "@/api/handlers/chat/chat-message-persistence";
@@ -43,6 +44,7 @@ import type { AIErrorKind } from "@/api/lib/ai-error";
 import { detached } from "@/api/lib/analytics/capture";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { ringChatTurnAdopters } from "@/api/lib/chat/chat-turn-handover-doorbell";
 import { ChatRunLogRefusedError } from "@/api/lib/chat/run-log-refusal";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
@@ -241,6 +243,56 @@ const CONNECTOR_CLOSE_FAILED_SINK = failureSink({
   event: "chat.turn.connector_close_failed",
   expected: [],
 });
+/** A release could not be stored; the turn stays running for the reaper. */
+const HAND_OVER_FAILED_SINK = failureSink({
+  event: "chat.turn.hand_over_failed",
+  expected: [],
+});
+
+/**
+ * How long one run may take to hand its turn over while its process stops:
+ * the reader's current event, its read position, the log drained, the
+ * release written. Runs hand over in parallel inside the process's stop
+ * budget (`WORKER_SHUTDOWN_TIMEOUT_MS`, 10 s), which itself sits inside the
+ * platform's 30 s between the stop signal and the kill.
+ */
+export const CHAT_TURN_HAND_OVER_BUDGET_MS = 5000;
+
+/** How a stopping process gives up the turns it owns. */
+export type ChatTurnRelinquishment =
+  /** Every run stores what it has as `owner-lost`. */
+  | { type: "end" }
+  /**
+   * A run whose turn runs on a computer releases it to another task within
+   * `budgetMs`, or is left running for the reaper; any other run ends as
+   * `owner-lost`.
+   */
+  | { type: "hand-over"; budgetMs: number };
+
+/** The relinquishment the server setting asks for. */
+export const chatTurnRelinquishmentOf = (
+  handOver: boolean,
+): ChatTurnRelinquishment =>
+  handOver
+    ? { type: "hand-over", budgetMs: CHAT_TURN_HAND_OVER_BUDGET_MS }
+    : { type: "end" };
+
+/**
+ * Whether a run bound by `bound` can hand its turn over. A computer's run
+ * goes on without this process, and the turn's reader moves to another
+ * task; a provider request is held open by this process and cannot move.
+ */
+const handsOverUnder = (bound: ChatTurnRunBound): boolean => {
+  switch (bound.type) {
+    case "provider-deadline":
+      return false;
+    case "computer-liveness":
+      return true;
+    default:
+      bound satisfies never;
+      return panic("Unhandled chat turn run bound");
+  }
+};
 
 /**
  * What ends a run by elapsed time alone, by where its turn runs.
@@ -335,7 +387,11 @@ export const countChatTurnSettlement = (
 export type ChatTurnStoredSettlement =
   | { type: "stored"; outcome: ChatTurnOutcome }
   | { type: "not-owned" }
-  | { type: "failed-instead" };
+  | { type: "failed-instead" }
+  /** Released to another task, which settles the turn. */
+  | { type: "handed-over" }
+  /** The release could not be stored: the turn stays running, unowned. */
+  | { type: "left-running" };
 
 /** The turn a run produces for, and what storing its failure needs. */
 type ChatTurnRunOwner = {
@@ -363,6 +419,11 @@ type ChatTurnRunControl = {
    * fires for a run its computer's liveness bounds.
    */
   deadlineSignal: AbortSignal;
+  /**
+   * The run's release to another task (`handOver`): no cut, so nothing
+   * reading it stops the computer.
+   */
+  handOverSignal: AbortSignal;
   /** Execution admission cancellation; durable ownership keeps its own fence. */
   admissionSignal?: AbortSignal;
 };
@@ -481,27 +542,37 @@ export class ChatTurnOwnership {
   }
 
   /**
-   * Give up every turn owned here, for a process that is stopping. Each run
-   * is cut short and stores what it has as `owner-lost`, so none waits out
-   * its lease; a run handed a turn from now on is cut short at once. A turn a
-   * send still prepares gets the short run lease, so if the process ends
-   * before the send hands it over, the reaper finds it within that lease.
-   * Resolves once nothing is owned any more, the turns' follow-ups included,
-   * saying whether every run stored its outcome; the caller bounds the wait.
+   * Give up every turn owned here, for a process that is stopping, as
+   * `relinquishment` says (`ChatTurnRun.giveUp`): each run is cut short and
+   * stores what it has as `owner-lost`, or releases its turn to another task,
+   * so none waits out its lease; a run handed a turn from now on is cut short
+   * at once. A turn a send still prepares gets the short run lease, so if the
+   * process ends before the send hands it over, the reaper finds it within
+   * that lease. Resolves once nothing is owned any more but runs left
+   * running, the turns' follow-ups included, saying whether every run stored
+   * its outcome; the caller bounds the wait.
    */
-  async relinquish(): Promise<ChatTurnRunEnd> {
+  async relinquish(
+    relinquishment: ChatTurnRelinquishment,
+  ): Promise<ChatTurnRunEnd> {
     this.relinquishing = true;
     try {
-      return await this.relinquishOwned();
+      return await this.relinquishOwned(relinquishment);
     } finally {
       this.relinquishing = false;
     }
   }
 
-  private async relinquishOwned(): Promise<ChatTurnRunEnd> {
+  private async relinquishOwned(
+    relinquishment: ChatTurnRelinquishment,
+  ): Promise<ChatTurnRunEnd> {
     const ends = new Map<ChatTurnRun, Promise<ChatTurnRunEnd>>();
     const shortened = new Set<ChatTurnClaim>();
-    while (this.liveRuns.size > 0 || this.claims.size > 0) {
+    /** Runs that missed their hand-over budget; their turns stay running. */
+    const leftRunning = new Set<ChatTurnRun>();
+    const owned = () =>
+      [...this.liveRuns.values()].filter((run) => !leftRunning.has(run));
+    while (owned().length > 0 || this.claims.size > 0) {
       const { promise: changed } = this.changed;
       for (const claim of this.claims) {
         if (!shortened.has(claim)) {
@@ -513,8 +584,16 @@ export class ChatTurnOwnership {
         }
       }
       const current: Promise<ChatTurnRunEnd>[] = [];
-      for (const run of this.liveRuns.values()) {
-        const runEnd = ends.get(run) ?? run.relinquish();
+      for (const run of owned()) {
+        const runEnd =
+          ends.get(run) ??
+          run.giveUp(relinquishment).then((end) => {
+            if (end !== "left-running") {
+              return end;
+            }
+            leftRunning.add(run);
+            return "unstored" as const;
+          });
         ends.set(run, runEnd);
         current.push(runEnd);
       }
@@ -553,6 +632,7 @@ export class ChatTurnRun {
   private readonly options: ChatTurnRunOptions;
   private readonly ownership: ChatTurnOwnership;
   private readonly settledResolvers = Promise.withResolvers<ChatTurnRunEnd>();
+  private readonly handOverController = new AbortController();
   private state: ChatTurnRunState = { status: "ready" };
   private stored = false;
   private continuationProduction: "not-started" | "started" = "not-started";
@@ -582,6 +662,7 @@ export class ChatTurnRun {
               ]),
             ),
       deadlineSignal,
+      handOverSignal: this.handOverController.signal,
       ...(options.admission === undefined
         ? {}
         : { admissionSignal: options.admission.signal }),
@@ -797,10 +878,13 @@ export class ChatTurnRun {
             break;
           }
           case "not-owned":
+          case "handed-over":
             this.stored = true;
             break;
           case "failed-instead":
             // `fail` recorded whether the failure was stored.
+            break;
+          case "left-running":
             break;
           default:
             settlement satisfies never;
@@ -820,6 +904,50 @@ export class ChatTurnRun {
     } finally {
       this.release();
     }
+  }
+
+  /**
+   * Store the answer so far of a turn this run released and tell adopters,
+   * once its reader stopped and its log is drained. A stop the member made
+   * first settles the turn as that stop instead. A release that cannot be
+   * stored leaves the turn running: its lease ends it.
+   */
+  async settleHandOver(answer: PersistableChatMessage): Promise<void> {
+    const { owner } = this.options;
+    await this.settle(async () => {
+      const released = await persistHandedOverChatTurn({
+        execution: owner.execution,
+        indexThread: owner.indexThread,
+        owningAssistantMessage: owner.owningAssistantMessage,
+        recordAuditEvent: owner.recordAuditEvent,
+        responseMessage: answer,
+        safeDb: owner.safeDb,
+        threadId: owner.threadId,
+        userId: owner.userId,
+        workspaceId: owner.workspaceId,
+      });
+      if (Result.isError(released)) {
+        if (isChatTurnNotOwned(released.error)) {
+          return { type: "not-owned" };
+        }
+        observeFailure(released.error, {
+          sink: HAND_OVER_FAILED_SINK,
+          ctx: { threadId: owner.threadId },
+        });
+        return { type: "left-running" };
+      }
+      const settled = released.value;
+      switch (settled.type) {
+        case "handed-over":
+          ringChatTurnAdopters(settled.turn);
+          return { type: "handed-over" };
+        case "stopped":
+          return { type: "stored", outcome: settled.outcome };
+        default:
+          settled satisfies never;
+          return panic("Unhandled chat turn release");
+      }
+    });
   }
 
   /**
@@ -957,6 +1085,53 @@ export class ChatTurnRun {
   async relinquish(): Promise<ChatTurnRunEnd> {
     this.abort(CHAT_TURN_OWNER_LOST_REASON);
     return await this.settled;
+  }
+
+  /**
+   * Give the run up as `relinquishment` says. A run left running missed its
+   * hand-over budget: its turn keeps today's lease and reaper.
+   */
+  async giveUp(
+    relinquishment: ChatTurnRelinquishment,
+  ): Promise<ChatTurnRunEnd | "left-running"> {
+    switch (relinquishment.type) {
+      case "end":
+        return await this.relinquish();
+      case "hand-over":
+        return handsOverUnder(this.options.bound) &&
+          this.state.status === "producing"
+          ? await this.handOverWithin(relinquishment.budgetMs)
+          : await this.relinquish();
+      default:
+        relinquishment satisfies never;
+        return panic("Unhandled chat turn relinquishment");
+    }
+  }
+
+  /**
+   * Release the turn to another task: its reader stops after the event it
+   * is on, records where, and the answer so far is stored for an adopter
+   * (`settleHandOver`), while the computer goes on. The heartbeat stops
+   * first: the release is the run's last word on the turn, under the lease it
+   * holds. Resolves once the release is stored, or the turn settled
+   * otherwise; `left-running` once `budgetMs` passed without either.
+   */
+  private async handOverWithin(
+    budgetMs: number,
+  ): Promise<ChatTurnRunEnd | "left-running"> {
+    if (this.state.status === "producing") {
+      this.state.heartbeat.stop();
+    }
+    this.handOverController.abort();
+    const budget = Promise.withResolvers<"left-running">();
+    const timer = setTimeout(() => {
+      budget.resolve("left-running");
+    }, budgetMs);
+    try {
+      return await Promise.race([this.settled, budget.promise]);
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   /**
@@ -1126,5 +1301,7 @@ export const stopLocalChatTurnRun = (
   processChatTurnOwnership.run(executionId)?.stop() ?? null;
 
 /** Give up every chat turn this process owns; see `relinquish`. */
-export const relinquishChatTurnRuns = async (): Promise<ChatTurnRunEnd> =>
-  await processChatTurnOwnership.relinquish();
+export const relinquishChatTurnRuns = async (
+  relinquishment: ChatTurnRelinquishment,
+): Promise<ChatTurnRunEnd> =>
+  await processChatTurnOwnership.relinquish(relinquishment);

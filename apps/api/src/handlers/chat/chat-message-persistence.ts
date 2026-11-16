@@ -27,6 +27,7 @@ import {
   claimChatTurnForExecutionOnTx,
   cutShortAssistantMessage,
   insertChatTurnAcceptanceOnTx,
+  releaseChatTurnOnTx,
   reservePlannedChatTurnOnTx,
   settleChatTurnOnTx,
   USER_STOP_OUTCOME,
@@ -70,6 +71,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import type { ChatRunPings } from "@/api/lib/chat/chat-run-pings";
+import type { ReleasedChatTurn } from "@/api/lib/chat/chat-turn-handover-doorbell";
 import {
   expandThreadDataScopeOnTx,
   replaceThreadDataScopeOnTx,
@@ -117,18 +119,32 @@ type ChatDataScopeReplacement = {
   observedDataWorkspaceIds: readonly SafeId<"workspace">[];
 };
 
-type ChatTurnSettlement = {
-  assistantMessageId: SafeId<"chatMessage"> | null;
-  execution: ChatTurnExecution;
-  failureCode?: ChatTurnFailureCode | undefined;
-  failureRetryable?: boolean | undefined;
-  outcome: ChatTurnOutcome;
-};
+/**
+ * What a persisted message does to its running turn: settles it with an
+ * outcome, or releases it to another task with the message as its answer so
+ * far (`releaseChatTurnOnTx`).
+ */
+type ChatTurnSettlement =
+  | {
+      kind: "outcome";
+      assistantMessageId: SafeId<"chatMessage"> | null;
+      execution: ChatTurnExecution;
+      failureCode?: ChatTurnFailureCode | undefined;
+      failureRetryable?: boolean | undefined;
+      outcome: ChatTurnOutcome;
+    }
+  | {
+      kind: "release";
+      assistantMessageId: SafeId<"chatMessage">;
+      execution: ChatTurnExecution;
+    };
 
 /** What a persisted message's turn writes changed beyond the message. */
 type ChatTurnWrites = {
   /** The awaiting assistant message an accepted turn superseded, as stored. */
   superseded: PersistableTerminalAssistantMessage | undefined;
+  /** The turn this write released to another task. */
+  released?: ReleasedChatTurn | undefined;
 };
 
 const NO_TURN_WRITES: ChatTurnWrites = { superseded: undefined };
@@ -155,7 +171,38 @@ const applyChatTurnWritesOnTx = async ({
   if (settlement === undefined) {
     return writes;
   }
-  const settled = await settleChatTurnOnTx({ ...settlement, pings, tx });
+  if (settlement.kind === "release") {
+    const released = await releaseChatTurnOnTx({
+      assistantMessageId: settlement.assistantMessageId,
+      execution: settlement.execution,
+      pings,
+      tx,
+    });
+    switch (released.type) {
+      case "released":
+        return { ...writes, released: released.turn };
+      case "stop-requested":
+        throw new ChatTurnStopRequestedError({
+          message: "The user stopped the chat turn before it was released",
+        });
+      case "not-owned":
+        throw new ChatTurnNotOwnedError({
+          message: "Another execution settled the chat turn first",
+        });
+      default:
+        released satisfies never;
+        return panic("Unhandled chat turn release");
+    }
+  }
+  const settled = await settleChatTurnOnTx({
+    assistantMessageId: settlement.assistantMessageId,
+    execution: settlement.execution,
+    failureCode: settlement.failureCode,
+    failureRetryable: settlement.failureRetryable,
+    outcome: settlement.outcome,
+    pings,
+    tx,
+  });
   switch (settled) {
     case "settled":
       return writes;
@@ -665,6 +712,7 @@ export const finalizeAssistantTurn = async ({
         safeDb,
         threadId,
         turnSettlement: {
+          kind: "outcome",
           assistantMessageId: settlement.message.id,
           execution,
           outcome: settlement.outcome,
@@ -795,6 +843,7 @@ export const persistTerminalAssistantTurn = async ({
       safeDb,
       threadId,
       turnSettlement: {
+        kind: "outcome",
         assistantMessageId: settlement.message.id,
         execution,
         ...(failure === undefined || stopped
@@ -809,6 +858,126 @@ export const persistTerminalAssistantTurn = async ({
       workspaceId,
     });
   });
+
+/** How a turn released to another task was stored. */
+type HandedOverChatTurn =
+  | { type: "handed-over"; turn: ReleasedChatTurn }
+  /** The member's stop committed first: the answer so far ends the turn. */
+  | { type: "stopped"; outcome: ChatTurnOutcome };
+
+/**
+ * Store a running turn's answer so far and release the turn to another task,
+ * in one transaction (`releaseChatTurnOnTx`). The answer is stored as the
+ * run left it: its calls still open, since the computer still runs them, and
+ * no outcome, since the turn has not ended; the adopter continues it as a
+ * continuation continues its owning message. A stop the member made first
+ * ends the turn as that stop instead, as any settlement does.
+ */
+export const persistHandedOverChatTurn = async ({
+  execution,
+  indexThread,
+  owningAssistantMessage,
+  recordAuditEvent,
+  responseMessage,
+  safeDb,
+  threadId,
+  userId,
+  workspaceId,
+}: Omit<PersistTerminalAssistantTurnProps, "failure" | "outcome"> & {
+  /** The released run's message as it stands. */
+  responseMessage: PersistableChatMessage;
+}): Promise<Result<HandedOverChatTurn, HandlerError<409> | SafeDbError>> => {
+  const planOf = (message: PersistableChatMessage) =>
+    owningAssistantMessage === undefined
+      ? ({ type: "insert", message } as const)
+      : ({ type: "update", messageId: message.id, message } as const);
+  return await settleHonouringStop(async (stopped) => {
+    if (stopped) {
+      const settlement = terminalSettlement({
+        outcome: USER_STOP_OUTCOME,
+        owningAssistantMessage,
+        responseMessage,
+        stopped,
+      });
+      const ended = await persistMessage({
+        indexThread,
+        persistencePlan: planOf(settlement.message),
+        recordAuditEvent,
+        safeDb,
+        threadId,
+        turnSettlement: {
+          kind: "outcome",
+          assistantMessageId: settlement.message.id,
+          execution,
+          outcome: settlement.outcome,
+        },
+        userId,
+        workspaceId,
+      });
+      return ended.map((): HandedOverChatTurn => ({
+        type: "stopped",
+        outcome: settlement.outcome,
+      }));
+    }
+    const answer = handedOverAssistantMessage({
+      owningAssistantMessage,
+      responseMessage,
+    });
+    const released = await persistMessage({
+      indexThread,
+      persistencePlan: planOf(answer),
+      recordAuditEvent,
+      safeDb,
+      threadId,
+      turnSettlement: {
+        kind: "release",
+        assistantMessageId: answer.id,
+        execution,
+      },
+      userId,
+      workspaceId,
+    });
+    return released.map(({ released: turn }): HandedOverChatTurn => ({
+      type: "handed-over",
+      turn: turn ?? panic("A stored release names no released turn"),
+    }));
+  });
+};
+
+/**
+ * The answer so far a released turn stores: the run's message over the
+ * owning one, merged as a terminal continuation merges them, with no outcome
+ * and nothing closed.
+ */
+const handedOverAssistantMessage = ({
+  owningAssistantMessage,
+  responseMessage,
+}: {
+  owningAssistantMessage: PersistableChatMessage | undefined;
+  responseMessage: PersistableChatMessage;
+}): PersistableChatMessage => {
+  if (
+    owningAssistantMessage !== undefined &&
+    responseMessage.id !== owningAssistantMessage.id
+  ) {
+    panic("A continuation must persist under its owning message id");
+  }
+  return toPersistableChatMessage({
+    id: responseMessage.id,
+    metadata: mergeContinuationMetadata({
+      owning: owningAssistantMessage?.metadata,
+      run: responseMessage.metadata,
+    }),
+    parts:
+      responseMessage.parts.length > 0 || owningAssistantMessage === undefined
+        ? responseMessage.parts
+        : owningAssistantMessage.parts,
+    role: "assistant",
+    ...(owningAssistantMessage?.createdAt !== undefined
+      ? { createdAt: owningAssistantMessage.createdAt }
+      : {}),
+  });
+};
 
 /**
  * A failure before the stream exists must still hydrate as the same terminal

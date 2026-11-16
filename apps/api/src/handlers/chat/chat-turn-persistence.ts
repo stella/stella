@@ -58,6 +58,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import type { ChatRunPings } from "@/api/lib/chat/chat-run-pings";
+import type { ReleasedChatTurn } from "@/api/lib/chat/chat-turn-handover-doorbell";
 import { closeChatRunLogOnTx } from "@/api/lib/chat/run-log";
 import {
   ACTIVE_CHAT_TURN_STATUSES,
@@ -2029,6 +2030,118 @@ export const settleChatTurnOnTx = async ({
     .where(owned)
     .limit(1);
   return stillOwned.length === 1 ? "stop-requested" : "not-owned";
+};
+
+/**
+ * How long a released turn waits for another task to adopt it before the
+ * reaper ends it as `owner-lost`: past a restart of a single-task
+ * deployment, and under the page's 180 s reconnect window.
+ */
+export const CHAT_TURN_ADOPT_BY_MS = 90_000;
+
+/** How a release went; see `ChatTurnSettlementResult` for the refusals. */
+type ChatTurnReleaseResult =
+  | { type: "released"; turn: ReleasedChatTurn }
+  | { type: "not-owned" }
+  | { type: "stop-requested" };
+
+/**
+ * Release the running turn `execution` owns to another task, with its answer
+ * so far stored as `assistantMessageId`: the planned `hand-over` transition,
+ * written as one compare-and-set on the owning execution and no stop request.
+ * The turn keeps its active time, its run log stays open for the adopter,
+ * and its queue waits (`CHAT_QUEUE_AFTER_TURN`). Like a settlement it does
+ * not take the thread lock; the adopter's claim does.
+ */
+export const releaseChatTurnOnTx = async ({
+  assistantMessageId,
+  execution,
+  pings,
+  tx,
+}: {
+  assistantMessageId: SafeId<"chatMessage">;
+  execution: ChatTurnExecution;
+  pings: ChatRunPings;
+  tx: Transaction;
+}): Promise<ChatTurnReleaseResult> => {
+  const owned = ownedByExecution(execution);
+  const current = (
+    await tx
+      .select({
+        adoptBy:
+          sql<Date>`now() + ${CHAT_TURN_ADOPT_BY_MS} * interval '1 millisecond'`.mapWith(
+            chatTurns.leaseExpiresAt,
+          ),
+        id: chatTurns.id,
+        leaseExpiresAt: chatTurns.leaseExpiresAt,
+        threadId: chatTurns.threadId,
+        userMessageId: chatTurns.userMessageId,
+      })
+      .from(chatTurns)
+      .where(owned)
+      .limit(1)
+  ).at(0);
+  if (current === undefined) {
+    return { type: "not-owned" };
+  }
+  const planned = planChatTurnTransition(
+    {
+      executionId: execution.executionId,
+      id: current.id,
+      leaseExpiresAt:
+        current.leaseExpiresAt ?? panic("A running chat turn has no lease"),
+      status: "running",
+      threadId: current.threadId,
+      userMessageId: current.userMessageId,
+    },
+    { type: "hand-over", adoptBy: current.adoptBy, assistantMessageId },
+  );
+  if (planned.type !== "applied" || planned.state.status !== "handed-over") {
+    return panic("A running chat turn cannot be handed over");
+  }
+  const handedOver = planned.state;
+  // The stop request and this write both lock the turn row, so exactly one
+  // of them lands first, as for a settlement.
+  // audit: skip — internal lifecycle release; the assistant message mutation is audited in this transaction
+  const released = await tx
+    .update(chatTurns)
+    .set({
+      assistantMessageId: handedOver.assistantMessageId,
+      executionId: null,
+      interactionToolCallId: null,
+      interactionType: null,
+      leaseExpiresAt: handedOver.adoptBy,
+      status: handedOver.status,
+    })
+    .where(and(owned, isNull(chatTurns.cancelRequestedAt)))
+    .returning({ ...CHAT_RUN_OWNER_COLUMNS, id: chatTurns.id });
+  recordChatRunOwners(pings, released);
+  const row = released.at(0);
+  if (row === undefined) {
+    const stillOwned = await tx
+      .select({ id: chatTurns.id })
+      .from(chatTurns)
+      .where(owned)
+      .limit(1);
+    return stillOwned.length === 1
+      ? { type: "stop-requested" }
+      : { type: "not-owned" };
+  }
+  await holdChatQueueAfterTurnOnTx({
+    outcome: handedOver.status,
+    threadId: row.threadId,
+    turnId: row.id,
+    tx,
+  });
+  return {
+    type: "released",
+    turn: {
+      organizationId: row.organizationId,
+      threadId: row.threadId,
+      turnId: row.id,
+      userId: brandPersistedUserId(row.userId),
+    },
+  };
 };
 
 /** Read an execution's clock anchor, including its just-settled outcome. */

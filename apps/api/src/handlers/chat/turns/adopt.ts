@@ -33,6 +33,7 @@ import {
 } from "@/api/handlers/chat/turns/settle";
 import { createVisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
 import { detached } from "@/api/lib/analytics/capture";
+import { answerChatTurnAdopterDoorbell } from "@/api/lib/chat/chat-turn-handover-doorbell";
 import { createContextNoticeStamp } from "@/api/lib/chat/context-notice";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { resolveServerStartedMember } from "@/api/lib/chat/server-started-member";
@@ -281,6 +282,7 @@ const adoptChatTurn = async ({
       instructions: "",
       resume: undefined,
       abortSignal: run.control.abortController.signal,
+      handOverSignal: run.control.handOverSignal,
     }),
     run,
     safeDb: caller.safeDb,
@@ -296,6 +298,8 @@ const adoptChatTurn = async ({
     turnBudget: createChatTurnBudget({ owningMessage: checkpoint }),
     contextNotice: createContextNoticeStamp(null),
     dismissesAwaited: false,
+    // The released read's answer is this turn's; the adopted read ends it.
+    answerSoFar: "released",
     // A harness answered the turn: no turn model, no reasoning provenance.
     stampAnswer: (message) => message,
     storedHistory: {
@@ -365,10 +369,11 @@ const createChatTurnAdopter = (dependencies: ChatTurnAdoptionDependencies) => {
 };
 
 /**
- * Adopt handed-over chat turns from this API task: a sweep every
- * `CHAT_TURN_ADOPTION_SWEEP_INTERVAL_MS`. Safe on every task at once: one
- * claim wins each turn. Answers the stop the server calls on shutdown, after
- * which this task adopts nothing more.
+ * Adopt handed-over chat turns from this API task: each one a stopping task
+ * rings for (`ringChatTurnAdopters`), and a sweep every
+ * `CHAT_TURN_ADOPTION_SWEEP_INTERVAL_MS` for those whose ring was lost. Safe
+ * on every task at once: one claim wins each turn. Answers the stop the
+ * server calls on shutdown, after which this task adopts nothing more.
  */
 export const startChatTurnAdopter = (): (() => void) => {
   const stopping = new AbortController();
@@ -390,7 +395,11 @@ export const startChatTurnAdopter = (): (() => void) => {
       }
     }, "chat-turn-adopter.sweep");
   }, CHAT_TURN_ADOPTION_SWEEP_INTERVAL_MS);
+  const stopAnswering = answerChatTurnAdopterDoorbell((turn) => {
+    detached(async () => await adopter.adopt(turn), "chat-turn-adopter.ring");
+  });
   return () => {
+    stopAnswering();
     clearInterval(timer);
     stopping.abort();
   };

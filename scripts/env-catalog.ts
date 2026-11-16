@@ -167,6 +167,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "FEATURE_ACTION_ADMISSION",
   "FEATURE_AGENT_ID_JAG",
   "FEATURE_AI_MEMORY",
+  "FEATURE_CHAT_TURN_HANDOVER",
   "FEATURE_CONFLICT_CHECK",
   "FEATURE_FILE_USAGE_LIMITS",
   "FEATURE_FREE_TIER",
@@ -517,6 +518,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "S3 bucket the SES receipt rule stores raw messages in, in S3_REGION.",
   INBOUND_MAIL_KEY_PREFIX:
     "Object key prefix of the SES receipt rule's S3 action, for example mail/.",
+  FEATURE_CHAT_TURN_HANDOVER:
+    "Release each local chat turn to another API task when this one stops, instead of ending it. Defaults off; enable only once every task runs a release that adopts released turns.",
   FEATURE_AI_MEMORY:
     "Enable tenant-scoped AI memory APIs, prompt retrieval, tools, and workers.",
   FEATURE_INBOX_DOCUMENT_SCOUTS:
@@ -902,6 +905,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   API_FEATURE_ACCESS_GRANTS_SSM_PARAMETER_NAME:
     ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_ACTION_ADMISSION: ENV_CREDENTIAL_KIND.notCredential,
+  FEATURE_CHAT_TURN_HANDOVER: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_ACTION_COST_RECORDS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_AGENT_ID_JAG: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_AI_MEMORY: ENV_CREDENTIAL_KIND.notCredential,

@@ -238,6 +238,11 @@ type CreateChatTurnTimingDurabilityArgs = {
   log: StreamDurability;
   getTerminal: () => PrepareChatTurnTimingBatchArgs["terminal"];
   getPhase: () => "running" | "settled";
+  /**
+   * Whether the run released its turn to another task: its settlement stores
+   * the answer so far, and the log stays open for the adopter.
+   */
+  isReleased: () => boolean;
   finishSettlement: () => Promise<void>;
   readTiming: WithChatTurnTimingArgs["readTiming"];
 };
@@ -250,6 +255,7 @@ export const createChatTurnTimingDurability = ({
   log,
   getTerminal,
   getPhase,
+  isReleased,
   finishSettlement,
   readTiming,
 }: CreateChatTurnTimingDurabilityArgs): StreamDurability => {
@@ -310,6 +316,13 @@ export const createChatTurnTimingDurability = ({
         : await log.append(chunks);
     },
     close: async () => {
+      if (isReleased()) {
+        // Every chunk the released read yielded is appended by now; the
+        // release stores the answer for the adopter, which appends after them
+        // under its own execution, so neither the message nor the log ends.
+        await settle();
+        return;
+      }
       try {
         if (status === "pending" && messageId !== undefined) {
           await finalize([

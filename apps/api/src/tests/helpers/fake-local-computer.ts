@@ -214,7 +214,7 @@ export const localSource =
     computer: ReturnType<typeof createComputer>,
     resume?: readonly RunAgentResumeItem[],
   ) =>
-  (abortSignal: AbortSignal) =>
+  (abortSignal: AbortSignal, handOverSignal = new AbortController().signal) =>
     createLocalChatRun(
       computer.context,
       resume === undefined
@@ -236,11 +236,13 @@ export const localSource =
       instructions: "You are stella.",
       resume,
       abortSignal,
+      handOverSignal,
     });
 
 /** The turn's run as a task that adopted the turn reads it on. */
 export const adoptedSource =
-  (computer: ReturnType<typeof createComputer>) => (abortSignal: AbortSignal) =>
+  (computer: ReturnType<typeof createComputer>) =>
+  (abortSignal: AbortSignal, handOverSignal = new AbortController().signal) =>
     createLocalChatRun(computer.context, {
       type: "adopt",
       harness: DESTINATION.harness,
@@ -251,4 +253,5 @@ export const adoptedSource =
       instructions: "You are stella.",
       resume: undefined,
       abortSignal,
+      handOverSignal,
     });

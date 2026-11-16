@@ -204,7 +204,24 @@ type LocalRunStreamInput = {
    * (`ChatTurnRunBound`).
    */
   abortSignal: AbortSignal;
+  /**
+   * The turn's release to another task (`ChatTurnRun.handOver`): the read
+   * stops after the event it is on, records where, and ends with
+   * `CHAT_TURN_RELEASED_EVENT`; the run on the computer goes on.
+   */
+  handOverSignal: AbortSignal;
 };
+
+/**
+ * The server-only end of a read released to another task: the processor
+ * stores the answer so far for the adopter instead of settling the turn, and
+ * the chunk reaches no log and no viewer.
+ */
+export const CHAT_TURN_RELEASED_EVENT = "stella.chat-turn.released";
+
+/** Whether `chunk` ends a read released to another task. */
+export const isChatTurnReleasedChunk = (chunk: StreamChunk): boolean =>
+  chunk.type === EventType.CUSTOM && chunk.name === CHAT_TURN_RELEASED_EVENT;
 
 /** A chat turn bound to a computer: started on a new turn, continued on a resume. */
 export type LocalChatRun = {
@@ -1296,6 +1313,7 @@ type ReadRunOptions = {
   toolCalls: LocalRunToolCalls;
   chatRunId: string;
   abortSignal: AbortSignal;
+  handOverSignal: AbortSignal;
   /**
    * When the turn was sent, for a run just started: the chat shows it waits
    * for the computer to pick the run up until it did. `null` when reading on
@@ -1325,12 +1343,15 @@ const interruptRun = async (context: LocalRunContext, runnerRunId: string) => {
 
 /**
  * Whether a cut of the turn, by its kind, stops the computer's turn. After
- * each of them nobody reads the run any more, so each does.
+ * each of them but a lost owner nobody reads the run any more. A lost owner
+ * is a task whose turn another task adopted, or the reaper ended: the
+ * adopter reads the run on, and the run of a turn that ended is cancelled
+ * from the rows (`readRunsOfEndedChatTurns`).
  */
 const LOCAL_RUN_CUT_STOPS_COMPUTER: Readonly<Record<ChatTurnRunCut, boolean>> =
   {
     "member-stop": true,
-    "owner-lost": true,
+    "owner-lost": false,
     "production-failed": true,
     "admission-lost": true,
     other: true,
@@ -1810,6 +1831,67 @@ const readStartOf = (
         told: null,
       };
 
+/**
+ * When a read may release its turn to another task: asked to, with no call
+ * input half read (an adopted read's processor folds a call's input only
+ * from the call's start; the input's end follows its start at once), and
+ * not between the harness's finish and the run's own end, which an adopted
+ * read would not repeat (that end follows at once, and the read settles the
+ * turn then).
+ */
+const releaseGate = (handOverSignal: AbortSignal) => {
+  const streamingInputs = new Set<string>();
+  return {
+    observe: (chunk: StreamChunk) => {
+      if (chunk.type === EventType.TOOL_CALL_START) {
+        streamingInputs.add(chunk.toolCallId);
+      }
+      if (chunk.type === EventType.TOOL_CALL_END) {
+        streamingInputs.delete(chunk.toolCallId);
+      }
+    },
+    open: (finished: boolean) =>
+      handOverSignal.aborted && !finished && streamingInputs.size === 0,
+  };
+};
+
+/**
+ * End a read whose turn goes to another task, after the last event it read
+ * and its run start: its position is recorded, the run goes on unheld, and
+ * the read's last chunk says it was released. A position that cannot be
+ * recorded fails the read as any store failure does.
+ */
+async function* releasedRead({
+  pause,
+  position,
+  releaseRun,
+  rewrite,
+  start,
+  stopRun,
+}: {
+  pause: () => ReturnType<LocalRunContext["control"]["recordChatReadSeq"]>;
+  position: number;
+  releaseRun: () => void;
+  rewrite: RewriteContext;
+  start: () => Generator<PublicStreamChunk>;
+  stopRun: () => Promise<void>;
+}): AsyncGenerator<PublicStreamChunk> {
+  yield* start();
+  const recorded = await pause();
+  if (recorded.isErr()) {
+    await stopRun();
+    yield* storeUnavailable(recorded.error, rewrite);
+    return;
+  }
+  releaseRun();
+  yield {
+    type: EventType.CUSTOM,
+    name: CHAT_TURN_RELEASED_EVENT,
+    value: { readSeq: position },
+    timestamp: nowMs(),
+  };
+}
+
 async function* readRunChunks({
   context,
   runnerRunId,
@@ -1817,6 +1899,7 @@ async function* readRunChunks({
   toolCalls,
   chatRunId,
   abortSignal,
+  handOverSignal,
   deliveringSince,
   adopted,
 }: ReadRunOptions): AsyncGenerator<PublicStreamChunk> {
@@ -1857,6 +1940,9 @@ async function* readRunChunks({
   const held = holdRun(context, runnerRunId, abortSignal);
   const stopRun = held.stop;
   const releaseRun = held.release;
+  const gate = releaseGate(handOverSignal);
+  const release = () =>
+    releasedRead({ pause, position, releaseRun, rewrite, start, stopRun });
   const onCut = () => {
     detached(held.endForCut, "local-run-chunks.interrupt");
   };
@@ -1869,6 +1955,10 @@ async function* readRunChunks({
     for (;;) {
       if (abortSignal.aborted) {
         await held.endForCut();
+        return;
+      }
+      if (gate.open(finished)) {
+        yield* release();
         return;
       }
       const page = await control.readEvents({
@@ -1890,6 +1980,10 @@ async function* readRunChunks({
         yield* computer({ status: "connected" });
       }
       for (const item of page.value.items) {
+        if (gate.open(finished) && !abortSignal.aborted) {
+          yield* release();
+          return;
+        }
         position = item.seq;
         const message = storedRunMessage(item.message);
         switch (message.type) {
@@ -1927,6 +2021,7 @@ async function* readRunChunks({
               continue;
             }
             yield* start();
+            gate.observe(chunk);
             if (chunk.type !== EventType.RUN_FINISHED) {
               yield* runApps.carry(chunk);
               continue;
@@ -2000,7 +2095,7 @@ async function* readRunChunks({
           yield* computer(step.computer);
           await listener.wait({
             timeoutMs: context.pollMs ?? DEFAULT_POLL_MS,
-            signal: abortSignal,
+            signal: AbortSignal.any([abortSignal, handOverSignal]),
           });
           continue;
         default:
@@ -2189,6 +2284,7 @@ async function* startLocalRun({
     toolCalls: new Map(),
     chatRunId: input.chatRunId,
     abortSignal: input.abortSignal,
+    handOverSignal: input.handOverSignal,
     deliveringSince: sentAt,
   });
 }
@@ -2403,6 +2499,7 @@ async function* resumeLocalRun({
     toolCalls: calls.value,
     chatRunId: input.chatRunId,
     abortSignal: input.abortSignal,
+    handOverSignal: input.handOverSignal,
     deliveringSince: null,
   });
 }
@@ -2459,6 +2556,7 @@ async function* adoptLocalRun({
     toolCalls: read.value.toolCalls,
     chatRunId: input.chatRunId,
     abortSignal: input.abortSignal,
+    handOverSignal: input.handOverSignal,
     deliveringSince: null,
     adopted: read.value,
   });

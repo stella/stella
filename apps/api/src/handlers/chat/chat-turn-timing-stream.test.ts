@@ -679,6 +679,7 @@ for (const batchSize of [1, 2, 32]) {
           adapter: createChatTurnTimingDurability({
             getTerminal: () => ({ chunk: runEnd, messageId: "answer" }),
             getPhase: () => "settled",
+            isReleased: () => false,
             readTiming: async () => readPresent(finished),
             finishSettlement: async () => {
               expect(stored.at(-1)).toEqual(runEnd);
@@ -769,6 +770,7 @@ for (const exit of ["drained", "thrown"] as const) {
             adapter: createChatTurnTimingDurability({
               getTerminal: () => undefined,
               getPhase: () => state,
+              isReleased: () => false,
               readTiming: async () =>
                 readPresent(state === "running" ? running : finished),
               finishSettlement: async () => {
@@ -860,6 +862,7 @@ test("a failed cleanup append still settles once and closes durability", async (
     },
     getTerminal: () => undefined,
     getPhase: () => "running",
+    isReleased: () => false,
     readTiming: async () => readPresent(finished),
     finishSettlement: async () => {
       settlements += 1;
@@ -924,6 +927,7 @@ test.each(["throw after terminal"] as const)(
             },
             getTerminal: () => ({ chunk: runEnd, messageId: "answer" }),
             getPhase: () => phase.status,
+            isReleased: () => false,
             readTiming: async () =>
               readPresent(phase.status === "running" ? running : finished),
             finishSettlement: async () => {
@@ -986,6 +990,7 @@ test("durability rejects a second assistant id before writing it", async () => {
     log,
     getTerminal: () => undefined,
     getPhase: () => "running",
+    isReleased: () => false,
     readTiming: async () => readPresent(running),
     finishSettlement: async () => {},
   });

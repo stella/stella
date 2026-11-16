@@ -12,7 +12,10 @@ import { envBase } from "@/api/env-base";
 import { startFeatureAccessGrantsRefresh } from "@/api/env-feature-access";
 import { computeCaseLawCoverageAnswer } from "@/api/handlers/case-law/decisions/coverage";
 import { reapOwnerlessChatTurnOnTx } from "@/api/handlers/chat/chat-turn-persistence";
-import { relinquishChatTurnRuns } from "@/api/handlers/chat/chat-turn-run";
+import {
+  chatTurnRelinquishmentOf,
+  relinquishChatTurnRuns,
+} from "@/api/handlers/chat/chat-turn-run";
 import { startChatQueueSender } from "@/api/handlers/chat/queue/chat-queue-sender";
 import { startChatTurnAdopter } from "@/api/handlers/chat/turns/adopt";
 import { initBuiltinReportTemplates } from "@/api/handlers/reports/builtin-templates";
@@ -318,7 +321,14 @@ const startServer = async (): Promise<void> => {
           "error.type": errorTag(error),
         });
       },
-      relinquishChatTurnRuns,
+      // Off by default: every task must adopt (`CHAT_TURN_HANDED_OVER_ROLLOUT`)
+      // before any releases a turn to one.
+      relinquishChatTurnRuns: async () =>
+        await relinquishChatTurnRuns(
+          chatTurnRelinquishmentOf(
+            isDeploymentFeatureEnabled("FEATURE_CHAT_TURN_HANDOVER"),
+          ),
+        ),
       stopChatQueueSender,
       stopChatTurnAdopter,
       stopHttp: async () => {
