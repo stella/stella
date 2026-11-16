@@ -55,6 +55,13 @@ const deleteIndex = async (): Promise<void> => {
 const incarnation = async () =>
   (await client.readIndexIncarnation(INDEX_ID, "unobserved")).unwrap();
 
+const presentIncarnation = (
+  read: Awaited<ReturnType<typeof incarnation>>,
+): string =>
+  read.type === "present"
+    ? read.incarnation
+    : panic("A created index read as missing");
+
 describe.skipIf(!runEngineTests)(
   "an index's incarnation, against the pinned engine",
   () => {
@@ -71,22 +78,16 @@ describe.skipIf(!runEngineTests)(
       async () => {
         expect(await incarnation()).toEqual({ type: "missing" });
         await createIndex();
-        const first = await incarnation();
-        if (first.type !== "present") {
-          return panic("A created index read as missing");
-        }
-        expect(first.incarnation.startsWith(`${INDEX_ID}:`)).toBe(true);
+        const first = presentIncarnation(await incarnation());
+        expect(first.startsWith(`${INDEX_ID}:`)).toBe(true);
         // A second read of the same index names the same incarnation.
-        expect(await incarnation()).toEqual(first);
+        expect(presentIncarnation(await incarnation())).toBe(first);
 
         await deleteIndex();
         expect(await incarnation()).toEqual({ type: "missing" });
         await createIndex();
-        const second = await incarnation();
-        if (second.type !== "present") {
-          return panic("A recreated index read as missing");
-        }
-        expect(second.incarnation).not.toBe(first.incarnation);
+        const second = presentIncarnation(await incarnation());
+        expect(second).not.toBe(first);
       },
       TEST_TIMEOUT_MS,
     );

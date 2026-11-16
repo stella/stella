@@ -47,6 +47,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-route-proof";
 import {
   checkCorpusIndexRouteProofIncarnations,
+  type CorpusIndexGenerationRouteProofs,
   type CorpusIndexRoute,
   readCorpusIndexRouteProofsTx,
   recordCorpusIndexRouteCensusPageTx,
@@ -144,8 +145,7 @@ const engineClient = {
   readIndexIncarnation: async (indexId: string) => {
     reads.incarnation += 1;
     if (
-      switchIncarnation !== null &&
-      switchIncarnation.indexId === indexId &&
+      switchIncarnation?.indexId === indexId &&
       reads.incarnation >= switchIncarnation.atRead
     ) {
       incarnations.set(indexId, switchIncarnation.to);
@@ -310,10 +310,24 @@ const statusOf = async (indexId: string = ROUTE.indexId) => {
         verdict.routes.find((reading) => reading.indexId === indexId) ??
         panic(`Undeclared route: ${indexId}`)
       ).status;
-    default:
+    case "generation_absent":
+    case "open_route_set":
       return panic(`No route set: ${verdict.type}`);
+    default:
+      verdict satisfies never;
+      return panic("Unhandled route proof verdict");
   }
 };
+
+const notReadyVerdict = (verdict: CorpusIndexGenerationRouteProofs) =>
+  verdict.type === "not_ready"
+    ? verdict
+    : panic(`Expected not ready, got ${verdict.type}`);
+
+const allCurrentVerdict = (verdict: CorpusIndexGenerationRouteProofs) =>
+  verdict.type === "all_current"
+    ? verdict
+    : panic(`Expected all current, got ${verdict.type}`);
 
 const passRow = async (indexId: string = ROUTE.indexId) =>
   (
@@ -776,10 +790,7 @@ describe("route readiness proof", () => {
   });
 
   test("the generation is all current only when every declared route is, and the flip re-reads each incarnation", async () => {
-    const verdict = await readVerdict();
-    if (verdict.type !== "not_ready") {
-      return panic(`Expected not ready, got ${verdict.type}`);
-    }
+    const verdict = notReadyVerdict(await readVerdict());
     // Every declared route is listed, though none has a row.
     expect(verdict.routes.length).toBeGreaterThan(1);
     expect(
@@ -816,10 +827,7 @@ describe("route readiness proof", () => {
           "present_drift",
         ),
     );
-    const ready = await readVerdict();
-    if (ready.type !== "all_current") {
-      return panic(`Expected all current, got ${ready.type}`);
-    }
+    const ready = allCurrentVerdict(await readVerdict());
     expect(ready.routes.map(({ indexId }) => indexId)).toEqual(
       verdict.routes.map(({ indexId }) => indexId),
     );
