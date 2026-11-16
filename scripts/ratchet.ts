@@ -1820,15 +1820,15 @@ const countSliceOwnedWebComponents: RepoCounter = (context) => {
     }
   }
 
-  const files: Record<string, number> = {};
+  const files = new Map<string, number>();
   let count = 0;
   for (const [component, slices] of importerSlices) {
     if (slices.size === 1 && !slices.has(SHARED_IMPORTER)) {
-      files[component] = 1;
+      files.set(component, 1);
       count += 1;
     }
   }
-  return { count, files };
+  return { count, files: Object.fromEntries(files) };
 };
 
 // --- Metric table -----------------------------------------------------------
@@ -2728,7 +2728,7 @@ const countCrossAppLibPathCopies: RepoCounter = (context) => {
     byLibPath.set(libPath, byApp);
   }
 
-  const files: Record<string, number> = {};
+  const files = new Map<string, number>();
   let count = 0;
   for (const byApp of byLibPath.values()) {
     if (byApp.size < 2) {
@@ -2736,12 +2736,12 @@ const countCrossAppLibPathCopies: RepoCounter = (context) => {
     }
     for (const copies of byApp.values()) {
       for (const rel of copies) {
-        files[rel] = 1;
+        files.set(rel, 1);
         count += 1;
       }
     }
   }
-  return { count, files };
+  return { count, files: Object.fromEntries(files) };
 };
 
 // A top-level exported binding. Line-anchored, so a nested or re-exported
@@ -2778,7 +2778,7 @@ const countCrossWorkspaceDuplicateExportNames: RepoCounter = (context) => {
     }
   }
 
-  const files: Record<string, number> = {};
+  const files = new Map<string, number>();
   let count = 0;
   for (const byWorkspace of definitions.values()) {
     const workspaces = [...byWorkspace.keys()].toSorted();
@@ -2786,11 +2786,11 @@ const countCrossWorkspaceDuplicateExportNames: RepoCounter = (context) => {
       const rel =
         byWorkspace.get(workspace) ??
         panic(`ratchet lost the defining file for ${workspace}`);
-      files[rel] = (files[rel] ?? 0) + 1;
+      files.set(rel, (files.get(rel) ?? 0) + 1);
       count += 1;
     }
   }
-  return { count, files };
+  return { count, files: Object.fromEntries(files) };
 };
 
 // Direct children of a flat lib bucket, one per entry: the bucket's size is the
@@ -2815,7 +2815,7 @@ const countLibTopLevelEntries =
                   .at(0),
               ),
           );
-    const files: Record<string, number> = {};
+    const files = new Map<string, number>();
     let count = 0;
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const rel = `${libDir}/${entry.name}`;
@@ -2826,10 +2826,10 @@ const countLibTopLevelEntries =
       ) {
         continue;
       }
-      files[rel] = 1;
+      files.set(rel, 1);
       count += 1;
     }
-    return { count, files };
+    return { count, files: Object.fromEntries(files) };
   };
 
 const THIRD_PARTY_DEPENDENCY_SECTIONS = [
@@ -2875,7 +2875,7 @@ const countDirectThirdPartyDeclarations: RepoCounter = (context) => {
     }
   }
 
-  const files: Record<string, number> = {};
+  const files = new Map<string, number>();
   let count = 0;
   for (const rel of manifests.toSorted()) {
     const manifest = parseJson5Record(context, rel);
@@ -2898,11 +2898,11 @@ const countDirectThirdPartyDeclarations: RepoCounter = (context) => {
       }
     }
     if (declarations > 0) {
-      files[rel] = declarations;
+      files.set(rel, declarations);
       count += declarations;
     }
   }
-  return { count, files };
+  return { count, files: Object.fromEntries(files) };
 };
 
 const countLockfilePackageEntries: RepoCounter = (context) => {
@@ -3178,16 +3178,16 @@ const countDuplicateTokenBlocks: RepoCounter = (context) => {
     }
   }
 
-  const files: Record<string, number> = {};
+  const files = new Map<string, number>();
   let count = 0;
   for (const [fileIndex, positions] of hitPositions) {
     const rel =
       scanned[fileIndex] ?? panic("ratchet lost a duplicate-block file index");
     const blocks = cloneBlockCount(positions);
-    files[rel] = blocks;
+    files.set(rel, blocks);
     count += blocks;
   }
-  return { count, files };
+  return { count, files: Object.fromEntries(files) };
 };
 
 const RESULT_BOUNDARY_METRICS = [
@@ -3980,7 +3980,7 @@ export const inspectConfiguration = (
     }
   }
 
-  const baseline: Baseline = {};
+  const baseline = new Map<string, MetricSnapshot>();
   for (const id of metricIds) {
     const rawSnapshot = ownValue(rawBaseline, id);
     if (!isRecord(rawSnapshot)) {
@@ -4013,7 +4013,7 @@ export const inspectConfiguration = (
       continue;
     }
 
-    const files: Record<string, number> = {};
+    const files = new Map<string, number>();
     let fileTotal = 0;
     let filesValid = true;
     for (const [file, value] of Object.entries(rawFiles)) {
@@ -4029,7 +4029,7 @@ export const inspectConfiguration = (
         );
         continue;
       }
-      files[file] = value;
+      files.set(file, value);
       fileTotal += value;
     }
     if (!filesValid) {
@@ -4047,11 +4047,11 @@ export const inspectConfiguration = (
       );
       continue;
     }
-    baseline[id] = { count: fileTotal, files };
+    baseline.set(id, { count: fileTotal, files: Object.fromEntries(files) });
   }
 
   return errors.length === 0
-    ? { status: "valid", baseline }
+    ? { status: "valid", baseline: Object.fromEntries(baseline) }
     : { status: "invalid", errors };
 };
 
@@ -4062,16 +4062,26 @@ const assertMetricRegistry = (): void => {
   }
 };
 
+const ownSnapshot = (baseline: Baseline, id: string) =>
+  Object.hasOwn(baseline, id) ? baseline[id] : undefined;
+
 const requireSnapshot = (baseline: Baseline, id: string): MetricSnapshot =>
-  baseline[id] ?? panic(`ratchet metric ${id} is missing from the snapshot`);
+  ownSnapshot(baseline, id) ??
+  panic(`ratchet metric ${id} is missing from the snapshot`);
 
 const sortedSnapshot = (result: RepoMetricResult): MetricSnapshot => {
-  const files: Record<string, number> = {};
-  for (const rel of Object.keys(result.files).toSorted()) {
-    files[rel] =
-      result.files[rel] ??
-      panic(`ratchet count for ${rel} disappeared during scan`);
-  }
+  const files = Object.fromEntries(
+    Object.keys(result.files)
+      .toSorted()
+      .map(
+        (rel) =>
+          [
+            rel,
+            result.files[rel] ??
+              panic(`ratchet count for ${rel} disappeared during scan`),
+          ] as const,
+      ),
+  );
   const count = Object.values(files).reduce((total, value) => total + value, 0);
   if (count !== result.count) {
     panic(
@@ -4152,7 +4162,7 @@ export const scanTree = ({
 
   const totals = new Map<
     string,
-    { count: number; files: Record<string, number> }
+    { count: number; files: Map<string, number> }
   >();
   const files = new Map<string, FileCounts>();
   for (const [rel, selected] of metricsByFile) {
@@ -4170,8 +4180,11 @@ export const scanTree = ({
       if (!(n > 0)) {
         continue;
       }
-      const total = totals.get(metric.id) ?? { count: 0, files: {} };
-      total.files[rel] = n;
+      const total = totals.get(metric.id) ?? {
+        count: 0,
+        files: new Map<string, number>(),
+      };
+      total.files.set(rel, n);
       total.count += n;
       totals.set(metric.id, total);
     }
@@ -4183,7 +4196,7 @@ export const scanTree = ({
     }
   }
 
-  const snapshot: Baseline = {};
+  const snapshot = new Map<string, MetricSnapshot>();
   for (const metric of metrics) {
     switch (metric.scope) {
       case "repo":
@@ -4192,20 +4205,30 @@ export const scanTree = ({
           // before allocating another whole-repository duplication index.
           Bun.gc(true);
         }
-        snapshot[metric.id] = sortedSnapshot(metric.count(tree));
+        snapshot.set(metric.id, sortedSnapshot(metric.count(tree)));
         break;
-      case "file":
-        snapshot[metric.id] = sortedSnapshot(
-          totals.get(metric.id) ?? { count: 0, files: {} },
+      case "file": {
+        const total = totals.get(metric.id);
+        snapshot.set(
+          metric.id,
+          sortedSnapshot(
+            total === undefined
+              ? { count: 0, files: {} }
+              : { count: total.count, files: Object.fromEntries(total.files) },
+          ),
         );
         break;
+      }
       default: {
         metric satisfies never;
         return panic(`ratchet metric has an unknown scope: ${String(metric)}`);
       }
     }
   }
-  const inspection = inspectConfiguration(metrics, snapshot);
+  const inspection = inspectConfiguration(
+    metrics,
+    Object.fromEntries(snapshot),
+  );
   if (inspection.status === "invalid") {
     panic(inspection.errors.join("\n"));
   }
@@ -4342,10 +4365,12 @@ const diffMetric = (
   baseline: MetricSnapshot,
   { perFile, allowlist, renamedFrom }: DiffOptions = {},
 ): MetricDiff => {
+  const currentFiles = new Map(Object.entries(current.files));
+  const baselineFiles = new Map(Object.entries(baseline.files));
   const regressedFiles: RegressedFile[] = [];
-  for (const [file, to] of Object.entries(current.files)) {
+  for (const [file, to] of currentFiles) {
     const baselineFile = renamedFrom?.get(file) ?? file;
-    const from = baseline.files[baselineFile] ?? 0;
+    const from = baselineFiles.get(baselineFile) ?? 0;
     if (to > from) {
       regressedFiles.push({ file, from, to });
     }
@@ -4357,8 +4382,8 @@ const diffMetric = (
     const renamedTo = new Map(
       [...(renamedFrom ?? [])].map(([to, from]) => [from, to]),
     );
-    for (const [file, from] of Object.entries(baseline.files)) {
-      const to = current.files[renamedTo.get(file) ?? file] ?? 0;
+    for (const [file, from] of baselineFiles) {
+      const to = currentFiles.get(renamedTo.get(file) ?? file) ?? 0;
       if (to < from) {
         staleFiles.push({ file, from, to });
       }
@@ -4416,7 +4441,7 @@ const runReport = (): number => {
   console.log("ratchet: current metric counts (vs baseline)\n");
   for (const metric of RATCHET_METRICS) {
     const c = requireSnapshot(current, metric.id);
-    const b = baseline[metric.id]?.count ?? 0;
+    const b = ownSnapshot(baseline, metric.id)?.count ?? 0;
     const delta = c.count - b;
     const sign = formatDelta(delta);
     console.log(
@@ -4455,7 +4480,7 @@ export const assessMeasurements = ({
     diffMetric(
       metric.id,
       requireSnapshot(current, metric.id),
-      baseline[metric.id] ?? { count: 0, files: {} },
+      ownSnapshot(baseline, metric.id) ?? { count: 0, files: {} },
       { perFile: metricGate(metric).perFile, renamedFrom },
     ),
   );
