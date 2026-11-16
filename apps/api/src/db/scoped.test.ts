@@ -20,6 +20,7 @@ import {
   DatabaseRlsError,
 } from "@/api/lib/errors/tagged-errors";
 import { errorSystemFields } from "@/api/lib/errors/utils";
+import { withExceptionScope } from "@/api/lib/observability/exception-scope";
 import { logger } from "@/api/lib/observability/logger";
 import { PG_ERROR } from "@/api/lib/pg-error";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
@@ -196,6 +197,33 @@ describe("scoped transaction deadline", () => {
       expect(warn.mock.calls[0]?.[0]).toBe(
         "database.transaction_over_deadline",
       );
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("names the route the request pipeline declared", async () => {
+    const warn = spyOn(logger, "warn").mockImplementation(() => undefined);
+    try {
+      const { timeoutMs } = TRANSACTION_DEADLINE.request;
+      await withExceptionScope(
+        {
+          type: "request",
+          method: "POST",
+          routeTemplate: "/api/v1/workspaces/:workspaceId/documents",
+        },
+        async () => {
+          reportOverDeadline({
+            deadline: TRANSACTION_DEADLINE.request,
+            elapsedMs: timeoutMs + 1,
+          });
+          await Promise.resolve();
+        },
+      );
+      expect(warn.mock.calls[0]?.[1]).toMatchObject({
+        "http.method": "POST",
+        "http.route": "/api/v1/workspaces/:workspaceId/documents",
+      });
     } finally {
       warn.mockRestore();
     }

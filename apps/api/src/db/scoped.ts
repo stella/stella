@@ -27,8 +27,8 @@ import {
   DatabaseRlsError,
 } from "@/api/lib/errors/tagged-errors";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
+import { getRequestRouteScope } from "@/api/lib/observability/exception-scope";
 import { logger } from "@/api/lib/observability/logger";
-import { getMountedRequestRoute } from "@/api/lib/observability/request-context";
 import {
   getPgDriverErrorCode,
   getPgErrorCode,
@@ -300,8 +300,10 @@ export const reportOverDeadline = ({
   if (deadline === undefined || elapsedMs <= deadline.timeoutMs) {
     return;
   }
+  const route = getRequestRouteScope();
   logger.warn("database.transaction_over_deadline", {
-    "http.route": getMountedRequestRoute() ?? "unmounted",
+    "http.method": route?.method ?? "none",
+    "http.route": route?.routeTemplate ?? "unmounted",
     "db.transaction.duration_ms": Math.round(elapsedMs),
     "db.transaction.deadline_ms": deadline.timeoutMs,
     "db.transaction.deadline_mode": deadline.mode,
