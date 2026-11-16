@@ -482,7 +482,6 @@
     "apps/api/src/lib/bbox/generate-b-boxes-shared.ts": 1,
     "apps/api/src/lib/deepl/client.ts": 3,
     "apps/api/src/lib/files/gotenberg.ts": 1,
-    "apps/api/src/lib/health/readiness.ts": 1,
     "apps/api/src/lib/hosted-usage-provider/client.ts": 1,
     "apps/api/src/lib/web-search/jina.ts": 1,
     "apps/api/src/lib/web-search/tavily.ts": 2,
