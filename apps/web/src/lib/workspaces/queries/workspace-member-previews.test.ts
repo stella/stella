@@ -52,7 +52,10 @@ test("preview request keeps sorted IDs and cancels its transport with the query"
       return await new Promise<Response>((_resolve, reject) => {
         request.signal.addEventListener(
           "abort",
-          () => reject(request.signal.reason),
+          () =>
+            reject(
+              new Error("Request aborted", { cause: request.signal.reason }),
+            ),
           { once: true },
         );
         reached.resolve(request);
