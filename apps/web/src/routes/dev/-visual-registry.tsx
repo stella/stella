@@ -308,7 +308,7 @@ type FixtureSectionProps = {
 
 export const FixtureSection = ({ visual, children }: FixtureSectionProps) => (
   <section
-    className="bg-background flex min-h-0 flex-1 flex-col"
+    className="bg-background flex flex-1 flex-col"
     data-playground-section={`fixture:${visual}`}
   >
     <header className="text-muted-foreground shrink-0 px-4 py-2 text-xs">
