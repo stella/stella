@@ -2098,6 +2098,7 @@
     },
     "queue": {
       "actions": "Aktionen für die Nachricht in der Warteschlange",
+      "editNeedsComposer": "Öffnen Sie diesen Chat, um eine Nachricht in der Warteschlange zu bearbeiten.",
       "filesNotQueued": "Eine Nachricht mit Dateien kann nicht in der Warteschlange warten. Senden Sie sie, sobald die aktuelle Antwort fertig ist.",
       "heldByMember": "Warteschlange pausiert.",
       "heldComputerAway": "Warten auf Ihren Computer: Nachrichten in der Warteschlange werden gesendet, sobald er verbunden ist.",

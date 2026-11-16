@@ -2098,6 +2098,7 @@
     },
     "queue": {
       "actions": "Acciones del mensaje en cola",
+      "editNeedsComposer": "Abre este chat para editar un mensaje en cola.",
       "filesNotQueued": "Un mensaje con archivos no puede esperar en la cola. Envíalo cuando termine la respuesta actual.",
       "heldByMember": "Cola en pausa.",
       "heldComputerAway": "Esperando a tu ordenador: los mensajes en cola se envían en cuanto se conecte.",

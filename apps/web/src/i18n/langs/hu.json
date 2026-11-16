@@ -2098,6 +2098,7 @@
     },
     "queue": {
       "actions": "A sorban álló üzenet műveletei",
+      "editNeedsComposer": "Nyissa meg ezt a csevegést a sorban álló üzenet szerkesztéséhez.",
       "filesNotQueued": "Fájlokat tartalmazó üzenet nem várhat a sorban. Küldje el, amikor az aktuális válasz befejeződött.",
       "heldByMember": "A sor szüneteltetve.",
       "heldComputerAway": "Várakozás a számítógépére: a sorban álló üzenetek elmennek, amint csatlakozik.",

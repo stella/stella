@@ -2098,6 +2098,7 @@
     },
     "queue": {
       "actions": "Rindā esošās ziņas darbības",
+      "editNeedsComposer": "Atveriet šo tērzēšanu, lai rediģētu rindā esošu ziņu.",
       "filesNotQueued": "Ziņa ar failiem nevar gaidīt rindā. Nosūtiet to, kad pašreizējā atbilde būs pabeigta.",
       "heldByMember": "Rinda apturēta.",
       "heldComputerAway": "Gaida jūsu datoru: rindā esošās ziņas tiks nosūtītas, tiklīdz tas pieslēgsies.",

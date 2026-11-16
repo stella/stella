@@ -2098,6 +2098,7 @@
     },
     "queue": {
       "actions": "Akce zprávy ve frontě",
+      "editNeedsComposer": "Zprávu ve frontě upravíte, když otevřete tento chat.",
       "filesNotQueued": "Zpráva se soubory nemůže čekat ve frontě. Odešlete ji, až aktuální odpověď skončí.",
       "heldByMember": "Fronta je pozastavená.",
       "heldComputerAway": "Čeká se na váš počítač: zprávy ve frontě se odešlou, jakmile se připojí.",

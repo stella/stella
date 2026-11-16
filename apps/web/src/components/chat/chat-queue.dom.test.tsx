@@ -1,6 +1,14 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
-import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import {
   CHAT_QUEUE_HOLD_REASONS,
@@ -41,6 +49,7 @@ const { useChatEditor } = await import("@/components/chat-editor-provider");
 const { toChatThreadId } = await import("@/lib/chat-thread-ref");
 const { EditorContent } = await import("@tiptap/react");
 const { useExternalSyncEffect } = await import("@/hooks/use-effect");
+const { stellaToast } = await import("@stll/ui/toast");
 
 const actEnvironment: unknown = Reflect.get(
   globalThis,
@@ -51,6 +60,7 @@ beforeAll(() => {
   Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", false);
 });
 afterEach(async () => {
+  mock.restore();
   await act(async () => cleanup());
   routeRequest = undefined;
   __resetChatRequestStateForTests();
@@ -292,17 +302,24 @@ const Composer = ({
   return <EditorContent editor={controller.editor} />;
 };
 
-const openPage = async () => {
+/** The thread page, with its composer unless `composer` is `absent` (a
+ *  surface that shows the queue without one). */
+const openPage = async ({
+  composer: mounted = "present",
+}: { composer?: "absent" | "present" } = {}) => {
   let composer: ChatEditorController | undefined;
   const page = await openChatThreadDomPage({
     organizationId: ORGANIZATION_ID,
-    renderComposer: () => (
-      <Composer
-        onController={(controller) => {
-          composer = controller;
-        }}
-      />
-    ),
+    renderComposer:
+      mounted === "absent"
+        ? undefined
+        : () => (
+            <Composer
+              onController={(controller) => {
+                composer = controller;
+              }}
+            />
+          ),
     threadId: THREAD_ID,
   });
   const view = within(page.view.container);
@@ -478,6 +495,22 @@ test("Move, Remove and Edit change the server's queue, and Edit hands the messag
   expect(server.requests.at(-1)).toBe(`DELETE ${QUEUE_PATH}/${FIRST}`);
   expect(server.order).toEqual([SECOND]);
   expect(server.unexpected).toEqual([]);
+});
+
+test("Edit with no composer of the chat on screen leaves the message queued", async () => {
+  const server = serve({ waiting: false });
+  const shown = spyOn(stellaToast, "info").mockReturnValue("notice");
+  const { page, view } = await openPage({ composer: "absent" });
+
+  await chooseAction(view, textOf(FIRST), messages.common.edit);
+
+  expect(shown).toHaveBeenCalledWith(messages.chat.queue.editNeedsComposer);
+  expect(server.requests).toEqual([]);
+  expect(shownOrder(page.view.container)).toEqual([
+    textOf(FIRST),
+    textOf(SECOND),
+    textOf(THIRD),
+  ]);
 });
 
 const HOLD_NOTICES = {

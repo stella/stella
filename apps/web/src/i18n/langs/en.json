@@ -2098,6 +2098,7 @@
     },
     "queue": {
       "actions": "Queued message actions",
+      "editNeedsComposer": "Open this chat to edit a queued message.",
       "filesNotQueued": "A message with files can't wait in the queue. Send it once the current response finishes.",
       "heldByMember": "Queue paused.",
       "heldComputerAway": "Waiting for your computer: queued messages are sent once it connects.",

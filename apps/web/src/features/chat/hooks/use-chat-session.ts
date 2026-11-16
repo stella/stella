@@ -206,6 +206,7 @@ import {
   unwrapApiResponse,
 } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
+import { readQueryResult } from "@/lib/errors/query-result";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { fileOptions } from "@/lib/files/queries";
 import {
@@ -817,7 +818,15 @@ export const useChatSession = ({
   const removeFromQueue = useCallback(
     async (id: string) => {
       removedHereRef.current.add(id);
-      return await removeQueuedChatMessage(threadRef.threadId, id);
+      const removed = await Result.tryPromise(
+        async () => await removeQueuedChatMessage(threadRef.threadId, id),
+      );
+      // Not removed here after all: if it leaves the queue later, the
+      // server sent it.
+      if (Result.isError(removed)) {
+        removedHereRef.current.delete(id);
+      }
+      return readQueryResult(removed);
     },
     [threadRef.threadId],
   );
@@ -1228,6 +1237,12 @@ export const useChatSession = ({
    *  to be written again and sent or queued anew. */
   const editQueuedMessage = useCallback(
     (id: string) => {
+      // The message goes back into this chat's composer; without one here
+      // it stays queued rather than leave the queue for nowhere.
+      if (draftManager?.hasLiveComposer(threadRef) !== true) {
+        stellaToast.info(t("chat.queue.editNeedsComposer"));
+        return;
+      }
       detached(
         (async () => {
           const removed = await Result.tryPromise(
@@ -1243,25 +1258,15 @@ export const useChatSession = ({
             stellaToast.info(t("chat.queue.noLongerQueued"));
             return;
           }
-          const draft = composerDraftOfParts(message.parts);
-          if (
-            draftManager?.restoreMessageDraftIntoThread(threadRef, draft) !==
-            true
-          ) {
-            // No composer of the thread here: the message is queued again.
-            await enqueueMessage(
-              {
-                content: draft.html,
-                id: toSafeId<"chatMessage">(createUuid()),
-              },
-              undefined,
-            );
-          }
+          draftManager?.restoreMessageDraftIntoThread(
+            threadRef,
+            composerDraftOfParts(message.parts),
+          );
         })(),
         "use-chat-session.edit-queued-message",
       );
     },
-    [draftManager, enqueueMessage, refreshQueue, removeFromQueue, t, threadRef],
+    [draftManager, refreshQueue, removeFromQueue, t, threadRef],
   );
 
   const moveQueuedMessage = useCallback(
@@ -1607,28 +1612,65 @@ export const useChatSession = ({
   /**
    * An open edit form holds the queue: the edit drops every turn after its
    * message, so nothing queued may be sent meanwhile. While any edit form of
-   * this page is open and the queue has messages nothing holds yet, the page
-   * pauses the server's queue, and resumes it once the last form closes
-   * without sending; a sent edit releases it itself (its turn goes first and
-   * the queue waits behind it).
+   * this page is open, the page pauses the server's queue whenever it has
+   * messages nothing holds yet (also ones another tab or device queues
+   * later), and resumes it once the last form closes without sending; a
+   * sent edit releases it itself (its turn goes first and the queue waits
+   * behind it). The page's pause and resume run one at a time, each decided
+   * by the forms open when it runs, so a form that closed earlier never
+   * releases a newer form's hold.
    */
-  const pauseForEdit = useCallback(async () => {
+  const editHoldRef = useRef<Promise<boolean>>(Promise.resolve(true));
+  const syncEditHold = useCallback(
+    async ({ forStop }: { forStop: boolean }): Promise<boolean> => {
+      const run = async (): Promise<boolean> => {
+        const pause = editPauseRef.current;
+        const current = readQueue();
+        if (forStop || pause.sessions.size > 0) {
+          if (
+            pause.paused ||
+            current.items.length === 0 ||
+            current.hold !== null
+          ) {
+            return true;
+          }
+          pause.paused = await writeQueue(
+            async () => await pauseChatQueue(threadRef.threadId),
+          );
+          return pause.paused;
+        }
+        if (pause.paused) {
+          pause.paused = !(await writeQueue(
+            async () => await resumeChatQueue(threadRef.threadId),
+          ));
+        }
+        return true;
+      };
+      const next = editHoldRef.current.then(run, run);
+      editHoldRef.current = next;
+      return await next;
+    },
+    [readQueue, threadRef.threadId, writeQueue],
+  );
+
+  // Messages another tab or device queues while an edit form is open are
+  // held too.
+  useExternalSyncEffect(() => {
     const pause = editPauseRef.current;
-    const current = readQueue();
-    if (pause.paused || current.items.length === 0 || current.hold !== null) {
-      return;
+    if (pause.sessions.size > 0 && !pause.paused && chatQueue.hold === null) {
+      detached(
+        syncEditHold({ forStop: false }),
+        "use-chat-session.pause-for-edit",
+      );
     }
-    pause.paused = true;
-    pause.paused = await writeQueue(
-      async () => await pauseChatQueue(threadRef.threadId),
-    );
-  }, [readQueue, threadRef.threadId, writeQueue]);
+  }, [chatQueue, syncEditHold]);
 
   /**
    * Opening the editor of a sent message while a turn runs stops that turn
    * through the composer's Stop, so the edit can be sent once it settled.
    * The queue is paused first, so the turn's end does not send a queued
-   * message ahead of the edit.
+   * message ahead of the edit; a pause that did not go through stops
+   * nothing (its failure is told).
    */
   const startUserMessageEdit = useCallback(() => {
     if (!turnRuns()) {
@@ -1636,12 +1678,13 @@ export const useChatSession = ({
     }
     detached(
       (async () => {
-        await pauseForEdit();
-        stop();
+        if (await syncEditHold({ forStop: true })) {
+          stop();
+        }
       })(),
       "use-chat-session.stop-for-edit",
     );
-  }, [pauseForEdit, stop, turnRuns]);
+  }, [stop, syncEditHold, turnRuns]);
 
   /** The edit form of session `sessionId` opened; the release it returns
    *  runs when that form closes. */
@@ -1649,20 +1692,19 @@ export const useChatSession = ({
     (sessionId: string) => {
       const pause = editPauseRef.current;
       pause.sessions.add(sessionId);
-      detached(pauseForEdit(), "use-chat-session.pause-for-edit");
+      detached(
+        syncEditHold({ forStop: false }),
+        "use-chat-session.pause-for-edit",
+      );
       return () => {
         pause.sessions.delete(sessionId);
-        if (pause.sessions.size > 0 || !pause.paused) {
-          return;
-        }
-        pause.paused = false;
         detached(
-          writeQueue(async () => await resumeChatQueue(threadRef.threadId)),
+          syncEditHold({ forStop: false }),
           "use-chat-session.resume-after-edit",
         );
       };
     },
-    [pauseForEdit, threadRef.threadId, writeQueue],
+    [syncEditHold],
   );
 
   /**
@@ -2303,21 +2345,24 @@ export const useChatSession = ({
   // thread again, and the runtime the read rebuilds joins the running turn.
   const queueHeadId = chatQueue.items.at(0)?.id ?? null;
   const queuedIds = chatQueue.items.map(({ id }) => id).join(" ");
-  const seenQueueHeadRef = useRef<string | null>(null);
+  // Every head seen counts, also while this page's turn runs: the server may
+  // send one from the queue before this page's request has ended.
+  const seenQueueHeadsRef = useRef(new Set<string>());
   useExternalSyncEffect(() => {
-    // While a turn of this page runs, the head it last saw stays the one to
-    // compare with: the server sends from the queue only once that turn
-    // has ended.
+    const seen = seenQueueHeadsRef.current;
+    if (queueHeadId !== null) {
+      seen.add(queueHeadId);
+    }
+    // Joining waits for this page's own turn to end.
     if (turnRunning) {
       return;
     }
-    const seen = seenQueueHeadRef.current;
-    seenQueueHeadRef.current = queueHeadId;
-    if (
-      seen === null ||
-      queuedIds.split(" ").includes(seen) ||
-      removedHereRef.current.has(seen)
-    ) {
+    const queued = new Set(queuedIds.split(" "));
+    const left = [...seen].filter((id) => !queued.has(id));
+    for (const id of left) {
+      seen.delete(id);
+    }
+    if (left.every((id) => removedHereRef.current.has(id))) {
       return;
     }
     detached(
