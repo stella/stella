@@ -1,8 +1,11 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import type { ResolvedField } from "./template-discover-types";
 import {
+  arrayIndexKey,
+  buildInitialValues,
+  buildSubmitValues,
   groupFieldsByPrefix,
   readAiFieldErrorPaths,
   readClauseWarnings,
@@ -321,4 +324,146 @@ describe("per-item field visibility", () => {
     );
     expect(visible({ vip: true }, 0)).toContain("salutation");
   });
+});
+
+describe("fill-form value snapshots", () => {
+  test("initial values keep scalar defaults and leave repeat indices absent", () => {
+    const fields = [
+      { path: "name", kind: "string", count: 1 },
+      { path: "approved", kind: "boolean", count: 1 },
+      { path: "amount", kind: "string", inputType: "number", count: 1 },
+      { path: "people", kind: "array", count: 1 },
+    ] satisfies ResolvedField[];
+    expect(buildInitialValues(fields)).toEqual({
+      name: "",
+      approved: false,
+      amount: "",
+    });
+  });
+
+  test("submitting nested values copies the path without changing restored values", () => {
+    const restoredAddress = { city: "Prague" };
+    const fields = [
+      { path: "address", kind: "string", count: 1 },
+      { path: "address.street", kind: "string", count: 1 },
+      { path: "address.number", kind: "string", inputType: "number", count: 1 },
+      { path: "approved", kind: "boolean", count: 1 },
+      { path: "hidden", kind: "string", visibleWhen: "show_hidden", count: 1 },
+      { path: "blank", kind: "string", count: 1 },
+    ] satisfies ResolvedField[];
+    const values = {
+      address: restoredAddress,
+      "address.street": "Main",
+      "address.number": "12",
+      approved: false,
+      hidden: "not sent",
+      show_hidden: false,
+      blank: "",
+    };
+    const submitted = buildSubmitValues({
+      values,
+      fields,
+      conditionFields: [],
+      conditions: [],
+    });
+    expect(submitted).toEqual({
+      address: { city: "Prague", street: "Main", number: 12 },
+      approved: false,
+    });
+    expect(restoredAddress).toEqual({ city: "Prague" });
+    expect(submitted["address"]).not.toBe(restoredAddress);
+    expect(Object.getPrototypeOf(submitted)).toBeNull();
+    expect(Object.getPrototypeOf(submitted["address"])).toBeNull();
+  });
+
+  test("repeat containers and item paths stay literal while branches and condition overrides apply", () => {
+    const field = {
+      path: "signers.people",
+      kind: "array",
+      count: 1,
+      itemAliases: ["p"],
+      itemFields: [
+        { path: "vip", kind: "boolean", count: 1 },
+        { path: "name", kind: "string", count: 1 },
+        { path: "address.city", kind: "string", count: 1 },
+        { path: "amount", kind: "string", inputType: "number", count: 1 },
+        { path: "salutation", kind: "string", visibleWhen: "p.vip", count: 1 },
+      ],
+    } satisfies ResolvedField;
+    const values = {
+      [arrayIndexKey(field.path)]: [0, 1],
+      "signers.people[0].vip": true,
+      "signers.people[0].name": "Ada",
+      "signers.people[0].address.city": "Prague",
+      "signers.people[0].amount": "3",
+      "signers.people[0].salutation": "Dr",
+      "signers.people[1].vip": false,
+      "signers.people[1].name": "",
+      "signers.people[1].salutation": "not sent",
+      force_use: false,
+    };
+    const submitted = buildSubmitValues({
+      values,
+      fields: [field, { path: "optional.people", kind: "array", count: 1 }],
+      conditionFields: [
+        { path: "force_use", kind: "boolean", count: 0 },
+        { path: "model_owned", kind: "boolean", count: 0 },
+      ],
+      conditions: [],
+    });
+    expect(Object.keys(submitted)).toEqual([
+      "signers.people",
+      "optional.people",
+      "force_use",
+    ]);
+    expect(submitted).toEqual({
+      "signers.people": [
+        {
+          vip: true,
+          name: "Ada",
+          "address.city": "Prague",
+          amount: 3,
+          salutation: "Dr",
+        },
+        { vip: false },
+      ],
+      "optional.people": [],
+      force_use: false,
+    });
+    const items = submitted["signers.people"];
+    expect(Array.isArray(items)).toBe(true);
+    if (Array.isArray(items)) {
+      expect(items.map((item) => Object.getPrototypeOf(item))).toEqual([
+        null,
+        null,
+      ]);
+    }
+  });
+});
+
+test("deep authored paths rebuild iteratively and trailing-empty paths remain omitted", () => {
+  const segments = Array.from(
+    { length: 1024 },
+    (_, index) => `section${index}`,
+  );
+  const path = [...segments, "title"].join(".");
+  const submitted = buildSubmitValues({
+    values: { [path]: "Deep clause", "section.": "not sent" },
+    fields: [
+      { path, kind: "string", count: 1 },
+      { path: "section.", kind: "string", count: 1 },
+    ],
+    conditionFields: [],
+    conditions: [],
+  });
+  expect(Object.keys(submitted)).toEqual(["section0"]);
+  let current: unknown = submitted;
+  for (const segment of [...segments, "title"]) {
+    if (typeof current !== "object" || current === null) {
+      panic("Submitted path ended before its field value");
+    }
+    expect(Object.getPrototypeOf(current)).toBeNull();
+    current = Reflect.get(current, segment);
+  }
+  expect(current).toBe("Deep clause");
 });

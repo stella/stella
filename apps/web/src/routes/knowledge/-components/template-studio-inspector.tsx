@@ -59,10 +59,10 @@ import type {
 import { registerInspectorView } from "@/components/inspector/view-registry";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import {
-  ARRAY_INDEX_KEY_PREFIX,
   TemplateForm,
   useFillToMatterSaveTarget,
 } from "@/components/templates/template-form";
+import { ARRAY_INDEX_KEY_PREFIX } from "@/components/templates/template-form.logic";
 import Tooltip from "@/components/tooltip";
 import { useMountEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";

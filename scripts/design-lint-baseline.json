@@ -614,7 +614,6 @@
     "apps/web/src/components/public-law-table/public-law-table.tsx": 1,
     "apps/web/src/components/search-dialog.logic.ts": 1,
     "apps/web/src/components/templates/template-ai-conditions.logic.ts": 2,
-    "apps/web/src/components/templates/template-form.tsx": 9,
     "apps/web/src/components/workspaces/table/select-all.logic.ts": 2,
     "apps/web/src/components/workspaces/table/select-row-content.tsx": 1,
     "apps/web/src/features/avt/verdict.ts": 1,
