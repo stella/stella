@@ -439,6 +439,82 @@ describe("route readiness proof", () => {
     expect(await db.select().from(corpusIndexRouteProofs)).toEqual([]);
   });
 
+  test("a pass ends while inflow keeps adding keys after its cursor", async () => {
+    for (const index of [0, 1, 2]) {
+      // db-await-in-loop: a three-decision fixture
+      await seedApplied(index);
+    }
+    const steps: string[] = [];
+    for (let page = 0; page < 20; page += 1) {
+      // db-await-in-loop: each page reads the cursor the previous one recorded
+      const step = await advance();
+      steps.push(`${step.expectation}:${step.type}`);
+      if (step.type === "proven") {
+        break;
+      }
+      // Every page, a decision applied with a key larger than any walked.
+      // db-await-in-loop: one new decision per page
+      await seedApplied(100 + page);
+    }
+    // The phase walks only what existed when it began: two pages of two.
+    expect(steps).toEqual([
+      "present:advanced",
+      "present:phase_completed",
+      "absent:proven",
+    ]);
+  });
+
+  test("a page read before a rebuild never lands on the re-registered generation's proof", async () => {
+    await seedApplied(0);
+    const stale = await runInTransaction(
+      async (tx) => await ensureCorpusIndexRouteCensusPassTx(tx, ROUTE),
+    );
+    await db.execute(
+      sql.raw(
+        `DELETE FROM corpus_index_projection_states WHERE generation = 'case_law_v10'`,
+      ),
+    );
+    await db.execute(
+      sql.raw(
+        `DELETE FROM corpus_index_projection_intents WHERE generation = 'case_law_v10'`,
+      ),
+    );
+    await db
+      .delete(corpusIndexGenerations)
+      .where(eq(corpusIndexGenerations.generation, ROUTE.generation));
+    await db.insert(corpusIndexGenerations).values({
+      family: ROUTE.family,
+      generation: ROUTE.generation,
+      cluster: "q09",
+      manifestDigest: corpusIndexManifestDigest(
+        CORPUS_INDEX_MANIFESTS.case_law_v10,
+      ),
+      status: "building",
+    });
+    const fresh = await runInTransaction(
+      async (tx) => await ensureCorpusIndexRouteCensusPassTx(tx, ROUTE),
+    );
+    // Same number, same phase, same cursor: only the pass token tells them apart.
+    expect(fresh).toMatchObject({
+      number: stale.number,
+      expectation: stale.expectation,
+      cursor: stale.cursor,
+    });
+    expect(fresh.token).not.toBe(stale.token);
+    expect(
+      await runInTransaction(
+        async (tx) =>
+          await recordCorpusIndexRouteCensusPageTx(tx, {
+            route: ROUTE,
+            pass: stale,
+            inspected: 1,
+            nextCursor: null,
+            complete: true,
+          }),
+      ),
+    ).toEqual({ type: "superseded" });
+  });
+
   test("one page costs one census read and no more", async () => {
     for (const index of [0, 1, 2, 3, 4, 5]) {
       // db-await-in-loop: a six-decision fixture

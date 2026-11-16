@@ -111,16 +111,27 @@ export const advanceCorpusIndexRouteProof = async ({
   const pass = await runInTransaction(
     async (tx) => await ensureCorpusIndexRouteCensusPassTx(tx, route),
   );
-  // The engine is read outside every transaction.
-  const page = await CENSUS_PAGES[pass.expectation]({
-    runInTransaction,
-    client,
-    family: route.family,
-    generation: route.generation,
-    indexId: route.indexId,
-    after: pass.cursor,
-    limit,
-  });
+  // A phase that began with nothing to walk is complete as it stands; the
+  // engine is read outside every transaction, and only up to the key the
+  // phase took when it began, so inflow cannot keep a phase open.
+  const page =
+    pass.through === null
+      ? Result.ok({
+          driftRevisions: [],
+          inspected: 0,
+          nextCursor: null,
+          complete: true,
+        })
+      : await CENSUS_PAGES[pass.expectation]({
+          runInTransaction,
+          client,
+          family: route.family,
+          generation: route.generation,
+          indexId: route.indexId,
+          after: pass.cursor,
+          through: pass.through,
+          limit,
+        });
   if (page.isErr()) {
     return Result.err(page.error);
   }

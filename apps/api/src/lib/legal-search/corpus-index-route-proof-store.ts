@@ -17,7 +17,11 @@ import { panic } from "better-result";
 import { type SQL, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
-import { corpusIndexRouteProofs } from "@/api/db/schema";
+import {
+  corpusIndexProjectionIntents,
+  corpusIndexProjectionStates,
+  corpusIndexRouteProofs,
+} from "@/api/db/schema";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import {
@@ -35,11 +39,15 @@ export type CorpusIndexRoute = {
 };
 
 /**
- * Where a route's census pass stands. `number` identifies the pass; the start
- * is in epoch microseconds, PostgreSQL's precision.
+ * Where a route's census pass stands. `number` orders passes and `token`
+ * identifies one, so a page read for a pass never matches another; the start
+ * is in epoch microseconds, PostgreSQL's precision. `through` is the last key
+ * the current phase walks, null when the phase has nothing to walk.
  */
 export type CorpusIndexRouteCensusPass = {
   number: number;
+  token: string;
+  through: string | null;
   startedAtUs: string;
   expectation: CorpusIndexRouteCensusExpectation;
   cursor: string | null;
@@ -55,6 +63,52 @@ const isRoute = ({ family, generation, indexId }: CorpusIndexRoute): SQL =>
   sql`${proofs.family} = ${family}
     AND ${proofs.generation} = ${generation}
     AND ${proofs.indexId} = ${indexId}`;
+
+const states = corpusIndexProjectionStates;
+const intents = corpusIndexProjectionIntents;
+
+/**
+ * The last applied revision's entity the `present` phase walks: the largest
+ * key of the applied-census index when the phase begins. A revision applied
+ * later with a larger key was proven present by its own apply.
+ */
+const presentThrough = ({ family, generation, indexId }: CorpusIndexRoute) =>
+  sql`(
+    SELECT ${states.entityId}
+    FROM ${states}
+    WHERE ${states.family} = ${family}
+      AND ${states.generation} = ${generation}
+      AND ${states.appliedIndexId} = ${indexId}
+      AND ${states.appliedAction} = 'upsert'
+      AND ${states.appliedRevision} IS NOT NULL
+    ORDER BY ${states.entityId} DESC
+    LIMIT 1
+  )`;
+
+/**
+ * The last deleted revision the `absent` phase walks: the larger of the
+ * largest settled and the largest withdrawn revision id of the index when the
+ * phase begins. One settled or withdrawn later with a larger id was proven
+ * gone when it got that status.
+ */
+const absentThrough = ({ family, generation, indexId }: CorpusIndexRoute) => {
+  const largest = (status: "settled" | "withdrawn") => sql`(
+      SELECT ${intents.id} AS id
+      FROM ${intents}
+      WHERE ${intents.family} = ${family}
+        AND ${intents.generation} = ${generation}
+        AND ${intents.indexId} = ${indexId}
+        AND ${intents.status} = ${sql.raw(`'${status}'`)}
+      ORDER BY ${intents.id} DESC
+      LIMIT 1
+    )`;
+  return sql`(
+    SELECT deleted.id
+    FROM (${largest("settled")} UNION ALL ${largest("withdrawn")}) AS deleted
+    ORDER BY deleted.id DESC
+    LIMIT 1
+  )`;
+};
 
 const requiredText = (row: unknown, key: string): string =>
   isRecord(row) && typeof row[key] === "string"
@@ -111,10 +165,11 @@ export const ensureCorpusIndexRouteCensusPassTx = async (
     tx,
     sql`
     INSERT INTO ${proofs}
-      (family, generation, index_id, pass_started_at, pass_expectation)
+      (family, generation, index_id, pass_started_at, pass_expectation,
+       pass_through)
     VALUES (
       ${route.family}, ${route.generation}, ${route.indexId},
-      clock_timestamp(), 'present'
+      clock_timestamp(), 'present', ${presentThrough(route)}
     )
     ON CONFLICT ON CONSTRAINT corpus_index_route_proofs_pkey DO NOTHING
   `,
@@ -122,6 +177,8 @@ export const ensureCorpusIndexRouteCensusPassTx = async (
   const row = executedRows(
     await tx.execute(sql`
       SELECT ${proofs.passNumber}::int AS pass_number,
+        ${proofs.passToken}::text AS pass_token,
+        ${proofs.passThrough}::text AS pass_through,
         ${epochMicros(sql`${proofs.passStartedAt}`)}::text AS started_at_us,
         ${proofs.passExpectation} AS expectation,
         ${proofs.passCursor}::text AS cursor,
@@ -132,6 +189,8 @@ export const ensureCorpusIndexRouteCensusPassTx = async (
   ).at(0);
   return {
     number: requiredCount(row, "pass_number"),
+    token: requiredText(row, "pass_token"),
+    through: nullableText(row, "pass_through"),
     startedAtUs: requiredText(row, "started_at_us"),
     expectation: censusExpectation(requiredText(row, "expectation")),
     cursor: nullableText(row, "cursor"),
@@ -153,6 +212,7 @@ const passIs = (
 ): SQL =>
   sql`${isRoute(route)}
     AND ${proofs.passNumber} = ${pass.number}
+    AND ${proofs.passToken} = ${pass.token}::uuid
     AND ${proofs.passExpectation} = ${pass.expectation}
     AND ${proofs.passCursor} IS NOT DISTINCT FROM ${pass.cursor}::uuid`;
 
@@ -200,6 +260,7 @@ export const recordCorpusIndexRouteCensusPageTx = async (
       case "phase_completed":
         return sql`pass_expectation = 'absent',
           pass_cursor = NULL,
+          pass_through = ${absentThrough(route)},
           pass_inspected = ${proofs.passInspected} + ${inspected}`;
       case "proven":
         // The finished pass's own number and start, as the row holds them.
@@ -208,7 +269,9 @@ export const recordCorpusIndexRouteCensusPageTx = async (
           proven_at = clock_reading.at,
           proven_inspected = ${proofs.passInspected} + ${inspected},
           pass_number = ${proofs.passNumber} + 1,
+          pass_token = gen_random_uuid(),
           pass_started_at = clock_reading.at,
+          pass_through = ${presentThrough(route)},
           pass_expectation = 'present',
           pass_cursor = NULL,
           pass_inspected = 0`;
@@ -251,7 +314,9 @@ export const revokeCorpusIndexRouteProofTx = async (
       revoke_reason = ${reason},
       revoked_pass_number = ${proofs.passNumber} + 1,
       pass_number = ${proofs.passNumber} + 1,
+      pass_token = gen_random_uuid(),
       pass_started_at = clock_reading.at,
+      pass_through = ${presentThrough(route)},
       pass_expectation = 'present',
       pass_cursor = NULL,
       pass_inspected = 0,
@@ -319,6 +384,8 @@ export const readCorpusIndexRouteProofsTx = async (
         ${epochMicros(sql`${proofs.provenPassStartedAt}`)}::text AS proven_pass_started_at_us,
         ${proofs.provenInspected}::int AS proven_inspected,
         ${proofs.passNumber}::int AS pass_number,
+        ${proofs.passToken}::text AS pass_token,
+        ${proofs.passThrough}::text AS pass_through,
         ${epochMicros(sql`${proofs.passStartedAt}`)}::text AS started_at_us,
         ${proofs.passExpectation} AS expectation,
         ${proofs.passCursor}::text AS cursor,
@@ -338,6 +405,8 @@ export const readCorpusIndexRouteProofsTx = async (
   return rows.map((row) => {
     const pass = {
       number: requiredCount(row, "pass_number"),
+      token: requiredText(row, "pass_token"),
+      through: nullableText(row, "pass_through"),
       startedAtUs: requiredText(row, "started_at_us"),
       expectation: censusExpectation(requiredText(row, "expectation")),
       cursor: nullableText(row, "cursor"),

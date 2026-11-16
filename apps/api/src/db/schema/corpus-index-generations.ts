@@ -382,8 +382,19 @@ export const corpusIndexRouteProofs = p.pgTable(
       .bigint("pass_number", { mode: "number" })
       .default(1)
       .notNull(),
+    /**
+     * A fresh random token per pass: a page read for one pass never matches
+     * another, even one a re-registered generation numbers the same.
+     */
+    passToken: p.uuid("pass_token").defaultRandom().notNull(),
     /** When the pass under way started, on the database clock. */
     passStartedAt: timestamptz("pass_started_at").notNull(),
+    /**
+     * The last key the current phase walks, taken when the phase began; null
+     * when the phase has nothing to walk. What sorts after it arrived later and
+     * was proven by its own transition.
+     */
+    passThrough: p.uuid("pass_through"),
     /** What the pass under way walks (`CORPUS_INDEX_ROUTE_CENSUS_EXPECTATIONS`). */
     passExpectation: p
       .text("pass_expectation", {

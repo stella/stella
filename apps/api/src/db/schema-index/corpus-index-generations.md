@@ -83,17 +83,19 @@ corpus_index_route_proofs.family                  text         fk,not null      
 corpus_index_route_proofs.generation              varchar      fk,not null       corpus-index-generations.ts:369
 corpus_index_route_proofs.index_id                varchar      not null          corpus-index-generations.ts:372
 corpus_index_route_proofs.pass_number             bigint       default,not null  corpus-index-generations.ts:381  The pass under way, counted from the route's first: every new pass and every revocation takes the next number, so a page recorded against a pass that has since…
-corpus_index_route_proofs.pass_started_at         timestamptz  not null          corpus-index-generations.ts:386  When the pass under way started, on the database clock.
-corpus_index_route_proofs.pass_expectation        text         not null          corpus-index-generations.ts:388  What the pass under way walks (`CORPUS_INDEX_ROUTE_CENSUS_EXPECTATIONS`).
-corpus_index_route_proofs.pass_cursor             uuid         null              corpus-index-generations.ts:394  Where the pass resumes within its phase; null at the phase's start.
-corpus_index_route_proofs.pass_inspected          bigint       default,not null  corpus-index-generations.ts:396  Revisions the pass under way has found exactly as recorded.
-corpus_index_route_proofs.proven_pass_number      bigint       null              corpus-index-generations.ts:401  The number of the last clean pass; null until one completes.
-corpus_index_route_proofs.proven_pass_started_at  timestamptz  null              corpus-index-generations.ts:403  When the last clean pass started.
-corpus_index_route_proofs.proven_at               timestamptz  null              corpus-index-generations.ts:405  When the last clean pass completed.
-corpus_index_route_proofs.proven_inspected        bigint       null              corpus-index-generations.ts:407  Revisions the last clean pass inspected.
-corpus_index_route_proofs.revoked_at              timestamptz  null              corpus-index-generations.ts:409  When a drift repair on the route last revoked the proof.
-corpus_index_route_proofs.revoked_pass_number     bigint       null              corpus-index-generations.ts:414  The pass the last revocation started: only a pass numbered this or later proves the route again.
-corpus_index_route_proofs.revoke_reason           text         null              corpus-index-generations.ts:416  Which drift it was (`CORPUS_INDEX_ROUTE_PROOF_REVOKE_REASONS`).
-corpus_index_route_proofs.created_at              timestamptz  default,not null  corpus-index-generations.ts:419
-corpus_index_route_proofs.updated_at              timestamptz  default,not null  corpus-index-generations.ts:420
+corpus_index_route_proofs.pass_token              uuid         default,not null  corpus-index-generations.ts:389  A fresh random token per pass: a page read for one pass never matches another, even one a re-registered generation numbers the same.
+corpus_index_route_proofs.pass_started_at         timestamptz  not null          corpus-index-generations.ts:391  When the pass under way started, on the database clock.
+corpus_index_route_proofs.pass_through            uuid         null              corpus-index-generations.ts:397  The last key the current phase walks, taken when the phase began; null when the phase has nothing to walk.
+corpus_index_route_proofs.pass_expectation        text         not null          corpus-index-generations.ts:399  What the pass under way walks (`CORPUS_INDEX_ROUTE_CENSUS_EXPECTATIONS`).
+corpus_index_route_proofs.pass_cursor             uuid         null              corpus-index-generations.ts:405  Where the pass resumes within its phase; null at the phase's start.
+corpus_index_route_proofs.pass_inspected          bigint       default,not null  corpus-index-generations.ts:407  Revisions the pass under way has found exactly as recorded.
+corpus_index_route_proofs.proven_pass_number      bigint       null              corpus-index-generations.ts:412  The number of the last clean pass; null until one completes.
+corpus_index_route_proofs.proven_pass_started_at  timestamptz  null              corpus-index-generations.ts:414  When the last clean pass started.
+corpus_index_route_proofs.proven_at               timestamptz  null              corpus-index-generations.ts:416  When the last clean pass completed.
+corpus_index_route_proofs.proven_inspected        bigint       null              corpus-index-generations.ts:418  Revisions the last clean pass inspected.
+corpus_index_route_proofs.revoked_at              timestamptz  null              corpus-index-generations.ts:420  When a drift repair on the route last revoked the proof.
+corpus_index_route_proofs.revoked_pass_number     bigint       null              corpus-index-generations.ts:425  The pass the last revocation started: only a pass numbered this or later proves the route again.
+corpus_index_route_proofs.revoke_reason           text         null              corpus-index-generations.ts:427  Which drift it was (`CORPUS_INDEX_ROUTE_PROOF_REVOKE_REASONS`).
+corpus_index_route_proofs.created_at              timestamptz  default,not null  corpus-index-generations.ts:430
+corpus_index_route_proofs.updated_at              timestamptz  default,not null  corpus-index-generations.ts:431
 ```

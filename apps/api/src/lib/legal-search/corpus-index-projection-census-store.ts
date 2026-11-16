@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, asc, eq, gt, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNotNull, lte, sql } from "drizzle-orm";
 
 import { isUuid } from "@stll/uuid-codec";
 
@@ -49,13 +49,26 @@ type CorpusProjectionCensusPageOptions = {
   generation: string;
   indexId: string;
   after: string | null;
+  /**
+   * The last key the walk reads, captured when it began: what sorts after it
+   * arrived later and was proven by its own transition, so a walk under
+   * inflow still ends. Omitted, the walk runs to the current end.
+   */
+  through?: string;
   limit: number;
 };
 
 const validateCensusPage = ({
   after,
+  through,
   limit,
-}: Pick<CorpusProjectionCensusPageOptions, "after" | "limit">): void => {
+}: Pick<
+  CorpusProjectionCensusPageOptions,
+  "after" | "through" | "limit"
+>): void => {
+  if (through !== undefined && !isUuid(through)) {
+    return panic("Corpus projection census bound must be a UUID");
+  }
   if (
     !Number.isSafeInteger(limit) ||
     limit < 1 ||
@@ -145,6 +158,9 @@ export const readAppliedCorpusProjectionCensusPageTx = async (
         options.after === null
           ? undefined
           : gt(corpusIndexProjectionStates.entityId, options.after),
+        options.through === undefined
+          ? undefined
+          : lte(corpusIndexProjectionStates.entityId, options.through),
       ),
     )
     .orderBy(asc(corpusIndexProjectionStates.entityId))
@@ -480,6 +496,11 @@ export const readSettledCorpusProjectionCensusPageTx = async (
       ? null
       : (brandValidatedCorpusIndexProjectionIntentId(options.after) ??
         panic("Lost validated corpus projection census cursor"));
+  const throughRevision =
+    options.through === undefined
+      ? null
+      : (brandValidatedCorpusIndexProjectionIntentId(options.through) ??
+        panic("Lost validated corpus projection census bound"));
   const absentWith = (status: "settled" | "withdrawn") =>
     tx
       .select({ revision: corpusIndexProjectionIntents.id })
@@ -493,6 +514,9 @@ export const readSettledCorpusProjectionCensusPageTx = async (
           afterRevision === null
             ? undefined
             : gt(corpusIndexProjectionIntents.id, afterRevision),
+          throughRevision === null
+            ? undefined
+            : lte(corpusIndexProjectionIntents.id, throughRevision),
         ),
       )
       .orderBy(asc(corpusIndexProjectionIntents.id))
