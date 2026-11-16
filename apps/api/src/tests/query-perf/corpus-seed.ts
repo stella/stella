@@ -16,8 +16,10 @@ import {
   corpusIndexGenerations,
 } from "@/api/db/schema";
 import type { TransactionOf } from "@/api/db/scoped";
+import { servableCandidateRevisionsStatement } from "@/api/handlers/case-law/decisions/search";
 import { decisionDocketColumns } from "@/api/handlers/case-law/ingestion/pipeline/decision-docket-columns";
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
+import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import {
   CASE_LAW_POPULATION_FOLD_BATCH_LIMIT,
   CASE_LAW_POPULATION_MAINTENANCE_HIGH_WATER,
@@ -38,6 +40,7 @@ import type {
   GatedTestClientScope,
   GatedTestDb,
 } from "@/api/tests/gated-test-database";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import { coverageIndexBuildSql } from "./coverage-indexes";
 import { withSeededTableMaintenance } from "./seeded-tables";
@@ -763,6 +766,22 @@ export const seedCorpusReadBudgets = async (database: GatedTestDb) =>
         `01990000-8${generationPrefix(CASE_LAW_SEARCH_GENERATION).slice(1)}-7000-8000-${state.toString(16).padStart(12, "0")}`,
       ),
     );
+    // The measurement reads one row per requested id whether or not it is
+    // admitted; the fixture is only meaningful if the read admits every one.
+    const admitted = await servableCandidateRevisionsStatement(
+      asTestRaw<CaseLawPublicReadTransaction>(database),
+      {
+        body: { country: "CZE" },
+        generation: CASE_LAW_SEARCH_GENERATION,
+        ids: caseLawSearchCandidateIds,
+      },
+    );
+    if (
+      admitted.filter(({ row }) => (row?.appliedRevision ?? null) !== null)
+        .length !== CASE_LAW_SEARCH_CANDIDATE_COUNT
+    ) {
+      panic("The search candidate fixture must be admitted in full");
+    }
     const quoteSourceId = toSafeId<"caseLawSource">(
       "01990000-00a3-7000-8000-000000000001",
     );

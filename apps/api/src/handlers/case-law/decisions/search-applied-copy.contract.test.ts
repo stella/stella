@@ -69,7 +69,17 @@ type Revision = SafeId<"corpusIndexProjectionIntent">;
 
 /** What Postgres records for a decision in the serving generation. */
 type StateShape =
-  | { type: "applied"; revision: Revision }
+  | {
+      type: "applied";
+      revision: Revision;
+      /**
+       * A newer upsert is queued (desired ahead of applied): the applied copy
+       * stays served until the new one lands.
+       */
+      queued?: true;
+      /** The applied revision is already scheduled for cleanup. */
+      cleanupPending?: true;
+    }
   | { type: "erasing"; revision: Revision }
   | { type: "none" };
 
@@ -93,6 +103,9 @@ const appliedOlderRevision = revision();
 const unappliedNewerRevision = revision();
 const erasingRevision = revision();
 const orphanRevision = revision();
+const cleanupPendingRevision = revision();
+/** What a queued upsert wants: content the index does not hold applied yet. */
+const QUEUED_FINGERPRINT = "b".repeat(64);
 
 const FIXTURES = {
   served: {
@@ -117,13 +130,23 @@ const FIXTURES = {
       { revision: appliedOlderRevision, text: plain },
       { revision: unappliedNewerRevision, text: strong("novyslovo") },
     ],
-    state: { type: "applied", revision: appliedOlderRevision },
+    state: { type: "applied", revision: appliedOlderRevision, queued: true },
   },
   erasing: {
     id: createSafeId<"caseLawDecision">(),
     caseNumber: "4 Cdo 4/2026",
     copies: [{ revision: erasingRevision, text: strong("vymazaneslovo") }],
     state: { type: "erasing", revision: erasingRevision },
+  },
+  cleanupPending: {
+    id: createSafeId<"caseLawDecision">(),
+    caseNumber: "6 Cdo 6/2026",
+    copies: [{ revision: cleanupPendingRevision, text: plain }],
+    state: {
+      type: "applied",
+      revision: cleanupPendingRevision,
+      cleanupPending: true,
+    },
   },
   neverApplied: {
     id: createSafeId<"caseLawDecision">(),
@@ -137,6 +160,7 @@ const SERVED_IDS = new Set<string>([
   FIXTURES.served.id,
   FIXTURES.superseded.id,
   FIXTURES.unappliedNewer.id,
+  FIXTURES.cleanupPending.id,
 ]);
 
 let client: PGlite;
@@ -298,11 +322,17 @@ describe.skipIf(!runEngineTests)(
           epoch: 1n,
           fingerprint: FINGERPRINT,
           indexId: ROUTED_INDEX_ID,
-          status: "applied" as const,
           appendStartedAt: appliedAt,
           appendCommittedAt: appliedAt,
           expectedDocumentCount: 1,
           appliedAt,
+          ...(state.type === "applied" && state.cleanupPending === true
+            ? {
+                status: "cleanup_pending" as const,
+                appendPublishBarrierAt: appliedAt,
+                cleanupNotBefore: appliedAt,
+              }
+            : { status: "applied" as const }),
         })),
       );
       await db.insert(corpusIndexProjectionStates).values(
@@ -319,8 +349,9 @@ describe.skipIf(!runEngineTests)(
               }
             : {
                 desiredAction: "upsert" as const,
-                desiredEpoch: 1n,
-                desiredFingerprint: FINGERPRINT,
+                desiredEpoch: state.queued === true ? 2n : 1n,
+                desiredFingerprint:
+                  state.queued === true ? QUEUED_FINGERPRINT : FINGERPRINT,
                 desiredIndexId: ROUTED_INDEX_ID,
               }),
           appliedAction: "upsert" as const,
@@ -369,7 +400,7 @@ describe.skipIf(!runEngineTests)(
     // timeout: each search is real engine round trips plus PGlite reads.
     test.each([
       { copy: "a superseded copy", word: "zastaralyslovo" },
-      { copy: "a newer copy never applied", word: "novyslovo" },
+      { copy: "the newer copy of a queued upsert", word: "novyslovo" },
       { copy: "the copy of a decision being erased", word: "vymazaneslovo" },
       { copy: "a copy no state records", word: "nikdyslovo" },
     ])(
@@ -383,7 +414,7 @@ describe.skipIf(!runEngineTests)(
 
     // timeout: real engine round trips plus PGlite reads.
     test(
-      "the common word finds every served decision, each excerpted from its applied copy",
+      "the common word finds every served decision, a queued upsert and a copy awaiting cleanup included, each excerpted from its applied copy",
       async () => {
         const page = await search(COMMON, 10);
         expect(new Set(page.hits.map(({ decisionId }) => decisionId))).toEqual(

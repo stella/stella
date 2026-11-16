@@ -14,7 +14,7 @@ import {
 } from "@/api/db/schema";
 import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
 import { rehydrateCaseLawCandidates } from "@/api/handlers/case-law/decisions/search";
-import { createSafeId } from "@/api/lib/branded-types";
+import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
@@ -429,5 +429,77 @@ test("an indexed ranking stands only on the copy Postgres records as applied", a
       })
       .where(eq(corpusIndexProjectionStates.entityId, erased));
     await db.insert(corpusIndexProjectionStates).values(unappliedState);
+  }
+});
+
+test("a decision whose newer upsert is queued, or whose applied copy awaits cleanup, still ranks on its applied copy", async () => {
+  const db = drizzle({ client });
+  // Distinct language groups, so the fold keeps all three.
+  const served = ids[0] ?? panic("Fixture ids missing");
+  const queued = ids[4] ?? panic("Fixture ids missing");
+  const cleanup = ids[7] ?? panic("Fixture ids missing");
+  const queuedRevision = projections.get(queued)?.revision ?? panic("No copy");
+  const cleanupRevision =
+    projections.get(cleanup)?.revision ?? panic("No copy");
+  const cleanupAt = new Date("2026-11-01T00:00:00.000Z");
+  // Postgres wants newer content for one decision than the index holds
+  // applied; the other's applied revision is already scheduled for cleanup.
+  // Both stay served from the applied copy until the new one lands.
+  await db
+    .update(corpusIndexProjectionStates)
+    .set({ desiredEpoch: 2n, desiredFingerprint: "b".repeat(64) })
+    .where(eq(corpusIndexProjectionStates.entityId, queued));
+  await db
+    .update(corpusIndexProjectionIntents)
+    .set({
+      status: "cleanup_pending",
+      appendPublishBarrierAt: cleanupAt,
+      cleanupNotBefore: cleanupAt,
+    })
+    .where(
+      eq(
+        corpusIndexProjectionIntents.id,
+        toSafeId<"corpusIndexProjectionIntent">(cleanupRevision),
+      ),
+    );
+  try {
+    const candidates = [served, queued, cleanup].map((id, at) => ({
+      id,
+      score: 1 - at / 10,
+    }));
+    const indexed = await rehydrateCaseLawCandidates({
+      body: { country: "CZE", query: "index parity" },
+      candidates,
+      caseLawDb,
+      courtWeights: courtWeightMapFromSeed(),
+      generation: GENERATION,
+      indexed: {
+        appliedProjections,
+        servable: new Map<string, ServableCopy | null>(),
+      },
+    });
+    expect(new Set(indexed.ranked.map(({ id }) => id))).toEqual(
+      new Set([served, queued, cleanup]),
+    );
+    expect(String(indexed.revisionById.get(queued))).toBe(queuedRevision);
+    expect(String(indexed.revisionById.get(cleanup))).toBe(cleanupRevision);
+  } finally {
+    await db
+      .update(corpusIndexProjectionStates)
+      .set({ desiredEpoch: 1n, desiredFingerprint: FINGERPRINT })
+      .where(eq(corpusIndexProjectionStates.entityId, queued));
+    await db
+      .update(corpusIndexProjectionIntents)
+      .set({
+        status: "applied",
+        appendPublishBarrierAt: null,
+        cleanupNotBefore: null,
+      })
+      .where(
+        eq(
+          corpusIndexProjectionIntents.id,
+          toSafeId<"corpusIndexProjectionIntent">(cleanupRevision),
+        ),
+      );
   }
 });

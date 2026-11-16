@@ -154,11 +154,29 @@ type CorpusIndexRanking<TContext> = {
    * revision's copy only; a ranked id without one gets neither.
    */
   revisionById: ReadonlyMap<string, CorpusProjectionRevision>;
+  /**
+   * Ids the ranker places without a scanned applied copy, never from an engine
+   * hit: a work an entry names outright, or the version a work is shown as.
+   * They show no excerpt. Every other ranked id must be one
+   * `selectAppliedCandidates` returned, under the revision it was selected
+   * by; the scan refuses a ranking that emits anything else.
+   */
+  placedWithoutCopy?: ReadonlySet<string> | undefined;
+};
+
+const appliedCandidateBrand: unique symbol = Symbol("appliedCandidate");
+
+/**
+ * A candidate the servable check selected: ranked by its best passage of the
+ * copy Postgres records as applied. Only `selectAppliedCandidates` makes one.
+ */
+type AppliedCandidate = ScoredCandidate & {
+  readonly [appliedCandidateBrand]: CorpusProjectionRevision;
 };
 
 type SelectAppliedCorpusCandidates = (
   appliedById: ReadonlyMap<string, CorpusAppliedProjection>,
-) => readonly ScoredCandidate[];
+) => readonly AppliedCandidate[];
 
 /** Scan identities require a revision selector; already-scored callers do not. */
 export type CorpusCandidateRankingInput =
@@ -1065,6 +1083,7 @@ const appliedPassages = () => {
   const passageClauseById = new Map<string, string>();
   const bestScoreById = new Map<string, number>();
   let selected: SelectedPassages[] | undefined;
+  const selectedRevisionById = new Map<string, CorpusProjectionRevision>();
   const applied = (appliedById: ReadonlyMap<string, CorpusAppliedProjection>) =>
     [...passages]
       .flatMap(([id, revisions]) => {
@@ -1133,15 +1152,45 @@ const appliedPassages = () => {
       selected = applied(appliedById);
       passageClauseById.clear();
       bestScoreById.clear();
-      return selected.map(({ id, best }) => {
+      selectedRevisionById.clear();
+      return selected.map(({ id, best }): AppliedCandidate => {
         if (best.clause !== null) {
           passageClauseById.set(id, best.clause);
         }
         if (best.bm25 !== undefined) {
           bestScoreById.set(id, best.bm25);
         }
-        return { id, score: best.score };
+        const revision =
+          appliedById.get(id)?.revision ??
+          panic("A selected candidate has no applied revision");
+        selectedRevisionById.set(id, revision);
+        // The one construction of the brand, after the servable check.
+        return { id, score: best.score, [appliedCandidateBrand]: revision };
       });
+    },
+    /**
+     * The ranking as the scan may emit it: every ranked id the servable check
+     * selected, under the revision it selected it by, or one the ranker places
+     * without a copy. Anything else is a ranker that read past the check.
+     */
+    admit: <TContext>(
+      ranking: CorpusIndexRanking<TContext>,
+    ): CorpusIndexRanking<TContext> => {
+      for (const { id } of ranking.ranked) {
+        if (ranking.placedWithoutCopy?.has(id) === true) {
+          continue;
+        }
+        const revision = selectedRevisionById.get(id);
+        if (
+          revision === undefined ||
+          ranking.revisionById.get(id) !== revision
+        ) {
+          return panic(
+            `Corpus ranker emitted ${id} without the copy Postgres records as applied`,
+          );
+        }
+      }
+      return ranking;
     },
     counts: (revisionById: ReadonlyMap<string, CorpusProjectionRevision>) => {
       if (selected === undefined) {
@@ -1302,7 +1351,7 @@ const readWindowPage = async <TContext>({
     malformed = 0;
     startOffset += hits.length;
     scanned += hits.length;
-    ranking = await rankCandidates(candidates, rankingScope);
+    ranking = passages.admit(await rankCandidates(candidates, rankingScope));
     windowed = windowAfterCursor(ranking.ranked, parsedCursor);
     if (windowed.length > limit) {
       const cursorScore = windowed.at(limit - 1)?.score ?? 0;
@@ -1317,7 +1366,7 @@ const readWindowPage = async <TContext>({
   }
 
   if (ranking === null) {
-    ranking = await rankCandidates(candidates, rankingScope);
+    ranking = passages.admit(await rankCandidates(candidates, rankingScope));
     windowed = windowAfterCursor(ranking.ranked, parsedCursor);
   }
   const hasMoreInWindow = windowed.length > limit;
@@ -1671,9 +1720,8 @@ const readBm25SearchPage = async <TContext>(
     }
   }
   hitDispositions.record({ malformed });
-  const ranking = await rankCandidates(
-    candidates,
-    rankingScopeOf(parsedCursor, passages),
+  const ranking = passages.admit(
+    await rankCandidates(candidates, rankingScopeOf(parsedCursor, passages)),
   );
   const windowed = windowAfterCursor(ranking.ranked, parsedCursor);
   const pageRanked = windowed.slice(skip, skip + limit);

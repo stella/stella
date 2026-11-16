@@ -2775,6 +2775,50 @@ describe("copies Postgres does not record as applied never surface", () => {
     );
   });
 
+  test("a ranker that emits an id the servable check did not select is refused", async () => {
+    // The decision's only matching copy is one Postgres superseded; its applied
+    // copy matched nothing. A ranker reading past the check would show it.
+    engineHits = [
+      {
+        document_id: documentId(0),
+        projection_revision: otherRevisionOf(documentId(0)),
+      },
+      { document_id: documentId(1) },
+    ];
+    const read = readCorpusIndexSearchPage({
+      scanTransport: NATIVE_SCAN_TRANSPORT,
+      observer: "unobserved",
+      cluster: "q09",
+      indexId: "case_law_v10_cze",
+      query: "text:smlouva",
+      limit: 10,
+      order: RELEVANCE_ORDER,
+      parsedCursor: null,
+      snippetFields: ["text"],
+      projectionRevisionField: "projection_revision",
+      extractId: (hit: CorpusIndexHit) =>
+        typeof hit["document_id"] === "string" ? hit["document_id"] : null,
+      extractSnippet: () => null,
+      unseenScoreUpperBound: (score) => score,
+      rankCandidates: async (probes, { selectAppliedCandidates }) => {
+        selectAppliedCandidates(testAppliedProjectionsFor(probes));
+        return {
+          context: null,
+          groups: [],
+          // Every scanned id, not the selected ones.
+          ranked: probes.map(({ id }, at) => ({
+            id,
+            score: 1 - at / 10,
+            lexicalScore: 1 - at / 10,
+            citationAuthority: 0,
+          })),
+          revisionById: testRevisionsFor(probes),
+        };
+      },
+    });
+    expect(await rejectionOf(read)).toBeInstanceOf(Panic);
+  });
+
   test("a window of other copies past the round cap continues the chain rather than ending it", async () => {
     // More stale copies than the scan reads in one page, ahead of every
     // applied one: the first page holds nothing, and says so without ending.
