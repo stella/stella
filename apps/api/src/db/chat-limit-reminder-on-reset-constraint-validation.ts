@@ -5,13 +5,13 @@ import type { OnlineRepair } from "./online-migration-connection";
 
 /**
  * The check of what a limit reminder does when it is due, which migration
- * 20261116212000_chat_limit_reminder_on_reset adds NOT VALID.
+ * 20261116214000_chat_limit_reminder_on_reset adds NOT VALID.
  */
 export const CHAT_LIMIT_REMINDER_ON_RESET_CONSTRAINTS = [
   {
     tableName: "chat_limit_reminders",
     constraintName: "chat_limit_reminders_on_reset_check",
-    introducedBy: "20261116212000_chat_limit_reminder_on_reset",
+    introducedBy: "20261116214000_chat_limit_reminder_on_reset",
   },
 ] as const satisfies readonly (OnlineConstraintValidation & {
   introducedBy: string;
