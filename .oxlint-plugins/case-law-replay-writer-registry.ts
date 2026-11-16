@@ -376,22 +376,22 @@ export const REPLAY_WRITER_REGISTRY = [
   },
   {
     file: "apps/api/src/lib/legal-search/corpus-index-generation-store.ts",
-    line: 229,
+    line: 202,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/legal-search/corpus-index-generation-store.ts",
-    line: 358,
+    line: 331,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/legal-search/corpus-index-generation-store.ts",
-    line: 375,
+    line: 340,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/legal-search/corpus-index-generation-store.ts",
-    line: 442,
+    line: 407,
     kind: "pending",
   },
   {

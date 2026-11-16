@@ -4,38 +4,38 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## corpus_index_generation_seeding_passes · `corpusIndexGenerationSeedingPasses` · corpus-index-seedings.ts:32 · rls
+## corpus_index_generation_seeding_passes · `corpusIndexGenerationSeedingPasses` · corpus-index-seedings.ts:34 · rls
 
 The seeding walk of one generation: one pass over every canonical row of the family in id order, giving each row the generation routes a desired state where it…
 
 ```text
-corpus_index_generation_seeding_passes.family               text         fk,not null       corpus-index-seedings.ts:35
-corpus_index_generation_seeding_passes.generation           varchar      fk,not null       corpus-index-seedings.ts:36
-corpus_index_generation_seeding_passes.pass_number          bigint       default,not null  corpus-index-seedings.ts:40  The pass under way or last completed, counted from the first.
-corpus_index_generation_seeding_passes.pass_started_at      timestamptz  not null          corpus-index-seedings.ts:45  When the pass began, on the database clock.
-corpus_index_generation_seeding_passes.route_index_ids      varchar      array,not null    corpus-index-seedings.ts:47  The routes the pass marks seeded when it completes, taken as it began.
-corpus_index_generation_seeding_passes.route_jurisdictions  varchar      array,not null    corpus-index-seedings.ts:52  The jurisdictions those routes held as the pass began.
-corpus_index_generation_seeding_passes.after_entity_id      uuid         null              corpus-index-seedings.ts:57  The last canonical id the pass accounted for; null before its first page.
-corpus_index_generation_seeding_passes.walked_count         bigint       default,not null  corpus-index-seedings.ts:59  Canonical rows the pass has walked.
-corpus_index_generation_seeding_passes.seeded_count         bigint       default,not null  corpus-index-seedings.ts:64  Desired states the pass has written.
-corpus_index_generation_seeding_passes.deferred_count       bigint       default,not null  corpus-index-seedings.ts:73  Rows the pass passed over because their text had not settled and no generation held them (`corpus-projectability.ts`): shown by none, and seeded in every activ…
-corpus_index_generation_seeding_passes.completed_at         timestamptz  null              corpus-index-seedings.ts:78  When the pass walked its last page; null while it is under way.
-corpus_index_generation_seeding_passes.created_at           timestamptz  default,not null  corpus-index-seedings.ts:79
-corpus_index_generation_seeding_passes.updated_at           timestamptz  default,not null  corpus-index-seedings.ts:80
+corpus_index_generation_seeding_passes.family               text         fk,not null       corpus-index-seedings.ts:37
+corpus_index_generation_seeding_passes.generation           varchar      fk,not null       corpus-index-seedings.ts:38
+corpus_index_generation_seeding_passes.pass_number          bigint       default,not null  corpus-index-seedings.ts:42  The pass under way or last completed, counted from the first.
+corpus_index_generation_seeding_passes.pass_started_at      timestamptz  not null          corpus-index-seedings.ts:47  When the pass began, on the database clock.
+corpus_index_generation_seeding_passes.route_index_ids      varchar      array,not null    corpus-index-seedings.ts:49  The routes the pass marks seeded when it completes, taken as it began.
+corpus_index_generation_seeding_passes.route_jurisdictions  varchar      array,not null    corpus-index-seedings.ts:54  The jurisdictions those routes held as the pass began.
+corpus_index_generation_seeding_passes.after_entity_id      uuid         null              corpus-index-seedings.ts:59  The last canonical id the pass accounted for; null before its first page.
+corpus_index_generation_seeding_passes.walked_count         bigint       default,not null  corpus-index-seedings.ts:61  Canonical rows the pass has walked.
+corpus_index_generation_seeding_passes.seeded_count         bigint       default,not null  corpus-index-seedings.ts:66  Desired states the pass has written.
+corpus_index_generation_seeding_passes.deferred_count       bigint       default,not null  corpus-index-seedings.ts:75  Rows the pass passed over because their text had not settled and no generation held them (`corpus-projectability.ts`): shown by none, and seeded in every activ…
+corpus_index_generation_seeding_passes.completed_at         timestamptz  null              corpus-index-seedings.ts:80  When the pass walked its last page; null while it is under way.
+corpus_index_generation_seeding_passes.created_at           timestamptz  default,not null  corpus-index-seedings.ts:81
+corpus_index_generation_seeding_passes.updated_at           timestamptz  default,not null  corpus-index-seedings.ts:82
 ```
 
-## corpus_index_route_seedings · `corpusIndexRouteSeedings` · corpus-index-seedings.ts:125 · rls
+## corpus_index_route_seedings · `corpusIndexRouteSeedings` · corpus-index-seedings.ts:135 · rls
 
 One route (physical index) of a generation that a completed seeding pass covered: every canonical row the route held when that pass began was given a desired s…
 
 ```text
-corpus_index_route_seedings.family           text         fk,not null       corpus-index-seedings.ts:128
-corpus_index_route_seedings.generation       varchar      fk,not null       corpus-index-seedings.ts:129
-corpus_index_route_seedings.index_id         varchar      not null          corpus-index-seedings.ts:132
-corpus_index_route_seedings.jurisdictions    varchar      array,not null    corpus-index-seedings.ts:136  The jurisdictions routed when the covering pass began.
-corpus_index_route_seedings.pass_number      bigint       not null          corpus-index-seedings.ts:138  The pass that covered the route.
-corpus_index_route_seedings.pass_started_at  timestamptz  not null          corpus-index-seedings.ts:140  When that pass began.
-corpus_index_route_seedings.seeded_at        timestamptz  not null          corpus-index-seedings.ts:142  When that pass completed.
-corpus_index_route_seedings.created_at       timestamptz  default,not null  corpus-index-seedings.ts:143
-corpus_index_route_seedings.updated_at       timestamptz  default,not null  corpus-index-seedings.ts:144
+corpus_index_route_seedings.family           text         fk,not null       corpus-index-seedings.ts:138
+corpus_index_route_seedings.generation       varchar      fk,not null       corpus-index-seedings.ts:139
+corpus_index_route_seedings.index_id         varchar      not null          corpus-index-seedings.ts:142
+corpus_index_route_seedings.jurisdictions    varchar      array,not null    corpus-index-seedings.ts:146  The jurisdictions routed when the covering pass began.
+corpus_index_route_seedings.pass_number      bigint       not null          corpus-index-seedings.ts:148  The pass that covered the route.
+corpus_index_route_seedings.pass_started_at  timestamptz  not null          corpus-index-seedings.ts:150  When that pass began.
+corpus_index_route_seedings.seeded_at        timestamptz  not null          corpus-index-seedings.ts:152  When that pass completed.
+corpus_index_route_seedings.created_at       timestamptz  default,not null  corpus-index-seedings.ts:153
+corpus_index_route_seedings.updated_at       timestamptz  default,not null  corpus-index-seedings.ts:154
 ```

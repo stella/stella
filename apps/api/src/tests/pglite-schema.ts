@@ -1911,3 +1911,39 @@ export const installPgliteFindingDecisionHistory = async (
     });
   }
 };
+
+export const CORPUS_INDEX_ROUTE_SEEDINGS_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261116123000_corpus_index_route_seedings",
+  "migration.sql",
+);
+
+/**
+ * Apply what schema push omits from the seeding tables: forced row security
+ * and the status trigger that deletes a generation's seeding pass when it
+ * leaves or re-enters the active set.
+ */
+export const installPgliteCorpusIndexSeedingLifecycle = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    CORPUS_INDEX_ROUTE_SEEDINGS_MIGRATION_PATH,
+  ).filter((statement) => {
+    const source = executableSql(statement);
+    return (
+      (source.startsWith("ALTER TABLE") &&
+        source.endsWith("FORCE ROW LEVEL SECURITY;")) ||
+      source.startsWith("CREATE FUNCTION") ||
+      source.startsWith("REVOKE ALL ON FUNCTION") ||
+      source.startsWith("CREATE TRIGGER")
+    );
+  });
+  if (statements.length !== 5) {
+    panic(
+      `Corpus index seeding lifecycle migration statements changed: ${statements.length}`,
+    );
+  }
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};

@@ -41,8 +41,10 @@
  * `tests/helpers/corpus-projection-seeding-guard.ts`). Rows created after the
  * walk passed their id are seeded by their writer; rows created before are
  * walked. A generation that leaves the active set stops receiving those
- * writes, so the transition that takes it out deletes its pass
- * (`corpus-index-generation-store.ts`), and the route rows cascade.
+ * writes, so a trigger on the registry's status deletes its pass when it
+ * leaves the active set or re-enters it, in the statement that changes the
+ * status, under any release (migration
+ * `20261116123000_corpus_index_route_seedings`); the route rows cascade.
  *
  * Each page seeds and records its cursor and counts in one transaction, so
  * the pass row never claims more than was seeded.

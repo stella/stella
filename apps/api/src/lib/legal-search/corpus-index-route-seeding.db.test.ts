@@ -16,6 +16,7 @@ import {
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   beginCorpusIndexGenerationRebuildTx,
+  resumeRetiringCorpusIndexGenerationTx,
   setServingCorpusIndexGenerationTx,
 } from "@/api/lib/legal-search/corpus-index-generation-store";
 import {
@@ -586,4 +587,180 @@ test("a decision that settles behind the cursor is seeded in every generation by
     pass: { walked: 3, seeded: 2, deferred: 1 },
   });
   expect(await statesOf(CASE_LAW)).toEqual([1, 2, 3].map(decisionId));
+});
+
+const passGenerations = async () =>
+  (
+    await db
+      .select({ generation: corpusIndexGenerationSeedingPasses.generation })
+      .from(corpusIndexGenerationSeedingPasses)
+      .orderBy(corpusIndexGenerationSeedingPasses.generation)
+  ).map(({ generation }) => generation);
+
+const routeGenerations = async () =>
+  (
+    await db
+      .selectDistinct({ generation: corpusIndexRouteSeedings.generation })
+      .from(corpusIndexRouteSeedings)
+      .orderBy(corpusIndexRouteSeedings.generation)
+  ).map(({ generation }) => generation);
+
+test("a status change made in raw SQL, as an older release makes it, forgets the pass on leaving the active set and keeps it within the set", async () => {
+  await inTx(async (tx) => await insertDecisions(tx, [1, 2]));
+  await register("case_law_v5", "serving");
+  await register("case_law_v6", "building");
+  const v6: CorpusIndexSeedingTarget = {
+    family: "case_law",
+    generation: "case_law_v6",
+  };
+  expect(await advance(CASE_LAW, 10)).toMatchObject({ type: "advanced" });
+  expect(await advance(CASE_LAW, 10)).toMatchObject({ type: "completed" });
+  expect(await advance(v6, 10)).toMatchObject({ type: "advanced" });
+  expect(await advance(v6, 10)).toMatchObject({ type: "completed" });
+
+  // A flip swaps serving and building: both stay active, both keep seeding.
+  await db.execute(sql`
+    UPDATE corpus_index_generations
+       SET status = CASE status WHEN 'serving' THEN 'building' ELSE 'serving' END
+     WHERE family = 'case_law'`);
+  expect(await passGenerations()).toEqual(["case_law_v5", "case_law_v6"]);
+
+  // A promotion that retires the old serving generation, written without
+  // any call into the seeding module.
+  await db.execute(sql`
+    UPDATE corpus_index_generations SET status = 'retiring'
+     WHERE family = 'case_law' AND generation = 'case_law_v6'`);
+  expect(await passGenerations()).toEqual(["case_law_v5"]);
+  expect(await routeGenerations()).toEqual(["case_law_v5"]);
+});
+
+test("a generation resumed from retiring comes back unseeded, even with a pass written while it was out", async () => {
+  await inTx(async (tx) => await insertDecisions(tx, [1, 2]));
+  await register("case_law_v5", "building");
+  expect(await advance(CASE_LAW, 10)).toMatchObject({ type: "advanced" });
+  expect(await advance(CASE_LAW, 10)).toMatchObject({ type: "completed" });
+  await inTx(
+    async (tx) =>
+      await beginCorpusIndexGenerationRebuildTx(tx, {
+        family: "case_law",
+        generation: "case_law_v5",
+      }),
+  );
+  expect(await passGenerations()).toEqual([]);
+
+  // A stale completed pass, as a release without the trigger could leave it.
+  await db.insert(corpusIndexGenerationSeedingPasses).values({
+    family: "case_law",
+    generation: "case_law_v5",
+    passStartedAt: new Date("2026-11-01T00:00:00Z"),
+    routeIndexIds: CASE_LAW_V5_ROUTES,
+    routeJurisdictions: ["CZE"],
+    walkedCount: 2n,
+    seededCount: 2n,
+    completedAt: new Date("2026-11-01T01:00:00Z"),
+  });
+  await inTx(
+    async (tx) =>
+      await resumeRetiringCorpusIndexGenerationTx(tx, {
+        family: "case_law",
+        generation: "case_law_v5",
+      }),
+  );
+  expect(await passGenerations()).toEqual([]);
+  expect(
+    (await readSeedings(CASE_LAW))?.routes.map(({ state }) => state),
+  ).toEqual(CASE_LAW_V5_ROUTES.map(() => "unseeded"));
+});
+
+const OWNERSHIP_ROLLED_BACK = "seeding ownership change rolled back";
+
+/**
+ * The test database's superuser bypasses row security, so this runs with the
+ * seeding tables and the trigger function owned by an ordinary role, as the
+ * maintenance lane's root handle owns them in production. The ownership
+ * change rolls back with the transaction.
+ */
+const asOrdinaryOwner = async (work: (tx: Transaction) => Promise<void>) => {
+  const outcome = await db
+    .transaction(async (raw) => {
+      const tx = asTestRaw<Transaction>(raw);
+      for (const statement of [
+        `DO $$ BEGIN
+           IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'seeding_test_owner') THEN
+             CREATE ROLE seeding_test_owner NOLOGIN NOBYPASSRLS;
+           END IF;
+         END $$`,
+        "ALTER TABLE corpus_index_generation_seeding_passes OWNER TO seeding_test_owner",
+        "ALTER TABLE corpus_index_route_seedings OWNER TO seeding_test_owner",
+        "ALTER FUNCTION forget_corpus_index_generation_seeding() OWNER TO seeding_test_owner",
+      ]) {
+        await tx.execute(sql.raw(statement));
+      }
+      await work(tx);
+      throw new Error(OWNERSHIP_ROLLED_BACK);
+    })
+    .then(
+      () => "committed",
+      (error: unknown) => {
+        if (error instanceof Error && error.message === OWNERSHIP_ROLLED_BACK) {
+          return "rolled back";
+        }
+        throw error;
+      },
+    );
+  expect(outcome).toBe("rolled back");
+};
+
+test("under forced row security, the status trigger and the registry cascade still delete the seeding rows", async () => {
+  await inTx(async (tx) => await insertDecisions(tx, [1, 2]));
+  await register("case_law_v5", "building");
+  await register("case_law_v6", "building");
+  const v6: CorpusIndexSeedingTarget = {
+    family: "case_law",
+    generation: "case_law_v6",
+  };
+  expect(await advance(CASE_LAW, 10)).toMatchObject({ type: "advanced" });
+  expect(await advance(CASE_LAW, 10)).toMatchObject({ type: "completed" });
+  expect(await advance(v6, 10)).toMatchObject({ type: "advanced" });
+  expect(await advance(v6, 10)).toMatchObject({ type: "completed" });
+
+  await asOrdinaryOwner(async (tx) => {
+    const forced = await tx.execute<{ relname: string; forced: boolean }>(sql`
+      SELECT relname, relforcerowsecurity AS forced FROM pg_class
+       WHERE relname IN ('corpus_index_generation_seeding_passes', 'corpus_index_route_seedings')
+       ORDER BY relname`);
+    expect(forced.rows).toEqual([
+      { relname: "corpus_index_generation_seeding_passes", forced: true },
+      { relname: "corpus_index_route_seedings", forced: true },
+    ]);
+    // Ingestion changes the status; the function runs as the owner, whose
+    // only way to the rows is the owner policy.
+    await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
+    await tx.execute(sql`
+      UPDATE corpus_index_generations SET status = 'retiring'
+       WHERE family = 'case_law' AND generation = 'case_law_v5'`);
+    await tx.execute(sql`RESET ROLE`);
+    const afterTrigger = await tx.execute<{ generation: string }>(sql`
+      SELECT generation FROM corpus_index_generation_seeding_passes ORDER BY generation`);
+    expect(afterTrigger.rows).toEqual([{ generation: "case_law_v6" }]);
+    // With the owner policies gone the cascade still runs: a referential
+    // action is not subject to row security.
+    await tx.execute(
+      sql`DROP POLICY corpus_index_generation_seeding_pass_owner_access ON corpus_index_generation_seeding_passes`,
+    );
+    await tx.execute(
+      sql`DROP POLICY corpus_index_route_seeding_owner_access ON corpus_index_route_seedings`,
+    );
+    // A completed rebuild deletes the generation's states, then its row.
+    await tx.execute(sql`
+      DELETE FROM corpus_index_projection_states
+       WHERE family = 'case_law' AND generation = 'case_law_v6'`);
+    await tx.execute(sql`
+      DELETE FROM corpus_index_generations
+       WHERE family = 'case_law' AND generation = 'case_law_v6'`);
+    const left = await tx.execute<{ passes: number; routes: number }>(sql`
+      SELECT (SELECT count(*)::int FROM corpus_index_generation_seeding_passes) AS passes,
+             (SELECT count(*)::int FROM corpus_index_route_seedings) AS routes`);
+    expect(left.rows).toEqual([{ passes: 0, routes: 0 }]);
+  });
 });

@@ -26,8 +26,10 @@ const familyValues = sql.raw(
  * Once a pass has completed, every desired writer keeps the generation
  * seeded by projecting each changed row into every active generation in its
  * own transaction. A generation that leaves the active set stops receiving
- * those writes, so the transition that takes it out deletes this row, and
- * its route rows with it; a rebuild deletes the registration and cascades.
+ * those writes, so a database trigger on the registry's status deletes this
+ * row, and its route rows with it, whenever the generation leaves the active
+ * set or re-enters it, whichever code or release changes the status; a
+ * deleted registration cascades.
  */
 export const corpusIndexGenerationSeedingPasses = p.pgTable(
   "corpus_index_generation_seeding_passes",
@@ -110,6 +112,14 @@ export const corpusIndexGenerationSeedingPasses = p.pgTable(
       sql`${t.completedAt} IS NULL OR ${t.completedAt} >= ${t.passStartedAt}`,
     ),
     ...globalCaseLawPolicies(),
+    // Row security is forced: the owner (the maintenance lane's root handle,
+    // and the status trigger's function) reaches the rows through this policy.
+    p.pgPolicy("corpus_index_generation_seeding_pass_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.corpus_index_generation_seeding_passes'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.corpus_index_generation_seeding_passes'::regclass)`,
+    }),
   ],
 );
 
@@ -174,5 +184,13 @@ export const corpusIndexRouteSeedings = p.pgTable(
       sql`${t.passNumber} > 0 AND ${t.seededAt} >= ${t.passStartedAt}`,
     ),
     ...globalCaseLawPolicies(),
+    // Row security is forced: the owner (the maintenance lane's root handle,
+    // and the status trigger's function) reaches the rows through this policy.
+    p.pgPolicy("corpus_index_route_seeding_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.corpus_index_route_seedings'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.corpus_index_route_seedings'::regclass)`,
+    }),
   ],
 );
