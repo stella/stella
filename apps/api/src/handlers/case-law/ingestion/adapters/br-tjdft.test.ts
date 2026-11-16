@@ -197,10 +197,21 @@ const cursorOf = (overrides: Partial<BrTjdftCursor> = {}): string =>
     ...overrides,
   });
 
-const nextCursorOf = (page: Awaited<ReturnType<typeof adapter.fetchPage>>) =>
-  Result.isOk(page)
-    ? JSON.parse(page.value.nextCursor ?? "null")
-    : panic(`the page failed: ${page.error.message}`);
+const nextCursorOf = (
+  page: Awaited<ReturnType<typeof adapter.fetchPage>>,
+): BrTjdftCursor => {
+  if (!Result.isOk(page)) {
+    return panic(`the page failed: ${page.error.message}`);
+  }
+  const { nextCursor } = page.value;
+  if (nextCursor === null) {
+    return panic("the page ended the walk");
+  }
+  const parsed = parseBrTjdftCursor(nextCursor, NOW);
+  return Result.isOk(parsed)
+    ? parsed.value
+    : panic(`the next cursor does not parse: ${parsed.error.message}`);
+};
 
 const originalSleep = Bun.sleep;
 
