@@ -86,6 +86,24 @@ describe("generate", () => {
 });
 
 describe("parseGlossary", () => {
+  test("reports the first invalid locale before later invalid fields", () => {
+    const invalid = JSON.stringify({
+      verbs: [
+        {
+          id: "save",
+          en: "Save",
+          translations: { ...fill("S"), ar: 1, cs: 2, xx: "extra" },
+          forbidden: { xx: ["later"] },
+        },
+      ],
+      legalConcepts: [],
+      ptBR: [],
+    });
+    expect(() => parseGlossary(invalid)).toThrow(
+      'verbs (save): missing translation for "ar"',
+    );
+  });
+
   test("rejects a term missing a locale", () => {
     expect(() =>
       parseGlossary(

@@ -99,10 +99,15 @@ const constBindingValue = ({ node, value }: Binding): ts.Node | undefined =>
     ? value
     : undefined;
 
-const isRouteSegmentCall = (node: ts.CallExpression): boolean =>
-  ts.isPropertyAccessExpression(node.expression) ||
-  (ts.isElementAccessExpression(node.expression) &&
-    ts.isStringLiteral(node.expression.argumentExpression));
+const isRouteSegmentCall = (node: ts.CallExpression): boolean => {
+  const callee = unwrap(node.expression);
+  return (
+    ts.isPropertyAccessExpression(callee) ||
+    (ts.isCallExpression(callee) && isRouteSegmentCall(callee)) ||
+    (ts.isElementAccessExpression(callee) &&
+      ts.isStringLiteral(callee.argumentExpression))
+  );
+};
 
 const isApiRequestCall = (node: ts.CallExpression): boolean =>
   API_CLIENT_REQUEST_METHODS.has(callName(node.expression) ?? "");
@@ -321,6 +326,14 @@ const indexModule = ({ file, text }: SourceInput): Module => {
         }
       }
     }
+    if (ts.isFunctionExpression(node) && node.name) {
+      bindings.push({
+        name: node.name.text,
+        node,
+        value: node,
+        scope: node,
+      });
+    }
     if (ts.isFunctionDeclaration(node) && node.name) {
       bindings.push({
         name: node.name.text,
@@ -408,16 +421,20 @@ type ImportedPrimitiveArgs = {
   seen?: Set<string>;
 };
 
+type ScanIntent = "inspect" | "evaluate";
+
 type ScanCallArgs = {
   current: Value & { node: ts.CallExpression };
   depth: number;
   nextActive: Set<ts.Node>;
+  intent: ScanIntent;
 };
 
 type ScanArgs = {
   value: Value;
   depth: number;
   active?: Set<ts.Node>;
+  intent?: ScanIntent;
 };
 
 type CallScanMode = "transitive" | "outside-mutations";
@@ -453,8 +470,51 @@ class CallScanner {
       file: node.getSourceFile().fileName,
       expression: normalize(node),
     });
-  scanCall = ({ current, depth, nextActive }: ScanCallArgs) => {
+  scanEvaluation = ({
+    value,
+    depth,
+    active = new Set<ts.Node>(),
+  }: ScanArgs) => {
+    const { node, env } = value;
+    if (active.has(node)) {
+      return;
+    }
+    if (depth > 12) {
+      this.unknown("helper-depth-limit", node);
+      return;
+    }
+    // Evaluating a function value does not invoke its body. Calls bind their
+    // own arguments; operation options and callback arguments use scan().
+    if (ts.isFunctionLike(node)) {
+      if (node.name && ts.isComputedPropertyName(node.name)) {
+        this.scanEvaluation({
+          value: { node: node.name.expression, env },
+          depth,
+          active,
+        });
+      }
+      return;
+    }
+    if (ts.isCallExpression(node)) {
+      this.scan({ value, depth, active, intent: "evaluate" });
+      return;
+    }
+    const nextActive = new Set(active).add(node);
+    ts.forEachChild(node, (child) =>
+      this.scanEvaluation({
+        value: { node: child, env },
+        depth,
+        active: nextActive,
+      }),
+    );
+  };
+  scanCall = ({ current, depth, nextActive, intent }: ScanCallArgs) => {
     const node = current.node;
+    this.scanEvaluation({
+      value: { node: node.expression, env: current.env },
+      depth,
+      active: nextActive,
+    });
     const name = this.analyzer.primitiveName(node);
     switch (this.mode) {
       case "transitive":
@@ -551,7 +611,11 @@ class CallScanner {
         ? this.analyzer.invocation(node, current.env)
         : undefined;
       if (body) {
-        this.scan({ value: body, depth: depth + 1, active: nextActive });
+        const scanBody = {
+          evaluate: this.scanEvaluation,
+          inspect: this.scan,
+        }[intent];
+        scanBody({ value: body, depth: depth + 1, active: nextActive });
       }
     }
     for (const argument of node.arguments) {
@@ -606,7 +670,12 @@ class CallScanner {
       });
     }
   };
-  scan = ({ value, depth, active = new Set<ts.Node>() }: ScanArgs) => {
+  scan = ({
+    value,
+    depth,
+    active = new Set<ts.Node>(),
+    intent = "inspect",
+  }: ScanArgs) => {
     const current = value;
     const node = current.node;
     if (active.has(node)) {
@@ -616,14 +685,19 @@ class CallScanner {
       this.unknown("helper-depth-limit", node);
       return;
     }
-    const signature = `${node.getSourceFile().fileName}:${String(node.kind)}:${String(node.pos)}:${String(node.end)}:${[...current.env.entries()].map(([parameter, argument]) => `${parameter.getSourceFile().fileName}:${String(parameter.pos)}=${argument.node.getSourceFile().fileName}:${String(argument.node.pos)}`).join(";")}`;
+    const signature = `${intent}:${node.getSourceFile().fileName}:${String(node.kind)}:${String(node.pos)}:${String(node.end)}:${[...current.env.entries()].map(([parameter, argument]) => `${parameter.getSourceFile().fileName}:${String(parameter.pos)}=${argument.node.getSourceFile().fileName}:${String(argument.node.pos)}`).join(";")}`;
     if (this.scanned.has(signature)) {
       return;
     }
     this.scanned.add(signature);
     const nextActive = new Set(active).add(node);
     if (ts.isCallExpression(node)) {
-      this.scanCall({ current: { node, env: current.env }, depth, nextActive });
+      this.scanCall({
+        current: { node, env: current.env },
+        depth,
+        nextActive,
+        intent,
+      });
       return;
     }
     if (ts.isSpreadAssignment(node)) {

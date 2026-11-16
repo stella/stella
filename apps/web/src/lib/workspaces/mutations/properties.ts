@@ -242,20 +242,22 @@ export const suggestPropertyPrompt = async ({
   options,
   currentPrompt,
   instruction,
-}: SuggestPromptVars) =>
-  unwrapApiResponse(
-    await api
-      .properties({ workspaceId: toSafeId<"workspace">(workspaceId) })
-      ["suggest-prompt"].post({
-        name,
-        contentType,
-        instruction,
-        ...(options && options.length > 0
-          ? { options: options.map((o) => ({ value: o.value })) }
-          : {}),
-        ...(currentPrompt && currentPrompt.length > 0 ? { currentPrompt } : {}),
-      }),
+}: SuggestPromptVars) => {
+  const propertiesApi = api.properties({
+    workspaceId: toSafeId<"workspace">(workspaceId),
+  });
+  return unwrapApiResponse(
+    await propertiesApi["suggest-prompt"].post({
+      name,
+      contentType,
+      instruction,
+      ...(options && options.length > 0
+        ? { options: options.map((o) => ({ value: o.value })) }
+        : {}),
+      ...(currentPrompt && currentPrompt.length > 0 ? { currentPrompt } : {}),
+    }),
   );
+};
 
 export const useSuggestPrompt = () => {
   const analytics = useAnalytics();

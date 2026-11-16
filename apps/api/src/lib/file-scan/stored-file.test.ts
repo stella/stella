@@ -16,7 +16,6 @@ import {
   responseByteFile,
   responseByteStream,
 } from "@/api/tests/helpers/response-byte-stream";
-import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import { readStoredFile } from "./stored-file";
 
@@ -173,11 +172,12 @@ describe("stored file default signal ownership", () => {
       let settled = false;
       const input =
         mode === "explicit-cap"
-          ? asTestRaw<Parameters<typeof readStoredFile>[0]>({
+          ? {
               key,
               mimeType: "text/plain",
               maxBytes: 8,
-            })
+              signal: caller.signal,
+            }
           : {
               key,
               mimeType: "text/plain",

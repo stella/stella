@@ -278,6 +278,14 @@
     "scripts/status-write-shapes.test.ts": ["**"],
     "scripts/stylelint.test.ts": ["**"],
     "scripts/suppression-waivers.test.ts": ["**"],
+    "scripts/tanstack-drift.test.ts": [
+      "apps/api/src/tests/helpers/recorded-conversation-suites.ts",
+      "packages/fetch/src/body-reader.ts",
+      "packages/fetch/src/connection-failure.ts",
+      "packages/fetch/src/index.ts",
+      "packages/fetch/src/race-abort.ts",
+      "scripts/tanstack-drift.ts"
+    ],
     "scripts/test-subject-reachability.test.ts": ["**"],
     "scripts/toast-error-census.test.ts": ["**"],
     "scripts/tsdown-declaration-tools.test.ts": ["**"],

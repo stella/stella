@@ -846,3 +846,352 @@ test("one module's types never reorder another module's inferred unions or expan
     { numRuns: 5 },
   );
 }, 90_000);
+
+const CALL_ARITY_CASES = [
+  {
+    name: "an optional argument in a generic default",
+    before:
+      "export interface Reader<T = { read(key: string, format?: number): void }> { value: T }",
+    after:
+      "export interface Reader<T = { read(key: string): void }> { value: T }",
+    consumer:
+      'import type { Reader } from "./model"; declare const reader: Reader; reader.value.read("key", 1);',
+  },
+  {
+    name: "a method argument in a class merged with a namespace",
+    before:
+      "export declare class Reader { read(key: string, format?: number): void } export declare namespace Reader { const version: string }",
+    after:
+      "export declare class Reader { read(key: string): void } export declare namespace Reader { const version: string }",
+    consumer: 'import { Reader } from "./model"; new Reader().read("key", 1);',
+  },
+  {
+    name: "an optional function argument",
+    before:
+      "export declare const read: (key: string, format?: number) => void;",
+    after: "export declare const read: (key: string) => void;",
+    consumer: 'import { read } from "./model"; read("key", 1);',
+  },
+  {
+    name: "a defaulted function argument",
+    before:
+      "export const read = (key: string, count = 1) => key.repeat(count);",
+    after: "export const read = (key: string) => key;",
+    consumer: 'import { read } from "./model"; read("key", 2);',
+  },
+  {
+    name: "an interface method argument",
+    before:
+      "export interface Reader { read(key: string, format?: number): void }",
+    after: "export interface Reader { read(key: string): void }",
+    consumer:
+      'import type { Reader } from "./model"; declare const reader: Reader; reader.read("key", 1);',
+  },
+  {
+    name: "a class method argument",
+    before:
+      "export declare class Reader { read(key: string, format?: number): void }",
+    after: "export declare class Reader { read(key: string): void }",
+    consumer: 'import { Reader } from "./model"; new Reader().read("key", 1);',
+  },
+  {
+    name: "an optional constructor argument",
+    before:
+      "export declare class Reader { constructor(key: string, format?: number) }",
+    after: "export declare class Reader { constructor(key: string) }",
+    consumer: 'import { Reader } from "./model"; new Reader("key", 1);',
+  },
+  {
+    name: "an optional construct-signature argument",
+    before:
+      "export interface ReaderFactory { new (key: string, format?: number): object }",
+    after: "export interface ReaderFactory { new (key: string): object }",
+    consumer:
+      'import type { ReaderFactory } from "./model"; declare const Reader: ReaderFactory; new Reader("key", 1);',
+  },
+  {
+    name: "an unbounded rest argument",
+    before: "export declare const read: (...parts: string[]) => void;",
+    after: "export declare const read: (first?: string) => void;",
+    consumer: 'import { read } from "./model"; read("a", "b", "c");',
+  },
+  {
+    name: "a bounded rest tuple argument",
+    before:
+      "export declare const read: (...args: [key: string, format?: number]) => void;",
+    after: "export declare const read: (...args: [key: string]) => void;",
+    consumer: 'import { read } from "./model"; read("key", 1);',
+  },
+  {
+    name: "a constrained generic rest tuple argument",
+    before:
+      "export declare const read: <T extends [key: string, format?: number]>(...args: T) => void;",
+    after:
+      "export declare const read: <T extends [key: string]>(...args: T) => void;",
+    consumer: 'import { read } from "./model"; read("key", 1);',
+  },
+  {
+    name: "a rest tuple with a required tail",
+    before:
+      "export declare const read: (...args: [first: string, ...middle: string[], last: number]) => void;",
+    after:
+      "export declare const read: (...args: [first: string, last: number]) => void;",
+    consumer: 'import { read } from "./model"; read("a", "b", 1);',
+  },
+  {
+    name: "a discriminated overload despite an unchanged global maximum",
+    before:
+      'export declare function read(mode: "short"): void; export declare function read(mode: "long", count?: number): void;',
+    after:
+      'export declare function read(mode: "short", count?: number): void; export declare function read(mode: "long"): void;',
+    consumer: 'import { read } from "./model"; read("long", 1);',
+  },
+  {
+    name: "a discriminated constructor overload despite an unchanged global maximum",
+    before:
+      'export declare class Reader { constructor(mode: "short"); constructor(mode: "long", count?: number) }',
+    after:
+      'export declare class Reader { constructor(mode: "short", count?: number); constructor(mode: "long") }',
+    consumer: 'import { Reader } from "./model"; new Reader("long", 1);',
+  },
+] as const;
+
+const consumerDiagnostics = (root: string, consumer: string) => {
+  const file = path.join(root, "packages/fixture/src/consumer.ts");
+  writeFileSync(file, consumer);
+  const program = ts.createProgram({
+    rootNames: [file],
+    options: {
+      strict: true,
+      noEmit: true,
+      skipLibCheck: true,
+      target: ts.ScriptTarget.ESNext,
+      module: ts.ModuleKind.ESNext,
+      moduleResolution: ts.ModuleResolutionKind.Bundler,
+      types: [],
+    },
+  });
+  const source =
+    program.getSourceFile(file) ?? panic("Missing API consumer fixture");
+  return [
+    ...program.getSyntacticDiagnostics(source),
+    ...program.getSemanticDiagnostics(source),
+  ].map((diagnostic) => ({
+    code: diagnostic.code,
+    message: ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"),
+  }));
+};
+
+const ARITY_MODEL_PREAMBLE =
+  "export type Input = string | number; export const convert = (input: Input): string => String(input);\n";
+
+test.each(CALL_ARITY_CASES)(
+  "reports lost calls after removing $name",
+  async ({ before, after, consumer }) => {
+    const root = await fixture();
+    const packageDir = path.join(root, "packages/fixture");
+    replace(root, "src/model.ts", `${ARITY_MODEL_PREAMBLE}${before}\n`);
+    expect(consumerDiagnostics(root, consumer)).toEqual([]);
+    const previous = generateApiReport(packageDir);
+    replace(root, "src/model.ts", `${ARITY_MODEL_PREAMBLE}${after}\n`);
+    expect(consumerDiagnostics(root, consumer).length).toBeGreaterThan(0);
+    const changes = breakingApiChanges({
+      before: previous,
+      after: generateApiReport(packageDir),
+      packageDir,
+    });
+    expect(changes.length).toBeGreaterThan(0);
+  },
+);
+
+const PRESERVED_CALL_CASES = [
+  {
+    name: "an added optional argument",
+    before: "export declare const read: (key: string) => void;",
+    after: "export declare const read: (key: string, format?: number) => void;",
+    consumer: 'import { read } from "./model"; read("key");',
+  },
+  {
+    name: "fixed arguments widened to an array rest",
+    before: "export declare const read: (key: string) => void;",
+    after: "export declare const read: (...parts: string[]) => void;",
+    consumer: 'import { read } from "./model"; read("key");',
+  },
+  {
+    name: "equivalent fixed and rest tuple arguments",
+    before: "export declare const read: (key: string, count?: number) => void;",
+    after:
+      "export declare const read: (...args: [key: string, count?: number]) => void;",
+    consumer: 'import { read } from "./model"; read("key"); read("key", 1);',
+  },
+  {
+    name: "an added optional constructor argument",
+    before: "export declare class Reader { constructor(key: string) }",
+    after:
+      "export declare class Reader { constructor(key: string, count?: number) }",
+    consumer: 'import { Reader } from "./model"; new Reader("key");',
+  },
+  {
+    name: "reordered discriminated overloads",
+    before:
+      'export declare function read(mode: "short"): void; export declare function read(mode: "long", count?: number): void;',
+    after:
+      'export declare function read(mode: "long", count?: number): void; export declare function read(mode: "short"): void;',
+    consumer: 'import { read } from "./model"; read("short"); read("long", 1);',
+  },
+  {
+    name: "reordered generic overloads with renamed parameters",
+    before:
+      'export declare function read(mode: "short"): void; export declare function read<T>(mode: "long", value: T, count?: number): void;',
+    after:
+      'export declare function read<U>(mode: "long", value: U, count?: number): void; export declare function read(mode: "short"): void;',
+    consumer:
+      'import { read } from "./model"; read("short"); read("long", { value: 1 }, 2);',
+  },
+  {
+    name: "widened generic constraints on the matching overload",
+    before:
+      'export declare function read(mode: "short"): void; export declare function read<T extends "long">(mode: T, count?: number): void;',
+    after:
+      'export declare function read<U extends string>(mode: U, count?: number): void; export declare function read(mode: "short"): void;',
+    consumer: 'import { read } from "./model"; read("short"); read("long", 1);',
+  },
+  {
+    name: "reordered generic methods with private parameter types",
+    before:
+      'type Item<T> = { item: T }; export interface Reader<T extends object> { read(mode: "short"): void; read<U extends T>(mode: "long", value: Item<U>, count?: number): void }',
+    after:
+      'type Item<T> = { item: T }; export interface Reader<T extends object> { read<V extends T>(mode: "long", value: Item<V>, count?: number): void; read(mode: "short"): void }',
+    consumer:
+      'import type { Reader } from "./model"; declare const reader: Reader<{ id: number }>; reader.read("short"); reader.read("long", { item: { id: 1 } }, 2);',
+  },
+  {
+    name: "reordered constructor overloads",
+    before:
+      'export declare class Reader { constructor(mode: "short"); constructor(mode: "long", count?: number) }',
+    after:
+      'export declare class Reader { constructor(mode: "long", count?: number); constructor(mode: "short") }',
+    consumer:
+      'import { Reader } from "./model"; new Reader("short"); new Reader("long", 1);',
+  },
+  {
+    name: "reordered methods with a polymorphic receiver parameter",
+    before:
+      'export interface Reader { read(mode: "short"): void; read(mode: "long", peer: this, count?: number): void }',
+    after:
+      'export interface Reader { read(mode: "long", peer: this, count?: number): void; read(mode: "short"): void }',
+    consumer:
+      'import type { Reader } from "./model"; declare const reader: Reader; reader.read("short"); reader.read("long", reader, 1);',
+  },
+  {
+    name: "an explicit receiver and a predicate",
+    before:
+      "export declare const read: (this: { prefix: string }, value: unknown) => value is string;",
+    after:
+      "export declare const read: (this: { prefix: string }, value: unknown, hint?: string) => value is string;",
+    consumer:
+      'import { read } from "./model"; read.call({ prefix: "a" }, "text");',
+  },
+  {
+    name: "reordered receiver overloads with a predicate",
+    before:
+      'export declare function read(this: { prefix: string }, mode: "short"): boolean; export declare function read(this: { prefix: string }, mode: "long", value: unknown, count?: number): value is string;',
+    after:
+      'export declare function read(this: { prefix: string }, mode: "long", value: unknown, count?: number): value is string; export declare function read(this: { prefix: string }, mode: "short"): boolean;',
+    consumer:
+      'import { read } from "./model"; const reader = { prefix: "a", read }; let value: unknown; if (reader.read("long", value, 1)) { const text: string = value; }',
+  },
+  {
+    name: "reordered overloads with parameter-bound typeof inputs",
+    before:
+      'export declare function read(mode: "short"): void; export declare function read(mode: "long", value: string, copy?: typeof value): void;',
+    after:
+      'export declare function read(mode: "long", value: string, copy?: typeof value): void; export declare function read(mode: "short"): void;',
+    consumer:
+      'import { read } from "./model"; read("short"); read("long", "value", "copy");',
+  },
+  {
+    name: "a parameter-bound typeof result",
+    before: "export declare const read: <T>(value: T) => typeof value;",
+    after:
+      "export declare const read: <T>(value: T, hint?: string) => typeof value;",
+    consumer: 'import { read } from "./model"; const result: number = read(1);',
+  },
+] as const;
+
+test.each(PRESERVED_CALL_CASES)(
+  "preserves existing calls with $name",
+  async ({ before, after, consumer }) => {
+    const root = await fixture();
+    const packageDir = path.join(root, "packages/fixture");
+    replace(root, "src/model.ts", `${ARITY_MODEL_PREAMBLE}${before}\n`);
+    expect(consumerDiagnostics(root, consumer)).toEqual([]);
+    const previous = generateApiReport(packageDir);
+    replace(root, "src/model.ts", `${ARITY_MODEL_PREAMBLE}${after}\n`);
+    expect(consumerDiagnostics(root, consumer)).toEqual([]);
+    expect(
+      breakingApiChanges({
+        before: previous,
+        after: generateApiReport(packageDir),
+        packageDir,
+      }),
+    ).toEqual([]);
+  },
+);
+
+test("argument evidence preserves conditional types inspecting the original parameter tuple", async () => {
+  const root = await fixture();
+  const packageDir = path.join(root, "packages/fixture");
+  const result =
+    'export type Shape = Parameters<typeof read> extends [string] ? "one" : "many";';
+  replace(
+    root,
+    "src/model.ts",
+    `${ARITY_MODEL_PREAMBLE}export declare const read: (value: string) => void; ${result}`,
+  );
+  const before = generateApiReport(packageDir);
+  replace(
+    root,
+    "src/model.ts",
+    `${ARITY_MODEL_PREAMBLE}export declare const read: (value: string, extra?: number) => void; ${result}`,
+  );
+  const changes = breakingApiChanges({
+    before,
+    after: generateApiReport(packageDir),
+    packageDir,
+  });
+  expect(changes.map(({ message }) => message)).toContain(
+    "./model#Shape: incompatible type signature",
+  );
+});
+
+test("removing an optional public argument requires a minor release before 1.0", async () => {
+  const root = await fixture("0.6.6");
+  replace(
+    root,
+    "src/model.ts",
+    `${ARITY_MODEL_PREAMBLE}export declare const read: (key: string, count?: number) => void;`,
+  );
+  await write(root);
+  git(root, ["add", "."]);
+  git(root, ["commit", "-qm", "optional argument baseline"]);
+  git(root, ["branch", "-f", "baseline"]);
+  replace(
+    root,
+    "src/model.ts",
+    `${ARITY_MODEL_PREAMBLE}export declare const read: (key: string) => void;`,
+  );
+  await write(root);
+  const changeset = path.join(root, ".changeset/argument-removal.md");
+  writeFileSync(
+    changeset,
+    '---\n"@stll/fixture": patch\n---\nRemove the optional count argument.\n',
+  );
+  git(root, ["add", "."]);
+  expect(run(root).join("\n")).toContain("removed accepted argument count");
+  writeFileSync(
+    changeset,
+    '---\n"@stll/fixture": minor\n---\nRemove the optional count argument.\n',
+  );
+  expect(run(root)).toEqual([]);
+});

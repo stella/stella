@@ -170,21 +170,21 @@ const parseForbidden = (
       `${where} (${id}): \`${field}\` must be an object keyed by locale`,
     );
   }
-  const result: Record<string, string[]> = {};
-  for (const [locale, words] of Object.entries(raw)) {
-    if (locale !== "en" && !LOCALE_SET.has(locale)) {
-      return panic(
-        `${where} (${id}): unknown locale "${locale}" in \`${field}\``,
-      );
-    }
-    if (!Array.isArray(words) || words.some((w) => typeof w !== "string")) {
-      return panic(
-        `${where} (${id}): \`${field}.${locale}\` must be an array of strings`,
-      );
-    }
-    result[locale] = words;
-  }
-  return result;
+  return Object.fromEntries(
+    Object.entries(raw).map(([locale, words]) => {
+      if (locale !== "en" && !LOCALE_SET.has(locale)) {
+        return panic(
+          `${where} (${id}): unknown locale "${locale}" in \`${field}\``,
+        );
+      }
+      if (!Array.isArray(words) || words.some((w) => typeof w !== "string")) {
+        return panic(
+          `${where} (${id}): \`${field}.${locale}\` must be an array of strings`,
+        );
+      }
+      return [locale, words];
+    }),
+  );
 };
 
 const parseTerm = (value: unknown, where: string): Term => {
@@ -200,14 +200,15 @@ const parseTerm = (value: unknown, where: string): Term => {
     return panic(`${where} (${id}): missing \`translations\``);
   }
 
-  const translations: Record<string, string> = {};
-  for (const locale of LOCALES) {
-    const translated = rawTranslations[locale];
-    if (typeof translated !== "string") {
-      return panic(`${where} (${id}): missing translation for "${locale}"`);
-    }
-    translations[locale] = translated;
-  }
+  const translations: Record<string, string> = Object.fromEntries(
+    LOCALES.map((locale) => {
+      const translated = rawTranslations[locale];
+      if (typeof translated !== "string") {
+        return panic(`${where} (${id}): missing translation for "${locale}"`);
+      }
+      return [locale, translated];
+    }),
+  );
   for (const key of Object.keys(rawTranslations)) {
     if (!LOCALE_SET.has(key)) {
       return panic(`${where} (${id}): unknown locale "${key}" in translations`);

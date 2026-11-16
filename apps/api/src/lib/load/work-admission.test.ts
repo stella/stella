@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { afterEach, expect, expectTypeOf, test } from "bun:test";
+import { afterEach, beforeEach, expect, expectTypeOf, test } from "bun:test";
 
 import {
   type LogRecord,
@@ -18,7 +18,47 @@ import {
   WorkRefusal,
 } from "./work-admission";
 
+beforeEach(() => resetWorkAdmissionForTesting({ readRssBytes: () => 0 }));
+afterEach(() => resetWorkAdmissionForTesting());
 afterEach(resetLogSinkForTesting);
+
+test("process admission uses the scoped memory reader and restores its default", async () => {
+  let rssBytes = Number.MAX_SAFE_INTEGER;
+  let readings = 0;
+  resetWorkAdmissionForTesting({
+    readRssBytes: () => {
+      readings += 1;
+      return rssBytes;
+    },
+  });
+  const refused = await admitWork({
+    pool: "heavy-sidecar",
+    kind: "memory-fixture",
+    run: async () => "admitted",
+  });
+  expect(
+    Result.isError(refused) &&
+      WorkRefusal.is(refused.error) &&
+      refused.error.reason === "memory",
+  ).toBe(true);
+
+  rssBytes = 0;
+  const admitted = await admitWork({
+    pool: "heavy-sidecar",
+    kind: "memory-fixture",
+    run: async () => "admitted",
+  });
+  expect(Result.isOk(admitted) && admitted.value).toBe("admitted");
+
+  resetWorkAdmissionForTesting();
+  const previousReadings = readings;
+  await admitWork({
+    pool: "heavy-sidecar",
+    kind: "default-memory-reader",
+    run: async () => "restored",
+  });
+  expect(readings).toBe(previousReadings);
+});
 
 test("the process pool resets only after admitted work settles", async () => {
   let release: () => void = () => undefined;

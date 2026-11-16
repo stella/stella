@@ -37,6 +37,7 @@ import {
 } from "@/api/lib/desktop-runner/app-calls";
 import { createLocalRunBell } from "@/api/lib/desktop-runner/doorbell";
 import type { DesktopRunnerDb, RunOwner } from "@/api/lib/desktop-runner/store";
+import { unqueuedSteers } from "@/api/tests/helpers/steered-queue";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -224,6 +225,7 @@ const readTurn = async ({
   const run = createLocalChatRun(
     {
       control,
+      steeredQueue: unqueuedSteers,
       runBell: createLocalRunBell(),
       owner: runOwner,
       chatThreadId: ids.chatThreadGlobalA1,

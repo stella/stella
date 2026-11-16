@@ -111,14 +111,14 @@ const readStringRecord = (
     throw new RailwayTemplateSyncError(`${label} must be an object`);
   }
 
-  const result: Record<string, string> = {};
-  for (const [key, item] of Object.entries(value)) {
-    if (typeof item !== "string") {
-      throw new RailwayTemplateSyncError(`${label}.${key} must be a string`);
-    }
-    result[key] = item;
-  }
-  return result;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, item]) => {
+      if (typeof item !== "string") {
+        throw new RailwayTemplateSyncError(`${label}.${key} must be a string`);
+      }
+      return [key, item] as const;
+    }),
+  );
 };
 
 const readManifest = (): TemplateManifest => {
@@ -127,20 +127,24 @@ const readManifest = (): TemplateManifest => {
     throw new RailwayTemplateSyncError(`${MANIFEST_PATH} must define services`);
   }
 
-  const services: Record<string, ServiceTemplate> = {};
-  for (const [serviceName, service] of Object.entries(value["services"])) {
-    if (!isRecord(service)) {
-      throw new RailwayTemplateSyncError(
-        `${MANIFEST_PATH} service ${serviceName} must be an object`,
-      );
-    }
-    services[serviceName] = {
-      variables: readStringRecord(
-        service["variables"] ?? {},
-        `services.${serviceName}.variables`,
-      ),
-    };
-  }
+  const services = Object.fromEntries(
+    Object.entries(value["services"]).map(([serviceName, service]) => {
+      if (!isRecord(service)) {
+        throw new RailwayTemplateSyncError(
+          `${MANIFEST_PATH} service ${serviceName} must be an object`,
+        );
+      }
+      return [
+        serviceName,
+        {
+          variables: readStringRecord(
+            service["variables"] ?? {},
+            `services.${serviceName}.variables`,
+          ),
+        },
+      ] as const;
+    }),
+  );
 
   return { services };
 };

@@ -74,6 +74,7 @@ import type {
 import { sha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
+import type { SafeDbError } from "@/api/db/safe-db";
 import {
   type ChatTurnRunCut,
   chatTurnRunCutOf,
@@ -161,8 +162,22 @@ export type LocalRunAppIssuer = {
   }) => Result<StellaMcpAppPart, string>;
 };
 
+/**
+ * What a run's report on a steer does to the queued message the steer named
+ * (`createSteeredQueue`): `taken`, it leaves the queue; `refused`, it waits
+ * for the turn's end. A steer written in the composer named none, and its
+ * report changes nothing.
+ */
+export type LocalRunSteeredQueue = {
+  settle: (
+    inputId: string,
+    report: "taken" | "refused",
+  ) => Promise<Result<void, SafeDbError>>;
+};
+
 export type LocalRunContext = {
   control: LocalRunControl;
+  steeredQueue: LocalRunSteeredQueue;
   runBell: DesktopRunnerRunBell;
   owner: RunOwner;
   chatThreadId: SafeId<"chatThread">;
@@ -1205,6 +1220,19 @@ const steerEvent = (event: ChatLocalRunSteerEvent): PublicStreamChunk => ({
  */
 const createRunSteers = (context: LocalRunContext, runnerRunId: string) => {
   const settled = new Set<string>();
+  /**
+   * The queued message a steer named leaves the queue, or waits for the
+   * turn's end, before the report is shown and before the run's end is read:
+   * the turn ends only after that, and the queue sends nothing before, so a
+   * message the turn took is never sent again. A write that fails leaves it
+   * queued for the turn's end, as a report never read would.
+   */
+  const settleQueued = async (inputId: string, report: "taken" | "refused") => {
+    const written = await context.steeredQueue.settle(inputId, report);
+    if (written.isErr()) {
+      observeFailure(written.error, { sink: LOCAL_RUN_STORE_SINK });
+    }
+  };
   return async (value: unknown): Promise<PublicStreamChunk[]> => {
     const report = v.safeParse(desktopRunnerInputEventSchema, value);
     if (!report.success || settled.has(report.output.inputId)) {
@@ -1224,9 +1252,11 @@ const createRunSteers = (context: LocalRunContext, runnerRunId: string) => {
       // stop the turn that holds it and send it again; the steer stays open
       // and the turn's end leaves the message queued, as for an input the
       // turn never answered.
-      return status === "rejected"
-        ? [steerEvent({ inputId, status: "refused" })]
-        : [];
+      if (status === "accepted") {
+        return [];
+      }
+      await settleQueued(inputId, "refused");
+      return [steerEvent({ inputId, status: "refused" })];
     }
     if (text.value === null) {
       observeFailure(
@@ -1238,8 +1268,10 @@ const createRunSteers = (context: LocalRunContext, runnerRunId: string) => {
       return [];
     }
     if (status === "rejected") {
+      await settleQueued(inputId, "refused");
       return [steerEvent({ inputId, status: "refused" })];
     }
+    await settleQueued(inputId, "taken");
     const toolCallId = chatLocalRunSteerCallId(inputId);
     const input = { text: text.value } satisfies ChatLocalRunSteerInput;
     const args = JSON.stringify(input);

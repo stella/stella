@@ -624,7 +624,9 @@
       "unavailableRegion": "stella AI jūsu organizācijas reģionā vēl nepiedāvā runas pārvēršanu tekstā.",
       "unavailableProvider": "Jūsu organizācijas MI pakalpojumu sniedzējs nepiedāvā runas pārvēršanu tekstā.",
       "unavailable": "Pārvēršana ar stella AI pašlaik nav pieejama.",
-      "model": "Pārvēršanas modelis"
+      "model": "Pārvēršanas modelis",
+      "outsideRegion": "Ārpus jūsu reģiona",
+      "outsideRegionNote": "Šis modelis apstrādā audio ārpus jūsu organizācijas reģiona."
     },
     "language": {
       "title": "Diktēšanas valoda",

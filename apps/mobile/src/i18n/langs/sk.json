@@ -293,7 +293,8 @@
       "noRun": "Agent teraz na vašom počítači nebeží.",
       "cannotSteer": "Tento agent počas práce neprijíma správy.",
       "runFull": "Agent teraz ďalšie správy neprijme.",
-      "notTaken": "Agent teraz vašu správu nemohol prijať."
+      "notTaken": "Agent teraz vašu správu nemohol prijať.",
+      "queuedMessageChanged": "Správa sa medzičasom zmenila alebo už nie je v poradí, preto ju agent nedostal."
     }
   },
   "tasks": {

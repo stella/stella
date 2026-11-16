@@ -768,17 +768,9 @@ const checkAll = (appsRoot: string): CheckResult => {
 // --- Modes ------------------------------------------------------------------
 
 const summarize = (reports: readonly AppReport[]): string => {
-  const counts: Record<CrawlPosture | "invalid", number> = {
-    public: 0,
-    private: 0,
-    mixed: 0,
-    unserved: 0,
-    invalid: 0,
-  };
-  for (const report of reports) {
-    counts[report.posture ?? "invalid"] += 1;
-  }
-  return `${reports.length} app(s): ${counts.public} public, ${counts.private} private, ${counts.mixed} mixed, ${counts.unserved} unserved`;
+  const count = (posture: CrawlPosture) =>
+    reports.filter((report) => report.posture === posture).length;
+  return `${reports.length} app(s): ${count("public")} public, ${count("private")} private, ${count("mixed")} mixed, ${count("unserved")} unserved`;
 };
 
 const runCheck = (appsRoot: string): number => {
