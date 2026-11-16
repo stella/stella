@@ -55,6 +55,7 @@ import type { HandedOverChatTurn } from "@/api/lib/db/chat-turn-handover-system"
 import type { DesktopRunnerControl } from "@/api/lib/desktop-runner/control";
 import type { DesktopRunnerRunBell } from "@/api/lib/desktop-runner/doorbell";
 import { failureSink } from "@/api/lib/observability/failure";
+import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { startExecutionAdmission } from "@/api/lib/rate-limit/execution-admission";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
@@ -223,14 +224,69 @@ const runAdoptedTurnFollowUps = async ({
   );
 };
 
+/**
+ * Why a task did not take a handed-over turn it was rung or swept for. None
+ * leaves the turn adoptable for ever: one never claimed waits for another
+ * task, or this one's next sweep, until its adopt-by, and one claimed but
+ * not readable keeps a run lease nothing renews; either way the reaper then
+ * ends it as `owner-lost`, as it ends a turn whose owner vanished.
+ */
+type ChatTurnAdoptionSkip =
+  /** This task is stopping; it adopts nothing more. */
+  | "adopter-stopping"
+  /** The member could not be proved again (an outage). */
+  | "member-unresolved"
+  /** The member may no longer act in the organization. */
+  | "member-unavailable"
+  /** No slot of the member's could be held. */
+  | "admission-refused"
+  /** The claim could not be written. */
+  | "claim-failed"
+  /** Another task took it, it ended, or its adopt-by passed. */
+  | "not-handed-over"
+  /** Claimed, then its stored settlement could not be read. */
+  | "settlement-unreadable"
+  /** Claimed, then the member could no longer see its thread. */
+  | "thread-unavailable"
+  /** Claimed, then the answer it was released with was not found. */
+  | "checkpoint-missing"
+  /** Claimed, then its run on the computer could not be read. */
+  | "local-run-unreadable"
+  /** Claimed, then the member had no run on a computer for it. */
+  | "local-run-missing"
+  /** Claimed, then the member could no longer run turns on a computer. */
+  | "computer-unavailable";
+
+/**
+ * How loudly a skip is traced: the ones every task but the winner meets, or
+ * a stopping task meets, are routine; the rest end the turn as `owner-lost`
+ * unless another task fares better.
+ */
+const ADOPTION_SKIP_LEVEL = {
+  "adopter-stopping": "info",
+  "member-unresolved": "warn",
+  "member-unavailable": "warn",
+  "admission-refused": "warn",
+  "claim-failed": "warn",
+  "not-handed-over": "info",
+  "settlement-unreadable": "warn",
+  "thread-unavailable": "warn",
+  "checkpoint-missing": "warn",
+  "local-run-unreadable": "warn",
+  "local-run-missing": "warn",
+  "computer-unavailable": "warn",
+} as const satisfies Record<ChatTurnAdoptionSkip, "info" | "warn">;
+
+/** The trace every skipped adoption leaves. */
+export const CHAT_TURN_ADOPTION_SKIPPED_EVENT = "chat.turn.adoption_skipped";
+
 /** What one attempt to adopt a handed-over turn did. */
 type ChatTurnAdoptionOutcome =
   /** This task runs the turn now. */
-  | { type: "adopted" }
-  /** Another task took it, or it ended, or its member cannot act any more. */
-  | { type: "not-adopted" }
-  /** A step may pass on its own (admission, an outage): the sweep tries again. */
-  | { type: "retry-later" };
+  { type: "adopted" } | { type: "skipped"; reason: ChatTurnAdoptionSkip };
+
+const skipped = (reason: ChatTurnAdoptionSkip) =>
+  ({ type: "skipped", reason }) satisfies ChatTurnAdoptionOutcome;
 
 /** Store the turn as failed because its answer could not be stored. */
 const failInstead = async ({
@@ -297,27 +353,18 @@ const settleAdoptedTurn = async ({
 };
 
 /**
- * Take over a handed-over turn and read its run on from where the task that
- * released it stopped, as the member: proved again now, holding a slot of
- * their own, with the turn's settlement read from its stored rows. Exactly
- * one task wins the claim (`adoptHandedOverChatTurn`); from then on this
- * task's run owns the turn, pumps the run log the turn's pages tail, and
- * settles the turn as the task that released it would have.
- *
- * A turn this task cannot take keeps waiting for another until its adopt-by,
- * when the reaper ends it as `owner-lost`. A turn claimed but not readable
- * (its member's matters or computer access gone, a store outage) is left to
- * its run lease, which nothing renews, with the same end.
+ * Prove the turn's member again, hold a slot of theirs and claim the turn:
+ * the steps before which this task holds nothing of the turn's.
  */
-const adoptChatTurn = async ({
+const claimHandedOverTurn = async ({
   dependencies,
   turn: { organizationId, threadId, turnId, userId },
 }: {
   dependencies: ChatTurnAdoptionDependencies;
   turn: HandedOverChatTurn;
-}): Promise<ChatTurnAdoptionOutcome> => {
+}) => {
   if (dependencies.signal.aborted) {
-    return { type: "not-adopted" };
+    return skipped("adopter-stopping");
   }
   const member = await resolveServerStartedMember({
     organizationId,
@@ -330,10 +377,10 @@ const adoptChatTurn = async ({
       sink: ADOPTION_FAILED,
       ctx: { step: "member", threadId },
     });
-    return { type: "retry-later" };
+    return skipped("member-unresolved");
   }
   if (member.value.type === "unavailable") {
-    return { type: "not-adopted" };
+    return skipped("member-unavailable");
   }
   const { caller } = member.value;
   // The turn's slot: the task that released it gave its own up. The turn's
@@ -349,7 +396,7 @@ const adoptChatTurn = async ({
     actionKind: "chat.send",
   });
   if (Result.isError(admission)) {
-    return { type: "retry-later" };
+    return skipped("admission-refused");
   }
   const claimed = await adoptHandedOverChatTurn({
     safeDb: caller.safeDb,
@@ -363,15 +410,57 @@ const adoptChatTurn = async ({
         sink: ADOPTION_FAILED,
         ctx: { step: "claim", threadId },
       });
-      return { type: "retry-later" };
+      return skipped("claim-failed");
     }
-    return { type: "not-adopted" };
+    return skipped("not-handed-over");
   }
-  const adopted = claimed.value;
-  const leaveToLease = async (step: string, error: unknown) => {
-    observeFailure(error, { sink: ADOPTION_FAILED, ctx: { step, threadId } });
-    await admission.value.release();
-    return { type: "not-adopted" } satisfies ChatTurnAdoptionOutcome;
+  return {
+    type: "claimed",
+    adopted: claimed.value,
+    admission: admission.value,
+    caller,
+  } as const;
+};
+
+/**
+ * Take over a handed-over turn and read its run on from where the task that
+ * released it stopped, as the member: proved again now, holding a slot of
+ * their own, with the turn's settlement read from its stored rows. Exactly
+ * one task wins the claim (`adoptHandedOverChatTurn`); from then on this
+ * task's run owns the turn, pumps the run log the turn's pages tail, and
+ * settles the turn as the task that released it would have.
+ *
+ * A turn this task cannot take keeps waiting for another until its adopt-by,
+ * when the reaper ends it as `owner-lost`. A turn claimed but not readable
+ * (its member's matters or computer access gone, a store outage) is left to
+ * its run lease, which nothing renews, with the same end. Every skip says
+ * why (`ChatTurnAdoptionSkip`); the caller traces it.
+ */
+const adoptChatTurn = async ({
+  dependencies,
+  turn,
+}: {
+  dependencies: ChatTurnAdoptionDependencies;
+  turn: HandedOverChatTurn;
+}): Promise<ChatTurnAdoptionOutcome> => {
+  const { organizationId, threadId, turnId, userId } = turn;
+  const claim = await claimHandedOverTurn({ dependencies, turn });
+  if (claim.type === "skipped") {
+    return claim;
+  }
+  const { adopted, admission, caller } = claim;
+  const leaveToLease = async (
+    reason: ChatTurnAdoptionSkip,
+    failure?: { step: string; error: unknown },
+  ) => {
+    if (failure !== undefined) {
+      observeFailure(failure.error, {
+        sink: ADOPTION_FAILED,
+        ctx: { step: failure.step, threadId },
+      });
+    }
+    await admission.release();
+    return skipped(reason);
   };
   const loaded = await loadStoredTurnSettlement({
     caseLawDb: dependencies.caseLawDb,
@@ -383,10 +472,13 @@ const adoptChatTurn = async ({
     threadId,
   });
   if (Result.isError(loaded)) {
-    return await leaveToLease("load", loaded.error);
+    return await leaveToLease("settlement-unreadable", {
+      step: "load",
+      error: loaded.error,
+    });
   }
   if (loaded.value.type !== "loaded") {
-    return await leaveToLease("load", loaded.value);
+    return await leaveToLease(loaded.value.type);
   }
   const { context } = loaded.value;
   const checkpoint = context.turn.owningAssistantMessage;
@@ -411,10 +503,17 @@ const adoptChatTurn = async ({
     workspaceIds: context.refs.opaqueReadWorkspaceIds,
   });
   if (Result.isError(adoptedRun)) {
-    return await leaveToLease("local-run", adoptedRun.error);
+    return await leaveToLease("local-run-unreadable", {
+      step: "local-run",
+      error: adoptedRun.error,
+    });
   }
   if (adoptedRun.value.type !== "adopted") {
-    return await leaveToLease("local-run", adoptedRun.value);
+    return await leaveToLease(
+      adoptedRun.value.type === "no-run"
+        ? "local-run-missing"
+        : "computer-unavailable",
+    );
   }
   const localRun = adoptedRun.value.run;
   // Apps the released read showed are in the stored answer; the origin
@@ -424,7 +523,7 @@ const adoptChatTurn = async ({
   });
   const run = new ChatTurnRun({
     ownership: dependencies.ownership,
-    admission: admission.value,
+    admission,
     connectors: undefined,
     bound: chatTurnRunBoundOf(CHAT_RUN_TARGET_KIND.local),
     // A turn on a computer is never sent anonymized.
@@ -503,7 +602,7 @@ const adoptChatTurn = async ({
             context,
             followUps,
             indexThread: dependencies.indexThread,
-            modelTier: admission.value.modelAdmission.modelTier,
+            modelTier: admission.modelAdmission.modelTier,
             run,
             steps: dependencies.followUps ?? ADOPTED_TURN_FOLLOW_UP_STEPS,
           }),
@@ -535,6 +634,16 @@ export const createChatTurnAdopter = (
       observeFailure(adopted.error, {
         sink: ADOPTION_FAILED,
         ctx: { step: "adopt", threadId: turn.threadId },
+      });
+      return;
+    }
+    if (adopted.value.type === "skipped") {
+      const { reason } = adopted.value;
+      logger[ADOPTION_SKIP_LEVEL[reason]](CHAT_TURN_ADOPTION_SKIPPED_EVENT, {
+        organizationId: turn.organizationId,
+        reason,
+        threadId: turn.threadId,
+        turnId: turn.turnId,
       });
     }
   };

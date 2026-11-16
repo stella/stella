@@ -1,7 +1,7 @@
 import { EventType } from "@tanstack/ai";
 import type { StreamChunk } from "@tanstack/ai";
 import { panic, Result } from "better-result";
-import { afterAll, describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, spyOn, test } from "bun:test";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
 import { harnessSessionId } from "@stll/agent-engine";
@@ -40,6 +40,8 @@ import {
   claimChatTurnForExecution,
   createChatTurnAcceptance,
   insertChatTurnAcceptanceOnTx,
+  OWNER_LOST_OUTCOME,
+  reapOwnerlessChatTurnOnTx,
 } from "@/api/handlers/chat/chat-turn-persistence";
 import {
   CHAT_TURN_BOUNDARY_MODE,
@@ -59,7 +61,10 @@ import {
   toChatMessage,
 } from "@/api/handlers/chat/stream-chat";
 import { createChatMessageIdMapper } from "@/api/handlers/chat/stream-message-identity";
-import { createChatTurnAdopter } from "@/api/handlers/chat/turns/adopt";
+import {
+  CHAT_TURN_ADOPTION_SKIPPED_EVENT,
+  createChatTurnAdopter,
+} from "@/api/handlers/chat/turns/adopt";
 import type { ChatMessage, ChatPart } from "@/api/handlers/chat/types";
 import { createVisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -72,6 +77,9 @@ import { createContextNoticeStamp } from "@/api/lib/chat/context-notice";
 import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
 import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
 import type { DesktopRunnerControl } from "@/api/lib/desktop-runner/control";
+import { logger } from "@/api/lib/observability/logger";
+import { createReapOwnerlessChatTurnsTask } from "@/api/lib/scheduler/tasks/chat-turn-reaper";
+import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
 import {
   createComputer,
   harnessChunks,
@@ -665,6 +673,106 @@ if (!databaseUrl || !runPostgresTests) {
       const turn = await readTurn(seeded.execution.id);
       expect(turn.status).toBe("cancelled");
       expect(turn.cancellationReason).toBe("user-stop");
+    });
+
+    test("that cannot act for the turn's member says why, and the turn ends as owner-lost at its adopt-by", async () => {
+      const seeded = await seedClaimedTurn();
+      const turnId = seeded.execution.id;
+      const released = await persistHandedOverChatTurn({
+        execution: seeded.execution,
+        indexThread: async () => {},
+        owningAssistantMessage: undefined,
+        recordAuditEvent: noAudit,
+        responseMessage: toPersistableChatMessage({
+          id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
+          parts: [{ content: "Running the tests. ", type: "text" }],
+          role: "assistant",
+        }),
+        safeDb: safeDbOf(),
+        threadId: seeded.threadId,
+        userId: ids.userA1,
+        workspaceId: ids.wsA1,
+      });
+      expect(released.isOk() ? released.value.type : released.error).toBe(
+        "handed-over",
+      );
+      const checkpointId =
+        (await readTurn(turnId)).assistantMessageId ??
+        panic("Expected the answer so far");
+      // The thread's member is no longer in the organization when a task is
+      // rung for the turn: its rows stay theirs.
+      await testDb
+        .update(chatThreads)
+        .set({ userId: ids.userB1 })
+        .where(eq(chatThreads.id, seeded.threadId));
+      await testDb
+        .update(chatMessages)
+        .set({ userId: ids.userB1 })
+        .where(eq(chatMessages.threadId, seeded.threadId));
+      await testDb
+        .update(chatTurns)
+        .set({ userId: ids.userB1 })
+        .where(eq(chatTurns.id, turnId));
+
+      const computer = createComputer();
+      const adopter = createChatTurnAdopter({
+        signal: new AbortController().signal,
+        indexThread: async () => {},
+        ownership: new ChatTurnOwnership(),
+        runtime: {
+          control: asTestRaw<DesktopRunnerControl>(computer.context.control),
+          runBell: computer.context.runBell,
+        },
+        answerQuoteChecker: NO_ANSWER_QUOTE_CHECKER,
+      });
+      const warned = spyOn(logger, "warn");
+      try {
+        await settledWithin(
+          adopter.adopt({
+            organizationId: ids.orgA,
+            threadId: seeded.threadId,
+            turnId,
+            userId: ids.userB1,
+          }),
+          {
+            description: "the rung task to skip the turn",
+            timeoutMs: STEP_TIMEOUT_MS,
+          },
+        );
+        expect(warned).toHaveBeenCalledWith(CHAT_TURN_ADOPTION_SKIPPED_EVENT, {
+          organizationId: ids.orgA,
+          reason: "member-unavailable",
+          threadId: seeded.threadId,
+          turnId,
+        });
+      } finally {
+        warned.mockRestore();
+      }
+      // Skipped, not taken: the turn waits for its adopt-by.
+      const waiting = await readTurn(turnId);
+      expect(waiting.status).toBe("handed-over");
+      expect(waiting.executionId).toBeNull();
+
+      // Nobody adopts it by then; the reaper ends it as a vanished owner's.
+      await testDb
+        .update(chatTurns)
+        .set({
+          leaseExpiresAt: sql`${chatTurns.createdAt} + interval '1 millisecond'`,
+        })
+        .where(eq(chatTurns.id, turnId));
+      await createReapOwnerlessChatTurnsTask(reapOwnerlessChatTurnOnTx)(
+        asTestRaw<SchedulerTaskContext>({
+          db: testDb,
+          logger: { info: () => undefined },
+          signal: new AbortController().signal,
+        }),
+      );
+      const ended = await readTurn(turnId);
+      expect(ended.status).toBe("interrupted");
+      expect(ended.interruptionReason).toBe(OWNER_LOST_OUTCOME.reason);
+      expect((await readAnswer(checkpointId)).metadata?.turnOutcome).toEqual(
+        OWNER_LOST_OUTCOME,
+      );
     });
   });
 }
