@@ -226,31 +226,32 @@ export const sourceExportTargets = (
   if (!isRecord(manifest) || typeof manifest["name"] !== "string") {
     panic("package.json must be an object with a name");
   }
+  const name = manifest["name"];
   const exportsField = manifest["exports"];
   if (!isRecord(exportsField)) {
-    panic(`${manifest["name"]}: exports must be an object`);
+    panic(`${name}: exports must be an object`);
   }
 
-  const targets: Record<string, string> = {};
-  for (const [subpath, entry] of Object.entries(exportsField)) {
-    const target = nativePair(entry)?.web ?? entry;
-    if (
-      typeof target !== "string" ||
-      !(
-        (target.startsWith("./src/") &&
-          (hasExtension(target, MODULE_EXTENSIONS) ||
-            hasExtension(target, COPIED_EXTENSIONS))) ||
-        isShippedRootJsonAsset(target, manifest) ||
-        isShippedAssetPattern(subpath, target, manifest)
-      )
-    ) {
-      panic(
-        `${manifest["name"]}: expected source export "${subpath}" to be a ./src/*.{ts,tsx,css} string, a { "react-native": "./src/<module>.native.tsx", "default": "./src/<module>.tsx" } pair, an explicitly shipped root JSON asset, or a "./<dir>/*.json" pattern mapped onto itself whose <dir> the files allowlist ships, got ${JSON.stringify(entry)}`,
-      );
-    }
-    targets[subpath] = target;
-  }
-  return targets;
+  return Object.fromEntries(
+    Object.entries(exportsField).map(([subpath, entry]) => {
+      const target = nativePair(entry)?.web ?? entry;
+      if (
+        typeof target !== "string" ||
+        !(
+          (target.startsWith("./src/") &&
+            (hasExtension(target, MODULE_EXTENSIONS) ||
+              hasExtension(target, COPIED_EXTENSIONS))) ||
+          isShippedRootJsonAsset(target, manifest) ||
+          isShippedAssetPattern(subpath, target, manifest)
+        )
+      ) {
+        panic(
+          `${name}: expected source export "${subpath}" to be a ./src/*.{ts,tsx,css} string, a { "react-native": "./src/<module>.native.tsx", "default": "./src/<module>.tsx" } pair, an explicitly shipped root JSON asset, or a "./<dir>/*.json" pattern mapped onto itself whose <dir> the files allowlist ships, got ${JSON.stringify(entry)}`,
+        );
+      }
+      return [subpath, target] as const;
+    }),
+  );
 };
 
 export const toPublishedManifest = (manifest: unknown): PublishedManifest => {
@@ -263,35 +264,37 @@ export const toPublishedManifest = (manifest: unknown): PublishedManifest => {
   }
 
   const nativeTargets = sourceNativeExportTargets(manifest);
-  const distExports: Record<string, DistEntry> = {};
-  for (const [subpath, target] of Object.entries(sourceTargets)) {
-    if (
-      isShippedRootJsonAsset(target, manifest) ||
-      isShippedAssetPattern(subpath, target, manifest)
-    ) {
-      distExports[subpath] = target;
-      continue;
-    }
-    if (hasExtension(target, COPIED_EXTENSIONS)) {
-      distExports[subpath] = distAsset(target);
-      continue;
-    }
-    const base = distBase(target);
-    const native = nativeTargets[subpath];
-    const nativeBase = native === undefined ? undefined : distBase(native);
-    distExports[subpath] = {
-      ...(nativeBase === undefined
-        ? {}
-        : {
-            [NATIVE_CONDITION]: {
-              types: `${nativeBase}.d.ts`,
-              import: `${nativeBase}.js`,
-            },
-          }),
-      types: `${base}.d.ts`,
-      import: `${base}.js`,
-    };
-  }
+  const distExports = Object.fromEntries(
+    Object.entries(sourceTargets).map(([subpath, target]) => {
+      if (
+        isShippedRootJsonAsset(target, manifest) ||
+        isShippedAssetPattern(subpath, target, manifest)
+      ) {
+        return [subpath, target] as const;
+      }
+      if (hasExtension(target, COPIED_EXTENSIONS)) {
+        return [subpath, distAsset(target)] as const;
+      }
+      const base = distBase(target);
+      const native = nativeTargets[subpath];
+      const nativeBase = native === undefined ? undefined : distBase(native);
+      return [
+        subpath,
+        {
+          ...(nativeBase === undefined
+            ? {}
+            : {
+                [NATIVE_CONDITION]: {
+                  types: `${nativeBase}.d.ts`,
+                  import: `${nativeBase}.js`,
+                },
+              }),
+          types: `${base}.d.ts`,
+          import: `${base}.js`,
+        },
+      ] as const;
+    }),
+  );
 
   const root =
     distExports["."] ??
