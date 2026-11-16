@@ -242,9 +242,10 @@ export const REVIEW_RESET_SHARED_STATEMENTS: readonly (readonly (typeof REVIEW_R
     // for tools, and usage limit reminders, all keyed on the same member and
     // organization.
     ["chat_browser_site_grants", "chat_limit_reminders", "chat_tool_grants"],
-    // A chat's run logs and its queue: rows of the organization's chats that
-    // the owner removes directly, in one statement.
+    // A chat's command receipts, run logs and queue: rows of the
+    // organization's chats that the owner removes directly, in one statement.
     [
+      "chat_command_receipts",
       "chat_run_log_entries",
       "chat_run_logs",
       "chat_queue_holds",
