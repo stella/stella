@@ -2164,7 +2164,7 @@ const GENERATOR_DECLARATIONS = [
       ".changeset/config.json",
       "packages/*/package.json",
       "packages/*/src/**",
-      "packages/cli/capabilities/*.json",
+      "packages/cli/capabilities/**",
       "packages/*/tsconfig*.json",
       "scripts/package-api-report.ts",
       "scripts/package-api-report-write.ts",
@@ -2201,7 +2201,8 @@ const GENERATOR_DECLARATIONS = [
     ],
     // API changes require explicit review and release intent.
     autofix: false,
-    after: [],
+    // The packed CLI carries the capability shards that generator derives.
+    after: ["capability-catalog"],
   },
   {
     id: "route-tree",
