@@ -241,6 +241,23 @@ export const CENSUS_CAPABILITIES = {
     },
     evidenceRef: "apps/api/src/handlers/case-law/ingestion/adapters/uk-fcl.ts",
   },
+  "br-tst": {
+    type: "none-exposed",
+    evidence: {
+      type: "unverified",
+      reason: "Source-wide enumeration has not been independently verified.",
+    },
+    evidenceRef: "apps/api/src/handlers/case-law/ingestion/adapters/br-tst.ts",
+  },
+  "br-tjdft": {
+    type: "none-exposed",
+    evidence: {
+      type: "unverified",
+      reason: "Source-wide enumeration has not been independently verified.",
+    },
+    evidenceRef:
+      "apps/api/src/handlers/case-law/ingestion/adapters/br-tjdft.ts",
+  },
 } as const satisfies Record<AdapterKey, CensusCapability>;
 
 const CAPABILITY_BY_KEY: ReadonlyMap<string, CensusCapability> = new Map(

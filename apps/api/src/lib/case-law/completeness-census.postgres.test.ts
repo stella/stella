@@ -32,6 +32,9 @@ import { publicLawDatabaseRolePermissionsSql } from "@/api/lib/public-law-read-d
 import { PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION } from "@/api/lib/public-law-relations";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
+// Leases are checked against the database clock, so a held one expires far ahead of it.
+const LEASE_EXPIRES_AT = new Date("2100-01-01T00:00:00Z");
+
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
 describe.skipIf(!enabled)(
@@ -70,14 +73,14 @@ describe.skipIf(!enabled)(
               adapterKey: "cz-ns",
               name: "Text threshold fixture",
               ingestionLeaseToken: leaseToken,
-              ingestionLeaseExpiresAt: new Date(Date.now() + 3_600_000),
+              ingestionLeaseExpiresAt: LEASE_EXPIRES_AT,
             },
             {
               id: partialSourceId,
               adapterKey: "pl-kio",
               name: "Partial publisher fixture",
               ingestionLeaseToken: leaseToken,
-              ingestionLeaseExpiresAt: new Date(Date.now() + 3_600_000),
+              ingestionLeaseExpiresAt: LEASE_EXPIRES_AT,
             },
           ]);
           await db.execute(sql`INSERT INTO case_law_decisions
@@ -229,7 +232,7 @@ describe.skipIf(!enabled)(
           adapterKey: "cz-ns",
           name: "Contradictory publisher count fixture",
           ingestionLeaseToken: leaseToken,
-          ingestionLeaseExpiresAt: new Date(Date.now() + 3_600_000),
+          ingestionLeaseExpiresAt: LEASE_EXPIRES_AT,
         });
         try {
           await db.insert(caseLawDecisions).values({
@@ -342,7 +345,7 @@ describe.skipIf(!enabled)(
             adapterKey: `census-supplement-${id}`,
             name: "Supplement census fixture",
             ingestionLeaseToken: leaseToken,
-            ingestionLeaseExpiresAt: new Date(Date.now() + 3_600_000),
+            ingestionLeaseExpiresAt: LEASE_EXPIRES_AT,
           })),
         );
         try {
@@ -605,7 +608,7 @@ describe.skipIf(!enabled)(
             adapterKey: `census-boundary-${sourceId}`,
             name: "Calendar scope boundary fixture",
             ingestionLeaseToken: leaseToken,
-            ingestionLeaseExpiresAt: new Date(Date.now() + 3_600_000),
+            ingestionLeaseExpiresAt: LEASE_EXPIRES_AT,
           });
           try {
             const scopedDb: ScopedDb = async (callback) =>
@@ -738,7 +741,7 @@ describe.skipIf(!enabled)(
             const current = await tx.execute(
               publicLawDatabaseRolePermissionsSql(),
             );
-            expect(current.at(0)?.["canReadOtherData"]).toBe(false);
+            expect(current.at(0)).toMatchObject({ canReadOtherData: false });
             const previousMap = Object.fromEntries(
               Object.entries(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION).filter(
                 ([relation]) => relation !== "case_law_completeness_census",
@@ -747,7 +750,7 @@ describe.skipIf(!enabled)(
             const previous = await tx.execute(
               publicLawDatabaseRolePermissionsSql(previousMap),
             );
-            expect(previous.at(0)?.["canReadOtherData"]).toBe(true);
+            expect(previous.at(0)).toMatchObject({ canReadOtherData: true });
           });
         } finally {
           await db
@@ -790,14 +793,14 @@ describe.skipIf(!enabled)(
               adapterKey: "cz-ns",
               name: "Census fixture",
               ingestionLeaseToken: leaseToken,
-              ingestionLeaseExpiresAt: new Date(Date.now() + 3_600_000),
+              ingestionLeaseExpiresAt: LEASE_EXPIRES_AT,
             },
             {
               id: unknownSourceId,
               adapterKey: "pl-nsa",
               name: "Unmeasured fixture",
               ingestionLeaseToken: leaseToken,
-              ingestionLeaseExpiresAt: new Date(Date.now() + 3_600_000),
+              ingestionLeaseExpiresAt: LEASE_EXPIRES_AT,
             },
           ]);
           await db.insert(caseLawDecisions).values([

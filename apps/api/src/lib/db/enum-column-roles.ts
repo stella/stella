@@ -86,6 +86,10 @@ export const ENUM_COLUMN_ROLES = {
   case_law_citations: {
     doctrinal_treatment: ATTRIBUTE,
   },
+  case_law_completeness_census: {
+    outcome: ATTRIBUTE,
+    scope_status: ATTRIBUTE,
+  },
   case_law_corpus_pack_refs: {
     kind: ATTRIBUTE,
   },

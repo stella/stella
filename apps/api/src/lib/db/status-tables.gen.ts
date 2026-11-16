@@ -307,6 +307,7 @@ export const ENUM_COLUMNS = {
   case_law_citation_resolution_census: ["kind"],
   case_law_citation_reviews: ["origin"],
   case_law_citations: ["doctrinal_treatment"],
+  case_law_completeness_census: ["outcome", "scope_status"],
   case_law_corpus_pack_refs: ["kind"],
   case_law_corpus_tombstones: ["reason"],
   case_law_decision_citation_stats: ["direction", "polarity"],
