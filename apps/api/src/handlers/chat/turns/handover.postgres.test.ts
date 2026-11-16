@@ -7,7 +7,7 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { harnessSessionId } from "@stll/agent-engine";
 import { CHAT_RUN_TARGET_KIND } from "@stll/api-contract/chat-run-target";
 import { DESKTOP_RUNNER_FEATURE_ID } from "@stll/api-contract/desktop-runner";
-import { waitFor } from "@stll/test-kit";
+import { settledWithin, waitFor } from "@stll/test-kit";
 import { createTestState } from "@stll/test-state";
 
 import { user } from "@/api/db/auth-schema";
@@ -19,6 +19,7 @@ import {
   chatThreads,
   chatTurns,
   featureEnrolments,
+  PROFESSIONAL_USE_ACCEPTANCE_SOURCE,
 } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
@@ -62,6 +63,7 @@ import { createChatTurnAdopter } from "@/api/handlers/chat/turns/adopt";
 import type { ChatMessage, ChatPart } from "@/api/handlers/chat/types";
 import { createVisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { recordAccountProfessionalUse } from "@/api/lib/auth/professional-use";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
@@ -82,7 +84,6 @@ import {
 } from "@/api/tests/security/rls-fixture";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
-import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 // Runs as a postgres suite: the adopting task resolves its member through
 // the root pool, as a task started on the server does.
@@ -112,6 +113,8 @@ const noAudit: AuditRecorder = async () => {
 };
 
 const QUESTION = "Run the test suite";
+/** Each step's bound, so a stuck step names itself before the test's own. */
+const STEP_TIMEOUT_MS = 8000;
 
 const toolCall = {
   id: "item_9",
@@ -438,6 +441,13 @@ if (!databaseUrl || !runPostgresTests) {
         .update(user)
         .set({ emailVerified: true })
         .where(eq(user.id, ids.userA1));
+      // A task started on the server acts for a member who accepted
+      // professional use, as any signed-in request does.
+      const accepted = await recordAccountProfessionalUse({
+        userId: ids.userA1,
+        source: PROFESSIONAL_USE_ACCEPTANCE_SOURCE.interactive,
+      });
+      expect(accepted.isOk()).toBe(true);
       await testDb
         .insert(featureEnrolments)
         .values({
@@ -493,7 +503,10 @@ if (!databaseUrl || !runPostgresTests) {
         },
       };
       const owner = await startOwner({ computer, seeded });
-      await caughtUp.promise;
+      await settledWithin(caughtUp.promise, {
+        description: "the owner's read to catch up with the computer",
+        timeoutMs: STEP_TIMEOUT_MS,
+      });
 
       // Another task listens for released turns, with the steps a completed
       // turn takes after it settles in the test's hand.
@@ -555,8 +568,15 @@ if (!databaseUrl || !runPostgresTests) {
         // The computer works on through the gap and finishes the turn.
         computer.events(after);
         computer.finish();
-        await Promise.all(adoptions);
+        await settledWithin(Promise.all(adoptions), {
+          description: "the rung task to take the turn",
+          timeoutMs: STEP_TIMEOUT_MS,
+        });
         expect(adoptions).toHaveLength(1);
+        // Taken: the rung task's claim moved the turn back to running.
+        expect((await readTurn(seeded.execution.id)).status).not.toBe(
+          "handed-over",
+        );
         await waitFor(
           async () => {
             const turn = await readTurn(seeded.execution.id);
@@ -566,7 +586,7 @@ if (!databaseUrl || !runPostgresTests) {
           },
           {
             description: "the adopted turn's end",
-            timeoutMs: HAPPY_PATH_TIMEOUT_MS,
+            timeoutMs: STEP_TIMEOUT_MS,
           },
         );
       } finally {
