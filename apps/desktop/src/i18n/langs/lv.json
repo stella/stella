@@ -837,7 +837,7 @@
     "callbackConnectedTitle": "ChatGPT ir savienots",
     "callbackConnectedBody": "MI pieprasījumi stellā tagad izmanto jūsu ChatGPT plānu.",
     "callbackNotConnectedTitle": "ChatGPT netika savienots",
-    "callbackNotConnectedBody": "stella parāda, kas nogāja greizi. Lai mēģinātu vēlreiz, stellā atveriet {section} › {group} un noklikšķiniet uz „{button}”.",
+    "callbackNotConnectedBody": "Iemesls ir redzams stella lietotnē. Lai mēģinātu vēlreiz, atveriet {section} › {group} un noklikšķiniet uz „{button}”.",
     "callbackAccount": "Konts",
     "callbackPlan": "Plāns",
     "callbackCloseTab": "Šo cilni varat aizvērt.",

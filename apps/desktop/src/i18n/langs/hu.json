@@ -837,7 +837,7 @@
     "callbackConnectedTitle": "A ChatGPT csatlakoztatva",
     "callbackConnectedBody": "A stella MI-kérései mostantól a ChatGPT-csomagját használják.",
     "callbackNotConnectedTitle": "A ChatGPT nem csatlakozott",
-    "callbackNotConnectedBody": "A stella megmutatja, mi történt. Az újrapróbálkozáshoz nyissa meg a stellában az {section} › {group} részt, és kattintson a „{button}” gombra.",
+    "callbackNotConnectedBody": "Az okot a stella alkalmazás mutatja. Az újrapróbálkozáshoz nyissa meg az {section} › {group} részt, és kattintson a „{button}” gombra.",
     "callbackAccount": "Fiók",
     "callbackPlan": "Csomag",
     "callbackCloseTab": "Ezt a lapot bezárhatja.",

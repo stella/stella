@@ -837,7 +837,7 @@
     "callbackConnectedTitle": "O ChatGPT está conectado",
     "callbackConnectedBody": "As solicitações de IA no stella agora usam seu plano do ChatGPT.",
     "callbackNotConnectedTitle": "O ChatGPT não foi conectado",
-    "callbackNotConnectedBody": "O stella mostra o que deu errado. Para tentar de novo, abra {section} › {group} no stella e clique em “{button}”.",
+    "callbackNotConnectedBody": "O motivo aparece no app do stella. Para tentar de novo, abra {section} › {group} e clique em “{button}”.",
     "callbackAccount": "Conta",
     "callbackPlan": "Plano",
     "callbackCloseTab": "Você pode fechar esta aba.",

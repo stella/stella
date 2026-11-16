@@ -837,7 +837,7 @@
     "callbackConnectedTitle": "ChatGPT prijungtas",
     "callbackConnectedBody": "DI užklausos stelloje dabar naudoja jūsų ChatGPT planą.",
     "callbackNotConnectedTitle": "ChatGPT neprijungtas",
-    "callbackNotConnectedBody": "stella parodo, kas nepavyko. Norėdami bandyti dar kartą, stelloje atidarykite {section} › {group} ir spustelėkite „{button}“.",
+    "callbackNotConnectedBody": "Priežastis rodoma stella programėlėje. Norėdami bandyti dar kartą, atidarykite {section} › {group} ir spustelėkite „{button}“.",
     "callbackAccount": "Paskyra",
     "callbackPlan": "Planas",
     "callbackCloseTab": "Šį skirtuką galite uždaryti.",

@@ -837,7 +837,7 @@
     "callbackConnectedTitle": "ChatGPT on ühendatud",
     "callbackConnectedBody": "stella AI-päringud kasutavad nüüd teie ChatGPT paketti.",
     "callbackNotConnectedTitle": "ChatGPT-d ei ühendatud",
-    "callbackNotConnectedBody": "stella näitab, mis valesti läks. Uuesti proovimiseks avage stellas {section} › {group} ja klõpsake nuppu „{button}“.",
+    "callbackNotConnectedBody": "Põhjus on näha stella rakenduses. Uuesti proovimiseks avage {section} › {group} ja klõpsake nuppu „{button}“.",
     "callbackAccount": "Konto",
     "callbackPlan": "Pakett",
     "callbackCloseTab": "Võite selle vahekaardi sulgeda.",

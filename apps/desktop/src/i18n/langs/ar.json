@@ -837,7 +837,7 @@
     "callbackConnectedTitle": "تم ربط ChatGPT",
     "callbackConnectedBody": "تستخدم طلبات الذكاء الاصطناعي في stella الآن خطة ChatGPT الخاصة بك.",
     "callbackNotConnectedTitle": "لم يتم ربط ChatGPT",
-    "callbackNotConnectedBody": "يعرض stella سبب الخطأ. لإعادة المحاولة، افتح {section} ثم {group} في stella، وانقر على «{button}».",
+    "callbackNotConnectedBody": "يظهر السبب في تطبيق stella. لإعادة المحاولة، افتح {section} ثم {group}، وانقر على «{button}».",
     "callbackAccount": "الحساب",
     "callbackPlan": "الخطة",
     "callbackCloseTab": "يمكنك إغلاق علامة التبويب هذه.",

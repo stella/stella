@@ -837,7 +837,7 @@
     "callbackConnectedTitle": "ChatGPT je připojen",
     "callbackConnectedBody": "Požadavky na AI ve stelle teď využívají váš tarif ChatGPT.",
     "callbackNotConnectedTitle": "ChatGPT se nepřipojil",
-    "callbackNotConnectedBody": "stella ukazuje, co se pokazilo. Chcete-li to zkusit znovu, otevřete ve stelle {section} › {group} a klikněte na „{button}“.",
+    "callbackNotConnectedBody": "Důvod najdete v aplikaci stella. Chcete-li to zkusit znovu, otevřete {section} › {group} a klikněte na „{button}“.",
     "callbackAccount": "Účet",
     "callbackPlan": "Tarif",
     "callbackCloseTab": "Tuto kartu můžete zavřít.",
