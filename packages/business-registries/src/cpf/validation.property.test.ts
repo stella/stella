@@ -7,7 +7,7 @@ import {
   propertyTestTimeout,
 } from "@stll/property-testing";
 
-import { registryString } from "../shared/property-test-helpers.test.js";
+import { registryString } from "../shared/tests/test-helpers.js";
 import { normalizeCpf, validateCpf } from "./validation.js";
 
 const digits = fc.array(fc.integer({ min: 0, max: 9 }), {

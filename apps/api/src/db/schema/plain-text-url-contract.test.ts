@@ -5,15 +5,15 @@ import {
   composedMetadataUrlSchema,
   METADATA_URL_SCHEMAS,
 } from "@/api/handlers/case-law/ingestion/metadata-url-schemas";
+import { readCommittedMigrations } from "@/api/tests/stella-table-privileges";
 
-// The latest migration that defines plain_text_source_url_schema; a source
-// that declares URL-bearing metadata replaces the function in a new one.
-const migration = await Bun.file(
-  new URL(
-    "../../../drizzle/20261027160100_uk_fcl_metadata_url_contract/migration.sql",
-    import.meta.url,
-  ),
-).text();
+import { plainTextSourceUrlContractSql } from "../../../scripts/generate-plain-text-url-contract";
+
+// Read what the migrator ultimately installs, rather than pinning an older contract.
+const migration =
+  readCommittedMigrations().findLast(({ sql }) =>
+    sql.includes("CREATE OR REPLACE FUNCTION plain_text_source_url_schema("),
+  )?.sql ?? panic("No committed source URL contract migration");
 // The triggers that pass the source to the contract live in the guard itself.
 const guardMigration = await Bun.file(
   new URL(
@@ -29,6 +29,7 @@ const databaseUrlContracts = Object.fromEntries(
 );
 
 test("database URL contracts derive from every declared adapter and composition", () => {
+  expect(migration).toBe(plainTextSourceUrlContractSql());
   const generated = /\$url_schemas\$([\s\S]*?)\$url_schemas\$/u
     .exec(migration)
     ?.at(1);

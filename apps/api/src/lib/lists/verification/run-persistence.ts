@@ -53,7 +53,7 @@ type VerificationTransitionAuditArgs = {
   claimCount: number;
 };
 
-export const recordVerificationAuditEvent = async ({
+const recordVerificationAuditEvent = async ({
   tx,
   run,
   status,

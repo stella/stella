@@ -253,7 +253,7 @@ export const snapshotOfCurrentVersion = ({
   versions: currentVersion ? [currentVersion] : [],
 });
 
-export type CopiedEntity = {
+type CopiedEntity = {
   sourceId: SafeId<"entity">;
   entityId: SafeId<"entity">;
   kind: EntityKind;
@@ -262,14 +262,14 @@ export type CopiedEntity = {
 };
 
 /** File field info needed for PDF derivative enqueueing. */
-export type CopiedFileField = {
+type CopiedFileField = {
   entityId: SafeId<"entity">;
   fieldId: SafeId<"field">;
   mimeType: string;
   encrypted: boolean;
 };
 
-export type CopiedField = {
+type CopiedField = {
   sourceEntityId: SafeId<"entity">;
   sourceFieldId: SafeId<"field">;
   entityId: SafeId<"entity">;
