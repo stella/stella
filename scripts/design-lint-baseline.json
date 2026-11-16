@@ -471,8 +471,7 @@
     "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts": 3,
     "apps/api/src/handlers/sharepoint/graph-client.ts": 1,
     "apps/api/src/handlers/sharepoint/graph-oauth.ts": 1,
-    "apps/api/src/lib/files/gotenberg.ts": 1,
-    "apps/api/src/lib/web-search/tavily.ts": 1
+    "apps/api/src/lib/files/gotenberg.ts": 1
   },
   "no-computed-key-record-assignment/no-computed-key-record-assignment": {
     "apps/api/scripts/ai-provider-canary-chat-toolsets.ts": 1,
