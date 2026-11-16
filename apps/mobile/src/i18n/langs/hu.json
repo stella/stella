@@ -293,7 +293,8 @@
       "noRun": "Az ügynök most nem fut a számítógépén.",
       "cannotSteer": "Ez az ügynök munka közben nem fogad üzeneteket.",
       "runFull": "Az ügynök most nem fogad több üzenetet.",
-      "notTaken": "Az ügynök most nem tudta fogadni az üzenetét."
+      "notTaken": "Az ügynök most nem tudta fogadni az üzenetét.",
+      "queuedMessageChanged": "Az üzenet időközben megváltozott vagy már nincs a sorban, ezért az ügynök nem kapta meg."
     }
   },
   "tasks": {

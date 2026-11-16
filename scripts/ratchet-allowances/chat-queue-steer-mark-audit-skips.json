@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 2,
+  "reason": "A queued message's steer mark records which revision a running turn was handed until the run reports on it. Setting and clearing it change no stored content; the message leaving the queue once the run took it is audited in the transaction that removes it."
+}

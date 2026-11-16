@@ -68,6 +68,12 @@ export const createComputer = () => {
   let state: DesktopRunnerRunView["state"] = "running";
   let chatReadSeq = 0;
   let approvalRequest: StoredRunEvent | undefined;
+  /** The text each steer handed the run, as the API queued it. */
+  const inputs = new Map<string, string>();
+  /** What the turn made of the run's steer reports, in order. */
+  const steerSettles: [string, "taken" | "refused"][] = [];
+  let steerSettled = Promise.withResolvers<undefined>();
+  let steerGate: Promise<undefined> = Promise.resolve(undefined);
   const store = (message: (seq: number) => Record<string, unknown>) => {
     const seq = stored.length + 1;
     const event = { seq, message: { ...message(seq), runId: RUNNER_RUN_ID } };
@@ -151,10 +157,19 @@ export const createComputer = () => {
     answerQuestion: async () => panic("No question is asked here"),
     pairAppCall: async () => panic("No app call is reported here"),
     readRunOutputFile: async () => panic("No output file is reported here"),
-    readRunInputText: async () => panic("No steer is reported here"),
+    readRunInputText: async ({ inputId }) =>
+      Result.ok(inputs.get(inputId) ?? null),
   };
   const context: LocalRunContext = {
     control,
+    steeredQueue: {
+      settle: async (inputId, report) => {
+        steerSettles.push([inputId, report]);
+        steerSettled.resolve(undefined);
+        await steerGate;
+        return Result.ok(undefined);
+      },
+    },
     runBell,
     owner: {
       userId: toSafeId<"user">("user_bound"),
@@ -170,6 +185,21 @@ export const createComputer = () => {
     context,
     queued,
     chatReadSeq: () => chatReadSeq,
+    steerSettles,
+    /** The API handed the run steer `inputId` with `text`. */
+    handInput: (inputId: string, text: string) => {
+      inputs.set(inputId, text);
+    },
+    /** Hold the turn's next steer report until `release`. */
+    holdSteers: () => {
+      const gate = Promise.withResolvers<undefined>();
+      steerGate = gate.promise;
+      steerSettled = Promise.withResolvers<undefined>();
+      return {
+        reached: steerSettled.promise,
+        release: () => gate.resolve(undefined),
+      };
+    },
     /** Where a released reader stopped, as its release records it. */
     releaseAt: (seq: number) => {
       chatReadSeq = seq;

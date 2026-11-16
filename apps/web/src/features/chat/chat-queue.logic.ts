@@ -208,6 +208,7 @@ export const CHAT_STEER_REFUSAL_MESSAGES = {
   no_run: "chat.steerRefused.noRun",
   harness_cannot_steer: "chat.steerRefused.cannotSteer",
   run_full: "chat.steerRefused.runFull",
+  queued_message_changed: "chat.steerRefused.queuedMessageChanged",
   not_taken: "chat.steerRefused.notTaken",
   message_not_plain: "chat.steerRefused.notPlain",
 } as const satisfies Record<ChatSteerRefusal, TranslationKey>;
