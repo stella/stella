@@ -105,9 +105,15 @@ const findMatchingClose = ({
     }
     const closing = xml[tagStart + 1] === "/";
     const tagNameStart = tagStart + (closing ? 2 : 1);
-    let tagNameEnd = tagNameStart;
-    while (tagNameEnd < xml.length && !isNameBoundary(xml[tagNameEnd])) {
-      tagNameEnd += 1;
+    // The outer lexer already read this name; matching tags need one boundary check.
+    const matchesName =
+      xml.startsWith(name, tagNameStart) &&
+      isNameBoundary(xml[tagNameStart + name.length]);
+    let tagNameEnd = matchesName ? tagNameStart + name.length : tagNameStart;
+    if (!matchesName) {
+      while (tagNameEnd < xml.length && !isNameBoundary(xml[tagNameEnd])) {
+        tagNameEnd += 1;
+      }
     }
 
     let tagEndIndex = tagNameEnd;
@@ -128,7 +134,7 @@ const findMatchingClose = ({
     }
     cursor = tagEndIndex + 1;
 
-    if (xml.slice(tagNameStart, tagNameEnd) !== name) {
+    if (!matchesName) {
       continue;
     }
     if (closing) {
