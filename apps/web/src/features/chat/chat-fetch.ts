@@ -2,18 +2,21 @@ import { Result, TaggedError } from "better-result";
 
 import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
 import {
+  CHAT_COMMAND_CONFIRMATION_MS,
   CHAT_COMMAND_ID_HEADER,
+  CHAT_COMMAND_MAX_RETRIES,
   chatCommandOutcomeOf,
 } from "@stll/api-contract/chat-command";
 import { SSE_SILENCE_BOUND_MS } from "@stll/api-contract/sse-heartbeat";
+import { hedgedAttempts } from "@stll/concurrency/hedged-attempts";
 import { fetchWithTimeout } from "@stll/fetch";
 import {
   iterateBodyWithIdleDeadline,
   readBodyJsonWithIdleDeadline,
 } from "@stll/fetch/body-reader";
 
-import { sendChatCommandAttempts } from "@/features/chat/chat-command.logic";
 import { ChatRequestError } from "@/features/chat/chat-request-error";
+import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import type { APIError } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
@@ -203,19 +206,37 @@ export class ChatCommandReplayedError extends TaggedError(
 /**
  * `chatFetchClient` for a member's command (a send, an answer): the request
  * carries an id of its own and is sent again under it when its response is
- * lost (`sendChatCommandAttempts`). A replay of an earlier attempt rejects
- * with `ChatCommandReplayedError`, every other refusal as `chatFetchClient`
- * rejects it.
+ * lost: at once after a connection error, or after
+ * `CHAT_COMMAND_CONFIRMATION_MS` without an answer, leaving that attempt
+ * running, since abandoning a request the server is still preparing would
+ * stop the turn it accepted. The first response that arrives is the
+ * command's; the server's receipt makes every other attempt a replay of it.
+ * A replay of an earlier attempt rejects with `ChatCommandReplayedError`,
+ * every other refusal as `chatFetchClient` rejects it.
  */
 export const chatCommandFetchClient = Object.assign(
   async (input: RequestInfo | URL, init?: RequestInit) => {
     const headers = new Headers(init?.headers);
     headers.set(CHAT_COMMAND_ID_HEADER, createRandomUuid());
     const commandInit = { ...init, headers };
-    const response = await sendChatCommandAttempts({
+    const answered = await hedgedAttempts({
       attempt: async () => await fetchChatResponse(input, commandInit),
-      isLostResponse: (error) => ChatRequestError.is(error),
+      hedgeAfterMs: CHAT_COMMAND_CONFIRMATION_MS,
+      isLost: (error) => ChatRequestError.is(error),
+      maxRetries: CHAT_COMMAND_MAX_RETRIES,
+      onLateAnswer: (late) => {
+        detached(
+          (async () => {
+            await late.body?.cancel();
+          })(),
+          "chat-fetch.release-late-command-answer",
+        );
+      },
     });
+    if (Result.isError(answered)) {
+      throw answered.error.error;
+    }
+    const response = answered.value;
     if (response.ok) {
       return boundedChatStream(response, requestSignalOf(input, init));
     }
