@@ -62,6 +62,9 @@ export const CI_MARKDOWN_READER_INPUTS = ["packages/cli/**"];
 const RUNTIME_GENERATOR =
   GENERATORS.find(({ id }) => id === "cli-runtime") ??
   panic("the generator manifest has no cli-runtime entry");
+const CATALOG_GENERATOR =
+  GENERATORS.find(({ id }) => id === "capability-catalog") ??
+  panic("the generator manifest has no capability-catalog entry");
 
 const run = (args: readonly [string, ...string[]], root: string): string => {
   const [command, ...parameters] = args;
@@ -645,14 +648,26 @@ test(
       // runtime must match the base whenever none of its inputs changed: a
       // difference then means an input the generator manifest does not list.
       // The catalog part is assembled from shards: a changed shard changes it.
-      const changedSurface = changedBetween(base, head, [
-        ...CLI_CONTRACT_SURFACE_PATHS.map((part) => `${CLI_DIRECTORY}/${part}`),
-        `${CLI_DIRECTORY}/capabilities`,
-      ]).map((file) =>
-        file.startsWith(`${CLI_DIRECTORY}/capabilities/`)
-          ? "capability-catalog.json"
-          : file.slice(CLI_DIRECTORY.length + 1),
-      );
+      // Untracked shards are derived from the API, so a changed generator
+      // input changes the catalog too.
+      const catalogInputsChanged =
+        changedBetween(base, head, [
+          ...CATALOG_GENERATOR.inputs,
+          ...(CATALOG_GENERATOR.checkInputs ?? []),
+        ]).length > 0;
+      const changedSurface = [
+        ...changedBetween(base, head, [
+          ...CLI_CONTRACT_SURFACE_PATHS.map(
+            (part) => `${CLI_DIRECTORY}/${part}`,
+          ),
+          `${CLI_DIRECTORY}/capabilities`,
+        ]).map((file) =>
+          file.startsWith(`${CLI_DIRECTORY}/capabilities/`)
+            ? "capability-catalog.json"
+            : file.slice(CLI_DIRECTORY.length + 1),
+        ),
+        ...(catalogInputsChanged ? ["capability-catalog.json"] : []),
+      ];
       const drift = findSurfaceDrift({
         head: readSurface({ tree: head, layout: "source" }),
         published: readSurface({ tree: base, layout: "source" }),
