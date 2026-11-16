@@ -364,6 +364,7 @@ it, and add it here in the same change that adds it to `packages/ui`.
 - `Form` `layout`: `inline`, `stack`
 - `InlineDropIndicator` `position`: `after`, `before`
 - `InputGroupAddon` `align`: `block-end`, `block-start`, `inline-end`, `inline-start`
+- `InputGroupTextarea`, `Textarea` `appearance`: `composer`, `default`
 - `InputGroupTextarea`, `Textarea` `fieldSizing`: `content`, `fixed`
 - `InspectorDock` `mount`: `content`, `shell-end`
 - `InspectorEntityTab` `inactiveIcon`: `dim`, `legible`
