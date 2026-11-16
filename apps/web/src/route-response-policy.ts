@@ -121,6 +121,8 @@ export const ROUTE_CACHE_CLASSES = {
   "/settings/organization/": "private-no-store",
   "/workspaces/$workspaceId/": "private-no-store",
   "/law/$country/statutes/": "public-indexable",
+  "/law/$country/": "public-indexable",
+  "/law/$country/courts/$": "public-indexable",
   "/law/cases/research/": "private-no-store",
   "/chat/workspaces/$workspaceId/$threadId": "private-no-store",
   "/chat/workspaces/$workspaceId/new": "private-no-store",

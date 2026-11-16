@@ -1191,6 +1191,13 @@
       "treatment": "Vēlākā judikatūra"
     },
     "analyzing": "Analizē...",
+    "browse": {
+      "courtDescription": "{court} ({country}): nolēmumi stella publiskajā tiesību datubāzē pa gadiem un mēnešiem.",
+      "courts": "Tiesas",
+      "days": "Dienas",
+      "jurisdictionDescription": "{country}: tiesu nolēmumi stella publiskajā tiesību datubāzē pa tiesām, gadiem un mēnešiem.",
+      "periodDescription": "{court} ({country}), {period}: nolēmumi stella publiskajā tiesību datubāzē."
+    },
     "chat": {
       "prompts": {
         "facts": {

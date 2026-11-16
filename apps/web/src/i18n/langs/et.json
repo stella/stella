@@ -1191,6 +1191,13 @@
       "treatment": "Hilisem käsitlus"
     },
     "analyzing": "Analüüsin...",
+    "browse": {
+      "courtDescription": "{court} ({country}): lahendid stella avalikus õigusandmebaasis aasta ja kuu kaupa.",
+      "courts": "Kohtud",
+      "days": "Päevad",
+      "jurisdictionDescription": "{country}: kohtulahendid stella avalikus õigusandmebaasis kohtu, aasta ja kuu kaupa.",
+      "periodDescription": "{court} ({country}), {period}: lahendid stella avalikus õigusandmebaasis."
+    },
     "chat": {
       "prompts": {
         "facts": {

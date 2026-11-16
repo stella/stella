@@ -4,6 +4,11 @@ import {
   PUBLIC_CASE_LAW_PAGE_COUNTRIES,
   toCaseLawCountryParam,
 } from "./features/case-law/case-law-jurisdiction";
+import { createCaseLawJurisdictionHubPath } from "./lib/case-law-browse-path";
+import {
+  isPublicStatutePageCountry,
+  STATUTE_COUNTRIES,
+} from "./lib/statutes/statute-route";
 
 type PublicCrawlRoute = {
   path: `/${string}`;
@@ -170,3 +175,66 @@ export const isPublicLawPathIndexable = (
     publicToolsCrawlAllowed: false,
     toolsBasePath: "/tools",
   });
+
+const CRAWL_URL_BASE = "https://crawl.invalid";
+
+/**
+ * The same answer for a whole URL a page is served at. A query string makes
+ * any law page a search, filter or paging variant of a query-free page, so it
+ * is never indexable: robots.txt blocks it (see `publicCrawlRobotsLines`) and
+ * its head says `noindex`, pointing at the hub it varies.
+ */
+export const isPublicLawUrlIndexable = (
+  href: string,
+  publicLawCrawlAllowed: boolean,
+): boolean => {
+  const url = new URL(href, CRAWL_URL_BASE);
+  return (
+    url.search === "" &&
+    isPublicLawPathIndexable(url.pathname, publicLawCrawlAllowed)
+  );
+};
+
+/**
+ * robots.txt's path rules, from the same table. A crawlable subtree allows
+ * its query-free URLs only: the `Disallow: <subtree>/*?` line is longer than
+ * the subtree's `Allow`, so it wins under longest-match precedence.
+ */
+export const publicCrawlRobotsLines = (
+  options: PublicCrawlOptions,
+): string[] => {
+  const lawPaths = new Set<string>(
+    createPublicCrawlRules({
+      publicKnowledgeCrawlAllowed: false,
+      publicLawCrawlAllowed: options.publicLawCrawlAllowed,
+      publicToolsCrawlAllowed: false,
+      toolsBasePath: options.toolsBasePath,
+    }).map(({ path }) => path),
+  );
+  return createPublicCrawlRules(options).flatMap(({ path, scope }) => {
+    if (scope === "exact") {
+      return [`Allow: ${path}$`];
+    }
+    const queryRule =
+      lawPaths.has(path) && path.startsWith("/law/")
+        ? [`Disallow: ${path}/*?`]
+        : [];
+    return [...queryRule, `Allow: ${path}/`, `Allow: ${path}$`];
+  });
+};
+
+/**
+ * The law sitemap's static entries: each public jurisdiction's hub and its
+ * statute hub. A path is listed only when the policy above makes it
+ * indexable, so the sitemap cannot list what robots.txt or the page's head
+ * refuses.
+ */
+export const publicLawHubSitemapPaths = (): readonly `/law/${string}`[] =>
+  [
+    ...PUBLIC_CASE_LAW_PAGE_COUNTRIES.map((country) =>
+      createCaseLawJurisdictionHubPath(toCaseLawCountryParam(country)),
+    ),
+    ...Object.keys(STATUTE_COUNTRIES)
+      .filter(isPublicStatutePageCountry)
+      .map((country): `/law/${string}` => `/law/${country}/statutes`),
+  ].filter((path) => isPublicLawUrlIndexable(path, true));

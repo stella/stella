@@ -5,6 +5,12 @@ import { PUBLIC_CASE_LAW_PAGE_COUNTRIES } from "@stll/api-contract/case-law-laun
 
 import readDecisionAnchorRedirectsRoute from "@/api/handlers/case-law/decisions/anchor-redirects";
 import {
+  listBrowseCourtsHandler,
+  listBrowseCourtsQuerySchema,
+  readBrowseCalendarHandler,
+  readBrowseCalendarQuerySchema,
+} from "@/api/handlers/case-law/decisions/browse-hubs";
+import {
   listDecisionFacetsHandler,
   listDecisionFacetsQuerySchema,
 } from "@/api/handlers/case-law/decisions/facets";
@@ -71,6 +77,8 @@ import {
   decisionProvisionsSuccessResponseSchema,
 } from "@/api/handlers/case-law/provisions/response-schema";
 import {
+  browseCalendarResponseSchema,
+  browseCourtsResponseSchema,
   corpusStatusResponseSchema,
   decisionFacetsResponseSchema,
   latestDecisionsResponseSchema,
@@ -211,6 +219,56 @@ const listLatestDecisions = createSafeBoundedPublicHandler(
 
     return Result.ok(
       projectResponseText(response, latestDecisionsResponseSchema),
+    );
+  },
+);
+
+const listBrowseCourts = createSafeBoundedPublicHandler(
+  {
+    contract: "patch",
+    accountAccess: ACCOUNT_ACCESS.sandbox,
+    mcp: { type: "internal", reason: "public_indexing" },
+    cache: { kind: "none" },
+    response: withPublicCountryUnavailable(
+      safePublicHandlerResponseSchemasWithStatusText(
+        browseCourtsResponseSchema,
+      ),
+    ),
+    query: listBrowseCourtsQuerySchema,
+  },
+  async function* ({ query }) {
+    const response = yield* Result.await(
+      Result.tryPromise(
+        async () => await listBrowseCourtsHandler(query, caseLawPublicReadDb),
+      ),
+    );
+
+    return Result.ok(projectResponseText(response, browseCourtsResponseSchema));
+  },
+);
+
+const readBrowseCalendar = createSafeBoundedPublicHandler(
+  {
+    contract: "patch",
+    accountAccess: ACCOUNT_ACCESS.sandbox,
+    mcp: { type: "internal", reason: "public_indexing" },
+    cache: { kind: "none" },
+    response: withPublicCountryUnavailable(
+      safePublicHandlerResponseSchemasWithStatusText(
+        browseCalendarResponseSchema,
+      ),
+    ),
+    query: readBrowseCalendarQuerySchema,
+  },
+  async function* ({ query }) {
+    const response = yield* Result.await(
+      Result.tryPromise(
+        async () => await readBrowseCalendarHandler(query, caseLawPublicReadDb),
+      ),
+    );
+
+    return Result.ok(
+      projectResponseText(response, browseCalendarResponseSchema),
     );
   },
 );
@@ -492,6 +550,8 @@ const listSitemapShards = createSafeBoundedPublicHandler(
 export const publicCaseLawRoute = routes(
   {
     "/coverage": { GET: readCaseLawCoverage },
+    "/browse/courts": { GET: listBrowseCourts },
+    "/browse/calendar": { GET: readBrowseCalendar },
     "/decisions": { GET: listDecisions },
     "/decisions/facets": { GET: listDecisionFacets },
     "/decisions/filter-validation": { GET: validateDecisionFilters },

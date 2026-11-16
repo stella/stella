@@ -777,6 +777,7 @@
       }
     },
     "ui": {
+      "browseLaw": "Pārlūkot publisko tiesību datubāzi",
       "capabilities": "Iespējas",
       "exploreMore": "Uzziniet vairāk",
       "faq": "Biežāk uzdotie jautājumi",

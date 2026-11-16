@@ -777,6 +777,7 @@
       }
     },
     "ui": {
+      "browseLaw": "Procházet veřejnou právní databázi",
       "capabilities": "Co to umí",
       "exploreMore": "Prozkoumejte dál",
       "faq": "Časté dotazy",

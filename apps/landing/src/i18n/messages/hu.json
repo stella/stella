@@ -777,6 +777,7 @@
       }
     },
     "ui": {
+      "browseLaw": "A nyilvános jogi adatbázis böngészése",
       "capabilities": "Képességek",
       "exploreMore": "Fedezzen fel többet",
       "faq": "GYIK",

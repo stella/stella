@@ -777,6 +777,7 @@
       }
     },
     "ui": {
+      "browseLaw": "Naršyti viešą teisės duomenų bazę",
       "capabilities": "Galimybės",
       "exploreMore": "Sužinokite daugiau",
       "faq": "Dažni klausimai",

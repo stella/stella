@@ -7,6 +7,11 @@ import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdiction
 import { DECISION_PRIMARY_REFERENCE_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import type {
+  BrowseCalendar,
+  BrowseCalendarPeriod,
+  listBrowseCourtsHandler,
+} from "@/api/handlers/case-law/decisions/browse-hubs";
+import type {
   DecisionCitationRow,
   LeadingCitationRow,
   listLeadingCitationsHandler,
@@ -136,6 +141,31 @@ export const latestDecisionsResponseSchema = v.object({
   keyof Success<typeof listLatestDecisionsHandler>,
   v.GenericSchema
 >);
+export const browseCourtsResponseSchema = v.object({
+  country: identity.country,
+  courts: v.pipe(
+    v.array(identity.court),
+    v.maxLength(LIMITS.caseLawBrowseCourtsMax),
+  ),
+  truncated: v.boolean(),
+} satisfies Record<
+  keyof Success<typeof listBrowseCourtsHandler>,
+  v.GenericSchema
+>);
+export const browseCalendarResponseSchema = v.object({
+  level: v.picklist(["years", "months", "days"]),
+  // A court's years span at most the four-digit range the request admits.
+  periods: v.pipe(
+    v.array(
+      v.object({
+        value: v.number(),
+        count: v.number(),
+      } satisfies Record<keyof BrowseCalendarPeriod, v.GenericSchema>),
+    ),
+    v.maxLength(9000),
+  ),
+  undated: v.number(),
+} satisfies Record<keyof BrowseCalendar, v.GenericSchema>);
 const facet = v.object({
   value: boundedString(2048),
   label: v.exactOptional(boundedString(2048)),

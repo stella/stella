@@ -1191,6 +1191,13 @@
       "treatment": "Późniejsze orzecznictwo"
     },
     "analyzing": "Analizowanie...",
+    "browse": {
+      "courtDescription": "{court} ({country}): orzeczenia w publicznej bazie prawnej stelli według roku i miesiąca.",
+      "courts": "Sądy",
+      "days": "Dni",
+      "jurisdictionDescription": "{country}: orzeczenia sądów w publicznej bazie prawnej stelli według sądu, roku i miesiąca.",
+      "periodDescription": "{court} ({country}), {period}: orzeczenia w publicznej bazie prawnej stelli."
+    },
     "chat": {
       "prompts": {
         "facts": {

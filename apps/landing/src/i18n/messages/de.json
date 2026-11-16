@@ -777,6 +777,7 @@
       }
     },
     "ui": {
+      "browseLaw": "Öffentliche Rechtsdatenbank durchsuchen",
       "capabilities": "Was es kann",
       "exploreMore": "Mehr entdecken",
       "faq": "Häufige Fragen",

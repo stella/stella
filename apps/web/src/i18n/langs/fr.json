@@ -1191,6 +1191,13 @@
       "treatment": "Traitement ultérieur"
     },
     "analyzing": "Analyse en cours...",
+    "browse": {
+      "courtDescription": "{court} ({country}) : décisions dans la base juridique publique de stella, par année et par mois.",
+      "courts": "Juridictions",
+      "days": "Jours",
+      "jurisdictionDescription": "{country} : décisions de justice dans la base juridique publique de stella, par juridiction, année et mois.",
+      "periodDescription": "{court} ({country}), {period} : décisions dans la base juridique publique de stella."
+    },
     "chat": {
       "prompts": {
         "facts": {

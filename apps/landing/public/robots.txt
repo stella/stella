@@ -39,3 +39,4 @@ User-agent: ImagesiftBot
 Disallow: /
 
 Sitemap: https://stll.app/sitemap-index.xml
+Sitemap: https://my.stll.app/sitemap.xml

@@ -42,6 +42,7 @@ import {
   decisionsPageOptions,
 } from "@/features/case-law/queries/decisions";
 import { getMessageLocale, getTranslator } from "@/i18n/i18n-store";
+import { publicCaseLawHubPathFor } from "@/lib/case-law-browse-path";
 import { resolveCaseLawRouteCountry } from "@/lib/case-law-route";
 import { readQueryResult } from "@/lib/errors/query-result";
 import { pageTitle } from "@/lib/page-title";
@@ -352,6 +353,7 @@ export const Route = createFileRoute("/law/cases/")({
     const path = createCaseLawIndexPath(search);
 
     return createPublicLawHead({
+      canonicalPath: publicCaseLawHubPathFor(match.search.country),
       description,
       jsonLd: createLegalCollectionJsonLd({
         t,

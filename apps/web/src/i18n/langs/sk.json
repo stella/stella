@@ -1191,6 +1191,13 @@
       "treatment": "Neskoršia judikatúra"
     },
     "analyzing": "Analyzujem...",
+    "browse": {
+      "courtDescription": "{court} ({country}): rozhodnutia vo verejnej právnej databáze stelly podľa roka a mesiaca.",
+      "courts": "Súdy",
+      "days": "Dni",
+      "jurisdictionDescription": "{country}: súdne rozhodnutia vo verejnej právnej databáze stelly podľa súdu, roka a mesiaca.",
+      "periodDescription": "{court} ({country}), {period}: rozhodnutia vo verejnej právnej databáze stelly."
+    },
     "chat": {
       "prompts": {
         "facts": {

@@ -1191,6 +1191,13 @@
       "treatment": "Later treatment"
     },
     "analyzing": "Analyzing...",
+    "browse": {
+      "courtDescription": "{court} ({country}): decisions in the stella public legal database, by year and month.",
+      "courts": "Courts",
+      "days": "Days",
+      "jurisdictionDescription": "{country}: court decisions in the stella public legal database, by court, year and month.",
+      "periodDescription": "{court} ({country}), {period}: decisions in the stella public legal database."
+    },
     "chat": {
       "prompts": {
         "facts": {

@@ -1191,6 +1191,13 @@
       "treatment": "Későbbi megítélés"
     },
     "analyzing": "Elemzés folyamatban...",
+    "browse": {
+      "courtDescription": "{court} ({country}): határozatok a stella nyilvános jogi adatbázisában, év és hónap szerint.",
+      "courts": "Bíróságok",
+      "days": "Napok",
+      "jurisdictionDescription": "{country}: bírósági határozatok a stella nyilvános jogi adatbázisában, bíróság, év és hónap szerint.",
+      "periodDescription": "{court} ({country}), {period}: határozatok a stella nyilvános jogi adatbázisában."
+    },
     "chat": {
       "prompts": {
         "facts": {

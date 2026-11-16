@@ -13,6 +13,11 @@ export type PublicHeadInput = {
   alternateLinks?: readonly PublicAlternateLink[];
   crawlAllowed: boolean;
   indexing?: "default" | "noindex";
+  /**
+   * The query-free page a `noindex` variant (a search, filter or paging URL)
+   * stands in for; its canonical link points there.
+   */
+  canonicalPath?: `/${string}` | null;
   description?: string | null;
   jsonLd?: JsonLdObject | null;
   path: `/${string}`;
@@ -52,6 +57,7 @@ export const createPublicCanonicalUrl = (path: `/${string}`): string =>
  */
 export const createPublicHead = ({
   alternateLinks = [],
+  canonicalPath = null,
   crawlAllowed,
   description,
   jsonLd,
@@ -61,9 +67,13 @@ export const createPublicHead = ({
   type,
 }: PublicHeadInput) => {
   const canonicalUrl = createPublicCanonicalUrl(path);
+  const variantLinks =
+    canonicalPath === null
+      ? []
+      : [{ rel: "canonical", href: createPublicCanonicalUrl(canonicalPath) }];
   const links =
     indexing === "noindex"
-      ? []
+      ? variantLinks
       : [
           { rel: "canonical", href: canonicalUrl },
           ...alternateLinks.map(

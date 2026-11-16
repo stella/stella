@@ -1191,6 +1191,13 @@
       "treatment": "Tratamiento posterior"
     },
     "analyzing": "Analizando...",
+    "browse": {
+      "courtDescription": "{court} ({country}): resoluciones en la base jurídica pública de stella, por año y mes.",
+      "courts": "Tribunales",
+      "days": "Días",
+      "jurisdictionDescription": "{country}: resoluciones judiciales en la base jurídica pública de stella, por tribunal, año y mes.",
+      "periodDescription": "{court} ({country}), {period}: resoluciones en la base jurídica pública de stella."
+    },
     "chat": {
       "prompts": {
         "facts": {

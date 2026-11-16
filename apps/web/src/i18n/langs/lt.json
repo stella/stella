@@ -1191,6 +1191,13 @@
       "treatment": "Vėlesnis vertinimas"
     },
     "analyzing": "Analizuojama...",
+    "browse": {
+      "courtDescription": "{court} ({country}): sprendimai viešoje stella teisės duomenų bazėje pagal metus ir mėnesį.",
+      "courts": "Teismai",
+      "days": "Dienos",
+      "jurisdictionDescription": "{country}: teismų sprendimai viešoje stella teisės duomenų bazėje pagal teismą, metus ir mėnesį.",
+      "periodDescription": "{court} ({country}), {period}: sprendimai viešoje stella teisės duomenų bazėje."
+    },
     "chat": {
       "prompts": {
         "facts": {

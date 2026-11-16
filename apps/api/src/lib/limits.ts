@@ -17,6 +17,10 @@ import {
   WORKSPACES_PER_ORGANIZATION_MAX,
 } from "@stll/api-contract";
 import {
+  CASE_LAW_BROWSE_COURTS_MAX,
+  CASE_LAW_BROWSE_LISTING_DEPTH,
+} from "@stll/api-contract/case-law-browse-hubs";
+import {
   CASE_LAW_RESULT_DEPTH_MAX,
   MULTIPART_DOCUMENT_MAX_BYTES,
   READER_PAGE_MAX_CHARS,
@@ -784,6 +788,10 @@ export const LIMITS = {
   /** Courts on the browse page's "newest decisions" shelf, by corpus size. */
   caseLawLatestCourts: 4,
   caseLawLatestPerCourt: 5,
+  /** Courts the crawlable browse tree names per jurisdiction. */
+  caseLawBrowseCourtsMax: CASE_LAW_BROWSE_COURTS_MAX,
+  /** Decisions one browse period lists; a capped count stops one past it. */
+  caseLawBrowseListingDepth: CASE_LAW_BROWSE_LISTING_DEPTH,
   legislationListPageSizeDefault: 20,
   legislationListPageSizeMax: 100,
   publicStatuteSearchPageSizeMax: PUBLIC_STATUTE_SEARCH_PAGE_SIZE_MAX,

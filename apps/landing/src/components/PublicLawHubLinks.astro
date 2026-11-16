@@ -1,0 +1,38 @@
+---
+import { publicLawHubLinks } from "../data/public-law-hubs";
+import type { Locale } from "../i18n/config";
+import { locales } from "../i18n/config";
+import { getTranslations } from "../i18n/utils";
+
+// Plain links from the marketing site into the public legal database's
+// crawlable jurisdiction hubs, one per jurisdiction whose pages are public.
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+const t = getTranslations(locale);
+const links = publicLawHubLinks(locales[locale].hreflang);
+---
+
+<section class="px-6 py-10 lg:py-12">
+  <div class="mx-auto max-w-3xl">
+    <h2
+      class="mb-6 text-xs font-medium uppercase tracking-[0.2em]"
+      style="color: var(--muted-foreground)"
+    >
+      {t("products.ui.browseLaw")}
+    </h2>
+    <ul class="flex flex-wrap gap-x-6 gap-y-3 text-sm">
+      {
+        links.map((link) => (
+          <li>
+            <a href={link.href} class="underline underline-offset-4">
+              {link.name}
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+  </div>
+</section>

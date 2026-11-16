@@ -42,8 +42,8 @@ import {
 } from "@/lib/public-tools-launch";
 import { isPublicStatutePageCountry } from "@/lib/statutes/statute-route";
 import {
-  createPublicCrawlRules,
-  isPublicLawPathIndexable,
+  publicCrawlRobotsLines,
+  publicLawHubSitemapPaths,
 } from "@/public-crawl-policy";
 
 const LAW_SITEMAP_PATH = "/sitemaps/law.xml";
@@ -333,15 +333,12 @@ export const createPublicLawStaticSitemapXml = ({
 `;
   }
 
-  // The home is the entry point. The coverage page is not listed: it renders
-  // its figures client-side, so a crawler sees only the pending shape, and
-  // robots.txt does not allow it. The results screen is not listed either: an
-  // unfiltered request redirects to the home, and every decision has its own
-  // entry in the per-country sitemaps. A candidate is listed only when the
-  // crawl policy that builds robots.txt allows it.
-  const entries = (["/law"] as const)
-    .filter((path) => isPublicLawPathIndexable(path, true))
-    .map((path) => createPublicLawCanonicalUrl(path));
+  // The jurisdiction hubs are the entry points; each links down its browse
+  // tree to every decision. The search home (`/law`) is not listed: it
+  // redirects to a search URL. See `publicLawHubSitemapPaths`.
+  const entries = publicLawHubSitemapPaths().map((path) =>
+    createPublicLawCanonicalUrl(path),
+  );
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -430,16 +427,12 @@ export const createRobotsTxt = ({
     env.VITE_PUBLIC_APP_URL,
   ).toString();
 
-  const allowLines = createPublicCrawlRules({
+  const allowLines = publicCrawlRobotsLines({
     publicKnowledgeCrawlAllowed,
     publicLawCrawlAllowed,
     publicToolsCrawlAllowed,
     toolsBasePath: publicToolsBasePath(),
-  }).flatMap(({ path, scope }) =>
-    scope === "exact"
-      ? [`Allow: ${path}$`]
-      : [`Allow: ${path}/`, `Allow: ${path}$`],
-  );
+  });
 
   return `${[
     "User-agent: *",

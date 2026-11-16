@@ -58,6 +58,7 @@ import { legislationShelfOptions } from "@/features/statutes/queries/statutes";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import { getMessageLocale, getTranslator } from "@/i18n/i18n-store";
+import { publicCaseLawHubPathFor } from "@/lib/case-law-browse-path";
 import {
   caseLawCountryName,
   resolveCaseLawRouteCountry,
@@ -187,6 +188,7 @@ export const Route = createFileRoute("/law/")({
     const path = createLawHomePath(match.search);
 
     return createPublicLawHead({
+      canonicalPath: publicCaseLawHubPathFor(match.search.country),
       description,
       jsonLd: createLegalCollectionJsonLd({
         t,

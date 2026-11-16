@@ -1191,6 +1191,13 @@
       "treatment": "المعالجة اللاحقة"
     },
     "analyzing": "جارٍ التحليل...",
+    "browse": {
+      "courtDescription": "{court} ({country}): أحكام في قاعدة stella القانونية العامة، حسب السنة والشهر.",
+      "courts": "المحاكم",
+      "days": "الأيام",
+      "jurisdictionDescription": "{country}: أحكام قضائية في قاعدة stella القانونية العامة، حسب المحكمة والسنة والشهر.",
+      "periodDescription": "{court} ({country})، {period}: أحكام في قاعدة stella القانونية العامة."
+    },
     "chat": {
       "prompts": {
         "facts": {
