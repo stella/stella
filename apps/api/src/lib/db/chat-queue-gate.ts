@@ -181,9 +181,11 @@ export const holdChatQueueOnTx = async ({
   })();
   // Owner columns come from the thread, and the row is written only while
   // the thread has a queued message.
+  // The table is named in the text so the conflict target reads as this
+  // table's key, not a chat turn's (scripts/check-online-index-dependencies.ts).
   // audit: skip — a hold records why queued messages wait; the turn or refusal that caused it is recorded where it happened
   await tx.execute(sql`
-    INSERT INTO ${chatQueueHolds} (
+    INSERT INTO chat_queue_holds (
       thread_id, organization_id, workspace_id, user_id, reason,
       turn_id, queued_message_id, refusal_code
     )
