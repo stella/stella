@@ -2643,48 +2643,49 @@ describe("copies Postgres does not record as applied never surface", () => {
     for (let page = 0; page < 400; page += 1) {
       const parsedCursor: SearchCursor | null = cursor;
       // Each cursor page needs the previous page's cursor.
-      const read = await readCorpusIndexSearchPage({
-        scanTransport: NATIVE_SCAN_TRANSPORT,
-        observer: "unobserved",
-        cluster: "q09",
-        indexId: "case_law_v10_cze",
-        query: "text:smlouva",
-        limit,
-        order: RELEVANCE_ORDER,
-        parsedCursor,
-        snippetFields: ["text"],
-        projectionRevisionField: "projection_revision",
-        extractId: (hit: CorpusIndexHit) =>
-          typeof hit["document_id"] === "string" ? hit["document_id"] : null,
-        extractSnippet: () => null,
-        unseenScoreUpperBound: (score) => score,
-        rankCandidates: async (
-          probes,
-          { excludedGroups, selectAppliedCandidates },
-        ) => {
-          const candidates = selectAppliedCandidates(
-            testAppliedProjectionsFor(
-              probes.filter(({ id }) => applied.has(id)),
-            ),
-          );
-          const shown = candidates.filter(
-            ({ id }) => !excludedGroups.has(corpusSearchGroupToken(id)),
-          );
-          return {
-            context: null,
-            groups: shown
-              .filter(({ id }) => recurring.has(id))
-              .map(({ id }) => corpusSearchGroupToken(id)),
-            ranked: shown.map((candidate) => ({
-              id: candidate.id,
-              score: candidate.score,
-              lexicalScore: candidate.score,
-              citationAuthority: 0,
-            })),
-            revisionById: testRevisionsFor(shown),
-          };
-        },
-      });
+      const read: Awaited<ReturnType<typeof readCorpusIndexSearchPage<null>>> =
+        await readCorpusIndexSearchPage({
+          scanTransport: NATIVE_SCAN_TRANSPORT,
+          observer: "unobserved",
+          cluster: "q09",
+          indexId: "case_law_v10_cze",
+          query: "text:smlouva",
+          limit,
+          order: RELEVANCE_ORDER,
+          parsedCursor,
+          snippetFields: ["text"],
+          projectionRevisionField: "projection_revision",
+          extractId: (hit: CorpusIndexHit) =>
+            typeof hit["document_id"] === "string" ? hit["document_id"] : null,
+          extractSnippet: () => null,
+          unseenScoreUpperBound: (score) => score,
+          rankCandidates: async (
+            probes,
+            { excludedGroups, selectAppliedCandidates },
+          ) => {
+            const candidates = selectAppliedCandidates(
+              testAppliedProjectionsFor(
+                probes.filter(({ id }) => applied.has(id)),
+              ),
+            );
+            const shown = candidates.filter(
+              ({ id }) => !excludedGroups.has(corpusSearchGroupToken(id)),
+            );
+            return {
+              context: null,
+              groups: shown
+                .filter(({ id }) => recurring.has(id))
+                .map(({ id }) => corpusSearchGroupToken(id)),
+              ranked: shown.map((candidate) => ({
+                id: candidate.id,
+                score: candidate.score,
+                lexicalScore: candidate.score,
+                citationAuthority: 0,
+              })),
+              revisionById: testRevisionsFor(shown),
+            };
+          },
+        });
       pages.push({
         ids: read.pageRanked.map((hit) => hit.id),
         reach: read.reach,

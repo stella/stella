@@ -2451,7 +2451,7 @@ export const rehydrateCaseLawCandidates = async (
  * dropped because the serving index has not applied it.
  */
 export const rehydrateNamedCaseLawDecisions = async (
-  options: Omit<RehydrateCaseLawCandidatesOptions, "indexed">,
+  options: RehydrateCaseLawCandidatesOptions & { indexed?: undefined },
 ) => await rehydrateAdmitting("published", options);
 
 const rehydrateAdmitting = async (
@@ -2499,7 +2499,7 @@ const rehydrateAdmitting = async (
   } else if (admission === "indexed") {
     await readIndexedCandidateRows({
       appliedProjections: indexed.appliedProjections,
-      body,
+      body: withoutProvision(body),
       caseLawDb,
       candidates,
       generation,

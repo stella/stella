@@ -424,7 +424,7 @@ test("an indexed ranking stands only on the copy Postgres records as applied", a
     expect(new Set(later.ranked.map(({ id }) => id))).toEqual(
       new Set([applied, stale]),
     );
-    expect(later.revisionById.get(stale)).toBe(staleOriginal.revision);
+    expect(String(later.revisionById.get(stale))).toBe(staleOriginal.revision);
   } finally {
     projections.set(stale, staleOriginal);
     await db
