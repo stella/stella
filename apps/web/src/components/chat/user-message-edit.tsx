@@ -502,9 +502,16 @@ const UserMessageEditForm = ({
             });
             return;
           }
+          // The form may have closed while the undo was followed: a closed
+          // or replaced edit sends nothing, the folder stays restored.
+          let open = false;
           session.run(() => {
+            open = true;
             setUndoing(false);
           });
+          if (!open) {
+            return;
+          }
         }
         const outcome = await onSubmit(edit);
         if (outcome.type !== "accepted") {

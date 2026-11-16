@@ -55,6 +55,8 @@ const server: {
   /** Every call the page made: `undo` for a request, `send` for an edit. */
   calls: ("undo" | "send")[];
   reads: number;
+  /** When set, the undo request answers only once it settles. */
+  undoHeld: Promise<undefined> | null;
 } = {
   read: {
     files: { type: "none" },
@@ -75,6 +77,7 @@ const server: {
   },
   calls: [],
   reads: 0,
+  undoHeld: null,
 };
 
 /** The undo request's answer when a test sets none: done at once. */
@@ -90,6 +93,7 @@ beforeEach(() => {
   server.answer = RESTORED_ANSWER;
   server.calls = [];
   server.reads = 0;
+  server.undoHeld = null;
   spyOn(globalThis, "fetch").mockImplementation(
     Object.assign(
       async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -104,6 +108,7 @@ beforeEach(() => {
         }
         if (method === "POST") {
           server.calls.push("undo");
+          await server.undoHeld;
           return Response.json(server.answer.body, {
             status: server.answer.status,
           });
@@ -701,6 +706,35 @@ describe("undoing the file changes made since the message", () => {
       expect(server.calls).toEqual(["undo", "send"]);
     });
     expect(submitted.map(([messageId]) => messageId)).toEqual([MESSAGE_ID]);
+  });
+
+  test("an edit cancelled while its undo is answered sends nothing once the folder is restored", async () => {
+    server.read = localRead({ type: "available" });
+    const held = Promise.withResolvers<undefined>();
+    server.undoHeld = held.promise;
+    const { actions, submitted } = createActions();
+    const view = renderMessage({ actions });
+
+    openEditor(view);
+    await toggle(await view.findByRole("checkbox", { name: UNDO_FILES }));
+    fireEvent.click(view.getByRole("button", { name: en.chat.sendPrompt }));
+    await waitFor(() => {
+      expect(server.calls).toEqual(["undo"]);
+    });
+    fireEvent.click(view.getByRole("button", { name: en.common.cancel }));
+    expect(view.getByText(SENT_BODY)).toBeDefined();
+
+    await act(async () => {
+      held.resolve(undefined);
+      await held.promise;
+      await Promise.resolve();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(server.calls).toEqual(["undo"]);
+    expect(submitted).toEqual([]);
   });
 
   test("a refused undo sends nothing, keeps the draft and says why, the box unchecked", async () => {

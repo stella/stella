@@ -260,21 +260,30 @@ type AssessOptions = ThreadOf & {
   seenSince: Date;
 };
 
-/**
- * Whether the files changed since the message's turn can be undone, and
- * from which checkpoint: the one the first run from that turn on took before
- * it worked in its folder. Restoring it undoes that run and every later one.
- */
-const assessUndo = async (
-  db: Pick<DesktopRunnerDb, "select">,
-  { owner, threadId, turn, seenSince }: AssessOptions,
-): Promise<Assessment> => {
-  const ofThread = and(
+/** The runs of the thread from the message's turn on that may have touched a folder. */
+const fromTurnOf = ({
+  owner,
+  threadId,
+  turn,
+}: ThreadOf & { turn: MessageTurn }) =>
+  and(
     eq(runs.userId, owner.userId),
     eq(runs.organizationId, owner.organizationId),
     eq(runs.chatThreadId, threadId),
+    mayHaveTouchedFolder,
+    fromTurnOn(turn),
   );
-  const fromTurn = and(ofThread, mayHaveTouchedFolder, fromTurnOn(turn));
+
+type FoundTarget = UndoTarget & { tookCheckpoint: boolean };
+
+/**
+ * The run whose checkpoint an undo from the message restores: the first run
+ * from the message's turn on that may have worked in a folder.
+ */
+const readUndoTarget = async (
+  db: Pick<DesktopRunnerDb, "select">,
+  options: ThreadOf & { turn: MessageTurn },
+): Promise<FoundTarget | null> => {
   const [target] = await db
     .select({
       runId: runs.runId,
@@ -284,10 +293,28 @@ const assessUndo = async (
     })
     .from(runs)
     .innerJoin(chatTurns, eq(chatTurns.id, runs.chatTurnId))
-    .where(fromTurn)
+    .where(fromTurnOf(options))
     .orderBy(asc(runs.createdAt), asc(runs.runId))
     .limit(1);
-  if (target === undefined) {
+  return target ?? null;
+};
+
+/**
+ * Whether the files changed since the message's turn can be undone, and
+ * from which checkpoint: the one the first run from that turn on took before
+ * it worked in its folder. Restoring it undoes that run and every later one.
+ */
+const assessUndo = async (
+  db: Pick<DesktopRunnerDb, "select">,
+  options: AssessOptions & { target?: FoundTarget | null },
+): Promise<Assessment> => {
+  const { owner, threadId, seenSince } = options;
+  const fromTurn = fromTurnOf(options);
+  const target =
+    options.target === undefined
+      ? await readUndoTarget(db, options)
+      : options.target;
+  if (target === null) {
     return { type: "none" };
   }
   if (await readThreadBusy(db, { owner, threadId })) {
@@ -320,7 +347,10 @@ const assessUndo = async (
   }
   if (target.linkedFolderId !== null) {
     // A linked folder is the member's own: another chat that worked in it
-    // since would lose its changes too.
+    // since would lose its changes too. That covers a run of another chat
+    // that started earlier and still worked after this run's checkpoint: one
+    // still open, or one whose last word (an event or its end, each of which
+    // moves `updated_at`) came after this run started.
     const [shared] = await db
       .select({ runId: runs.runId })
       .from(runs)
@@ -330,7 +360,11 @@ const assessUndo = async (
           eq(runs.organizationId, owner.organizationId),
           sameFolder(target, threadId),
           sql`${runs.chatThreadId} IS DISTINCT FROM ${threadId}::uuid`,
-          sql`${runs.createdAt} > (select r.created_at from desktop_runner_runs r where r.run_id = ${target.runId})`,
+          // sql-perf-allow: bounded by the indexed runs of one member on one computer (desktop_runner_runs_runner_state_idx), which pruneEndedRuns keeps few; the subquery reads one run by primary key
+          or(
+            inArray(runs.state, DESKTOP_RUNNER_OPEN_RUN_STATES),
+            sql`${runs.updatedAt} > (select r.created_at from desktop_runner_runs r where r.run_id = ${target.runId})`,
+          ),
           mayHaveTouchedFolder,
         ),
       )
@@ -601,22 +635,16 @@ export const requestFolderRestore = async (
       if (turn === null) {
         return { type: "refused", reason: "not_found" };
       }
-      const assessed = await assessUndo(tx, { ...options, turn });
-      switch (assessed.type) {
-        case "none":
-          return { type: "refused", reason: "no_checkpoint" };
-        case "refused":
-          return { type: "refused", reason: assessed.reason };
-        case "ready":
-          break;
-        default:
-          assessed satisfies never;
-          return panic("Unknown local files undo assessment");
+      const found = await readUndoTarget(tx, { ...options, turn });
+      if (found === null) {
+        return { type: "refused", reason: "no_checkpoint" };
       }
-      const { target, online } = assessed;
+      // The undo of this checkpoint asked before answers for itself, before
+      // any check a new one needs: a repeat while the computer is away or a
+      // turn runs follows the same undo.
       const existing = await readRunRestore(tx, {
         owner,
-        runId: target.runId,
+        runId: found.runId,
       });
       if (existing !== null && lapsed(existing, now)) {
         // Past its time: expire it, so the checkpoint may be asked again.
@@ -637,6 +665,23 @@ export const requestFolderRestore = async (
       ) {
         return { type: "existing", restore: viewOf(existing, now) };
       }
+      const assessed = await assessUndo(tx, {
+        ...options,
+        turn,
+        target: found,
+      });
+      switch (assessed.type) {
+        case "none":
+          return { type: "refused", reason: "no_checkpoint" };
+        case "refused":
+          return { type: "refused", reason: assessed.reason };
+        case "ready":
+          break;
+        default:
+          assessed satisfies never;
+          return panic("Unknown local files undo assessment");
+      }
+      const { target, online } = assessed;
       // audit: skip - the endpoint that asks for the restore audits it
       await tx.insert(restores).values({
         id: options.restoreId,
@@ -881,7 +926,11 @@ export const settleFolderRestore = async (
         } satisfies ChatLocalFilesUndone,
       };
       // The answers of the turns whose runs the restore undid: the target
-      // run's and every later run's in the same folder, up to the request.
+      // run's and every later run's of the thread in the same folder. No
+      // upper bound is needed, nor one sampled by a clock: the request found
+      // no run of the thread open, and from the request until this answer
+      // run admission refuses the thread's runs on this computer (folder
+      // busy), under the same lock, so every such run existed at the request.
       const target = alias(runs, "target_run");
       const undoneAnswers = tx
         .select({ id: chatTurns.assistantMessageId })
@@ -893,9 +942,8 @@ export const settleFolderRestore = async (
             eq(runs.chatThreadId, restores.chatThreadId),
             eq(runs.desktopId, target.desktopId),
             sql`${runs.linkedFolderId} IS NOT DISTINCT FROM ${target.linkedFolderId}`,
-            // Both bounds are read in the database, at full precision.
+            // Read in the database, at full precision.
             sql`${runs.createdAt} >= (select t.created_at from desktop_runner_runs t where t.run_id = ${restores.runId})`,
-            sql`${runs.createdAt} <= (select fr.created_at from desktop_runner_folder_restores fr where fr.id = ${restoreId})`,
           ),
         )
         .innerJoin(chatTurns, eq(chatTurns.id, runs.chatTurnId))

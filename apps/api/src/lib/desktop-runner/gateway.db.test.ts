@@ -7760,6 +7760,87 @@ describe("undoing the file changes made since a message", () => {
     await desktop.close();
   });
 
+  test("asking again for an undo already sent answers that undo while a turn runs or the computer is away", async () => {
+    const { desktopId, desktop } = await connected();
+    const threadId = await newThread();
+    const { turnId } = await finishedTurn(desktop, desktopId, { threadId });
+    const undo = await accepted(threadId, turnId);
+    await desktop.receive("folder.restore");
+    const sent = { restoreId: undo.restoreId, state: "sent", reason: null };
+
+    const running = await newTurn(threadId);
+    expect(await accepted(threadId, turnId)).toEqual(sent);
+    await db.delete(chatTurns).where(eq(chatTurns.id, running));
+
+    await desktop.close();
+    expect(await accepted(threadId, turnId)).toEqual(sent);
+    expect(
+      await db
+        .select({ id: desktopRunnerFolderRestores.id })
+        .from(desktopRunnerFolderRestores)
+        .where(eq(desktopRunnerFolderRestores.chatThreadId, threadId)),
+    ).toEqual([{ id: undo.restoreId }]);
+  });
+
+  test("a linked folder another chat's earlier run still worked in after the checkpoint is not undone", async () => {
+    const { desktopId, desktop } = await connected();
+    const threadId = await newThread();
+    const folderId = Bun.randomUUIDv7();
+    const [runner] = await db
+      .select({ deviceJkt: desktopRunners.deviceJkt })
+      .from(desktopRunners)
+      .where(eq(desktopRunners.desktopId, desktopId));
+    // Another chat's run in the same linked folder, started before this
+    // chat's turn.
+    const otherRunId = Bun.randomUUIDv7();
+    const before = new Date(clock.now - MINUTE_MS);
+    await db.insert(desktopRunnerRuns).values({
+      runId: otherRunId,
+      userId: ids.userA1,
+      organizationId: ids.orgA,
+      desktopId,
+      deviceJkt: runner?.deviceJkt ?? panic("the computer has a runner row"),
+      harness: "codex",
+      harnessVersion: HARNESS_VERSION,
+      workspaceIds: [],
+      state: "finished",
+      outcome: "completed",
+      leaseExpiresAt: before,
+      chatThreadId: await newThread(),
+      linkedFolderId: folderId,
+      createdAt: before,
+      updatedAt: before,
+    });
+    const { turnId, runId } = await finishedTurn(desktop, desktopId, {
+      threadId,
+    });
+    await db
+      .update(desktopRunnerRuns)
+      .set({ linkedFolderId: folderId })
+      .where(eq(desktopRunnerRuns.runId, runId));
+    // It ended before this chat's run began: undoing loses none of its work.
+    expect((await read(threadId, turnId))?.files).toEqual({
+      type: "available",
+    });
+
+    // It still worked after this chat's run began, so after its checkpoint.
+    await db
+      .update(desktopRunnerRuns)
+      .set({
+        updatedAt: sql`(select r.created_at from desktop_runner_runs r where r.run_id = ${runId}) + interval '1 millisecond'`,
+      })
+      .where(eq(desktopRunnerRuns.runId, otherRunId));
+    expect((await read(threadId, turnId))?.files).toEqual({
+      type: "unavailable",
+      reason: "folder_shared",
+    });
+    expect(await request(threadId, turnId)).toEqual({
+      type: "refused",
+      reason: "folder_shared",
+    });
+    await desktop.close();
+  });
+
   test("the edit an undo comes with removes the undone answer, and the edited turn is still told", async () => {
     const { desktopId, desktop } = await connected();
     const threadId = await newThread();
