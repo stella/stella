@@ -14,6 +14,7 @@ import {
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { sha256Base64 as hashSha256Base64 } from "@stll/sha256/node";
 
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";
 import {
   copyObject,
@@ -833,6 +834,70 @@ describe("scoped object operations over the S3 wire protocol", () => {
     expect(
       new Uint8Array(await readTenantS3ArrayBuffer({ key, scope, signal })),
     ).toEqual(HELLO_BYTES);
+  });
+
+  test.each(["oversized", "undeclared"] as const)(
+    "%s object lengths are refused through the real tenant client",
+    async (length) => {
+      fake.stop();
+      fake = startFakeS3({
+        readResponse: ({ headers }) => {
+          const responseHeaders = new Headers(headers);
+          if (length === "oversized") {
+            responseHeaders.set(
+              "content-length",
+              String(FILE_SIZE_LIMIT_BYTES.document + 1),
+            );
+          } else {
+            responseHeaders.delete("content-length");
+          }
+          return new Response(
+            new ReadableStream<Uint8Array>({
+              start(controller) {
+                // An open body prevents Bun from deriving a replacement length.
+                controller.enqueue(HELLO_BYTES);
+              },
+            }),
+            { headers: responseHeaders },
+          );
+        },
+      });
+      const key = "org_1/ws_1/document.pdf";
+      const scope = { organizationId: "org_1", workspaceId: "ws_1" };
+      fake.put("stella", key, HELLO_BYTES, "application/pdf");
+      const controller = new AbortController();
+      const failure = await rejectionOf(
+        readTenantS3ArrayBuffer({ key, scope, signal: controller.signal }),
+      );
+
+      expect(failure).toMatchObject({
+        _tag: "S3PresignError",
+        message: "S3 object length does not satisfy the document byte limit",
+      });
+      expect(fake.requests.map(({ method }) => method)).toEqual(["GET"]);
+      expect(controller.signal.aborted).toBe(false);
+    },
+  );
+
+  test("caller cancellation stops a tenant read while the store holds it", async () => {
+    const key = "org_1/ws_1/document.pdf";
+    const scope = { organizationId: "org_1", workspaceId: "ws_1" };
+    fake.put("stella", key, HELLO_BYTES, "application/pdf");
+    const held = fake.holdNext({ method: "GET", keyIncludes: key });
+    const controller = new AbortController();
+    const pending = rejectionOf(
+      readTenantS3ArrayBuffer({ key, scope, signal: controller.signal }),
+    );
+    try {
+      await held.reached;
+      controller.abort(
+        new DOMException("Document read cancelled", "AbortError"),
+      );
+      expect(await pending).toMatchObject({ name: "AbortError" });
+      expect(fake.requests.map(({ method }) => method)).toEqual(["GET"]);
+    } finally {
+      held.release();
+    }
   });
 });
 

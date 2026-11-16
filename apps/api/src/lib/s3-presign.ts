@@ -33,6 +33,7 @@ import { Result, TaggedError } from "better-result";
 
 import { fetchWithTimeout } from "@stll/fetch";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
+import { readCappedBytes } from "@stll/skills/streaming";
 import { Temporal } from "@stll/time";
 
 import { envBase } from "@/api/env-base";
@@ -40,6 +41,7 @@ import { PRIVATE_CACHE_CONTROL } from "@/api/http/cache";
 import { detached } from "@/api/lib/analytics/capture";
 import { contentDisposition } from "@/api/lib/content-disposition";
 import { markContentDeliveryIntent } from "@/api/lib/files/content-delivery";
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { recordReadWork } from "@/api/lib/observability/request-work";
 import {
   isMissingS3ObjectError,
@@ -562,15 +564,40 @@ const DEFAULT_TENANT_S3_OPERATION_HOOKS: TenantS3OperationHooks = {
     return response.ContentLength ?? null;
   },
   readObject: async (client, command, signal) => {
-    const response = await client.send(command, {
-      abortSignal: createTenantS3RequestSignal(signal),
-    });
-    if (!response.Body) {
-      throw new S3PresignError({
-        message: "S3 returned an object without a response body",
+    const operation = new AbortController();
+    try {
+      const response = await client.send(command, {
+        abortSignal: createTenantS3RequestSignal(
+          AbortSignal.any([signal, operation.signal]),
+        ),
       });
+      if (
+        response.ContentLength === undefined ||
+        response.ContentLength > FILE_SIZE_LIMIT_BYTES.document
+      ) {
+        throw new S3PresignError({
+          message: "S3 object length does not satisfy the document byte limit",
+        });
+      }
+      if (!response.Body) {
+        throw new S3PresignError({
+          message: "S3 returned an object without a response body",
+        });
+      }
+      const bytes = await readCappedBytes(
+        response.Body.transformToWebStream(),
+        FILE_SIZE_LIMIT_BYTES.document,
+      );
+      if (bytes === null) {
+        throw new S3PresignError({
+          message: "S3 object body exceeds the document byte limit",
+        });
+      }
+      return bytes;
+    } finally {
+      // Header refusal must close the unread body without aborting its caller.
+      operation.abort();
     }
-    return await response.Body.transformToByteArray();
   },
   writeObject: async (client, command, signal) => {
     await client.send(command, {
