@@ -7,6 +7,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { loadExternalMcpToolsForUser } from "@/api/handlers/chat/tools/external-mcp-tools";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
+import type { ChatTool } from "@/api/lib/chat/chat-tool-types";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import type { LoadedMcpConnection } from "@/api/lib/mcp-upstream/connections";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
@@ -54,7 +55,7 @@ const stubSafeDb = (() => {
 
 type FakeMcpClient = {
   close: ReturnType<typeof mock<() => Promise<void>>>;
-  tools: ReturnType<typeof mock<() => Promise<never[]>>>;
+  tools: ReturnType<typeof mock<() => Promise<ChatTool[]>>>;
 };
 
 const buildRow = (): LoadedMcpConnection => ({
@@ -284,7 +285,18 @@ describe("loadExternalMcpToolsForUser across connectors", () => {
         } else {
           secondStarted.resolve(undefined);
         }
-        return asMcpClient(buildFakeClient());
+        return asMcpClient(
+          buildFakeClient({
+            tools: mock(async (): Promise<ChatTool[]> => [
+              {
+                name: "lookup",
+                description: "Look up one record",
+                __toolSide: "server",
+                inputSchema: { type: "object", properties: {} },
+              },
+            ]),
+          }),
+        );
       },
     );
 
@@ -299,6 +311,13 @@ describe("loadExternalMcpToolsForUser across connectors", () => {
       "first",
       "second",
     ]);
+    const names = ["mcp__first__lookup", "mcp__second__lookup"];
+    expect(Object.keys(loaded.tools)).toEqual(names);
+    const sourceTools = await loaded.source.tools();
+    expect(sourceTools.map((tool) => tool.name)).toEqual(names);
+    for (const tool of sourceTools) {
+      expect(tool).toBe(loaded.tools[tool.name]);
+    }
     await loaded.close();
   });
 });
