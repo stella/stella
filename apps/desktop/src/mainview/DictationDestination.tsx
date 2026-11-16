@@ -117,13 +117,18 @@ export const DictationDestination = ({
   const selectedModel =
     offered === null
       ? null
-      : (offered.models.find(({ id }) => id === cloudModel)?.id ??
-        offered.defaultModelId ??
-        offered.models[0]?.id ??
+      : // A model whose provider keeps the audio is shown only once picked,
+        // never as the fallback for a missing or stale choice.
+        (offered.models.find(({ id }) => id === cloudModel)?.id ??
+        offered.models.find(
+          ({ id, retainsData }) =>
+            id === offered.defaultModelId && retainsData !== true,
+        )?.id ??
+        offered.models.find(({ retainsData }) => retainsData !== true)?.id ??
         null);
 
   const modelChoice =
-    destination === "cloud" && offered !== null && selectedModel !== null
+    destination === "cloud" && offered !== null && offered.models.length > 0
       ? { models: offered.models, selected: selectedModel }
       : null;
   const chosen =
@@ -227,7 +232,7 @@ export const DictationDestination = ({
               aria-labelledby="dictation-cloud-model-label"
               className="w-64"
             >
-              <SelectValue />
+              <SelectValue placeholder={t("chooseModel")} />
             </SelectTrigger>
             <SelectPopup>
               {modelChoice.models.map((model) => (

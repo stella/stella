@@ -625,6 +625,7 @@
       "unavailableProvider": "Your organization’s AI provider does not offer transcription.",
       "unavailable": "stella AI transcription is unavailable right now.",
       "model": "Transcription model",
+      "chooseModel": "Choose a model",
       "outsideRegion": "Outside your region",
       "outsideRegionNote": "This model processes audio outside your organization’s region.",
       "retainsData": "Keeps your audio",

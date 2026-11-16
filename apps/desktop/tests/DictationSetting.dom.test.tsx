@@ -604,6 +604,38 @@ test("a model whose provider keeps the audio is labeled and warned about when ch
   );
 });
 
+test("a model whose provider keeps the audio is never shown as the fallback", async () => {
+  const view = await renderSetting(
+    {
+      ...ENABLED_SNAPSHOT,
+      cloudAvailable: true,
+      cloudModel: null,
+      destination: "cloud",
+    },
+    (command) =>
+      command === "dictation_get_cloud_models"
+        ? {
+            defaultModelId: null,
+            models: [
+              {
+                displayName: "Scribe v3",
+                id: "elevenlabs-direct/scribe-v3",
+                outsideRegion: false,
+                provider: "ElevenLabs",
+                retainsData: true,
+              },
+            ],
+            unavailable: null,
+          }
+        : undefined,
+  );
+  const { destination } = defaultMessages.dictation;
+  await waitFor(() => {
+    expect(view.getByText(destination.chooseModel)).toBeTruthy();
+  });
+  expect(view.queryByRole("alert")).toBeNull();
+});
+
 test("a model in the region adds no note", async () => {
   const { getByText, queryByText } = await renderSetting(
     { ...ENABLED_SNAPSHOT, cloudAvailable: true, destination: "cloud" },

@@ -625,6 +625,7 @@
       "unavailableProvider": "Teie organisatsiooni tehisintellekti teenusepakkuja ei paku kõne teisendamist.",
       "unavailable": "stella AI teisendamine pole praegu saadaval.",
       "model": "Teisendusmudel",
+      "chooseModel": "Valige mudel",
       "outsideRegion": "Väljaspool teie piirkonda",
       "outsideRegionNote": "See mudel töötleb heli väljaspool teie organisatsiooni piirkonda.",
       "retainsData": "Säilitab teie heli",

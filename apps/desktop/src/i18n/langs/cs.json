@@ -625,6 +625,7 @@
       "unavailableProvider": "Poskytovatel AI vaší organizace převod řeči nenabízí.",
       "unavailable": "Převod pomocí stella AI teď není k dispozici.",
       "model": "Model převodu",
+      "chooseModel": "Zvolte model",
       "outsideRegion": "Mimo váš region",
       "outsideRegionNote": "Tento model zpracovává zvuk mimo region vaší organizace.",
       "retainsData": "Uchovává váš zvuk",

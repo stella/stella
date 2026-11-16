@@ -625,6 +625,7 @@
       "unavailableProvider": "A szervezete AI-szolgáltatója nem kínál átírást.",
       "unavailable": "A stella AI átírás most nem érhető el.",
       "model": "Átírási modell",
+      "chooseModel": "Válasszon modellt",
       "outsideRegion": "A régióján kívül",
       "outsideRegionNote": "Ez a modell a szervezete régióján kívül dolgozza fel a hangot.",
       "retainsData": "Megőrzi a hangfelvételt",

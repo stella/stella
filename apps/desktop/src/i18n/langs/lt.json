@@ -625,6 +625,7 @@
       "unavailableProvider": "Jūsų organizacijos DI paslaugų teikėjas nesiūlo kalbos pavertimo tekstu.",
       "unavailable": "Pavertimas naudojant stella AI šiuo metu nepasiekiamas.",
       "model": "Pavertimo modelis",
+      "chooseModel": "Pasirinkite modelį",
       "outsideRegion": "Už jūsų regiono ribų",
       "outsideRegionNote": "Šis modelis garsą apdoroja už jūsų organizacijos regiono ribų.",
       "retainsData": "Saugo jūsų garsą",

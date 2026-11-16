@@ -625,6 +625,7 @@
       "unavailableProvider": "Der KI-Anbieter Ihrer Organisation bietet keine Umwandlung an.",
       "unavailable": "Die Umwandlung mit stella AI ist gerade nicht verfügbar.",
       "model": "Umwandlungsmodell",
+      "chooseModel": "Wählen Sie ein Modell",
       "outsideRegion": "Außerhalb Ihrer Region",
       "outsideRegionNote": "Dieses Modell verarbeitet Audio außerhalb der Region Ihrer Organisation.",
       "retainsData": "Speichert Ihre Aufnahmen",

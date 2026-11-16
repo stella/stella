@@ -625,6 +625,7 @@
       "unavailableProvider": "Dostawca AI Twojej organizacji nie oferuje przetwarzania mowy.",
       "unavailable": "Przetwarzanie przez stella AI jest teraz niedostępne.",
       "model": "Model przetwarzania",
+      "chooseModel": "Wybierz model",
       "outsideRegion": "Poza Twoim regionem",
       "outsideRegionNote": "Ten model przetwarza dźwięk poza regionem Twojej organizacji.",
       "retainsData": "Przechowuje Twój dźwięk",

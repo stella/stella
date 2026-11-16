@@ -625,6 +625,7 @@
       "unavailableProvider": "Jūsu organizācijas MI pakalpojumu sniedzējs nepiedāvā runas pārvēršanu tekstā.",
       "unavailable": "Pārvēršana ar stella AI pašlaik nav pieejama.",
       "model": "Pārvēršanas modelis",
+      "chooseModel": "Izvēlieties modeli",
       "outsideRegion": "Ārpus jūsu reģiona",
       "outsideRegionNote": "Šis modelis apstrādā audio ārpus jūsu organizācijas reģiona.",
       "retainsData": "Saglabā jūsu audio",

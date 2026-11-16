@@ -423,11 +423,25 @@ pub fn choose_model(
       replaces_stored: false,
     });
   }
+  // Never falls back to a model whose provider keeps the audio: that one is
+  // used only once picked where its warning shows.
+  let without_warning = |model_id: &str| {
+    offered
+      .models
+      .iter()
+      .any(|model| model.id == model_id && !model.retains_data)
+  };
   offered
     .default_model_id
     .as_deref()
-    .filter(|default| offered.offers(default))
-    .or_else(|| offered.models.first().map(|model| model.id.as_str()))
+    .filter(|default| without_warning(default))
+    .or_else(|| {
+      offered
+        .models
+        .iter()
+        .find(|model| !model.retains_data)
+        .map(|model| model.id.as_str())
+    })
     .map(|model_id| ModelChoice {
       model_id: model_id.to_string(),
       replaces_stored: true,
@@ -911,6 +925,29 @@ mod tests {
       unavailable: Some("region".to_string()),
     };
     assert_eq!(choose_model(Some("retired/model"), &none), None);
+  }
+
+  #[test]
+  fn a_model_that_keeps_audio_is_used_only_once_picked() {
+    let mut offered = models_fixture(None);
+    for model in &mut offered.models {
+      model.retains_data = model.id == "mistralai/voxtral-mini-transcribe";
+    }
+    assert_eq!(
+      choose_model(None, &offered).map(|choice| choice.model_id),
+      Some("openai/whisper-large-v3".to_string())
+    );
+    assert_eq!(
+      choose_model(Some("mistralai/voxtral-mini-transcribe"), &offered),
+      Some(ModelChoice {
+        model_id: "mistralai/voxtral-mini-transcribe".to_string(),
+        replaces_stored: false,
+      })
+    );
+    for model in &mut offered.models {
+      model.retains_data = true;
+    }
+    assert_eq!(choose_model(Some("retired/model"), &offered), None);
   }
 
   #[tokio::test]
