@@ -77,6 +77,18 @@ export const ChatQueueList = (props: ChatQueueListProps) => {
   );
 };
 
+/**
+ * Whether queued message `id` is in the queue read now. A failed read
+ * answers false: the message stays counted as the phone's own hand-off.
+ */
+const stillQueued = async (
+  request: Parameters<typeof readChatQueue>[0],
+  id: string,
+): Promise<boolean> => {
+  const queue = await readChatQueue(request);
+  return Result.isOk(queue) && queue.value.items.some((item) => item.id === id);
+};
+
 const LoadedQueue = ({
   load,
   onEdit,
@@ -207,7 +219,12 @@ const LoadedQueue = ({
               text,
             }));
           if (steered) {
-            // Taken: the server removed it from the queue.
+            // Taken: the server removed it at the revision the turn was
+            // handed. One edited since stays queued, and when the server
+            // later sends it, that is a turn this phone did not start.
+            if (await stillQueued(request, item.id)) {
+              removedHere.current.delete(item.id);
+            }
             changed("chatQueues");
             return;
           }
