@@ -1,0 +1,22 @@
+{
+  "id": "no-adhoc-outcome-screen",
+  "rules": ["no-adhoc-outcome-screen/no-adhoc-outcome-screen"],
+  "type": "changed-lines",
+  "expiresAt": "2026-11-23T00:00:00.000Z",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "no-adhoc-outcome-screen/no-adhoc-outcome-screen",
+    "apps/web/src",
+    "apps/desktop/src",
+    "packages/ui/src",
+    "packages/cli/src",
+    "apps/api/src"
+  ]
+}

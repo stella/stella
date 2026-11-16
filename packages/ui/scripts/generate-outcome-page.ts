@@ -115,14 +115,16 @@ export const outcomePageCss = async (
     ].join("\n"),
     {
       base: REPO_ROOT,
-      loadStylesheet: (id, base) =>
-        id === "tailwindcss/theme.css"
-          ? Promise.resolve({
-              path: tailwindThemePath,
-              base,
-              content: tailwindTheme,
-            })
-          : panic(`The outcome page imports an unexpected sheet: ${id}`),
+      loadStylesheet: async (id, base) => {
+        if (id !== "tailwindcss/theme.css") {
+          return panic(`The outcome page imports an unexpected sheet: ${id}`);
+        }
+        return {
+          path: tailwindThemePath,
+          base,
+          content: await readFile(tailwindThemePath, "utf-8"),
+        };
+      },
     },
   );
   const utilities = compiler.build(markups.flatMap(classesOf));

@@ -9,5 +9,8 @@
     ".claude/mcp/**/*.ts",
     "apps/web/scripts/**/*.ts",
     "packages/*/scripts/**/*.ts"
-  ]
+  ],
+  // @stll/ui's scripts render its components, so its own project (JSX and the
+  // DOM library) checks them; its tsconfig.json includes the whole package.
+  "exclude": ["packages/ui/scripts"]
 }

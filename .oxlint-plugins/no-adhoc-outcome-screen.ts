@@ -205,8 +205,8 @@ const isWholeRender = (node: AstNode): boolean => {
 // A frame that is the whole render and holds a page title, an optional
 // description and at most one way on: the shape every hand-built outcome card
 // took.
-const isMessageCard = (frame: AstNode): boolean => {
-  if (!isWholeRender(frame) || hasChildrenSlot(frame)) {
+const isMessageCard = (frame: unknown): boolean => {
+  if (!isAstNode(frame) || !isWholeRender(frame) || hasChildrenSlot(frame)) {
     return false;
   }
   const names = jsxElementsUnder(frame).map(elementName);
