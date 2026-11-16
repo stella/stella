@@ -577,8 +577,23 @@ const readTenantObjectBody = async ({
       }),
     );
   }
+  const body: ReadableStream<unknown> = Body.transformToWebStream();
   const bytes = await readCappedBytes(
-    Body.transformToWebStream(),
+    body.pipeThrough(
+      new TransformStream<unknown, Uint8Array>({
+        transform(chunk, controller) {
+          if (chunk instanceof Uint8Array) {
+            controller.enqueue(chunk);
+          } else {
+            controller.error(
+              new S3PresignError({
+                message: "S3 returned an invalid response chunk",
+              }),
+            );
+          }
+        },
+      }),
+    ),
     FILE_SIZE_LIMIT_BYTES.document,
   );
   return bytes === null
