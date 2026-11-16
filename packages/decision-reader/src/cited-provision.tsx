@@ -1,5 +1,5 @@
-import { useState } from "react";
-import type { KeyboardEvent, MouseEventHandler, ReactNode } from "react";
+import { useId, useState } from "react";
+import type { MouseEventHandler, ReactNode } from "react";
 
 import { panic } from "better-result";
 
@@ -8,6 +8,8 @@ import type { StatuteAnchorScheme } from "@stll/legal-ast/statute-anchor-scheme"
 import { paragraphFromPreview } from "@stll/legal-ast/statute-list";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { ChevronRightIcon } from "@stll/ui/icons";
 import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
@@ -479,6 +481,7 @@ export const CitedProvisionExpansion = ({
   placement = "inline",
 }: CitedProvisionExpansionProps) => {
   const [expanded, setExpanded] = useState(false);
+  const contentId = useId();
   const messages = useReaderMessages();
   const first = citations.at(0) ?? panic("A provision card without citations");
   const statuteAnchors = statuteAnchorSchemeFor(first.document.country);
@@ -493,46 +496,49 @@ export const CitedProvisionExpansion = ({
     passage.blocks.length > 0;
   const extent = placement === "gutter" && !expanded ? "glimpse" : "all";
   const toggleExpanded = () => setExpanded((current) => !current);
-  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    // A key pressed on a control inside the card belongs to that control:
-    // only the card's own focus toggles it.
-    if (event.target !== event.currentTarget) {
-      return;
-    }
-    if (event.key !== "Enter" && event.key !== " ") {
-      return;
-    }
-    event.preventDefault();
-    toggleExpanded();
-  };
 
   return (
     <ReaderInsetBox
-      aria-expanded={expanded}
       className={cn(
         PROVISION_CARD_GROUP,
-        "flex cursor-pointer flex-col gap-1.5",
+        "flex flex-col gap-1.5",
         placement === "inline" ? "my-2" : "w-full",
       )}
       data-reader-chrome=""
       data-placement={placement}
       data-slot="provision-card"
       density="compact"
-      onClick={toggleExpanded}
-      onKeyDown={onKeyDown}
-      role="button"
-      tabIndex={0}
     >
-      <ProvisionCardHeader
-        actionPresence={PEEK_ACTION_PRESENCE.revealOnCard}
-        label={label}
-        provision={first}
-      />
+      <div className="flex min-w-0 items-center gap-1.5">
+        <Button
+          aria-controls={contentId}
+          aria-expanded={expanded}
+          aria-label={label}
+          data-slot="provision-card-trigger"
+          onClick={toggleExpanded}
+          size="icon-xs"
+          variant="ghost"
+        >
+          <DirectionalIcon
+            className={cn(expanded && "rotate-90")}
+            flip={!expanded}
+            icon={ChevronRightIcon}
+          />
+        </Button>
+        <div className="min-w-0 flex-1">
+          <ProvisionCardHeader
+            actionPresence={PEEK_ACTION_PRESENCE.revealOnCard}
+            label={label}
+            provision={first}
+          />
+        </div>
+      </div>
       <div
         className={cn(
           "contents",
           !expanded && placement === "inline" && "hidden",
         )}
+        id={contentId}
       >
         <span className={cn("contents", !expanded && "hidden")}>
           <ProvisionTrailLine
