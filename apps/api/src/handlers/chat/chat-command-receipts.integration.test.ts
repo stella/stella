@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 
 import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
 import {
@@ -18,7 +18,15 @@ import {
 import { createScopedDb } from "@/api/db/scoped";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { createApprovalHarness } from "@/api/tests/helpers/chat-approval-harness";
+import { DueSlot } from "@/api/lib/scheduler/due-slot";
+import { sweepChatCommandReceipts } from "@/api/lib/scheduler/tasks/chat-command-receipt-retention";
+import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
+import {
+  APPROVAL_TOOL_NAME,
+  approvalToolArguments,
+  createApprovalHarness,
+  pendingApprovalCallOf,
+} from "@/api/tests/helpers/chat-approval-harness";
 import type { ChatHarness } from "@/api/tests/helpers/chat-approval-harness";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
@@ -241,6 +249,122 @@ describe("a send retried under its command id", () => {
           .from(chatCommandReceipts)
           .where(eq(chatCommandReceipts.threadId, threadId)),
       ).toEqual([]);
+    } finally {
+      await harness.close();
+    }
+  });
+});
+
+describe("an answer retried under its command id", () => {
+  test("is answered with the turn it continued and runs the approved tool once", async () => {
+    const harness = createApprovalHarness({ ids, safeDb, scopedDb, testDb });
+    const threadId = newThreadId();
+    const commandId = Bun.randomUUIDv7();
+    const runId = `run-${Bun.randomUUIDv7()}`;
+    try {
+      harness.script(threadId, [
+        {
+          arguments: approvalToolArguments("NDA"),
+          toolCallId: "call-NDA",
+          toolName: APPROVAL_TOOL_NAME,
+          type: "tool-call",
+        },
+      ]);
+      expect(
+        await harness.send(
+          harness.sendContext({
+            message: {
+              id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
+              parts: [{ content: "Delete the NDA", type: "text" }],
+              role: "user",
+            },
+            runId,
+            threadId,
+          }),
+        ),
+      ).toEqual({ status: "streamed" });
+      const awaitingTurnId =
+        (await turnsOf(threadId)).at(0)?.id ?? panic("The send stored no turn");
+      const pending = await harness.lastAssistant(threadId);
+      const call = pendingApprovalCallOf(pending.parts);
+      /** The member's approval as their client sends it, under one id. */
+      const approval = () => {
+        const ctx = harness.approveContext({
+          call,
+          interruptedRunId: runId,
+          messageId: pending.id,
+          parts: pending.parts,
+          threadId,
+        });
+        Object.assign(ctx.headers, { [CHAT_COMMAND_ID_HEADER]: commandId });
+        return ctx;
+      };
+
+      harness.script(threadId, [
+        { finishReason: "stop", text: "The NDA is deleted.", type: "text" },
+      ]);
+      expect(await harness.send(approval())).toEqual({ status: "streamed" });
+      expect(harness.executions).toEqual(["NDA"]);
+      expect(await receiptOf(commandId)).toEqual([
+        { commandType: "answer", threadId, turnId: awaitingTurnId },
+      ]);
+      const turnsAnswered = await turnsOf(threadId);
+
+      const retry = approval();
+      expect(await harness.send(retry)).toEqual(replayed);
+      expect(retry.set.headers[CHAT_TURN_ID_HEADER]).toBe(awaitingTurnId);
+      // The tool ran once and the thread holds no other turn.
+      expect(harness.executions).toEqual(["NDA"]);
+      expect(await turnsOf(threadId)).toEqual(turnsAnswered);
+    } finally {
+      await harness.close();
+    }
+  });
+});
+
+describe("the receipt sweep", () => {
+  test("deletes receipts older than a day and keeps newer ones", async () => {
+    const harness = createApprovalHarness({ ids, safeDb, scopedDb, testDb });
+    const expiredId = Bun.randomUUIDv7();
+    const keptId = Bun.randomUUIDv7();
+    try {
+      for (const commandId of [expiredId, keptId]) {
+        const threadId = newThreadId();
+        harness.script(threadId, [
+          { finishReason: "stop", text: "It runs for a year.", type: "text" },
+        ]);
+        expect(
+          await harness.send(
+            commandSend({
+              commandId,
+              harness,
+              messageId: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
+              threadId,
+            }),
+          ),
+        ).toEqual({ status: "streamed" });
+      }
+      // The sweep runs a day and an hour after the expired receipt was
+      // accepted, and an hour after the kept one.
+      const acceptedAt = (commandId: string, at: string) =>
+        testDb
+          .update(chatCommandReceipts)
+          .set({ acceptedAt: sql`${at}::timestamptz` })
+          .where(eq(chatCommandReceipts.commandId, commandId));
+      await acceptedAt(expiredId, "2026-01-01T00:00:00Z");
+      await acceptedAt(keptId, "2026-01-02T00:00:00Z");
+
+      await sweepChatCommandReceipts(
+        asTestRaw<SchedulerTaskContext>({
+          db: testDb,
+          dueAt: DueSlot.of({ nextRunAt: new Date("2026-01-02T01:00:00Z") }),
+          logger: { info: () => undefined },
+          signal: new AbortController().signal,
+        }),
+      );
+
+      expect(await receiptOf(expiredId)).toEqual([]);
+      expect(await receiptOf(keptId)).toHaveLength(1);
     } finally {
       await harness.close();
     }
