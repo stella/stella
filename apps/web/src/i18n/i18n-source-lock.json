@@ -4438,6 +4438,7 @@
   "organization.matterNumber.showInTitleDescription": "When this is off, the title is exactly the name you entered.",
   "organization.matterNumber.title": "Matter numbering",
   "organization.matterNumber.tokenHelp": "Available tokens: '{'SEQ'}' (sequence), '{'YYYY'}' (year), '{'YY'}' (2-digit year), '{'MM'}' (month)",
+  "organization.members.billingAccess": "Billing visibility",
   "organization.members.changeRole": "Change role",
   "organization.members.changeRoleDescription": "Update the role for {email}",
   "organization.members.confirmRoleChangeDescription": "{email}'s role will change from {oldRole} to {newRole}.",

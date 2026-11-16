@@ -294,6 +294,18 @@ export const chatKeys = {
     ...chatKeys.backgroundTaskCounts(activeOrganizationId, userId),
     threadId,
   ],
+  /** Every chat queue of the reader, for one refresh. */
+  queues: (activeOrganizationId: string, userId: string) => [
+    ...chatKeys.all,
+    activeOrganizationId,
+    userId,
+    "queue",
+  ],
+  /** The messages the reader queued in one thread, and what holds them. */
+  queue: (activeOrganizationId: string, userId: string, threadId: string) => [
+    ...chatKeys.queues(activeOrganizationId, userId),
+    threadId,
+  ],
   /** Every stored step of one thread, as a fork's copy completes them. */
   localRunStepOutputs: ({
     activeOrganizationId,

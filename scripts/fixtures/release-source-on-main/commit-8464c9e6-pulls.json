@@ -1,0 +1,23 @@
+[
+  {
+    "number": 7578,
+    "title": "chore: release v0.9.72",
+    "state": "closed",
+    "merged_at": "2026-10-30T19:48:09Z",
+    "merge_commit_sha": "34036ec80f5ca121ee0bb000462df0b0afb3a070",
+    "head": {
+      "ref": "release/v0.9.72",
+      "sha": "8464c9e631150b801530dc854a7155d209f66e33",
+      "repo": {
+        "full_name": "stella/stella"
+      }
+    },
+    "base": {
+      "ref": "main",
+      "sha": "71851b2ab8374b6240a895faa7525a8b1956f860",
+      "repo": {
+        "full_name": "stella/stella"
+      }
+    }
+  }
+]

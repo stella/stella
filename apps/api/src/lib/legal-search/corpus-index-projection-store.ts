@@ -16,13 +16,16 @@ import { isUuid } from "@stll/uuid-codec";
 
 import type { Transaction } from "@/api/db/root";
 import {
+  corpusIndexGenerations,
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import {
   corpusProjectionReservationQueue,
+  type CorpusProjectionReservationQueueKey,
   lockCorpusProjectionAcceptedRows,
+  lockCorpusProjectionIntentsById,
   lockCorpusProjectionOfflineRequest,
 } from "@/api/lib/db/aggregate-lock";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
@@ -35,6 +38,7 @@ import {
 import {
   CORPUS_INDEX_APPEND_CANCEL_REASON,
   CORPUS_INDEX_OFFLINE_REQUEST_MAX_REVISIONS,
+  type CorpusIndexAppendFault,
   type CorpusIndexIntentStatus,
   type CorpusIndexProjectionAppendMode,
   type CorpusIndexProjectionFailureKind,
@@ -45,6 +49,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import {
   CORPUS_PROJECTION_APPEND_MAX_REVISIONS,
+  CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
   type CorpusProjectionPresenceCensus,
   type CorpusProjectionPresenceProof,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
@@ -57,7 +62,10 @@ import {
   corpusProjectionOfflineRequestLeaseFloor,
   corpusProjectionUnrecordedAppendCleanupFence,
 } from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
-import { lockCorpusIndexProjectionMutationsTx } from "@/api/lib/legal-search/corpus-index-projection-revision";
+import {
+  lockCorpusIndexProjectionMutationsTx,
+  lockCorpusIndexProjectionWriterTx,
+} from "@/api/lib/legal-search/corpus-index-projection-revision";
 import {
   CORPUS_PROJECTION_GENERATION_SCOPE,
   type CorpusProjectionAppendScopedWorkOptions,
@@ -154,6 +162,80 @@ export const reserveCorpusProjectionIntentsTx = async <
   Family extends CorpusFamily,
 >(
   tx: Transaction,
+  options: ReserveCorpusProjectionIntentsOptions<Family>,
+): Promise<CorpusProjectionIntentLease[]> =>
+  (await reserveFromQueueTx(tx, options, { after: null, batchableOnly: false }))
+    .leases;
+
+type ReserveCorpusProjectionRoutePageOptions<Family extends CorpusFamily> =
+  Omit<ReserveCorpusProjectionIntentsOptions<Family>, "scope"> & {
+    indexId: string;
+    /** The previous page's `cursor`, or null to walk from the queue's head. */
+    after: CorpusProjectionReservationQueueKey | null;
+  };
+
+export type CorpusProjectionRoutePage = {
+  type: "page";
+  leases: CorpusProjectionIntentLease[];
+  /**
+   * The last queue position this page read, whether or not it reserved it;
+   * the next page starts after it. Null only when the walk has read nothing
+   * yet. A page that read nothing returns the cursor it was given.
+   */
+  cursor: CorpusProjectionReservationQueueKey | null;
+  /** The page read fewer candidates than its limit: the walk is at its end. */
+  exhausted: boolean;
+};
+
+/**
+ * One page of a walk over one route's reservation queue, for a producer that
+ * reserves many pages in a row. The reservation is the per-row path's own
+ * (same queue, same per-entity claim, same leases); the page only starts
+ * after the previous page's last position, so reserved and unproven entities
+ * at the head of the queue are not read again on every page. Correctness
+ * still rests on the claim, not the cursor: a state whose position moves
+ * behind the cursor is left to the per-row path, which owns completeness.
+ * Only batchable entities are taken; one isolated into single requests stays
+ * with the per-row path.
+ */
+export const reserveCorpusProjectionRoutePageTx = async <
+  Family extends CorpusFamily,
+>(
+  tx: Transaction,
+  {
+    indexId,
+    after,
+    ...options
+  }: ReserveCorpusProjectionRoutePageOptions<Family>,
+): Promise<CorpusProjectionRoutePage | { type: "generation_not_building" }> => {
+  // The queue admits a serving generation too; a route build reserves only
+  // while its generation is still building. The status is read under the
+  // projection mutation fence the reservation itself holds: a promotion takes
+  // that fence exclusively, so it either committed before this read or waits
+  // for the reservation to commit.
+  await lockCorpusIndexProjectionWriterTx(tx);
+  const [generationRow] = await tx
+    .select({ status: corpusIndexGenerations.status })
+    .from(corpusIndexGenerations)
+    .where(
+      and(
+        eq(corpusIndexGenerations.family, options.family),
+        eq(corpusIndexGenerations.generation, options.generation),
+      ),
+    )
+    .limit(1);
+  if (generationRow?.status !== "building") {
+    return { type: "generation_not_building" };
+  }
+  return await reserveFromQueueTx(
+    tx,
+    { ...options, scope: { type: "route", indexId } },
+    { after, batchableOnly: true },
+  );
+};
+
+const reserveFromQueueTx = async <Family extends CorpusFamily>(
+  tx: Transaction,
   {
     family,
     generation,
@@ -164,7 +246,15 @@ export const reserveCorpusProjectionIntentsTx = async <
     newIntentId = () => createSafeId<"corpusIndexProjectionIntent">(),
     newLeaseToken = () => Bun.randomUUIDv7(),
   }: ReserveCorpusProjectionIntentsOptions<Family>,
-): Promise<CorpusProjectionIntentLease[]> => {
+  {
+    after,
+    batchableOnly,
+  }: {
+    after: CorpusProjectionReservationQueueKey | null;
+    batchableOnly: boolean;
+  },
+): Promise<CorpusProjectionRoutePage> => {
+  // audit: skip - reservation bookkeeping on the derived public corpus projection
   const limit = validateBatchSize(requestedLimit);
   const leaseMs = validateLeaseMs(requestedLeaseMs);
   const scopedEntityIds = entityIdsForCorpusProjectionWorkScope(scope);
@@ -176,7 +266,7 @@ export const reserveCorpusProjectionIntentsTx = async <
   const scopedIndexId = indexIdForCorpusProjectionWorkScope(scope, manifest);
   const excludedIndexIds = await unattestedCorpusIndexIdsTx(tx, manifest);
   if (scopedIndexId !== null && excludedIndexIds.includes(scopedIndexId)) {
-    return [];
+    return { type: "page", leases: [], cursor: after, exhausted: true };
   }
   const eligibilityAt = testNow ?? (await readPostgresClock(tx));
   const candidates = await corpusProjectionReservationQueue(tx, {
@@ -187,10 +277,18 @@ export const reserveCorpusProjectionIntentsTx = async <
     scopedEntityIds,
     scopedIndexId,
     excludedIndexIds,
+    after,
+    batchableOnly,
   });
 
+  const last = candidates.at(-1);
+  const cursor =
+    last === undefined
+      ? after
+      : { runnableAt: last.runnableAt, entityId: last.entityId };
+  const exhausted = candidates.length < limit;
   if (candidates.length === 0) {
-    return [];
+    return { type: "page", leases: [], cursor, exhausted };
   }
   const leaseExpiresAt =
     testNow === undefined
@@ -284,7 +382,7 @@ export const reserveCorpusProjectionIntentsTx = async <
       appendMode: reservation.appendMode,
     });
   }
-  return leases;
+  return { type: "page", leases, cursor, exhausted };
 };
 
 /**
@@ -758,9 +856,10 @@ const deliveredTogetherTx = async (
  * keeps its run from publishing is alone after at most floor(log2 N)
  * withdrawals from a request of N, where a withdrawal is charged like any
  * isolated document fault and blocks the entity at the attempt limit: at
- * most floor(log2 N) + 5 deliveries, 18 for a request of 8192. A refused or
- * killed run of many entities leaves each of them in requests of half the
- * size, still batched.
+ * most floor(log2 N) + 5 deliveries, 18 for a request of 8192. A killed run
+ * of many entities, or one that failed on what its file held, leaves each of
+ * them in requests of half the size, still batched; a refused, undelivered or
+ * crashed one says nothing about its documents and halves nothing.
  */
 const corpusProjectionOfflineRequestCap = (
   fewestDeliveredWithdrawn: number | null,
@@ -771,8 +870,9 @@ const corpusProjectionOfflineRequestCap = (
 
 /**
  * Each lease's request cap (`corpusProjectionOfflineRequestCap`), from the
- * withdrawn revisions of its entity at its epoch and the number each one's
- * request actually delivered. Those rows are history, so the cap survives
+ * withdrawn revisions of its entity at its epoch whose delivery could have
+ * failed on its documents, and the number each one's request actually
+ * delivered. Those rows are history, so the cap survives
  * any crash, and the lease is the entity's only outstanding revision, so it
  * cannot shrink while the lease is held.
  */
@@ -807,6 +907,12 @@ export const readCorpusProjectionOfflineRequestCapsTx = async (
           ...new Set(leases.map(({ entityId }) => entityId)),
         ]),
         eq(corpusIndexProjectionIntents.status, "withdrawn"),
+        // A withdrawal whose delivery said nothing about its documents (a
+        // refusal, a crash, a failure outside the indexer) halves nothing.
+        inArray(corpusIndexProjectionIntents.appendFault, [
+          "documents",
+          "killed",
+        ]),
       ),
     );
   const delivered = await readOfflineDeliveredCountsTx(
@@ -1533,6 +1639,14 @@ type AcceptedProjectionAppend = {
 type RecordAcceptedCorpusProjectionAppendsOptions = {
   /** Revisions of one index whose append the engine accepted. */
   accepted: readonly AcceptedProjectionAppend[];
+  /**
+   * How every revision of the batch travelled; each must have started so.
+   * An offline record states what a failure of its revisions is charged to
+   * (`CORPUS_INDEX_APPEND_FAULTS`), stored with the commit for any prover.
+   */
+  delivery:
+    | { type: "ingest_api" }
+    | { type: "offline_indexer"; fault: CorpusIndexAppendFault };
   testNow?: Date | undefined;
 };
 
@@ -1640,7 +1754,7 @@ const validateAcceptedBatch = (intentIds: readonly ProjectionIntentId[]) => {
  */
 export const recordAcceptedCorpusProjectionAppendsTx = async (
   tx: Transaction,
-  { accepted, testNow }: RecordAcceptedCorpusProjectionAppendsOptions,
+  { accepted, delivery, testNow }: RecordAcceptedCorpusProjectionAppendsOptions,
 ): Promise<RecordedCorpusProjectionAppend[]> => {
   // audit: skip - append bookkeeping on the derived public corpus projection
   validateAcceptedBatch(accepted.map(({ intentId }) => intentId));
@@ -1667,6 +1781,11 @@ export const recordAcceptedCorpusProjectionAppendsTx = async (
       intent.leaseToken !== leaseToken
     ) {
       return { status: "lease_lost", intentId, documentCount } as const;
+    }
+    if (intent.appendDelivery !== delivery.type) {
+      return panic(
+        `Projection append recorded as ${delivery.type} started as ${intent.appendDelivery}: ${intent.id}`,
+      );
     }
     if (
       intent.appendDelivery === "offline_indexer" &&
@@ -1754,6 +1873,8 @@ export const recordAcceptedCorpusProjectionAppendsTx = async (
           () => sql`${STALE_ACCEPTED_APPEND_MESSAGE}`,
           sql`${corpusIndexProjectionIntents.lastError}`,
         ),
+        appendFault:
+          delivery.type === "offline_indexer" ? delivery.fault : null,
         updatedAt: transitionAt,
       })
       .where(
@@ -2036,6 +2157,31 @@ const censusFollowsOfflineEnd = (
   );
 };
 
+/**
+ * Whether a failure of this revision may be charged to its documents: always
+ * for an ingest revision, whose request's own outcome decides, and for an
+ * offline one only when its commit recorded that the indexer ran to its own
+ * verdict (`CORPUS_INDEX_APPEND_FAULTS`).
+ */
+const offlineFaultIsDocuments = (intent: CommittedIntentRow): boolean => {
+  if (intent.appendDelivery !== "offline_indexer") {
+    return true;
+  }
+  const fault =
+    intent.appendFault ??
+    panic(`Committed offline projection intent has no fault: ${intent.id}`);
+  switch (fault) {
+    case "documents":
+      return true;
+    case "killed":
+    case "none":
+      return false;
+    default:
+      fault satisfies never;
+      return panic(`Unhandled append fault: ${String(fault)}`);
+  }
+};
+
 const committedBarrierOf = (intent: CommittedIntentRow) =>
   intent.appendPublishBarrierAt ??
   panic(`Committed projection intent has no barrier: ${intent.id}`);
@@ -2116,15 +2262,18 @@ const decideUnprovenRevision = (
       appendRequestRevisionCount: deliveredTogether,
       transitionAt,
       rejection,
-      fault,
+      // An offline revision's commit stored what its failure costs: only a
+      // delivery the indexer ran to its own verdict charges the documents.
+      fault: offlineFaultIsDocuments(committed) ? fault : "engine",
     });
   // Nothing of the revision reached the index and nothing can any more, so no
   // delete is owed, and no maturity waited for: the entity may be reserved
-  // again once its retry is due. An empty run cannot tell a refused or killed
-  // delivery from a revision at fault, so a withdrawal from a request of
-  // several revisions charges no one and keeps the entity batched; its next
-  // request is capped instead (`corpusProjectionOfflineRequestCap`). Alone in
-  // its request, it is a document fault like any other. A state that moved on
+  // again once its retry is due. An empty run of several revisions cannot say
+  // which, if any, was at fault, so such a withdrawal charges no one and keeps
+  // the entity batched; its next request is capped instead
+  // (`corpusProjectionOfflineRequestCap`). Alone in a request its indexer ran
+  // to a verdict, it is a document fault like any other; one whose delivery
+  // says nothing about its documents is never charged. A state that moved on
   // has nothing to retry.
   if (offlineFinal && revision.observedDocumentCount === 0) {
     const isolated = deliveredTogether === 1;
@@ -2410,6 +2559,93 @@ export const readProvableCorpusProjectionAppendsTx = async <
   };
 };
 
+type ReadCommittedCorpusProjectionRevisionsOptions = {
+  family: CorpusFamily;
+  generation: string;
+  indexId: string;
+  /** The revisions a caller wrote and wants decided, at most one census. */
+  revisions: readonly ProjectionIntentId[];
+  testNow?: Date | undefined;
+};
+
+export type CommittedCorpusProjectionRevisions = {
+  /** Committed and past their barrier: what one census may decide now. */
+  provable: { revision: ProjectionIntentId; documentCount: number }[];
+  /** Committed, with a barrier still ahead. */
+  unpublished: ProjectionIntentId[];
+  /** No longer committed: decided, erased or recovered by another actor. */
+  settled: ProjectionIntentId[];
+  /** Read before the revisions, so before any census of them. */
+  censusStart: CorpusProjectionCensusStart;
+};
+
+/**
+ * The state of revisions a caller names, for a proof of exactly those: the
+ * offline build proves the revisions it delivered rather than whichever the
+ * index's oldest barriers name. Plain reads, like the proof cycle's: the
+ * proof transaction re-checks each revision under its locks.
+ */
+export const readCommittedCorpusProjectionRevisionsTx = async (
+  tx: Transaction,
+  {
+    family,
+    generation,
+    indexId,
+    revisions,
+    testNow,
+  }: ReadCommittedCorpusProjectionRevisionsOptions,
+): Promise<CommittedCorpusProjectionRevisions> => {
+  if (
+    revisions.length === 0 ||
+    revisions.length > CORPUS_PROJECTION_DELETE_MAX_REVISIONS ||
+    new Set(revisions).size !== revisions.length
+  ) {
+    return panic(
+      `A committed revision read must name 1 to ${CORPUS_PROJECTION_DELETE_MAX_REVISIONS} unique revisions`,
+    );
+  }
+  const censusStart = new CorpusProjectionCensusStart(
+    CENSUS_START_CONSTRUCTION,
+    testNow ?? (await readPostgresClock(tx)),
+  );
+  const rows = await tx
+    .select({
+      revision: corpusIndexProjectionIntents.id,
+      documentCount: corpusIndexProjectionIntents.expectedDocumentCount,
+      published: sql<boolean>`${corpusIndexProjectionIntents.appendPublishBarrierAt} <= ${censusStart.at}::timestamptz`,
+    })
+    .from(corpusIndexProjectionIntents)
+    .where(
+      and(
+        inArray(corpusIndexProjectionIntents.id, [...revisions]),
+        eq(corpusIndexProjectionIntents.family, family),
+        eq(corpusIndexProjectionIntents.generation, generation),
+        eq(corpusIndexProjectionIntents.indexId, indexId),
+        eq(corpusIndexProjectionIntents.status, "append_committed"),
+      ),
+    )
+    .orderBy(asc(corpusIndexProjectionIntents.id))
+    .limit(revisions.length);
+  const committed = new Set(rows.map(({ revision }) => revision));
+  return {
+    provable: rows
+      .filter(({ published }) => published)
+      .map(({ revision, documentCount }) => ({
+        revision,
+        documentCount:
+          documentCount ??
+          panic(
+            `Committed projection intent has no document count: ${revision}`,
+          ),
+      })),
+    unpublished: rows
+      .filter(({ published }) => !published)
+      .map(({ revision }) => revision),
+    settled: revisions.filter((revision) => !committed.has(revision)),
+    censusStart,
+  };
+};
+
 type ProofTransition = Exclude<ProofDecision, { type: "settled" }>;
 
 type WriteCorpusProjectionProofTransitionsOptions = {
@@ -2681,45 +2917,55 @@ const chargeGivenUpRevisionsTx = async (
   }
 };
 
-type CancelCorpusProjectionReservationOptions = {
-  intentId: ProjectionIntentId;
-  leaseToken: string;
-  testNow?: Date;
-  errorMessage?: string;
+type CancelCorpusProjectionReservationsOptions = {
+  /** Reservations of one generation, at most one store batch. */
+  leases: readonly Pick<
+    CorpusProjectionIntentLease,
+    "intentId" | "leaseToken" | "family" | "generation"
+  >[];
+  errorMessage: string;
+  testNow?: Date | undefined;
 };
 
-export const cancelCorpusProjectionReservationTx = async (
+/**
+ * Cancel many reservations of one generation in one statement, under the
+ * same locks the single-row cancel takes: the generation's mutation lock,
+ * then the intent rows in id order. A reservation whose lease moved on is
+ * counted as lost, not touched.
+ */
+export const cancelCorpusProjectionReservationsTx = async (
   tx: Transaction,
-  {
-    intentId,
-    leaseToken,
-    testNow,
-    errorMessage,
-  }: CancelCorpusProjectionReservationOptions,
-): Promise<"cancelled" | "lease_lost"> => {
-  const identities = await tx
-    .select({
-      family: corpusIndexProjectionIntents.family,
-      generation: corpusIndexProjectionIntents.generation,
-    })
-    .from(corpusIndexProjectionIntents)
-    .where(eq(corpusIndexProjectionIntents.id, intentId))
-    .limit(1);
-  const identity = identities.at(0);
-  if (identity === undefined) {
-    return "lease_lost";
+  { leases, errorMessage, testNow }: CancelCorpusProjectionReservationsOptions,
+): Promise<{ cancelled: number; leaseLost: number }> => {
+  // audit: skip - reservation bookkeeping on the derived public corpus projection
+  const first = leases.at(0);
+  if (first === undefined) {
+    return { cancelled: 0, leaseLost: 0 };
   }
-  await lockCorpusIndexProjectionMutationsTx(tx, [identity]);
-  const locked = await tx
-    .select({ id: corpusIndexProjectionIntents.id })
-    .from(corpusIndexProjectionIntents)
-    .where(eq(corpusIndexProjectionIntents.id, intentId))
-    .limit(1)
-    .for("update");
-  if (locked.length === 0) {
-    return "lease_lost";
+  if (
+    leases.length > CORPUS_PROJECTION_STORE_MAX_BATCH_SIZE ||
+    leases.some(
+      ({ family, generation }) =>
+        family !== first.family || generation !== first.generation,
+    ) ||
+    new Set(leases.map(({ intentId }) => intentId)).size !== leases.length
+  ) {
+    return panic(
+      "A reservation cancel names one generation's unique leases, at most one store batch",
+    );
   }
+  await lockCorpusIndexProjectionMutationsTx(tx, [first]);
+  await lockCorpusProjectionIntentsById(
+    tx,
+    leases.map(({ intentId }) => intentId),
+  );
   const transitionAt = testNow ?? sql<Date>`clock_timestamp()`;
+  const leased = sql.join(
+    leases.map(
+      ({ intentId, leaseToken }) => sql`(${intentId}::uuid, ${leaseToken})`,
+    ),
+    sql`, `,
+  );
   const rows = await tx
     .update(corpusIndexProjectionIntents)
     .set({
@@ -2727,18 +2973,17 @@ export const cancelCorpusProjectionReservationTx = async (
       leaseToken: null,
       leaseExpiresAt: null,
       cancelledAt: transitionAt,
-      lastError: errorMessage?.slice(0, 2048),
+      lastError: errorMessage.slice(0, 2048),
       updatedAt: transitionAt,
     })
     .where(
       and(
-        eq(corpusIndexProjectionIntents.id, intentId),
         eq(corpusIndexProjectionIntents.status, "reserved"),
-        eq(corpusIndexProjectionIntents.leaseToken, leaseToken),
+        sql`(${corpusIndexProjectionIntents.id}, ${corpusIndexProjectionIntents.leaseToken}) IN (${leased})`,
       ),
     )
     .returning({ id: corpusIndexProjectionIntents.id });
-  return rows.length === 1 ? "cancelled" : "lease_lost";
+  return { cancelled: rows.length, leaseLost: leases.length - rows.length };
 };
 
 export type CorpusProjectionReservationFailure =

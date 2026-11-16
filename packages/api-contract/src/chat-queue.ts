@@ -60,6 +60,25 @@ export type ChatQueueErrorCode =
   (typeof CHAT_QUEUE_ERROR_CODE)[keyof typeof CHAT_QUEUE_ERROR_CODE];
 
 /**
+ * Why the server refused a member's new message without storing anything of
+ * it. A plain send never replaces a turn and never jumps the queue: the
+ * client queues the message instead (`POST .../queue`, same message id), so
+ * it goes once what is ahead of it is done. Replacing a turn that waits on
+ * the member stays an explicit action: Send now on a queued message.
+ */
+export const CHAT_SEND_QUEUES_INSTEAD_CODE = {
+  /** A turn of the thread still runs. */
+  turnRunning: "chat_turn_running",
+  /** A turn of the thread waits on the member: a question, an approval. */
+  turnAwaitingMember: "chat_turn_awaiting_member",
+  /** Messages are queued in the thread and nothing holds them: they go first. */
+  queuedAhead: "chat_queued_ahead",
+} as const;
+
+export type ChatSendQueuesInsteadCode =
+  (typeof CHAT_SEND_QUEUES_INSTEAD_CODE)[keyof typeof CHAT_SEND_QUEUES_INSTEAD_CODE];
+
+/**
  * Why sending a queued message as the member was refused before anything of
  * it was stored, when the refusal is not one of the send's own codes.
  */

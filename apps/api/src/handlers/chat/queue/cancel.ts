@@ -10,6 +10,7 @@ import {
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { announceChatQueueChange } from "@/api/lib/chat/chat-queue-announcement";
 import { ringChatQueue } from "@/api/lib/chat/chat-queue-doorbell";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { removeQueuedChatMessageOnTx } from "@/api/lib/db/chat-queue-gate";
@@ -69,6 +70,10 @@ const cancelQueuedChatMessage = createSafeRootHandler(
     switch (outcome.type) {
       case "removed":
       case "not-found":
+        announceChatQueueChange({
+          organizationId: session.activeOrganizationId,
+          userId: user.id,
+        });
         // Removing the head, or the last message with its hold, may let
         // the queue go.
         ringChatQueue(threadId);

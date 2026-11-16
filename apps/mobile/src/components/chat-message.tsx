@@ -86,6 +86,8 @@ export const ChatMessage = ({
             );
           case "subagent":
             return <AnswerSubagent block={block} key={block.key} />;
+          case "steered":
+            return <SteeredMessage key={block.key} text={block.text} />;
           default:
             block satisfies never;
             return panic("Unhandled answer block");
@@ -116,6 +118,20 @@ const FailedAnswer = ({
           {t("resend")}
         </Button>
       )}
+    </View>
+  );
+};
+
+/**
+ * A message the person sent while a coding agent worked, inside the answer
+ * where the agent took it, as their own words rather than a step.
+ */
+const SteeredMessage = ({ text }: { text: string }) => {
+  const t = useTranslations("chat");
+  return (
+    <View className="bg-secondary gap-1 rounded-lg px-2.5 py-2">
+      <Text variant="caption">{t("localRun.steered")}</Text>
+      <Text>{text}</Text>
     </View>
   );
 };

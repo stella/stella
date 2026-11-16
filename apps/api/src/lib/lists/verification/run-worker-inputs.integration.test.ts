@@ -20,6 +20,8 @@ import {
 } from "bun:test";
 import { eq } from "drizzle-orm";
 
+import { createTestState } from "@stll/test-state";
+
 import { member, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { legalListVerificationRuns, workspaceMembers } from "@/api/db/schema";
@@ -37,11 +39,12 @@ import {
   releaseRlsFixture,
 } from "@/api/tests/security/rls-fixture";
 
+const testState = createTestState({ file: import.meta.path, config: env });
+
 setDefaultTimeout(120_000);
 
 const { testDb, ids } = await getRlsFixture();
-const previousGrants = env.API_FEATURE_ACCESS_GRANTS;
-const previousDeployment = env.FEATURE_LEGAL_LISTS;
+
 const database = asTestRaw<RlsDatabase<Transaction>>(testDb);
 
 const originalOrganizationMember = (
@@ -88,11 +91,11 @@ const readRun = async () =>
 
 beforeEach(async () => {
   readSpy = spyOn(documentText, "readVerificationDocument");
-  env.FEATURE_LEGAL_LISTS = true;
-  env.API_FEATURE_ACCESS_GRANTS = {
+  testState.setConfig("FEATURE_LEGAL_LISTS", true);
+  testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
     "legal-lists": [{ type: "organization", organizationId: ids.orgA }],
     "list-verification": [{ type: "organization", organizationId: ids.orgA }],
-  };
+  });
   await testDb
     .update(user)
     .set({ emailVerified: true })
@@ -134,8 +137,6 @@ afterEach(async () => {
 });
 
 afterAll(async () => {
-  env.API_FEATURE_ACCESS_GRANTS = previousGrants;
-  env.FEATURE_LEGAL_LISTS = previousDeployment;
   readSpy.mockRestore();
   await releaseRlsFixture();
 });

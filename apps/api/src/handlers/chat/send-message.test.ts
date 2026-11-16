@@ -9,6 +9,7 @@ import {
   CHAT_MESSAGE_EMPTY_ERROR_CODE,
   CHAT_TURN_INTENT,
 } from "@stll/api-contract";
+import { CHAT_SEND_QUEUES_INSTEAD_CODE } from "@stll/api-contract/chat-queue";
 import {
   LEGAL_HOLD_ACTIVE,
   LEGAL_HOLD_REASON_ISSUE_CODE,
@@ -2033,7 +2034,10 @@ describe("send message turn persistence", () => {
 
     expect(result).toEqual({
       code: 409,
-      response: { message: "A chat turn is already running" },
+      response: {
+        code: CHAT_SEND_QUEUES_INSTEAD_CODE.turnRunning,
+        message: "A chat turn is already running",
+      },
     });
     expect(compactionCheckpointReads).toBe(HISTORY_WINDOW_CHECKPOINT_READS);
     expect(rollbackUnpersistedChatSideEffectsMock).toHaveBeenCalledWith(

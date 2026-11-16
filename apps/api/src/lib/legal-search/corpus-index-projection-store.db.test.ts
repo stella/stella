@@ -164,6 +164,7 @@ const acceptAndProveAppend = async (
           documentCount: 1,
         },
       ],
+      delivery: { type: "ingest_api" },
       testNow,
     })
   ).at(0);

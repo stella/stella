@@ -1,6 +1,8 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { createTestState } from "@stll/test-state";
+
 import { env } from "@/api/env";
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -12,6 +14,8 @@ import {
   matchesFolioCollabSnapshotCut,
   writeFolioCollabCheckpointObject,
 } from "./checkpoint-folio-collab-room";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 describe("folio collaboration checkpoint snapshot cut", () => {
   const materialized = {
@@ -79,7 +83,7 @@ describe("folio collaboration checkpoint storage", () => {
       const priorFlag = env.FEATURE_FILE_USAGE_LIMITS;
       const priorWorkerFlag =
         envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS;
-      env.FEATURE_FILE_USAGE_LIMITS = true;
+      testState.setConfig("FEATURE_FILE_USAGE_LIMITS", true);
       envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = true;
       try {
         const written = await writeFolioCollabCheckpointObject({
@@ -95,7 +99,7 @@ describe("folio collaboration checkpoint storage", () => {
         }
         expect(written.error).toMatchObject({ status: expectedStatus });
       } finally {
-        env.FEATURE_FILE_USAGE_LIMITS = priorFlag;
+        testState.setConfig("FEATURE_FILE_USAGE_LIMITS", priorFlag);
         envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = priorWorkerFlag;
       }
     },

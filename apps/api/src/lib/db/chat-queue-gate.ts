@@ -18,6 +18,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { replayWrite } from "@/api/lib/case-law/replay-write";
 import { ACTIVE_CHAT_TURN_STATUSES } from "@/api/lib/chat/turn-status";
 import { lockChatThreadForTurnOnTx } from "@/api/lib/db/aggregate-lock";
+import { executedRows } from "@/api/lib/db/executed-rows";
+import { isRecord } from "@/api/lib/type-guards";
 
 /**
  * When a thread's queue may send, and the writes that keep it consistent
@@ -209,6 +211,67 @@ export const releaseChatQueueOnTx = async ({
 }): Promise<void> => {
   // audit: skip — releasing a hold changes no stored content; the send or resume that released it is the record
   await tx.delete(chatQueueHolds).where(eq(chatQueueHolds.threadId, threadId));
+};
+
+/**
+ * Whether a member's new message may start a turn now: `admitted`, or why it
+ * waits. A plain message never replaces a turn that waits on the member, and
+ * never goes ahead of messages queued before it that nothing holds (the queue
+ * sends those as soon as the thread is free). A held queue does not stop it:
+ * the member's message is their next word, so it releases the hold and the
+ * queue waits behind its turn.
+ */
+export type MemberMessageAdmission =
+  "admitted" | "turn-awaiting-member" | "queued-ahead";
+
+/**
+ * Admit a member's new message, releasing a held queue in the same statement
+ * when it is admitted. The caller holds the thread lock and has refused a
+ * running turn; a refusal changes nothing.
+ */
+export const admitMemberMessageOnTx = async ({
+  threadId,
+  tx,
+}: {
+  threadId: SafeId<"chatThread">;
+  tx: Transaction;
+}): Promise<MemberMessageAdmission> => {
+  // One statement on the send path: the waiting turn is read once, the hold
+  // is released only when no turn waits, and a queue the statement did not
+  // release was not held.
+  // audit: skip — releasing a hold changes no stored content; the message it admits is audited in this transaction
+  const row = executedRows(
+    await tx.execute(sql`
+      WITH awaiting AS (
+        SELECT EXISTS (
+          SELECT 1 FROM ${chatTurns}
+          WHERE ${chatTurns.threadId} = ${threadId}
+            AND ${chatTurns.status} = 'awaiting-user'
+        ) AS yes
+      ), released AS (
+        DELETE FROM ${chatQueueHolds}
+        WHERE ${chatQueueHolds.threadId} = ${threadId}
+          AND NOT (SELECT yes FROM awaiting)
+        RETURNING ${chatQueueHolds.threadId}
+      )
+      SELECT
+        (SELECT yes FROM awaiting) AS awaiting,
+        EXISTS (SELECT 1 FROM released) AS released,
+        EXISTS (
+          SELECT 1 FROM ${chatQueuedMessages}
+          WHERE ${chatQueuedMessages.threadId} = ${threadId}
+        ) AS queued
+    `),
+  ).at(0);
+  if (!isRecord(row)) {
+    return panic("The member message admission returned no row");
+  }
+  if (row["awaiting"] === true) {
+    return "turn-awaiting-member";
+  }
+  return row["queued"] === true && row["released"] !== true
+    ? "queued-ahead"
+    : "admitted";
 };
 
 /** The next queued message, as stored. */

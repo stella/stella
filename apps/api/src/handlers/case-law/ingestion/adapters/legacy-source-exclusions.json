@@ -79,24 +79,5 @@
   "cz-us": {
     "Název soudu": "the publisher naming itself; the deciding court is resolved from the record's own ECLI, because this database also republishes other courts' decisions",
     "URL adresa": "the retrieval address of the document the row already stores as sourceUrl"
-  },
-  "pl-ncourt": {
-    "excerpt": "the opening characters of the document the document part holds whole",
-    "xPart@xml:space": "a serialisation directive for the XML, not a statement about the judgment"
-  },
-  "pl-kis": {
-    "POZIOM_DOSTEPU_WYBRANEJ_TRESCI": "which of the service's editor groups may see a part of the document; it says nothing about the document",
-    "informacja/id": "the same id ID_INFORMACJI states, which keys the row",
-    "informacja/nazwa": "the category's name, which KATEGORIA_INFORMACJI states",
-    "informacja/informacjaTytulDto": "an empty list on every document observed; the title is TEZA"
-  },
-  "pl-uodo": {
-    "type": "the record format's own name; every record the search returns carries the same value",
-    "version": "the version of the record format, not a fact about the document"
-  },
-  "pl-uokik": {
-    "listing.@position": "the row's place in a view that shifts with every decision published; the crawl reads it, the row does not keep it",
-    "listing.@siblings": "the view's size, the same on every row; the total probe reads it",
-    "listing.entrydata": "the column container; each value in it is declared below"
   }
 }

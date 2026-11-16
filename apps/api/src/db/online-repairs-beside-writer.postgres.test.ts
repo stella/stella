@@ -61,6 +61,8 @@ const EXTERNAL_REF_VALUES = "'fixture', 'external-1', 'change-1', now()";
 const SITEMAP_ENROLLMENT = "case-law-sitemap-packing-enrollment";
 /** A Czech VAT number in the legacy tax_id column; synthetic. */
 const VAT_ID = "CZ12345678";
+/** An offline revision committed with the fault its record stores. */
+const OFFLINE_COMMITTED_INTENT_INSERT = `INSERT INTO corpus_index_projection_intents (id, family, generation, entity_id, epoch, fingerprint, index_id, status, append_started_at, append_committed_at, append_publish_barrier_at, append_delivery, append_request_id, append_request_revision_count, expected_document_count, append_fault) VALUES ('${ID}', 'case_law', 'case_law_v1', '${ID_2}', 1, repeat('a', 64), 'i', 'append_committed', now(), now(), now(), 'offline_indexer', '${ID_3}', 1, 1, 'none')`;
 const READER_ANNOTATION_INSERT = `INSERT INTO legal_reader_annotations (id, organization_id, user_id, target_type, target_id, kind, visibility, color, style, block_anchor_id, start_offset, end_offset, quote) VALUES ('${ID}', 'org', 'user', 'statute', '${ID_2}', 'highlight', 'private', 'yellow', 'highlight', 'p-1', 0, 5, 'words')`;
 
 if (enabled && templateDatabase === undefined) {
@@ -466,6 +468,16 @@ const SEEDS = {
     },
     writerLock: { id: ID, table: "corpus_index_projection_intents" },
   },
+  corpus_index_projection_intents_append_fault_values: noRowSeed(
+    "corpus_index_projection_intents",
+    "corpus_index_projection_intents_append_fault_values",
+    OFFLINE_COMMITTED_INTENT_INSERT,
+  ),
+  corpus_index_projection_intents_append_fault_shape: noRowSeed(
+    "corpus_index_projection_intents",
+    "corpus_index_projection_intents_append_fault_shape",
+    OFFLINE_COMMITTED_INTENT_INSERT,
+  ),
   "entity-feature-row-gates": {
     kind: "row-work",
     assertPending: async (client, id) => {

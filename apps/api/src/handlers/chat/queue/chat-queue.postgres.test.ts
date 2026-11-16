@@ -37,6 +37,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import { ACTIVE_CHAT_TURN_STATUSES } from "@/api/lib/chat/turn-status";
 import {
+  admitMemberMessageOnTx,
   holdChatQueueOnTx,
   holdDueChatQueueOnTx,
   releaseChatQueueOnTx,
@@ -94,6 +95,14 @@ const sendOf = (id: SafeId<"chatMessage">, text: string): QueuedChatSend => ({
   sendMode: "anonymized",
   message: { id, role: "user", parts: [{ type: "text", content: text }] },
 });
+
+/** The model's answer to a member's new message on a thread no turn runs. */
+const expectedAdmission = (model: Model) => {
+  if (model.turn === "awaiting-user") {
+    return "turn-awaiting-member";
+  }
+  return model.queue.length > 0 && !model.held ? "queued-ahead" : "admitted";
+};
 
 type TerminalOutcome = Exclude<ChatTurnOutcome["type"], "awaiting-user">;
 
@@ -597,23 +606,33 @@ const suite = (
         });
         model.held = false;
         return;
-      case "member-send":
-        if (ACTIVE.has(model.turn)) {
+      case "member-send": {
+        // A turn that runs refuses it before admission (`turn-running`).
+        if (model.turn === "accepted" || model.turn === "running") {
           return;
         }
-        // A member's own send releases the queue, as acceptance does.
-        await withLock(threadId, owner, async (tx) => {
-          await releaseChatQueueOnTx({ threadId, tx });
-          await acceptTurnOnTx({
-            messageId: createSafeId<"chatMessage">(),
-            owner,
-            threadId,
-            tx,
-          });
+        // A member's new message never replaces a turn waiting on them and
+        // never goes ahead of a queue nothing holds; admitted, it releases
+        // a held queue, as acceptance does.
+        const admission = await withLock(threadId, owner, async (tx) => {
+          const admitted = await admitMemberMessageOnTx({ threadId, tx });
+          if (admitted === "admitted") {
+            await acceptTurnOnTx({
+              messageId: createSafeId<"chatMessage">(),
+              owner,
+              threadId,
+              tx,
+            });
+          }
+          return admitted;
         });
-        model.held = false;
-        model.turn = "accepted";
+        expect(admission).toBe(expectedAdmission(model));
+        if (admission === "admitted") {
+          model.held = false;
+          model.turn = "accepted";
+        }
         return;
+      }
       case "run":
         if (model.turn !== "accepted") {
           return;

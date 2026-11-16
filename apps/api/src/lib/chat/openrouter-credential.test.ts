@@ -239,108 +239,71 @@ const createHarness = ({
   };
 };
 
-const originalWifEnvironment = () => ({
-  OPENROUTER_API_KEY: env.OPENROUTER_API_KEY,
-  OPENROUTER_FAST_TIER_API_KEY: env.OPENROUTER_FAST_TIER_API_KEY,
-  OPENROUTER_FAST_TIER_WIF_POLICY_ID: env.OPENROUTER_FAST_TIER_WIF_POLICY_ID,
-  OPENROUTER_WIF_POLICY_ID: env.OPENROUTER_WIF_POLICY_ID,
-  OPENROUTER_WIF_AUDIENCE: env.OPENROUTER_WIF_AUDIENCE,
-  OPENROUTER_WIF_STS_REGION: env.OPENROUTER_WIF_STS_REGION,
-});
-
-const restoreWifEnvironment = (
-  previous: ReturnType<typeof originalWifEnvironment>,
-) => {
-  env.OPENROUTER_API_KEY = previous.OPENROUTER_API_KEY;
-  testState.setConfig(
-    "OPENROUTER_FAST_TIER_API_KEY",
-    previous.OPENROUTER_FAST_TIER_API_KEY,
-  );
-  testState.setConfig(
-    "OPENROUTER_FAST_TIER_WIF_POLICY_ID",
-    previous.OPENROUTER_FAST_TIER_WIF_POLICY_ID,
-  );
-  env.OPENROUTER_WIF_POLICY_ID = previous.OPENROUTER_WIF_POLICY_ID;
-  env.OPENROUTER_WIF_AUDIENCE = previous.OPENROUTER_WIF_AUDIENCE;
-  env.OPENROUTER_WIF_STS_REGION = previous.OPENROUTER_WIF_STS_REGION;
-};
-
 describe("managed OpenRouter credentials", () => {
   test("static credentials win over WIF and unavailable configuration refuses", async () => {
-    const previous = originalWifEnvironment();
-    env.OPENROUTER_API_KEY = "fixture-static-key";
-    env.OPENROUTER_WIF_POLICY_ID = POLICY_ID;
+    testState.setConfig("OPENROUTER_API_KEY", "fixture-static-key");
+    testState.setConfig("OPENROUTER_WIF_POLICY_ID", POLICY_ID);
     testState.setConfig("OPENROUTER_WIF_AUDIENCE", AUDIENCE);
     testState.setConfig("OPENROUTER_WIF_STS_REGION", REGION);
-    try {
-      const harness = createHarness({
+
+    const harness = createHarness({
+      configuration: () =>
+        getManagedOpenRouterConfiguration(MANAGED_MODEL_TIER.standard),
+    });
+    const staticResult = await harness.provider.get();
+    expect(staticResult).toEqual(Result.ok("fixture-static-key"));
+    expect(harness.stsClients).toBe(0);
+    expect(harness.exchangeCalls).toBe(0);
+
+    testState.setConfig("OPENROUTER_API_KEY", undefined);
+    testState.setConfig("OPENROUTER_WIF_POLICY_ID", undefined);
+    testState.setConfig("OPENROUTER_WIF_AUDIENCE", undefined);
+    testState.setConfig("OPENROUTER_WIF_STS_REGION", undefined);
+    expect(
+      getManagedOpenRouterConfiguration(MANAGED_MODEL_TIER.standard),
+    ).toEqual({
+      type: "unavailable",
+    });
+    managedUnavailable(
+      await createHarness({
         configuration: () =>
           getManagedOpenRouterConfiguration(MANAGED_MODEL_TIER.standard),
-      });
-      const staticResult = await harness.provider.get();
-      expect(staticResult).toEqual(Result.ok("fixture-static-key"));
-      expect(harness.stsClients).toBe(0);
-      expect(harness.exchangeCalls).toBe(0);
-
-      env.OPENROUTER_API_KEY = undefined;
-      env.OPENROUTER_WIF_POLICY_ID = undefined;
-      env.OPENROUTER_WIF_AUDIENCE = undefined;
-      env.OPENROUTER_WIF_STS_REGION = undefined;
-      expect(
-        getManagedOpenRouterConfiguration(MANAGED_MODEL_TIER.standard),
-      ).toEqual({
-        type: "unavailable",
-      });
-      managedUnavailable(
-        await createHarness({
-          configuration: () =>
-            getManagedOpenRouterConfiguration(MANAGED_MODEL_TIER.standard),
-        }).provider.get(),
-      );
-    } finally {
-      restoreWifEnvironment(previous);
-    }
+      }).provider.get(),
+    );
   });
 
   test("keeps fast and standard static credentials isolated", () => {
-    const previous = originalWifEnvironment();
     testState.setConfig("OPENROUTER_API_KEY", "standard-key");
     testState.setConfig("OPENROUTER_FAST_TIER_API_KEY", "fast-key");
-    try {
-      expect(
-        getManagedOpenRouterConfiguration(MANAGED_MODEL_TIER.standard),
-      ).toEqual({ type: "static", apiKey: "standard-key" });
-      expect(
-        getManagedOpenRouterConfiguration(MANAGED_MODEL_TIER.fast),
-      ).toEqual({ type: "static", apiKey: "fast-key" });
 
-      testState.setConfig("OPENROUTER_FAST_TIER_API_KEY", undefined);
-      expect(
-        getManagedOpenRouterConfiguration(MANAGED_MODEL_TIER.fast),
-      ).toEqual({ type: "unavailable" });
-    } finally {
-      restoreWifEnvironment(previous);
-    }
+    expect(
+      getManagedOpenRouterConfiguration(MANAGED_MODEL_TIER.standard),
+    ).toEqual({ type: "static", apiKey: "standard-key" });
+    expect(getManagedOpenRouterConfiguration(MANAGED_MODEL_TIER.fast)).toEqual({
+      type: "static",
+      apiKey: "fast-key",
+    });
+
+    testState.setConfig("OPENROUTER_FAST_TIER_API_KEY", undefined);
+    expect(getManagedOpenRouterConfiguration(MANAGED_MODEL_TIER.fast)).toEqual({
+      type: "unavailable",
+    });
   });
 
   test("selects the tier-specific federation policy", () => {
-    const previous = originalWifEnvironment();
     testState.setConfig("OPENROUTER_API_KEY", undefined);
     testState.setConfig("OPENROUTER_FAST_TIER_API_KEY", undefined);
     testState.setConfig("OPENROUTER_WIF_POLICY_ID", "standard-policy");
     testState.setConfig("OPENROUTER_FAST_TIER_WIF_POLICY_ID", "fast-policy");
     testState.setConfig("OPENROUTER_WIF_AUDIENCE", AUDIENCE);
     testState.setConfig("OPENROUTER_WIF_STS_REGION", REGION);
-    try {
-      expect(
-        getManagedOpenRouterConfiguration(MANAGED_MODEL_TIER.standard),
-      ).toMatchObject({ type: "federated", policyId: "standard-policy" });
-      expect(
-        getManagedOpenRouterConfiguration(MANAGED_MODEL_TIER.fast),
-      ).toMatchObject({ type: "federated", policyId: "fast-policy" });
-    } finally {
-      restoreWifEnvironment(previous);
-    }
+
+    expect(
+      getManagedOpenRouterConfiguration(MANAGED_MODEL_TIER.standard),
+    ).toMatchObject({ type: "federated", policyId: "standard-policy" });
+    expect(
+      getManagedOpenRouterConfiguration(MANAGED_MODEL_TIER.fast),
+    ).toMatchObject({ type: "federated", policyId: "fast-policy" });
   });
 
   test("keeps federated token caches independent between tiers", async () => {
