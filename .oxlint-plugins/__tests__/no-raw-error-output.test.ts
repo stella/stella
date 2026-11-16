@@ -179,3 +179,69 @@ logger.table(error);`,
     ),
   ).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
 });
+
+test("accepts aliased canonical handler telemetry projections through spreads", async () => {
+  expect(
+    await lintSingleRule(
+      "no-raw-error-output",
+      `import { requestErrorStatusFields as status, causeChainAttributes as causes } from "@/api/lib/observability/failure";
+import { shadowFields as shadow } from "@/api/lib/observability/failure-shadow";
+const attributes = { ...status(error), ...causes(error), ...shadow(error) };
+logger.warn("fixture.failed", attributes);`,
+    ),
+  ).toEqual([]);
+});
+
+test("rejects telemetry projection names outside their exact owner binding", async () => {
+  expect(
+    await lintSingleRule(
+      "no-raw-error-output",
+      `import { requestErrorStatusFields, causeChainAttributes, shadowFields } from "./other";
+logger.warn("fixture.failed", { ...requestErrorStatusFields(error) });
+logger.warn("fixture.failed", { ...causeChainAttributes(error) });
+logger.warn("fixture.failed", { ...shadowFields(error) });`,
+    ),
+  ).toEqual([2, 3, 4]);
+  expect(
+    await lintSingleRule(
+      "no-raw-error-output",
+      `import { requestErrorStatusFields } from "@/api/lib/observability/failure";
+const causeChainAttributes = (value) => value;
+const shadowFields = (value) => value;
+function output(requestErrorStatusFields) {
+  logger.warn("fixture.failed", { ...requestErrorStatusFields(error) });
+}
+logger.warn("fixture.failed", { ...causeChainAttributes(error) });
+logger.warn("fixture.failed", { ...shadowFields(error) });`,
+    ),
+  ).toEqual([5, 7, 8]);
+});
+
+test("a canonical projection does not make its raw error sibling safe", async () => {
+  expect(
+    await lintSingleRule(
+      "no-raw-error-output",
+      `import { requestErrorStatusFields as status } from "@/api/lib/observability/failure";
+logger.warn("fixture.failed", { ...status(error), error });`,
+    ),
+  ).toEqual([2]);
+});
+
+test.each([
+  ["failure", "requestErrorStatusFields"],
+  ["failure", "causeChainAttributes"],
+  ["failure-shadow", "shadowFields"],
+] as const)(
+  "does not trust a shadowed local %s/%s projection inside its owner file",
+  async (owner, name) => {
+    expect(
+      await lintSingleRule(
+        "no-raw-error-output",
+        `function output(${name}) {
+  logger.warn("fixture.failed", { ...${name}(error) });
+}`,
+        { sourcePath: `apps/api/src/lib/observability/${owner}.ts` },
+      ),
+    ).toEqual([2]);
+  },
+);
