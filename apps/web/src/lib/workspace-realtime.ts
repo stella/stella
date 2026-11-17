@@ -219,6 +219,16 @@ export const RESOURCE_MUTATION_CONTRACTS = {
     ],
     resources: [RESOURCE_TYPE.INVOICE],
   },
+  revokeInvoiceSend: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/invoices/:workspaceId/:invoiceId/sends/:sendId/revoke",
+      },
+    ],
+    resources: [RESOURCE_TYPE.INVOICE],
+  },
   updateTask: {
     writes: [
       {

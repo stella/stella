@@ -45,6 +45,7 @@ import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
 import { useQueryViewError } from "@/lib/use-query-view";
+import { resourceMutation } from "@/lib/workspace-realtime";
 import {
   invoiceSendsInfiniteOptions,
   invoiceSendsOptions,
@@ -396,14 +397,25 @@ const InvoiceSendRow = ({
     );
 
   const revoke = useMutation({
-    mutationFn: async () =>
-      unwrapApiResponse(
+    mutationFn: resourceMutation({
+      mutation: "revokeInvoiceSend",
+      queryClient,
+      mutationFn: async ({
+        workspaceId: mutationWorkspaceId,
+      }: {
+        workspaceId: string;
+      }) =>
         await invokeCapability("invoices.sends.revoke", async (request) =>
-          invoiceApi({ workspaceId, invoiceId })
-            .sends({ sendId: toSafeId<"invoiceSend">(send.id) })
-            .revoke.post({}, request),
+          unwrapApiResponse(
+            await api
+              .invoices({
+                workspaceId: toSafeId<"workspace">(mutationWorkspaceId),
+              })({ invoiceId: toSafeId<"invoice">(invoiceId) })
+              .sends({ sendId: toSafeId<"invoiceSend">(send.id) })
+              .revoke.post({}, request),
+          ),
         ),
-      ),
+    }),
     onSuccess: async () => {
       stellaToast.add({ type: "success", title: t("revoked") });
       await queryClient.invalidateQueries({
@@ -477,7 +489,7 @@ const InvoiceSendRow = ({
                 <AlertDialogClose
                   render={
                     <Button
-                      onClick={() => revoke.mutate()}
+                      onClick={() => revoke.mutate({ workspaceId })}
                       variant="destructive"
                     />
                   }

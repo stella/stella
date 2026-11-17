@@ -26,6 +26,7 @@ import { APIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { pageTitle, pageTitleLiteral } from "@/lib/page-title";
 import { downloadFile } from "@/lib/utils";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
 
 import {
@@ -72,13 +73,17 @@ export const invoiceLinkViewOptions = (
   token: string | null,
   view: typeof viewInvoice = viewInvoice,
 ) =>
-  queryOptions({
-    queryKey: ["invoice-link", token],
-    enabled: token !== null,
-    retry: false,
-    staleTime: STALE_TIME.ONE.MINUTE,
-    queryFn: async () => (token === null ? null : await view(token)),
-  });
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: ["invoice-link", token],
+      enabled: token !== null,
+      retry: false,
+      staleTime: STALE_TIME.ONE.MINUTE,
+      queryFn: async () => (token === null ? null : await view(token)),
+    }),
+    // A public link reads by its token, outside any member session.
+    { type: "independent" },
+  );
 
 const downloadInvoiceFile = async (
   token: string,

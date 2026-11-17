@@ -83,17 +83,23 @@ export const invoiceSendsOptions = ({
   invoiceId,
   userId,
 }: InvoiceSendsQueryScope) =>
-  queryOptions({
-    queryKey: invoicesKeys.sends({ workspaceId, invoiceId, userId }),
-    staleTime: ROUTE_QUERY_STALE_TIME_MS,
-    queryFn: async ({ signal }) => {
-      const response = await api
-        .invoices({ workspaceId })({ invoiceId })
-        .sends.get({ query: {}, fetch: { signal } });
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: invoicesKeys.sends({ workspaceId, invoiceId, userId }),
+      staleTime: ROUTE_QUERY_STALE_TIME_MS,
+      queryFn: async ({ signal }) => {
+        const response = await api
+          .invoices({ workspaceId })({ invoiceId })
+          .sends.get({ query: {}, fetch: { signal } });
 
-      return unwrapApiResponse(response);
+        return unwrapApiResponse(response);
+      },
+    }),
+    {
+      resources: [RESOURCE_TYPE.INVOICE],
+      scope: { type: "workspace", workspaceId },
     },
-  });
+  );
 
 export type InvoiceSends = Awaited<
   ReturnType<NonNullable<ReturnType<typeof invoiceSendsOptions>["queryFn"]>>
@@ -104,26 +110,32 @@ export const invoiceSendsInfiniteOptions = ({
   invoiceId,
   userId,
 }: InvoiceSendsQueryScope) =>
-  infiniteQueryOptions({
-    queryKey: [
-      ...invoicesKeys.sends({ workspaceId, invoiceId, userId }),
-      "infinite",
-    ],
-    staleTime: ROUTE_QUERY_STALE_TIME_MS,
-    queryFn: async ({ pageParam, signal }) => {
-      const response = await api
-        .invoices({ workspaceId })({ invoiceId })
-        .sends.get({
-          query: pageParam === undefined ? {} : { cursor: pageParam },
-          fetch: { signal },
-        });
+  resourceQueryOptions(
+    infiniteQueryOptions({
+      queryKey: [
+        ...invoicesKeys.sends({ workspaceId, invoiceId, userId }),
+        "infinite",
+      ],
+      staleTime: ROUTE_QUERY_STALE_TIME_MS,
+      queryFn: async ({ pageParam, signal }) => {
+        const response = await api
+          .invoices({ workspaceId })({ invoiceId })
+          .sends.get({
+            query: pageParam === undefined ? {} : { cursor: pageParam },
+            fetch: { signal },
+          });
 
-      return unwrapApiResponse(response);
+        return unwrapApiResponse(response);
+      },
+      initialPageParam: getInitialInvoicesPageParam(),
+      getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+      select: (data) => data.pages.flatMap((page) => page.items),
+    }),
+    {
+      resources: [RESOURCE_TYPE.INVOICE],
+      scope: { type: "workspace", workspaceId },
     },
-    initialPageParam: getInitialInvoicesPageParam(),
-    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
-    select: (data) => data.pages.flatMap((page) => page.items),
-  });
+  );
 
 /**
  * What a new invoice in the matter starts from: unbilled entries and
