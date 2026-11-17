@@ -213,9 +213,14 @@ if (!databaseUrl || !runPostgresTests) {
         await writerWrote.promise;
         // The writer is released only after the retire returns, so a retire
         // that waited for it would never return: the refusal is the proof.
-        expect(await retireOn(retireDb)).toBe("busy:lock_unavailable");
+        // Released whatever happens, so the fixture's cleanup is never held.
+        const whileWriterHolds = await Result.tryPromise({
+          try: async () => await retireOn(retireDb),
+          catch: (cause) => cause,
+        });
         releaseWriter.resolve(undefined);
         const { epoch } = await writer;
+        expect(whileWriterHolds.unwrap()).toBe("busy:lock_unavailable");
         expect((await stateOf(writerDb, subject.entityId))?.desiredEpoch).toBe(
           epoch,
         );

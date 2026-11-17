@@ -1080,4 +1080,31 @@ describe("retire", () => {
     expect(rerun.code).toBe(0);
     expect([...engine.indexes]).toEqual(["case_law_v7_cs_sk"]);
   });
+  test("an engine that cannot list refuses the dry run, and an apply still retires and cleans the history", async () => {
+    await registerRow("case_law_v6", "building");
+    await seedConvergedProjection("case_law_v6");
+    const unlisted: CorpusIndexRetireEngine = {
+      readPublishedSplitCounts: async () =>
+        await Promise.resolve(
+          Result.err(
+            new CorpusIndexError({ message: "search lane down", status: 503 }),
+          ),
+        ),
+      deleteIndex: async () => await Promise.resolve(Result.ok()),
+    };
+    const report = await run({
+      args: caseLaw("retire", "case_law_v6"),
+      retireEngine: unlisted,
+    });
+    expect(report.code).toBe(15);
+    expect(await statusOf("case_law_v6")).toBe("building");
+
+    const applied = await run({
+      args: caseLaw("retire", "case_law_v6", ...APPLY),
+      retireEngine: unlisted,
+    });
+    expect(applied.code).toBe(15);
+    expect(await statusOf("case_law_v6")).toBe("retired");
+    expect(await historyOf("case_law_v6")).toEqual({ states: 0, intents: 0 });
+  });
 });

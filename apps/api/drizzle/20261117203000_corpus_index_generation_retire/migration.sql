@@ -34,15 +34,17 @@ BEGIN
          IS DISTINCT FROM (OLD."retired_at", OLD."retire_actor", OLD."retire_reason") THEN
     RAISE EXCEPTION 'corpus index generation retire receipt is immutable';
   END IF;
+  -- IS NOT TRUE, not NOT: a missing part makes the check null, and a null
+  -- must refuse the receipt too.
   IF OLD."retired_at" IS NULL
      AND (NEW."retired_at" IS NOT NULL OR NEW."retire_actor" IS NOT NULL OR NEW."retire_reason" IS NOT NULL)
-     AND NOT (
+     AND (
        OLD."status" <> 'retired'
        AND NEW."status" = 'retired'
        AND NEW."retired_at" IS NOT NULL
        AND NEW."retire_actor" ~ '^[a-z0-9][a-z0-9:._@/-]*$'
        AND length(btrim(NEW."retire_reason")) > 0
-     ) THEN
+     ) IS NOT TRUE THEN
     RAISE EXCEPTION 'corpus index generation retire receipt is written whole, with the move to retired';
   END IF;
   RETURN NEW;

@@ -1686,33 +1686,45 @@ const applyRetireTransition = async (
     receipt,
   }: RetireCommand & { receipt: { actor: string; reason: string } },
 ): Promise<Result<number | null, CorpusGenerationRefusal>> => {
+  // The lane can run out of time after the retire's transaction ended; the
+  // retire's own answer, kept here, then still says whether it committed.
+  const settled: {
+    value?: Awaited<ReturnType<typeof retireCorpusIndexGeneration>>;
+  } = {};
   const lane = await Result.tryPromise({
     try: async () =>
-      await context.withDatabase(
-        ACCESS.write,
-        async (rootDb) =>
-          await retireCorpusIndexGeneration(
-            async (work) => await withAggregateTransaction(rootDb, work),
-            target,
-            receipt,
-          ),
-      ),
+      await context.withDatabase(ACCESS.write, async (rootDb) => {
+        settled.value = await retireCorpusIndexGeneration(
+          async (work) => await withAggregateTransaction(rootDb, work),
+          target,
+          receipt,
+        );
+        return settled.value;
+      }),
     catch: (cause) => cause,
   });
-  if (lane.isErr()) {
+  if (lane.isOk() && lane.value.isErr()) {
+    return Result.err(lane.value.error);
+  }
+  const retired = settled.value;
+  if (retired === undefined) {
+    if (lane.isOk()) {
+      return panic("The retire lane returned without the retire's answer");
+    }
     const busy = corpusIndexFlipBusyReasonOf(lane.error);
     if (busy === null) {
-      return panic("The retire lane failed", lane.error);
+      return panic("The retire lane failed before the retire ran", lane.error);
     }
     context.writeError(
-      `refused (busy: ${busy}): the lane or the database declined the retire its time; if it committed, running retire again reports it retired`,
+      `refused (busy: ${busy}): the lane or the database declined the retire its time before it ran; nothing changed, retry`,
     );
     return Result.ok(RETIRE_EXIT.busy);
   }
-  if (lane.value.isErr()) {
-    return Result.err(lane.value.error);
+  if (lane.isErr()) {
+    context.writeError(
+      "note: the operator lane's time budget ran out after the retire's transaction ended; its outcome below stands",
+    );
   }
-  const retired = lane.value.value;
   if (retired.isErr()) {
     return retireRefused(context, retired.error);
   }
@@ -1844,20 +1856,25 @@ const runRetire = async (
   });
   if (listed.isErr()) {
     writeError(
-      `refused (engine): the engine did not list the indexes of ${target.generation}: ${listed.error.message}`,
+      `engine: the engine did not list the indexes of ${target.generation}: ${listed.error.message}`,
     );
-    return Result.ok(RETIRE_EXIT.engine);
+    // A dry run stops here. An apply goes on: the retire and the history
+    // need no engine, and the engine step reports its own failure.
+    if (mode === MODES.dryRun || receipt === null) {
+      return Result.ok(RETIRE_EXIT.engine);
+    }
+  } else {
+    write(
+      listed.value.length === 0
+        ? "plan: the engine holds no index of this generation"
+        : `plan: delete ${String(listed.value.length)} engine indexes: ${listed.value
+            .map(
+              ({ indexId, publishedSplits }) =>
+                `${indexId} (${String(publishedSplits)} splits)`,
+            )
+            .join(", ")}`,
+    );
   }
-  write(
-    listed.value.length === 0
-      ? "plan: the engine holds no index of this generation"
-      : `plan: delete ${String(listed.value.length)} engine indexes: ${listed.value
-          .map(
-            ({ indexId, publishedSplits }) =>
-              `${indexId} (${String(publishedSplits)} splits)`,
-          )
-          .join(", ")}`,
-  );
   write(
     `plan: delete its projection history in pages of at most ${String(RETIRE_PAGE_LIMIT)} decisions, under the database-load brake`,
   );
