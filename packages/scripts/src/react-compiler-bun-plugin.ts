@@ -9,6 +9,13 @@ import {
 /** JavaScript and TypeScript modules outside `node_modules`. */
 const SOURCE_FILES = /^(?!.*[/\\]node_modules[/\\]).*\.[jt]sx?$/u;
 
+/**
+ * Test files never ship, so they load as written. Their components close over
+ * the enclosing test's locals, and the compiler outlines such closures to
+ * module scope, where those locals are not defined.
+ */
+const TEST_FILES = /\.test\.[jt]sx?$/u;
+
 const LOADERS = {
   js: "js",
   jsx: "jsx",
@@ -41,7 +48,10 @@ export const reactCompilerBunPlugin = {
     // interop, so the filter itself leaves dependencies to Bun.
     builder.onLoad({ filter: SOURCE_FILES }, async ({ path: filename }) => {
       const source = await Bun.file(filename).text();
-      if (REACT_COMPILER_EXCLUDE.some((pattern) => pattern.test(filename))) {
+      if (
+        TEST_FILES.test(filename) ||
+        REACT_COMPILER_EXCLUDE.some((pattern) => pattern.test(filename))
+      ) {
         return { contents: source, loader: loaderOf(filename) };
       }
       const result = await transform(filename, source, {
