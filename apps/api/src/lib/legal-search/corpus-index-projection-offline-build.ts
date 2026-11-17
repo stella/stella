@@ -492,7 +492,7 @@ export type CorpusProjectionOfflineBuildOutcome = {
  * build slot writes under its own, so this is what a run leaves the searchers
  * to open. `not_read` when the run never held the route.
  */
-export type CorpusProjectionOfflineSplitReceipt =
+type CorpusProjectionOfflineSplitReceipt =
   | { read: "counted"; count: number }
   | { read: "failed"; message: string }
   | { read: "not_read" };

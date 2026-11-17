@@ -363,7 +363,7 @@ type CaseLawDecisionTermsContract = {
   openingPassages: CaseLawOpeningPassageLayout;
 };
 
-export type CaseLawOpeningPassageLayout = "own_splits" | "shared_splits";
+type CaseLawOpeningPassageLayout = "own_splits" | "shared_splits";
 
 /**
  * v10 plus one decision-level field: the decision's terms on its opening

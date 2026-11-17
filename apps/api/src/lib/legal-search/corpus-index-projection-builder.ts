@@ -289,7 +289,7 @@ const rankingSignalFields = (
  * `form` says whether they are stems or surface tokens. Bytes are the UTF-8
  * bytes of the space-joined terms.
  */
-export type CaseLawDecisionTermsOutcome =
+type CaseLawDecisionTermsOutcome =
   | { kind: "not_mapped" }
   | { kind: "whole"; form: DecisionTermsForm; bytes: number }
   | {
