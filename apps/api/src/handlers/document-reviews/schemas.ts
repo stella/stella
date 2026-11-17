@@ -2,7 +2,7 @@ import * as v from "valibot";
 
 import { DOCUMENT_REVIEW_LIMITS } from "@stll/api-contract";
 
-import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { displayNameSchema, resourceIdSchema } from "@/api/lib/custom-schema";
 import {
   REVIEW_PARTY_NAME_MAX_LENGTH,
   REVIEW_PARTY_ROLE_MAX_LENGTH,
@@ -12,6 +12,7 @@ import {
 } from "@/api/lib/document-review/contract";
 import {
   DOCUMENT_REVIEW_APPLICATION_STATUS,
+  DOCUMENT_REVIEW_DECISION_REASON_MAX,
   DOCUMENT_REVIEW_DECISIONS,
   DOCUMENT_REVIEW_FINDING_FLAGS,
   DOCUMENT_REVIEW_FINDING_FLAGS_MAX,
@@ -51,6 +52,16 @@ export const decideReviewFindingBodySchema = v.object({
       v.maxLength(DOCUMENT_REVIEW_FINDING_FLAGS_MAX),
     ),
   ),
+  /** Why the reviewer decided, kept on the decision's history event. Read
+   *  only when the decision changes: a restated decision is no new one. */
+  reason: v.optional(
+    v.pipe(
+      v.string(),
+      v.trim(),
+      v.minLength(1),
+      v.maxLength(DOCUMENT_REVIEW_DECISION_REASON_MAX),
+    ),
+  ),
 });
 
 true satisfies v.InferOutput<
@@ -72,7 +83,10 @@ const reviewPerspectiveSchema = v.union([
       v.maxLength(REVIEW_PARTY_ROLE_MAX_LENGTH),
     ),
     name: v.nullable(
-      v.pipe(v.string(), v.maxLength(REVIEW_PARTY_NAME_MAX_LENGTH)),
+      displayNameSchema({
+        maxLength: REVIEW_PARTY_NAME_MAX_LENGTH,
+        allowEmpty: true,
+      }),
     ),
   }),
 ]);

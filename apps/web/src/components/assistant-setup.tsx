@@ -4,9 +4,10 @@ import { useTranslations } from "use-intl";
 
 import { MCP_HTTP_PATH } from "@stll/api-contract";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { AIProviderIcon } from "@/components/ai-provider-icons";
-import { CopyActionButton } from "@/components/copy-action-button";
+import { CopyControl } from "@/components/copy-control";
 import { externalApiOrigin } from "@/lib/api-origins";
 import { CONNECT_AI_ASSISTANT_DOCS_URL } from "@/lib/consts";
 
@@ -64,18 +65,19 @@ export const AssistantSetup = ({
           {t("agentSetup.addressLabel")}
         </span>
         <div className="bg-muted flex items-center gap-2 rounded-lg py-1 ps-3 pe-1">
-          <code
-            className="text-foreground min-w-0 flex-1 truncate font-mono text-sm"
+          <TruncatedText
+            className="text-foreground flex-1 font-mono text-sm"
             dir="ltr"
+            render={<code />}
           >
             {mcpUrl}
-          </code>
-          <CopyActionButton size="sm" text={mcpUrl} variant="default" />
+          </TruncatedText>
+          <CopyControl size="sm" text={mcpUrl} variant="default" />
         </div>
       </div>
       <div className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
         <span>{t("agentSetup.selfSetupHint")}</span>
-        <CopyActionButton
+        <CopyControl
           label={t("agentSetup.copy")}
           size="xs"
           text={instructions}

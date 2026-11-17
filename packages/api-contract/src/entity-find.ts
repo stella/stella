@@ -25,6 +25,7 @@ export const PROPERTY_CONTENT_TYPES = [
   "int",
   "money",
   "person",
+  "record",
 ] as const;
 
 export type PropertyContentType = (typeof PROPERTY_CONTENT_TYPES)[number];
@@ -52,6 +53,9 @@ export const PROPERTY_FIND_SUPPORT = {
   date: "excluded",
   int: "excluded",
   money: "excluded",
+  // A record renders as a summary of typed values; its projection columns
+  // are the searchable scalars.
+  record: "excluded",
 } as const satisfies Record<PropertyContentType, "searchable" | "excluded">;
 
 export const isFindablePropertyType = (type: PropertyContentType): boolean =>

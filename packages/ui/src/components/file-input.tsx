@@ -6,6 +6,7 @@ import { UploadIcon } from "../icons";
 import { openFilePicker } from "../lib/file-picker";
 import { cn } from "../lib/utils";
 import { Button } from "./button";
+import { TruncatedText } from "./truncated-text";
 
 type FileInputProps = {
   accept?: string | undefined;
@@ -57,12 +58,12 @@ const FileInput = ({
         <UploadIcon aria-hidden="true" />
         {chooseLabel}
       </Button>
-      <span
-        className="text-muted-foreground min-w-0 truncate text-sm"
+      <TruncatedText
+        className="text-muted-foreground text-sm"
         data-slot="file-input-name"
       >
         {file ? <bdi>{file.name}</bdi> : emptyLabel}
-      </span>
+      </TruncatedText>
     </span>
   );
 };

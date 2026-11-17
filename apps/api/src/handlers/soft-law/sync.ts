@@ -56,10 +56,7 @@ export const syncSoftLaw = async ({
         const row =
           (
             await tx
-              .select({
-                id: softLawSources.id,
-                descriptor: softLawSources.descriptor,
-              })
+              .select({ id: softLawSources.id })
               .from(softLawSources)
               .where(eq(softLawSources.adapterKey, adapter.key))
               .limit(1)
@@ -73,18 +70,6 @@ export const syncSoftLaw = async ({
       error: new SoftLawIngestionError({
         message: "Could not register soft-law source",
         cause: registration.error,
-      }),
-    };
-  }
-  if (
-    registration.value.descriptor.allowsRedistribution ||
-    registration.value.descriptor.allowsDerivedAi
-  ) {
-    return {
-      status: "failed" as const,
-      error: new SoftLawIngestionError({
-        message:
-          "EU soft-law acquisition requires an ingestion-only source descriptor",
       }),
     };
   }

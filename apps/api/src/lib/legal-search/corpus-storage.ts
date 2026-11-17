@@ -3,8 +3,10 @@ import { sql } from "drizzle-orm";
 import type { Column, SQL } from "drizzle-orm";
 import * as v from "valibot";
 
+import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 import {
   type DocumentAst,
+  headMatterOrderDegradations,
   persistedAstDegradations,
 } from "@stll/legal-ast/document-ast";
 
@@ -59,6 +61,7 @@ import type {
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
+import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { recordReadWork } from "@/api/lib/observability/request-work";
 import {
@@ -176,11 +179,28 @@ export const parsePersistedCorpusAst = (
     }
     throw error;
   }
+  // Late head matter is a known state of stored rows that a read serves as
+  // stored: a line per read, so its rate stays visible, and no exception, since
+  // no one can act on each read of the same row. Undeclared vocabulary is the
+  // schema falling behind what was stored, and is reported as a failure.
+  const lateHeadMatter =
+    parsed.output !== null && "blocks" in parsed.output
+      ? headMatterOrderDegradations(parsed.output.blocks)
+      : [];
+  if (lateHeadMatter.length > 0) {
+    logger.warn(
+      "case_law.decision.stored_ast_head_matter_order",
+      sanitizeErrorAttributesForOutput({
+        ...(documentId === undefined ? {} : { documentId }),
+        lateBlockCount: lateHeadMatter.length,
+      }),
+    );
+  }
   const degradations = persistedAstDegradations(value);
   if (degradations.length > 0) {
     captureError(
       new StoredAstDegradedError({
-        message: "Stored document AST carries undeclared vocabulary",
+        message: "Stored document AST was degraded on read",
         degradations,
       }),
       handlerErrorContext("legalsearch.parsePersistedCorpusAst", {
@@ -220,6 +240,18 @@ const reportStoredCorpusValidation = (
   });
 };
 
+/** The corpus operations a timeout names, each its own telemetry label. */
+const CORPUS_IO_TIMEOUT_LABEL = {
+  "corpus-delete": "corpus-delete",
+  "corpus-read-ast": "corpus-read-ast",
+  "corpus-read-sections": "corpus-read-sections",
+  "corpus-read-text": "corpus-read-text",
+  "corpus-write-ast": "corpus-write-ast",
+  "corpus-write-sections": "corpus-write-sections",
+  "corpus-write-text": "corpus-write-text",
+} as const;
+type CorpusIoLabel = keyof typeof CORPUS_IO_TIMEOUT_LABEL;
+
 /**
  * The single bounded boundary for every corpus object read/write/delete.
  * Bun's S3 convenience methods (`.file(key).bytes()`, `.write`, `.delete`)
@@ -230,7 +262,7 @@ const reportStoredCorpusValidation = (
  * is safe to retry.
  */
 const boundedCorpusIo = async <T>(
-  label: string,
+  label: CorpusIoLabel,
   operation: (signal: AbortSignal) => Promise<T>,
   {
     signal,
@@ -238,7 +270,7 @@ const boundedCorpusIo = async <T>(
   }: { signal?: AbortSignal; timeoutMs?: number } = {},
 ): Promise<T> =>
   await withTimeout(operation, {
-    label,
+    label: CORPUS_IO_TIMEOUT_LABEL[label],
     ...(signal === undefined ? {} : { signal }),
     timeoutMs,
   });
@@ -305,7 +337,7 @@ type SettleCancellableCorpusIoGroupOptions = {
  * cleanup deleted it.
  */
 const startCancellableCorpusIo = <T>(
-  label: string,
+  label: CorpusIoLabel,
   operation: (signal: AbortSignal) => Promise<T>,
   options: CorpusIoOptions,
 ): StartedCorpusIo<T> => {

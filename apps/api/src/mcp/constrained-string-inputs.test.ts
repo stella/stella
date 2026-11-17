@@ -237,6 +237,10 @@ const HAND_CONSTRAINED_STRING_INPUTS: ReadonlyMap<
     "GET /v1/case/sitemap/decisions/shard.query.bucket",
     "sitemap shard address emitted by the sitemap index",
   ],
+  [
+    "save_contact.external.source",
+    "stable source-system namespace key echoed on re-import; changing its spelling would change record identity",
+  ],
 ]);
 
 /** Route prefixes of the public case-law and legislation surface. */

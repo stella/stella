@@ -369,11 +369,22 @@ test.each([429, 503] as const)(
         "budget.windowMs": WINDOW_MS,
         "http.status_code": refusalStatus,
       });
-      expect(metrics).toHaveLength(1);
-      expect(JSON.parse(metrics.at(0) ?? "{}")).toMatchObject({
-        budgetName: "mcp.transport.bearer",
-        RateLimitRejected: 1,
-      });
+      // A 503 refusal sheds load: it is observed from its cause as a
+      // transient capacity failure; a 429 is the caller's and observes none.
+      expect(metrics.map((line): unknown => JSON.parse(line))).toEqual([
+        expect.objectContaining({
+          budgetName: "mcp.transport.bearer",
+          RateLimitRejected: 1,
+        }),
+        ...(refusalStatus === 503
+          ? [
+              expect.objectContaining({
+                sink: "api.capacity_refused",
+                reason: "work_capacity_unavailable",
+              }),
+            ]
+          : []),
+      ]);
       expect(JSON.stringify(rejections)).not.toContain(
         "private-caller-credential",
       );

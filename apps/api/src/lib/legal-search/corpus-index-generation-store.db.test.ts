@@ -7,6 +7,7 @@ import type { Transaction } from "@/api/db/root";
 import { corpusIndexGenerations } from "@/api/db/schema";
 import { CORPUS_FAMILIES } from "@/api/lib/legal-search/corpus-generation-contract";
 import {
+  beginCorpusIndexGenerationRebuildTx,
   type CorpusIndexGenerationTarget,
   CorpusServingGenerationAbsentError,
   lockCorpusIndexGenerationActivationTx,
@@ -214,25 +215,40 @@ test("serving generation reads and flips are family-independent", async () => {
     ...CASE_LAW_TARGET,
     cluster: "q09",
   });
-  const immediateRollbackRejection: unknown = await setServing(
-    CASE_LAW_PREVIOUS_TARGET,
-  ).then(
-    () => null,
-    (error: unknown) => error,
-  );
-  expect(immediateRollbackRejection).toMatchObject({
-    message: `Corpus serving target is not reconciled: case_law/${CASE_LAW_PREVIOUS_TARGET.generation}`,
+  // The generation it replaced stays building, so it takes every change and
+  // can serve again at once: a flip is reversible.
+  const statusOf = async (generation: string) =>
+    (
+      await db
+        .select({ status: corpusIndexGenerations.status })
+        .from(corpusIndexGenerations)
+        .where(eq(corpusIndexGenerations.generation, generation))
+    ).at(0)?.status;
+  expect(await statusOf(CASE_LAW_PREVIOUS_TARGET.generation)).toBe("building");
+  expect(await setServing(CASE_LAW_PREVIOUS_TARGET)).toEqual({
+    ...CASE_LAW_PREVIOUS_TARGET,
+    cluster: "q09",
   });
+  expect(await statusOf(CASE_LAW_TARGET.generation)).toBe("building");
 
+  // A retiring generation returns to the build set before it can serve.
+  await db.transaction(
+    async (tx) =>
+      await beginCorpusIndexGenerationRebuildTx(
+        asTestRaw<Transaction>(tx),
+        CASE_LAW_TARGET,
+      ),
+  );
+  expect(await statusOf(CASE_LAW_TARGET.generation)).toBe("retiring");
   await db.transaction(
     async (tx) =>
       await resumeRetiringCorpusIndexGenerationTx(
         asTestRaw<Transaction>(tx),
-        CASE_LAW_PREVIOUS_TARGET,
+        CASE_LAW_TARGET,
       ),
   );
-  expect(await setServing(CASE_LAW_PREVIOUS_TARGET)).toEqual({
-    ...CASE_LAW_PREVIOUS_TARGET,
+  expect(await setServing(CASE_LAW_TARGET)).toEqual({
+    ...CASE_LAW_TARGET,
     cluster: "q09",
   });
   expect(

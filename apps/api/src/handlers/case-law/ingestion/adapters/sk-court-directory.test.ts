@@ -11,7 +11,6 @@ import {
   assembleSkCourtsDecision,
   skCourtsAdapter,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
-import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import {
   ADAPTER_KEYS,
@@ -21,11 +20,15 @@ import {
   decodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@/api/lib/legal-search/ingestion-types";
+import { requireReconciliation } from "@/api/tests/helpers/case-law-adapter-test-utils";
+import { replayCapturedSkDocument } from "@/api/tests/helpers/sk-document-raw-storage";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
-const originalFetch = globalThis.fetch;
+const testFetchState = createTestFetch();
+
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
 });
 
 const registry = {
@@ -95,7 +98,7 @@ describe("court registry enrichment", () => {
         if (decision === null) {
           continue;
         }
-        const replay = await skCourtsAdapter.reparseStoredRaw?.({
+        const replay = await replayCapturedSkDocument({
           raw: new TextEncoder().encode(decision.sourceRaw),
           contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
           caseNumber: listedItem.spisovaZnacka,
@@ -109,8 +112,8 @@ describe("court registry enrichment", () => {
           documentUrl: null,
           metadata: {},
         });
-        expect(replay?.type).toBe("parsed");
-        if (replay?.type !== "parsed") {
+        expect(replay.type).toBe("parsed");
+        if (replay.type !== "parsed") {
           continue;
         }
         expect(replay.result.parserVersion).toBe(
@@ -256,10 +259,12 @@ describe("court registry enrichment", () => {
 
   test("coalesces concurrent requests within a page and reloads on the next page", async () => {
     const requested: string[] = [];
-    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-      requested.push(input instanceof Request ? input.url : String(input));
-      return new Response(JSON.stringify(registry));
-    });
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request) => {
+        requested.push(input instanceof Request ? input.url : String(input));
+        return new Response(JSON.stringify(registry));
+      }),
+    );
     const read = createSkCourtRegistryReader();
     const records = await Promise.all(
       Array.from({ length: 20 }, async () => await read(registry.registreGuid)),
@@ -279,22 +284,24 @@ describe("court registry enrichment", () => {
     for (const name of [item.sud.nazov, "Najvyšší súd Slovenskej republiky"]) {
       const listedItem = { ...item, sud: { ...item.sud, nazov: name } };
       let unavailable = true;
-      globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-        const url = new URL(
-          input instanceof Request ? input.url : String(input),
-        );
-        if (url.pathname.includes("/v1/sud/")) {
-          return unavailable
-            ? new Response("unavailable", { status: 503 })
-            : new Response(JSON.stringify({ ...registry, nazov: name }));
-        }
-        if (url.searchParams.has("page")) {
-          return new Response(
-            JSON.stringify({ numFound: 1, rozhodnutieList: [listedItem] }),
+      testFetchState.set(
+        asFetchMock(async (input: string | URL | Request) => {
+          const url = new URL(
+            input instanceof Request ? input.url : String(input),
           );
-        }
-        return new Response(JSON.stringify(listedItem));
-      });
+          if (url.pathname.includes("/v1/sud/")) {
+            return unavailable
+              ? new Response("unavailable", { status: 503 })
+              : new Response(JSON.stringify({ ...registry, nazov: name }));
+          }
+          if (url.searchParams.has("page")) {
+            return new Response(
+              JSON.stringify({ numFound: 1, rozhodnutieList: [listedItem] }),
+            );
+          }
+          return new Response(JSON.stringify(listedItem));
+        }),
+      );
       const failed = await skCourtsAdapter.fetchPage(null, {});
       expect(failed.isErr()).toBe(true);
       if (failed.isErr()) {
@@ -348,8 +355,8 @@ describe("court registry enrichment", () => {
       ["not found", 404, absentRegistry("http-404")],
       ["gone", 410, absentRegistry("http-410")],
     ] as const) {
-      globalThis.fetch = asFetchMock(
-        async () => new Response(body, { status }),
+      testFetchState.set(
+        asFetchMock(async () => new Response(body, { status })),
       );
       const result = await createSkCourtRegistryReader()(registry.registreGuid);
       expect(result.unwrap()).toEqual(observation);
@@ -364,8 +371,8 @@ describe("court registry enrichment", () => {
       [JSON.stringify({ ...registry, typSudu: 42 }), 200, "invalid-shape"],
       ["x".repeat(1024 * 1024 + 1), 200, "response-too-large"],
     ] as const) {
-      globalThis.fetch = asFetchMock(
-        async () => new Response(body, { status }),
+      testFetchState.set(
+        asFetchMock(async () => new Response(body, { status })),
       );
       const result = await createSkCourtRegistryReader()(registry.registreGuid);
       expect(result.unwrap()).toEqual({
@@ -382,8 +389,8 @@ describe("court registry enrichment", () => {
       () => new Response(null, { status: 204 }),
       () => new Response(""),
     ]) {
-      globalThis.fetch = asFetchMock(
-        async () => await Promise.resolve(answer()),
+      testFetchState.set(
+        asFetchMock(async () => await Promise.resolve(answer())),
       );
       const result = await createSkCourtRegistryReader()(registry.registreGuid);
       expect(result.isErr()).toBe(true);
@@ -422,20 +429,22 @@ describe("court registry enrichment", () => {
         },
       ],
     ] as const) {
-      globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-        const url = new URL(
-          input instanceof Request ? input.url : String(input),
-        );
-        if (url.pathname.includes("/v1/sud/")) {
-          return new Response(body, { status });
-        }
-        if (url.searchParams.has("page")) {
-          return new Response(
-            JSON.stringify({ numFound: 1, rozhodnutieList: [item] }),
+      testFetchState.set(
+        asFetchMock(async (input: string | URL | Request) => {
+          const url = new URL(
+            input instanceof Request ? input.url : String(input),
           );
-        }
-        return new Response(JSON.stringify(item));
-      });
+          if (url.pathname.includes("/v1/sud/")) {
+            return new Response(body, { status });
+          }
+          if (url.searchParams.has("page")) {
+            return new Response(
+              JSON.stringify({ numFound: 1, rozhodnutieList: [item] }),
+            );
+          }
+          return new Response(JSON.stringify(item));
+        }),
+      );
       const page = await skCourtsAdapter.fetchPage(null, {});
       expect(page.isOk()).toBe(true);
       if (page.isErr()) {
@@ -460,12 +469,14 @@ describe("court registry enrichment", () => {
 
   test("a transient failure is not cached into later reconciliation attempts", async () => {
     let calls = 0;
-    globalThis.fetch = asFetchMock(async () => {
-      calls += 1;
-      return calls === 1
-        ? new Response("retry", { status: 503 })
-        : new Response(JSON.stringify(registry));
-    });
+    testFetchState.set(
+      asFetchMock(async () => {
+        calls += 1;
+        return calls === 1
+          ? new Response("retry", { status: 503 })
+          : new Response(JSON.stringify(registry));
+      }),
+    );
     const read = createSkCourtRegistryReader();
     expect((await read(registry.registreGuid)).isErr()).toBe(true);
     expect((await read(registry.registreGuid)).unwrap()).toEqual({
@@ -497,14 +508,18 @@ describe("court registry enrichment", () => {
 
   test("a reconciliation slice shares its registry reader and the next slice refreshes it", async () => {
     let registryCalls = 0;
-    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-      const url = new URL(input instanceof Request ? input.url : String(input));
-      if (url.pathname.includes("/v1/sud/")) {
-        registryCalls += 1;
-        return new Response(JSON.stringify(registry));
-      }
-      return new Response(JSON.stringify(item));
-    });
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request) => {
+        const url = new URL(
+          input instanceof Request ? input.url : String(input),
+        );
+        if (url.pathname.includes("/v1/sud/")) {
+          registryCalls += 1;
+          return new Response(JSON.stringify(registry));
+        }
+        return new Response(JSON.stringify(item));
+      }),
+    );
     const reconciliation = requireReconciliation(skCourtsAdapter);
     const createBuild = reconciliation.createSliceBuildDecision;
     expect(createBuild).toBeDefined();
@@ -546,7 +561,7 @@ describe("court registry enrichment", () => {
       expect(
         JSON.parse(parts?.["court-registry-unavailable"] ?? "null"),
       ).toEqual(observation);
-      const outcome = await skCourtsAdapter.reparseStoredRaw?.({
+      const outcome = await replayCapturedSkDocument({
         raw: new TextEncoder().encode(decision.sourceRaw),
         contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
         caseNumber: item.spisovaZnacka,
@@ -560,8 +575,8 @@ describe("court registry enrichment", () => {
         documentUrl: null,
         metadata: {},
       });
-      expect(outcome?.type).toBe("parsed");
-      if (outcome?.type !== "parsed") {
+      expect(outcome.type).toBe("parsed");
+      if (outcome.type !== "parsed") {
         return;
       }
       expect(
@@ -595,7 +610,7 @@ describe("court registry enrichment", () => {
           "null",
       ),
     ).toEqual(record);
-    const outcome = await skCourtsAdapter.reparseStoredRaw?.({
+    const outcome = await replayCapturedSkDocument({
       raw: new TextEncoder().encode(decision.sourceRaw),
       contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
       caseNumber: item.spisovaZnacka,
@@ -609,8 +624,8 @@ describe("court registry enrichment", () => {
       documentUrl: null,
       metadata: {},
     });
-    expect(outcome?.type).toBe("parsed");
-    if (outcome?.type !== "parsed") {
+    expect(outcome.type).toBe("parsed");
+    if (outcome.type !== "parsed") {
       return;
     }
     expect(outcome.result.metadata["courtSuccession"]).toMatchObject({

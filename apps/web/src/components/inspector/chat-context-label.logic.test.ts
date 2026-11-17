@@ -21,7 +21,6 @@ const labelOf = (
     activeSkillName: undefined,
     boundDocumentLabel: undefined,
     matterNames: [],
-    newChatLabel: "New chat",
     tabLabel: "New chat",
     ...overrides,
   });
@@ -91,8 +90,9 @@ describe("what the composer says the chat is about", () => {
     expect(labelOf({ tabLabel: "Lease renewal" })).toBe("Lease renewal");
   });
 
-  test("falls back to the untitled name while the thread has no title", () => {
-    expect(labelOf()).toBe("New chat");
+  test("names nothing for an untitled chat with no context", () => {
+    expect(labelOf()).toBeUndefined();
+    expect(labelOf({ tabLabel: "  " })).toBeUndefined();
   });
 });
 

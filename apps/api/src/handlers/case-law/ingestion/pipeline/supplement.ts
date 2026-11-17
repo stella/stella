@@ -23,6 +23,7 @@ import {
 import type { SupplementPlacement } from "@/api/handlers/case-law/ingestion/pipeline/supplement-placement";
 import {
   SUPPLEMENT_JUDGMENT_UNREADABLE,
+  SUPPLEMENT_REMOVED_WHILE_LEAVING,
   SUPPLEMENT_STANDALONE_REASON,
 } from "@/api/handlers/case-law/ingestion/pipeline/supplement-types";
 import type {
@@ -37,6 +38,13 @@ import { assertDocketKeyedSupplementAllowed } from "@/api/lib/legal-search/decis
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import { openRawSourceWriteWindow } from "@/api/lib/legal-search/raw-source-storage";
 import { logger } from "@/api/lib/observability/logger";
+
+/**
+ * What became of the supplement row once its former holder was written:
+ * detached from it, moved to another judgment by a concurrent placement,
+ * or deleted.
+ */
+type FormerHolderLeft = "detached" | "moved" | "removed";
 
 /**
  * Take the supplement out of a judgment a correction says it no longer
@@ -111,7 +119,7 @@ const leaveFormerHolder = async (
   }
   // The rewrite parks a supplement it leaves out; one still naming the
   // former holder is detached here.
-  const detached = await scopedDb(async (tx) => {
+  const left = await scopedDb(async (tx): Promise<FormerHolderLeft> => {
     if (
       await detachSupplement(tx, {
         sourceId,
@@ -119,7 +127,7 @@ const leaveFormerHolder = async (
         decisionId: formerId,
       })
     ) {
-      return true;
+      return "detached";
     }
     const current = (
       await tx
@@ -133,14 +141,38 @@ const leaveFormerHolder = async (
         )
         .limit(1)
     ).at(0);
-    return current?.decisionId === null;
+    if (current === undefined) {
+      return "removed";
+    }
+    return current.decisionId === null ? "detached" : "moved";
   });
-  if (!detached) {
-    // Moved by a concurrent placement; the next observation settles it.
-    return Result.ok({
-      status: PROCESS_DECISION_STATUS.RETRYABLE,
-      reason: PROCESS_DECISION_RETRY_REASON.CONTENTION,
-    });
+  switch (left) {
+    case "detached":
+      break;
+    case "moved":
+      // Moved by a concurrent placement; the next observation settles it.
+      return Result.ok({
+        status: PROCESS_DECISION_STATUS.RETRYABLE,
+        reason: PROCESS_DECISION_RETRY_REASON.CONTENTION,
+      });
+    case "removed":
+      // Only an erasure or a takedown deletes a supplement row (see
+      // SUPPLEMENT_ROW_DELETERS). Placing it again here would bring back
+      // what it removed, and retrying would only wait for the next
+      // observation, which places it from the start where the erasure
+      // checks run. So the step ends here.
+      logger.warn(SUPPLEMENT_REMOVED_WHILE_LEAVING, {
+        sourceId,
+        judgmentId: formerId,
+        sourceDocumentId,
+      });
+      return Result.ok({
+        status: PROCESS_DECISION_STATUS.COMPLETE,
+        disposition: { type: "removed", formerJudgmentId: formerId },
+      });
+    default:
+      left satisfies never;
+      return panic("Unhandled former holder outcome");
   }
   return await processSupplement(
     {

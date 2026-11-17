@@ -20,6 +20,8 @@ describe("TruncatedText", () => {
     expect(markup).toStartWith("<span");
     expect(markup).toContain('data-slot="truncated-text"');
     expect(markup).toContain("truncate");
+    // Capped at its container even where a parent does not stretch it.
+    expect(markup).toContain("max-w-full");
     expect(markup).toContain("Smlouva o dílo č. 2026/118");
     expect(markup).not.toContain('data-slot="tooltip-popup"');
     expect(markup).not.toContain('data-slot="popover-popup"');
@@ -44,6 +46,29 @@ describe("TruncatedText", () => {
     );
 
     expect(markup).toContain("line-clamp-2");
+    expect(markup).toContain("max-w-full");
+    expect(markup).not.toContain(" truncate");
+  });
+
+  test("stays contained without a hint where the caller shows the text", () => {
+    const markup = renderToStaticMarkup(
+      <TruncatedText hint={false} lines={8}>
+        A long description
+      </TruncatedText>,
+    );
+
+    expect(markup).toContain("line-clamp-8");
+    expect(markup).toContain("max-w-full");
+    expect(markup).toContain('data-slot="truncated-text"');
+  });
+
+  test("lets the text take every line it needs, still contained", () => {
+    const markup = renderToStaticMarkup(
+      <TruncatedText lines="none">An expanded description</TruncatedText>,
+    );
+
+    expect(markup).toContain("max-w-full");
+    expect(markup).not.toContain("line-clamp");
     expect(markup).not.toContain(" truncate");
   });
 

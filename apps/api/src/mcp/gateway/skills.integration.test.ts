@@ -193,9 +193,11 @@ describe("MCP skill tools against the database", () => {
     expect(resourceRead.isError).toBeUndefined();
     expect(resourceRead.structuredContent).toEqual({
       type: "resource",
+      charCount: "1. Parties\n2. Term".length,
       content: "1. Parties\n2. Term",
       id: skillId,
       name: slug,
+      nextCursor: null,
       path: "references/checklist.md",
     });
 

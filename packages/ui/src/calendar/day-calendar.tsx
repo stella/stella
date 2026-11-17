@@ -3,6 +3,7 @@ import type {
   CSSProperties,
   KeyboardEvent,
   PointerEvent,
+  PropsWithChildren,
   ReactElement,
   ReactNode,
 } from "react";
@@ -10,10 +11,19 @@ import type {
 import { panic } from "better-result";
 import { Temporal } from "temporal-polyfill/full";
 
+import { Popover, PopoverPopup, PopoverTrigger } from "../components/popover";
+import {
+  Tooltip,
+  TOOLTIP_OPEN_DELAY_MS,
+  TooltipPopup,
+  TooltipTrigger,
+} from "../components/tooltip";
+import { TruncatedText } from "../components/truncated-text";
 import { resolveMatterColor } from "../lib/matter-colors";
 import { cn } from "../lib/utils";
 import {
   boundsHeight,
+  DAY_CALENDAR_ONE_LINE_BLOCK_MIN_PX,
   DAY_CALENDAR_SLOT_HEIGHT_PX,
   extendRange,
   getDayBounds,
@@ -31,25 +41,56 @@ import type {
   DayCalendarLanePlacement,
   DayCalendarRange,
 } from "./day-calendar.logic";
+import { getTopicColor } from "./topic-colors";
 
-/** A block paints in its matter's colour, or in the neutral surface tone. */
+/**
+ * A block paints in its matter's colour, with the matter's edge; in a topic's
+ * colour, from the separate low-chroma topic set keyed by a stable topic key
+ * and without an edge, so it never reads as a matter; or in the neutral
+ * surface tone.
+ */
 export type DayCalendarTone =
   | { color: string | null; matterId: string; type: "matter" }
+  | { key: string; type: "topic" }
   | { type: "neutral" };
 
-/** Whether an entry is still provisional (drawn dashed) or final. */
-export type DayCalendarEntryState = "draft" | "final";
+/**
+ * Whether an entry is final, still provisional (dashed), or only proposed:
+ * a suggestion is not an entry yet, so it is drawn lighter, dashed, and is a
+ * button the caller acts on.
+ */
+export type DayCalendarEntryState = "draft" | "final" | "suggestion";
+
+/**
+ * What a block shows on hover, for example the apps a `mixed` block merged.
+ * `actions` holds controls: it is a popover that also opens on focus or
+ * press and stays open while the pointer is on it, so its block is a button.
+ */
+export type DayCalendarBlockTooltip =
+  | { content: ReactNode; type: "actions" }
+  | { content: ReactNode; type: "text" };
 
 type DayCalendarBlockFields = DayCalendarRange & {
   accessibleLabel: string;
-  detail?: ReactNode;
+  caption?: ReactNode;
   id: string;
   title: ReactNode;
   tone: DayCalendarTone;
+  tooltip?: DayCalendarBlockTooltip;
 };
 
 export type DayCalendarBlock =
-  | (DayCalendarBlockFields & { kind: "entry"; state: DayCalendarEntryState })
+  | (DayCalendarBlockFields & {
+      kind: "entry";
+      state: Exclude<DayCalendarEntryState, "suggestion">;
+    })
+  | (Omit<DayCalendarBlockFields, "tooltip"> & {
+      kind: "entry";
+      onActivate: () => void;
+      state: "suggestion";
+      /** A suggestion is already a button; its hover only describes it. */
+      tooltip?: Extract<DayCalendarBlockTooltip, { type: "text" }>;
+    })
   | (DayCalendarBlockFields & { kind: "mixed" })
   | (DayCalendarBlockFields & { kind: "segment" });
 
@@ -243,7 +284,7 @@ export const DayCalendar = ({
     columnId: string,
     event: PointerEvent<HTMLElement>,
   ) => {
-    if (event.button !== 0) {
+    if (event.button !== 0 || !isWithinColumn(event)) {
       return;
     }
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -304,6 +345,10 @@ export const DayCalendar = ({
     columnId: string,
     event: KeyboardEvent<HTMLElement>,
   ) => {
+    // Keys from a block or its popover are not the column's.
+    if (event.target !== event.currentTarget) {
+      return;
+    }
     const current = draft?.columnId === columnId ? draft : null;
     switch (event.key) {
       case "ArrowDown":
@@ -388,11 +433,11 @@ export const DayCalendar = ({
           data-slot="day-calendar-column-header"
           key={column.id}
         >
-          <span className="min-w-0 shrink-0 truncate">{column.label}</span>
+          <TruncatedText className="shrink-0">{column.label}</TruncatedText>
           {column.badge === undefined ? null : (
-            <span className="bg-muted text-muted-foreground text-2xs min-w-0 truncate rounded-full px-2 py-0.5">
+            <TruncatedText className="bg-muted text-muted-foreground text-2xs rounded-full px-2 py-0.5">
               {column.badge}
-            </span>
+            </TruncatedText>
           )}
         </header>
       ))}
@@ -547,7 +592,19 @@ const ColumnBlocks = ({
   });
 };
 
-/** Below this height a block puts its title and detail on one line. */
+/** A block's popover is portalled out of the column, yet its events still
+ * bubble to the column through React. */
+function isWithinColumn({
+  currentTarget,
+  target,
+}: {
+  currentTarget: HTMLElement;
+  target: EventTarget;
+}) {
+  return target instanceof Node && currentTarget.contains(target);
+}
+
+/** Below this height a block puts its title and caption on one line. */
 const TWO_LINE_BLOCK_MIN_PX = 40;
 
 /** A brief block paints at least this tall, unless the grid ends sooner. */
@@ -562,6 +619,8 @@ const BLOCK_KIND_CLASSES = {
 const ENTRY_STATE_CLASSES = {
   draft: "border border-dashed border-current/40",
   final: "",
+  suggestion:
+    "border border-dashed border-current/45 outline-none hover:ring-1 hover:ring-ring/50 focus-visible:ring-2 focus-visible:ring-ring",
 } as const satisfies Record<DayCalendarEntryState, string>;
 
 const DayCalendarBlockView = ({
@@ -586,56 +645,216 @@ const DayCalendarBlockView = ({
     insetBlockStart: top,
     insetInlineStart: `${String((lane.lane * 100) / lane.laneCount)}%`,
   } satisfies CSSProperties;
+  const oneLine = blockSize < TWO_LINE_BLOCK_MIN_PX;
+  const className = cn(
+    // A size container: the block's width is set by its placement, never by
+    // its content, so a label can adapt to it with a container query.
+    "text-foreground @container flex h-full w-full min-w-0 overflow-hidden rounded-md px-2.5 text-start text-xs",
+    oneLine ? "flex-row items-center gap-2" : "flex-col gap-0.5 py-1",
+    BLOCK_KIND_CLASSES[block.kind],
+    block.kind === "entry" && ENTRY_STATE_CLASSES[block.state],
+    block.tone.type === "matter" && "border-s-[3px]",
+    block.tone.type === "neutral" && "bg-muted",
+  );
+  const content =
+    blockSize < DAY_CALENDAR_ONE_LINE_BLOCK_MIN_PX ? null : (
+      <>
+        {/* On one line the caption gives way first, then the title ends in
+            an ellipsis rather than being cut at the block's edge. The block
+            carries its whole text as its accessible name, so a cut line adds
+            no hint. */}
+        <TruncatedText
+          className={cn("font-medium", oneLine ? "shrink" : "shrink-0")}
+          hint={false}
+        >
+          {block.title}
+        </TruncatedText>
+        {block.caption === undefined ? null : (
+          <TruncatedText
+            className={cn(
+              "text-muted-foreground tabular-nums",
+              oneLine && "shrink-[999]",
+            )}
+            hint={false}
+          >
+            {block.caption}
+          </TruncatedText>
+        )}
+      </>
+    );
+  const shared = {
+    "aria-label": block.accessibleLabel,
+    className,
+    "data-block-id": block.id,
+    "data-kind": block.kind,
+    "data-slot": "day-calendar-block",
+    style: blockSurfaceStyle(block),
+  };
 
   return (
     <div
-      className="pointer-events-none absolute px-1.5 py-px"
+      className={cn(
+        "absolute px-1.5 py-px",
+        block.tooltip === undefined &&
+          !(block.kind === "entry" && block.state === "suggestion") &&
+          "pointer-events-none",
+      )}
       style={placement}
     >
-      <article
-        aria-label={block.accessibleLabel}
-        className={cn(
-          "text-foreground flex h-full min-w-0 overflow-hidden rounded-md px-2.5 text-start text-xs",
-          blockSize < TWO_LINE_BLOCK_MIN_PX
-            ? "flex-row items-center gap-2"
-            : "flex-col gap-0.5 py-1",
-          BLOCK_KIND_CLASSES[block.kind],
-          block.kind === "entry" && ENTRY_STATE_CLASSES[block.state],
-          block.tone.type === "matter" && "border-s-[3px]",
-          block.tone.type === "neutral" && "bg-muted",
-        )}
-        data-kind={block.kind}
-        data-slot="day-calendar-block"
-        style={blockSurfaceStyle(block)}
-      >
-        <span className="min-w-0 shrink-0 truncate font-medium">
-          {block.title}
-        </span>
-        {block.detail === undefined ? null : (
-          <span className="text-muted-foreground min-w-0 truncate tabular-nums">
-            {block.detail}
-          </span>
-        )}
-      </article>
+      <BlockSurface block={block} content={content} shared={shared} />
     </div>
   );
 };
 
-const MIXED_STRIPES =
-  "repeating-linear-gradient(135deg, var(--muted) 0 6px, transparent 6px 12px)";
+type BlockSurfaceProps = {
+  block: DayCalendarBlock;
+  content: ReactNode;
+  shared: {
+    "aria-label": string;
+    className: string;
+    "data-block-id": string;
+    "data-kind": DayCalendarBlock["kind"];
+    "data-slot": string;
+    style: CSSProperties;
+  };
+};
 
-function blockSurfaceStyle(block: DayCalendarBlock): CSSProperties {
+/** A block whose hover holds actions answers hover, focus and an open
+ * popover like a suggestion does. */
+const ACTIONS_BLOCK_CLASSES =
+  "focus-visible:ring-ring data-popup-open:ring-ring/50 hover:ring-ring/50 outline-none hover:ring-1 focus-visible:ring-2 data-popup-open:ring-1";
+
+type ActionsPopoverProps = PropsWithChildren<{
+  trigger: ReactElement;
+}>;
+
+/** A block's actions, opened by hover, focus or press. Once something in
+ * them is pressed they stay open until dismissed: a press can move the
+ * layout under a pointer that never moved (a notice above the calendar
+ * goes away), and a hover popover would close as if the pointer had left,
+ * taking the action's confirmation with it. */
+const ActionsPopover = ({ children, trigger }: ActionsPopoverProps) => {
+  const [open, setOpen] = useState(false);
+  const [held, setHeld] = useState(false);
+  return (
+    <Popover
+      onOpenChange={(next, { reason }) => {
+        if (!next && held && reason === "trigger-hover") {
+          return;
+        }
+        setOpen(next);
+        if (!next) {
+          setHeld(false);
+        }
+      }}
+      open={open}
+    >
+      <PopoverTrigger
+        delay={TOOLTIP_OPEN_DELAY_MS}
+        openOnHover
+        render={trigger}
+      />
+      <PopoverPopup
+        className="max-w-72"
+        onPointerDown={() => setHeld(true)}
+        side="top"
+        tooltipStyle
+      >
+        {children}
+      </PopoverPopup>
+    </Popover>
+  );
+};
+
+/** A block whose hover holds actions is a button that opens them; a
+ * suggestion is a button the caller acts on; any other block is read. */
+const BlockSurface = ({ block, content, shared }: BlockSurfaceProps) => {
+  const state = block.kind === "entry" ? block.state : undefined;
+  if (block.tooltip?.type === "actions") {
+    const trigger = (
+      <button
+        {...shared}
+        className={cn(shared.className, ACTIONS_BLOCK_CLASSES)}
+        data-state={state}
+        // Pressing the block opens its actions; it must not start a range.
+        onPointerDown={(event) => event.stopPropagation()}
+        type="button"
+      >
+        {content}
+      </button>
+    );
+    return (
+      <ActionsPopover trigger={trigger}>{block.tooltip.content}</ActionsPopover>
+    );
+  }
+  const surface =
+    block.kind === "entry" && block.state === "suggestion" ? (
+      <button
+        {...shared}
+        data-state={state}
+        onClick={block.onActivate}
+        // A suggestion is acted on, not dragged across: the column's range
+        // selection must not start under it, and its keys must not reach the
+        // column's range slider (Enter would commit a keyboard range).
+        onKeyDown={(event) => event.stopPropagation()}
+        onPointerDown={(event) => event.stopPropagation()}
+        type="button"
+      >
+        {content}
+      </button>
+    ) : (
+      <article {...shared} data-state={state}>
+        {content}
+      </article>
+    );
+  return block.tooltip === undefined ? (
+    surface
+  ) : (
+    <Tooltip>
+      <TooltipTrigger render={surface} />
+      <TooltipPopup className="max-w-72">{block.tooltip.content}</TooltipPopup>
+    </Tooltip>
+  );
+};
+
+/** A suggestion's tint is half an entry's, so proposed time reads lighter. */
+const TONE_TINT_PERCENT = {
+  entry: 16,
+  suggestion: 8,
+} as const;
+
+/** A topic swatch is already muted, so it mixes in stronger than a matter's
+ * to stay visible; the result is still far less saturated. */
+const TOPIC_TINT_PERCENT = 30;
+
+/** A block's surface. Its tone's colour is a custom property the tint reads,
+ * so the swatch a block took can be read back from its style. */
+type BlockSurfaceStyle = CSSProperties & { "--day-calendar-tone"?: string };
+
+function blockSurfaceStyle(block: DayCalendarBlock): BlockSurfaceStyle {
   const tone = block.tone;
-  const stripes = block.kind === "mixed" ? MIXED_STRIPES : undefined;
+  const suggestion = block.kind === "entry" && block.state === "suggestion";
   switch (tone.type) {
     case "neutral": {
-      return { backgroundImage: stripes };
+      return {
+        backgroundColor: suggestion ? "transparent" : undefined,
+      };
+    }
+    case "topic": {
+      return {
+        "--day-calendar-tone": getTopicColor(tone.key),
+        backgroundColor: `color-mix(in srgb, var(--day-calendar-tone) ${String(TOPIC_TINT_PERCENT)}%, var(--card))`,
+      };
     }
     case "matter": {
       const color = resolveMatterColor(tone.matterId, tone.color);
+      const tint = suggestion
+        ? TONE_TINT_PERCENT.suggestion
+        : TONE_TINT_PERCENT.entry;
       return {
-        backgroundColor: `color-mix(in srgb, ${color} 16%, var(--card))`,
-        backgroundImage: stripes,
+        "--day-calendar-tone": color,
+        backgroundColor: `color-mix(in srgb, var(--day-calendar-tone) ${String(tint)}%, var(--card))`,
+        borderColor: suggestion ? color : undefined,
         borderInlineStartColor: color,
       };
     }

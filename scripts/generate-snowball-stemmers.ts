@@ -28,8 +28,7 @@ import path from "node:path";
 import {
   SNOWBALL_BASE_STEMMER_SHA256,
   SNOWBALL_RELEASE,
-} from "@/api/lib/legal-search/morphology/snowball/base-stemmer";
-
+} from "../apps/api/src/lib/legal-search/morphology/snowball/base-stemmer";
 import { hashGeneratedSource as sha256 } from "./generated-source-hash";
 
 const SNOWBALL_REPO = "https://github.com/snowballstem/snowball";

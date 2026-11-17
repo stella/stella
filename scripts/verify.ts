@@ -1,4 +1,10 @@
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -11,7 +17,11 @@ import {
   withCheckAdmission,
 } from "./verify-admission";
 import { VerifyError } from "./verify-error";
-import { readVerifyWorkflow, type VerifyWorkflowStep } from "./verify-workflow";
+import {
+  readVerifyWorkflow,
+  type VerifyWorkflowMode,
+  type VerifyWorkflowStep,
+} from "./verify-workflow";
 
 export type VerifyOptions = {
   base: string;
@@ -90,6 +100,35 @@ export const runVerifySteps = (
 };
 
 const repo = path.resolve(import.meta.dirname, "..");
+
+/**
+ * `RUNNER_TEMP` entries the local runner creates in place of the unmarked CI
+ * steps that create them. The workflow test derives the required list from
+ * the workflows; `localChecks` proves each entry exists before a marked step
+ * can read it.
+ */
+export const LOCAL_RUNNER_TEMP_ENTRIES = {
+  autofix: [
+    "autofix-fix-paths",
+    "autofix-format-paths",
+    "autofix-lint-paths",
+    "workflow-tooling",
+  ],
+  verify: [],
+} as const satisfies Record<VerifyWorkflowMode, readonly string[]>;
+
+const assertRunnerTempEntries = (
+  temporary: string,
+  mode: VerifyWorkflowMode,
+): void => {
+  for (const entry of LOCAL_RUNNER_TEMP_ENTRIES[mode]) {
+    if (!existsSync(path.join(temporary, entry))) {
+      throw new VerifyError(
+        `The local runner did not create RUNNER_TEMP/${entry}`,
+      );
+    }
+  }
+};
 const spawn = (
   args: readonly string[],
   env: NodeJS.ProcessEnv = process.env,
@@ -234,6 +273,24 @@ const localChecks = (options: VerifyOptions, config: HostConfig): number => {
           path.join(temporary, "autofix-added-paths"),
           `${added.join("\0")}\0`,
         );
+        const selected = Bun.spawnSync(
+          [
+            process.execPath,
+            "scripts/autofix-select-paths.ts",
+            path.join(temporary, "autofix-fix-paths"),
+            path.join(temporary, "autofix-format-paths"),
+            path.join(temporary, "autofix-lint-paths"),
+          ],
+          { cwd: repo, stdout: "inherit", stderr: "inherit" },
+        );
+        if (selected.exitCode !== 0) {
+          return selected.exitCode;
+        }
+        // CI checks the lockfile tooling out at the workflow's own revision.
+        // The local run already executes this checkout's scripts, so the
+        // checkout is the tooling.
+        symlinkSync(repo, path.join(temporary, "workflow-tooling"));
+        assertRunnerTempEntries(temporary, "autofix");
         const plan = Bun.spawnSync(
           [process.execPath, "scripts/autofix-plan.ts", "plan"],
           {
@@ -265,6 +322,7 @@ const localChecks = (options: VerifyOptions, config: HostConfig): number => {
           return fixed;
         }
       }
+      assertRunnerTempEntries(temporary, "verify");
       return runVerifySteps(
         readVerifyWorkflow({ root: repo, mode: "verify" }),
         run,

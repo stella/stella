@@ -3,10 +3,11 @@ import { createElement } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import { defaultPresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
 import type { PresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
 import { createPresentationPrefsSync } from "@/lib/account/presentation-prefs/sync";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 const { act, cleanup, fireEvent, render } =

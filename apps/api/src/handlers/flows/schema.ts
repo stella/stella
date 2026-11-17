@@ -3,6 +3,7 @@ import * as v from "valibot";
 import { numberFromString } from "@stll/api-contract/http-input";
 
 import {
+  displayNameSchema,
   paginationCursorSchema,
   resourceIdSchema,
   workspaceParams,
@@ -19,6 +20,7 @@ import {
 } from "@/api/lib/flows/flow-types";
 import type { FLOW_RUN_STATUSES } from "@/api/lib/flows/flow-types";
 import { LIMITS } from "@/api/lib/limits";
+import { expectedUpdatedAtSchema } from "@/api/lib/optimistic-concurrency";
 
 // The HTTP contract for a flow definition (the API client's typed shape +
 // first-pass validation). The handler additionally parses the body through
@@ -30,11 +32,7 @@ import { LIMITS } from "@/api/lib/limits";
 // layer; only the shapes the two layers express differently are written
 // twice.
 
-const tStepName = v.pipe(
-  v.string(),
-  v.minLength(1),
-  v.maxLength(FLOW_STEP_NAME_MAX_CHARS),
-);
+const tStepName = displayNameSchema({ maxLength: FLOW_STEP_NAME_MAX_CHARS });
 
 const tFlowStep = v.union([
   v.object({
@@ -95,11 +93,7 @@ const tFlowTrigger = v.union([
 ]);
 
 export const flowDefinitionBodySchema = v.object({
-  name: v.pipe(
-    v.string(),
-    v.minLength(1),
-    v.maxLength(FLOW_DEFINITION_NAME_MAX_CHARS),
-  ),
+  name: displayNameSchema({ maxLength: FLOW_DEFINITION_NAME_MAX_CHARS }),
   description: v.union([
     v.pipe(v.string(), v.maxLength(FLOW_DEFINITION_DESCRIPTION_MAX_CHARS)),
     v.null(),
@@ -111,6 +105,11 @@ export const flowDefinitionBodySchema = v.object({
   ),
   trigger: tFlowTrigger,
   enabled: v.boolean(),
+});
+
+export const updateFlowDefinitionBodySchema = v.object({
+  ...flowDefinitionBodySchema.entries,
+  expectedUpdatedAt: expectedUpdatedAtSchema,
 });
 
 export const flowDefinitionParamsSchema = v.object({

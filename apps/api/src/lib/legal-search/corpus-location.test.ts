@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   formatCorpusLocation,
@@ -46,13 +46,14 @@ const packedLocation: fc.Arbitrary<PackedCorpusLocation> = fc
 
 describe("corpus location grammar", () => {
   test("format then parse is the identity over packed addresses", () => {
-    fc.assert(
+    assertProperty(
+      "format then parse is the identity over packed addresses",
       fc.property(packedLocation, (location) => {
         const address = formatCorpusLocation(location);
         expect(parseCorpusLocation(address)).toEqual(location);
         expect(address.length).toBeLessThan(KEY_COLUMN_MAX_CHARS);
       }),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 

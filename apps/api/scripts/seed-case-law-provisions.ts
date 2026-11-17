@@ -57,6 +57,8 @@ import {
 } from "@/api/lib/db/timestamp-cas";
 import { FIXTURE_SOURCE_KEYS } from "@/api/lib/legal-search/adapter-manifest";
 import { corpusContentHash } from "@/api/lib/legal-search/corpus-content-hash";
+import { writeProjectedCorpusColumnsTx } from "@/api/lib/legal-search/corpus-projectability-write";
+import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 
 import type { FixtureDecision } from "./seed-case-law";
 import { AUTHORED_PROVISION_CITATIONS } from "./seed-case-law-synthetic";
@@ -296,32 +298,40 @@ export const readSyntheticSeedDecision = async (
     }
     let inputDigest = row.inputDigest;
     if (row.contentHash === null) {
-      const updated = await tx
-        .update(caseLawDecisions)
-        .set({
+      // The content hash is a projection input: the owner writes it and
+      // projects the decision in this transaction.
+      const written = await writeProjectedCorpusColumnsTx(tx, {
+        family: "case_law",
+        id: row.id,
+        columns: {
           contentHash: corpusContentHash({
             text: row.fulltext,
             sections: row.sections,
             ast: row.documentAst,
           }),
-        })
-        .where(
-          and(
-            eq(caseLawDecisions.id, row.id),
-            isNull(caseLawDecisions.contentHash),
-            isNull(caseLawDecisions.redactedAt),
-            eq(
-              caseLawDecisions.corpusMirrorStatus,
-              CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
-            ),
-            timestampMatchesCasToken(
-              caseLawDecisions.updatedAt,
-              row.updatedAtToken,
-            ),
+        },
+        where: and(
+          isNull(caseLawDecisions.contentHash),
+          isNull(caseLawDecisions.redactedAt),
+          eq(
+            caseLawDecisions.corpusMirrorStatus,
+            CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
           ),
-        )
-        .returning({ inputDigest: extractionInputDigest });
-      const hydrated = updated.at(0);
+          timestampMatchesCasToken(
+            caseLawDecisions.updatedAt,
+            row.updatedAtToken,
+          ),
+        ),
+      });
+      const hydrated = written
+        ? (
+            await tx
+              .select({ inputDigest: extractionInputDigest })
+              .from(caseLawDecisions)
+              .where(eq(caseLawDecisions.id, row.id))
+              .limit(1)
+          ).at(0)
+        : undefined;
       if (hydrated === undefined) {
         panic(
           "Synthetic seed decision changed while preparing provision links",
@@ -371,19 +381,26 @@ const BACKFILL_RUN_LIMIT = 20;
 /**
  * The scheduler's provision state backfill, run to completion: scope rows for
  * every decision key, the admitted scopes active, and state owed to every
- * decision in them.
+ * decision in them. A running API's scheduler advances the same cursors, so a
+ * unit that lost that race is rolled back and the next run retries it, as the
+ * scheduler's next run does.
  */
 const completeProvisionStateBackfill = async (
   connection: ProvisionBackfillSession,
 ) => {
   for (let run = 0; run < BACKFILL_RUN_LIMIT; run += 1) {
-    const outcome = (
-      await runProvisionStateBackfill({
-        connection,
-        deadline: Number.POSITIVE_INFINITY,
-        signal: new AbortController().signal,
-      })
-    ).unwrap("Provision state backfill failed");
+    const result = await runProvisionStateBackfill({
+      connection,
+      deadline: Number.POSITIVE_INFINITY,
+      signal: new AbortController().signal,
+    });
+    if (
+      result.isErr() &&
+      isPgError(result.error, PG_ERROR.SERIALIZATION_FAILURE)
+    ) {
+      continue;
+    }
+    const outcome = result.unwrap("Provision state backfill failed");
     if (outcome.type === "complete") {
       return;
     }

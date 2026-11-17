@@ -38,6 +38,7 @@ import {
   infraPortsForOffset,
   isWorktreeCheckout,
   loadEnvFile,
+  loadEnvFileWithExampleDefaults,
   MAX_HASH_OFFSET,
   migrateLegacyS3DevCredentials,
   parseDockerComposePsJson,
@@ -1673,10 +1674,67 @@ describe("dev env factories", () => {
     });
   });
 
+  test("a worktree stack's browser talks to that stack's object store", () => {
+    const offset = 80;
+    const webEnv = createWebEnv({
+      baseEnv: { VITE_DOCUMENTS_ENDPOINT: "http://localhost:9000" },
+      infraOffset: offset,
+      infraPorts: infraPortsForOffset(offset),
+      ports: portsForOffset(offset),
+    });
+    const apiEnv = createApiEnv({
+      baseEnv: {},
+      infraOffset: offset,
+      infraPorts: infraPortsForOffset(offset),
+      ports: portsForOffset(offset),
+    });
+
+    expect(webEnv.VITE_DOCUMENTS_ENDPOINT).not.toBe("http://localhost:9000");
+    expect(webEnv.VITE_DOCUMENTS_ENDPOINT).toBe(apiEnv.S3_ENDPOINT);
+  });
+
+  test("a variable the example gained later reaches a checkout with an older env file", () => {
+    const root = createTempDir();
+    const envPath = path.resolve(root, ".env");
+    writeFileSync(envPath, 'OWN="mine"\nBOTH="mine"\n');
+    writeFileSync(
+      `${envPath}.example`,
+      'BOTH="example"\nADDED_LATER="example"\n# OPTIONAL="example"\n',
+    );
+    const before = readFileSync(envPath, "utf-8");
+
+    expect(loadEnvFileWithExampleDefaults(envPath)).toEqual({
+      ADDED_LATER: "example",
+      BOTH: "mine",
+      OWN: "mine",
+    });
+    // Worktrees share this file through a link, so it is never rewritten.
+    expect(readFileSync(envPath, "utf-8")).toBe(before);
+  });
+
+  test("a value the shell already sets beats the example's when the env file refers to it", () => {
+    const root = createTempDir();
+    const envPath = path.resolve(root, ".env");
+    writeFileSync(envPath, `REFERS="\${FROM_SHELL}"\nOWN="mine"\n`);
+    writeFileSync(
+      `${envPath}.example`,
+      'FROM_SHELL="example"\nOWN="example"\n',
+    );
+
+    expect(
+      loadEnvFileWithExampleDefaults(envPath, {
+        FROM_SHELL: "shell",
+        OWN: "shell",
+      }),
+    ).toEqual({ FROM_SHELL: "shell", OWN: "mine", REFERS: "shell" });
+  });
+
   test("threads computed ports into the web env", () => {
     expect(
       createWebEnv({
         baseEnv: { KEEP_ME: "1" },
+        infraOffset: 0,
+        infraPorts: infraPortsForOffset(0),
         ports: {
           api: 3101,
           desktopBridge: 45_999,
@@ -1703,6 +1761,8 @@ describe("dev env factories", () => {
           VITE_BROWSER_API_URL: "http://localhost:2/api",
           VITE_PUBLIC_APP_URL: "http://localhost:3",
         },
+        infraOffset: offset,
+        infraPorts: infraPortsForOffset(offset),
         ports,
       });
       const browserApi = new URL(webEnv.VITE_BROWSER_API_URL ?? "");
@@ -1720,7 +1780,12 @@ describe("dev env factories", () => {
   test("same-origin API routing requires an explicit opt-in", () => {
     for (const optIn of [undefined, "", "0"]) {
       const baseEnv = { STELLA_DEV_SAME_ORIGIN_API: optIn };
-      const webEnv = createWebEnv({ baseEnv, ports: portsForOffset(10) });
+      const webEnv = createWebEnv({
+        baseEnv,
+        infraOffset: 10,
+        infraPorts: infraPortsForOffset(10),
+        ports: portsForOffset(10),
+      });
       expect(webEnv).not.toHaveProperty("DEV_API_PROXY_TARGET");
       expect(webEnv).not.toHaveProperty("VITE_BROWSER_API_URL");
       expect(webEnv).not.toHaveProperty("VITE_PUBLIC_APP_URL");
@@ -1847,6 +1912,64 @@ describe("loadEnvFile and expandEnvMap", () => {
       A: "nested-value",
       B: "nested-value",
       C: "nested-value",
+    });
+  });
+
+  test("duplicate declarations replace values without moving their first key", () => {
+    const rootDir = createTempDir();
+    const envFilePath = path.resolve(rootDir, ".env");
+    writeFileSync(
+      envFilePath,
+      [
+        "export PORT=3000",
+        "NAME='ordinary project' # ignored comment",
+        "PORT=3001",
+        'EQUALS="left=right"',
+        "EMPTY=",
+        "PORT=3002",
+      ].join("\n"),
+    );
+    const parsed = loadEnvFile(envFilePath);
+    expect(parsed).toEqual({
+      PORT: "3002",
+      NAME: "ordinary project",
+      EQUALS: "left=right",
+      EMPTY: "",
+    });
+    expect(Object.keys(parsed)).toEqual(["PORT", "NAME", "EQUALS", "EMPTY"]);
+  });
+
+  test("expansion preserves empty values, original keys and input ownership", () => {
+    const input = {
+      URL: "http://$HOST:$PORT",
+      HOST: "localhost",
+      PORT: "3000",
+      EMPTY: "",
+      COPY: "$EMPTY",
+    };
+    const original = { ...input };
+    const expanded = expandEnvMap(input);
+    expect(expanded).toEqual({
+      URL: "http://localhost:3000",
+      HOST: "localhost",
+      PORT: "3000",
+      EMPTY: "",
+      COPY: "",
+    });
+    expect(Object.keys(expanded)).toEqual(Object.keys(input));
+    expect(input).toEqual(original);
+    expect(expanded === input).toBe(false);
+  });
+
+  test("cyclic references retain the existing ordered unresolved values", () => {
+    expect(expandEnvMap({ SELF: "$SELF" })).toEqual({ SELF: "$SELF" });
+    expect(expandEnvMap({ FIRST: "$SECOND", SECOND: "$FIRST" })).toEqual({
+      FIRST: "$SECOND",
+      SECOND: "$SECOND",
+    });
+    expect(expandEnvMap({ SECOND: "$FIRST", FIRST: "$SECOND" })).toEqual({
+      SECOND: "$FIRST",
+      FIRST: "$FIRST",
     });
   });
 });

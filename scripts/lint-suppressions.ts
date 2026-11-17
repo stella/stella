@@ -160,6 +160,11 @@ export const TRACKED_SUPPRESSION_RULES = [
       "publication recovery ownership retired outside its transaction boundary",
   },
   {
+    rule: "citation-evidence-text-fence/citation-evidence-text-fence",
+    tier: "security",
+    guards: "citation evidence written without its source text revision fence",
+  },
+  {
     rule: "no-direct-ingestion-checkpoint-write/no-direct-ingestion-checkpoint-write",
     tier: "security",
     guards: "ingestion checkpoints advanced outside the replay-safe boundary",
@@ -178,11 +183,6 @@ export const TRACKED_SUPPRESSION_RULES = [
     rule: "require-query-limit/require-query-limit",
     tier: "data-volume",
     guards: "unbounded Drizzle list reads",
-  },
-  {
-    rule: "no-raw-zip-load/no-raw-zip-load",
-    tier: "data-volume",
-    guards: "archive entries inflated without the loadDocxArchive size caps",
   },
   {
     rule: "no-network-await-in-loop/no-network-await-in-loop",

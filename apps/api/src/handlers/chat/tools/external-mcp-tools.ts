@@ -129,8 +129,8 @@ export const loadExternalMcpToolsForUser = async ({
 
   const clients: MCPClient[] = [];
   const connectors: LoadedExternalMcpConnector[] = [];
-  const sourceTools: Record<string, AnyServerTool | undefined> = {};
-  const loadedTools: ChatToolMap = {};
+  const sourceTools = new Map<string, AnyServerTool>();
+  const loadedTools = new Map<string, ChatTool | undefined>();
 
   // Merge sequentially, after every connector has settled, instead of
   // mutating these shared collections from inside the concurrent loop
@@ -143,7 +143,9 @@ export const loadExternalMcpToolsForUser = async ({
     }
     clients.push(result.client);
     connectors.push(result.connector);
-    Object.assign(loadedTools, result.tools);
+    for (const [name, tool] of Object.entries(result.tools)) {
+      loadedTools.set(name, tool);
+    }
     copyServerTools({ sourceTools, tools: result.tools });
   }
 
@@ -155,9 +157,17 @@ export const loadExternalMcpToolsForUser = async ({
     await Promise.allSettled(closeTasks);
   };
 
-  const source = createStellaMcpToolSource({ closeClients, sourceTools });
+  const source = createStellaMcpToolSource({
+    closeClients,
+    sourceTools: Object.fromEntries(sourceTools),
+  });
 
-  return { close: closeClients, connectors, source, tools: loadedTools };
+  return {
+    close: closeClients,
+    connectors,
+    source,
+    tools: Object.fromEntries(loadedTools),
+  };
 };
 
 export type LazyExternalMcpToolsLoader = {
@@ -250,12 +260,12 @@ const copyServerTools = ({
   sourceTools,
   tools,
 }: {
-  sourceTools: Record<string, AnyServerTool | undefined>;
+  sourceTools: Map<string, AnyServerTool>;
   tools: ChatToolMap;
 }): void => {
   for (const [name, tool] of Object.entries(tools)) {
     if (isServerTool(tool)) {
-      sourceTools[name] = tool;
+      sourceTools.set(name, tool);
     }
   }
 };
@@ -351,7 +361,7 @@ const loadConnectorTools = async ({
 
   try {
     return await dependencies.withTimeout(async () => await discovery, {
-      label: `external-mcp-tools:${row.slug}`,
+      label: "external-mcp-tools-discovery",
       timeoutMs: EXTERNAL_MCP_DISCOVERY_TIMEOUT_MS,
     });
   } catch (error) {
@@ -375,10 +385,11 @@ const loadConnectorTools = async ({
       // Sequencing only: a late discovery rejection is the fallout of the
       // timeout reported below (often the close above), not a new failure.
       detached(
-        Promise.allSettled([discovery]).then(
-          async () =>
-            await closeAbandonedClient({ client, connectorSlug: row.slug }),
-        ),
+        async () =>
+          Promise.allSettled([discovery]).then(
+            async () =>
+              await closeAbandonedClient({ client, connectorSlug: row.slug }),
+          ),
         "external-mcp-tools.discovery",
       );
     } else {

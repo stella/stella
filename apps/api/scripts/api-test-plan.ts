@@ -32,7 +32,7 @@ const TEST_FILE_GLOB = `{${TEST_ROOTS.join(",")}}/**/*.test.{ts,tsx}`;
 // Non-test helper modules live here; some install a module mock at import.
 const TEST_HELPER_GLOB = "src/tests/**/*.ts";
 const MODULE_MOCK_PATTERN = /\bmock\.module\s*\(/u;
-const PROPERTY_TEST_MARKERS = ["fc.assert", "assertProperty"];
+export const PROPERTY_TEST_MARKERS = ["fc.assert", "assertProperty"];
 // Keep headroom as the legal-list suite grows: larger batches cross the 2 GiB
 // guard once the additional handler and schema modules share one process.
 const REGULAR_TEST_BATCH_SIZE = 10;
@@ -67,6 +67,10 @@ const HEAVY_LOGIC_TEST_BATCH_SIZE = 1;
 const HEAVY_LOGIC_SOURCE_MARKERS = ["@modelcontextprotocol/client"] as const;
 const HEAVY_LOGIC_PATH_MARKERS = [
   "handlers/chat/tools/execute/sandbox/",
+  // Loads the API route graph and builds the whole capability catalog in
+  // process; alone it peaks near the ordinary logic ceiling, and a shared
+  // ten-file batch with it reached 2284 MB on Linux.
+  "scripts/deployment-feature-guard.test.ts",
 ] as const;
 // Hard per-batch peak-RSS budgets. A batch that outgrows its budget fails
 // the run even when every test passes, so memory growth surfaces here as a

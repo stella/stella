@@ -19,6 +19,7 @@ import {
   getChatAttachmentFilename,
   getChatAttachmentMimeType,
   getChatAttachmentUrl,
+  isAnswerFilePart,
   isChatAttachmentPart,
   isProviderVisibleChatPart,
 } from "@/api/handlers/chat/chat-message-parts";
@@ -37,7 +38,7 @@ import { loadAnonymizationAllowlistCanonicals } from "@/api/lib/anonymization-al
 import { loadAnonymizationGazetteerEntries } from "@/api/lib/anonymization-blacklist";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
+import type { ChatTool, ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 import { parseDataUrl, toDataUrl } from "@/api/lib/data-url";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { anonymizeTextFields } from "@/api/mcp/anonymization";
@@ -1240,6 +1241,9 @@ const removeProviderInvisibleParts = (
   for (const message of messages) {
     const parts: ChatMessage["parts"] = [];
     for (const part of message.parts) {
+      if (isAnswerFilePart(message.role, part)) {
+        continue;
+      }
       if (isProviderVisibleChatPart(part)) {
         parts.push(part);
       }
@@ -1858,7 +1862,7 @@ export const prepareToolsForThirdParty = ({
     return tools;
   }
 
-  const wrapped: ChatToolMap = {};
+  const wrapped = new Map<string, ChatTool>();
 
   for (const [key, current] of Object.entries(tools)) {
     if (!current) {
@@ -1866,7 +1870,7 @@ export const prepareToolsForThirdParty = ({
     }
 
     if (!current.execute) {
-      wrapped[key] = current;
+      wrapped.set(key, current);
       continue;
     }
 
@@ -1874,7 +1878,7 @@ export const prepareToolsForThirdParty = ({
     const policy = getChatToolPolicy(current);
     const deanonymizeInputBeforeExecute =
       DEANONYMIZE_INPUT_BY_POLICY_KIND[policy.kind];
-    wrapped[key] = {
+    wrapped.set(key, {
       ...current,
       execute: async (input, context) => {
         if (boundary.type === "raw") {
@@ -1927,10 +1931,10 @@ export const prepareToolsForThirdParty = ({
         }
         return anonymized.value;
       },
-    };
+    });
   }
 
-  return wrapped;
+  return Object.fromEntries(wrapped);
 };
 
 export const prepareMcpToolSourceForThirdParty = ({

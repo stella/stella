@@ -1,0 +1,5 @@
+{
+  "kind": "priority",
+  "qualifier": "Builds, publishes and attests the production web image for a release candidate, once, from the candidate commit.",
+  "reviewedDigest": "beb63c36f07a017b661f84c9d37bd32ddbb150885f1664b58066f1233a1067a0"
+}

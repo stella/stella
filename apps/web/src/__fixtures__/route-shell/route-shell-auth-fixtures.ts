@@ -17,7 +17,7 @@ export const authFixtureBeforeLoadData = (routeId: string, email: string) => {
         ReturnType<NonNullable<typeof OtpRoute.options.beforeLoad>>
       >;
     case "/auth/organization":
-      return { userId, isOauthPostLoginFromSearch: false } satisfies Awaited<
+      return { userId } satisfies Awaited<
         ReturnType<NonNullable<typeof OrganizationRoute.options.beforeLoad>>
       >;
     case "/auth/professional-use":
@@ -55,7 +55,10 @@ export const authFixtureLoaderData = (routeId: string) => {
         provider: null,
       } satisfies typeof ErrorRoute.types.loaderData;
     case "/auth/accept-invitation/$invitationId":
-      return { invitation } satisfies typeof InvitationRoute.types.loaderData;
+      return {
+        type: "invitation",
+        invitation,
+      } satisfies typeof InvitationRoute.types.loaderData;
     default:
       return undefined;
   }

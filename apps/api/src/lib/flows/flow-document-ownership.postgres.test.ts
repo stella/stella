@@ -2,6 +2,8 @@ import { type InferOk, panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
+import { createTestClock } from "@stll/test-kit";
+
 import { entities, flowRuns, flowRunSteps } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -15,6 +17,8 @@ import { executeFlowStep, FlowStepError } from "@/api/lib/flows/flow-executor";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { flowReviewGateFixture } from "@/api/tests/helpers/flow-review-gate";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
+
+const stateClock = createTestClock();
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -76,13 +80,14 @@ if (!databaseUrl || !enabled) {
               .where(eq(flowRuns.id, f.runId));
             await db
               .update(flowRunSteps)
-              .set({ status: "running" })
+              .set({ status: "running", startedAt: new Date(stateClock.now()) })
               .where(eq(flowRunSteps.reviewTaskEntityId, f.taskEntityId));
             await db
               .update(flowRunSteps)
               .set({
                 kind: "ai",
                 status: "completed",
+                finishedAt: new Date(stateClock.now()),
                 reviewTaskEntityId: null,
                 output: { kind: "ai", markdown: "# Generated document" },
               })

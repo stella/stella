@@ -3,7 +3,12 @@ import type { Query, QueryClient, QueryKey } from "@tanstack/react-query";
 import { redirect } from "@tanstack/react-router";
 
 import { publicKnowledgeKeys } from "@/features/knowledge/public/public-knowledge-keys";
-import { rootKeys, sessionOptions } from "@/lib/auth-queries";
+import {
+  hasCurrentAuthQueryOwner,
+  isAuthBootstrapQuery,
+  observeAuthQueryOwner,
+} from "@/lib/account/auth-query-owner";
+import { rootKeys, sessionOptions } from "@/lib/auth-query-options";
 import { detached } from "@/lib/detached";
 import { memberKnowledgeKeys } from "@/lib/knowledge/knowledge-cache";
 import { isAuthFlowPathname } from "@/lib/redirect";
@@ -80,19 +85,33 @@ const cleanup = async (
   await pending;
 };
 
-const removedBy = (policy: TransitionPolicy) => (query: Query) => {
-  if (hasPrefix(query, publicKnowledgeKeys.all)) {
-    return false;
-  }
-  return policy === "organization"
-    ? !hasPrefix(query, rootKeys.session) && !hasPrefix(query, rootKeys.role)
-    : !isSessionQuery(query);
+const removedBy =
+  (queryClient: QueryClient, policy: TransitionPolicy) => (query: Query) => {
+    if (hasPrefix(query, publicKnowledgeKeys.all)) {
+      return false;
+    }
+    if (policy === "organization") {
+      return isAuthBootstrapQuery(query)
+        ? !hasCurrentAuthQueryOwner(queryClient, query)
+        : !hasPrefix(query, rootKeys.session);
+    }
+    return !isSessionQuery(query);
+  };
+
+const removeUnownedAuthQueries = (queryClient: QueryClient) => {
+  queryClient.removeQueries({
+    predicate: (query) =>
+      isAuthBootstrapQuery(query) &&
+      !hasCurrentAuthQueryOwner(queryClient, query),
+  });
 };
 
 const observeAuthTransition = async (
   queryClient: QueryClient,
   refreshKnowledge = false,
 ) => {
+  observeAuthQueryOwner(queryClient);
+  removeUnownedAuthQueries(queryClient);
   const session: unknown = queryClient.getQueryData(sessionOptions.queryKey);
   if (
     signedInUserId(session) === undefined &&
@@ -119,14 +138,17 @@ const observeAuthTransition = async (
       current.phase === "awaiting-frame" && current.policy === "identity"
         ? "identity"
         : transitionPolicy(current, visitor);
-    const pending = cleanup(queryClient, removedBy(policy));
-    transitions.set(queryClient, {
-      visitor,
-      lastMember: memberIdentity(visitor) ?? current.lastMember,
-      phase: "awaiting-frame",
-      policy,
-      pending,
-    });
+    const pending = cleanup(queryClient, removedBy(queryClient, policy));
+    const lastMember = memberIdentity(visitor) ?? current.lastMember;
+    // Sign-in and onboarding pages render no frame, so nothing read for the
+    // previous visitor can be rebuilt after this pass. A second pass when the
+    // next frame mounts would only cancel the reads its page's loaders started.
+    transitions.set(
+      queryClient,
+      authFlowPages.get(queryClient)?.()
+        ? { visitor, lastMember, phase: "settled", pending }
+        : { visitor, lastMember, phase: "awaiting-frame", policy, pending },
+    );
     await pending;
     return;
   } else {
@@ -169,7 +191,7 @@ export const resetAuthTransition = async (
       : transitionPolicy(current, visitor);
   // Observers may have rebuilt queries after the early session cleanup.
   // This pass is deliberately not deduplicated against that earlier pass.
-  const pending = cleanup(queryClient, removedBy(policy));
+  const pending = cleanup(queryClient, removedBy(queryClient, policy));
   transitions.set(queryClient, {
     visitor,
     lastMember: memberIdentity(visitor) ?? current.lastMember,
@@ -227,6 +249,8 @@ export const installSessionCacheGuard = (
   }: SessionCacheGuardOptions,
 ) => {
   authFlowPages.set(queryClient, isAuthFlowPage);
+  observeAuthQueryOwner(queryClient);
+  removeUnownedAuthQueries(queryClient);
   const initial = queryClient.getQueryState(sessionOptions.queryKey);
   if (initial?.status === "success" && !transitions.has(queryClient)) {
     const visitor = sessionVisitor(initial.data);
@@ -248,6 +272,7 @@ export const installSessionCacheGuard = (
     }
     const session: unknown = event.query.state.data;
     const userId = signedInUserId(session);
+    observeAuthQueryOwner(queryClient);
     detached(observeAuthTransition(queryClient), "session-cache.transition");
     if (userId === undefined) {
       return;

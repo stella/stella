@@ -3,10 +3,9 @@ import { readdirSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
 import * as v from "valibot";
 
-import { readCapabilityCatalog } from "@stll/cli/capability-catalog-data";
-
 import { withNullOptionalsOmitted } from "@/api/mcp/input-normalization";
 import { ALL_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
+import { repositoryCapabilityCatalog } from "@/api/tests/helpers/repository-capability-catalog";
 
 import { parseCapabilityCatalog } from "../../../../packages/cli/src/capability-catalog-load";
 
@@ -69,7 +68,7 @@ const optionalProperties = (schema: unknown): string[] => {
     : [];
 };
 
-const capabilityCatalog = parseCapabilityCatalog(readCapabilityCatalog());
+const capabilityCatalog = parseCapabilityCatalog(repositoryCapabilityCatalog);
 if (capabilityCatalog === null) {
   throw new TypeError("Invalid capability catalog");
 }
@@ -196,24 +195,49 @@ describe("MCP tool inputs read null as an omitted optional property", () => {
    */
   test("every handler parses its arguments through a null-as-absent schema", () => {
     const directory = import.meta.dir;
-    const sources = readdirSync(directory).filter(
-      (file) => file.endsWith(".ts") && !file.endsWith(".test.ts"),
+    const sources = new Map(
+      readdirSync(directory)
+        .filter((file) => file.endsWith(".ts") && !file.endsWith(".test.ts"))
+        .map((file) => [
+          file,
+          readFileSync(nodePath.join(directory, file), "utf-8"),
+        ]),
     );
+    // An input contract may live in its own module, imported by the handler,
+    // or come from a factory whose body is a nullAsAbsent schema.
+    const wrapped = new Set<string>();
+    const factories = new Set<string>();
+    for (const source of sources.values()) {
+      for (const [, name] of source.matchAll(
+        /(?:^|\n)(?:export )?const (\w+) = nullAsAbsent\(/gu,
+      )) {
+        wrapped.add(name ?? "");
+      }
+      for (const [, name] of source.matchAll(
+        /(?:^|\n)(?:export )?const (\w+) = \([^)]*\) =>\s*nullAsAbsent\(/gu,
+      )) {
+        factories.add(name ?? "");
+      }
+    }
+    for (const source of sources.values()) {
+      for (const [, name, factory] of source.matchAll(
+        /(?:^|\n)(?:export )?const (\w+) = (\w+)\(/gu,
+      )) {
+        if (factories.has(factory ?? "")) {
+          wrapped.add(name ?? "");
+        }
+      }
+    }
     const offenders: string[] = [];
-    for (const file of sources) {
-      const source = readFileSync(nodePath.join(directory, file), "utf-8");
+    for (const [file, source] of sources) {
       for (const match of source.matchAll(
         /v\.safeParse\(\s*([\w.]+)\s*,\s*args\s*,?\s*\)/gu,
       )) {
         const [, schema] = match;
-        if (schema === undefined || schema.endsWith(".inputSchemaSource")) {
-          continue;
-        }
         if (
-          new RegExp(
-            `(?:^|\\n)(?:export )?const ${schema} = nullAsAbsent\\(`,
-            "u",
-          ).test(source)
+          schema === undefined ||
+          schema.endsWith(".inputSchemaSource") ||
+          wrapped.has(schema)
         ) {
           continue;
         }

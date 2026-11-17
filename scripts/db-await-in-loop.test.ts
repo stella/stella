@@ -7,7 +7,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
-import { API, ModuleKind, ModuleResolutionKind } from "tsrs/unstable/async";
+import { API, ModuleKind, ModuleResolutionKind } from "tsrs/async";
 
 import { createProgram } from "../packages/scripts/src/typescript-program";
 import {

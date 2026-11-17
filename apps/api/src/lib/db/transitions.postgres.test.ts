@@ -12,6 +12,7 @@ import fc from "fast-check";
 
 import { FLOW_RUN_STATUSES, FLOW_RUN_STEP_STATUSES } from "@stll/api-contract";
 import { assertProperty, propertyConfig } from "@stll/property-testing";
+import { createTestClock } from "@stll/test-kit";
 
 import { jsonb, timestamptz } from "@/api/db/columns";
 import { flowRuns, flowRunSteps } from "@/api/db/schema";
@@ -34,6 +35,12 @@ import {
 import { isPgConstraintError } from "@/api/lib/pg-error";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { flowReviewGateFixture } from "@/api/tests/helpers/flow-review-gate";
+import {
+  flowRunStateFields,
+  flowRunStepStateFields,
+} from "@/api/tests/helpers/flow-state-fields";
+
+const stateClock = createTestClock();
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -256,7 +263,11 @@ if (!databaseUrl || !enabled) {
                 tx,
                 spec: TRANSITIONS.flowRuns,
                 id: fixture.runId,
-                options: { from: ["pending"], to: "running" },
+                options: {
+                  from: ["pending"],
+                  to: "running",
+                  set: { startedAt: new Date(stateClock.now()) },
+                },
                 recordTransitionAuditEvent: async (auditTx, row) =>
                   await recordTransitionAuditEvent(auditTx, {
                     action: AUDIT_ACTION.UPDATE,
@@ -300,6 +311,7 @@ if (!databaseUrl || !enabled) {
               id,
               workspaceId: fixture.workspaceId,
               status,
+              ...flowRunStateFields(status),
               definitionSnapshot: { name: "Initial status", steps: [] },
               triggerSource: { type: "manual", userId: fixture.userId },
             });
@@ -315,7 +327,7 @@ if (!databaseUrl || !enabled) {
               const reopened = await Result.tryPromise(() =>
                 db
                   .update(flowRuns)
-                  .set({ status: "running" })
+                  .set({ status: "running", ...flowRunStateFields("running") })
                   .where(eq(flowRuns.id, id)),
               );
               expect(reopened.isErr()).toBe(true);
@@ -371,11 +383,12 @@ if (!databaseUrl || !enabled) {
                 index: index++,
                 kind: "review-gate",
                 status: from,
+                ...flowRunStepStateFields(from),
               });
               const outcome = await Result.tryPromise(() =>
                 db
                   .update(flowRunSteps)
-                  .set({ status: to })
+                  .set({ status: to, ...flowRunStepStateFields(to) })
                   .where(eq(flowRunSteps.id, id)),
               );
               expect(outcome.isOk()).toBe(
@@ -427,6 +440,7 @@ if (!databaseUrl || !enabled) {
               id,
               workspaceId: fixture.workspaceId,
               status: from,
+              ...flowRunStateFields(from),
               definitionSnapshot: { name: "Transition", steps: [] },
               triggerSource: { type: "manual", userId: fixture.userId },
             });
@@ -434,7 +448,7 @@ if (!databaseUrl || !enabled) {
             const raw = await Result.tryPromise(() =>
               db
                 .update(flowRuns)
-                .set({ status: to })
+                .set({ status: to, ...flowRunStateFields(to) })
                 .where(eq(flowRuns.id, id)),
             );
             expect(raw.isOk()).toBe(expected);
@@ -458,10 +472,15 @@ if (!databaseUrl || !enabled) {
               id: ownerId,
               workspaceId: fixture.workspaceId,
               status: from,
+              ...flowRunStateFields(from),
               definitionSnapshot: { name: "Owner transition", steps: [] },
               triggerSource: { type: "manual", userId: fixture.userId },
             });
-            const move = { from: [from], to } as const;
+            const move = {
+              from: [from],
+              to,
+              set: flowRunStateFields(to),
+            } as const;
             const owned = await Result.tryPromise(
               async () =>
                 await db.transaction(

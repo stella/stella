@@ -1,19 +1,20 @@
 import { env } from "@/api/env";
 import { toResponse } from "@/api/http/respond";
 import type { Middleware } from "@/api/http/route";
-import { status } from "@/api/http/status";
 import {
   type RateLimitClientAddressOptions,
   resolveRateLimitClientAddress,
 } from "@/api/lib/client-ip";
 import { logger } from "@/api/lib/observability/logger";
 import { emitPublicCorpusAdmissionMetric } from "@/api/lib/observability/request-metrics";
+import { observedStatus } from "@/api/lib/observability/server-error-answer";
 import {
   type AdmissionClass,
   createPublicCorpusAdmission,
 } from "@/api/lib/rate-limit/public-corpus-admission";
 import {
   asRouteBudget,
+  capacityRefusalCause,
   DEFAULT_RATE_LIMIT_ERROR_RESPONSE,
 } from "@/api/lib/rate-limit/rate-limit";
 import {
@@ -96,7 +97,11 @@ export const publicCorpusConcurrencyLimit = ({
       });
       ctx.set.headers["Retry-After"] = "1";
       return toResponse(
-        status(503, DEFAULT_RATE_LIMIT_ERROR_RESPONSE),
+        observedStatus(
+          capacityRefusalCause("public corpus admission refused"),
+          503,
+          DEFAULT_RATE_LIMIT_ERROR_RESPONSE,
+        ),
         ctx.set,
       );
     }

@@ -1,12 +1,15 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, expect, test } from "bun:test";
+import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 
+import { AUTH_SIGN_IN_CODE_UNAVAILABLE_ERROR_CODE } from "@stll/auth-model";
 import { sleep } from "@stll/concurrency/sleep";
-
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { SignInMode } from "./sign-in-mode";
-import type { AuthCapabilities } from "./sign-in-panel.logic";
+import type {
+  AuthCapabilities,
+  SignInEntryMethod,
+} from "./sign-in-panel.logic";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/auth/sign-in" });
 const originalFetch = globalThis.fetch;
@@ -27,6 +30,8 @@ const { MEMBER_SESSION } =
   await import("@/lib/account/auth-session.test-fixtures");
 const { SIGN_IN_MODE } = await import("./sign-in-mode");
 const { SignInPanel } = await import("./sign-in-panel");
+const { SIGN_IN_ENTRY_METHOD } = await import("./sign-in-panel.logic");
+const { stellaToast } = await import("@stll/ui/toast");
 
 const clients: InstanceType<typeof QueryClient>[] = [];
 
@@ -52,10 +57,15 @@ const emailOnly = {
   social: { google: false, microsoft: false, apple: false },
 } satisfies AuthCapabilities;
 
+type MountOptions = {
+  mode?: SignInMode;
+  events?: string[];
+  entryMethod?: SignInEntryMethod;
+};
+
 const mount = async (
   capabilities: AuthCapabilities,
-  mode: SignInMode = SIGN_IN_MODE.signIn,
-  events: string[] = [],
+  { mode = SIGN_IN_MODE.signIn, events = [], entryMethod }: MountOptions = {},
 ) => {
   globalThis.fetch = stubFetch(capabilities);
   const client = new QueryClient({
@@ -66,7 +76,13 @@ const mount = async (
   const route = router.createRoute({
     getParentRoute: () => root,
     path: "/auth/sign-in",
-    component: () => <SignInPanel mode={mode} redirectTo="/account" />,
+    component: () => (
+      <SignInPanel
+        entryMethod={entryMethod}
+        mode={mode}
+        redirectTo="/account"
+      />
+    ),
   });
   const twoFactor = router.createRoute({
     getParentRoute: () => root,
@@ -97,9 +113,8 @@ const mount = async (
       </IntlProvider>
     </QueryClientProvider>,
   );
-  await waitFor(() =>
-    ui.getByRole("button", { name: messages.auth.continueWithEmail }),
-  );
+  // The panel renders once the capabilities have loaded.
+  await ui.findByRole("heading", { name: messages.auth.signIn });
   return { client, ui, appRouter };
 };
 
@@ -112,22 +127,121 @@ test("offers no password sign-in without the capability", async () => {
   expect(ui.queryByPlaceholderText(messages.auth.password)).toBeNull();
 });
 
-test("keeps the password form behind a quiet option with the capability", async () => {
+test("swaps the email step for the password form, carrying the typed address", async () => {
   const { ui } = await mount({ ...emailOnly, reviewPasswordSignIn: true });
 
   const option = ui.getByRole("button", { name: messages.auth.usePassword });
-  expect(option.getAttribute("aria-expanded")).toBe("false");
   expect(ui.queryByPlaceholderText(messages.auth.password)).toBeNull();
+  fireEvent.change(ui.getByPlaceholderText(messages.auth.emailPlaceholder), {
+    target: { value: "review@example.test" },
+  });
 
   fireEvent.click(option);
 
-  await waitFor(() => ui.getByPlaceholderText(messages.auth.password));
+  const passwordField = await ui.findByPlaceholderText(messages.auth.password);
   expect(
     ui.getByRole("button", { name: messages.auth.signInWithPassword }),
   ).toBeDefined();
+  // One form on the page: the email step and its link are gone.
+  for (const name of [
+    messages.auth.usePassword,
+    messages.auth.continueWithEmail,
+  ]) {
+    expect(ui.queryByRole("button", { name })).toBeNull();
+  }
+  const emailFields = ui.getAllByPlaceholderText(
+    messages.auth.emailPlaceholder,
+  );
+  expect(emailFields).toHaveLength(1);
+  expect(emailFields.at(0)?.getAttribute("value")).toBe("review@example.test");
+  expect(document.activeElement).toBe(passwordField);
+
+  fireEvent.click(ui.getByRole("button", { name: messages.auth.useEmailCode }));
+
+  await waitFor(() =>
+    ui.getByRole("button", { name: messages.auth.continueWithEmail }),
+  );
+  expect(ui.queryByPlaceholderText(messages.auth.password)).toBeNull();
+});
+
+test("opens on the password form when a link asks for it", async () => {
+  const { ui } = await mount(
+    { ...emailOnly, reviewPasswordSignIn: true },
+    { entryMethod: SIGN_IN_ENTRY_METHOD.password },
+  );
+
+  expect(ui.getByPlaceholderText(messages.auth.password)).toBeDefined();
   expect(
-    ui.queryByRole("button", { name: messages.auth.usePassword }),
+    ui.queryByRole("button", { name: messages.auth.continueWithEmail }),
   ).toBeNull();
+  expect(
+    ui.getByRole("button", { name: messages.auth.useEmailCode }),
+  ).toBeDefined();
+});
+
+test("ignores a link asking for the password form without the capability", async () => {
+  const { ui } = await mount(emailOnly, {
+    entryMethod: SIGN_IN_ENTRY_METHOD.password,
+  });
+
+  expect(ui.queryByPlaceholderText(messages.auth.password)).toBeNull();
+  expect(
+    ui.getByRole("button", { name: messages.auth.continueWithEmail }),
+  ).toBeDefined();
+});
+
+test("shows the password form alone when the page has no email step", async () => {
+  const { ui } = await mount({
+    ...emailOnly,
+    emailOtp: false,
+    reviewPasswordSignIn: true,
+  });
+
+  expect(ui.getByPlaceholderText(messages.auth.password)).toBeDefined();
+  expect(
+    ui.queryByRole("button", { name: messages.auth.useEmailCode }),
+  ).toBeNull();
+});
+
+test("swaps the email-code form for the password form when the server names a password account", async () => {
+  const { ui } = await mount({ ...emailOnly, reviewPasswordSignIn: true });
+  const requested: string[] = [];
+  globalThis.fetch = Object.assign(
+    async (input: string | URL | Request) => {
+      const url = input instanceof Request ? input.url : input.toString();
+      if (url.includes("/email-otp/send-verification-otp")) {
+        requested.push(url);
+        return Response.json(
+          {
+            code: AUTH_SIGN_IN_CODE_UNAVAILABLE_ERROR_CODE,
+            message: "This account signs in with a password.",
+          },
+          { status: 409 },
+        );
+      }
+      return Response.json(null);
+    },
+    { preconnect: () => undefined },
+  );
+
+  fireEvent.change(ui.getByPlaceholderText(messages.auth.emailPlaceholder), {
+    target: { value: "review@example.test" },
+  });
+  fireEvent.click(
+    ui.getByRole("button", { name: messages.auth.continueWithEmail }),
+  );
+
+  const passwordField = await ui.findByPlaceholderText(messages.auth.password);
+  expect(requested).toHaveLength(1);
+  expect(
+    ui.queryByRole("button", { name: messages.auth.continueWithEmail }),
+  ).toBeNull();
+  const emailFields = ui.getAllByPlaceholderText(
+    messages.auth.emailPlaceholder,
+  );
+  expect(emailFields).toHaveLength(1);
+  expect(emailFields.at(0)?.getAttribute("value")).toBe("review@example.test");
+  expect(document.activeElement).toBe(passwordField);
 });
 
 test("password two-factor sign-in clears the old session before the challenge guard", async () => {
@@ -138,16 +252,9 @@ test("password two-factor sign-in clears the old session before the challenge gu
       ...emailOnly,
       localPassword: true,
     },
-    SIGN_IN_MODE.reauthenticate,
-    events,
+    { mode: SIGN_IN_MODE.reauthenticate, events },
   );
-  await client.query({
-    ...sessionOptions,
-    queryFn: async () => {
-      events.push("session-read");
-      return pendingTwoFactor ? null : MEMBER_SESSION;
-    },
-  });
+  client.setQueryData(sessionOptions.queryKey, MEMBER_SESSION);
   events.length = 0;
   globalThis.fetch = Object.assign(
     async (input: string | URL | Request) => {
@@ -156,6 +263,10 @@ test("password two-factor sign-in clears the old session before the challenge gu
         events.push("password-sign-in");
         pendingTwoFactor = true;
         return Response.json({ twoFactorRedirect: true });
+      }
+      if (url.includes("/get-session")) {
+        events.push("session-read");
+        return Response.json(pendingTwoFactor ? null : MEMBER_SESSION);
       }
       return Response.json(null);
     },
@@ -191,4 +302,68 @@ test("password two-factor sign-in clears the old session before the challenge gu
     events.indexOf("challenge"),
   );
   expect(appRouter.state.location.pathname).toBe("/auth/two-factor");
+});
+
+test("a committed password sign-in with a failed session refresh stays on the form and notifies once", async () => {
+  const { ui, appRouter } = await mount({ ...emailOnly, localPassword: true });
+  const requested: string[] = [];
+  globalThis.fetch = Object.assign(
+    async (input: string | URL | Request) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      requested.push(url.pathname);
+      if (url.pathname.endsWith("/sign-in/email")) {
+        return Response.json({
+          redirect: false,
+          token: "token",
+          user: MEMBER_SESSION.user,
+        });
+      }
+      if (url.pathname.endsWith("/get-session")) {
+        return Response.json(
+          {
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Session could not be read",
+          },
+          { status: 503 },
+        );
+      }
+      throw new Error(`Unexpected request: ${url.pathname}`);
+    },
+    { preconnect: () => undefined },
+  );
+  const notice = spyOn(stellaToast, "add").mockImplementation(() => "notice");
+  try {
+    const submit = ui.getByRole("button", {
+      name: messages.auth.signInWithPassword,
+    });
+    const form = submit.closest("form");
+    if (form === null) {
+      throw new Error("Password sign-in button must belong to its form");
+    }
+    const fields = within(form);
+    fireEvent.change(
+      fields.getByPlaceholderText(messages.auth.emailPlaceholder),
+      {
+        target: { value: "member@example.test" },
+      },
+    );
+    fireEvent.change(fields.getByPlaceholderText(messages.auth.password), {
+      target: { value: "correct horse battery staple" },
+    });
+    fireEvent.click(submit);
+    await waitFor(() => expect(notice).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(submit.hasAttribute("disabled")).toBe(false));
+    expect(appRouter.state.location.pathname).toBe("/auth/sign-in");
+    expect(ui.queryByTestId("existing-session")).toBeNull();
+    expect(ui.getByDisplayValue("member@example.test")).toBeDefined();
+    expect(
+      requested.filter((path) => path.endsWith("/sign-in/email")),
+    ).toHaveLength(1);
+    expect(
+      requested.filter((path) => path.endsWith("/get-session")),
+    ).toHaveLength(1);
+    expect(notice).toHaveBeenCalledTimes(1);
+  } finally {
+    notice.mockRestore();
+  }
 });

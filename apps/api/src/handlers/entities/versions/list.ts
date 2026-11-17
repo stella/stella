@@ -16,6 +16,7 @@ import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
+import { importOriginOf } from "@/api/lib/uploads/import-origin";
 
 const readVersionsParamsSchema = workspaceParams({
   entityId: resourceIdSchema("entity"),
@@ -75,7 +76,7 @@ export const readVersionFileMetadata = (
     .orderBy(fields.entityVersionId, fields.id)
     .limit(pageSize);
 
-const readVersionsHandler = async function* ({
+export const readVersionsHandler = async function* ({
   safeDb,
   workspaceId,
   entityId,
@@ -326,6 +327,10 @@ const readVersionsHandler = async function* ({
       diffWordsAdded: version.diffWordsAdded,
       diffWordsRemoved: version.diffWordsRemoved,
       sourceKind: version.source?.kind ?? null,
+      importOrigin:
+        version.source?.kind === "import"
+          ? importOriginOf(version.source)
+          : null,
       createdAt: version.createdAt.toISOString(),
       author: authorUser
         ? { id: authorUser.id, name: authorUser.name, image: authorUser.image }
@@ -350,7 +355,9 @@ const config = {
     "List one document's version history, newest first, with a before cursor " +
     "for older pages. Each version carries its number, stamp, label, " +
     "description, the words added and removed against its predecessor, its " +
-    "author, and the file attached to it; tombstoned versions are left out. " +
+    "author, the file attached to it, and, for a file imported from another " +
+    "system, its importOrigin (source, id, original dates and author); " +
+    "tombstoned versions are left out. " +
     "The response also names the entity's current version.",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,

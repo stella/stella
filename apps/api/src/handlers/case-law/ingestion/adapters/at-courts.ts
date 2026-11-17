@@ -1,3 +1,6 @@
+// parser-output-unchanged: Named listedDocumentUrl options preserve its body, argument values and evaluation order.
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
+// parser-output-unchanged: Reconciliation exposes the existing listing total for unfiltered source scopes; decision parsing and listed identities are unchanged.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
@@ -47,6 +50,7 @@ import {
   EMPTY_AST,
   encodeSourceRawEnvelope,
   isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
@@ -596,6 +600,14 @@ const parsedUrl = (value: string): URL | null =>
     catch: () => null,
   }).unwrapOr(null);
 
+type ListedDocumentUrlOptions = {
+  source: AtRisSourceDefinition;
+  item: RisListingItem;
+  sourceDocumentId: string;
+  dataType: "Html" | "Xml";
+  extension: "html" | "xml";
+};
+
 /**
  * The address the publisher lists for one format of this decision's document.
  *
@@ -606,13 +618,13 @@ const parsedUrl = (value: string): URL | null =>
  * document number implies, so a listed address can name a different host or a
  * different document and be refused rather than followed.
  */
-const listedDocumentUrl = (
-  source: AtRisSourceDefinition,
-  item: RisListingItem,
-  sourceDocumentId: string,
-  dataType: "Html" | "Xml",
-  extension: "html" | "xml",
-): string | undefined => {
+const listedDocumentUrl = ({
+  source,
+  item,
+  sourceDocumentId,
+  dataType,
+  extension,
+}: ListedDocumentUrlOptions): string | undefined => {
   const listed = mainDocumentFormats(item)[dataType];
   if (listed === undefined) {
     return undefined;
@@ -1055,13 +1067,13 @@ const buildListingOnly = ({
       decisionDate: data.decisionDate,
       decisionType: data.decisionType,
       sourceUrl: data.sourceUrl,
-      documentUrl: listedDocumentUrl(
+      documentUrl: listedDocumentUrl({
         source,
         item,
         sourceDocumentId,
-        "Html",
-        "html",
-      ),
+        dataType: "Html",
+        extension: "html",
+      }),
       // The listing states a text of its own for some applications, so a row
       // without its document is still not a row whose publisher wrote nothing.
       textFields: decisionTextFields(source, data, NO_SECTIONS),
@@ -1116,13 +1128,13 @@ const buildDecision = async ({
       source,
     });
   }
-  const xmlUrl = listedDocumentUrl(
+  const xmlUrl = listedDocumentUrl({
     source,
     item,
     sourceDocumentId,
-    "Xml",
-    "xml",
-  );
+    dataType: "Xml",
+    extension: "xml",
+  });
   if (xmlUrl === undefined) {
     return buildListingOnly({
       identity,
@@ -1282,13 +1294,13 @@ export const assembleAtRisDecision = (
       decisionType: data.decisionType,
       fulltext: parsed.fulltext,
       sourceUrl: data.sourceUrl,
-      documentUrl: listedDocumentUrl(
+      documentUrl: listedDocumentUrl({
         source,
         item,
         sourceDocumentId,
-        "Html",
-        "html",
-      ),
+        dataType: "Html",
+        extension: "html",
+      }),
       textFields: decisionTextFields(source, data, parsed.sections),
       metadata: checkedDecisionMetadata(
         {
@@ -1432,6 +1444,7 @@ const listReconciliationSlicePage = async (
         payload: item,
       })),
     totalPages,
+    publisherCount: source.excludeForeignCourts ? undefined : listing.total,
   };
 };
 
@@ -1589,6 +1602,7 @@ const createAdapter = <const TKey extends AtRisAdapterKey>(
           if (page.total !== expectedTotal) {
             return {
               decisions: [],
+              publisherRequest: PUBLISHER_REQUEST.ANSWERED,
               nextCursor: encodeCursor(restartSliceCursor(state.slice)),
             };
           }
@@ -1600,6 +1614,7 @@ const createAdapter = <const TKey extends AtRisAdapterKey>(
             );
             return {
               decisions: [],
+              publisherRequest: PUBLISHER_REQUEST.ANSWERED,
               nextCursor: encodeCursor(next),
             };
           }
@@ -1629,6 +1644,7 @@ const createAdapter = <const TKey extends AtRisAdapterKey>(
             if (state.page < totalPages) {
               return {
                 decisions: [],
+                publisherRequest: PUBLISHER_REQUEST.ANSWERED,
                 nextCursor: encodeCursor({
                   ...state,
                   page: state.page + 1,
@@ -1644,6 +1660,7 @@ const createAdapter = <const TKey extends AtRisAdapterKey>(
             ) {
               return {
                 decisions: [],
+                publisherRequest: PUBLISHER_REQUEST.ANSWERED,
                 nextCursor: encodeCursor(restartSliceCursor(state.slice)),
               };
             }
@@ -1654,6 +1671,7 @@ const createAdapter = <const TKey extends AtRisAdapterKey>(
             );
             return {
               decisions: [],
+              publisherRequest: PUBLISHER_REQUEST.ANSWERED,
               nextCursor: encodeCursor(next),
             };
           }
@@ -1700,6 +1718,7 @@ const createAdapter = <const TKey extends AtRisAdapterKey>(
             return {
               decisions,
               itemBuildFailures,
+              publisherRequest: PUBLISHER_REQUEST.ANSWERED,
               nextCursor: encodeCursor({
                 ...state,
                 page: state.page + 1,
@@ -1714,12 +1733,14 @@ const createAdapter = <const TKey extends AtRisAdapterKey>(
           if (collected !== expectedTotal - foreign) {
             return {
               decisions: [],
+              publisherRequest: PUBLISHER_REQUEST.ANSWERED,
               nextCursor: encodeCursor(restartSliceCursor(state.slice)),
             };
           }
           return {
             decisions,
             itemBuildFailures,
+            publisherRequest: PUBLISHER_REQUEST.ANSWERED,
             nextCursor: encodeCursor({
               slice: state.slice,
               phase: CURSOR_PHASE.VERIFY,

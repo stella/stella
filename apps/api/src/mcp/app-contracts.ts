@@ -5,6 +5,7 @@ import { MCP_APPS } from "@stll/mcp-apps/manifest";
 import type { PresentationApp } from "@stll/mcp-apps/manifest";
 
 import { READ_CASE_LAW_CITATIONS_PROJECTION } from "../lib/chat/case-law-citation-projection";
+import { CASE_LAW_COURT_CATALOG_PROJECTION } from "../lib/chat/case-law-court-catalog-projection";
 import { SEARCH_CASE_LAW_PROJECTION } from "../lib/chat/case-law-result-projections";
 import {
   blocksDecisionOutput,
@@ -73,6 +74,10 @@ export const MCP_APP_OUTPUT_CONTRACTS = {
   search_case_law: {
     access: "read",
     outputSchemaSource: SEARCH_CASE_LAW_PROJECTION,
+  },
+  list_case_law_courts: {
+    access: "read",
+    outputSchemaSource: CASE_LAW_COURT_CATALOG_PROJECTION,
   },
   resolve_case_law_decision: {
     access: "read",

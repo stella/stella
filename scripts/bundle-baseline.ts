@@ -45,6 +45,7 @@ import * as v from "valibot";
 
 import { MCP_APPS } from "../packages/mcp-apps/src/manifest";
 import { BASELINE_PATHS } from "./baseline-paths";
+import { assertOfflineCheckPreload } from "./offline-check-startup";
 
 const SCRIPTS_DIR = import.meta.dir;
 const REPO_ROOT = path.resolve(SCRIPTS_DIR, "..");
@@ -864,5 +865,7 @@ const main = (): number => {
 };
 
 if (import.meta.main) {
+  assertOfflineCheckPreload();
+
   process.exit(main());
 }

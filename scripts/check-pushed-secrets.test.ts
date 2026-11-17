@@ -6,11 +6,14 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { GITLEAKS_VERSION } from "./gitleaks-pins";
 
 const SCRIPT = fileURLToPath(
   new URL("check-pushed-secrets.sh", import.meta.url),
@@ -160,6 +163,9 @@ type ScanOptions = {
   /** What the scanner logs as read: a count, or "none" for no line. */
   scannerScanned?: string;
   scannerBinary?: string;
+  /** Replaces PATH entirely, leaving out the fake scanner. */
+  path?: string;
+  cacheHome?: string;
 };
 type ScanResult = {
   exitCode: number;
@@ -176,25 +182,33 @@ const scan = (
     scannerExit = 0,
     scannerScanned,
     scannerBinary,
+    path: searchPath,
+    cacheHome,
   }: ScanOptions = {},
 ): ScanResult => {
   rmSync(log, { force: true });
   rmSync(argsLog, { force: true });
   rmSync(patchLog, { force: true });
-  const result = Bun.spawnSync(["bash", SCRIPT], {
-    cwd,
-    env: {
-      ...process.env,
-      FAKE_GITLEAKS_EXIT: String(scannerExit),
-      GITLEAKS_TEST_BINARY: scannerBinary ?? "",
-      ...(scannerScanned === undefined
-        ? {}
-        : { FAKE_GITLEAKS_SCANNED: scannerScanned }),
-      PATH: `${pathPrefix}:${bin}:${process.env["PATH"] ?? ""}`,
+  const scanPath =
+    searchPath ?? `${pathPrefix}:${bin}:${process.env["PATH"] ?? ""}`;
+  const result = Bun.spawnSync(
+    [Bun.which("bash", { PATH: scanPath }) ?? "bash", SCRIPT],
+    {
+      cwd,
+      env: {
+        ...process.env,
+        FAKE_GITLEAKS_EXIT: String(scannerExit),
+        GITLEAKS_TEST_BINARY: scannerBinary ?? "",
+        ...(scannerScanned === undefined
+          ? {}
+          : { FAKE_GITLEAKS_SCANNED: scannerScanned }),
+        PATH: searchPath ?? `${pathPrefix}:${bin}:${process.env["PATH"] ?? ""}`,
+        ...(cacheHome === undefined ? {} : { XDG_CACHE_HOME: cacheHome }),
+      },
+      stdin: new TextEncoder().encode(stdin),
+      stderr: "pipe",
     },
-    stdin: new TextEncoder().encode(stdin),
-    stderr: "pipe",
-  });
+  );
   return {
     exitCode: result.exitCode,
     patch: existsSync(patchLog) ? readFileSync(patchLog, "utf-8") : "",
@@ -570,6 +584,72 @@ regexes = ['''sk_test_FAKE''']
     expect(result.exitCode).toBe(0);
     expect(result.ranges).toContain(`--diff-merges=first-parent -n 1 ${tip}`);
     expect(result.patch).toContain(MAIN_ONLY);
+  });
+});
+
+describe("a host without a scanner on PATH", () => {
+  const dir = initRepo("no-scanner");
+  const before = commitFile(dir, { file: "kept.txt", text: "one\n" });
+  publish(dir, { ref: "main", oid: before });
+  const changed = commitFile(dir, { file: "kept.txt", text: "two\n" });
+  const push = `refs/heads/x ${changed} refs/heads/x ${before}\n`;
+  // Only the tools the hook runs, each linked by name: no system directory is
+  // on PATH, so a scanner installed anywhere on the host stays out of reach.
+  const toolsBin = path.join(root, "no-scanner-bin");
+  mkdirSync(toolsBin);
+  const tools = [
+    "bash",
+    "git",
+    "dirname",
+    "mktemp",
+    "awk",
+    "sed",
+    "cat",
+    "rm",
+    "tail",
+  ];
+  for (const tool of tools) {
+    const resolved = Bun.which(tool);
+    if (resolved === null) {
+      throw new Error(`test host has no ${tool}`);
+    }
+    symlinkSync(
+      tool === "git" ? REAL_GIT : resolved,
+      path.join(toolsBin, tool),
+    );
+  }
+  symlinkSync(process.execPath, path.join(toolsBin, "bun"));
+  const searchPath = toolsBin;
+  const platformKey = `${process.platform}-${process.arch}`;
+  const pinnedCache = (cacheHome: string) =>
+    path.join(cacheHome, "stella", "gitleaks", GITLEAKS_VERSION, platformKey);
+
+  test("the test PATH really has no scanner", () => {
+    const probe = Bun.spawnSync(
+      [path.join(toolsBin, "bash"), "-c", "command -v gitleaks"],
+      {
+        env: { PATH: searchPath },
+      },
+    );
+    expect(probe.exitCode).not.toBe(0);
+  });
+
+  test("an unverifiable scanner download refuses the push", () => {
+    const cacheHome = mkdtempSync(path.join(root, "cache-"));
+    mkdirSync(pinnedCache(cacheHome), { recursive: true });
+    // A cached archive is reverified before use, so this one never runs.
+    writeFileSync(
+      path.join(pinnedCache(cacheHome), "archive.tar.gz"),
+      "not the release",
+    );
+    const result = scan(push, { cwd: dir, path: searchPath, cacheHome });
+    // Where dependencies are installed the provisioner names the mismatch; an
+    // install-free run cannot load it. Either way nothing is scanned.
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain(
+      "cannot provision the pinned gitleaks; secret scanning refused",
+    );
+    expect(result.ranges).toEqual([]);
   });
 });
 

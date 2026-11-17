@@ -18,6 +18,13 @@ import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronRightIcon } from "@stll/ui/icons";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
 import { ScrollArea } from "@stll/ui/scroll-area";
+import {
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "@stll/ui/select";
 import { Skeleton } from "@stll/ui/skeleton";
 import {
   Table,
@@ -47,6 +54,7 @@ import { parseDeterministicDate } from "@/lib/deterministic-date";
 import {
   CALENDAR_DATE_FORMAT,
   MEDIUM_DATE_SHORT_TIME_FORMAT,
+  UTC_CALENDAR_DATE_FORMAT,
 } from "@/lib/relative-time";
 import {
   CASE_LAW_COVERAGE_AVAILABILITY_LABEL_KEYS,
@@ -244,21 +252,11 @@ export const CaseLawCoveragePage = ({
         aria-label={t("caseLaw.coverage.countryNavigation")}
         className="bg-background sticky top-0 z-10 border-b py-2"
       >
-        <select
-          aria-label={t("caseLaw.coverage.countryNavigation")}
-          className="bg-background focus-visible:ring-ring min-h-11 w-full rounded-md border px-3 text-sm focus-visible:ring-2 sm:hidden"
-          value={
-            countries.some(
-              (country) => caseLawCoverageAnchor(country.country) === hash,
-            )
-              ? hash
-              : ""
-          }
-          onChange={(event) => {
+        <Select<string>
+          onValueChange={(anchor) => {
             const country = countries.find(
               (candidate) =>
-                caseLawCoverageAnchor(candidate.country) ===
-                event.currentTarget.value,
+                caseLawCoverageAnchor(candidate.country) === anchor,
             );
             if (country === undefined) {
               return;
@@ -272,19 +270,33 @@ export const CaseLawCoveragePage = ({
               "law-coverage.navigate-country",
             );
           }}
+          value={
+            countries.some(
+              (country) => caseLawCoverageAnchor(country.country) === hash,
+            )
+              ? hash
+              : null
+          }
         >
-          <option value="" disabled>
-            {t("caseLaw.coverage.countryNavigation")}
-          </option>
-          {countries.map((country) => (
-            <option
-              value={caseLawCoverageAnchor(country.country)}
-              key={country.country}
-            >
-              {caseLawCountryName(format, country.country)}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger
+            aria-label={t("caseLaw.coverage.countryNavigation")}
+            className="min-h-11 w-full sm:hidden"
+          >
+            <SelectValue
+              placeholder={t("caseLaw.coverage.countryNavigation")}
+            />
+          </SelectTrigger>
+          <SelectPopup>
+            {countries.map((country) => (
+              <SelectItem
+                key={country.country}
+                value={caseLawCoverageAnchor(country.country)}
+              >
+                {caseLawCountryName(format, country.country)}
+              </SelectItem>
+            ))}
+          </SelectPopup>
+        </Select>
         <div className="hidden flex-wrap gap-x-1 sm:flex">
           {countries.map((country) => (
             <Link
@@ -409,6 +421,7 @@ const CoverageHeading = ({ children }: PropsWithChildren) => {
 
 const COLOR_BY_JURISDICTION = {
   AUT: "var(--chart-1)",
+  BRA: "var(--chart-2)",
   CZE: "var(--chart-2)",
   EU: "var(--chart-3)",
   GBR: "var(--chart-4)",
@@ -518,6 +531,39 @@ const Delta = ({ value }: { value: number | null }) => {
       {format.number(value, DELTA_FORMAT)}
     </span>
   );
+};
+
+/**
+ * A source's freshness. A fixed snapshot states the day it was taken beside
+ * its status: that day, not the last run, is how current it can ever be.
+ */
+const SourceHealth = ({ source }: { source: CaseLawCoverageSource }) => {
+  const format = useFormatter();
+  const { edition } = source;
+
+  switch (edition.type) {
+    case "live":
+      return <CaseLawHealthSignal className="text-sm" health={source.health} />;
+    case "snapshot": {
+      const taken = parseDeterministicDate(edition.snapshotDate);
+      return (
+        <span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-1">
+          <CaseLawHealthSignal className="text-sm" health={source.health} />
+          <time
+            className="text-muted-foreground text-xs"
+            dateTime={edition.snapshotDate}
+          >
+            {taken === null
+              ? edition.snapshotDate
+              : format.dateTime(taken, UTC_CALENDAR_DATE_FORMAT)}
+          </time>
+        </span>
+      );
+    }
+    default:
+      edition satisfies never;
+      return panic("Unhandled case-law source edition");
+  }
 };
 
 type CountryCardProps = PropsWithChildren<{
@@ -647,12 +693,17 @@ const CountrySection = ({
 };
 
 const CountryFreshness = ({
-  sources,
+  sources: allSources,
 }: {
   sources: readonly CaseLawCoverageSource[];
 }) => {
   const t = useTranslations();
   const relativeTime = useRelativeTime();
+  // A fixed release states its own date in the row; sync freshness applies to live sources.
+  const sources = allSources.filter((source) => source.edition.type === "live");
+  if (sources.length === 0) {
+    return null;
+  }
   const exceptions = sources.filter(
     (source) => source.health !== "current",
   ).length;
@@ -736,13 +787,16 @@ const SourcesTableHead = () => {
           <Tooltip>
             <TooltipTrigger
               render={
-                <button
-                  type="button"
-                  className="focus-visible:ring-ring min-h-11 max-w-full whitespace-normal underline decoration-dotted underline-offset-4 focus-visible:ring-2"
+                <Button
+                  className="min-h-11 max-w-full"
+                  size="inline"
+                  variant="muted"
                 />
               }
             >
-              {t("caseLaw.coverage.completeness")}
+              <span className="font-medium underline decoration-dotted underline-offset-4">
+                {t("caseLaw.coverage.completeness")}
+              </span>
             </TooltipTrigger>
             <TooltipPopup>
               {t("caseLaw.coverage.completenessHelp")}
@@ -816,17 +870,19 @@ const SourceRows = ({ source }: { source: CaseLawCoverageSource }) => {
             </a>
             {source.health !== "current" && (
               <div className="mt-1 ps-1 text-xs">
-                <CaseLawHealthSignal health={source.health} />
+                <SourceHealth source={source} />
               </div>
             )}
           </TableHead>
-          <TableCell className="text-end tabular-nums">
+          <TableCell align="end" numeric>
             {format.number(source.publishedDecisions)}
           </TableCell>
+
           <TableCell className={"text-end"}>
             <Delta value={source.addedLastWeek} />
           </TableCell>
           <TableCell className={"whitespace-normal"}>
+            <SourcePublisherCensus census={source.publisherCensus} />
             <SourceCompleteness
               completeness={source.completeness}
               knownGaps={source.knownGaps}
@@ -842,7 +898,7 @@ const SourceRows = ({ source }: { source: CaseLawCoverageSource }) => {
                 {row.court ?? t("caseLaw.corpusStatus.otherCourts")}
               </span>
             </TableHead>
-            <TableCell className="text-end tabular-nums">
+            <TableCell align="end" numeric>
               {format.number(row.decisions)}
             </TableCell>
             <TableCell colSpan={SOURCE_COLUMN_COUNT - 2} />
@@ -850,6 +906,50 @@ const SourceRows = ({ source }: { source: CaseLawCoverageSource }) => {
         ))}
       </TableBody>
     </>
+  );
+};
+
+const SourcePublisherCensus = ({
+  census: { type, measurement },
+}: {
+  census: CaseLawCoverageSource["publisherCensus"];
+}) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  const labels = {
+    unknown: "caseLaw.coverage.notMeasuredYet",
+    "none-recorded": "caseLaw.coverage.censusComplete",
+    known: "caseLaw.coverage.censusIncomplete",
+  } as const;
+  const tones = {
+    unknown: "neutral",
+    "none-recorded": "success",
+    known: "warning",
+  } as const;
+  return (
+    <div className="mb-1 flex flex-col gap-0.5 wrap-anywhere">
+      <ReviewStatusBadge
+        tone={tones[type]}
+        className="max-w-full whitespace-normal"
+      >
+        {t(labels[type])}
+      </ReviewStatusBadge>
+      {measurement.publisher !== null && (
+        <span className="text-muted-foreground text-xs tabular-nums">
+          {t("caseLaw.coverage.censusComparison", {
+            stored: format.number(measurement.stored),
+            publisher: format.number(measurement.publisher),
+            withText: format.number(measurement.withText),
+          })}
+          <span className="block">
+            {t("caseLaw.coverage.censusSliceMemberships")}
+          </span>
+        </span>
+      )}
+      {measurement.observedAt !== null && (
+        <ObservedOn asOf={measurement.observedAt} />
+      )}
+    </div>
   );
 };
 

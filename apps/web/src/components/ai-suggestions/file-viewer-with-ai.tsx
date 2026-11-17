@@ -4,6 +4,7 @@ import { cn } from "@stll/ui/utils";
 
 import { activeLegalDocumentRef } from "@/components/ai-suggestions/active-legal-document";
 import { DockedChatStackProvider } from "@/components/chat/docked-chat-stack";
+import { DockedComposerPending } from "@/components/chat/docked-composer";
 import type { ChatThreadId } from "@/lib/chat-thread-ref";
 
 import { FileChatOverlayBoundary } from "./file-chat-overlay-boundary";
@@ -119,6 +120,7 @@ export const FileViewerWithAI = ({
               setLazyGatedChatComposer(() => createLazyGatedChatComposer());
             }}
             overlayKey={overlayKey}
+            pending={<DockedComposerPending surface="sign-in" />}
           >
             <LazyGatedChatComposer
               activeDraft={activeDraft}
@@ -139,6 +141,7 @@ export const FileViewerWithAI = ({
               setLazyFileChatOverlayHost(() => createLazyFileChatOverlayHost());
             }}
             overlayKey={overlayKey}
+            pending={<DockedComposerPending surface="chat" />}
           >
             <LazyFileChatOverlayHost
               activeExternal={activeExternal}

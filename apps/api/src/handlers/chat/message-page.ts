@@ -7,12 +7,12 @@ import { withScopedTx } from "@/api/db/safe-db";
 import { chatMessages, chatTurns } from "@/api/db/schema";
 import {
   chatMessageFromPersisted,
+  clientVisibleChatPart,
   getChatAttachmentUrl,
   isChatAttachmentPart,
   normalizePersistedChatMessageContent,
 } from "@/api/handlers/chat/chat-message-parts";
 import { ACTIVE_CHAT_TURN_STATUSES } from "@/api/handlers/chat/chat-turn-state";
-import { clientVisibleChatPart } from "@/api/handlers/chat/client-visible-chat-part";
 import type {
   ChatMessageMetadata,
   ChatMessageRole,
@@ -125,8 +125,24 @@ const loadChatMessagePageOnTx = async ({
 }: LoadChatMessagePageOnTxArgs): Promise<ChatMessagePage> => {
   const pageSize = normalizeTenantPageLimit(LIMITS.chatMessagesPageSizeDefault);
 
+  // The thread's unsettled turn is read in the same statement as its
+  // messages, so both come from one snapshot. Read apart, a turn accepted (its
+  // message and its row commit together) or settled between the two reads
+  // pairs a running turn with a page missing its message, or a page missing
+  // its answer with no running turn.
+  const activeTurnId = tx
+    .select({ id: chatTurns.id })
+    .from(chatTurns)
+    .where(
+      and(
+        eq(chatTurns.threadId, threadId),
+        inArray(chatTurns.status, [...ACTIVE_CHAT_TURN_STATUSES]),
+      ),
+    )
+    .limit(1);
   const rows = await tx
     .select({
+      activeTurnId: sql<SafeId<"chatTurn"> | null>`(${activeTurnId})`,
       id: chatMessages.id,
       role: chatMessages.role,
       content: chatMessages.content,
@@ -162,21 +178,9 @@ const loadChatMessagePageOnTx = async ({
 
   const lastActivityAt = pageAscending.at(-1)?.createdAt.toISOString() ?? null;
 
-  const activeTurn = (
-    await tx
-      .select({ id: chatTurns.id })
-      .from(chatTurns)
-      .where(
-        and(
-          eq(chatTurns.threadId, threadId),
-          inArray(chatTurns.status, [...ACTIVE_CHAT_TURN_STATUSES]),
-        ),
-      )
-      .limit(1)
-  ).at(0);
-
   return {
-    activeTurnId: activeTurn?.id ?? null,
+    // No message, no turn: a turn's row commits with its message.
+    activeTurnId: rows.at(0)?.activeTurnId ?? null,
     messages: await projectPageRowsOnTx({
       rows: pageAscending,
       tx,

@@ -11,6 +11,7 @@ import { eq, inArray } from "drizzle-orm";
 
 import { user as authUser } from "@/api/db/auth-schema";
 import {
+  auditLogs,
   BILLING_STATUS,
   billingArrangements,
   featureEnrolments,
@@ -24,11 +25,19 @@ import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { SafeHandlerLogContext } from "@/api/lib/api-handlers";
 import type { AuditEvent } from "@/api/lib/audit-log";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  createAuditRecorder,
+} from "@/api/lib/audit-log";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import {
+  removeIssuingSeller,
+  seedIssuingSeller,
+} from "@/api/tests/helpers/issuing-seller";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -53,6 +62,7 @@ let ids: TestIds;
 const entryIds: SafeId<"timeEntry">[] = [];
 const invoiceIds: SafeId<"invoice">[] = [];
 const auditEvents: AuditEvent[] = [];
+let issuingSellerId: SafeId<"sellerProfile">;
 
 beforeAll(async () => {
   const fixture = await getRlsFixture();
@@ -73,6 +83,7 @@ beforeAll(async () => {
       },
     ])
     .onConflictDoNothing();
+  issuingSellerId = await seedIssuingSeller(db, ids.orgA);
 });
 afterEach(async () => {
   if (invoiceIds.length) {
@@ -88,7 +99,13 @@ afterEach(async () => {
   invoiceIds.length = 0;
   auditEvents.length = 0;
 });
-afterAll(releaseRlsFixture);
+afterAll(async () => {
+  try {
+    await removeIssuingSeller(db, issuingSellerId);
+  } finally {
+    await releaseRlsFixture();
+  }
+});
 
 const recordAuditEvent = async (
   _tx: unknown,
@@ -397,6 +414,77 @@ test("hourly draft reservations consume the cap; refused claims roll back and de
     context(deleteInvoice.handler, {}, { invoiceId }),
   );
   expect(await draft([second])).toHaveProperty("id");
+});
+
+test("a refused invoice line restores its time claim, line and transactional audit", async () => {
+  await setArrangement("hourly", 1000);
+  const first = await seedEntry();
+  const invoiceId = invoiceIdFrom(await draft([first]));
+  const second = await seedEntry();
+  const beforeEntry =
+    (await db.query.timeEntries.findFirst({
+      where: { id: { eq: second } },
+    })) ?? panic("The approved invoice entry fixture is missing");
+  expect(beforeEntry.status).toBe(BILLING_STATUS.APPROVED);
+  expect(beforeEntry.invoiceId).toBeNull();
+  const beforeLines = await timeLines(invoiceId);
+  expect(beforeLines).toHaveLength(1);
+  const beforeInvoice = await invoiceRow(invoiceId);
+  const resources = [invoiceId, second];
+  const beforeAudits = await db
+    .select()
+    .from(auditLogs)
+    .where(inArray(auditLogs.resourceId, resources));
+  const handlerContext = context(
+    createLine.handler,
+    {
+      source: { type: "time_entry", timeEntryId: second },
+      vatRateBps: 0,
+      vatTreatment: "domestic_vat",
+    },
+    { invoiceId },
+  );
+  const recorder = createAuditRecorder({
+    organizationId: ids.orgA,
+    workspaceId: ids.wsA2,
+    userId: ids.userA1,
+    request: handlerContext.request,
+    server: null,
+  });
+  const attemptedAudits: AuditEvent[] = [];
+  const result = await createLine.handler({
+    ...handlerContext,
+    recordAuditEvent: async (tx, events) => {
+      attemptedAudits.push(...(Array.isArray(events) ? events : [events]));
+      await recorder(tx, events);
+    },
+  });
+  expect(result).toMatchObject({
+    code: 409,
+    response: { code: "billing_cap_exceeded" },
+  });
+  expect(attemptedAudits).toEqual([
+    expect.objectContaining({
+      resourceId: invoiceId,
+      changes: {
+        linesAdded: {
+          old: null,
+          new: [expect.objectContaining({ source: "time_entry" })],
+        },
+      },
+    }),
+  ]);
+  expect(
+    await db.query.timeEntries.findFirst({ where: { id: { eq: second } } }),
+  ).toEqual(beforeEntry);
+  expect(await timeLines(invoiceId)).toEqual(beforeLines);
+  expect(await invoiceRow(invoiceId)).toEqual(beforeInvoice);
+  expect(
+    await db
+      .select()
+      .from(auditLogs)
+      .where(inArray(auditLogs.resourceId, resources)),
+  ).toEqual(beforeAudits);
 });
 
 test.each([40, 41])(

@@ -3,7 +3,9 @@
 import { useCallback, useId, useState } from "react";
 
 import { cn } from "../lib/utils";
+import { withoutDirectionalControls } from "./bidi-text";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./tooltip";
+import { TruncatedText } from "./truncated-text";
 
 type IdentityTextProps = {
   children: string;
@@ -16,6 +18,7 @@ export const IdentityText = ({ children, className }: IdentityTextProps) => {
   const [overflow, setOverflow] = useState(false);
   const [hasFocusOwner, setHasFocusOwner] = useState(false);
   const [open, setOpen] = useState(false);
+  const name = withoutDirectionalControls(children);
   const textRef = useCallback((node: HTMLSpanElement | null) => {
     if (node === null) {
       return undefined;
@@ -60,24 +63,30 @@ export const IdentityText = ({ children, className }: IdentityTextProps) => {
             setOpen(true);
           }
         }}
+        // TruncatedText cuts the name at its container; the tooltip here is
+        // its hint, because it also opens when the owning control takes focus.
         render={
-          <span
+          <TruncatedText
             className={cn(
-              "focus-visible:ring-ring block min-w-0 truncate outline-none [unicode-bidi:isolate] focus-visible:ring-2",
+              "focus-visible:ring-ring outline-none [unicode-bidi:isolate] focus-visible:ring-2",
               className,
             )}
             dir="auto"
+            hint={false}
             ref={textRef}
             role={overflow && !hasFocusOwner ? "button" : undefined}
             tabIndex={overflow && !hasFocusOwner ? 0 : undefined}
           />
         }
       >
-        {children}
+        {name}
       </TooltipTrigger>
-      <TooltipPopup className="max-w-sm" role="tooltip">
+      {/* Beside the name, never above or below it: clipped names sit in
+          stacked rows, and a popup over the next row hides the row the
+          pointer is heading to. */}
+      <TooltipPopup className="max-w-sm" role="tooltip" side="inline-end">
         <span className="block max-w-sm wrap-break-word" dir="auto">
-          {children}
+          {name}
         </span>
       </TooltipPopup>
     </Tooltip>

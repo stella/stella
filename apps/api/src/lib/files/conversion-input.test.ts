@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import JSZip from "jszip";
 
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 
 import {
   checkConversionInput,
@@ -29,28 +28,25 @@ const encodeUtf16WithoutBom = (
   byteOrder: "le" | "be",
 ): Uint8Array => encodeUtf16(value, byteOrder).slice(2);
 const zip = async (path: string, value: string): Promise<Uint8Array> =>
-  new Uint8Array(
-    await writeZipEntry(new JSZip(), path, encode(value)).generateAsync({
-      type: "arraybuffer",
-    }),
-  );
+  await zipBytes(path, encode(value));
 
 const zipEntries = async (
   entries: Readonly<Record<string, string>>,
 ): Promise<Uint8Array> => {
-  const archive = new JSZip();
+  const archive = new ZipArchive();
   for (const [path, value] of Object.entries(entries)) {
-    writeZipEntry(archive, path, encode(value));
+    archive.set(path, encode(value));
   }
-  return new Uint8Array(await archive.generateAsync({ type: "arraybuffer" }));
+  return new Uint8Array(
+    (await archive.generate({ compression: "store" })).buffer,
+  );
 };
 
-const zipBytes = async (path: string, value: Uint8Array): Promise<Uint8Array> =>
-  new Uint8Array(
-    await writeZipEntry(new JSZip(), path, value).generateAsync({
-      type: "arraybuffer",
-    }),
-  );
+async function zipBytes(path: string, value: Uint8Array): Promise<Uint8Array> {
+  const archive = new ZipArchive();
+  archive.set(path, value);
+  return await archive.generate({ compression: "store" });
+}
 
 const binaryField = (instruction: string): Uint8Array =>
   new Uint8Array([0x13, ...encode(instruction), 0x14]);

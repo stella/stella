@@ -3,6 +3,11 @@ import { and, eq, sql } from "drizzle-orm";
 
 import type { ReasoningEffort } from "@stll/ai-catalog";
 import type { ChatSendRequest } from "@stll/api-contract/chat";
+import {
+  CHAT_CLOUD_RUN_TARGET,
+  type ChatLocalRunTarget,
+  type ChatRunTarget,
+} from "@stll/api-contract/chat-run-target";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { chatThreads } from "@/api/db/schema";
@@ -11,14 +16,15 @@ import {
   loadWindowedThreadHistory,
 } from "@/api/handlers/chat/history-window";
 import type { ChatHistorySnapshot } from "@/api/handlers/chat/history-window";
-import { shouldRefreshEmptyThreadTitle } from "@/api/handlers/chat/thread-title";
 import type {
   ChatMessage,
   PersistedChatMessageContent,
 } from "@/api/handlers/chat/types";
+import { shouldRefreshEmptyThreadTitle } from "@/api/lib/ai-generation/thread-title";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { chatRunTargetOf } from "@/api/lib/chat/run-target";
 import {
   type ChatThreadNamesRead,
   EMPTY_CHAT_THREAD_NAMES_READ,
@@ -46,6 +52,8 @@ type ThreadValidationState = {
     content: PersistedChatMessageContent;
     role: ChatMessage["role"];
   } | null;
+  /** Where the thread runs its turns; cloud for a thread the send creates. */
+  runTarget: ChatRunTarget;
   /** Every name the thread's history holds. */
   threadNames: ChatThreadNamesRead;
   webSearchEnabled: boolean;
@@ -74,6 +82,7 @@ export const readThreadValidationState = async ({
           },
           columns: {
             activeSkill: true,
+            chatLocalRunTarget: true,
             workspaceId: true,
             webSearchEnabled: true,
           },
@@ -111,6 +120,7 @@ export const readThreadValidationState = async ({
       return Result.ok({
         activeSkill: initialActiveSkill,
         persistedMessage: null,
+        runTarget: CHAT_CLOUD_RUN_TARGET,
         threadNames: EMPTY_CHAT_THREAD_NAMES_READ,
         webSearchEnabled: false,
       });
@@ -137,6 +147,7 @@ export const readThreadValidationState = async ({
               content: persistedMessage.content,
               role: persistedMessage.role,
             },
+      runTarget: chatRunTargetOf(thread.chatLocalRunTarget),
       threadNames,
       webSearchEnabled: thread.webSearchEnabled,
     });
@@ -150,6 +161,8 @@ type ChatThreadRecord = {
   webSearchEnabled: boolean;
   chatModel: string | null;
   chatReasoningEffort: ReasoningEffort | null;
+  /** The stored run target (`storedChatRunTarget`); null runs in the cloud. */
+  chatLocalRunTarget: ChatLocalRunTarget | null;
   messages: {
     id: SafeId<"chatMessage">;
     role: ChatMessage["role"];
@@ -240,6 +253,7 @@ const loadThreadAttempt = async ({
       webSearchEnabled: boolean;
       chatModel: string | null;
       chatReasoningEffort: ReasoningEffort | null;
+      chatLocalRunTarget: ChatLocalRunTarget | null;
       rollbackToken: string | null;
     };
 
@@ -260,6 +274,7 @@ const loadThreadAttempt = async ({
             webSearchEnabled: true,
             chatModel: true,
             chatReasoningEffort: true,
+            chatLocalRunTarget: true,
             rollbackToken: true,
           },
         }),
@@ -293,6 +308,7 @@ const loadThreadAttempt = async ({
           webSearchEnabled: existing.webSearchEnabled,
           chatModel: existing.chatModel,
           chatReasoningEffort: existing.chatReasoningEffort,
+          chatLocalRunTarget: existing.chatLocalRunTarget,
           messages: [],
           historySnapshot: EMPTY_CHAT_HISTORY_SNAPSHOT,
         },
@@ -514,6 +530,7 @@ const loadThreadAttempt = async ({
         webSearchEnabled: false,
         chatModel: null,
         chatReasoningEffort: null,
+        chatLocalRunTarget: null,
         messages: [],
         historySnapshot: EMPTY_CHAT_HISTORY_SNAPSHOT,
       },

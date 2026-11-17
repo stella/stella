@@ -21,6 +21,7 @@ import {
 } from "@stll/ui/icons";
 import { MattersNavIcon } from "@stll/ui/matter-icon";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 import type { SortableProperty } from "@stll/workspace-ui/sorts";
 
@@ -482,13 +483,8 @@ const CollectionCell = ({ column, entry }: CollectionCellProps) => {
         entry.type === "entity" && entry.entity.kind === "document"
           ? getFirstFile(entry.entity)
           : null;
-      return (
-        <button
-          className="flex min-w-0 items-center gap-2 text-start"
-          disabled={open === undefined}
-          onClick={open}
-          type="button"
-        >
+      const name = (
+        <span className="flex min-w-0 items-center gap-2">
           {entry.type === "entity" && (
             <EntityKindIcon
               className="size-4 shrink-0"
@@ -507,18 +503,27 @@ const CollectionCell = ({ column, entry }: CollectionCellProps) => {
               }
             />
           )}
-          <UserText className="truncate font-medium">
+          <TruncatedText className="font-medium" render={<UserText />}>
             {entry.type === "entity"
               ? getEntityName(entry.entity)
               : entry.signal.title}
-          </UserText>
+          </TruncatedText>
           {entry.type === "proposal" && (
             <ReviewStatusBadge tone="neutral">
               {t("flows.status.awaitingReview")}
             </ReviewStatusBadge>
           )}
           {entry.type === "entity" && <WorkRiskBadge risk={entry.workRisk} />}
-        </button>
+        </span>
+      );
+      // An entry with nothing to open is a name, not a dimmed control.
+      if (open === undefined) {
+        return name;
+      }
+      return (
+        <Button className="flex min-w-0" onClick={open} variant="plain">
+          {name}
+        </Button>
       );
     }
     case "_matter": {
@@ -544,7 +549,7 @@ const CollectionCell = ({ column, entry }: CollectionCellProps) => {
         case "document":
           return t("common.document");
         case "folder":
-          return t("search.kinds.folder");
+          return t("common.folder");
         case null:
           return null;
         case "message":

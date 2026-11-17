@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -15,6 +22,7 @@ import {
   validateArtifactDownloadExceptions,
   validateArtifactDownloads,
   validateLocalActionReferences,
+  validateLocalActionsAfterCheckout,
   validateNoRubyProcessSpawns,
   validateNoRubyShell,
   validateWorkflowJobTimeouts,
@@ -24,6 +32,97 @@ import {
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const FIXTURES = path.join(import.meta.dirname, "__fixtures__/workflow-yaml");
+
+const runIosCertificateImport = (keychains: string[], listStatus = 0) => {
+  const workflow = readFileSync(
+    path.join(ROOT, ".github/workflows/release-mobile-ios.yml"),
+    "utf-8",
+  );
+  const script =
+    /- name: Import the distribution certificate[\s\S]*? {8}run: \|\n((?: {10}[^\n]*\n)+)/u.exec(
+      workflow,
+    )?.[1];
+  if (!script) {
+    throw new Error("iOS certificate import step is missing");
+  }
+  const root = mkdtempSync(path.join(tmpdir(), "ios-signing-"));
+  const githubEnv = path.join(root, "github-env");
+  try {
+    const result = Bun.spawnSync(
+      [
+        "/bin/bash",
+        "-c",
+        String.raw`
+security() {
+  case "$*" in
+    "list-keychains -d user")
+      printf '%s\n' "$EXISTING_KEYCHAINS"
+      return "$LIST_STATUS"
+      ;;
+    "list-keychains -d user -s "*)
+      shift 4
+      printf '%s\0' "$@"
+      ;;
+  esac
+}
+openssl() { printf '%s\n' 'test-password'; }
+` + script.replace(/^ {10}/gmu, ""),
+      ],
+      {
+        env: {
+          ...process.env,
+          RUNNER_TEMP: root,
+          GITHUB_ENV: githubEnv,
+          CERTIFICATE_BASE64:
+            Buffer.from("test-certificate").toString("base64"),
+          CERTIFICATE_PASSWORD: "test-password",
+          EXISTING_KEYCHAINS: keychains
+            .map((keychain) => `    "${keychain}"`)
+            .join("\n"),
+          LIST_STATUS: String(listStatus),
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    return {
+      exitCode: result.exitCode,
+      stderr: result.stderr.toString(),
+      keychains: result.stdout.toString().split("\0").filter(Boolean),
+      published: existsSync(githubEnv) ? readFileSync(githubEnv, "utf-8") : "",
+      signingKeychain: path.join(root, "release-signing.keychain-db"),
+    };
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+};
+
+test("iOS signing preserves each existing keychain path as one argument", () => {
+  for (const keychains of [
+    [],
+    ["fixtures/keychains/login.keychain-db"],
+    [
+      "fixtures/Build Agent/team signing.keychain-db",
+      "fixtures/keychains/System.keychain",
+    ],
+    ["fixtures/keychains/signing [one]*.keychain-db"],
+  ]) {
+    const result = runIosCertificateImport(keychains);
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toBe("");
+    expect(result.keychains).toEqual([result.signingKeychain, ...keychains]);
+    expect(result.published).toBe(
+      `MOBILE_SIGNING_KEYCHAIN=${result.signingKeychain}\n`,
+    );
+  }
+});
+
+test("iOS signing stops when the existing keychain list cannot be read", () => {
+  const result = runIosCertificateImport(["/partial/login.keychain-db"], 17);
+  expect(result.exitCode).toBe(17);
+  expect(result.keychains).toEqual([]);
+  expect(result.published).toBe("");
+});
 
 test("archive action lint rewrites are one-to-one and preserve workflow semantics", () => {
   const source = `jobs:
@@ -440,5 +539,84 @@ describe("workflow YAML validation", () => {
       "message",
       `${file}: runs.steps[0] run and shell must be nonempty strings`,
     );
+  });
+});
+
+describe("workspace actions run after the checkout that brings them", () => {
+  const CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
+  const file = "workflow.yml";
+  const job = (steps: Record<string, unknown>[]) => ({
+    jobs: { build: { "timeout-minutes": 5, steps } },
+  });
+
+  test("a workspace action before any checkout is rejected", () => {
+    expect(() =>
+      validateLocalActionsAfterCheckout(
+        job([{ uses: "./.github/actions/partial-clone-checkout" }]),
+        file,
+      ),
+    ).toThrow(
+      `${file}: job build uses ./.github/actions/partial-clone-checkout before checking out the repository there; a workspace action cannot run before the checkout that brings it`,
+    );
+  });
+
+  test("a root checkout, local or through the shared retry action, makes workspace actions usable", () => {
+    for (const uses of [
+      CHECKOUT,
+      "stella/.github/actions/partial-clone-checkout@c6d66dfa2a5ad1f96a21b819fe456fecdd3d6f6d",
+    ]) {
+      expect(() =>
+        validateLocalActionsAfterCheckout(
+          job([{ uses }, { uses: "./.github/actions/ci-install" }]),
+          file,
+        ),
+      ).not.toThrow();
+    }
+  });
+
+  test("a checkout into a directory reaches only actions under it", () => {
+    const steps = [{ uses: CHECKOUT, with: { path: ".workflow-source" } }];
+    expect(() =>
+      validateLocalActionsAfterCheckout(
+        job([...steps, { uses: "./.workflow-source/.github/actions/build" }]),
+        file,
+      ),
+    ).not.toThrow();
+    expect(() =>
+      validateLocalActionsAfterCheckout(
+        job([...steps, { uses: "./.github/actions/build" }]),
+        file,
+      ),
+    ).toThrow("before checking out the repository there");
+  });
+
+  test("checkout and action paths compare as the checkout resolves them", () => {
+    for (const [destination, uses] of [
+      ["source//nested/", "./source/nested/.github/actions/build"],
+      ["./source/./nested", "./source/nested/.github/actions/build"],
+      ["source/nested", "./source//nested/.github/actions/build"],
+      ["./", "./.github/actions/build"],
+    ] as const) {
+      expect(
+        () =>
+          validateLocalActionsAfterCheckout(
+            job([{ uses: CHECKOUT, with: { path: destination } }, { uses }]),
+            file,
+          ),
+        `${destination} -> ${uses}`,
+      ).not.toThrow();
+    }
+  });
+
+  test("a checkout of another repository does not bring this one's actions", () => {
+    expect(() =>
+      validateLocalActionsAfterCheckout(
+        job([
+          { uses: CHECKOUT, with: { repository: "stella/folio" } },
+          { uses: "./.github/actions/build" },
+        ]),
+        file,
+      ),
+    ).toThrow("before checking out the repository there");
   });
 });

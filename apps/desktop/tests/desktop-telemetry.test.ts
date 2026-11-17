@@ -1,7 +1,9 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
   describeError,
+  failureReason,
   messageDigest,
   redactErrorMessage,
 } from "../src/telemetry/desktop-telemetry";
@@ -107,5 +109,44 @@ describe("describeError", () => {
     error.name = "Not An Identifier";
 
     expect(describeError(error).errorName).toBe("Error");
+  });
+});
+
+describe("failureReason", () => {
+  test("names the refusals an activity read gets from the native side", () => {
+    expect(failureReason("activity account is unavailable")).toBe(
+      "accountUnavailable",
+    );
+    expect(failureReason("activity timeline is not available here")).toBe(
+      "windowRefused",
+    );
+    expect(failureReason("billing draft request failed")).toBe(
+      "billingRequestFailed",
+    );
+  });
+
+  test("reads a rejection that better-result wrapped", async () => {
+    const wrapped = await Result.tryPromise(async () => {
+      // oxlint-disable-next-line prefer-promise-reject-errors -- a native command rejects with a plain string
+      await Promise.reject("billing draft request failed");
+    });
+    expect(wrapped.isErr() && failureReason(wrapped.error)).toBe(
+      "billingRequestFailed",
+    );
+  });
+
+  test("names the class of a thrown error, never its message", () => {
+    expect(failureReason(new TypeError("Article 12 of the lease"))).toBe(
+      "typeError",
+    );
+    expect(failureReason(new Error("Article 12 of the lease"))).toBe(
+      "otherError",
+    );
+  });
+
+  test("has no value for anything it does not recognise", () => {
+    for (const value of ["Article 12 of the lease", null, 42, { kind: "x" }]) {
+      expect(failureReason(value)).toBe("unclassified");
+    }
   });
 });

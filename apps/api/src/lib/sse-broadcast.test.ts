@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { REALTIME_EVENT_TYPE, RESOURCE_TYPE } from "@stll/api-contract";
+import { deferred } from "@stll/test-kit";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import {
@@ -135,6 +136,9 @@ test("the publisher constructs a cache client with bounded connection options", 
     createClient: (options) => {
       constructed.push(options);
       return {
+        connect: async () => undefined,
+        close: () => undefined,
+        onClose: () => () => undefined,
         publish: async (...args) => {
           published.push(args);
           return 0;
@@ -158,4 +162,100 @@ test("the publisher constructs a cache client with bounded connection options", 
     },
   ]);
   expect(published).toHaveLength(2);
+});
+
+test("concurrent first events wait for one connection before publishing", async () => {
+  const connected = deferred();
+  const started = deferred();
+  let connections = 0;
+  let ready = false;
+  const messages: string[] = [];
+  const publisher = createSseBroadcastPublisher({
+    createClient: () => ({
+      connect: async () => {
+        connections += 1;
+        started.resolve();
+        await connected.promise;
+        ready = true;
+      },
+      close: () => undefined,
+      onClose: () => () => undefined,
+      publish: async (_channel, message) => {
+        expect(ready).toBe(true);
+        messages.push(message);
+        return 0;
+      },
+    }),
+  });
+  const session = publisher.publishSessionEvent(
+    toSafeId<"desktopEditSession">("00000000-0000-4000-8000-000000000001"),
+    { type: REALTIME_EVENT_TYPE.SESSION_CLOSED, data: { reason: "expired" } },
+  );
+  const workspace = publisher.publishWorkspaceEvent(
+    toSafeId<"workspace">("00000000-0000-4000-8000-000000000002"),
+    {
+      type: REALTIME_EVENT_TYPE.RESOURCE_SET_UPDATED,
+      resourceType: RESOURCE_TYPE.ENTITY,
+    },
+  );
+  const completed = Promise.all([session, workspace]).then(
+    () => ({ type: "published" as const }),
+    (error: unknown) => ({ type: "failure" as const, error }),
+  );
+  try {
+    expect(
+      await Promise.race([
+        started.promise.then(() => "started"),
+        completed.then(() => "completed"),
+      ]),
+    ).toBe("started");
+    expect(connections).toBe(1);
+    expect(messages).toEqual([]);
+  } finally {
+    connected.resolve();
+  }
+  expect(await completed).toEqual({ type: "published" });
+  expect(messages.map((message) => parseRedisPayload(message)?.scope)).toEqual([
+    "session",
+    "workspace",
+  ]);
+});
+
+test("an MCP tool projection change round-trips for an organisation or one member", async () => {
+  const published: string[] = [];
+  const publisher = createSseBroadcastPublisher({
+    createClient: () => ({
+      connect: async () => undefined,
+      close: () => undefined,
+      onClose: () => () => undefined,
+      publish: async (_channel, message) => {
+        published.push(message);
+        return 0;
+      },
+    }),
+  });
+  await publisher.publishMcpToolProjectionChange(
+    {
+      organizationId: toSafeId<"organization">("org_1"),
+      userId: toSafeId<"user">("user_1"),
+    },
+    { originInstanceId: "api:origin" },
+  );
+  await publisher.publishMcpToolProjectionChange({
+    organizationId: toSafeId<"organization">("org_1"),
+  });
+  expect(published.map((message) => parseRedisPayload(message))).toEqual([
+    {
+      scope: "mcp-tool-projection",
+      id: "org_1",
+      userId: "user_1",
+      originInstanceId: "api:origin",
+    },
+    { scope: "mcp-tool-projection", id: "org_1", originInstanceId: undefined },
+  ]);
+  expect(
+    parseRedisPayload(
+      JSON.stringify({ scope: "mcp-tool-projection", id: "org_1", userId: 7 }),
+    ),
+  ).toBeNull();
 });

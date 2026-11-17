@@ -34,6 +34,20 @@ ENV NODE_ENV=production
 COPY --from=pruner /app/out/full/ .
 RUN bun --filter @stll/legal-atlas-runner build
 RUN bun apps/legal-atlas-runner/dist/index.js smoke
+# Case-law ingestion starts the PDF parser as a subprocess from
+# $STELLA_WORKER_DIR (the retention check projects publisher PDFs through it),
+# so the image ships it the way the API image does. The smoke feeds it bytes
+# that are no PDF: exit 65 is the parser's refusal, so the bundle started and
+# loaded its parser; any other exit is a broken worker.
+RUN bun build \
+      --define __STELLA_RELEASE__=true \
+      --minify \
+      --keep-names \
+      --target bun \
+      --outdir apps/legal-atlas-runner/dist/workers \
+      --entry-naming pdf-worker.js \
+      apps/api/src/lib/files/pdf-worker.ts
+RUN status=0; printf 'not a pdf' | bun apps/legal-atlas-runner/dist/workers/pdf-worker.js text-lines >/dev/null 2>&1 || status=$?; [ "$status" -eq 65 ] || { echo "ERROR: pdf worker smoke exited $status, expected 65" >&2; exit 1; }
 RUN DATABASE_URL=postgres://smoke:smoke@localhost:5432/smoke \
     S3_ENDPOINT=http://localhost \
     S3_BUCKET=smoke \
@@ -56,6 +70,9 @@ COPY --chown=stella:stella --from=builder /app/apps/legal-atlas-runner/dist/inde
 COPY --chown=stella:stella --from=builder /app/apps/legal-atlas-runner/dist/index.js.map /app/legal-atlas.js.map
 COPY --chown=stella:stella --from=builder /app/apps/legal-atlas-runner/dist/eu-ecj-refetch.js /app/eu-ecj-refetch.js
 COPY --chown=stella:stella --from=builder /app/apps/legal-atlas-runner/dist/eu-ecj-refetch.js.map /app/eu-ecj-refetch.js.map
+COPY --chown=stella:stella --from=builder /app/apps/legal-atlas-runner/dist/workers/pdf-worker.js /app/workers/pdf-worker.js
+# Where stella resolves its subprocess workers (see the pdf worker above).
+ENV STELLA_WORKER_DIR=/app/workers
 WORKDIR /app
 USER stella
 ENTRYPOINT ["bun", "/app/legal-atlas.js"]

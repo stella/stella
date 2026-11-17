@@ -1,0 +1,34 @@
+{
+  "name": "@stll/browser-page",
+  "version": "0.0.0",
+  "private": true,
+  "description": "What every browser host runs in a page: the page script, the reading window, and the guards around them",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    "./browser-control-result": "./src/browser-control-result.ts",
+    "./origin-policy": "./src/origin-policy.ts",
+    "./page-script": "./src/page-script.ts",
+    "./page-window": "./src/page-window.ts",
+    "./sign-in-policy": "./src/sign-in-policy.ts",
+    "./snapshot-guard": "./src/snapshot-guard.ts",
+    "./stella-origins": "./src/stella-origins.ts"
+  },
+  "scripts": {
+    "clean": "git clean -xdf .cache .turbo node_modules",
+    "test": "bun test src",
+    "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
+    "lint": "cd ../.. && bun scripts/lint.ts packages/browser-page",
+    "lint:fix": "cd ../.. && bun scripts/lint.ts --fix packages/browser-page"
+  },
+  "dependencies": {
+    "@stll/api-contract": "workspace:*",
+    "better-result": "catalog:",
+    "valibot": "catalog:"
+  },
+  "devDependencies": {
+    "@stll/typescript-config": "workspace:*",
+    "bun-types": "catalog:"
+  }
+}

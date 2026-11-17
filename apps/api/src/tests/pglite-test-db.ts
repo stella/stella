@@ -9,13 +9,15 @@ import { drizzle } from "drizzle-orm/pglite";
 import * as agentAuthSchema from "@/api/db/agent-auth-schema";
 import * as authSchema from "@/api/db/auth-schema";
 import * as rlsExports from "@/api/db/rls";
+import type { Transaction } from "@/api/db/root";
+import type { ScopedDb } from "@/api/db/safe-db";
 import * as schema from "@/api/db/schema";
 import type { AnyDrizzle } from "@/api/db/scoped";
 import {
   CASE_LAW_DECISION_VIEWS,
   caseLawDecisionViewGrantStatement,
-  CENSUS_COLUMN_GRANTS_BY_RELATION,
-  DOCTRINE_COLUMN_GRANTS_BY_RELATION,
+  CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION,
+  IMPORT_SNAPSHOT_COLUMN_GRANTS_BY_RELATION,
   PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
   publicLawColumnPairs,
   ROLLOUT_CASE_LAW_SOURCE_COLUMNS,
@@ -23,33 +25,46 @@ import {
   ROLLOUT_CASE_LAW_WHOLE_RELATIONS,
 } from "@/api/lib/public-law-relations";
 import { readPgliteTestSnapshotPath } from "@/api/tests/env";
+import { installCorpusProjectionSeedingGuard } from "@/api/tests/helpers/corpus-projection-seeding-guard";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createSchemaPglite,
   installPgliteAccountAuditRls,
   installPgliteAgentSkillRevisionTrigger,
   installPgliteAiMemoryActiveUserGuard,
+  installPgliteCaseLawContentChangedAt,
   installPgliteCaseLawCountryShape,
   installPgliteCaseLawCoverageSummary,
   installPgliteCaseLawObservationFence,
   installPgliteCaseLawParsedSourceInvalidation,
+  installPgliteCaseLawPopulationCounts,
+  installPgliteCaseLawRankingSignalChanges,
   installPgliteCaseLawSitemapChanges,
   installPgliteChatMessageRevisionsRls,
   installPgliteChatRunLogRls,
   installPgliteChatSecretRls,
   installPgliteChatStoredContentEgress,
+  installPgliteChatTurnOrdinal,
   installPgliteChatTurnRunIdLookup,
   installPgliteCitationDoctrineRls,
+  installPgliteConflictCheckRoutines,
+  installPgliteCorpusIndexSeedingLifecycle,
   installPgliteCorpusProjectionRevisionFence,
+  installPgliteCorrespondenceSources,
   installPgliteDecisionAliases,
   installPgliteDecisionCitationStats,
   installPgliteDecisionDocketFilingYear,
   installPgliteDesktopPresenceRls,
   installPgliteEntityFeatureGateMaintenance,
+  installPgliteFindingDecisionHistory,
   installPgliteFlowTransitions,
   installPgliteInvoiceObjects,
+  installPgliteLegalHoldDeleteBackstop,
   installPgliteLegislationExpressionIdentity,
   installPgliteLegislationPayloadRevision,
-  installPgliteListVerificationBudgets,
+  installPgliteMatterTimerPresence,
+  installPgliteModelRunBudgets,
+  installPgliteOrganizationDeleteOwnerGuard,
   installPgliteOrganizationMemberCapacity,
   installPglitePdfSigningTokenScopes,
   installPglitePlaybookDocumentTypeKey,
@@ -59,6 +74,7 @@ import {
   installPgliteSanctionsMonitoringTriggers,
   installPgliteSchedulerJobPauseLog,
   installPgliteSchemaPrerequisites,
+  installPgliteSearchHistoryClearFence,
   installPgliteServiceClientCredentialCascade,
   installPgliteStatuteCitationCounts,
   installPgliteSyntheticMembershipTrigger,
@@ -80,7 +96,7 @@ import {
 // costs a ~2.2 GB peak (drizzle-kit's push diffing plus PGlite WASM churn);
 // loading a snapshot skips drizzle-kit entirely and keeps the process near
 // PGlite's runtime floor.
-export const PGLITE_TEST_SNAPSHOT_ENV = "PGLITE_TEST_SNAPSHOT";
+const PGLITE_TEST_SNAPSHOT_ENV = "PGLITE_TEST_SNAPSHOT";
 
 const allSchema = {
   ...schema,
@@ -249,6 +265,7 @@ export const CORPUS_SAMPLE_READER_SELECT_COLUMNS = {
  * reader grant and no writer.
  */
 export const CASE_LAW_SOURCE_INGESTION_UPDATE_COLUMNS = [
+  "config",
   "sync_cursor",
   "last_sync_at",
   "updated_at",
@@ -268,7 +285,21 @@ export const CASE_LAW_SOURCE_INGESTION_UPDATE_COLUMNS = [
   "stored_total_next_refresh_at",
   "stored_total_held_since",
   "stored_total_warned_slot",
+  "import_snapshot_date",
 ] as const;
+
+/**
+ * Build the transaction boundary used by case-law ingestion tests. Fixture
+ * setup and assertions keep using the owner handle; only pipeline callbacks
+ * assume the deployment's least-privileged ingestion role.
+ */
+export const createIngestionRoleScopedDb =
+  (database: AnyDrizzle): ScopedDb =>
+  async <T>(callback: (tx: Transaction) => Promise<T>): Promise<T> =>
+    await database.transaction(async (tx) => {
+      await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
+      return await callback(asTestRaw<Transaction>(tx));
+    });
 
 /**
  * Execute a read callback under the same role used by the external public-law
@@ -321,20 +352,19 @@ const CORPUS_PROJECTION_REVISION_TABLE_SQL = quoteSqlIdentifier(
  * harness mirrors the migrations, so it leaves them ungranted too.
  */
 const PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE: ReadonlySet<string> =
-  new Set([
-    "case_law_decisions.docket_family_key",
-    ...[DOCTRINE_COLUMN_GRANTS_BY_RELATION, CENSUS_COLUMN_GRANTS_BY_RELATION]
-      .flatMap(publicLawColumnPairs)
-      .map(({ relation, column }) => `${relation}.${column}`),
-  ]);
+  new Set(
+    [
+      ...publicLawColumnPairs(
+        CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION,
+      ),
+      ...publicLawColumnPairs(IMPORT_SNAPSHOT_COLUMN_GRANTS_BY_RELATION),
+    ].map(({ relation, column }) => `${relation}.${column}`),
+  );
 
 const decisionColumnNames = new Set(
   Object.values(getColumns(schema.caseLawDecisions)).map(({ name }) => name),
 );
-const decisionRelationNames = new Set<string>([
-  getTableName(schema.caseLawDecisions),
-  ...CASE_LAW_DECISION_VIEWS,
-]);
+const decisionRelationNames = new Set<string>(CASE_LAW_DECISION_VIEWS);
 
 const grantedPublicLawColumns = (
   relation: string,
@@ -367,10 +397,14 @@ export const availableSchemaRelationNames = new Set<string>(
  * is how a REVOKE goes missing from the harness.
  */
 export const ROLE_GRANT_STATEMENTS = [
+  `GRANT SELECT (generation_provenance), UPDATE (generation_provenance), INSERT (generation_provenance) ON chat_threads TO stella`,
   `GRANT SELECT ON TABLE "soft_law_sources", "soft_law_documents", "soft_law_document_versions", "soft_law_document_locators", "soft_law_ingestion_attempts" TO stella_ingestion`,
   `GRANT INSERT, UPDATE ON TABLE "soft_law_documents", "soft_law_document_versions", "soft_law_document_locators", "soft_law_ingestion_attempts" TO stella_ingestion`,
   `GRANT UPDATE (listing_baseline, listing_seen, listing_expected_total, sync_cursor, last_sync_at, run_state, run_id, run_started_at, lease_token, lease_expires_at, failure_tag) ON TABLE "soft_law_sources" TO stella_ingestion`,
+  `GRANT INSERT ON TABLE "soft_law_sources" TO stella_ingestion`,
+  `GRANT INSERT ON TABLE "system_audit_runs" TO stella_ingestion`,
   `GRANT SELECT, INSERT, UPDATE ON TABLE "case_law_decision_aliases" TO stella_ingestion`,
+  `GRANT SELECT, INSERT, UPDATE ON TABLE "case_law_completeness_census" TO stella_ingestion`,
   `GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "case_law_decision_alias_moved_identities" TO stella_ingestion`,
   caseLawDecisionViewGrantStatement("later", "stella_ingestion"),
   `
@@ -404,6 +438,7 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_judges",
       "case_law_decision_judges",
       "case_law_citations",
+      "case_law_decision_reviews",
       "case_law_provision_citations",
       "case_law_statute_citation_memberships",
       "case_law_statute_citation_counts",
@@ -432,6 +467,7 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_judges",
       "case_law_decision_judges",
       "case_law_citations",
+      "case_law_decision_reviews",
       "case_law_provision_citations",
       "case_law_statute_citation_memberships",
       "case_law_statute_citation_counts",
@@ -459,6 +495,9 @@ export const ROLE_GRANT_STATEMENTS = [
   `
     GRANT SELECT ("removal_checkpoint") ON TABLE "case_law_sources" TO stella_ingestion
   `,
+  `
+    GRANT SELECT ("import_snapshot_date") ON TABLE "case_law_sources" TO stella_ingestion
+  `,
   // Ingestion-owned case-law tables the migrations grant one by one, as they
   // were added. `pglite-role-grants.test.ts` holds this list and the
   // migrations to agreement, so the next such table cannot be forgotten here.
@@ -472,6 +511,7 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_corpus_pack_refs",
       "case_law_corpus_tombstones",
       "case_law_decision_source_identities",
+      "case_law_decision_fallback_identities",
       "case_law_decision_supplements",
       "case_law_search_document_preview_passages",
       "case_law_citation_resolution_census",
@@ -480,7 +520,8 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_raw_sweeps",
       "case_law_citation_authority_sweep",
       "case_law_decision_citation_stats",
-      "case_law_decision_citation_stats_state"
+      "case_law_decision_citation_stats_state",
+      "case_law_decision_anchor_redirects"
     TO stella_ingestion
   `,
   `
@@ -492,8 +533,13 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_browse_facet_counts",
       "case_law_coverage_summaries",
       "case_law_sitemap_shard_counts",
+      "case_law_ranking_signal_changes",
       "case_law_sitemap_shards",
       "case_law_source_arrivals"
+    TO stella_ingestion
+  `,
+  `
+    GRANT UPDATE ("claimed_until") ON TABLE "case_law_ranking_signal_changes"
     TO stella_ingestion
   `,
   `
@@ -617,6 +663,29 @@ export const ROLE_GRANT_STATEMENTS = [
   // The withdrawal trail is append-only: ingestion records, the app reads.
   `
     GRANT SELECT, INSERT ON TABLE "corpus_index_group_withdrawals"
+    TO stella_ingestion
+  `,
+  // Flip receipts are append-only: the guarded flip records, the app reads.
+  `
+    GRANT SELECT, INSERT ON TABLE "corpus_index_generation_flips"
+    TO stella_ingestion
+  `,
+  // Route proofs: the projection runner advances and revokes them; only the
+  // generation's cascade deletes one.
+  `
+    GRANT SELECT, INSERT, UPDATE ON TABLE "corpus_index_route_proofs"
+    TO stella_ingestion
+  `,
+  // Seeding passes: the seeding walk writes them; the transition that takes
+  // a generation out of the active set deletes its pass, and its route rows
+  // cascade.
+  `
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
+      "corpus_index_generation_seeding_passes"
+    TO stella_ingestion
+  `,
+  `
+    GRANT SELECT, INSERT, UPDATE ON TABLE "corpus_index_route_seedings"
     TO stella_ingestion
   `,
   `
@@ -807,6 +876,11 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await db.execute(sql.raw("CREATE ROLE stella NOLOGIN"));
   await db.execute(
     sql.raw(
+      "CREATE ROLE stella_correspondence_source NOLOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION",
+    ),
+  );
+  await db.execute(
+    sql.raw(
       "CREATE ROLE stella_entity_gate NOLOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION",
     ),
   );
@@ -837,12 +911,14 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteFlowTransitions(db);
   await installPgliteWorkspaceAccessObjects(db);
   await installPgliteInvoiceObjects(db);
+  await installPgliteMatterTimerPresence(db);
   await db.transaction(async (tx) => {
     await installPgliteEntityFeatureGateMaintenance(tx);
   });
   await installPgliteAgentSkillRevisionTrigger(db);
   await installPgliteSyntheticMembershipTrigger(db);
   await installPgliteUserFileOrganizationKeyGuard(db);
+  await installPgliteConflictCheckRoutines(db);
   await installPgliteAiMemoryActiveUserGuard(db);
   await installPgliteDecisionAliases(db);
   await installPgliteCorpusProjectionRevisionFence(db);
@@ -856,13 +932,17 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteCaseLawCoverageSummary(db);
   await installPgliteCaseLawObservationFence(db);
   await installPgliteCaseLawParsedSourceInvalidation(db);
+  await installPgliteCaseLawContentChangedAt(db);
   await installPgliteCaseLawSitemapChanges(db);
+  await installPgliteCaseLawRankingSignalChanges(db);
+  await installPgliteCaseLawPopulationCounts(db);
+  await installPgliteCorpusIndexSeedingLifecycle(db);
   await installPglitePdfSigningTokenScopes(db);
   await installPgliteDesktopPresenceRls(db);
   await installPgliteChatTurnRunIdLookup(db);
   await installPgliteOrganizationMemberCapacity(db);
   await installPgliteWorkspaceContactCapacity(db);
-  await installPgliteListVerificationBudgets(db);
+  await installPgliteModelRunBudgets(db);
   await installPgliteChatRunLogRls(db);
   await installPgliteAccountAuditRls(db);
   await installPgliteChatMessageRevisionsRls(db);
@@ -872,6 +952,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteReaderAnnotationMatterRows(db);
   await installPgliteSchedulerJobPauseLog(db);
   await installPgliteTreeParentGuards(db);
+  await installPgliteOrganizationDeleteOwnerGuard(db);
 
   await applyStellaTablePrivileges(client);
   for (const statement of ROLE_GRANT_STATEMENTS) {
@@ -880,7 +961,16 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteTimeEntryTimerSignals(db);
   await installPgliteChatStoredContentEgress(db);
   await installPgliteSanctionsMonitoringTriggers(db);
+  await installPgliteSearchHistoryClearFence(db);
+  await installPgliteChatTurnOrdinal(db);
   await installPglitePlaybookDocumentTypeKey(db);
+  await installPgliteFindingDecisionHistory(db);
+  await db.transaction(async (tx) => {
+    await installPgliteCorrespondenceSources(tx);
+  });
+  await installPgliteLegalHoldDeleteBackstop(db);
+  // On by default: every suite that commits a canonical row is checked.
+  await installCorpusProjectionSeedingGuard(client);
 
   return client;
 };

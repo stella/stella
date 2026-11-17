@@ -1,3 +1,5 @@
+import { TruncatedText } from "@stll/ui/truncated-text";
+
 import { PreviewSurface } from "./PreviewSurface";
 
 // Static lookalike of stella's AI agent answering a legal question in chat with
@@ -19,8 +21,8 @@ export const AgentAnswerPreview = () => (
     `}</style>
     <div className="flex h-full flex-col gap-2.5">
       <div className="flex justify-end">
-        <span
-          className="max-w-[80%] truncate rounded-md px-2 py-1 text-[0.6rem]"
+        <TruncatedText
+          className="max-w-[80%] rounded-md px-2 py-1 text-[0.6rem]"
           style={{
             color: "var(--muted-foreground)",
             background:
@@ -28,7 +30,7 @@ export const AgentAnswerPreview = () => (
           }}
         >
           What did the court hold on termination?
-        </span>
+        </TruncatedText>
       </div>
 
       <div className="flex max-w-[92%] flex-col gap-1.5">
@@ -70,7 +72,7 @@ export const AgentAnswerPreview = () => (
                 className="h-1 w-1 shrink-0 rounded-full"
                 style={{ background: "var(--muted-foreground)" }}
               />
-              <span className="truncate">{item}</span>
+              <TruncatedText>{item}</TruncatedText>
             </li>
           ))}
         </ul>
@@ -103,7 +105,7 @@ const Chip = ({ glyph, label, delay, external }: ChipProps) => (
     }}
   >
     {glyph === "doc" ? <DocGlyph /> : <GlobeGlyph />}
-    <span className="truncate">{label}</span>
+    <TruncatedText>{label}</TruncatedText>
   </span>
 );
 

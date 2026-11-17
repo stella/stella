@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import JSZip from "jszip";
 
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 import { evaluateCondition } from "@stll/template-conditions";
 
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
@@ -13,10 +12,9 @@ import { discoverTemplate } from "./discover-template";
 // ── Helpers ──────────────────────────────────────────────
 
 const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
-  const zip = new JSZip();
-  writeZipEntry(zip, "word/document.xml", documentXml);
-  writeZipEntry(
-    zip,
+  const zip = new ZipArchive();
+  zip.set("word/document.xml", documentXml);
+  zip.set(
     "[Content_Types].xml",
     `<?xml version="1.0" encoding="UTF-8"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
@@ -24,7 +22,7 @@ const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
 </Types>`,
   );
-  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
+  return testDocxFile(await zip.generate({ compression: "store" }));
 };
 
 const WRAP = (body: string) =>
@@ -856,9 +854,8 @@ describe("row-form block markers", () => {
 });
 
 test("derived manifests cache every distinct clause slot target from template content", async () => {
-  const zip = new JSZip();
-  writeZipEntry(
-    zip,
+  const zip = new ZipArchive();
+  zip.set(
     "word/document.xml",
     WRAP(
       [
@@ -868,14 +865,13 @@ test("derived manifests cache every distinct clause slot target from template co
       ].join(""),
     ),
   );
-  writeZipEntry(
-    zip,
+  zip.set(
     "word/header1.xml",
     `<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">${P(
       '{{ clause("Header", "latest") }}',
     )}</w:hdr>`,
   );
-  const file = testDocxFile(await zip.generateAsync({ type: "uint8array" }));
+  const file = testDocxFile(await zip.generate({ compression: "store" }));
   const manifest = deriveManifest(await discoverTemplate(file));
   expect(manifest.clauseSlots).toEqual([
     { name: "Terms", versionModifier: undefined, patchKey: "@clause:Terms" },

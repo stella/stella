@@ -7,6 +7,7 @@ export const LIBRARY_PACKAGE_ORDER = [
   "text-normalize",
   "anonymize-chat",
   "ui",
+  "html",
   "chat",
   "country-codes",
   "business-registries",

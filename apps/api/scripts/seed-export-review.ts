@@ -1,4 +1,5 @@
 import { deriveBlockId } from "@stll/folio-core/server";
+import { stripDiacritics } from "@stll/text-normalize";
 
 import { at, seedId } from "./seed-utils";
 
@@ -27,114 +28,155 @@ export const exportReviewDocumentIds = (index: number) => ({
   ),
 });
 
-export const EXPORT_REVIEW_FOLDERS = [
-  "Corporate",
-  "Commercial",
-  "Employment",
-  "Regulatory",
-  "Finance",
-  "Real Estate",
-] as const;
+type Four<T> = readonly [T, T, T, T];
+type Five<T> = readonly [T, T, T, T, T];
+type Six<T> = readonly [T, T, T, T, T, T];
+type Eight<T> = readonly [T, T, T, T, T, T, T, T];
 
-export const EXPORT_REVIEW_DOCUMENT_TYPES = [
-  "Shareholder Register",
-  "Customer Contract",
-  "Supplier Agreement",
-  "Employment Agreement",
-  "Permit",
-  "Loan Agreement",
-  "Lease",
-  "Insurance Policy",
-] as const;
+/** Every review extract line a table cell cites, by citation field. */
+type ExportReviewCitationField =
+  | "document-type"
+  | "counterparty"
+  | "jurisdiction"
+  | "governing-law"
+  | "effective-date"
+  | "expiry-date"
+  | "contract-value"
+  | "risk-level"
+  | "evidence-quality"
+  | "tags"
+  | "key-obligation"
+  | "risk-finding";
 
-const EXPORT_REVIEW_COUNTERPARTIES = [
-  "Aurora Retail GmbH",
-  "BluePeak Manufacturing s.r.o.",
-  "Cedar Cloud Ltd.",
-  "Delta Logistics Kft.",
-  "Edison Bank plc",
-  "Fjord Analytics AB",
-  "Granite Properties B.V.",
-  "Helios Energy a.s.",
-] as const;
+type ExportReviewColumn = { name: string; prompt: string };
 
-export const EXPORT_REVIEW_JURISDICTIONS = [
-  "Czech Republic",
-  "Germany",
-  "Netherlands",
-  "Hungary",
-  "United Kingdom",
-] as const;
-
-export const EXPORT_REVIEW_RISK_LEVELS = [
-  "Low",
-  "Medium",
-  "High",
-  "Critical",
-] as const;
-
-const EXPORT_REVIEW_REVIEW_STATUSES = [
-  "Not Started",
-  "In Review",
-  "Needs Partner",
-  "Cleared",
-] as const;
-
-const EXPORT_REVIEW_EVIDENCE_QUALITY = [
-  "Direct citation",
-  "Needs source check",
-  "Conflicting evidence",
-] as const;
+/**
+ * The data room's words in one locale. Lists are positional: a row's values
+ * are picked by index, so every locale's room has the same shape, and the
+ * agent thread that cites it tells the same story. Counterparty 3 and 7 hold
+ * the two Critical customer and loan agreements the agent answers name.
+ */
+export type ExportReviewCopy = {
+  folders: Six<string>;
+  documentTypes: Eight<string>;
+  counterparties: Eight<string>;
+  jurisdictions: Five<string>;
+  /** The governing law each jurisdiction's agreements state, by index. */
+  governingLaws: Five<string>;
+  /** Low, medium, high and critical, least severe first. */
+  riskLevels: Four<string>;
+  reviewStatuses: Four<string>;
+  evidenceQuality: readonly [string, string, string];
+  /** First tag of a row: change of control, termination, data room, renewal. */
+  primaryTags: Four<string>;
+  /** Second tag of a row: consent needed, pricing, privacy, security. */
+  secondaryTags: Four<string>;
+  keyObligation: (counterparty: string) => string;
+  /** High and Critical rows get the elevated finding. */
+  riskFinding: { elevated: string; ordinary: string };
+  /** The contract value as the extract states it, e.g. "EUR 50000". */
+  formatContractValue: (value: number) => string;
+  /**
+   * The review extract body. Its line layout is fixed (the citation block
+   * indexes below count its lines), so a locale changes words, not lines.
+   */
+  extract: {
+    heading: (documentType: string) => string;
+    intro: (row: {
+      counterparty: string;
+      documentType: string;
+      jurisdiction: string;
+    }) => string;
+    keyTerms: string;
+    labels: {
+      document: string;
+      documentType: string;
+      counterparty: string;
+      jurisdiction: string;
+      governingLaw: string;
+      effectiveDate: string;
+      expiryDate: string;
+      contractValue: string;
+      riskLevel: string;
+      reviewStatus: string;
+      evidenceQuality: string;
+      tags: string;
+    };
+    keyObligation: string;
+    riskFinding: string;
+    underReview: string;
+    clause: (row: { counterparty: string; governingLaw: string }) => string;
+  };
+  /** The table cell's justification for each cited value. */
+  statements: Record<
+    ExportReviewCitationField,
+    (metadata: ExportReviewMetadata) => string
+  >;
+  columns: {
+    documentType: ExportReviewColumn;
+    counterparty: ExportReviewColumn;
+    jurisdiction: ExportReviewColumn;
+    governingLaw: ExportReviewColumn;
+    effectiveDate: ExportReviewColumn;
+    expiryDate: ExportReviewColumn;
+    contractValue: ExportReviewColumn;
+    riskLevel: ExportReviewColumn;
+    /** Filled in by hand, so it has no prompt. */
+    reviewStatus: { name: string };
+    evidenceQuality: ExportReviewColumn;
+    tags: ExportReviewColumn;
+    keyObligation: ExportReviewColumn;
+    riskFinding: ExportReviewColumn;
+  };
+};
 
 // File names read like a real data room: the row's counterparty and document
 // type joined with a vintage year, e.g. Aurora_Retail_Shareholder_Register_2018.docx.
 // The counterparty/type indices mirror buildExportReviewMetadata exactly so a
 // row's name always matches its metadata columns, and the year advances once
 // per full (type, counterparty) cycle so all names stay unique. The marketing
-// recorder's content markers reference these names; keep them in sync
-// (apps/web/e2e/marketing/record-product-story.ts) and the agent thread's
-// citations (seed-marketing-agent-thread.ts).
-const buildExportReviewDocNames = (): string[] => {
+// markers (@stll/playwright-tools/marketing-locales) name two of these files,
+// and the agent thread's citations (seed-marketing-agent-thread.ts) cite them.
+const fileNamePart = (value: string) => stripDiacritics(value);
+
+export const buildExportReviewDocNames = (copy: ExportReviewCopy): string[] => {
   const result: string[] = [];
 
   for (let i = 0; i < EXPORT_TABLE_FILE_COUNT; i++) {
-    const documentType = at(
-      EXPORT_REVIEW_DOCUMENT_TYPES,
-      i % EXPORT_REVIEW_DOCUMENT_TYPES.length,
-    );
+    const documentType = at(copy.documentTypes, i % copy.documentTypes.length);
     const counterparty = at(
-      EXPORT_REVIEW_COUNTERPARTIES,
-      (i * 3) % EXPORT_REVIEW_COUNTERPARTIES.length,
+      copy.counterparties,
+      (i * 3) % copy.counterparties.length,
     );
-    const counterpartyName = counterparty
+    const counterpartyName = fileNamePart(counterparty)
       .split(" ")
       .slice(0, 2)
       .join("_")
       .replaceAll(/[^\w]/gu, "");
-    const year = 2018 + Math.floor(i / EXPORT_REVIEW_DOCUMENT_TYPES.length);
+    const year = 2018 + Math.floor(i / copy.documentTypes.length);
     const extension = i % 9 === 0 ? "docx" : "pdf";
     result.push(
-      `${counterpartyName}_${documentType.replaceAll(" ", "_")}_${year}.${extension}`,
+      `${counterpartyName}_${fileNamePart(documentType).replaceAll(" ", "_")}_${year}.${extension}`,
     );
   }
 
   return result;
 };
 
-export const EXPORT_REVIEW_DOC_NAMES = buildExportReviewDocNames();
-
 export type ExportReviewMetadata = {
-  documentType: (typeof EXPORT_REVIEW_DOCUMENT_TYPES)[number];
-  counterparty: (typeof EXPORT_REVIEW_COUNTERPARTIES)[number];
-  jurisdiction: (typeof EXPORT_REVIEW_JURISDICTIONS)[number];
+  documentType: string;
+  counterparty: string;
+  jurisdiction: string;
   governingLaw: string;
   effectiveDate: string;
   expiryDate: string;
   contractValue: number;
-  riskLevel: (typeof EXPORT_REVIEW_RISK_LEVELS)[number];
-  reviewStatus: (typeof EXPORT_REVIEW_REVIEW_STATUSES)[number];
-  evidenceQuality: (typeof EXPORT_REVIEW_EVIDENCE_QUALITY)[number];
-  tags: string[];
+  /** One of the copy's `riskLevels`. */
+  riskLevel: string;
+  reviewStatus: string;
+  evidenceQuality: string;
+  /** The primary tag, then the secondary tag. */
+  tags: readonly [string, string];
   keyObligation: string;
   riskFinding: string;
   pageNumber: number;
@@ -146,103 +188,97 @@ const addDays = (date: Date, days: number): string => {
   return copy.toISOString().slice(0, 10);
 };
 
+/** Whether a risk level is High or Critical. */
+export const isElevatedRisk = (copy: ExportReviewCopy, riskLevel: string) =>
+  copy.riskLevels.indexOf(riskLevel) >= 2;
+
 export const buildExportReviewMetadata = (
+  copy: ExportReviewCopy,
   index: number,
 ): ExportReviewMetadata => {
   const documentType = at(
-    EXPORT_REVIEW_DOCUMENT_TYPES,
-    index % EXPORT_REVIEW_DOCUMENT_TYPES.length,
+    copy.documentTypes,
+    index % copy.documentTypes.length,
   );
   const counterparty = at(
-    EXPORT_REVIEW_COUNTERPARTIES,
-    (index * 3) % EXPORT_REVIEW_COUNTERPARTIES.length,
+    copy.counterparties,
+    (index * 3) % copy.counterparties.length,
   );
-  const jurisdiction = at(
-    EXPORT_REVIEW_JURISDICTIONS,
-    // Stride must stay coprime with the list length or the "cycle" is a
-    // constant: the old *5 stride on this length-5 list pinned every row to
-    // Netherlands, which read as filler on camera. *2 varies row by row and
-    // keeps index 0 on Netherlands, which the review-citation recording's
-    // paint predicate quotes verbatim.
-    (index * 2 + 2) % EXPORT_REVIEW_JURISDICTIONS.length,
-  );
-  const riskLevel = at(
-    EXPORT_REVIEW_RISK_LEVELS,
-    (index * 7) % EXPORT_REVIEW_RISK_LEVELS.length,
-  );
+  // Stride must stay coprime with the list length or the "cycle" is a
+  // constant: the old *5 stride on this length-5 list pinned every row to
+  // one jurisdiction, which read as filler on camera. *2 varies row by row
+  // and keeps index 0 on the third jurisdiction, which the review-citation
+  // recording's paint predicate quotes verbatim.
+  const jurisdictionIndex = (index * 2 + 2) % copy.jurisdictions.length;
+  const riskLevel = at(copy.riskLevels, (index * 7) % copy.riskLevels.length);
   const effectiveDate = addDays(new Date(2024, 0, 1), index * 11);
   const expiryDate = addDays(new Date(2026, 0, 1), index * 17);
   const contractValue = 50_000 + ((index * 137_500) % 4_950_000);
-  const reviewStatus = at(
-    EXPORT_REVIEW_REVIEW_STATUSES,
-    index % EXPORT_REVIEW_REVIEW_STATUSES.length,
-  );
-  const evidenceQuality = at(
-    EXPORT_REVIEW_EVIDENCE_QUALITY,
-    index % EXPORT_REVIEW_EVIDENCE_QUALITY.length,
-  );
-  const tags = [
-    at(["change of control", "termination", "data room", "renewal"], index % 4),
-    at(["consent needed", "pricing", "privacy", "security"], (index + 1) % 4),
-  ];
 
   return {
     documentType,
     counterparty,
-    jurisdiction,
-    governingLaw:
-      jurisdiction === "United Kingdom" ? "England and Wales" : jurisdiction,
+    jurisdiction: at(copy.jurisdictions, jurisdictionIndex),
+    governingLaw: at(copy.governingLaws, jurisdictionIndex),
     effectiveDate,
     expiryDate,
     contractValue,
     riskLevel,
-    reviewStatus,
-    evidenceQuality,
-    tags,
-    keyObligation: `${counterparty} must provide written notice before any assignment, renewal, or material service change.`,
-    riskFinding:
-      riskLevel === "High" || riskLevel === "Critical"
-        ? "Consent, notice, or termination rights require partner review before signing."
-        : "No blocking issue identified; confirm ordinary-course compliance before closing.",
+    reviewStatus: at(copy.reviewStatuses, index % copy.reviewStatuses.length),
+    evidenceQuality: at(
+      copy.evidenceQuality,
+      index % copy.evidenceQuality.length,
+    ),
+    tags: [
+      at(copy.primaryTags, index % 4),
+      at(copy.secondaryTags, (index + 1) % 4),
+    ],
+    keyObligation: copy.keyObligation(counterparty),
+    riskFinding: isElevatedRisk(copy, riskLevel)
+      ? copy.riskFinding.elevated
+      : copy.riskFinding.ordinary,
     pageNumber: (index % 4) + 1,
   };
 };
 
 export const buildExportReviewDocumentText = (
+  copy: ExportReviewCopy,
   fileName: string,
   index: number,
 ): string => {
-  const metadata = buildExportReviewMetadata(index);
-  return `${metadata.documentType.toUpperCase()} — REVIEW EXTRACT
+  const metadata = buildExportReviewMetadata(copy, index);
+  const { extract } = copy;
+  const { labels } = extract;
+  return `${extract.heading(metadata.documentType)}
 
-${metadata.counterparty}, based in ${metadata.jurisdiction}, is party to this ${metadata.documentType.toLowerCase()} under review as part of the Project Atlas data room.
+${extract.intro(metadata)}
 
-Key terms
-Document: ${fileName}
-Document type: ${metadata.documentType}
-Counterparty: ${metadata.counterparty}
-Jurisdiction: ${metadata.jurisdiction}
-Governing law: ${metadata.governingLaw}
-Effective date: ${metadata.effectiveDate}
-Expiry date: ${metadata.expiryDate}
-Contract value: EUR ${metadata.contractValue}
-Risk level: ${metadata.riskLevel}
-Review status: ${metadata.reviewStatus}
-Evidence quality: ${metadata.evidenceQuality}
-Tags: ${metadata.tags.join(", ")}
+${extract.keyTerms}
+${labels.document}: ${fileName}
+${labels.documentType}: ${metadata.documentType}
+${labels.counterparty}: ${metadata.counterparty}
+${labels.jurisdiction}: ${metadata.jurisdiction}
+${labels.governingLaw}: ${metadata.governingLaw}
+${labels.effectiveDate}: ${metadata.effectiveDate}
+${labels.expiryDate}: ${metadata.expiryDate}
+${labels.contractValue}: ${copy.formatContractValue(metadata.contractValue)}
+${labels.riskLevel}: ${metadata.riskLevel}
+${labels.reviewStatus}: ${metadata.reviewStatus}
+${labels.evidenceQuality}: ${metadata.evidenceQuality}
+${labels.tags}: ${metadata.tags.join(", ")}
 
-Key obligation
+${extract.keyObligation}
 ${metadata.keyObligation}
 
-Risk finding
+${extract.riskFinding}
 ${metadata.riskFinding}
 
-Extract under review:
-"${metadata.counterparty} must comply with the obligation identified above and the governing law is ${metadata.governingLaw}."`;
+${extract.underReview}
+${extract.clause(metadata)}`;
 };
 
 export type ExportReviewCitationSeed = {
-  fieldSuffix: string;
+  fieldSuffix: ExportReviewCitationField;
   statement: string;
   quote: string;
   /**
@@ -261,87 +297,62 @@ export type ExportReviewCitationSeed = {
 };
 
 export const buildExportReviewCitationSeeds = (
+  copy: ExportReviewCopy,
   metadata: ExportReviewMetadata,
-): ExportReviewCitationSeed[] => [
-  {
-    fieldSuffix: "document-type",
-    statement: `Document type extracted as ${metadata.documentType}.`,
-    quote: `Document type: ${metadata.documentType}`,
-    blockIndex: 6,
-  },
-  {
-    fieldSuffix: "counterparty",
-    statement: `Counterparty extracted as ${metadata.counterparty}.`,
-    quote: `Counterparty: ${metadata.counterparty}`,
-    blockIndex: 7,
-  },
-  {
-    fieldSuffix: "jurisdiction",
-    statement: `Jurisdiction extracted as ${metadata.jurisdiction}.`,
-    quote: `Jurisdiction: ${metadata.jurisdiction}`,
-    blockIndex: 8,
-  },
-  {
-    fieldSuffix: "governing-law",
-    statement: `Governing law extracted as ${metadata.governingLaw}.`,
-    quote: `Governing law: ${metadata.governingLaw}`,
-    blockIndex: 9,
-  },
-  {
-    fieldSuffix: "effective-date",
-    statement: `Effective date extracted as ${metadata.effectiveDate}.`,
-    quote: `Effective date: ${metadata.effectiveDate}`,
-    blockIndex: 10,
-  },
-  {
-    fieldSuffix: "expiry-date",
-    statement: `Expiry date extracted as ${metadata.expiryDate}.`,
-    quote: `Expiry date: ${metadata.expiryDate}`,
-    blockIndex: 11,
-  },
-  {
-    fieldSuffix: "contract-value",
-    statement: `Contract value extracted as EUR ${metadata.contractValue}.`,
-    quote: `Contract value: EUR ${metadata.contractValue}`,
-    blockIndex: 12,
-  },
-  {
-    fieldSuffix: "risk-level",
-    statement: `Risk level classified as ${metadata.riskLevel}.`,
-    quote: `Risk level: ${metadata.riskLevel}`,
-    blockIndex: 13,
-  },
-  {
-    fieldSuffix: "evidence-quality",
-    statement: `Evidence quality classified as ${metadata.evidenceQuality}.`,
-    quote: `Evidence quality: ${metadata.evidenceQuality}`,
-    // Position 14 is "Review status: ..." (not a citation field); evidence
-    // quality is the next line.
-    blockIndex: 15,
-  },
-  {
-    fieldSuffix: "tags",
-    statement: `Tags extracted as ${metadata.tags.join(", ")}.`,
-    quote: `Tags: ${metadata.tags.join(", ")}`,
-    blockIndex: 16,
-  },
-  {
-    fieldSuffix: "key-obligation",
-    statement: "Key obligation extracted from the obligation section.",
-    quote: metadata.keyObligation,
-    // Position 17 is the "Key obligation" heading; the obligation text
-    // itself is the next line.
-    blockIndex: 18,
-  },
-  {
-    fieldSuffix: "risk-finding",
-    statement: "Risk finding extracted from the risk section.",
-    quote: metadata.riskFinding,
-    // Position 19 is the "Risk finding" heading; the finding text itself
-    // is the next line.
-    blockIndex: 20,
-  },
-];
+): ExportReviewCitationSeed[] => {
+  const { labels } = copy.extract;
+  const line = (
+    fieldSuffix: ExportReviewCitationField,
+    label: string,
+    value: string,
+    blockIndex: number,
+  ): ExportReviewCitationSeed => ({
+    fieldSuffix,
+    statement: copy.statements[fieldSuffix](metadata),
+    quote: `${label}: ${value}`,
+    blockIndex,
+  });
+  return [
+    line("document-type", labels.documentType, metadata.documentType, 6),
+    line("counterparty", labels.counterparty, metadata.counterparty, 7),
+    line("jurisdiction", labels.jurisdiction, metadata.jurisdiction, 8),
+    line("governing-law", labels.governingLaw, metadata.governingLaw, 9),
+    line("effective-date", labels.effectiveDate, metadata.effectiveDate, 10),
+    line("expiry-date", labels.expiryDate, metadata.expiryDate, 11),
+    line(
+      "contract-value",
+      labels.contractValue,
+      copy.formatContractValue(metadata.contractValue),
+      12,
+    ),
+    line("risk-level", labels.riskLevel, metadata.riskLevel, 13),
+    // Position 14 is the review status line (not a citation field);
+    // evidence quality is the next line.
+    line(
+      "evidence-quality",
+      labels.evidenceQuality,
+      metadata.evidenceQuality,
+      15,
+    ),
+    line("tags", labels.tags, metadata.tags.join(", "), 16),
+    {
+      fieldSuffix: "key-obligation",
+      statement: copy.statements["key-obligation"](metadata),
+      quote: metadata.keyObligation,
+      // Position 17 is the key obligation heading; the obligation text
+      // itself is the next line.
+      blockIndex: 18,
+    },
+    {
+      fieldSuffix: "risk-finding",
+      statement: copy.statements["risk-finding"](metadata),
+      quote: metadata.riskFinding,
+      // Position 19 is the risk finding heading; the finding text itself
+      // is the next line.
+      blockIndex: 20,
+    },
+  ];
+};
 
 /** The folio block id a DOCX citation seed resolves to. */
 export const exportReviewCitationBlockId = (

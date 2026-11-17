@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -267,6 +268,84 @@ test("moves two migrations sharing a suffix when one targets the other's name", 
         ),
       ),
     ).toBe(secondSql);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+const lockAllowance = (root: string, name: string, contents: string) => {
+  const directory = path.join(root, "scripts/migration-lock-allowances");
+  mkdirSync(directory, { recursive: true });
+  writeFileSync(path.join(directory, `${name}.json`), contents);
+};
+
+const readLockAllowance = (root: string, name: string) =>
+  readFileSync(
+    path.join(root, "scripts/migration-lock-allowances", `${name}.json`),
+    "utf-8",
+  );
+
+const lockAllowanceExists = (root: string, name: string) =>
+  existsSync(
+    path.join(root, "scripts/migration-lock-allowances", `${name}.json`),
+  );
+
+test("moves a lock allowance named after a re-stamped migration", () => {
+  const root = fixture();
+  try {
+    const allowance = `${JSON.stringify({ "add-foreign-key": "new table" })}\n`;
+    migration(root, "20260101010000_feature");
+    lockAllowance(root, "20260101010000_feature", allowance);
+    commitFeature(root);
+    advanceBase(root);
+    expect(restampMigrations({ baseRef: "base", cwd: root })).toEqual([
+      { oldName: "20260101010000_feature", newName: "20260101020100_feature" },
+    ]);
+    expect(lockAllowanceExists(root, "20260101010000_feature")).toBe(false);
+    expect(readLockAllowance(root, "20260101020100_feature")).toBe(allowance);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("moves lock allowances of two migrations when one targets the other's name", () => {
+  const root = fixture();
+  try {
+    migration(root, "20260101010000_feature", "select 10;\n");
+    migration(root, "20260101020100_feature", "select 11;\n");
+    lockAllowance(root, "20260101010000_feature", '{"first":"a"}\n');
+    lockAllowance(root, "20260101020100_feature", '{"second":"b"}\n');
+    commitFeature(root);
+    advanceBase(root);
+    restampMigrations({ baseRef: "base", cwd: root });
+    expect(lockAllowanceExists(root, "20260101010000_feature")).toBe(false);
+    expect(readLockAllowance(root, "20260101020100_feature")).toBe(
+      '{"first":"a"}\n',
+    );
+    expect(readLockAllowance(root, "20260101020200_feature")).toBe(
+      '{"second":"b"}\n',
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("refuses before renaming when a file named after the migration lies outside the generator outputs", () => {
+  const root = fixture();
+  try {
+    migration(root, "20260101010000_first");
+    mkdirSync(path.join(root, "docs"), { recursive: true });
+    writeFileSync(path.join(root, "docs/20260101010000_first.md"), "notes\n");
+    commitFeature(root);
+    advanceBase(root);
+    expect(() => restampMigrations({ baseRef: "base", cwd: root })).toThrow(
+      "docs/20260101010000_first.md",
+    );
+    expect(
+      existsSync(
+        path.join(root, "apps/api/drizzle/20260101010000_first/migration.sql"),
+      ),
+    ).toBe(true);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

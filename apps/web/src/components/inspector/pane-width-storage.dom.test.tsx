@@ -1,14 +1,40 @@
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { describe, expect, test } from "bun:test";
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
+import { IntlProvider } from "use-intl";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
+import en from "@/i18n/langs/en.json";
 import { defaultPresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
-import { PresentationPrefsProvider } from "@/lib/account/presentation-prefs/provider";
 import { createTestPresentationPrefsSync } from "@/lib/account/presentation-prefs/sync.test-fixtures";
 
-import { useSharedInspectorPaneWidth } from "./pane-width-storage";
+GlobalRegistrator.register({ url: "http://localhost:3000/workspaces" });
+
+const { cleanup, render } = await import("@testing-library/react");
+const { PresentationPrefsProvider } =
+  await import("@/lib/account/presentation-prefs/provider");
+const { useSharedInspectorPaneWidth } = await import("./pane-width-storage");
+const { inspectorStateEntry, inspectorMinimizedEntry } =
+  await import("@/components/inspector/inspector-storage-keys");
+const { writePersistedState, removePersistedState } =
+  await import("@/lib/persisted-state/registry");
+const { ProtectedPendingSkeleton } =
+  await import("@/routes/-protected-pending-skeleton");
+const pendingScope = { organizationId: "pending-org", userId: "pending-user" };
+
+afterEach(() => {
+  cleanup();
+  removePersistedState(inspectorStateEntry, pendingScope).unwrap();
+  removePersistedState(inspectorMinimizedEntry, pendingScope).unwrap();
+});
+
+afterAll(async () => {
+  await unregisterDomEnvironment();
+});
 
 const Dock = () => {
   const { width } = useSharedInspectorPaneWidth({
@@ -38,6 +64,44 @@ describe("inspector width server snapshot", () => {
       ).toHaveLength(2);
     }
   });
+});
+
+test("the member loading frame reserves the saved inspector before tabs mount", () => {
+  const prefs = { ...defaultPresentationPrefs, inspectorWidth: 320 };
+  writePersistedState(inspectorStateEntry, pendingScope, {
+    tabs: [
+      {
+        type: "chat",
+        id: "00000000-0000-4000-8000-000000000001",
+        label: "Chat",
+        contextMatterIds: [],
+      },
+    ],
+    groups: [],
+    groupAssignments: {},
+    activeId: "00000000-0000-4000-8000-000000000001",
+    collapsedGroupIds: [],
+  }).unwrap();
+  writePersistedState(inspectorMinimizedEntry, pendingScope, false).unwrap();
+  const sync = createTestPresentationPrefsSync(prefs);
+  const frame = (scope: typeof pendingScope) => (
+    <IntlProvider locale="en" messages={en}>
+      <PresentationPrefsProvider initialPrefs={prefs} sync={sync}>
+        <ProtectedPendingSkeleton inspectorScope={scope} />
+      </PresentationPrefsProvider>
+    </IntlProvider>
+  );
+  const { container, rerender } = render(frame(pendingScope));
+  const dockWidth = () =>
+    container
+      .querySelector('[data-slot="inspector-pending-dock"]')
+      ?.getAttribute("style");
+  expect(dockWidth()).toBe("width: 320px;");
+  rerender(frame({ ...pendingScope, userId: "another-user" }));
+  expect(dockWidth()).toBeNull();
+  writePersistedState(inspectorMinimizedEntry, pendingScope, true).unwrap();
+  rerender(frame(pendingScope));
+  expect(dockWidth()).toBeNull();
 });
 
 // A dock bypassing the shared hook would reintroduce independent persistence.

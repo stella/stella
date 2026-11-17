@@ -64,6 +64,7 @@ const chatToolsFor = (
     resolveCurrentExecutionContext: async () =>
       await Promise.resolve(
         Result.ok({
+          billingAccess: false,
           accessibleWorkspaces: currentWorkspaceIds.map((id) => ({
             id,
             status: "active" as const,

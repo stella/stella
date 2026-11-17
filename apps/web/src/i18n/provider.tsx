@@ -8,6 +8,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { FormattingProvider } from "@/i18n/formatting-context";
 import {
   buildFormattingLocale,
+  buildMessageLocale,
   synchronizeFormatterTimeZone,
   synchronizeFormattingPreferences,
   useI18nStore,
@@ -63,8 +64,21 @@ export const I18nProvider = ({ children }: PropsWithChildren) => {
     weekStart: prefs.weekStart,
   });
 
+  // Messages render in the UI language with the reader's digits, so a
+  // plural's `#` matches every number formatted with format.number.
+  const messageLocale = buildMessageLocale({
+    lang: locale,
+    region: prefs.region,
+    regionalFormat: prefs.regionalFormat,
+    numberingSystem: prefs.numberingSystem,
+  });
+
   return (
-    <IntlProvider locale={locale} messages={messages} timeZone={timeZone}>
+    <IntlProvider
+      locale={messageLocale}
+      messages={messages}
+      timeZone={timeZone}
+    >
       <FormattingProvider locale={formattingLocale} timeZone={timeZone}>
         <DialogTranslations>{children}</DialogTranslations>
       </FormattingProvider>

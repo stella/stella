@@ -5,12 +5,14 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { statuteDisplayLabel } from "@stll/api-contract/statute-display-label";
 import { pickVersionAt } from "@stll/api-contract/statute-version";
 import type { AISuggestionPreset } from "@stll/folio-react";
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { Maximize2Icon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import type { ActiveLegalDocument } from "@/components/ai-suggestions/active-legal-document";
@@ -32,7 +34,6 @@ import { ProvisionCitingDecisions } from "@/features/statutes/components/provisi
 import { ProvisionHistory } from "@/features/statutes/components/provision-history";
 import { ProvisionVersionContext } from "@/features/statutes/components/provision-version-context";
 import { ProvisionWording } from "@/features/statutes/components/provision-wording";
-import { StatuteDisplayLabel } from "@/features/statutes/components/statute-display-label";
 import { StatuteStatusDot } from "@/features/statutes/components/statute-validity-indicator";
 import { StatuteVersionMenu } from "@/features/statutes/components/statute-version-menu";
 import type { ProvisionViewPayload } from "@/features/statutes/provision-inspector.logic";
@@ -254,15 +255,10 @@ export const ProvisionInspectorView = ({
             ),
           },
         ]}
-        label={tab.label}
-        labelOverflow="wrap"
-        labelContent={
-          statute === undefined ? undefined : (
-            <>
-              <span className="block">{payload.provisionLabel}</span>
-              <StatuteDisplayLabel statute={statute} />
-            </>
-          )
+        label={
+          statute === undefined
+            ? tab.label
+            : `${payload.provisionLabel} ${statuteDisplayLabel(statute).text}`
         }
         onClose={onClose}
       />
@@ -453,11 +449,11 @@ const ProvisionVersionBar = ({
           versions={versions}
         />
       ) : (
-        <span className="text-muted-foreground min-w-0 truncate tabular-nums">
+        <TruncatedText className="text-muted-foreground tabular-nums">
           {ineligibleLabel === null
             ? range
             : t("statutes.statedWindow", { range })}
-        </span>
+        </TruncatedText>
       )}
     </span>
   );

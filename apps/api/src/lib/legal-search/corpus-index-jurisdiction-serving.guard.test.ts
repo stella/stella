@@ -61,10 +61,12 @@ test("the modules that resolve an index for a read are the pointer's and the dec
     "scripts/corpus-snippet-compare.ts",
   ]);
   // The generations readers are served from, pointer applied: the read path's
-  // store and what measures those readers' freshness.
+  // store and what measures those readers' freshness and coverage.
   expect(modulesMatching(/\breadServedCorpusIndexGenerationsTx\b/u)).toEqual([
     "lib/legal-search/corpus-index-group-enrollment-store.ts",
     "lib/observability/case-law-freshness-metrics.ts",
+    "lib/observability/corpus-index-projection-unserved-report.ts",
+    "lib/observability/corpus-index-split-census.ts",
   ]);
 });
 
@@ -79,7 +81,8 @@ test("the routing primitives are called by the declaration, the write side, the 
     "lib/legal-search/corpus-index-group-contract.ts",
     "lib/legal-search/corpus-index-manifest.ts",
     "lib/legal-search/corpus-index-projection-descriptor.ts",
-    "scripts/corpus-generation.ts",
+    // The seeding walk: which routes a generation has, to record each seeded.
+    "lib/legal-search/corpus-index-route-seeding.ts",
   ]);
   expect(modulesMatching(/\bcaseLawIndexIdSql\(/u)).toEqual([
     "lib/legal-search/case-law-corpus-projection.ts",
@@ -132,10 +135,12 @@ test("the SQL acceptance of an indexed hit resolves its generation through the p
     expect(argument).toContain("COALESCE(pointer.");
   }
   // And the callers hand it the serving generation, never a route of their own.
-  expect(modulesMatching(/\bcurrentCaseLawCorpusProjection\(/u)).toEqual([
+  expect(modulesMatching(/\bservedCaseLawCorpusProjection\(/u)).toEqual([
     "handlers/case-law/decisions/search.ts",
-    "lib/case-law/research-answer-runner.ts",
     "lib/legal-search/corpus-index-provider.ts",
+  ]);
+  expect(modulesMatching(/\bcurrentCaseLawCorpusProjection\(/u)).toEqual([
+    "lib/case-law/research-answer-runner.ts",
   ]);
 });
 

@@ -308,6 +308,11 @@ const handledMemberTables = async (omittedDelete?: PgTable) => {
     if (query.includes("AS aggregate_context")) {
       return { rows: [["fixture_owner", "", "", "", "", ""]] };
     }
+    // The removal runs on the owner connection, which names no organization
+    // before it scopes the departing member's contacts.
+    if (query.includes("AS is_owner")) {
+      return { rows: [{ organization_id: "", is_owner: true }] };
+    }
     // Advisory fences report their physical identity and acquisition.
     if (query.includes("AS key1")) {
       return { rows: [{ acquired: true, key1: 1, key2: 2 }] };
@@ -333,7 +338,7 @@ const handledMemberTables = async (omittedDelete?: PgTable) => {
             ? { where: async () => [] }
             : target.delete(table);
       }
-      return Reflect.get(target, property, receiver);
+      return Reflect.get(target, property, receiver) as unknown;
     },
   });
   await removeOrganizationMemberInTransaction(asTestRaw(transaction), {

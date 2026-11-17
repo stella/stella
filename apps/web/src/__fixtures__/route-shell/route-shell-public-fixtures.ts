@@ -1,3 +1,4 @@
+import { noDecisionReviewFound } from "@stll/api-contract/case-law-reviews";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
@@ -11,6 +12,8 @@ export const publicRouteExceptions: Record<string, string> = {
   "/": "RootRedirect immediately navigates according to the audience; it has no stable leaf body. Destination routes are covered separately.",
   "/auth/handoff":
     "The handoff confirmation route requires root-loader state captured from an MCP handoff; its panel is covered separately.",
+  "/sharepoint/oauth-callback":
+    "The SharePoint OAuth callback reports the outcome and navigates to the connections settings on mount; it has no stable leaf body. The destination route is covered separately.",
   "/knowledge/clauses:anonymous":
     "KnowledgeMemberOnly redirects anonymous visitors to the Knowledge landing before its page body mounts.",
   "/knowledge/styles:anonymous":
@@ -24,6 +27,7 @@ export const publicRouteExceptions: Record<string, string> = {
 const absentText = { type: "absent", reason: "not_published" } as const;
 
 const decision = {
+  appealReviews: noDecisionReviewFound(),
   caseFile: { items: [], nextCursor: null, limit: 50 },
   caseNumber: "SYN 1/2026",
   caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
@@ -46,6 +50,8 @@ const decision = {
   documentPending: false,
   documentReadFailed: false,
   documentUnavailable: false,
+  textIncompleteReason: null,
+  textWithheldReason: null,
   documentUrl: null,
   ecli: null,
   extractionWarnings: [],
@@ -169,6 +175,10 @@ export const publicFixtureResponse = (
         organizationName: null,
         sanctionsMonitoringMode: "included",
         displayName: "Fixture contact",
+        externalSource: null,
+        externalId: null,
+        externalChangeKey: null,
+        importedAt: null,
         notes: null,
         emails: [],
         phones: [],
@@ -181,6 +191,7 @@ export const publicFixtureResponse = (
         vatId: null,
         vatPayer: false,
         invoiceLanguage: null,
+        timeBillingFormat: "categories",
         bankAccounts: [],
         billingAddress: null,
         defaultHourlyRate: null,

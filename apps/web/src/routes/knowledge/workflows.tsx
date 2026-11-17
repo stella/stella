@@ -1,25 +1,31 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { Skeleton } from "@stll/ui/skeleton";
-
 import { guideAnchor } from "@/features/guides/guide-anchor";
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
+import { useMountEffect } from "@/hooks/use-effect";
 import { workflowsRouteAvailable } from "@/hooks/use-workflows-preview";
+import {
+  captureSessionQueryOwner,
+  isCurrentSessionQueryOwner,
+  isObservedSessionQueryOwner,
+} from "@/lib/account/auth-query-owner";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import {
+  useAuthenticatedUser,
+  useMaybeAuthenticatedUser,
+} from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { toAPIError } from "@/lib/errors/api";
-import { userErrorMessage } from "@/lib/errors/user-safe";
+import { unwrapApiResponse } from "@/lib/errors/api";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   FLOW_PICKER_LIMIT,
-  flowDetailOptions,
   flowsOptions,
   knowledgeKeys,
 } from "@/lib/knowledge/queries";
@@ -28,10 +34,14 @@ import { toSafeId } from "@/lib/safe-id";
 import { routePresentation } from "@/routes/-route-presentation";
 import { FlowEditor } from "@/routes/knowledge/-components/flow-editor";
 import type { FlowExampleKey } from "@/routes/knowledge/-components/flow-examples";
-import { FlowList } from "@/routes/knowledge/-components/flow-list";
+import {
+  FlowList,
+  FlowListSkeleton,
+} from "@/routes/knowledge/-components/flow-list";
 import type {
   FlowDefinitionBody,
   FlowDefinitionDetail,
+  FlowDefinitionUpdateBody,
   FlowListItem,
 } from "@/routes/knowledge/-components/flow-types";
 import { KnowledgeMemberOnly } from "@/routes/knowledge/-knowledge-member-only";
@@ -56,8 +66,6 @@ export const Route = createFileRoute("/knowledge/workflows")({
   component: GuardedWorkflowsPage,
   head: () => ({ meta: [{ title: pageTitle("common.workflows") }] }),
 });
-
-const FLOW_ROW_KEYS = ["a", "b", "c", "d", "e"];
 
 // The GET response carries workspace ids as plain strings; the PUT body
 // expects branded SafeIds, so rebrand before sending a fetched trigger back.
@@ -92,33 +100,22 @@ const toTriggerBody = (
   return trigger;
 };
 
-function WorkflowsPageSkeleton() {
-  return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center justify-end gap-1 border-b px-4 py-2">
-        <Skeleton className="h-8 w-8 rounded-md" />
-        <Skeleton className="h-8 w-28 rounded-md" />
-      </div>
-      <ul className="flex-1 divide-y overflow-y-auto">
-        {FLOW_ROW_KEYS.map((key) => (
-          <li className="flex items-center gap-3 px-4 py-3" key={key}>
-            <Skeleton className="size-9 shrink-0 rounded-lg" />
-            <div className="min-w-0 flex-1 space-y-1.5">
-              <Skeleton className="h-4 w-48" />
-              <Skeleton className="h-3 w-32" />
-            </div>
-            <Skeleton className="h-5 w-9 rounded-full" />
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
 function RouteComponent() {
   const t = useTranslations();
   const queryClient = useQueryClient();
-  const organizationId = useAuthenticatedUser().activeOrganizationId;
+  const { id: userId, activeOrganizationId: organizationId } =
+    useAuthenticatedUser();
+  const lifetime = useRef<AbortController | null>(null);
+  useMountEffect(() => {
+    const controller = new AbortController();
+    lifetime.current = controller;
+    return () => {
+      controller.abort();
+      if (lifetime.current === controller) {
+        lifetime.current = null;
+      }
+    };
+  });
   const [view, setView] = useState<View>({ kind: "list" });
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
@@ -137,21 +134,38 @@ function RouteComponent() {
   const handleBackToList = () => setView({ kind: "list" });
 
   const handleToggleEnabled = async (flow: FlowListItem, enabled: boolean) => {
+    const request = lifetime.current;
+    const owner = captureSessionQueryOwner(queryClient);
+    if (
+      !owner ||
+      owner.userId !== userId ||
+      owner.organizationId !== organizationId ||
+      !request
+    ) {
+      return;
+    }
     setTogglingId(flow.id);
     const flowId = toSafeId<"flowDefinition">(flow.id);
 
-    // The update endpoint takes the full definition, so read it back and PUT it
-    // with the flipped `enabled` flag. Force a fresh read (`staleTime: 0`): the
-    // cached detail can be up to five minutes old, so replaying it would clobber
-    // another user's concurrent edits to name/description/steps/trigger. A
-    // dedicated enabled-only mutation (see the PR follow-ups) would remove the
-    // full-body replay entirely; this closes the stale-cache window.
+    // Read outside the query cache: joining an older in-flight GET would not
+    // establish the version paired with this toggle's replacement fields.
     const detailResult = await Result.tryPromise(async () =>
-      queryClient.query({
-        ...flowDetailOptions(organizationId, flow.id),
-        staleTime: 0,
-      }),
+      unwrapApiResponse(
+        await api
+          .flows({ flowId })
+          .get({ fetch: { signal: request.signal, cache: "no-store" } }),
+      ),
     );
+    if (
+      lifetime.current !== request ||
+      !isObservedSessionQueryOwner(queryClient, owner)
+    ) {
+      return;
+    }
+    if (!isCurrentSessionQueryOwner(queryClient, owner)) {
+      setTogglingId(null);
+      return;
+    }
     if (Result.isError(detailResult)) {
       setTogglingId(null);
       getAnalytics().captureError(detailResult.error, {
@@ -166,31 +180,45 @@ function RouteComponent() {
     }
     const detail = detailResult.value;
 
-    const response = await api.flows({ flowId }).put({
-      name: detail.name,
-      description: detail.description,
-      steps: detail.steps,
-      trigger: toTriggerBody(detail.trigger),
-      enabled,
-    });
+    const outcome = await Result.tryPromise(async () =>
+      unwrapApiResponse(
+        await api.flows({ flowId }).put({
+          name: detail.name,
+          description: detail.description,
+          steps: detail.steps,
+          trigger: toTriggerBody(detail.trigger),
+          enabled,
+          expectedUpdatedAt: detail.updatedAt,
+        } satisfies FlowDefinitionUpdateBody),
+      ),
+    );
+    if (outcome.isOk()) {
+      detached(
+        queryClient.invalidateQueries({
+          queryKey: knowledgeKeys.flows.all(organizationId),
+        }),
+        "knowledge-workflows.invalidate",
+      );
+    }
+    if (
+      lifetime.current !== request ||
+      !isObservedSessionQueryOwner(queryClient, owner)
+    ) {
+      return;
+    }
     setTogglingId(null);
-
-    if (response.error) {
-      notifyUserError(toAPIError(response.error), t("flows.saveFailed"), {
-        description: userErrorMessage(
-          response.error,
+    if (!isCurrentSessionQueryOwner(queryClient, owner)) {
+      return;
+    }
+    if (outcome.isErr()) {
+      notifyUserError(outcome.error.cause, t("flows.saveFailed"), {
+        description: userErrorFromThrown(
+          outcome.error,
           t("common.unexpectedError"),
         ),
       });
       return;
     }
-
-    detached(
-      queryClient.invalidateQueries({
-        queryKey: knowledgeKeys.flows.all(organizationId),
-      }),
-      "knowledge-workflows.invalidate",
-    );
   };
 
   if (view.kind === "editor") {
@@ -206,7 +234,7 @@ function RouteComponent() {
   }
 
   if (isLoading) {
-    return <WorkflowsPageSkeleton />;
+    return <FlowListSkeleton />;
   }
 
   if (isError) {
@@ -250,9 +278,12 @@ function RouteComponent() {
 }
 
 function GuardedWorkflowsPage() {
+  const user = useMaybeAuthenticatedUser();
   return (
-    <KnowledgeMemberOnly pending={<WorkflowsPageSkeleton />}>
-      {(organizationId) => <RouteComponent key={organizationId} />}
+    <KnowledgeMemberOnly pending={<FlowListSkeleton />}>
+      {(organizationId) => (
+        <RouteComponent key={JSON.stringify([organizationId, user?.id])} />
+      )}
     </KnowledgeMemberOnly>
   );
 }

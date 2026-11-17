@@ -28,11 +28,11 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { tallyDecisions } from "@/api/lib/document-review/decision-counts";
 import { resolvePlaybookStaleness } from "@/api/lib/document-review/playbook-staleness";
+import { basisReferenceWorkspaceIds } from "@/api/lib/document-review/reference-passages";
 import {
   basisForReader,
   findingForReader,
   readableReferenceWorkspaces,
-  referenceWorkspacesByPosition,
 } from "@/api/lib/document-review/reference-visibility";
 import { DOCUMENT_REVIEW_FINDINGS_PER_RUN_MAX } from "@/api/lib/document-review/run-contract";
 import { PLAYBOOK_VERSION_SOURCE } from "@/api/lib/workflow/playbook-positions";
@@ -64,6 +64,7 @@ export const readDocumentReviewRunDetail = async function* ({
         .select({
           id: documentReviewRuns.id,
           status: documentReviewRuns.status,
+          executor: documentReviewRuns.executor,
           errorCode: documentReviewRuns.errorCode,
           entityId: documentReviewRuns.entityId,
           fileFieldId: documentReviewRuns.fileFieldId,
@@ -73,8 +74,10 @@ export const readDocumentReviewRunDetail = async function* ({
           // What the proposal pass left uncompared, so the results can say how
           // much of the document the checklist never covered.
           skipped: documentReviewRuns.skipped,
+          withheldSources: documentReviewRuns.withheldSources,
           total: documentReviewRuns.total,
           completed: documentReviewRuns.completed,
+          fixesWithheld: documentReviewRuns.fixesWithheld,
           pipelineVersion: documentReviewRuns.pipelineVersion,
           createdAt: documentReviewRuns.createdAt,
           startedAt: documentReviewRuns.startedAt,
@@ -179,7 +182,7 @@ export const readDocumentReviewRunDetail = async function* ({
     safeDb,
     basis: run.basis,
   });
-  const positionWorkspaces = referenceWorkspacesByPosition(run.basis);
+  const runSources = basisReferenceWorkspaceIds(run.basis);
 
   return {
     run: {
@@ -202,7 +205,7 @@ export const readDocumentReviewRunDetail = async function* ({
       outcome: finding.outcome,
       payload: {
         finding: findingForReader(finding.payload.finding, {
-          positionWorkspaces,
+          runSources,
           readable,
         }),
       },

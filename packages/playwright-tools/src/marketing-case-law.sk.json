@@ -1,0 +1,47 @@
+[
+  {
+    "country": "SVK",
+    "caseNumber": "III. ÚS 265/2026",
+    "language": "sk",
+    "highlightAnchor": "p13",
+    "underlineAnchor": "p12",
+    "aiNote": "Kritika postupu sudcu zo strany sťažovateľa sama osebe nezakladá pomer sudcu k účastníkovi, a teda ani objektívne pochybnosti o jeho nezaujatosti.",
+    "comment": "V námietke zaujatosti preukázať otvorené nepriateľstvo alebo neznášanlivosť sudcu. Jeho negatívne vnímanie našich podaní nestačí.",
+    "question": "Je kritika postupu sudcu dôvodom na jeho vylúčenie z konania?",
+    "answer": "Nie. Kritika postupov súdov a sudcov je prirodzená a nemožno z nej vyvodiť pomer medzi kritizovaným sudcom a sťažovateľom. Objektívne pochybnosti o nezaujatosti preto nevznikajú.",
+    "followUp": "Ako ústavný súd posúdil subjektívnu nestrannosť sudcu spravodajcu?",
+    "followUpAnswer": "Sudca síce komunikáciu sťažovateľa vníma negatívne, nemožno z toho však vyvodiť otvorené nepriateľstvo ani neznášanlivosť. Zo subjektívneho hľadiska preto niet pochýb o jeho nezaujatosti.",
+    "highlightNumber": 9,
+    "underlineNumber": 8
+  },
+  {
+    "country": "SVK",
+    "caseNumber": "III. ÚS 267/2026",
+    "language": "sk",
+    "highlightAnchor": "p5",
+    "underlineAnchor": "p4",
+    "aiNote": "Zastupovanie sťažovateľa externým poradcom sudcu je dôvodom na vylúčenie sudcu podľa § 49 ods. 1 zákona o ústavnom súde, a to aj ak ho zastupoval už pred všeobecnými súdmi.",
+    "comment": "Pri prevzatí veci preveriť väzby advokáta na sudcov ústavného súdu a podľa rozvrhu práce zistiť, ktorý senát rozhoduje o vylúčení.",
+    "question": "Je dôvodom na vylúčenie sudcu, ak sťažovateľa zastupuje jeho bývalá poradkyňa?",
+    "answer": "Áno. Záver, že zastupovanie externým poradcom sudcu zakladá pochybnosti o jeho nezaujatosti, ústavný súd uplatnil aj na bývalú poradkyňu pre ich pracovný a kolegiálny pomer.",
+    "followUp": "Prečo o vylúčení nerozhodoval senát, ktorého je sudca členom?",
+    "followUpAnswer": "O vylúčení sudcu II. senátu rozhoduje podľa § 51 ods. 2 prvej vety zákona o ústavnom súde a rozvrhu práce III. senát. O námietke tak rozhoduje senát, v ktorom dotknutý sudca nesedí.",
+    "highlightNumber": 3,
+    "underlineNumber": 2
+  },
+  {
+    "country": "SVK",
+    "caseNumber": "III. ÚS 268/2026",
+    "language": "sk",
+    "highlightAnchor": "p5",
+    "underlineAnchor": "p4",
+    "aiNote": "Pochybnosti o nezaujatosti podľa § 49 ods. 1 zákona o ústavnom súde sa posudzujú v subjektívnej aj objektívnej rovine. Nestrannosť sudcu podmieňuje dôveru verejnosti v súdnictvo.",
+    "comment": "Námietku proti sudcovi II. senátu formulovať pre III. senát, ktorý o nej rozhodne, a doložiť konkrétny prejav nepriateľstva sudcu.",
+    "question": "Je žaloba sťažovateľa proti sudcovi dôvodom na jeho vylúčenie?",
+    "answer": "Sama osebe nie. Podľa § 49 ods. 1 zákona o ústavnom súde rozhoduje, či vznikajú subjektívne alebo objektívne pochybnosti o nezaujatosti, a sudca tu nepriateľský pomer k sťažovateľovi neprejavil.",
+    "followUp": "Kto o vylúčení sudcu Petra Straku rozhodoval?",
+    "followUpAnswer": "III. senát ústavného súdu, keďže sudca Straka je členom II. senátu. Príslušnosť vyplýva z § 51 ods. 2 prvej vety zákona o ústavnom súde a z rozvrhu práce.",
+    "highlightNumber": 3,
+    "underlineNumber": 2
+  }
+]

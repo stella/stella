@@ -54,15 +54,15 @@ describe("unsignalled skip shapes", () => {
     ],
     [
       "nullable record lookup uses empty object",
-      "return lookupRecord(recordId) || {};",
+      "async function fixture() {\nreturn lookupRecord(recordId) || {};\n}",
     ],
     [
       "map extraction uses empty collection",
-      "const groups = new Map(); return groups.get(id) ?? [];",
+      "async function fixture() {\nconst groups = new Map(); return groups.get(id) ?? [];\n}",
     ],
     [
       "adapter filters failed row parses",
-      "return sourceRows.filter(row => { const parsed = parseRow(row); return parsed.success; });",
+      "async function fixture() {\nreturn sourceRows.filter(row => { const parsed = parseRow(row); return parsed.success; });\n}",
     ],
     [
       "catch with short circuit telemetry",
@@ -89,7 +89,10 @@ describe("unsignalled skip shapes", () => {
       "rows.filter(row => { const parsed = schema.safeParse(row); return parsed.success; });",
     ],
     ["catch without signal", "try { read(); } catch (cause) {}"],
-    ["catch returning empty text", 'try { read(); } catch { return ""; }'],
+    [
+      "catch returning empty text",
+      'async function fixture() {\ntry { read(); } catch { return ""; }\n}',
+    ],
     ["catch with ordinary work", "try { read(); } catch { cleanup(); }"],
     [
       "catch with deferred telemetry",
@@ -101,7 +104,7 @@ describe("unsignalled skip shapes", () => {
     ],
     [
       "catch with one empty return",
-      "try { read(); } catch { if (debug) return Result.err(cause); return []; }",
+      "async function fixture() {\ntry { read(); } catch { if (debug) return Result.err(cause); return []; }\n}",
     ],
     [
       "nullable computed value skipped",
@@ -109,7 +112,7 @@ describe("unsignalled skip shapes", () => {
     ],
     [
       "empty text extraction fallback",
-      'return { kind: "windowed-text", text: asString(valueAtPath(payload, textPath)) ?? "", nextCursor: asString(fieldOf(payload, "nextCursor")) };',
+      'async function fixture() {\nreturn { kind: "windowed-text", text: asString(valueAtPath(payload, textPath)) ?? "", nextCursor: asString(fieldOf(payload, "nextCursor")) };\n}',
     ],
     [
       "lookup skipped",
@@ -169,11 +172,11 @@ describe("unsignalled skip shapes", () => {
     ],
     [
       "success result fallback",
-      "try { read(); } catch { return Result.ok([]); }",
+      "async function fixture() {\ntry { read(); } catch { return Result.ok([]); }\n}",
     ],
     [
       "success-shaped record fallback",
-      'try { read(); } catch { return { kind: "text", text: "" }; }',
+      'async function fixture() {\ntry { read(); } catch { return { kind: "text", text: "" }; }\n}',
     ],
     [
       "collected success record",
@@ -207,11 +210,11 @@ describe("unsignalled skip shapes", () => {
     ],
     [
       "multiline extraction allowance",
-      'return parseBody(raw)\n ?? ""; // unsignalled-skip-allow: optional field',
+      'async function fixture() {\nreturn parseBody(raw)\n ?? ""; // unsignalled-skip-allow: optional field\n}',
     ],
     [
       "hoisted typed failure helper",
-      "try { read(); } catch { return toFailure(cause); } function toFailure(cause) { return Result.err(cause); }",
+      "async function fixture() {\ntry { read(); } catch { return toFailure(cause); } function toFailure(cause) { return Result.err(cause); }\n}",
     ],
     [
       "local telemetry helper",
@@ -221,12 +224,21 @@ describe("unsignalled skip shapes", () => {
       "typed issue code constant",
       "for (const row of rows) { const parsed = parseRow(row); if (!parsed.success) { issues.push({ code: FAILURE_CODES.invalid, row }); continue; } }",
     ],
-    ["arbitrary function fallback", "return getSettings() ?? {};"],
-    ["ordinary array default", "return rows ?? [];"],
-    ["primitive optional field default", 'return payload.optionalLabel ?? "";'],
+    [
+      "arbitrary function fallback",
+      "async function fixture() {\nreturn getSettings() ?? {};\n}",
+    ],
+    [
+      "ordinary array default",
+      "async function fixture() {\nreturn rows ?? [];\n}",
+    ],
+    [
+      "primitive optional field default",
+      'async function fixture() {\nreturn payload.optionalLabel ?? "";\n}',
+    ],
     [
       "nullable fallback is a domain absence",
-      "return valueAtPath(payload, path) ?? null;",
+      "async function fixture() {\nreturn valueAtPath(payload, path) ?? null;\n}",
     ],
     [
       "adapter records rejected row telemetry",
@@ -238,19 +250,19 @@ describe("unsignalled skip shapes", () => {
     ],
     [
       "stored row fetch propagates rejection",
-      "return await fetchStoredRows().catch(cause => { throw cause; });",
+      "async function fixture() {\nreturn await fetchStoredRows().catch(cause => { throw cause; });\n}",
     ],
     [
       "stored row fetch returns a typed result",
-      "return await fetchStoredRows().catch(cause => Result.err(cause));",
+      "async function fixture() {\nreturn await fetchStoredRows().catch(cause => Result.err(cause));\n}",
     ],
     [
       "stored row fetch returns a discriminated outcome",
-      'return await fetchStoredRows().catch(cause => ({ status: "failed", cause }));',
+      'async function fixture() {\nreturn await fetchStoredRows().catch(cause => ({ status: "failed", cause }));\n}',
     ],
     [
       "extraction fallback has a reason",
-      'return parseBody(raw) ?? ""; // unsignalled-skip-allow: optional description field',
+      'async function fixture() {\nreturn parseBody(raw) ?? ""; // unsignalled-skip-allow: optional description field\n}',
     ],
     [
       "switch rethrow",
@@ -271,7 +283,7 @@ describe("unsignalled skip shapes", () => {
     ["rethrow", "try { read(); } catch (cause) { throw cause; }"],
     [
       "result return",
-      "try { read(); } catch (cause) { return Result.err(cause); }",
+      "async function fixture() {\ntry { read(); } catch (cause) { return Result.err(cause); }\n}",
     ],
     [
       "result produced",
@@ -279,11 +291,11 @@ describe("unsignalled skip shapes", () => {
     ],
     [
       "discriminated return",
-      'try { read(); } catch { return { status: "failed", cause }; }',
+      'async function fixture() {\ntry { read(); } catch { return { status: "failed", cause }; }\n}',
     ],
     [
       "failure record return",
-      "try { read(); } catch { return { ok: false, cause }; }",
+      "async function fixture() {\ntry { read(); } catch { return { ok: false, cause }; }\n}",
     ],
     [
       "telemetry then fallback",
@@ -353,11 +365,11 @@ describe("unsignalled skip shapes", () => {
     ],
     [
       "returned result error",
-      "try { read(); } catch (cause) { return Result.err(cause); }",
+      "async function fixture() {\ntry { read(); } catch (cause) { return Result.err(cause); }\n}",
     ],
     [
       "returned typed result helper",
-      "const failure = cause => Result.err(cause); try { read(); } catch (cause) { return failure(cause); }",
+      "async function fixture() {\nconst failure = cause => Result.err(cause); try { read(); } catch (cause) { return failure(cause); }\n}",
     ],
     [
       "collected result error",

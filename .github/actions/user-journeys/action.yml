@@ -127,7 +127,10 @@ runs:
           fi
         }
         verify_deployed_commit
-        timeout 12m bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:journeys --project "$PROJECT"
+        # Covers a deployed journey's wait for its scheduled jobs (up to
+        # 10 min, apps/web/e2e/helpers/journey-prerequisites.ts) plus the rest
+        # of the suite, inside the callers' 20-minute step budgets.
+        timeout 16m bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:journeys --project "$PROJECT"
         verify_deployed_commit
 
     - name: Stop mock-model services

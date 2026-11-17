@@ -64,7 +64,6 @@ export type {
   PositionDecisionSummary,
   PositionSeverity,
   PositionStandard,
-  PositionStandardSource,
   ReferencePassage,
   TierRule,
   ViewLayout,

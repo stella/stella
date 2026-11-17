@@ -15,13 +15,13 @@ import type {
 } from "./action-capabilities.logic";
 
 const cases = {
-  ai: { reason: "aiMissing", route: "/admin/ai" },
-  deepl: { reason: "deeplMissing", route: "/admin/ai" },
+  ai: { reason: "aiMissing", route: "/settings/organization/ai" },
+  deepl: { reason: "deeplMissing", route: "/settings/organization/ai" },
   translation: {
     reason: "translationMissing",
-    route: "/admin/ai",
+    route: "/settings/organization/ai",
   },
-  ocr: { reason: "ocrUnavailable", route: "/admin/ai" },
+  ocr: { reason: "ocrUnavailable", route: "/settings/organization/ai" },
   desktop: { reason: "desktopUnavailable", route: "/settings/account/desktop" },
   verification: {
     reason: "featureUnavailable",
@@ -164,7 +164,7 @@ test("OCR admits live and batched deployments and keeps the status for the actio
         ? {
             type: "unavailable",
             reason: "ocrUnavailable",
-            settingsLink: "/admin/ai",
+            settingsLink: "/settings/organization/ai",
           }
         : { type: "available" },
     );

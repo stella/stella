@@ -4,6 +4,7 @@ import {
   useSuspenseInfiniteQuery,
   useSuspenseQuery,
 } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -18,7 +19,7 @@ import {
   type ManualTimeEntryValues,
 } from "@/components/billing/manual-time-entry-form";
 import { isTimeEntryRateRequired } from "@/components/billing/time-entry-rate-error.logic";
-import { shiftWeeks, weekOf } from "@/components/billing/work-week.logic";
+import { weekOf } from "@/components/billing/work-week.logic";
 import {
   MatterCombobox,
   type MatterOption,
@@ -165,6 +166,8 @@ export const MyWeek = ({
   const { week } = queries;
   const entriesQuery = useSuspenseInfiniteQuery(queries.entries);
   const { data: suggestionRange } = useSuspenseQuery(queries.suggestions);
+  const tReport = useTranslations("billing.timeReport");
+  const canReadTime = usePermissions({ timeEntry: ["read"] });
   const canDecide = usePermissions({ timeEntry: ["create"] });
   const canEdit = usePermissions({ timeEntry: ["update"] });
   const canApprove = usePermissions({ timeEntry: ["approve"] });
@@ -256,6 +259,7 @@ export const MyWeek = ({
                 {tCommon("logTime")}
               </Button>
             )}
+            {canReadTime && <Link to="/time/report">{tReport("title")}</Link>}
             {/* Members approve what is assigned to them, so the link follows
                 the queue, not the role; it shows nothing while none waits. */}
             <PendingApprovalsLink
@@ -272,11 +276,10 @@ export const MyWeek = ({
             />
           </>
         }
-        onNextWeek={() => onSelectDate(shiftWeeks(date, 1))}
-        onPreviousWeek={() => onSelectDate(shiftWeeks(date, -1))}
+        date={date}
+        onSelectDate={onSelectDate}
         onToday={onToday}
         totals={totals}
-        week={week}
       />
       <WeekStrip
         onSelectDate={onSelectDate}

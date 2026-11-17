@@ -58,6 +58,8 @@ const SearchField = ({
       <InputGroupAddon align="inline-end">
         <Button
           aria-label={clearLabel}
+          // A disabled field cannot be edited, so it cannot be cleared either.
+          disabled={props.disabled}
           onClick={() => {
             onValueChange("");
           }}

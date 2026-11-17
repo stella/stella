@@ -1,5 +1,9 @@
 {
-  "nativeEvents": ["$exception", "desktop_timing", "desktopCrashed"],
+  "nativeEvents": [
+    "$exception",
+    "desktop_timing",
+    "desktopCrashed"
+  ],
   "windows": [
     "clipboard",
     "clipboardEditor",
@@ -40,6 +44,17 @@
     "unhandledError",
     "unhandledRejection",
     "windowLabelMismatch"
+  ],
+  "reasons": [
+    "accountUnavailable",
+    "windowRefused",
+    "billingRequestFailed",
+    "typeError",
+    "referenceError",
+    "rangeError",
+    "syntaxError",
+    "otherError",
+    "unclassified"
   ],
   "spans": [
     "clipboardFirstPaint",

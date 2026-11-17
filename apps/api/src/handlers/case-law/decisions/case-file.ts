@@ -113,10 +113,9 @@ export const listCaseFileDocuments = async ({
   if (after === false) {
     return false;
   }
-  const familyKey = await docketFamilyKeyToRead({
+  const familyKey = docketFamilyKeyToRead({
     country: decision.country,
     locator,
-    tx,
   });
   const localizedCourts = tx
     .select({ court: publishedCaseLawDecisions.court })
@@ -252,6 +251,8 @@ const UNPROJECTED_CASE_FILE_COLUMNS = [
   "analysis",
   // Parser bookkeeping does not describe a case-file document.
   "parserVersion",
+  // Procedural review extraction version is internal bookkeeping.
+  "reviewExtractionVersion",
   // Raw publisher bytes are not returned in a document list.
   "sourceRaw",
   // Internal object-storage address for publisher bytes.
@@ -264,6 +265,12 @@ const UNPROJECTED_CASE_FILE_COLUMNS = [
   "documentUrl",
   // Publisher ingestion identity; the public link uses id or slug.
   "sourceDocumentId",
+  // Fallback identity and cohort bookkeeping are not public document labels.
+  "fallbackIdentityKey",
+  "fallbackCohortKey",
+  "fallbackContentHash",
+  "fallbackPublicationHash",
+  "fallbackDocumentHash",
   // The file's document labels use the published primary reference.
   "sheetNumber",
   // Document-fetch queue priority is internal bookkeeping.
@@ -272,6 +279,17 @@ const UNPROJECTED_CASE_FILE_COLUMNS = [
   "documentFetchAttemptedAt",
   // Document-fetch retry state is internal bookkeeping.
   "documentFetchAttempts",
+  // These materialized publisher fields are already represented in metadata.
+  "nssReporterNumber",
+  "nssReporterYear",
+  "nssReporterIssue",
+  "nssKeywordSearchCode",
+  "nssRegistryCaseNumber",
+  "nssRegistryReferral",
+  "nssRegistryReferralDate",
+  "nssRegistryAgainstCases",
+  "nssRegistryStatus",
+  "nssRegistryAnnotation",
   // Open publisher metadata is deliberately absent from compact document links.
   "metadata",
   // Source change detection is internal bookkeeping.
@@ -282,6 +300,7 @@ const UNPROJECTED_CASE_FILE_COLUMNS = [
   "parsedSourceHash",
   "parsedSourceHashVersion",
   "parsedSourceRawS3Key",
+  "parsedInputState",
   // Source observation timing is internal bookkeeping.
   "sourceObservedAt",
   // Source observation ordering is internal bookkeeping.
@@ -318,6 +337,8 @@ const UNPROJECTED_CASE_FILE_COLUMNS = [
   "createdAt",
   // Storage update time is not the document's decision date.
   "updatedAt",
+  // Content change time is a reader's cursor, not the decision's date.
+  "contentChangedAt",
 ] as const satisfies readonly (keyof typeof publishedCaseLawDecisions.$inferSelect)[];
 
 type CaseFilePage = Exclude<

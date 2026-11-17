@@ -12,8 +12,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
+import { CAPABILITY_CATALOG_RELEASE_INPUTS } from "./capability-catalog-sources";
 import {
   checkChangesetPackages,
   decideChangesetGate,
@@ -155,6 +156,41 @@ const gatedWorkspaces = (): string[] =>
     ),
   ].toSorted();
 
+/** What `bun scripts/changeset-guard.ts` loads, copied into fixture repos. */
+const GUARD_SOURCES = [
+  "scripts/changeset-guard.ts",
+  "scripts/changeset-entry.ts",
+  "scripts/changeset-policy.json",
+  "scripts/capability-catalog-sources.ts",
+  "scripts/generated-files.ts",
+  "packages/scripts/src/generated-files.ts",
+] as const;
+
+/** A repository holding the guard and its policy, ready for commits. */
+const createGuardFixture = (prefix: string): string => {
+  const root = mkdtempSync(path.join(tmpdir(), prefix));
+  for (const file of GUARD_SOURCES) {
+    mkdirSync(path.join(root, path.dirname(file)), { recursive: true });
+    writeFileSync(path.join(root, file), readFile(file));
+  }
+  mkdirSync(path.join(root, ".changeset"));
+  git(root, ["init", "-b", "main"]);
+  git(root, ["config", "user.email", "test@example.com"]);
+  git(root, ["config", "user.name", "Test"]);
+  return root;
+};
+
+const commitAll = (root: string, message: string): void => {
+  git(root, ["add", "."]);
+  git(root, ["commit", "--no-gpg-sign", "-m", message]);
+};
+
+const runPackageCheck = (root: string, base: string) =>
+  Bun.spawnSync(
+    ["bun", "scripts/changeset-guard.ts", "--base", base, "--packages-only"],
+    { cwd: root },
+  );
+
 const CHANGESET_GATE_FIRST_STEP = "Load release policy";
 const CHANGESET_GATE_LAST_STEP =
   "Changeset present for published package changes";
@@ -242,7 +278,8 @@ describe("changeset gate decision", () => {
   });
 
   test("adding any changeset entry flips a failing verdict to a passing one", () => {
-    fc.assert(
+    assertProperty(
+      "adding any changeset entry flips a failing verdict to a passing one",
       fc.property(
         fc.uniqueArray(fc.constantFrom(...GATED_FILES), { minLength: 1 }),
         fc.array(fc.tuple(fc.constantFrom(...UNGATED_PREFIXES), SLUG)),
@@ -258,12 +295,13 @@ describe("changeset gate decision", () => {
           );
         },
       ),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 
   test("never asks for a changeset when nothing gated changed", () => {
-    fc.assert(
+    assertProperty(
+      "never asks for a changeset when nothing gated changed",
       fc.property(
         fc.array(fc.tuple(fc.constantFrom(...UNGATED_PREFIXES), SLUG)),
         (ungated) => {
@@ -273,7 +311,7 @@ describe("changeset gate decision", () => {
           ).toBe("not-required");
         },
       ),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 });
@@ -285,7 +323,8 @@ describe("changeset package relevance", () => {
   });
 
   test("requires path evidence for every named package across the release policy", () => {
-    fc.assert(
+    assertProperty(
+      "requires path evidence for every named package across the release policy",
       fc.property(
         fc.constantFrom(...policy.packageFiles),
         fc.constantFrom(...policy.packageFiles),
@@ -307,7 +346,7 @@ describe("changeset package relevance", () => {
           checkChangesetPackages(options);
         },
       ),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 
@@ -357,44 +396,18 @@ describe("changeset package relevance", () => {
   });
 
   test("checks edits as well as additions at HEAD, while allowing consumed version entries", () => {
-    const root = mkdtempSync(path.join(tmpdir(), "stella-package-relevance-"));
+    const root = createGuardFixture("stella-package-relevance-");
     try {
-      mkdirSync(path.join(root, "scripts"));
-      mkdirSync(path.join(root, ".changeset"));
       mkdirSync(path.join(root, "packages/cli/src"), { recursive: true });
-      for (const file of [
-        "changeset-guard.ts",
-        "changeset-entry.ts",
-        "changeset-policy.json",
-      ]) {
-        writeFileSync(
-          path.join(root, "scripts", file),
-          readFile(`scripts/${file}`),
-        );
-      }
       const entryPath = path.join(root, ".changeset/change.md");
       writeFileSync(entryPath, entry(["@stll/cli"]).contents);
       writeFileSync(
         path.join(root, "packages/cli/src/main.ts"),
         "export const version = 1;\n",
       );
-      git(root, ["init", "-b", "main"]);
-      git(root, ["config", "user.email", "test@example.com"]);
-      git(root, ["config", "user.name", "Test"]);
-      git(root, ["add", "."]);
-      git(root, ["commit", "--no-gpg-sign", "-m", "base"]);
+      commitAll(root, "base");
       const base = git(root, ["rev-parse", "HEAD"]).trim();
-      const check = () =>
-        Bun.spawnSync(
-          [
-            "bun",
-            "scripts/changeset-guard.ts",
-            "--base",
-            base,
-            "--packages-only",
-          ],
-          { cwd: root },
-        );
+      const check = () => runPackageCheck(root, base);
       writeFileSync(entryPath, entry(["@stll/cli", "@stll/ui"]).contents);
       git(root, ["add", "."]);
       git(root, ["commit", "--no-gpg-sign", "-m", "edit entry"]);
@@ -687,6 +700,121 @@ describe("catalog versions a published package ships", () => {
   });
 });
 
+describe("capability catalog sources", () => {
+  const CLI = "@stll/cli";
+  const REFERENCE = "@stll/cli@0.4.0";
+  const ENTRY_FILE = ".changeset/change.md";
+  const HANDLER = "apps/api/src/handlers/matters.ts";
+  /** In the API workspace, but nothing the catalog is derived from. */
+  const UNRELATED_API_FILE = "apps/api/README.md";
+  const derivedInputs = [CAPABILITY_CATALOG_RELEASE_INPUTS];
+  const entry = (names: readonly string[]) => ({
+    file: ENTRY_FILE,
+    contents: `---\n${names.map((name) => `"${name}": patch`).join("\n")}\n---\n\nA capability schema change.\n`,
+  });
+  const publishedCli = (changedFiles: readonly string[]) =>
+    new Map([[CLI, { reference: REFERENCE, changedFiles, catalogInputs: [] }]]);
+
+  test("counts a catalog source change as a release input of the CLI, with a note", () => {
+    expect(
+      checkChangesetPackages({
+        changedFiles: [HANDLER, ENTRY_FILE],
+        entries: [entry([CLI])],
+        policy,
+        derivedInputs,
+        published: publishedCli([]),
+      }),
+    ).toEqual([`${CLI}: capability catalog sources changed: ${HANDLER}.`]);
+  });
+
+  test("still refuses the CLI for an API file the catalog is not derived from", () => {
+    expect(() =>
+      checkChangesetPackages({
+        // The CLI's own ungated changelog is no catalog source either.
+        changedFiles: [
+          UNRELATED_API_FILE,
+          "packages/cli/CHANGELOG.md",
+          ENTRY_FILE,
+        ],
+        entries: [entry([CLI])],
+        policy,
+        derivedInputs,
+        published: publishedCli(["packages/cli/CHANGELOG.md"]),
+      }),
+    ).toThrow(`${ENTRY_FILE}: ${CLI}`);
+  });
+
+  test("justifies only the package that ships the catalog", () => {
+    expect(() =>
+      checkChangesetPackages({
+        changedFiles: [HANDLER, ENTRY_FILE],
+        entries: [entry(["@stll/business-registries"])],
+        policy,
+        derivedInputs,
+      }),
+    ).toThrow(`${ENTRY_FILE}: @stll/business-registries`);
+  });
+
+  test("counts catalog sources changed since the CLI's last publish", () => {
+    expect(
+      checkChangesetPackages({
+        changedFiles: [ENTRY_FILE],
+        entries: [entry([CLI])],
+        policy,
+        derivedInputs,
+        published: publishedCli(["packages/cli/CHANGELOG.md", HANDLER]),
+      }),
+    ).toEqual([
+      `${CLI}: capability catalog sources changed since ${REFERENCE}: ${HANDLER}.`,
+    ]);
+    expect(() =>
+      checkChangesetPackages({
+        changedFiles: [ENTRY_FILE],
+        entries: [entry([CLI])],
+        policy,
+        derivedInputs,
+        published: publishedCli([
+          "packages/cli/CHANGELOG.md",
+          UNRELATED_API_FILE,
+        ]),
+      }),
+    ).toThrow(`${ENTRY_FILE}: ${CLI}`);
+  });
+
+  test("the guard accepts a CLI entry for an API schema change outside packages/cli", () => {
+    const root = createGuardFixture("stella-catalog-sources-");
+    try {
+      mkdirSync(path.join(root, "packages/cli"), { recursive: true });
+      mkdirSync(path.join(root, path.dirname(HANDLER)), { recursive: true });
+      writeFileSync(
+        path.join(root, "packages/cli/package.json"),
+        '{"name":"@stll/cli","version":"0.4.0"}',
+      );
+      writeFileSync(path.join(root, HANDLER), "export const limit = 10;\n");
+      writeFileSync(path.join(root, UNRELATED_API_FILE), "# API\n");
+      commitAll(root, "base");
+      const base = git(root, ["rev-parse", "HEAD"]).trim();
+
+      writeFileSync(path.join(root, ENTRY_FILE), entry([CLI]).contents);
+      writeFileSync(path.join(root, UNRELATED_API_FILE), "# The API\n");
+      commitAll(root, "unrelated API change");
+      const refused = runPackageCheck(root, base);
+      expect(refused.exitCode).toBe(1);
+      expect(refused.stderr.toString()).toContain(`${ENTRY_FILE}: ${CLI}`);
+
+      writeFileSync(path.join(root, HANDLER), "export const limit = 20;\n");
+      commitAll(root, "schema change");
+      const accepted = runPackageCheck(root, base);
+      expect(accepted.exitCode).toBe(0);
+      expect(accepted.stdout.toString()).toContain(
+        `${CLI}: capability catalog sources changed: ${HANDLER}.`,
+      );
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+});
+
 describe("the diff the gate decides on", () => {
   test("counts a renamed empty changeset as a new entry", () => {
     // A maintenance release commit deletes the previous release's empty entry
@@ -820,10 +948,6 @@ describe("changeset policy file", () => {
       expect(policy.releasePaths).toContain(`${workspace}/README.md`);
       expect(policy.releasePaths).toContain(`${workspace}/src${TREE_SUFFIX}`);
     }
-  });
-
-  test("gates the CLI capability catalog", () => {
-    expect(policy.releasePaths).toContain("packages/cli/capabilities/**");
   });
 
   test("declares the same packages to the changesets entry validator", () => {

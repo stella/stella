@@ -3,13 +3,14 @@ import { and, desc, eq, isNull, lte } from "drizzle-orm";
 import * as v from "valibot";
 
 import type { Transaction } from "@/api/db/root";
-import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db";
 import {
   entities,
   entityVersions,
   fields,
   officeFileEvidence,
 } from "@/api/db/schema";
+import { envBase } from "@/api/env-base";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent, encryptContent } from "@/api/lib/content-encryption";
@@ -29,6 +30,7 @@ import {
   officeEvidencePayloadSchema,
 } from "@/api/lib/files/office-evidence-types";
 import { createFileKey } from "@/api/lib/files/utils";
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import {
   admitWork,
   type WorkAdmission,
@@ -37,7 +39,7 @@ import {
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
-import { OBJECT_READ_TIMEOUT_MS, readS3ArrayBuffer } from "@/api/lib/s3";
+import { OBJECT_READ_TIMEOUT_MS, readS3ObjectBounded } from "@/api/lib/s3";
 import { normalizeMimeType } from "@/api/lib/search/extractable-mime-types";
 import { PPTX_MIME_TYPE, XLSX_MIME_TYPE } from "@/api/mime-types";
 
@@ -151,17 +153,34 @@ const selectEvidenceVersionRows = async (
 
 const parseJson = (value: string): unknown => JSON.parse(value);
 
+type OfficeEvidenceDecodeFailure = {
+  operation:
+    | "office-evidence-decrypt"
+    | "office-evidence-json"
+    | "office-evidence-validate";
+  cause: unknown;
+};
+
+type OfficeEvidenceLoadFailure =
+  | OfficeEvidenceDecodeFailure
+  | {
+      operation: "office-evidence-claim";
+      cause: SafeDbError;
+    };
+
 const decodeEvidenceRow = async (
   row: PersistedEvidenceRow,
   organizationId: SafeId<"organization">,
-): Promise<OfficeEvidencePayload | null> => {
+): Promise<
+  Result<OfficeEvidencePayload | null, OfficeEvidenceDecodeFailure>
+> => {
   const { payloadCiphertext, payloadIv } = row;
   if (
     row.status !== OFFICE_EVIDENCE_STATUS.available ||
     !payloadCiphertext ||
     !payloadIv
   ) {
-    return null;
+    return Result.ok(null);
   }
 
   const decryptResult = await Result.tryPromise({
@@ -176,7 +195,10 @@ const decodeEvidenceRow = async (
         operation: "office-evidence-decrypt",
       }),
     );
-    return null;
+    return Result.err({
+      operation: "office-evidence-decrypt",
+      cause: decryptResult.error,
+    });
   }
   const jsonResult = Result.try({
     try: () => parseJson(decryptResult.value),
@@ -189,7 +211,10 @@ const decodeEvidenceRow = async (
         operation: "office-evidence-json",
       }),
     );
-    return null;
+    return Result.err({
+      operation: "office-evidence-json",
+      cause: jsonResult.error,
+    });
   }
   const parsed = v.safeParse(officeEvidencePayloadSchema, jsonResult.value);
   if (
@@ -197,47 +222,48 @@ const decodeEvidenceRow = async (
     parsed.output.blocks.length !== row.blockCount ||
     parsed.output.format !== row.format
   ) {
+    const cause = new TelemetryError({
+      message: "Persisted Office evidence failed validation",
+    });
     captureError(
-      new TelemetryError({
-        message: "Persisted Office evidence failed validation",
-      }),
+      cause,
       handlerErrorContext("files.decodeEvidenceRow", {
         operation: "office-evidence-validate",
       }),
     );
-    return null;
+    return Result.err({ operation: "office-evidence-validate", cause });
   }
-  return parsed.output;
+  return Result.ok(parsed.output);
 };
 
 type FindEvidenceBlockOptions = {
   blockId: string;
   evidenceRows: readonly PersistedEvidenceRow[];
-  index?: number;
   organizationId: SafeId<"organization">;
 };
 
 const findEvidenceBlock = async ({
   blockId,
   evidenceRows,
-  index = 0,
   organizationId,
-}: FindEvidenceBlockOptions): Promise<OfficeEvidenceBlock | null> => {
-  const evidenceRow = evidenceRows.at(index);
-  if (!evidenceRow) {
-    return null;
+}: FindEvidenceBlockOptions): Promise<
+  Result<OfficeEvidenceBlock | null, OfficeEvidenceDecodeFailure>
+> => {
+  let firstFailure: OfficeEvidenceDecodeFailure | undefined;
+  for (const evidenceRow of evidenceRows) {
+    const payload = await decodeEvidenceRow(evidenceRow, organizationId);
+    if (Result.isError(payload)) {
+      firstFailure ??= payload.error;
+      continue;
+    }
+    const block = payload.value?.blocks.find(({ id }) => id === blockId);
+    if (block) {
+      return Result.ok(block);
+    }
   }
-  const payload = await decodeEvidenceRow(evidenceRow, organizationId);
-  const block = payload?.blocks.find(({ id }) => id === blockId);
-  return (
-    block ??
-    findEvidenceBlock({
-      blockId,
-      evidenceRows,
-      index: index + 1,
-      organizationId,
-    })
-  );
+  return firstFailure === undefined
+    ? Result.ok(null)
+    : Result.err(firstFailure);
 };
 
 const isCurrentSource = async (
@@ -435,7 +461,9 @@ const createClaimedOfficeEvidence = async ({
   safeDb,
   source,
   workspaceId,
-}: CreateClaimedOfficeEvidenceOptions): Promise<OfficeEvidencePayload | null> => {
+}: CreateClaimedOfficeEvidenceOptions): Promise<
+  Result<OfficeEvidencePayload | null, OfficeEvidenceDecodeFailure>
+> => {
   const claim = {
     claimToken,
     organizationId,
@@ -445,36 +473,52 @@ const createClaimedOfficeEvidence = async ({
   };
   const readResult = await Result.tryPromise({
     try: async () =>
-      await readS3ArrayBuffer(
-        createFileKey({
+      await readS3ObjectBounded({
+        bucket: envBase.S3_BUCKET,
+        key: createFileKey({
           fileId: source.fileId,
           mimeType: source.mimeType,
           organizationId,
           workspaceId,
         }),
-        admission.signal,
-      ),
+        maxBytes: FILE_SIZE_LIMIT_BYTES.document,
+        signal: AbortSignal.any([
+          admission.signal,
+          AbortSignal.timeout(OBJECT_READ_TIMEOUT_MS),
+        ]),
+      }),
     catch: (cause) => cause,
   });
   if (Result.isError(readResult)) {
-    return await captureAndAbandonOfficeEvidence({
-      ...claim,
-      error: readResult.error,
-      operation: "office-evidence-file-read",
-    });
+    return Result.ok(
+      await captureAndAbandonOfficeEvidence({
+        ...claim,
+        error: readResult.error,
+        operation: "office-evidence-file-read",
+      }),
+    );
   }
 
+  const bytes = readResult.value;
+  const buffer =
+    bytes.buffer instanceof ArrayBuffer &&
+    bytes.byteOffset === 0 &&
+    bytes.byteLength === bytes.buffer.byteLength
+      ? bytes.buffer
+      : bytes.slice().buffer;
   const extraction = await extractOfficeEvidence(
-    readResult.value,
+    buffer,
     format,
     admission.signal,
   );
   if (Result.isError(extraction)) {
-    return await captureAndAbandonOfficeEvidence({
-      ...claim,
-      error: extraction.error,
-      operation: "office-evidence-extract",
-    });
+    return Result.ok(
+      await captureAndAbandonOfficeEvidence({
+        ...claim,
+        error: extraction.error,
+        operation: "office-evidence-extract",
+      }),
+    );
   }
 
   const extractionValue = extraction.value;
@@ -490,11 +534,13 @@ const createClaimedOfficeEvidence = async ({
         })
       : Result.ok(null);
   if (Result.isError(encryptedResult)) {
-    return await captureAndAbandonOfficeEvidence({
-      ...claim,
-      error: encryptedResult.error,
-      operation: "office-evidence-encrypt",
-    });
+    return Result.ok(
+      await captureAndAbandonOfficeEvidence({
+        ...claim,
+        error: encryptedResult.error,
+        operation: "office-evidence-encrypt",
+      }),
+    );
   }
   const scope = { organizationId, workspaceId };
   const persistResult = await safeDb(async (tx) => {
@@ -551,15 +597,17 @@ const createClaimedOfficeEvidence = async ({
     return updated.at(0) ?? null;
   });
   if (Result.isError(persistResult)) {
-    return await captureAndAbandonOfficeEvidence({
-      ...claim,
-      error: persistResult.error,
-      operation: "office-evidence-persist",
-    });
+    return Result.ok(
+      await captureAndAbandonOfficeEvidence({
+        ...claim,
+        error: persistResult.error,
+        operation: "office-evidence-persist",
+      }),
+    );
   }
   return persistResult.value
     ? await decodeEvidenceRow(persistResult.value, organizationId)
-    : null;
+    : Result.ok(null);
 };
 
 /**
@@ -571,10 +619,12 @@ export const loadOfficeEvidence = async ({
   safeDb,
   source,
   workspaceId,
-}: LoadOfficeEvidenceOptions): Promise<OfficeEvidencePayload | null> => {
+}: LoadOfficeEvidenceOptions): Promise<
+  Result<OfficeEvidencePayload | null, OfficeEvidenceLoadFailure>
+> => {
   const format = resolveOfficeEvidenceFormat(source.mimeType);
   if (!format) {
-    return null;
+    return Result.ok(null);
   }
   const claimResult = await claimOfficeEvidence({
     format,
@@ -590,14 +640,17 @@ export const loadOfficeEvidence = async ({
         operation: "office-evidence-claim",
       }),
     );
-    return null;
+    return Result.err({
+      operation: "office-evidence-claim",
+      cause: claimResult.error,
+    });
   }
   const claim = claimResult.value;
   if (claim.type === "cached") {
     return await decodeEvidenceRow(claim.row, organizationId);
   }
   if (claim.type === "pending") {
-    return null;
+    return Result.ok(null);
   }
 
   const admitted = await admitWork({
@@ -621,13 +674,15 @@ export const loadOfficeEvidence = async ({
         ctx: { operation: "office-evidence-admission" },
       });
     }
-    return await abandonRefusedOfficeEvidence({
-      claimToken: claim.claimToken,
-      organizationId,
-      safeDb,
-      source,
-      workspaceId,
-    });
+    return Result.ok(
+      await abandonRefusedOfficeEvidence({
+        claimToken: claim.claimToken,
+        organizationId,
+        safeDb,
+        source,
+        workspaceId,
+      }),
+    );
   }
   return admitted.value;
 };
@@ -661,18 +716,23 @@ export const findOfficeEvidenceBlock = async ({
   organizationId,
   scopedDb,
   workspaceId,
-}: FindOfficeEvidenceBlockOptions): Promise<{
-  block: OfficeEvidenceBlock;
-  source: {
-    entityId: SafeId<"entity">;
-    entityName: string;
-    fieldId: SafeId<"field">;
-    fileName: string;
-    mimeType: string;
-    pdfFileId: string | null;
-    propertyId: SafeId<"property">;
-  };
-} | null> => {
+}: FindOfficeEvidenceBlockOptions): Promise<
+  Result<
+    {
+      block: OfficeEvidenceBlock;
+      source: {
+        entityId: SafeId<"entity">;
+        entityName: string;
+        fieldId: SafeId<"field">;
+        fileName: string;
+        mimeType: string;
+        pdfFileId: string | null;
+        propertyId: SafeId<"property">;
+      };
+    } | null,
+    OfficeEvidenceDecodeFailure
+  >
+> => {
   const resolved = await scopedDb(async (tx) => {
     const rows = await tx
       .select({
@@ -737,7 +797,7 @@ export const findOfficeEvidenceBlock = async ({
       : null;
   });
   if (!resolved) {
-    return null;
+    return Result.ok(null);
   }
   const { evidenceRows, source } = resolved;
   const block = await findEvidenceBlock({
@@ -745,5 +805,5 @@ export const findOfficeEvidenceBlock = async ({
     evidenceRows,
     organizationId,
   });
-  return block ? { block, source } : null;
+  return block.map((value) => (value ? { block: value, source } : null));
 };

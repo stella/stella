@@ -11,6 +11,9 @@ import {
   inspectorMinimizedEntry,
   inspectorRestorePendingEntry,
   inspectorStateEntry,
+  isInspectorRestorePending,
+  isPersistedInspectorPaneOpen,
+  startInspectorPageLoad,
 } from "@/components/inspector/inspector-storage-keys";
 import {
   type ChatTab,
@@ -148,7 +151,7 @@ type PageLoad = {
 };
 
 const createPageLoad = (): PageLoad => ({
-  id: createUuid(),
+  id: startInspectorPageLoad(),
   restoreHolds: 0,
   settlingScope: null,
   settleTimer: null,
@@ -156,14 +159,6 @@ const createPageLoad = (): PageLoad => ({
 });
 
 let pageLoad = createPageLoad();
-
-const readRestorePending = (scope: InspectorBroadcastScope): boolean => {
-  const pendingPageLoad = readPersistedState(
-    inspectorRestorePendingEntry,
-    scope,
-  );
-  return pendingPageLoad !== "" && pendingPageLoad !== pageLoad.id;
-};
 
 const writeRestorePending = (
   scope: InspectorBroadcastScope,
@@ -673,6 +668,15 @@ const readPersistedInspectorState = (
   };
 };
 
+/** The same restore policy as the store, available before its tabs hydrate. */
+export const readPersistedInspectorPaneOpen = (
+  scope: InspectorBroadcastScope,
+) =>
+  isPersistedInspectorPaneOpen(
+    scope,
+    (tabScope) => readPersistedInspectorState(tabScope)?.tabs.length ?? 0,
+  );
+
 const writePersistedInspectorState = (
   scope: InspectorBroadcastScope,
   state: InspectorTabsStore,
@@ -909,7 +913,7 @@ const initializeInspectorScope = (
   // empty store should recover a previous document's unfinished restore.
   const hasLiveScope =
     previousScopeKey === scopeKey && store.getState().tabs.length > 0;
-  const recovering = readRestorePending(scope) && !hasLiveScope;
+  const recovering = isInspectorRestorePending(scope) && !hasLiveScope;
   const minimized = persistedMinimized || recovering;
   if (store.getState().minimized !== minimized) {
     store.setState({ minimized });

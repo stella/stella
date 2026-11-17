@@ -1,5 +1,7 @@
 import * as v from "valibot";
 
+import { decisionReviewsSchema } from "./case-law-reviews";
+
 const legalResolveCandidateSchema = v.strictObject({
   decisionId: v.string(),
   identifier: v.string(),
@@ -22,15 +24,7 @@ const otherCourtCandidatesSchema = v.optional(
 const legalResolveDecisionTextSchema = v.variant("status", [
   v.strictObject({
     status: v.literal("readable"),
-    blocks: v.array(v.unknown()),
-    extent: v.variant("type", [
-      v.strictObject({ type: v.literal("complete") }),
-      v.strictObject({
-        type: v.literal("partial"),
-        returnedChars: v.number(),
-        totalChars: v.number(),
-      }),
-    ]),
+    charCount: v.number(),
   }),
   v.strictObject({
     status: v.literal("withheld"),
@@ -58,6 +52,7 @@ const legalResolveDocumentSchema = v.variant("kind", [
     languageAlternates: v.array(legalResolveDecisionAlternateSchema),
     readerUrl: v.string(),
     text: legalResolveDecisionTextSchema,
+    appealReviews: decisionReviewsSchema,
   }),
   v.strictObject({
     kind: v.literal("provision"),

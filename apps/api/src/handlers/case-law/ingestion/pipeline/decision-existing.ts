@@ -175,12 +175,12 @@ const unchangedReadOutcomeMetadata = (
   if (unreadOutcome !== undefined) {
     return { metadata: recordReadOutcome(unreadOutcome) };
   }
-  if (existing.metadata?.[READ_OUTCOME_METADATA_KEY] === undefined) {
-    return {};
+  if (existing.metadata?.[READ_OUTCOME_METADATA_KEY] !== undefined) {
+    return {
+      metadata: sql`${caseLawDecisions.metadata} - ${READ_OUTCOME_METADATA_KEY}::text`,
+    };
   }
-  return {
-    metadata: sql`${caseLawDecisions.metadata} - ${READ_OUTCOME_METADATA_KEY}::text`,
-  };
+  return {};
 };
 
 /**
@@ -443,6 +443,9 @@ export const resolveExistingDecisionPolicy = async ({
       storedPartialObservation.detail !== OBSERVATION_DETAIL.LISTING_ONLY &&
       !corpusCarriesDocument(existing.contentHash)
     ) &&
+    (result.ecli === undefined || existing.ecli === result.ecli) &&
+    (result.sheetNumber === undefined ||
+      existing.sheetNumber === result.sheetNumber) &&
     existing.caseNumber === result.caseNumber &&
     existing.caseNumberType ===
       parsePrimaryReferenceType(result.caseNumberType);

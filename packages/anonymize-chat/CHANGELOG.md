@@ -1,5 +1,38 @@
 # @stll/anonymize-chat
 
+## 0.3.0
+
+### Minor Changes
+
+- [#8719](https://github.com/stella/stella/pull/8719) [`f11651f`](https://github.com/stella/stella/commit/f11651fbfa5e2ac1696b0c8893d7c5e8a8ee6f3e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add the `local_run_anonymized_refusal` transport code for an anonymized send to a turn on the member's computer, and `isChatTransportErrorCode`. Every transport refusal code now reads as one the member can send past without anonymization.
+
+## 0.2.9
+
+### Patch Changes
+
+- [#8537](https://github.com/stella/stella/pull/8537) [`001c640`](https://github.com/stella/stella/commit/001c640e64cb00e3948bdf68a18a40347c65a40f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Build declarations through the native tsrs API supported by tsdown 0.23.7, resolving the compiler from each package.
+
+## 0.2.8
+
+### Patch Changes
+
+- Updated dependencies [[`74bfae6`](https://github.com/stella/stella/commit/74bfae60cecf3be82e6d9554cf3448ef9a3c17eb)]:
+  - @stll/text-normalize@0.8.0
+
+## 0.2.7
+
+### Patch Changes
+
+- Updated dependencies [[`c1f546a`](https://github.com/stella/stella/commit/c1f546aff35c2c7e3d97a380642161b0c79799ba)]:
+  - @stll/text-normalize@0.7.0
+
+## 0.2.6
+
+### Patch Changes
+
+- Updated dependencies [[`228b271`](https://github.com/stella/stella/commit/228b271affce5a3f531e0adf036b5e02e3494f97)]:
+  - @stll/text-normalize@0.6.0
+
 ## 0.2.5
 
 ### Patch Changes

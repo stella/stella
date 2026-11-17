@@ -3,13 +3,22 @@ import {
   and,
   desc,
   eq,
+  gt,
   inArray,
   isNotNull,
   isNull,
   lte,
   or,
+  type SQL,
   sql,
 } from "drizzle-orm";
+import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
+
+import { memberWaitsOf } from "@stll/api-contract/chat-member-wait";
+import {
+  CHAT_QUEUE_HOLD_REASON,
+  type ChatQueueHoldReason,
+} from "@stll/api-contract/chat-queue";
 
 import { CHAT_TURNS_ORG_RUN_ID_UIDX } from "@/api/db/online-unique-indexes";
 import type { Transaction } from "@/api/db/root";
@@ -19,9 +28,9 @@ import {
   attachTerminalTurnOutcome,
   chatMessageContentFromMessage,
   chatMessageFromPersisted,
-  getAwaitingUserInteractions,
 } from "@/api/handlers/chat/chat-message-parts";
 import {
+  CHAT_TURN_STATUS_OF_OUTCOME,
   closeCutShortCalls,
   settleOpenToolCallsForOutcome,
 } from "@/api/handlers/chat/chat-turn-settlement";
@@ -31,7 +40,6 @@ import {
   planChatTurnTransition,
 } from "@/api/handlers/chat/chat-turn-state";
 import type {
-  ChatTurnCancellationReason,
   ChatTurnFailureCode,
   ChatTurnInteractionType,
   ChatTurnState,
@@ -47,13 +55,23 @@ import type {
   PersistableTerminalAssistantMessage,
 } from "@/api/handlers/chat/types";
 import type { AIErrorKind } from "@/api/lib/ai-error";
+import type { ServerStartedChatTurn } from "@/api/lib/auth/member-caller";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
+import type { ChatRunPings } from "@/api/lib/chat/chat-run-pings";
+import type { ReleasedChatTurn } from "@/api/lib/chat/chat-turn-handover-doorbell";
 import { closeChatRunLogOnTx } from "@/api/lib/chat/run-log";
-import { CHAT_TURN_TIMING_ACTIVE_STATUSES } from "@/api/lib/chat/turn-status";
+import {
+  ACTIVE_CHAT_TURN_STATUSES,
+  CHAT_TURN_TIMING_ACTIVE_STATUSES,
+} from "@/api/lib/chat/turn-status";
 import { messageTurnTiming } from "@/api/lib/chat/turn-timing";
+import { lockChatThreadForTurnOnTx } from "@/api/lib/db/aggregate-lock";
+import { holdChatQueueOnTx } from "@/api/lib/db/chat-queue-gate";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
+import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
 
 /** Maximum time a metered provider call may run before the server aborts it. */
@@ -79,8 +97,30 @@ export const OWNER_LOST_OUTCOME = {
   type: "interrupted",
 } as const satisfies ChatTurnOutcome;
 
-const AI_ERROR_RETRYABLE = {
+export const AI_ERROR_RETRYABLE = {
   empty_completion: true,
+  // The member signs in or waits on their computer before a retry can help.
+  local_runner_needs_login: false,
+  local_runner_limit_reached: false,
+  local_runner_unavailable: true,
+  // The same conversation never fits; only a shorter one does.
+  local_runner_turn_too_large: false,
+  // The same turn grows the same way; a new message starts a new run.
+  turn_too_large: false,
+  // Sending again once the computer is connected can help.
+  local_runner_not_reached: true,
+  // The relinked computer takes the turn when it is sent again.
+  local_runner_relinked: true,
+  // The undo finishes in a moment; the turn runs when sent again.
+  local_runner_restoring: true,
+  // The turn runs when sent again once the linked folder is back.
+  local_runner_folder_unavailable: true,
+  local_runner_no_computer: true,
+  local_runner_harness_unavailable: true,
+  local_runner_model_unavailable: true,
+  local_runner_reasoning_effort_unavailable: true,
+  local_runner_approvals_unavailable: true,
+  local_runner_folder_not_approved: true,
   loop_detected: false,
   deadline_exceeded: true,
   model_unavailable: false,
@@ -101,6 +141,22 @@ const AI_ERROR_RETRYABLE = {
  */
 export const AI_ERROR_FAILURE_CODE = {
   empty_completion: "empty-response",
+  local_runner_needs_login: "provider-error",
+  local_runner_limit_reached: "provider-error",
+  local_runner_unavailable: "provider-error",
+  local_runner_turn_too_large: "provider-error",
+  // The turn's delivery log refused its output, not the model.
+  turn_too_large: "persistence",
+  local_runner_not_reached: "provider-error",
+  local_runner_relinked: "provider-error",
+  local_runner_restoring: "provider-error",
+  local_runner_folder_unavailable: "provider-error",
+  local_runner_no_computer: "provider-error",
+  local_runner_harness_unavailable: "provider-error",
+  local_runner_model_unavailable: "provider-error",
+  local_runner_reasoning_effort_unavailable: "provider-error",
+  local_runner_approvals_unavailable: "provider-error",
+  local_runner_folder_not_approved: "provider-error",
   loop_detected: "provider-error",
   deadline_exceeded: "provider-error",
   model_unavailable: "provider-error",
@@ -115,8 +171,19 @@ export const AI_ERROR_FAILURE_CODE = {
   unknown: "provider-error",
 } as const satisfies Record<AIErrorKind, ChatTurnFailureCode>;
 
+/**
+ * Who asked for a turn. A member's own request releases a held queue, as
+ * typing a message does; a message the server sends from the queue is taken
+ * from it in the acceptance transaction, only while the queue's gate is open
+ * for it at the revision the sender read; a turn the server sends again after
+ * a usage limit reset takes the member's request for it, only while the
+ * stopped turn is still the thread's latest.
+ */
+export type ChatTurnSource = { type: "member" } | ServerStartedChatTurn;
+
 export type ChatTurnAcceptance = {
   id: SafeId<"chatTurn">;
+  source: ChatTurnSource;
   organizationId: SafeId<"organization">;
   threadId: SafeId<"chatThread">;
   userId: SafeId<"user">;
@@ -169,6 +236,33 @@ export const isChatTurnNotOwned = (error: { cause?: unknown }): boolean =>
  */
 const databaseNow = () => sql<Date>`now()`;
 
+/**
+ * The owner columns a status write returns, so it records whom it changed
+ * without a statement of its own.
+ */
+const CHAT_RUN_OWNER_COLUMNS = {
+  organizationId: chatTurns.organizationId,
+  threadId: chatTurns.threadId,
+  userId: chatTurns.userId,
+} as const;
+
+const recordChatRunOwners = (
+  pings: ChatRunPings,
+  rows: readonly {
+    organizationId: SafeId<"organization">;
+    threadId: SafeId<"chatThread">;
+    userId: string;
+  }[],
+): void => {
+  for (const { organizationId, threadId, userId } of rows) {
+    pings.changed({
+      organizationId,
+      threadId,
+      userId: brandPersistedUserId(userId),
+    });
+  }
+};
+
 // Sum only active execution spans. Closing a span before awaiting-user keeps
 // human response time out of the next continuation's accumulated duration.
 const closeActiveTiming = () => ({
@@ -190,12 +284,14 @@ const nextChatTurnRunLeaseExpiry = () =>
 
 export const createChatTurnAcceptance = ({
   organizationId,
+  source,
   threadId,
   userId,
   userMessageId,
   workspaceId,
 }: Omit<ChatTurnAcceptance, "id">): ChatTurnAcceptance => ({
   id: createSafeId<"chatTurn">(),
+  source,
   organizationId,
   threadId,
   userId,
@@ -203,19 +299,72 @@ export const createChatTurnAcceptance = ({
   workspaceId,
 });
 
-const lockChatThreadForTurnOnTx = async ({
+/**
+ * How a turn's owner settled it: an outcome, or released to another task
+ * (`handed-over`), which is not an end of the turn.
+ */
+type ChatTurnSettlementKind = ChatTurnOutcome["type"] | "handed-over";
+
+/**
+ * What a turn's settlement does to its thread's queue, by how it settled.
+ * Total over the outcome union and the release, so a new one does not compile
+ * until it is decided. `wait`: the turn still owns the thread (it waits on
+ * the member, or on another task to adopt it), nothing may start. `drain`:
+ * the next queued message may go. A hold keeps the queue until the member
+ * resumes it or sends a message.
+ */
+export const CHAT_QUEUE_AFTER_TURN = {
+  "awaiting-user": { type: "wait" },
+  // Released to another task, which goes on with the same turn.
+  "handed-over": { type: "wait" },
+  completed: { type: "drain" },
+  // A budget pause ends the turn; the queued message is the member's next
+  // word and starts the next turn, as a typed one would.
+  paused: { type: "drain" },
+  // Stop sends the next message, as it did before the queue was stored.
+  cancelled: { type: "drain" },
+  failed: { type: "hold", reason: CHAT_QUEUE_HOLD_REASON.turnFailed },
+  interrupted: { type: "hold", reason: CHAT_QUEUE_HOLD_REASON.turnInterrupted },
+} as const satisfies Record<
+  ChatTurnSettlementKind,
+  | { type: "wait" | "drain" }
+  | {
+      type: "hold";
+      reason: Extract<ChatQueueHoldReason, "turn-failed" | "turn-interrupted">;
+    }
+>;
+
+/**
+ * Apply `CHAT_QUEUE_AFTER_TURN` for a turn that settled in this transaction.
+ * Draining needs nothing here: the settlement's ping rings the queue.
+ */
+export const holdChatQueueAfterTurnOnTx = async ({
+  outcome,
   threadId,
+  turnId,
   tx,
 }: {
+  outcome: ChatTurnSettlementKind;
   threadId: SafeId<"chatThread">;
+  turnId: SafeId<"chatTurn">;
   tx: Transaction;
-}): Promise<boolean> => {
-  const locked = await tx
-    .select({ id: chatThreads.id })
-    .from(chatThreads)
-    .where(eq(chatThreads.id, threadId))
-    .for("update");
-  return locked.length === 1;
+}): Promise<void> => {
+  const after = CHAT_QUEUE_AFTER_TURN[outcome];
+  switch (after.type) {
+    case "wait":
+    case "drain":
+      return;
+    case "hold":
+      await holdChatQueueOnTx({
+        hold: { reason: after.reason, turnId },
+        threadId,
+        tx,
+      });
+      return;
+    default:
+      after satisfies never;
+      panic("Unhandled queue disposition");
+  }
 };
 
 /**
@@ -293,24 +442,27 @@ const settleInterruptedContinuationOnTx = async ({
 };
 
 /**
- * Under the thread lock, turn an abandoned provider owner into its durable
- * terminal outcome, `owner-lost`. A live owner renews its lease conditionally,
+ * Under the thread lock, turn an abandoned provider owner, or a handed-over
+ * turn nobody adopted by its lease, into its durable terminal outcome,
+ * `owner-lost`. A live owner renews its lease conditionally,
  * so it either wins that renewal before this write (and remains running), or
  * loses it after this write (and can no longer settle effects it no longer
  * owns). Clearing the execution id is the fence: every later write of the
  * former owner is conditional on it.
  */
 const interruptExpiredRunningChatTurnOnTx = async ({
+  pings,
   threadId,
   tx,
 }: {
+  pings: ChatRunPings;
   threadId: SafeId<"chatThread">;
   tx: Transaction;
 }): Promise<void> => {
   const now = databaseNow();
   const expired = and(
     eq(chatTurns.threadId, threadId),
-    eq(chatTurns.status, "running"),
+    inArray(chatTurns.status, ["running", "handed-over"]),
     // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- cutoff read from the caller's clock, never round-tripped through the database
     lte(chatTurns.leaseExpiresAt, now),
   );
@@ -340,10 +492,11 @@ const interruptExpiredRunningChatTurnOnTx = async ({
     })
     .where(and(expired, isNotNull(chatTurns.cancelRequestedAt)))
     .returning({
+      ...CHAT_RUN_OWNER_COLUMNS,
       id: chatTurns.id,
-      organizationId: chatTurns.organizationId,
       runId: chatTurns.runId,
     });
+  recordChatRunOwners(pings, stopped);
   const [stoppedTurn] = stopped;
   if (stoppedTurn !== undefined) {
     await closeChatRunLogOnTx({
@@ -370,10 +523,20 @@ const interruptExpiredRunningChatTurnOnTx = async ({
     })
     .where(and(expired, isNull(chatTurns.cancelRequestedAt)))
     .returning({
+      ...CHAT_RUN_OWNER_COLUMNS,
+      // The answer so far a handed-over turn held. A subquery in RETURNING
+      // reads the statement's snapshot, so it sees the row before this write.
+      // The outer row is named by its table: drizzle renders a column of the
+      // updated table unqualified here, which the subquery would read as its
+      // own.
+      handedOverMessageId: sql<SafeId<"chatMessage"> | null>`(
+        SELECT held.assistant_message_id FROM chat_turns AS held
+        WHERE held.id = chat_turns.id AND held.status = 'handed-over'
+      )`,
       id: chatTurns.id,
-      organizationId: chatTurns.organizationId,
       runId: chatTurns.runId,
     });
+  recordChatRunOwners(pings, interrupted);
   const [interruptedTurn] = interrupted;
   if (interruptedTurn !== undefined) {
     await closeChatRunLogOnTx({
@@ -382,56 +545,80 @@ const interruptExpiredRunningChatTurnOnTx = async ({
       turnId: interruptedTurn.id,
       tx,
     });
+    // A handed-over turn nobody adopted by its lease stored its answer so
+    // far as its own message: the outcome goes on it whether or not it has
+    // open calls.
+    if (interruptedTurn.handedOverMessageId !== null) {
+      await cutShortMessageOnTx({
+        messageId: interruptedTurn.handedOverMessageId,
+        outcome: OWNER_LOST_OUTCOME,
+        threadId,
+        tx,
+      });
+    }
     await settleInterruptedContinuationOnTx({
       outcome: OWNER_LOST_OUTCOME,
       threadId,
+      tx,
+    });
+    await holdChatQueueAfterTurnOnTx({
+      outcome: OWNER_LOST_OUTCOME.type,
+      threadId,
+      turnId: interruptedTurn.id,
       tx,
     });
   }
 };
 
 /**
- * End the turn of `threadId` whose owner stopped producing, under the thread
- * lock the owner's own settlement takes too. Idempotent: a thread whose turn
- * is live, already settled, or gone is left as it is.
+ * End the turn of `threadId` whose owner stopped producing, or that nobody
+ * adopted after its owner released it, under the thread lock the owner's own
+ * settlement takes too. Idempotent: a thread whose turn is live, already
+ * settled, or gone is left as it is.
  */
 export const reapOwnerlessChatTurnOnTx = async ({
+  pings,
   threadId,
   tx,
 }: {
+  pings: ChatRunPings;
   threadId: SafeId<"chatThread">;
   tx: Transaction;
 }): Promise<void> => {
   if (!(await lockChatThreadForTurnOnTx({ threadId, tx }))) {
     return;
   }
-  await interruptExpiredRunningChatTurnOnTx({ threadId, tx });
+  await interruptExpiredRunningChatTurnOnTx({ pings, threadId, tx });
 };
 
 /**
  * Lock the thread before a caller writes its new user message. A running turn
- * cannot be superseded while its lease is live. Once its lease expires, end it
- * atomically under the same lock so it cannot block every future message.
+ * cannot be superseded while its lease is live, nor a handed-over one before
+ * its adopt-by time: another task is about to go on with it. Once either
+ * lapses, end the turn atomically under the same lock so it cannot block
+ * every future message.
  */
 export const canAcceptChatTurnOnTx = async ({
+  pings,
   threadId,
   tx,
 }: {
+  pings: ChatRunPings;
   threadId: SafeId<"chatThread">;
   tx: Transaction;
 }): Promise<boolean> => {
   if (!(await lockChatThreadForTurnOnTx({ threadId, tx }))) {
     return false;
   }
-  await interruptExpiredRunningChatTurnOnTx({ threadId, tx });
-  const running = await tx.query.chatTurns.findFirst({
+  await interruptExpiredRunningChatTurnOnTx({ pings, threadId, tx });
+  const live = await tx.query.chatTurns.findFirst({
     where: {
-      status: { eq: "running" },
+      status: { in: ["running", "handed-over"] },
       threadId: { eq: threadId },
     },
     columns: { id: true },
   });
-  return running === undefined;
+  return live === undefined;
 };
 
 /** Why a thread cannot take a new turn. */
@@ -447,10 +634,12 @@ export type ChatTurnRefusal = "history-changed" | "turn-running";
  */
 export const reservePlannedChatTurnOnTx = async ({
   history,
+  pings,
   threadId,
   tx,
 }: {
   history: ChatHistorySnapshot;
+  pings: ChatRunPings;
   threadId: SafeId<"chatThread">;
   tx: Transaction;
 }): Promise<ChatTurnRefusal | "reserved"> => {
@@ -468,7 +657,7 @@ export const reservePlannedChatTurnOnTx = async ({
   ) {
     return "history-changed";
   }
-  return (await canAcceptChatTurnOnTx({ threadId, tx }))
+  return (await canAcceptChatTurnOnTx({ pings, threadId, tx }))
     ? "reserved"
     : "turn-running";
 };
@@ -493,19 +682,66 @@ export const cutShortAssistantMessage = ({
     turnOutcome: outcome,
   });
 
-/** Store `cutShortAssistantMessage` for the awaiting turn `turnId`, cancelled. */
-const cancelAssistantMessageOnTx = async ({
-  reason,
+/** Store `cutShortAssistantMessage` for the assistant message `messageId`. */
+const cutShortMessageOnTx = async ({
+  messageId,
+  outcome,
+  threadId,
+  tx,
+}: {
+  messageId: SafeId<"chatMessage">;
+  outcome: CutShortOutcome;
+  threadId: SafeId<"chatThread">;
+  tx: Transaction;
+}): Promise<void> => {
+  const stored =
+    (
+      await tx
+        .select({
+          content: chatMessages.content,
+          id: chatMessages.id,
+          role: chatMessages.role,
+        })
+        .from(chatMessages)
+        .where(
+          and(
+            eq(chatMessages.id, messageId),
+            eq(chatMessages.threadId, threadId),
+          ),
+        )
+        .limit(1)
+    ).at(0) ?? panic("A chat turn's message vanished under its thread lock");
+  if (stored.role !== "assistant") {
+    panic("A chat turn's held message is not an assistant message");
+  }
+  await storeServerEndedMessageOnTx({
+    message: cutShortAssistantMessage({
+      message: chatMessageFromPersisted(stored),
+      outcome,
+    }),
+    threadId,
+    tx,
+  });
+};
+
+/**
+ * Store `cutShortAssistantMessage` for the message an unowned turn `turnId`
+ * holds (one awaiting the member, or one handed over), ended by `outcome`.
+ */
+const cutShortHeldMessageOnTx = async ({
+  outcome,
+  status,
   threadId,
   turnId,
   tx,
 }: {
-  reason: ChatTurnCancellationReason;
+  outcome: CutShortOutcome;
+  status: "awaiting-user" | "handed-over";
   threadId: SafeId<"chatThread">;
   turnId: SafeId<"chatTurn">;
   tx: Transaction;
 }): Promise<PersistableTerminalAssistantMessage | undefined> => {
-  const awaitingMessage = (
+  const heldMessage = (
     await tx
       .select({
         content: chatMessages.content,
@@ -524,28 +760,28 @@ const cancelAssistantMessageOnTx = async ({
         and(
           eq(chatTurns.id, turnId),
           eq(chatTurns.threadId, threadId),
-          eq(chatTurns.status, "awaiting-user"),
+          eq(chatTurns.status, status),
         ),
       )
       .limit(1)
   ).at(0);
 
-  if (awaitingMessage === undefined) {
+  if (heldMessage === undefined) {
     return undefined;
   }
-  if (awaitingMessage.role !== "assistant") {
-    panic("Awaiting chat turn does not own an assistant message");
+  if (heldMessage.role !== "assistant") {
+    panic(`A ${status} chat turn does not own an assistant message`);
   }
-  const cancelledMessage = cutShortAssistantMessage({
-    message: chatMessageFromPersisted(awaitingMessage),
-    outcome: { reason, type: "cancelled" },
+  const endedMessage = cutShortAssistantMessage({
+    message: chatMessageFromPersisted(heldMessage),
+    outcome,
   });
   await storeServerEndedMessageOnTx({
-    message: cancelledMessage,
+    message: endedMessage,
     threadId,
     tx,
   });
-  return cancelledMessage;
+  return endedMessage;
 };
 
 /**
@@ -567,15 +803,23 @@ export type ChatTurnAcceptanceResult =
  */
 export const insertChatTurnAcceptanceOnTx = async ({
   acceptance,
+  pings,
   tx,
 }: {
   acceptance: ChatTurnAcceptance;
+  pings: ChatRunPings;
   tx: Transaction;
 }): Promise<ChatTurnAcceptanceResult> => {
   const now = databaseNow();
   // The caller normally reserved this lock before persisting the user
   // message. Keep the check here too so direct callers retain the invariant.
-  if (!(await canAcceptChatTurnOnTx({ threadId: acceptance.threadId, tx }))) {
+  if (
+    !(await canAcceptChatTurnOnTx({
+      pings,
+      threadId: acceptance.threadId,
+      tx,
+    }))
+  ) {
     return { type: "refused" };
   }
   const awaiting = await tx.query.chatTurns.findFirst({
@@ -588,14 +832,15 @@ export const insertChatTurnAcceptanceOnTx = async ({
   const superseded =
     awaiting === undefined
       ? undefined
-      : await cancelAssistantMessageOnTx({
-          reason: "superseded",
+      : await cutShortHeldMessageOnTx({
+          outcome: { reason: "superseded", type: "cancelled" },
+          status: "awaiting-user",
           threadId: acceptance.threadId,
           turnId: awaiting.id,
           tx,
         });
   // audit: skip — internal turn coordination; the user message mutation is audited in this transaction
-  await tx
+  const supersededTurns = await tx
     .update(chatTurns)
     .set({
       ...closeActiveTiming(),
@@ -616,7 +861,9 @@ export const insertChatTurnAcceptanceOnTx = async ({
         eq(chatTurns.threadId, acceptance.threadId),
         inArray(chatTurns.status, ["accepted", "awaiting-user"]),
       ),
-    );
+    )
+    .returning(CHAT_RUN_OWNER_COLUMNS);
+  recordChatRunOwners(pings, supersededTurns);
 
   // audit: skip — internal turn coordination; the user message mutation is audited in this transaction
   const inserted = await tx
@@ -635,6 +882,11 @@ export const insertChatTurnAcceptanceOnTx = async ({
     })
     .onConflictDoNothing()
     .returning({ id: chatTurns.id });
+  pings.changed({
+    organizationId: acceptance.organizationId,
+    threadId: acceptance.threadId,
+    userId: acceptance.userId,
+  });
   return inserted.length === 1
     ? { superseded, type: "accepted" }
     : { type: "refused" };
@@ -711,6 +963,15 @@ const chatTurnStateFromRow = (row: ChatTurnRow): ChatTurnState => {
         threadId: row.threadId,
         userMessageId: row.userMessageId,
       };
+    case "handed-over":
+      return {
+        adoptBy: present(row.leaseExpiresAt, "lease"),
+        assistantMessageId: present(row.assistantMessageId, "message"),
+        id: row.id,
+        status: row.status,
+        threadId: row.threadId,
+        userMessageId: row.userMessageId,
+      };
     case "completed":
       return {
         assistantMessageId: present(row.assistantMessageId, "message"),
@@ -766,15 +1027,22 @@ type ChatTurnStop =
   | { executionId: string; turn: ChatTurnView; type: "requested" };
 
 /**
- * End a turn no execution owns (accepted, or awaiting the user) as the
- * user's stop, message and turn together. Both statuses change only under
- * the thread lock the caller holds, so the compare-and-set cannot lose.
+ * End a turn no execution owns (accepted, awaiting the user, or handed over
+ * and not yet adopted) as the user's stop, message and turn together. These
+ * statuses change only under the thread lock the caller holds, so the
+ * compare-and-set cannot lose. A handed-over turn's run is cancelled by the
+ * gateway's sweep, which finds the turn ended.
  */
 const stopUnownedChatTurnOnTx = async ({
+  pings,
   state,
   tx,
 }: {
-  state: Extract<ChatTurnState, { status: "accepted" | "awaiting-user" }>;
+  pings: ChatRunPings;
+  state: Extract<
+    ChatTurnState,
+    { status: "accepted" | "awaiting-user" | "handed-over" }
+  >;
   tx: Transaction;
 }): Promise<ChatTurnView> => {
   const planned = planChatTurnTransition(state, {
@@ -787,9 +1055,10 @@ const stopUnownedChatTurnOnTx = async ({
   if (planned.type === "rejected" || planned.state.status !== "cancelled") {
     return panic(`A stop cannot end a ${state.status} chat turn`);
   }
-  if (state.status === "awaiting-user") {
-    await cancelAssistantMessageOnTx({
-      reason: planned.state.reason,
+  if (state.status !== "accepted") {
+    await cutShortHeldMessageOnTx({
+      outcome: { reason: planned.state.reason, type: "cancelled" },
+      status: state.status,
       threadId: state.threadId,
       turnId: state.id,
       tx,
@@ -815,9 +1084,25 @@ const stopUnownedChatTurnOnTx = async ({
       status: planned.state.status,
     })
     .where(and(eq(chatTurns.id, state.id), eq(chatTurns.status, state.status)))
-    .returning({ id: chatTurns.id });
-  if (stopped.length !== 1) {
+    .returning({
+      ...CHAT_RUN_OWNER_COLUMNS,
+      id: chatTurns.id,
+      runId: chatTurns.runId,
+    });
+  recordChatRunOwners(pings, stopped);
+  const [stoppedTurn] = stopped;
+  if (stopped.length !== 1 || stoppedTurn === undefined) {
     return panic("A chat turn changed status under its thread lock");
+  }
+  // A handed-over turn's log stays open for its adopter; nobody else closes
+  // it now, so a viewer tailing it learns the turn ended.
+  if (state.status === "handed-over") {
+    await closeChatRunLogOnTx({
+      organizationId: stoppedTurn.organizationId,
+      runId: stoppedTurn.runId,
+      turnId: stoppedTurn.id,
+      tx,
+    });
   }
   // The thread's revision tells a page its transcript changed in place, so it
   // rebuilds from the stored thread instead of keeping its own copy.
@@ -843,9 +1128,11 @@ const requestedStop = (
  * keeps the first time.
  */
 const requestRunningChatTurnStopOnTx = async ({
+  pings,
   state,
   tx,
 }: {
+  pings: ChatRunPings;
   state: Extract<ChatTurnState, { status: "running" }>;
   tx: Transaction;
 }): Promise<ChatTurnStop> => {
@@ -875,25 +1162,28 @@ const requestRunningChatTurnStopOnTx = async ({
   );
   return current.status === "running"
     ? requestedStop(current)
-    : await stopChatTurnStateOnTx({ state: current, tx });
+    : await stopChatTurnStateOnTx({ pings, state: current, tx });
 };
 
 const stopChatTurnStateOnTx = async ({
+  pings,
   state,
   tx,
 }: {
+  pings: ChatRunPings;
   state: ChatTurnState;
   tx: Transaction;
 }): Promise<ChatTurnStop> => {
   switch (state.status) {
     case "accepted":
     case "awaiting-user":
+    case "handed-over":
       return {
-        turn: await stopUnownedChatTurnOnTx({ state, tx }),
+        turn: await stopUnownedChatTurnOnTx({ pings, state, tx }),
         type: "settled",
       };
     case "running":
-      return await requestRunningChatTurnStopOnTx({ state, tx });
+      return await requestRunningChatTurnStopOnTx({ pings, state, tx });
     case "cancelled":
     case "completed":
     case "failed":
@@ -912,10 +1202,12 @@ const stopChatTurnStateOnTx = async ({
  * found. Idempotent: a settled turn is reported as it stands.
  */
 export const stopChatTurnOnTx = async ({
+  pings,
   threadId,
   turnId,
   tx,
 }: {
+  pings: ChatRunPings;
   threadId: SafeId<"chatThread">;
   turnId: SafeId<"chatTurn">;
   tx: Transaction;
@@ -926,7 +1218,11 @@ export const stopChatTurnOnTx = async ({
   const row = await readChatTurnOnTx({ threadId, turnId, tx });
   return row === undefined
     ? { type: "not-found" }
-    : await stopChatTurnStateOnTx({ state: chatTurnStateFromRow(row), tx });
+    : await stopChatTurnStateOnTx({
+        pings,
+        state: chatTurnStateFromRow(row),
+        tx,
+      });
 };
 
 /** The turn as it stands, for a stop request reporting after its owner. */
@@ -961,13 +1257,14 @@ type ClaimChatTurnForExecutionProps = ChatTurnExecutionClaim & {
 };
 
 type ClaimChatTurnForExecutionOnTxProps = ChatTurnExecutionClaim & {
+  pings: ChatRunPings;
   tx: Transaction;
 };
 
 type ClaimSource = {
   executionId: string | null;
   id: SafeId<"chatTurn">;
-  status: "accepted" | "awaiting-user" | "running";
+  status: "accepted" | "awaiting-user" | "handed-over" | "running";
 };
 
 const claimActiveTiming = (
@@ -975,7 +1272,9 @@ const claimActiveTiming = (
   incomingMessageId: SafeId<"chatMessage">,
 ) => {
   switch (source.status) {
+    // A handed-over turn's active time ran on through the gap.
     case "accepted":
+    case "handed-over":
       return {
         activeDurationMs: chatTurns.activeDurationMs,
         activeStartedAt: chatTurns.activeStartedAt,
@@ -1006,6 +1305,7 @@ export const claimChatTurnForExecutionOnTx = async ({
   incomingMessageId,
   incomingMessageRole,
   organizationId,
+  pings,
   threadId,
   tx,
   userId,
@@ -1058,7 +1358,7 @@ export const claimChatTurnForExecutionOnTx = async ({
     const awaitingTurn = awaiting.at(0);
     const ownsContinuation =
       awaitingTurn !== undefined &&
-      getAwaitingUserInteractions(
+      memberWaitsOf(
         chatMessageFromPersisted({
           content: awaitingTurn.content,
           id: incomingMessageId,
@@ -1116,7 +1416,7 @@ export const claimChatTurnForExecutionOnTx = async ({
   if (!source) {
     const active = await tx.query.chatTurns.findFirst({
       where: {
-        status: { in: ["accepted", "running", "awaiting-user"] },
+        status: { in: [...ACTIVE_CHAT_TURN_STATUSES] },
         threadId: { eq: threadId },
       },
       columns: { id: true },
@@ -1174,9 +1474,40 @@ export const claimChatTurnForExecutionOnTx = async ({
       userMessageId,
       workspaceId,
     });
+    pings.changed({ organizationId, threadId, userId });
     return { executionId, id: legacyTurnId };
   }
 
+  return await takeChatTurnOnTx({
+    executionId,
+    incomingMessageId,
+    leaseExpiresAt,
+    pings,
+    source,
+    tx,
+  });
+};
+
+/**
+ * Give `source` to a new execution: one compare-and-set on its status and
+ * owner, under the thread lock the caller holds. Null when another claim, a
+ * stop or the reaper changed the turn first.
+ */
+const takeChatTurnOnTx = async ({
+  executionId,
+  incomingMessageId,
+  leaseExpiresAt,
+  pings,
+  source,
+  tx,
+}: {
+  executionId: string;
+  incomingMessageId: SafeId<"chatMessage">;
+  leaseExpiresAt: SQL<Date>;
+  pings: ChatRunPings;
+  source: ClaimSource;
+  tx: Transaction;
+}): Promise<ChatTurnExecution | null> => {
   const executionOwnershipPredicate =
     source.executionId === null
       ? isNull(chatTurns.executionId)
@@ -1200,11 +1531,107 @@ export const claimChatTurnForExecutionOnTx = async ({
         executionOwnershipPredicate,
       ),
     )
-    .returning({ id: chatTurns.id });
+    .returning({ ...CHAT_RUN_OWNER_COLUMNS, id: chatTurns.id });
+  recordChatRunOwners(pings, claimed);
 
   const row = claimed.at(0);
   return row ? { executionId, id: row.id } : null;
 };
+
+/** A handed-over turn this execution now runs, and where it stood. */
+type AdoptedChatTurn = {
+  execution: ChatTurnExecution;
+  /** The answer so far the released owner stored; the run continues it. */
+  checkpointMessageId: SafeId<"chatMessage">;
+  /** The chat run whose log the turn's viewers tail. */
+  runId: string;
+  workspaceId: SafeId<"workspace"> | null;
+};
+
+/**
+ * Adopt a handed-over turn: under the thread lock, one compare-and-set from
+ * `handed-over` with no owner and a live adopt-by to `running` under a new
+ * execution with a run lease. Exactly one of any number of adopters wins;
+ * the others, and a turn a stop or the reaper ended first, get null. From
+ * this write on the run log and the turn row refuse every other execution.
+ */
+const adoptHandedOverChatTurnOnTx = async ({
+  pings,
+  threadId,
+  turnId,
+  tx,
+}: {
+  pings: ChatRunPings;
+  threadId: SafeId<"chatThread">;
+  turnId: SafeId<"chatTurn">;
+  tx: Transaction;
+}): Promise<AdoptedChatTurn | null> => {
+  if (!(await lockChatThreadForTurnOnTx({ threadId, tx }))) {
+    return null;
+  }
+  const handedOver = (
+    await tx
+      .select({
+        assistantMessageId: chatTurns.assistantMessageId,
+        runId: chatTurns.runId,
+        userMessageId: chatTurns.userMessageId,
+        workspaceId: chatTurns.workspaceId,
+      })
+      .from(chatTurns)
+      .where(
+        and(
+          eq(chatTurns.id, turnId),
+          eq(chatTurns.threadId, threadId),
+          eq(chatTurns.status, "handed-over"),
+          isNull(chatTurns.executionId),
+          gt(chatTurns.leaseExpiresAt, databaseNow()),
+        ),
+      )
+      .limit(1)
+  ).at(0);
+  if (handedOver === undefined) {
+    return null;
+  }
+  const { assistantMessageId, runId } = handedOver;
+  if (assistantMessageId === null || runId === null) {
+    // The payload check requires the answer; only a run that produced, and
+    // so bound its id, is ever released.
+    return panic("A handed-over chat turn has no stored answer or run");
+  }
+  const execution = await takeChatTurnOnTx({
+    executionId: Bun.randomUUIDv7(),
+    incomingMessageId: handedOver.userMessageId,
+    // The adopter's heartbeat renews it, as for any run.
+    leaseExpiresAt: nextChatTurnRunLeaseExpiry(),
+    pings,
+    source: { executionId: null, id: turnId, status: "handed-over" },
+    tx,
+  });
+  return execution === null
+    ? null
+    : {
+        execution,
+        checkpointMessageId: assistantMessageId,
+        runId,
+        workspaceId: handedOver.workspaceId,
+      };
+};
+
+/** `adoptHandedOverChatTurnOnTx` in its own transaction, as the member. */
+export const adoptHandedOverChatTurn = async ({
+  safeDb,
+  ...turn
+}: {
+  safeDb: SafeDb;
+  threadId: SafeId<"chatThread">;
+  turnId: SafeId<"chatTurn">;
+}): Promise<Result<AdoptedChatTurn | null, SafeDbError>> =>
+  await withChatRunPings(
+    async (pings) =>
+      await safeDb(
+        async (tx) => await adoptHandedOverChatTurnOnTx({ ...turn, pings, tx }),
+      ),
+  );
 
 /** Claim an accepted turn, or resume the awaiting turn owning an assistant. */
 export const claimChatTurnForExecution = async ({
@@ -1213,14 +1640,19 @@ export const claimChatTurnForExecution = async ({
 }: ClaimChatTurnForExecutionProps): Promise<
   Result<ChatTurnExecution | null, SafeDbError>
 > =>
-  await safeDb(
-    async (tx) => await claimChatTurnForExecutionOnTx({ ...claim, tx }),
+  await withChatRunPings(
+    async (pings) =>
+      await safeDb(
+        async (tx) =>
+          await claimChatTurnForExecutionOnTx({ ...claim, pings, tx }),
+      ),
   );
 
 type WithClaimedChatTurnExecutionProps<T> = {
   claim: ChatTurnExecutionClaim;
   mutate: (args: {
     execution: ChatTurnExecution;
+    pings: ChatRunPings;
     tx: Transaction;
   }) => Promise<T>;
   safeDb: SafeDb;
@@ -1238,13 +1670,20 @@ export const withClaimedChatTurnExecution = async <T>({
 }: WithClaimedChatTurnExecutionProps<T>): Promise<
   Result<{ execution: ChatTurnExecution; value: T } | null, SafeDbError>
 > =>
-  await safeDb(async (tx) => {
-    const execution = await claimChatTurnForExecutionOnTx({ ...claim, tx });
-    if (execution === null) {
-      return null;
-    }
-    return { execution, value: await mutate({ execution, tx }) };
-  });
+  await withChatRunPings(
+    async (pings) =>
+      await safeDb(async (tx) => {
+        const execution = await claimChatTurnForExecutionOnTx({
+          ...claim,
+          pings,
+          tx,
+        });
+        if (execution === null) {
+          return null;
+        }
+        return { execution, value: await mutate({ execution, pings, tx }) };
+      }),
+  );
 
 type WriteChatTurnRunOwnershipOptions = {
   execution: ChatTurnExecution;
@@ -1423,6 +1862,7 @@ type SettleChatTurnProps = {
   failureCode?: ChatTurnFailureCode | undefined;
   failureRetryable?: boolean | undefined;
   outcome: ChatTurnOutcome;
+  pings: ChatRunPings;
   tx: Transaction;
 };
 
@@ -1445,6 +1885,7 @@ export const settleChatTurnOnTx = async ({
   failureCode,
   failureRetryable,
   outcome,
+  pings,
   tx,
 }: SettleChatTurnProps): Promise<ChatTurnSettlementResult> => {
   const settledAt = databaseNow();
@@ -1473,7 +1914,11 @@ export const settleChatTurnOnTx = async ({
           settledAt: null,
           status: "awaiting-user" as const,
         };
+      // A paused turn owes nothing and runs nothing: its row settles
+      // completed (`CHAT_TURN_STATUS_OF_OUTCOME`), the stored message carries
+      // the pause, and the user's next message starts the next turn.
       case "completed":
+      case "paused":
         if (assistantMessageId === null) {
           return null;
         }
@@ -1486,7 +1931,7 @@ export const settleChatTurnOnTx = async ({
           interactionType: null,
           interruptionReason: null,
           settledAt,
-          status: "completed" as const,
+          status: CHAT_TURN_STATUS_OF_OUTCOME[outcome.type],
         };
       case "cancelled":
         return {
@@ -1547,35 +1992,184 @@ export const settleChatTurnOnTx = async ({
     return "not-owned";
   }
 
-  const owned = ownedByExecution(execution);
   const isUserStop =
     outcome.type === "cancelled" && outcome.reason === USER_STOP_OUTCOME.reason;
+  const written = await writeOwnedChatTurnOnTx({
+    execution,
+    honoursStop: !isUserStop,
+    pings,
+    tx,
+    values,
+  });
+  if (written.type !== "written") {
+    return written.type;
+  }
+  const settled = written.row;
+  await closeChatRunLogOnTx({
+    organizationId: settled.organizationId,
+    runId: settled.runId,
+    turnId: settled.id,
+    tx,
+  });
+  await holdChatQueueAfterTurnOnTx({
+    outcome: outcome.type,
+    threadId: settled.threadId,
+    turnId: settled.id,
+    tx,
+  });
+  return "settled";
+};
+
+/**
+ * The one write that moves a running turn its execution owns to the turn's
+ * next status: a compare-and-set on the owning execution and, unless the
+ * write is the member's stop itself, on no stop request. The stop request
+ * and this write both lock the turn row, so exactly one of them lands first.
+ * Says which refused it when it did not land.
+ */
+const writeOwnedChatTurnOnTx = async ({
+  execution,
+  honoursStop,
+  pings,
+  tx,
+  values,
+}: {
+  execution: ChatTurnExecution;
+  /** Whether a stop request recorded first refuses the write. */
+  honoursStop: boolean;
+  pings: ChatRunPings;
+  tx: Transaction;
+  values: PgUpdateSetSource<typeof chatTurns>;
+}) => {
+  const owned = ownedByExecution(execution);
   // audit: skip — internal lifecycle settlement; the assistant message mutation is audited in this transaction
   const updated = await tx
     .update(chatTurns)
     .set(values)
-    .where(isUserStop ? owned : and(owned, isNull(chatTurns.cancelRequestedAt)))
+    .where(
+      honoursStop ? and(owned, isNull(chatTurns.cancelRequestedAt)) : owned,
+    )
     .returning({
+      ...CHAT_RUN_OWNER_COLUMNS,
       id: chatTurns.id,
-      organizationId: chatTurns.organizationId,
       runId: chatTurns.runId,
     });
-  const [settled, ...others] = updated;
-  if (settled !== undefined && others.length === 0) {
-    await closeChatRunLogOnTx({
-      organizationId: settled.organizationId,
-      runId: settled.runId,
-      turnId: settled.id,
-      tx,
-    });
-    return "settled";
+  recordChatRunOwners(pings, updated);
+  const [row, ...others] = updated;
+  if (row !== undefined && others.length === 0) {
+    return { type: "written", row } as const;
   }
   const stillOwned = await tx
     .select({ id: chatTurns.id })
     .from(chatTurns)
     .where(owned)
     .limit(1);
-  return stillOwned.length === 1 ? "stop-requested" : "not-owned";
+  return {
+    type: stillOwned.length === 1 ? "stop-requested" : "not-owned",
+  } as const;
+};
+
+/**
+ * How long a released turn waits for another task to adopt it before the
+ * reaper ends it as `owner-lost`: past a restart of a single-task
+ * deployment, and under the page's 180 s reconnect window.
+ */
+const CHAT_TURN_ADOPT_BY_MS = 90_000;
+
+/** How a release went; see `ChatTurnSettlementResult` for the refusals. */
+type ChatTurnReleaseResult =
+  | { type: "released"; turn: ReleasedChatTurn }
+  | { type: "not-owned" }
+  | { type: "stop-requested" };
+
+/**
+ * Release the running turn `execution` owns to another task, with its answer
+ * so far stored as `assistantMessageId`: the planned `hand-over` transition,
+ * written as one compare-and-set on the owning execution and no stop request.
+ * The turn keeps its active time, its run log stays open for the adopter,
+ * and its queue waits (`CHAT_QUEUE_AFTER_TURN`). Like a settlement it does
+ * not take the thread lock; the adopter's claim does.
+ */
+export const releaseChatTurnOnTx = async ({
+  assistantMessageId,
+  execution,
+  pings,
+  tx,
+}: {
+  assistantMessageId: SafeId<"chatMessage">;
+  execution: ChatTurnExecution;
+  pings: ChatRunPings;
+  tx: Transaction;
+}): Promise<ChatTurnReleaseResult> => {
+  const owned = ownedByExecution(execution);
+  const current = (
+    await tx
+      .select({
+        adoptBy:
+          sql<Date>`now() + ${CHAT_TURN_ADOPT_BY_MS} * interval '1 millisecond'`.mapWith(
+            chatTurns.leaseExpiresAt,
+          ),
+        id: chatTurns.id,
+        leaseExpiresAt: chatTurns.leaseExpiresAt,
+        threadId: chatTurns.threadId,
+        userMessageId: chatTurns.userMessageId,
+      })
+      .from(chatTurns)
+      .where(owned)
+      .limit(1)
+  ).at(0);
+  if (current === undefined) {
+    return { type: "not-owned" };
+  }
+  const planned = planChatTurnTransition(
+    {
+      executionId: execution.executionId,
+      id: current.id,
+      leaseExpiresAt:
+        current.leaseExpiresAt ?? panic("A running chat turn has no lease"),
+      status: "running",
+      threadId: current.threadId,
+      userMessageId: current.userMessageId,
+    },
+    { type: "hand-over", adoptBy: current.adoptBy, assistantMessageId },
+  );
+  if (planned.type !== "applied" || planned.state.status !== "handed-over") {
+    return panic("A running chat turn cannot be handed over");
+  }
+  const handedOver = planned.state;
+  const written = await writeOwnedChatTurnOnTx({
+    execution,
+    honoursStop: true,
+    pings,
+    tx,
+    values: {
+      assistantMessageId: handedOver.assistantMessageId,
+      executionId: null,
+      interactionToolCallId: null,
+      interactionType: null,
+      leaseExpiresAt: handedOver.adoptBy,
+      status: handedOver.status,
+    },
+  });
+  if (written.type !== "written") {
+    return { type: written.type };
+  }
+  const { row } = written;
+  await holdChatQueueAfterTurnOnTx({
+    outcome: handedOver.status,
+    threadId: row.threadId,
+    turnId: row.id,
+    tx,
+  });
+  return {
+    type: "released",
+    turn: {
+      organizationId: row.organizationId,
+      threadId: row.threadId,
+      turnId: row.id,
+      userId: brandPersistedUserId(row.userId),
+    },
+  };
 };
 
 /** Read an execution's clock anchor, including its just-settled outcome. */

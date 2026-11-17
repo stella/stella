@@ -1,4 +1,13 @@
-import type { BrowserControlResult } from "@stll/api-contract/browser-control";
+import { panic } from "better-result";
+
+import {
+  BROWSER_CONTROL_ERROR_CODE,
+  BROWSER_CONTROL_PROTOCOL_VERSION,
+  type BrowserControlResult,
+} from "@stll/api-contract/browser-control";
+import { browserSiteGrantOrigin } from "@stll/api-contract/browser-site-grants";
+
+import type { BrowserApprovalProvenance } from "./browser-approval-mode";
 
 /** How a command runs: the chat turn it belongs to and its stop signal. */
 export type BrowserCommandRun = {
@@ -15,15 +24,73 @@ type BrowserCommandExecutor = (
 /** Marks a command as running; the returned callback reports how it ended. */
 type BeginBrowserCommand = () => (succeeded: boolean) => void;
 
+/** Who answered `toolCallId`, as this tab recorded it. */
+type ApprovalProvenanceFor = (toolCallId: string) => BrowserApprovalProvenance;
+
+const WITHHELD: BrowserControlResult = {
+  code: BROWSER_CONTROL_ERROR_CODE.redirected,
+  message:
+    "The tab is now on a website the user has not allowed, so the page was not read. Take a snapshot; the user is asked first.",
+  protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+  status: "error",
+};
+
+/**
+ * A command a website approval answered may only hand back a page on the
+ * website it was allowed for. The extension reports where the tab ended up; a
+ * page elsewhere (a link, a redirect, going back, or the user moving the tab
+ * before it ran) is withheld from the model, and the command counts as failed
+ * so the next one asks. When this tab cannot tell who answered, the page is
+ * withheld too.
+ */
+/** The page a result hands back content from, or null for an error. */
+const resultPageUrl = (result: BrowserControlResult): string | null => {
+  switch (result.status) {
+    case "success":
+      return result.snapshot.url;
+    case "found":
+      return result.found.url;
+    case "error":
+      return null;
+    default:
+      result satisfies never;
+      return panic("Unhandled browser result status");
+  }
+};
+
+const withinSiteGrant = (
+  result: BrowserControlResult,
+  provenance: BrowserApprovalProvenance,
+): BrowserControlResult => {
+  const pageUrl = resultPageUrl(result);
+  if (pageUrl === null) {
+    return result;
+  }
+  switch (provenance.type) {
+    case "person":
+      return result;
+    case "site-grant":
+      return browserSiteGrantOrigin(pageUrl) === provenance.origin
+        ? result
+        : WITHHELD;
+    case "unreadable":
+      return WITHHELD;
+    default:
+      provenance satisfies never;
+      return panic("Unhandled browser approval provenance");
+  }
+};
+
 /**
  * Coalesces same-runtime retries. Durable at-most-once enforcement lives in
  * the extension and receives this same tool-call id across reloads. Each real
  * execution (never a coalesced retry, whose outcome is already recorded) is
- * reported to `beginCommand`, which gates read auto-approval.
+ * reported to `beginCommand`, which gates auto-approval.
  */
 export const createBrowserToolExecutionCache = (
   execute: BrowserCommandExecutor,
   beginCommand: BeginBrowserCommand,
+  approvalProvenanceFor: ApprovalProvenanceFor,
 ) => {
   const executions = new Map<string, Promise<BrowserControlResult>>();
 
@@ -33,10 +100,16 @@ export const createBrowserToolExecutionCache = (
     commandRun: BrowserCommandRun,
   ) => {
     const finish = beginCommand();
+    // Read before the command runs: what answered it must not depend on the
+    // record still being there, or readable, once the result comes back.
+    const provenance = approvalProvenanceFor(toolCallId);
     let succeeded = false;
     try {
-      const result = await execute(input, toolCallId, commandRun);
-      succeeded = result.status === "success";
+      const result = withinSiteGrant(
+        await execute(input, toolCallId, commandRun),
+        provenance,
+      );
+      succeeded = resultPageUrl(result) !== null;
       return result;
     } finally {
       finish(succeeded);

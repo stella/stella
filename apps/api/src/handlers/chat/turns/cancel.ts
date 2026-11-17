@@ -9,6 +9,7 @@ import { stopLocalChatTurnRun } from "@/api/handlers/chat/chat-turn-run";
 import { CHAT_TURN_PERMISSIONS } from "@/api/handlers/chat/chat-turn-state";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -62,7 +63,13 @@ const cancelChatTurn = createSafeRootHandler(
   config,
   async function* ({ params: { threadId, turnId }, safeDb, set }) {
     const stop = yield* Result.await(
-      safeDb(async (tx) => await stopChatTurnOnTx({ threadId, tx, turnId })),
+      withChatRunPings(
+        async (pings) =>
+          await safeDb(
+            async (tx) =>
+              await stopChatTurnOnTx({ pings, threadId, tx, turnId }),
+          ),
+      ),
     );
     switch (stop.type) {
       case "not-found":

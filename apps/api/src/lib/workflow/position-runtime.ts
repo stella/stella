@@ -1,4 +1,7 @@
+import { panic } from "better-result";
+
 import type { PropertyContent } from "@/api/db/schema-validators";
+import type { AnswerShape } from "@/api/lib/workflow/ai-answer-schema";
 import type {
   Position,
   PositionRule,
@@ -26,6 +29,19 @@ export const isTierStandard = (
   position: Position,
 ): position is TierStandardPosition =>
   position.mode === "graded" && position.standard.source === "tiers";
+
+// A tier-standard position's grading inputs, in stored order. Ideal language is
+// excluded: it drives FIX, not what is extracted or how a clause is graded.
+export const canonicalRulesInput = (position: TierStandardPosition) => {
+  const { tiers } = position.standard;
+  return {
+    issue: position.issue,
+    acceptableRuleTexts: tiers.acceptable.rules.map((rule) => rule.text),
+    fallbackTexts: tiers.fallback.entries.map((entry) => entry.text),
+    notAcceptableRuleTexts: tiers.notAcceptable.rules.map((rule) => rule.text),
+    check: position.check ?? null,
+  };
+};
 
 // Materialize/grade only enabled positions: a disabled position is skipped by
 // run, review, and auto-run. Centralizing the filter keeps the call sites from
@@ -69,3 +85,24 @@ export const gradedPositionRule = (position: GradedPosition): PositionRule => {
   }
   return { kind: "propertyConstraint", condition: check.condition };
 };
+
+// Only a tier match reads a clause. A presence check or a constraint reads the
+// answer itself, so those answers stay the value they have always been.
+export const answerShapeForRule = (rule: PositionRule): AnswerShape => {
+  switch (rule.kind) {
+    case "positionMatch":
+      return "clause-summary";
+    case "presence":
+    case "propertyConstraint":
+    case "extractOnly":
+      return "value";
+    default:
+      rule satisfies never;
+      return panic(`Unhandled rule: ${String(rule)}`);
+  }
+};
+
+export const answerShapeForPosition = (position: Position): AnswerShape =>
+  position.mode === "graded"
+    ? answerShapeForRule(gradedPositionRule(position))
+    : "value";

@@ -38,7 +38,7 @@ export type ServingCorpusIndexGeneration = {
   cluster: QuickwitCluster;
 };
 
-export const CORPUS_INDEX_SOURCE_TABLES = {
+const CORPUS_INDEX_SOURCE_TABLES = {
   case_law: caseLawSources,
   legislation: legislationSources,
 } as const satisfies Record<
@@ -278,8 +278,11 @@ export const registerCorpusIndexGenerationTx = async (
 };
 
 /**
- * Atomically flip one family to a registered generation. Families route and
- * roll back independently; retired generations cannot be resurrected.
+ * Atomically flip one family to a registered generation. The generation that
+ * served before stays `building`: it keeps taking every change, so the same
+ * guarded flip (`corpus-index-generation-flip.ts`) can move readers back to it.
+ * Families route and roll back independently; retired generations cannot be
+ * resurrected.
  */
 export const setServingCorpusIndexGenerationTx = async (
   tx: Transaction,
@@ -330,7 +333,7 @@ export const setServingCorpusIndexGenerationTx = async (
   await clearJurisdictionServingTx(tx, target.family);
   await tx
     .update(corpusIndexGenerations)
-    .set({ status: "retiring", updatedAt: sql`clock_timestamp()` })
+    .set({ status: "building", updatedAt: sql`clock_timestamp()` })
     .where(
       and(
         eq(corpusIndexGenerations.family, target.family),

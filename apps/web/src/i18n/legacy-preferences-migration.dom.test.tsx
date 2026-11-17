@@ -8,9 +8,8 @@ import {
   STATUTE_COLUMN_IDS,
 } from "@stll/api-contract/public-law-table";
 import { UI_LOCALES } from "@stll/locales";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { rejectionOf } from "@stll/property-testing/rejection";
-
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 

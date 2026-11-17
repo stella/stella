@@ -2,6 +2,8 @@ import {
   CancelledError,
   defaultShouldDehydrateQuery,
   InfiniteQueryObserver,
+  MutationCache,
+  QueryCache,
   QueryClient,
   QueryObserver,
 } from "@tanstack/react-query";
@@ -17,7 +19,8 @@ import { Result, TaggedError } from "better-result";
 
 import { STALE_TIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
-import { shouldRetryAPIRequest } from "@/lib/errors/api";
+import { apiRetryDelayMs, shouldRetryAPIRequest } from "@/lib/errors/api";
+import { notifySessionExpired } from "@/lib/errors/session-expired";
 
 /**
  * Typed input shape for query option factories.
@@ -374,6 +377,19 @@ export const shouldDehydrateServerQuery = (query: Query): boolean =>
 /** The app's query cache, with the defaults every read shares. */
 export const createAppQueryClient = () =>
   new QueryClient({
+    // Covers every mutation, also those that show no failure of their own.
+    mutationCache: new MutationCache({
+      onError: (error) => {
+        notifySessionExpired(error);
+      },
+    }),
+    // A page that only reads learns of an ended session the same way: each
+    // view shows its own failure, and none of them says to sign in.
+    queryCache: new QueryCache({
+      onError: (error) => {
+        notifySessionExpired(error);
+      },
+    }),
     defaultOptions: {
       queries: {
         staleTime: STALE_TIME.FIVE.MINUTES,
@@ -382,6 +398,7 @@ export const createAppQueryClient = () =>
         // connection) would reach the route's error page. Mutations keep
         // TanStack's no-retry default: a write is never replayed silently.
         retry: shouldRetryAPIRequest,
+        retryDelay: apiRetryDelayMs,
       },
     },
   });

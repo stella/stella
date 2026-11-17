@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { SQL } from "bun";
 import {
   afterAll,
@@ -76,15 +77,14 @@ type SeedJobOptions = {
   task?: string;
   nextRunAt?: Date;
   enabled?: boolean;
-  lockedBy?: string | null;
-  lockedUntil?: Date | null;
+  // A held lease is a token and its expiry; the claim time is the fixture's past.
+  lease?: { lockedBy: string; lockedUntil: Date };
 };
 
 const seedJob = async ({
   enabled = true,
   id = "test.job",
-  lockedBy = null,
-  lockedUntil = null,
+  lease,
   nextRunAt = PAST,
   task = "test.noop",
 }: SeedJobOptions = {}): Promise<string> => {
@@ -92,8 +92,7 @@ const seedJob = async ({
     description: "test job",
     enabled,
     id,
-    lockedBy,
-    lockedUntil,
+    ...(lease === undefined ? {} : { ...lease, lockedAt: PAST }),
     nextRunAt,
     schedule: INTERVAL_SCHEDULE,
     task,
@@ -129,6 +128,33 @@ const registryOf = (task: string, fn: SchedulerTask): SchedulerTaskRegistry =>
   new Map([[task, fn]]);
 
 const noopRegistry = registryOf("test.noop", () => {});
+
+test("a panicking job logs where it panicked and never what the panic said", async () => {
+  await seedJob({ id: "panic.job", task: "test.panic" });
+  const recording = installRecordingLogger();
+  try {
+    const result = await runSchedulerOnce({
+      db,
+      leaseMs: LEASE_MS,
+      registry: registryOf("test.panic", () => {
+        panic("invariant broken for private-value");
+      }),
+      runnerId: "runner-a",
+    });
+
+    expect(result.failed).toBe(1);
+    const failure = recording.records.find(
+      (record) => record.message === "scheduler.job_failed",
+    );
+    expect(failure?.attributes?.["error.type"]).toBe("Panic");
+    expect(String(failure?.attributes?.["error.frame"])).toContain(
+      "runner.test.ts",
+    );
+    expect(JSON.stringify(failure)).not.toContain("private-value");
+  } finally {
+    recording.restore();
+  }
+});
 
 test("scheduler failure logs preserve Bun driver codes and SQLSTATEs", async () => {
   await seedJob({ id: "idle.job", task: "test.pg-failure" });
@@ -350,8 +376,10 @@ const abortSignalWhenRunInserted = (
       }
       // Bind delegated methods to the real handle so drizzle's query builders
       // run with `this` pointing at the underlying db, not the proxy.
-      const value = Reflect.get(target, prop);
-      return typeof value === "function" ? value.bind(target) : value;
+      const value: unknown = Reflect.get(target, prop);
+      return typeof value === "function"
+        ? (...args: unknown[]): unknown => Reflect.apply(value, target, args)
+        : value;
     },
   });
 
@@ -577,7 +605,7 @@ describe("bounded scheduler sweeps", () => {
 
 describe("lease expiry", () => {
   test("a job whose lease has expired is reclaimable by another runner", async () => {
-    await seedJob({ lockedBy: "dead-runner", lockedUntil: PAST });
+    await seedJob({ lease: { lockedBy: "dead-runner", lockedUntil: PAST } });
 
     const result = await runSchedulerOnce({
       db,
@@ -595,7 +623,7 @@ describe("lease expiry", () => {
 
   test("a job with a live lease is not reclaimed", async () => {
     const future = new Date(Date.now() + LEASE_MS);
-    await seedJob({ lockedBy: "live-runner", lockedUntil: future });
+    await seedJob({ lease: { lockedBy: "live-runner", lockedUntil: future } });
 
     const result = await runSchedulerOnce({
       db,
@@ -938,8 +966,7 @@ describe("zombie completion guard holds on every write path", () => {
     const freshLease = new Date(Date.now() + LEASE_MS);
     await seedJob({
       id: "zombie.job",
-      lockedBy: "runner-a",
-      lockedUntil: freshLease,
+      lease: { lockedBy: "runner-a", lockedUntil: freshLease },
     });
     const [terminalRun] = await testDb
       .insert(schedulerJobRuns)
@@ -1032,8 +1059,7 @@ describe("stale-token completion preserves a same-runner re-acquired lease", () 
     const freshLease = new Date(Date.now() + LEASE_MS);
     await seedJob({
       id: "reacquired.job",
-      lockedBy: FRESH_TOKEN,
-      lockedUntil: freshLease,
+      lease: { lockedBy: FRESH_TOKEN, lockedUntil: freshLease },
     });
     const [staleRun] = await testDb
       .insert(schedulerJobRuns)

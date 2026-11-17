@@ -4,14 +4,20 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { PassThrough } from "node:stream";
+import * as v from "valibot";
 
 import { respondToMcpLifecycle } from "../tests/mcp-test-lifecycle.js";
+import {
+  resolveEffectiveGrants,
+  scopeGranted,
+  scopePreflightFailure,
+} from "./auth/command-scopes.js";
 import { CLI_IDENTITY_SCOPES } from "./auth/constants.js";
 import { parseScopesFlag } from "./auth/scopes.js";
 import type { Context } from "./context.js";
 import {
-  VERIFICATION_RUN_CAP_CODES,
-  type VerificationRunCapCode,
+  MODEL_RUN_CAP_CODES,
+  type ModelRunCapCode,
 } from "./generated/mcp-contract.js";
 import { EXIT_CODES } from "./mcp-constants.js";
 import type { FlagSpec, LeafCommandSpec } from "./route-types.js";
@@ -27,9 +33,10 @@ import {
   requestIdLine,
   reservedFlagUsageError,
   runLeafCommand,
-  scopePreflightFailure,
+  streamOrRenderAllPages,
   toolErrorLines,
 } from "./run-leaf-command.js";
+import { commandUnavailableMessage } from "./unavailable-command.js";
 
 const specWith = (flags: readonly FlagSpec[]): LeafCommandSpec => ({
   commandPath: ["x", "y"],
@@ -541,6 +548,7 @@ const makeTtyContext = ({
     configDir: "/tmp/stella-test",
     serverUrl,
     token: "header.payload.sig",
+    effectiveGrants: resolveEffectiveGrants({ token: "header.payload.sig" }),
   };
   return {
     context,
@@ -715,6 +723,44 @@ describe("--file <path> (local bytes into the tool's base64 prop)", () => {
     );
   });
 
+  test.each(["constructor", "__proto__"])(
+    "local bytes retain the own declared %s field",
+    async (prop) => {
+      const server = startConfirmGateServer();
+      const tty = makeTtyContext({
+        serverUrl: server.url,
+        stdinData: "",
+        isTTY: false,
+      });
+      const file = await writeDocx(2048);
+      try {
+        await runLeafCommand({
+          context: tty.context,
+          flags: { file, input: JSON.stringify({ confirm: true }) },
+          spec: {
+            ...TEMPLATE_CREATE_SPEC,
+            flags: [],
+            localFileBase64Prop: prop,
+            inputSchema: {
+              type: "object",
+              properties: {
+                [prop]: { type: "string", maxLength: 262_144 },
+                confirm: { type: "boolean" },
+              },
+            },
+          },
+        });
+        expect(server.calls).toHaveLength(1);
+        const args = server.calls[0]?.args ?? {};
+        expect(Object.keys(args)).toEqual(["confirm", prop]);
+        expect(Buffer.from(String(args[prop]), "base64").byteLength).toBe(2048);
+        expect(tty.stderrText()).toBe("");
+      } finally {
+        server.stop();
+      }
+    },
+  );
+
   test("a 300 KB DOCX is refused before any call, naming the cap", async () => {
     const server = startConfirmGateServer();
     const tty = makeTtyContext({
@@ -820,7 +866,11 @@ describe("--schema", () => {
       stdinData: "",
       isTTY: false,
     });
-    const signedOut: Context = { ...tty.context, token: undefined };
+    const signedOut: Context = {
+      ...tty.context,
+      token: undefined,
+      effectiveGrants: resolveEffectiveGrants({}),
+    };
     await runLeafCommand({
       context: signedOut,
       flags: { schema: true },
@@ -992,14 +1042,112 @@ describe("scopePreflightFailure: the hint must survive a re-parse", () => {
     ({ granted, required, admitted }) => {
       const result = scopePreflightFailure({
         scope: required,
-        token: tokenGranting(granted),
+        effectiveGrants: resolveEffectiveGrants({
+          token: tokenGranting(granted),
+        }),
       });
       expect(result === undefined).toBe(admitted);
+      expect(
+        scopeGranted({
+          effectiveGrants: resolveEffectiveGrants({
+            token: tokenGranting(granted),
+          }),
+          scope: required,
+        }),
+      ).toBe(admitted);
       if (!admitted) {
-        expect(result?.missingScope).toBe(required);
+        expect(result?.scope).toBe(`stella:${required}`);
       }
     },
   );
+
+  for (const admitted of [false, true]) {
+    test(`curated execution follows effective server grants when token claims ${admitted ? "deny" : "allow"}`, async () => {
+      const server = startConfirmGateServer();
+      const tty = makeTtyContext({
+        serverUrl: server.url,
+        stdinData: "",
+        isTTY: false,
+      });
+      const token = tokenGranting(
+        admitted ? "stella:read" : "stella:matters_write",
+      );
+      try {
+        await runLeafCommand({
+          context: {
+            ...tty.context,
+            token,
+            effectiveGrants: resolveEffectiveGrants({
+              token,
+              registry: {
+                grantedScopes: admitted
+                  ? ["stella:matters_write"]
+                  : ["stella:read"],
+              },
+            }),
+          },
+          flags: { input: '{"confirm":true}' },
+          spec: { ...specWith([]), scope: "matters_write" },
+        });
+        expect(server.calls).toHaveLength(admitted ? 1 : 0);
+        if (admitted) {
+          expect(tty.exitCode()).toBeUndefined();
+          expect(tty.stderrText()).toBe("");
+        } else {
+          expect(tty.exitCode()).toBe(EXIT_CODES.auth);
+          expect(tty.stderrText()).toContain("stella:matters_write");
+        }
+      } finally {
+        server.stop();
+      }
+    });
+  }
+
+  test("current server grants override token claims and login retains the selected server", () => {
+    const failure = scopePreflightFailure({
+      scope: "billing_write",
+      effectiveGrants: resolveEffectiveGrants({
+        token: tokenGranting("stella:billing_write"),
+        registry: { grantedScopes: ["openid", "stella:read"] },
+      }),
+      serverUrl: "https://tenant.example",
+    });
+    expect(failure).toEqual({
+      type: "missing-scope",
+      scope: "stella:billing_write",
+      loginCommand:
+        "stella auth login --scopes stella:read,stella:billing_write --server https://tenant.example",
+    });
+    expect(
+      scopePreflightFailure({
+        scope: "billing_write",
+        effectiveGrants: resolveEffectiveGrants({
+          token: tokenGranting("stella:read"),
+          registry: { grantedScopes: ["stella:billing_write"] },
+        }),
+      }),
+    ).toBeUndefined();
+    if (failure === undefined) {
+      throw new TypeError("Missing scope evidence required");
+    }
+    expect(commandUnavailableMessage(failure)).toContain(
+      "stella:billing_write",
+    );
+    expect(commandUnavailableMessage(failure)).toContain(failure.loginCommand);
+  });
+
+  test("login hints quote the selected server as one shell argument", () => {
+    const failure = scopePreflightFailure({
+      scope: "billing_write",
+      effectiveGrants: resolveEffectiveGrants({
+        token: tokenGranting("stella:read"),
+      }),
+      serverUrl: "https://tenant.example/?q=a'b",
+    });
+    expect(failure?.loginCommand).toBe(
+      "stella auth login --scopes stella:read,stella:billing_write --server 'https://tenant.example/?q=a'\\''b'",
+    );
+  });
 
   // The hint used to echo every granted scope, identity scopes included, so
   // following it re-ran login without `offline_access` and left the session
@@ -1009,9 +1157,11 @@ describe("scopePreflightFailure: the hint must survive a re-parse", () => {
     const failure = scopePreflightFailure({
       additionalScopes: ["templates"],
       scope: "documents_write",
-      token: tokenGranting(
-        "openid profile email offline_access stella:read stella:documents_write",
-      ),
+      effectiveGrants: resolveEffectiveGrants({
+        token: tokenGranting(
+          "openid profile email offline_access stella:read stella:documents_write",
+        ),
+      }),
     });
 
     expect(failure).toBeDefined();
@@ -1035,17 +1185,18 @@ describe("scopePreflightFailure: the hint must survive a re-parse", () => {
 describe("toolErrorLines", () => {
   const FLAGS = new Set(["matter_id", "entity_id"]);
 
-  test("an unknown tool is an actionable outdated-CLI error", () => {
+  test("an unknown tool stays distinct from disabled features and version incompatibility", () => {
     expect(
-      toolErrorLines({
-        code: "unknown_tool",
-        message: "Unknown tool: invoke_capability",
-        hint: undefined,
-        issues: [],
-      }),
-    ).toEqual([
-      "this CLI is too old for this server; run npm i -g @stll/cli@latest",
-    ]);
+      toolErrorLines(
+        {
+          code: "unknown_tool",
+          message: "Unknown tool: invoke_capability",
+          hint: undefined,
+          issues: [],
+        },
+        { command: "matter archive" },
+      ),
+    ).toEqual(["Command 'matter archive' is unknown to this server."]);
   });
 
   test("a lone issue repeating the summary folds into one line naming the flag", () => {
@@ -1063,7 +1214,7 @@ describe("toolErrorLines", () => {
             },
           ],
         },
-        FLAGS,
+        { command: "task list", flagPaths: FLAGS },
       ),
     ).toEqual([
       "error: Provide matter_id to list tasks, or task_id to read one task (--matter-id)",
@@ -1083,7 +1234,7 @@ describe("toolErrorLines", () => {
             { path: "", message: "Body too large" },
           ],
         },
-        FLAGS,
+        { command: "task list", flagPaths: FLAGS },
       ),
     ).toEqual([
       "error: Invalid input",
@@ -1094,14 +1245,56 @@ describe("toolErrorLines", () => {
       "hint: Fix the fields",
     ]);
   });
+
+  test("an issue code renders beside its reason, so each legal hold names its scope", () => {
+    const envelope = errorEnvelope({
+      error: {
+        code: "legal_hold_active",
+        message: "Deletion is blocked by an active legal hold",
+        hint: "Release the hold first",
+        issues: [
+          {
+            path: "hold-1",
+            code: "matter",
+            message: "2026-10-01T00:00:00.000Z",
+          },
+          {
+            path: "hold-2",
+            code: "entity",
+            message: "2026-10-02T00:00:00.000Z",
+          },
+          { path: "hold-3", code: 7, message: "2026-10-03T00:00:00.000Z" },
+        ],
+      },
+    });
+    expect(envelope?.issues).toEqual([
+      { path: "hold-1", code: "matter", message: "2026-10-01T00:00:00.000Z" },
+      { path: "hold-2", code: "entity", message: "2026-10-02T00:00:00.000Z" },
+      { path: "hold-3", message: "2026-10-03T00:00:00.000Z" },
+    ]);
+    expect(
+      envelope === null
+        ? []
+        : toolErrorLines(envelope, {
+            command: "matter delete",
+            flagPaths: FLAGS,
+          }),
+    ).toEqual([
+      "error: Deletion is blocked by an active legal hold",
+      "  hold-1: 2026-10-01T00:00:00.000Z [matter]",
+      "  hold-2: 2026-10-02T00:00:00.000Z [entity]",
+      "  hold-3: 2026-10-03T00:00:00.000Z",
+      "hint: Release the hold first",
+    ]);
+  });
 });
 
 test("verification limit envelopes retain recovery metadata and select their exit class", () => {
   const expectedExits = {
-    [VERIFICATION_RUN_CAP_CODES.active]: EXIT_CODES.server,
-    [VERIFICATION_RUN_CAP_CODES.daily]: EXIT_CODES.usageLimited,
-  } as const satisfies Record<VerificationRunCapCode, number>;
-  for (const code of Object.values(VERIFICATION_RUN_CAP_CODES)) {
+    [MODEL_RUN_CAP_CODES.active]: EXIT_CODES.server,
+    [MODEL_RUN_CAP_CODES.daily]: EXIT_CODES.usageLimited,
+  } as const satisfies Record<ModelRunCapCode, number>;
+  for (const code of Object.values(MODEL_RUN_CAP_CODES)) {
     for (const retryable of [true, false]) {
       const error = {
         code,
@@ -1116,10 +1309,94 @@ test("verification limit envelopes retain recovery metadata and select their exi
         requestId: undefined,
       });
       expect(classifyToolError(payload)).toBe(expectedExits[code]);
-      expect(toolErrorLines(error)).toEqual([
+      expect(toolErrorLines(error, { command: "verification run" })).toEqual([
         `error: ${error.message}`,
         `hint: ${error.hint}`,
       ]);
     }
   }
 });
+
+for (const format of ["jsonl", "json"] as const) {
+  test(`--all ${format} reports rendering time without awaited API time`, async () => {
+    let now = 0;
+    let page = 0;
+    const durations: number[] = [];
+    const output: string[] = [];
+    const server = Bun.serve({
+      port: 0,
+      async fetch(request) {
+        if (request.method === "GET") {
+          return new Response(null, { status: 405 });
+        }
+        const body = v.parse(
+          v.object({
+            method: v.exactOptional(v.string()),
+            id: v.exactOptional(v.number()),
+          }),
+          await request.json(),
+        );
+        const lifecycle = respondToMcpLifecycle(body);
+        if (lifecycle !== null) {
+          return lifecycle;
+        }
+        now += 1000;
+        page += 1;
+        return Response.json({
+          jsonrpc: "2.0",
+          id: body.id,
+          result: {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({
+                  items: [{ id: page }],
+                  nextCursor: page === 1 ? "page-two" : null,
+                }),
+              },
+            ],
+          },
+        });
+      },
+    });
+    const tty = makeTtyContext({
+      serverUrl: server.url.origin,
+      stdinData: "",
+      isTTY: false,
+    });
+    try {
+      await streamOrRenderAllPages({
+        context: tty.context,
+        command: "matter list",
+        writers: {
+          stdout: (text) => {
+            output.push(text);
+            now += 3;
+          },
+          stderr: (text) => {
+            throw new TypeError(`Unexpected error output: ${text}`);
+          },
+        },
+        format,
+        textPath: undefined,
+        itemsKey: "items",
+        baseArgs: {},
+        serverUrl: server.url.origin,
+        token: "opaque-token",
+        toolName: "list_items",
+        cursorInto: (base, cursor) => ({ ...base, cursor }),
+        now: () => now,
+        reportOutputDuration: (durationMs) => {
+          durations.push(durationMs);
+        },
+      });
+      expect(page).toBe(2);
+      expect(output.join("")).toMatch(/"id":\s*1/u);
+      expect(output.join("")).toMatch(/"id":\s*2/u);
+      expect(durations).toEqual([format === "jsonl" ? 6 : 3]);
+      expect(now).toBe(2000 + (format === "jsonl" ? 6 : 3));
+    } finally {
+      await server.stop(true);
+    }
+  });
+}

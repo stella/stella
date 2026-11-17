@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { PRESENTATION_PREFS_COOKIE } from "../../src/lib/account/presentation-prefs/preferences";
+import { PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS } from "../helpers/wait-budgets";
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
@@ -22,6 +23,8 @@ test("malformed presentation cookie cannot block app bootstrap", async ({
 
   await page.goto("/", { waitUntil: "commit" });
 
-  await expect(page).toHaveURL(/\/auth\/?$/u, { timeout: 30_000 });
+  await expect(page).toHaveURL(/\/auth\/?$/u, {
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  });
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
 });

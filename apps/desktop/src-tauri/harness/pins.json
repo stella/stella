@@ -1,4 +1,5 @@
 {
-  "codex": "0.164.0",
-  "claudeAgentSdk": "0.3.309"
+  "codex": "0.166.0",
+  "claudeAgentSdk": "0.3.309",
+  "bun": "1.4.4"
 }

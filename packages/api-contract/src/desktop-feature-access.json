@@ -1,4 +1,9 @@
 {
   "path": "/v1/desktop/feature-access",
-  "featureIds": ["activity-timeline", "local-agents"]
+  "featureIds": [
+    "activity-timeline",
+    "desktop-dictation",
+    "desktop-dictation-cloud",
+    "local-agents"
+  ]
 }

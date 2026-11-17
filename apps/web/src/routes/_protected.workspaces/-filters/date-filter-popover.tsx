@@ -3,7 +3,6 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { CheckIcon, XIcon } from "@stll/ui/icons";
 import { Separator } from "@stll/ui/separator";
-import { cn } from "@stll/ui/utils";
 
 import { DateRangeFilter } from "@/components/date-range-filter";
 import type { DateFilter, DateFilterPreset } from "@/lib/workspaces/types";
@@ -36,18 +35,17 @@ export const DateFilterPopover = ({
       {DATE_FILTER_PRESETS.map((preset) => {
         const active = preset === activePreset;
         return (
-          <button
-            className={cn(
-              "hover:bg-accent flex items-center justify-between rounded px-2 py-1.5 text-sm",
-              active && "text-foreground",
-            )}
+          <Button
+            aria-pressed={active}
+            className="justify-between"
             key={preset}
             onClick={() => handlePreset(preset)}
-            type="button"
+            size="row"
+            variant="ghost"
           >
             <span>{labels[preset]}</span>
             {active && <CheckIcon className="text-primary size-3.5" />}
-          </button>
+          </Button>
         );
       })}
       {isCustom && (

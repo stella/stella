@@ -4,14 +4,19 @@ import { useEffect, useEffectEvent, useState } from "react";
 
 import type { DOMProps } from "expo/dom";
 
-import { UI_COLORS } from "@/ui-theme.gen";
+import { compileLegalSourceToDocx } from "@stll/docx-core";
 
-import { chunksOf, decodeChunkInto } from "./chunks";
+import { useDomAppearance } from "@/components/dom-theme";
+import type { DomAppearance } from "@/components/dom-theme";
+
+import { chunksOf, decodeChunkInto, encodeChunk } from "./chunks";
 import { DocxPages } from "./docx-pages";
 import { PdfPages } from "./pdf-pages";
 
 type DocumentViewProps = {
   kind: "docx" | "pdf";
+  /** The document's name, as the screen titles it. */
+  fileName: string;
   /** The file's size in bytes, which `readChunk` serves in slices. */
   size: number;
   /** The app's language, for the few words folio shows itself. */
@@ -20,8 +25,36 @@ type DocumentViewProps = {
    * The app's appearance. folio and the PDF pages read stella's colour
    * tokens and its `dark` class, as on the web.
    */
-  appearance: "light" | "dark";
+  appearance: DomAppearance;
+  /** The pages' width as a factor of the screen's fit (see ./zoom.ts). */
+  zoom: number;
+  /** Room under the document's end, in CSS pixels, for the app's bar. */
+  clearance: number;
   readChunk: (offset: number, length: number) => Promise<string>;
+  /**
+   * A draft the model wrote, built here from its source instead of read
+   * from a file: the Word document is packed in the page, as the web packs
+   * it, since the app's own runtime cannot compress one.
+   */
+  draftSource?: string | undefined;
+  /** The title a draft without one of its own takes. */
+  draftTitle?: string | undefined;
+  /** The app holds the Word document's edit lock (see `DocxPages`). */
+  editable: boolean;
+  /** Changes to ask for the edits now, to finish editing. */
+  saveRequest: number;
+  /** A tap into the read-only text of a Word document. */
+  onEditRequest: () => void;
+  /**
+   * One slice of a save, base64, sent before `onEditSaved`. Across the
+   * bridge the call answers asynchronously, so each slice is awaited.
+   */
+  writeEdit: (offset: number, base64: string) => Promise<void> | void;
+  /**
+   * A save is complete: its size, or null when nothing changed. Whether the
+   * app stored it comes back; edits it did not store go with the next save.
+   */
+  onEditSaved: (size: number | null, final: boolean) => Promise<boolean>;
   /**
    * The first page is on screen. The app's handlers only set state, so the
    * DOM side does not wait on the bridge's reply.
@@ -45,27 +78,23 @@ const allowZoom = () => {
 };
 
 /**
- * Declares stella's colour tokens, light on `:root` and dark under `.dark`,
- * as the web's theme does: folio's canvas, pages and chrome read them, and
- * without them every surface falls back to the same white.
+ * A draft's Word document, packed from its source, or why the source does
+ * not compile.
  */
-let tokensDeclared = false;
-
-const declareThemeTokens = () => {
-  if (tokensDeclared) {
-    return;
-  }
-  tokensDeclared = true;
-  const variables = (colors: Record<string, string>) =>
-    Object.entries(colors)
-      .map(
-        ([name, value]) =>
-          `--${name.replaceAll(/[A-Z]/gu, (letter) => `-${letter.toLowerCase()}`)}:${value};`,
-      )
-      .join("");
-  const style = document.createElement("style");
-  style.textContent = `:root{${variables(UI_COLORS.light)}color-scheme:light;}.dark{${variables(UI_COLORS.dark)}color-scheme:dark;}`;
-  document.head.append(style);
+const buildDraft = async (
+  source: string,
+  titleFallback: string,
+): Promise<
+  | { readonly built: true; readonly bytes: Uint8Array }
+  | { readonly built: false; readonly reason: string }
+> => {
+  const compiled = await compileLegalSourceToDocx(source, { titleFallback });
+  return compiled.status === "ok"
+    ? { built: true, bytes: new Uint8Array(compiled.buffer) }
+    : {
+        built: false,
+        reason: compiled.errors.map(({ message }) => message).join(" "),
+      };
 };
 
 /**
@@ -82,10 +111,20 @@ const CANVAS = "linear-gradient(var(--muted), var(--muted)) var(--background)";
  */
 const DocumentView = ({
   kind,
+  fileName,
   size,
   locale,
   appearance,
+  zoom,
+  clearance,
   readChunk,
+  draftSource,
+  draftTitle,
+  editable,
+  saveRequest,
+  onEditRequest,
+  writeEdit,
+  onEditSaved,
   onReady,
   onFailed,
 }: DocumentViewProps) => {
@@ -98,14 +137,33 @@ const DocumentView = ({
     onFailed(String(error));
   });
 
-  useEffect(() => {
-    declareThemeTokens();
-    document.documentElement.classList.toggle("dark", appearance === "dark");
-  }, [appearance]);
+  useDomAppearance(appearance);
 
   useEffect(() => {
     allowZoom();
     let cancelled = false;
+    if (draftSource !== undefined) {
+      buildDraft(draftSource, draftTitle ?? "")
+        .then((draft) => {
+          if (cancelled) {
+            return undefined;
+          }
+          if (draft.built) {
+            setBytes(draft.bytes);
+          } else {
+            loadFailed(draft.reason);
+          }
+          return undefined;
+        })
+        .catch((error: unknown) => {
+          if (!cancelled) {
+            loadFailed(error);
+          }
+        });
+      return () => {
+        cancelled = true;
+      };
+    }
     const target = new Uint8Array(size);
     const chunks = chunksOf(size);
     // One slice after another, so a single bridge message stays small.
@@ -130,13 +188,28 @@ const DocumentView = ({
     return () => {
       cancelled = true;
     };
-  }, [size]);
+  }, [size, draftSource, draftTitle]);
 
   const ready = () => {
     onReady();
   };
   const failed = (message: string) => {
     onFailed(message);
+  };
+  // A save goes back to the app as the file came: in slices, then its end.
+  const saved = async (
+    edited: Uint8Array | null,
+    final: boolean,
+  ): Promise<boolean> => {
+    if (edited !== null) {
+      for (const [offset, length] of chunksOf(edited.length)) {
+        await writeEdit(
+          offset,
+          encodeChunk(edited.subarray(offset, offset + length)),
+        );
+      }
+    }
+    return await onEditSaved(edited === null ? null : edited.length, final);
   };
 
   let pages = null;
@@ -145,17 +218,30 @@ const DocumentView = ({
       kind === "pdf" ? (
         <PdfPages
           bytes={bytes}
+          clearance={clearance}
           invert={appearance === "dark"}
           onFailed={failed}
           onReady={ready}
+          zoom={zoom}
         />
       ) : (
-        <DocxPages
-          bytes={bytes}
-          locale={locale}
-          onFailed={failed}
-          onReady={ready}
-        />
+        // folio scrolls within its own box, so the box ends above the bar.
+        <div style={{ height: `calc(100vh - ${String(clearance)}px)` }}>
+          <DocxPages
+            bytes={bytes}
+            editable={editable}
+            fileName={fileName}
+            locale={locale}
+            onEditRequest={() => {
+              onEditRequest();
+            }}
+            onFailed={failed}
+            onReady={ready}
+            onSaved={saved}
+            saveRequest={saveRequest}
+            zoom={zoom}
+          />
+        </div>
       );
   }
 

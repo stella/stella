@@ -5,6 +5,7 @@ import { plugin } from "bun";
 import { afterAll, afterEach, expect, test } from "bun:test";
 import { DetachedWindowAPI } from "happy-dom";
 
+import { noDecisionReviewFound } from "@stll/api-contract/case-law-reviews";
 import {
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
@@ -197,6 +198,7 @@ const absent = {
   type: TEXT_FIELD_TYPE.ABSENT,
 } as const;
 const decision = {
+  appealReviews: noDecisionReviewFound(),
   id: toSafeId<"caseLawDecision">("00000000-0000-4000-8000-000000000002"),
   caseNumber: "1 As 1/2026",
   caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
@@ -336,7 +338,12 @@ const fakeReaderServer = (initialAnswers: ReaderAnswer[] = [answer]) => {
         return Response.json({ message: "Not found" }, { status: 404 });
       }
       if (path.endsWith("/workspaces/navigation")) {
-        return Response.json({ items: [], nextCursor: null, workspaces: [] });
+        return Response.json({
+          items: [],
+          nextCursor: null,
+          workspaces: [],
+          features: { timeBilling: false },
+        });
       }
       if (path.endsWith("/organization-settings/ai-availability")) {
         return Response.json(aiAvailableResponse());
@@ -441,7 +448,7 @@ const installDisplacedLayout = () => {
   };
   Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
     configurable: true,
-    get() {
+    get(this: HTMLElement) {
       return this.closest('[data-margin-note="card"]') ? 250 : 100;
     },
   });
@@ -610,8 +617,8 @@ for (const activation of ["create", "regenerate", "follow-up"]) {
     const view = await renderWorkspace(client, "enabled");
     await waitFor(() =>
       expect(
-        view.container.querySelectorAll('[data-margin-note="card"]'),
-      ).toHaveLength(3),
+        view.container.querySelectorAll('[data-margin-note="card"]').length,
+      ).toBe(3),
     );
     if (activation === "create") {
       const paragraph = view.container.querySelector('[data-anchor="p-2"]');

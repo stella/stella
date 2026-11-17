@@ -25,6 +25,7 @@ import {
 } from "@stll/ui/landing";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -51,7 +52,7 @@ type HistoryEntry = Extract<
   ReturnType<typeof useLawHistory>["list"],
   { status: "ready" }
 >["entries"][number];
-const recentEntryIcon = (entry: HistoryEntry) => {
+const recentEntryMark = (entry: HistoryEntry) => {
   switch (entry.kind) {
     case "search":
       return <SearchIcon className="size-4" />;
@@ -63,6 +64,17 @@ const recentEntryIcon = (entry: HistoryEntry) => {
       return panic("Unhandled law history kind");
   }
 };
+
+/** Every row's mark sits in one fixed-width column, so all titles start at
+ * the same edge whether the mark is the search icon, a court chip or a
+ * statute number. The column fits a four-letter court chip and a short
+ * statute number; a statute number wider than it shows its short form
+ * (`262/06`), which the badge picks by container query. */
+const recentEntryIcon = (entry: HistoryEntry) => (
+  <span className="flex w-11 shrink-0 justify-start" data-slot="recent-mark">
+    {recentEntryMark(entry)}
+  </span>
+);
 
 type LawRecentProps = {
   onSearch: (query: string) => void;
@@ -77,6 +89,7 @@ export const LawRecent = ({
   const history = useLawHistory({ filter, country });
   return (
     <LawRecentList
+      key={country}
       onSearch={onSearch}
       history={history}
       filter={filter}
@@ -216,7 +229,9 @@ const ScopedLawRecentList = ({
                 className="flex items-start gap-2 px-2 py-1.5"
                 key={index}
               >
-                <Skeleton className="mt-0.5 size-4 shrink-0 rounded-sm" />
+                <span className="flex w-11 shrink-0">
+                  <Skeleton className="mt-0.5 size-4 rounded-sm" />
+                </span>
                 <div className="flex min-w-0 flex-1 flex-col gap-1">
                   <Skeleton className="h-4 w-3/5" />
                   <Skeleton className="h-3 w-2/5" />
@@ -246,9 +261,9 @@ const ScopedLawRecentList = ({
                           <span className="text-foreground block text-sm font-medium wrap-anywhere whitespace-normal">
                             {title}
                           </span>
-                          <span className="text-muted-foreground block truncate text-xs">
+                          <TruncatedText className="text-muted-foreground text-xs">
                             {relativeTime(entry.lastUsedAt)}
-                          </span>
+                          </TruncatedText>
                         </span>
                       </span>
                     ) : (
@@ -264,13 +279,18 @@ const ScopedLawRecentList = ({
                       key={entry.id}
                     >
                       {entry.kind === "search" ? (
-                        <button
-                          className={cn(LANDING_ROW_CLASS, "min-w-0 flex-1")}
+                        <Button
+                          className="group/row group flex min-w-0 flex-1"
                           onClick={() => onSearch(entry.query)}
-                          type="button"
+                          variant="plain"
                         >
-                          {text}
-                        </button>
+                          {/* The landing row's inset and hover tint, so a
+                              search row lines up and lights like the page
+                              links beside it. */}
+                          <span className="group-hover/row:bg-accent/50 min-w-0 flex-1 rounded-md px-2 py-1.5">
+                            {text}
+                          </span>
+                        </Button>
                       ) : (
                         <a
                           className={cn(LANDING_ROW_CLASS, "min-w-0 flex-1")}

@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import { DEFAULT_DECISION_TABLE_LAYOUT } from "@/features/case-law/decision-column-preferences.logic";
 import { DEFAULT_STATUTE_TABLE_LAYOUT } from "@/features/statutes/statute-table-layout.logic";
 import {
@@ -12,7 +14,6 @@ import {
 import type { PresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
 import { createPresentationPrefsSync } from "@/lib/account/presentation-prefs/sync";
 import { createPrefsWriteLock } from "@/lib/account/presentation-prefs/sync.test-fixtures";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 const { act, cleanup, fireEvent, render } =

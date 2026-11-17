@@ -100,7 +100,7 @@ const MANIFEST_FIXTURE = {
   condition: { path: "penalty_applies", condition: "amount > 1000" },
 } as const satisfies Record<string, FieldMeta>;
 
-describe("describe -> configure round trip", () => {
+describe("the describe -> configure round trip", () => {
   test.each(Object.entries(MANIFEST_FIXTURE))(
     "%s survives a wire round trip unchanged",
     (_name, field: FieldMeta) => {

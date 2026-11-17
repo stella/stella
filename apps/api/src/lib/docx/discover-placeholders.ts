@@ -75,13 +75,13 @@ export const discoverPlaceholders = async (
   const zip = await loadDocx(docxBuffer);
   const counts = new Map<string, number>();
 
-  for (const path of templateContentPartPaths(Object.keys(zip.files))) {
-    const entry = zip.file(path);
+  for (const path of templateContentPartPaths(zip.paths())) {
+    const entry = zip.entry(path);
     if (!entry) {
       continue;
     }
 
-    const xml = await entry.async("string");
+    const xml = await entry.text();
     scanParagraphs(slimdom.parseXmlDocument(xml), counts);
   }
 

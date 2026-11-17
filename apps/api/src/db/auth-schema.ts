@@ -321,6 +321,8 @@ export const member = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     role: text("role").default("member").notNull(),
+    /** An additional monetary-visibility grant; management roles hold it independently. */
+    billingAccess: boolean("billing_access").default(false).notNull(),
     lastActiveWorkspaceId: text("last_active_workspace_id"),
     createdAt: timestamptz("created_at").notNull(),
   },
@@ -668,6 +670,20 @@ export const oauthRefreshToken = pgTable(
     index("oauth_refresh_token_reference_id_idx").on(table.referenceId),
     index("oauth_refresh_token_authorization_code_id_idx").on(
       table.authorizationCodeId,
+    ),
+    // Rotation revokes the old token in the same write; only its replay
+    // window, and the response stored for it, outlive that.
+    check(
+      "oauth_refresh_token_rotation_revokes_check",
+      sql`${table.rotatedAt} IS NULL OR ${table.revoked} IS NOT NULL`,
+    ),
+    check(
+      "oauth_refresh_token_replay_window_check",
+      sql`${table.rotationReplayExpiresAt} IS NULL OR ${table.rotatedAt} IS NOT NULL`,
+    ),
+    check(
+      "oauth_refresh_token_replay_response_check",
+      sql`${table.rotationReplayResponse} IS NULL OR ${table.rotationReplayExpiresAt} IS NOT NULL`,
     ),
     ...denyStellaAccessPolicies(),
   ],

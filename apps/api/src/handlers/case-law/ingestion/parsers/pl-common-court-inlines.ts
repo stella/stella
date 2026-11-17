@@ -31,8 +31,8 @@ import { panic } from "better-result";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Inline } from "@stll/legal-ast/document-ast";
 import { hasInlineChildren, plainTextOf } from "@stll/legal-ast/document-ast";
+import { startsWithPlOperativeVerb } from "@stll/legal-ast/polish-document-roles";
 
-import { startsWithPlOperativeVerb } from "./pl-operative-verbs";
 import { appendTextInline } from "./shared-inlines";
 
 // Built from code points: the characters are invisible in a regex literal.

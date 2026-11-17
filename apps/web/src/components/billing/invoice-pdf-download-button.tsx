@@ -2,6 +2,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { fetchWithTimeout } from "@stll/fetch";
+import { readBodyWithIdleDeadline } from "@stll/fetch/body-reader";
 import { Button } from "@stll/ui/button";
 import { DownloadIcon } from "@stll/ui/icons";
 
@@ -57,7 +58,7 @@ export const InvoicePdfDownloadButton = ({
     mutationFn: async () => {
       const { downloadUrl, fileName } = await requestPdf();
       const file = await fetchWithTimeout(downloadUrl, {
-        timeout: { type: "idle", ms: PDF_DOWNLOAD_TIMEOUT_MS },
+        timeout: { type: "headers", ms: PDF_DOWNLOAD_TIMEOUT_MS },
       });
       if (!file.ok) {
         unwrapApiResponse({
@@ -65,7 +66,10 @@ export const InvoicePdfDownloadButton = ({
           error: { status: file.status, value: "Invoice PDF download failed" },
         });
       }
-      const blob = await file.blob();
+      const bytes = await readBodyWithIdleDeadline(file, {
+        idleMs: PDF_DOWNLOAD_TIMEOUT_MS,
+      });
+      const blob = new Blob([Uint8Array.from(bytes).buffer]);
       downloadFile(blob, fileName);
     },
     onError: (error) => {

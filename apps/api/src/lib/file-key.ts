@@ -26,11 +26,14 @@ const fileExtensionMap: Record<string, string> = {
   "application/xml": "xml",
   "message/rfc822": "eml",
   "application/vnd.ms-outlook": "msg",
+  "application/vnd.software602.filler.form-xml-zip": "zfo",
   "application/rtf": "rtf",
 };
 
 export const getFileExtension = (mimeType: string): string =>
-  fileExtensionMap[mimeType] ?? "bin";
+  Object.hasOwn(fileExtensionMap, mimeType)
+    ? (fileExtensionMap[mimeType] ?? "bin")
+    : "bin";
 
 type CreateFileKeyProps = {
   organizationId: SafeId<"organization">;

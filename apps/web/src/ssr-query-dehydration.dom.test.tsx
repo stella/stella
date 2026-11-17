@@ -2,8 +2,9 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import type { AnyRoute } from "@tanstack/react-router";
 import { afterAll, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import { memberSessionFor } from "@/lib/account/auth-session.test-fixtures";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({
   settings: {

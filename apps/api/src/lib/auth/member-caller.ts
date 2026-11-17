@@ -6,6 +6,26 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import type { SseStreamBinding } from "@/api/lib/sse";
+import type { McpSession } from "@/api/mcp/auth";
+
+/**
+ * A chat turn the server starts as the member, with no request of theirs:
+ * the next message they queued (`handlers/chat/queue/chat-queue-drain.ts`,
+ * with the revision the sender read), or their turn stopped by a usage limit
+ * on their computer, sent again once it reset
+ * (`handlers/chat/limit-reminder/limit-resume.ts`). The turn's acceptance
+ * takes what it names, once.
+ */
+export type ServerStartedChatTurn =
+  | {
+      readonly type: "queue";
+      readonly queuedMessageId: SafeId<"chatMessage">;
+      readonly revision: number;
+    }
+  | {
+      readonly type: "limit-resume";
+      readonly failedTurnId: SafeId<"chatTurn">;
+    };
 
 /** Builds a recorder whose events default to another matter (or none). */
 export type AuditRecorderFactory = (opts?: {
@@ -24,6 +44,7 @@ export type MemberCaller = Readonly<OrgSettingsForAuth> & {
   readonly session: {
     /** The browser session, or `null` for a credential that has none (MCP). */
     readonly id: string | null;
+    readonly credentialType?: NonNullable<McpSession["credential"]>["type"];
     readonly activeOrganizationId: SafeId<"organization">;
     /**
      * What keeps an event stream this caller opens authorized when no
@@ -31,12 +52,17 @@ export type MemberCaller = Readonly<OrgSettingsForAuth> & {
      */
     readonly stream?: SseStreamBinding;
     /**
-     * The OAuth scopes of an app's access token, for a handler whose consent
-     * depends on the request rather than its route (an upload's purpose).
-     * Absent for a browser session, and for MCP, which checks that consent
-     * before dispatch.
+     * The OAuth scopes of the credential, over REST or MCP, for a handler
+     * whose consent depends on the request rather than its route (an upload's
+     * purpose, the result types a search returns). Absent for a browser
+     * session, which acts as the person directly.
      */
     readonly grantedScopes?: readonly string[];
+    /**
+     * Set only when the server starts a chat turn as the member. No request
+     * can carry it.
+     */
+    readonly serverStartedTurn?: ServerStartedChatTurn;
   };
   readonly featureAccessSnapshot?: FeatureAccessSnapshot;
   readonly scopedDb: ScopedDb;

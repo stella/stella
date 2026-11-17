@@ -25,6 +25,7 @@ export const createTestRawExecute =
       undefined,
       undefined,
       undefined,
+      undefined,
     );
     return new PgAsyncRaw(prepared, statement, compiled);
   };

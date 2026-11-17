@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
@@ -25,7 +25,7 @@ const readGzip = async (url: URL): Promise<string> =>
 
 const projectionOf = async (sourceRaw: string) =>
   czNssRetention.type === "checked"
-    ? await czNssRetention.project(sourceRaw)
+    ? await czNssRetention.project(sourceRaw, { sourceRawObjects: {} })
     : panic("cz-nss is declared unparsed");
 
 /** The oracle's verdict on the adapter's document against the projection. */
@@ -101,11 +101,6 @@ describe("cz-nss retention against the document the portal served", () => {
   });
 
   describe("the enrolled synthetic decision", () => {
-    const originalFetch = globalThis.fetch;
-    afterEach(() => {
-      globalThis.fetch = originalFetch;
-    });
-
     test("keeps its text", async () => {
       const result = await retentionOf(await czNssFixture().buildDecision());
       expect(result.stats.missingWords).toEqual([]);

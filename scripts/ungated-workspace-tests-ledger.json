@@ -1,0 +1,18 @@
+[
+  {
+    "id": "apps/visual-preview/browser/render.test.ts",
+    "reason": "Only test:browser collects it, in the path-filtered visual-preview workflow, which is not a required check."
+  },
+  {
+    "id": "packages/docx-utils/scripts/check-office-fixture-metadata.test.ts",
+    "reason": "The package test script runs src only; ci-checks-rest runs it through test:office-fixture-metadata."
+  },
+  {
+    "id": "packages/sanctions/src/compact-screening.property.test.ts",
+    "reason": "The package test script ignores property tests; only the nightly property workflow runs them."
+  },
+  {
+    "id": "packages/sanctions/src/name-match.property.test.ts",
+    "reason": "The package test script ignores property tests; only the nightly property workflow runs them."
+  }
+]

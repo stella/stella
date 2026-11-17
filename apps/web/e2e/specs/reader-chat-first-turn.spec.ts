@@ -15,6 +15,7 @@ import {
   DOCKED_CHAT_LEGAL_ROUTES,
   installDockedLegalFixtures,
 } from "../helpers/docked-chat-legal-fixtures";
+import { apiError, apiJson, eventStream, respond } from "../helpers/route-mock";
 import { EXPECTS_DEV_RUNTIME } from "../helpers/runtime-mode";
 import { expect, test } from "../helpers/test";
 
@@ -37,7 +38,12 @@ test.use({ locale: "en-US" });
 const openFreshReader = async (page: Page) => {
   await installDockedLegalFixtures(page);
   await page.route("**/v1/chat/threads/*/suggested-prompts*", async (route) => {
-    await route.fulfill({ json: { prompts: [] } });
+    await respond(
+      route,
+      apiJson("v1/chat/threads/:threadId/suggested-prompts", "post", {
+        prompts: [],
+      }),
+    );
   });
   await openMemberDecision(page, {
     bootPath: DECISION_READER_BOOT_PATH,
@@ -65,13 +71,14 @@ test("a fresh decision reader succeeds on its first chat question", async ({
     parts: [{ type: "text", content: ANSWER }],
   } satisfies (typeof dockedChatMessagePage.messages)[number];
   await page.route("**/v1/chat/threads/*/messages*", async (route) => {
-    await route.fulfill({
-      json: {
+    await respond(
+      route,
+      apiJson("v1/chat/threads/:threadId/messages", "get", {
         ...dockedChatMessagePage,
         messages: answered ? [completedMessage] : [],
         threadExists: answered,
-      },
-    });
+      }),
+    );
   });
   await page.route(/\/v1\/chat\/?$/u, async (route) => {
     const body: unknown = route.request().postDataJSON();
@@ -104,12 +111,7 @@ test("a fresh decision reader succeeds on its first chat question", async ({
         runId: send.runId,
       },
     ] satisfies StreamChunk[];
-    await route.fulfill({
-      contentType: "text/event-stream",
-      body: events
-        .map((event) => `data: ${JSON.stringify(event)}\n\n`)
-        .join(""),
-    });
+    await respond(route, eventStream(events));
   });
 
   const composer = await openFreshReader(page);
@@ -135,32 +137,42 @@ test("a fresh reader shows specific copy when the API refuses its first chat que
   }
   browserErrors.expectCaptured(/Failed to load resource:.*401/u);
   await page.route("**/v1/chat/threads/*/messages*", async (route) => {
-    await route.fulfill({
-      json: { ...dockedChatMessagePage, messages: [], threadExists: false },
-    });
+    await respond(
+      route,
+      apiJson("v1/chat/threads/:threadId/messages", "get", {
+        ...dockedChatMessagePage,
+        messages: [],
+        threadExists: false,
+      }),
+    );
   });
   await page.route(/\/v1\/chat\/?$/u, async (route) => {
-    await route.fulfill({
-      status: 401,
-      json: {
-        code: "unauthorized",
+    await respond(
+      route,
+      // The code a member route answers a 401 with (the API's
+      // `AUTH_REJECTION_BODY`), under wording the page must not show.
+      apiError(401, {
+        code: "permission_denied",
         message: "Private authentication diagnostics",
-      },
-    });
+      }),
+    );
   });
   const composer = await openFreshReader(page);
   await composer.getByRole("textbox").fill(QUESTION);
   await composer.getByRole("button", { name: "Send message" }).click();
-  await expect(page.locator('[data-slot="docked-chat-thread"]')).toContainText(
-    messages.errors.api.unauthorized,
-  );
+  // Not sent: the question is back in the composer, not in the thread, and
+  // the notice is the expired session's, never the server's own wording.
   await expect(
-    page.getByRole("button", { name: "Resend", exact: true }),
+    page.getByText(messages.auth.sessionExpired, { exact: true }),
   ).toBeVisible();
+  await expect(composer.getByRole("textbox")).toContainText(QUESTION);
   await expect(
     page.locator('[data-slot="docked-chat-thread"]'),
-  ).not.toContainText(messages.chat.sendError);
+  ).not.toContainText(QUESTION);
   await expect(
-    page.locator('[data-slot="docked-chat-thread"]'),
-  ).not.toContainText("Private authentication diagnostics");
+    page.getByText(messages.chat.sendError, { exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByText("Private authentication diagnostics"),
+  ).toHaveCount(0);
 });

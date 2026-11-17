@@ -3,12 +3,13 @@ import { createRouter } from "@tanstack/react-router";
 import { plugin } from "bun";
 import { afterAll, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import { defaultPresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
 import { createAnalyticsValue } from "@/lib/analytics/provider";
 import { createRouteErrorLifecycleController } from "@/lib/analytics/route-error-lifecycle";
 import { createAppQueryClient } from "@/lib/react-query";
 import { WEB_ROUTE_TEMPLATES } from "@/route-templates.gen";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import { declaredBreadcrumbs } from "./app-breadcrumbs.logic";
 
@@ -38,6 +39,15 @@ const router = createRouter({
     ),
   },
 });
+
+const ORGANIZATION_SETTINGS_BREADCRUMBS = [
+  { type: "label", labelKey: "common.settings", to: "/settings" },
+  {
+    type: "label",
+    labelKey: "common.organization",
+    to: "/settings/organization",
+  },
+] as const;
 
 test.each([
   {
@@ -90,13 +100,13 @@ test.each([
     ],
   },
   {
-    pathname: "/admin/members",
+    pathname: "/settings/organization/members",
     decisions: [
-      { type: "label", labelKey: "common.organization", to: "/admin" },
+      ...ORGANIZATION_SETTINGS_BREADCRUMBS,
       {
         type: "label",
         labelKey: "common.members",
-        to: "/admin/members",
+        to: "/settings/organization/members",
       },
     ],
   },

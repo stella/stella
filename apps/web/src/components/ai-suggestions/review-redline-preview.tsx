@@ -41,20 +41,15 @@ type RedlinePreviewProps = {
   /** Plain-text summary used as the accessible label. */
   srSummary: string;
   rejected: boolean;
-  compact?: boolean | undefined;
 };
 
 export const RedlinePreview = ({
   preview,
   srSummary,
   rejected,
-  compact = false,
 }: RedlinePreviewProps) => {
   const baseCls = cn(
-    "text-foreground [font-family:Calibri,Arial,sans-serif] wrap-break-word",
-    compact
-      ? "line-clamp-1 text-[13.5px] leading-5"
-      : "text-[14.5px] leading-6",
+    "text-foreground [font-family:Calibri,Arial,sans-serif] text-[14.5px] leading-6 wrap-break-word",
     rejected && "opacity-60",
   );
   const muted = "text-foreground-strong-muted";
@@ -76,7 +71,7 @@ export const RedlinePreview = ({
         className={className}
         // oxlint-disable-next-line react/no-array-index-key -- runs is a read-only preview recomputed fresh from the AI suggestion on every render (whole-list replace); spans are non-interactive with no per-item state.
         key={`${index}-${run.text}`}
-        style={previewRunStyle(run, compact)}
+        style={previewRunStyle(run)}
       >
         {run.text}
       </span>
@@ -292,18 +287,14 @@ const slicePreviewRuns = (
   return sliced;
 };
 
-const previewRunStyle = (
-  run: FolioAIBlockPreviewRun,
-  compact: boolean,
-): CSSProperties => {
+const previewRunStyle = (run: FolioAIBlockPreviewRun): CSSProperties => {
   const style: CSSProperties = {};
   const fontFamily = cssFontFamily(run.fontFamily);
   if (fontFamily !== undefined) {
     style.fontFamily = fontFamily;
   }
   if (run.fontSizePt !== undefined) {
-    const maxPt = compact ? 12.5 : 14.5;
-    style.fontSize = `${Math.min(Math.max(run.fontSizePt, 8), maxPt)}pt`;
+    style.fontSize = `${Math.min(Math.max(run.fontSizePt, 8), 14.5)}pt`;
   }
   if (run.color !== undefined) {
     style.color = run.color;

@@ -7,7 +7,9 @@ import { Menu as MenuPrimitive } from "@base-ui/react/menu";
 import { ChevronRightIcon } from "../icons";
 import { OVERLAY_LAYER_CLASS_NAMES } from "../lib/overlay-layer";
 import { cn } from "../lib/utils";
+import { COMPOSER_PICKER_TRIGGER_CLASS } from "./composer-tokens";
 import { DirectionalIcon } from "./directional-icon";
+import { Kbd } from "./kbd";
 import { renderTooltipTrigger } from "./tooltip-trigger-helper";
 
 const MenuCreateHandle = MenuPrimitive.createHandle;
@@ -17,13 +19,34 @@ const Menu = MenuPrimitive.Root;
 const MenuPortal = MenuPrimitive.Portal;
 
 function MenuTrigger({
+  appearance = "default",
+  className,
   tooltip,
   ...props
-}: MenuPrimitive.Trigger.Props & { tooltip?: React.ReactNode }) {
+}: MenuPrimitive.Trigger.Props & {
+  appearance?: "default" | "caption";
+  tooltip?: React.ReactNode;
+}) {
+  const appearanceClassName =
+    appearance === "caption"
+      ? cn(
+          COMPOSER_PICKER_TRIGGER_CLASS,
+          "relative pointer-coarse:after:absolute pointer-coarse:after:size-full pointer-coarse:after:min-h-11 pointer-coarse:after:min-w-11",
+        )
+      : undefined;
   return renderTooltipTrigger({
     tooltip,
     trigger: (
-      <MenuPrimitive.Trigger data-slot="menu-trigger" nativeButton {...props} />
+      <MenuPrimitive.Trigger
+        className={
+          typeof className === "function"
+            ? (state) => cn(appearanceClassName, className(state))
+            : cn(appearanceClassName, className)
+        }
+        data-slot="menu-trigger"
+        nativeButton
+        {...props}
+      />
     ),
   });
 }
@@ -103,6 +126,9 @@ const MenuGroup = (props: MenuPrimitive.Group.Props) => (
   <MenuPrimitive.Group data-slot="menu-group" {...props} />
 );
 
+const MENU_ITEM_CLASS_NAME =
+  "text-foreground data-highlighted:bg-accent data-highlighted:text-accent-foreground data-[variant=destructive]:text-destructive-foreground flex min-h-8 cursor-pointer items-center gap-2 rounded-sm px-2 py-1 text-base outline-none select-none data-disabled:pointer-events-none data-disabled:opacity-64 data-inset:ps-8 sm:min-h-7 sm:text-sm pointer-coarse:min-h-11 [&>svg]:pointer-events-none [&>svg]:-mx-0.5 [&>svg]:shrink-0 [&>svg:not([class*='opacity-'])]:opacity-80 [&>svg:not([class*='size-'])]:size-4.5 sm:[&>svg:not([class*='size-'])]:size-4";
+
 const MenuItem = ({
   className,
   inset,
@@ -113,13 +139,32 @@ const MenuItem = ({
   variant?: "default" | "destructive";
 }) => (
   <MenuPrimitive.Item
-    className={cn(
-      "text-foreground data-highlighted:bg-accent data-highlighted:text-accent-foreground data-[variant=destructive]:text-destructive-foreground flex min-h-8 cursor-pointer items-center gap-2 rounded-sm px-2 py-1 text-base outline-none select-none data-disabled:pointer-events-none data-disabled:opacity-64 data-inset:ps-8 sm:min-h-7 sm:text-sm pointer-coarse:min-h-11 [&>svg]:pointer-events-none [&>svg]:-mx-0.5 [&>svg]:shrink-0 [&>svg:not([class*='opacity-'])]:opacity-80 [&>svg:not([class*='size-'])]:size-4.5 sm:[&>svg:not([class*='size-'])]:size-4",
-      className,
-    )}
+    className={cn(MENU_ITEM_CLASS_NAME, className)}
     data-inset={inset}
     data-slot="menu-item"
     data-variant={variant}
+    {...props}
+  />
+);
+
+/**
+ * A menu row that navigates: an `<a>` with the item's look, so it opens in a
+ * new tab on a modified click, shows its URL on hover and is announced as a
+ * link. Use it for "Open in new tab", "View invoice", help pages; a `MenuItem`
+ * with an `onClick` that navigates loses all of that. Pass a router link
+ * through `render` to keep client-side navigation.
+ */
+const MenuLinkItem = ({
+  className,
+  inset,
+  ...props
+}: MenuPrimitive.LinkItem.Props & {
+  inset?: boolean;
+}) => (
+  <MenuPrimitive.LinkItem
+    className={cn(MENU_ITEM_CLASS_NAME, className)}
+    data-inset={inset}
+    data-slot="menu-link-item"
     {...props}
   />
 );
@@ -257,14 +302,20 @@ const MenuSeparator = ({
   />
 );
 
-const MenuShortcut = ({ className, ...props }: React.ComponentProps<"kbd">) => (
-  <kbd
-    className={cn(
-      "text-foreground-label ms-auto font-sans text-xs font-medium tracking-widest",
-      className,
-    )}
+/**
+ * The shortcut at the end of a menu row. Pass `keys` (`["mod", "K"]`) to have
+ * it spelled for the reader's platform; see `Kbd`. It is the `plain` `Kbd`,
+ * with no key-cap box, which would crowd a row of labels.
+ */
+const MenuShortcut = ({
+  className,
+  ...props
+}: Omit<React.ComponentProps<typeof Kbd>, "variant">) => (
+  <Kbd
+    className={cn("ms-auto", className)}
     data-slot="menu-shortcut"
     {...props}
+    variant="plain"
   />
 );
 
@@ -353,6 +404,8 @@ export {
   MenuSeparator as DropdownMenuSeparator,
   MenuShortcut,
   MenuShortcut as DropdownMenuShortcut,
+  MenuLinkItem,
+  MenuLinkItem as DropdownMenuLinkItem,
   MenuSub,
   MenuSub as DropdownMenuSub,
   MenuSubTrigger,

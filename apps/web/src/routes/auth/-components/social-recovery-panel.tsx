@@ -9,6 +9,7 @@ import * as v from "valibot";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { Form } from "@stll/ui/form";
 import {
   Frame,
   FrameDescription,
@@ -168,8 +169,14 @@ export const SocialRecoveryPanel = ({
         method: socialProviderName(method),
       })
     : t("auth.socialLink.emailProof");
+  // The provider itself was down: retrying soon is the whole remedy, and
+  // saying so keeps a provider outage from reading as a broken account.
+  const failureDescription =
+    error === "temporarily_unavailable" || error === "server_error"
+      ? t("auth.error.providerUnavailable")
+      : t("auth.error.generic");
   const description =
-    error === "account_not_linked" ? proofDescription : t("auth.error.generic");
+    error === "account_not_linked" ? proofDescription : failureDescription;
 
   return (
     <Frame className="w-full max-w-sm">
@@ -183,8 +190,8 @@ export const SocialRecoveryPanel = ({
       </FrameHeader>
       <FramePanel>
         {error === "account_not_linked" ? (
-          <form
-            className="flex flex-col gap-3"
+          <Form
+            density="snug"
             onSubmit={(event) => {
               event.preventDefault();
               sendCode.mutate();
@@ -214,7 +221,7 @@ export const SocialRecoveryPanel = ({
             >
               {t("auth.continueWithEmail")}
             </Button>
-          </form>
+          </Form>
         ) : (
           <Button
             className="w-full"

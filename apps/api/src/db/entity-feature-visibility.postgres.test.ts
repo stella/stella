@@ -39,6 +39,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { ORGANIZATION_DELETION_FOR_TEST_SQL } from "@/api/tests/helpers/organization-deletion";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -295,7 +296,9 @@ describe.skipIf(!runPostgresTests)(
             }
           } finally {
             await client`DELETE FROM time_entries WHERE id = ${entryId}`;
-            await client`DELETE FROM organization WHERE id = ${organizationId}`;
+            await client.unsafe(ORGANIZATION_DELETION_FOR_TEST_SQL("$1"), [
+              organizationId,
+            ]);
             await client`DELETE FROM "user" WHERE id = ${userId}`;
           }
         });

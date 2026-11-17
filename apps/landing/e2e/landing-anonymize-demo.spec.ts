@@ -1,5 +1,10 @@
 import { expect, test } from "@playwright/test";
 
+import {
+  PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  PLAYWRIGHT_EXPECT_TIMEOUT_90_SECONDS_MS,
+} from "./wait-budgets";
+
 // Class guard: the landing anonymization demo must detect entities in a real
 // browser bundle, not just under Node. Its dictionaries reach the worker
 // through dynamic imports; a specifier the bundler cannot see statically
@@ -54,12 +59,12 @@ type DemoState = {
 };
 
 // Runs in the page. The demo has no root test id, so anchor on the textarea's
-// id and walk up to the component root (textarea → text-layer wrapper → root)
-// to keep the reads scoped to the island.
+// id and the shared editor owner to keep reads scoped to the island.
 const readDemoState = (selectors: typeof DEMO_SELECTORS): DemoState => {
   const root =
-    document.querySelector(selectors.textarea)?.parentElement?.parentElement ??
-    null;
+    document
+      .querySelector(selectors.textarea)
+      ?.closest('[data-slot="highlighted-textarea"]')?.parentElement ?? null;
   if (!root) {
     return { status: "demo island not mounted", highlighted: [], legend: [] };
   }
@@ -89,7 +94,10 @@ test("live anonymization demo highlights a city as an address", async ({
   await expect
     .poll(
       async () => (await page.evaluate(readDemoState, DEMO_SELECTORS)).status,
-      { message: "the demo's engine finishes booting", timeout: 90_000 },
+      {
+        message: "the demo's engine finishes booting",
+        timeout: PLAYWRIGHT_EXPECT_TIMEOUT_90_SECONDS_MS,
+      },
     )
     .toMatch(/detected/u);
 
@@ -108,7 +116,7 @@ test("live anonymization demo highlights a city as an address", async ({
   await expect
     .poll(async () => page.evaluate(readDemoState, DEMO_SELECTORS), {
       message: `the engine highlights "${CITY}" as an address`,
-      timeout: 30_000,
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
     })
     .toMatchObject({ highlighted: [CITY], legend: [ADDRESS_LEGEND] });
 });
@@ -123,7 +131,10 @@ test("isolated browser demo matches detector output literally", async ({
   await expect
     .poll(
       async () => (await page.evaluate(readDemoState, DEMO_SELECTORS)).status,
-      { message: "the demo's engine finishes booting", timeout: 90_000 },
+      {
+        message: "the demo's engine finishes booting",
+        timeout: PLAYWRIGHT_EXPECT_TIMEOUT_90_SECONDS_MS,
+      },
     )
     .toMatch(/detected/u);
 
@@ -154,7 +165,7 @@ test("live anonymization demo does not expose runtime errors", async ({
   await expect(page.locator(DEMO_SELECTORS.textarea)).toBeVisible();
   await expect(page.locator(DEMO_SELECTORS.status)).toHaveText(
     "Something went wrong. Reload the page to try again.",
-    { timeout: 30_000 },
+    { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS },
   );
 });
 
@@ -174,7 +185,9 @@ test.describe("before the engine loads", () => {
   }) => {
     await page.goto(DEMO_URL, { waitUntil: "domcontentloaded" });
 
-    const root = page.locator(DEMO_SELECTORS.textarea).locator("xpath=../..");
+    const root = page
+      .locator('[data-slot="highlighted-textarea"]')
+      .locator("..");
     await expect(root.locator(DEMO_SELECTORS.textarea)).toBeVisible();
 
     await expect(root.locator(DEMO_SELECTORS.entitySpan)).toHaveText(
@@ -192,4 +205,56 @@ test.describe("before the engine loads", () => {
     // the test above cannot mistake it for a finished run.
     await expect(root.locator(DEMO_SELECTORS.status)).toHaveText(/warming up/u);
   });
+});
+
+// The editor owns native scrolling; the highlighted layer must reserve the same
+// text width and the final empty line on platforms with classic scrollbars.
+test("highlighted editor keeps wrapping and final-line scrolling aligned", async ({
+  page,
+}) => {
+  await page.goto(DEMO_URL, { waitUntil: "domcontentloaded" });
+  const textarea = page.locator(DEMO_SELECTORS.textarea);
+  await expect
+    .poll(
+      async () => (await page.evaluate(readDemoState, DEMO_SELECTORS)).status,
+      { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_90_SECONDS_MS },
+    )
+    .toMatch(/detected/u);
+  await page.addStyleTag({
+    content: `
+    #anon-demo-textarea, [data-slot="highlighted-textarea-backdrop"] { scrollbar-width: auto; }
+    #anon-demo-textarea::-webkit-scrollbar, [data-slot="highlighted-textarea-backdrop"]::-webkit-scrollbar { width: 17px; height: 17px; }
+  `,
+  });
+  const text = `${Array.from(
+    { length: 30 },
+    (_, index) =>
+      `Line ${index}: words that wrap across the shared editor and highlighted layer.`,
+  ).join("\n")}\n`;
+  await textarea.fill(text);
+  await textarea.evaluate((editor: HTMLTextAreaElement) => {
+    editor.scrollTop = editor.scrollHeight;
+    editor.dispatchEvent(new Event("scroll"));
+  });
+  await expect
+    .poll(
+      async () =>
+        await textarea.evaluate((editor: HTMLTextAreaElement) => {
+          const backdrop = editor
+            .closest('[data-slot="highlighted-textarea"]')
+            ?.querySelector('[data-slot="highlighted-textarea-backdrop"]');
+          return {
+            overflowing: editor.scrollHeight > editor.clientHeight,
+            widthMatches: backdrop?.clientWidth === editor.clientWidth,
+            heightMatches: backdrop?.scrollHeight === editor.scrollHeight,
+            scrollMatches: backdrop?.scrollTop === editor.scrollTop,
+          };
+        }),
+    )
+    .toEqual({
+      overflowing: true,
+      widthMatches: true,
+      heightMatches: true,
+      scrollMatches: true,
+    });
 });

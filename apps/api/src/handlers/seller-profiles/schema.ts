@@ -3,9 +3,9 @@ import * as v from "valibot";
 import { PARTY_IDENTIFIER_MAX_LENGTH } from "@stll/api-contract";
 import { currencyCodeSchema } from "@stll/api-contract/currency-code";
 
-import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { displayNameSchema, resourceIdSchema } from "@/api/lib/custom-schema";
 
-const name = v.pipe(v.string(), v.minLength(1), v.maxLength(512));
+const name = displayNameSchema({ maxLength: 512 });
 const registrationId = v.pipe(
   v.string(),
   v.maxLength(PARTY_IDENTIFIER_MAX_LENGTH),

@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig, propertySeed } from "@stll/property-testing";
+import { assertProperty, propertySeed } from "@stll/property-testing";
 
 import {
   expectNullableString,
@@ -12,7 +12,7 @@ import {
   nullableRegistryString,
   registryMutation,
   registryString,
-} from "../shared/property-test-helpers.test.js";
+} from "../shared/tests/test-helpers.js";
 import { lookupByUid } from "./client.js";
 import { parseFirm, parseSearchEntry } from "./parse.js";
 import type { ZefixCompany, ZefixRawFirm } from "./types.js";
@@ -38,7 +38,8 @@ const firm = fc
   .map((raw) => raw satisfies ZefixRawFirm);
 
 test("firm projections retain valid identities and typed optional fields", () => {
-  fc.assert(
+  assertProperty(
+    "firm projections retain valid identities and typed optional fields",
     fc.property(firm, (raw) => {
       const company = expectRegistryOutcome(() => parseFirm(raw));
       if (company === undefined) {
@@ -75,7 +76,7 @@ test("firm projections retain valid identities and typed optional fields", () =>
         expectNullableString(company.status.upstreamValue);
       }
     }),
-    propertyConfig({ seed: propertySeed() }),
+    { seed: propertySeed() },
   );
 });
 
@@ -97,7 +98,8 @@ const expectTypedOutput = (output: ZefixCompany) => {
 };
 
 test("firm response mutations retain typed projections or registry failures", async () => {
-  await fc.assert(
+  await assertProperty(
+    "firm response mutations retain typed projections or registry failures",
     fc.asyncProperty(
       firm,
       fc.nat(),
@@ -130,7 +132,7 @@ test("firm response mutations retain typed projections or registry failures", as
         expectTypedOutput(output);
       },
     ),
-    propertyConfig({ seed: propertySeed(), numRuns: 20 }),
+    { seed: propertySeed(), numRuns: 20 },
   );
 });
 

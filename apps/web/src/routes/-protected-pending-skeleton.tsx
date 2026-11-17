@@ -2,6 +2,7 @@ import type { ReactElement } from "react";
 
 import { useTranslations } from "use-intl";
 
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   HelpCircleIcon,
   NewChatIcon,
@@ -9,14 +10,27 @@ import {
   PanelRightIcon,
 } from "@stll/ui/icons";
 import {
+  resolveInspectorPaneWidth,
+  shouldForceSidebarCollapsed,
   SIDE_RAIL_ICON_BUTTON_SIZE,
   SIDE_RAIL_WIDTH,
 } from "@stll/ui/inspector";
-import { SIDEBAR_WIDTH_ICON_PX, SIDEBAR_WIDTH_PX } from "@stll/ui/sidebar";
 import { Skeleton } from "@stll/ui/skeleton";
 import { StellaWordmarkLatin } from "@stll/ui/stella-wordmark";
+import { TruncatedText } from "@stll/ui/truncated-text";
+import { useViewportWidth } from "@stll/ui/use-viewport-width";
 import { cn } from "@stll/ui/utils";
 
+import {
+  countStoredInspectorTabs,
+  isPersistedInspectorPaneOpen,
+} from "@/components/inspector/inspector-storage-keys";
+import type { InspectorStorageScope } from "@/components/inspector/inspector-storage-keys";
+import { ProtectedPendingInspectorScopeContext } from "@/components/inspector/protected-pending-inspector-scope";
+import {
+  SIDEBAR_WIDTH_ICON_PX,
+  SIDEBAR_WIDTH_PX,
+} from "@/components/sidebar-sizing";
 import { StellaWordmarkArabic } from "@/components/stella-wordmark";
 import { getWorkspacePrimaryNavItems } from "@/components/workspace-primary-nav";
 import { usePresentationPrefs } from "@/lib/account/presentation-prefs/provider";
@@ -39,16 +53,66 @@ const PINNED_ROW_KEYS = ["a", "b", "c"] as const;
 // icons, the rail toggles), so the frame is already the app; only what
 // depends on data shimmers: pinned matters, the account card, the breadcrumb
 // and the page body. Cookie preferences and the request locale already exist
-// during SSR, so the pending frame uses the same geometry and nav labels.
+// during SSR, so the pending frame uses the same geometry and nav labels. It
+// also tracks the viewport and the saved inspector tabs, so it resizes with
+// the frame it stands in for.
 export function ProtectedPendingSkeleton({
   content,
+  inspectorScope,
 }: {
   content?: ReactElement | undefined;
+  inspectorScope?: InspectorStorageScope;
+}) {
+  if (inspectorScope !== undefined) {
+    return (
+      <ProtectedPendingSkeletonContent
+        content={content}
+        inspectorScope={inspectorScope}
+      />
+    );
+  }
+  return (
+    <ProtectedPendingInspectorScopeContext.Consumer>
+      {(contextScope) => (
+        <ProtectedPendingSkeletonContent
+          content={content}
+          inspectorScope={contextScope}
+        />
+      )}
+    </ProtectedPendingInspectorScopeContext.Consumer>
+  );
+}
+
+function ProtectedPendingSkeletonContent({
+  content,
+  inspectorScope,
+}: {
+  content: ReactElement | undefined;
+  inspectorScope: InspectorStorageScope | undefined;
 }) {
   const t = useTranslations();
-  const {
-    prefs: { sidebarOpen },
-  } = usePresentationPrefs();
+  const { prefs } = usePresentationPrefs();
+  const viewportWidth = useViewportWidth();
+  // The restore policy the authenticated frame applies, on the stored tabs:
+  // the member's tab registry loads with that frame, and the store writes
+  // only tabs it would restore.
+  const paneRequested =
+    inspectorScope !== undefined &&
+    isPersistedInspectorPaneOpen(inspectorScope, countStoredInspectorTabs);
+  const sidebarOpen =
+    prefs.sidebarOpen &&
+    !shouldForceSidebarCollapsed({
+      expandedSidebarWidth: SIDEBAR_WIDTH_PX,
+      inspectorPaneOpen: paneRequested,
+      viewportWidth,
+    });
+  const paneWidth = paneRequested
+    ? resolveInspectorPaneWidth({
+        desiredWidth: prefs.inspectorWidth,
+        sidebarWidth: sidebarOpen ? SIDEBAR_WIDTH_PX : SIDEBAR_WIDTH_ICON_PX,
+        viewportWidth,
+      })
+    : undefined;
   return (
     <div
       aria-hidden={content === undefined ? "true" : undefined}
@@ -90,11 +154,13 @@ export function ProtectedPendingSkeleton({
           {STATIC_NAV_ITEMS.map((item) => (
             <div className="flex h-8 items-center gap-2 px-2" key={item.id}>
               <item.icon className="text-muted-foreground size-4 shrink-0" />
-              <span
-                className={cn(sidebarOpen ? "truncate text-sm" : "sr-only")}
-              >
-                {t(item.labelKey)}
-              </span>
+              {sidebarOpen ? (
+                <TruncatedText className="text-sm" hint={false}>
+                  {t(item.labelKey)}
+                </TruncatedText>
+              ) : (
+                <span className="sr-only">{t(item.labelKey)}</span>
+              )}
             </div>
           ))}
         </div>
@@ -152,12 +218,14 @@ export function ProtectedPendingSkeleton({
         )}
       </div>
 
-      {/* Right side rail: the real toggle and new-chat icons, no tabs yet. */}
+      {/* Reserve the member's pane while its code and tabs load. */}
       <div
         className={cn(
           "bg-muted/50 text-muted-foreground hidden shrink-0 flex-col border-s md:flex",
           SIDE_RAIL_WIDTH,
         )}
+        data-slot="inspector-pending-dock"
+        style={paneWidth === undefined ? undefined : { width: paneWidth }}
       >
         <div
           className={cn(
@@ -165,7 +233,7 @@ export function ProtectedPendingSkeleton({
             TOOLBAR_ROW_HEIGHT,
           )}
         >
-          <PanelRightIcon className="size-4" />
+          <DirectionalIcon className="size-4" icon={PanelRightIcon} />
         </div>
         <div className="flex-1" />
         <div

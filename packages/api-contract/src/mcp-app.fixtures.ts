@@ -53,7 +53,6 @@ export const APP_SEARCH_FIXTURE = {
       matchingPassages: 1,
       textAvailability: "available" as const,
       match: "all_terms" as const,
-      sourceUrl: "https://example.test/decision",
       snippet: "Náhrada škody: <b>právní jistota</b>.",
       keywords: {
         type: "keywords" as const,
@@ -87,8 +86,16 @@ export const APP_RESOLVE_FIXTURE = {
     readerUrl: "https://stll.app/case-law/fixture-decision",
     text: {
       status: "readable",
-      blocks: [],
-      extent: { type: "complete" },
+      charCount: 1200,
+    },
+    appealReviews: {
+      status: "none_found" as const,
+      reason: "no_link_in_corpus" as const,
+      basis: "available_corpus" as const,
+      reviewedBy: [],
+      reviews: [],
+      reviewedByTruncated: false,
+      reviewsTruncated: false,
     },
   },
 } satisfies LegalResolveResponse;

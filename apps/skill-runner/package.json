@@ -1,0 +1,24 @@
+{
+  "name": "@stll/skill-runner",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "bun test src",
+    "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
+    "lint": "cd ../.. && bun scripts/lint.ts apps/skill-runner"
+  },
+  "dependencies": {
+    "@stll/api-contract": "workspace:*",
+    "@stll/docx-core": "catalog:",
+    "@stll/fetch": "workspace:*",
+    "@stll/sha256": "workspace:*",
+    "better-result": "catalog:",
+    "valibot": "catalog:"
+  },
+  "devDependencies": {
+    "@stll/typescript-config": "workspace:*",
+    "bun-types": "catalog:"
+  },
+  "crawlPosture": "unserved"
+}

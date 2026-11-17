@@ -3,12 +3,13 @@ import type { ComponentProps } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, jest, test } from "bun:test";
 
+import { SEARCH_QUERY_MAX_LENGTH } from "@stll/api-contract/limits";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 
 import type { contactsOptions } from "@/lib/contacts/queries";
 import { toSafeId } from "@/lib/safe-id";
 import type { Workspace } from "@/lib/workspaces/types";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/contacts" });
 const originalFetch = globalThis.fetch;
@@ -236,6 +237,11 @@ const typeSearch = async (input: HTMLElement) => {
 
 test("contacts filtered search offers recovery and authoritative empty results", async () => {
   const client = await mount();
+  expect(
+    testing.screen
+      .getByPlaceholderText(messages.contacts.search)
+      .getAttribute("maxlength"),
+  ).toBe(String(SEARCH_QUERY_MAX_LENGTH));
   await typeSearch(
     testing.screen.getByPlaceholderText(messages.contacts.search),
   );
@@ -296,6 +302,7 @@ test("picker failed search hides creation and recovers matches while retaining f
   if (!(input instanceof HTMLInputElement)) {
     throw new TypeError("Expected contact search input");
   }
+  expect(input.maxLength).toBe(SEARCH_QUERY_MAX_LENGTH);
   testing.act(() => input.focus());
   await typeSearch(input);
   expect(input.value).toBe("Eva");
@@ -356,12 +363,10 @@ test("picker pending read hides creation and only successful absence is empty", 
   await testing.act(async () => {
     jest.advanceTimersByTime(201);
   });
-  await testing.act(async () => {
-    // Keep the deliberately pending read pending: draining the fake clock also
-    // fires the API fetcher's total request deadline. One second covers the
-    // component library's short cleanup timers without reaching that deadline.
-    restoreRealTimers({ advanceMs: 1000 });
-  });
+  // Keep the deliberately pending read pending: draining the fake clock also
+  // fires the API fetcher's total request deadline. One second covers the
+  // component library's short cleanup timers without reaching that deadline.
+  restoreRealTimers({ advanceMs: 1000 });
   await testing.waitFor(() =>
     expect(reads.some((url) => url.searchParams.get("q") === "Eva")).toBe(true),
   );
@@ -373,7 +378,7 @@ test("picker pending read hides creation and only successful absence is empty", 
     pending.resolve(Response.json({ items: [], nextCursor: null })),
   );
   await testing.waitFor(() =>
-    expect(testing.screen.getAllByRole("option")).toHaveLength(2),
+    expect(testing.screen.getAllByRole("option").length).toBe(2),
   );
 });
 
@@ -419,7 +424,7 @@ test("picker successful empty search hides creation after failed refresh", async
   testing.act(() => input.focus());
   await typeSearch(input);
   await testing.waitFor(() =>
-    expect(testing.screen.getAllByRole("option")).toHaveLength(2),
+    expect(testing.screen.getAllByRole("option").length).toBe(2),
   );
   failing = true;
   await testing.act(async () => {
@@ -451,7 +456,7 @@ test("client picker lists recent clients before typing and searches once typed",
   testing.act(() => input.focus());
   testing.fireEvent.keyDown(input, { key: "ArrowDown" });
   await testing.waitFor(() =>
-    expect(testing.screen.getAllByRole("option")).toHaveLength(2),
+    expect(testing.screen.getAllByRole("option").length).toBe(2),
   );
   expect(
     testing.screen.getByText(messages.workspaces.parties.recentClients),

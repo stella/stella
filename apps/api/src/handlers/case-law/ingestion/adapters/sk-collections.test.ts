@@ -577,6 +577,34 @@ describe("publisher collection enrichment", () => {
       expect(result.cache.parserVersion).toBe(SK_COLLECTION_PARSER_VERSION);
     }
   });
+  test("an issue cached before the PDF glyph-name fix is extracted again", async () => {
+    // Version 4 outcomes were read by the extractor that misread letters a
+    // font names the legacy way (`zdot`), so none of them may be reused.
+    const cache = {
+      issue: NS_ISSUE,
+      parserVersion: 4,
+      etag: null,
+      lastModified: null,
+      outcome: parseSkCollectionPages(NS_ISSUE, samplePages(0)),
+    } satisfies SkCollectionIssueCache;
+    let extractions = 0;
+    const connector = createSkCollectionConnector({
+      status: "enabled",
+      extract: async () => {
+        extractions++;
+        return Result.ok(samplePages(0));
+      },
+      request: async ({ url }) =>
+        url.endsWith("/robots.txt")
+          ? new Response(null, { status: 404 })
+          : new Response("%PDF-transient"),
+    });
+    const result = (
+      await connector.readIssue({ issue: NS_ISSUE, cache })
+    ).unwrap();
+    expect(result.status).toBe("read");
+    expect(extractions).toBe(1);
+  });
   test.each([
     { body: null, message: "Collection response has no body" },
     { body: "invalid", message: "Issue response is not a PDF" },

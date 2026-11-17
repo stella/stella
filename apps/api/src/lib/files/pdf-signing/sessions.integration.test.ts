@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -14,13 +14,25 @@ import { DESKTOP_HANDOFF_FAILURE } from "@stll/api-contract/desktop-handoff";
 
 import type { rootDb, Transaction } from "@/api/db/root";
 import {
+  auditLogs,
   entities,
   entityVersions,
   pdfSigningSessions,
   properties,
   workspaces,
 } from "@/api/db/schema";
-import { createScopedDb, createTenantlessDb } from "@/api/db/scoped";
+import {
+  createSafeDb,
+  createScopedDb,
+  createTenantlessDb,
+} from "@/api/db/scoped";
+import { cancelPdfSigningSession } from "@/api/handlers/entities/pdf-signing-sessions";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  createAuditRecorder,
+} from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -42,6 +54,7 @@ import {
   recordPdfSigningHandoffFailure,
   redeemPdfSigningHandoff,
 } from "@/api/lib/files/pdf-signing/sessions";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { TokenScopedDatabase } from "@/api/lib/root-scoped-db";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -141,7 +154,7 @@ const testTokenDb = (): TokenScopedDatabase => ({
             if (key === "execute") {
               return async (query: SQL) => (await tx.execute(query)).rows;
             }
-            return Reflect.get(target, key, receiver);
+            return Reflect.get(target, key, receiver) as unknown;
           },
         });
         return callback(asTestRaw<Transaction>(bunRowsTx));
@@ -555,6 +568,124 @@ describe("pdf signing session authorization", () => {
 describe("pdf signing finalization attempts", () => {
   const store = () => asTestRaw<Transaction>(testDb);
 
+  test.each(["close", "browser-cancel"] as const)(
+    "%s records one current cancellation and leaves repeats unchanged",
+    async (owner) => {
+      const { sessionId } = await seedHandoff();
+      const safeDb = createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1);
+      const request = new Request("https://example.test/pdf-signing-session");
+      const audit = createAuditRecorder({
+        organizationId: ids.orgA,
+        workspaceId: ids.wsA1,
+        userId: ids.userA1,
+        request,
+        server: null,
+      });
+      const close = async (targetId = sessionId) =>
+        owner === "close"
+          ? await closePdfSigningSession({
+              closeReason: "user_cancelled",
+              recordAuditEvent: audit,
+              safeDb: async (run, retry) =>
+                await safeDb(
+                  async (tx) => await run(asTestRaw<Transaction>(tx)),
+                  retry,
+                ),
+              sessionId: targetId,
+            })
+          : await cancelPdfSigningSession.handler(
+              asTestRaw<Parameters<typeof cancelPdfSigningSession.handler>[0]>({
+                params: { sessionId: targetId },
+                recordAuditEvent: audit,
+                safeDb,
+                user: { id: ids.userA1 },
+                session: { activeOrganizationId: ids.orgA },
+                memberRole: sessionMemberRole("owner"),
+                getWorkspaceAccess: async () => ({
+                  id: ids.wsA1,
+                  status: "active",
+                }),
+                getActiveWorkspaceIds: async () => [ids.wsA1],
+                scopedDb: createScopedDb(
+                  testDb,
+                  [ids.wsA1],
+                  ids.orgA,
+                  ids.userA1,
+                ),
+                orgAIConfig: null,
+                orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+                managedAIResidency: "eu",
+                promptCachingEnabled: false,
+                workspaceId: ids.wsA1,
+                request,
+                route:
+                  "/v1/entities/:workspaceId/pdf-signing-sessions/:sessionId/cancel",
+              }),
+            );
+      try {
+        const firstClose = await close();
+        if (owner === "browser-cancel") {
+          expect(firstClose).toMatchObject({
+            status: "cancelled",
+            closeReason: "user_cancelled",
+          });
+        }
+        const beforeRepeat =
+          (
+            await testDb
+              .select()
+              .from(pdfSigningSessions)
+              .where(eq(pdfSigningSessions.id, sessionId))
+          ).at(0) ?? panic("The cancelled signing fixture disappeared");
+        expect(beforeRepeat).toMatchObject({
+          status: "cancelled",
+          closeReason: "user_cancelled",
+        });
+        expect(beforeRepeat.closedAt).toBeInstanceOf(Date);
+        await close();
+        expect(
+          (
+            await testDb
+              .select()
+              .from(pdfSigningSessions)
+              .where(eq(pdfSigningSessions.id, sessionId))
+          ).at(0),
+        ).toEqual(beforeRepeat);
+        const audits = await testDb
+          .select({
+            action: auditLogs.action,
+            resourceType: auditLogs.resourceType,
+            changes: auditLogs.changes,
+            metadata: auditLogs.metadata,
+          })
+          .from(auditLogs)
+          .where(eq(auditLogs.resourceId, sessionId));
+        expect(audits).toEqual([
+          {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.PDF_SIGNING_SESSION,
+            changes: { status: { old: "open", new: "cancelled" } },
+            metadata: expect.objectContaining({
+              closeReason: "user_cancelled",
+            }),
+          },
+        ]);
+        if (owner === "browser-cancel") {
+          expect(
+            await close(createSafeId<"pdfSigningSession">()),
+          ).toMatchObject({
+            code: 404,
+            response: { code: "pdf_signing_session_not_found" },
+          });
+        }
+      } finally {
+        await testDb
+          .delete(auditLogs)
+          .where(eq(auditLogs.resourceId, sessionId));
+      }
+    },
+  );
+
   test("keeps the first signature and refuses a different one", async () => {
     const { sessionId } = await seedHandoff();
     const signature = new Uint8Array([1, 2, 3]);
@@ -654,16 +785,16 @@ describe("pdf signing finalization attempts", () => {
       sessionId,
       tx: store(),
     });
+    const auditsBeforeClose = recordedAuditEvents.length;
     const closed = await closePdfSigningSession({
       attempt: 1,
       closeReason: "signing_failed",
-      recordAuditEvent: async () => {
-        await Promise.resolve();
-      },
+      recordAuditEvent,
       safeDb: async (callback) => Result.ok(await callback(store())),
       sessionId,
     });
     expect(Result.isOk(closed)).toBe(true);
+    expect(recordedAuditEvents).toHaveLength(auditsBeforeClose);
     expect(await claim(new Date(lapsed.getTime() + 1000))).toEqual({
       status: "in-progress",
     });

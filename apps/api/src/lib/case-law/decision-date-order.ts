@@ -143,7 +143,7 @@ export const decisionDateBandsFrom = (
     : DECISION_DATE_BANDS.slice(DECISION_DATE_BANDS.indexOf(position.band));
 
 /** The direction each order reads its key and its id in. */
-const DECISION_DATE_DIRECTIONS = {
+export const DECISION_DATE_DIRECTIONS = {
   newest: desc,
   oldest: asc,
 } as const satisfies Record<DecisionDateOrder, (column: SQLWrapper) => SQL>;
@@ -248,13 +248,4 @@ export const decisionDateRankAfterSql = ({
       order satisfies never;
       return panic(`Unhandled decision date order: ${String(order)}`);
   }
-};
-
-/** One sorted pass's ORDER BY: the rank, then id, in the order's direction. */
-export const decisionDateRankOrderBySql = (
-  order: DecisionDateOrder,
-  { rank, id }: { rank: SQLWrapper; id: SQLWrapper },
-): SQL[] => {
-  const direction = DECISION_DATE_DIRECTIONS[order];
-  return [direction(rank), direction(id)];
 };

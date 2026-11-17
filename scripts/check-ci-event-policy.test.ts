@@ -3,7 +3,13 @@ import { expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import * as v from "valibot";
 
-import { checkCiEventPolicies, workflowSchema } from "./check-ci-event-policy";
+import {
+  checkCiEventPolicies,
+  PULL_REQUEST_TARGET_BANNED,
+  WHOLE_CONTEXT_ENV_BUDGET_CASES,
+  wholeContextConsumers,
+  workflowSchema,
+} from "./check-ci-event-policy";
 
 const directory = new URL("../.github/workflows/", import.meta.url);
 const workflows = Object.fromEntries(
@@ -62,7 +68,6 @@ test("seeded compiler probes require dispatch-only policy in every workflow", ()
       "schedule",
       "push",
       "pull_request",
-      "pull_request_target",
       "merge_group",
       "workflow_call",
       "workflow_run",
@@ -106,6 +111,61 @@ test("moving compiler proofs into an automatic workflow fails the real policy ce
 
 test("every real workflow job has an event policy and the fast gate follows it", () => {
   expect(checkCiEventPolicies({ workflows, policy })).toEqual([]);
+});
+
+test("whole-context environment values require an exact budget-test allowlist entry", () => {
+  const changed = structuredClone(workflows);
+  const workflow = v.parse(workflowSchema, changed["ci.yml"]);
+  const job = workflow.jobs["ci-checks-rest"] ?? panic("Missing check job");
+  job.steps?.push({
+    name: "Unbudgeted context",
+    env: { EVERYTHING: ["$", "{{ toJSON(needs) }}"].join("") },
+  });
+  expect(
+    checkCiEventPolicies({
+      workflows: { ...changed, "ci.yml": workflow },
+      policy,
+    }),
+  ).toContain(
+    "ci.yml/ci-checks-rest/Unbudgeted context/EVERYTHING: whole-context env is not covered by whole workflow contexts stay below the per-variable environment budget",
+  );
+});
+
+test("whole-context detection covers spelling, job env and the declared context", () => {
+  const changed = structuredClone(workflows);
+  const workflow = v.parse(workflowSchema, changed["ci.yml"]);
+  const job = workflow.jobs["ci-checks-rest"] ?? panic("Missing check job");
+  job["env"] = {
+    PLAN: ["$", "{{ toJson( needs.ci-plan.outputs ) }}"].join(""),
+  };
+  const pool =
+    job.steps?.find((step) => step["name"] === "Run repository checks") ??
+    panic("Missing pool step");
+  pool.env = {
+    ...pool.env,
+    CI_CHECK_POOL_INPUTS: ["$", "{{ toJSON(needs) }}"].join(""),
+  };
+  const problems = checkCiEventPolicies({
+    workflows: { ...changed, "ci.yml": workflow },
+    policy,
+  });
+  expect(problems).toContain(
+    "ci.yml/ci-checks-rest/<job env>/PLAN: whole-context env is not covered by whole workflow contexts stay below the per-variable environment budget",
+  );
+  expect(problems).toContain(
+    "ci.yml/ci-checks-rest/Run repository checks/CI_CHECK_POOL_INPUTS: serializes toJSON(needs), but whole workflow contexts stay below the per-variable environment budget measures toJSON(inputs)",
+  );
+});
+
+test("every whole-context allowlist entry names a live workflow consumer", () => {
+  const live = Object.entries(workflows).flatMap(([file, raw]) =>
+    wholeContextConsumers(file, v.parse(workflowSchema, raw)).map(
+      ({ consumer }) => consumer,
+    ),
+  );
+  expect(Object.keys(WHOLE_CONTEXT_ENV_BUDGET_CASES).toSorted()).toEqual(
+    [...new Set(live)].toSorted(),
+  );
 });
 
 test("duplicate raw event-policy job keys fail before JSON key collapse", () => {
@@ -245,6 +305,37 @@ test("new heavy jobs require a policy that excludes every pull request", () => {
       policy: declared,
     }),
   ).toEqual(["fixture.yml/image: queue job can run on pull_request"]);
+});
+
+test("pull_request_target is banned in every workflow with its reason", () => {
+  for (const on of [
+    { pull_request_target: {} },
+    { pull_request_target: { types: ["labeled"] }, pull_request: {} },
+    { pull_request_target: null, merge_group: {} },
+  ]) {
+    const problems = checkCiEventPolicies({
+      workflows: { "fixture.yml": { on, jobs: { job: { if: "false" } } } },
+      policy: { jobs: { "fixture.yml/job": "pr-fast" } },
+    });
+    expect(problems).toContain(`fixture.yml: ${PULL_REQUEST_TARGET_BANNED}`);
+  }
+  expect(PULL_REQUEST_TARGET_BANNED).toContain("GitHub restricts it");
+  expect(PULL_REQUEST_TARGET_BANNED).toContain("workflow_run");
+  expect(
+    checkCiEventPolicies({
+      workflows: {
+        "fixture.yml": { on: { pull_request: {} }, jobs: { job: {} } },
+      },
+      policy: { jobs: { "fixture.yml/job": "pr-fast" } },
+    }),
+  ).toEqual([]);
+  expect(
+    Object.entries(workflows).flatMap(([file, workflow]) =>
+      Object.hasOwn(v.parse(workflowSchema, workflow).on, "pull_request_target")
+        ? [file]
+        : [],
+    ),
+  ).toEqual([]);
 });
 
 test("removed jobs cannot leave an event policy behind", () => {

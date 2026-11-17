@@ -37,12 +37,15 @@ const snapshots = fc
           collaborationContributorUserIds: null,
           detectedLanguage: null,
           createdAt: new Date(createdAt),
+          deletedAt: null,
+          deletedBy: null,
           fields: [1, 2].map((fieldNumber) => ({
             id: toSafeId<"field">(
               `${id}_v${String(versionNumber)}_f${String(fieldNumber)}`,
             ),
             propertyId: toSafeId<"property">(`property_${String(fieldNumber)}`),
             content: { type: "text", version: 1, value } as const,
+            aiSettlement: null,
           })),
         }));
         return {
@@ -117,6 +120,8 @@ test("entity-transfer.carried-state-invariance", () => {
               ],
             },
             detectedLanguage: { detectedLanguage: "CS" },
+            deletedAt: { deletedAt: new Date(version.createdAt.getTime() + 2) },
+            deletedBy: { deletedBy: "deleting_user" },
             fields: { fields: [] },
           } satisfies {
             [Key in keyof EntityVersionSnapshot]: Pick<

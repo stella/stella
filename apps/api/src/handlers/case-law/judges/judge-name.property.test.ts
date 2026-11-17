@@ -11,16 +11,13 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig, propertySeed } from "@stll/property-testing";
+import { assertProperty, propertySeed } from "@stll/property-testing";
 import { stripDiacritics } from "@stll/text-normalize";
 
 import {
   judgeNameKey,
   stripAcademicTitles,
 } from "@/api/handlers/case-law/judges/judge-name";
-
-const config = (numRuns: number) =>
-  propertyConfig({ numRuns, seed: propertySeed() });
 
 /**
  * Invented names built from ordinary Czech given names and surnames, each
@@ -72,18 +69,20 @@ const titledName = fc
 
 describe("judge match key", () => {
   test("keying a key returns it unchanged", () => {
-    fc.assert(
+    assertProperty(
+      "keying a key returns it unchanged",
       fc.property(titledName, (printed) => {
         const key = judgeNameKey(printed);
 
         expect(judgeNameKey(key)).toBe(key);
       }),
-      config(300),
+      { numRuns: 300, seed: propertySeed() },
     );
   });
 
   test("the titles a publisher prints do not reach the key", () => {
-    fc.assert(
+    assertProperty(
+      "the titles a publisher prints do not reach the key",
       fc.property(judgeName, titleRun, titleRun, (name, prefix, suffix) => {
         const printed = [prefix, name, suffix]
           .filter((part) => part !== "")
@@ -91,12 +90,13 @@ describe("judge match key", () => {
 
         expect(judgeNameKey(printed)).toBe(judgeNameKey(name));
       }),
-      config(300),
+      { numRuns: 300, seed: propertySeed() },
     );
   });
 
   test("a name keeps its key when the diacritics are dropped", () => {
-    fc.assert(
+    assertProperty(
+      "a name keeps its key when the diacritics are dropped",
       fc.property(judgeName, (name) => {
         const folded = stripDiacritics(name);
 
@@ -104,12 +104,13 @@ describe("judge match key", () => {
         expect(folded).not.toBe(name);
         expect(judgeNameKey(folded)).toBe(judgeNameKey(name));
       }),
-      config(100),
+      { numRuns: 100, seed: propertySeed() },
     );
   });
 
   test("the order the court printed the name in does not reach the key", () => {
-    fc.assert(
+    assertProperty(
+      "the order the court printed the name in does not reach the key",
       fc.property(judgeName, (name) => {
         const reversed = name.split(" ").toReversed().join(" ");
 
@@ -117,7 +118,7 @@ describe("judge match key", () => {
         expect(reversed).not.toBe(name);
         expect(judgeNameKey(reversed)).toBe(judgeNameKey(name));
       }),
-      config(100),
+      { numRuns: 100, seed: propertySeed() },
     );
   });
 
@@ -157,13 +158,14 @@ describe("printed name without titles", () => {
   });
 
   test("removing titles from a stripped name changes nothing", () => {
-    fc.assert(
+    assertProperty(
+      "removing titles from a stripped name changes nothing",
       fc.property(titledName, (printed) => {
         const stripped = stripAcademicTitles(printed);
 
         expect(stripAcademicTitles(stripped)).toBe(stripped);
       }),
-      config(300),
+      { numRuns: 300, seed: propertySeed() },
     );
   });
 });

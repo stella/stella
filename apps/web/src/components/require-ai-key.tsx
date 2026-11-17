@@ -6,7 +6,10 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { OrganizationAIAvailability } from "@stll/api-contract/organization-ai-availability";
-import { resolveAIProviderSettings } from "@stll/api-contract/organization-ai-availability";
+import {
+  AI_PROVIDER_CONFIGURATION,
+  resolveAIProviderSettings,
+} from "@stll/api-contract/organization-ai-availability";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
@@ -309,14 +312,18 @@ export const AIUnavailableDialogTrigger = () => {
               {t("ai.keyRequired.cta")}
             </Button>
           ) : null}
-          <Button
-            size="sm"
-            variant="ghost"
-            loading={state.retrying}
-            onClick={state.retry}
-          >
-            {t("common.retry")}
-          </Button>
+          {/* Nothing a retry reads can change for a restricted account. */}
+          {state.availability.providerConfiguration ===
+          AI_PROVIDER_CONFIGURATION.accountRestricted ? null : (
+            <Button
+              size="sm"
+              variant="ghost"
+              loading={state.retrying}
+              onClick={state.retry}
+            >
+              {t("common.retry")}
+            </Button>
+          )}
         </div>
       );
     default:
@@ -342,6 +349,24 @@ export const RequireAIKey = ({ children }: PropsWithChildren) => {
   );
 };
 
+// Credentials are missing: name who can add them. Asking someone who cannot
+// leaves them with an instruction they have no way to follow.
+const missingCredentialsMessageKey = (
+  providerConfiguration: OrganizationAIAvailability["providerConfiguration"],
+) => {
+  switch (providerConfiguration) {
+    case AI_PROVIDER_CONFIGURATION.allowed:
+      return "ai.keyRequired.description" as const;
+    case AI_PROVIDER_CONFIGURATION.permissionRequired:
+      return "ai.keyRequired.permissionRequired" as const;
+    case AI_PROVIDER_CONFIGURATION.accountRestricted:
+      return "ai.keyRequired.accountFeaturesUnavailable" as const;
+    default:
+      providerConfiguration satisfies never;
+      return panic("Unhandled AI provider configuration");
+  }
+};
+
 function aiUnavailableMessageKey(availability: OrganizationAIAvailability) {
   switch (availability.unavailableReason) {
     case "member_assignment_required":
@@ -350,7 +375,7 @@ function aiUnavailableMessageKey(availability: OrganizationAIAvailability) {
       return "ai.keyRequired.configUnreadable" as const;
     case "own_key_required":
     case "provider_not_configured":
-      return "ai.keyRequired.description" as const;
+      return missingCredentialsMessageKey(availability.providerConfiguration);
     case null:
       return panic("Available AI rendered an unavailable message");
     default:
@@ -606,13 +631,13 @@ export const AIKeyRequiredDialog = ({
             setRoleModels(initialRoleModels);
           }}
         />
-        <DialogHeader className="p-4 pb-2">
+        <DialogHeader className="p-4 pb-1">
           <DialogTitle>{t("ai.keyRequired.title")}</DialogTitle>
           <DialogDescription>
             {t("ai.keyRequired.description")}
           </DialogDescription>
         </DialogHeader>
-        <div className="min-h-0 overflow-x-hidden overflow-y-auto px-4 pb-3">
+        <div className="min-h-0 overflow-x-hidden overflow-y-auto px-4 pt-1 pb-3">
           {configRefusalKey !== null ? (
             <p className="text-muted-foreground text-sm">
               {t(configRefusalKey)}

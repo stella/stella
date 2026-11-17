@@ -1,12 +1,15 @@
 import { Result, TaggedError } from "better-result";
-import { and, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
+
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 
 import { stellaAuthorizedWorkspaces } from "@/api/db/rls";
 import type { Transaction } from "@/api/db/root";
 import { workspaces } from "@/api/db/schema";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import type { SafeId } from "@/api/lib/branded-types";
+import { visibleWorkspaceSql } from "@/api/lib/workspaces/visible-workspace-sql";
 
 /**
  * The one owner of "which matters may this actor read" outside the row
@@ -153,7 +156,7 @@ export const authorizedWorkspaceIds = async (
               .where(
                 and(
                   eq(workspaces.organizationId, organizationId),
-                  ne(workspaces.status, "deleting"),
+                  visibleWorkspaceSql(),
                   inArray(workspaces.id, requestedWorkspaceIds),
                 ),
               ),
@@ -177,7 +180,7 @@ export const activeAuthorizedWorkspaceQuery = (
     .where(
       and(
         eq(stellaAuthorizedWorkspaces.authorizedWorkspaceId, workspaceId),
-        eq(stellaAuthorizedWorkspaces.workspaceStatus, "active"),
+        eq(stellaAuthorizedWorkspaces.workspaceStatus, WORKSPACE_STATUS.active),
       ),
     )
     .limit(1);

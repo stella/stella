@@ -278,6 +278,28 @@ describe("searchAnswer", () => {
       }).warnings.map(({ code }) => code),
     ).toContain("partial_matches_appended");
   });
+
+  test("an empty page whose partial matches went unread does not say nothing matched", () => {
+    const body = request();
+    const interpretation = interpret(body);
+    const answer = (relaxedTopUp: "read" | "skipped") =>
+      searchAnswer({
+        body,
+        interpretation,
+        hitCount: 0,
+        countsResultSet: true,
+        relaxedTopUp,
+      });
+
+    expect(answer("read").warnings.map(({ code }) => code)).toContain(
+      "no_hits",
+    );
+    expect(answer("read").relaxedTopUp).toBeUndefined();
+    expect(answer("skipped").warnings.map(({ code }) => code)).not.toContain(
+      "no_hits",
+    );
+    expect(answer("skipped").relaxedTopUp).toBe("skipped");
+  });
 });
 
 test.each([

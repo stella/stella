@@ -16,6 +16,7 @@ import { createHttpApp } from "@/api/http/app";
 import { routes } from "@/api/http/route";
 import { isSafePublicHandler } from "@/api/lib/api-handlers";
 import { toSafeId } from "@/api/lib/branded-types";
+import type { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
   decodeCorpusSearchCursor,
   encodeCorpusSearchCursor,
@@ -28,6 +29,7 @@ import type {
 } from "@/api/lib/legislation-public-read-db";
 import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { serveForTest } from "@/api/tests/helpers/test-server";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const result = {
   items: [],
@@ -70,6 +72,11 @@ const timingTransaction = drizzle(async () => ({
 
 type TimedSearchFailure = "none" | "hydration" | "index" | "ranking_sync";
 
+/** The scan's servable check, which these fakes stand in for. */
+type SelectApplied = Parameters<
+  Parameters<typeof readCorpusIndexSearchPage>[0]["rankCandidates"]
+>[1]["selectAppliedCandidates"];
+
 const runTimedSearch = async (
   stageTool?: string,
   failure: TimedSearchFailure = "none",
@@ -77,6 +84,8 @@ const runTimedSearch = async (
   let clock = 0;
   let databaseReads = 0;
   let rankings = 0;
+  /** Every id each candidate-row read asked for, in order. */
+  const candidateRowReads: string[][] = [];
   const records: Parameters<
     NonNullable<
       NonNullable<Parameters<typeof searchLegislationHandler>[3]>["emitStage"]
@@ -106,16 +115,20 @@ const runTimedSearch = async (
           })),
           {
             excludedGroups: new Set(),
+            appliedProjections: () => new Map(),
             selectAppliedCandidates: () => {
               clock += 13;
               rankings += 1;
               if (failure === "ranking_sync" && rankings === 2) {
                 throw new Error("ranking failed synchronously");
               }
-              return timingCandidateIds.map((id, index) => ({
-                id,
-                score: 1 - index / 10,
-              }));
+              // The scan's servable check is faked here: its candidates.
+              return asTestRaw<ReturnType<SelectApplied>>(
+                timingCandidateIds.map((id, index) => ({
+                  id,
+                  score: 1 - index / 10,
+                })),
+              );
             },
           },
         );
@@ -130,16 +143,20 @@ const runTimedSearch = async (
           })),
           {
             excludedGroups: new Set(),
+            appliedProjections: () => new Map(),
             selectAppliedCandidates: () => {
               clock += 13;
               rankings += 1;
               if (failure === "ranking_sync" && rankings === 2) {
                 throw new Error("ranking failed synchronously");
               }
-              return timingCandidateIds.map((id, index) => ({
-                id,
-                score: 1 - index / 10,
-              }));
+              // The scan's servable check is faked here: its candidates.
+              return asTestRaw<ReturnType<SelectApplied>>(
+                timingCandidateIds.map((id, index) => ({
+                  id,
+                  score: 1 - index / 10,
+                })),
+              );
             },
           },
         );
@@ -166,27 +183,30 @@ const runTimedSearch = async (
           reach: "reached",
         };
       },
-      readCandidateRows: (async (_tx, { ids }) => ({
-        rows: ids.map((id) => ({
-          id,
-          sourceId: timingSourceId,
-          eli: timingHit.eli,
-          slug: timingHit.slug,
-          title: timingHit.title,
-          country: timingHit.country,
-          language: timingHit.language,
-          documentType: timingHit.documentType,
-          statusValue: timingHit.status,
-          effectiveDate: timingHit.effectiveDate,
-          versionValidFrom: timingHit.versionValidFrom,
-          versionValidTo: timingHit.versionValidTo,
-          sourceUrl: timingHit.sourceUrl,
-          citationAuthority: 0,
-          canRecur: false,
-          appliedRevision: null,
-        })),
-        dispositions: [],
-      })) satisfies typeof readLegislationCandidateRows,
+      readCandidateRows: (async (_tx, { ids }) => {
+        candidateRowReads.push([...ids]);
+        return {
+          rows: ids.map((id) => ({
+            id,
+            sourceId: timingSourceId,
+            eli: timingHit.eli,
+            slug: timingHit.slug,
+            title: timingHit.title,
+            country: timingHit.country,
+            language: timingHit.language,
+            documentType: timingHit.documentType,
+            statusValue: timingHit.status,
+            effectiveDate: timingHit.effectiveDate,
+            versionValidFrom: timingHit.versionValidFrom,
+            versionValidTo: timingHit.versionValidTo,
+            sourceUrl: timingHit.sourceUrl,
+            citationAuthority: 0,
+            canRecur: false,
+            appliedRevision: null,
+          })),
+          dispositions: [],
+        };
+      }) satisfies typeof readLegislationCandidateRows,
       readNamedWorks: async () => [],
     },
     projectHit: (hit) => {
@@ -211,8 +231,15 @@ const runTimedSearch = async (
     "unobserved",
     dependencies,
   );
-  return { operation, records };
+  return { operation, records, candidateRowReads };
 };
+
+test("a later scan round reads only the candidates earlier rounds did not", async () => {
+  const { operation, candidateRowReads } = await runTimedSearch();
+  await operation;
+  // Both rounds rank the same three candidates; only the first reads them.
+  expect(candidateRowReads).toEqual([[...timingCandidateIds]]);
+});
 
 test.each([
   [undefined, false],

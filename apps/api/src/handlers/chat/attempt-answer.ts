@@ -4,12 +4,14 @@
 // fallback model, and the terminal guard in `stream-chat.ts`, which fails
 // the turn. Every other part an assistant message shows reaches it through
 // a call, so a chunk that only reports on one (its arguments, its result, a
-// custom event) is not counted, and neither is thinking.
+// custom event) is not counted, and neither is thinking. The one exception is
+// a file a local run handed back: it reaches the answer through no call.
 
 import { EventType } from "@tanstack/ai";
 import type { StreamChunk, UIMessage } from "@tanstack/ai";
 import { panic } from "better-result";
 
+import { chatLocalRunFilePartsOf } from "@stll/api-contract/chat-run-target";
 import { ownEntry } from "@stll/api-contract/own-key";
 
 import { arrayOrEmpty } from "@/api/lib/array";
@@ -63,7 +65,11 @@ export const chunkCarriesAnswer = (chunk: StreamChunk): boolean => {
     case "call":
       return true;
     case "none":
-      return false;
+      // A file a local run handed back answers the turn with no text at all.
+      return (
+        chunk.type === EventType.TEXT_MESSAGE_START &&
+        chatLocalRunFilePartsOf(chunk.metadata, []).length > 0
+      );
     case "text":
       return (
         (chunk.type === EventType.TEXT_MESSAGE_CONTENT ||

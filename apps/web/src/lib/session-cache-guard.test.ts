@@ -59,6 +59,7 @@ const {
   installSessionCacheGuard,
   isCurrentDocumentSession,
   requireFreshDocument,
+  resetAuthTransition,
 } = await import("@/lib/session-cache-guard");
 
 afterAll(() => {
@@ -277,6 +278,29 @@ describe("sign-in and the client cache", () => {
     expect(
       await nextNavigation(client.queryClient, { pathname: "/chat" }),
     ).toBe("stay");
+  });
+
+  test("the first page after signing in keeps the reads its loaders started", async () => {
+    // A signed-out visitor opens a member page and is sent to sign in.
+    signedIn = null;
+    const client = createClient("/workspaces");
+    await client.queryClient.query(sessionOptions);
+    client.location.pathname = "/auth/otp";
+    signedIn = "member-a";
+    await refreshAuthQueries(client.queryClient);
+
+    // The destination's loader starts its read, then the member frame mounts
+    // for the visitor now signed in, as the frame host does on first show.
+    client.location.pathname = "/workspaces";
+    const response = Promise.withResolvers<string>();
+    const loaderRead = client.queryClient.query({
+      queryKey: ["workspaces", "org-x"],
+      queryFn: async () => await response.promise,
+    });
+    await resetAuthTransition(client.queryClient, "member:member-a:org-x");
+    response.resolve("matters");
+
+    expect(await loaderRead).toBe("matters");
   });
 });
 

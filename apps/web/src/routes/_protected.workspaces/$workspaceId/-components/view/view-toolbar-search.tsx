@@ -3,8 +3,8 @@ import type { RefObject } from "react";
 import { useTranslations } from "use-intl";
 
 import { InfoIcon } from "@stll/ui/icons";
+import { PropertyIcon } from "@stll/workspace-ui/property-icon";
 
-import { PropertyIcon } from "@/components/workspaces/property-helpers";
 import { entityPickerColumns } from "@/components/workspaces/table/entity-find.logic";
 import type { EntityFindPickerColumn } from "@/components/workspaces/table/entity-find.logic";
 import { TableFindBar } from "@/components/workspaces/table/table-find-bar";
@@ -14,6 +14,7 @@ import {
   useEntityTableFind,
 } from "@/components/workspaces/table/use-entity-table-find";
 import type { WorkspaceProperty, WorkspaceView } from "@/lib/types";
+import { usePropertyDisplayName } from "@/lib/workspaces/property-display-name";
 import { useWorkspaceTableSchema } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-columns";
 import { includesListItems } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
 
@@ -40,6 +41,7 @@ export const ViewToolbarSearch = ({
   workspaceId,
 }: ViewToolbarSearchProps) => {
   const t = useTranslations();
+  const displayName = usePropertyDisplayName();
   const viewRef = { workspaceId, viewId: view.id };
   const { columns, selection, term } = useEntityTableFind({
     hasNameColumn: includesListItems(view.layout.filters),
@@ -56,7 +58,13 @@ export const ViewToolbarSearch = ({
     <TableFindBar
       appliedTerm={term}
       columns={entityPickerColumns({
-        findColumns: columns,
+        findColumns: columns.map((column) => ({
+          ...column,
+          label: displayName({
+            content: { type: column.contentType },
+            name: column.label,
+          }),
+        })),
         schemaColumns: schema.columns,
       }).map((column) =>
         pickerRow({

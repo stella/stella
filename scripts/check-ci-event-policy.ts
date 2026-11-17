@@ -35,6 +35,146 @@ const policySchema = v.object({
     {},
   ),
 });
+
+/**
+ * No workflow may trigger on pull_request_target, whatever its jobs do.
+ * `pull_request` runs a pull request's checks unprivileged; a step that needs
+ * secrets or a write token moves to a workflow_run workflow, which runs the
+ * default branch's code and treats the triggering run as untrusted data.
+ */
+export const PULL_REQUEST_TARGET_BANNED =
+  "pull_request_target is banned: GitHub restricts it on public repositories, and it runs base-branch code with secrets for pull request events. Use pull_request, plus a workflow_run workflow for any step that needs secrets or a write token";
+
+const WHOLE_CONTEXT_BUDGET_TEST =
+  "whole workflow contexts stay below the per-variable environment budget";
+
+type WholeContextBudgetCase = {
+  /** The context the value serializes, as written inside `toJSON(...)`. */
+  context: string;
+  /** The context the budget test measures for this consumer. */
+  budget: string;
+};
+
+/**
+ * Every workflow, job or step env value that receives a whole workflow
+ * context, keyed by consumer. The budget test fails when a named budget is not
+ * measured, the policy check fails on an unlisted consumer or a context other
+ * than the declared one, and the policy test fails on an entry no workflow
+ * still declares.
+ */
+export const WHOLE_CONTEXT_ENV_BUDGET_CASES = {
+  "ci.yml/ci-checks-policy/Run policy checks/CI_CHECK_POOL_STEPS": {
+    context: "steps",
+    budget: "pool steps",
+  },
+  "ci.yml/ci-checks-policy/Run policy checks/CI_CHECK_POOL_INPUTS": {
+    context: "inputs",
+    budget: "pool inputs",
+  },
+  "ci.yml/ci-checks-policy/Record static check receipts/CHECK_OUTCOMES": {
+    context: "steps",
+    budget: "pool steps",
+  },
+  "ci.yml/ci-checks-rest/Run repository checks/CI_CHECK_POOL_STEPS": {
+    context: "steps",
+    budget: "pool steps",
+  },
+  "ci.yml/ci-checks-rest/Run repository checks/CI_CHECK_POOL_INPUTS": {
+    context: "inputs",
+    budget: "pool inputs",
+  },
+  "ci.yml/ci-checks-rest/Record static check receipts/CHECK_OUTCOMES": {
+    context: "steps",
+    budget: "pool steps",
+  },
+  "ci.yml/code-quality-web-rest/Run independent code-quality checks/CI_CHECK_POOL_STEPS":
+    { context: "steps", budget: "pool steps" },
+  "ci.yml/code-quality-web-rest/Run independent code-quality checks/CI_CHECK_POOL_INPUTS":
+    { context: "inputs", budget: "pool inputs" },
+  "main-heavy.yml/status/Classify failed heavy jobs/RESULTS": {
+    context: "needs",
+    budget: "main-heavy needs",
+  },
+  "main-heavy.yml/status/Publish heavy conclusion/RESULTS": {
+    context: "needs",
+    budget: "main-heavy needs",
+  },
+  "main-pr-depth.yml/status/Publish PR-depth conclusion/RESULTS": {
+    context: "needs",
+    budget: "main-pr-depth needs",
+  },
+  "publish-npm.yml/release-summary/Report published, failed and skipped packages/NPM_RELEASE_NEEDS":
+    { context: "needs", budget: "publish-npm release-summary needs" },
+  "release-desktop.yml/release-complete/Require all release jobs to complete/NEEDS":
+    { context: "needs", budget: "release-desktop release-complete needs" },
+} as const satisfies Record<string, WholeContextBudgetCase>;
+
+const WHOLE_CONTEXT_BUDGETS = new Map(
+  Object.entries(WHOLE_CONTEXT_ENV_BUDGET_CASES),
+);
+
+// GitHub function names are case-insensitive and allow whitespace around
+// arguments.
+const WHOLE_CONTEXT_EXPRESSION =
+  /toJSON\(\s*(needs|steps|inputs|github|needs\.[A-Za-z0-9_-]+\.outputs)\s*\)/giu;
+
+const envSchema = v.record(v.string(), v.unknown());
+
+type WholeContextConsumer = { consumer: string; contexts: string[] };
+
+const wholeContextValues = (
+  prefix: string,
+  env: unknown,
+): WholeContextConsumer[] =>
+  (v.is(envSchema, env) ? Object.entries(env) : []).flatMap(([name, value]) => {
+    if (typeof value !== "string") {
+      return [];
+    }
+    const contexts = [...value.matchAll(WHOLE_CONTEXT_EXPRESSION)].map(
+      (match) => match[1] ?? "",
+    );
+    return contexts.length === 0
+      ? []
+      : [{ consumer: `${prefix}/${name}`, contexts }];
+  });
+
+/** Workflow, job and step env values that serialize a whole context. */
+export const wholeContextConsumers = (
+  file: string,
+  workflow: v.InferOutput<typeof workflowSchema>,
+): WholeContextConsumer[] => [
+  ...wholeContextValues(`${file}/<workflow env>`, workflow["env"]),
+  ...Object.entries(workflow.jobs).flatMap(([id, job]) => [
+    ...wholeContextValues(`${file}/${id}/<job env>`, job["env"]),
+    ...(job.steps ?? []).flatMap((step) =>
+      wholeContextValues(
+        `${file}/${id}/${typeof step["name"] === "string" ? step["name"] : "<unnamed step>"}`,
+        step.env,
+      ),
+    ),
+  ]),
+];
+
+const checkWholeContextEnvironment = (
+  workflows: Readonly<Record<string, v.InferOutput<typeof workflowSchema>>>,
+) =>
+  Object.entries(workflows)
+    .flatMap(([file, workflow]) => wholeContextConsumers(file, workflow))
+    .flatMap(({ consumer, contexts }) => {
+      const declared = WHOLE_CONTEXT_BUDGETS.get(consumer);
+      if (declared === undefined) {
+        return [
+          `${consumer}: whole-context env is not covered by ${WHOLE_CONTEXT_BUDGET_TEST}`,
+        ];
+      }
+      return contexts
+        .filter((context) => context !== declared.context)
+        .map(
+          (context) =>
+            `${consumer}: serializes toJSON(${context}), but ${WHOLE_CONTEXT_BUDGET_TEST} measures toJSON(${declared.context})`,
+        );
+    });
+
 export const workflowSchema = v.looseObject({
   on: v.record(v.string(), v.unknown()),
   permissions: v.optional(v.unknown()),
@@ -300,18 +440,16 @@ const checkArmedPolicy = ({
   if (!condition.includes(HEAVY_PROOF_GATE)) {
     problems.push(`${key}: armed job must gate on ${HEAVY_PROOF_GATE}`);
   }
-  for (const event of ["pull_request", "pull_request_target"]) {
-    if (
-      Object.hasOwn(triggers, event) &&
-      !definitelyFalse(condition, {
-        values: {
-          "github.event_name": event,
-          "needs.ci-plan.outputs.heavy_proof": "false",
-        },
-      })
-    ) {
-      problems.push(`${key}: armed job can run on an unarmed ${event}`);
-    }
+  if (
+    Object.hasOwn(triggers, "pull_request") &&
+    !definitelyFalse(condition, {
+      values: {
+        "github.event_name": "pull_request",
+        "needs.ci-plan.outputs.heavy_proof": "false",
+      },
+    })
+  ) {
+    problems.push(`${key}: armed job can run on an unarmed pull_request`);
   }
   return problems;
 };
@@ -423,17 +561,13 @@ const checkJobEventPolicy = ({
   if (eventPolicy !== "queue" && eventPolicy !== "main") {
     return problems;
   }
-  for (const event of ["pull_request", "pull_request_target"]) {
-    if (!Object.hasOwn(triggers, event)) {
-      continue;
-    }
-    if (
-      !definitelyFalse(condition, {
-        values: { "github.event_name": event },
-      })
-    ) {
-      problems.push(`${key}: ${eventPolicy} job can run on ${event}`);
-    }
+  if (
+    Object.hasOwn(triggers, "pull_request") &&
+    !definitelyFalse(condition, {
+      values: { "github.event_name": "pull_request" },
+    })
+  ) {
+    problems.push(`${key}: ${eventPolicy} job can run on pull_request`);
   }
   return problems;
 };
@@ -548,8 +682,17 @@ export const checkCiEventPolicies = ({
   for (const key of policySource ? duplicatePolicyJobKeys(policySource) : []) {
     problems.push(`CI event policy has duplicate job key: ${key}`);
   }
-  for (const [file, raw] of Object.entries(workflows)) {
-    const workflow = v.parse(workflowSchema, raw);
+  const parsedWorkflows = Object.fromEntries(
+    Object.entries(workflows).map(([file, raw]) => [
+      file,
+      v.parse(workflowSchema, raw),
+    ]),
+  );
+  problems.push(...checkWholeContextEnvironment(parsedWorkflows));
+  for (const [file, workflow] of Object.entries(parsedWorkflows)) {
+    if (Object.hasOwn(workflow.on, "pull_request_target")) {
+      problems.push(`${file}: ${PULL_REQUEST_TARGET_BANNED}`);
+    }
     if (file === "codeql.yml") {
       problems.push(...checkCodeqlWorkflow(workflow));
     }

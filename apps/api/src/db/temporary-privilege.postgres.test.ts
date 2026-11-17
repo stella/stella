@@ -11,7 +11,7 @@ import { runMigrations } from "./migration-runner";
 
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const migrationsFolder = nodePath.resolve(import.meta.dir, "../../drizzle");
-const applicationRoles = rolePrivilegeCensus.map(({ role }) => role);
+const applicationRoles = rolePrivilegeCensus.roles.map(({ role }) => role);
 const describePostgres = describe.skipIf(!runPostgresTests);
 
 describePostgres("database temporary-object privilege", () => {

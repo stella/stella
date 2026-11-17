@@ -2,8 +2,9 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
 import { afterAll, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import { createTestPresentationPrefsSync } from "@/lib/account/presentation-prefs/sync.test-fixtures";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import { defaultPresentationPrefs } from "../lib/account/presentation-prefs/preferences";
 import { createRootHead, THEME_COLOR } from "../routes/-root-head";

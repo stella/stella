@@ -12,11 +12,11 @@ import { sleep } from "@stll/concurrency/sleep";
 import type { DecisionProvisionAnchor } from "@stll/decision-reader/reader-types";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import { defaultPresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
 import { PresentationPrefsProvider } from "@/lib/account/presentation-prefs/provider";
 import { createTestPresentationPrefsSync } from "@/lib/account/presentation-prefs/sync.test-fixtures";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 
@@ -79,8 +79,12 @@ const scrollerOf = (element: Element): HTMLElement | undefined =>
   [...scrollers].find(
     (scroller) => scroller !== element && scroller.contains(element),
   );
+// An open popover's focus guards around its trigger are visually hidden and
+// fixed, so they take no row.
 const contentTop = (scroller: HTMLElement, element: Element): number =>
-  [...scroller.querySelectorAll("*")].indexOf(element) * ROW_PX;
+  [...scroller.querySelectorAll(":not([data-base-ui-focus-guard])")].indexOf(
+    element,
+  ) * ROW_PX;
 const setScrollTop = (scroller: HTMLElement, value: number) => {
   scrollTops.set(scroller, Math.max(0, value));
 };
@@ -96,7 +100,9 @@ const registerScroller = (scroller: HTMLElement) => {
   Object.defineProperty(scroller, "scrollTop", {
     configurable: true,
     get: () => scrollTops.get(scroller) ?? 0,
-    set: (value: number) => setScrollTop(scroller, value),
+    set: (value: number) => {
+      setScrollTop(scroller, value);
+    },
   });
   Object.defineProperty(scroller, "clientHeight", {
     configurable: true,
@@ -483,7 +489,10 @@ const TOGGLE_SELECTOR = "[aria-expanded], [aria-pressed], summary";
 type ToggleKind = "disclosure" | "peek" | "pressed";
 
 const toggleKind = (toggle: HTMLElement): ToggleKind => {
-  if (toggle.tagName === "SUMMARY") {
+  if (
+    toggle.tagName === "SUMMARY" ||
+    toggle.dataset["slot"] === "collapsible-trigger"
+  ) {
     return "disclosure";
   }
   return toggle.hasAttribute("aria-pressed") ? "pressed" : "peek";
@@ -598,6 +607,59 @@ const pageToggles = () => [
 ];
 
 describe("in-reader toggles keep the reader's place", () => {
+  test("apparatus chrome stays out of copied and anchored source text, and navigation reveals its target", async () => {
+    const { cleanSelectionText } =
+      await import("@/components/legal-reader/annotations/reader-copy-text.logic");
+    const { selectionAnchorsFrom } =
+      await import("@/components/legal-reader/annotations/selection-anchor");
+    const { revealEnclosingDisclosures } =
+      await import("@/lib/platform/reveal-disclosures");
+    await renderReaders();
+    const { section } = readerParts("page");
+    const disclosure =
+      section.querySelector<HTMLElement>(".reader-apparatus") ??
+      panic("Missing apparatus disclosure");
+    const target =
+      disclosure.querySelector<HTMLElement>(
+        '[data-anchor="anchor-publisher"]',
+      ) ?? panic("Missing anchored publisher passage");
+    const trigger =
+      disclosure.querySelector<HTMLElement>(
+        '[data-slot="collapsible-trigger"]',
+      ) ?? panic("Missing apparatus toggle");
+    expect(target.closest('[hidden="until-found"]')).not.toBeNull();
+    await act(async () => {
+      revealEnclosingDisclosures(target);
+    });
+    expect(target.closest("[hidden]")).toBeNull();
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    const range = section.ownerDocument.createRange();
+    range.selectNodeContents(disclosure);
+    expect(cleanSelectionText(range)).not.toContain(
+      messages.caseLaw.reader.headMatter,
+    );
+    expect(cleanSelectionText(range)).toContain(
+      "Zveřejněno v databázi soudních rozhodnutí.",
+    );
+    const selection =
+      section.ownerDocument.getSelection() ?? panic("No selection owner");
+    try {
+      selection.removeAllRanges();
+      selection.addRange(range);
+      expect(selectionAnchorsFrom(selection, section)).toEqual([
+        expect.objectContaining({
+          blockAnchorId: "anchor-publisher",
+          quote: "Zveřejněno v databázi soudních rozhodnutí.",
+        }),
+      ]);
+    } finally {
+      selection.removeAllRanges();
+    }
+    await activate(trigger);
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(target.isConnected).toBe(true);
+  });
+
   test("the layout moves a passage when content is inserted above it", async () => {
     // Guards the fixture: without this, a position assertion could pass
     // because nothing in the layout ever moves.
@@ -616,8 +678,9 @@ describe("in-reader toggles keep the reader's place", () => {
   test("the reader renders every kind of toggle the assertions cover", async () => {
     await renderReaders();
     expect(
-      readerParts("page").section.querySelector(".reader-apparatus > summary")
-        ?.textContent,
+      readerParts("page").section.querySelector(
+        '.reader-apparatus [data-slot="collapsible-trigger"]',
+      )?.textContent,
     ).toBe(messages.caseLaw.reader.headMatter);
     const kinds = new Set(pageToggles().map(toggleKind));
     expect([...kinds].toSorted()).toEqual(["disclosure", "peek", "pressed"]);
@@ -876,8 +939,8 @@ describe("a card shows the cited part and, on request, the whole provision", () 
     await activate(fold);
     await waitFor(() => {
       expect(
-        card.querySelectorAll('[data-slot="provision-card-wording"] p'),
-      ).toHaveLength(FULL_LINES.length);
+        card.querySelectorAll('[data-slot="provision-card-wording"] p').length,
+      ).toBe(FULL_LINES.length);
     });
     for (const name of READERS) {
       const { scroller } = readerParts(name);

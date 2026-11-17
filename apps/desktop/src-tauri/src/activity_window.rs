@@ -16,7 +16,7 @@ pub fn show(app: &AppHandle) {
   }
   crate::activity::initialize(app);
   #[cfg(target_os = "macos")]
-  let _ = app.show();
+  crate::logging::best_effort(app.show(), "app could not be shown");
   if let Some(window) = app.get_webview_window(ACTIVITY_WINDOW_LABEL) {
     if window.show().and_then(|()| window.set_focus()).is_err() {
       tracing::warn!("activity window could not be focused");

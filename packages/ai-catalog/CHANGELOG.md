@@ -1,5 +1,55 @@
 # @stll/ai-catalog
 
+## 0.14.0
+
+### Minor Changes
+
+- [#8697](https://github.com/stella/stella/pull/8697) [`3505436`](https://github.com/stella/stella/commit/3505436363a468d70e34faa5d8511a31e6cb80a9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Transcription models name their route (OpenRouter, or straight to ElevenLabs under the provider's model id), add Scribe v3, and `transcriptionEndpointFor` and `defaultTranscriptionModelId` take what the deployment serves.
+
+- [#8679](https://github.com/stella/stella/pull/8679) [`e5dacf4`](https://github.com/stella/stella/commit/e5dacf41a6d171397eb8b81fcd69385d41767005) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Transcription models now list availability on the global endpoint and a provider name, with refreshed prices, US availability and new zero-retention models; `transcriptionEndpointFor` picks the endpoint that serves a model for an organization.
+
+## 0.13.0
+
+### Minor Changes
+
+- [#8463](https://github.com/stella/stella/pull/8463) [`e87f7e2`](https://github.com/stella/stella/commit/e87f7e2f6e0607577e1a07f984151c1787cac989) Thanks [@stella-provenance-updater](https://github.com/apps/stella-provenance-updater)! - Offer Gemini 4 Hydrogen on the Google and OpenRouter routes with its upstream rates, context window and generated capabilities. The offered model id types and option lists change with it, so code that matches them exhaustively has to handle the new id.
+
+### Patch Changes
+
+- [#8537](https://github.com/stella/stella/pull/8537) [`001c640`](https://github.com/stella/stella/commit/001c640e64cb00e3948bdf68a18a40347c65a40f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Build declarations through the native tsrs API supported by tsdown 0.23.7, resolving the compiler from each package.
+
+## 0.12.0
+
+### Minor Changes
+
+- [#8310](https://github.com/stella/stella/pull/8310) [`459ba98`](https://github.com/stella/stella/commit/459ba9864a0928dfd04e21ab77d0a0eca1f21ebf) Thanks [@stella-provenance-updater](https://github.com/apps/stella-provenance-updater)! - Offer Gemini 4 Carbon on the Google and OpenRouter routes with its upstream rates, context window and generated capabilities. The offered model id types and option lists change with it, so code that matches them exhaustively has to handle the new id.
+
+- [#8253](https://github.com/stella/stella/pull/8253) [`91b7234`](https://github.com/stella/stella/commit/91b7234554c474741dc9a2bf5f36a8117bc5c10c) Thanks [@stella-provenance-updater](https://github.com/apps/stella-provenance-updater)! - Offer Claude Fable 5.2 with its upstream rates, 1M context window, and generated capabilities, and supersede Claude Fable 5 and 5.1 with it. The offered model id types and option lists change with it, so code that matches them exhaustively has to handle the new id.
+
+## 0.11.0
+
+### Minor Changes
+
+- [#8036](https://github.com/stella/stella/pull/8036) [`a673b9c`](https://github.com/stella/stella/commit/a673b9ce9ae19be276457c14a29969f176e3daba) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Offer GPT-6.1 Terra. The offered model id types and option lists change with it, so code that matches them exhaustively has to handle the new id.
+
+## 0.10.1
+
+### Patch Changes
+
+- [#7357](https://github.com/stella/stella/pull/7357) [`14ae497`](https://github.com/stella/stella/commit/14ae497b31a86e96931d734fd3441c4bbe8aac29) Thanks [@stella-provenance-updater](https://github.com/apps/stella-provenance-updater)! - Refresh upstream model rates and request capabilities.
+
+## 0.10.0
+
+### Minor Changes
+
+- Add `defaultTranscriptionModelId`, the cheapest transcription model offered in a region. The `dictation transcribe` capability no longer requires a model: without one the server uses that default for the organization's region.
+
+## 0.9.0
+
+### Minor Changes
+
+- [#7350](https://github.com/stella/stella/pull/7350) [`27375ef`](https://github.com/stella/stella/commit/27375ef28c854e8341c537d18e910ca68b17e883) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add transcription model metadata and a file-input dictation capability description.
+
 ## 0.8.2
 
 ### Patch Changes

@@ -252,7 +252,7 @@ const isReservedAction = (value: unknown): value is ReservedAction =>
   typeof value === "string" &&
   (RESERVED_ACTIONS as readonly string[]).includes(value);
 
-const isShortcutKeys = (value: unknown): value is ShortcutKeys =>
+export const isShortcutKeys = (value: unknown): value is ShortcutKeys =>
   isRecord(value) &&
   typeof value["code"] === "string" &&
   Array.isArray(value["modifiers"]) &&

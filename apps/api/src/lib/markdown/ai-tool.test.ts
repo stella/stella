@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import * as cheerio from "cheerio";
+
+import { load } from "@stll/html";
 
 import { deserializeAITool, serializeAITool } from "@/api/lib/markdown/ai-tool";
 import type { AITool } from "@/api/lib/markdown/ai-tool";
@@ -87,7 +88,7 @@ describe("ai tool", () => {
     };
 
     const deserialized = deserializeAITool(stored);
-    const $ = cheerio.load(deserialized.prompt, undefined, false);
+    const $ = load(deserialized.prompt, undefined, false);
     const chip = $("pasted-text");
     expect(chip.attr("data-source")).toBe("skill");
     expect(chip.attr("data-label")).toBe('NDA "review"');
@@ -109,7 +110,7 @@ describe("ai tool", () => {
     };
 
     const deserialized = deserializeAITool(toolWithHostileLinkText);
-    const $ = cheerio.load(deserialized.prompt, undefined, false);
+    const $ = load(deserialized.prompt, undefined, false);
     const mention = $("mention-component");
 
     expect(mention.attr("data-id")).toBe("dep");

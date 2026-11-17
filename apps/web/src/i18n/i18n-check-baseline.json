@@ -56,6 +56,8 @@
     "appearance.calendar",
     "auth.continueWithEmail",
     "avt.claimTypes.opinion.label",
+    "avt.mode.review",
+    "avt.review.status.reviewed",
     "avt.verification.documentView.original",
     "billing.codes.activity",
     "billing.codes.codeLabelField",
@@ -65,7 +67,6 @@
     "billing.invoices.dueDate",
     "billing.invoices.statuses.draft",
     "billing.invoices.statuses.paid",
-    "billing.selectedCount",
     "billing.statuses.approved",
     "billing.statuses.draft",
     "billing.stopTimer",
@@ -147,7 +148,6 @@
     "inspector.metadata.documentProperties.keys.createdAt",
     "inspector.metadata.documentProperties.keys.description",
     "inspector.metadata.documentProperties.keys.title",
-    "inspector.metadata.updatedAt",
     "inspector.review.decision",
     "inspector.review.decisions.accepted",
     "inspector.review.playbookSection",
@@ -167,6 +167,7 @@
     "knowledge.playbooks.review.fixAccepted",
     "knowledge.playbooks.review.playbookLabel",
     "knowledge.playbooks.review.reject",
+    "knowledge.playbooks.review.run",
     "knowledge.playbooks.versions.restoredToast",
     "knowledge.playbooks.versions.versionHistory",
     "knowledge.sections.skills.title",
@@ -174,7 +175,6 @@
     "knowledge.sections.tools.title",
     "memory.kinds.decision",
     "navigation.chat",
-    "navigation.myTodos",
     "navigation.templates",
     "onboarding.catalogueCommunityHeading",
     "onboarding.catalogueDetailCost",
@@ -191,8 +191,6 @@
     "organization.invitations.statuses.accepted",
     "organization.invitations.statuses.pending",
     "organization.invitations.statuses.rejected",
-    "organization.matterNumber.description",
-    "organization.matterNumber.title",
     "organization.members.noMembersFound",
     "publicTools.contribute.form.costLabel",
     "publicTools.contribute.form.jurisdictionsLabel",
@@ -213,8 +211,7 @@
     "settings.organization.anonymization.labelPickerEmpty",
     "settings.organization.anonymization.labelPickerPlaceholder",
     "settings.organization.anonymization.title",
-    "settings.organization.matterNumbering",
-    "settings.organization.matterNumberingDescription",
+    "settings.organization.auditResourceKinds.property",
     "settings.organization.practiceJurisdictions",
     "settings.organization.usageStatusCancelled",
     "skillHistory.comments",
@@ -227,7 +224,6 @@
     "success.documentCreated",
     "tasks.activity",
     "tasks.dueDate",
-    "tasks.myTasksTitle",
     "tasks.queue.completed",
     "tasks.sourceTypeValues.calendar",
     "tasks.sourceTypeValues.manual",
@@ -246,6 +242,7 @@
     "templates.saveFailed",
     "templates.studio.conditionSourceRule",
     "templates.studio.insertFormatDefault",
+    "templates.studio.namePlaceholder",
     "templates.studio.slashEmpty",
     "templates.tags",
     "translate.settings.apiKeyLabel",
@@ -261,7 +258,10 @@
     "workspaces.overview.activity.actorActions.cancelled",
     "workspaces.overview.activity.actorActions.created",
     "workspaces.overview.activity.actorActions.deleted",
+    "workspaces.overview.activity.actorActions.reviewed",
     "workspaces.overview.activity.actorActions.updated",
+    "workspaces.overview.activity.fields.name",
+    "workspaces.overview.activity.fields.property",
     "workspaces.parties.partyRoles.expert_witness",
     "workspaces.parties.partyRoles.other",
     "workspaces.parties.personalLabel",
@@ -271,9 +271,7 @@
     "workspaces.properties.chipMulti",
     "workspaces.properties.chipNumber",
     "workspaces.properties.chipText",
-    "workspaces.properties.text",
     "workspaces.team",
-    "workspaces.views.fieldsSelected",
     "workspaces.views.layouts.calendar"
   ],
   "identicalToSource": {
@@ -317,8 +315,8 @@
     "auth.emailPlaceholder": [
       "ar"
     ],
-    "avt.claimDetail.sourceCount": [
-      "fr"
+    "avt.mode.graph": [
+      "de"
     ],
     "avt.verification.documentView.original": [
       "de",
@@ -380,6 +378,12 @@
     "chat.pastedText.fromPromptFallback": [
       "de"
     ],
+    "chat.runOn.cloud": [
+      "cs",
+      "de",
+      "fr",
+      "sk"
+    ],
     "chat.suggestionSeverity.style": [
       "fr"
     ],
@@ -429,6 +433,9 @@
     "common.filter": [
       "et"
     ],
+    "common.folder": [
+      "pl"
+    ],
     "common.formula": [
       "lv"
     ],
@@ -469,9 +476,6 @@
     ],
     "common.type": [
       "fr"
-    ],
-    "common.urlIdentifierPlaceholder": [
-      "ar"
     ],
     "common.version": [
       "de",
@@ -561,9 +565,6 @@
     ],
     "inspector.metadata.documentProperties.keys.slides": [
       "pt-BR"
-    ],
-    "inspector.review.passagesCount": [
-      "fr"
     ],
     "inspector.review.passagesToggle": [
       "fr"
@@ -688,6 +689,9 @@
     "navigation.contacts": [
       "fr"
     ],
+    "navigation.knowledge": [
+      "fr"
+    ],
     "navigation.shortcutCategories.navigation": [
       "de",
       "fr"
@@ -768,9 +772,6 @@
     "search.kinds.contact": [
       "fr"
     ],
-    "search.kinds.folder": [
-      "pl"
-    ],
     "search.kinds.link": [
       "de",
       "et",
@@ -782,6 +783,16 @@
     ],
     "settings.account.desktop": [
       "de"
+    ],
+    "settings.organization.auditResourceKinds.playbook": [
+      "cs",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "pl",
+      "pt-BR",
+      "sk"
     ],
     "styleSets.stellaStyle": [
       "ar",
@@ -804,9 +815,6 @@
       "de",
       "pl",
       "pt-BR"
-    ],
-    "templates.conditionCount": [
-      "fr"
     ],
     "templates.conditionDecidedNo": [
       "es"
@@ -908,6 +916,13 @@
     "workspaces.lead": [
       "de"
     ],
+    "workspaces.overview.activity.fields.status": [
+      "pl",
+      "pt-BR"
+    ],
+    "workspaces.overview.activity.fields.type": [
+      "fr"
+    ],
     "workspaces.overview.activity.targets.folder": [
       "pl"
     ],
@@ -928,6 +943,9 @@
     ],
     "workspaces.parties.personalLabel": [
       "es"
+    ],
+    "workspaces.pdf.evidence": [
+      "fr"
     ],
     "workspaces.pdf.selection.pageLocator": [
       "es",
@@ -969,11 +987,6 @@
       "fr",
       "pt-BR"
     ],
-    "workspaces.properties.text": [
-      "cs",
-      "de",
-      "sk"
-    ],
     "workspaces.sections.parties": [
       "fr"
     ],
@@ -998,233 +1011,5 @@
       "pl"
     ]
   },
-  "unusedKeys": [
-    "errors.failedToAcceptInvitation",
-    "errors.failedToAddParty",
-    "errors.failedToCancelInvitation",
-    "errors.failedToCheckSlugAvailability",
-    "errors.failedToCreateContact",
-    "errors.failedToCreateEntity",
-    "errors.failedToCreateOrganization",
-    "errors.failedToCreateProperty",
-    "errors.failedToCreateWorkspace",
-    "errors.failedToDeclineInvitation",
-    "errors.failedToDeleteContact",
-    "errors.failedToDeleteProperty",
-    "errors.failedToExportNoData",
-    "errors.failedToFetchFile",
-    "errors.failedToInviteMember",
-    "errors.failedToMoveItem",
-    "errors.failedToRemoveMember",
-    "errors.failedToRemoveParty",
-    "errors.failedToRenameWorkspace",
-    "errors.failedToResendInvitation",
-    "errors.failedToSelectOrganization",
-    "errors.failedToSendInvitation",
-    "errors.failedToSendVerificationCode",
-    "errors.failedToSetActiveOrganization",
-    "errors.failedToSetClient",
-    "errors.failedToSignOut",
-    "errors.failedToUpdateContact",
-    "errors.failedToUpdateField",
-    "errors.failedToUpdateMatterNumbering",
-    "errors.failedToUpdateOrganization",
-    "errors.failedToUpdateProperty",
-    "errors.failedToUpdateRole",
-    "errors.failedToUpdateWorkspace",
-    "errors.failedToUploadFiles",
-    "errors.failedToVerifyOtp",
-    "errors.partyAlreadyExists",
-    "inbox.empty",
-    "inbox.filter.any",
-    "inbox.newRequest",
-    "inbox.request.created",
-    "inbox.request.description",
-    "inbox.request.submit",
-    "inbox.suggestion.fileToWorkspace",
-    "inbox.suggestion.runReview",
-    "inspector.metadata.updatedAt",
-    "inspector.review.actionNeeded",
-    "inspector.review.addComment",
-    "inspector.review.addTopic",
-    "inspector.review.assessment.additionalInTarget",
-    "inspector.review.assessment.aligned",
-    "inspector.review.assessment.dealSpecific",
-    "inspector.review.assessment.different",
-    "inspector.review.assessment.missingFromTarget",
-    "inspector.review.assessment.notComparable",
-    "inspector.review.comparedWithReferences",
-    "inspector.review.description",
-    "inspector.review.impact.notJudged",
-    "inspector.review.insertFailed",
-    "inspector.review.insertSuggestion",
-    "inspector.review.newTopic",
-    "inspector.review.noReferencesFound",
-    "inspector.review.playbookFindings",
-    "inspector.review.playbookTopic",
-    "inspector.review.referenceFindings",
-    "inspector.review.removeTopic",
-    "inspector.review.reviewedAgainstCombined",
-    "inspector.review.scoreTopics",
-    "inspector.review.topicContext",
-    "inspector.review.topicContextPlaceholder",
-    "inspector.review.topicName",
-    "inspector.review.topicsDescription",
-    "lawHome.enteringIntoForce",
-    "lawHome.recentlyInForce",
-    "lawHome.tryIdentifier",
-    "legalReader.annotations.sharedBadge",
-    "navigation.myTodos",
-    "organization.aiConfig.apiKeyUpdatePlaceholder",
-    "organization.aiConfig.baseUrl",
-    "organization.aiConfig.chooseModelsSubtitle",
-    "organization.aiConfig.chooseModelsTitle",
-    "organization.aiConfig.customModelBadge",
-    "organization.aiConfig.customModelDescription",
-    "organization.aiConfig.customModelHint",
-    "organization.aiConfig.defaultModel",
-    "organization.aiConfig.defaultModelOption",
-    "organization.aiConfig.deploymentNamePlaceholder",
-    "organization.aiConfig.editProviders",
-    "organization.aiConfig.endpoint",
-    "organization.aiConfig.endpointDescription",
-    "organization.aiConfig.overrideRoles",
-    "organization.aiConfig.overrideRolesDescription",
-    "organization.aiConfig.prices.azureManaged",
-    "organization.aiConfig.prices.empty",
-    "organization.aiConfig.prices.emptyHint",
-    "organization.aiConfig.prices.inMtok",
-    "organization.aiConfig.prices.model",
-    "organization.aiConfig.prices.outMtok",
-    "organization.aiConfig.prices.perCall",
-    "organization.aiConfig.prices.selectedHeading",
-    "organization.aiConfig.prices.source",
-    "organization.aiConfig.prices.title",
-    "organization.aiConfig.prices.typicalCallHint",
-    "organization.aiConfig.selectAtLeastOneRole",
-    "organization.aiConfig.selectedProvider",
-    "organization.matterNumber.description",
-    "organization.matterNumber.patternInvalidTokens",
-    "organization.matterNumber.patternMustContainSeq",
-    "organization.matterNumber.patternRequired",
-    "organization.matterNumber.title",
-    "organization.members.changeRoleDescription",
-    "organization.members.updateRole",
-    "organization.settingsDescription",
-    "translate.settings.removing",
-    "workspaces.deleteSelectedRows",
-    "workspaces.deleteSelectedRowsDescription",
-    "workspaces.deleteSelection",
-    "workspaces.exportToCsv",
-    "workspaces.fields.formatNotSupported",
-    "workspaces.files.desktopEdit.forceRelease",
-    "workspaces.files.desktopEdit.opening",
-    "workspaces.files.desktopEdit.takeoverNoResponse",
-    "workspaces.files.desktopEdit.takeoverNoResponseDescription",
-    "workspaces.files.maxEntitiesReached",
-    "workspaces.files.xfaFormNotSupported",
-    "workspaces.importOrganizer.folderPlaceholder",
-    "workspaces.importOrganizer.instructionsHelp",
-    "workspaces.importOrganizer.moveTo",
-    "workspaces.importOrganizer.moveToHint",
-    "workspaces.importOrganizer.moveToTitle",
-    "workspaces.importOrganizer.reset",
-    "workspaces.infosoud.courtPlaceholder",
-    "workspaces.infosoud.courtsFailed",
-    "workspaces.infosoud.eventCount",
-    "workspaces.infosoud.events",
-    "workspaces.infosoud.hearings",
-    "workspaces.infosoud.importAgenda",
-    "workspaces.infosoud.importAgendaFailed",
-    "workspaces.infosoud.importAgendaResult",
-    "workspaces.infosoud.importAgendaUpToDate",
-    "workspaces.infosoud.lookup",
-    "workspaces.infosoud.lookupFailed",
-    "workspaces.infosoud.noHearings",
-    "workspaces.infosoud.notFound",
-    "workspaces.infosoud.relatedCases",
-    "workspaces.infosoud.spisZn",
-    "workspaces.infosoud.spisZnPlaceholder",
-    "workspaces.infosoud.statusDate",
-    "workspaces.infosoud.validTo",
-    "workspaces.lockMatter",
-    "workspaces.members.alreadyMember",
-    "workspaces.members.cannotRemoveLast",
-    "workspaces.noMatters",
-    "workspaces.operators.containsEvery",
-    "workspaces.operators.equals",
-    "workspaces.overview.activity.details.actor",
-    "workspaces.overview.activity.details.channel",
-    "workspaces.overview.activity.loadEarlier",
-    "workspaces.overview.atAGlance",
-    "workspaces.overview.getStarted",
-    "workspaces.overview.uploaded",
-    "workspaces.parties.noClient",
-    "workspaces.parties.removePartyConfirm",
-    "workspaces.parties.setClient",
-    "workspaces.pdf.entitySidebar",
-    "workspaces.pdf.pageEditor.pageCount",
-    "workspaces.pdf.pageEditor.title",
-    "workspaces.pdf.showOriginal",
-    "workspaces.properties.addCondition",
-    "workspaces.properties.addInputProperty",
-    "workspaces.properties.bulk.createMany",
-    "workspaces.properties.bulk.promptPlaceholder",
-    "workspaces.properties.createOption",
-    "workspaces.properties.defaultNames.file",
-    "workspaces.properties.defaultNames.multiSelect",
-    "workspaces.properties.defaultNames.singleSelect",
-    "workspaces.properties.defaultNames.text",
-    "workspaces.properties.extractEntityTypeDescription",
-    "workspaces.properties.extractionInstruction",
-    "workspaces.properties.extractionInstructionHelp",
-    "workspaces.properties.extractionInstructionPlaceholder",
-    "workspaces.properties.extractionScope",
-    "workspaces.properties.flowNoInputs",
-    "workspaces.properties.inputs",
-    "workspaces.properties.inputsHelp",
-    "workspaces.properties.manualColumn",
-    "workspaces.properties.nameProperty",
-    "workspaces.properties.newColumnDescription",
-    "workspaces.properties.noConditionFields",
-    "workspaces.properties.noFirstDocument",
-    "workspaces.properties.optionsHelp",
-    "workspaces.properties.previewEmpty",
-    "workspaces.properties.previewMockNotice",
-    "workspaces.properties.previewOnFirst",
-    "workspaces.properties.previewSkipped",
-    "workspaces.properties.previewSubject",
-    "workspaces.properties.previewUnsupported",
-    "workspaces.properties.referencesItself",
-    "workspaces.properties.resultType",
-    "workspaces.properties.scopeFile",
-    "workspaces.properties.scopeFileDescription",
-    "workspaces.properties.scopeFileUnavailable",
-    "workspaces.properties.scopeMatter",
-    "workspaces.properties.scopeMatterDescription",
-    "workspaces.properties.searchOrAddOptions",
-    "workspaces.properties.selectField",
-    "workspaces.properties.selectOperator",
-    "workspaces.properties.unnamedColumn",
-    "workspaces.table.flags.contradictionDescription",
-    "workspaces.table.flags.followUpDescription",
-    "workspaces.table.flags.importantDescription",
-    "workspaces.table.flags.needsReviewDescription",
-    "workspaces.table.flags.verifiedDescription",
-    "workspaces.tools.aiModel",
-    "workspaces.tools.manualInput",
-    "workspaces.views.addFields",
-    "workspaces.views.cannotDeleteRequired",
-    "workspaces.views.fields",
-    "workspaces.views.reportExport.action",
-    "workspaces.views.timeline.noDates",
-    "workspaces.workflow.allManualInputsDescription",
-    "workspaces.workflow.allManualInputsTitle",
-    "workspaces.workflow.generate",
-    "workspaces.workflow.someFieldsOutdatedDescription",
-    "workspaces.workflow.someFieldsOutdatedTitle",
-    "workspaces.workflow.starting",
-    "workspaces.workflow.terminated",
-    "workspaces.workflow.terminatedDescription"
-  ]
+  "unusedKeys": []
 }

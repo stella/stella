@@ -8,10 +8,12 @@ const UUID_PATTERN =
 
 describe("chat request message building", () => {
   test("uses a stella chat message id for text-only TanStack sends", async () => {
-    const message = await buildChatRequestMessage({
-      files: [],
-      html: "<p>ahoj</p>",
-    });
+    const message = (
+      await buildChatRequestMessage({
+        files: [],
+        html: "<p>ahoj</p>",
+      })
+    ).unwrap();
 
     expectTypeOf(message.id).toEqualTypeOf<SafeId<"chatMessage">>();
     expect(message.id).toMatch(UUID_PATTERN);
@@ -22,19 +24,49 @@ describe("chat request message building", () => {
 
 test("sends pasted text as a native text attachment without normalizing it", async () => {
   const text = " \r\n<b>Literal text</b>\n\t  ";
-  const message = await buildChatRequestMessage({
-    files: [{ type: "pasted_text", id: "paste", text }],
-    html: "<p>Read this</p>",
-  });
+  const message = (
+    await buildChatRequestMessage({
+      files: [{ type: "pasted_text", id: "paste", text }],
+      html: "<p>Read this</p>",
+    })
+  ).unwrap();
   expect(message.content).toEqual([
     { type: "text", content: "<p>Read this</p>" },
     { type: "text", content: text, metadata: { type: "pasted_text" } },
   ]);
-  const attachmentOnly = await buildChatRequestMessage({
-    files: [{ type: "pasted_text", id: "paste", text }],
-    html: "",
-  });
+  const attachmentOnly = (
+    await buildChatRequestMessage({
+      files: [{ type: "pasted_text", id: "paste", text }],
+      html: "",
+    })
+  ).unwrap();
   expect(attachmentOnly.content).toEqual([
     { type: "text", content: text, metadata: { type: "pasted_text" } },
+  ]);
+});
+
+test("sends a file the server already stores by reference, never inline", async () => {
+  const url = "stella://file::00000000-0000-7000-8000-0000000000f1";
+  const message = (
+    await buildChatRequestMessage({
+      files: [
+        {
+          type: "stored_file",
+          filename: "lease.pdf",
+          id: "stored",
+          mimeType: "application/pdf",
+          url,
+        },
+      ],
+      html: "<p>Again</p>",
+    })
+  ).unwrap();
+  expect(message.content).toEqual([
+    { type: "text", content: "<p>Again</p>" },
+    {
+      type: "document",
+      source: { type: "url", value: url, mimeType: "application/pdf" },
+      metadata: { filename: "lease.pdf" },
+    },
   ]);
 });

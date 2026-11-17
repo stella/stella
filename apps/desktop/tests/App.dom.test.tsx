@@ -40,6 +40,12 @@ const isPreferenceKey = (key: string): key is PreferenceKey =>
 const PREFERENCE_KEYS = Object.keys(PREFERENCE_LABELS).filter(isPreferenceKey);
 
 const INITIAL_SNAPSHOT = {
+  documentRecovery: {
+    edits: [],
+    unassigned: false,
+    pending: false,
+    access: "available",
+  },
   bridgePort: 45_901,
   bridgeVersion: 1,
   capabilities: [],
@@ -151,6 +157,9 @@ const installBackend = (order: ResponseOrder) => {
         }
         case "account_get_state":
           return ACCOUNT;
+        // Decides whether the Activity tab shows; this account has no timeline.
+        case "is_activity_enabled":
+          return false;
         default:
           unexpected.push(command);
           return panic(`Unexpected native command: ${command}`);

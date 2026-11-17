@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import * as v from "valibot";
 
 import configuredBudgets from "./code-quality-task-budgets.json" with { type: "json" };
+import { assertOfflineCheckPreload } from "./offline-check-startup";
 
 const CLEANUP_MARGIN_SECONDS = 30;
 
@@ -37,6 +38,8 @@ export const shardBudgetViolation = (shard: number, elapsedSeconds: number) => {
 };
 
 if (import.meta.main) {
+  assertOfflineCheckPreload();
+
   const shard = v.parse(
     v.pipe(v.number(), v.integer(), v.minValue(1)),
     Number(process.argv.at(3)),

@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 // Token storage.
 //
 // The XDG file is the only backend; an OS keychain backend would add real
@@ -19,6 +19,9 @@ import {
 import path from "node:path";
 import { Temporal } from "temporal-polyfill/full";
 import * as v from "valibot";
+
+import { TokenRefreshError } from "./errors.js";
+import { acquireRefreshLock, credentialLockPath } from "./refresh-lock.js";
 
 const CREDENTIALS_FILE_MODE = 0o600;
 
@@ -181,9 +184,8 @@ const defaultAtomicWriteOps: AtomicWriteOps = {
  * filesystem (a cross-device rename is not atomic). A failed write drops the
  * temp and never touches the live file.
  *
- * Concurrent writers are out of scope (a last-writer-wins read-modify-write
- * race remains); this fix targets only the truncation/corruption mode, which
- * atomic replace eliminates.
+ * This replaces a whole snapshot. Production read-modify-write operations use
+ * updateCredentialFile so concurrent credentials cannot overwrite each other.
  */
 export const writeCredentialFile = async (
   configDir: string,
@@ -327,3 +329,64 @@ export const setDefaultOrg = (
   ...file,
   defaultOrgByServer: { ...file.defaultOrgByServer, [serverUrl]: orgId },
 });
+
+type CredentialUpdate<T> =
+  | { status: "unchanged"; value: T }
+  | { status: "updated"; file: CredentialFile; value: T };
+
+/** The transform is synchronous: the shared lock never encloses network work. */
+export const updateCredentialFile = async <T extends CredentialUpdate<unknown>>(
+  configDir: string,
+  update: (file: CredentialFile) => T,
+): Promise<Result<T["value"], TokenRefreshError>> => {
+  const directory = await Result.tryPromise({
+    try: async () => await mkdir(configDir, { mode: 0o700, recursive: true }),
+    catch: (cause) =>
+      new TokenRefreshError({
+        message: `Could not create the credential directory ${configDir}. Check its permissions before retrying.`,
+        cause,
+      }),
+  });
+  if (Result.isError(directory)) {
+    return Result.err(directory.error);
+  }
+  const lock = await acquireRefreshLock(configDir);
+  if (Result.isError(lock)) {
+    return Result.err(lock.error);
+  }
+  const outcome = await Result.tryPromise(async () => {
+    const decision = update(await readCredentialFile(configDir));
+    switch (decision.status) {
+      case "updated":
+        await writeCredentialFile(configDir, decision.file);
+        return decision.value;
+      case "unchanged":
+        return decision.value;
+      default:
+        decision satisfies never;
+        return panic("Unexpected credential update");
+    }
+  });
+  const released = await Result.tryPromise(lock.value);
+  if (Result.isError(released)) {
+    // The update outcome stands on its own; the retained lock is a second fact.
+    const updateState = Result.isError(outcome)
+      ? `Could not update the credential store ${credentialsFilePath(configDir)} (${outcome.error.message}).`
+      : `The credential store ${credentialsFilePath(configDir)} was updated.`;
+    return Result.err(
+      new TokenRefreshError({
+        message: `${updateState} Could not remove the credential store lock ${credentialLockPath(configDir)}; credential commands wait for it and then time out. Confirm no command is updating credentials, then remove this lock.`,
+        cause: Result.isError(outcome) ? outcome.error : released.error,
+      }),
+    );
+  }
+  if (Result.isError(outcome)) {
+    return Result.err(
+      new TokenRefreshError({
+        message: `Could not update the credential store ${credentialsFilePath(configDir)} (${outcome.error.message}).`,
+        cause: outcome.error,
+      }),
+    );
+  }
+  return Result.ok(outcome.value);
+};

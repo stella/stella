@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   hashSkillEntrypoint,
   hashSkillPackage,
+  SKILL_PACKAGE_LIMITS,
   validateSkillPackage,
 } from "./format";
 
@@ -98,6 +99,41 @@ describe("skill package format", () => {
       expect(
         result.error.some(({ type }) => type === "required_tool_unknown"),
       ).toBe(false);
+    }
+  });
+
+  test("stores a resource up to the resource cap and refuses one past it", () => {
+    const limit = SKILL_PACKAGE_LIMITS.resourceMaxChars;
+    // A text larger than one model window still fits a single stored file.
+    expect(limit).toBeGreaterThan(
+      SKILL_PACKAGE_LIMITS.resourceModelContextMaxChars,
+    );
+    // Every file at the cap, in its widest UTF-8 form, fits one pack.
+    expect(limit * 4).toBeLessThanOrEqual(
+      SKILL_PACKAGE_LIMITS.archiveUncompressedMaxBytes,
+    );
+    const validate = (content: string) =>
+      validateSkillPackage({
+        files: [
+          { path: "skill/SKILL.md", content: skill() },
+          { path: "skill/references/commentary.txt", content },
+        ],
+        tools: { type: "deferred" },
+      });
+
+    const atCap = validate("a".repeat(limit));
+    expect(atCap.isOk()).toBe(true);
+    if (atCap.isOk()) {
+      expect(atCap.value.resources.at(0)?.content.length).toBe(limit);
+    }
+    const pastCap = validate("a".repeat(limit + 1));
+    expect(pastCap.isErr()).toBe(true);
+    if (pastCap.isErr()) {
+      expect(pastCap.error).toContainEqual({
+        type: "limit_exceeded",
+        field: "references/commentary.txt",
+        limit,
+      });
     }
   });
 

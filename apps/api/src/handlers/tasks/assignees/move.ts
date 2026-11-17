@@ -12,11 +12,17 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema, userIdSchema } from "@/api/lib/custom-schema";
 import { TASK_ASSIGNEE_ROLE } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { NewNotification } from "@/api/lib/notifications";
 import {
   lockTaskAssignmentMembers,
   removeTaskAssignment,
   writeTaskAssignments,
 } from "@/api/lib/tasks/assignment-membership";
+import {
+  fileTaskAssignedNotifications,
+  taskAssignedNotifications,
+} from "@/api/lib/tasks/assignment-notifications";
+import type { FileTaskAssignedNotifications } from "@/api/lib/tasks/assignment-notifications";
 
 const moveAssigneeBodySchema = v.object({
   taskId: resourceIdSchema("entity"),
@@ -27,20 +33,26 @@ const moveAssigneeBodySchema = v.object({
 export type MoveAssigneeHandlerProps = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
+  /** The authenticated caller, who is never notified of their own action. */
+  actorUserId: SafeId<"user">;
   recordAuditEvent: AuditRecorder;
   body: v.InferOutput<typeof moveAssigneeBodySchema>;
+  fileNotifications?: FileTaskAssignedNotifications;
 };
 
 type MoveAssigneeTxResult =
-  { ok: true } | { ok: false; status: 400 | 404 | 409; message: string };
+  | { ok: true; notifications: NewNotification[] }
+  | { ok: false; status: 400 | 404 | 409; message: string };
 
 // Lock workspace -> membership -> task for both halves of a move. A failed
 // destination validation preserves the previous assignments and their audit.
 export const moveAssigneeHandler = async function* ({
   safeDb,
   workspaceId,
+  actorUserId,
   recordAuditEvent,
   body,
+  fileNotifications = fileTaskAssignedNotifications,
 }: MoveAssigneeHandlerProps) {
   const { taskId, fromUserId, toUserId } = body;
 
@@ -97,19 +109,20 @@ export const moveAssigneeHandler = async function* ({
         });
       }
 
-      if (toUserId !== null) {
-        await writeTaskAssignments({
-          tx,
-          workspaceId,
-          assignments: [
-            {
-              entityId: taskId,
-              userId: toUserId,
-              role: TASK_ASSIGNEE_ROLE.ASSIGNEE,
-            },
-          ],
-        });
-      }
+      const written =
+        toUserId === null
+          ? []
+          : await writeTaskAssignments({
+              tx,
+              workspaceId,
+              assignments: [
+                {
+                  entityId: taskId,
+                  userId: toUserId,
+                  role: TASK_ASSIGNEE_ROLE.ASSIGNEE,
+                },
+              ],
+            });
 
       const events: AuditEvent[] = [];
       if (fromUserId !== null) {
@@ -139,7 +152,14 @@ export const moveAssigneeHandler = async function* ({
       }
       await recordAuditEvent(tx, events);
 
-      return { ok: true };
+      return {
+        ok: true,
+        notifications: await taskAssignedNotifications(tx, {
+          actorUserId,
+          workspaceId,
+          written,
+        }),
+      };
     }),
   );
 
@@ -149,6 +169,7 @@ export const moveAssigneeHandler = async function* ({
     );
   }
 
+  fileNotifications(txResult.notifications);
   return Result.ok({ success: true });
 };
 
@@ -168,10 +189,11 @@ const moveAssignee = createSafeHandler(
     mcp: { type: "covered", by: "save_task" },
     body: moveAssigneeBodySchema,
   },
-  async function* ({ workspaceId, body, safeDb, recordAuditEvent }) {
+  async function* ({ workspaceId, user, body, safeDb, recordAuditEvent }) {
     return yield* moveAssigneeHandler({
       safeDb,
       workspaceId,
+      actorUserId: user.id,
       recordAuditEvent,
       body,
     });

@@ -3,6 +3,10 @@ import { EventType } from "@tanstack/ai/client";
 import type { StreamChunk } from "@tanstack/ai/client";
 import * as v from "valibot";
 
+import {
+  CHAT_COMMAND_ID_HEADER,
+  CHAT_COMMAND_MAX_RETRIES,
+} from "@stll/api-contract/chat-command";
 import { toSafeId } from "@stll/api-contract/safe-id";
 
 import messages from "../../src/i18n/langs/en.json" with { type: "json" };
@@ -15,6 +19,7 @@ import {
   DOCKED_CHAT_LEGAL_ROUTES,
   installDockedLegalFixtures,
 } from "../helpers/docked-chat-legal-fixtures";
+import { apiJson, eventStream, respond } from "../helpers/route-mock";
 import { EXPECTS_DEV_RUNTIME } from "../helpers/runtime-mode";
 import { expect, test } from "../helpers/test";
 
@@ -37,7 +42,12 @@ test.use({ locale: "en-US" });
 const openFreshReader = async (page: Page) => {
   await installDockedLegalFixtures(page);
   await page.route("**/v1/chat/threads/*/suggested-prompts*", async (route) => {
-    await route.fulfill({ json: { prompts: [] } });
+    await respond(
+      route,
+      apiJson("v1/chat/threads/:threadId/suggested-prompts", "post", {
+        prompts: [],
+      }),
+    );
   });
   await openMemberDecision(page, {
     bootPath: DECISION_READER_BOOT_PATH,
@@ -65,13 +75,14 @@ test("a fresh decision reader succeeds on its first chat question", async ({
     parts: [{ type: "text", content: ANSWER }],
   } satisfies (typeof dockedChatMessagePage.messages)[number];
   await page.route("**/v1/chat/threads/*/messages*", async (route) => {
-    await route.fulfill({
-      json: {
+    await respond(
+      route,
+      apiJson("v1/chat/threads/:threadId/messages", "get", {
         ...dockedChatMessagePage,
         messages: answered ? [completedMessage] : [],
         threadExists: answered,
-      },
-    });
+      }),
+    );
   });
   await page.route(/\/v1\/chat\/?$/u, async (route) => {
     const body: unknown = route.request().postDataJSON();
@@ -104,12 +115,7 @@ test("a fresh decision reader succeeds on its first chat question", async ({
         runId: send.runId,
       },
     ] satisfies StreamChunk[];
-    await route.fulfill({
-      contentType: "text/event-stream",
-      body: events
-        .map((event) => `data: ${JSON.stringify(event)}\n\n`)
-        .join(""),
-    });
+    await respond(route, eventStream(events));
   });
 
   const composer = await openFreshReader(page);
@@ -135,26 +141,38 @@ test("a fresh reader shows connection guidance when its first chat request canno
   }
   browserErrors.expectCaptured(/Failed to load resource:.*ERR_FAILED/u);
   await page.route("**/v1/chat/threads/*/messages*", async (route) => {
-    await route.fulfill({
-      json: { ...dockedChatMessagePage, messages: [], threadExists: false },
-    });
+    await respond(
+      route,
+      apiJson("v1/chat/threads/:threadId/messages", "get", {
+        ...dockedChatMessagePage,
+        messages: [],
+        threadExists: false,
+      }),
+    );
   });
-  let sends = 0;
+  const commandIds: (string | undefined)[] = [];
   await page.route(/\/v1\/chat\/?$/u, async (route) => {
-    sends += 1;
+    commandIds.push(route.request().headers()[CHAT_COMMAND_ID_HEADER]);
     await route.abort("failed");
   });
   const composer = await openFreshReader(page);
   await composer.getByRole("textbox").fill(QUESTION);
   await composer.getByRole("button", { name: "Send message" }).click();
-  await expect(page.locator('[data-slot="docked-chat-thread"]')).toContainText(
-    messages.chat.sendErrorConnectionFailed,
-  );
+  // Not sent: the question is back in the composer, not in the thread, and
+  // the notice says why.
   await expect(
-    page.getByRole("button", { name: "Resend", exact: true }),
+    page.getByText(messages.chat.sendErrorConnectionFailed),
   ).toBeVisible();
+  await expect(composer.getByRole("textbox")).toContainText(QUESTION);
   await expect(
     page.locator('[data-slot="docked-chat-thread"]'),
-  ).not.toContainText(messages.chat.sendError);
-  expect(sends).toBe(1);
+  ).not.toContainText(QUESTION);
+  await expect(
+    page.getByText(messages.chat.sendError, { exact: true }),
+  ).toHaveCount(0);
+  // A send that never reached the server is asked again under its command
+  // id, and the guidance shows once the last attempt fails too.
+  expect(commandIds).toHaveLength(1 + CHAT_COMMAND_MAX_RETRIES);
+  expect(new Set(commandIds).size).toBe(1);
+  expect(commandIds[0]).toMatch(/^[0-9a-f-]{36}$/u);
 });

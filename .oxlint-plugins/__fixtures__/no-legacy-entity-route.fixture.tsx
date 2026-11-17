@@ -67,7 +67,7 @@ export const methodConcatenatedLegacyRoute = "/workspaces/".concat(
 );
 
 export const satisfiesWrappedLegacyRoute =
-  // oxlint-disable-next-line no-legacy-entity-route/no-legacy-entity-route -- regression case
+  // oxlint-disable-next-line no-legacy-entity-route/no-legacy-entity-route, prefer-template -- concatenation is the negative specimen
   (`/workspaces/${workspaceId}` satisfies `/workspaces/${string}`) +
   `/entities/${entityId}`;
 

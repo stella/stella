@@ -1,18 +1,22 @@
 import { beforeEach, expect, spyOn, test } from "bun:test";
 import { runInNewContext } from "node:vm";
+import { createFormatter, createTranslator } from "use-intl";
 
 import { stellaToast } from "@stll/ui/toast";
 
 import {
   buildFormattingLocale,
+  buildMessageLocale,
   folioMessageLoaders,
   getFormatter,
   getFormattingLocale,
   getMessageLocale,
+  loadLocaleMessages,
   messageLoaders,
   supportedLanguages,
   useI18nStore,
 } from "@/i18n/i18n-store";
+import type { NumberingPreference, SupportedLanguage } from "@/i18n/i18n-store";
 import en from "@/i18n/langs/en.json";
 import { getAnalytics } from "@/lib/analytics/provider";
 
@@ -200,6 +204,39 @@ test("buildFormattingLocale never builds an invalid tag for any language + regio
   }
 });
 
+test("numbers inside a message use the same digits as the formatter", () => {
+  // A plural's `#` is formatted by the message locale, `{n}` arguments by
+  // the formatter; with Arabic UI the two printed different digits.
+  const expectSameDigits = (
+    lang: SupportedLanguage,
+    numberingSystem: NumberingPreference,
+  ) => {
+    const options = {
+      lang,
+      region: "",
+      regionalFormat: "auto",
+      calendar: "auto",
+      numberingSystem,
+      weekStart: "auto",
+    } as const;
+    const translate = createTranslator({
+      locale: buildMessageLocale(options),
+      messages: { probe: "{count, plural, other {#}}" },
+    });
+    const formatter = createFormatter({
+      locale: buildFormattingLocale(options),
+      timeZone: "UTC",
+    });
+    expect(translate("probe", { count: 6 })).toBe(formatter.number(6));
+    expect(new Intl.Locale(buildMessageLocale(options)).baseName).toBe(lang);
+  };
+  for (const lang of supportedLanguages) {
+    expectSameDigits(lang, "auto");
+    expectSameDigits(lang, "latn");
+    expectSameDigits(lang, "arab");
+  }
+});
+
 test("Indian regional format uses lakh and crore grouping", () => {
   useI18nStore.getState().setRegionalFormat("en-IN");
 
@@ -301,5 +338,44 @@ test("reports a folio catalog that fails to load and keeps the previous language
     await expectFailedCsSwitchIsReported(bundleError);
   } finally {
     loaderSpy.mockRestore();
+  }
+});
+
+test("folio defaults preserve frozen app catalogs and app-owned messages", async () => {
+  const appMessages = {
+    ...en,
+    folio: {
+      ...en.folio,
+      editor: Object.freeze({
+        outlineDepthAll: "App outline depths",
+        outlineDepthLabel: en.folio.editor.outlineDepthLabel,
+        outlineDepthThree: en.folio.editor.outlineDepthThree,
+        outlineDepthTwo: en.folio.editor.outlineDepthTwo,
+      }),
+    },
+  };
+  const before = structuredClone(appMessages);
+  const folioCatalog = await folioMessageLoaders.cs();
+  const editorDefaults = folioCatalog.folio["editor"];
+  if (editorDefaults === undefined || typeof editorDefaults === "string") {
+    throw new TypeError("The editor catalog must contain message defaults");
+  }
+  const accessibleName = editorDefaults["accessibleName"];
+  if (typeof accessibleName !== "string") {
+    throw new TypeError("The editor catalog must contain its accessible name");
+  }
+  const catalogBefore = structuredClone(folioCatalog);
+  const loader = spyOn(messageLoaders, "cs").mockResolvedValue(appMessages);
+  try {
+    const merged = await loadLocaleMessages("cs");
+    expect(merged.folio.editor).not.toBe(appMessages.folio.editor);
+    expect(merged.folio.editor.outlineDepthAll).toBe("App outline depths");
+    expect(merged.folio.editor).toMatchObject({
+      accessibleName,
+    });
+    expect(appMessages).toEqual(before);
+    expect(folioCatalog).toEqual(catalogBefore);
+  } finally {
+    loader.mockRestore();
   }
 });

@@ -21,8 +21,8 @@
 
 import { Glob } from "bun";
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
-import * as cheerio from "cheerio";
 
+import { load } from "@stll/html";
 import { headingPathsByAnchor } from "@stll/legal-ast";
 import {
   hasBlockInlines,
@@ -34,13 +34,14 @@ import {
   ecjDocumentHtml,
   ecjDocumentRoot,
   ecjPageCarriesChrome,
-  parseEcjDecisionHtml,
+  parseEcjDecisionHtml as uncheckedParseEcjDecisionHtml,
 } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj";
 import {
   normalizeOracleText,
   parseFormex,
 } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj-formex";
 import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 import {
   manifestationStem,
@@ -52,6 +53,8 @@ import {
   SHELL_STEM,
   SHELL_STEM_SUFFIX,
 } from "./__fixtures__/eu-ecj/corpus";
+
+const parseEcjDecisionHtml = guardParser(uncheckedParseEcjDecisionHtml);
 
 /**
  * Every test here gunzips and parses one of the largest fixtures in the repo,
@@ -491,20 +494,20 @@ describe("parseEcjDecisionHtml", () => {
 
     // Two of the publisher's own annotations, and the refusal needs both.
     // The shell has the site's component library and no converter output.
-    expect(ecjDocumentRoot(cheerio.load(shell)).boundary).toBe("page-chrome");
+    expect(ecjDocumentRoot(load(shell)).boundary).toBe("page-chrome");
     // The same decision, in the language the Court did publish it in:
     // without this the assertion above would hold of a parser that had
     // simply stopped finding markers anywhere.
-    expect(ecjDocumentRoot(cheerio.load(decision)).boundary).toBe("converter");
-    expect(ecjPageCarriesChrome(cheerio.load(decision))).toBe(false);
+    expect(ecjDocumentRoot(load(decision)).boundary).toBe("converter");
+    expect(ecjPageCarriesChrome(load(decision))).toBe(false);
     // The portal page carries both, and the converter's markers decide:
     // there is a decision inside it, so it is bounded, not refused.
-    expect(ecjPageCarriesChrome(cheerio.load(page))).toBe(true);
-    expect(ecjDocumentRoot(cheerio.load(page)).boundary).toBe("converter");
+    expect(ecjPageCarriesChrome(load(page))).toBe(true);
+    expect(ecjDocumentRoot(load(page)).boundary).toBe("converter");
     // A layout this parser does not recognise is unmatched, not a page.
     // It keeps the whole body, which is what rule 10 requires of it.
     expect(
-      ecjDocumentRoot(cheerio.load("<html><body><p>Rozsudok</p></body></html>"))
+      ecjDocumentRoot(load("<html><body><p>Rozsudok</p></body></html>"))
         .boundary,
     ).toBe("document");
   });
@@ -520,7 +523,7 @@ describe("parseEcjDecisionHtml", () => {
       }
       expect({
         stem,
-        chrome: ecjPageCarriesChrome(cheerio.load(html)),
+        chrome: ecjPageCarriesChrome(load(html)),
       }).toEqual({ stem, chrome: false });
     }
   });
@@ -928,6 +931,36 @@ test("excludes script and style from the keyword metadata chain", () => {
   expect(keywords).toEqual(["First", "Second"]);
 });
 
+test("a range's closing number stays in its keyword, with either separator spacing", () => {
+  const keywordsOf = (chain: string) =>
+    parseEcjDecisionHtml({
+      caseNumber: "C-383/07",
+      ecli: undefined,
+      court: "Court of Justice",
+      decisionDate: undefined,
+      decisionType: undefined,
+      sourceUrl: undefined,
+      celex: "62007CJ0383",
+      html: `<body><p class='coj-sum-title-1'>OTSUS</p><p class='coj-index'>${chain}</p><p class='coj-normal'>Body.</p></body>`,
+    }).keywords;
+  // The chain of C-383/07 in Estonian: paragraphs 1 to 3 of Article 1.
+  expect(
+    keywordsOf(
+      "„Eelotsusetaotlus — Määrus (EÜ) nr 258/97 — Artikli 1 lõiked 1 — 3 — Uuendtoit”",
+    ),
+  ).toEqual([
+    "Eelotsusetaotlus",
+    "Määrus (EÜ) nr 258/97",
+    "Artikli 1 lõiked 1 — 3",
+    "Uuendtoit",
+  ]);
+  expect(keywordsOf("(Appeal — Article 2(1) — 3 — 2003 reform)")).toEqual([
+    "Appeal",
+    "Article 2(1) — 3",
+    "2003 reform",
+  ]);
+});
+
 const parseStem = async (stem: string): Promise<Block[]> => {
   const html = await readFixture(`${stem}.html.gz`);
   if (html === undefined) {
@@ -1046,12 +1079,21 @@ describe("the oldest layout", () => {
     }).documentAst.blocks;
 
   /** Each paragraph's number, or null, with its text. */
+  /** The grounds' paragraphs: everything before the operative part. */
   const numberedLines = (blocks: readonly Block[]) =>
-    blocks.flatMap((block) =>
-      block.type === "paragraph" && block.role === undefined
-        ? [[block.number ?? null, block.plainText] as const]
-        : [],
-    );
+    blocks
+      .slice(
+        0,
+        blocks.findIndex(
+          (block) =>
+            block.type === "heading" && block.plainText === "Operative part",
+        ),
+      )
+      .flatMap((block) =>
+        block.type === "paragraph" && block.role === undefined
+          ? [[block.number ?? null, block.plainText] as const]
+          : [],
+      );
 
   test("a quoted list item never takes the number of the Court's next paragraph", () => {
     // The quoted item is numbered `2.`, the Court's own `2` follows it: the
@@ -1183,7 +1225,16 @@ describe("the oldest layout", () => {
     expect(after("Parties")).toMatchObject({ role: "intro" });
     expect(after("Grounds")).toMatchObject({ number: 1 });
     expect(after("Grounds")).not.toHaveProperty("role");
-    expect(after("Operative part")).toMatchObject({ role: "holding" });
+    // The sentence introducing the ruling is not part of it.
+    expect(after("Operative part")).toMatchObject({
+      plainText: "On those grounds,",
+    });
+    expect(after("Operative part")).not.toHaveProperty("role");
+    expect(
+      blocks.find((block) =>
+        block.plainText.startsWith("1. The provisions of Council Directive"),
+      ),
+    ).toMatchObject({ role: "holding" });
   });
 
   test("printed report page markers become page anchors", async () => {
@@ -1237,5 +1288,139 @@ describe("converter output", () => {
     for (const holding of holdings) {
       expect(headingTitlesOf(blocks, holding.anchorId)).toEqual([formula]);
     }
+  });
+});
+
+describe("title lines and the footnote list", () => {
+  const parseBody = (body: string) =>
+    parseEcjDecisionHtml({
+      caseNumber: "C-176/17",
+      ecli: undefined,
+      court: "Court of Justice",
+      decisionDate: undefined,
+      decisionType: undefined,
+      sourceUrl: undefined,
+      celex: "62017CC0176",
+      html: `<html><body>${body}</body></html>`,
+    }).documentAst.blocks;
+
+  // The markup Cellar serves for an Advocate General's opinion: the title is
+  // set over three lines, and the third carries the first note reference.
+  const OPINION = [
+    "<p class='sum-title-1'><a id='conclusion'></a>OPINION OF ADVOCATE GENERAL</p>",
+    "<p class='sum-title-1'>KOKOTT</p>",
+    "<p class='sum-title-1'>delivered on 26 April 2018 (<span class='note'><a id='c-E0001' href='#t-E0001'>1</a></span>)</p>",
+    "<p class='subtitle'><span class='bold'>Case C‑176/17</span></p>",
+    "<p class='normal'>The request concerns consumer protection.</p>",
+    "<hr class='note'/>",
+    "<p class='note'>(<span class='note'><a id='t-E0001' href='#c-E0001'>1</a></span>)\tOriginal language: German.</p>",
+    "<p class='note'>(<span class='note'><a id='t-E0002' href='#c-E0002'>2</a></span>)\tCouncil Directive 93/13/EEC of 5 April 1993.</p>",
+    "<p class='note'>Continued text of the second note.</p>",
+  ].join("");
+
+  test("a title set over several lines is one decision title", () => {
+    const titles = parseBody(OPINION).filter(
+      (block) => block.type === "heading" && block.role === "decision-title",
+    );
+    expect(titles.map((block) => block.plainText)).toEqual([
+      "OPINION OF ADVOCATE GENERAL KOKOTT delivered on 26 April 2018 (1)",
+    ]);
+    const [title] = titles;
+    expect(
+      title?.type === "heading"
+        ? title.inlines.filter((inline) => inline.type === "line-break")
+        : [],
+    ).toHaveLength(2);
+  });
+
+  test("a judgment's chamber and date lines are one decision title", () => {
+    const titles = parseBody(
+      [
+        "<p class='coj-sum-title-1'>JUDGMENT OF THE COURT (Fourth Chamber)</p>",
+        "<p class='coj-sum-title-1'>16 July 2020</p>",
+        "<p class='coj-normal'>Body paragraph.</p>",
+      ].join(""),
+    ).filter(
+      (block) => block.type === "heading" && block.role === "decision-title",
+    );
+    expect(titles.map((block) => block.plainText)).toEqual([
+      "JUDGMENT OF THE COURT (Fourth Chamber) 16 July 2020",
+    ]);
+  });
+
+  test("each footnote entry is a note keyed by the anchor its reference names", () => {
+    const notes = parseBody(OPINION).flatMap((block) =>
+      block.type === "paragraph" && block.note !== undefined
+        ? [
+            {
+              anchorId: block.anchorId,
+              note: block.note,
+              text: block.plainText,
+            },
+          ]
+        : [],
+    );
+    expect(notes).toEqual([
+      {
+        anchorId: "t-E0001",
+        note: { type: "footnote", label: "1", noteId: "t-E0001" },
+        text: expect.stringContaining("Original language: German."),
+      },
+      {
+        anchorId: "t-E0002",
+        note: { type: "footnote", label: "2", noteId: "t-E0002" },
+        text: expect.stringContaining("Council Directive 93/13/EEC"),
+      },
+      {
+        anchorId: expect.not.stringMatching(/^t-E0002$/u),
+        note: { type: "footnote", label: "2", noteId: "t-E0002" },
+        text: "Continued text of the second note.",
+      },
+    ]);
+  });
+});
+
+describe("the table of contents after the signatures", () => {
+  // The shape EUR-Lex serves for a General Court judgment (T-612/17): the
+  // operative part, the signatures, then the converter's own contents table.
+  const html = [
+    "<html><body>",
+    "<p class='coj-sum-title-1'>JUDGMENT OF THE GENERAL COURT (Ninth Chamber, Extended Composition)</p>",
+    "<table><tr><td><span class='coj-count' id='point1'>1</span></td><td><p class='coj-normal'>The background to the dispute.</p></td></tr></table>",
+    "<table><tr><td><span class='coj-count' id='point2'>2</span></td><td><p class='coj-normal'>The action is unfounded in part.</p></td></tr></table>",
+    "<p class='coj-normal'>hereby:</p>",
+    "<table><tr><td><p class='coj-normal'>1.</p></td><td><p class='coj-normal'>Annuls Article 1 of the decision;</p></td></tr></table>",
+    "<table><tr><td><p class='coj-normal'>2.</p></td><td><p class='coj-normal'>Dismisses the action as to the remainder;</p></td></tr></table>",
+    "<p class='coj-sum-title-1'>Table of contents</p>",
+    "<table><tbody>",
+    "<tr><td> </td><td valign='top'><p class='coj-NTOC2'>I. Background to the dispute</p></td></tr>",
+    "<tr><td> </td><td valign='top'><p class='coj-NTOC3'>A. Context</p></td></tr>",
+    "<tr><td> </td><td valign='top'><p class='coj-NTOC2'>V. Costs</p></td></tr>",
+    "</tbody></table>",
+    "</body></html>",
+  ].join("");
+
+  test("contents entries are publisher notes, not the operative part", () => {
+    const { documentAst } = parseEcjDecisionHtml({
+      caseNumber: "T-612/17",
+      ecli: undefined,
+      court: "General Court",
+      decisionDate: undefined,
+      decisionType: undefined,
+      sourceUrl: undefined,
+      celex: "62017TJ0612",
+      html,
+    });
+    const roleOf = (text: string) => {
+      const block = documentAst.blocks.find((candidate) =>
+        candidate.plainText.endsWith(text),
+      );
+      return block?.type === "paragraph" ? block.role : undefined;
+    };
+    expect(roleOf("Annuls Article 1 of the decision;")).toBe("holding");
+    expect(roleOf("Dismisses the action as to the remainder;")).toBe("holding");
+    expect(roleOf("I. Background to the dispute")).toBe("publisher-note");
+    expect(roleOf("A. Context")).toBe("publisher-note");
+    expect(roleOf("V. Costs")).toBe("publisher-note");
   });
 });

@@ -213,11 +213,11 @@ export const IntegrationsGroup = ({
             >
               <ListItemMedia>
                 <CatalogueEntryIcon
-                  className="text-muted-foreground"
                   icon={entry.icon}
                   iconUrl={entry.iconUrl ?? null}
                   size={18}
                   slug={entry.slug}
+                  tone="muted"
                 />
               </ListItemMedia>
               <ListItemContent>
@@ -295,15 +295,15 @@ const ApproveAuthorizationButton = ({
   const [open, setOpen] = useState(false);
   const { activeOrganizationId, id: userId } = useAuthenticatedUser();
   const approve = useMutation({
-    mutationFn: async () =>
-      unwrapApiResponse(
-        await api.mcp
-          .connectors({ slug: connectorSlug })
-          ["approve-authorization"].post({
-            confirmedIssuer: issuer,
-            confirmedEndpointOrigins: endpointOrigins,
-          }),
-      ),
+    mutationFn: async () => {
+      const connectorApi = api.mcp.connectors({ slug: connectorSlug });
+      return unwrapApiResponse(
+        await connectorApi["approve-authorization"].post({
+          confirmedIssuer: issuer,
+          confirmedEndpointOrigins: endpointOrigins,
+        }),
+      );
+    },
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({

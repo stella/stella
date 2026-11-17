@@ -36,17 +36,26 @@ import {
 } from "@/api/lib/legal-search/corpus-search-order";
 import { collapseByLanguageGroup } from "@/api/lib/legal-search/language-group-collapse";
 import { collapseLegislationHitsByWork } from "@/api/lib/legal-search/legislation-work-collapse";
+import { PUBLIC_READ_TIMEOUT_CODE } from "@/api/lib/legal-search/public-read-timeout";
 import {
   blendStableCitationAuthority,
   DEFAULT_AUTHORITY_WEIGHT,
   stableBlendUpperBound,
 } from "@/api/lib/legal-search/rerank";
+import { isSearchIndexUnavailable } from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
+import {
+  findRequestBudgetExpiry,
+  runWithinRequestLatencyBudget,
+} from "@/api/lib/load/request-latency-budget";
 import {
   testAppliedProjectionsFor,
   testRevisionOf,
   testRevisionsFor,
 } from "@/api/tests/helpers/corpus-projection-revisions";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+
+const testFetchState = createTestFetch();
 
 /**
  * Grouping passage hits back into document hits. A passage-granular generation
@@ -66,7 +75,14 @@ let responseBody: unknown;
  * single-window cases.
  */
 let engineHits:
-  { document_id: string; anchor_id?: string; chunk_id?: string }[] | null;
+  | {
+      document_id: string;
+      anchor_id?: string;
+      chunk_id?: string;
+      /** The copy the hit belongs to; the applied one when absent. */
+      projection_revision?: string;
+    }[]
+  | null;
 let requestBodies: Record<string, unknown>[];
 /**
  * Wall time the fake engine spends on every request. Zero by default, so only
@@ -167,20 +183,23 @@ beforeEach(() => {
         num_hits: engineHits.length,
         hits: window.map((hit) => ({
           ...hit,
-          projection_revision: testRevisionOf(hit.document_id),
+          projection_revision:
+            hit.projection_revision ?? testRevisionOf(hit.document_id),
         })),
         snippets: window.map((hit) => ({ text: [`snip ${hit.document_id}`] })),
       }),
       { status: 200 },
     );
   };
-  globalThis.fetch = Object.assign(stub, {
-    preconnect: originalFetch.preconnect,
-  });
+  testFetchState.set(
+    Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    }),
+  );
 });
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
   mock.restore();
 });
 
@@ -1350,9 +1369,11 @@ describe("only the passages a page emits are highlighted", () => {
         { status: 200 },
       );
     };
-    globalThis.fetch = Object.assign(stub, {
-      preconnect: originalFetch.preconnect,
-    });
+    testFetchState.set(
+      Object.assign(stub, {
+        preconnect: originalFetch.preconnect,
+      }),
+    );
     const page = await readPage(2);
     expect(
       hits.filter(({ document_id }) => document_id === "doc-a").length,
@@ -1402,9 +1423,15 @@ describe("only the passages a page emits are highlighted", () => {
     },
   );
 
-  test.each([0, 1, 12])(
-    "only %i superseded chunks need per-document fallback",
-    async (supersededCount) => {
+  test.each([
+    // Before batching, each superseded chunk cost one request of its own
+    // (1 + supersededCount highlight requests in all).
+    { supersededCount: 0, fallbackRequests: 0 },
+    { supersededCount: 1, fallbackRequests: 1 },
+    { supersededCount: 12, fallbackRequests: 1 },
+  ])(
+    "$supersededCount superseded chunks re-select in $fallbackRequests request(s)",
+    async ({ supersededCount, fallbackRequests }) => {
       const currentHits = Array.from({ length: 20 }, (_, index) => ({
         document_id: `doc-${index}`,
         chunk_id: `doc-${index}:0`,
@@ -1458,20 +1485,17 @@ describe("only the passages a page emits are highlighted", () => {
           }),
         );
       };
-      globalThis.fetch = Object.assign(stub, {
-        preconnect: originalFetch.preconnect,
-      });
+      testFetchState.set(
+        Object.assign(stub, {
+          preconnect: originalFetch.preconnect,
+        }),
+      );
       const page = await readPage(20);
       expect(scanRequestCount()).toBe(1);
-      expect(snippetRequests()).toHaveLength(1 + supersededCount);
-      expect(requestBodies).toHaveLength(2 + supersededCount);
-      expect(page.scan.highlightRounds).toBe(1 + supersededCount);
-      expect(peak).toBe(
-        Math.max(
-          1,
-          Math.min(supersededCount, LIMITS.corpusIndexHighlightConcurrency),
-        ),
-      );
+      expect(snippetRequests()).toHaveLength(1 + fallbackRequests);
+      expect(requestBodies).toHaveLength(2 + fallbackRequests);
+      expect(page.scan.highlightRounds).toBe(1 + fallbackRequests);
+      expect(peak).toBe(1);
       for (const hit of currentHits) {
         expect(page.snippetById.get(hit.document_id)).toBe(
           `current ${hit.document_id}`,
@@ -1480,6 +1504,71 @@ describe("only the passages a page emits are highlighted", () => {
       }
     },
   );
+
+  test("a document crowded out of the batched re-selection gets a request of its own", async () => {
+    // Both scan chunks are superseded. doc-a's current revision matches in
+    // more passages than the batch has room for, all scoring above doc-b's.
+    const scanned = [
+      { document_id: "doc-a", chunk_id: "doc-a:old", anchor_id: "a-old" },
+      { document_id: "doc-b", chunk_id: "doc-b:old", anchor_id: "b-old" },
+    ];
+    const currentCopies = [
+      ...Array.from({ length: 20 }, (_, index) => ({
+        document_id: "doc-a",
+        chunk_id: `doc-a:${index}`,
+        anchor_id: `a-${index}`,
+      })),
+      { document_id: "doc-b", chunk_id: "doc-b:0", anchor_id: "b-0" },
+    ];
+    const stub = async (
+      _input: Parameters<typeof fetch>[0],
+      init?: Parameters<typeof fetch>[1],
+    ): Promise<Response> => {
+      const body: Record<string, unknown> =
+        typeof init?.body === "string" ? JSON.parse(init.body) : {};
+      requestBodies.push(body);
+      const query = String(body["query"]);
+      const matching =
+        body["snippet_fields"] === undefined
+          ? scanned
+          : currentCopies.filter((hit) =>
+              ["document_id", "chunk_id"].some((field) =>
+                query.includes(
+                  `(${field}:"${field === "document_id" ? hit.document_id : hit.chunk_id}" AND projection_revision:"${testRevisionOf(hit.document_id)}")`,
+                ),
+              ),
+            );
+      const selected = matching.slice(0, Number(body["max_hits"]));
+      return new Response(
+        JSON.stringify({
+          num_hits: matching.length,
+          hits: selected.map((hit) => ({
+            ...hit,
+            projection_revision: testRevisionOf(hit.document_id),
+          })),
+          snippets: selected.map((hit) => ({
+            text: [`passage ${hit.chunk_id}`],
+          })),
+        }),
+      );
+    };
+    testFetchState.set(
+      Object.assign(stub, { preconnect: originalFetch.preconnect }),
+    );
+
+    const page = await readPage(2);
+
+    expect(snippetRequests().map((request) => request["query"])).toEqual([
+      `(text:promlčení) AND (${current('chunk_id:"doc-a:old"', "doc-a")} OR ${current('chunk_id:"doc-b:old"', "doc-b")})`,
+      `(text:promlčení) AND (${current('document_id:"doc-a"', "doc-a")} OR ${current('document_id:"doc-b"', "doc-b")})`,
+      `(text:promlčení) AND (${current('document_id:"doc-b"', "doc-b")})`,
+    ]);
+    expect(page.scan.highlightRounds).toBe(3);
+    expect(page.snippetById.get("doc-a")).toBe("passage doc-a:0");
+    expect(page.anchorIdById.get("doc-a")).toBe("a-0");
+    expect(page.snippetById.get("doc-b")).toBe("passage doc-b:0");
+    expect(page.anchorIdById.get("doc-b")).toBe("b-0");
+  });
 
   test("an expired shared highlight deadline prevents further dispatch", async () => {
     engineHits = Array.from({ length: 6 }, (_, index) => ({
@@ -1506,9 +1595,11 @@ describe("only the passages a page emits are highlighted", () => {
       }
       return engine(input, init);
     };
-    globalThis.fetch = Object.assign(stub, {
-      preconnect: originalFetch.preconnect,
-    });
+    testFetchState.set(
+      Object.assign(stub, {
+        preconnect: originalFetch.preconnect,
+      }),
+    );
     // The batch consumes the shared budget; missing passages do not
     // receive a fresh timeout for their fallback requests.
     expect(await rejectionOf(readPage(6))).toMatchObject({
@@ -1517,6 +1608,57 @@ describe("only the passages a page emits are highlighted", () => {
     });
     expect(snippetRequests()).toHaveLength(1);
     clock.mockRestore();
+  });
+
+  test("a highlight window the request's budget ended is a timeout, not an outage", async () => {
+    engineHits = Array.from({ length: 6 }, (_, index) => ({
+      document_id: `doc-${index}`,
+    }));
+    let now = 0;
+    const clock = spyOn(performance, "now").mockImplementation(() => now);
+    const budgetMs = 1000; // timeout under test: shorter than the 30 s window
+    const engine = globalThis.fetch;
+    const stub = async (
+      input: Parameters<typeof fetch>[0],
+      init?: Parameters<typeof fetch>[1],
+    ): Promise<Response> => {
+      const body: Record<string, unknown> =
+        typeof init?.body === "string" ? JSON.parse(init.body) : {};
+      if (
+        body["snippet_fields"] !== undefined &&
+        snippetRequests().length === 0
+      ) {
+        // The request's budget, not the window's own 30 s, runs out here.
+        now = budgetMs + 1;
+        requestBodies.push(body);
+        return new Response(
+          JSON.stringify({ num_hits: 0, hits: [], snippets: [] }),
+        );
+      }
+      return engine(input, init);
+    };
+    testFetchState.set(
+      Object.assign(stub, {
+        preconnect: originalFetch.preconnect,
+      }),
+    );
+    try {
+      const failure = await runWithinRequestLatencyBudget(
+        { label: "search_legislation", budgetMs },
+        async () => await rejectionOf(readPage(6)),
+      );
+      expect(failure).toMatchObject({
+        status: 503,
+        code: PUBLIC_READ_TIMEOUT_CODE,
+      });
+      expect(isSearchIndexUnavailable(failure)).toBe(false);
+      expect(findRequestBudgetExpiry(failure)).toMatchObject({
+        label: "search_legislation",
+      });
+      expect(snippetRequests()).toHaveLength(1);
+    } finally {
+      clock.mockRestore();
+    }
   });
 
   test("an empty page asks the engine for nothing to highlight", async () => {
@@ -1577,36 +1719,38 @@ describe("only the passages a page emits are highlighted", () => {
       },
     ];
     const scanStub = globalThis.fetch;
-    globalThis.fetch = Object.assign(
-      async (
-        input: Parameters<typeof fetch>[0],
-        init?: Parameters<typeof fetch>[1],
-      ): Promise<Response> => {
-        const body: Record<string, unknown> =
-          typeof init?.body === "string" ? JSON.parse(init.body) : {};
-        if (body["snippet_fields"] === undefined) {
-          return await scanStub(input, init);
-        }
-        requestBodies.push(body);
-        // The engine answers a revision-narrowed clause with that copy only.
-        const query = String(body["query"]);
-        const answered = copies.filter(({ hit, revision }) =>
-          ["document_id", "chunk_id"].some((field) =>
-            query.includes(
-              `(${field}:"${field === "document_id" ? hit.document_id : hit.chunk_id}" AND projection_revision:"${revision}")`,
+    testFetchState.set(
+      Object.assign(
+        async (
+          input: Parameters<typeof fetch>[0],
+          init?: Parameters<typeof fetch>[1],
+        ): Promise<Response> => {
+          const body: Record<string, unknown> =
+            typeof init?.body === "string" ? JSON.parse(init.body) : {};
+          if (body["snippet_fields"] === undefined) {
+            return await scanStub(input, init);
+          }
+          requestBodies.push(body);
+          // The engine answers a revision-narrowed clause with that copy only.
+          const query = String(body["query"]);
+          const answered = copies.filter(({ hit, revision }) =>
+            ["document_id", "chunk_id"].some((field) =>
+              query.includes(
+                `(${field}:"${field === "document_id" ? hit.document_id : hit.chunk_id}" AND projection_revision:"${revision}")`,
+              ),
             ),
-          ),
-        );
-        return new Response(
-          JSON.stringify({
-            num_hits: answered.length,
-            hits: answered.map(({ hit }) => hit),
-            snippets: answered.map(({ text }) => ({ text: [text] })),
-          }),
-          { status: 200 },
-        );
-      },
-      { preconnect: originalFetch.preconnect },
+          );
+          return new Response(
+            JSON.stringify({
+              num_hits: answered.length,
+              hits: answered.map(({ hit }) => hit),
+              snippets: answered.map(({ text }) => ({ text: [text] })),
+            }),
+            { status: 200 },
+          );
+        },
+        { preconnect: originalFetch.preconnect },
+      ),
     );
 
     const page = await readPage();
@@ -1739,19 +1883,23 @@ describe("an engine refusal reaches the caller as a mapped status", () => {
     // request alone reaches the second read site with a page already scanned.
     snippetResponseBody = null;
     const stubbedFetch = globalThis.fetch;
-    globalThis.fetch = Object.assign(
-      async (
-        input: Parameters<typeof fetch>[0],
-        init?: Parameters<typeof fetch>[1],
-      ): Promise<Response> => {
-        const body: Record<string, unknown> =
-          typeof init?.body === "string" ? JSON.parse(init.body) : {};
-        if (body["snippet_fields"] !== undefined) {
-          return new Response("engine refused the highlight", { status: 503 });
-        }
-        return await stubbedFetch(input, init);
-      },
-      { preconnect: originalFetch.preconnect },
+    testFetchState.set(
+      Object.assign(
+        async (
+          input: Parameters<typeof fetch>[0],
+          init?: Parameters<typeof fetch>[1],
+        ): Promise<Response> => {
+          const body: Record<string, unknown> =
+            typeof init?.body === "string" ? JSON.parse(init.body) : {};
+          if (body["snippet_fields"] !== undefined) {
+            return new Response("engine refused the highlight", {
+              status: 503,
+            });
+          }
+          return await stubbedFetch(input, init);
+        },
+        { preconnect: originalFetch.preconnect },
+      ),
     );
 
     const failure = await readPageFailure();
@@ -2474,4 +2622,228 @@ test("two sequential scans report as one, with every count added", () => {
     highlightRounds: 3,
   });
   expect(sumCorpusIndexScans(strict, emptyCorpusIndexScan())).toEqual(strict);
+});
+
+describe("copies Postgres does not record as applied never surface", () => {
+  const documentId = (index: number) =>
+    `copy-${String(index).padStart(5, "0")}`;
+  /** A copy of the document other than the applied one: stale or unapplied. */
+  const otherRevisionOf = (id: string) => testRevisionOf(`${id}#other`);
+
+  type Copy = "applied" | "other";
+
+  /**
+   * The cursor chain over an engine holding `hits`, ranked through the scope's
+   * one servable check against the applied revisions in `applied`.
+   */
+  const readChain = async (applied: ReadonlySet<string>, limit: number) => {
+    const recurring = recurringFixtureIdentities();
+    const pages: { ids: string[]; reach: string }[] = [];
+    let cursor: SearchCursor | null = null;
+    for (let page = 0; page < 400; page += 1) {
+      const parsedCursor: SearchCursor | null = cursor;
+      // Each cursor page needs the previous page's cursor.
+      const read: Awaited<ReturnType<typeof readCorpusIndexSearchPage<null>>> =
+        await readCorpusIndexSearchPage({
+          scanTransport: NATIVE_SCAN_TRANSPORT,
+          observer: "unobserved",
+          cluster: "q09",
+          indexId: "case_law_v10_cze",
+          query: "text:smlouva",
+          limit,
+          order: RELEVANCE_ORDER,
+          parsedCursor,
+          snippetFields: ["text"],
+          projectionRevisionField: "projection_revision",
+          extractId: (hit: CorpusIndexHit) =>
+            typeof hit["document_id"] === "string" ? hit["document_id"] : null,
+          extractSnippet: () => null,
+          unseenScoreUpperBound: (score) => score,
+          rankCandidates: async (
+            probes,
+            { excludedGroups, selectAppliedCandidates },
+          ) => {
+            const candidates = selectAppliedCandidates(
+              testAppliedProjectionsFor(
+                probes.filter(({ id }) => applied.has(id)),
+              ),
+            );
+            const shown = candidates.filter(
+              ({ id }) => !excludedGroups.has(corpusSearchGroupToken(id)),
+            );
+            return {
+              context: null,
+              groups: shown
+                .filter(({ id }) => recurring.has(id))
+                .map(({ id }) => corpusSearchGroupToken(id)),
+              ranked: shown.map((candidate) => ({
+                id: candidate.id,
+                score: candidate.score,
+                lexicalScore: candidate.score,
+                citationAuthority: 0,
+              })),
+              revisionById: testRevisionsFor(shown),
+            };
+          },
+        });
+      pages.push({
+        ids: read.pageRanked.map((hit) => hit.id),
+        reach: read.reach,
+      });
+      if (read.nextCursor === null) {
+        break;
+      }
+      cursor = read.nextCursor;
+    }
+    return pages;
+  };
+
+  /**
+   * The independent oracle: the documents Postgres serves that the engine
+   * holds an applied copy of, each placed by its first applied hit.
+   */
+  const oracle = (applied: ReadonlySet<string>) => {
+    const placed: string[] = [];
+    for (const hit of engineHits ?? []) {
+      if (
+        applied.has(hit.document_id) &&
+        (hit.projection_revision ?? testRevisionOf(hit.document_id)) ===
+          testRevisionOf(hit.document_id) &&
+        !placed.includes(hit.document_id)
+      ) {
+        placed.push(hit.document_id);
+      }
+    }
+    return placed;
+  };
+
+  test("the cursor chain is exactly the applied copies' order, however many other copies the engine holds", async () => {
+    await assertProperty(
+      "the cursor chain is exactly the applied copies' order, however many other copies the engine holds",
+      fc.asyncProperty(
+        fc.array(
+          fc.record({
+            // Whether Postgres records any applied copy (none: never applied,
+            // withdrawn, or erased with its delete not settled).
+            served: fc.boolean(),
+            copies: fc.array(fc.constantFrom<Copy>("applied", "other"), {
+              minLength: 1,
+              maxLength: 5,
+            }),
+          }),
+          { minLength: 10, maxLength: 140 },
+        ),
+        fc.array(fc.nat(), { minLength: 700, maxLength: 700 }),
+        fc.integer({ min: 1, max: 25 }),
+        async (documents, order, limit) => {
+          const placed = documents.flatMap(({ copies }, index) =>
+            copies.map((copy) => ({
+              document_id: documentId(index),
+              projection_revision:
+                copy === "applied"
+                  ? testRevisionOf(documentId(index))
+                  : otherRevisionOf(documentId(index)),
+            })),
+          );
+          // An arbitrary interleaving: a stale copy may outrank the applied one.
+          engineHits = placed
+            .map((hit, at) => ({ hit, key: order.at(at) ?? at }))
+            .toSorted((left, right) => left.key - right.key)
+            .map(({ hit }) => hit);
+          const applied = new Set(
+            documents.flatMap(({ served }, index) =>
+              served ? [documentId(index)] : [],
+            ),
+          );
+
+          const pages = await readChain(applied, limit);
+          const chain = pages.flatMap(({ ids }) => ids);
+
+          // Every page is reached and full until the last, and the chain is
+          // the oracle: nothing unapplied, nothing twice, nothing missed, in
+          // the order of the applied copies.
+          expect(
+            pages.every(({ reach }) => reach === SEARCH_PAGE_REACH.REACHED),
+          ).toBe(true);
+          expect(
+            pages.slice(0, -1).every(({ ids }) => ids.length === limit),
+          ).toBe(true);
+          expect(chain).toEqual(oracle(applied));
+        },
+      ),
+      { numRuns: 40 },
+    );
+  });
+
+  test("a ranker that emits an id the servable check did not select is refused", async () => {
+    // The decision's only matching copy is one Postgres superseded; its applied
+    // copy matched nothing. A ranker reading past the check would show it.
+    engineHits = [
+      {
+        document_id: documentId(0),
+        projection_revision: otherRevisionOf(documentId(0)),
+      },
+      { document_id: documentId(1) },
+    ];
+    const read = readCorpusIndexSearchPage({
+      scanTransport: NATIVE_SCAN_TRANSPORT,
+      observer: "unobserved",
+      cluster: "q09",
+      indexId: "case_law_v10_cze",
+      query: "text:smlouva",
+      limit: 10,
+      order: RELEVANCE_ORDER,
+      parsedCursor: null,
+      snippetFields: ["text"],
+      projectionRevisionField: "projection_revision",
+      extractId: (hit: CorpusIndexHit) =>
+        typeof hit["document_id"] === "string" ? hit["document_id"] : null,
+      extractSnippet: () => null,
+      unseenScoreUpperBound: (score) => score,
+      rankCandidates: async (probes, { selectAppliedCandidates }) => {
+        selectAppliedCandidates(testAppliedProjectionsFor(probes));
+        return {
+          context: null,
+          groups: [],
+          // Every scanned id, not the selected ones.
+          ranked: probes.map(({ id }, at) => ({
+            id,
+            score: 1 - at / 10,
+            lexicalScore: 1 - at / 10,
+            citationAuthority: 0,
+          })),
+          revisionById: testRevisionsFor(probes),
+        };
+      },
+    });
+    expect(await rejectionOf(read)).toBeInstanceOf(Panic);
+  });
+
+  test("a window of other copies past the round cap continues the chain rather than ending it", async () => {
+    // More stale copies than the scan reads in one page, ahead of every
+    // applied one: the first page holds nothing, and says so without ending.
+    const flood =
+      LIMITS.corpusIndexSearchMaxRounds *
+        LIMITS.corpusIndexSearchCandidateLimit +
+      50;
+    engineHits = [
+      ...Array.from({ length: flood }, (_, index) => ({
+        document_id: documentId(index),
+        projection_revision: otherRevisionOf(documentId(index)),
+      })),
+      ...Array.from({ length: 30 }, (_, index) => ({
+        document_id: documentId(flood + index),
+      })),
+    ];
+    const applied = new Set(
+      Array.from({ length: flood + 30 }, (_, index) => documentId(index)),
+    );
+
+    const pages = await readChain(applied, 10);
+
+    expect(pages[0]?.ids).toEqual([]);
+    expect(pages[0]?.reach).toBe(SEARCH_PAGE_REACH.REACHED);
+    expect(pages.flatMap(({ ids }) => ids)).toEqual(oracle(applied));
+    expect(oracle(applied)).toHaveLength(30);
+  });
 });

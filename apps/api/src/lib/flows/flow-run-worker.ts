@@ -3,7 +3,7 @@ import { and, asc, gt, inArray, lt, sql } from "drizzle-orm";
 
 import type { rootDb } from "@/api/db/root";
 import { flowRuns } from "@/api/db/schema";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { BullMqWorker } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
@@ -98,6 +98,50 @@ const executeAdmittedFlowStep = async ({
   });
 };
 
+type FailedFlowStepJob = Pick<Job<FlowStepJobData>, "data" | "attemptsMade"> & {
+  opts: Pick<Job<FlowStepJobData>["opts"], "attempts">;
+};
+
+/** Record the failed attempt now; the worker detaches final settlement only when retries end. */
+export const prepareFlowStepFailure = ({
+  job,
+  error,
+  dependencies,
+}: {
+  job: FailedFlowStepJob | undefined;
+  error: Error;
+  dependencies: Parameters<typeof failFlowRunFromWorker>[2];
+}): (() => Promise<void>) | undefined => {
+  if (!job) {
+    return undefined;
+  }
+  logger.error("flow.step_failed", {
+    runId: job.data.runId,
+    stepIndex: String(job.data.stepIndex),
+    attemptsMade: String(job.attemptsMade),
+    "error.type": errorTag(error),
+  });
+
+  // Failed also fires for transient attempts. Keep the run eligible for its retry.
+  const totalAttempts = job.opts.attempts ?? 1;
+  if (job.attemptsMade < totalAttempts) {
+    return undefined;
+  }
+  return async () => {
+    await failFlowRunFromWorker(job.data, error, dependencies).catch(
+      (finalizeError: unknown) => {
+        captureError(
+          finalizeError,
+          handlerErrorContext("flows.initFlowRunWorker.finalizeError", {
+            runId: job.data.runId,
+            stepIndex: String(job.data.stepIndex),
+          }),
+        );
+      },
+    );
+  };
+};
+
 /**
  * Initialize the BullMQ worker for flow runs. Call once at API startup
  * (mirrors `initWorkflowWorker`). The worker owns a dedicated blocking Redis
@@ -142,35 +186,14 @@ export const initFlowRunWorker = ({ db }: BullMqWorkerContext) => {
   );
 
   worker.on("failed", (job, error) => {
-    if (!job) {
-      return;
-    }
-    logger.error("flow.step_failed", {
-      runId: job.data.runId,
-      stepIndex: String(job.data.stepIndex),
-      attemptsMade: String(job.attemptsMade),
-      "error.type": errorTag(error),
+    const finalize = prepareFlowStepFailure({
+      job,
+      error,
+      dependencies: { database: db },
     });
-
-    // With retries enabled the failed event also fires for a transient first
-    // attempt; only flip the run to `failed` once BullMQ has exhausted its
-    // attempts, otherwise a retry would run against an already-failed run.
-    const totalAttempts = job.opts.attempts ?? 1;
-    if (job.attemptsMade < totalAttempts) {
-      return;
+    if (finalize !== undefined) {
+      detached(finalize, "flow-run-worker.fail-flow-run-from-worker");
     }
-
-    failFlowRunFromWorker(job.data, error, { database: db }).catch(
-      (finalizeError: unknown) => {
-        captureError(
-          finalizeError,
-          handlerErrorContext("flows.initFlowRunWorker.finalizeError", {
-            runId: job.data.runId,
-            stepIndex: String(job.data.stepIndex),
-          }),
-        );
-      },
-    );
   });
 
   worker.on("error", createQueueWorkerErrorLogger("flow.worker_error"));
@@ -190,10 +213,16 @@ export const initFlowRunWorker = ({ db }: BullMqWorkerContext) => {
   // ground on a cadence, but only past a stall window. This call is kept
   // without one because a restart is proof that this process's in-flight
   // jobs are gone: waiting out the window would idle every run it just lost.
-  reconcileOrphanedFlowRuns({}, { database: db }).catch((error: unknown) => {
-    captureError(error, handlerErrorContext("flows.initFlowRunWorker"));
-    logger.error("flow.reconcile_failed", errorSystemFields(error));
-  });
+  detached(
+    async () =>
+      reconcileOrphanedFlowRuns({}, { database: db }).catch(
+        (error: unknown) => {
+          captureError(error, handlerErrorContext("flows.initFlowRunWorker"));
+          logger.error("flow.reconcile_failed", errorSystemFields(error));
+        },
+      ),
+    "flow-run-worker.reconcile-orphaned-flow-runs",
+  );
 
   return {
     queues: [FLOW_RUN_QUEUE_NAME] as const,

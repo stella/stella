@@ -34,6 +34,7 @@ export default createSafeRootHandler(
     const message = yield* Result.await(
       safeDb(async (tx) => {
         const loaded = await readEditableMessageOnTx({
+          admitted: "active-or-archived",
           tx,
           getWorkspaceAccess,
           threadId,

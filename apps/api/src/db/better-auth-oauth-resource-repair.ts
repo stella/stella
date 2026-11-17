@@ -1,10 +1,11 @@
 /**
  * Online repair for the Better Auth OAuth resource policy.
  *
- * Every MCP audience is an OAuth resource, and startup refuses to serve until
- * `oauth_resource` matches `buildBetterAuthOAuthResources()` exactly and every
- * client registration is linked to a configured resource
- * (`ensureBetterAuthOAuthPolicy`). Startup deliberately does not repair:
+ * Every MCP audience is an OAuth resource. A deploy must not finish until
+ * `oauth_resource` covers `buildBetterAuthOAuthResources()` and every client
+ * registration is linked to a resource; startup reports a gap as an error
+ * (`ensureBetterAuthOAuthPolicy`) and Better Auth refuses the affected
+ * requests, but neither refuses boot. Startup deliberately does not repair:
  * `resourceSeedMode: "none"` in `lib/auth.ts` keeps resource creation out of
  * the request path, and `initializePristineBetterAuthOAuthPolicy` seeds only an
  * entirely empty auth database.
@@ -13,8 +14,8 @@
  * database. The one-time 1.7 cutover command owns the same work, but it is an
  * operator script: it wants a write freeze and the private trusted-identity
  * manifest, and no deploy path runs it. Shipping an audience against that would
- * mean the next release's API failing its boot census on every environment
- * until somebody ran a script by hand.
+ * mean the next release's OAuth audiences failing on every environment until
+ * somebody ran a script by hand.
  *
  * So the policy half of that backfill runs here instead, on the migrate
  * entrypoint, before the API rolls. It reuses the cutover command's own
@@ -22,9 +23,11 @@
  * reimplementing their semantics, which is what keeps a resource seeded by a
  * deploy identical to one seeded by the cutover: a missing resource is
  * inserted, and a matching one is left alone. Before seeding, a stored Stella
- * resource whose scopes or name an earlier release configured differently is
- * brought to this release's policy (`reconcileStoredResources`); every other
- * conflicting definition refuses the transaction. The identity half of the cutover
+ * resource that lacks a scope this release configures, or carries a name an
+ * earlier release configured, is brought up to this release's policy
+ * (`reconcileStoredResources`); every other conflicting definition refuses the
+ * transaction. The repair only adds: scopes and resources another release
+ * stored stay, so the release before this one still boots after it ran. The identity half of the cutover
  * (`backfillAccounts`) stays private to that command; it needs the manifest and
  * the freeze, and nothing about adding an audience touches identities.
  *
@@ -208,112 +211,131 @@ const readStoredPolicies = async (
 };
 
 /**
- * Brings every stored Stella resource to the scopes and name this release
- * configures.
+ * Brings every stored Stella resource up to the scopes and name this release
+ * configures, and returns the policy the seeder then verifies each row
+ * against.
  *
- * The scope sets are code: a release that moves a tool between audiences, or
- * gives one audience a new scope, changes `buildBetterAuthOAuthResources()`,
- * and the boot census then accepts only the new set. So the deploy rewrites a
- * stored row whose scopes differ, in both directions, before the seeder checks
- * it. Trust stays narrow: the row must be one of this deployment's configured
+ * The scope sets are code: a release that gives an audience a new scope, or
+ * moves a tool to another audience, changes `buildBetterAuthOAuthResources()`,
+ * and the boot census then requires the stored row to hold the new set. So the
+ * deploy adds every configured scope a stored row lacks. It never removes one:
+ * the stored policy is the union of what the releases sharing this database
+ * configure. A scope this release dropped from an audience, or one a newer
+ * release added that this code has never heard of, stays stored, because the
+ * release beside it in a rollout, or the one a rollback returns to, may still
+ * configure it and has to boot. What this code grants is not the stored row:
+ * the auth adapter narrows every resource to this code's own policy before
+ * the provider reads it (`withConfiguredOAuthResources`), so a scope kept here
+ * for another release is never issued by this one.
+ *
+ * Trust stays narrow: the row must be one of this deployment's configured
  * identifiers with the configured name or a name an earlier release
  * configured for that same audience (`releasedOAuthResourceNames`), enabled,
- * and hold only scopes that some configured resource still grants. A released
- * name is rewritten to the configured one alongside the scopes. Anything else
- * (a foreign scope, an unknown name, a disabled audience) is left untouched
- * for the seeder to refuse, because that is a policy this code never wrote.
+ * and carry a scope list. A released name is rewritten to the configured one
+ * alongside the scopes. Anything else (an unknown name, a disabled audience, a
+ * row without a scope restriction) is left untouched and verified against the
+ * configured policy, which the seeder then refuses, because that is a policy
+ * no release wrote.
  *
- * A scope a resource loses but another configured resource still grants has
- * moved audiences. Consents that covered the narrowed resource and hold that
- * scope gain the resource it moved to, so the people who already approved it
- * are not asked again when their client connects there. Tokens are left alone:
- * the provider intersects a grant with every resource it names, so a token for
- * the narrowed resource refreshes with the scopes that resource still allows,
- * and the moved scope is only ever served by the resource it moved to.
+ * A scope that this release configures on an MCP audience for the first time,
+ * while another configured audience still stores it without configuring it,
+ * has moved audiences. Consents that cover the audience it left and hold that
+ * scope gain the audience it moved to, so the people who already approved it
+ * are not asked again when their client connects there. Tokens are left
+ * alone: the narrowed policy refreshes a token for the old audience with the
+ * scopes that audience still allows, and the moved scope is only ever served
+ * by the audience it moved to.
  */
 const reconcileStoredResources = async (
   transaction: BoundTransaction,
   expectedResources: readonly BetterAuthExpectedOAuthResource[],
-): Promise<void> => {
-  const vocabulary = new Set<string>(
-    expectedResources.flatMap(({ allowedScopes }) => allowedScopes),
-  );
+): Promise<BetterAuthExpectedOAuthResource[]> => {
   const stored = await readStoredPolicies(transaction, expectedResources);
-  const changes = expectedResources.flatMap((resource) => {
+  const storedHolds = (identifier: string, scope: string): boolean =>
+    stored.get(identifier)?.allowedScopes?.includes(scope) === true;
+  const plans = expectedResources.map((resource) => {
     const current = stored.get(resource.identifier);
     if (
       current === undefined ||
       current.disabled ||
       (current.name !== resource.name &&
         !releasedOAuthResourceNames(resource.name).includes(current.name)) ||
-      current.allowedScopes === null ||
-      !current.allowedScopes.every((scope) => vocabulary.has(scope))
+      current.allowedScopes === null
     ) {
-      return [];
+      return { change: null, verified: resource };
     }
     const before = sortedScopes(current.allowedScopes);
-    const after = sortedScopes(resource.allowedScopes);
+    const allowedScopes = sortedScopes([...before, ...resource.allowedScopes]);
+    const verified = { ...resource, allowedScopes };
     if (
-      JSON.stringify(before) === JSON.stringify(after) &&
+      allowedScopes.length === before.length &&
       current.name === resource.name
     ) {
-      return [];
+      return { change: null, verified };
     }
-    return [
-      {
-        added: after.filter((scope) => !before.includes(scope)),
-        allowedScopes: after,
+    return {
+      change: {
+        added: allowedScopes.filter((scope) => !before.includes(scope)),
+        allowedScopes,
         identifier: resource.identifier,
+        kept: before.filter((scope) => !resource.allowedScopes.includes(scope)),
         name: resource.name,
         previousName: current.name,
-        removed: before.filter((scope) => !after.includes(scope)),
       },
-    ];
+      verified,
+    };
   });
-  if (changes.length === 0) {
-    return;
-  }
-
-  await transaction.execute(sql`
-    WITH expected AS (
-      SELECT * FROM jsonb_to_recordset(${JSON.stringify(changes)}::text::jsonb)
-        AS policy(identifier text, name text, "allowedScopes" jsonb)
-    )
-    UPDATE oauth_resource actual
-       SET allowed_scopes = ARRAY(
-             SELECT jsonb_array_elements_text(expected."allowedScopes")
-           ),
-           name = expected.name,
-           updated_at = now()
-      FROM expected
-     WHERE actual.identifier = expected.identifier
-  `);
-  for (const { added, identifier, name, previousName, removed } of changes) {
-    writeRepairEvent({
-      added,
-      event: "oauth_resource_scopes_reconciled",
-      identifier,
-      removed,
-      ...(name === previousName ? {} : { name, previousName }),
-    });
-  }
-
-  const moves = changes.flatMap(({ identifier: from, removed }) =>
-    removed.flatMap((scope) =>
-      expectedResources
-        // A consent only ever gains an MCP audience: the API resource belongs
-        // to stella's own apps alone, whatever scopes it shares.
-        .filter(
-          (resource) =>
-            resource.identifier !== from &&
-            isEveryClientOAuthResource(resource) &&
-            resource.allowedScopes.includes(scope),
-        )
-        .map(({ identifier: to }) => ({ from, scope, to })),
-    ),
+  const verified = plans.map((plan) => plan.verified);
+  const changes = plans.flatMap(({ change }) =>
+    change === null ? [] : [change],
   );
+
+  if (changes.length > 0) {
+    await transaction.execute(sql`
+      WITH expected AS (
+        SELECT * FROM jsonb_to_recordset(${JSON.stringify(changes)}::text::jsonb)
+          AS policy(identifier text, name text, "allowedScopes" jsonb)
+      )
+      UPDATE oauth_resource actual
+         SET allowed_scopes = ARRAY(
+               SELECT jsonb_array_elements_text(expected."allowedScopes")
+             ),
+             name = expected.name,
+             updated_at = now()
+        FROM expected
+       WHERE actual.identifier = expected.identifier
+    `);
+    for (const { added, identifier, kept, name, previousName } of changes) {
+      writeRepairEvent({
+        added,
+        event: "oauth_resource_scopes_reconciled",
+        identifier,
+        kept,
+        ...(name === previousName ? {} : { name, previousName }),
+      });
+    }
+  }
+
+  const moves = expectedResources
+    // A consent only ever gains an MCP audience: the API resource belongs to
+    // stella's own apps alone, whatever scopes it shares.
+    .filter((target) => isEveryClientOAuthResource(target))
+    .flatMap(({ allowedScopes, identifier: to }) =>
+      allowedScopes
+        .filter((scope) => !storedHolds(to, scope))
+        .flatMap((scope) =>
+          expectedResources
+            .filter(
+              (source) =>
+                source.identifier !== to &&
+                storedHolds(source.identifier, scope) &&
+                !source.allowedScopes.includes(scope),
+            )
+            .map(({ identifier: from }) => ({ from, scope, to })),
+        ),
+    );
   if (moves.length === 0) {
-    return;
+    return verified;
   }
   // One statement for every move: a consent gains each audience that one of
   // its approved scopes moved to from an audience it already covers.
@@ -348,6 +370,7 @@ const reconcileStoredResources = async (
       });
     }
   }
+  return verified;
 };
 
 const repair = async (connection: OnlineMigrationConnection): Promise<void> => {
@@ -370,9 +393,12 @@ const repair = async (connection: OnlineMigrationConnection): Promise<void> => {
     );
     const transaction = bindTo(connection);
 
-    await reconcileStoredResources(transaction, expectedResources);
+    const verifiedResources = await reconcileStoredResources(
+      transaction,
+      expectedResources,
+    );
 
-    const seeded = await seedOAuthResources(transaction, expectedResources);
+    const seeded = await seedOAuthResources(transaction, verifiedResources);
     if (Result.isError(seeded)) {
       throw seeded.error;
     }

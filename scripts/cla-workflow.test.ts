@@ -14,6 +14,7 @@ const NEXT_BLOB = "e".repeat(40);
 // The merge queue squashes: each entry head is a synthetic commit on its predecessor.
 const SQUASH = "9".repeat(40);
 const PREDECESSOR = "8".repeat(40);
+const RUN_URL = "https://github.com/stella/stella/actions/runs/700";
 const stepSchema = v.looseObject({
   name: v.string(),
   uses: v.string(),
@@ -44,12 +45,17 @@ const credentialsSource = v.parse(
   ],
 );
 const author = { id: 101, login: "fixture-author", type: "User" };
-const pull = (number = 17, user = author, sha = HEAD) => ({
+const pull = (
+  number = 17,
+  user = author,
+  sha = HEAD,
+  headRepository = "stella/stella",
+) => ({
   number,
   state: "open",
   commits: 1,
   user,
-  head: { sha },
+  head: { sha, ref: "feature", repo: { full_name: headRepository } },
   base: {
     ref: "main",
     sha: BASE,
@@ -130,8 +136,8 @@ type FixtureOptions = {
   groupCompare?: CompareCommit[];
 };
 const fixture = ({
-  event = "pull_request_target",
-  payload = { pull_request: { number: 17 } },
+  event = "issue_comment",
+  payload = { issue: { number: 17, pull_request: {} } },
   pulls = [pull()],
   memberships = {},
   commitsByPull,
@@ -178,9 +184,13 @@ const fixture = ({
   const commentsByPull = new Map(
     pulls.map(({ number }) => [number, [...comments]]),
   );
+  let stepSummary = "";
   const injectFailure = (route: string) => {
     const injected = failures.find((failure) => failure.route === route);
-    if (injected?.errors.length) {
+    // A null entry lets that call through, to fail a later one.
+    if (injected?.errors[0] === null) {
+      injected.errors.shift();
+    } else if (injected?.errors.length) {
       throw injected.errors.shift();
     }
     if (apiError?.route === route) {
@@ -380,13 +390,19 @@ const fixture = ({
           },
         };
       }
-      if (route === "POST /repos/{owner}/{repo}/check-runs") {
-        expect(params["name"]).toMatch(/^cla(?:\/pr-\d+)?$/u);
-        created.push(params);
-        return { data: { id: created.length + 400 } };
-      }
-      if (route.startsWith("PATCH") && route.includes("/check-runs/")) {
-        updates.push(params);
+      if (route === "POST /repos/{owner}/{repo}/statuses/{sha}") {
+        expect(params["context"]).toMatch(/^cla(?:\/pr-\d+)?$/u);
+        expect(params["target_url"]).toBe(RUN_URL);
+        // GitHub refuses a longer description.
+        if (v.parse(v.string(), params["description"]).length > 140) {
+          throw new FixtureApiError({
+            status: 422,
+            message: "description is too long",
+          });
+        }
+        const status = { ...params, stepSummary };
+        stepSummary = "";
+        (params["state"] === "pending" ? created : updates).push(status);
         return { data: {} };
       }
       if (route.startsWith("POST") && route.endsWith("/comments")) {
@@ -507,11 +523,17 @@ const fixture = ({
           }
           return;
         }
-        if (route.includes("/commits/")) {
-          // GitHub lists commit pulls without the commit count.
+        if (route === "GET /repos/{owner}/{repo}/pulls") {
+          // GitHub filters by head owner and branch, and lists pull requests
+          // without the commit count.
+          expect(params["state"]).toBe("open");
           yield {
             data: pulls
-              .filter(({ head }) => head.sha === params["commit_sha"])
+              .filter(
+                ({ head }) =>
+                  `${head.repo.full_name.split("/")[0] ?? ""}:${head.ref}` ===
+                  params["head"],
+              )
               .map(({ commits: _omitted, ...listed }) => listed),
           };
           return;
@@ -571,9 +593,18 @@ const fixture = ({
         eventName: event,
         payload,
         repo: { owner: "stella", repo: "stella" },
+        runId: 700,
       },
       core: {
         setFailed: (message: string) => errors.push(message),
+        summary: {
+          addRaw: (text: string) => ({
+            write: async () => {
+              stepSummary = text;
+              await Promise.resolve();
+            },
+          }),
+        },
         error: (message: string, { title }: { title: string }) => {
           annotations.push({ message, title });
         },
@@ -609,19 +640,26 @@ const fixture = ({
     prompts: () => prompts,
   };
 };
-const lastOutput = (run: ReturnType<typeof fixture>, name?: string) =>
-  v.parse(
+const lastOutput = (run: ReturnType<typeof fixture>, name?: string) => {
+  const status = v.parse(
     v.object({
-      conclusion: v.string(),
-      output: v.object({ title: v.string(), summary: v.string() }),
+      state: v.string(),
+      description: v.string(),
+      stepSummary: v.string(),
     }),
     name === undefined
       ? run.updates.at(-1)
-      : run.updates.findLast((update) => {
-          const index = v.parse(v.number(), update["check_run_id"]) - 401;
-          return run.created.at(index)?.["name"] === name;
-        }),
+      : run.updates.findLast((update) => update["context"] === name),
   );
+  const [title = "", ...rest] = status.description.split(": ");
+  return {
+    conclusion: status.state,
+    output: {
+      title,
+      summary: `${rest.join(": ")}\n${status.stepSummary}`,
+    },
+  };
+};
 
 // bun-types declares `.rejects.toThrow` as void, so awaiting it trips
 // type-aware lint; capture the rejection explicitly instead.
@@ -773,8 +811,8 @@ describe("contributor signature workflow", () => {
       },
       apiFailures: [
         {
-          route: "PATCH /repos/{owner}/{repo}/check-runs/{check_run_id}",
-          errors: [{ status: 403 }],
+          route: "POST /repos/{owner}/{repo}/statuses/{sha}",
+          errors: [null, { status: 403 }],
         },
       ],
     });
@@ -879,7 +917,12 @@ describe("contributor signature workflow", () => {
       run.requests.filter((request) => request.route === route),
     ).toHaveLength(1);
     expect(run.delays).toEqual([]);
-    expect(run.annotations).toEqual([]);
+    expect(run.annotations).toEqual([
+      {
+        message: "CLA_API_ERROR_504: Injected API failure",
+        title: "signature-api-refused",
+      },
+    ]);
     expect(run.errors).toEqual(["CLA_API_ERROR_504"]);
     expect(lastOutput(run).conclusion).toBe("failure");
   });
@@ -910,6 +953,47 @@ describe("contributor signature workflow", () => {
     expect(lastOutput(run).conclusion).toBe("success");
   });
 
+  test("a merge group's verdict survives a server error on its status", async () => {
+    const run = fixture({
+      event: "merge_group",
+      payload: {
+        merge_group: {
+          head_sha: SQUASH,
+          base_sha: BASE,
+          base_ref: "refs/heads/main",
+          head_ref: `refs/heads/gh-readonly-queue/main/pr-17-${PREDECESSOR}`,
+        },
+      },
+      pulls: [pull(), pull(18)],
+      signatures: [signature()],
+      apiFailures: [
+        {
+          route: "POST /repos/{owner}/{repo}/statuses/{sha}",
+          // The pending status lands; the verdict's first post does not.
+          errors: [null, { status: 500 }],
+        },
+      ],
+    });
+    await run.execute();
+    expect(run.errors).toEqual([]);
+    expect(run.delays).toEqual([2000]);
+    expect(lastOutput(run).conclusion).toBe("success");
+  });
+
+  test("a pending status that may have landed still gets a failed verdict", async () => {
+    const run = fixture({
+      apiFailures: [
+        {
+          route: "POST /repos/{owner}/{repo}/statuses/{sha}",
+          errors: [{ status: 500 }, { status: 500 }, { status: 500 }],
+        },
+      ],
+    });
+    await run.execute();
+    expect(run.errors).toEqual(["CLA_API_UNAVAILABLE status=500 attempts=3"]);
+    expect(run.updates.at(-1)?.["state"]).toBe("failure");
+  });
+
   test("an unsigned contributor remains a policy verdict without API retries", async () => {
     const run = fixture();
     await run.execute();
@@ -930,12 +1014,13 @@ describe("contributor signature workflow", () => {
         : `CLA_API_ERROR_${status}`,
     ]);
     expect(run.created.length).toBeGreaterThan(0);
-    for (let index = 0; index < run.created.length; index++) {
+    for (const check of run.created) {
       const update = run.updates.findLast(
-        (value) => value["check_run_id"] === index + 401,
+        (value) =>
+          value["context"] === check["context"] &&
+          value["sha"] === check["sha"],
       );
-      expect(update?.["conclusion"]).toBe("failure");
-      expect(update?.["status"]).toBe("completed");
+      expect(update?.["state"]).toBe("failure");
     }
   };
   test.each([401, 403, 429, 500, 502, 503])(
@@ -1003,11 +1088,11 @@ describe("contributor signature workflow", () => {
       "CLA_API_UNAVAILABLE",
     );
     expect(
-      run.updates.filter((update) => update["check_run_id"] === 401),
+      run.updates.filter((update) => update["context"] === "cla"),
     ).toHaveLength(1);
   });
 
-  for (const event of ["pull_request_target", "merge_group"]) {
+  for (const event of ["issue_comment", "merge_group"]) {
     const eventOptions =
       event === "merge_group"
         ? {
@@ -1143,6 +1228,20 @@ describe("contributor signature workflow", () => {
       event: "pull_request",
       conclusion: "success",
       head_sha: HEAD,
+      head_branch: "feature",
+      head_repository: {
+        full_name: "stella/stella",
+        owner: { login: "stella" },
+      },
+    },
+  };
+  const forkNotification = {
+    workflow_run: {
+      ...notification.workflow_run,
+      head_repository: {
+        full_name: "fixture-fork/stella",
+        owner: { login: "fixture-fork" },
+      },
     },
   };
   const dependabot = {
@@ -1153,7 +1252,11 @@ describe("contributor signature workflow", () => {
   };
   test("an ordinary all-bot PR skips store credentials after a fresh API preflight", async () => {
     const bot = { ...author, login: "release-fixture[bot]", type: "Bot" };
-    const run = fixture({ pulls: [pull(17, bot)] });
+    const run = fixture({
+      event: "workflow_run",
+      payload: notification,
+      pulls: [pull(17, bot)],
+    });
     await run.selectCredentials();
     expect(run.credentials["store_required"]).toBe("false");
     await run.execute();
@@ -1169,6 +1272,8 @@ describe("contributor signature workflow", () => {
   });
   test("a bot preflight API failure cannot produce a check or credentials decision", async () => {
     const run = fixture({
+      event: "workflow_run",
+      payload: notification,
       pulls: [pull(17, dependabot)],
       authorPreflightError: true,
     });
@@ -1181,6 +1286,8 @@ describe("contributor signature workflow", () => {
   });
   test("a bot preflight missing immutable commit object fails before reporting", async () => {
     const run = fixture({
+      event: "workflow_run",
+      payload: notification,
       pulls: [pull(17, dependabot)],
       authorsByCommit: { [HEAD]: { users: [dependabot], oid: OTHER_HEAD } },
     });
@@ -1259,7 +1366,21 @@ describe("contributor signature workflow", () => {
       expect(run.created).toEqual([]);
     },
   );
-  test.each(["repository", "path", "event", "head_sha", "conclusion"])(
+  const untrustedNotificationFields: Record<string, unknown> = {
+    repository: { full_name: "attacker/repo" },
+    path: "attacker",
+    event: "attacker",
+    head_sha: "attacker",
+    conclusion: "attacker",
+    head_branch: "",
+    head_repository: null,
+    // The owner the branch is listed under must own the head repository.
+    head_owner: {
+      full_name: "fixture-fork/stella",
+      owner: { login: "stella" },
+    },
+  };
+  test.each(Object.keys(untrustedNotificationFields))(
     "notification rejects untrusted %s before reporting",
     async (field) => {
       const run = fixture({
@@ -1267,10 +1388,8 @@ describe("contributor signature workflow", () => {
         payload: {
           workflow_run: {
             ...notification.workflow_run,
-            [field]:
-              field === "repository"
-                ? { full_name: "attacker/repo" }
-                : "attacker",
+            [field === "head_owner" ? "head_repository" : field]:
+              untrustedNotificationFields[field],
           },
         },
         pulls: [pull(17, dependabot)],
@@ -1298,6 +1417,66 @@ describe("contributor signature workflow", () => {
     expect(run.writes()).toBe(0);
   });
 
+  test("a notification for a human pull request verifies it with store credentials", async () => {
+    const run = fixture({ event: "workflow_run", payload: notification });
+    await run.execute();
+    expect(run.credentials).toEqual({
+      store_required: "true",
+      pull_requests: "[17]",
+    });
+    expect(run.errors).toEqual([]);
+    expect(lastOutput(run, "cla").output.title).toBe("CLA_UNSIGNED");
+    expect(lastOutput(run, "cla/pr-17").conclusion).toBe("failure");
+    expect(run.created.map(({ sha }) => sha)).toEqual([HEAD, HEAD]);
+    expect(run.prompts()).toBe(1);
+  });
+
+  test("a fork notification resolves its pull request from the head repository and branch", async () => {
+    const run = fixture({
+      event: "workflow_run",
+      payload: forkNotification,
+      pulls: [pull(17, author, HEAD, "fixture-fork/stella")],
+      signatures: [signature()],
+    });
+    await run.execute();
+    expect(run.credentials["pull_requests"]).toBe("[17]");
+    expect(run.errors).toEqual([]);
+    expect(lastOutput(run, "cla").conclusion).toBe("success");
+    expect(lastOutput(run, "cla/pr-17").conclusion).toBe("success");
+    expect(
+      run.requests.find(
+        ({ route }) => route === "GET /repos/{owner}/{repo}/pulls",
+      )?.params,
+    ).toMatchObject({ head: "fixture-fork:feature", state: "open" });
+  });
+
+  test("a notification never reports on another repository's branch of the same name or head", async () => {
+    const run = fixture({
+      event: "workflow_run",
+      payload: forkNotification,
+      pulls: [pull(17), pull(18, author, HEAD, "fixture-fork/other")],
+    });
+    await run.execute();
+    expect(run.credentials["pull_requests"]).toBe("[]");
+    expect(run.created).toEqual([]);
+    expect(run.updates).toEqual([]);
+  });
+
+  test("every open pull request sharing the notified head is verified", async () => {
+    const second = { ...author, id: 102, login: "second-author" };
+    const run = fixture({
+      event: "workflow_run",
+      payload: notification,
+      pulls: [pull(17), pull(18, second)],
+      signatures: [signature()],
+    });
+    await run.execute();
+    expect(run.credentials["pull_requests"]).toBe("[17,18]");
+    expect(run.errors).toEqual([]);
+    expect(lastOutput(run, "cla/pr-17").conclusion).toBe("success");
+    expect(lastOutput(run, "cla/pr-18").output.title).toBe("CLA_UNSIGNED");
+  });
+
   test("members, owners, allowlisted accounts, Bot authors and Dependabot always report success", async () => {
     for (const options of [
       { memberships: { [author.login]: { state: "active", role: "member" } } },
@@ -1313,7 +1492,7 @@ describe("contributor signature workflow", () => {
       await run.execute();
       expect(run.errors).toEqual([]);
       expect(lastOutput(run).conclusion).toBe("success");
-      expect(run.created.at(0)?.["head_sha"]).toBe(HEAD);
+      expect(run.created.at(0)?.["sha"]).toBe(HEAD);
       expect(run.writes()).toBe(0);
       expect(run.prompts()).toBe(0);
     }
@@ -1794,11 +1973,11 @@ describe("contributor signature workflow", () => {
     expect(run.errors).toEqual([]);
     expect(lastOutput(run, "cla").conclusion).toBe("success");
     expect(lastOutput(run, "cla/pr-17").conclusion).toBe("success");
-    expect(run.created.some((check) => check["name"] === "cla/pr-18")).toBe(
+    expect(run.created.some((check) => check["context"] === "cla/pr-18")).toBe(
       false,
     );
     const outsider = fixture({
-      payload: { pull_request: { number: 18 } },
+      payload: { issue: { number: 18, pull_request: {} } },
       pulls: [pull(), pull(18, { ...author, id: 102, login: "second-author" })],
       memberships: { [author.login]: { state: "active", role: "member" } },
       commitsByPull: { 18: [commit()] },
@@ -1938,6 +2117,135 @@ describe("contributor signature workflow", () => {
     expect(invalid.created).toEqual([]);
   });
 
+  test("the required result is a commit status on the verified head, not a check run", async () => {
+    const run = fixture({ signatures: [signature(author.id)] });
+    await run.execute();
+    expect(run.errors).toEqual([]);
+    expect(
+      run.requests.filter(({ route }) => route.includes("/check-runs")),
+    ).toEqual([]);
+    expect(run.updates.map((update) => update["context"])).toEqual([
+      "cla",
+      "cla/pr-17",
+    ]);
+    expect(run.updates.every((update) => update["sha"] === HEAD)).toBe(true);
+    expect(lastOutput(run, "cla").conclusion).toBe("success");
+  });
+
+  test("a long unsigned list fits the status and stays whole in the run summary", async () => {
+    const coauthors = Array.from({ length: 12 }, (_, index) => ({
+      ...author,
+      id: 200 + index,
+      login: `contributor-with-a-long-name-${String(index)}`,
+    }));
+    const run = fixture({
+      pulls: [{ ...pull(), commits: coauthors.length }],
+      commitsByPull: {
+        17: coauthors.map((user, index) =>
+          commit({ user, sha: String(index).padStart(40, "a") }),
+        ),
+      },
+    });
+    await run.execute();
+    expect(run.errors).toEqual([]);
+    const { output, conclusion } = lastOutput(run, "cla");
+    expect(conclusion).toBe("failure");
+    expect(output.title).toBe("CLA_UNSIGNED");
+    for (const { login } of coauthors) {
+      expect(output.summary).toContain(login);
+    }
+    expect(output.summary).toContain(SENTENCE);
+  });
+
+  test("a refused signing prompt keeps the unsigned verdict and names the refusal", async () => {
+    const route = "POST /repos/{owner}/{repo}/issues/{issue_number}/comments";
+    const refusal = {
+      status: 403,
+      message: "Resource not accessible by integration",
+      response: {
+        headers: {
+          "x-accepted-github-permissions": "issues=write; pull_requests=write",
+        },
+      },
+    };
+    const run = fixture({
+      apiFailures: [{ route, errors: [refusal, refusal] }],
+    });
+    await run.execute();
+    for (const name of ["cla", "cla/pr-17"]) {
+      const check = lastOutput(run, name);
+      expect(check.conclusion).toBe("failure");
+      expect(check.output.title).toBe("CLA_UNSIGNED");
+      expect(check.output.summary).toContain(author.login);
+      expect(check.output.summary).toContain(SENTENCE);
+    }
+    expect(run.errors).toEqual(["CLA_PROMPT_ERROR_403"]);
+    expect(run.annotations).toEqual(
+      Array.from({ length: 2 }, () => ({
+        message:
+          "CLA_PROMPT_ERROR_403 (#17): Resource not accessible by integration; accepted permissions: issues=write; pull_requests=write",
+        title: "signature-prompt-failed",
+      })),
+    );
+    expect(run.prompts()).toBe(0);
+  });
+
+  test("a refused signing prompt does not stop later dispatched pull requests", async () => {
+    const run = fixture({
+      event: "workflow_dispatch",
+      payload: { inputs: { pull_requests: "17, 18" } },
+      pulls: [pull(), pull(18, { ...author, id: 102 })],
+      apiFailures: [
+        {
+          route: "POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
+          errors: [{ status: 403 }, { status: 403 }],
+        },
+      ],
+    });
+    await run.execute();
+    expect(run.errors).toEqual(["CLA_PROMPT_ERROR_403"]);
+    expect(run.created).toHaveLength(4);
+    expect(run.prompts()).toBe(1);
+  });
+
+  test("a refused API call reports GitHub's reason beside the error code", async () => {
+    const run = fixture({
+      apiFailures: [
+        {
+          route: "GET /repos/{owner}/{repo}/pulls/{pull_number}",
+          errors: [
+            {
+              status: 403,
+              message: "Resource not accessible by integration",
+            },
+          ],
+        },
+      ],
+    });
+    await run.execute();
+    expect(run.errors).toEqual(["CLA_API_ERROR_403"]);
+    expect(run.annotations).toEqual([
+      {
+        message: "CLA_API_ERROR_403: Resource not accessible by integration",
+        title: "signature-api-refused",
+      },
+    ]);
+  });
+
+  test("a local error's text never reaches the public run log", async () => {
+    const run = fixture({
+      apiFailures: [
+        {
+          route: "GET /repos/{owner}/{repo}/pulls/{pull_number}",
+          errors: [{ message: "local error text" }],
+        },
+      ],
+    });
+    await run.execute();
+    expect(run.errors).toEqual(["CLA_API_ERROR_UNKNOWN"]);
+    expect(run.annotations).toEqual([]);
+  });
+
   test("merge-group success requires every PR the group's commits name", async () => {
     const payload = {
       merge_group: {
@@ -1961,7 +2269,7 @@ describe("contributor signature workflow", () => {
       await run.execute();
       expect(run.errors).toEqual([]);
       expect(run.created).toHaveLength(1);
-      expect(run.created.at(0)?.["head_sha"]).toBe(SQUASH);
+      expect(run.created.at(0)?.["sha"]).toBe(SQUASH);
       expect(lastOutput(run).conclusion).toBe(
         signedSecond ? "success" : "failure",
       );
@@ -1997,17 +2305,52 @@ describe("contributor signature workflow", () => {
       `\${{ !cancelled() && steps.credentials.outcome == 'success' }}`,
     );
     expect(workflow.jobs["verify-signatures"]?.if).toContain(
-      "(github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.actor.login == 'dependabot[bot]' && github.event.workflow_run.head_repository.full_name == github.repository && github.event.workflow_run.path == '.github/workflows/cla-notify.yml' && github.event.workflow_run.event == 'pull_request'))",
+      "(github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.repository.full_name == github.repository && github.event.workflow_run.path == '.github/workflows/cla-notify.yml' && github.event.workflow_run.event == 'pull_request'))",
     );
+    expect(Object.keys(workflow.on).toSorted()).toEqual([
+      "issue_comment",
+      "merge_group",
+      "workflow_dispatch",
+      "workflow_run",
+    ]);
     expect(workflow.permissions).toEqual({
       contents: "read",
-      checks: "write",
+      statuses: "write",
       issues: "write",
-      "pull-requests": "read",
+      "pull-requests": "write",
     });
     expect(workflow.on).toHaveProperty("merge_group");
     expect(workflow.on).toHaveProperty("workflow_dispatch");
     expect(workflow.on).toHaveProperty("workflow_run");
     expect(source).not.toContain("author_association");
+  });
+
+  test("the notification half runs for every pull request without privileges", () => {
+    const notify = v.parse(
+      v.looseObject({
+        on: v.record(v.string(), v.unknown()),
+        permissions: v.record(v.string(), v.string()),
+        jobs: v.record(
+          v.string(),
+          v.looseObject({
+            steps: v.array(v.looseObject({ run: v.optional(v.string()) })),
+          }),
+        ),
+      }),
+      Bun.YAML.parse(
+        readFileSync(
+          new URL("../.github/workflows/cla-notify.yml", import.meta.url),
+          "utf-8",
+        ),
+      ),
+    );
+    expect(Object.keys(notify.on)).toEqual(["pull_request"]);
+    expect(notify.permissions).toEqual({});
+    expect(Object.values(notify.jobs)).toHaveLength(1);
+    const [job] = Object.values(notify.jobs);
+    expect(job).not.toHaveProperty("if");
+    expect(job?.steps).toEqual([
+      { name: "Request trusted signature verification", run: ":" },
+    ]);
   });
 });

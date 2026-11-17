@@ -11,12 +11,11 @@ import { Script } from "node:vm";
 const WORKFLOWS_URL = new URL("../.github/workflows/", import.meta.url);
 const PULL_REQUEST_EVENTS = new Set([
   "pull_request",
-  "pull_request_target",
   "pull_request_review",
   "pull_request_review_comment",
 ]);
 /**
- * PR numbers survive both regular and target events. `head_ref` never
+ * PR numbers survive every pull request event. `head_ref` never
  * counts: two forks can push branches of the same name.
  */
 const PULL_REQUEST_NUMBER = [
@@ -117,7 +116,7 @@ const concurrencyProblems = (
         .every((event) => event === "pull_request")
         ? []
         : [
-            "branch concurrency does not identify target or review pull requests, or commented issues",
+            "branch concurrency does not identify review pull requests or commented issues",
           ]),
       ...(cancel === true
         ? []
@@ -250,6 +249,7 @@ const concurrencyModes: Record<
   NonNullable<ConcurrencyProblemsOptions["mode"]>
 > = {
   "disarm-auto-merge.yml": "preserve-events",
+  "merge-group-hold.yml": "preserve-events",
 };
 
 describe("pull request workflow concurrency", () => {
@@ -350,9 +350,7 @@ describe("pull request workflow concurrency", () => {
           (file === "deploy-landing.yml" &&
             group === `deploy-landing-\${{ github.ref }}`) ||
           (file === "manual-checks.yml" &&
-            group === `manual-check-\${{ github.ref }}-\${{ inputs.check }}`) ||
-          (file === "queue-admission.yml" &&
-            group === `queue-admission-\${{ inputs.pr }}`);
+            group === `manual-check-\${{ github.ref }}-\${{ inputs.check }}`);
         if (deliberate) {
           return [];
         }
@@ -376,7 +374,7 @@ describe("pull request workflow concurrency", () => {
 
   test("reads every trigger spelling", () => {
     expect(runsOnPullRequests({ on: "pull_request" })).toBe(true);
-    expect(runsOnPullRequests({ on: ["push", "pull_request_target"] })).toBe(
+    expect(runsOnPullRequests({ on: ["push", "pull_request_review"] })).toBe(
       true,
     );
     expect(runsOnPullRequests({ on: { pull_request: null } })).toBe(true);
@@ -385,7 +383,7 @@ describe("pull request workflow concurrency", () => {
     );
   });
 
-  test("main analysis supersedes its branch while target events retain pull request identity", () => {
+  test("main analysis supersedes its branch while review events retain pull request identity", () => {
     const workflow = {
       on: { push: { branches: ["main"] }, pull_request: null, schedule: [] },
       concurrency: {
@@ -406,12 +404,6 @@ describe("pull request workflow concurrency", () => {
         }),
       ).toEqual([expect.stringContaining("does not identify")]);
     }
-    expect(
-      concurrencyProblems({
-        ...workflow,
-        on: { ...workflow.on, pull_request_target: null },
-      }),
-    ).toEqual([expect.stringContaining("target or review")]);
     expect(
       concurrencyProblems({
         ...workflow,
@@ -455,14 +447,11 @@ describe("pull request workflow concurrency", () => {
     ["pull_request", `\${{ github.workflow }}-\${{ github.ref }}`],
     // Two forks can push branches of the same name.
     ["pull_request", `\${{ github.workflow }}-\${{ github.head_ref }}`],
-    ["pull_request_target", `\${{ github.workflow }}-\${{ github.head_ref }}`],
     // Only the branch name, shared by every pull request from it.
     ["pull_request", `\${{ github.workflow }}-\${{ github.ref_name }}`],
-    // Under pull_request_target the ref is the base branch.
-    ["pull_request_target", `\${{ github.workflow }}-\${{ github.ref }}`],
     // The issue number identifies a pull request only on a comment trigger.
     [
-      "pull_request_target",
+      "pull_request",
       `\${{ github.workflow }}-\${{ github.event.issue.number }}`,
     ],
   ])("rejects a %s group keyed as %s", (event, group) => {
@@ -479,10 +468,7 @@ describe("pull request workflow concurrency", () => {
       ["pull_request"],
       `\${{ github.workflow }}-\${{ github.event.pull_request.number }}`,
     ],
-    [
-      ["pull_request_target"],
-      `\${{ github.workflow }}-\${{ github.event.number }}`,
-    ],
+    [["pull_request"], `\${{ github.workflow }}-\${{ github.event.number }}`],
   ])("accepts %p grouped as %s", (events, group) => {
     expect(
       concurrencyProblems({
@@ -529,7 +515,7 @@ describe("pull request workflow concurrency", () => {
   test("accepts a per pull request group that cancels in progress", () => {
     expect(
       concurrencyProblems({
-        on: { pull_request_target: { types: ["labeled"] } },
+        on: { pull_request: { types: ["labeled"] } },
         concurrency: {
           group: `\${{ github.workflow }}-\${{ github.event.pull_request.number }}`,
           "cancel-in-progress": true,
@@ -622,7 +608,7 @@ test("unrelated labels cannot supersede baseline recording requests", async () =
   const request = {
     ...recording,
     workflow: "Request network baseline",
-    event_name: "pull_request_target",
+    event_name: "pull_request",
   };
   const group = await groupFor(file, request);
   expect(group).toBe("Request network baseline-pr-12");

@@ -1,4 +1,8 @@
-import { isRecord } from "@/api/lib/type-guards";
+import { panic } from "better-result";
+
+import { PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT } from "@/api/lib/public-law-relations";
+import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
+import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import type { ExplainPlanDocument } from "@/api/tests/explain-as-stella";
 
 import { isExceptedPlanViolation } from "./plan-exceptions";
@@ -35,6 +39,35 @@ const children = (node: Record<string, unknown>) => {
   return Array.isArray(plans) ? plans.filter(isRecord) : [];
 };
 
+const rowCounter = (node: Record<string, unknown>, name: string) => {
+  const value = node[name] ?? 0;
+  return typeof value === "number"
+    ? value
+    : panic(`Plan node ${name} is not a number`);
+};
+
+/** Rows returned or rejected by every scan of a relation, over all its loops. */
+export const relationRowsVisited = (
+  node: Record<string, unknown>,
+  relation: string,
+): number => {
+  const own =
+    node["Relation Name"] === relation
+      ? (rowCounter(node, "Actual Rows") +
+          rowCounter(node, "Rows Removed by Filter") +
+          rowCounter(node, "Rows Removed by Index Recheck")) *
+        rowCounter(node, "Actual Loops")
+      : 0;
+  const plans = node["Plans"] ?? [];
+  if (!isUnknownArray(plans) || !plans.every(isRecord)) {
+    return panic("Plan children are malformed");
+  }
+  return plans.reduce(
+    (sum, child) => sum + relationRowsVisited(child, relation),
+    own,
+  );
+};
+
 const hasOuterStreamBound = (node: Record<string, unknown>): boolean => {
   if (node["Node Type"] === "Limit" || typeof node["Index Cond"] === "string") {
     return true;
@@ -51,6 +84,22 @@ const nodeLabel = (node: Record<string, unknown>) => {
   const relation = node["Relation Name"];
   return `${typeof nodeType === "string" ? nodeType : "unknown node"}${typeof relation === "string" ? ` on ${relation}` : ""}`;
 };
+
+// The folded queue is deliberately empty in this job profile. PostgreSQL
+// chooses a zero-buffer sequential scan there; its nonempty maximum window
+// is measured separately, without relaxing classification of queue storage.
+const isEmptyPopulationDeltaScan = (
+  node: Record<string, unknown>,
+  owner: string,
+) =>
+  owner === SCHEDULER_BACKFILL_IDS.coverage &&
+  node["Node Type"] === "Seq Scan" &&
+  node["Relation Name"] ===
+    PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT.caseLawPopulationDeltas &&
+  ["Actual Rows", "Shared Hit Blocks", "Shared Read Blocks"].every(
+    (field) => node[field] === 0,
+  ) &&
+  (node["Rows Removed by Filter"] ?? 0) === 0;
 
 export const analyzePlan = ({
   document,
@@ -95,6 +144,7 @@ export const analyzePlan = ({
     if (
       typeof relation === "string" &&
       isLargeQueryPerfRelation(relation) &&
+      !isEmptyPopulationDeltaScan(node, owner) &&
       (nodeType === "Seq Scan" ||
         (nodeType === "Bitmap Heap Scan" &&
           ((typeof discarded === "number" && discarded > 0) ||

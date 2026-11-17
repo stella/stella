@@ -29,10 +29,11 @@ import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
-import { defaultConfig, type Verdict } from "@stll/db-load-gate/health";
+import type { Verdict } from "@stll/db-load-gate/health";
 
 import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 
+import { loadGateHealthConfig } from "../env-online-index";
 import { CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT } from "../lib/decision-date-bounds-sql";
 import type { CorruptDecisionDateRow } from "../scripts/repair-decision-dates-plan";
 import { repairDecisionDateBatch } from "../scripts/repair-decision-dates-plan";
@@ -112,7 +113,7 @@ const repairUntilEmpty = async (
     tableName: TABLE_NAME,
     initialSize: BATCH,
     config: {
-      ...defaultConfig,
+      ...loadGateHealthConfig(),
       batchLockTimeoutMs: 30_000,
       batchStatementTimeoutMs: 300_000,
     },

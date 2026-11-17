@@ -66,7 +66,7 @@ const FILING_DATE_DEFINITION_PREDICATE =
   "COALESCE((EXTRACT(year FROM decision_date) >= (((decision_docket_filing_year((case_number)::text, (country)::text) ->> 'year'::text))::integer)::numeric), true)";
 
 /** Endpoint probes skip dates rejected by their docket's filing year without a heap walk. */
-export const CASE_LAW_COVERAGE_FILING_DATE_INDEX = {
+const CASE_LAW_COVERAGE_FILING_DATE_INDEX = {
   createSql: `CREATE INDEX CONCURRENTLY "case_law_decisions_source_filing_date_coverage_idx" ON public."case_law_decisions" USING btree ("source_id", "decision_date", "id") WHERE ${publishedCaseLawDecisionIndexPredicateSql()} AND ${FILING_DATE_PREDICATE_SQL}`,
   definitionBody: `ON public.case_law_decisions USING btree (source_id, decision_date, id) WHERE (${PUBLISHED_DEFINITION_TERMS} AND ${FILING_DATE_DEFINITION_PREDICATE})`,
   introducedBy: { type: "code", owner: "src/lib/case-law/coverage-index.ts" },

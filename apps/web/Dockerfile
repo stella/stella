@@ -99,6 +99,8 @@ ARG PUBLIC_TOOLS_ENABLED
 ARG PUBLIC_TOOLS_INDEXING_ENABLED
 ARG PUBLIC_KNOWLEDGE_ENABLED
 ARG PUBLIC_KNOWLEDGE_INDEXING_ENABLED
+ARG S3_BUCKET
+ARG S3_ENDPOINT
 ARG VITE_COLLAB_URL
 ARG VITE_DESKTOP_BRIDGE_PORT
 ARG VITE_DESKTOP_RELEASES_BASE_URL
@@ -144,6 +146,8 @@ RUN VITE_API_URL="${PUBLIC_API_URL}" \
     VITE_COLLAB_URL="${VITE_COLLAB_URL}" \
     VITE_DESKTOP_BRIDGE_PORT="${VITE_DESKTOP_BRIDGE_PORT}" \
     VITE_DESKTOP_RELEASES_BASE_URL="${VITE_DESKTOP_RELEASES_BASE_URL}" \
+    VITE_DOCUMENTS_BUCKET="${S3_BUCKET}" \
+    VITE_DOCUMENTS_ENDPOINT="${S3_ENDPOINT}" \
     VITE_FEATURE_FOLIO_COLLAB="${VITE_FEATURE_FOLIO_COLLAB}" \
     VITE_FEATURE_USAGE="${VITE_FEATURE_USAGE}" \
     VITE_POSTHOG_LOCAL_DEBUG="${VITE_POSTHOG_LOCAL_DEBUG}" \
@@ -178,9 +182,7 @@ RUN find apps/web/dist/client -type f -printf '%P\n' | LC_ALL=C sort \
 # which no stage copies), so the committed one from the deps stage survives,
 # but this install must never depend on that staying true.
 COPY --from=install-inputs /json/bun.lock /json/package.json ./
-# The staged packages' tsdown configs resolve their build tools through
-# scripts/resolve-package-binary.ts.
-COPY --from=pruner /app/scripts/publish-manifest.ts /app/scripts/resolve-package-binary.ts /app/scripts/stage-web-runtime.ts /app/scripts/web-runtime-closure.ts ./scripts/
+COPY --from=pruner /app/scripts/publish-manifest.ts /app/scripts/stage-web-runtime.ts /app/scripts/web-runtime-closure.ts ./scripts/
 RUN --mount=type=cache,target=/root/.bun/install/cache \
     bun scripts/stage-web-runtime.ts /app/web-runtime-stage --install-build-deps
 

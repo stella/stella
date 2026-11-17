@@ -163,18 +163,25 @@ export const getMcpResourceScopes = (mode: McpMode) =>
  * The OAuth resource set Better Auth is configured with, one entry per
  * audience.
  *
- * Adding an audience widens this set, and the startup census
- * (`ensureBetterAuthOAuthPolicy`) refuses to boot until the database matches
- * it. Startup does not repair an existing database on its own: seeding runs
- * only against an entirely empty auth database, and `resourceSeedMode: "none"`
- * in `lib/auth.ts` keeps resource creation out of the request path.
+ * Adding an audience or a scope widens this set, and the deploy's repair
+ * (`better-auth-oauth-resource-repair.ts`) refuses to finish until the
+ * database covers it; the startup census (`ensureBetterAuthOAuthPolicy`)
+ * reports a gap as an error, while Better Auth refuses the affected requests.
+ * Covering is enough: scopes and audiences a newer release stored are
+ * tolerated, and the auth adapter narrows every stored resource to this set
+ * before the provider reads it (`withConfiguredOAuthResources`), so this code
+ * never grants what it does not configure here. Startup does not repair an
+ * existing database on its own: seeding runs only against an entirely empty
+ * auth database, and `resourceSeedMode: "none"` in `lib/auth.ts` keeps
+ * resource creation out of the request path.
  *
  * Reconciling them is the deploy's job, and it needs no operator step: the
  * `better-auth-oauth-resources` online repair
  * (`db/better-auth-oauth-resource-repair.ts`, registered in
  * `db/online-migrations.ts`) runs on the migrate entrypoint before the API
- * rolls, inserts any resource this set names and the table lacks, and links
- * every existing client registration to each MCP audience
+ * rolls, inserts any resource this set names and the table lacks, adds any
+ * scope a stored resource lacks (never removing one), and links every
+ * existing client registration to each MCP audience
  * (`buildEveryClientOAuthResources`). It also upgrades the exact predecessor
  * policy that omitted protocol scopes from token issuance.
  * `better-auth-oauth-policy-census.db.test.ts` pins that, the idempotence, and
@@ -233,9 +240,9 @@ export const isEveryClientOAuthResource = (resource: {
  * joined the issuance policy: the configured set minus
  * `MCP_OAUTH_PROTOCOL_SCOPES`.
  *
- * Databases seeded before then still hold this set. The deploy repair
- * reconciles it to the configured set like any earlier configured scope set,
- * and the boot census accepts only the configured set.
+ * Databases seeded before then still hold this set. The deploy repair adds
+ * the protocol scopes like any other configured scope a stored row lacks, and
+ * the boot census refuses a row that lacks them.
  */
 export const predecessorOAuthResourceScopes = (
   allowedScopes: readonly string[],

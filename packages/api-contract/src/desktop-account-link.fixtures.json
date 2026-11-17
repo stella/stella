@@ -1,0 +1,66 @@
+{
+  "connectLinks": [
+    {
+      "intent": "connect",
+      "apiBaseUrl": "https://api.stll.app",
+      "webOrigin": "https://my.stll.app",
+      "url": "stella://account/connect?apiBaseUrl=https%3A%2F%2Fapi.stll.app&webOrigin=https%3A%2F%2Fmy.stll.app&intent=connect"
+    },
+    {
+      "intent": "switch",
+      "apiBaseUrl": "https://api.stll.app",
+      "webOrigin": "https://my.stll.app",
+      "url": "stella://account/connect?apiBaseUrl=https%3A%2F%2Fapi.stll.app&webOrigin=https%3A%2F%2Fmy.stll.app&intent=switch"
+    }
+  ],
+  "connectionStatuses": [
+    { "payload": { "status": "pending" }, "signed": "pending" },
+    { "payload": { "status": "connected" }, "signed": "connected" },
+    {
+      "payload": { "status": "failed", "reason": "account_conflict" },
+      "signed": "failed:account_conflict"
+    },
+    {
+      "payload": { "status": "failed", "reason": "switch_declined" },
+      "signed": "failed:switch_declined"
+    },
+    {
+      "payload": { "status": "failed", "reason": "declined" },
+      "signed": "failed:declined"
+    },
+    {
+      "payload": { "status": "failed", "reason": "update_required" },
+      "signed": "failed:update_required"
+    },
+    {
+      "payload": { "status": "failed", "reason": "unavailable" },
+      "signed": "failed:unavailable"
+    }
+  ],
+  "settingsLinks": {
+    "valid": [
+      { "harness": "codex", "url": "stella://settings/agents?harness=codex" },
+      {
+        "harness": "claude-code",
+        "url": "stella://settings/agents?harness=claude-code"
+      },
+      { "harness": null, "url": "stella://settings/agents" }
+    ],
+    "rejected": [
+      "stella://settings",
+      "stella://settings/general",
+      "stella://settings/agents/",
+      "stella://settings/agents/codex",
+      "stella://settings/agents?harness=",
+      "stella://settings/agents?harness=Codex",
+      "stella://settings/agents?harness=codex%20",
+      "stella://settings/agents?harness=..%2Fcodex",
+      "stella://settings/agents?harness=gemini",
+      "stella://settings/agents?tab=codex",
+      "stella://settings/agents?harness=codex&harness=claude-code",
+      "stella://settings/agents?harness=codex&focus=1",
+      "stella://settings/agents?harness=codex#general",
+      "stella://agents/settings?harness=codex"
+    ]
+  }
+}

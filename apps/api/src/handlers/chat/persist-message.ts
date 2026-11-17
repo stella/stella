@@ -165,6 +165,7 @@ export const planAssistantFinishPersistence = ({
     case "completed":
     case "failed":
     case "interrupted":
+    case "paused":
       return existingIds.has(message.id)
         ? { type: "update", messageId: message.id, message }
         : { type: "insert", message };

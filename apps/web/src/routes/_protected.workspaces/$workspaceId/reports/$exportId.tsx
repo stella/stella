@@ -16,6 +16,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
+import { loadRouteResource } from "@/lib/errors/route-resource";
 import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
@@ -242,10 +243,14 @@ export const Route = createFileRoute(
 )({
   component: ReportExportRecoveryPage,
   loader: async ({ context, params }) => {
-    await ensureRouteQueryData(
-      context.queryClient,
-      reportExportRecoveryOptions({ ...params, userId: context.user.id }),
-    );
+    await loadRouteResource({
+      ids: [params.workspaceId, params.exportId],
+      load: async () =>
+        await ensureRouteQueryData(
+          context.queryClient,
+          reportExportRecoveryOptions({ ...params, userId: context.user.id }),
+        ),
+    });
   },
   pendingComponent: ReportExportRecoverySkeleton,
 });

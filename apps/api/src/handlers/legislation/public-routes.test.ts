@@ -9,6 +9,7 @@ import {
   PUBLIC_COUNTRY_UNAVAILABLE_STATUS,
 } from "@stll/api-contract/public-country-capability";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import { publicLegislationRoute } from "@/api/handlers/legislation/public-routes";
@@ -18,6 +19,8 @@ import { LIMITS } from "@/api/lib/limits";
 import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { serveForTest } from "@/api/tests/helpers/test-server";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const server = serveForTest(
   createHttpApp({
@@ -104,7 +107,7 @@ describe("public statute routes", () => {
     const restoreRuntimeMode = setRuntimeModeForTesting({
       mode: RUNTIME_MODE.strict,
     });
-    env.FEATURE_PUBLIC_LAW = false;
+    testState.setConfig("FEATURE_PUBLIC_LAW", false);
 
     try {
       const absent = await server.fetch(
@@ -128,7 +131,7 @@ describe("public statute routes", () => {
       }
     } finally {
       restoreRuntimeMode();
-      env.FEATURE_PUBLIC_LAW = previousFeature;
+      testState.setConfig("FEATURE_PUBLIC_LAW", previousFeature);
     }
   });
 

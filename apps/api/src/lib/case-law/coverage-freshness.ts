@@ -1,10 +1,10 @@
-import { CASE_LAW_COVERAGE_REFRESH_INTERVAL_MS } from "@/api/lib/case-law/coverage-refresh-interval";
+import { CASE_LAW_COVERAGE_REFRESH_INTERVAL_MS } from "./coverage-refresh-interval";
 
 /**
  * How old a stored answer may be and still read as current: one or two late
  * runs are ordinary scheduling slack, a third means refreshes are not landing.
  */
-const CASE_LAW_COVERAGE_CURRENT_WITHIN_MS =
+export const CASE_LAW_COVERAGE_CURRENT_WITHIN_MS =
   3 * CASE_LAW_COVERAGE_REFRESH_INTERVAL_MS;
 
 export const CASE_LAW_COVERAGE_FRESHNESS = {

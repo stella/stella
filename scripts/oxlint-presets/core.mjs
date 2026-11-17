@@ -3,6 +3,10 @@ import { defineConfig } from "oxlint";
 
 import { ignorePatterns } from "./ignores.mjs";
 
+// One deliberate departure from upstream: the jsdoc plugin and its rules are
+// dropped. They check JSDoc comment formatting only, and Bun's built-in
+// linter, which reads this config, has no jsdoc rules.
+
 export default defineConfig({
   env: {
     browser: true,
@@ -40,7 +44,6 @@ export default defineConfig({
     "unicorn",
     "oxc",
     "import",
-    "jsdoc",
     "node",
     "promise",
   ],
@@ -276,31 +279,6 @@ export default defineConfig({
     "import/no-webpack-loader-syntax": "error",
     "import/prefer-default-export": "off",
     "import/unambiguous": "off",
-
-    // ── jsdoc ──────────────────────────────────────────────────────────
-    "jsdoc/check-access": "error",
-    "jsdoc/check-property-names": "error",
-    "jsdoc/check-tag-names": "error",
-    "jsdoc/empty-tags": "error",
-    "jsdoc/implements-on-classes": "error",
-    "jsdoc/no-blank-blocks": "error",
-    "jsdoc/no-defaults": "error",
-    "jsdoc/require-param": "off",
-    "jsdoc/require-param-description": "error",
-    "jsdoc/require-param-name": "error",
-    "jsdoc/require-param-type": "off",
-    "jsdoc/require-property": "error",
-    "jsdoc/require-property-description": "error",
-    "jsdoc/require-property-name": "error",
-    "jsdoc/require-property-type": "error",
-    "jsdoc/require-returns": "off",
-    "jsdoc/require-returns-description": "error",
-    "jsdoc/require-returns-type": "off",
-    "jsdoc/require-throws-description": "error",
-    "jsdoc/require-throws-type": "error",
-    "jsdoc/require-yields": "error",
-    "jsdoc/require-yields-description": "error",
-    "jsdoc/require-yields-type": "error",
 
     // ── node ───────────────────────────────────────────────────────────
     "node/callback-return": "error",

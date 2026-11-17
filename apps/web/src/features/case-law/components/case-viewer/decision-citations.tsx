@@ -4,6 +4,10 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import type {
+  CitationTextIncompleteReason,
+  DecisionTextWithheldReason,
+} from "@stll/api-contract/case-law-text-field";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
@@ -44,7 +48,7 @@ import { citedDecisionLabel } from "@/lib/legal/cited-decision-label";
 import { decisionDocumentIdentity } from "@/lib/legal/document-identity";
 import type { SafeId } from "@/lib/safe-id";
 
-export const DIRECTION_TITLE = {
+const DIRECTION_TITLE = {
   incoming: "caseLaw.viewer.citedBy",
   outgoing: "caseLaw.viewer.cites",
 } as const satisfies Record<CitationDirection, TranslationKey>;
@@ -76,26 +80,28 @@ const CitationDirectionSection = ({
 
   return (
     <section className="reader-chrome border-border/60 mb-6 rounded-lg border print:hidden">
-      <button
+      <Button
         aria-expanded={open}
-        className="text-foreground-strong-muted hover:text-foreground flex w-full items-center gap-1.5 px-3 py-2 text-start text-xs font-medium"
+        className="group/plain flex w-full"
         onClick={() => setOpen(!open)}
-        type="button"
+        variant="plain"
       >
-        <DirectionalIcon
-          className={cn("size-3.5 transition-transform", open && "rotate-90")}
-          flip={!open}
-          icon={ChevronRightIcon}
-        />
-        <span>{t(DIRECTION_TITLE[direction])}</span>
-        <span className="text-muted-foreground font-normal">
-          {capped
-            ? `${format.number(totalCitations(counts))}+`
-            : t("caseLaw.citation.decisionCount", {
-                count: totalCitations(counts),
-              })}
+        <span className="text-foreground-strong-muted group-hover/plain:text-foreground flex w-full items-center gap-1.5 px-3 py-2 text-xs font-medium">
+          <DirectionalIcon
+            className={cn("size-3.5 transition-transform", open && "rotate-90")}
+            flip={!open}
+            icon={ChevronRightIcon}
+          />
+          <span>{t(DIRECTION_TITLE[direction])}</span>
+          <span className="text-muted-foreground font-normal">
+            {capped
+              ? `${format.number(totalCitations(counts))}+`
+              : t("caseLaw.citation.decisionCount", {
+                  count: totalCitations(counts),
+                })}
+          </span>
         </span>
-      </button>
+      </Button>
       {capped ? (
         <p className="text-muted-foreground px-3 ps-8 pb-2 text-xs">
           {t("caseLaw.citation.partialSummary")}
@@ -172,7 +178,7 @@ const groupByTreatment = (
   return ordered;
 };
 
-export const CitationList = ({
+const CitationList = ({
   decision,
   decisionId,
   direction,
@@ -376,6 +382,53 @@ export const DecisionCitations = ({
   );
 };
 
+const CITATION_TEXT_EMPTY_MESSAGE = {
+  absent_ast: "caseLaw.viewer.textPending",
+  gate_failed: "caseLaw.viewer.textReadFailed",
+  missing_text: "inspector.review.passageUnavailable",
+  source_licence: "inspector.review.passageUnavailable",
+  text_changed: "caseLaw.viewer.textReadFailed",
+} as const satisfies Record<
+  CitationTextIncompleteReason | DecisionTextWithheldReason,
+  TranslationKey
+>;
+
+export const UnresolvedCitationRow = ({
+  item,
+}: {
+  // An unresolved citation names no decision, so it carries no identity.
+  item: {
+    citationText: string | null;
+    textIncompleteReason: CitationTextIncompleteReason | null;
+    textWithheldReason: DecisionTextWithheldReason | null;
+  };
+}) => {
+  const t = useTranslations();
+  const reason = item.textWithheldReason ?? item.textIncompleteReason;
+
+  return (
+    <li className="text-foreground-strong-muted flex items-baseline gap-2 text-xs">
+      {item.citationText === null ? (
+        <span
+          className="text-muted-foreground"
+          data-text-unavailable-reason={reason ?? undefined}
+        >
+          {t(
+            reason === null
+              ? "inspector.review.passageUnavailable"
+              : CITATION_TEXT_EMPTY_MESSAGE[reason],
+          )}
+        </span>
+      ) : (
+        <BidiText as="span">{item.citationText}</BidiText>
+      )}
+      <span className="text-muted-foreground text-[calc(0.7rem*var(--reader-text-scale))]">
+        {t("caseLaw.citation.unresolved")}
+      </span>
+    </li>
+  );
+};
+
 const CitationRow = ({
   decision,
   direction,
@@ -387,18 +440,10 @@ const CitationRow = ({
   direction: CitationDirection;
   item: DecisionCitation;
 }) => {
-  const t = useTranslations();
   const format = useFormatter();
 
   if (item.decision === null) {
-    return (
-      <li className="text-foreground-strong-muted flex items-baseline gap-2 text-xs">
-        <BidiText as="span">{item.citationText}</BidiText>
-        <span className="text-muted-foreground text-[calc(0.7rem*var(--reader-text-scale))]">
-          {t("caseLaw.citation.unresolved")}
-        </span>
-      </li>
-    );
+    return <UnresolvedCitationRow item={item} />;
   }
 
   const decided = formatDecisionDate(item.decision.decisionDate, format);
@@ -421,17 +466,21 @@ const CitationRow = ({
           presentations.get(item.decision.id) ??
           panic("Citation list target missing collected identity")
         }
-        passage={{
-          type: "citation",
-          citation: {
-            citationText: item.citationText,
-            decision: cited,
-            id: item.id,
-            sectionIndex: item.sectionIndex,
-            treatment: item.treatment,
-          },
-          textDecisionId,
-        }}
+        passage={
+          item.citationText === null
+            ? undefined
+            : {
+                type: "citation",
+                citation: {
+                  citationText: item.citationText,
+                  decision: cited,
+                  id: item.id,
+                  sectionIndex: item.sectionIndex,
+                  treatment: item.treatment,
+                },
+                textDecisionId,
+              }
+        }
         treatment={item.treatment}
       >
         <BidiText as="span">{citedDecisionLabel(item.decision)}</BidiText>

@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { API } from "tsrs/unstable/async";
+import { API } from "tsrs/async";
 import * as v from "valibot";
 
 const API_ROOT = path.resolve(import.meta.dir, "..");

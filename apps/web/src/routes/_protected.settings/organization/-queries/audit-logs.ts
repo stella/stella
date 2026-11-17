@@ -1,0 +1,110 @@
+import { queryOptions } from "@tanstack/react-query";
+
+import type { AuditPerformerFilter } from "@stll/api-contract/audit-log";
+
+import { api } from "@/lib/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
+import type { SafeId } from "@/lib/safe-id";
+
+export type AuditLogsPageKey = {
+  workspaceId?: SafeId<"workspace"> | undefined;
+  action?: string | undefined;
+  resourceType?: string | undefined;
+  resourceId?: string | undefined;
+  userId?: string | undefined;
+  performer?: AuditPerformerFilter | undefined;
+  from?: string | undefined;
+  to?: string | undefined;
+  toExclusive?: string | undefined;
+  limit?: number | undefined;
+  cursor?: string | undefined;
+};
+
+// Change details follow the viewer's feature access, so pages are cached per
+// viewer, not only per filter.
+export type AuditLogViewer = {
+  userId: string;
+  organizationId: string;
+};
+
+const auditLogKeys = {
+  all: ["audit-logs"] as const,
+  filtered: (viewer: AuditLogViewer, key: AuditLogsPageKey) =>
+    [
+      ...auditLogKeys.all,
+      viewer.userId,
+      viewer.organizationId,
+      {
+        workspaceId: key.workspaceId,
+        action: key.action,
+        resourceType: key.resourceType,
+        resourceId: key.resourceId,
+        userId: key.userId,
+        performer: key.performer,
+        from: key.from,
+        to: key.to,
+        toExclusive: key.toExclusive,
+        limit: key.limit,
+        cursor: key.cursor,
+      },
+    ] as const,
+};
+
+export type AuditLogOptionsInput = {
+  viewer: AuditLogViewer;
+  key: AuditLogsPageKey;
+};
+
+type AuditLogsRequestQuery = {
+  [Key in keyof AuditLogsPageKey]?: Exclude<AuditLogsPageKey[Key], undefined>;
+};
+
+export const fetchAuditLogs = async (query: AuditLogsPageKey) => {
+  // Construct a query object with only defined keys to satisfy exactOptionalPropertyTypes
+  const cleanedQuery: AuditLogsRequestQuery = {};
+
+  if (query.workspaceId !== undefined) {
+    cleanedQuery.workspaceId = query.workspaceId;
+  }
+  if (query.action !== undefined) {
+    cleanedQuery.action = query.action;
+  }
+  if (query.resourceType !== undefined) {
+    cleanedQuery.resourceType = query.resourceType;
+  }
+  if (query.resourceId !== undefined) {
+    cleanedQuery.resourceId = query.resourceId;
+  }
+  if (query.userId !== undefined) {
+    cleanedQuery.userId = query.userId;
+  }
+  if (query.performer !== undefined) {
+    cleanedQuery.performer = query.performer;
+  }
+  if (query.from !== undefined) {
+    cleanedQuery.from = query.from;
+  }
+  if (query.to !== undefined) {
+    cleanedQuery.to = query.to;
+  }
+  if (query.toExclusive !== undefined) {
+    cleanedQuery.toExclusive = query.toExclusive;
+  }
+  if (query.limit !== undefined) {
+    cleanedQuery.limit = query.limit;
+  }
+  if (query.cursor !== undefined) {
+    cleanedQuery.cursor = query.cursor;
+  }
+
+  const response = await api["audit-logs"].get({
+    query: cleanedQuery,
+  });
+  return unwrapApiResponse(response);
+};
+
+export const auditLogOptions = ({ viewer, key }: AuditLogOptionsInput) =>
+  queryOptions({
+    queryKey: auditLogKeys.filtered(viewer, key),
+    queryFn: async () => await fetchAuditLogs(key),
+  });

@@ -24,9 +24,9 @@ import type {
 } from "@/api/lib/legal-search/corpus-index-client";
 import {
   CORPUS_INDEX_SEARCH_TIMEOUT_MS,
+  corpusIndexBudgetExpiry,
   CorpusIndexError,
   getCorpusIndexClient,
-  isCorpusIndexUnavailable,
 } from "@/api/lib/legal-search/corpus-index-client";
 import {
   type CorpusAppliedProjection,
@@ -46,8 +46,9 @@ import {
   type SearchSort,
 } from "@/api/lib/legal-search/corpus-search-order";
 import type { RankedHit, ScoredCandidate } from "@/api/lib/legal-search/rerank";
-import { searchIndexUnavailableError } from "@/api/lib/legal-search/search-index-unavailable";
+import { corpusIndexReadRefusal } from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
+import { requestBoundedTimeout } from "@/api/lib/load/request-latency-budget";
 
 /**
  * The client answers a failed search with a typed `CorpusIndexError` so its
@@ -62,23 +63,45 @@ import { LIMITS } from "@/api/lib/limits";
  * engine refused, which no retry fixes and 502 reports. Mapping matches
  * `catalogueUpstreamStatus`, the same translation for the skill catalogue.
  * An engine that could not be reached at all, or that does not hold the
- * index, answers with the typed `search_index_unavailable` refusal, which
- * every search route and tool maps to the same actionable answer.
+ * index, answers with the typed `search_index_unavailable` refusal, and a
+ * request whose latency budget ran out with the public read timeout
+ * (`corpusIndexReadRefusal`), which every search route and tool maps to the
+ * same actionable answer.
  */
 const corpusIndexSearchFailure = (error: CorpusIndexError): HandlerError =>
-  isCorpusIndexUnavailable(error)
-    ? searchIndexUnavailableError(error)
-    : new HandlerError({
+  corpusIndexReadRefusal(
+    error,
+    (answered) =>
+      new HandlerError({
         code: "internal_error",
         status:
-          error.status === undefined ||
-          error.status === 429 ||
-          error.status >= 500
+          answered.status === undefined ||
+          answered.status === 429 ||
+          answered.status >= 500
             ? 503
             : 502,
         message: "Search is temporarily unavailable",
-        cause: error,
-      });
+        cause: answered,
+      }),
+  );
+
+/**
+ * Highlighting ran out of the window its searches share: the request's latency
+ * budget when that window ends with the request, else its own.
+ */
+const highlightWindowSpent = (
+  endsAtRequestDeadline: boolean,
+): CorpusIndexError => {
+  const spent = new CorpusIndexError({
+    message: "Corpus page highlighting exhausted its shared search budget.",
+    reach: "unreachable",
+  });
+  return (
+    (endsAtRequestDeadline
+      ? corpusIndexBudgetExpiry({ label: "page highlighting", cause: spent })
+      : undefined) ?? spent
+  );
+};
 
 /**
  * A page boundary as the scan means it. `corpus-search-cursor` owns how it
@@ -131,11 +154,29 @@ type CorpusIndexRanking<TContext> = {
    * revision's copy only; a ranked id without one gets neither.
    */
   revisionById: ReadonlyMap<string, CorpusProjectionRevision>;
+  /**
+   * Ids the ranker places without a scanned applied copy, never from an engine
+   * hit: a work an entry names outright, or the version a work is shown as.
+   * They show no excerpt. Every other ranked id must be one
+   * `selectAppliedCandidates` returned, under the revision it was selected
+   * by; the scan refuses a ranking that emits anything else.
+   */
+  placedWithoutCopy?: ReadonlySet<string> | undefined;
+};
+
+const appliedCandidateBrand: unique symbol = Symbol("appliedCandidate");
+
+/**
+ * A candidate the servable check selected: ranked by its best passage of the
+ * copy Postgres records as applied. Only `selectAppliedCandidates` makes one.
+ */
+type AppliedCandidate = ScoredCandidate & {
+  readonly [appliedCandidateBrand]: CorpusProjectionRevision;
 };
 
 type SelectAppliedCorpusCandidates = (
   appliedById: ReadonlyMap<string, CorpusAppliedProjection>,
-) => readonly ScoredCandidate[];
+) => readonly AppliedCandidate[];
 
 /** Scan identities require a revision selector; already-scored callers do not. */
 export type CorpusCandidateRankingInput =
@@ -157,16 +198,38 @@ export type CorpusCandidateRankingInput =
  */
 type CorpusIndexRankingScope = {
   excludedGroups: ReadonlySet<string>;
-  /** Resolve physical hits after the existing SQL read, before blending or folding. */
+  /**
+   * The one place an engine hit becomes servable: given the revision
+   * Postgres records as applied for each candidate, the candidates ranked by
+   * the best passage of that copy. A candidate Postgres records no applied
+   * copy for, or whose applied copy the scan has not reached, is not
+   * returned, so a stale, withdrawn or never-applied copy the index still
+   * holds can neither rank a decision nor surface it.
+   */
   selectAppliedCandidates: SelectAppliedCorpusCandidates;
+  /**
+   * The stored fields of each candidate's best passage of the copy Postgres
+   * records as applied, for a ranker that reads its signals off the hits
+   * instead of the database. Keyed by the same applied revisions as
+   * `selectAppliedCandidates`, and nothing else: no hit of another copy is
+   * reachable from the scope, so signals can only be read off the copy the
+   * reader is served.
+   */
+  appliedProjections: (
+    appliedById: ReadonlyMap<string, CorpusAppliedProjection>,
+  ) => ReadonlyMap<string, CorpusIndexHit>;
 };
 
 const rankingScopeOf = (
   cursor: SearchCursor | null,
-  selectAppliedCandidates: SelectAppliedCorpusCandidates,
+  passages: Pick<
+    ReturnType<typeof appliedPassages>,
+    "selectCandidates" | "appliedProjections"
+  >,
 ): CorpusIndexRankingScope => ({
   excludedGroups: new Set(cursor?.excludedGroups),
-  selectAppliedCandidates,
+  selectAppliedCandidates: passages.selectCandidates,
+  appliedProjections: passages.appliedProjections,
 });
 
 /**
@@ -240,6 +303,12 @@ type CorpusIndexSearchPageInput<TContext> = {
   /** The manifest's indexed revision field, including on legacy mappings. */
   projectionRevisionField: CorpusProjectionRevisionField;
   extractId: (hit: CorpusIndexHit) => string | null;
+  /**
+   * Stored fields the scored transport reads beside the scan's own, for a
+   * ranker that reads them off `appliedProjections`. The native transport
+   * returns whole stored documents and needs none.
+   */
+  scanFields?: readonly string[] | undefined;
   /**
    * The excerpt one hit shows. Handed the hit beside its snippet because the
    * engine's snippet is a fixed width with no size on the wire: a caller that
@@ -505,17 +574,14 @@ const readPageSnippets = async ({
   }
 
   const startedAt = performance.now();
-  const deadline = startedAt + CORPUS_INDEX_SEARCH_TIMEOUT_MS;
+  const highlightWindow = requestBoundedTimeout(CORPUS_INDEX_SEARCH_TIMEOUT_MS);
+  const deadline = startedAt + highlightWindow.timeoutMs;
   const search = async (clause: string, maxHits: number) => {
     const remainingMs = deadline - performance.now();
     const result =
       remainingMs <= 0
         ? Result.err(
-            new CorpusIndexError({
-              message:
-                "Corpus page highlighting exhausted its shared search budget.",
-              reach: "unreachable",
-            }),
+            highlightWindowSpent(highlightWindow.endsAtRequestDeadline),
           )
         : await getCorpusIndexClient(cluster).search({
             observer,
@@ -576,16 +642,35 @@ const readPageSnippets = async ({
     }
   };
   recordResults(fastResults);
-  const missing = clauses.filter(({ id }) => !seen.has(id));
   // A superseded scan chunk can vanish under the applied-revision filter.
   // Optional snippet/anchor metadata does not make a returned passage missing.
+  const missingAfter = (from: typeof clauses) =>
+    from.filter(({ id }) => !seen.has(id));
+  const missing = missingAfter(clauses);
+  // Several missing documents are re-selected in one request: hits come best
+  // first, and each document's revision-narrowed clause scores its own
+  // passages alike, so a document's first hit there is the passage its own
+  // request would have chosen. A document whose passages the others crowd
+  // out of the batch falls back to a request of its own, so the batch can
+  // only remove requests: one engine round instead of one per document,
+  // which is what a page reached mid-refresh would otherwise cost.
+  if (missing.length > 1) {
+    rounds += 1;
+    recordResults([
+      await search(
+        missing.map(({ document }) => document).join(" OR "),
+        missing.length * PASSAGE_OVER_FETCH,
+      ),
+    ]);
+  }
+  const unresolved = missingAfter(missing);
   const fallbackResults = await mapWithConcurrency({
-    items: missing,
+    items: unresolved,
     limit: LIMITS.corpusIndexHighlightConcurrency,
     operation: async ({ document }) => search(document, 1),
   });
   recordResults(fallbackResults);
-  rounds += missing.length;
+  rounds += unresolved.length;
   hitDispositions.record({ malformed });
   return {
     indexMs: performance.now() - startedAt,
@@ -694,6 +779,7 @@ type ReadScanRoundOptions = {
   transport: CorpusIndexScanTransport;
   startOffset: number;
   maxHits: number;
+  scanFields?: readonly string[] | undefined;
 };
 
 /**
@@ -711,6 +797,7 @@ const readScanRound = async ({
   transport,
   startOffset,
   maxHits,
+  scanFields,
 }: ReadScanRoundOptions): Promise<ScanRound> => {
   switch (transport.type) {
     case "native": {
@@ -744,6 +831,7 @@ const readScanRound = async ({
         query,
         from: startOffset,
         size: maxHits,
+        scanFields,
       });
       return {
         numHits: result.numHits,
@@ -796,6 +884,7 @@ type ReadScoredScanRoundOptions = {
   query: string;
   from: number;
   size: number;
+  scanFields?: readonly string[] | undefined;
 };
 
 /**
@@ -810,6 +899,7 @@ const readScoredScanRound = async ({
   query,
   from,
   size,
+  scanFields = [],
 }: ReadScoredScanRoundOptions): Promise<CorpusIndexScoredSearchResponse> => {
   const result = await getCorpusIndexClient(cluster).scoredSearch({
     observer,
@@ -818,7 +908,7 @@ const readScoredScanRound = async ({
     query,
     from,
     size,
-    fields: CORPUS_INDEX_SCAN_PASSAGE_FIELDS,
+    fields: [...new Set([...CORPUS_INDEX_SCAN_PASSAGE_FIELDS, ...scanFields])],
     requiredFields: ["document_id"],
   });
   if (result.isErr()) {
@@ -970,6 +1060,7 @@ type ScannedPassage = {
   position: number;
   bm25: number | undefined;
   clause: string | null;
+  fields: CorpusIndexHit;
 };
 
 type SelectedPassages = {
@@ -992,6 +1083,7 @@ const appliedPassages = () => {
   const passageClauseById = new Map<string, string>();
   const bestScoreById = new Map<string, number>();
   let selected: SelectedPassages[] | undefined;
+  const selectedRevisionById = new Map<string, CorpusProjectionRevision>();
   const applied = (appliedById: ReadonlyMap<string, CorpusAppliedProjection>) =>
     [...passages]
       .flatMap(([id, revisions]) => {
@@ -1026,6 +1118,10 @@ const appliedPassages = () => {
     candidates,
     passageClauseById,
     bestScoreById,
+    appliedProjections: (
+      appliedById: ReadonlyMap<string, CorpusAppliedProjection>,
+    ): ReadonlyMap<string, CorpusIndexHit> =>
+      new Map(applied(appliedById).map(({ id, best }) => [id, best.fields])),
     record: (passage: ScannedPassage): boolean => {
       const { id, revision } = passage;
       if (
@@ -1056,15 +1152,45 @@ const appliedPassages = () => {
       selected = applied(appliedById);
       passageClauseById.clear();
       bestScoreById.clear();
-      return selected.map(({ id, best }) => {
+      selectedRevisionById.clear();
+      return selected.map(({ id, best }): AppliedCandidate => {
         if (best.clause !== null) {
           passageClauseById.set(id, best.clause);
         }
         if (best.bm25 !== undefined) {
           bestScoreById.set(id, best.bm25);
         }
-        return { id, score: best.score };
+        const revision =
+          appliedById.get(id)?.revision ??
+          panic("A selected candidate has no applied revision");
+        selectedRevisionById.set(id, revision);
+        // The one construction of the brand, after the servable check.
+        return { id, score: best.score, [appliedCandidateBrand]: revision };
       });
+    },
+    /**
+     * The ranking as the scan may emit it: every ranked id the servable check
+     * selected, under the revision it selected it by, or one the ranker places
+     * without a copy. Anything else is a ranker that read past the check.
+     */
+    admit: <TContext>(
+      ranking: CorpusIndexRanking<TContext>,
+    ): CorpusIndexRanking<TContext> => {
+      for (const { id } of ranking.ranked) {
+        if (ranking.placedWithoutCopy?.has(id) === true) {
+          continue;
+        }
+        const revision = selectedRevisionById.get(id);
+        if (
+          revision === undefined ||
+          ranking.revisionById.get(id) !== revision
+        ) {
+          return panic(
+            `Corpus ranker emitted ${id} without the copy Postgres records as applied`,
+          );
+        }
+      }
+      return ranking;
     },
     counts: (revisionById: ReadonlyMap<string, CorpusProjectionRevision>) => {
       if (selected === undefined) {
@@ -1101,12 +1227,13 @@ const readWindowPage = async <TContext>({
   extractSnippet,
   rankCandidates,
   unseenScoreUpperBound,
+  scanFields,
 }: ObservedCorpusIndexSearchPageInput<TContext>): Promise<
   ScanPage<TContext>
 > => {
   const passages = appliedPassages();
   const { candidates, passageClauseById, bestScoreById } = passages;
-  const rankingScope = rankingScopeOf(parsedCursor, passages.selectCandidates);
+  const rankingScope = rankingScopeOf(parsedCursor, passages);
   const scores = scanScoreRecorder(bestScoreById);
   let ranking: CorpusIndexRanking<TContext> | null = null;
   let windowed: RankedHit[] = [];
@@ -1178,6 +1305,7 @@ const readWindowPage = async <TContext>({
       transport: scanTransport,
       startOffset,
       maxHits,
+      scanFields,
     });
     indexMs += performance.now() - roundStartedAt;
 
@@ -1205,6 +1333,7 @@ const readWindowPage = async <TContext>({
               position: startOffset + index,
               bm25: round.scores?.[index],
               clause: passageClause(hit),
+              fields: hit,
             })
           ) {
             malformed += 1;
@@ -1222,7 +1351,7 @@ const readWindowPage = async <TContext>({
     malformed = 0;
     startOffset += hits.length;
     scanned += hits.length;
-    ranking = await rankCandidates(candidates, rankingScope);
+    ranking = passages.admit(await rankCandidates(candidates, rankingScope));
     windowed = windowAfterCursor(ranking.ranked, parsedCursor);
     if (windowed.length > limit) {
       const cursorScore = windowed.at(limit - 1)?.score ?? 0;
@@ -1237,7 +1366,7 @@ const readWindowPage = async <TContext>({
   }
 
   if (ranking === null) {
-    ranking = await rankCandidates(candidates, rankingScope);
+    ranking = passages.admit(await rankCandidates(candidates, rankingScope));
     windowed = windowAfterCursor(ranking.ranked, parsedCursor);
   }
   const hasMoreInWindow = windowed.length > limit;
@@ -1506,6 +1635,7 @@ const readBm25SearchPage = async <TContext>(
     extractId,
     extractSnippet,
     rankCandidates,
+    scanFields,
   } = options;
   if (
     order.type !== "relevance" ||
@@ -1523,6 +1653,7 @@ const readBm25SearchPage = async <TContext>(
     query,
     from: 0,
     size: CORPUS_BM25_PASSAGE_LIMIT + 1,
+    scanFields,
   });
   const indexMs = performance.now() - startedAt;
   const topScore = bm25TopScore(round.hits);
@@ -1576,6 +1707,7 @@ const readBm25SearchPage = async <TContext>(
             position,
             bm25: score,
             clause: passageClause(hit),
+            fields: hit,
           })
         ) {
           malformed += 1;
@@ -1588,9 +1720,8 @@ const readBm25SearchPage = async <TContext>(
     }
   }
   hitDispositions.record({ malformed });
-  const ranking = await rankCandidates(
-    candidates,
-    rankingScopeOf(parsedCursor, passages.selectCandidates),
+  const ranking = passages.admit(
+    await rankCandidates(candidates, rankingScopeOf(parsedCursor, passages)),
   );
   const windowed = windowAfterCursor(ranking.ranked, parsedCursor);
   const pageRanked = windowed.slice(skip, skip + limit);

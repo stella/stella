@@ -35,7 +35,7 @@ import type { api, WebApiRoutes } from "@/lib/api";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import { sessionOptions } from "@/lib/auth-query-options";
 import { toSafeId } from "@/lib/safe-id";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { withTestServerIsomorphicHalf } from "@/testing/isomorphic-half";
 
 type RouteShellProviderFixtureOptions = {
@@ -108,6 +108,15 @@ const setupFixtureEnvironment = (
     });
   }
 };
+/**
+ * The event streams a shell opens: the open matter's stream, and the signed-in
+ * user's stream that the app shell opens on every page.
+ */
+const RECORDED_SHELL_EVENT_STREAMS: readonly string[] = [
+  "/v1/workspaces/00000000-0000-4000-8000-000000000001/events",
+  "/v1/notifications/events",
+];
+
 // Resolve EventTarget after Happy DOM installs its matching Event constructor.
 const createFixtureEventSource = () =>
   class FixtureEventSource extends EventTarget implements EventSource {
@@ -129,9 +138,7 @@ const createFixtureEventSource = () =>
       this.url = String(url);
       this.withCredentials = init.withCredentials ?? false;
       const path = new URL(this.url, window.location.origin).pathname;
-      if (
-        path !== "/v1/workspaces/00000000-0000-4000-8000-000000000001/events"
-      ) {
+      if (!RECORDED_SHELL_EVENT_STREAMS.includes(path)) {
         panic(`Unrecorded shell event stream: ${path}`);
       }
       queueMicrotask(() => {
@@ -284,13 +291,17 @@ const installFixtureNetwork = () => {
     matterNumberingEnabled: true,
     practiceJurisdictions: [],
     promptCachingEnabled: true,
+    aiInstructions: "",
+    aiInstructionsMaxLength: 3000,
     managedAIResidency: "eu",
     memoryExtractionEnabled: false,
+    localRunMaxApprovalMode: "full_auto",
     timeMinimumUnitMinutes: 1,
     timeEditWindowDays: 30,
     timeLockedThroughMonth: null,
     timeNarrativeRequired: false,
     timeZone,
+    primaryJurisdictionTimeZone: timeZone,
     timeZoneSource: "organization",
   } satisfies NonNullable<
     Awaited<ReturnType<(typeof api)["organization-settings"]["get"]>>["data"]
@@ -299,10 +310,15 @@ const installFixtureNetwork = () => {
     id: toSafeId<"workspace">("00000000-0000-4000-8000-000000000001"),
     organizationId: session.activeOrganizationId,
     name: "Fixture matter",
+    externalSource: null,
+    externalId: null,
+    externalChangeKey: null,
+    importedAt: null,
     reference: "2026/1",
     clientId: null,
     leadUserId: null,
     billingReference: null,
+    billingNarrativeLanguage: null,
     color: null,
     status: "active",
     lastActivityAt: "2026-10-01T00:00:00.000Z",
@@ -377,6 +393,7 @@ const installFixtureNetwork = () => {
           return Response.json({
             activeSkill: null,
             activeTurnId: null,
+            activeTurnSteering: "not_steerable",
             attachedFiles: { fileCount: 0, files: [] },
             context: {
               estimatedTokens: 0,
@@ -416,11 +433,24 @@ const installFixtureNetwork = () => {
           nextCursor: null,
         } satisfies WebApiRoutes["skills"]["get"]["response"][200]);
       }
+      // The composer's where chip: this member runs no turns on a computer.
+      if (pathname === "/v1/chat/local-runners") {
+        return Response.json({ status: "hidden" });
+      }
       if (pathname === "/v1/chat/skill-availability") {
         return Response.json({
           unavailable: [],
           unavailableHere: [],
         } satisfies WebApiRoutes["chat"]["skill-availability"]["get"]["response"][200]);
+      }
+      if (pathname === "/v1/chat/runs/active") {
+        return Response.json({
+          items: [],
+          limit: 100,
+          nextCursor: null,
+        } satisfies NonNullable<
+          Awaited<ReturnType<typeof api.chat.runs.active.get>>["data"]
+        >);
       }
       if (pathname === "/v1/chat/threads") {
         return Response.json({
@@ -871,7 +901,12 @@ const declareCensus = (fixture: FixtureRuntime) => {
           .filter(
             (route) => route.parentRoute?.id === "__root__" && hasUi(route),
           )
-          .filter((route) => route.options.staticData?.appFrame === undefined)
+          .filter((route) => {
+            if (route.options.staticData === undefined) {
+              return true;
+            }
+            return route.options.staticData.appFrame === undefined;
+          })
           .map(({ id }) => id),
       ).toEqual([]);
       const publicLeaves = uiLeaves.filter((route) => !isLegacyTool(route));

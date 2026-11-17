@@ -1,0 +1,20 @@
+{
+  "id": "no-local-paragraph-label",
+  "rules": ["no-local-paragraph-label/no-local-paragraph-label"],
+  "type": "changed-lines",
+  "expiresAt": "2026-11-15T00:00:00.000Z",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "no-local-paragraph-label/no-local-paragraph-label",
+    "apps/api/src/handlers/case-law/ingestion/parsers",
+    "apps/api/src/lib/legal-search/parsers",
+    "packages/legal-ast/src"
+  ]
+}

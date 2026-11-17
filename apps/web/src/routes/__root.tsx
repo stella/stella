@@ -22,6 +22,7 @@ import { AppProviders } from "@/app-providers";
 import { ApiVersionMismatchProvider } from "@/components/api-version-mismatch-refresh";
 import {
   DefaultErrorComponent,
+  DefaultNotFoundComponent,
   DefaultPendingComponent,
 } from "@/components/route-components";
 import { RouteProviderScopeBoundary } from "@/components/route-provider-scope/route-provider-scope";
@@ -54,6 +55,7 @@ import {
   isPublicKnowledgeEnabled,
 } from "@/lib/knowledge/public-knowledge-launch";
 import { publicToolsBasePath } from "@/lib/knowledge/public-tools-path";
+import { sweepStaleRedirectRequests } from "@/lib/mcp-oauth-channel";
 import { isPublicLawCrawlAllowed } from "@/lib/public-law-launch";
 import { isPublicSsrPath } from "@/lib/public-ssr-paths";
 import { isPublicToolsCrawlAllowed } from "@/lib/public-tools-launch";
@@ -64,6 +66,7 @@ import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
 import { requireProfessionalUseForSignedInRoute } from "@/routes/-auth-context";
 import { createRootHead } from "@/routes/-root-head";
 import "@/styles/app.css";
+import "@/styles/print.css";
 
 const isDev = import.meta.env.DEV;
 const DevRoot = isDev
@@ -121,7 +124,26 @@ export const Route = createRootRouteWithContext<{
     }),
   pendingComponent: () => <DefaultPendingComponent className="h-dvh" />,
   errorComponent: RootErrorComponent,
+  notFoundComponent: RootNotFoundComponent,
 });
+
+function RootNotFoundComponent() {
+  const appContext = Route.useRouteContext({
+    select: (context) => ({
+      analyticsValue: context.analyticsValue,
+      queryClient: context.queryClient,
+    }),
+  });
+
+  return (
+    <AppProviders
+      analyticsValue={appContext.analyticsValue}
+      queryClient={appContext.queryClient}
+    >
+      <DefaultNotFoundComponent />
+    </AppProviders>
+  );
+}
 
 function RootErrorComponent(props: ErrorComponentProps) {
   const appContext = Route.useRouteContext({
@@ -150,6 +172,7 @@ function RootComponent() {
   // Public documents reuse server route context during hydration. Re-enter
   // the browser guard after mounting so redirects stay in the router boundary.
   useMountEffect(() => {
+    sweepStaleRedirectRequests();
     const href = pendingHandoffPath();
     if (href) {
       detached(
@@ -190,6 +213,7 @@ function RootComponent() {
 }
 
 function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
+  const nonce = useRouter().options.ssr?.nonce;
   const routeErrorLifecycle = Route.useRouteContext({
     select: (context) => context.routeErrorLifecycle,
   });
@@ -232,8 +256,8 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
         <head>
           <HeadContent />
 
-          <script src="/handoff-init.js" />
-          <script src="/prepaint-init.js" />
+          <script nonce={nonce} src="/handoff-init.js" />
+          <script nonce={nonce} src="/prepaint-init.js" />
         </head>
         <body>
           <RouteErrorLifecycleProvider controller={routeErrorLifecycle}>

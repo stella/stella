@@ -1,11 +1,13 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
 
+import type { rootDb } from "@/api/db/root";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
 import {
   McpAuthenticationError,
   McpTokenVerificationError,
 } from "@/api/mcp/errors";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import { authenticateLegalResolveToken } from "./authentication";
 
@@ -114,6 +116,28 @@ test("classifies a live service binding outage as infrastructure failure", async
   });
   expect(Result.isError(result)).toBe(true);
   if (Result.isError(result)) {
+    expect(result.error).toBeInstanceOf(McpTokenVerificationError);
+  }
+});
+
+test("classifies an OAuth admission outage as infrastructure failure", async () => {
+  const result = await authenticateLegalResolveToken("synthetic", {
+    verifyToken: async () => ({
+      sub: "user",
+      org_id: "organization",
+      client_id: "client",
+      iat: 1_700_000_000,
+    }),
+    admissionOptions: {
+      db: asTestRaw<Pick<typeof rootDb, "select">>({
+        select: () => {
+          throw new TypeError("Synthetic admission outage");
+        },
+      }),
+    },
+  });
+  expect(result.isErr()).toBe(true);
+  if (result.isErr()) {
     expect(result.error).toBeInstanceOf(McpTokenVerificationError);
   }
 });
