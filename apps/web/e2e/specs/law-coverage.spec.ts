@@ -48,6 +48,7 @@ test.beforeAll(() => {
         "../../tests/fixtures/law-coverage.fixture.tsx",
       ),
       "--target=browser",
+      "--minify",
       "--external=@tanstack/react-start/server",
       "--external=@tanstack/react-start",
       `--define=import.meta.env=${JSON.stringify({

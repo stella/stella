@@ -537,7 +537,12 @@ export const migrateLegacyPresentationPreferences = async ({
         patch.visitorLocale = visitorLocale;
       }
       locale = visitorLocale ?? prefs.visitorLocale;
-    } else if (profileLocale === defaultPresentationPrefs.visitorLocale) {
+    } else if (
+      profileLocale === defaultPresentationPrefs.visitorLocale &&
+      legacyLocale !== profileLocale
+    ) {
+      // An unchanged locale needs no profile write; a write would refresh
+      // the session and interrupt the page that is loading.
       const written = await writeProfileLocale(legacyLocale);
       if (written.isErr()) {
         return {
