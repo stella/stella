@@ -625,8 +625,12 @@
       "unavailableProvider": "Poskytovateľ AI vašej organizácie prevod reči neponúka.",
       "unavailable": "Prevod pomocou stella AI teraz nie je k dispozícii.",
       "model": "Model prevodu",
+      "chooseModel": "Zvoľte model",
       "outsideRegion": "Mimo vášho regiónu",
-      "outsideRegionNote": "Tento model spracúva zvuk mimo regiónu vašej organizácie."
+      "outsideRegionNote": "Tento model spracúva zvuk mimo regiónu vašej organizácie.",
+      "retainsData": "Uchováva váš zvuk",
+      "retainsDataTitle": "{provider} si ponecháva, čo diktujete",
+      "retainsDataWarning": "Tento model beží na účte bez nulového uchovávania údajov. {provider} ukladá zvuk aj prepis všetkého, čo nadiktujete, podľa vlastných podmienok a mimo kontroly stella. Nediktujte s ním dôverné ani klientske informácie."
     },
     "language": {
       "title": "Jazyk diktovania",

@@ -270,14 +270,14 @@ export const chatKeys = {
     activeOrganizationId: string,
     userId: string,
     threadId: string,
-    turnId: string,
+    messageId: string,
   ) => [
     ...chatKeys.all,
     activeOrganizationId,
     userId,
     "local-files-undo",
     threadId,
-    turnId,
+    messageId,
   ],
   /** Every chat's background count of the reader, for one refresh. */
   backgroundTaskCounts: (activeOrganizationId: string, userId: string) => [

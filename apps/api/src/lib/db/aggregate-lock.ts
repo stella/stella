@@ -782,7 +782,8 @@ type AuxiliaryRowIdentityOptions = Extract<
       | "correspondence"
       | "desktopMembership"
       | "memory"
-      | "searchProjectionRepair";
+      | "searchProjectionRepair"
+      | "savedSearch";
   }
 >;
 
@@ -790,6 +791,14 @@ const auxiliaryRowResource = (
   options: AuxiliaryRowIdentityOptions,
 ): RowResource => {
   switch (options.aggregate) {
+    case "savedSearch":
+      return {
+        table: "saved_searches",
+        columns: ["id"],
+        values: [options.id.id],
+        scopeColumns: ["organization_id", "user_id"],
+        scopeValues: [options.id.organizationId, options.id.userId],
+      };
     case "correspondence":
       return byIdWithin(
         "correspondence",
@@ -870,6 +879,7 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
     case "desktopMembership":
     case "memory":
     case "searchProjectionRepair":
+    case "savedSearch":
       return auxiliaryRowResource(options);
     case "searchHistory":
       return {
@@ -2658,6 +2668,37 @@ export const lockCaseLawDecisionRows = async ({
   `);
 };
 
+type CaseLawDecisionSnapshotOptions = {
+  tx: Pick<Transaction, "select">;
+  /** The base table, passed in so this owner names no case-law relation itself. */
+  decisions: typeof caseLawDecisions;
+  decisionId: SafeId<"caseLawDecision">;
+  /** The storage slice supplies its document-presence policy without a dependency cycle. */
+  holdsDocument: SQL<boolean>;
+};
+
+/** Lock and read a decision's pre-refresh identity and payload state together. */
+export const lockCaseLawDecisionSnapshot = async ({
+  tx,
+  decisions,
+  decisionId,
+  holdsDocument,
+}: CaseLawDecisionSnapshotOptions) =>
+  await tx
+    .select({
+      citationKey: decisions.citationKey,
+      country: decisions.country,
+      court: decisions.court,
+      docketFamilyKey: decisions.docketFamilyKey,
+      language: decisions.language,
+      decisionDate: decisions.decisionDate,
+      holdsDocument,
+      metadata: decisions.metadata,
+    })
+    .from(decisions)
+    .where(eq(decisions.id, decisionId))
+    .for("update")
+    .limit(1);
 /** Hold every summary endpoint in one ordered batch before checking revisions. */
 export const lockLegislationVersionRows = async (
   tx: Transaction,

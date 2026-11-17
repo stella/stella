@@ -85,6 +85,7 @@
     "documentClose": "Close",
     "approvalBrowserNote": "Allowed, it runs in your browser on your computer, through the stella extension.",
     "grantFailed": "The approval could not be saved. Try again.",
+    "limitReminderFailed": "The change could not be saved. Try again.",
     "elsewhereBrowser": "This step runs in your browser on your computer, through the stella extension. Open this conversation in stella there to finish it.",
     "elsewhereSecret": "This step needs a key. For safety, keys are added in stella on your computer, not in the app.",
     "elsewhereConnector": "This step connects an app. For safety, apps are connected in stella on your computer, not in the app.",
@@ -251,7 +252,13 @@
       "sessionNotResumed": "The coding agent on your computer could not pick up where it left off, so it continued from the messages in this chat.",
       "steered": "Sent while the agent was working",
       "ranOnModel": "Ran on {model}",
-      "desktopSettingsSteps": "In stella desktop on your computer, open Settings › General › AI subscriptions."
+      "desktopSettingsSteps": "In stella desktop on your computer, open Settings › General › AI subscriptions.",
+      "errorLimitResetsAt": "The coding agent on your computer reached its usage limit. You can try again after {time}.",
+      "limitReminderNotify": "Notify me when it resets",
+      "limitReminderScheduled": "We will notify you after {time}.",
+      "limitResumeContinue": "Continue automatically when it resets",
+      "limitResumeScheduled": "Continues automatically at {time}.",
+      "limitReminderCancel": "Cancel"
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# source checked} other {# sources checked}}",

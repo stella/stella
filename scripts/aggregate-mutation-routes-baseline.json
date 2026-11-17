@@ -455,11 +455,6 @@
     "reason": "Existing PATCH route awaits ownership declaration at its route definition."
   },
   {
-    "key": "PATCH /v1/saved-searches/:savedSearchId",
-    "count": 1,
-    "reason": "Existing PATCH route awaits ownership declaration at its route definition."
-  },
-  {
     "key": "PATCH /v1/saved-time-narratives/:id",
     "count": 1,
     "reason": "Existing PATCH route awaits ownership declaration at its route definition."

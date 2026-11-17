@@ -250,7 +250,7 @@ export const useUserEventRefreshes = ({
         ...organizationResourceQueryActions({
           queryClient,
           organizationId,
-          resources: [RESOURCE_TYPE.USER],
+          resources: [RESOURCE_TYPE.WORKSPACE, RESOURCE_TYPE.USER],
         }),
         ...organizationEventQueryKeys(
           resourceSetUpdatedRealtimeEvent(RESOURCE_TYPE.CONTACT),

@@ -321,7 +321,7 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     path: "apps/api/src/lib/chat/provider-data-policy.ts",
     class: "third-party",
     reason:
-      "Sends provider checks and completions to configured OpenRouter endpoints.",
+      "Sends provider checks, completions and transcriptions to configured OpenRouter and ElevenLabs endpoints.",
     transports: ["module:@stll/fetch"],
   },
   {

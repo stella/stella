@@ -625,8 +625,12 @@
       "unavailableProvider": "O provedor de IA da sua organização não oferece transcrição.",
       "unavailable": "A transcrição pela stella AI não está disponível no momento.",
       "model": "Modelo de transcrição",
+      "chooseModel": "Escolha um modelo",
       "outsideRegion": "Fora da sua região",
-      "outsideRegionNote": "Este modelo processa o áudio fora da região da sua organização."
+      "outsideRegionNote": "Este modelo processa o áudio fora da região da sua organização.",
+      "retainsData": "Guarda seu áudio",
+      "retainsDataTitle": "{provider} guarda o que você dita",
+      "retainsDataWarning": "Este modelo usa uma conta sem retenção zero de dados. {provider} armazena o áudio e a transcrição de tudo o que você dita conforme os próprios termos, fora do controle da stella. Não dite informações confidenciais nem dados de clientes com ele."
     },
     "language": {
       "title": "Idioma do ditado",

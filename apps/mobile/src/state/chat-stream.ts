@@ -22,6 +22,10 @@ import {
   type ChatLocalRunSteerRequest,
   type ChatLocalRunSteerSource,
 } from "@stll/api-contract/chat-run-target";
+import {
+  CHAT_TURN_STEERING_EVENT,
+  chatTurnSteeringEventSchema,
+} from "@stll/api-contract/chat-send-intent";
 import { SSE_SILENCE_BOUND_MS } from "@stll/api-contract/sse-heartbeat";
 import { hedgedAttempts } from "@stll/concurrency/hedged-attempts";
 
@@ -156,6 +160,12 @@ const chatEventSchema = v.union([
     type: v.literal("CUSTOM"),
     name: v.literal(CHAT_LOCAL_RUN_STEER_EVENT),
     value: chatLocalRunSteerEventSchema,
+  }),
+  // Whether the turn takes a message mid-turn, as the server knows it.
+  v.object({
+    type: v.literal("CUSTOM"),
+    name: v.literal(CHAT_TURN_STEERING_EVENT),
+    value: chatTurnSteeringEventSchema,
   }),
 ]);
 
@@ -391,7 +401,8 @@ export const applyChatEvent = (
         failure: streamedTurnFailure(event.code),
       };
     }
-    // A steer's outcome is the turn's to act on, not part of the answer.
+    // A steer's outcome and the turn's steering are the turn's to act on,
+    // not part of the answer.
     case "CUSTOM": {
       return answer;
     }

@@ -24,6 +24,7 @@ import {
 } from "@/api/handlers/case-law/decisions/slug";
 import { writeDecisionCitations } from "@/api/handlers/case-law/ingestion/pipeline/citations";
 import { findFallbackDecisionTx } from "@/api/handlers/case-law/ingestion/pipeline/decision-identity";
+import { writeDecisionReviews } from "@/api/handlers/case-law/ingestion/pipeline/decision-reviews";
 import {
   announceDecisionIdentifiers,
   reconcileStableProjection,
@@ -188,6 +189,13 @@ const finishInsertedRowTx = async (
     observedAt,
     plan: { citations, identifierRows },
   } = write;
+  await writeDecisionReviews(tx, {
+    decisionId: insertedId,
+    country: write.result.country,
+    previousIdentity: null,
+    reviews: write.plan.reviews,
+  });
+
   await writeDecisionJudges(tx, write, insertedId);
 
   // The row and its identifiers are stored, so the citations that were

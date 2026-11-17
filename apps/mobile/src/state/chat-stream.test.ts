@@ -16,6 +16,10 @@ import type { ChatContextNotice } from "@stll/api-contract/chat-context-notice";
 import { CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY } from "@stll/api-contract/chat-local-run-tool";
 import { CHAT_SEND_QUEUES_INSTEAD_CODE } from "@stll/api-contract/chat-queue";
 import {
+  CHAT_TURN_STEERING,
+  CHAT_TURN_STEERING_EVENT,
+} from "@stll/api-contract/chat-send-intent";
+import {
   SSE_HEARTBEAT_FRAME,
   SSE_HEARTBEAT_INTERVAL_MS,
   SSE_SILENCE_BOUND_MS,
@@ -226,6 +230,36 @@ describe("an answer's context notice", () => {
       );
       expect(withdrawn.contextNotice).toBeNull();
     }
+  });
+});
+
+describe("whether the turn takes a message mid-turn", () => {
+  test("is read from the event the server sends with the turn's start, and leaves the answer as it was", () => {
+    const told = parseChatEvent(
+      JSON.stringify({
+        type: "CUSTOM",
+        name: CHAT_TURN_STEERING_EVENT,
+        value: { steering: CHAT_TURN_STEERING.steerable },
+      }),
+    );
+    expect(told).toEqual({
+      type: "CUSTOM",
+      name: CHAT_TURN_STEERING_EVENT,
+      value: { steering: CHAT_TURN_STEERING.steerable },
+    });
+    expect(applyChatEvent(EMPTY_ANSWER, told ?? panic("Not read"))).toBe(
+      EMPTY_ANSWER,
+    );
+    // One it cannot read is not drawn from.
+    expect(
+      parseChatEvent(
+        JSON.stringify({
+          type: "CUSTOM",
+          name: CHAT_TURN_STEERING_EVENT,
+          value: { steering: "sometimes" },
+        }),
+      ),
+    ).toBeUndefined();
   });
 });
 

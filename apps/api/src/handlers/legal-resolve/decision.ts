@@ -33,6 +33,10 @@ import {
 } from "@/api/handlers/legal-resolve/decision-constraints";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { parseCachedDecisionAst } from "@/api/lib/case-law/decision-ast-normalization";
+import {
+  readDecisionReviews,
+  requireDecisionReviews,
+} from "@/api/lib/case-law/decision-reviews";
 import { CASE_LAW_SURFACE_COUNTRIES } from "@/api/lib/case-law/public-subject";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { buildCaseLawDecisionUrl } from "@/api/lib/legal-search/public-law-app-urls";
@@ -42,6 +46,7 @@ import { toPlainCorpusText } from "@/api/mcp/tool-utils";
 type DecisionResolverDependencies = {
   lookup?: typeof lookupDecisionsByIdentity;
   read?: typeof readDecisionReaderSource;
+  readReviews?: typeof readDecisionReviews;
 };
 
 type ResolvedDecisionDocument = Extract<
@@ -135,10 +140,17 @@ const candidate = (row: DecisionIdentityRow) => ({
  * The document of a decision. Only `admitResolvedDecision` turns it into a
  * resolved answer, once the decision has met every constraint.
  */
-const decisionDocument = async (
-  row: DecisionIdentityRow,
-  read: typeof readDecisionReaderSource,
-): Promise<ResolvedDecisionDocument> => {
+type DecisionDocumentOptions = {
+  row: DecisionIdentityRow;
+  read: typeof readDecisionReaderSource;
+  readReviews: typeof readDecisionReviews;
+};
+
+const decisionDocument = async ({
+  row,
+  read,
+  readReviews,
+}: DecisionDocumentOptions): Promise<ResolvedDecisionDocument> => {
   const content = await read({
     decisionId: row.id,
     phase: "blocks",
@@ -170,6 +182,16 @@ const decisionDocument = async (
     ecli: row.ecli,
     readerUrl,
     text: decisionText(content),
+    appealReviews:
+      content?.status === "read" && content.decision.id === row.id
+        ? content.decision.appealReviews
+        : requireDecisionReviews(
+            await readReviews({
+              decisionIds: [row.id],
+              caseLawDb: caseLawPublicReadDb,
+            }),
+            row.id,
+          ),
   };
 };
 
@@ -200,6 +222,7 @@ const resolveConstrainedDecision = async ({
   dependencies: {
     lookup = lookupDecisionsByIdentity,
     read = readDecisionReaderSource,
+    readReviews = readDecisionReviews,
   } = {},
 }: ResolveDecisionOptions): Promise<DecisionResolveResponse> => {
   if (identifier.trim().length === 0) {
@@ -309,7 +332,8 @@ const resolveConstrainedDecision = async ({
     await admitResolvedDecision({
       constraints,
       row,
-      document: async (verified) => await decisionDocument(verified, read),
+      document: async (verified) =>
+        await decisionDocument({ row: verified, read, readReviews }),
       candidate,
       otherCourtCandidate,
       otherCourtCandidates,

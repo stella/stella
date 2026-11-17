@@ -49,6 +49,7 @@ import type { Identity as ReaderAnswerMessageIdentity } from "./readerAnswerMess
 import type { Identity as RequestReceiptIdentity } from "./requestReceipt";
 import type { Identity as RunIdentity } from "./run";
 import type { Identity as SampleCaseIdentity } from "./sampleCase";
+import type { Identity as SavedSearchIdentity } from "./savedSearch";
 import type { Identity as SchedulerClaimIdentity } from "./schedulerClaim";
 import type { Identity as ScoutCensusIdentity } from "./scoutCensus";
 import type { Identity as SearchHistoryIdentity } from "./searchHistory";
@@ -109,6 +110,7 @@ export type AggregateIdentities = {
   "requestReceipt": RequestReceiptIdentity;
   "run": RunIdentity;
   "sampleCase": SampleCaseIdentity;
+  "savedSearch": SavedSearchIdentity;
   "schedulerClaim": SchedulerClaimIdentity;
   "scoutCensus": ScoutCensusIdentity;
   "searchHistory": SearchHistoryIdentity;

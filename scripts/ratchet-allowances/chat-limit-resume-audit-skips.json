@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 3,
+  "reason": "A request to continue a chat after a usage limit reset is consumed by the turn it starts (audited in the same transaction), ended by the notification it files (the notification row is the record), or dropped for a member who can no longer act; the member's request itself was audited when set."
+}

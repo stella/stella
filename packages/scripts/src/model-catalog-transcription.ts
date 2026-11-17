@@ -141,6 +141,11 @@ export const checkTranscriptionCatalog = ({
       continue;
     }
     const model = TRANSCRIPTION_MODELS[modelId];
+    // A direct model is reached with the deployment's own key, not through
+    // OpenRouter, so OpenRouter's listings say nothing about it.
+    if (model.route !== "openrouter") {
+      continue;
+    }
     const offered = ENDPOINTS.some(
       (endpoint) => model.residency[endpoint].status === "available",
     );

@@ -105,6 +105,12 @@ const WEB_LOCAL_RUN_KEYS = {
   steered: ["chat", "tool", "user_message"],
   ranOnModel: ["chat", "ranOnModel"],
   desktopSettingsSteps: ["chat", "localRun", "desktopSettingsSteps"],
+  errorLimitResetsAt: ["chat", "localRun", "errorLimitResetsAt"],
+  limitReminderNotify: ["chat", "localRun", "limitReminderNotify"],
+  limitReminderScheduled: ["chat", "localRun", "limitReminderScheduled"],
+  limitResumeContinue: ["chat", "localRun", "limitResumeContinue"],
+  limitResumeScheduled: ["chat", "localRun", "limitResumeScheduled"],
+  limitReminderCancel: ["common", "cancel"],
 } as const satisfies WebKeysOf<MobileMessages["chat"]["localRun"]>;
 
 /** Where the web keeps the reason each failed turn gives (`AI_FAILURE_ERROR_KEYS`). */

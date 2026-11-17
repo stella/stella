@@ -14,7 +14,14 @@ type TranscriptionRegionalAvailability =
   | { status: "available"; price: TranscriptionDurationPrice }
   | { status: "unavailable" | "unknown" };
 
-type TranscriptionModelMetadata = {
+/**
+ * How requests reach the model: through OpenRouter, or straight to the
+ * provider with the deployment's own key, under the provider's model id.
+ */
+type TranscriptionRoute =
+  { route: "openrouter" } | { route: "elevenlabs"; providerModelId: string };
+
+type TranscriptionModelMetadata = TranscriptionRoute & {
   displayName: string;
   /** The company behind the model, shown beside its name. */
   provider: string;
@@ -26,9 +33,20 @@ type TranscriptionModelMetadata = {
   vocabularyMechanism:
     "none" | "groq-prompt" | "azure-phrase-list" | "context-hint";
   diarization: "supported" | "unconfirmed";
+  /** The price at each endpoint. A direct model is offered only at the
+   *  endpoints its deployment key serves, which the deployment decides. */
   residency: Record<TranscriptionEndpoint, TranscriptionRegionalAvailability>;
   source: { url: string; checkedAt: string };
 };
+
+/** Whether the deployment serves a model at an endpoint. Every OpenRouter
+ *  endpoint is served; a direct model needs the deployment's key. */
+export type TranscriptionServed = (
+  modelId: TranscriptionModelId,
+  endpoint: TranscriptionEndpoint,
+) => boolean;
+
+const SERVED_EVERYWHERE: TranscriptionServed = () => true;
 
 const perSecond = (
   usdNumerator: number,
@@ -57,6 +75,7 @@ export const TRANSCRIPTION_MODELS = {
   "openai/whisper-large-v3-turbo": {
     displayName: "Whisper Large V3 Turbo",
     provider: "OpenAI",
+    route: "openrouter",
     price: perSecond(1, 300_000),
     languageClaim: "99+ languages",
     timestamps: "none",
@@ -75,6 +94,7 @@ export const TRANSCRIPTION_MODELS = {
   "openai/whisper-large-v3": {
     displayName: "Whisper Large V3",
     provider: "OpenAI",
+    route: "openrouter",
     price: perSecond(3, 400_000),
     languageClaim: "99+ languages",
     timestamps: "word",
@@ -93,6 +113,7 @@ export const TRANSCRIPTION_MODELS = {
   "nvidia/parakeet-tdt-0.6b-v3": {
     displayName: "Parakeet TDT 0.6B v3",
     provider: "NVIDIA",
+    route: "openrouter",
     price: perSecond(1, 60_000),
     languageClaim: "All official EU languages",
     timestamps: "segment",
@@ -111,6 +132,7 @@ export const TRANSCRIPTION_MODELS = {
   "microsoft/mai-transcribe-2": {
     displayName: "MAI-Transcribe 2",
     provider: "Microsoft",
+    route: "openrouter",
     price: perSecond(1, 36_000),
     languageClaim: "60 languages",
     timestamps: "word",
@@ -129,6 +151,7 @@ export const TRANSCRIPTION_MODELS = {
   "elevenlabs/scribe-v2": {
     displayName: "Scribe v2",
     provider: "ElevenLabs",
+    route: "openrouter",
     price: perSecond(11, 180_000),
     languageClaim: "90+ languages",
     timestamps: "word",
@@ -147,6 +170,7 @@ export const TRANSCRIPTION_MODELS = {
   "google/chirp-3": {
     displayName: "Chirp 3",
     provider: "Google",
+    route: "openrouter",
     price: perSecond(1, 3750),
     languageClaim: "24 languages, 77+ in preview",
     timestamps: "none",
@@ -165,6 +189,7 @@ export const TRANSCRIPTION_MODELS = {
   "deepgram/nova-3": {
     displayName: "Nova-3",
     provider: "Deepgram",
+    route: "openrouter",
     price: perSecond(43, 600_000),
     languageClaim: "Multilingual; language count not specified",
     timestamps: "none",
@@ -183,6 +208,7 @@ export const TRANSCRIPTION_MODELS = {
   "assemblyai/universal-3-6-pro": {
     displayName: "Universal-3.6 Pro",
     provider: "AssemblyAI",
+    route: "openrouter",
     price: perSecond(1, 12_000),
     languageClaim: "Multilingual; language count not specified",
     timestamps: "none",
@@ -201,6 +227,7 @@ export const TRANSCRIPTION_MODELS = {
   "mistralai/voxtral-mini-transcribe": {
     displayName: "Voxtral Mini Transcribe",
     provider: "Mistral",
+    route: "openrouter",
     price: perSecond(1, 20_000),
     languageClaim: "Not specified",
     timestamps: "none",
@@ -219,6 +246,7 @@ export const TRANSCRIPTION_MODELS = {
   "mistralai/voxtral-mini-transcribe-3-0": {
     displayName: "Voxtral Mini Transcribe 3.0",
     provider: "Mistral",
+    route: "openrouter",
     price: perSecond(7, 120_000),
     languageClaim: "Not specified",
     timestamps: "none",
@@ -237,6 +265,7 @@ export const TRANSCRIPTION_MODELS = {
   "mistralai/voxtral-small-transcribe-3-0": {
     displayName: "Voxtral Small Transcribe 3.0",
     provider: "Mistral",
+    route: "openrouter",
     price: perSecond(1, 15_000),
     languageClaim: "Not specified",
     timestamps: "none",
@@ -252,9 +281,30 @@ export const TRANSCRIPTION_MODELS = {
       checkedAt: CHECKED_AT,
     },
   },
+  "elevenlabs-direct/scribe-v3": {
+    route: "elevenlabs",
+    providerModelId: "scribe_v3",
+    displayName: "Scribe v3",
+    provider: "ElevenLabs",
+    price: perSecond(1, 18_000),
+    languageClaim: "90+ languages",
+    timestamps: "word",
+    vocabularyMechanism: "none",
+    diarization: "supported",
+    residency: {
+      eu: at(perSecond(1, 18_000)),
+      us: at(perSecond(1, 18_000)),
+      global: at(perSecond(1, 18_000)),
+    },
+    source: {
+      url: "https://elevenlabs.io/pricing/api",
+      checkedAt: CHECKED_AT,
+    },
+  },
   "openai/gpt-transcribe": {
     displayName: "GPT Transcribe",
     provider: "OpenAI",
+    route: "openrouter",
     price: perSecond(3, 40_000),
     languageClaim: "Multilingual; language count not specified",
     timestamps: "none",
@@ -295,15 +345,18 @@ const availabilityAt = (
 export const transcriptionEndpointFor = (
   modelId: TranscriptionModelId,
   residency: TranscriptionResidency,
-  { outsideRegion }: { outsideRegion: boolean },
+  {
+    outsideRegion,
+    served = SERVED_EVERYWHERE,
+  }: { outsideRegion: boolean; served?: TranscriptionServed },
 ): TranscriptionEndpoint | undefined => {
-  if (availabilityAt(modelId, residency).status === "available") {
+  const offeredAt = (endpoint: TranscriptionEndpoint) =>
+    availabilityAt(modelId, endpoint).status === "available" &&
+    served(modelId, endpoint);
+  if (offeredAt(residency)) {
     return residency;
   }
-  if (
-    outsideRegion &&
-    availabilityAt(modelId, "global").status === "available"
-  ) {
+  if (outsideRegion && offeredAt("global")) {
     return "global";
   }
   return undefined;
@@ -317,6 +370,7 @@ export const transcriptionEndpointFor = (
  */
 export const defaultTranscriptionModelId = (
   residency: TranscriptionResidency,
+  served: TranscriptionServed = SERVED_EVERYWHERE,
 ): TranscriptionModelId | undefined => {
   let cheapest:
     | { modelId: TranscriptionModelId; price: TranscriptionDurationPrice }
@@ -326,7 +380,7 @@ export const defaultTranscriptionModelId = (
       continue;
     }
     const regional = availabilityAt(modelId, residency);
-    if (regional.status !== "available") {
+    if (regional.status !== "available" || !served(modelId, residency)) {
       continue;
     }
     const { price } = regional;

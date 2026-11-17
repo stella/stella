@@ -428,3 +428,45 @@ describe("a send retried under its command id after a lost answer", () => {
     },
   );
 });
+
+describe("a send to a thread that runs on the member's computer", () => {
+  /** A thread whose Run on choice is Codex on the member's computer. */
+  const threadOnCodex = async () => {
+    const threadId = newThreadId();
+    await testDb.insert(chatThreads).values({
+      id: threadId,
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+      title: CHAT_THREAD_PLACEHOLDER_TITLE,
+      workspaceId: null,
+      contextMatterIds: [],
+      dataWorkspaceIds: [],
+      chatLocalRunTarget: CODEX,
+    });
+    picks.length = 0;
+    streamChatMock.mockClear();
+    return threadId;
+  };
+
+  test("runs on the thread's computer when it names no target, as the phone sends it", async () => {
+    const threadId = await threadOnCodex();
+
+    const result = await sendMessage.handler(firstSend(threadId, undefined));
+
+    expect(result).toBeInstanceOf(Response);
+    expect(handedOff()?.harness).toBe("codex");
+    expect(await storedRunTarget(threadId)).toEqual(CODEX);
+  });
+
+  test("runs on stella when it names stella, and the thread keeps its choice", async () => {
+    const threadId = await threadOnCodex();
+
+    const result = await sendMessage.handler(
+      firstSend(threadId, { kind: "cloud" }),
+    );
+
+    expect(result).toBeInstanceOf(Response);
+    expect(handedOff()).toBeUndefined();
+    expect(await storedRunTarget(threadId)).toEqual(CODEX);
+  });
+});

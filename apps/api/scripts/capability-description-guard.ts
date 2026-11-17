@@ -11,11 +11,8 @@
 // empty or whitespace-only description fails. `description` is still optional
 // on the handler config's type, so this guard is what requires it.
 //
-// Reads the committed catalog rather than importing the handler graph: no env,
-// no module loading, and the artifact is already pinned to the live
-// handlers by the capability-catalog drift guard
-// (`export-capability-catalog.ts --check`), which runs beside this one. A stale
-// artifact therefore cannot hide debt from this guard without failing that one.
+// Builds the catalog from the live handlers so the guard also works before
+// packaging has written the npm capability shards.
 //
 // Modes:
 //   bun apps/api/scripts/capability-description-guard.ts              CI gate (exit 1 on failure)
@@ -25,14 +22,9 @@
 // capability-catalog drift guard.
 
 import { panic } from "better-result";
-import path from "node:path";
-import { pathToFileURL } from "node:url";
 
-import { readCapabilityCatalog } from "../../../packages/cli/src/capability-catalog-data";
 import { parseCapabilityCatalog } from "../../../packages/cli/src/capability-catalog-load";
-import { REPO_ROOT } from "./lib/enumerate-safe-handlers";
-
-const CATALOG_PATH = "packages/cli/capabilities/";
+import { buildCapabilityCatalog } from "./export-capability-catalog";
 
 type CatalogEntry = { id: string; description?: string };
 
@@ -52,13 +44,12 @@ export const findUndescribedIds = (
     .map(({ id }) => id)
     .toSorted();
 
-const readCatalog = (relativePath: string): CatalogEntry[] => {
-  const absolute = path.resolve(REPO_ROOT, relativePath);
-  const raw = readCapabilityCatalog(pathToFileURL(`${absolute}/`));
+const readCatalog = async (): Promise<CatalogEntry[]> => {
+  const raw = await buildCapabilityCatalog();
   const parsed = parseCapabilityCatalog(raw);
   if (parsed === null) {
     return panic(
-      `capability-description-guard: ${relativePath} is not a valid capability catalog.`,
+      "capability-description-guard: generated catalog is not a valid capability catalog.",
     );
   }
   return parsed.map(({ id, description }) =>
@@ -71,20 +62,20 @@ type Loaded = {
   undescribed: string[];
 };
 
-const loadCatalog = (): Loaded => {
-  const entries = readCatalog(CATALOG_PATH);
+const loadCatalog = async (): Promise<Loaded> => {
+  const entries = await readCatalog();
   return {
     catalogIds: entries.map(({ id }) => id).toSorted(),
     undescribed: findUndescribedIds(entries),
   };
 };
 
-const runCheck = (): number => {
-  const { catalogIds, undescribed } = loadCatalog();
+const runCheck = async (): Promise<number> => {
+  const { catalogIds, undescribed } = await loadCatalog();
 
   if (catalogIds.length === 0) {
     console.error(
-      "\ncapability-description-guard: the catalog is empty — the guard did not exercise anything. Fix the committed catalog before trusting a green run.",
+      "\ncapability-description-guard: the catalog is empty — the guard did not exercise anything. Fix the generated catalog before trusting a green run.",
     );
     return 1;
   }
@@ -135,6 +126,6 @@ const runSelfTest = (): number => {
 
 if (import.meta.main) {
   process.exit(
-    process.argv.includes("--self-test") ? runSelfTest() : runCheck(),
+    process.argv.includes("--self-test") ? runSelfTest() : await runCheck(),
   );
 }

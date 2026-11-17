@@ -3,13 +3,18 @@ import { afterEach, beforeEach, describe, expect, jest, test } from "bun:test";
 import { BodyByteLimitError } from "@stll/fetch/body-reader";
 import { createTestState } from "@stll/test-state";
 
-import { DeepLDocumentError, DeepLUpstreamError } from "@/api/lib/deepl/errors";
+import {
+  DeepLDocumentError,
+  DeepLQuotaError,
+  DeepLUpstreamError,
+} from "@/api/lib/deepl/errors";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 
 import {
   DEEPL_TEXT_REQUEST_MAX_BYTES,
   DEEPL_TEXT_REQUEST_MAX_ITEMS,
+  fetchTargetLanguages,
   partitionDeepLTextBatches,
   translateDocument,
   translateTextBatch,
@@ -429,4 +434,168 @@ describe("DeepL document result body", () => {
     expect(failure.cause).toHaveProperty("name", "TimeoutError");
     expect(cancelledWith).toBe(failure.cause);
   });
+});
+
+describe("DeepL metadata and error response bodies", () => {
+  afterEach(() => {
+    jest.useRealTimers();
+    testFetchState.restore();
+  });
+
+  test("decodes chunked metadata and preserves the normal HTTP error mapping", async () => {
+    const bytes = new TextEncoder().encode(
+      JSON.stringify([
+        { language: "CS", name: "Čeština", supports_formality: true },
+      ]),
+    );
+    installFetchMock(
+      async () =>
+        new Response(
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              for (const byte of bytes) {
+                controller.enqueue(new Uint8Array([byte]));
+              }
+              controller.close();
+            },
+          }),
+        ),
+    );
+    expect(await fetchTargetLanguages("deepl-key")).toEqual([
+      { code: "CS", name: "Čeština", supportsFormality: true },
+    ]);
+
+    installFetchMock(
+      async () =>
+        new Response(JSON.stringify({ message: "Translation quota reached" }), {
+          status: 456,
+        }),
+    );
+    const failure = await fetchTargetLanguages("deepl-key").catch(
+      (error: unknown) => error,
+    );
+    expect(DeepLQuotaError.is(failure)).toBe(true);
+    if (!DeepLQuotaError.is(failure)) {
+      expect.unreachable("Expected quota error");
+    }
+    expect(failure.cause).toBe("Translation quota reached");
+  });
+
+  const responseCases = [
+    {
+      name: "metadata",
+      status: 200,
+      idleMs: 15_000,
+      read: async () => await fetchTargetLanguages("deepl-key"),
+    },
+    {
+      name: "HTTP error",
+      status: 503,
+      idleMs: 60_000,
+      read: async () =>
+        await translateTextBatch({
+          apiKey: "deepl-key",
+          texts: ["Hello"],
+          targetLang: "DE",
+        }),
+    },
+  ];
+
+  test.each(responseCases)(
+    "bounds an oversized $name chunk and cancels the body",
+    async ({ status, read }) => {
+      let cancelledWith: unknown;
+      installFetchMock(
+        async () =>
+          new Response(
+            new ReadableStream<Uint8Array>(
+              {
+                start(controller) {
+                  controller.enqueue(new Uint8Array(8 * 1024 * 1024 + 1));
+                },
+                pull(controller) {
+                  controller.close();
+                },
+                cancel(reason) {
+                  cancelledWith = reason;
+                },
+              },
+              { highWaterMark: 0 },
+            ),
+            { status },
+          ),
+      );
+      const failure = await read().catch((error: unknown) => error);
+      expect(DeepLUpstreamError.is(failure)).toBe(true);
+      if (!DeepLUpstreamError.is(failure)) {
+        expect.unreachable("Expected upstream wrapper");
+      }
+      expect(failure.message).toBe("DeepL response body could not be read");
+      expect(BodyByteLimitError.is(failure.cause)).toBe(true);
+      expect(failure.cause).toHaveProperty("limit", 8 * 1024 * 1024);
+      expect(cancelledWith).toBe(failure.cause);
+    },
+  );
+
+  test.each(responseCases)(
+    "preserves a $name stream failure",
+    async ({ status, read }) => {
+      const cause = new DOMException("Response disconnected", "NetworkError");
+      installFetchMock(
+        async () =>
+          new Response(
+            new ReadableStream<Uint8Array>({
+              start(controller) {
+                controller.error(cause);
+              },
+            }),
+            { status },
+          ),
+      );
+      const failure = await read().catch((error: unknown) => error);
+      expect(DeepLUpstreamError.is(failure)).toBe(true);
+      if (!DeepLUpstreamError.is(failure)) {
+        expect.unreachable("Expected upstream wrapper");
+      }
+      expect(failure.cause).toBe(cause);
+    },
+  );
+
+  test.each(responseCases)(
+    "bounds a stalled $name body by its endpoint duration",
+    async ({ status, idleMs, read }) => {
+      jest.useFakeTimers();
+      const reading = Promise.withResolvers<undefined>();
+      let cancelledWith: unknown;
+      installFetchMock(
+        async () =>
+          new Response(
+            new ReadableStream<Uint8Array>(
+              {
+                pull() {
+                  reading.resolve(undefined);
+                },
+                cancel(reason) {
+                  cancelledWith = reason;
+                },
+              },
+              { highWaterMark: 0 },
+            ),
+            { status },
+          ),
+      );
+      const outcome = read().catch((error: unknown) => error);
+      await reading.promise;
+      jest.advanceTimersByTime(idleMs - 1);
+      expect(cancelledWith).toBeUndefined();
+      jest.advanceTimersByTime(1);
+      const failure = await outcome;
+      expect(DeepLUpstreamError.is(failure)).toBe(true);
+      if (!DeepLUpstreamError.is(failure)) {
+        expect.unreachable("Expected upstream wrapper");
+      }
+      expect(failure.cause).toHaveProperty("name", "TimeoutError");
+      expect(cancelledWith).toBe(failure.cause);
+    },
+  );
 });

@@ -547,15 +547,14 @@ const TIME_ENTRY_DIFF_EXCLUDED_FIELDS = new Set([
 const buildTimeEntryDiff = (
   before: Record<string, unknown>,
   updates: Record<string, unknown>,
-): Record<string, { old: unknown; new: unknown }> => {
-  const diff: Record<string, { old: unknown; new: unknown }> = {};
-  for (const [key, value] of Object.entries(updates)) {
-    if (TIME_ENTRY_DIFF_EXCLUDED_FIELDS.has(key)) {
-      continue;
-    }
-    diff[key] = { old: before[key] ?? null, new: value };
-  }
-  return diff;
-};
+): Record<string, { old: unknown; new: unknown }> =>
+  Object.fromEntries(
+    Object.entries(updates)
+      .filter(([key]) => !TIME_ENTRY_DIFF_EXCLUDED_FIELDS.has(key))
+      .map(
+        ([key, value]) =>
+          [key, { old: before[key] ?? null, new: value }] as const,
+      ),
+  );
 
 export default updateTimeEntryById;

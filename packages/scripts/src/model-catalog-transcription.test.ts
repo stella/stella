@@ -18,9 +18,9 @@ import {
 } from "./model-catalog-transcription";
 
 const ENDPOINTS = ["global", "eu", "us"] as const;
-const OFFERED = Object.keys(TRANSCRIPTION_MODELS).filter(
-  isTranscriptionModelId,
-);
+const OFFERED = Object.keys(TRANSCRIPTION_MODELS)
+  .filter(isTranscriptionModelId)
+  .filter((modelId) => TRANSCRIPTION_MODELS[modelId].route === "openrouter");
 
 /** Each endpoint's listing exactly as the catalog describes it. */
 const matchingListing = (endpoint: TranscriptionEndpoint) =>

@@ -8,6 +8,7 @@ import {
   inspectEmbeddedMetricNamespaces,
 } from "../../../scripts/embedded-metric-namespaces.ts";
 import { guardEnforcesLine } from "../../../scripts/guard-rollouts.ts";
+import { workspaceSources } from "./workspace-source-files.ts";
 
 const root = path.resolve(import.meta.dirname, "../../..");
 const legacyNamespace = JSON.stringify("Stella/Api");
@@ -18,9 +19,7 @@ const unlistedNamespace = JSON.stringify("Stella/Unlisted");
 test("application and package EMF namespaces have declared consumers", () => {
   const violations: string[] = [];
   const namespaces = new Set<string>();
-  for (const file of new Bun.Glob(
-    "{apps,packages}/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}",
-  ).scanSync({ cwd: root, onlyFiles: true })) {
+  for (const file of workspaceSources(root)) {
     if (
       /(?:^|\/)(?:node_modules|dist|build|target|__fixtures__|__tests__)\//u.test(
         file,

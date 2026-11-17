@@ -1481,6 +1481,23 @@
     },
     "viewer": {
       "abstract": "Abstract",
+      "appealReviews": {
+        "conflict": "The review evidence is incomplete or conflicting. The review outcome requires verification.",
+        "corpusOnly": "No decision reviewing this decision was found in the available corpus. This does not establish that no appeal exists.",
+        "noneFound": "No reviewing decision found",
+        "overturned": "Overturned",
+        "partly": "Partly overturned",
+        "reviewedBy": "Reviewing decisions",
+        "reviews": "Reviewed decisions",
+        "sourceHistory": "Case history",
+        "sourceMetadata": "Publisher metadata",
+        "sourceOpening": "Opening paragraph",
+        "title": "Appeal review",
+        "truncated": "Only part of the review history is shown.",
+        "underReview": "Under review",
+        "unknown": "Outcome unknown",
+        "upheld": "Left standing"
+      },
       "appliedVersionNotStated": "Applied version not stated",
       "appliedVersionNotStatedCompact": "Version not stated",
       "appliedVersionStatedAmendment": "Wording as amended by <reference>{amendment}</reference>",
@@ -1892,23 +1909,24 @@
     "loadEarlierMessagesError": "Couldn't load earlier messages",
     "loadingEarlierMessages": "Loading earlier messages…",
     "localFilesUndo": {
-      "action": "Undo file changes",
       "computer": {
         "failed": "The undo did not finish on your computer. Some files may already have changed, so check the chat's folder.",
         "folderBusy": "A run on your computer is using this folder. Try again when it finishes.",
         "noCheckpoint": "Your computer has no saved copy of the files from before this turn, so nothing was undone.",
-        "notNewest": "Your computer has newer changes in this folder, so nothing was undone."
+        "updateForEarlier": "Update stella desktop to undo changes from earlier messages."
       },
-      "confirm": "Undo changes",
-      "confirmDescription": "The files this turn changed in its folder on your computer go back to how they were before the turn. Only this turn's changes are undone; earlier turns' changes stay.",
-      "confirmTitle": "Undo this turn's file changes?",
+      "conversationRestarts": "The agent starts over from this chat's text, because the reply before this message did not finish.",
       "expired": "Your computer did not answer in time. Try again.",
+      "option": "Also undo file changes made since this message",
+      "optionHint": "This also undoes changes you made in the folder yourself.",
       "pending": "Undoing file changes on your computer",
       "refused": {
+        "alreadyUndone": "These file changes were already undone.",
         "desktopOffline": "Your computer is offline. Open the stella desktop app and try again.",
         "desktopUpdateRequired": "The stella desktop app on your computer is too old to undo changes. Update it, then try again.",
-        "noCheckpoint": "This turn has no saved copy of the files to go back to.",
-        "notNewest": "Only the newest turn's file changes can be undone.",
+        "folderShared": "Another chat has worked in this folder since this message.",
+        "noSavedCopy": "Your computer kept no copy of the folder from before this message: it was too large or too slow to save, or newer copies replaced it.",
+        "severalFolders": "Later messages ran on another computer or in another folder.",
         "threadBusy": "This chat is still working. Try again when it finishes."
       },
       "restored": "File changes undone"
@@ -1937,6 +1955,8 @@
       "folderStateUnreadable": "Cannot be read",
       "limitReminderNotify": "Notify me when it resets",
       "limitReminderScheduled": "We will notify you after {time}.",
+      "limitResumeContinue": "Continue automatically when it resets",
+      "limitResumeScheduled": "Continues automatically at {time}.",
       "permissionAboveLimit": "Not allowed by your organization",
       "permissionAskDescription": "Edits files in the chat's folder on its own; asks before anything else.",
       "permissionAutoDescription": "Does what it judges safe on its own; asks about the rest.",
