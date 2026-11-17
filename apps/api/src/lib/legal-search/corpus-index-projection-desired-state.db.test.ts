@@ -936,7 +936,10 @@ test("a registry generation the process does not know refuses the canonical writ
     .update(corpusIndexGenerations)
     .set({ status: "retired" })
     .where(eq(corpusIndexGenerations.generation, "case_law_v5"));
-  await registerUnknownGeneration(db, "building");
+  await db.transaction(
+    async (raw) =>
+      await registerUnknownGeneration(asTestRaw<Transaction>(raw), "building"),
+  );
   const before = await caseLawProjection();
 
   const refusal = await refusalOf(async (tx) => {
@@ -955,7 +958,10 @@ test("a registry generation the process does not know refuses the canonical writ
 
 test("a retired generation the process does not know is owed nothing and does not stop a writer", async () => {
   await seedKnownGeneration();
-  await registerUnknownGeneration(db, "retired");
+  await db.transaction(
+    async (raw) =>
+      await registerUnknownGeneration(asTestRaw<Transaction>(raw), "retired"),
+  );
 
   const advanced = await db.transaction(async (raw) => {
     const tx = asTestRaw<Transaction>(raw);
