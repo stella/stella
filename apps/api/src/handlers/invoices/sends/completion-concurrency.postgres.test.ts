@@ -4,6 +4,7 @@ import { and, eq, sql } from "drizzle-orm";
 
 import { withTimeout } from "@stll/concurrency/with-timeout";
 import { waitForExternalState } from "@stll/property-testing/external-state";
+import { dbClock } from "@stll/test-kit/db";
 import { createTestState } from "@stll/test-state";
 
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -53,8 +54,20 @@ const transportGate = () => ({
   release: Promise.withResolvers<undefined>(),
 });
 
-const waitForMilestone = async <T>(milestone: Promise<T>, label: string) =>
-  await withTimeout(async () => await milestone, { label, timeoutMs: 5000 });
+const MILESTONE_LABELS = {
+  transportsReached: "both sends reach the transport",
+  completionLockHeld: "invoice completion lock held",
+  sentAtCaptured: "send timestamp captured",
+} as const;
+
+const waitForMilestone = async <T>(
+  milestone: Promise<T>,
+  key: keyof typeof MILESTONE_LABELS,
+) =>
+  await withTimeout(async () => await milestone, {
+    label: MILESTONE_LABELS[key],
+    timeoutMs: 5000,
+  });
 
 describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
   "concurrent invoice send completion",
@@ -148,7 +161,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
             id: organizationId,
             name: "Concurrent sends",
             slug: organizationId,
-            createdAt: new Date(),
+            createdAt: dbClock.now(),
           });
           await db.insert(user).values({
             id: userId,
@@ -161,7 +174,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
             organizationId,
             userId,
             role: "owner",
-            createdAt: new Date(),
+            createdAt: dbClock.now(),
           });
           await db.insert(workspaces).values({
             id: workspaceId,
@@ -178,7 +191,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
             invoiceDate: "2026-10-01",
             currency: "EUR",
             status: INVOICE_STATUS.FINALIZED,
-            finalizedAt: new Date(),
+            finalizedAt: dbClock.now(),
             totalAmount: cents(1000),
           });
           const invoke = async (actor: "a" | "b") => {
@@ -242,13 +255,10 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
           try {
             const tokens = await waitForMilestone(
               Promise.all([gates.a.reached.promise, gates.b.reached.promise]),
-              "both sends reach the transport",
+              "transportsReached",
             );
             startHolder.resolve("lock");
-            await waitForMilestone(
-              rowLocked.promise,
-              "invoice completion lock held",
-            );
+            await waitForMilestone(rowLocked.promise, "completionLockHeld");
             expect(
               await db
                 .select({ status: invoiceSends.deliveryStatus })
@@ -304,7 +314,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
               status: INVOICE_STATUS.SENT,
               sentAt: await waitForMilestone(
                 firstSentAt.promise,
-                "G9 send timestamp captured",
+                "sentAtCaptured",
               ),
             });
             const sends = await db

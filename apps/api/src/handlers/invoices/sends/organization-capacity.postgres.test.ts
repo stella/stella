@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { count, eq, inArray } from "drizzle-orm";
 
+import { createTestClock } from "@stll/test-kit";
+import { dbClock } from "@stll/test-kit/db";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
@@ -34,6 +37,7 @@ import { withInterleaving } from "@/api/tests/helpers/transaction-interleaving";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgres = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
+const testClock = createTestClock();
 
 type CapacitySeedOptions = {
   db: GatedTestDb;
@@ -61,14 +65,14 @@ const seedCapacity = async ({
     id: organizationId,
     name: "Send capacity organization",
     slug: organizationId,
-    createdAt: new Date(),
+    createdAt: dbClock.now(),
   });
   await db.insert(member).values({
     id: mintAuthProviderIdValue(),
     organizationId,
     userId,
     role: "owner",
-    createdAt: new Date(),
+    createdAt: dbClock.now(),
   });
   await db.insert(workspaces).values(
     Object.values(workspaceIds).map((id) => ({
@@ -100,7 +104,7 @@ const seedCapacity = async ({
       invoiceDate: "2026-10-01",
       currency: "EUR",
       status: INVOICE_STATUS.SENT,
-      sentAt: new Date(),
+      sentAt: dbClock.now(),
       totalAmount: cents(1000),
     })),
   );
@@ -133,7 +137,7 @@ const seedCapacity = async ({
               language: "en" as const,
               replyTo: `${userId}@example.test`,
               tokenHash: hashInvoiceLinkToken(createInvoiceLinkToken()),
-              expiresAt: new Date(Date.now() + 86_400_000),
+              expiresAt: dbClock.fromNow(86_400_000),
               deliveryStatus: "pending" as const,
             }),
           ),
@@ -212,7 +216,7 @@ if (!databaseUrl || !runPostgres) {
                     recipients: ["client@example.test"],
                     message: null,
                     tokenHash: hashInvoiceLinkToken(createInvoiceLinkToken()),
-                    now: new Date(),
+                    now: new Date(testClock.now()),
                     recordAuditEvent,
                   });
                   if (reserved.isErr()) {

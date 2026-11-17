@@ -2,6 +2,9 @@ import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
+import { createTestClock } from "@stll/test-kit";
+import { dbClock } from "@stll/test-kit/db";
+
 import { member, user as authUser } from "@/api/db/auth-schema";
 import {
   INVOICE_SEND_UPDATE_COLUMNS,
@@ -31,10 +34,22 @@ import {
 } from "@/api/tests/security/rls-fixture";
 
 let fixture: Awaited<ReturnType<typeof getRlsFixture>>;
+const testClock = createTestClock();
 // timeout: initializes the shared database schema and its RLS fixture.
 beforeAll(
   async () => {
     fixture = await getRlsFixture();
+    // Link expiry is checked against the database clock; the test clock starts there.
+    const [databaseTime] = await fixture.testDb
+      .select({
+        now: sql`(extract(epoch FROM pg_catalog.now()) * 1000)::bigint`.mapWith(
+          Number,
+        ),
+      })
+      .from(sql`(VALUES (1)) AS clock(value)`);
+    testClock.setTime(
+      databaseTime?.now ?? panic("Expected the database clock"),
+    );
   },
   { timeout: 30_000 },
 );
@@ -58,7 +73,7 @@ const seedSend = async (
     invoiceDate: "2026-10-01",
     currency: "EUR",
     status: INVOICE_STATUS.SENT,
-    sentAt: new Date(),
+    sentAt: dbClock.now(),
     totalAmount: cents(1000),
   });
   const safeDb = createMembershipSafeDb(testDb, {
@@ -79,7 +94,7 @@ const seedSend = async (
     language: "en",
     replyTo: "billing@example.test",
     tokenHash,
-    expiresAt: new Date(Date.now() + 86_400_000),
+    expiresAt: new Date(testClock.now() + 86_400_000),
     deliveryStatus: "pending",
   } satisfies typeof invoiceSends.$inferInsert;
   (
@@ -127,7 +142,7 @@ describe("invoice send mutation authority", () => {
       { invoiceId: sibling.invoiceId },
       { organizationId: ids.orgB },
       { expiresAt: new Date(values.expiresAt.getTime() + 86_400_000) },
-      { firstViewedAt: new Date() },
+      { firstViewedAt: new Date(testClock.now()) },
     ];
     for (const patch of changes) {
       const refused = await safeDb(async (tx) => {
@@ -146,7 +161,7 @@ describe("invoice send mutation authority", () => {
         ...values,
         id: createSafeId<"invoiceSend">(),
         tokenHash: hashInvoiceLinkToken(createInvoiceLinkToken()),
-        firstViewedAt: new Date(),
+        firstViewedAt: new Date(testClock.now()),
       });
     });
     expect(forgedInsert.isErr()).toBe(true);
@@ -195,7 +210,7 @@ describe("invoice send mutation authority", () => {
     async (actor) => {
       const { testDb, ids } = fixture;
       const { sendId, safeDb } = await seedSend();
-      const revokedAt = new Date();
+      const revokedAt = new Date(testClock.now());
       const revokedByUserId = actor === "member" ? ids.userA1 : null;
       (
         await safeDb(async (tx) => {
@@ -376,9 +391,11 @@ describe("invoice send mutation authority", () => {
           violation === "failed"
             ? violation
             : "pending",
-        ...(violation === "revoked" ? { revokedAt: new Date() } : {}),
+        ...(violation === "revoked"
+          ? { revokedAt: new Date(testClock.now()) }
+          : {}),
         ...(violation === "long-lived"
-          ? { expiresAt: new Date(Date.now() + 61 * 86_400_000) }
+          ? { expiresAt: new Date(testClock.now() + 61 * 86_400_000) }
           : {}),
       } satisfies typeof invoiceSends.$inferInsert;
       const app = await safeDb(async (tx) => {
@@ -418,7 +435,7 @@ describe("invoice send mutation authority", () => {
         organizationId: ids.orgA,
         userId: revokerId,
         role: "member",
-        createdAt: new Date(),
+        createdAt: dbClock.now(),
       });
       await testDb.insert(workspaceMembers).values({
         id: createSafeId<"workspaceMember">(),
@@ -442,7 +459,7 @@ describe("invoice send mutation authority", () => {
           ),
       );
       expect(executedRows(liveBefore)).toMatchObject([{ send_id: sendId }]);
-      const revokedAt = new Date();
+      const revokedAt = new Date(testClock.now());
       const revoked = await revokerDb(
         async (tx) =>
           await tx

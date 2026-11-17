@@ -15,6 +15,7 @@ import {
   FrameTitle,
 } from "@stll/ui/frame";
 import { DownloadIcon } from "@stll/ui/icons";
+import { OutcomeScreen } from "@stll/ui/outcome-screen";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
@@ -23,7 +24,7 @@ import { invoiceLinkDownload, invoiceLinkView } from "@/lib/api";
 import { STALE_TIME } from "@/lib/consts";
 import { APIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { pageTitle } from "@/lib/page-title";
+import { pageTitle, pageTitleLiteral } from "@/lib/page-title";
 import { downloadFile } from "@/lib/utils";
 import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
 
@@ -152,13 +153,15 @@ const InvoiceLinkUnavailable = ({
   reason: ReturnType<typeof invoiceLinkFailure>;
 }) => {
   const t = useTranslations("invoiceLink");
+  const title = t(`failure.${reason}.title`);
   return (
-    <Frame>
-      <FrameHeader>
-        <FrameTitle>{t(`failure.${reason}.title`)}</FrameTitle>
-        <FrameDescription>{t(`failure.${reason}.body`)}</FrameDescription>
-      </FrameHeader>
-    </Frame>
+    <OutcomeScreen
+      description={t(`failure.${reason}.body`)}
+      documentTitle={pageTitleLiteral(title)}
+      surface="embedded"
+      title={title}
+      tone="error"
+    />
   );
 };
 

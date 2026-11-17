@@ -28,6 +28,7 @@ import { Label } from "@stll/ui/label";
 import { Skeleton } from "@stll/ui/skeleton";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { useFormatter } from "@/i18n/formatting-context";
@@ -417,9 +418,9 @@ const InvoiceSendRow = ({
   return (
     <li className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
       <div className="flex min-w-0 flex-col gap-1">
-        <p className="truncate text-sm font-medium" dir="ltr">
+        <TruncatedText className="text-sm font-medium" dir="ltr" render={<p />}>
           {send.recipients.join(", ")}
-        </p>
+        </TruncatedText>
         <p className="text-muted-foreground text-xs">
           {send.sentBy === null
             ? when(send.createdAt)

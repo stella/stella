@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
+import { dbClock } from "@stll/test-kit/db";
 import { createTestState } from "@stll/test-state";
 
 import { invoiceSends } from "@/api/db/schema";
@@ -59,7 +60,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
                 language: "en",
                 replyTo: "sender@example.test",
                 tokenHash: hashInvoiceLinkToken(token),
-                expiresAt: new Date(Date.now() + 86_400_000),
+                expiresAt: dbClock.fromNow(86_400_000),
               });
               await tx
                 .update(invoiceSends)
