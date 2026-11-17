@@ -8849,6 +8849,8 @@
         "column:public.case_law_sources.enabled:SELECT:GRANTOR:census_admin:GRANTABLE:false",
         "column:public.case_law_sources.id:SELECT:EFFECTIVE",
         "column:public.case_law_sources.id:SELECT:GRANTOR:census_admin:GRANTABLE:false",
+        "column:public.case_law_sources.import_snapshot_date:SELECT:EFFECTIVE",
+        "column:public.case_law_sources.import_snapshot_date:SELECT:GRANTOR:census_admin:GRANTABLE:false",
         "column:public.case_law_sources.last_sync_at:SELECT:EFFECTIVE",
         "column:public.case_law_sources.last_sync_at:SELECT:GRANTOR:census_admin:GRANTABLE:false",
         "column:public.case_law_sources.name:SELECT:EFFECTIVE",
