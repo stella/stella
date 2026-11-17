@@ -142,6 +142,9 @@ export const TAGGED_FAILURE_REASON = {
   CorpusIndexError: "tagged_failure",
   CorpusIndexFlipPairRefusedError: "tagged_failure",
   CorpusIndexFlipParityReadError: "tagged_failure",
+  // Deploy skew: an older release's writer refused a write it could not make
+  // whole. The caller retries; a process of a newer release takes it.
+  CorpusIndexGenerationUnknownError: "corpus_generation_unknown",
   CorpusIndexGroupContractMismatchError: "tagged_failure",
   CorpusIndexGroupNotReadyError: "tagged_failure",
   CorpusIndexGroupWithdrawalRefusedError: "tagged_failure",

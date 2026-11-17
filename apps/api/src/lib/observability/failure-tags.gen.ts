@@ -130,6 +130,7 @@ export const FAILURE_TAGS = [
   "CorpusIndexError",
   "CorpusIndexFlipPairRefusedError",
   "CorpusIndexFlipParityReadError",
+  "CorpusIndexGenerationUnknownError",
   "CorpusIndexGroupContractMismatchError",
   "CorpusIndexGroupNotReadyError",
   "CorpusIndexGroupWithdrawalRefusedError",
