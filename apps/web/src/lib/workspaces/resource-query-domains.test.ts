@@ -1,4 +1,8 @@
-import { QueryClient, QueryObserver } from "@tanstack/react-query";
+import {
+  type InferDataFromTag,
+  QueryClient,
+  QueryObserver,
+} from "@tanstack/react-query";
 import { afterEach, expect, spyOn, test } from "bun:test";
 
 import {
@@ -144,11 +148,9 @@ test("same-organization foreign-user projections become stale without fetching e
       refetchInterval: false as const,
       queryFn: read,
     };
+    const observer = new QueryObserver(client, options);
     if (active) {
-      const observer = new QueryObserver(client, options);
       unsubscribes.push(observer.subscribe(() => undefined));
-    } else {
-      client.getQueryCache().build(client, options);
     }
     return {
       reads: () => reads,
@@ -181,14 +183,15 @@ test("the organization membership list is user-wide but cannot fetch another use
   const client = createClient();
   const observe = (userId: string) => {
     const base = organizationListOptions(userId);
+    const initialData: InferDataFromTag<never, typeof base.queryKey> = [];
     let reads = 0;
     const read = async () => {
       reads += 1;
-      return [];
+      return initialData;
     };
     const observer = new QueryObserver(client, {
       ...base,
-      initialData: [],
+      initialData,
       staleTime: Infinity,
       queryFn: read,
     });
