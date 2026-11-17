@@ -37,7 +37,6 @@ const reconciled = (
   years: readonly { year: number; missing?: number }[],
 ): AbsenceCoverageSource["knownGaps"] => ({
   type: "reconciled",
-  summary: { missing: 0, shortSlices: 0, unlistedSlices: 0 },
   years: years.map(({ year, missing }) =>
     missing === undefined
       ? { year, type: "complete" as const }
