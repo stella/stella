@@ -517,6 +517,9 @@ export const NO_NATIVE_UI_REACT_NATIVE = {
   "animated-count": webOnly(
     "a web number animation; the app shows counts as plain text",
   ),
+  "animated-preview": webOnly(
+    "a web feature preview animation; the app plays no feature previews",
+  ),
   "application-rail": webOnly(
     "the web's navigation chrome; the app navigates with the platform's tab bar",
   ),
@@ -541,6 +544,9 @@ export const NO_NATIVE_UI_REACT_NATIVE = {
   checkbox: webOnly(
     "iOS has no checkbox control; a binary choice on a phone is a Switch",
   ),
+  collapsible: webOnly(
+    "a phone discloses details by navigating to them; the app has no disclosure row yet",
+  ),
   "color-picker": webOnly("the app does not edit colours"),
   combobox: webOnly(
     "a phone picks from a list on its own screen or sheet (a searchable list), not a dropdown",
@@ -558,6 +564,9 @@ export const NO_NATIVE_UI_REACT_NATIVE = {
     "a Button with clipboard feedback the app does not offer yet",
   ),
   "court-badge": webOnly("a web review badge the app does not show"),
+  "court-filter": webOnly(
+    "the web's case-law court filter; the app has no search filters",
+  ),
   "data-table": webOnly("a phone lists records in rows, not a table"),
   "date-picker-popover": webOnly(
     "a phone picks a date with the platform's picker",
@@ -582,6 +591,10 @@ export const NO_NATIVE_UI_REACT_NATIVE = {
   "document-identity-badge": webOnly(
     "a web review badge the app does not show",
   ),
+  "document-mark": renderer("DocumentMark from @stll/ui/document-mark", []),
+  "entity-actions": webOnly(
+    "a phone opens an object's actions through the platform (expo-router Link.Menu) or a swipe row",
+  ),
   field: webOnly(
     "the app labels a control with Text above it; there is no <label> element to pair",
   ),
@@ -593,6 +606,9 @@ export const NO_NATIVE_UI_REACT_NATIVE = {
   ),
   frame: webOnly("a web layout surface; screens lay out with View"),
   "hex-color-picker": webOnly("the app does not edit colours"),
+  "highlighted-textarea": webOnly(
+    "the web's highlighted editing field; the app composes with Textarea",
+  ),
   "horizontal-scroller": webOnly("ScrollView scrolls natively on a phone"),
   icons: webOnly(
     "the app draws the same entries from lucide-react-native through its generated icon module",
@@ -613,6 +629,7 @@ export const NO_NATIVE_UI_REACT_NATIVE = {
     "the web's docked inspector; a phone shows details on their own screen",
   ),
   kanban: webOnly("a phone has no room for a board"),
+  kbd: webOnly("a phone has no keyboard shortcuts to show"),
   label: webOnly(
     "React Native has no label element; Text names the control above it",
   ),
@@ -626,7 +643,13 @@ export const NO_NATIVE_UI_REACT_NATIVE = {
     "a phone opens menus through the platform (expo-router Link.Menu, native header menus)",
   ),
   "menu-section": webOnly("a phone opens menus through the platform"),
+  "middle-truncate": webOnly(
+    'React Native truncates a line natively (numberOfLines with ellipsizeMode "middle")',
+  ),
   "number-input": webOnly("the app enters no numbers yet"),
+  "outcome-screen": webOnly(
+    "the web's end-of-flow screen; no app flow ends on one yet",
+  ),
   "outline-rail": webOnly(
     "the web's document outline; the app shows no outline",
   ),
@@ -647,6 +670,7 @@ export const NO_NATIVE_UI_REACT_NATIVE = {
   "review-out-of-date-notice": webOnly("the app shows no review surfaces"),
   "review-severity-dot": webOnly("the app shows no review surfaces"),
   "review-status-badge": webOnly("the app shows no review surfaces"),
+  "run-state-mark": renderer("RunStateMark from @stll/ui/run-state-mark", []),
   "scroll-area": webOnly("ScrollView scrolls natively on a phone"),
   "scroll-to-top": webOnly("iOS scrolls to the top from the status bar"),
   "search-field": webOnly(
@@ -683,9 +707,14 @@ export const NO_NATIVE_UI_REACT_NATIVE = {
   textarea: renderer("Textarea from @stll/ui/textarea", [
     "TextInput[multiline]",
   ]),
+  "time-field": webOnly("a phone enters a time with the platform's picker"),
   toast: webOnly(
     "the app reports outcomes inline; there is no toast host on the phone",
   ),
+  toggle: webOnly(
+    "the app has no pressed-state buttons yet; a binary choice on a phone is a Switch",
+  ),
+  "toggle-group": webOnly("the app has no segmented controls yet"),
   "toolbar-icon-action": webOnly(
     "a web toolbar button with a hover tooltip; a phone has no hover",
   ),
