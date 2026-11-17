@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { describe, expect, mock, spyOn, test } from "bun:test";
 
+import { deferred } from "@stll/test-kit";
+
 const createBunRedisClientCalls: unknown[] = [];
 
 // Spread the real module: mock.module is process-global; a partial mock would
@@ -309,37 +311,299 @@ describe("createLazyRedisClient", () => {
   });
 
   test("a caller after an exhausted connect starts a fresh one", async () => {
-    // Long enough to outlast the ladder above, so the first caller sees a
-    // real failure rather than a retry.
-    const failingAttempts = 5;
-    const client = fakeClient();
-    client.connectResult = async () => {
-      if (client.connects <= failingAttempts) {
-        throw Object.assign(new Error("connect ECONNREFUSED"), {
-          code: "ECONNREFUSED",
-        });
-      }
-      await Promise.resolve();
-    };
+    const clients: ReturnType<typeof fakeClient>[] = [];
+    const failure = new Error("connect refused");
     const delays: number[] = [];
-    const lazy = createLazyRedisClient(() => client, {
-      sleep: async (delayMs) => {
-        delays.push(delayMs);
+    const lazy = createLazyRedisClient(
+      () => {
+        const client = fakeClient();
+        if (clients.length === 0) {
+          client.connectResult = async () => {
+            throw failure;
+          };
+        }
+        clients.push(client);
+        return client;
       },
-    });
-
-    const rejection: unknown = await lazy.ready().then(
+      {
+        sleep: async (delayMs) => {
+          delays.push(delayMs);
+        },
+      },
+    );
+    const rejection = await lazy.ready().then(
       () => null,
       (error: unknown) => error,
     );
-    // Keeping the rejected attempt would strand every later caller behind
-    // the outage that has since cleared.
-    await lazy.ready();
-
-    expect(rejection).toBeInstanceOf(Error);
-    expect(client.connects).toBe(failingAttempts + 1);
+    const connected = await lazy.ready();
+    expect(rejection).toBe(failure);
+    expect(clients).toHaveLength(2);
+    expect(clients.at(0)?.connects).toBe(5);
+    expect(clients.at(0)?.closed).toBe(1);
+    expect(connected.connects).toBe(1);
     expect(delays).toEqual([200, 500, 1000, 2000]);
   });
+
+  test("the once policy shares a failed connect and disposes only that attempt", async () => {
+    const clients: ReturnType<typeof fakeClient>[] = [];
+    const failure = new Error("connect refused");
+    const delays: number[] = [];
+    const lazy = createLazyRedisClient(
+      () => {
+        const client = fakeClient();
+        if (clients.length === 0) {
+          client.connectResult = async () => {
+            throw failure;
+          };
+        }
+        clients.push(client);
+        return client;
+      },
+      {
+        connectPolicy: "once",
+        sleep: async (delayMs) => {
+          delays.push(delayMs);
+        },
+      },
+    );
+    const rejected = async (promise: ReturnType<typeof lazy.ready>) =>
+      promise.then(
+        () => null,
+        (error: unknown) => error,
+      );
+    expect(
+      await Promise.all([rejected(lazy.ready()), rejected(lazy.ready())]),
+    ).toEqual([failure, failure]);
+    const connected = await lazy.ready();
+    expect(clients).toHaveLength(2);
+    expect(clients.at(0)?.connects).toBe(1);
+    expect(clients.at(0)?.closed).toBe(1);
+    expect(connected.closed).toBe(0);
+    expect(connected.connects).toBe(1);
+    expect(delays).toEqual([]);
+  });
+
+  test("a natural close during connect cannot hand out its retired client", async () => {
+    const gate = deferred();
+    const started = deferred();
+    const clients: ReturnType<typeof fakeClient>[] = [];
+    const lazy = createLazyRedisClient(
+      () => {
+        const client = fakeClient();
+        if (clients.length === 0) {
+          client.connectResult = async () => {
+            started.resolve();
+            await gate.promise;
+          };
+        }
+        clients.push(client);
+        return client;
+      },
+      { connectPolicy: "once" },
+    );
+    const pending = lazy.ready().then(
+      () => null,
+      (error: unknown) => error,
+    );
+    await started.promise;
+    clients.at(0)?.fireClose();
+    const replacement = await lazy.ready();
+    gate.resolve();
+    expect(await pending).toMatchObject({ _tag: "RedisClientClosedError" });
+    expect(await lazy.ready()).toBe(replacement);
+    expect(clients.at(0)?.closed).toBe(0);
+    expect(replacement.closed).toBe(0);
+  });
+
+  test("a retired connect failure cannot close the replacement or close twice", async () => {
+    const gate = deferred();
+    const started = deferred();
+    const clients: ReturnType<typeof fakeClient>[] = [];
+    const lazy = createLazyRedisClient(
+      () => {
+        const client = fakeClient();
+        if (clients.length === 0) {
+          client.connectResult = async () => {
+            started.resolve();
+            await gate.promise;
+          };
+        }
+        clients.push(client);
+        return client;
+      },
+      { connectPolicy: "once" },
+    );
+    const pending = lazy.ready().then(
+      () => null,
+      (error: unknown) => error,
+    );
+    await started.promise;
+    lazy.close();
+    const replacement = await lazy.ready();
+    gate.reject(new Error("retired connection failed"));
+    expect(await pending).toMatchObject({ _tag: "RedisClientClosedError" });
+    expect(await lazy.ready()).toBe(replacement);
+    expect(clients.at(0)?.closed).toBe(1);
+    expect(replacement.closed).toBe(0);
+  });
+
+  test("a synchronous terminal close from connect is observed before readiness", async () => {
+    const client = fakeClient();
+    client.connectResult = async () => {
+      client.fireClose();
+    };
+    const lazy = createLazyRedisClient(() => client, { connectPolicy: "once" });
+    const rejection = await lazy.ready().then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(rejection).toMatchObject({ _tag: "RedisClientClosedError" });
+    expect(client.connects).toBe(1);
+    expect(client.closed).toBe(0);
+  });
+
+  test("a shared connect deadline retires only its timed-out client", async () => {
+    const started = deferred();
+    const release = deferred();
+    const completed = deferred();
+    const clients: ReturnType<typeof fakeClient>[] = [];
+    const deadlines: {
+      fire: () => void;
+      delayMs: number;
+      cancelled: boolean;
+    }[] = [];
+    const lazy = createLazyRedisClient(
+      () => {
+        const client = fakeClient();
+        if (clients.length === 0) {
+          client.connectResult = async () => {
+            started.resolve();
+            await release.promise;
+            completed.resolve();
+          };
+        }
+        clients.push(client);
+        return client;
+      },
+      {
+        connectPolicy: "once",
+        connectTimeout: {
+          timeoutMs: 2000,
+          scheduleTimeout: (fire, delayMs) => {
+            const deadline = { fire, delayMs, cancelled: false };
+            deadlines.push(deadline);
+            return () => {
+              deadline.cancelled = true;
+            };
+          },
+        },
+      },
+    );
+    try {
+      const first = lazy.ready().then(
+        () => null,
+        (error: unknown) => error,
+      );
+      const second = lazy.ready().then(
+        () => null,
+        (error: unknown) => error,
+      );
+      await started.promise;
+      expect(deadlines).toHaveLength(1);
+      expect(deadlines.at(0)?.delayMs).toBe(2000);
+      deadlines.at(0)?.fire();
+      const failure = await first;
+      expect(failure).toMatchObject({ _tag: "TimeoutError" });
+      expect(await second).toBe(failure);
+      expect(clients.at(0)?.closed).toBe(1);
+      expect(deadlines.at(0)?.cancelled).toBe(true);
+      const replacement = await lazy.ready();
+      release.resolve();
+      await completed.promise;
+      expect(await lazy.ready()).toBe(replacement);
+      expect(clients.at(0)?.closed).toBe(1);
+      expect(replacement.closed).toBe(0);
+      expect(deadlines).toHaveLength(2);
+      expect(deadlines.at(1)?.cancelled).toBe(true);
+    } finally {
+      release.resolve();
+      lazy.close();
+    }
+  });
+
+  for (const closure of ["explicit", "natural"] as const) {
+    test(`a ${closure} holder close during the default retry wait stops the retired ladder`, async () => {
+      const entered = deferred();
+      const release = deferred();
+      const finished = deferred<unknown>();
+      const clients: ReturnType<typeof fakeClient>[] = [];
+      const delays: number[] = [];
+      let attempts = 0;
+      const original = connectWithColdStartRetries;
+      const track = spyOn(
+        redisClientModule,
+        "connectWithColdStartRetries",
+      ).mockImplementation(async (connect, options) => {
+        const first = attempts++ === 0;
+        const retrying = original(connect, options);
+        const outcome = await Result.tryPromise({
+          try: async () => await retrying,
+          catch: (cause: unknown) => cause,
+        });
+        if (first) {
+          finished.resolve(Result.isError(outcome) ? outcome.error : null);
+        }
+        await retrying;
+      });
+      const lazy = createLazyRedisClient(
+        () => {
+          const client = fakeClient();
+          if (clients.length === 0) {
+            client.connectResult = async () => {
+              throw new Error("Connect refused");
+            };
+          }
+          clients.push(client);
+          return client;
+        },
+        {
+          sleep: async (delayMs) => {
+            delays.push(delayMs);
+            entered.resolve();
+            await release.promise;
+          },
+        },
+      );
+      try {
+        const pending = lazy.ready().then(
+          () => null,
+          (error: unknown) => error,
+        );
+        await entered.promise;
+        expect(track).toHaveBeenCalledTimes(1);
+        if (closure === "explicit") {
+          lazy.close();
+        } else {
+          clients.at(0)?.fireClose();
+        }
+        const replacement = await lazy.ready();
+        release.resolve();
+        expect(await pending).toMatchObject({ _tag: "RedisClientClosedError" });
+        expect(await finished.promise).toMatchObject({
+          _tag: "RedisClientClosedError",
+        });
+        expect(clients.at(0)?.connects).toBe(1);
+        expect(clients.at(0)?.closed).toBe(closure === "explicit" ? 1 : 0);
+        expect(await lazy.ready()).toBe(replacement);
+        expect(replacement.closed).toBe(0);
+        expect(delays).toEqual([200]);
+      } finally {
+        release.resolve();
+        lazy.close();
+        track.mockRestore();
+      }
+    });
+  }
 
   test("closing drops the connection with the client", async () => {
     const clients: ReturnType<typeof fakeClient>[] = [];
