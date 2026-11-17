@@ -1674,11 +1674,6 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/lib/load/request-latency-budget.test.ts": {
-    "count": 3,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/api/src/lib/machine-api-keys/personal-lifecycle.db.test.ts": {
     "count": 6,
     "owner": "api",

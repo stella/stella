@@ -64,11 +64,6 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/lib/load/request-latency-budget.test.ts": {
-    "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/api/src/lib/observability/otlp-log-exporter.test.ts": {
     "count": 1,
     "owner": "api",
