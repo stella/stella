@@ -409,6 +409,13 @@ export const caseLawSources = p.pgTable(
     /** Weekly publisher-removal checkpoint; null begins the next bounded cycle. */
     removalCheckpoint: jsonb("removal_checkpoint").$type<RemovalCheckpoint>(),
     lastSyncAt: timestamptz("last_sync_at"),
+    /**
+     * The publisher snapshot day the source's last completed bulk import
+     * read. Null for a crawl adapter and for an import that has not finished
+     * a run. It is the import's edition, which the public pages state, so it
+     * is public bookkeeping and kept apart from the sync cursor.
+     */
+    importSnapshotDate: p.date("import_snapshot_date"),
     observationOrder: p
       .bigint("observation_order", { mode: "bigint" })
       .default(0n)
