@@ -1440,6 +1440,12 @@ export const invoiceSends = p.pgTable(
         "invoice_sends_revoked_check",
         sql`${table.revokedByUserId} IS NULL OR ${table.revokedAt} IS NOT NULL`,
       ),
+      // A send whose emails all failed carries a dead link: it is revoked in
+      // the same write that records the failure.
+      p.check(
+        "invoice_sends_failed_revoked_check",
+        sql`${table.deliveryStatus} <> 'failed' OR ${table.revokedAt} IS NOT NULL`,
+      ),
       p.pgPolicy("invoice_sends_organization_select", {
         for: "select",
         to: stella,

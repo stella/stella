@@ -267,7 +267,13 @@ describe("invoice send mutation authority", () => {
         await safeDb(async (tx) => {
           await tx
             .update(invoiceSends)
-            .set({ deliveryStatus: terminal })
+            // A failed send is revoked in the write that records the failure.
+            .set({
+              deliveryStatus: terminal,
+              ...(terminal === "failed"
+                ? { revokedAt: new Date(testClock.now()) }
+                : {}),
+            })
             .where(eq(invoiceSends.id, sendId));
         })
       ).unwrap();
@@ -320,7 +326,7 @@ describe("invoice send mutation authority", () => {
       const { sendId, safeDb } = await seedSend("pending", recipients);
       type DeliveryPatch = Pick<
         typeof invoiceSends.$inferInsert,
-        "deliveryStatus" | "failedRecipients"
+        "deliveryStatus" | "failedRecipients" | "revokedAt"
       >;
       const write = async (patch: DeliveryPatch) =>
         actor === "application"
@@ -343,7 +349,16 @@ describe("invoice send mutation authority", () => {
         partial: ["refused@example.test"],
         failed: recipients,
       }[terminal];
-      (await write({ deliveryStatus: terminal, failedRecipients })).unwrap();
+      // A failed send is revoked in the write that records the failure.
+      const revocation =
+        terminal === "failed" ? { revokedAt: new Date(testClock.now()) } : {};
+      (
+        await write({
+          deliveryStatus: terminal,
+          failedRecipients,
+          ...revocation,
+        })
+      ).unwrap();
       const changedRecipients =
         failedRecipients.length === 0 ? ["refused@example.test"] : [];
       for (const patch of [

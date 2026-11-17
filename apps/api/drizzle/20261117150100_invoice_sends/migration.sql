@@ -25,7 +25,8 @@ CREATE TABLE "invoice_sends" (
 	CONSTRAINT "invoice_sends_language_check" CHECK ("invoice_sends"."language" IN ('ar', 'cs', 'de', 'en', 'es', 'et', 'fr', 'hu', 'lt', 'lv', 'pl', 'pt-BR', 'sk')),
 	CONSTRAINT "invoice_sends_recipients_check" CHECK (cardinality("invoice_sends"."recipients") BETWEEN 1 AND 10 AND "invoice_sends"."failed_recipients" <@ "invoice_sends"."recipients"),
 	CONSTRAINT "invoice_sends_message_check" CHECK ("invoice_sends"."message" IS NULL OR length("invoice_sends"."message") BETWEEN 1 AND 1000),
-	CONSTRAINT "invoice_sends_revoked_check" CHECK ("invoice_sends"."revoked_by_user_id" IS NULL OR "invoice_sends"."revoked_at" IS NOT NULL)
+	CONSTRAINT "invoice_sends_revoked_check" CHECK ("invoice_sends"."revoked_by_user_id" IS NULL OR "invoice_sends"."revoked_at" IS NOT NULL),
+	CONSTRAINT "invoice_sends_failed_revoked_check" CHECK ("invoice_sends"."delivery_status" <> 'failed' OR "invoice_sends"."revoked_at" IS NOT NULL)
 );
 --> statement-breakpoint
 ALTER TABLE "invoice_sends" ADD CONSTRAINT "invoice_sends_organization_id_organization_id_fk" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE;--> statement-breakpoint
