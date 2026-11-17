@@ -168,32 +168,36 @@ const FlowEditorLoader = ({
   const detailView = queryView(detailQuery);
   useQueryViewError(detailView, "FlowEditorLoader:detail");
 
-  if (detailView.type === "pending") {
-    return (
-      <div className="flex flex-1 items-center justify-center p-8">
-        <p className="text-muted-foreground text-sm">{t("flows.loading")}</p>
-      </div>
-    );
+  switch (detailView.type) {
+    case "pending":
+      return (
+        <div className="flex flex-1 items-center justify-center p-8">
+          <p className="text-muted-foreground text-sm">{t("flows.loading")}</p>
+        </div>
+      );
+    case "empty":
+    case "error":
+      return (
+        <div className="flex flex-1 items-center justify-center p-8">
+          <p className="text-muted-foreground text-sm">
+            {t("flows.loadFailed")}
+          </p>
+        </div>
+      );
+    case "items":
+      return (
+        <FlowEditorForm
+          flowId={flowId}
+          initialSnapshot={detailView.items}
+          onBack={onBack}
+          onSaved={onSaved}
+          organizationId={organizationId}
+        />
+      );
+    default:
+      detailView satisfies never;
+      return panic("Unhandled workflow detail state");
   }
-
-  if (detailView.type !== "items") {
-    return (
-      <div className="flex flex-1 items-center justify-center p-8">
-        <p className="text-muted-foreground text-sm">{t("flows.loadFailed")}</p>
-      </div>
-    );
-  }
-
-  const detail = detailView.items;
-  return (
-    <FlowEditorForm
-      flowId={flowId}
-      initialSnapshot={detail}
-      onBack={onBack}
-      onSaved={onSaved}
-      organizationId={organizationId}
-    />
-  );
 };
 
 // ── Trigger draft (keeps both sub-configs so switching type is lossless) ──
@@ -915,11 +919,22 @@ const flowDraftProblem = (draft: FlowEditorDraft) => {
     if (step.name.trim() === "") {
       return "flows.steps.nameRequired" satisfies TranslationKey;
     }
-    if (step.kind === "ai" && step.prompt.trim() === "") {
-      return "flows.steps.promptRequired" satisfies TranslationKey;
-    }
-    if (step.kind === "create-document" && step.documentTitle.trim() === "") {
-      return "flows.steps.documentTitleRequired" satisfies TranslationKey;
+    switch (step.kind) {
+      case "ai":
+        if (step.prompt.trim() === "") {
+          return "flows.steps.promptRequired" satisfies TranslationKey;
+        }
+        break;
+      case "review-gate":
+        break;
+      case "create-document":
+        if (step.documentTitle.trim() === "") {
+          return "flows.steps.documentTitleRequired" satisfies TranslationKey;
+        }
+        break;
+      default:
+        step satisfies never;
+        return panic("Unhandled workflow step kind");
     }
   }
   if (

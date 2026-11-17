@@ -16,7 +16,10 @@ import {
 } from "@/lib/account/auth-query-owner";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import {
+  useAuthenticatedUser,
+  useMaybeAuthenticatedUser,
+} from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
@@ -275,11 +278,11 @@ function RouteComponent() {
 }
 
 function GuardedWorkflowsPage() {
-  const { id: userId } = useAuthenticatedUser();
+  const user = useMaybeAuthenticatedUser();
   return (
     <KnowledgeMemberOnly pending={<FlowListSkeleton />}>
       {(organizationId) => (
-        <RouteComponent key={JSON.stringify([organizationId, userId])} />
+        <RouteComponent key={JSON.stringify([organizationId, user?.id])} />
       )}
     </KnowledgeMemberOnly>
   );

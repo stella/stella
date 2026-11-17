@@ -10,6 +10,7 @@ import { deferred } from "@stll/test-kit";
 import type { FlowDefinitionDetail, FlowListItem } from "./flow-types";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
+Object.assign(import.meta.env, { VITE_PUBLIC_KNOWLEDGE_ENABLED: "true" });
 Object.assign(globalThis, {
   __APP_VERSION__: "test",
   __APP_COMMIT_SHA__: "0000000000000000000000000000000000000000",
@@ -793,4 +794,83 @@ test("creating a workflow keeps the creation body free of a replacement version"
   });
   expect(f.creates.at(0)).not.toHaveProperty("expectedUpdatedAt");
   expect(f.writes).toEqual([]);
+});
+
+test("an anonymous workflow page requests public Knowledge without requiring a member provider", async () => {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  disposals.push(() => client.clear());
+  client.setQueryData(sessionOptions.queryKey, null);
+  const requests: Request[] = [];
+  globalThis.fetch = Object.assign(
+    async (input: RequestInfo | URL, init?: RequestInit) => {
+      const request = new Request(input, init);
+      requests.push(request);
+      if (new URL(request.url).pathname.endsWith("/get-session")) {
+        return Response.json(null);
+      }
+      return Response.json(
+        { message: "Unexpected anonymous fixture request" },
+        { status: 404 },
+      );
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  const { Route: KnowledgeLayout } = await import("../route");
+  const { Route: KnowledgeIndex } = await import("../index");
+  const root = createRootRoute();
+  const knowledge = createRoute({
+    getParentRoute: () => root,
+    path: "/knowledge",
+    component:
+      KnowledgeLayout.options.component ??
+      panic("Knowledge requires its layout"),
+  });
+  const workflows = createRoute({
+    getParentRoute: () => knowledge,
+    path: "workflows",
+    component:
+      WorkflowsRoute.options.component ??
+      panic("Workflow route requires its component"),
+  });
+  const landing = createRoute({
+    getParentRoute: () => knowledge,
+    path: "/",
+    validateSearch: KnowledgeIndex.options.validateSearch,
+    component: () => <p>{messages.common.catalogue}</p>,
+  });
+  const router = createRouter({
+    isServer: false,
+    routeTree: root.addChildren([knowledge.addChildren([workflows, landing])]),
+    history: createMemoryHistory({ initialEntries: ["/knowledge/workflows"] }),
+  });
+  await router.load();
+  const navigation = spyOn(router, "navigate").mockResolvedValue(undefined);
+  let rendered: ReturnType<typeof render> | undefined;
+  try {
+    rendered = render(
+      <StrictMode>
+        <QueryClientProvider client={client}>
+          <IntlProvider locale="en" messages={messages} timeZone="UTC">
+            <RouterProvider router={router} />
+          </IntlProvider>
+        </QueryClientProvider>
+      </StrictMode>,
+    );
+    await waitFor(() => expect(navigation.mock.calls.length).toBe(1));
+    expect(navigation).toHaveBeenCalledWith({
+      replace: true,
+      to: "/knowledge",
+      search: { from: "/knowledge/workflows" },
+    });
+    expect(
+      requests.some((request) =>
+        new URL(request.url).pathname.startsWith("/v1/flows"),
+      ),
+    ).toBe(false);
+  } finally {
+    rendered?.unmount();
+    navigation.mockRestore();
+  }
 });
