@@ -2600,10 +2600,12 @@ export const caseLawCitations = p.pgTable(
       .index("case_law_citations_cited_page_idx")
       .on(t.citedDecisionId, t.id)
       .where(isNotNull(t.citedDecisionId)),
+    // The unclassified precedent citations in id order: a walk of the queue
+    // keysets over this index and reads only the rows still in it.
     p
-      .index("case_law_citations_polarity_null_idx")
-      .on(t.polarity)
-      .where(isNull(t.polarity)),
+      .index("case_law_citations_polarity_pending_idx")
+      .on(t.id)
+      .where(sql`${t.polarity} IS NULL AND ${t.kind} = 'precedent'`),
     p
       .index("case_law_citations_doctrine_cited_idx")
       .on(t.citedDecisionId)
