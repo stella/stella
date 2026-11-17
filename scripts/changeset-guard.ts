@@ -407,19 +407,25 @@ const releaseInputs = (
   ),
 ];
 
-/** Notes naming the derived sources that changed, one per kind. */
+/**
+ * Notes naming the derived sources that changed, one per kind. The release
+ * policy alone decides the package's own files, so an ungated one such as its
+ * changelog never counts as a derived source.
+ */
 const derivedNotes = (
   { changedFiles }: Pick<ReleaseEvidence, "changedFiles">,
-  { name, derived }: PackageTarget,
+  { name, directory, derived }: PackageTarget,
   since?: string,
-): string[] =>
-  derived.flatMap(({ label, sources }) => {
-    const files = sources(changedFiles);
+): string[] => {
+  const outside = changedFiles.filter((file) => !file.startsWith(directory));
+  return derived.flatMap(({ label, sources }) => {
+    const files = sources(outside);
     const range = since === undefined ? "" : ` since ${since}`;
     return files.length > 0
       ? [`${name}: ${label} changed${range}: ${preview(files)}.`]
       : [];
   });
+};
 
 /**
  * Whether a named package has anything to release. The diff decides first;

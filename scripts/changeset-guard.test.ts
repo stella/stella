@@ -730,7 +730,12 @@ describe("capability catalog sources", () => {
   test("still refuses the CLI for an API file the catalog is not derived from", () => {
     expect(() =>
       checkChangesetPackages({
-        changedFiles: [UNRELATED_API_FILE, ENTRY_FILE],
+        // The CLI's own ungated changelog is no catalog source either.
+        changedFiles: [
+          UNRELATED_API_FILE,
+          "packages/cli/CHANGELOG.md",
+          ENTRY_FILE,
+        ],
         entries: [entry([CLI])],
         policy,
         derivedInputs,
