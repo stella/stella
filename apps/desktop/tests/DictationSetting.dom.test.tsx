@@ -637,7 +637,7 @@ test("a model whose provider keeps the audio is never shown as the fallback", as
 });
 
 test("a model in the region adds no note", async () => {
-  const { getByText, queryByText } = await renderSetting(
+  const { getByText, queryByRole, queryByText } = await renderSetting(
     { ...ENABLED_SNAPSHOT, cloudAvailable: true, destination: "cloud" },
     (command) =>
       command === "dictation_get_cloud_models" ? CLOUD_MODELS : undefined,
@@ -648,11 +648,7 @@ test("a model in the region adds no note", async () => {
   expect(
     queryByText(defaultMessages.dictation.destination.outsideRegionNote),
   ).toBeNull();
-  expect(
-    queryByText(defaultMessages.dictation.destination.retainsDataTitle, {
-      exact: false,
-    }),
-  ).toBeNull();
+  expect(queryByRole("alert")).toBeNull();
 });
 
 test("a downloaded speech model can be removed, also while stella AI transcribes", async () => {
