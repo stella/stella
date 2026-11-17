@@ -57,6 +57,55 @@ describe("migration catalog", () => {
     expect(JSON.stringify(snapshot)).toContain('"value":"9223372036854775807"');
   });
 
+  test("snapshots retain ordered enum labels and sequential table digests", async () => {
+    const digestQueries: string[] = [];
+    let digestPending = false;
+    const snapshot = await snapshotCatalog({
+      unsafe: async (query) => {
+        if (query.includes("c.relkind IN ('r', 'p', 'f')")) {
+          return [
+            { schema: "tenant", name: "alpha", kind: "r" },
+            { schema: "tenant", name: "beta", kind: "r" },
+            { schema: "drizzle", name: "ledger", kind: "r" },
+            { schema: "tenant", name: "foreign", kind: "f" },
+          ];
+        }
+        if (query.includes("FROM pg_enum")) {
+          return [
+            { schema: "tenant", name: "state", label: "new" },
+            { schema: "tenant", name: "state", label: "done" },
+            { schema: "other", name: "state", label: "archived" },
+          ];
+        }
+        if (query.includes("SELECT count(*)::text AS count")) {
+          expect(digestPending).toBe(false);
+          digestPending = true;
+          digestQueries.push(query);
+          await Promise.resolve();
+          digestPending = false;
+          return [
+            {
+              count: 2n,
+              digest: query.includes('"alpha"') ? "digest-a" : "digest-b",
+            },
+          ];
+        }
+        return [];
+      },
+    });
+    expect(snapshot["enums"]).toEqual({
+      "tenant.state": ["new", "done"],
+      "other.state": ["archived"],
+    });
+    expect(snapshot["data"]).toEqual({
+      "tenant.alpha": "2:digest-a",
+      "tenant.beta": "2:digest-b",
+    });
+    expect(digestQueries).toHaveLength(2);
+    expect(digestQueries[0]).toContain('FROM "tenant"."alpha" t');
+    expect(digestQueries[1]).toContain('FROM "tenant"."beta" t');
+  });
+
   test("column attnum order is not a difference", () => {
     const id = { schema: "public", table: "items", name: "id", type: "uuid" };
     const name = {

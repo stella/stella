@@ -33,6 +33,7 @@ export const PROCESS_DECISION_STATUS = {
 
 export const PROCESS_DECISION_RETRY_REASON = {
   CONTENTION: "contention",
+  FALLBACK_IDENTITY: "fallback-identity",
   CORPUS_WRITE: "corpus-write",
   SOURCE_RAW_WRITE: "source-raw-write",
 } as const;

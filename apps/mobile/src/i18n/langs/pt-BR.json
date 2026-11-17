@@ -85,6 +85,7 @@
     "documentClose": "Fechar",
     "approvalBrowserNote": "Se permitida, a ação roda no navegador do seu computador, pela extensão da stella.",
     "grantFailed": "Não foi possível salvar a aprovação. Tente novamente.",
+    "limitReminderFailed": "Não foi possível salvar a alteração. Tente novamente.",
     "elsewhereBrowser": "Esta etapa roda no navegador do seu computador, pela extensão da stella. Abra esta conversa na stella lá para concluí-la.",
     "elsewhereSecret": "Esta etapa precisa de uma chave. Por segurança, chaves são adicionadas na stella no seu computador, não no app.",
     "elsewhereConnector": "Esta etapa conecta um app. Por segurança, apps são conectados na stella no seu computador, não no app.",
@@ -103,6 +104,8 @@
     "pickFailed": "Não foi possível abrir o seletor de arquivos. Tente novamente.",
     "sendFileRefused": "Não foi possível enviar um arquivo, então a mensagem não foi enviada. Remova o arquivo e tente novamente.",
     "sendFileNotAnonymizable": "Esta conversa é anonimizada e a stella não conseguiu anonimizar um dos arquivos, então nada foi enviado. Remova o arquivo e tente novamente.",
+    "sendLocalRunNotAnonymizable": "Esta conversa é anonimizada e o agente de programação do seu computador lê seus documentos como estão, então nada foi enviado a ele.",
+    "sendWithoutAnonymization": "Enviar sem anonimização",
     "pickTitle": "Escolha uma conversa",
     "pickDescription": "Escolha uma conversa da lista ou comece uma nova com +.",
     "runBanner": {
@@ -246,7 +249,16 @@
         "loadFailed": "Não foi possível carregar.",
         "showMore": "Mostrar mais"
       },
-      "sessionNotResumed": "O agente de programação do seu computador não conseguiu retomar de onde parou, então continuou a partir das mensagens deste chat."
+      "sessionNotResumed": "O agente de programação do seu computador não conseguiu retomar de onde parou, então continuou a partir das mensagens deste chat.",
+      "steered": "Enviado enquanto o agente trabalhava",
+      "ranOnModel": "Executado com {model}",
+      "desktopSettingsSteps": "No stella desktop do seu computador, abra Configurações › Geral › Assinaturas de IA.",
+      "errorLimitResetsAt": "O agente de programação do seu computador atingiu o limite de uso. Você poderá tentar novamente a partir de {time}.",
+      "limitReminderNotify": "Avise-me quando for renovado",
+      "limitReminderScheduled": "Avisaremos você a partir de {time}.",
+      "limitResumeContinue": "Continuar automaticamente quando for renovado",
+      "limitResumeScheduled": "Continuará automaticamente a partir de {time}.",
+      "limitReminderCancel": "Cancelar"
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# fonte consultada} other {# fontes consultadas} many {# fontes consultadas}}",
@@ -285,6 +297,41 @@
       "sendErrorQuotaExhausted": "A cota do provedor de IA foi esgotada. Tente novamente em um minuto ou fale com o administrador do espaço de trabalho.",
       "sendErrorStreamIncomplete": "A resposta da IA foi interrompida antes de terminar. Tente novamente.",
       "sendErrorTurnTooLarge": "Esta resposta ficou grande demais para ser entregue por completo. Envie uma nova mensagem para continuar."
+    },
+    "steerPrompt": "Enviar ao agente enquanto ele trabalha",
+    "steerRefused": {
+      "turnNotRunning": "O agente não está trabalhando agora.",
+      "noRun": "O agente não está em execução no seu computador agora.",
+      "cannotSteer": "Este agente não aceita mensagens enquanto trabalha.",
+      "runFull": "O agente não pode aceitar mais mensagens agora.",
+      "notTaken": "O agente não conseguiu receber sua mensagem agora.",
+      "queuedMessageChanged": "A mensagem mudou ou saiu da fila, então o agente não a recebeu."
+    },
+    "queue": {
+      "notice": "Na fila: será enviada quando a resposta atual terminar",
+      "prompt": "Enviar quando o agente terminar",
+      "sendNow": "Enviar agora",
+      "remove": "Cancelar mensagem na fila",
+      "edit": "Editar",
+      "moveUp": "Mover para cima",
+      "moveDown": "Mover para baixo",
+      "cancel": "Cancelar",
+      "attachments": "{count, plural, one {# anexo} many {# anexos} other {# anexos}}",
+      "actions": "Ações da mensagem na fila",
+      "notSent": "Não foi possível enviar",
+      "pause": "Pausar fila",
+      "resume": "Retomar fila",
+      "replaceTitle": "Enviar esta mensagem agora?",
+      "replaceDescription": "Este chat está aguardando sua resposta. Enviar esta mensagem agora cancela a pergunta ou aprovação que ele aguarda.",
+      "noLongerQueued": "Essa mensagem não está mais na fila.",
+      "held": {
+        "turn-failed": "Fila pausada: a última resposta falhou. Retome para enviar a próxima mensagem.",
+        "turn-interrupted": "Fila pausada: a última resposta foi interrompida. Retome para enviar a próxima mensagem.",
+        "member": "Fila pausada.",
+        "send-refused": "Fila pausada: não foi possível enviar a primeira mensagem. Edite ou remova-a e depois retome.",
+        "usage-limit": "Fila pausada: você atingiu seu limite de uso. Retome quando ele for redefinido.",
+        "computer-away": "Aguardando seu computador: as mensagens na fila são enviadas assim que ele se conectar."
+      }
     }
   },
   "tasks": {

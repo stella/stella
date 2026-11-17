@@ -8,6 +8,11 @@ import {
 } from "@stll/api-contract/chat-context-notice";
 import type { ChatContextNotice } from "@stll/api-contract/chat-context-notice";
 import { CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY } from "@stll/api-contract/chat-local-run-tool";
+import { CHAT_SEND_QUEUES_INSTEAD_CODE } from "@stll/api-contract/chat-queue";
+import {
+  CHAT_TURN_STEERING,
+  CHAT_TURN_STEERING_EVENT,
+} from "@stll/api-contract/chat-send-intent";
 import {
   SSE_HEARTBEAT_FRAME,
   SSE_HEARTBEAT_INTERVAL_MS,
@@ -21,6 +26,7 @@ import {
   type StoredSession,
 } from "@/connection/session";
 
+import { queuesInstead } from "./chat-queue";
 import {
   answerEntry,
   applyChatEvent,
@@ -216,6 +222,36 @@ describe("an answer's context notice", () => {
       );
       expect(withdrawn.contextNotice).toBeNull();
     }
+  });
+});
+
+describe("whether the turn takes a message mid-turn", () => {
+  test("is read from the event the server sends with the turn's start, and leaves the answer as it was", () => {
+    const told = parseChatEvent(
+      JSON.stringify({
+        type: "CUSTOM",
+        name: CHAT_TURN_STEERING_EVENT,
+        value: { steering: CHAT_TURN_STEERING.steerable },
+      }),
+    );
+    expect(told).toEqual({
+      type: "CUSTOM",
+      name: CHAT_TURN_STEERING_EVENT,
+      value: { steering: CHAT_TURN_STEERING.steerable },
+    });
+    expect(applyChatEvent(EMPTY_ANSWER, told ?? panic("Not read"))).toBe(
+      EMPTY_ANSWER,
+    );
+    // One it cannot read is not drawn from.
+    expect(
+      parseChatEvent(
+        JSON.stringify({
+          type: "CUSTOM",
+          name: CHAT_TURN_STEERING_EVENT,
+          value: { steering: "sometimes" },
+        }),
+      ),
+    ).toBeUndefined();
   });
 });
 
@@ -850,6 +886,33 @@ describe("sending a message", () => {
         ? sent.error.error.status
         : undefined,
     ).toBe(409);
+  });
+
+  test("reports the code of a refused send, which says to queue it instead", async () => {
+    const { fetch } = streamingFetch(
+      () =>
+        new Response(
+          JSON.stringify({
+            code: CHAT_SEND_QUEUES_INSTEAD_CODE.turnAwaitingMember,
+            message: "A turn waits on you",
+          }),
+          { status: 409 },
+        ),
+    );
+    const sent = await sendChatMessage({
+      anonymized: false,
+      fetch,
+      matterId: undefined,
+      messageId: MESSAGE_ID,
+      onEvent: () => {},
+      onTurn: () => {},
+      runId: "run-1",
+      signal: new AbortController().signal,
+      source: sourceFor(),
+      text: "Hello",
+      threadId: THREAD_ID,
+    });
+    expect(Result.isError(sent) && queuesInstead(sent.error.error)).toBe(true);
   });
 
   test("names the turn of a send refused after the server stored it, and none before", async () => {

@@ -13,6 +13,7 @@ import {
   readChatThread,
   readOlderChatMessages,
   sentEntry,
+  steeringAfterPageRead,
   toChatEntry,
 } from "./chat-messages";
 import type { ChatEntry } from "./chat-messages";
@@ -230,6 +231,25 @@ describe("what a thread shows of a stored message", () => {
     expect(answer(undefined)).toBeNull();
   });
 
+  test("names the model an answer ran on only when the harness rerouted it", () => {
+    const answer = (metadata: unknown) =>
+      toChatEntry({
+        id: "m6",
+        role: "assistant",
+        createdAt: "2026-10-20T10:00:00.000Z",
+        parts: [{ type: "text", content: "Done." }],
+        metadata,
+      })?.ranOnModel;
+    expect(
+      answer({ localRunModel: { requested: "gpt-5.5", ran: "gpt-5.4" } }),
+    ).toBe("gpt-5.4");
+    expect(
+      answer({ localRunModel: { requested: "gpt-5.5", ran: "gpt-5.5" } }),
+    ).toBeUndefined();
+    expect(answer({ localRunModel: { ran: "gpt-5.4" } })).toBeUndefined();
+    expect(answer(undefined)).toBeUndefined();
+  });
+
   test("leaves out system messages and messages with nothing to draw", () => {
     expect(
       toChatEntry({
@@ -321,6 +341,52 @@ describe("reading a thread", () => {
     expect(await read(pageFor(false))).toBe(false);
     // A server from before the field reads as a thread that never anonymized.
     expect(await read(pageFor(undefined))).toBe(false);
+  });
+
+  test("says whether the turn it waits on or runs takes a message mid-turn", async () => {
+    const pageFor =
+      (activeTurnSteering?: string): Fetch =>
+      async () =>
+        Response.json({
+          messages: [],
+          olderCursor: null,
+          activeTurnId: "turn-1",
+          ...(activeTurnSteering === undefined ? {} : { activeTurnSteering }),
+        });
+    const read = async (fetch: Fetch) => {
+      const page = await readChatThread({
+        fetch,
+        matterId: undefined,
+        source: sourceFor(fetch),
+        threadId: "t1",
+      });
+      return page.isOk() ? page.value.activeTurnSteering : page.error._tag;
+    };
+    expect(await read(pageFor("steerable"))).toBe("steerable");
+    expect(await read(pageFor("not_steerable"))).toBe("not_steerable");
+    // A server from before the field: the turn takes none, so nothing waits
+    // on a guess.
+    expect(await read(pageFor(undefined))).toBe("not_steerable");
+  });
+
+  test("a refused answer leaves the waiting turn steerable as the page reads it again", () => {
+    // Answering opened a turn that takes nothing; the server refused it
+    // before it streamed, so only the page says the wait takes a message.
+    expect(
+      steeringAfterPageRead({
+        page: "steerable",
+        shown: "not_steerable",
+        streamOpen: false,
+      }),
+    ).toBe("steerable");
+    // An open stream says it for its own turn.
+    expect(
+      steeringAfterPageRead({
+        page: "steerable",
+        shown: "not_steerable",
+        streamOpen: true,
+      }),
+    ).toBe("not_steerable");
   });
 
   test("a global thread is read without a matter", () => {

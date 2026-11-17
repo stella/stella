@@ -3,7 +3,7 @@ import { renderToReadableStream, renderToStaticMarkup } from "react-dom/server";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Result } from "better-result";
-import { afterAll, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { Window } from "happy-dom";
 import { IntlProvider } from "use-intl";
 import { createFormatter } from "use-intl/core";
@@ -23,6 +23,7 @@ import {
   PROVIDER_SETUP_ERROR_CATALOGUE,
   PROVIDER_SETUP_ERROR_CODE,
 } from "@stll/api-contract/provider-setup";
+import { createTestState } from "@stll/test-state";
 
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
 import { testChatApprovalContextValue } from "@/components/chat/chat-approval-context.test-fixtures";
@@ -45,8 +46,9 @@ import {
 import { ProviderDiagnosticError } from "@/lib/errors/provider-diagnostic";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 
-const previousApiUrl = process.env["VITE_API_URL"];
-process.env["VITE_API_URL"] = previousApiUrl ?? "https://api.example.test";
+const testState = createTestState({ file: import.meta.path, config: {} });
+
+testState.setEnvIfAbsent("VITE_API_URL", "https://api.example.test");
 
 const { ChatEditorProvider } =
   await import("@/components/chat-editor-provider");
@@ -59,14 +61,6 @@ const { buildMessageTurns, CHAT_MESSAGE_RENDER_POLICY } =
 const RETRY_BUTTON = />Retry<\/(?:span><\/)?button>/u;
 const RETRY_BUTTONS = new RegExp(RETRY_BUTTON.source, "gu");
 const RESEND_BUTTON = />Resend<\/(?:span><\/)?button>/u;
-
-afterAll(() => {
-  if (previousApiUrl === undefined) {
-    delete process.env["VITE_API_URL"];
-    return;
-  }
-  process.env["VITE_API_URL"] = previousApiUrl;
-});
 
 const withProviders = (children: ReactNode, savedSecretAvailable = false) => {
   const queryClient = new QueryClient();

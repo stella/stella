@@ -4,6 +4,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "constraints-invoice-language-constraints",
   revision: 1350,
+  lifecycle: "finalized",
   type: "constraints",
   values: [...INVOICE_LANGUAGE_CONSTRAINTS],
 } satisfies OnlineMigrationEntry;

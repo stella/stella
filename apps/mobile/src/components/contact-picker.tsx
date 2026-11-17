@@ -5,6 +5,7 @@ import { randomUUID } from "expo-crypto";
 import { View } from "react-native";
 import { useTranslations } from "use-intl";
 
+import { SEARCH_QUERY_MAX_LENGTH } from "@stll/api-contract/limits";
 import type { ContactType } from "@stll/api-contract/workspace-contacts";
 import { Button } from "@stll/ui/button";
 import { Input } from "@stll/ui/input";
@@ -179,6 +180,7 @@ export const ContactPicker = ({
         autoCapitalize="words"
         autoCorrect={false}
         disabled={busy}
+        maxLength={SEARCH_QUERY_MAX_LENGTH}
         onChangeText={search}
         placeholder={t("findClient")}
         type="search"

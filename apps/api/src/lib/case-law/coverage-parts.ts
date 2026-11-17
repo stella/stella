@@ -6,6 +6,7 @@
 export const CASE_LAW_COVERAGE_PARTS = [
   "arrivals",
   "slice-completeness",
+  "publisher-census",
   "facets",
   "courts",
   "provision-processing",

@@ -23,6 +23,7 @@ import * as v from "valibot";
 import {
   DESKTOP_RUNNER_CHECKPOINT_EVENT,
   type DESKTOP_RUNNER_CHECKPOINT_UNAVAILABLE_REASONS,
+  DESKTOP_RUNNER_CHECKPOINTS_KEPT,
   type DesktopRunnerCheckpointEvent,
 } from "@stll/api-contract/desktop-runner";
 import { createDetached } from "@stll/errors";
@@ -34,7 +35,9 @@ import { SIDECAR_CHECKPOINT_STORE_SUFFIX } from "./protocol";
  * A run's folder as it stood before its turn, so the member can undo what the
  * turn changed there. The sidecar saves the folder once per run, after the
  * run's attachments are copied and before its harness starts; restoring puts
- * the folder back as it was saved.
+ * the folder back as it was saved. Any kept checkpoint may be restored, not
+ * only the newest: restoring one undoes its run and every later run, so
+ * those later checkpoints are undone with it.
  *
  * Saved beside the folder (`<folder>.checkpoints/`), never inside it: the
  * agent's sandbox can write in the folder only, so it can neither forge nor
@@ -109,7 +112,7 @@ export const CHECKPOINT_LIMITS: CheckpointLimits = {
   // under 0.1 s, so 5 s fails only a folder too slow to save in time.
   maxCaptureMs: 5000,
   maxRestoreWalkMs: 15_000,
-  maxManifests: 20,
+  maxManifests: DESKTOP_RUNNER_CHECKPOINTS_KEPT,
   maxStoredBytes: 2 * 1024 * 1024 * 1024,
   maxManifestBytes: 16 * 1024 * 1024,
   lockWaitMs: 30_000,
@@ -150,8 +153,7 @@ export type CheckpointUnavailableReason =
   (typeof DESKTOP_RUNNER_CHECKPOINT_UNAVAILABLE_REASONS)[number];
 
 /** What a restore did; the host adds `folder_busy` before it starts one. */
-type CheckpointRestoreOutcome =
-  "restored" | "no_checkpoint" | "not_newest" | "failed";
+type CheckpointRestoreOutcome = "restored" | "no_checkpoint" | "failed";
 
 export type CheckpointRestore = {
   outcome: CheckpointRestoreOutcome;
@@ -232,6 +234,7 @@ const relativePathSchema = v.pipe(
   v.maxLength(4096),
   v.check(isInsidePath, "A path inside the run's folder"),
 );
+const ordinalSchema = v.pipe(v.number(), v.integer(), v.minValue(1));
 const modeSchema = v.pipe(
   v.number(),
   v.integer(),
@@ -271,20 +274,54 @@ type Entry = v.InferOutput<typeof entrySchema>;
 type FileEntry = Extract<Entry, { kind: "file" }>;
 type StatKey = FileEntry["stat"];
 
-const manifestSchema = v.object({
-  version: v.literal(MANIFEST_VERSION),
-  runId: v.pipe(v.string(), v.uuid()),
-  /** Orders a folder's checkpoints; the clock does not. */
-  ordinal: v.pipe(v.number(), v.integer(), v.minValue(1)),
-  takenAt: v.pipe(v.string(), v.isoTimestamp()),
-  /** Restored once; an undone checkpoint is never restored again. */
-  undone: v.boolean(),
-  entries: v.array(entrySchema),
-  /** The attachments copied into the folder for this run. */
-  memberFiles: v.array(relativePathSchema),
-});
+const manifestSchema = v.pipe(
+  v.object({
+    version: v.literal(MANIFEST_VERSION),
+    runId: v.pipe(v.string(), v.uuid()),
+    /** Orders a folder's checkpoints; the clock does not. */
+    ordinal: ordinalSchema,
+    takenAt: v.pipe(v.string(), v.isoTimestamp()),
+    /** Restored once; an undone checkpoint is never restored again. */
+    undone: v.boolean(),
+    /**
+     * The newest ordinal when this checkpoint was restored: the later
+     * checkpoints up to it were undone by the same restore. Absent on a
+     * checkpoint never restored, and on one undone before restores reached
+     * past the newest (it undid itself alone).
+     */
+    undoneThrough: v.optional(ordinalSchema),
+    entries: v.array(entrySchema),
+    /** The attachments copied into the folder for this run. */
+    memberFiles: v.array(relativePathSchema),
+  }),
+  v.check(
+    ({ ordinal, undone, undoneThrough }) =>
+      undoneThrough === undefined || (undone && undoneThrough >= ordinal),
+    "Only an undone checkpoint undoes later ones, never earlier ones",
+  ),
+);
 
 type Manifest = v.InferOutput<typeof manifestSchema>;
+
+/**
+ * The runs whose checkpoints are undone: each restored checkpoint, and the
+ * later ones its restore undid with it (`undoneThrough`).
+ */
+const undoneRunIds = (manifests: readonly Manifest[]): Set<string> => {
+  const undoneRanges = manifests.flatMap(
+    ({ ordinal, undone, undoneThrough }) =>
+      undone ? [{ from: ordinal, through: undoneThrough ?? ordinal }] : [],
+  );
+  return new Set(
+    manifests
+      .filter(({ ordinal }) =>
+        undoneRanges.some(
+          ({ from, through }) => from <= ordinal && ordinal <= through,
+        ),
+      )
+      .map(({ runId }) => runId),
+  );
+};
 
 /** The folder as a restore found it, kept until the restore is settled. */
 const recoverySchema = v.object({
@@ -1335,6 +1372,18 @@ const prune = async (
     ) {
       kept.shift();
     }
+    // A kept checkpoint undone through an older one it outlives is marked
+    // undone itself first, so dropping the older one cannot make it
+    // restorable again.
+    const undone = undoneRunIds(state.manifests);
+    for (const manifest of kept) {
+      if (undone.has(manifest.runId) && !manifest.undone) {
+        // await-in-loop: one manifest written at a time.
+        yield* Result.await(
+          writeManifest(store, { ...manifest, undone: true }, limits),
+        );
+      }
+    }
     const keptIds = new Set(kept.map(({ runId }) => runId));
     const dropped = [
       ...state.invalid,
@@ -1358,7 +1407,7 @@ const prune = async (
 
 /**
  * The folder the checkpoint describes, plus the attachments later turns
- * copied: those turns are still in the chat, so their files stay.
+ * copied: files the member gave are never taken away by an undo.
  */
 const desiredTree = (
   target: Manifest,
@@ -2009,11 +2058,13 @@ const reconcile = async (
   });
 
 /**
- * Put the folder back as the run's checkpoint saved it. Only the newest
- * checkpoint not undone yet is restored. The folder's current state is saved
- * and written down first; any failure puts it back. Until the folder is
- * restored or verifiably put back, that state and its files stay in the
- * store.
+ * Put the folder back as the run's checkpoint saved it, undoing that run and
+ * every later one. A checkpoint already undone, by its own restore or by an
+ * earlier one's, is answered as restored and the folder is not touched:
+ * restoring it now would bring back changes an undo took away. The folder's
+ * current state is saved and written down first; any failure puts it back.
+ * Until the folder is restored or verifiably put back, that state and its
+ * files stay in the store.
  *
  * The caller holds the store, and makes sure no run uses the folder.
  */
@@ -2034,14 +2085,11 @@ const restoreHeld = async (
   if (target === undefined) {
     return { outcome: "no_checkpoint", detail: null };
   }
-  // Asked again after it was done (an answer that never arrived): the folder
-  // is not touched, and the answer is the same.
-  if (target.undone) {
+  // Asked again after it was done (an answer that never arrived), or undone
+  // with an earlier checkpoint: the folder is not touched, and the answer is
+  // the same.
+  if (undoneRunIds(manifests).has(runId)) {
     return { outcome: "restored", detail: null };
-  }
-  const newest = manifests.findLast(({ undone }) => !undone);
-  if (newest?.runId !== runId) {
-    return { outcome: "not_newest", detail: null };
   }
   const desired = desiredTree(
     target,
@@ -2093,12 +2141,20 @@ const restoreHeld = async (
     };
   }
   const applied = await applyTree(workspaceDir, store, desired, before);
-  // Marked undone in the same step: a restore that is not recorded did not
-  // happen, and is undone too.
+  // Marked undone in the same step, the later checkpoints with it in the one
+  // write: a restore that is not recorded did not happen, and is undone too.
   const marked =
     Result.isOk(applied) &&
     Result.isOk(
-      await writeManifest(store, { ...target, undone: true }, limits),
+      await writeManifest(
+        store,
+        {
+          ...target,
+          undone: true,
+          undoneThrough: (manifests.at(-1) ?? target).ordinal,
+        },
+        limits,
+      ),
     );
   if (marked) {
     await afterMark?.();

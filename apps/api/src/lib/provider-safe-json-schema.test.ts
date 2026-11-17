@@ -74,7 +74,15 @@ const assertOnlyProviderSafeKeywords = (schema: Record<string, unknown>) => {
   }
 };
 
-const schemaPropertyName = fc.constantFrom("query", "limit", "mode", "kind");
+const schemaPropertyName = fc.constantFrom(
+  "query",
+  "limit",
+  "mode",
+  "kind",
+  "__proto__",
+  "constructor",
+  "toString",
+);
 
 const jsonSchemaLiteral = fc.oneof(
   fc.string({ maxLength: 12 }),
@@ -626,6 +634,76 @@ describe("projectToProviderSafeJsonSchema", () => {
     });
     expect(droppedKeywords).toEqual([]);
   });
+
+  test.each(["__proto__", "constructor", "toString", "ordinary"])(
+    "allOf retains and refines the own property %s",
+    (key) => {
+      const source = {
+        type: "object",
+        properties: { retained: { type: "boolean" } },
+        allOf: [
+          { properties: { [key]: { type: "string", maxLength: 10 } } },
+          {
+            properties: { [key]: { minLength: 2, maxLength: 8 } },
+            required: [key],
+          },
+        ],
+      };
+      const before = JSON.stringify(source);
+      const { schema, droppedKeywords } =
+        projectToProviderSafeJsonSchema(source);
+      expect(schema).toEqual({
+        type: "object",
+        properties: {
+          retained: { type: "boolean" },
+          [key]: { type: "string", maxLength: 8, minLength: 2 },
+        },
+        required: [key],
+      });
+      expect(Object.keys(schema["properties"] ?? {})).toEqual([
+        "retained",
+        key,
+      ]);
+      expect(Object.getPrototypeOf(schema["properties"])).toBe(
+        Object.prototype,
+      );
+      expect(droppedKeywords).toEqual([]);
+      expect(JSON.stringify(source)).toBe(before);
+    },
+  );
+
+  test.each(["__proto__", "constructor", "toString", "ordinary", "a/b", "a~b"])(
+    "local references resolve only the own %s definition",
+    (key) => {
+      const pointer = key.replaceAll("~", "~0").replaceAll("/", "~1");
+      const definition = { type: "string", minLength: 2 };
+      const definitions = { [key]: definition };
+      const source = {
+        type: "object",
+        $defs: definitions,
+        properties: { value: { $ref: `#/$defs/${pointer}` } },
+      };
+      expect(projectToProviderSafeJsonSchema(source)).toEqual({
+        schema: { type: "object", properties: { value: definition } },
+        droppedKeywords: ["$defs", "properties.value.$ref"],
+      });
+
+      const inheritedDefinitions = {};
+      Object.setPrototypeOf(inheritedDefinitions, definitions);
+      expect(
+        projectToProviderSafeJsonSchema({
+          ...source,
+          $defs: inheritedDefinitions,
+        }),
+      ).toEqual({
+        schema: { type: "object", properties: { value: {} } },
+        droppedKeywords: ["$defs", "properties.value.$ref"],
+      });
+      expect(Object.getPrototypeOf(inheritedDefinitions)).toBe(definitions);
+      expect(Object.keys(inheritedDefinitions)).toEqual([]);
+      expect(definition).toEqual({ type: "string", minLength: 2 });
+    },
+  );
 
   test("merges allOf property refinements before projection", () => {
     const { schema, droppedKeywords } = projectToProviderSafeJsonSchema({

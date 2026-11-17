@@ -80,6 +80,7 @@ import {
   CORPUS_PROJECTION_LEASE_MIN_MS,
   corpusProjectionDeliveredTogether,
 } from "@/api/lib/legal-search/corpus-index-projection-store";
+import { revokeCorpusIndexRouteProofTx } from "@/api/lib/legal-search/corpus-index-route-proof-store";
 import { logger } from "@/api/lib/observability/logger";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
@@ -1662,6 +1663,17 @@ export const reopenCorpusProjectionCleanupTx = async (
   ) {
     return panic("Corpus projection cleanup reopen identities changed");
   }
+  // A revision recorded as gone was found in the engine, so whatever proved
+  // the route no longer does. The index id names one generation, so the
+  // reopened revisions share one route.
+  const [identity] = identities;
+  if (rows.length > 0 && identity !== undefined) {
+    await revokeCorpusIndexRouteProofTx(
+      tx,
+      { family: identity.family, generation: identity.generation, indexId },
+      "absent_drift",
+    );
+  }
   return rows.length;
 };
 
@@ -1866,8 +1878,8 @@ type CommitExpiredOfflineAppendsOptions = {
  * certainly ended (`offline_unended`), and the prover's census decides it:
  * exact applies it, empty withdraws it, anything else retires it. Only a
  * revision its state still wants advances; any other goes to cleanup with the
- * unknown appends. The state is not charged here: the proof charges what it
- * retires or withdraws, and an applied revision costs nothing.
+ * unknown appends. It commits with the fault `none`, so the proof charges
+ * nobody whatever it decides, and its withdrawal halves no request.
  */
 const commitExpiredOfflineAppendsTx = async (
   tx: Transaction,
@@ -1918,6 +1930,10 @@ const commitExpiredOfflineAppendsTx = async (
         leaseExpiresAt: null,
         appendCommittedAt: transitionAt,
         appendPublishBarrierAt: barrierSql,
+        // A start that expired unrecorded never ran its documents to a
+        // verdict this process saw (a crash, a rejected delivery, a lost
+        // lock): whatever the census finds, nobody is charged for it.
+        appendFault: "none",
         // No `last_error`: a revision this census applies must stay
         // restorable like any other (`corpusIndexProjectionRevisionIsRestorable`).
         updatedAt: transitionAt,

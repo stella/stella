@@ -47,11 +47,16 @@ const renderCardHeader = (client: OAuthConsentClient) => {
   );
 };
 
-const renderSuccess = (client: OAuthConsentClient) =>
+type Grant = { organizationName: string | null; scopes: readonly string[] };
+
+const NOTHING_KNOWN: Grant = { organizationName: null, scopes: [] };
+
+const renderSuccess = (client: OAuthConsentClient, grant?: Grant) =>
   renderEn(
     <ConsentSuccess
       identity={resolveConsentClientIdentity(info(client), FALLBACK_NAME)}
       redirectUrl="https://connector.example/callback?code=example"
+      {...(grant ?? NOTHING_KNOWN)}
     />,
   );
 
@@ -202,7 +207,25 @@ describe("consent success", () => {
     expect(markup).toContain(VERIFIED_MARK);
     expect(markup).not.toContain(UNVERIFIED_MARK);
     expect(markup).toContain("Connected to Claude");
-    expect(markup).toContain(en.consent.returnToAgent);
+    expect(markup).toContain("Taking you back to Claude.");
+    expect(markup).toContain('role="status"');
+  });
+
+  test("the success screen names the organization and counts the access just granted", () => {
+    const markup = renderSuccess(
+      { type: "verified", brand: "claude" },
+      {
+        organizationName: "Novák & Partners",
+        scopes: ["stella:organization_create", "stella:account_export_read"],
+      },
+    );
+    expect(markup).toContain("<bdi>Novák &amp; Partners</bdi>");
+    expect(markup).toContain("<bdi>2 permissions</bdi>");
+    // Without a known organization or any disclosed scope there is nothing
+    // specific to list, so no fact surface is drawn.
+    expect(renderSuccess({ type: "verified", brand: "claude" })).not.toContain(
+      'data-slot="outcome-details"',
+    );
   });
 
   test("an unverified client keeps the neutral mark and its claimed name", () => {

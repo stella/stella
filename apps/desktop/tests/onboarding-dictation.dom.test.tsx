@@ -246,3 +246,24 @@ test("dictation that arrives after setup is introduced and closed once", async (
   });
   expect(sentCommands(native)).not.toContain("onboarding_advance");
 });
+
+test("the dictation step shows AI cleanup, on by default, and turns it off on request", async () => {
+  const native = nativeSide();
+  const { findByRole, getByText } = await renderSetup(native);
+
+  const toggle = await findByRole("switch", { name: dictation.cleanup.title });
+  expect(toggle.getAttribute("aria-checked")).toBe("true");
+  expect(getByText(dictation.cleanup.description).textContent).toContain(
+    "through stella to your organization’s AI provider",
+  );
+
+  fireEvent.click(toggle);
+
+  await waitFor(() => {
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+  });
+  expect(native.calls).toContainEqual({
+    args: { enabled: false },
+    command: "dictation_set_cleanup",
+  });
+});

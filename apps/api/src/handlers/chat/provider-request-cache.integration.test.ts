@@ -1,12 +1,13 @@
 import { toolDefinition } from "@tanstack/ai";
 import { panic } from "better-result";
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
 import * as v from "valibot";
 
 import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
 import type { TanStackAIProvider } from "@stll/ai-catalog";
 import { propertyTestTimeout } from "@stll/property-testing";
+import { createTestState } from "@stll/test-state";
 
 import { user as authUser } from "@/api/db/auth-schema";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
@@ -89,6 +90,8 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
+const testState = createTestState({ file: import.meta.path, config: env });
+
 // What the chat request builder (`chat-request.ts`) promises each provider's
 // prompt cache, held on the request bodies the provider SDKs write. A
 // conversation runs through the real send handler and `streamChat` into the
@@ -133,8 +136,7 @@ let safeDb: SafeDb;
 let scopedDb: ScopedDb;
 let replay: ProviderWireReplay;
 let fakeS3: FakeS3;
-let previousMockAI: typeof env.USE_MOCK_AI;
-let previousBedrockEndpoint: string | undefined;
+
 const seededThreadIds: SafeId<"chatThread">[] = [];
 
 registerProviderWireReplay({
@@ -172,7 +174,7 @@ const memberOf = (
   };
 };
 
-beforeAll(async () => {
+testState.beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
@@ -182,22 +184,19 @@ beforeAll(async () => {
   safeDb = toSafeDbMock(scopedDb);
   firstMember = { id: ids.userA1, safeDb, scopedDb };
   secondMember = memberOf(ids.userA2);
-  previousMockAI = env.USE_MOCK_AI;
-  env.USE_MOCK_AI = false;
-  previousBedrockEndpoint = process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"];
-  process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"] =
-    "https://bedrock-runtime.us-east-1.amazonaws.com.cassette.invalid";
+
+  testState.setConfig("USE_MOCK_AI", false);
+
+  testState.setEnv(
+    "AWS_ENDPOINT_URL_BEDROCK_RUNTIME",
+    "https://bedrock-runtime.us-east-1.amazonaws.com.cassette.invalid",
+  );
   fakeS3 = startFakeS3();
 });
 
 afterAll(async () => {
   fakeS3.stop();
-  env.USE_MOCK_AI = previousMockAI;
-  if (previousBedrockEndpoint === undefined) {
-    delete process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"];
-  } else {
-    process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"] = previousBedrockEndpoint;
-  }
+
   if (seededThreadIds.length > 0) {
     // Uploaded attachments belong to their thread.
     await testDb
@@ -569,7 +568,7 @@ const expectMembersShareThePrefix = async (
 describe("chat requests: the cached prefix", () => {
   let previousJurisdictions: PracticeJurisdiction[] = [];
 
-  beforeAll(async () => {
+  testState.beforeAll(async () => {
     const [row] = await testDb
       .select({
         practiceJurisdictions: organizationSettings.practiceJurisdictions,

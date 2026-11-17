@@ -1110,7 +1110,9 @@ describe("cz-nss listSlicePage", () => {
     // that matters is not the byte string but that it is still JSON: the
     // escaped backslashes around each codelist title are exactly what a
     // reader resolving `\\uXXXX` on its own destroys.
-    expect(() => JSON.parse(posted ?? "")).not.toThrow();
+    expect(() => {
+      JSON.parse(posted ?? "");
+    }).not.toThrow();
   });
 
   test("a literal ending at an escaped apostrophe is not truncated", async () => {
@@ -1146,7 +1148,7 @@ describe("cz-nss listSlicePage", () => {
 
     expect(
       await reconciliation.listSlicePage({ slice: "2026-08-09", page: 0 }),
-    ).toEqual({ items: [], totalPages: 0 });
+    ).toEqual({ items: [], totalPages: 0, publisherCount: 0 });
   });
 
   test("a failed search throws rather than reporting an empty day", async () => {

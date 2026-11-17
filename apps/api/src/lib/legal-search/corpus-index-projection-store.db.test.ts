@@ -61,6 +61,7 @@ import {
   unparkCorpusProjectionAppendTx,
 } from "@/api/lib/legal-search/corpus-index-projection-store";
 import { logger } from "@/api/lib/observability/logger";
+import { optOutOfCorpusProjectionSeedingGuard } from "@/api/tests/helpers/corpus-projection-seeding-guard";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   capturePgliteDatabaseBaseline,
@@ -164,6 +165,7 @@ const acceptAndProveAppend = async (
           documentCount: 1,
         },
       ],
+      delivery: { type: "ingest_api" },
       testNow,
     })
   ).at(0);
@@ -412,6 +414,10 @@ const seedDatabase = async (): Promise<void> => {
 
 beforeAll(async () => {
   client = await createTestPglite();
+  await optOutOfCorpusProjectionSeedingGuard(client, {
+    reason:
+      "Exercises the projection store, executor and serving pipeline on canonical rows and desired states this suite stands up as fixtures; no desired writer runs here, and the writer suites keep the guard.",
+  });
   db = drizzle({ client });
   await installProjectionMigrationDdl();
   baseline = await capturePgliteDatabaseBaseline(client);

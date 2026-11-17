@@ -3,6 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "replacements-case-law-decisions-sitemap-shard-idx",
   revision: 800,
+  lifecycle: "finalized",
   type: "replacements",
   values: [
     {

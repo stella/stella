@@ -14,7 +14,7 @@ import {
   forEachRegistryMutation,
   registryExtras,
   registryString,
-} from "../shared/property-test-helpers.test.js";
+} from "../shared/tests/test-helpers.js";
 import { lookupByKrsNumber } from "./client.js";
 import { parseAddress, parseEntity } from "./parse.js";
 import { normalizeRegon } from "./regon.js";

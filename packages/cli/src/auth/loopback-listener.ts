@@ -12,13 +12,18 @@ import { createServer } from "node:http";
 import type { IncomingMessage, ServerResponse } from "node:http";
 
 import { sha256Base64Url } from "../sha256.js";
-import { CALLBACK_PAGE_THEME_CSS } from "./callback-page-theme.js";
 import {
   CLIENT_NAME,
   LOOPBACK_REDIRECT_PATH,
   SIGN_IN_COMPLETION_TIMEOUT_MS,
 } from "./constants.js";
 import { LoopbackCallbackError, LoopbackTimeoutError } from "./errors.js";
+import {
+  OUTCOME_FRAGMENT_SLOTS,
+  OUTCOME_PAGE_FRAGMENTS,
+  OUTCOME_PAGE_SLOTS,
+  OUTCOME_PAGE_TEMPLATES,
+} from "./outcome-page.gen.js";
 
 export type LoopbackCallback =
   | { readonly kind: "success"; readonly code: string; readonly state: string }
@@ -34,7 +39,11 @@ export type LoopbackCallback =
  * on the redirect is answered with this, never with success before it.
  */
 export type SignInOutcome =
-  | { readonly kind: "signed_in" }
+  | {
+      readonly kind: "signed_in";
+      /** The signed-in account's email, when the ID token named it. */
+      readonly email?: string;
+    }
   | { readonly kind: "failed"; readonly step: "exchange" | "save" };
 
 export type LoopbackListener = {
@@ -75,10 +84,17 @@ type FailureReason = "redirect" | "exchange" | "save" | "unconfirmed";
 // Only a verified callback carries query text onto the page; every failure
 // page renders fixed text.
 type CallbackPageOptions =
-  | { readonly status: "success"; readonly callback: VerifiedCallback }
+  | {
+      readonly status: "success";
+      readonly callback: VerifiedCallback;
+      readonly email?: string;
+    }
   | { readonly status: "failure"; readonly reason: FailureReason };
 
-const RETRY = `Return to your terminal for details, then run stella auth login to try again.`;
+const CLOSE_TAB_NOTE = "You can close this tab.";
+
+/** The command a failure page offers, set as code under its message. */
+const RETRY_COMMAND = "stella auth login";
 
 const failureText = (
   reason: FailureReason,
@@ -86,22 +102,22 @@ const failureText = (
   switch (reason) {
     case "redirect":
       return {
-        message: `Return to your terminal for details, then try signing in to ${CLIENT_NAME} again.`,
+        message: `${CLIENT_NAME} did not receive a sign-in it could use; your terminal shows why. To try again, run:`,
         title: "Sign-in failed",
       };
     case "exchange":
       return {
-        message: `${CLIENT_NAME} could not finish signing in. ${RETRY}`,
+        message: `${CLIENT_NAME} could not finish signing in; your terminal shows why. To try again, run:`,
         title: "Sign-in failed",
       };
     case "save":
       return {
-        message: `${CLIENT_NAME} could not save your sign-in on this computer. ${RETRY}`,
+        message: `${CLIENT_NAME} could not save your sign-in on this computer; your terminal shows why. To try again, run:`,
         title: "Sign-in not saved",
       };
     case "unconfirmed":
       return {
-        message: `${CLIENT_NAME} did not confirm the sign-in in time. Return to your terminal; if it is not signed in, run stella auth login to try again.`,
+        message: `${CLIENT_NAME} did not confirm the sign-in in time. If your terminal does not show you signed in, run:`,
         title: "Sign-in not confirmed",
       };
     default:
@@ -110,129 +126,109 @@ const failureText = (
   }
 };
 
-const renderCallbackPage = (page: CallbackPageOptions) => {
-  const ok = page.status === "success";
-  const organizationName = ok ? page.callback.organizationName : null;
-  const { title, message } = ok
-    ? {
-        message: `Return to your terminal to continue with ${CLIENT_NAME}.`,
-        title: "Signed in to stella",
-      }
-    : failureText(page.reason);
-  const statusColor = ok ? "--status-success" : "--status-failure";
-
-  const styles = `${CALLBACK_PAGE_THEME_CSS}
-      :root {
-        color-scheme: light dark;
-        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      }
-      * {
-        box-sizing: border-box;
-      }
-      body {
-        align-items: center;
-        background: var(--page-background);
-        color: var(--page-foreground);
-        display: flex;
-        justify-content: center;
-        margin: 0;
-        min-height: 100vh;
-        padding: 24px;
-        -webkit-font-smoothing: antialiased;
-      }
-      main {
-        background: var(--card-background);
-        border: 1px solid var(--card-border);
-        border-radius: 8px;
-        box-shadow:
-          0 1px 2px var(--card-shadow-near),
-          0 24px 80px var(--card-shadow-far);
-        display: grid;
-        gap: 28px;
-        max-width: 480px;
-        padding: 32px;
-        width: min(100%, 480px);
-      }
-      .brand {
-        align-items: center;
-        color: var(--page-foreground);
-        display: flex;
-        gap: 12px;
-        min-width: 0;
-      }
-      .mark {
-        color: var(--page-foreground);
-        height: 28px;
-        width: 28px;
-      }
-      .wordmark {
-        font-size: 22px;
-        font-weight: 500;
-        letter-spacing: 0;
-        line-height: 1;
-      }
-      h1 {
-        color: var(${statusColor});
-        font-size: 24px;
-        font-weight: 600;
-        letter-spacing: 0;
-        line-height: 1.15;
-        margin: 0;
-        text-wrap: balance;
-      }
-      p {
-        color: var(--body-foreground);
-        font-size: 15px;
-        line-height: 1.6;
-        margin: 10px 0 0;
-        text-wrap: pretty;
-      }
-      .organization {
-        overflow-wrap: anywhere;
-      }
-      @media (prefers-color-scheme: dark) {
-        main {
-          box-shadow: 0 24px 80px var(--card-shadow-far);
-        }
-        path {
-          fill: currentColor;
-        }
-      }
-`;
-  const escapedOrganizationName = organizationName
-    ?.replaceAll("&", "&amp;")
+const escapeHtml = (text: string) =>
+  text
+    .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
 
+// Both tones share one stylesheet (the generator's test holds it to that), so
+// one hash admits it under the CSP.
+const OUTCOME_PAGE_STYLE_HASH = (() => {
+  const page = OUTCOME_PAGE_TEMPLATES.success;
+  const start = page.indexOf("<style>") + "<style>".length;
+  return sha256Base64Url(page.slice(start, page.indexOf("</style>", start)));
+})();
+
+const slotPattern = (slots: Readonly<Record<string, string>>) =>
+  new RegExp(
+    Object.values(slots)
+      .map((slot) => slot.replaceAll(/[{}]/gu, (brace) => `\\${brace}`))
+      .join("|"),
+    "gu",
+  );
+
+const PAGE_SLOT_PATTERN = slotPattern(OUTCOME_PAGE_SLOTS);
+const FRAGMENT_SLOT_PATTERN = slotPattern(OUTCOME_FRAGMENT_SLOTS);
+
+/**
+ * Fills `template` in one pass, so text put into one slot is never read as
+ * another slot. Every value is escaped text or a filled fragment.
+ */
+const fill = (
+  template: string,
+  pattern: RegExp,
+  values: Readonly<Record<string, string>>,
+) => template.replaceAll(pattern, (slot) => values[slot] ?? slot);
+
+/** The facts the success page lists: only what this sign-in already holds. */
+const signedInDetails = (
+  organizationName: string | null,
+  email: string | undefined,
+): string => {
+  const rows = [
+    ...(email ? [["Account", email] as const] : []),
+    ...(organizationName ? [["Organization", organizationName] as const] : []),
+  ].map(([label, value]) =>
+    fill(OUTCOME_PAGE_FRAGMENTS.detailRow, FRAGMENT_SLOT_PATTERN, {
+      [OUTCOME_FRAGMENT_SLOTS.label]: escapeHtml(label),
+      [OUTCOME_FRAGMENT_SLOTS.value]: escapeHtml(value),
+    }),
+  );
+  return rows.length === 0
+    ? ""
+    : fill(OUTCOME_PAGE_FRAGMENTS.details, FRAGMENT_SLOT_PATTERN, {
+        [OUTCOME_FRAGMENT_SLOTS.rows]: rows.join(""),
+      });
+};
+
+/**
+ * The outcome page, from the template rendered from `@stll/ui/outcome-screen`
+ * (`packages/ui/scripts/generate-outcome-page.ts`). Every slot is filled with
+ * escaped text; only the organization's name comes from the redirect, and only
+ * once its `state` matched this sign-in.
+ */
+const renderCallbackPage = (page: CallbackPageOptions) => {
+  const ok = page.status === "success";
+  const failure = ok ? null : failureText(page.reason);
+  const html = fill(
+    OUTCOME_PAGE_TEMPLATES[ok ? "success" : "error"],
+    PAGE_SLOT_PATTERN,
+    {
+      [OUTCOME_PAGE_SLOTS.lang]: "en",
+      [OUTCOME_PAGE_SLOTS.dir]: "ltr",
+      // A terminal has no colour scheme to pass on; the browser's decides.
+      [OUTCOME_PAGE_SLOTS.theme]: "system",
+      [OUTCOME_PAGE_SLOTS.title]: escapeHtml(
+        failure?.title ?? `${CLIENT_NAME} is signed in`,
+      ),
+      [OUTCOME_PAGE_SLOTS.description]: escapeHtml(
+        failure?.message ?? "Return to your terminal to continue.",
+      ),
+      [OUTCOME_PAGE_SLOTS.details]: ok
+        ? signedInDetails(page.callback.organizationName, page.email)
+        : "",
+      [OUTCOME_PAGE_SLOTS.command]: ok
+        ? ""
+        : fill(OUTCOME_PAGE_FRAGMENTS.command, FRAGMENT_SLOT_PATTERN, {
+            [OUTCOME_FRAGMENT_SLOTS.code]: escapeHtml(RETRY_COMMAND),
+          }),
+      // Once signed in, nothing on the page is left to do; a failure's way
+      // on is the command above.
+      [OUTCOME_PAGE_SLOTS.note]: ok
+        ? fill(OUTCOME_PAGE_FRAGMENTS.note, FRAGMENT_SLOT_PATTERN, {
+            [OUTCOME_FRAGMENT_SLOTS.text]: escapeHtml(CLOSE_TAB_NOTE),
+          })
+        : "",
+    },
+  );
+
   return {
-    contentSecurityPolicy: `default-src 'none'; style-src 'sha256-${sha256Base64Url(styles)}'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
-    html: `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>${title}</title>
-    <style>${styles}</style>
-  </head>
-  <body>
-    <main>
-      <div class="brand">
-        <svg aria-hidden="true" class="mark" fill="currentColor" viewBox="0 0 40 41" xmlns="http://www.w3.org/2000/svg">
-          <path d="M6.58 11.3 16.69 5.05a5.9 5.9 0 0 1 6.62.01l14.68 9.07V9.26L25.52 1.55A11.8 11.8 0 0 0 20 0c-1.97 0-3.88.54-5.53 1.56L4.37 7.81A9.3 9.3 0 0 0 0 15.61a9.3 9.3 0 0 0 4.37 7.8l3.26 2.02-.01.01 11.15 6.9c.14.09.27.16.39.2.68.26 1.42.19 2.03-.19l9.59-5.93.1-.07 2.07-1.28-2.82-1.72-1.1-.69-9.02 5.56-.41-.24-13.01-8.05a5.57 5.57 0 0 1-2.41-4.31c0-1.79.88-3.36 2.41-4.3Z" />
-          <path d="M33.34 29.25 23.24 35.5a5.9 5.9 0 0 1-6.63-.01L1.94 26.43v4.86l12.47 7.71a11.8 11.8 0 0 0 5.52 1.55c1.97 0 3.88-.54 5.53-1.56l10.1-6.25a9.3 9.3 0 0 0 4.37-7.8 9.3 9.3 0 0 0-4.37-7.8l-3.26-2.02.01-.01-11.15-6.9a1.6 1.6 0 0 0-.39-.2 1.64 1.64 0 0 0-2.03.19l-9.59 5.93-.1.07-2.07 1.28 2.82 1.72 1.1.69 9.02-5.56.41.24 13.01 8.05a5.57 5.57 0 0 1 2.41 4.31c0 1.79-.88 3.36-2.41 4.3Z" />
-        </svg>
-        <span class="wordmark">stella</span>
-      </div>
-      <section>
-        <h1>${title}</h1>
-        ${ok && escapedOrganizationName ? `<p class="organization"><bdi>${escapedOrganizationName}</bdi></p>` : ""}
-        <p>${message}</p>
-      </section>
-    </main>
-  </body>
-</html>`,
+    // `img-src data:` admits the inline favicon and nothing else.
+    contentSecurityPolicy: `default-src 'none'; style-src 'sha256-${OUTCOME_PAGE_STYLE_HASH}'; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
+    html,
   };
 };
 
@@ -360,7 +356,11 @@ const sendAnswer = (
       sendCallbackPage(
         held.response,
         200,
-        { callback: held.callback, status: "success" },
+        {
+          callback: held.callback,
+          status: "success",
+          ...(answer.email ? { email: answer.email } : {}),
+        },
         onSent,
       );
       return;

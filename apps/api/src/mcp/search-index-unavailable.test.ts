@@ -9,6 +9,7 @@ import {
   SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET,
   SEARCH_TOTAL_NOT_COUNTED,
 } from "@stll/api-contract/search";
+import { createTestState } from "@stll/test-state";
 
 import { PUBLIC_READ_STATEMENT_TIMEOUT_MS } from "@/api/db/shared-pool-timeouts";
 import { env } from "@/api/env";
@@ -88,6 +89,8 @@ import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
+const testState = createTestState({ file: import.meta.path, config: env });
+
 const TIMEOUT_FIXTURE_SINK = failureSink({
   event: "mcp.search_index_unavailable_test.timeout",
   expected: [],
@@ -118,7 +121,6 @@ const EXPECTED_ENVELOPE = {
 };
 
 const originalFetch = globalThis.fetch;
-const originalPublicLaw = env.FEATURE_PUBLIC_LAW;
 
 const slowEngineAnswers: PromiseWithResolvers<Response>[] = [];
 
@@ -135,7 +137,7 @@ beforeEach(() => {
       { preconnect: originalFetch.preconnect },
     ),
   );
-  env.FEATURE_PUBLIC_LAW = true;
+  testState.setConfig("FEATURE_PUBLIC_LAW", true);
 });
 
 afterEach(() => {
@@ -146,7 +148,6 @@ afterEach(() => {
   }
   slowEngineAnswers.length = 0;
   testFetchState.restore();
-  env.FEATURE_PUBLIC_LAW = originalPublicLaw;
 });
 
 /** A scan against the unreachable index, as both search handlers run one. */

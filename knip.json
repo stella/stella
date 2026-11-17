@@ -166,6 +166,9 @@
       "entry": ["src/**/*.test.ts"],
       "ignoreDependencies": ["@stll/api"]
     },
+    "packages/browser-page": {
+      "entry": ["src/**/*.test.ts"]
+    },
     "packages/clipboard": {
       "entry": ["src/**/*.test.ts"]
     },
@@ -284,7 +287,8 @@
         "src/components/*.tsx",
         "src/hooks/*.ts",
         "src/inspector/*.{ts,tsx}",
-        "src/lib/*.ts"
+        "src/lib/*.ts",
+        "scripts/*.ts"
       ]
     },
     "packages/user-agent": {

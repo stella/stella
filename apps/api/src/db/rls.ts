@@ -295,6 +295,27 @@ const chatTurnScopeCheck = sql`(
   )
 )`;
 
+// Queue rows mirror the turn rows' ownership columns and prove they match
+// the owning thread, with the thread's embedded-data scope, as turns do.
+const chatQueueScopeCheck = (
+  table: "chat_queued_messages" | "chat_queue_holds",
+) => sql`(
+  ${userCheck} AND
+  ${organizationCheck} AND
+  (workspace_id IS NULL OR ${workspaceCheck}) AND
+  EXISTS (
+    SELECT 1 FROM chat_threads ct
+    WHERE ct.id = ${sql.raw(table)}.thread_id
+      AND ct.user_id = ${sql.raw(table)}.user_id
+      AND ct.organization_id = ${sql.raw(table)}.organization_id
+      AND ct.workspace_id IS NOT DISTINCT FROM ${sql.raw(table)}.workspace_id
+      AND (
+        cardinality(ct.data_workspace_ids) = 0
+        OR ${workspaceArrayCheck(sql`ct.data_workspace_ids`)}
+      )
+  )
+)`;
+
 const fileChatThreadScopeCheck = sql`(
   ${userCheck} AND
   ${organizationCheck} AND
@@ -1830,6 +1851,58 @@ export const chatTurnPolicies = () => [
   }),
 ];
 
+const queuedMessageScopeCheck = chatQueueScopeCheck("chat_queued_messages");
+
+export const chatQueuedMessagePolicies = () => [
+  p.pgPolicy("chat_queued_message_select", {
+    for: "select",
+    to: stella,
+    using: queuedMessageScopeCheck,
+  }),
+  p.pgPolicy("chat_queued_message_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: queuedMessageScopeCheck,
+  }),
+  p.pgPolicy("chat_queued_message_update", {
+    for: "update",
+    to: stella,
+    using: queuedMessageScopeCheck,
+    withCheck: queuedMessageScopeCheck,
+  }),
+  p.pgPolicy("chat_queued_message_delete", {
+    for: "delete",
+    to: stella,
+    using: queuedMessageScopeCheck,
+  }),
+];
+
+const queueHoldScopeCheck = chatQueueScopeCheck("chat_queue_holds");
+
+export const chatQueueHoldPolicies = () => [
+  p.pgPolicy("chat_queue_hold_select", {
+    for: "select",
+    to: stella,
+    using: queueHoldScopeCheck,
+  }),
+  p.pgPolicy("chat_queue_hold_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: queueHoldScopeCheck,
+  }),
+  p.pgPolicy("chat_queue_hold_update", {
+    for: "update",
+    to: stella,
+    using: queueHoldScopeCheck,
+    withCheck: queueHoldScopeCheck,
+  }),
+  p.pgPolicy("chat_queue_hold_delete", {
+    for: "delete",
+    to: stella,
+    using: queueHoldScopeCheck,
+  }),
+];
+
 const chatSecretScopeCheck = sql`(
   ${userCheck} AND ${organizationCheck} AND
   EXISTS (
@@ -2170,4 +2243,13 @@ export const invoiceLineOwnerReadPolicy = () =>
     for: "select",
     to: "public",
     using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.invoice_lines'::regclass)`,
+  });
+
+// The timer presence function reads every member's timer under FORCE RLS.
+// Only the table owner gains SELECT; request-role visibility and owner writes stay unchanged.
+export const timeTimerOwnerReadPolicy = () =>
+  p.pgPolicy("time_timers_owner_select", {
+    for: "select",
+    to: "public",
+    using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.time_timers'::regclass)`,
   });

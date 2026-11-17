@@ -3,6 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "indexes-soft-law-search",
   revision: 1426,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     {

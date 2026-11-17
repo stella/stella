@@ -143,7 +143,7 @@ export type IssuedInvoice = {
   workspaceId: string;
   invoiceNumber: string | null;
   issued: boolean;
-  totalAmount: number;
+  totalAmount: number | null;
   currency: string;
   dueDate: string | null;
 };
@@ -1477,7 +1477,9 @@ export const IssuedState = ({
   const format = useFormatter();
   const summary = [
     buyerName,
-    formatCurrencyAmount(invoice.totalAmount, invoice.currency),
+    invoice.totalAmount === null
+      ? null
+      : formatCurrencyAmount(invoice.totalAmount, invoice.currency),
     invoice.dueDate === null
       ? null
       : t("billing.invoiceComposer.dueOn", {

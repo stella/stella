@@ -22,6 +22,21 @@ export default {
         reason: "Hands the upgrade request to the gateway.",
       },
       {
+        path: "apps/api/src/handlers/chat/queue/chat-queue-sender.ts",
+        reason:
+          "Checks a queued message bound for the member's computer finds one connected before sending it.",
+      },
+      {
+        path: "apps/api/src/handlers/chat/limit-reminder/limit-resume-sender.ts",
+        reason:
+          "Checks the member's computer is connected, and its agent no longer limited, before continuing a chat after a usage limit reset.",
+      },
+      {
+        path: "apps/api/src/handlers/chat/messages/list.ts",
+        reason:
+          "Reads whether the thread's active turn on the member's computer takes a message mid-turn, for the page.",
+      },
+      {
         path: "apps/api/src/handlers/chat/local-run-plan.ts",
         reason:
           "Routes a chat turn bound for the member's computer through the control and reads its run back.",
@@ -47,7 +62,7 @@ export default {
           "Records the member's OK for turns to work in a folder linked on one of their computers.",
       },
       {
-        path: "apps/api/src/handlers/chat/turns/local-files-undo.ts",
+        path: "apps/api/src/handlers/chat/messages/local-files-undo.ts",
         reason:
           "Asks the turn's computer to undo the turn's file changes and reads where that undo stands.",
       },

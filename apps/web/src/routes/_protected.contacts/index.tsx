@@ -27,6 +27,7 @@ import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
 import { CONTACT_TYPES, type ContactType } from "@stll/api-contract";
+import { SEARCH_QUERY_MAX_LENGTH } from "@stll/api-contract/limits";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { DestructiveConfirmDialog } from "@stll/ui/destructive-confirm-dialog";
@@ -238,6 +239,7 @@ function ContactsPage() {
             aria-label={t("contacts.search")}
             clearLabel={t("common.clearSearch")}
             groupClassName="sm:max-w-sm"
+            maxLength={SEARCH_QUERY_MAX_LENGTH}
             onValueChange={(value) => {
               setSearchQuery(value);
               updateSearch(value);

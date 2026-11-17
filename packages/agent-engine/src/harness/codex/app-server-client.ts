@@ -55,13 +55,15 @@ type AppServerAnswer = Result<unknown, AppServerRequestError>;
 
 /**
  * Startup requests, which wait on the startup deadline: initialize covers
- * the CLI's first launch (an antivirus scan, a busy computer); starting or
- * resuming a thread waits for its MCP servers, stella's among them.
+ * the CLI's first launch (an antivirus scan, a busy computer); starting,
+ * resuming or forking a thread waits for its MCP servers, stella's among
+ * them.
  */
 const STARTUP_REQUESTS: ReadonlySet<CodexClientRequestMethod> = new Set([
   "initialize",
   "thread/start",
   "thread/resume",
+  "thread/fork",
 ]);
 
 export type AppServerClient = {

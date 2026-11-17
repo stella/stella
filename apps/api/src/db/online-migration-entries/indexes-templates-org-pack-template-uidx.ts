@@ -7,6 +7,7 @@ import {
 export default {
   id: "indexes-templates-org-pack-template-uidx",
   revision: 630,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     onlineUniqueIndexDefinition(

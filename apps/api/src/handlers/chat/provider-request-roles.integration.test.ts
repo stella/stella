@@ -1,6 +1,6 @@
 import type { ModelMessage } from "@tanstack/ai";
 import { panic, Result } from "better-result";
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import { inArray } from "drizzle-orm";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -10,6 +10,7 @@ import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { CHAT_TOOL_POLICY_KIND } from "@stll/api-contract";
 import { CHAT_PROMPT_IMPROVEMENT_STRATEGIES } from "@stll/api-contract/chat";
 import { repoRelativePath } from "@stll/portable-path";
+import { createTestState } from "@stll/test-state";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
@@ -89,6 +90,8 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
+const testState = createTestState({ file: import.meta.path, config: env });
+
 // Every provider request the chat surface builds besides the chat turn
 // (`provider-request-schemas.integration.test.ts`), each through the
 // production function that builds it, with the organization's real adapter
@@ -115,8 +118,7 @@ const cassettes = loadProviderWireCassettes();
 let testDb: TestDatabase;
 let ids: TestIds;
 let replay: ProviderWireReplay;
-let previousMockAI: typeof env.USE_MOCK_AI;
-let previousBedrockEndpoint: string | undefined;
+
 const seededThreadIds: SafeId<"chatThread">[] = [];
 
 registerProviderWireReplay({
@@ -125,24 +127,20 @@ registerProviderWireReplay({
   },
 });
 
-beforeAll(async () => {
+testState.beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
-  previousMockAI = env.USE_MOCK_AI;
-  env.USE_MOCK_AI = false;
-  previousBedrockEndpoint = process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"];
-  process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"] =
-    "https://bedrock-runtime.us-east-1.amazonaws.com.cassette.invalid";
+
+  testState.setConfig("USE_MOCK_AI", false);
+
+  testState.setEnv(
+    "AWS_ENDPOINT_URL_BEDROCK_RUNTIME",
+    "https://bedrock-runtime.us-east-1.amazonaws.com.cassette.invalid",
+  );
 });
 
 afterAll(async () => {
-  env.USE_MOCK_AI = previousMockAI;
-  if (previousBedrockEndpoint === undefined) {
-    delete process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"];
-  } else {
-    process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"] = previousBedrockEndpoint;
-  }
   if (seededThreadIds.length > 0) {
     await testDb
       .delete(chatThreads)

@@ -282,6 +282,7 @@
       "Setup Bun",
       "Test .claude/mcp",
       "Test API or rest",
+      "Test the stella browser host",
       "Test web",
       "Turbo remote cache",
       "Upload API test timings",

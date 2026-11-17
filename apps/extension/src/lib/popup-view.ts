@@ -11,7 +11,7 @@ export type PopupActiveTab =
   | { kind: "unsupported" };
 export type PopupController = Pick<BrowserController, "origin">;
 export type PopupAction = {
-  action: "adopt" | "connect" | "grant" | "grant-and-connect";
+  action: "adopt" | "connect" | "grant" | "grant-and-connect" | "open-stella";
   messageKey: PopupMessageKey;
 };
 export type PopupSecondaryAction = {
@@ -82,7 +82,7 @@ export const popupView = ({
       };
     }
     return {
-      primary: null,
+      primary: { action: "open-stella", messageKey: "openStella" },
       secondary: [REVOKE],
       showPurpose: true,
       state: { type: "open-stella-to-connect" },

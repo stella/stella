@@ -5,15 +5,12 @@ import type { ExactRequestBody } from "@stll/api-client";
 import { APIError } from "@/lib/errors/api";
 
 import {
-  batchDeleteTimeEntries,
-  batchUpdateTimeEntries,
   createTimeEntry,
   type CreateTimeEntryBody,
   decideTimeSuggestion,
   deleteTimeEntry,
   fetchTimeEntries,
   fetchTimeEntrySummary,
-  splitTimeEntry,
   updateTimeEntry,
 } from "./time-entries-api";
 
@@ -98,18 +95,6 @@ test.each([
     }
   },
 );
-
-test("a batch delete accepts the batch count answer", async () => {
-  responses = [{ updated: 2 }];
-  expect(
-    await batchDeleteTimeEntries("workspace-1", ["entry-1", "entry-2"]),
-  ).toEqual({
-    updated: 2,
-  });
-  expect(requests).toEqual([
-    { body: { ids: ["entry-1", "entry-2"] }, method: "DELETE" },
-  ]);
-});
 
 afterAll(() => {
   globalThis.fetch = originalFetch;
@@ -234,38 +219,6 @@ const cases = [
     response: { deleted: true },
     body: { id: "entry" },
     send: async () => await deleteTimeEntry("matter", "entry"),
-  },
-  {
-    name: "batch update",
-    method: "POST",
-    path: "/time-entries/matter/batch",
-    response: { updated: 1 },
-    body: { ids: ["entry"], action: "approve" },
-    send: async () =>
-      await batchUpdateTimeEntries("matter", {
-        ids: ["entry"],
-        action: "approve",
-      }),
-  },
-  {
-    name: "batch delete",
-    method: "DELETE",
-    path: "/time-entries/matter/batch",
-    response: { updated: 1 },
-    body: { ids: ["entry"] },
-    send: async () => await batchDeleteTimeEntries("matter", ["entry"]),
-  },
-  {
-    name: "split",
-    method: "POST",
-    path: "/time-entries/matter/split",
-    response: { entryIds: ["split-entry"], splitGroupId: "split-group" },
-    body: { id: "entry", splits: [{ workItemId: "task", percentage: 100 }] },
-    send: async () =>
-      await splitTimeEntry("matter", {
-        id: "entry",
-        splits: [{ workItemId: "task", percentage: 100 }],
-      }),
   },
   {
     name: "suggestion decision",

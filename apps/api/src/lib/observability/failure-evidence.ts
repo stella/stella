@@ -656,12 +656,12 @@ const readNode = (state: ReadState, value: object): ReadNodeResult => {
       ? ACTION_ADMISSION_REFUSALS[codeString]
       : undefined;
   const sqlState = sqlStateFrom({ syscall, errno, code });
-  const pgIdentifiers: Partial<Record<PgIdentifierProperty, string>> = {};
+  const pgIdentifiers = new Map<PgIdentifierProperty, string>();
   if (sqlState !== undefined) {
     for (const property of PG_IDENTIFIER_PROPERTIES) {
       const identifier = nonEmptyString(readKey(state, value, property));
       if (identifier !== undefined) {
-        pgIdentifiers[property] = identifier;
+        pgIdentifiers.set(property, identifier);
       }
     }
   }
@@ -715,8 +715,8 @@ const readNode = (state: ReadState, value: object): ReadNodeResult => {
         (className !== undefined && PG_DRIVER_CLASS_NAMES.has(className)) ||
         (name === PG_PROTOCOL_ERROR_NAME &&
           sqlState !== undefined &&
-          pgIdentifiers.severity !== undefined)),
-    pgIdentifiers,
+          pgIdentifiers.has("severity"))),
+    pgIdentifiers: Object.fromEntries(pgIdentifiers),
     ownStatus,
     providerStatus: providerStatusFrom({
       isHandlerError,

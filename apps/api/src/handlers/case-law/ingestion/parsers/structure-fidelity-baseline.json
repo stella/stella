@@ -1226,16 +1226,6 @@
           "rule": "sentence-cut",
           "anchorId": "p-7",
           "excerpt": "rozpoznaniu na rozprawie w dniu 22 marca 2018 r. w Warszawie ⏎ sprawy z powództwa P. M."
-        },
-        {
-          "rule": "stray-leading-number",
-          "anchorId": "p-30",
-          "excerpt": "8 września 2016 r. powódka nie pojawiła się w pracy i około godz. 10:00 poinformowała w wiadomości SMS przełożonego M. R"
-        },
-        {
-          "rule": "stray-leading-number",
-          "anchorId": "p-34",
-          "excerpt": "12 września 2016 r. M. R. zwrócił się do dyrektora Agencji o podjęcie stosownych działań dyscyplinarnych w stosunku do p"
         }
       ],
       "pl-courts-dump-day.json.gz:74": [
@@ -1269,11 +1259,6 @@
           "rule": "sentence-cut",
           "anchorId": "p-12",
           "excerpt": "ości przekraczających zakres zwykłego zarządu rzeczą wspólną ⏎ na skutek apelacji wnioskodawców"
-        },
-        {
-          "rule": "stray-leading-number",
-          "anchorId": "p-27",
-          "excerpt": "13 marca 2017 r. zmarła wnioskodawczyni U. G.. Postanowieniem z 27 kwietnia 2017 r. Sąd Rejonowy zawiesił postępowanie ("
         }
       ],
       "pl-courts-dump-day.json.gz:81": [
@@ -1551,31 +1536,11 @@
         },
         {
           "rule": "sentence-cut",
-          "anchorId": "p-20",
-          "excerpt": " by E. Montaguti, J. Tomkin and F. Wilman, acting as Agents, ⏎ after hearing the Opinion of the Advocate General at the "
-        },
-        {
-          "rule": "sentence-cut",
           "anchorId": "p-21",
           "excerpt": " of the Advocate General at the sitting on 7 September 2023, ⏎ gives the following"
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-266",
-          "excerpt": "3/96/EEC, read in conjunction with Articles 4 and 5 thereof, ⏎ must be interpreted as not precluding legislation of gene"
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-268",
-          "excerpt": " European Parliament and of the Council of 30 November 2017, ⏎ must be interpreted as not precluding legislation of a Me"
         }
       ],
       "eu-ecj/61990CJ0006.en.html.gz (recorded document; census metadata)": [
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-21",
-          "excerpt": "Karen Banks, members of its Legal Service, acting as Agents, ⏎ having regard to the Report for the Hearing,"
-        },
         {
           "rule": "sentence-cut",
           "anchorId": "p-23",
@@ -1649,11 +1614,6 @@
         },
         {
           "rule": "sentence-cut",
-          "anchorId": "p-18",
-          "excerpt": "az B.R. Killmanna, działających w charakterze pełnomocników, ⏎ po zapoznaniu się z opinią rzecznika generalnego na posie"
-        },
-        {
-          "rule": "sentence-cut",
           "anchorId": "p-19",
           "excerpt": "cznika generalnego na posiedzeniu w dniu 5 września 2018 r., ⏎ wydaje następujący"
         },
@@ -1690,11 +1650,6 @@
           "rule": "sentence-cut",
           "anchorId": "p-19",
           "excerpt": "written procedure and further to the hearing on 9 July 2019, ⏎ after considering the observations submitted on behalf of"
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-40",
-          "excerpt": "n Board (EDPB), by A. Jelinek and K. Behn, acting as Agents, ⏎ after hearing the Opinion of the Advocate General at the "
         },
         {
           "rule": "sentence-cut",
@@ -1796,23 +1751,8 @@
         },
         {
           "rule": "sentence-cut",
-          "anchorId": "p-20",
-          "excerpt": " by E. Montaguti, J. Tomkin and F. Wilman, acting as Agents, ⏎ after hearing the Opinion of the Advocate General at the "
-        },
-        {
-          "rule": "sentence-cut",
           "anchorId": "p-21",
           "excerpt": " of the Advocate General at the sitting on 7 September 2023, ⏎ gives the following"
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-266",
-          "excerpt": "3/96/EEC, read in conjunction with Articles 4 and 5 thereof, ⏎ must be interpreted as not precluding legislation of gene"
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-268",
-          "excerpt": " European Parliament and of the Council of 30 November 2017, ⏎ must be interpreted as not precluding legislation of a Me"
         }
       ],
       "eu-ecj/62022CJ0128.en.page.html.gz (recorded document; census metadata)": [
@@ -1823,23 +1763,8 @@
         },
         {
           "rule": "sentence-cut",
-          "anchorId": "p-20",
-          "excerpt": " by E. Montaguti, J. Tomkin and F. Wilman, acting as Agents, ⏎ after hearing the Opinion of the Advocate General at the "
-        },
-        {
-          "rule": "sentence-cut",
           "anchorId": "p-21",
           "excerpt": " of the Advocate General at the sitting on 7 September 2023, ⏎ gives the following"
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-266",
-          "excerpt": "3/96/EEC, read in conjunction with Articles 4 and 5 thereof, ⏎ must be interpreted as not precluding legislation of gene"
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-268",
-          "excerpt": " European Parliament and of the Council of 30 November 2017, ⏎ must be interpreted as not precluding legislation of a Me"
         }
       ],
       "eu-ecj/62023CO0786.en.html.gz (recorded document; census metadata)": [

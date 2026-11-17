@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { isRecord } from "@/api/lib/type-guards";
+import { optOutOfCorpusProjectionSeedingGuard } from "@/api/tests/helpers/corpus-projection-seeding-guard";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 import { HIGH_VOLUME_TABLES } from "../db/high-volume-tables";
@@ -89,6 +90,10 @@ test("the run ends with one vacuum of exactly the tables it seeds", () => {
 
 test("every seeder satisfies the schema and writes its promised rows", async () => {
   const client = await createTestPglite();
+  await optOutOfCorpusProjectionSeedingGuard(client, {
+    reason:
+      "The rehearsal seeders bulk-write synthetic canonical rows as the state a migration rehearsal starts from, not through a desired writer; the writer suites keep the guard.",
+  });
   const db = drizzle({ client });
 
   await applySteps(db, rehearsalSeedSteps(DECISIONS));

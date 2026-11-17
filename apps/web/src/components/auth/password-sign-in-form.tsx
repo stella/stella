@@ -1,5 +1,6 @@
 import { useForm, useSelector } from "@tanstack/react-form";
 import { useNavigate } from "@tanstack/react-router";
+import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -10,6 +11,7 @@ import { Input } from "@stll/ui/input";
 
 import { SecretInput } from "@/components/secret-input";
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
+import { INVALID_SIGN_IN_CODE } from "@/lib/account/auth-code-report";
 import { useAnalytics } from "@/lib/analytics/provider";
 import {
   authClient,
@@ -70,16 +72,19 @@ export const EmailCredentialField = ({
 
 export const SecretCredentialField = ({
   autoComplete,
+  autoFocus,
   field,
   placeholder,
 }: {
   autoComplete: "current-password" | "new-password" | "one-time-code";
+  autoFocus: boolean;
   field: TextFieldBinding;
   placeholder: string;
 }) => (
   <Field name={field.name}>
     <SecretInput
       autoComplete={autoComplete}
+      autoFocus={autoFocus}
       onBlur={field.handleBlur}
       onChange={(e) => field.handleChange(e.target.value)}
       placeholder={placeholder}
@@ -100,10 +105,13 @@ export const getOrganizationCallbackUrl = (redirectTo: string) => {
 
 export const PasswordSignInForm = ({
   autoFocus,
+  defaultEmail,
   lastUsed,
   redirectTo,
 }: {
   autoFocus: boolean;
+  /** An address already typed on this page; focus then starts at the password. */
+  defaultEmail: string;
   lastUsed: SignInMethod | null;
   redirectTo: string;
 }) => {
@@ -114,7 +122,7 @@ export const PasswordSignInForm = ({
   const form = useForm(
     schemaFormOptions({
       schema: passwordFormSchema(t("validation.invalidEmail")),
-      defaultValues: { email: "", password: "" },
+      defaultValues: { email: defaultEmail, password: "" },
       submitValues: "schema-output",
       onSubmit: async ({ value }) => {
         const { data, error } = await authClient.signIn.email({
@@ -132,8 +140,21 @@ export const PasswordSignInForm = ({
             },
           });
           if (error.status !== HTTP_TOO_MANY_REQUESTS) {
-            notifyUserError(toAuthClientError(error), t("errors.actionFailed"));
+            notifyUserError(
+              toAuthClientError(error),
+              error.code === INVALID_SIGN_IN_CODE
+                ? t("auth.invalidEmailOrPassword")
+                : t("errors.actionFailed"),
+            );
           }
+          return;
+        }
+
+        const refreshed = await Result.tryPromise(
+          async () => await invalidateSession.mutateAsync(),
+        );
+        if (refreshed.isErr()) {
+          notifyUserError(refreshed.error, t("errors.actionFailed"));
           return;
         }
 
@@ -141,7 +162,6 @@ export const PasswordSignInForm = ({
         // pending a second factor; send them to the same challenge page the
         // email-OTP flow uses instead of treating this as a completed sign-in.
         if (isTwoFactorRedirect(data)) {
-          await invalidateSession.mutateAsync();
           await navigate({
             to: "/auth/two-factor",
             search: { redirectTo },
@@ -149,7 +169,6 @@ export const PasswordSignInForm = ({
           return;
         }
 
-        await invalidateSession.mutateAsync();
         await navigate({
           to: "/auth/organization",
           search: { redirectTo },
@@ -175,7 +194,7 @@ export const PasswordSignInForm = ({
       <form.Field name="email">
         {(field) => (
           <EmailCredentialField
-            autoFocus={autoFocus}
+            autoFocus={autoFocus && defaultEmail === ""}
             field={field}
             lastUsed={lastUsed === SIGN_IN_METHOD.password}
           />
@@ -185,6 +204,7 @@ export const PasswordSignInForm = ({
         {(field) => (
           <SecretCredentialField
             autoComplete="current-password"
+            autoFocus={autoFocus && defaultEmail !== ""}
             field={field}
             placeholder={t("auth.password")}
           />

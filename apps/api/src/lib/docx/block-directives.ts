@@ -175,10 +175,18 @@ const applyRowRawOverlay = ({
       continue;
     }
     const relativePath = key.slice(prefix.length);
-    itemContext[relativePath] = raw;
-    for (const aliasPath of uniqueAliasPaths) {
-      itemContext[`${aliasPath}.${relativePath}`] = raw;
-    }
+    Object.defineProperties(
+      itemContext,
+      Object.getOwnPropertyDescriptors(
+        Object.fromEntries([
+          [relativePath, raw],
+          ...[...uniqueAliasPaths].map((aliasPath) => [
+            `${aliasPath}.${relativePath}`,
+            raw,
+          ]),
+        ]),
+      ),
+    );
   }
 };
 
@@ -516,25 +524,29 @@ export const flattenTemplateData = (
   data: TemplateData,
   prefix = "",
 ): Record<string, RichPatchValue> => {
-  const result: Record<string, RichPatchValue> = {};
+  const result = new Map<string, RichPatchValue>();
 
   for (const [key, value] of Object.entries(data)) {
     const fullKey = prefix ? `${prefix}.${key}` : key;
 
     if (isRichPatchValue(value)) {
-      result[fullKey] = value;
+      result.set(fullKey, value);
     } else if (typeof value === "number") {
-      result[fullKey] = String(value);
+      result.set(fullKey, String(value));
     } else if (typeof value === "boolean") {
-      result[fullKey] = String(value);
+      result.set(fullKey, String(value));
     } else if (Array.isArray(value)) {
       // Arrays are not flattened — handled by {% for %}
     } else if (typeof value === "object") {
-      Object.assign(result, flattenTemplateData(value, fullKey));
+      for (const [nestedKey, nestedValue] of Object.entries(
+        flattenTemplateData(value, fullKey),
+      )) {
+        result.set(nestedKey, nestedValue);
+      }
     }
   }
 
-  return result;
+  return Object.fromEntries(result);
 };
 
 // ── w:t node rewriting ───────────────────────────────────
@@ -744,7 +756,6 @@ export const processBlockDirectives = (
     processingContext = createDirectiveProcessingContext(),
   }: ProcessBlockDirectivesOptions = {},
 ): ProcessResult => {
-  const patchValues: Record<string, RichPatchValue> = {};
   const allErrors: TemplateStructureError[] = [];
 
   // Row-form markers become own-paragraph markers before anything scans, so
@@ -754,7 +765,7 @@ export const processBlockDirectives = (
   normalizeRowBlockMarkers(body);
 
   // Flatten top-level nested objects for value substitution.
-  Object.assign(patchValues, flattenTemplateData(data));
+  const patchValues = flattenTemplateData(data);
 
   // Context for condition/loop evaluation: `data` overlaid with the raw
   // (pre-format) values of any field a fill step rewrote to a display string
@@ -999,7 +1010,12 @@ export const processBlockDirectives = (
     path,
     value,
   }: RegisterContextAliasesOptions): void => {
-    context[path] = value;
+    Object.defineProperty(context, path, {
+      value,
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
     if (Array.isArray(value) || !isRecord(value) || isRichPatchValue(value)) {
       return;
     }
@@ -1034,7 +1050,12 @@ export const processBlockDirectives = (
           identity: eachKey(scope.identity, itemIdx, relativePath),
           valuePath: `${scope.valuePath}.${itemIdx}.${relativePath}`,
         } satisfies LoopScope;
-        itemContext[nestedScope.identity] = value;
+        Object.defineProperty(itemContext, nestedScope.identity, {
+          value,
+          enumerable: true,
+          configurable: true,
+          writable: true,
+        });
         nestedLoopScopes.set(relativePath, nestedScope);
         nestedLoopScopes.set(nestedScope.declaredPath, nestedScope);
         nestedLoopScopes.set(nestedScope.identity, nestedScope);
@@ -1062,15 +1083,14 @@ export const processBlockDirectives = (
     itemIdx,
     scope,
   }: BuildItemContextOptions): Record<string, unknown> => {
-    const itemContext: Record<string, unknown> = { ...contextData };
+    let itemContext: Record<string, unknown> = { ...contextData };
     const nestedLoopScopes = new Map<string, LoopScope>();
     // `loop` is the innermost loop's counters, the same values the
     // `{{ loop.* }}` output markers resolve to, so a condition and a printed
     // value inside one iteration cannot disagree.
     itemContext["loop"] = loopContext(itemIdx, itemCount);
     if (isRecord(item)) {
-      Object.assign(itemContext, item);
-      itemContext[arrayPath] = item;
+      itemContext = { ...itemContext, ...item, [arrayPath]: item };
       registerContextAliases({
         context: itemContext,
         path: scope.declaredPath,
@@ -1109,12 +1129,15 @@ export const processBlockDirectives = (
       itemContext["value"] = item;
       // A primitive row has one field, `value`; the alias addresses it the same
       // way the array path does, so `{% if tag.value == "keep" %}` resolves.
-      itemContext[alias] = { value: item };
-      itemContext[`${alias}.value`] = item;
-      itemContext[arrayPath] = { value: item };
-      itemContext[`${arrayPath}.value`] = item;
-      itemContext[scope.declaredPath] = { value: item };
-      itemContext[`${scope.declaredPath}.value`] = item;
+      itemContext = {
+        ...itemContext,
+        [alias]: { value: item },
+        [`${alias}.value`]: item,
+        [arrayPath]: { value: item },
+        [`${arrayPath}.value`]: item,
+        [scope.declaredPath]: { value: item },
+        [`${scope.declaredPath}.value`]: item,
+      };
     }
     if (nestedLoopScopes.size > 0) {
       loopScopeByContext.set(itemContext, nestedLoopScopes);
@@ -1546,8 +1569,13 @@ export const registerLoopItemPatchValues = (
   }
 
   const value = String(item);
-  patchValues[`__each_${arrayPath}_${itemIdx}`] = value;
-  patchValues[eachKey(arrayPath, itemIdx, "value")] = value;
+  Object.defineProperties(
+    patchValues,
+    Object.getOwnPropertyDescriptors({
+      [`__each_${arrayPath}_${itemIdx}`]: value,
+      [eachKey(arrayPath, itemIdx, "value")]: value,
+    }),
+  );
 };
 
 type RegisterItemPatchValuesOptions = {
@@ -1573,14 +1601,20 @@ const registerItemPatchValues = ({
   for (const [field, value] of Object.entries(item)) {
     const fullField = prefix ? `${prefix}.${field}` : field;
     const key = eachKey(arrayPath, itemIdx, fullField);
-    if (typeof value === "string") {
-      patchValues[key] = value;
-    } else if (typeof value === "number") {
-      patchValues[key] = String(value);
-    } else if (typeof value === "boolean") {
-      patchValues[key] = String(value);
-    } else if (isRichPatchValue(value)) {
-      patchValues[key] = value;
+    if (isRichPatchValue(value)) {
+      Object.defineProperty(patchValues, key, {
+        value,
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
+    } else if (typeof value === "number" || typeof value === "boolean") {
+      Object.defineProperty(patchValues, key, {
+        value: String(value),
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
     } else if (Array.isArray(value)) {
       // Arrays inside items are not expanded
     } else if (isRecord(value)) {

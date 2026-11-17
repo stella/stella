@@ -192,7 +192,7 @@ const withFolioMessages = (
   messages: LocaleMessages,
   folioCatalog: FolioCatalog,
 ): LocaleMessages => {
-  const folio = { ...messages.folio };
+  const folio = structuredClone(messages.folio);
   applyMessageDefaults(folio, folioCatalog.folio);
   return { ...messages, folio };
 };

@@ -35,19 +35,21 @@ import { SERVER_ANALYTICS_EVENTS } from "./server-analytics";
 import type { ServerAnalytics } from "./server-analytics";
 import type { TanStackAIAnalyticsCallbacks } from "./tanstack-ai";
 
-process.env["EMAIL_PROVIDER"] ??= "smtp";
-process.env["GOTENBERG_PASSWORD"] ??= "gotenberg";
-process.env["GOTENBERG_URL"] ??= "http://localhost:3003";
-process.env["GOTENBERG_USERNAME"] ??= "gotenberg";
-process.env["AI_PROVIDER"] = "openai";
-process.env["OPENAI_API_KEY"] ??= "test-openai-instance-key";
-process.env["REDIS_URL"] ??= "redis://localhost:6379";
-process.env["SMTP_HOST"] ??= "localhost";
-process.env["SMTP_PORT"] ??= "1025";
+const state = createTestState({ file: import.meta.path, config: {} });
 
-// The environment must be set before the validated configuration loads.
+state.setEnvIfAbsent("EMAIL_PROVIDER", "smtp");
+state.setEnvIfAbsent("GOTENBERG_PASSWORD", "gotenberg");
+state.setEnvIfAbsent("GOTENBERG_URL", "http://localhost:3003");
+state.setEnvIfAbsent("GOTENBERG_USERNAME", "gotenberg");
+state.setEnv("AI_PROVIDER", "openai");
+state.setEnvIfAbsent("OPENAI_API_KEY", "test-openai-instance-key");
+state.setEnvIfAbsent("REDIS_URL", "redis://localhost:6379");
+state.setEnvIfAbsent("SMTP_HOST", "localhost");
+state.setEnvIfAbsent("SMTP_PORT", "1025");
+
+// Bootstrap precedes validation; both objects share the fixture lifetime.
 const { env } = await import("@/api/env");
-const state = createTestState({ file: import.meta.path, config: env });
+const configState = state.forConfig(env);
 
 const loadTanStackAIAnalytics = async () => await import("./tanstack-ai");
 
@@ -958,7 +960,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       identifyOrganizationGroup: () => undefined,
     };
 
-    state.setConfig("REQUIRE_PERSONAL_AI_KEY", true);
+    configState.setConfig("REQUIRE_PERSONAL_AI_KEY", true);
 
     const callbacks = createTanStackAIAnalyticsCallbacks({
       modelTier: MANAGED_MODEL_TIER.standard,

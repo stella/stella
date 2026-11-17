@@ -5,6 +5,7 @@ import {
   QueryObserver,
   queryOptions,
 } from "@tanstack/react-query";
+import { updateUser } from "better-auth/api";
 import { organization } from "better-auth/plugins";
 import { expect, spyOn, test } from "bun:test";
 import { readFileSync } from "node:fs";
@@ -27,6 +28,7 @@ import {
 } from "@/features/avt/queries";
 import { linkIconOptions } from "@/features/chat/link-icons";
 import { getAnalytics } from "@/lib/analytics/provider";
+import { rootKeys } from "@/lib/auth-query-options";
 import { fileMetadataOptions } from "@/lib/files/file-metadata-query";
 import { fileMetadataByFieldQueryRoot } from "@/lib/files/file-metadata-query.logic";
 import { fileOptions, textFileOptions } from "@/lib/files/queries";
@@ -38,6 +40,7 @@ import {
 import {
   agentSkillsQueryRoot,
   catalogueQueryRoot,
+  legalListsQueryRoot,
   mcpQueryRoot,
 } from "@/lib/resource-query-roots.logic";
 import type { ViewLayout } from "@/lib/types";
@@ -60,6 +63,9 @@ import {
   invoicesInfiniteOptions,
   invoicesKeys,
 } from "@/lib/workspaces/queries/invoices";
+import { legalListKeys } from "@/lib/workspaces/queries/legal-lists";
+import { myWorkKeys } from "@/lib/workspaces/queries/my-work";
+import { taskKeys } from "@/lib/workspaces/queries/tasks";
 import {
   timeEntriesKeys,
   timeEntriesOptions,
@@ -130,6 +136,26 @@ const previousInvalidationFor = (factory: string): PreviousInvalidation => {
       const target = timeEntriesKeys.all(WORKSPACE_ID);
       const { queryKey, meta } = timeEntriesOptions(WORKSPACE_ID, USER_ID);
       return { target, readers: [{ queryKey, ...(meta ? { meta } : {}) }] };
+    }
+    case "taskKeys.all": {
+      const target = taskKeys.all(WORKSPACE_ID);
+      return { target, readers: [{ queryKey: target }] };
+    }
+    case "myWorkKeys.all": {
+      const target = myWorkKeys.all;
+      return { target, readers: [{ queryKey: target }] };
+    }
+    case "workspacesKeys.overview": {
+      const target = workspacesKeys.overview(WORKSPACE_ID);
+      return { target, readers: [{ queryKey: target }] };
+    }
+    case "legalListsQueryRoot": {
+      const target = legalListsQueryRoot(WORKSPACE_ID);
+      return { target, readers: [{ queryKey: target }] };
+    }
+    case "legalListKeys.items": {
+      const target = legalListKeys.items(WORKSPACE_ID, "list-coverage");
+      return { target, readers: [{ queryKey: target }] };
     }
     case "entitiesKeys.all": {
       const target = entitiesKeys.all(WORKSPACE_ID);
@@ -281,7 +307,7 @@ test("each migrated mutation still invalidates every prior cache target", async 
   const migrated = Object.entries(migratedMutationTargets);
   expect(migrated.length).toBeGreaterThan(0);
   for (const [mutation, factories] of migrated) {
-    if (!isContractName(mutation)) {
+    if (!isContractName(mutation) || mutation === "updateUser") {
       throw new TypeError(`Frozen targets name no contract: ${mutation}`);
     }
     expect({ mutation, factories: factories.length > 0 }).toEqual({
@@ -400,6 +426,10 @@ test("cache invalidation failures preserve every registered mutation's committed
   );
   for (const mutation of mutationNames) {
     const queryClient = new QueryClient();
+    queryClient.setQueryData(rootKeys.session, {
+      user: { id: "profile-user" },
+      session: { activeOrganizationId: "profile-organization" },
+    });
     // A registered reader of what the write changes, so every contract has
     // something to refresh, including one whose resource has no static scope.
     const [resource, ...resources] =
@@ -411,6 +441,14 @@ test("cache invalidation failures preserve every registered mutation's committed
         resourceReads: {
           resources: [resource, ...resources],
           scope: { type: "workspace", workspaceId: WORKSPACE_ID },
+          ...(mutation === "updateUser"
+            ? {
+                organizationReads: {
+                  organizationId: "profile-organization",
+                  resources: [RESOURCE_TYPE.USER],
+                },
+              }
+            : {}),
         },
       },
     });
@@ -421,11 +459,23 @@ test("cache invalidation failures preserve every registered mutation's committed
     ).mockRejectedValue(failure);
     const capture = spyOn(getAnalytics(), "captureError");
     const committed = { workspaceId: WORKSPACE_ID, name: "confirmed" };
-    const write = resourceMutation({
-      mutation,
-      queryClient,
-      mutationFn: async () => committed,
-    });
+    const write =
+      mutation === "updateUser"
+        ? resourceMutation({
+            mutation,
+            queryClient,
+            scope: {
+              type: "organization-projection",
+              userId: "profile-user",
+              organizationId: "profile-organization",
+            },
+            mutationFn: async () => committed,
+          })
+        : resourceMutation({
+            mutation,
+            queryClient,
+            mutationFn: async () => committed,
+          });
     try {
       expect(
         await write({ workspaceId: WORKSPACE_ID, entityId: ENTITY_ID }),
@@ -1110,6 +1160,54 @@ test("every mutation resource declaration agrees with its registered backend rou
     const observedResources = new Set<ResourceType>();
     let registeredWriteCount = 0;
     for (const write of contract.writes) {
+      if (write.type === "auth-core-endpoint") {
+        const endpoint = updateUser();
+        expect(write.endpoint).toBe("updateUser");
+        expect(write.method).toBe(endpoint.options.method);
+        expect(write.route).toBe(endpoint.path);
+        expect(contract.resources).toEqual([RESOURCE_TYPE.USER]);
+        const authSource = readSource("lib/auth.ts");
+        expect(
+          imports(authSource).get("createUserProjectionUpdateHook"),
+        ).toEqual({
+          module: "@/api/lib/auth/user-projection-updates",
+          name: "createUserProjectionUpdateHook",
+        });
+        const registrations: ts.CallExpression[] = [];
+        const visitAuth = (node: ts.Node) => {
+          if (
+            ts.isCallExpression(node) &&
+            node.expression.getText() === "betterAuth"
+          ) {
+            const options = node.arguments.at(0);
+            if (!options) {
+              throw new TypeError("Auth options are missing");
+            }
+            const hook = propertyValue(
+              propertyValue(
+                propertyValue(propertyValue(options, "databaseHooks"), "user"),
+                "update",
+              ),
+              "after",
+            );
+            if (!ts.isCallExpression(hook)) {
+              throw new TypeError(
+                "User update after hook must register its owner",
+              );
+            }
+            registrations.push(hook);
+          }
+          ts.forEachChild(node, visitAuth);
+        };
+        visitAuth(authSource);
+        expect(registrations).toHaveLength(1);
+        expect(registrations.at(0)?.expression.getText()).toBe(
+          "createUserProjectionUpdateHook",
+        );
+        observedResources.add(RESOURCE_TYPE.USER);
+        registeredWriteCount += 1;
+        continue;
+      }
       if (write.type === "auth-plugin-endpoint") {
         const endpoint = organizationEndpoints[write.endpoint];
         expect(contract.resources).toEqual([RESOURCE_TYPE.ORGANIZATION]);

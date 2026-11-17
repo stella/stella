@@ -951,8 +951,7 @@
   {
     "id": "apps/api/src/lib/flows/flow-executor.ts::cancelFlowRun",
     "writes": {
-      "update:flowRunSteps": 1,
-      "update:flowRuns": 1
+      "update:flowRunSteps": 1
     },
     "reason": "Background work state transition; the request that started the work records the audit event."
   },
@@ -1323,13 +1322,6 @@
     "reason": "Shared public corpus or index maintenance with no tenant actor."
   },
   {
-    "id": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts::cancelCorpusProjectionReservationTx",
-    "writes": {
-      "update:corpusIndexProjectionIntents": 1
-    },
-    "reason": "Shared public corpus or index maintenance with no tenant actor."
-  },
-  {
     "id": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts::classifyCorpusProjectionReservationFailureTx",
     "writes": {
       "update:corpusIndexProjectionIntents": 1,
@@ -1341,13 +1333,6 @@
     "id": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts::continueCorpusProjectionAppendPartTx",
     "writes": {
       "update:corpusIndexProjectionIntents": 1
-    },
-    "reason": "Shared public corpus or index maintenance with no tenant actor."
-  },
-  {
-    "id": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts::reserveCorpusProjectionIntentsTx",
-    "writes": {
-      "insert:corpusIndexProjectionIntents": 1
     },
     "reason": "Shared public corpus or index maintenance with no tenant actor."
   },

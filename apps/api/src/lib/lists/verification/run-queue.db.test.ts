@@ -1,10 +1,11 @@
 // The STELLA_RUN_POSTGRES_TESTS runner also executes this verification suite.
 import { panic, Result } from "better-result";
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { afterAll, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -55,6 +56,8 @@ import {
 } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
+const testState = createTestState({ file: import.meta.path, config: env });
+
 let db: TestDatabase;
 const organizationId = toSafeId<"organization">(
   `verification-queue-${Bun.randomUUIDv7()}`,
@@ -68,7 +71,7 @@ const grants = {
   [LIST_VERIFICATION_FEATURE_ID]: [{ type: "organization", organizationId }],
 } satisfies FeatureAccessGrants;
 
-beforeAll(async () => {
+testState.beforeAll(async () => {
   db = await getTestDb();
   await db.insert(organization).values({
     id: organizationId,
@@ -181,10 +184,10 @@ const revokeExecutionPrerequisite = async (kind: ExecutionRevocation) => {
           .values({ id: workspaceMemberId, workspaceId, userId });
       };
     case "grant":
-      env.API_FEATURE_ACCESS_GRANTS = {};
+      testState.setConfig("API_FEATURE_ACCESS_GRANTS", {});
       return async () => {};
     case "deployment":
-      env.FEATURE_LEGAL_LISTS = false;
+      testState.setConfig("FEATURE_LEGAL_LISTS", false);
       return async () => {};
     case "active":
       await db
@@ -209,19 +212,20 @@ const withProductionPrerequisites = async (run: () => Promise<void>) => {
   const previousActive = env.LIST_VERIFICATION_ACTIVE_RUNS_MAX;
   const previousDaily = env.LIST_VERIFICATION_DAILY_STARTS_MAX;
   const restoreMode = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
-  env.FEATURE_LEGAL_LISTS = true;
-  env.API_FEATURE_ACCESS_GRANTS = grants;
+  testState.setConfig("FEATURE_LEGAL_LISTS", true);
+  testState.setConfig("API_FEATURE_ACCESS_GRANTS", grants);
   // Shared queue fixtures intentionally retain runs; ordinary execution tests
   // use the supported upper limits, and budget tests lower them explicitly.
-  env.LIST_VERIFICATION_ACTIVE_RUNS_MAX = 100;
-  env.LIST_VERIFICATION_DAILY_STARTS_MAX = 1000;
+  testState.setConfig("LIST_VERIFICATION_ACTIVE_RUNS_MAX", 100);
+  testState.setConfig("LIST_VERIFICATION_DAILY_STARTS_MAX", 1000);
   try {
     await run();
   } finally {
-    env.API_FEATURE_ACCESS_GRANTS = previousGrants;
-    env.FEATURE_LEGAL_LISTS = previousDeployment;
-    env.LIST_VERIFICATION_ACTIVE_RUNS_MAX = previousActive;
-    env.LIST_VERIFICATION_DAILY_STARTS_MAX = previousDaily;
+    testState.setConfig("API_FEATURE_ACCESS_GRANTS", previousGrants);
+    testState.setConfig("FEATURE_LEGAL_LISTS", previousDeployment);
+    testState.setConfig("LIST_VERIFICATION_ACTIVE_RUNS_MAX", previousActive);
+    testState.setConfig("LIST_VERIFICATION_DAILY_STARTS_MAX", previousDaily);
+
     restoreMode();
   }
 };
@@ -368,7 +372,7 @@ test("access is rechecked after resolving the pinned file before reading documen
       logQuery: (query) => {
         if (query.includes('from "fields"')) {
           revokedAtFileLookup = true;
-          env.API_FEATURE_ACCESS_GRANTS = {};
+          testState.setConfig("API_FEATURE_ACCESS_GRANTS", {});
         }
       },
     });
@@ -898,12 +902,11 @@ test("worker budget refusal stops model dispatch and releases its active slot", 
       aiConfigIv: configured.iv,
     });
     const runId = await seedPinnedRun();
-    const previousActive = env.LIST_VERIFICATION_ACTIVE_RUNS_MAX;
-    const previousDaily = env.LIST_VERIFICATION_DAILY_STARTS_MAX;
+
     const modelDispatches: unknown[] = [];
     try {
-      env.LIST_VERIFICATION_ACTIVE_RUNS_MAX = 1;
-      env.LIST_VERIFICATION_DAILY_STARTS_MAX = 1;
+      testState.setConfig("LIST_VERIFICATION_ACTIVE_RUNS_MAX", 1);
+      testState.setConfig("LIST_VERIFICATION_DAILY_STARTS_MAX", 1);
       await seedRun();
       await processListVerificationRun({
         data: { runId, organizationId, workspaceId, userId },
@@ -936,8 +939,6 @@ test("worker budget refusal stops model dispatch and releases its active slot", 
       });
       expect(await readAudits(runId)).toHaveLength(1);
     } finally {
-      env.LIST_VERIFICATION_ACTIVE_RUNS_MAX = previousActive;
-      env.LIST_VERIFICATION_DAILY_STARTS_MAX = previousDaily;
       await db
         .delete(organizationSettings)
         .where(eq(organizationSettings.organizationId, organizationId));

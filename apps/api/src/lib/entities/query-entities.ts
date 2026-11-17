@@ -106,7 +106,7 @@ import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 export const ENTITY_LIST_TEXT_MAX_LENGTH = 512;
 
-export type QueryEntitiesFieldMode = "full" | "visible";
+type QueryEntitiesFieldMode = "full" | "visible";
 
 type CellMetadataFlagProvenanceResult = {
   addedBy: string;
@@ -120,7 +120,7 @@ type CellLockProvenanceResult = NonNullable<CellMetadata["lockProvenance"]> & {
   lockedByImage: string | null;
 };
 
-export type QueryEntityAssignee = {
+type QueryEntityAssignee = {
   userId: string;
   name: string | null;
   image: string | null;
@@ -152,15 +152,6 @@ type CellMetadataResult = Omit<
   lockProvenance?: CellLockProvenanceResult;
   override?: CellOverrideResult;
 };
-
-/**
- * Which OCR export formats a file field can currently serve.
- *
- * Text lands with the projection; the searchable PDF is a separate stored
- * derivative that can still be retrying or permanently failed. One value keeps
- * the two from being reported as interchangeable.
- */
-export type { OcrExportStatus };
 
 export type QueryEntityResult = AgendaItemWireFields & {
   entityId: string;
@@ -197,6 +188,10 @@ export type QueryEntityResult = AgendaItemWireFields & {
     entityId: string;
     content: FieldContent & { truncated?: true };
     aiSettlement?: AiCellSettlement | null;
+    /**
+     * Text lands with the projection; the searchable PDF is a separate stored
+     * derivative that can still be retrying or permanently failed.
+     */
     ocrExportStatus?: OcrExportStatus;
   }[];
   cellMetadata: {

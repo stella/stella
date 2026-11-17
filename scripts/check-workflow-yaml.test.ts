@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -25,6 +32,97 @@ import {
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const FIXTURES = path.join(import.meta.dirname, "__fixtures__/workflow-yaml");
+
+const runIosCertificateImport = (keychains: string[], listStatus = 0) => {
+  const workflow = readFileSync(
+    path.join(ROOT, ".github/workflows/release-mobile-ios.yml"),
+    "utf-8",
+  );
+  const script =
+    /- name: Import the distribution certificate[\s\S]*? {8}run: \|\n((?: {10}[^\n]*\n)+)/u.exec(
+      workflow,
+    )?.[1];
+  if (!script) {
+    throw new Error("iOS certificate import step is missing");
+  }
+  const root = mkdtempSync(path.join(tmpdir(), "ios-signing-"));
+  const githubEnv = path.join(root, "github-env");
+  try {
+    const result = Bun.spawnSync(
+      [
+        "/bin/bash",
+        "-c",
+        String.raw`
+security() {
+  case "$*" in
+    "list-keychains -d user")
+      printf '%s\n' "$EXISTING_KEYCHAINS"
+      return "$LIST_STATUS"
+      ;;
+    "list-keychains -d user -s "*)
+      shift 4
+      printf '%s\0' "$@"
+      ;;
+  esac
+}
+openssl() { printf '%s\n' 'test-password'; }
+` + script.replace(/^ {10}/gmu, ""),
+      ],
+      {
+        env: {
+          ...process.env,
+          RUNNER_TEMP: root,
+          GITHUB_ENV: githubEnv,
+          CERTIFICATE_BASE64:
+            Buffer.from("test-certificate").toString("base64"),
+          CERTIFICATE_PASSWORD: "test-password",
+          EXISTING_KEYCHAINS: keychains
+            .map((keychain) => `    "${keychain}"`)
+            .join("\n"),
+          LIST_STATUS: String(listStatus),
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    return {
+      exitCode: result.exitCode,
+      stderr: result.stderr.toString(),
+      keychains: result.stdout.toString().split("\0").filter(Boolean),
+      published: existsSync(githubEnv) ? readFileSync(githubEnv, "utf-8") : "",
+      signingKeychain: path.join(root, "release-signing.keychain-db"),
+    };
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+};
+
+test("iOS signing preserves each existing keychain path as one argument", () => {
+  for (const keychains of [
+    [],
+    ["fixtures/keychains/login.keychain-db"],
+    [
+      "fixtures/Build Agent/team signing.keychain-db",
+      "fixtures/keychains/System.keychain",
+    ],
+    ["fixtures/keychains/signing [one]*.keychain-db"],
+  ]) {
+    const result = runIosCertificateImport(keychains);
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toBe("");
+    expect(result.keychains).toEqual([result.signingKeychain, ...keychains]);
+    expect(result.published).toBe(
+      `MOBILE_SIGNING_KEYCHAIN=${result.signingKeychain}\n`,
+    );
+  }
+});
+
+test("iOS signing stops when the existing keychain list cannot be read", () => {
+  const result = runIosCertificateImport(["/partial/login.keychain-db"], 17);
+  expect(result.exitCode).toBe(17);
+  expect(result.keychains).toEqual([]);
+  expect(result.published).toBe("");
+});
 
 test("archive action lint rewrites are one-to-one and preserve workflow semantics", () => {
   const source = `jobs:

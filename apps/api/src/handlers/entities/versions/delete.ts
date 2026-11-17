@@ -145,8 +145,10 @@ export const deleteEntityVersionHandler = async function* ({
         });
       }
 
-      // Lock every edit owner anchored to this version first, establishing the
-      // edit-state -> entity order. Desktop sessions can be cancelled below;
+      // Lock every edit owner anchored to this version first, whatever its
+      // state, establishing the edit-state -> entity order: a session's base
+      // never changes, so the cancellations below reach only rows locked
+      // here or opened since. Desktop sessions can be cancelled below;
       // durable collaboration rooms must instead block the tombstone so their
       // shared working state never loses its base.
       await tx
@@ -156,7 +158,6 @@ export const deleteEntityVersionHandler = async function* ({
           and(
             eq(desktopEditSessions.baseVersionId, params.versionId),
             eq(desktopEditSessions.workspaceId, workspaceId),
-            eq(desktopEditSessions.status, "open"),
           ),
         )
         .for("update");
@@ -167,7 +168,6 @@ export const deleteEntityVersionHandler = async function* ({
           and(
             eq(pdfSigningSessions.baseVersionId, params.versionId),
             eq(pdfSigningSessions.workspaceId, workspaceId),
-            eq(pdfSigningSessions.status, "open"),
           ),
         )
         .for("update");

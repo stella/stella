@@ -52,6 +52,10 @@ export const CORPUS_ENGINE_TEST_SUITES = [
     metastore: CORPUS_ENGINE_METASTORE.postgres,
   },
   {
+    file: "src/lib/legal-search/corpus-index-projection-offline-build.contract.test.ts",
+    metastore: CORPUS_ENGINE_METASTORE.postgres,
+  },
+  {
     file: "src/handlers/legislation/search-relaxed.contract.test.ts",
     metastore: CORPUS_ENGINE_METASTORE.file,
   },
@@ -65,6 +69,10 @@ export const CORPUS_ENGINE_TEST_SUITES = [
   },
   {
     file: "src/lib/legal-search/corpus-index-query-features.contract.test.ts",
+    metastore: CORPUS_ENGINE_METASTORE.file,
+  },
+  {
+    file: "src/lib/legal-search/corpus-index-incarnation.contract.test.ts",
     metastore: CORPUS_ENGINE_METASTORE.file,
   },
 ] as const satisfies readonly {

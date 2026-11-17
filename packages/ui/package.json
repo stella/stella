@@ -83,6 +83,7 @@
     "./form": "./src/components/form.tsx",
     "./frame": "./src/components/frame.tsx",
     "./file-size": "./src/lib/file-size.ts",
+    "./highlighted-textarea": "./src/components/highlighted-textarea.tsx",
     "./hex-color-picker": "./src/components/hex-color-picker.tsx",
     "./icons": "./src/icons.ts",
     "./identity-text": "./src/components/identity-text.tsx",
@@ -164,6 +165,7 @@
       "default": "./src/components/loader.tsx"
     },
     "./middle-truncate": "./src/components/middle-truncate.tsx",
+    "./outcome-screen": "./src/components/outcome-screen.tsx",
     "./skeleton": "./src/components/skeleton.tsx",
     "./status-mark": "./src/components/status-mark.tsx",
     "./swap-text": "./src/components/swap-text.tsx",

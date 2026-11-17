@@ -9,16 +9,23 @@ import { compareCodeUnit } from "@stll/collation";
  * They run after every ordinary suite, each in its own test process, so no CRUD
  * transaction can retain a conflicting table lock while their DDL runs. Each
  * starts on a fresh clone of the template, so rows the earlier suites left in
- * shared tables cannot change what it observes.
+ * shared tables cannot change what it observes. The suites that install the
+ * corpus projection seeding guard on the canonical tables
+ * (`guardPostgresSuiteSeeding`) are among them.
  */
 export const EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS: ReadonlySet<string> =
   new Set([
+    "src/db/case-law-polarity-kind.postgres.test.ts",
     "src/db/contacts-rls-maintenance.postgres.test.ts",
+    "src/db/data-export-owner-policy.postgres.test.ts",
     "src/db/entity-feature-gate-maintenance.postgres.test.ts",
     "src/db/entity-feature-search-budget.postgres.test.ts",
+    "src/db/online-repairs-beside-writer.postgres.test.ts",
     "src/handlers/case-law/decisions/coverage-counts.postgres.test.ts",
     "src/handlers/case-law/ingestion/background-replay-store.postgres.test.ts",
+    "src/handlers/case-law/ingestion/background-replay.postgres.test.ts",
     "src/handlers/case-law/ingestion/reconciliation-listing-revisions.postgres.test.ts",
+    "src/handlers/case-law/withdraw-document.postgres.test.ts",
     "src/handlers/entities/versions/list.postgres.test.ts",
     "src/lib/account-export/store.postgres.test.ts",
     "src/lib/business-registries/desktop/proof.postgres.test.ts",
@@ -30,7 +37,36 @@ export const EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS: ReadonlySet<string> =
     "src/lib/lists/sanctions/monitoring-migrations.postgres.test.ts",
     "src/lib/lists/sanctions/monitoring-roles.postgres.test.ts",
     "src/lib/scheduler/tasks/registration-retention.postgres.test.ts",
+    "src/scripts/eu-completion-tick.postgres.test.ts",
+    "src/tests/query-perf/scheduled-run.postgres.test.ts",
   ]);
+
+/** Suites that clone the worker runner’s idle, fully migrated source database. */
+export const TEMPLATE_DATABASE_TEST_PATHS: ReadonlySet<string> = new Set([
+  "src/db/online-repairs-beside-writer.postgres.test.ts",
+]);
+
+export const assertTemplateDatabaseTestsAreExclusive = (
+  templatePaths = TEMPLATE_DATABASE_TEST_PATHS,
+  exclusivePaths = EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS,
+): void => {
+  const sharedPaths = [...templatePaths].filter(
+    (testPath) => !exclusivePaths.has(testPath),
+  );
+  if (sharedPaths.length === 0) {
+    return;
+  }
+  panic(
+    `PostgreSQL tests that clone the migrated template require an exclusive test process:\n${sharedPaths
+      .map((testPath) => `  ${testPath}`)
+      .join("\n")}\nAdd each path to EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS.`,
+  );
+};
+
+export const needsTemplateDatabase = (
+  testPaths: readonly string[],
+  templatePaths = TEMPLATE_DATABASE_TEST_PATHS,
+): boolean => testPaths.some((testPath) => templatePaths.has(testPath));
 
 export const isolateSharedTableDdlTests = (
   testPaths: readonly string[],

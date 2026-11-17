@@ -4,6 +4,7 @@ import { Result } from "better-result";
 import {
   type RetainableToolResult,
   supersededToolResults,
+  type SupersededToolResultsOptions,
 } from "@stll/api-contract/chat-tool-result-retention";
 
 import type { ChatMessage, ChatPart } from "@/api/handlers/chat/types";
@@ -84,6 +85,7 @@ const readCallResult = (
  */
 export const supersededCallOutputs = (
   parts: readonly ChatPart[],
+  options?: SupersededToolResultsOptions,
 ): ReadonlyMap<string, unknown> => {
   const results = new Map(
     parts.flatMap((part) =>
@@ -92,8 +94,10 @@ export const supersededCallOutputs = (
         : [],
     ),
   );
-  const superseded = supersededToolResults(parts, (part) =>
-    readCallResult(part, results),
+  const superseded = supersededToolResults(
+    parts,
+    (part) => readCallResult(part, results),
+    options,
   );
   return new Map(
     [...superseded].flatMap(([part, projection]) =>
@@ -147,6 +151,36 @@ export const retainToolResultsInParts = <T extends ChatPart>(
   return parts.map((part) => {
     const projected = projectSupersededPart(part, projections);
     return projected === part ? part : onProjected(part, projected);
+  });
+};
+
+/**
+ * One sub-agent run's messages, each a list of parts, with every superseded
+ * result projected across the whole run: a page one child message read is
+ * superseded by a page a later one read. With `keepNewest: false` the newest
+ * result is projected as well. Returns the same lists when nothing changed;
+ * `onProjected` lets a caller carry a stored part's provenance.
+ */
+export const retainToolResultsInMessages = (
+  messages: readonly (readonly ChatPart[])[],
+  options: SupersededToolResultsOptions,
+  onProjected: (source: ChatPart, projected: ChatPart) => ChatPart = (
+    _source,
+    projected,
+  ) => projected,
+): readonly (readonly ChatPart[])[] => {
+  const projections = supersededCallOutputs(messages.flat(), options);
+  if (projections.size === 0) {
+    return messages;
+  }
+  return messages.map((parts) => {
+    const projected = parts.map((part) => {
+      const replacement = projectSupersededPart(part, projections);
+      return replacement === part ? part : onProjected(part, replacement);
+    });
+    return projected.every((part, index) => part === parts.at(index))
+      ? parts
+      : projected;
   });
 };
 

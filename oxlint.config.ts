@@ -41,6 +41,7 @@ import {
   PRODUCT_FRONTEND_FILES,
   REACT_NATIVE_CONSUMER_FILES,
 } from "./scripts/product-frontend-files.ts";
+import { PROVIDER_CLIENT_MODULES } from "./scripts/provider-client-modules.ts";
 import {
   DECLARATION_FILE_GLOB,
   RESULT_CONVENTION_ENABLED_GLOBS,
@@ -156,20 +157,18 @@ const colourExemptions = [
       // An awareness placeholder the collaboration server replaces; never drawn.
       "apps/web/src/components/docx/use-folio-collaboration-room.ts",
       // A third-party page's computed colours, compared to find hidden text.
-      "apps/extension/src/lib/page-script.ts",
+      "packages/browser-page/src/page-script.ts",
     ],
   },
   {
     reason:
       "Surfaces no stylesheet reaches name their palette once: mail clients " +
       "drop CSS custom properties, the email preview is a standalone " +
-      "document, the OG card is rasterised SVG, and the CLI's sign-in page " +
-      "is served by the CLI itself.",
+      "document, and the OG card is rasterised SVG.",
     files: [
       "packages/transactional/emails/_shared.ts",
       "apps/api/src/lib/files/email-preview-palette.ts",
       "apps/landing/src/lib/og-card.ts",
-      "packages/cli/src/auth/callback-page-theme.ts",
     ],
   },
 ] as const satisfies readonly ColourExemption[];
@@ -606,6 +605,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-adhoc-loader.fixture.tsx", [
     "no-adhoc-loader/no-adhoc-loader",
   ]),
+  fixtureRuleOverride("no-adhoc-outcome-screen.fixture.tsx", [
+    "no-adhoc-outcome-screen/no-adhoc-outcome-screen",
+  ]),
   fixtureRuleOverride("no-dialog-trigger-menu-item.fixture.tsx", [
     "no-dialog-trigger-menu-item/no-dialog-trigger-menu-item",
   ]),
@@ -802,6 +804,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("require-billing-cap-crossings.fixture.ts", [
     "require-billing-cap-crossings/require-billing-cap-crossings",
+  ]),
+  fixtureRuleOverride("require-locked-rows-write.fixture.ts", [
+    "require-locked-rows-write/require-locked-rows-write",
   ]),
   fixtureRuleOverride("require-running-entry-guard.fixture.ts", [
     "require-running-entry-guard/require-running-entry-guard",
@@ -1202,30 +1207,16 @@ const apiDetachedFactoryImport = {
 
 // The model factory builds every provider text adapter and holds its stream
 // to the provider stream contract (one terminal event, last; a cut-off stream
-// is a run error). An adapter built anywhere else skips that contract, so the
-// runtime entry points of the adapter packages, and of the adapter subclass
-// the factory builds, belong to the factory; type-only imports stay allowed.
-export const API_PROVIDER_ADAPTER_MODULES = [
-  "@/api/lib/stella-openrouter-text-adapter",
-  "@tanstack/ai-anthropic",
-  "@tanstack/ai-anthropic/byok",
-  "@tanstack/ai-anthropic/vertex",
-  "@tanstack/ai-bedrock",
-  "@tanstack/ai-bedrock/byok",
-  "@tanstack/ai-gemini",
-  "@tanstack/ai-gemini/byok",
-  "@tanstack/ai-gemini/experimental",
-  "@tanstack/ai-mistral",
-  "@tanstack/ai-mistral/adapters/text",
-  "@tanstack/ai-mistral/byok",
-  "@tanstack/ai-mistral/vertex",
-  "@tanstack/ai-openai",
-  "@tanstack/ai-openai/byok",
-  "@tanstack/ai-openai/compatible",
-  "@tanstack/ai-openrouter",
-  "@tanstack/ai-openrouter/byok",
-  "@tanstack/openai-base",
-] as const;
+// is a run error). It also builds every provider client with the client's own
+// retries off, so a request is retried only by the generation layer
+// (`provider-retry-policy.ts`, held by `tanstack-ai-models.retries.test.ts`).
+// An adapter or client built anywhere else skips both, so the runtime entry
+// points of the adapter packages, of the provider SDKs (with the families the
+// API does not use yet), and of the adapter subclass the factory builds,
+// belong to the factory; type-only imports stay allowed. This rule reads
+// import declarations only; `provider-client-construction` in
+// `scripts/ownership/` holds the dynamic imports.
+export const API_PROVIDER_ADAPTER_MODULES = PROVIDER_CLIENT_MODULES;
 
 const apiProviderAdapterImports = API_PROVIDER_ADAPTER_MODULES.map((name) => ({
   name,
@@ -1814,6 +1805,7 @@ const config = defineConfig({
     "no-direct-property-table-write/no-direct-property-table-write": "error",
     "no-direct-entity-insert/no-direct-entity-insert": "error",
     "no-direct-field-write/no-direct-field-write": "error",
+    "no-independent-fallback-state/no-independent-fallback-state": "error",
     "no-direct-folio-snapshot-retirement/no-direct-folio-snapshot-retirement":
       "error",
     "no-direct-legislation-revision-write/no-direct-legislation-revision-write":
@@ -2071,6 +2063,9 @@ const config = defineConfig({
     "apps/web/src/generated/api-routes.gen.ts",
     // Bundled API-owned schemas: validate their source and regenerate this artifact.
     "packages/mcp-apps/src/shared/generated/contracts.js",
+    // The outcome page rendered from `@stll/ui/outcome-screen`; the
+    // generated-files check rebuilds it from the component and the theme.
+    "packages/cli/src/auth/outcome-page.gen.ts",
     "**/*.config.js",
     "**/*.config.cjs",
     // Module-augmentation files must use `interface` for declaration
@@ -2206,6 +2201,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-cn-for-classname-composition.ts",
     "./.oxlint-plugins/no-ref-mirror.ts",
     "./.oxlint-plugins/no-adhoc-loader.ts",
+    "./.oxlint-plugins/no-adhoc-outcome-screen.ts",
     "./.oxlint-plugins/no-shared-suspense-query.ts",
     "./.oxlint-plugins/no-raw-query-error-capture.ts",
     "./.oxlint-plugins/no-bare-chrome-query.ts",
@@ -2242,6 +2238,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-query-limit.ts",
     "./.oxlint-plugins/require-search-scope.ts",
     "./.oxlint-plugins/no-direct-ingestion-checkpoint-write.ts",
+    "./.oxlint-plugins/citation-evidence-text-fence.ts",
     "./.oxlint-plugins/no-source-raw-projection.ts",
     "./.oxlint-plugins/no-unguarded-case-law-replay-write.ts",
     "./.oxlint-plugins/no-bare-case-law-source-ingestion-lease.ts",
@@ -2289,6 +2286,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-running-entry-guard.ts",
     "./.oxlint-plugins/require-worker-database-login-posture.ts",
     "./.oxlint-plugins/require-billing-cap-crossings.ts",
+    "./.oxlint-plugins/require-locked-rows-write.ts",
     "./.oxlint-plugins/require-transaction-abort.ts",
     "./.oxlint-plugins/no-direct-audit-log-insert.ts",
     "./.oxlint-plugins/no-direct-clause-variant-insert.ts",
@@ -2299,6 +2297,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-direct-field-write.ts",
     "./.oxlint-plugins/no-chat-table-write.ts",
     "./.oxlint-plugins/fill-diagnostics.ts",
+    "./.oxlint-plugins/no-independent-fallback-state.ts",
     "./.oxlint-plugins/no-direct-folio-snapshot-retirement.ts",
     "./.oxlint-plugins/no-direct-legislation-revision-write.ts",
     "./.oxlint-plugins/no-direct-decision-identifier-column-write.ts",
@@ -2522,6 +2521,15 @@ const config = defineConfig({
       ],
       rules: {
         "confine-online-ddl/confine-online-ddl": "error",
+      },
+    },
+    {
+      files: [
+        "apps/api/**/*.ts",
+        ".oxlint-plugins/__fixtures__/citation-evidence-text-fence.fixture.ts",
+      ],
+      rules: {
+        "citation-evidence-text-fence/citation-evidence-text-fence": "error",
       },
     },
     {
@@ -3165,6 +3173,20 @@ const config = defineConfig({
       ],
       rules: {
         "no-adhoc-loader/no-adhoc-loader": "error",
+      },
+    },
+    {
+      // Every place a flow's end or an HTML page could be built in TypeScript:
+      // the web and desktop apps, the design system, the CLI and the API.
+      files: [
+        "apps/web/src/**/*.{ts,tsx}",
+        "apps/desktop/src/**/*.{ts,tsx}",
+        "packages/ui/src/**/*.{ts,tsx}",
+        "packages/cli/src/**/*.ts",
+        "apps/api/src/**/*.ts",
+      ],
+      rules: {
+        "no-adhoc-outcome-screen/no-adhoc-outcome-screen": "error",
       },
     },
     {
@@ -6045,6 +6067,7 @@ const config = defineConfig({
       files: [
         "apps/extension/src/lib/desktop-link.ts",
         "packages/agent-engine/src/sidecar/browser/**/*.ts",
+        "packages/browser-page/src/**/*.ts",
       ],
       excludeFiles: ["**/*.test.ts"],
       rules: {
@@ -6192,6 +6215,15 @@ const config = defineConfig({
       excludeFiles: ["**/*.test.ts", "apps/api/src/tests/**/*.ts"],
       rules: {
         "require-billing-cap-crossings/require-billing-cap-crossings": "error",
+      },
+    },
+    {
+      // A row lock decides on the rows it returned; a later write to the same
+      // table must name those rows, not repeat the lock's filter.
+      files: ["apps/api/src/**/*.ts", "apps/api/scripts/**/*.ts"],
+      excludeFiles: ["**/*.test.ts", "apps/api/src/tests/**/*.ts"],
+      rules: {
+        "require-locked-rows-write/require-locked-rows-write": "error",
       },
     },
     {
@@ -6549,6 +6581,9 @@ const config = defineConfig({
     {
       files: ["apps/api/src/**"],
       rules: {
+        // `require()` would reach a restricted module past
+        // `no-restricted-imports`, which reads only import declarations.
+        "typescript/no-require-imports": "error",
         "no-restricted-imports": [
           "error",
           {
@@ -6896,6 +6931,10 @@ const config = defineConfig({
         // tool call as absent.
         "apps/api/evals/**/*.ts",
         "apps/api/scripts/**/*.ts",
+        // The runner daemons import the api's database schema and write the
+        // same canonical rows, so an owned write there must go through the
+        // owner too.
+        "apps/legal-atlas-runner/src/**/*.ts",
         "apps/web/src/**/*.{ts,tsx}",
         // An owner that lives in a package (`@stll/clipboard`) confines
         // nothing if the rule stops at the apps: a second package could reach
@@ -7600,15 +7639,13 @@ const config = defineConfig({
         "security-guards/no-raw-filename-write": "off",
         "security-guards/no-unsanitized-href": "off",
         "vitest/no-focused-tests": "error",
-        // bun:test globals (describe/test/expect/it/…) can resolve as `error`
-        // when test files are excluded from a package's main tsconfig.
-        // Suppressing unsafe rules for test files avoids false positives that
-        // would require modifying every test or adding a separate tsconfig.
-        "typescript/no-unsafe-call": "off",
-        "typescript/no-unsafe-member-access": "off",
+        // Asymmetric matchers such as `expect.stringContaining()` and
+        // `expect.any()` are typed `any`, so passing them to `toEqual` or
+        // storing them in an expected-value object is allowed. Calling,
+        // member access and returning `any` are still reported, matching
+        // `unsafeAnyOverrides` in @stll/oxlint-config 4.0.0.
         "typescript/no-unsafe-assignment": "off",
         "typescript/no-unsafe-argument": "off",
-        "typescript/no-unsafe-return": "off",
         "typescript/strict-boolean-expressions": "off",
       },
     },

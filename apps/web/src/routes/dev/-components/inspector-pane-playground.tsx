@@ -125,6 +125,13 @@ const BENCH_DOCUMENT_AST = {
     statutes: [],
   },
   blocks: [
+    {
+      ...paragraph(
+        "apparatus",
+        "Publisher information keeps its own paragraph permalink.",
+      ),
+      role: "apparatus",
+    },
     paragraph(
       "b1",
       "Ústavní soud rozhodl o návrhu na zrušení ustanovení zákona; odůvodnění se opírá o dosavadní judikaturu a o ustálený výklad dotčených ustanovení.",

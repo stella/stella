@@ -161,13 +161,13 @@ export const createClauseHandler = async function* ({
   // Best-effort: if the search vector update fails the clause
   // is still persisted; it will be unsearchable until the next
   // update re-indexes it.
-  const searchVectorResult = await updateSearchVector(
+  const searchVectorResult = await updateSearchVector({
     safeDb,
     clauseId,
-    body.title,
-    body.description,
-    body.body,
-  );
+    title: body.title,
+    description: body.description,
+    body: body.body,
+  });
   if (Result.isError(searchVectorResult)) {
     captureError(
       searchVectorResult.error,

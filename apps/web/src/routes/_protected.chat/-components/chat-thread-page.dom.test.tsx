@@ -83,7 +83,7 @@ type ThreadResponse =
 const savedThread = {
   activeSkill: builder,
   activeTurnId: null,
-  newestLocalTurn: null,
+  activeTurnSteering: "not_steerable",
   attachedFiles: { fileCount: 0, files: [] },
   context: {
     estimatedTokens: 0,
@@ -307,6 +307,13 @@ const serveSavedBuilder = ({
       }
       if (pathname.startsWith("/api/auth/")) {
         return Response.json(null);
+      }
+      // Nothing is queued in the chat.
+      if (
+        pathname.endsWith(`/chat/threads/${threadRef.threadId}/queue`) &&
+        request.method === "GET"
+      ) {
+        return Response.json({ hold: null, items: [] });
       }
       unexpected.push(pathname);
       return Response.json(

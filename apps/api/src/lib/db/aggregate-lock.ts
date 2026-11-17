@@ -44,8 +44,10 @@ import {
   caseLawDecisionIdentifiers,
   caseLawReplayBatches,
   caseLawSources,
+  chatThreads,
   contacts,
   corpusIndexGenerations,
+  corpusIndexGenerationSeedingPasses,
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
   documentReviewRuns,
@@ -780,7 +782,8 @@ type AuxiliaryRowIdentityOptions = Extract<
       | "correspondence"
       | "desktopMembership"
       | "memory"
-      | "searchProjectionRepair";
+      | "searchProjectionRepair"
+      | "savedSearch";
   }
 >;
 
@@ -788,6 +791,14 @@ const auxiliaryRowResource = (
   options: AuxiliaryRowIdentityOptions,
 ): RowResource => {
   switch (options.aggregate) {
+    case "savedSearch":
+      return {
+        table: "saved_searches",
+        columns: ["id"],
+        values: [options.id.id],
+        scopeColumns: ["organization_id", "user_id"],
+        scopeValues: [options.id.organizationId, options.id.userId],
+      };
     case "correspondence":
       return byIdWithin(
         "correspondence",
@@ -868,6 +879,7 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
     case "desktopMembership":
     case "memory":
     case "searchProjectionRepair":
+    case "savedSearch":
       return auxiliaryRowResource(options);
     case "searchHistory":
       return {
@@ -2656,6 +2668,37 @@ export const lockCaseLawDecisionRows = async ({
   `);
 };
 
+type CaseLawDecisionSnapshotOptions = {
+  tx: Pick<Transaction, "select">;
+  /** The base table, passed in so this owner names no case-law relation itself. */
+  decisions: typeof caseLawDecisions;
+  decisionId: SafeId<"caseLawDecision">;
+  /** The storage slice supplies its document-presence policy without a dependency cycle. */
+  holdsDocument: SQL<boolean>;
+};
+
+/** Lock and read a decision's pre-refresh identity and payload state together. */
+export const lockCaseLawDecisionSnapshot = async ({
+  tx,
+  decisions,
+  decisionId,
+  holdsDocument,
+}: CaseLawDecisionSnapshotOptions) =>
+  await tx
+    .select({
+      citationKey: decisions.citationKey,
+      country: decisions.country,
+      court: decisions.court,
+      docketFamilyKey: decisions.docketFamilyKey,
+      language: decisions.language,
+      decisionDate: decisions.decisionDate,
+      holdsDocument,
+      metadata: decisions.metadata,
+    })
+    .from(decisions)
+    .where(eq(decisions.id, decisionId))
+    .for("update")
+    .limit(1);
 /** Hold every summary endpoint in one ordered batch before checking revisions. */
 export const lockLegislationVersionRows = async (
   tx: Transaction,
@@ -3183,6 +3226,26 @@ export const lockMatterCreationMembers = async ({
     .limit(userIds.length)
     .for("update");
 
+/**
+ * Lock the chat thread every write of its turns and its queue serializes on:
+ * acceptance, settlement, a stop and every queue change. False when the
+ * caller cannot see the thread.
+ */
+export const lockChatThreadForTurnOnTx = async ({
+  threadId,
+  tx,
+}: {
+  threadId: SafeId<"chatThread">;
+  tx: Transaction;
+}): Promise<boolean> =>
+  (
+    await tx
+      .select({ id: chatThreads.id })
+      .from(chatThreads)
+      .where(eq(chatThreads.id, threadId))
+      .for("update")
+  ).length === 1;
+
 /** Lock the member within the caller's lifecycle or access-hold sequence. */
 export const lockMemberAccessRow = async ({
   tx,
@@ -3192,7 +3255,7 @@ export const lockMemberAccessRow = async ({
 }: MemberAccessRowLockOptions) =>
   (
     await tx
-      .select({ role: member.role })
+      .select({ role: member.role, billingAccess: member.billingAccess })
       .from(member)
       .where(
         and(
@@ -3397,6 +3460,33 @@ export const lockTimerMatterAccessRows = async ({
   }
 };
 
+type LockCaseLawSourceIngestionLeaseOptions = {
+  tx: Transaction;
+  sourceId: SafeId<"caseLawSource">;
+  leaseToken: SafeId<"caseLawSourceIngestionLease">;
+};
+
+/** Fence source-lease takeover until a corpus bookkeeping transaction commits. */
+export const lockCaseLawSourceIngestionLease = async ({
+  tx,
+  sourceId,
+  leaseToken,
+}: LockCaseLawSourceIngestionLeaseOptions) => {
+  const owned = await tx
+    .select({ id: caseLawSources.id })
+    .from(caseLawSources)
+    .where(
+      and(
+        eq(caseLawSources.id, sourceId),
+        eq(caseLawSources.ingestionLeaseToken, leaseToken),
+        sql`${caseLawSources.ingestionLeaseExpiresAt} > now()`,
+      ),
+    )
+    .for("update")
+    .limit(1);
+  return owned.length > 0;
+};
+
 /** Fence snapshot writers before removal discards their inputs. */
 export const lockCaseLawRemovalSnapshots = async (
   tx: ExecuteTransaction,
@@ -3460,6 +3550,49 @@ export const lockCaseLawRemovalSource = async ({
   );
 };
 
+/** Lock the actor and target together so simultaneous membership changes use one row order. */
+export const lockMemberBillingAccessRows = async ({
+  tx,
+  organizationId,
+  actorUserId,
+  targetMemberId,
+}: {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  actorUserId: SafeId<"user">;
+  targetMemberId: string;
+}) => {
+  const result = await readBounded(
+    {
+      limit: (cap) =>
+        tx
+          .select({
+            id: member.id,
+            userId: member.userId,
+            role: member.role,
+            billingAccess: member.billingAccess,
+          })
+          .from(member)
+          .where(
+            and(
+              eq(member.organizationId, organizationId),
+              or(eq(member.userId, actorUserId), eq(member.id, targetMemberId)),
+            ),
+          )
+          .orderBy(member.id)
+          .limit(cap)
+          .for("update"),
+    },
+    2,
+  );
+  if (result.type === "overflow") {
+    return panic(
+      "A membership access change can lock at most its actor and target",
+    );
+  }
+  return result.rows;
+};
+
 /** Lock the accepted source predicate before distinguishing a replay no-op from a lost fence. */
 export const lockCaseLawReplaySource = async ({
   tx,
@@ -3473,6 +3606,32 @@ export const lockCaseLawReplaySource = async ({
     .from(caseLawSources)
     .where(where)
     .for("update");
+
+/**
+ * Serialize fallback publication enrichment through the decision row write,
+ * including absent rows: several identities of one source in one statement,
+ * in the order given. Callers pass them sorted, so overlapping sets never
+ * wait on each other in inverse order.
+ */
+export const lockCaseLawFallbackIdentities = async ({
+  tx,
+  sourceId,
+  identityKeys,
+}: {
+  tx: ExecuteTransaction;
+  sourceId: SafeId<"caseLawSource">;
+  identityKeys: readonly string[];
+}): Promise<void> => {
+  if (identityKeys.length === 0) {
+    return;
+  }
+  await tx.execute(
+    sql`SELECT pg_advisory_xact_lock(hashtext('case_law_fallback_identity'), hashtext(keys.key)) FROM unnest(ARRAY[${sql.join(
+      identityKeys.map((identityKey) => sql`${`${sourceId}:${identityKey}`}`),
+      sql`, `,
+    )}]::text[]) WITH ORDINALITY AS keys(key, position) ORDER BY keys.position`,
+  );
+};
 
 type LockBillingCodeOptions = {
   id: SafeId<"billingCode">;
@@ -3576,44 +3735,147 @@ export const lockOwnedContactsForBulkDelete = async ({
 /**
  * The time entries a batch action locks before it checks and updates them;
  * the caller holds the matter/timer guards. The action then updates these
- * rows by id, so it never changes a row it did not lock and check.
+ * rows through `where()`, so it never changes a row it did not lock and check.
  */
 export const lockBatchTimeEntryCandidates = async (
   tx: Transaction,
   condition: SQL | undefined,
   limit: number,
 ) =>
-  await tx
-    .select({
-      id: timeEntries.id,
-      dateWorked: timeEntries.dateWorked,
-      narrative: timeEntries.narrative,
-      timezoneId: timeEntries.timezoneId,
-    })
-    .from(timeEntries)
-    .where(condition)
-    .limit(limit)
-    .for("update");
+  await lockRowsForWrite({
+    table: timeEntries,
+    query: tx
+      .select({
+        id: timeEntries.id,
+        dateWorked: timeEntries.dateWorked,
+        narrative: timeEntries.narrative,
+        timezoneId: timeEntries.timezoneId,
+      })
+      .from(timeEntries)
+      .where(condition)
+      .limit(limit),
+  });
 
 /** Caller holds the matter/timer guards before changing nonbillable work. */
 export const lockUnbillableRateCandidates = async (
   tx: Transaction,
   condition: SQL | undefined,
 ) =>
-  await tx
-    .select({
-      currency: timeEntries.currency,
-      dateWorked: timeEntries.dateWorked,
-      activityCode: timeEntries.activityCode,
-      narrative: timeEntries.narrative,
-      timezoneId: timeEntries.timezoneId,
-      id: timeEntries.id,
-      rateAtEntry: timeEntries.rateAtEntry,
-      userId: timeEntries.userId,
-    })
-    .from(timeEntries)
-    .where(condition)
-    .for("update");
+  await lockRowsForWrite({
+    table: timeEntries,
+    query: tx
+      .select({
+        currency: timeEntries.currency,
+        dateWorked: timeEntries.dateWorked,
+        activityCode: timeEntries.activityCode,
+        narrative: timeEntries.narrative,
+        timezoneId: timeEntries.timezoneId,
+        id: timeEntries.id,
+        rateAtEntry: timeEntries.rateAtEntry,
+        userId: timeEntries.userId,
+      })
+      .from(timeEntries)
+      .where(condition),
+  });
+
+/** A table whose rows a lock can name by primary key. */
+type IdentifiedTable = PgTable & { id: PgColumn };
+
+/** The SELECT a caller builds for `lockRowsForWrite`, before its lock clause. */
+type LockableSelect<Row> = {
+  for: (strength: LockStrength, config?: LockConfig) => PromiseLike<Row[]>;
+  toSQL: () => { sql: string };
+  as: (alias: string) => Subquery;
+};
+
+type LockRowsForWriteOptions<Table extends IdentifiedTable, Row> = {
+  /** The table the rows are read from and later written. */
+  table: Table;
+  /** A SELECT from `table` that projects `id`, without a lock clause. */
+  query: LockableSelect<Row>;
+  /** `no key update` when the write leaves keys alone and must not block foreign-key checks. */
+  mode?: "update" | "no key update";
+};
+
+/**
+ * Lock the rows a decision reads and write exactly those rows.
+ *
+ * A `SELECT ... FOR UPDATE` followed by an UPDATE or DELETE that repeats the
+ * SELECT's WHERE also writes every row that started to match after the lock
+ * was taken: a concurrent transaction can commit a change that moves a row into
+ * the filter, and the second statement reads it although the decision never
+ * saw it. `where` is the WHERE an UPDATE or DELETE of the locked table uses
+ * instead: the ids the lock returned, with an optional `narrow` predicate
+ * ANDed on top that can only shrink that set.
+ *
+ *   const locked = await lockRowsForWrite({ table: t, query });
+ *   decide(locked.rows);
+ *   await tx.update(t).set(values).where(locked.where());
+ *
+ * The caller spells the statement in its own function so the lifecycle-write
+ * census, the audit, running-entry and cap-crossing rules, and the WHERE rules
+ * keep seeing it there. `require-locked-rows-write` reports a later write to
+ * `t` in that function that repeats the query's filter without naming the
+ * locked rows (`locked.where(...)` or a pin on `locked.ids`).
+ *
+ * Only the target table's rows are locked (`FOR UPDATE OF table`), so the
+ * query may join other tables for the decision without locking them; its
+ * `id` must still be the locked table's own. Each call outside this file is
+ * an acquisition of its own (`locked-rows-write`) in
+ * `scripts/aggregate-lock-baseline.json`, reviewed like an inline lock.
+ *
+ * Race test: `withLockThenWriteRace` in
+ * `apps/api/src/tests/helpers/lock-then-write-race.ts` runs tx A and tx B on
+ * two real connections in the order that exposes this: A locks and calls
+ * `pause()`, B commits a change that makes another row match A's predicate,
+ * then A writes. `pauseBeforeWrite` stops an unmodified handler right before
+ * its first write, so the race drives the real code path.
+ * `apps/api/src/handlers/time-entries/batch/update.postgres.test.ts` is the
+ * worked example; add one beside every lock-then-write fix.
+ */
+export const lockRowsForWrite = async <
+  Table extends IdentifiedTable,
+  Row extends { id: Table["id"]["_"]["data"] },
+>({
+  table,
+  query,
+  mode = "update",
+}: LockRowsForWriteOptions<Table, Row>) => {
+  const tableName = getTableName(table);
+  if (aggregateSelectTarget(query.toSQL().sql).table !== tableName) {
+    panic("Locked rows must be read from the table they are written to");
+  }
+  // `where()` names rows by `table.id`, so the projected `id` must be that
+  // column, not a joined table's id under the same name. The builder's own
+  // selection keeps each column's table; a subquery view of it would rename
+  // every column's table to the subquery's alias.
+  const builder: unknown = Reflect.get(query, "_");
+  const selection: unknown = isRecord(builder)
+    ? builder["selectedFields"]
+    : undefined;
+  const projectedId: unknown = isRecord(selection)
+    ? selection["id"]
+    : undefined;
+  if (
+    !is(projectedId, PgColumn) ||
+    projectedId.name !== table.id.name ||
+    getTableName(getColumnTable(projectedId)) !== tableName
+  ) {
+    panic("Locked rows must project the locked table's own id column");
+  }
+  const rows: readonly Row[] = await query.for(mode, { of: table });
+  const ids: readonly Row["id"][] = rows.map(({ id }) => id);
+  return {
+    /** The rows the lock returned. */
+    rows,
+    /** The primary keys of `rows`, the only rows `where` matches. */
+    ids,
+    /** The locked rows, and only those also matching `narrow` when given. */
+    where: (narrow?: SQL): SQL =>
+      and(inArray(table.id, ids), narrow) ??
+      panic("Locked rows predicate is empty"),
+  };
+};
 
 /** Legal-hold rows are locked after their organization placement fence. */
 export const readLockedLegalHolds = async ({
@@ -3841,6 +4103,26 @@ type CorpusProjectionReservationQueueOptions = {
   scopedIndexId: string | null;
   /** Physical indexes no append may reach yet (`unattestedCorpusIndexIdsTx`). */
   excludedIndexIds: readonly string[];
+  /**
+   * Start the walk after this queue key, exclusively. The key is the queue's
+   * own order, `coalesce(retry_not_before, updated_at)` as PostgreSQL text
+   * (exact to the microsecond) and the entity id, so a walker resumes where
+   * it stopped instead of reading its own unproven backlog again.
+   */
+  after?: CorpusProjectionReservationQueueKey | null;
+  /**
+   * Only entities that may travel with others. One a failed shared append
+   * isolated keeps to single requests, which only the per-row path sends.
+   */
+  batchableOnly?: boolean;
+  /** Entities the caller will not take this time; they keep their place. */
+  skipEntityIds?: readonly string[];
+};
+
+/** One position in the reservation queue's order. */
+export type CorpusProjectionReservationQueueKey = {
+  runnableAt: string;
+  entityId: string;
 };
 
 /**
@@ -3857,6 +4139,9 @@ export const corpusProjectionReservationQueue = (
     scopedEntityIds,
     scopedIndexId,
     excludedIndexIds,
+    after = null,
+    batchableOnly = false,
+    skipEntityIds = [],
   }: CorpusProjectionReservationQueueOptions,
 ) => {
   const runnableAt = sql<Date>`coalesce(
@@ -3865,6 +4150,7 @@ export const corpusProjectionReservationQueue = (
   )`;
   return tx
     .select({
+      runnableAt: sql<string>`(${runnableAt})::text`,
       entityId: corpusIndexProjectionStates.entityId,
       epoch: corpusIndexProjectionStates.desiredEpoch,
       fingerprint: corpusIndexProjectionStates.desiredFingerprint,
@@ -3907,6 +4193,17 @@ export const corpusProjectionReservationQueue = (
           "retry_scheduled",
           "repair_scheduled",
         ]),
+        skipEntityIds.length === 0
+          ? undefined
+          : notInArray(corpusIndexProjectionStates.entityId, [
+              ...skipEntityIds,
+            ]),
+        batchableOnly
+          ? eq(corpusIndexProjectionStates.appendMode, "batchable")
+          : undefined,
+        after === null
+          ? undefined
+          : sql`(${runnableAt}, ${corpusIndexProjectionStates.entityId}) > (${after.runnableAt}::timestamptz, ${after.entityId})`,
         lte(runnableAt, eligibilityAt),
         inArray(corpusIndexGenerations.status, ["building", "serving"]),
         pendingDesiredState,
@@ -3921,6 +4218,54 @@ export const corpusProjectionReservationQueue = (
       skipLocked: true,
     });
 };
+
+type CorpusIndexGenerationKey = { family: CorpusFamily; generation: string };
+
+/**
+ * One generation's registry row, share-locked. Every lifecycle transition
+ * locks the row for update before it changes the status, so the generation
+ * stays in its status until this transaction ends. The seeding walk takes it
+ * first, then its pass (`lockCorpusIndexGenerationSeedingPass`).
+ */
+export const lockCorpusIndexGenerationShared = async (
+  tx: Transaction,
+  { family, generation }: CorpusIndexGenerationKey,
+) =>
+  (
+    await tx
+      .select()
+      .from(corpusIndexGenerations)
+      .where(
+        and(
+          eq(corpusIndexGenerations.family, family),
+          eq(corpusIndexGenerations.generation, generation),
+        ),
+      )
+      .limit(1)
+      .for("share")
+  ).at(0);
+
+/**
+ * One generation's seeding pass, locked for update after the registry row,
+ * so two walkers of one generation never advance the same pass.
+ */
+export const lockCorpusIndexGenerationSeedingPass = async (
+  tx: Transaction,
+  { family, generation }: CorpusIndexGenerationKey,
+) =>
+  (
+    await tx
+      .select()
+      .from(corpusIndexGenerationSeedingPasses)
+      .where(
+        and(
+          eq(corpusIndexGenerationSeedingPasses.family, family),
+          eq(corpusIndexGenerationSeedingPasses.generation, generation),
+        ),
+      )
+      .limit(1)
+      .for("update")
+  ).at(0);
 
 /**
  * State rows precede their revisions in the projection lock order. Settling a
@@ -4105,6 +4450,22 @@ export const lockCorpusProjectionAcceptedRows = async (
     .for("update");
   return { states, intents };
 };
+
+/**
+ * Lock projection intents a reservation cancel will move, in id order, after
+ * the generation's mutation lock: the order every intent writer takes.
+ */
+export const lockCorpusProjectionIntentsById = async (
+  tx: Transaction,
+  intentIds: readonly SafeId<"corpusIndexProjectionIntent">[],
+) =>
+  await tx
+    .select({ id: corpusIndexProjectionIntents.id })
+    .from(corpusIndexProjectionIntents)
+    .where(inArray(corpusIndexProjectionIntents.id, [...intentIds]))
+    .orderBy(asc(corpusIndexProjectionIntents.id))
+    .limit(intentIds.length)
+    .for("update");
 
 /** Canonical rows precede desired-state rows in the projection lock order. */
 export const lockCaseLawProjectionRepairStates = async (

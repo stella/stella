@@ -1,6 +1,8 @@
 import { panic, Result } from "better-result";
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
+
+import { createTestState } from "@stll/test-state";
 
 import {
   ORGANIZATION_ACCESS_STATE,
@@ -49,10 +51,12 @@ import type { TestIds } from "@/api/tests/security/rls-helpers";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
+const testState = createTestState({ file: import.meta.path, config: env });
+const workerState = testState.forConfig(envDocumentProcessingWorker);
+
 let testDb: TestDatabase;
 let ids: TestIds;
-const priorFlag = env.FEATURE_FILE_USAGE_LIMITS;
-const priorWorkerFlag = envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS;
+
 const policyId = createSafeId<"usagePolicy">();
 const entitlementId = createSafeId<"usageEntitlement">();
 const assignmentId = createSafeId<"usageSeatAssignment">();
@@ -92,7 +96,7 @@ const releaseConfirmedAbsentReservation = async (key: string) => {
   );
 };
 
-beforeAll(async () => {
+testState.beforeAll(async () => {
   testDb = await getTestDb();
   ids = createTestIds();
   await setupRlsTestData(testDb, ids);
@@ -120,13 +124,11 @@ beforeAll(async () => {
     organizationId: ids.orgA,
     userId: ids.userA1,
   });
-  env.FEATURE_FILE_USAGE_LIMITS = true;
-  envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = true;
+  testState.setConfig("FEATURE_FILE_USAGE_LIMITS", true);
+  workerState.setConfig("FEATURE_FILE_USAGE_LIMITS", true);
 });
 
 afterAll(async () => {
-  env.FEATURE_FILE_USAGE_LIMITS = priorFlag;
-  envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = priorWorkerFlag;
   await testDb
     .delete(organizationFileObjects)
     .where(eq(organizationFileObjects.organizationId, ids.orgA));
@@ -1174,8 +1176,8 @@ describe("organization file usage", () => {
   });
 
   test("flag off does not call the database", async () => {
-    env.FEATURE_FILE_USAGE_LIMITS = false;
-    envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = false;
+    testState.setConfig("FEATURE_FILE_USAGE_LIMITS", false);
+    workerState.setConfig("FEATURE_FILE_USAGE_LIMITS", false);
     const noDb = {
       transaction: async () => {
         throw new Error("unexpected transaction");
@@ -1188,7 +1190,7 @@ describe("organization file usage", () => {
       >(noDb),
     );
     expect(reservation).toMatchObject({ value: { status: "disabled" } });
-    env.FEATURE_FILE_USAGE_LIMITS = true;
-    envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = true;
+    testState.setConfig("FEATURE_FILE_USAGE_LIMITS", true);
+    workerState.setConfig("FEATURE_FILE_USAGE_LIMITS", true);
   });
 });

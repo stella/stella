@@ -11,7 +11,7 @@ import type {
 } from "@stll/api-contract/desktop-runner";
 
 import type { StellaSandboxMcpBinding } from "../sandbox";
-import type { HarnessEvent, HarnessSessionId } from "./events";
+import type { HarnessBoundary, HarnessEvent, HarnessSessionId } from "./events";
 import type { HarnessTranscriptMessage } from "./transcript-handoff";
 
 /**
@@ -52,6 +52,13 @@ export type HarnessInputFileType = HarnessInputFile["type"];
 export type HarnessContinuationRequest =
   | { type: "fresh" }
   | { type: "resume"; sessionId: HarnessSessionId }
+  /**
+   * A new native session holding what `sessionId` held through `boundary`
+   * (an earlier completed turn's `turn.completed`), for a chat whose history
+   * after that turn was replaced. `sessionId` itself is never changed, so a
+   * retried start forks the same prefix again.
+   */
+  | { type: "fork"; sessionId: HarnessSessionId; boundary: HarnessBoundary }
   /**
    * The next turn in the process a completed turn left running (see
    * `HarnessLiveSession`): the agent sees what it started in the background.

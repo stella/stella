@@ -9,16 +9,15 @@ import {
   BROWSER_CONTROL_LIMITS,
   BROWSER_CONTROL_PROTOCOL_VERSION,
   BROWSER_EXTENSION_MESSAGE_SOURCE,
-  type BrowserControlCommand,
   type BrowserControlErrorCode,
   type BrowserControlResult,
   type BrowserDesktopRequest,
   type BrowserDesktopResponse,
   type BrowserDownload,
-  type BrowserObservedTab,
   parseBrowserDesktopResponse,
 } from "@stll/api-contract/browser-control";
 
+import type { BrowserHostCancel, BrowserHostRequest } from "./browser-host";
 import { type LocalBrowserResult, localBrowserResult } from "./local-result";
 
 /**
@@ -51,18 +50,9 @@ type BrowserBridgeStatus =
   | { type: "waiting" }
   | { type: "ready"; protocolVersion: number };
 
-type BrowserBridgeRequest = {
-  command: BrowserControlCommand;
-  /** The chat the agent runs in; the extension keeps one tab per chat. */
-  controllerId: string;
-  observedTab: BrowserObservedTab | null;
-  toolCallId: string;
-  /** The run; the extension's per-turn budgets count by it. */
-  turnId: string;
-};
+type BrowserBridgeRequest = BrowserHostRequest;
 
-/** Which command to stop: the chat's controller and its run. */
-type BrowserBridgeCancel = { controllerId: string; turnId: string };
+type BrowserBridgeCancel = BrowserHostCancel;
 
 export type BrowserBridge = {
   readonly endpoint: string;

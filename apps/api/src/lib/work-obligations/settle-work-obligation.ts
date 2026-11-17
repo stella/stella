@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -12,6 +12,8 @@ import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { TRANSITIONS } from "@/api/lib/db/transition-specs";
+import { transitionBatch } from "@/api/lib/db/transitions";
 import { workTask } from "@/api/lib/tasks/work-task";
 import { WORK_OBLIGATION_TRANSITION_AUDIT_ACTION } from "@/api/lib/work-obligations/transitions";
 import type {
@@ -62,49 +64,49 @@ export const settleWorkObligation = async ({
     nextStatus === WORK_OBLIGATION_STATUS.UNASSIGNED
       ? { acknowledgedAt: null, acknowledgedByUserId: null }
       : {};
-  const updated = await tx
-    .update(workObligations)
-    .set({ status: nextStatus, ...acknowledgementReset, updatedAt: now })
-    .where(
-      and(
-        eq(workObligations.entityId, entityId),
-        eq(workObligations.workspaceId, workspaceId),
-        inArray(workObligations.status, [...transition.from]),
-      ),
-    )
-    .returning({ entityId: workObligations.entityId });
+  const updated = await transitionBatch({
+    tx,
+    spec: TRANSITIONS.workObligations,
+    ids: [entityId],
+    options: {
+      ...transition.move,
+      set: { ...acknowledgementReset, updatedAt: now },
+      guard: eq(workObligations.workspaceId, workspaceId),
+    },
+    recordTransitionAuditEvent: async (auditTx) => {
+      await auditTx
+        .update(entities)
+        .set({ status: transition.taskStatus, updatedAt: now })
+        .where(
+          and(
+            eq(entities.id, entityId),
+            eq(entities.workspaceId, workspaceId),
+            workTask(entities),
+          ),
+        );
+
+      await auditTx.insert(workObligationEvents).values({
+        id: createSafeId<"workObligationEvent">(),
+        workspaceId,
+        obligationEntityId: entityId,
+        actorUserId,
+        type: transition.eventType,
+        details: { type: "status_changed", previousStatus, nextStatus },
+        reason,
+        occurredAt: now,
+      });
+      await recordAuditEvent(auditTx, {
+        action: WORK_OBLIGATION_TRANSITION_AUDIT_ACTION[action],
+        resourceType: AUDIT_RESOURCE_TYPE.WORK_OBLIGATION,
+        resourceId: entityId,
+        changes: { status: { old: previousStatus, new: nextStatus } },
+        ...(reason ? { metadata: { reason } } : {}),
+      });
+    },
+  });
   if (!updated.at(0)) {
     return "conflict";
   }
-
-  await tx
-    .update(entities)
-    .set({ status: transition.taskStatus, updatedAt: now })
-    .where(
-      and(
-        eq(entities.id, entityId),
-        eq(entities.workspaceId, workspaceId),
-        workTask(entities),
-      ),
-    );
-
-  await tx.insert(workObligationEvents).values({
-    id: createSafeId<"workObligationEvent">(),
-    workspaceId,
-    obligationEntityId: entityId,
-    actorUserId,
-    type: transition.eventType,
-    details: { type: "status_changed", previousStatus, nextStatus },
-    reason,
-    occurredAt: now,
-  });
-  await recordAuditEvent(tx, {
-    action: WORK_OBLIGATION_TRANSITION_AUDIT_ACTION[action],
-    resourceType: AUDIT_RESOURCE_TYPE.WORK_OBLIGATION,
-    resourceId: entityId,
-    changes: { status: { old: previousStatus, new: nextStatus } },
-    ...(reason ? { metadata: { reason } } : {}),
-  });
 
   return "settled";
 };

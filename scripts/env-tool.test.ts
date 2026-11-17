@@ -1185,3 +1185,30 @@ describe("web container build arguments", () => {
     ).toThrow("no longer runs");
   });
 });
+
+for (const name of [
+  "__proto__",
+  "constructor",
+  "toString",
+  "hasOwnProperty",
+  "ENV_VALUE",
+  "1",
+]) {
+  test(`environment normalization retains the own variable ${name}`, () => {
+    for (const value of ["configured", "", undefined]) {
+      const result = normalizeEmptyEnvironment({ [name]: value });
+      expect(Object.hasOwn(result, name)).toBe(true);
+      expect(result[name]).toBe(value === "" ? undefined : value);
+    }
+  });
+}
+
+for (const name of ["__proto__", "constructor", "ENV_VALUE"]) {
+  test(`ambient variable ${name} reaches Bun dotenv expansion`, () => {
+    expect(
+      parseEnvText(`FORWARDED=$${name}`, { [name]: "configured" }),
+    ).toEqual({
+      FORWARDED: "configured",
+    });
+  });
+}

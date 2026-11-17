@@ -3,6 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "indexes-corpus-index-projection-intents-proof-idx",
   revision: 1460,
+  lifecycle: "pending",
   type: "indexes",
   values: [
     {

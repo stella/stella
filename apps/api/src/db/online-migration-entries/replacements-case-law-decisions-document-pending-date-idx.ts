@@ -5,6 +5,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "replacements-case-law-decisions-document-pending-date-idx",
   revision: 850,
+  lifecycle: "finalized",
   type: "replacements",
   values: [
     {

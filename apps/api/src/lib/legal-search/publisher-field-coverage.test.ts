@@ -89,6 +89,39 @@ describe("publisher field retention", () => {
     );
   });
 
+  test("publisher-field-retention: empty observations alert and preserve every raw payload", async () => {
+    await assertProperty(
+      "publisher-field-retention: empty observations alert and preserve every raw payload",
+      fc.asyncProperty(fc.jsonValue(), async (value) => {
+        const record = JSON.stringify(value);
+        const sourceRaw = encodeSourceRawEnvelope({ record });
+        const result = Object.freeze({ sourceRaw });
+        const { reports, report } = captureReports();
+        await inspectPublisherFieldCoverage({
+          adapterKey: "fixture",
+          inventory: { ...inventory, listSourceFields: () => [] },
+          result,
+          report,
+        });
+        expect(result.sourceRaw).toBe(sourceRaw);
+        expect(decodeSourceRawEnvelope(result.sourceRaw)?.["record"]).toBe(
+          record,
+        );
+        expect(reports).toEqual([
+          [
+            PUBLISHER_FIELD_COVERAGE_EVENT.READER_FAILED,
+            {
+              adapterKey: "fixture",
+              recordCount: 1,
+              retainedRaw: true,
+              readerFailure: "no-observed-fields",
+            },
+          ],
+        ]);
+      }),
+    );
+  });
+
   test("deleting a mapping and adding a publisher field both produce drift", () => {
     const { reports, report } = captureReports();
     expect(
@@ -97,24 +130,24 @@ describe("publisher field retention", () => {
         inventory,
         observedFields: ["known"],
         report,
-      }).unmapped,
-    ).toEqual([]);
+      }),
+    ).toMatchObject({ status: "audited", unmappedFields: [] });
     expect(
       recordPublisherFieldCoverage({
         adapterKey: "fixture",
         inventory: { fields: {} },
         observedFields: ["known"],
         report,
-      }).unmapped,
-    ).toEqual(["known"]);
+      }),
+    ).toMatchObject({ status: "audited", unmappedFields: ["known"] });
     expect(
       recordPublisherFieldCoverage({
         adapterKey: "fixture",
         inventory,
         observedFields: ["known", "new", "new"],
         report,
-      }).unmapped,
-    ).toEqual(["new"]);
+      }),
+    ).toMatchObject({ status: "audited", unmappedFields: ["new"] });
     expect(
       reports.map(([, attributes]) => attributes?.["unmappedFieldCount"]),
     ).toEqual([1, 1]);
