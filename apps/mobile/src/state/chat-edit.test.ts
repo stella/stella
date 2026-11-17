@@ -24,6 +24,7 @@ import {
   editUndoesFilesFirst,
   entriesBefore,
   followLocalFilesUndo,
+  formAfterAccepted,
   hasEditContent,
   localFilesReadPollMs,
   messageActions,
@@ -284,6 +285,17 @@ describe("the thread while an edit runs", () => {
     ]);
     // A message the loaded thread no longer holds cuts nothing.
     expect(entriesBefore(thread, "gone")).toBe(thread);
+  });
+});
+
+describe("the form once its edit was taken", () => {
+  test("closes the form that sent it, and never a newer one", () => {
+    const sent = { session: 1 };
+    expect(formAfterAccepted(sent, 1)).toBeNull();
+    // Closed and opened again on another message while the edit was out.
+    const newer = { session: 2 };
+    expect(formAfterAccepted(newer, 1)).toBe(newer);
+    expect(formAfterAccepted(null, 1)).toBeNull();
   });
 });
 

@@ -30,6 +30,7 @@ import {
   editUndoesFilesFirst,
   entriesBefore,
   followLocalFilesUndo,
+  formAfterAccepted,
   hasEditContent,
   localFilesReadPollMs,
   type LocalFilesUndoProblem,
@@ -182,6 +183,8 @@ const ChatMessageEdit = ({
       // and leaves the draft here, the switch off.
       if (undoFirst) {
         const followed = await undoFilesFirst();
+        // A form closed while its undo was followed sends nothing, even an
+        // undo that restored the folder.
         if (!open.current) {
           return;
         }
@@ -300,21 +303,31 @@ export const useMessageEdit = ({
   threadId: string;
   turn: Pick<ChatTurn, "busy" | "canStop" | "edit" | "stop">;
 }) => {
-  const [editing, setEditing] = useState<ChatEntry | null>(null);
+  // Each opening of the form is its own session: an edit sent from one that
+  // was closed since closes nothing it did not open.
+  const [editing, setEditing] = useState<{
+    readonly entry: ChatEntry;
+    readonly session: number;
+  } | null>(null);
+  const sessions = useRef(0);
   const openMenu = useMessageActionsMenu((action, entry) => {
     switch (action) {
       case "edit":
         if (turn.canStop) {
           turn.stop();
         }
-        setEditing(entry);
+        sessions.current += 1;
+        setEditing({ entry, session: sessions.current });
         return;
       default:
         action satisfies never;
         panic("Unhandled message action");
     }
   });
-  const send = async (entry: ChatEntry, draft: EditDraft) =>
+  const send = async (
+    { entry, session }: NonNullable<typeof editing>,
+    draft: EditDraft,
+  ) =>
     await new Promise<EditOutcome>((resolve) => {
       const started = turn.edit(
         {
@@ -329,7 +342,7 @@ export const useMessageEdit = ({
         {
           onAccepted: () => {
             setEntries((loaded) => entriesBefore(loaded, entry.id));
-            setEditing(null);
+            setEditing((current) => formAfterAccepted(current, session));
             resolve({ type: "accepted" });
           },
           onRefused: (error) => {
@@ -350,8 +363,8 @@ export const useMessageEdit = ({
       editing === null ? null : (
         <ChatMessageEdit
           busy={turn.busy}
-          entry={editing}
-          key={editing.id}
+          entry={editing.entry}
+          key={editing.session}
           onCancel={() => {
             setEditing(null);
           }}

@@ -9,7 +9,7 @@ export type ReplayWriterOwner = {
 export const REPLAY_WRITER_REGISTRY = [
   {
     file: "apps/api/src/db/root.ts",
-    line: 761,
+    line: 787,
     kind: "pending",
   },
   {
@@ -214,22 +214,22 @@ export const REPLAY_WRITER_REGISTRY = [
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row-update.ts",
-    line: 488,
+    line: 485,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row.ts",
-    line: 375,
+    line: 383,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row.ts",
-    line: 441,
+    line: 449,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row.ts",
-    line: 459,
+    line: 467,
     kind: "pending",
   },
   {

@@ -36,11 +36,16 @@ import {
   CHAT_LOCAL_RUN_FILES_METADATA_KEY,
   CHAT_LOCAL_RUN_FILES_NOT_SHARED_METADATA_KEY,
   CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
+  CHAT_LOCAL_RUN_MODEL_METADATA_KEY,
   CHAT_LOCAL_RUN_STEER_EVENT,
   CHAT_LOCAL_RUN_STEER_TOOL,
   chatLocalRunComputerEventSchema,
   chatLocalRunSteerCallId,
 } from "@stll/api-contract/chat-run-target";
+import {
+  CHAT_TURN_STEERING,
+  CHAT_TURN_STEERING_EVENT,
+} from "@stll/api-contract/chat-send-intent";
 import {
   DESKTOP_RUNNER_APPROVAL_MODES,
   DESKTOP_RUNNER_CHECKPOINT_EVENT,
@@ -2980,9 +2985,17 @@ describe("chat turns on a computer", () => {
       isRecord(chunk) ? chunk["value"] : undefined,
     ).status;
 
+  const isSteeringEvent = (chunk: unknown) =>
+    isRecord(chunk) &&
+    chunk["type"] === EventType.CUSTOM &&
+    chunk["name"] === CHAT_TURN_STEERING_EVENT;
+
+  /** Without what a read tells with the run's start: the start, its steering. */
   const withoutRunStarts = (chunks: readonly unknown[]) =>
     chunks.filter(
-      (chunk) => !isRecord(chunk) || chunk["type"] !== EventType.RUN_STARTED,
+      (chunk) =>
+        !isRecord(chunk) ||
+        (chunk["type"] !== EventType.RUN_STARTED && !isSteeringEvent(chunk)),
     );
 
   const toolCallIdsOf = (chunks: readonly unknown[]) =>
@@ -3076,6 +3089,13 @@ describe("chat turns on a computer", () => {
     expect(
       chunks.filter(({ type }) => type === EventType.RUN_STARTED),
     ).toHaveLength(1);
+    // Told once, with the start: this computer's harness reports no `steer`.
+    expect(chunks.filter(isSteeringEvent)).toEqual([
+      expect.objectContaining({
+        value: { steering: CHAT_TURN_STEERING.notSteerable },
+      }),
+    ]);
+    expect(chunks.at(1)).toMatchObject({ name: CHAT_TURN_STEERING_EVENT });
     // The chat is told the run waits for the computer until it has it.
     expect(chunks.filter(isComputerEvent).map(computerStatus)).toEqual([
       "delivering",
@@ -3403,6 +3423,65 @@ describe("chat turns on a computer", () => {
       { usedTokens: 15 },
     ]) {
       expect(await finishedTurn(withReport(forged))).toBeUndefined();
+    }
+  });
+
+  test("a rerouted run's models reach the turn, and ones the desktop made up do not", async () => {
+    const finishedTurn = async (
+      events: HarnessEvent[],
+      rewrite: (chunk: unknown) => unknown = (chunk) => chunk,
+    ): Promise<unknown> => {
+      const chatThreadId = await newThread();
+      const { desktop } = shared();
+      const turn = collect(
+        createLocalChatRun(contextFor(chatThreadId), START_PLAN).stream({
+          chatRunId: Bun.randomUUIDv7(),
+          chatTurnId: turnOf(chatThreadId),
+          messages: [{ role: "user", content: "What does the matter hold?" }],
+          instructions: "You are stella.",
+          resume: undefined,
+          abortSignal: new AbortController().signal,
+        }),
+      );
+      const start = await desktop.receive("run.start");
+      desktop.send({ type: "run.accepted", runId: start.runId });
+      const run = desktopRun(desktop, start.runId);
+      await run.events((await harnessChunks(start.runId, events)).map(rewrite));
+      await run.finish("completed", "codex-session-1");
+      const finish = (await turn.done).findLast(
+        ({ type }) => type === EventType.RUN_FINISHED,
+      );
+      return finish?.metadata?.[CHAT_LOCAL_RUN_MODEL_METADATA_KEY];
+    };
+
+    expect(await finishedTurn(completedTurn)).toEqual({
+      requested: CHAT_MODEL,
+      ran: CHAT_MODEL,
+    });
+    expect(
+      await finishedTurn([
+        { type: "model.rerouted", model: "gpt-rerouted" },
+        ...completedTurn,
+      ]),
+    ).toEqual({ requested: CHAT_MODEL, ran: "gpt-rerouted" });
+    for (const forged of [
+      { requested: CHAT_MODEL, ran: "<b>gpt</b>".repeat(20) },
+      { requested: CHAT_MODEL },
+      { requested: CHAT_MODEL, ran: CHAT_MODEL, note: "extra" },
+    ]) {
+      expect(
+        await finishedTurn(completedTurn, (chunk) =>
+          isRecord(chunk) && chunk["type"] === EventType.RUN_FINISHED
+            ? {
+                ...chunk,
+                metadata: {
+                  ...(isRecord(chunk["metadata"]) ? chunk["metadata"] : {}),
+                  [CHAT_LOCAL_RUN_MODEL_METADATA_KEY]: forged,
+                },
+              }
+            : chunk,
+        ),
+      ).toBeUndefined();
     }
   });
 
@@ -5898,7 +5977,21 @@ describe("chat turns on a computer", () => {
         })
       ).unwrap(),
     ).toEqual({ type: "refused", reason: "no_run" });
+    expect(
+      (
+        await control.readChatTurnSteering({
+          owner: { ...owner, userId: ids.userA2 },
+          chat: steer.chat,
+        })
+      ).unwrap(),
+    ).toBe(CHAT_TURN_STEERING.notSteerable);
     expect(await commandsOf(start.runId, "run.input")).toEqual([]);
+    // The turn's own member reads it as one that takes a message.
+    expect(
+      (
+        await control.readChatTurnSteering({ owner, chat: steer.chat })
+      ).unwrap(),
+    ).toBe(CHAT_TURN_STEERING.steerable);
     expect((await control.steerChatTurn(steer)).unwrap()).toEqual({
       type: "queued",
     });
@@ -7697,6 +7790,91 @@ describe("undoing the file changes made since a message", () => {
       turnId: await newTurn(threadId),
     });
     expect(JSON.stringify(after.messages)).not.toContain(FOLDER_RESTORED_NOTE);
+    await desktop.close();
+  });
+
+  test("asking again for an undo already sent answers that undo while a turn runs or the computer is away", async () => {
+    const { desktopId, desktop } = await connected();
+    const threadId = await newThread();
+    const { turnId } = await finishedTurn(desktop, desktopId, { threadId });
+    const undo = await accepted(threadId, turnId);
+    await desktop.receive("folder.restore");
+    const sent = {
+      restoreId: undo.restoreId,
+      state: "sent" as const,
+      reason: null,
+    };
+
+    const running = await newTurn(threadId);
+    expect(await accepted(threadId, turnId)).toEqual(sent);
+    await db.delete(chatTurns).where(eq(chatTurns.id, running));
+
+    await desktop.close();
+    expect(await accepted(threadId, turnId)).toEqual(sent);
+    expect(
+      await db
+        .select({ id: desktopRunnerFolderRestores.id })
+        .from(desktopRunnerFolderRestores)
+        .where(eq(desktopRunnerFolderRestores.chatThreadId, threadId)),
+    ).toEqual([{ id: undo.restoreId }]);
+  });
+
+  test("a linked folder another chat's earlier run still worked in after the checkpoint is not undone", async () => {
+    const { desktopId, desktop } = await connected();
+    const threadId = await newThread();
+    const folderId = Bun.randomUUIDv7();
+    const [runner] = await db
+      .select({ deviceJkt: desktopRunners.deviceJkt })
+      .from(desktopRunners)
+      .where(eq(desktopRunners.desktopId, desktopId));
+    // Another chat's run in the same linked folder, started before this
+    // chat's turn.
+    const otherRunId = Bun.randomUUIDv7();
+    const before = new Date(clock.now - MINUTE_MS);
+    await db.insert(desktopRunnerRuns).values({
+      runId: otherRunId,
+      userId: ids.userA1,
+      organizationId: ids.orgA,
+      desktopId,
+      deviceJkt: runner?.deviceJkt ?? panic("the computer has a runner row"),
+      harness: "codex",
+      harnessVersion: HARNESS_VERSION,
+      workspaceIds: [],
+      state: "finished",
+      outcome: "completed",
+      leaseExpiresAt: before,
+      chatThreadId: await newThread(),
+      linkedFolderId: folderId,
+      createdAt: before,
+      updatedAt: before,
+    });
+    const { turnId, runId } = await finishedTurn(desktop, desktopId, {
+      threadId,
+    });
+    await db
+      .update(desktopRunnerRuns)
+      .set({ linkedFolderId: folderId })
+      .where(eq(desktopRunnerRuns.runId, runId));
+    // It ended before this chat's run began: undoing loses none of its work.
+    expect((await read(threadId, turnId))?.files).toEqual({
+      type: "available",
+    });
+
+    // It still worked after this chat's run began, so after its checkpoint.
+    await db
+      .update(desktopRunnerRuns)
+      .set({
+        updatedAt: sql`(select r.created_at from desktop_runner_runs r where r.run_id = ${runId}) + interval '1 millisecond'`,
+      })
+      .where(eq(desktopRunnerRuns.runId, otherRunId));
+    expect((await read(threadId, turnId))?.files).toEqual({
+      type: "unavailable",
+      reason: "folder_shared",
+    });
+    expect(await request(threadId, turnId)).toEqual({
+      type: "refused",
+      reason: "folder_shared",
+    });
     await desktop.close();
   });
 

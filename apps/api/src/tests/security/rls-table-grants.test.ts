@@ -125,6 +125,9 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   // Where a replaced decision's anchors went: written by the decision write,
   // read by the public anchor redirect read.
   "case_law_decision_anchor_redirects",
+  // Appeal links between decisions: global legal data read by public
+  // case-law reads, written only by the ingestion pipeline.
+  "case_law_decision_reviews",
   // A directory court's rank: global legal data read by case-law search and
   // citation scoring, written only by its seed migrations and the seed script.
   "case_law_court_directory_ranks",
@@ -157,6 +160,9 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   // mutates the state machine.
   "corpus_index_projection_states",
   "corpus_index_projection_intents",
+  // Route readiness proofs: request code may read whether a route is proven;
+  // only the projection runner advances or revokes one.
+  "corpus_index_route_proofs",
   // Global reference editions are read by request code and written by ingestion.
   "sanctions_edition_fanouts",
   "sanctions_sources",

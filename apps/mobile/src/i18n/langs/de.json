@@ -85,6 +85,7 @@
     "documentClose": "Schließen",
     "approvalBrowserNote": "Freigegeben läuft es in Ihrem Browser auf Ihrem Computer, über die stella-Erweiterung.",
     "grantFailed": "Die Freigabe konnte nicht gespeichert werden. Versuchen Sie es erneut.",
+    "limitReminderFailed": "Die Änderung konnte nicht gespeichert werden. Versuchen Sie es erneut.",
     "elsewhereBrowser": "Dieser Schritt läuft in Ihrem Browser auf Ihrem Computer, über die stella-Erweiterung. Öffnen Sie diese Unterhaltung dort in stella, um ihn abzuschließen.",
     "elsewhereSecret": "Dieser Schritt braucht einen Schlüssel. Aus Sicherheitsgründen werden Schlüssel in stella auf Ihrem Computer hinzugefügt, nicht in der App.",
     "elsewhereConnector": "Dieser Schritt verbindet eine App. Aus Sicherheitsgründen werden Apps in stella auf Ihrem Computer verbunden, nicht in der App.",
@@ -250,7 +251,14 @@
       },
       "sessionNotResumed": "Der Coding-Agent auf Ihrem Computer konnte nicht dort weitermachen, wo er aufgehört hatte. Er hat daher anhand der Nachrichten in diesem Chat weitergearbeitet.",
       "steered": "Während der Arbeit des Agenten gesendet",
-      "desktopSettingsSteps": "Öffnen Sie in stella desktop auf Ihrem Computer Einstellungen › Allgemein › KI-Abonnements."
+      "ranOnModel": "Ausgeführt mit {model}",
+      "desktopSettingsSteps": "Öffnen Sie in stella desktop auf Ihrem Computer Einstellungen › Allgemein › KI-Abonnements.",
+      "errorLimitResetsAt": "Der Coding-Agent auf Ihrem Computer hat sein Nutzungslimit erreicht. Sie können es ab {time} erneut versuchen.",
+      "limitReminderNotify": "Benachrichtigen, sobald es zurückgesetzt ist",
+      "limitReminderScheduled": "Wir benachrichtigen Sie ab {time}.",
+      "limitResumeContinue": "Automatisch fortsetzen, sobald es zurückgesetzt ist",
+      "limitResumeScheduled": "Wird ab {time} automatisch fortgesetzt.",
+      "limitReminderCancel": "Abbrechen"
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# Quelle geprüft} other {# Quellen geprüft}}",

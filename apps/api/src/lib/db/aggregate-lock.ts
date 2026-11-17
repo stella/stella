@@ -2658,6 +2658,37 @@ export const lockCaseLawDecisionRows = async ({
   `);
 };
 
+type CaseLawDecisionSnapshotOptions = {
+  tx: Pick<Transaction, "select">;
+  /** The base table, passed in so this owner names no case-law relation itself. */
+  decisions: typeof caseLawDecisions;
+  decisionId: SafeId<"caseLawDecision">;
+  /** The storage slice supplies its document-presence policy without a dependency cycle. */
+  holdsDocument: SQL<boolean>;
+};
+
+/** Lock and read a decision's pre-refresh identity and payload state together. */
+export const lockCaseLawDecisionSnapshot = async ({
+  tx,
+  decisions,
+  decisionId,
+  holdsDocument,
+}: CaseLawDecisionSnapshotOptions) =>
+  await tx
+    .select({
+      citationKey: decisions.citationKey,
+      country: decisions.country,
+      court: decisions.court,
+      docketFamilyKey: decisions.docketFamilyKey,
+      language: decisions.language,
+      decisionDate: decisions.decisionDate,
+      holdsDocument,
+      metadata: decisions.metadata,
+    })
+    .from(decisions)
+    .where(eq(decisions.id, decisionId))
+    .for("update")
+    .limit(1);
 /** Hold every summary endpoint in one ordered batch before checking revisions. */
 export const lockLegislationVersionRows = async (
   tx: Transaction,

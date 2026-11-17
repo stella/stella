@@ -1,5 +1,14 @@
 import { expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
@@ -14,13 +23,87 @@ const legacyNamespace = JSON.stringify("Stella/Api");
 const caseLawNamespace = JSON.stringify("Stella/CaseLaw");
 const unlistedNamespace = JSON.stringify("Stella/Unlisted");
 
+// Ignored build outputs can be replaced by concurrent generators. Git owns the
+// source inventory, including new local files and tracked generated sources.
+const workspaceSources = (directory: string) => {
+  const deleted = new Set(
+    execFileSync(
+      "git",
+      ["ls-files", "--deleted", "-z", "--", "apps", "packages"],
+      {
+        cwd: directory,
+        encoding: "utf-8",
+        maxBuffer: 8 * 1024 * 1024,
+      },
+    ).split("\0"),
+  );
+  return execFileSync(
+    "git",
+    [
+      "ls-files",
+      "--cached",
+      "--others",
+      "--exclude-standard",
+      "-z",
+      "--",
+      "apps",
+      "packages",
+    ],
+    { cwd: directory, encoding: "utf-8", maxBuffer: 8 * 1024 * 1024 },
+  )
+    .split("\0")
+    .filter(
+      (file) =>
+        !deleted.has(file) &&
+        /\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs)$/u.test(file),
+    );
+};
+
+test("namespace source inventory retains authored files without reading ignored build outputs", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "emf-source-inventory-"));
+  try {
+    execFileSync("git", ["init", "--quiet"], {
+      cwd: directory,
+      maxBuffer: 1024 * 1024,
+    });
+    mkdirSync(path.join(directory, "apps/api/generated"), { recursive: true });
+    mkdirSync(path.join(directory, "packages/example"), { recursive: true });
+    writeFileSync(path.join(directory, ".gitignore"), "apps/api/generated/\n");
+    const tracked = "apps/api/generated/tracked.ts";
+    const deleted = "packages/example/deleted.ts";
+    const renamed = "packages/example/old name\nfile.ts";
+    const renamedTo = "packages/example/renamed source\nfile.ts";
+    for (const file of [tracked, deleted, renamed]) {
+      writeFileSync(path.join(directory, file), "export {};\n");
+    }
+    execFileSync("git", ["add", "--force", "--", tracked, deleted, renamed], {
+      cwd: directory,
+      maxBuffer: 1024 * 1024,
+    });
+    rmSync(path.join(directory, deleted));
+    renameSync(path.join(directory, renamed), path.join(directory, renamedTo));
+    const local = "packages/example/new source\nfile.tsx";
+    writeFileSync(path.join(directory, local), "export {};\n");
+    const output = path.join(directory, "apps/api/generated/transient.ts");
+    writeFileSync(output, "export {};\n");
+    writeFileSync(path.join(directory, "packages/example/data.json"), "{}");
+
+    const files = workspaceSources(directory).toSorted();
+    expect(files).toEqual([tracked, local, renamedTo].toSorted());
+    rmSync(output);
+    expect(
+      files.map((file) => readFileSync(path.join(directory, file), "utf-8")),
+    ).toEqual(["export {};\n", "export {};\n", "export {};\n"]);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 // timeout: Parsing every application and package source scales with repository size.
 test("application and package EMF namespaces have declared consumers", () => {
   const violations: string[] = [];
   const namespaces = new Set<string>();
-  for (const file of new Bun.Glob(
-    "{apps,packages}/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}",
-  ).scanSync({ cwd: root, onlyFiles: true })) {
+  for (const file of workspaceSources(root)) {
     if (
       /(?:^|\/)(?:node_modules|dist|build|target|__fixtures__|__tests__)\//u.test(
         file,

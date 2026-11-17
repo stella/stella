@@ -172,6 +172,16 @@ export const shownBeforeEdit = (
 ): readonly ChatEntry[] =>
   truncates === undefined ? entries : entriesBefore(entries, truncates);
 
+/**
+ * The open edit form once the edit sent from form `session` was taken:
+ * closed when it is still that form, kept when the member closed it and
+ * opened another meanwhile.
+ */
+export const formAfterAccepted = <Form extends { readonly session: number }>(
+  current: Form | null,
+  session: number,
+): Form | null => (current?.session === session ? null : current);
+
 /** Why the server did not take an edit, as the form says it. */
 type EditRefusal = "refused" | "history-changed" | "target-missing";
 

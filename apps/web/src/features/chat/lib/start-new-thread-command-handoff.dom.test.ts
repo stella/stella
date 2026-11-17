@@ -34,6 +34,7 @@ type ThreadResponse =
 const NEW_THREAD: ThreadResponse = {
   activeSkill: null,
   activeTurnId: null,
+  activeTurnSteering: "not_steerable",
   attachedFiles: { fileCount: 0, files: [] },
   context: {
     estimatedTokens: 0,

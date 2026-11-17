@@ -17,7 +17,6 @@
     "apps/web/src/components/catalogue/catalogue-badges.tsx": 17,
     "apps/web/src/components/chat-mention-category.tsx": 1,
     "apps/web/src/components/chat-pasted-text-node.tsx": 1,
-    "apps/web/src/components/chat/chat-composer-action-button.tsx": 1,
     "apps/web/src/components/chat/chat-context-meter.tsx": 1,
     "apps/web/src/components/chat/chat-image-attachment.tsx": 1,
     "apps/web/src/components/chat/chat-matter-picker.tsx": 15,
@@ -478,7 +477,6 @@
     "apps/api/src/handlers/sharepoint/graph-oauth.ts": 1,
     "apps/api/src/lib/deepl/client.ts": 2,
     "apps/api/src/lib/files/gotenberg.ts": 1,
-    "apps/api/src/lib/hosted-usage-provider/client.ts": 1,
     "apps/api/src/lib/web-search/tavily.ts": 1
   },
   "no-computed-key-record-assignment/no-computed-key-record-assignment": {
@@ -527,7 +525,6 @@
     "apps/api/src/handlers/chat/tools/registry-write-tools.ts": 1,
     "apps/api/src/handlers/document-reviews/reference-position-normalizer.ts": 1,
     "apps/api/src/handlers/expenses/update.ts": 1,
-    "apps/api/src/handlers/feedback/sanitize-report.ts": 2,
     "apps/api/src/handlers/invoices/update.ts": 1,
     "apps/api/src/handlers/legislation/ingestion/outbound-urls.ts": 2,
     "apps/api/src/handlers/lists/items/fact-details/update.ts": 1,
@@ -679,7 +676,6 @@
     "apps/api/src/lib/file-scan/archive.ts": 1,
     "apps/api/src/lib/file-scan/yara.ts": 1,
     "apps/api/src/lib/files/document-properties.ts": 1,
-    "apps/api/src/lib/files/email-to-html.ts": 4,
     "apps/api/src/lib/files/gotenberg.ts": 1,
     "apps/api/src/lib/files/image-derivative.ts": 1,
     "apps/api/src/lib/files/image-header.ts": 1,
@@ -706,7 +702,6 @@
     "apps/api/src/lib/review-organization/reset-scope.ts": 1,
     "apps/api/src/lib/search/detect-language.ts": 1,
     "apps/api/src/lib/search/extraction-worker.ts": 1,
-    "apps/api/src/lib/search/query.ts": 3,
     "apps/api/src/lib/synthetic-principal/credential-policy.ts": 1,
     "apps/api/src/lib/system-audit/modules.ts": 1,
     "apps/api/src/lib/tanstack-ai-generate.ts": 1,
@@ -732,7 +727,6 @@
     "apps/web/src/components/inspector/anonymization-facet.tsx": 1,
     "apps/web/src/components/inspector/pdf-signing-stamp.logic.ts": 1,
     "apps/web/src/components/templates/registry-autofill.ts": 1,
-    "apps/web/src/components/workspaces/table/select-row-content.tsx": 1,
     "apps/web/src/features/case-law/components/case-viewer/analysis/types.ts": 1,
     "apps/web/src/features/knowledge/views/templates/template-preview-view.tsx": 1,
     "apps/web/src/features/time-timers/timer.logic.ts": 1,
@@ -780,7 +774,7 @@
     "apps/api/src/handlers/invoices/delete.ts": 2,
     "apps/api/src/handlers/invoices/entries/add.ts": 1,
     "apps/api/src/handlers/invoices/entries/remove.ts": 2,
-    "apps/api/src/handlers/invoices/lines/create.ts": 2,
+    "apps/api/src/handlers/invoices/lines/create.ts": 1,
     "apps/api/src/handlers/invoices/lines/delete.ts": 2,
     "apps/api/src/handlers/invoices/transition.ts": 2,
     "apps/api/src/handlers/invoices/update.ts": 1,
@@ -814,15 +808,11 @@
     "apps/api/src/handlers/skills/proposals/update.ts": 1,
     "apps/api/src/handlers/style-sets/storage.ts": 1,
     "apps/api/src/handlers/templates/update.ts": 1,
-    "apps/api/src/handlers/time-entries/batch/delete.ts": 1,
-    "apps/api/src/handlers/time-entries/batch/update.ts": 1,
-    "apps/api/src/handlers/time-entries/delete.ts": 1,
     "apps/api/src/handlers/time-entries/update.ts": 1,
     "apps/api/src/handlers/uploads/agent-skill.ts": 1,
     "apps/api/src/handlers/uploads/delete.ts": 1,
     "apps/api/src/handlers/uploads/entity-version.ts": 1,
     "apps/api/src/handlers/uploads/update.ts": 3,
-    "apps/api/src/handlers/work-obligations/update.ts": 1,
     "apps/api/src/handlers/workspaces/archive.ts": 1,
     "apps/api/src/handlers/workspaces/correspondence/update.ts": 1,
     "apps/api/src/handlers/workspaces/members/remove.ts": 2,
@@ -924,22 +914,15 @@
   },
   "no-native-ui/no-native-accordion": {
     "apps/desktop/src/activity/ActivityApp.tsx": 2,
-    "packages/decision-reader/src/decision-text.tsx": 2,
     "packages/decision-reader/src/headnote-block.tsx": 2
   },
   "no-native-ui/no-native-button": {
     "apps/web/src/components/catalogue/catalogue-row.tsx": 1,
     "apps/web/src/components/file-tree/file-tree.tsx": 1,
-    "apps/web/src/components/workspaces/table/select-row-content.tsx": 1,
-    "packages/decision-reader/src/annotation-anchors.tsx": 1,
-    "packages/decision-reader/src/cited-provision.tsx": 1
+    "packages/decision-reader/src/annotation-anchors.tsx": 1
   },
-  "no-native-ui/no-native-checkbox": {
-    "apps/web/src/components/workspaces/table/select-row-content.tsx": 1
-  },
-  "no-native-ui/no-native-details-grid": {
-    "apps/landing/src/components/react/previews/RegistryLookupPreview.tsx": 3
-  },
+  "no-native-ui/no-native-checkbox": {},
+  "no-native-ui/no-native-details-grid": {},
   "no-native-ui/no-native-dialog": {
     "apps/web/src/components/ai-suggestions/host.tsx": 1,
     "apps/web/src/features/chat/answer-edit/answer-edit-panel.tsx": 1
