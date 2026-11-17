@@ -298,7 +298,7 @@ const chatTurnScopeCheck = sql`(
 // Queue rows mirror the turn rows' ownership columns and prove they match
 // the owning thread, with the thread's embedded-data scope, as turns do.
 const chatQueueScopeCheck = (
-  table: "chat_queued_messages" | "chat_queue_holds" | "chat_command_receipts",
+  table: "chat_queued_messages" | "chat_queue_holds",
 ) => sql`(
   ${userCheck} AND
   ${organizationCheck} AND
@@ -1903,7 +1903,18 @@ export const chatQueueHoldPolicies = () => [
   }),
 ];
 
-const commandReceiptScopeCheck = chatQueueScopeCheck("chat_command_receipts");
+// A receipt names its thread and is seen only with it: the thread's own
+// policy decides the matter and data scope, so the receipt keeps no copy of
+// the thread's workspace that could go stale.
+const commandReceiptScopeCheck = sql`(
+  ${userCheck} AND ${organizationCheck} AND
+  EXISTS (
+    SELECT 1 FROM chat_threads ct
+    WHERE ct.id = chat_command_receipts.thread_id
+      AND ct.organization_id = chat_command_receipts.organization_id
+      AND ct.user_id = chat_command_receipts.user_id
+  )
+)`;
 
 /**
  * A receipt is written once and never changed; its update policy holds a

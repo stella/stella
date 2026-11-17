@@ -1456,7 +1456,6 @@ export const persistAcceptedMessageWithClaim = async ({
             turnId: execution.id,
             tx,
             userId: turnAcceptance.userId,
-            workspaceId: turnAcceptance.workspaceId,
           });
         }
         return Result.ok({
@@ -1524,7 +1523,6 @@ export const persistClaimedReplayMessage = async ({
           turnId: execution.id,
           tx,
           userId: claim.userId,
-          workspaceId: claim.workspaceId,
         });
       }
     },
