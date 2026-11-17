@@ -548,7 +548,6 @@
     "apps/api/src/lib/safe-outbound-fetch.ts": 1,
     "apps/api/src/lib/search/detect-language.ts": 1,
     "apps/api/src/lib/style-set-editor.ts": 1,
-    "apps/api/src/lib/tanstack-ai-schema.ts": 2,
     "apps/api/src/lib/tanstack-ai-usage.ts": 1,
     "apps/api/src/lib/tasks/update-task.ts": 1,
     "apps/api/src/lib/template-binding/apply-source-fields.ts": 1,
