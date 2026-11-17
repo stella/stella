@@ -7287,6 +7287,7 @@
         "column:public.case_law_sources.config:UPDATE:GRANTOR:census_admin:GRANTABLE:false",
         "column:public.case_law_sources.decision_merge_epoch:UPDATE:EFFECTIVE",
         "column:public.case_law_sources.decision_merge_epoch:UPDATE:GRANTOR:census_admin:GRANTABLE:false",
+        "column:public.case_law_sources.import_snapshot_date:SELECT:GRANTOR:census_admin:GRANTABLE:false",
         "column:public.case_law_sources.import_snapshot_date:UPDATE:EFFECTIVE",
         "column:public.case_law_sources.import_snapshot_date:UPDATE:GRANTOR:census_admin:GRANTABLE:false",
         "column:public.case_law_sources.ingestion_lease_expires_at:UPDATE:EFFECTIVE",
