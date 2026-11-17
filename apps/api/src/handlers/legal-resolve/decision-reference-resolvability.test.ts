@@ -171,6 +171,20 @@ describe("a reference no grammar claims", () => {
     ).toBe("ambiguous");
   });
 
+  test("keeps a decision its lookup found for an equivalent spelling", () => {
+    const { intent } = resolverReadOf("CZE", "SA 12345");
+    expect(intent.kind).toBe("reference");
+    expect(
+      resolveDecisionIdentity(intent, [
+        {
+          caseNumber: "SA.12345",
+          ecli: null,
+          identifiers: [{ type: "commission-case-number", value: "SA.12345" }],
+        },
+      ]).status,
+    ).toBe("unique");
+  });
+
   test("leaves a docket a court grammar reads to that grammar", () => {
     expect(resolverReadOf("CZE", "29 Cdo 4084/2009").intent.kind).toBe(
       "docket",

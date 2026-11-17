@@ -562,14 +562,19 @@ export const exactDecisionMatches = <THit extends DecisionHitIdentity>(
     case "docket":
     case "ecli":
     case "reference": {
-      // A docket is keyed by the grammar that read it; an ECLI and a stored
-      // reference belong to no docket grammar, so they are compared unscoped.
+      // A docket is keyed by the grammar that read it; an ECLI belongs to no
+      // docket grammar, so it is compared unscoped. A stored reference is
+      // compared with case, spacing and punctuation folded, at least as
+      // loosely as every per-type key its lookup read rows by, so a row the
+      // lookup found for an equivalent spelling is never dropped here.
       const grammar =
         identifier.kind === "docket"
           ? DECISION_DOCKET_GRAMMARS[identifier.jurisdiction]
           : undefined;
       const keyOf = (value: string): string =>
-        decisionIdentifierComparisonKey(value, grammar);
+        identifier.kind === "reference"
+          ? structuredCitationKey(value)
+          : decisionIdentifierComparisonKey(value, grammar);
       const wanted = keyOf(identifier.value);
       return hits.filter(
         (hit) =>
