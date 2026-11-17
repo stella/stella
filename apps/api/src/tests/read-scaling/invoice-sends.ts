@@ -34,6 +34,7 @@ import {
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
 import { invoiceLinksSnapshot } from "@/api/tests/helpers/invoice-links-feature-access";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 const SENDS_PER_INVOICE = 3;
 // Exercise the real handler operation and SQL; only the email provider is replaced.
@@ -156,7 +157,7 @@ export const seedInvoiceSendScaling = async (db: GatedTestDb, size: number) => {
       request,
     },
     cleanup: async () => {
-      await db.delete(organization).where(eq(organization.id, organizationId));
+      await deleteOrganizationsForTest(db, [organizationId]);
       await db.delete(user).where(eq(user.id, userId));
     },
   };

@@ -32,6 +32,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 import { withInterleaving } from "@/api/tests/helpers/transaction-interleaving";
 
@@ -242,9 +243,7 @@ if (!databaseUrl || !runPostgres) {
           reset: async () => {
             accepted = 0;
             refusals.splice(0);
-            await db
-              .delete(organization)
-              .where(eq(organization.id, organizationId));
+            await deleteOrganizationsForTest(db, [organizationId]);
             await seedCapacity({
               db,
               organizationId,
@@ -279,9 +278,7 @@ if (!databaseUrl || !runPostgres) {
         expect(results).toHaveLength(6);
         expect(results.some(({ blocked }) => blocked.length > 0)).toBe(true);
       } finally {
-        await db
-          .delete(organization)
-          .where(eq(organization.id, organizationId));
+        await deleteOrganizationsForTest(db, [organizationId]);
         await db.delete(user).where(eq(user.id, userId));
       }
     });

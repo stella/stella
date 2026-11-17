@@ -42,6 +42,7 @@ import {
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
 import { invoiceLinksSnapshot } from "@/api/tests/helpers/invoice-links-feature-access";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 const testState = createTestState({ file: import.meta.path, config: env });
 testState.beforeAll(() => {
@@ -356,9 +357,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
             gates.b.release.resolve(undefined);
             releaseRow.resolve(undefined);
             await Promise.all([responses.a, responses.b, holdCompletion]);
-            await db
-              .delete(organization)
-              .where(eq(organization.id, organizationId));
+            await deleteOrganizationsForTest(db, [organizationId]);
             await db.delete(user).where(eq(user.id, userId));
           }
         });
