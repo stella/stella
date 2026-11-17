@@ -4084,7 +4084,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
               "type": "null"
             }
           ],
-          "description": "Business registration number"
+          "description": "Business register number"
         },
         "tax_id": {
           "anyOf": [
@@ -4108,7 +4108,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
               "type": "null"
             }
           ],
-          "description": "Business VAT number"
+          "description": "VAT number"
         },
         "vat_payer": {
           "anyOf": [
@@ -11691,7 +11691,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
               "type": "null"
             }
           ],
-          "description": "Business registration number"
+          "description": "Business register number"
         },
         "tax_id": {
           "anyOf": [
@@ -11715,7 +11715,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
               "type": "null"
             }
           ],
-          "description": "Business VAT number"
+          "description": "VAT number"
         },
         "vat_payer": {
           "anyOf": [

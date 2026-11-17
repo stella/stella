@@ -8928,7 +8928,7 @@
               "type": "null"
             }
           ],
-          "description": "Business registration number"
+          "description": "Business register number"
         },
         "tax_id": {
           "anyOf": [
@@ -8952,7 +8952,7 @@
               "type": "null"
             }
           ],
-          "description": "Business VAT number"
+          "description": "VAT number"
         },
         "vat_payer": {
           "anyOf": [

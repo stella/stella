@@ -737,7 +737,7 @@ const CONTACT_SAVE_FIELD_SCHEMAS = {
   ),
   registration_number: v.pipe(
     updateContactBodySchema.entries.registrationNumber,
-    v.description("Business registration number"),
+    v.description("Business register number"),
   ),
   tax_id: v.pipe(
     updateContactBodySchema.entries.taxId,
@@ -745,7 +745,7 @@ const CONTACT_SAVE_FIELD_SCHEMAS = {
   ),
   vat_id: v.pipe(
     updateContactBodySchema.entries.vatId,
-    v.description("Business VAT number"),
+    v.description("VAT number"),
   ),
   vat_payer: v.pipe(
     updateContactBodySchema.entries.vatPayer,
