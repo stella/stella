@@ -318,7 +318,11 @@ test("each migrated mutation still invalidates every prior cache target", async 
   const migrated = Object.entries(migratedMutationTargets);
   expect(migrated.length).toBeGreaterThan(0);
   for (const [mutation, factories] of migrated) {
-    if (!isContractName(mutation) || mutation === "updateUser") {
+    if (
+      !isContractName(mutation) ||
+      mutation === "updateUser" ||
+      isPublicTokenMutation(mutation)
+    ) {
       throw new TypeError(`Frozen targets name no contract: ${mutation}`);
     }
     expect({ mutation, factories: factories.length > 0 }).toEqual({

@@ -195,19 +195,20 @@ export const InvoiceSummary = ({
   const rootT = useTranslations();
   const format = useFormatter();
   const queryClient = useQueryClient();
+  const openFile = resourceMutation({
+    mutation: "openInvoiceLinkFile",
+    queryClient,
+    scope: { type: "public-token" },
+    mutationFn: async ({
+      file,
+      fileName,
+    }: {
+      file: InvoiceLinkFile;
+      fileName: string;
+    }) => await downloadInvoiceFile(token, file, fileName),
+  });
   const download = useMutation({
-    mutationFn: resourceMutation({
-      mutation: "openInvoiceLinkFile",
-      queryClient,
-      scope: { type: "public-token" },
-      mutationFn: async ({
-        file,
-        fileName,
-      }: {
-        file: InvoiceLinkFile;
-        fileName: string;
-      }) => await downloadInvoiceFile(token, file, fileName),
-    }),
+    mutationFn: openFile,
     onSuccess: (result) => {
       if (result.isErr()) {
         notifyUserError(result.error, t("downloadFailed"));
