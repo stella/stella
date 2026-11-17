@@ -223,9 +223,9 @@ const clientLocaleOwner = createClientDocumentLocaleOwner({
   },
   readSelectionUser: async () => {
     const session = await fetchSession();
-    return session?.user === undefined
-      ? null
-      : { id: session.user.id, locale: session.user.locale };
+    return session?.user !== undefined
+      ? { id: session.user.id, locale: session.user.locale }
+      : null;
   },
   isCurrent: isCurrentDocumentSession,
   getPrefs: getBrowserPresentationPrefs,

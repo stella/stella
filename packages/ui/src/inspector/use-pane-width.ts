@@ -138,25 +138,40 @@ export const useInspectorPaneWidth = ({
     initialWidth === undefined
       ? undefined
       : clampInspectorPaneWidth(initialWidth);
-  const [desiredWidth, setDesiredWidth] = useState(
-    normalizedInitialWidth ?? INSPECTOR_PANE_DEFAULT_WIDTH,
-  );
-  const [hostWidth, setHostWidth] = useState(normalizedInitialWidth);
+  // A local choice belongs to the host width it was made against: once the
+  // host reports another width outside a drag, the host's width wins. A drag
+  // keeps the host width it started against, so host updates wait for release.
+  const [localChoice, setLocalChoice] = useState<{
+    hostWidth: number | undefined;
+    width: number;
+  } | null>(null);
   const [dragStatus, setDragStatus] = useState<"idle" | "dragging">("idle");
+  const desiredWidth =
+    localChoice !== null &&
+    (localChoice.hostWidth === normalizedInitialWidth ||
+      dragStatus === "dragging")
+      ? localChoice.width
+      : (normalizedInitialWidth ?? INSPECTOR_PANE_DEFAULT_WIDTH);
+  const setDesiredWidth = (width: number) => {
+    setLocalChoice({ hostWidth: normalizedInitialWidth, width });
+  };
+  const setDraggedWidth = (width: number) => {
+    setLocalChoice((previous) => ({
+      hostWidth:
+        previous === null ? normalizedInitialWidth : previous.hostWidth,
+      width,
+    }));
+  };
   // Pointer move and release can share a React batch; retain the latest width
   // synchronously while state makes the drag status available during render.
   const drag = useRef<
     { status: "idle" } | { status: "dragging"; width: number }
   >({ status: "idle" });
 
-  if (hostWidth !== normalizedInitialWidth && dragStatus === "idle") {
-    setHostWidth(normalizedInitialWidth);
-    setDesiredWidth(normalizedInitialWidth ?? INSPECTOR_PANE_DEFAULT_WIDTH);
-  }
-
   const handlePointerDown = (event: ReactPointerEvent<HTMLElement>) => {
     event.preventDefault();
     drag.current = { status: "dragging", width: desiredWidth };
+    setDesiredWidth(desiredWidth);
     setDragStatus("dragging");
     event.currentTarget.setPointerCapture(event.pointerId);
   };
@@ -171,7 +186,7 @@ export const useInspectorPaneWidth = ({
       viewportWidth: window.innerWidth,
     });
     drag.current = { status: "dragging", width };
-    setDesiredWidth(width);
+    setDraggedWidth(width);
   };
 
   /**
