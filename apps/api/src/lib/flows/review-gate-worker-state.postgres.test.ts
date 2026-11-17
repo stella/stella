@@ -165,7 +165,12 @@ const observeGateResources = async (db: GatedTestDb, f: GateFixture) => {
         subscribe: async () => 0,
       }),
       publisher: createSseBroadcastPublisher({
-        createClient: () => ({ publish: async () => 0 }),
+        createClient: () => ({
+          connect: async () => undefined,
+          close: () => undefined,
+          onClose: () => () => undefined,
+          publish: async () => 0,
+        }),
       }),
     });
     const reader = subscribe({

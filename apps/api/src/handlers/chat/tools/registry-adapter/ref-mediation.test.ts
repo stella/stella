@@ -108,14 +108,16 @@ describe("registry input ref dehydration", () => {
       workspaceId: toSafeId<"workspace">(WS_UUID),
     });
 
+    const sourceRefs = Object.freeze([entityRef]);
+    const args = Object.freeze({
+      name: entityRef,
+      positions: Object.freeze([
+        Object.freeze({ issue: entityRef }),
+        Object.freeze({ issue: "Term", sources: sourceRefs }),
+      ]),
+    });
     const dehydrated = dehydrateRefs({
-      args: {
-        name: entityRef,
-        positions: [
-          { issue: entityRef },
-          { issue: "Term", sources: [entityRef] },
-        ],
-      },
+      args,
       inputRefs: WRITE_TOOL_REF_FIELD_MAP.save_playbook.inputRefs,
       refRegistry: registry,
     }).unwrap();
@@ -129,6 +131,7 @@ describe("registry input ref dehydration", () => {
         { issue: "Term", sources: [ENTITY_UUID] },
       ],
     });
+    expect(sourceRefs).toEqual([entityRef]);
     expect(dehydrated.dehydratedEntityRefs.get(ENTITY_UUID)).toBe(entityRef);
   });
 

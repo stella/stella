@@ -5,8 +5,8 @@ import { Result } from "better-result";
 import { rootKeys, sessionOptions } from "@/lib/auth-query-options";
 
 type AuthQueryOwner = {
-  userId: string | null;
-  organizationId: string | null;
+  readonly userId: string | null;
+  readonly organizationId: string | null;
 };
 
 type AuthQueryBinding = {
@@ -20,10 +20,12 @@ const cacheOwners = new WeakMap<Query, AuthQueryOwner>();
 
 /** Called by the session cache guard on successful session observations.
  * Same-owner refreshes retain their snapshot; leaving and returning does not. */
-export const observeAuthQueryOwner = (queryClient: QueryClient): void => {
+export const observeAuthQueryOwner = (
+  queryClient: QueryClient,
+): AuthQueryOwner | undefined => {
   const session = queryClient.getQueryState(sessionOptions.queryKey);
   if (session?.status !== "success") {
-    return;
+    return owners.get(queryClient);
   }
   const userId = session.data?.user.id ?? null;
   const organizationId = session.data?.session.activeOrganizationId ?? null;
@@ -32,13 +34,40 @@ export const observeAuthQueryOwner = (queryClient: QueryClient): void => {
     previous?.userId === userId &&
     previous.organizationId === organizationId
   ) {
-    return;
+    return previous;
   }
-  owners.set(queryClient, {
+  const owner = {
     userId,
     organizationId,
-  });
+  };
+  owners.set(queryClient, owner);
+  return owner;
 };
+
+/** Capture before starting work. An absent or failed session cannot gain
+ * ownership from a later successful read. */
+export const captureSessionQueryOwner = (queryClient: QueryClient) => {
+  const owner = observeAuthQueryOwner(queryClient);
+  return queryClient.getQueryState(sessionOptions.queryKey)?.status ===
+    "success" &&
+    owner !== undefined &&
+    owner.userId !== null
+    ? owner
+    : undefined;
+};
+
+/** Lifecycle identity survives an unconfirmed read, but not an observed owner change. */
+export const isObservedSessionQueryOwner = (
+  queryClient: QueryClient,
+  owner: ReturnType<typeof captureSessionQueryOwner>,
+): owner is NonNullable<ReturnType<typeof captureSessionQueryOwner>> =>
+  owner !== undefined && observeAuthQueryOwner(queryClient) === owner;
+
+export const isCurrentSessionQueryOwner = (
+  queryClient: QueryClient,
+  owner: ReturnType<typeof captureSessionQueryOwner>,
+): boolean =>
+  owner !== undefined && captureSessionQueryOwner(queryClient) === owner;
 
 export const isAuthBootstrapQuery = (query: Query): boolean =>
   query.queryHash === hashKey(rootKeys.role) ||
@@ -77,29 +106,20 @@ export const bindAuthQueryOwner = ({
   },
   CancelledError
 > => {
-  observeAuthQueryOwner(queryClient);
-  const owner = owners.get(queryClient);
-  const session = queryClient.getQueryState(sessionOptions.queryKey);
+  const owner = captureSessionQueryOwner(queryClient);
   const query = queryClient.getQueryCache().find({ queryKey, exact: true });
-  if (
-    session?.status !== "success" ||
-    owner?.userId === null ||
-    owner?.organizationId === null ||
-    owner === undefined ||
-    query === undefined ||
-    signal.aborted
-  ) {
+  if (owner === undefined) {
+    return Result.err(new CancelledError({ revert: false }));
+  }
+  if (owner.organizationId === null || query === undefined || signal.aborted) {
     return Result.err(new CancelledError({ revert: false }));
   }
   const binding = { owner, signal };
   bindings.set(query, binding);
   const assertCurrent = () => {
-    observeAuthQueryOwner(queryClient);
     if (
-      queryClient.getQueryState(sessionOptions.queryKey)?.status !==
-        "success" ||
+      !isCurrentSessionQueryOwner(queryClient, owner) ||
       signal.aborted ||
-      owners.get(queryClient) !== owner ||
       bindings.get(query) !== binding ||
       queryClient.getQueryCache().find({ queryKey, exact: true }) !== query
     ) {

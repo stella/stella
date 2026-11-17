@@ -151,6 +151,8 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   contactImportRequest: { type: "non_resource", reason: "workflow" },
   contactRelationship: { type: "non_resource", reason: "association" },
   corpusIndexProjectionIntent: { type: "non_resource", reason: "workflow" },
+  // The receipt of one serving flip of a public corpus family.
+  corpusIndexGenerationFlip: { type: "non_resource", reason: "event" },
   hostedCheckoutClaim: { type: "non_resource", reason: "workflow" },
   usageAllocation: { type: "non_resource", reason: "policy" },
   usageLaneCounter: { type: "non_resource", reason: "event" },

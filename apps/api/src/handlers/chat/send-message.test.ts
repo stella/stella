@@ -413,6 +413,7 @@ const createContext = ({
     recordAuditEvent: async () => {},
     request,
     route: "/v1/chat" satisfies ApiRoutePath,
+    headers: {},
     safeDb: observedSafeDb,
     scopedDb,
     set: { headers: {}, status: 200 },

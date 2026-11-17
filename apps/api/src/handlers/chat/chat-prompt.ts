@@ -944,9 +944,16 @@ const resolveActiveFilePromptContext = async ({
       },
       workspaceId,
     });
+    if (Result.isError(officeCitationSnapshot)) {
+      // The evidence owner reported the failure. Locator evidence is optional: keep the
+      // real AnyDoc-backed file prompt without claiming the citation is absent.
+      return Result.ok(promptBase);
+    }
     return Result.ok({
       ...promptBase,
-      ...(officeCitationSnapshot ? { officeCitationSnapshot } : {}),
+      ...(officeCitationSnapshot.value
+        ? { officeCitationSnapshot: officeCitationSnapshot.value }
+        : {}),
     });
   }
   const emailMimeType = resolveEmailMimeType({

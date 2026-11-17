@@ -152,6 +152,9 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   // seeding walk and the generation's lifecycle write them.
   "corpus_index_generation_seeding_passes",
   "corpus_index_route_seedings",
+  // Flip receipts: request code may read them; only the guarded flip
+  // appends one.
+  "corpus_index_generation_flips",
   // Mutation revisions are appended and pruned only by ingestion triggers;
   // request code may read the current proof watermark.
   "corpus_index_projection_revisions",

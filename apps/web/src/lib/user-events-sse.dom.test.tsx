@@ -1,6 +1,6 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import type { QueryMeta } from "@tanstack/react-query";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import {
@@ -63,6 +63,10 @@ const { taskDetailOptions, taskKeys } =
 const { workspaceMemberPreviewsOptions } =
   await import("@/lib/workspaces/queries/workspace-member-previews");
 const { resourceQueryOptions } = await import("@/lib/workspace-realtime");
+const { MEMBER_SESSION } =
+  await import("@/lib/account/auth-session.test-fixtures");
+const { sessionOptions } = await import("@/lib/auth-query-options");
+const { readQueryResult } = await import("@/lib/errors/query-result");
 
 afterEach(() => {
   cleanup();
@@ -72,9 +76,25 @@ afterAll(async () => await unregisterDomEnvironment());
 
 const ORGANIZATION = "organization-one";
 const USER = "user-one";
+const STREAM_SESSION = {
+  ...MEMBER_SESSION,
+  user: { ...MEMBER_SESSION.user, id: USER },
+  session: {
+    ...MEMBER_SESSION.session,
+    userId: USER,
+    activeOrganizationId: ORGANIZATION,
+  },
+};
+const createStreamClient = (
+  options?: ConstructorParameters<typeof QueryClient>[0],
+) => {
+  const client = new QueryClient(options);
+  client.setQueryData(sessionOptions.queryKey, STREAM_SESSION);
+  return client;
+};
 
 const mount = () => {
-  const queryClient = new QueryClient();
+  const queryClient = createStreamClient();
   const contactsList = contactsKeys.list(ORGANIZATION, { q: "" });
   const otherFirmContacts = contactsKeys.lists("organization-two");
   const notifications = notificationsOptions({
@@ -240,7 +260,7 @@ test("a frame that is no known event refreshes nothing", async () => {
 test.each(["event", "reconnect"])(
   "organization user projections refresh exact owner queries on %s",
   async (delivery) => {
-    const client = new QueryClient({
+    const client = createStreamClient({
       defaultOptions: { queries: { staleTime: Infinity, retry: false } },
     });
     const base = taskDetailOptions({
@@ -284,7 +304,7 @@ test.each(["event", "reconnect"])(
         },
       ),
     );
-    const wrongResource = observe(
+    const contactProjection = observe(
       resourceQueryOptions(
         {
           queryKey: [
@@ -335,7 +355,9 @@ test.each(["event", "reconnect"])(
       });
       expect(own()).toBe("After");
       expect(wrongOrganization()).toBe("Before");
-      expect(wrongResource()).toBe("Before");
+      expect(contactProjection()).toBe(
+        delivery === "event" ? "Before" : "After",
+      );
       await act(async () => {
         view.rerender({ userId: "new-user" });
       });
@@ -365,7 +387,7 @@ test.each(["event", "reconnect"])(
 test.each(["event", "reconnect"])(
   "the existing user stream refreshes organization member previews on %s without fetching inactive identities",
   async (delivery) => {
-    const client = new QueryClient({
+    const client = createStreamClient({
       defaultOptions: { queries: { staleTime: Infinity, retry: false } },
     });
     const subscriptions: (() => void)[] = [];
@@ -502,6 +524,105 @@ test.each(["event", "reconnect"])(
       for (const unsubscribe of subscriptions) {
         unsubscribe();
       }
+      client.clear();
+    }
+  },
+);
+
+test.each([
+  { name: "confirmed" },
+  { name: "recovering" },
+  { name: "unobserved" },
+])(
+  "a %s first subscription reconciles only a deferred-authority gap",
+  async ({ name: initialSession }) => {
+    const client = createStreamClient({
+      defaultOptions: { queries: { staleTime: Infinity, retry: false } },
+    });
+    let reads = 0;
+    const read = async () => ++reads;
+    const options = resourceQueryOptions(
+      {
+        queryKey: ["stream-recovery", ORGANIZATION, USER],
+        initialData: 0,
+        staleTime: Infinity,
+        queryFn: read,
+      },
+      {
+        resources: [RESOURCE_TYPE.ENTITY],
+        scope: {
+          type: "organization",
+          organizationId: ORGANIZATION,
+          userId: USER,
+        },
+      },
+    );
+    const observer = new QueryObserver(client, options);
+    const unsubscribe = observer.subscribe(() => undefined);
+    if (initialSession !== "confirmed") {
+      // The retained-owner case models a previously installed app guard.
+      if (initialSession === "recovering") {
+        const { observeAuthQueryOwner } =
+          await import("@/lib/account/auth-query-owner");
+        observeAuthQueryOwner(client);
+      }
+      const outcome = await client
+        .query({
+          ...sessionOptions,
+          staleTime: 0,
+          queryFn: async () =>
+            readQueryResult(Result.err(new Error("Session read failed"))),
+        })
+        .catch((error: unknown) => error);
+      expect(outcome).toBeInstanceOf(Error);
+      expect(client.getQueryState(sessionOptions.queryKey)?.status).toBe(
+        "error",
+      );
+    }
+    const view = renderHook(
+      () =>
+        useUserEventRefreshes({ organizationId: ORGANIZATION, userId: USER }),
+      {
+        wrapper: ({ children }) => (
+          <QueryClientProvider client={client}>{children}</QueryClientProvider>
+        ),
+      },
+    );
+    try {
+      expect(FakeEventSource.opened).toHaveLength(
+        initialSession === "confirmed" ? 1 : 0,
+      );
+      if (initialSession !== "confirmed") {
+        expect(reads).toBe(0);
+        await act(async () => {
+          client.setQueryData(sessionOptions.queryKey, STREAM_SESSION);
+        });
+      }
+      const live = FakeEventSource.opened.filter(
+        (stream) => stream.readyState !== FakeEventSource.CLOSED,
+      );
+      expect(live).toHaveLength(1);
+      await act(async () => {
+        for (const stream of FakeEventSource.opened.filter(
+          (candidate) => candidate.readyState === FakeEventSource.CLOSED,
+        )) {
+          stream.dispatchEvent(new Event("open"));
+        }
+      });
+      expect(reads).toBe(0);
+      await act(async () => {
+        live.at(0)?.open();
+        await Promise.all(
+          client
+            .getQueryCache()
+            .findAll()
+            .map(async (query) => await query.promise),
+        );
+      });
+      expect(reads).toBe(initialSession === "confirmed" ? 0 : 1);
+    } finally {
+      view.unmount();
+      unsubscribe();
       client.clear();
     }
   },

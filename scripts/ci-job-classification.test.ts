@@ -262,7 +262,7 @@ jobs:
 test("a callee with its own permissions is privileged under a privileged event", () => {
   const underTarget = (step: string) =>
     jobsFor({
-      ".github/workflows/caller.yml": `on: pull_request_target
+      ".github/workflows/caller.yml": `on: workflow_run
 permissions: {}
 jobs:
   call:
@@ -288,7 +288,7 @@ ${step}`,
 test("a privileged event reaches a callee through an intermediate workflow", () => {
   const nested = (step: string) =>
     jobsFor({
-      ".github/workflows/caller.yml": `on: pull_request_target
+      ".github/workflows/caller.yml": `on: workflow_run
 permissions: {}
 jobs:
   call:

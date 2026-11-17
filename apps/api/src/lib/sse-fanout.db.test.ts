@@ -253,6 +253,9 @@ const createFakeSubscriber = (): FakeSubscriberClient => {
 
 const loopbackPublisher = createSseBroadcastPublisher({
   createClient: () => ({
+    connect: async () => undefined,
+    close: () => undefined,
+    onClose: () => () => undefined,
     publish: async (_channel, message) => {
       redisPublishes += 1;
       for (const deliver of subscriberCallbacks) {
