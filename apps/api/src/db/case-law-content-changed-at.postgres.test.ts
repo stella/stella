@@ -189,9 +189,12 @@ const contentDiffers = (left: Snapshot, right: Snapshot): boolean =>
     (column) => left.content[column] !== right.content[column],
   );
 
-const contentColumns = Object.keys(
+const isContentColumn = (column: string): column is CaseLawContentColumn =>
+  Object.hasOwn(CASE_LAW_CONTENT_COLUMNS, column);
+
+const contentColumns: CaseLawContentColumn[] = Object.keys(
   CASE_LAW_CONTENT_COLUMNS,
-) as CaseLawContentColumn[];
+).filter((column) => isContentColumn(column));
 
 if (!databaseUrl || !runPostgresTests) {
   describe.skip("case-law content change stamp (postgres)", () => {
