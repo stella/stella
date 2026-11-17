@@ -47,7 +47,6 @@ import {
 } from "@/api/db/schema";
 import {
   bareCitationKey,
-  citationKeyOf,
   normalizeDecisionIdentifierValueIn,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -165,7 +164,7 @@ export const docketFamilyCitationKeys = (
  * reference is whatever a decision displays as its own: its docket, an
  * authority's decision number, a commission's case number.
  */
-export const IDENTIFIER_TYPES_OF_LOCATOR_KIND = {
+const IDENTIFIER_TYPES_OF_LOCATOR_KIND = {
   docket: [DECISION_IDENTIFIER_TYPES.CASE_NUMBER],
   ecli: [DECISION_IDENTIFIER_TYPES.ECLI],
   neutral: [DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION],
@@ -318,10 +317,10 @@ const ownColumnKeysOf = (
       return { column: "ecli-folded", keys: [locator.value.toUpperCase()] };
     case "reference": {
       // A decision's citation key is its displayed docket under the key
-      // function that writes the column; a reference with none is held only
-      // in the identifier rows.
-      const key = citationKeyOf(locator.value);
-      return key === null ? null : { column: "citation-key", keys: [key] };
+      // function that writes the column, read as a docket's spellings are;
+      // a reference with none is held only in the identifier rows.
+      const key = bareCitationKey(locator.value);
+      return key.length === 0 ? null : { column: "citation-key", keys: [key] };
     }
     case "neutral":
     case "reporter":
