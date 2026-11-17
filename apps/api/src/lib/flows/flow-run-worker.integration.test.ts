@@ -75,6 +75,7 @@ import {
 } from "@/api/lib/flows/flow-executor";
 import { fileFlowRunCompletionNotice } from "@/api/lib/flows/flow-run-actor";
 import type { notifyFlowRunActorOfCompletion } from "@/api/lib/flows/flow-run-completion-notice";
+import { prepareFlowStepFailure } from "@/api/lib/flows/flow-run-worker";
 import type { FlowStep, FlowTrigger } from "@/api/lib/flows/flow-types";
 import { decideGateForTask } from "@/api/lib/flows/review-gate-task";
 import { startFlowRun } from "@/api/lib/flows/start-flow-run";
@@ -2059,14 +2060,49 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
           throw new TypeError("The fixture has an error outcome");
         }
         expect(error.kind).toBe(cassette.expect.errorKind);
-        await failFlowRunFromWorker(job, error, {
+        const dependencies = {
           database:
             asTestRaw<Parameters<typeof failFlowRunFromWorker>[2]["database"]>(
               testDb,
             ),
           makeScopedDb,
           broadcastUpdate,
+        };
+        expect(
+          prepareFlowStepFailure({ job: undefined, error, dependencies }),
+        ).toBeUndefined();
+        expect(
+          logs.records.filter(
+            (record) => record.message === "flow.step_failed",
+          ),
+        ).toEqual([]);
+        const beforeRetry = await testDb.query.flowRuns.findFirst({
+          where: { id: { eq: runId } },
+          columns: { error: true, status: true },
         });
+        expect(
+          prepareFlowStepFailure({
+            job: { data: job, opts: { attempts: 2 }, attemptsMade: 1 },
+            error,
+            dependencies,
+          }),
+        ).toBeUndefined();
+        expect(
+          await testDb.query.flowRuns.findFirst({
+            where: { id: { eq: runId } },
+            columns: { error: true, status: true },
+          }),
+        ).toEqual(beforeRetry);
+        const finalize = prepareFlowStepFailure({
+          job: { data: job, opts: { attempts: 2 }, attemptsMade: 2 },
+          error,
+          dependencies,
+        });
+        expect(finalize).toBeDefined();
+        if (finalize === undefined) {
+          throw new TypeError("The final failed attempt settles the flow");
+        }
+        await finalize();
         const run = await testDb.query.flowRuns.findFirst({
           where: { id: { eq: runId } },
           columns: { error: true, status: true },
@@ -2088,7 +2124,24 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
           unconsumed: [],
           unexpected: [],
         });
-        expect(logs.records.length).toBeGreaterThan(0);
+        expect(
+          logs.records.filter(
+            (record) => record.message === "flow.step_failed",
+          ),
+        ).toEqual(
+          [1, 2].map((attemptsMade) => ({
+            message: "flow.step_failed",
+            severityText: "ERROR",
+            attributes: {
+              runId,
+              stepIndex: "0",
+              attemptsMade: String(attemptsMade),
+              // errorTag preserves the inherited canonical HandlerError tag.
+              "error.type": "HandlerError",
+              "observability.unowned": true,
+            },
+          })),
+        );
         expect(analytics.exceptions()).toEqual([]);
         expect(
           JSON.stringify({

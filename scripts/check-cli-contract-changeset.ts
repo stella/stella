@@ -20,6 +20,7 @@ import {
   deriveRevisionCatalog,
   type RevisionCatalog,
 } from "./capability-catalog-revision";
+import { touchesCatalogSources } from "./capability-catalog-sources";
 import { isChangesetEntry } from "./changeset-guard";
 import {
   canonicalJson,
@@ -29,7 +30,6 @@ import {
   compareStableVersions,
   readCapabilityShards,
 } from "./check-cli-release-coupling";
-import { GENERATORS, matchesGeneratedGlob } from "./generated-files";
 
 const DEFAULT_ROOT = path.resolve(import.meta.dirname, "..");
 const CLI_PACKAGE = "packages/cli";
@@ -288,22 +288,6 @@ const CATALOG_PART = `${CLI_PACKAGE}/capability-catalog.json`;
 
 const isCatalogPath = (file: string): boolean =>
   file === CATALOG_PART || file.startsWith(`${CLI_PACKAGE}/capabilities/`);
-
-const CATALOG_SOURCES = ((): readonly string[] => {
-  const generator = GENERATORS.find(({ id }) => id === "capability-catalog");
-  if (generator === undefined) {
-    return panic("the generator manifest has no capability-catalog entry");
-  }
-  return [...generator.inputs, ...(generator.checkInputs ?? [])];
-})();
-
-/** Whether a change touches anything the capability catalog is derived from. */
-export const touchesCatalogSources = (
-  changedFiles: readonly string[],
-): boolean =>
-  changedFiles.some((file) =>
-    CATALOG_SOURCES.some((glob) => matchesGeneratedGlob(glob, file)),
-  );
 
 const deriveCatalogText = (
   derive: CatalogDeriver,

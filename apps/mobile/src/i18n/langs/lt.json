@@ -332,6 +332,39 @@
         "usage-limit": "Eilė pristabdyta: pasiekėte naudojimo limitą. Tęskite, kai jis atsinaujins.",
         "computer-away": "Laukiama jūsų kompiuterio: eilėje esančios žinutės bus išsiųstos, kai jis prisijungs."
       }
+    },
+    "edit": {
+      "action": "Redaguoti",
+      "title": "Redaguoti žinutę",
+      "input": "Redaguota žinutė",
+      "notice": "Išsiuntus bus pakeista ši žinutė ir visos po jos esančios žinutės.",
+      "cancel": "Atšaukti",
+      "refused": "Žinutės redaguoti nepavyko. Pokalbyje dabar rodoma tai, kas išsaugota; bandykite dar kartą, kai nebebus rengiamas joks atsakymas.",
+      "refusedHistoryChanged": "Pokalbis pasikeitė, kol buvo siunčiamas pataisymas. Dabar rodoma tai, kas išsaugota; išsiųskite pataisymą dar kartą.",
+      "refusedTargetMissing": "Šios žinutės pokalbyje nebėra, todėl jos redaguoti negalima.",
+      "localFiles": {
+        "computer": {
+          "failed": "Atšaukimas jūsų kompiuteryje nebuvo baigtas. Kai kurie failai jau galėjo pasikeisti, todėl patikrinkite pokalbio aplanką.",
+          "folderBusy": "Šį aplanką jūsų kompiuteryje naudoja kitas vykdymas. Bandykite dar kartą, kai jis baigsis.",
+          "noCheckpoint": "Jūsų kompiuteryje nėra išsaugotos failų kopijos iš laiko prieš šį žingsnį, todėl niekas neatšaukta.",
+          "updateForEarlier": "Atnaujinkite stella desktop, kad galėtumėte atšaukti ankstesnių žinučių pakeitimus."
+        },
+        "conversationRestarts": "Agentas pradės iš naujo nuo šio pokalbio teksto, nes atsakymas prieš šią žinutę nebuvo baigtas.",
+        "expired": "Jūsų kompiuteris laiku neatsakė. Bandykite dar kartą.",
+        "option": "Taip pat atšaukti failų pakeitimus nuo šios žinutės",
+        "optionHint": "Bus atšaukti ir pakeitimai, kuriuos aplanke atlikote patys.",
+        "pending": "Atšaukiami failų pakeitimai jūsų kompiuteryje",
+        "refused": {
+          "alreadyUndone": "Šie failų pakeitimai jau atšaukti.",
+          "desktopOffline": "Jūsų kompiuteris neprisijungęs. Atidarykite stella darbalaukio programą ir bandykite dar kartą.",
+          "desktopUpdateRequired": "Jūsų kompiuteryje esanti stella darbalaukio programa per sena pakeitimams atšaukti. Atnaujinkite ją ir bandykite dar kartą.",
+          "folderShared": "Nuo šios žinutės šiame aplanke dirbo kitas pokalbis.",
+          "noSavedCopy": "Jūsų kompiuteris neišsaugojo aplanko kopijos iš laiko prieš šią žinutę: jis buvo per didelis arba per lėtai išsisaugojo, arba ją pakeitė naujesnės kopijos.",
+          "severalFolders": "Vėlesnės žinutės buvo vykdomos kitame kompiuteryje arba kitame aplanke.",
+          "threadBusy": "Šis pokalbis dar vyksta. Bandykite dar kartą, kai jis baigsis."
+        },
+        "restored": "Failų pakeitimai atšaukti"
+      }
     }
   },
   "tasks": {

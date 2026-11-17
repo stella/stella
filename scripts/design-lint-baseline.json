@@ -509,8 +509,6 @@
     "apps/api/src/handlers/chat/skill-availability/offered-tools.ts": 1,
     "apps/api/src/handlers/chat/stream-chat.ts": 1,
     "apps/api/src/handlers/chat/stream-message-identity.ts": 1,
-    "apps/api/src/handlers/chat/third-party-boundary.ts": 2,
-    "apps/api/src/handlers/chat/tool-read-scope.ts": 2,
     "apps/api/src/handlers/chat/tools/execute/sandbox/code-mode-driver.ts": 1,
     "apps/api/src/handlers/chat/tools/execute/sandbox/run-sandbox.ts": 1,
     "apps/api/src/handlers/chat/tools/external-mcp-tools-normalization.ts": 1,

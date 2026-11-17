@@ -69,6 +69,7 @@
     "scripts/check-tracked-cloud-reports.test.ts": ["**"],
     "scripts/check-tracked-symlinks.test.ts": ["**"],
     "scripts/check-workflow-pr-write-token.test.ts": ["**"],
+    "scripts/check-workspace-test-gating.test.ts": ["apps/**", "packages/**"],
     "scripts/child-output-buffer.test.ts": ["**"],
     "scripts/ci-affected-selection.test.ts": ["**"],
     "scripts/ci-api-bootstrap.test.ts": ["**"],

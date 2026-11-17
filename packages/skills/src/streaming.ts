@@ -1,6 +1,7 @@
 /**
  * Read an untrusted byte stream up to a hard cap. The reader is cancelled on
- * overflow or failure and its lock is released on every exit path.
+ * overflow or failure and its lock is released on every exit path, without
+ * waiting for transport cleanup to settle.
  * `onChunk` sees every chunk read, including the one that overflows, so a
  * caller can keep a prefix of a body it will refuse.
  */
@@ -29,7 +30,10 @@ export const readCappedBytes = async (
       chunks.push(value);
     }
     if (overflowed) {
-      await reader.cancel();
+      reader.cancel().catch((cancellationError: unknown) => {
+        // Cleanup cannot replace the already-established byte-limit result.
+        cancellationError satisfies unknown;
+      });
       return null;
     }
 
@@ -41,7 +45,10 @@ export const readCappedBytes = async (
     }
     return merged;
   } catch (error) {
-    await reader.cancel(error).catch(() => undefined);
+    reader.cancel(error).catch((cancellationError: unknown) => {
+      // The read or observer failure remains authoritative.
+      cancellationError satisfies unknown;
+    });
     throw error;
   } finally {
     reader.releaseLock();

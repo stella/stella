@@ -762,7 +762,6 @@ describe("workflow_run trust", () => {
           "schedule",
           "workflow_dispatch",
           "pull_request",
-          "pull_request_target",
           "workflow_run",
           "push",
         ]) {
@@ -905,26 +904,20 @@ describe("workflow_run trust", () => {
     expect(trustProblems(workflow)).toHaveLength(3);
   });
 
-  test("no pull_request_target or workflow_run job uses a cache", () => {
+  test("no workflow_run job uses a cache", () => {
     const workflows = allWorkflows().filter(({ workflow }) =>
       usesDefaultCacheScope(workflow),
     );
-    expect(workflows.map(({ file }) => file).toSorted()).toEqual(
-      [
-        ...WORKFLOW_RUN_WORKFLOWS,
-        "merge-group-hold.yml",
-        "network-baseline-request.yml",
-        "pr-lint.yml",
-        "release-proof.yml",
-      ].toSorted(),
-    );
+    expect(workflows.map(({ file }) => file).toSorted()).toEqual([
+      ...WORKFLOW_RUN_WORKFLOWS,
+    ]);
     const problems = workflows.flatMap(({ file, workflow }) =>
       workflowCacheProblems(workflow).map((problem) => `${file}: ${problem}`),
     );
     expect(problems).toEqual([]);
   });
 
-  test("rejects every cache-saving step shape in a pull_request_target job", () => {
+  test("rejects every cache-saving step shape in a workflow_run job", () => {
     const steps = [
       { uses: "actions/cache@abc" },
       { uses: "actions/cache/save@abc" },
@@ -937,13 +930,13 @@ describe("workflow_run trust", () => {
     ];
     for (const step of steps) {
       const workflow = {
-        on: ["pull_request_target"],
+        on: ["workflow_run"],
         jobs: { a: { steps: [step] } },
       };
       expect(workflowCacheProblems(workflow), step.uses).toHaveLength(1);
     }
     const unreviewed = {
-      on: { pull_request_target: {} },
+      on: { workflow_run: {} },
       jobs: { a: { uses: "someone/repo/.github/workflows/x.yml@abc" } },
     };
     expect(workflowCacheProblems(unreviewed)).toHaveLength(1);
@@ -951,7 +944,7 @@ describe("workflow_run trust", () => {
 
   test("accepts steps that cannot save to a cache", () => {
     const workflow = {
-      on: ["pull_request_target"],
+      on: ["workflow_run"],
       jobs: {
         a: {
           steps: [

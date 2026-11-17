@@ -13,8 +13,9 @@ import entry11 from "./statement.caseLaw.courtCatalogPage";
 import entry12 from "./statement.caseLaw.coverageSources";
 import entry13 from "./statement.caseLaw.euCompletionPage";
 import entry14 from "./statement.caseLaw.quoteRecord";
-import entry15 from "./statement.documents.searchHits";
-import entry16 from "./statement.legislation.candidateRows";
+import entry15 from "./statement.caseLaw.servableCandidateRevisions";
+import entry16 from "./statement.documents.searchHits";
+import entry17 from "./statement.legislation.candidateRows";
 
 export default {
   "scheduled.caseLaw.backfillProvisionState": entry0,
@@ -32,6 +33,7 @@ export default {
   "statement.caseLaw.coverageSources": entry12,
   "statement.caseLaw.euCompletionPage": entry13,
   "statement.caseLaw.quoteRecord": entry14,
-  "statement.documents.searchHits": entry15,
-  "statement.legislation.candidateRows": entry16,
+  "statement.caseLaw.servableCandidateRevisions": entry15,
+  "statement.documents.searchHits": entry16,
+  "statement.legislation.candidateRows": entry17,
 } as const;

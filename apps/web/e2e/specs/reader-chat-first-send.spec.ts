@@ -3,6 +3,10 @@ import { EventType } from "@tanstack/ai/client";
 import type { StreamChunk } from "@tanstack/ai/client";
 import * as v from "valibot";
 
+import {
+  CHAT_COMMAND_ID_HEADER,
+  CHAT_COMMAND_MAX_RETRIES,
+} from "@stll/api-contract/chat-command";
 import { toSafeId } from "@stll/api-contract/safe-id";
 
 import messages from "../../src/i18n/langs/en.json" with { type: "json" };
@@ -146,9 +150,9 @@ test("a fresh reader shows connection guidance when its first chat request canno
       }),
     );
   });
-  let sends = 0;
+  const commandIds: (string | undefined)[] = [];
   await page.route(/\/v1\/chat\/?$/u, async (route) => {
-    sends += 1;
+    commandIds.push(route.request().headers()[CHAT_COMMAND_ID_HEADER]);
     await route.abort("failed");
   });
   const composer = await openFreshReader(page);
@@ -166,5 +170,9 @@ test("a fresh reader shows connection guidance when its first chat request canno
   await expect(
     page.getByText(messages.chat.sendError, { exact: true }),
   ).toHaveCount(0);
-  expect(sends).toBe(1);
+  // A send that never reached the server is asked again under its command
+  // id, and the guidance shows once the last attempt fails too.
+  expect(commandIds).toHaveLength(1 + CHAT_COMMAND_MAX_RETRIES);
+  expect(new Set(commandIds).size).toBe(1);
+  expect(commandIds[0]).toMatch(/^[0-9a-f-]{36}$/u);
 });
