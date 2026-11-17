@@ -55,6 +55,10 @@ const invoice = {
   organizationId: toSafeId<"organization">(
     "019a0000-0000-7000-8000-000000000003",
   ),
+  externalSource: null,
+  externalId: null,
+  externalChangeKey: null,
+  importedAt: null,
   status: "sent",
   documentType: "invoice",
   currency: "EUR",

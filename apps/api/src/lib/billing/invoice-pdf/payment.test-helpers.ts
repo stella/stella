@@ -65,7 +65,7 @@ export const assertInvoicePaymentRequest = ({
   }
   const payment = data.payment;
   if (payment?.status !== "due") {
-    return panic("Payable invoice must carry payment");
+    panic("Payable invoice must carry payment");
   }
   expect(payment.fields.map(({ value }) => value)).toContain(
     money(outstandingAmount),

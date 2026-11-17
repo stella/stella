@@ -35,6 +35,12 @@ import {
 } from "./-invoice-link.logic";
 import type { InvoiceLinkFile } from "./-invoice-link.logic";
 
+/** The `invoiceLink` message stating each settled outcome. */
+const SETTLEMENT_STATEMENT = {
+  paid: "paid",
+  credited: "credited",
+} as const;
+
 /**
  * The page an invoice email links to. The link's token rides in the URL
  * fragment, which the browser never sends to a server; the page posts it to
@@ -246,7 +252,7 @@ export const InvoiceSummary = ({
             <p className="text-sm font-medium">
               {invoice.settlement.kind === "overpaid"
                 ? t("overpaid", { amount: invoice.settlement.refund })
-                : t(invoice.settlement.kind)}
+                : t(SETTLEMENT_STATEMENT[invoice.settlement.kind])}
             </p>
           )}
           {invoice.payment === null ? null : (

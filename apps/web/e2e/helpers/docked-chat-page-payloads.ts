@@ -69,6 +69,7 @@ export const dockedChatPagePayloads = ({
     payments: [],
     paidAmount: cents(0),
     outstandingAmount: cents(0),
+    settlement: { kind: "open" as const },
     sentAt: null,
     paidAt: null,
     finalizedAt: null,
