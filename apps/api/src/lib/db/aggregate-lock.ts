@@ -782,7 +782,8 @@ type AuxiliaryRowIdentityOptions = Extract<
       | "correspondence"
       | "desktopMembership"
       | "memory"
-      | "searchProjectionRepair";
+      | "searchProjectionRepair"
+      | "savedSearch";
   }
 >;
 
@@ -790,6 +791,14 @@ const auxiliaryRowResource = (
   options: AuxiliaryRowIdentityOptions,
 ): RowResource => {
   switch (options.aggregate) {
+    case "savedSearch":
+      return {
+        table: "saved_searches",
+        columns: ["id"],
+        values: [options.id.id],
+        scopeColumns: ["organization_id", "user_id"],
+        scopeValues: [options.id.organizationId, options.id.userId],
+      };
     case "correspondence":
       return byIdWithin(
         "correspondence",
@@ -870,6 +879,7 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
     case "desktopMembership":
     case "memory":
     case "searchProjectionRepair":
+    case "savedSearch":
       return auxiliaryRowResource(options);
     case "searchHistory":
       return {

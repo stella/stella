@@ -439,6 +439,318 @@ const factoryImport = ({
   return undefined;
 };
 
+/** The declaration a reference actually binds to, including callback parameters. */
+const patternBindings = (pattern: Node): Node[] => {
+  if (pattern.type === "Identifier") {
+    return [pattern];
+  }
+  if (pattern.type === "AssignmentPattern") {
+    return patternBindings(pattern.left);
+  }
+  if (pattern.type === "RestElement") {
+    return patternBindings(pattern.argument);
+  }
+  if (pattern.type === "ObjectPattern") {
+    return pattern.properties.flatMap((property) =>
+      patternBindings(
+        property.type === "RestElement" ? property : property.value,
+      ),
+    );
+  }
+  return pattern.type === "ArrayPattern"
+    ? pattern.elements.flatMap((element) =>
+        element === null ? [] : patternBindings(element),
+      )
+    : [];
+};
+const namedBinding = (pattern: Node, name: string) =>
+  patternBindings(pattern).find(
+    (binding) => binding.type === "Identifier" && binding.name === name,
+  );
+
+const loopDeclarationOf = (node: Node) => {
+  if (node.type === "ForInStatement" || node.type === "ForOfStatement") {
+    return node.left;
+  }
+  if (node.type === "ForStatement") {
+    return node.init ?? undefined;
+  }
+  return undefined;
+};
+
+const lexicalBinding = (reference: Node, name: string): Node | undefined => {
+  for (
+    let ancestor = parentOf(reference);
+    ancestor !== undefined;
+    ancestor = parentOf(ancestor)
+  ) {
+    if (ancestor.type === "BlockStatement" || ancestor.type === "Program") {
+      for (const statement of ancestor.body) {
+        const declaration = declaredStatement(statement);
+        if (declaration.type === "VariableDeclaration") {
+          for (const item of declaration.declarations) {
+            const binding = namedBinding(item.id, name);
+            if (binding !== undefined) {
+              return binding;
+            }
+          }
+        }
+        if (
+          (declaration.type === "FunctionDeclaration" ||
+            declaration.type === "ClassDeclaration") &&
+          declaration.id?.name === name
+        ) {
+          return declaration.id;
+        }
+        if (declaration.type === "ImportDeclaration") {
+          const imported = declaration.specifiers.find(
+            (item) => item.local.name === name,
+          );
+          if (imported !== undefined) {
+            return imported.local;
+          }
+        }
+      }
+    }
+    const loopDeclaration = loopDeclarationOf(ancestor);
+    if (loopDeclaration?.type === "VariableDeclaration") {
+      for (const declaration of loopDeclaration.declarations) {
+        const binding = namedBinding(declaration.id, name);
+        if (binding !== undefined) {
+          return binding;
+        }
+      }
+    }
+    if (
+      ancestor.type === "FunctionDeclaration" ||
+      isWrapperFunction(ancestor)
+    ) {
+      for (const parameter of ancestor.params) {
+        const binding = namedBinding(parameter, name);
+        if (binding !== undefined) {
+          return binding;
+        }
+      }
+      if (
+        ancestor.type !== "ArrowFunctionExpression" &&
+        ancestor.id?.name === name
+      ) {
+        return ancestor.id;
+      }
+    }
+  }
+  return undefined;
+};
+
+const bindingOrigin = (
+  reference: Node,
+  name: string,
+  seen = new Set<Node>(),
+): Node | undefined => {
+  const binding = lexicalBinding(reference, name);
+  if (binding === undefined || seen.has(binding)) {
+    return undefined;
+  }
+  seen.add(binding);
+  const declaration = parentOf(binding);
+  const initializer =
+    declaration?.type === "VariableDeclarator" ? declaration.init : null;
+  return initializer?.type === "Identifier"
+    ? bindingOrigin(initializer, initializer.name, seen)
+    : binding;
+};
+
+const assignmentTarget = (node: Node) => {
+  if (node.type === "AssignmentExpression") {
+    return node.left;
+  }
+  if (node.type === "UpdateExpression") {
+    return node.argument;
+  }
+  if (
+    (node.type === "ForOfStatement" || node.type === "ForInStatement") &&
+    node.left.type !== "VariableDeclaration"
+  ) {
+    return node.left;
+  }
+  return undefined;
+};
+
+/** Assignment destinations exclude keys and computed lookup expressions. */
+const writtenBindings = (target: Node): Node[] => {
+  const node = unwrap(target);
+  if (node.type === "Identifier") {
+    return [node];
+  }
+  if (node.type === "MemberExpression") {
+    return writtenBindings(node.object);
+  }
+  if (node.type === "AssignmentPattern") {
+    return writtenBindings(node.left);
+  }
+  if (node.type === "RestElement") {
+    return writtenBindings(node.argument);
+  }
+  if (node.type === "ObjectPattern") {
+    return node.properties.flatMap((property) =>
+      writtenBindings(
+        property.type === "RestElement" ? property : property.value,
+      ),
+    );
+  }
+  return node.type === "ArrayPattern"
+    ? node.elements.flatMap((element) =>
+        element === null ? [] : writtenBindings(element),
+      )
+    : [];
+};
+
+/** Reject writes to a capability or its methods, and ambiguous hoisted var shadows. */
+const stableBinding = (program: Program, binding: Node): boolean => {
+  if (binding.type !== "Identifier") {
+    return false;
+  }
+  let stable = true;
+  walk(program, (node) => {
+    if (
+      node.type === "VariableDeclaration" &&
+      node.kind === "var" &&
+      node.declarations.some(
+        (item) => namedBinding(item.id, binding.name) !== undefined,
+      )
+    ) {
+      stable = false;
+    }
+    const target = assignmentTarget(node);
+    if (target === undefined) {
+      return;
+    }
+    for (const part of writtenBindings(target)) {
+      if (
+        part.type === "Identifier" &&
+        bindingOrigin(part, part.name) === binding
+      ) {
+        stable = false;
+      }
+    }
+  });
+  return stable;
+};
+
+const singleConst = (statement: Node | undefined) => {
+  if (
+    statement?.type !== "VariableDeclaration" ||
+    statement.kind !== "const" ||
+    statement.declarations.length !== 1
+  ) {
+    return undefined;
+  }
+  const declaration = statement.declarations.at(0);
+  return declaration?.id.type === "Identifier" && declaration.init !== null
+    ? { id: declaration.id, init: declaration.init }
+    : undefined;
+};
+const delegatedValue = (node: Node | null | undefined): Node | undefined => {
+  if (node === undefined || node === null) {
+    return undefined;
+  }
+  const value = unwrap(node);
+  return value.type === "YieldExpression" &&
+    value.delegate &&
+    value.argument !== null
+    ? unwrap(value.argument)
+    : undefined;
+};
+const unconditionalExit = (node: Node): boolean =>
+  node.type === "ReturnStatement" ||
+  node.type === "ThrowStatement" ||
+  (node.type === "BlockStatement" && node.body.some(unconditionalExit));
+
+/** Result's namespace may be called directly, but cannot escape to an opaque mutator. */
+const resultNamespaceIsClosed = (program: Program, binding: Node): boolean => {
+  let closed = true;
+  walk(program, (node) => {
+    if (
+      node.type !== "Identifier" ||
+      bindingOrigin(node, node.name) !== binding
+    ) {
+      return;
+    }
+    const parent = parentOf(node);
+    if (
+      parent?.type === "ImportSpecifier" ||
+      parent?.type === "TSTypeReference" ||
+      parent?.type === "TSTypeQuery" ||
+      parent?.type === "TSQualifiedName"
+    ) {
+      return;
+    }
+    if (
+      parent?.type === "MemberExpression" &&
+      !parent.computed &&
+      parent.property === node
+    ) {
+      return;
+    }
+    if (
+      parent?.type === "Property" &&
+      !parent.computed &&
+      !parent.shorthand &&
+      parent.key === node
+    ) {
+      return;
+    }
+    const call = parent === undefined ? undefined : parentOf(parent);
+    if (
+      parent?.type !== "MemberExpression" ||
+      parent.object !== node ||
+      memberName(parent) === undefined ||
+      call?.type !== "CallExpression" ||
+      call.callee !== parent ||
+      call.optional
+    ) {
+      closed = false;
+    }
+  });
+  return closed;
+};
+
+const literalFields = (
+  value: Node | undefined,
+): Map<string, Node> | undefined => {
+  if (value?.type !== "ObjectExpression") {
+    return undefined;
+  }
+  const fields = new Map<string, Node>();
+  for (const property of value.properties) {
+    if (
+      property.type !== "Property" ||
+      property.computed ||
+      property.method ||
+      property.kind !== "init"
+    ) {
+      return undefined;
+    }
+    const key = moduleExportName(property.key);
+    if (key === undefined || fields.has(key)) {
+      return undefined;
+    }
+    fields.set(key, property.value);
+  }
+  return fields;
+};
+
+const soleReturn = (node: Node): Node | undefined => {
+  if (node.type === "ReturnStatement") {
+    return node.argument ?? undefined;
+  }
+  const only =
+    node.type === "BlockStatement" && node.body.length === 1
+      ? node.body.at(0)
+      : undefined;
+  return only === undefined ? undefined : soleReturn(only);
+};
+
 class WriteSourceResolver {
   private readonly load: SourceLoader;
   constructor(load: SourceLoader) {
@@ -892,11 +1204,14 @@ class WriteSourceResolver {
       if (callback === undefined) {
         return new Set<string>();
       }
-      return this.functionEnforcement({
-        value: { file: safe.file, node: callback, scope: safe.scope },
-        type,
-        seen: new Set(),
-      });
+      return new Set([
+        ...this.functionEnforcement({
+          value: { file: safe.file, node: callback, scope: safe.scope },
+          type,
+          seen: new Set(),
+        }),
+        ...this.resultTransactionEnforcement(safe, type),
+      ]);
     });
     const first = perHandler.at(0) ?? new Set<string>();
     return new Set(
@@ -904,6 +1219,713 @@ class WriteSourceResolver {
         perHandler.every((fields) => fields.has(field)),
       ),
     );
+  };
+  canonicalImportBinding = ({
+    file,
+    reference,
+    module,
+    imported,
+  }: {
+    file: string;
+    reference: Node;
+    module: string;
+    imported: string;
+  }): Node | undefined => {
+    const program = this.source(file);
+    if (program === undefined || reference.type !== "Identifier") {
+      return undefined;
+    }
+    const binding = lexicalBinding(reference, reference.name);
+    if (binding === undefined || !stableBinding(program, binding)) {
+      return undefined;
+    }
+    return program.body.some(
+      (statement) =>
+        statement.type === "ImportDeclaration" &&
+        (statement.source.value === module ||
+          modulePath(file, statement.source.value) === module) &&
+        statement.importKind !== "type" &&
+        statement.specifiers.some(
+          (item) =>
+            item.type === "ImportSpecifier" &&
+            item.importKind !== "type" &&
+            item.local === binding &&
+            moduleExportName(item.imported) === imported,
+        ),
+    )
+      ? binding
+      : undefined;
+  };
+  /** Package methods are capabilities too: spelling alone never proves Result. */
+  resultCall = (
+    file: string,
+    node: Node,
+    method: string,
+  ): node is CallExpression => {
+    if (
+      node.type !== "CallExpression" ||
+      node.optional ||
+      node.callee.type !== "MemberExpression" ||
+      memberName(node.callee) !== method
+    ) {
+      return false;
+    }
+    const program = this.source(file);
+    const binding = this.canonicalImportBinding({
+      file,
+      reference: node.callee.object,
+      module: "better-result",
+      imported: "Result",
+    });
+    return (
+      program !== undefined &&
+      binding !== undefined &&
+      resultNamespaceIsClosed(program, binding)
+    );
+  };
+  rootResultContext = (safe: SafeCall) => {
+    const program = this.source(safe.file);
+    const factory = this.canonicalImportBinding({
+      file: safe.file,
+      reference: safe.node.callee,
+      module: "apps/api/src/lib/api-handlers.ts",
+      imported: "createSafeRootHandler",
+    });
+    if (program === undefined || factory === undefined) {
+      return undefined;
+    }
+    const expression = safe.node.arguments.at(1);
+    const handler =
+      expression === undefined
+        ? undefined
+        : this.resolve({
+            file: safe.file,
+            node: expression,
+            scope: safe.scope,
+          });
+    if (
+      handler?.node.type !== "FunctionExpression" ||
+      !handler.node.async ||
+      !handler.node.generator ||
+      handler.node.body?.type !== "BlockStatement"
+    ) {
+      return undefined;
+    }
+    const parameter = handler.node.params.at(0);
+    if (parameter?.type !== "ObjectPattern") {
+      return undefined;
+    }
+    const capability = parameter.properties.find(
+      (property) =>
+        property.type === "Property" &&
+        !property.computed &&
+        moduleExportName(property.key) === "safeDb",
+    );
+    if (
+      capability?.type !== "Property" ||
+      capability.value.type !== "Identifier" ||
+      !stableBinding(program, capability.value)
+    ) {
+      return undefined;
+    }
+    return {
+      program,
+      handler,
+      body: handler.node.body,
+      capability: capability.value,
+      dataBindings: new Set(handler.node.params.flatMap(patternBindings)),
+    };
+  };
+  /** Earlier exits must refuse; catch/finally cannot replace a transaction refusal. */
+  resultEarlyExits = ({
+    file,
+    body,
+    before,
+    rejectTry,
+  }: {
+    file: string;
+    body: BlockStatement;
+    before: Node;
+    rejectTry: boolean;
+  }): boolean => {
+    let propagates = true;
+    const visit = (node: Node) => {
+      if (isFunctionLike(node)) {
+        return;
+      }
+      if (rejectTry && node.type === "TryStatement") {
+        propagates = false;
+      }
+      if (
+        node.type === "ReturnStatement" &&
+        node.start < before.start &&
+        (node.argument === null ||
+          !this.resultCall(file, unwrap(node.argument), "err"))
+      ) {
+        propagates = false;
+      }
+      for (const child of childNodes(node)) {
+        visit(child);
+      }
+    };
+    visit(body);
+    return propagates;
+  };
+  delegatedResultCallback = ({
+    file,
+    program,
+    body,
+    capability,
+    statement,
+    next,
+  }: {
+    file: string;
+    program: Program;
+    body: BlockStatement;
+    capability: Node;
+    statement: Node;
+    next: Node | undefined;
+  }) => {
+    const outcome = singleConst(statement);
+    const awaited = delegatedValue(outcome?.init);
+    if (
+      outcome === undefined ||
+      awaited === undefined ||
+      !this.resultCall(file, awaited, "await") ||
+      awaited.arguments.length !== 1 ||
+      !stableBinding(program, outcome.id)
+    ) {
+      return undefined;
+    }
+    const invocation = awaited.arguments.at(0);
+    if (
+      invocation?.type !== "CallExpression" ||
+      invocation.optional ||
+      invocation.callee.type !== "Identifier" ||
+      lexicalBinding(invocation.callee, invocation.callee.name) !==
+        capability ||
+      invocation.arguments.length !== 1
+    ) {
+      return undefined;
+    }
+    const inner = delegatedValue(singleConst(next)?.init);
+    if (
+      inner?.type !== "Identifier" ||
+      lexicalBinding(inner, inner.name) !== outcome.id ||
+      !this.resultEarlyExits({
+        file,
+        body,
+        before: statement,
+        rejectTry: false,
+      })
+    ) {
+      return undefined;
+    }
+    const callback = invocation.arguments.at(0);
+    return callback !== undefined &&
+      isWrapperFunction(callback) &&
+      callback.async &&
+      !(callback.type === "FunctionExpression" && callback.generator) &&
+      callback.body?.type === "BlockStatement"
+      ? { node: callback, body: callback.body }
+      : undefined;
+  };
+  schemaTableBinding = (file: string, reference: Node): Node | undefined => {
+    const program = this.source(file);
+    if (program === undefined || reference.type !== "Identifier") {
+      return undefined;
+    }
+    const binding = lexicalBinding(reference, reference.name);
+    return binding !== undefined &&
+      stableBinding(program, binding) &&
+      program.body.some(
+        (statement) =>
+          statement.type === "ImportDeclaration" &&
+          statement.importKind !== "type" &&
+          (modulePath(file, statement.source.value) ===
+            "apps/api/src/db/schema.ts" ||
+            modulePath(file, statement.source.value)?.startsWith(
+              "apps/api/src/db/schema/",
+            )) &&
+          statement.specifiers.some(
+            (item) =>
+              item.type === "ImportSpecifier" &&
+              item.importKind !== "type" &&
+              item.local === binding,
+          ),
+      )
+      ? binding
+      : undefined;
+  };
+  /** Only data rooted in the handler context or immutable literals may enter the locked read. */
+  pureReadData = ({
+    file,
+    node,
+    bindings,
+    seen = new Set<Node>(),
+  }: {
+    file: string;
+    node: Node;
+    bindings: ReadonlySet<Node>;
+    seen?: Set<Node>;
+  }): boolean => {
+    const value = unwrap(node);
+    if (value.type === "Literal") {
+      return (
+        value.value === null ||
+        ["string", "number", "boolean"].includes(typeof value.value)
+      );
+    }
+    if (value.type === "Identifier") {
+      const binding = lexicalBinding(value, value.name);
+      const program = this.source(file);
+      if (
+        binding === undefined ||
+        program === undefined ||
+        seen.has(binding) ||
+        !stableBinding(program, binding)
+      ) {
+        return false;
+      }
+      if (
+        bindings.has(binding) ||
+        this.schemaTableBinding(file, value) !== undefined
+      ) {
+        return true;
+      }
+      const declaration = parentOf(binding);
+      const statement =
+        declaration === undefined ? undefined : parentOf(declaration);
+      return (
+        declaration?.type === "VariableDeclarator" &&
+        statement?.type === "VariableDeclaration" &&
+        statement.kind === "const" &&
+        declaration.init !== null &&
+        this.pureReadData({
+          file,
+          node: declaration.init,
+          bindings,
+          seen: new Set(seen).add(binding),
+        })
+      );
+    }
+    if (
+      value.type === "MemberExpression" &&
+      !value.computed &&
+      value.property.type === "Identifier"
+    ) {
+      return this.pureReadData({ file, node: value.object, bindings, seen });
+    }
+    if (value.type === "ArrayExpression") {
+      return value.elements.every(
+        (element) =>
+          element !== null &&
+          this.pureReadData({ file, node: element, bindings, seen }),
+      );
+    }
+    const fields = literalFields(value);
+    return (
+      fields !== undefined &&
+      [...fields.values()].every((field) =>
+        this.pureReadData({ file, node: field, bindings, seen }),
+      )
+    );
+  };
+  readSelection = ({
+    file,
+    node,
+    parameter,
+  }: {
+    file: string;
+    node: Node;
+    parameter: Node;
+  }): boolean => {
+    if (
+      node.type !== "CallExpression" ||
+      node.optional ||
+      node.callee.type !== "MemberExpression"
+    ) {
+      return false;
+    }
+    const receiver = node.callee.object;
+    const method = memberName(node.callee);
+    if (method === "select") {
+      return (
+        node.arguments.length === 0 &&
+        receiver.type === "Identifier" &&
+        lexicalBinding(receiver, receiver.name) === parameter
+      );
+    }
+    if (method === "from") {
+      const table = node.arguments.at(0);
+      return (
+        node.arguments.length === 1 &&
+        table !== undefined &&
+        this.schemaTableBinding(file, table) !== undefined &&
+        this.readSelection({ file, node: receiver, parameter })
+      );
+    }
+    return false;
+  };
+  missingRowRefusal = ({
+    file,
+    statement,
+    row,
+    bindings,
+  }: {
+    file: string;
+    statement: Node | undefined;
+    row: Node;
+    bindings: ReadonlySet<Node>;
+  }): boolean => {
+    if (
+      statement?.type !== "IfStatement" ||
+      statement.alternate !== null ||
+      statement.test.type !== "UnaryExpression" ||
+      statement.test.operator !== "!" ||
+      statement.test.argument.type !== "Identifier" ||
+      lexicalBinding(statement.test.argument, statement.test.argument.name) !==
+        row
+    ) {
+      return false;
+    }
+    const refused = soleReturn(statement.consequent);
+    if (
+      refused === undefined ||
+      !this.resultCall(file, refused, "err") ||
+      refused.arguments.length !== 1
+    ) {
+      return false;
+    }
+    const error = refused.arguments.at(0);
+    if (
+      error?.type !== "NewExpression" ||
+      error.arguments.length !== 1 ||
+      this.canonicalImportBinding({
+        file,
+        reference: error.callee,
+        module: "apps/api/src/lib/errors/tagged-errors.ts",
+        imported: "HandlerError",
+      }) === undefined
+    ) {
+      return false;
+    }
+    const fields = literalFields(error.arguments.at(0));
+    const status = fields?.get("status");
+    if (
+      fields === undefined ||
+      status?.type !== "Literal" ||
+      status.value !== 404
+    ) {
+      return false;
+    }
+    return [...fields].every(([key, value]) => {
+      if (!["status", "code", "message"].includes(key)) {
+        return false;
+      }
+      if (this.pureReadData({ file, node: value, bindings })) {
+        return true;
+      }
+      const binding =
+        value.type === "Identifier"
+          ? lexicalBinding(value, value.name)
+          : undefined;
+      return (
+        key === "code" &&
+        binding !== undefined &&
+        parentOf(binding)?.type === "ImportSpecifier" &&
+        stableBinding(
+          this.source(file) ?? panic("Missing loaded source"),
+          binding,
+        )
+      );
+    });
+  };
+  canonicalReadOptions = ({
+    file,
+    node,
+    tx,
+    bindings,
+  }: {
+    file: string;
+    node: Node | undefined;
+    tx: Node;
+    bindings: ReadonlySet<Node>;
+  }): boolean => {
+    const fields = literalFields(node);
+    const transaction = fields?.get("tx");
+    const mode = fields?.get("mode");
+    const aggregate = fields?.get("aggregate");
+    const id = fields?.get("id");
+    const selection = fields?.get("select");
+    if (
+      fields?.size !== 5 ||
+      transaction?.type !== "Identifier" ||
+      lexicalBinding(transaction, transaction.name) !== tx ||
+      mode?.type !== "Literal" ||
+      mode.value !== "update" ||
+      aggregate?.type !== "Literal" ||
+      typeof aggregate.value !== "string" ||
+      id === undefined ||
+      !this.pureReadData({ file, node: id, bindings }) ||
+      selection?.type !== "ArrowFunctionExpression" ||
+      selection.async ||
+      selection.params.length !== 1
+    ) {
+      return false;
+    }
+    const parameter = selection.params.at(0);
+    return (
+      parameter?.type === "Identifier" &&
+      this.readSelection({ file, node: selection.body, parameter })
+    );
+  };
+  lockedReadCall = ({
+    file,
+    node,
+    tx,
+    bindings,
+  }: {
+    file: string;
+    node: Node;
+    tx: Node;
+    bindings: ReadonlySet<Node>;
+  }): boolean => {
+    const awaited = unwrap(node);
+    if (
+      awaited.type !== "AwaitExpression" ||
+      awaited.argument.type !== "CallExpression" ||
+      awaited.argument.optional ||
+      awaited.argument.arguments.length !== 1 ||
+      this.canonicalImportBinding({
+        file,
+        reference: awaited.argument.callee,
+        module: "apps/api/src/lib/db/aggregate-lock.ts",
+        imported: "withAggregateRowQuery",
+      }) === undefined
+    ) {
+      return false;
+    }
+    return this.canonicalReadOptions({
+      file,
+      node: awaited.argument.arguments.at(0),
+      tx,
+      bindings,
+    });
+  };
+  lockedRowBinding = (statement: Node | undefined, acquisition: Node) => {
+    const row = singleConst(statement);
+    const at = row?.init;
+    const index =
+      at?.type === "CallExpression" ? at.arguments.at(0) : undefined;
+    if (
+      row === undefined ||
+      at?.type !== "CallExpression" ||
+      at.optional ||
+      memberName(at.callee) !== "at" ||
+      at.callee.type !== "MemberExpression" ||
+      at.arguments.length !== 1 ||
+      index?.type !== "Literal" ||
+      index.value !== 0
+    ) {
+      return undefined;
+    }
+    const rows = at.callee.object;
+    return memberName(rows) === "rows" &&
+      rows.type === "MemberExpression" &&
+      rows.object.type === "Identifier" &&
+      lexicalBinding(rows.object, rows.object.name) === acquisition
+      ? row.id
+      : undefined;
+  };
+  /** Recognize the canonical lock/read/missing prefix, never infer arbitrary helper effects. */
+  lockedReadPrefix = ({
+    file,
+    callback,
+    bindings,
+  }: {
+    file: string;
+    callback: Node;
+    bindings: ReadonlySet<Node>;
+  }): ReadonlySet<Node> | undefined => {
+    if (
+      !isWrapperFunction(callback) ||
+      callback.body?.type !== "BlockStatement"
+    ) {
+      return undefined;
+    }
+    const tx = callback.params.at(0);
+    const acquisition = singleConst(callback.body.body.at(0));
+    if (
+      tx?.type !== "Identifier" ||
+      callback.params.length !== 1 ||
+      acquisition === undefined ||
+      !this.lockedReadCall({ file, node: acquisition.init, tx, bindings })
+    ) {
+      return undefined;
+    }
+    const row = this.lockedRowBinding(callback.body.body.at(1), acquisition.id);
+    const program = this.source(file);
+    if (
+      row === undefined ||
+      program === undefined ||
+      ![tx, acquisition.id, row].every((binding) =>
+        stableBinding(program, binding),
+      ) ||
+      !this.missingRowRefusal({
+        file,
+        statement: callback.body.body.at(2),
+        row,
+        bindings,
+      })
+    ) {
+      return undefined;
+    }
+    return new Set([...bindings, row]);
+  };
+  resultRefusalFields = ({
+    file,
+    body,
+    scope,
+    type,
+    callback,
+    dataBindings,
+  }: {
+    file: string;
+    body: BlockStatement;
+    scope: LexicalScope;
+    type: string;
+    callback: Node;
+    dataBindings: ReadonlySet<Node>;
+  }): Set<string> => {
+    const result = new Set<string>();
+    const program = this.source(file);
+    if (program === undefined) {
+      return result;
+    }
+    const bindings = this.lockedReadPrefix({
+      file,
+      callback,
+      bindings: dataBindings,
+    });
+    if (bindings === undefined) {
+      return result;
+    }
+    for (const [position, candidate] of body.body.entries()) {
+      if (unconditionalExit(candidate)) {
+        break;
+      }
+      if (position !== 3) {
+        continue;
+      }
+      const conflict = singleConst(candidate);
+      if (
+        conflict?.init.type !== "CallExpression" ||
+        !stableBinding(program, conflict.id)
+      ) {
+        continue;
+      }
+      const comparison = conflict.init;
+      if (
+        comparison.arguments.length !== 1 ||
+        !comparison.arguments.every((node) =>
+          this.pureReadData({ file, node, bindings }),
+        )
+      ) {
+        continue;
+      }
+      if (
+        this.canonicalImportBinding({
+          file,
+          reference: comparison.callee,
+          module: OWNER,
+          imported: "enforceWritePrecondition",
+        }) === undefined
+      ) {
+        continue;
+      }
+      const refusal = body.body.at(position + 1);
+      if (
+        refusal?.type !== "IfStatement" ||
+        refusal.alternate !== null ||
+        !checksNonNull(unwrap(refusal.test), conflict.id.name) ||
+        lexicalBinding(refusal.test, conflict.id.name) !== conflict.id
+      ) {
+        continue;
+      }
+      const returned = soleReturn(refusal.consequent);
+      if (
+        returned === undefined ||
+        !this.resultCall(file, returned, "err") ||
+        returned.arguments.length !== 1
+      ) {
+        continue;
+      }
+      const error = returned.arguments.at(0);
+      if (
+        error?.type !== "Identifier" ||
+        lexicalBinding(error, error.name) !== conflict.id ||
+        !this.resultEarlyExits({
+          file,
+          body,
+          before: candidate,
+          rejectTry: true,
+        })
+      ) {
+        continue;
+      }
+      for (const field of this.callEnforcement({
+        value: { file, node: comparison, scope },
+        type,
+        seen: new Set(),
+      })) {
+        result.add(field);
+      }
+    }
+    return result;
+  };
+  /** A real root-context safeDb returns an outer Result; the callback Result must also be delegated. */
+  resultTransactionEnforcement = (
+    safe: SafeCall,
+    type: string,
+  ): Set<string> => {
+    const result = new Set<string>();
+    const context = this.rootResultContext(safe);
+    if (context === undefined) {
+      return result;
+    }
+    for (const [index, statement] of context.body.body.entries()) {
+      if (unconditionalExit(statement)) {
+        break;
+      }
+      const callback = this.delegatedResultCallback({
+        file: safe.file,
+        program: context.program,
+        body: context.body,
+        capability: context.capability,
+        statement,
+        next: context.body.body.at(index + 1),
+      });
+      if (callback === undefined) {
+        continue;
+      }
+      const scope = wrapperScope({
+        file: safe.file,
+        node: callback.node,
+        scope: wrapperScope(context.handler),
+      });
+      for (const field of this.resultRefusalFields({
+        file: safe.file,
+        body: callback.body,
+        scope,
+        type,
+        callback: callback.node,
+        dataBindings: context.dataBindings,
+      })) {
+        result.add(field);
+      }
+    }
+    return result;
   };
   functionEnforcement = ({
     value,
