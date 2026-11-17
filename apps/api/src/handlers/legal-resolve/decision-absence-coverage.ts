@@ -11,8 +11,9 @@
  * `no_exact_identity` says which of the two it is. It is the only place the
  * verdict is made.
  */
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import type { DecisionDocketGrammar } from "@stll/api-contract/decision-docket-grammar";
 import type { DecisionIdentifierIntent } from "@stll/api-contract/decision-query-intent";
 import type {
@@ -20,12 +21,25 @@ import type {
   DecisionAbsenceSourceVerdict,
 } from "@stll/api-contract/legal-resolve";
 
-import type { CaseLawKnownGaps } from "@/api/handlers/case-law/decisions/coverage-years";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import {
   ADAPTER_KEYS,
   type AdapterKey,
 } from "@/api/lib/legal-search/ingestion-constants";
+
+/**
+ * A source's reconciled-listing state, as the coverage snapshot reports it
+ * (`knownGaps`): each reconciled year complete or with known misses.
+ */
+type AbsenceKnownGaps =
+  | {
+      type: "reconciled";
+      years: readonly (
+        | { year: number; type: "complete" }
+        | { year: number; type: "gaps" | "unlisted"; missing: number }
+      )[];
+    }
+  | { type: "not_reconciled"; reason: string };
 
 /** What the verdict reads from one source of the coverage snapshot. */
 export type AbsenceCoverageSource = {
@@ -33,7 +47,7 @@ export type AbsenceCoverageSource = {
   name: string;
   decisionYearFrom: number | null;
   decisionYearTo: number | null;
-  knownGaps: CaseLawKnownGaps;
+  knownGaps: AbsenceKnownGaps;
   courts: readonly { court: string | null }[];
 };
 
@@ -103,12 +117,22 @@ export const EXCLUSIVE_DOCKET_REGISTERS = {
   [ADAPTER_KEYS.BR_TST]: [],
 } as const satisfies Record<AdapterKey, readonly string[]>;
 
-/** The register mark of a docket: the letters before its number and year. */
-const DOCKET_REGISTER_RE =
-  /(?<register>\p{L}+)\s*\d+\s*\/\s*\d{2,4}(?:\s|$|-|–)/u;
+const NUMBER_AND_YEAR_RE = /^\d+\/\d+/u;
+const LETTERS_RE = /^\p{L}+$/u;
 
-export const docketRegisterOf = (docket: string): string | undefined =>
-  DOCKET_REGISTER_RE.exec(docket)?.groups?.["register"];
+/**
+ * The register mark of a docket as a grammar formats it: the word of letters
+ * just before its number and year (`Cdo` in `29 Cdo 4084/2009`, `ÚS` in
+ * `I. ÚS 12/20`).
+ */
+export const docketRegisterOf = (docket: string): string | undefined => {
+  const words = docket.split(" ");
+  const numbered = words.findIndex((word) => NUMBER_AND_YEAR_RE.test(word));
+  const register = numbered > 0 ? words[numbered - 1] : undefined;
+  return register !== undefined && LETTERS_RE.test(register)
+    ? register
+    : undefined;
+};
 
 const foldRegister = (register: string) => register.toLocaleLowerCase("cs");
 
@@ -138,8 +162,10 @@ const earliestYearOf = (
   grammar: DecisionDocketGrammar | null,
 ): number | null => {
   const yearOf = (match: RegExpExecArray | null) => {
-    const year = match?.groups?.["year"];
-    return year === undefined ? null : Number(year);
+    const year = parseIntegerToken(match?.groups?.["year"], {
+      sign: "unsigned",
+    });
+    return Result.isOk(year) ? year.value : null;
   };
   switch (intent.kind) {
     case "docket": {
@@ -267,7 +293,12 @@ export const decisionAbsenceCoverage = ({
   const earliest = earliestYearOf(intent, grammar);
   // The ledger can say nothing past the moment the snapshot was taken, so
   // the snapshot's year closes every range.
-  const currentYear = Number(snapshot.generatedAt.slice(0, 4));
+  const snapshotYear = parseIntegerToken(snapshot.generatedAt.slice(0, 4), {
+    sign: "unsigned",
+  });
+  const currentYear = Result.isOk(snapshotYear)
+    ? snapshotYear.value
+    : panic(`Coverage snapshot has no year: ${snapshot.generatedAt}`);
   return {
     status: "read",
     asOf: snapshot.generatedAt,
