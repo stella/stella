@@ -216,13 +216,19 @@ test("the organization membership list is user-wide but cannot fetch another use
 test("current-session refresh requires the actual accepted bootstrap Query binding", async () => {
   const client = createClient();
   let roleReads = 0;
+  const preconnect = globalThis.fetch.preconnect;
   const fetchSpy = spyOn(globalThis, "fetch").mockImplementation(
-    async (input) => {
-      const url = new URL(input instanceof Request ? input.url : String(input));
-      expect(url.pathname).toEndWith("/get-active-member-role");
-      roleReads += 1;
-      return Response.json({ role: "member" });
-    },
+    Object.assign(
+      async (input: Parameters<typeof fetch>[0]) => {
+        const url = new URL(
+          input instanceof Request ? input.url : String(input),
+        );
+        expect(url.pathname).toEndWith("/get-active-member-role");
+        roleReads += 1;
+        return Response.json({ role: "member" });
+      },
+      { preconnect },
+    ),
   );
   try {
     await client.query(roleOptions);

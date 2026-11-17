@@ -27,6 +27,14 @@ import { applyWorkspaceRealtimeQueryActions } from "@/lib/workspace-sse";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities.logic";
 import { getRealtimeRefreshScheduler } from "@/lib/workspaces/realtime-refresh";
 
+const OTHER_ORGANIZATION_SESSION = {
+  ...MEMBER_SESSION,
+  session: {
+    ...MEMBER_SESSION.session,
+    activeOrganizationId: "other-organization",
+  },
+} satisfies typeof MEMBER_SESSION;
+
 const WORKSPACE = "workspace-a";
 const clients: { client: QueryClient; uninstall: () => void }[] = [];
 const observers: (() => void)[] = [];
@@ -225,13 +233,7 @@ test("a retired owner cannot drain retained active-reader work", async () => {
   const owner = captureSessionQueryOwner(client);
   await failSession(client);
   view.deliver(owner);
-  client.setQueryData(sessionOptions.queryKey, {
-    ...MEMBER_SESSION,
-    session: {
-      ...MEMBER_SESSION.session,
-      activeOrganizationId: "other-organization",
-    },
-  });
+  client.setQueryData(sessionOptions.queryKey, OTHER_ORGANIZATION_SESSION);
   client.setQueryData(sessionOptions.queryKey, MEMBER_SESSION);
   expect(captureSessionQueryOwner(client)).not.toBe(owner);
   expect(view.reads()).toBe(0);

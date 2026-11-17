@@ -56,6 +56,14 @@ const { useWorkspaceSSE } = await import("@/lib/workspace-sse");
 const { runWorkspaceMutation } =
   await import("@/lib/workspaces/workspace-mutation");
 
+const OTHER_ORGANIZATION_SESSION = {
+  ...MEMBER_SESSION,
+  session: {
+    ...MEMBER_SESSION.session,
+    activeOrganizationId: "other-organization",
+  },
+} satisfies typeof MEMBER_SESSION;
+
 const WORKSPACE = "workspace-one";
 const identity = {
   userId: MEMBER_SESSION.user.id,
@@ -116,7 +124,7 @@ const mount = async (
   onEvent?: Parameters<typeof useWorkspaceSSE>[1]["onEvent"],
 ) => {
   const Subscription = () => {
-    useWorkspaceSSE(WORKSPACE, { identity, onEvent });
+    useWorkspaceSSE(WORKSPACE, { identity, ...(onEvent ? { onEvent } : {}) });
     return null;
   };
   const root = router.createRootRoute({ component: Subscription });
@@ -207,13 +215,10 @@ test("a retired workspace source cannot consume the pending connection gap", asy
   });
   const retired = FakeEventSource.opened.at(-1);
   await act(async () => {
-    view.client.setQueryData(sessionOptions.queryKey, {
-      ...MEMBER_SESSION,
-      session: {
-        ...MEMBER_SESSION.session,
-        activeOrganizationId: "other-organization",
-      },
-    });
+    view.client.setQueryData(
+      sessionOptions.queryKey,
+      OTHER_ORGANIZATION_SESSION,
+    );
     view.client.setQueryData(sessionOptions.queryKey, MEMBER_SESSION);
     // The old handler can run before React commits the new subscription effect.
     retired?.open();
@@ -243,13 +248,10 @@ test("retired workspace messages cannot reach the current route callback", async
   );
   try {
     await act(async () => {
-      view.client.setQueryData(sessionOptions.queryKey, {
-        ...MEMBER_SESSION,
-        session: {
-          ...MEMBER_SESSION.session,
-          activeOrganizationId: "other-organization",
-        },
-      });
+      view.client.setQueryData(
+        sessionOptions.queryKey,
+        OTHER_ORGANIZATION_SESSION,
+      );
       view.client.setQueryData(sessionOptions.queryKey, MEMBER_SESSION);
       retired?.push(resourceSetUpdatedRealtimeEvent(RESOURCE_TYPE.ENTITY));
       retired?.failClosed();
@@ -287,13 +289,10 @@ test.each([
         resource: { type: RESOURCE_TYPE.ENTITY, id: "entity-one" },
       });
       if (retire) {
-        view.client.setQueryData(sessionOptions.queryKey, {
-          ...MEMBER_SESSION,
-          session: {
-            ...MEMBER_SESSION.session,
-            activeOrganizationId: "other-organization",
-          },
-        });
+        view.client.setQueryData(
+          sessionOptions.queryKey,
+          OTHER_ORGANIZATION_SESSION,
+        );
         view.client.setQueryData(sessionOptions.queryKey, MEMBER_SESSION);
         view.client.setQueryData(key, "rebuilt");
       }
@@ -331,13 +330,10 @@ test.each([
       expect(navigate).toHaveBeenCalledTimes(1);
       await act(async () => {
         if (retire) {
-          view.client.setQueryData(sessionOptions.queryKey, {
-            ...MEMBER_SESSION,
-            session: {
-              ...MEMBER_SESSION.session,
-              activeOrganizationId: "other-organization",
-            },
-          });
+          view.client.setQueryData(
+            sessionOptions.queryKey,
+            OTHER_ORGANIZATION_SESSION,
+          );
           view.client.setQueryData(sessionOptions.queryKey, MEMBER_SESSION);
         } else {
           // Normal navigation may unmount before its promise settles.
@@ -393,13 +389,10 @@ test.each([
       expect(callbacks).toBe(0);
       await act(async () => {
         if (retire) {
-          view.client.setQueryData(sessionOptions.queryKey, {
-            ...MEMBER_SESSION,
-            session: {
-              ...MEMBER_SESSION.session,
-              activeOrganizationId: "other-organization",
-            },
-          });
+          view.client.setQueryData(
+            sessionOptions.queryKey,
+            OTHER_ORGANIZATION_SESSION,
+          );
           view.client.setQueryData(sessionOptions.queryKey, MEMBER_SESSION);
         }
         response.reject(new Error("Request refused"));

@@ -1,4 +1,5 @@
 import type { Query, QueryClient } from "@tanstack/react-query";
+import { panic } from "better-result";
 
 import {
   type captureSessionQueryOwner,
@@ -71,8 +72,11 @@ export const canInvalidateResourceQuery = (
     case "workspace":
     case "workspace-set":
       return true;
+    default: {
+      reads.scope satisfies never;
+      return panic("Unhandled resource query scope");
+    }
   }
-  return false;
 };
 
 /** Same-organization foreign-user entries may become stale, but never fetch. */
