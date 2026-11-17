@@ -67,6 +67,10 @@ const BASELINE_FILE = "apps/api/deployment-feature-routes-baseline.json";
  */
 const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   [
+    "/v1/outbound-actions",
+    "Authenticated confirmation of a user's prepared outbound actions is available on every deployment",
+  ],
+  [
     "/v1/saved-searches",
     "The caller's private saved searches support search on every deployment",
   ],

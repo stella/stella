@@ -94,6 +94,7 @@ export const USER_OWNED_TABLE_NAMES = [
   "organization_creation_requests",
   "organization_data_exports",
   "organization_professional_use_acceptances",
+  "outbound_actions",
   "pdf_signing_sessions",
   "pending_uploads",
   "playbook_definition_versions",

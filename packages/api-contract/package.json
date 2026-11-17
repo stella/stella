@@ -66,6 +66,7 @@
     "./chat-context-notice": "./src/chat-context-notice.ts",
     "./internal-ui-transport": "./src/internal-ui-transport.ts",
     "./chat-secret": "./src/chat-secret.ts",
+    "./outbound-action": "./src/outbound-action.ts",
     "./chat-limit-reminder": "./src/chat-limit-reminder.ts",
     "./chat-tool-grants": "./src/chat-tool-grants.ts",
     "./chat-tool-input-rows": "./src/chat-tool-input-rows.ts",

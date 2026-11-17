@@ -39,24 +39,25 @@ import entry37 from "./organization";
 import entry38 from "./organizationDataBoxes";
 import entry39 from "./organizationObjectIntent";
 import entry40 from "./organizationSettings";
-import entry41 from "./personalCatalog";
-import entry42 from "./processingClaim";
-import entry43 from "./professionalUseAcceptance";
-import entry44 from "./rateTableWorkspace";
-import entry45 from "./readerAnnotation";
-import entry46 from "./readerAnswer";
-import entry47 from "./readerAnswerMessage";
-import entry48 from "./requestReceipt";
-import entry49 from "./run";
-import entry50 from "./sampleCase";
-import entry51 from "./savedSearch";
-import entry52 from "./schedulerClaim";
-import entry53 from "./scoutCensus";
-import entry54 from "./searchHistory";
-import entry55 from "./searchProjectionRepair";
-import entry56 from "./signal";
-import entry57 from "./signingSession";
-import entry58 from "./workspace";
+import entry41 from "./outboundAction";
+import entry42 from "./personalCatalog";
+import entry43 from "./processingClaim";
+import entry44 from "./professionalUseAcceptance";
+import entry45 from "./rateTableWorkspace";
+import entry46 from "./readerAnnotation";
+import entry47 from "./readerAnswer";
+import entry48 from "./readerAnswerMessage";
+import entry49 from "./requestReceipt";
+import entry50 from "./run";
+import entry51 from "./sampleCase";
+import entry52 from "./savedSearch";
+import entry53 from "./schedulerClaim";
+import entry54 from "./scoutCensus";
+import entry55 from "./searchHistory";
+import entry56 from "./searchProjectionRepair";
+import entry57 from "./signal";
+import entry58 from "./signingSession";
+import entry59 from "./workspace";
 
 export default {
   "account": entry0,
@@ -100,22 +101,23 @@ export default {
   "organizationDataBoxes": entry38,
   "organizationObjectIntent": entry39,
   "organizationSettings": entry40,
-  "personalCatalog": entry41,
-  "processingClaim": entry42,
-  "professionalUseAcceptance": entry43,
-  "rateTableWorkspace": entry44,
-  "readerAnnotation": entry45,
-  "readerAnswer": entry46,
-  "readerAnswerMessage": entry47,
-  "requestReceipt": entry48,
-  "run": entry49,
-  "sampleCase": entry50,
-  "savedSearch": entry51,
-  "schedulerClaim": entry52,
-  "scoutCensus": entry53,
-  "searchHistory": entry54,
-  "searchProjectionRepair": entry55,
-  "signal": entry56,
-  "signingSession": entry57,
-  "workspace": entry58,
+  "outboundAction": entry41,
+  "personalCatalog": entry42,
+  "processingClaim": entry43,
+  "professionalUseAcceptance": entry44,
+  "rateTableWorkspace": entry45,
+  "readerAnnotation": entry46,
+  "readerAnswer": entry47,
+  "readerAnswerMessage": entry48,
+  "requestReceipt": entry49,
+  "run": entry50,
+  "sampleCase": entry51,
+  "savedSearch": entry52,
+  "schedulerClaim": entry53,
+  "scoutCensus": entry54,
+  "searchHistory": entry55,
+  "searchProjectionRepair": entry56,
+  "signal": entry57,
+  "signingSession": entry58,
+  "workspace": entry59,
 } as const;

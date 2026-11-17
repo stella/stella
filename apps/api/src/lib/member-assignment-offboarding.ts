@@ -40,6 +40,7 @@ import {
   mcpOAuthState,
   mcpUserConnections,
   mcpWebHandoff,
+  outboundActions,
   pdfSigningSessions,
   requestIdempotencyReceipts,
   searchHistoryCountryClears,
@@ -1614,6 +1615,79 @@ const clearMemberScopedData = async (options: ClearMemberScopedDataOptions) => {
   });
 };
 
+type ClearMemberConnectorAuthorizationOptions = Pick<
+  RemoveOrganizationMemberOptions,
+  "tx" | "organizationId" | "userId"
+> & { recordAuditEvent: AuditRecorder };
+
+const clearMemberConnectorAuthorization = async ({
+  tx,
+  organizationId,
+  userId,
+  recordAuditEvent,
+}: ClearMemberConnectorAuthorizationOptions) => {
+  await tx
+    .delete(mcpUserConnections)
+    .where(
+      and(
+        eq(mcpUserConnections.organizationId, organizationId),
+        eq(mcpUserConnections.userId, userId),
+      ),
+    );
+  await tx
+    .delete(sharepointConnections)
+    .where(
+      and(
+        eq(sharepointConnections.organizationId, organizationId),
+        eq(sharepointConnections.userId, userId),
+      ),
+    );
+  await tx
+    .delete(outboundActions)
+    .where(
+      and(
+        eq(outboundActions.organizationId, organizationId),
+        eq(outboundActions.userId, userId),
+        eq(outboundActions.status, "pending"),
+      ),
+    );
+  // The member's own chat settings: tool grants, limit reminders and browser
+  // site approvals.
+  for (const table of [
+    chatToolGrants,
+    chatLimitReminders,
+    chatBrowserSiteGrants,
+  ] as const) {
+    await tx
+      .delete(table)
+      .where(
+        and(eq(table.organizationId, organizationId), eq(table.userId, userId)),
+      );
+  }
+  await tx
+    .delete(mcpOAuthState)
+    .where(
+      and(
+        eq(mcpOAuthState.organizationId, organizationId),
+        eq(mcpOAuthState.userId, userId),
+      ),
+    );
+  await tx
+    .delete(sharepointOAuthState)
+    .where(
+      and(
+        eq(sharepointOAuthState.organizationId, organizationId),
+        eq(sharepointOAuthState.userId, userId),
+      ),
+    );
+  await recordAuditEvent(tx, {
+    action: AUDIT_ACTION.UPDATE,
+    resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+    resourceId: organizationId,
+    metadata: { change: "member-connector-authorization-cleared", userId },
+  });
+};
+
 type ValidateOrganizationReassignmentOptions = Pick<
   RemoveOrganizationMemberOptions,
   "tx" | "organizationId" | "userId"
@@ -1757,51 +1831,12 @@ export const removeOrganizationMemberInTransaction = async (
         eq(searchHistoryEntries.userId, userId),
       ),
     );
-  await tx
-    .delete(mcpUserConnections)
-    .where(
-      and(
-        eq(mcpUserConnections.organizationId, organizationId),
-        eq(mcpUserConnections.userId, userId),
-      ),
-    );
-  await tx
-    .delete(sharepointConnections)
-    .where(
-      and(
-        eq(sharepointConnections.organizationId, organizationId),
-        eq(sharepointConnections.userId, userId),
-      ),
-    );
-  // The member's own chat settings: tool grants, limit reminders and browser
-  // site approvals.
-  for (const table of [
-    chatToolGrants,
-    chatLimitReminders,
-    chatBrowserSiteGrants,
-  ] as const) {
-    await tx
-      .delete(table)
-      .where(
-        and(eq(table.organizationId, organizationId), eq(table.userId, userId)),
-      );
-  }
-  await tx
-    .delete(mcpOAuthState)
-    .where(
-      and(
-        eq(mcpOAuthState.organizationId, organizationId),
-        eq(mcpOAuthState.userId, userId),
-      ),
-    );
-  await tx
-    .delete(sharepointOAuthState)
-    .where(
-      and(
-        eq(sharepointOAuthState.organizationId, organizationId),
-        eq(sharepointOAuthState.userId, userId),
-      ),
-    );
+  await clearMemberConnectorAuthorization({
+    tx,
+    organizationId,
+    userId,
+    recordAuditEvent,
+  });
   await tx
     .delete(invitation)
     .where(
