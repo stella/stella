@@ -1,7 +1,12 @@
+import { panic } from "better-result";
 import { expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
 import {
   bunTestCollects,
+  checkUngatedLedgerMembership,
   checkWorkspaceTestGating,
   ledgerFindings,
   scriptCollectors,
@@ -85,14 +90,108 @@ test("files outside every collector are reported", () => {
 });
 
 test("the list names exactly the uncollected files", () => {
-  const entry = { path: "packages/example/b.test.ts", reason: "Nightly only." };
-  expect(ledgerFindings([entry], [entry.path])).toEqual([]);
+  const entry = { id: "packages/example/b.test.ts", reason: "Nightly only." };
+  expect(ledgerFindings([entry], [entry.id])).toEqual([]);
   // A new uncollected file must be fixed or listed.
-  expect(ledgerFindings([], [entry.path])).toHaveLength(1);
+  expect(ledgerFindings([], [entry.id])).toHaveLength(1);
   // A listed file that is now collected or gone must leave the list.
   expect(ledgerFindings([entry], [])).toHaveLength(1);
-  expect(
-    ledgerFindings([{ ...entry, reason: " " }], [entry.path]),
-  ).toHaveLength(1);
-  expect(ledgerFindings([entry, entry], [entry.path])).toHaveLength(1);
+  expect(ledgerFindings([{ ...entry, reason: " " }], [entry.id])).toHaveLength(
+    1,
+  );
+  expect(ledgerFindings([entry, entry], [entry.id])).toHaveLength(1);
+});
+
+const LEDGER = "scripts/ungated-workspace-tests-ledger.json";
+
+const git = (root: string, args: readonly string[]): string => {
+  const result = Bun.spawnSync(["git", "-C", root, ...args], {
+    stderr: "pipe",
+  });
+  if (result.exitCode !== 0) {
+    return panic(result.stderr.toString() || `git ${args.join(" ")} failed`);
+  }
+  return result.stdout.toString().trim();
+};
+
+const writeLedger = (root: string, ids: readonly string[]) => {
+  writeFileSync(
+    path.join(root, LEDGER),
+    JSON.stringify(ids.map((id) => ({ id, reason: "Nightly only." }))),
+  );
+};
+
+/** A repository whose base commit lists `packages/example/old.test.ts`. */
+const withBaseRepo = (run: (root: string) => void) => {
+  const root = mkdtempSync(path.join(tmpdir(), "ungated-workspace-tests-"));
+  try {
+    mkdirSync(path.join(root, "scripts"));
+    mkdirSync(path.join(root, "packages/example"), { recursive: true });
+    writeFileSync(path.join(root, "packages/example/old.test.ts"), "old\n");
+    writeLedger(root, ["packages/example/old.test.ts"]);
+    git(root, ["init", "-q", "--initial-branch=base"]);
+    git(root, ["add", "."]);
+    git(root, [
+      "-c",
+      "user.name=Test",
+      "-c",
+      "user.email=test@example.com",
+      "commit",
+      "-q",
+      "-m",
+      "base",
+    ]);
+    run(root);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+};
+
+const membership = (root: string) => {
+  const errors: string[] = [];
+  const status = checkUngatedLedgerMembership({
+    args: ["--base", "HEAD"],
+    repoRoot: root,
+    log: () => {},
+    error: (message) => {
+      errors.push(message);
+    },
+  });
+  return { status, errors: errors.join("\n") };
+};
+
+test("the list refuses an entry its base does not have", () => {
+  withBaseRepo((root) => {
+    writeLedger(root, [
+      "packages/example/new.test.ts",
+      "packages/example/old.test.ts",
+    ]);
+    const { status, errors } = membership(root);
+    expect(status).toBe(1);
+    expect(errors).toContain("packages/example/new.test.ts");
+    expect(errors).not.toContain("packages/example/old.test.ts");
+  });
+});
+
+test("the list refuses swapping one entry for another", () => {
+  withBaseRepo((root) => {
+    writeLedger(root, ["packages/example/new.test.ts"]);
+    expect(membership(root).status).toBe(1);
+  });
+});
+
+test("the list may shrink, and a renamed file keeps its entry", () => {
+  withBaseRepo((root) => {
+    writeLedger(root, []);
+    expect(membership(root).status).toBe(0);
+  });
+  withBaseRepo((root) => {
+    git(root, [
+      "mv",
+      "packages/example/old.test.ts",
+      "packages/example/renamed.test.ts",
+    ]);
+    writeLedger(root, ["packages/example/renamed.test.ts"]);
+    expect(membership(root).status).toBe(0);
+  });
 });

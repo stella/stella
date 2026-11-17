@@ -13,14 +13,18 @@
 // packages/* is collected when its package's `test` script, followed through
 // `bun run <script>` and the package runners below, reaches a plain `bun test`
 // invocation that selects it. Every other command earns no credit, so a file
-// collected some other way is listed rather than assumed. The list is
-// shrink-only: an uncollected file missing from it fails, and so does a listed
-// file that is now collected or gone.
+// collected some other way is listed rather than assumed. The list must name
+// exactly the uncollected files: an unlisted one fails, and so does a listed
+// file that is now collected or gone. It also only shrinks: `--base` refuses
+// any entry the base revision's list does not have (scripts/ledger-membership.ts),
+// so a new test file has to be collected, not listed. A renamed file keeps its
+// entry.
 //
 // Root scripts/**/*.test.ts are out of scope: scripts/run-unlisted-script-tests.ts
 // runs every one that no workflow step names.
 //
-//   bun scripts/check-workspace-test-gating.ts
+//   bun scripts/check-workspace-test-gating.ts                exact list
+//   bun scripts/check-workspace-test-gating.ts --base <ref>   CI: also only shrinks
 
 import { panic } from "better-result";
 import { readFileSync } from "node:fs";
@@ -28,10 +32,15 @@ import path from "node:path";
 
 import { listApiTestPaths } from "../apps/api/scripts/api-test-plan";
 import { planTestRuns } from "../apps/web/scripts/test-run-plan";
-import ungated from "./ungated-workspace-tests.json" with { type: "json" };
+import {
+  parseReasonedLedger,
+  relocateLedgerEntries,
+  runLedgerMembershipGuard,
+} from "./ledger-membership";
+import ungated from "./ungated-workspace-tests-ledger.json" with { type: "json" };
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
-const UNGATED_LEDGER = "scripts/ungated-workspace-tests.json";
+const UNGATED_LEDGER = "scripts/ungated-workspace-tests-ledger.json";
 
 const WORKSPACE_TEST_FILE = /^(?:apps|packages)\/[^/]+\/.+\.test\.tsx?$/u;
 const MAX_SCRIPT_DEPTH = 4;
@@ -224,14 +233,14 @@ export const uncollectedTestFiles = ({
     .toSorted();
 };
 
-type LedgerEntry = { readonly path: string; readonly reason: string };
+type LedgerEntry = { readonly id: string; readonly reason: string };
 
 /** The list must name exactly the uncollected files, each with a reason. */
 export const ledgerFindings = (
   ledger: readonly LedgerEntry[],
   uncollected: readonly string[],
 ): readonly string[] => {
-  const listed = new Set(ledger.map((entry) => entry.path));
+  const listed = new Set(ledger.map((entry) => entry.id));
   const actual = new Set(uncollected);
   return [
     ...uncollected
@@ -241,20 +250,20 @@ export const ledgerFindings = (
           `${file} runs in no gating job: make its package's \`test\` script collect it, or list it in ${UNGATED_LEDGER} with a reason.`,
       ),
     ...ledger
-      .filter((entry) => !actual.has(entry.path))
+      .filter((entry) => !actual.has(entry.id))
       .map(
         (entry) =>
-          `${entry.path} is listed in ${UNGATED_LEDGER} but is now collected or gone: remove its entry.`,
+          `${entry.id} is listed in ${UNGATED_LEDGER} but is now collected or gone: remove its entry.`,
       ),
     ...ledger
       .filter((entry) => entry.reason.trim().length === 0)
-      .map((entry) => `${entry.path} has no reason in ${UNGATED_LEDGER}.`),
+      .map((entry) => `${entry.id} has no reason in ${UNGATED_LEDGER}.`),
     ...ledger
       .filter(
         (entry, index) =>
-          ledger.findIndex((other) => other.path === entry.path) !== index,
+          ledger.findIndex((other) => other.id === entry.id) !== index,
       )
-      .map((entry) => `${entry.path} is listed twice in ${UNGATED_LEDGER}.`),
+      .map((entry) => `${entry.id} is listed twice in ${UNGATED_LEDGER}.`),
   ];
 };
 
@@ -292,6 +301,32 @@ export const checkWorkspaceTestGating = (): readonly string[] => {
   return ledgerFindings(ungated, uncollected);
 };
 
+/** Refuses any list entry the base revision's list does not have. */
+export const checkUngatedLedgerMembership = ({
+  args,
+  repoRoot = REPO_ROOT,
+  log,
+  error,
+}: {
+  readonly args: readonly string[];
+  readonly repoRoot?: string;
+  readonly log: (message: string) => void;
+  readonly error: (message: string) => void;
+}): number =>
+  runLedgerMembershipGuard({
+    ledgerRel: UNGATED_LEDGER,
+    repoRoot,
+    parseLedger: parseReasonedLedger,
+    normalizeBaseEntries: (options) =>
+      relocateLedgerEntries({ ...options, repoRoot }),
+    label: "ungated-workspace-tests",
+    remediation:
+      "make the package's `test` script collect the file instead of listing it",
+    args,
+    log,
+    error,
+  });
+
 if (import.meta.main) {
   const findings = checkWorkspaceTestGating();
   if (findings.length > 0) {
@@ -301,4 +336,14 @@ if (import.meta.main) {
   console.log(
     `Workspace test gating OK (${ungated.length} listed uncollected files).`,
   );
+  const args = process.argv.slice(2);
+  if (args.includes("--base")) {
+    process.exit(
+      checkUngatedLedgerMembership({
+        args,
+        log: console.log,
+        error: console.error,
+      }),
+    );
+  }
 }
