@@ -339,6 +339,209 @@ describe("a replacement reaches the owner's enforcement", () => {
     "Replacement must reach owner enforcement",
   );
 
+  const resultHandler = `import {Result} from 'better-result';
+    import {createSafeRootHandler} from '@/api/lib/api-handlers';
+    import {enforceWritePrecondition} from '@/api/lib/write-contract/write-contract';
+    export default createSafeRootHandler({contract:'replace'}, async function* ({body, safeDb}) {
+      const outcome = yield* Result.await(safeDb(async (tx) => {
+        const stored = await tx.readForUpdate();
+        if (!stored) return Result.err(new Error('missing'));
+        const conflict = enforceWritePrecondition({type:'updatedAt',field:'expectedUpdatedAt',storedUpdatedAt:stored.updatedAt,expectedUpdatedAt:body.expectedUpdatedAt});
+        if (conflict) return Result.err(conflict);
+        return Result.ok(await tx.replace(body));
+      }));
+      const row = yield* outcome;
+      return Result.ok(row);
+    });`;
+
+  test("real root-context safeDb propagates both canonical Result layers", () => {
+    expect(enforcementOf(resultHandler)).toEqual([]);
+    const aliased = resultHandler
+      .replace("{Result}", "{Result as Outcome}")
+      .replaceAll("Result.", "Outcome.")
+      .replace(
+        "{createSafeRootHandler}",
+        "{createSafeRootHandler as createRoot}",
+      )
+      .replace("default createSafeRootHandler(", "default createRoot(")
+      .replace(
+        "{enforceWritePrecondition}",
+        "{enforceWritePrecondition as enforce}",
+      )
+      .replace(
+        "const conflict = enforceWritePrecondition(",
+        "const conflict = enforce(",
+      )
+      .replace("body, safeDb}", "body, safeDb: database}")
+      .replace("await(safeDb(", "await(database(");
+    expect(enforcementOf(aliased)).toEqual([]);
+    expect(
+      enforcementOf(
+        resultHandler.replace(
+          "const outcome =",
+          "if (!body) return Result.err(new Error('missing body')); const outcome =",
+        ),
+      ),
+    ).toEqual([]);
+  });
+
+  test("Result transaction proof requires actual immutable context and import bindings", () => {
+    for (const source of [
+      resultHandler.replace("'@/api/lib/api-handlers'", "'./fake-factory'"),
+      resultHandler.replace("'better-result'", "'./fake-result'"),
+      resultHandler.replace(
+        "'@/api/lib/write-contract/write-contract'",
+        "'./fake-enforcer'",
+      ),
+      resultHandler.replace("body, safeDb}", "body, safeDb = fake}"),
+      resultHandler.replace("body, safeDb}", "body, ['safeDb']: safeDb}"),
+      resultHandler.replace("body, safeDb}", "body, ...safeDb}"),
+      resultHandler
+        .replace("body, safeDb}", "body, database}")
+        .replace("await(safeDb(", "await(database.safeDb("),
+      resultHandler.replace(
+        "const outcome =",
+        "safeDb = fake; const outcome =",
+      ),
+      resultHandler.replace(
+        "const outcome =",
+        "({safeDb} = fake); const outcome =",
+      ),
+      resultHandler.replace("const outcome =", "var safeDb; const outcome ="),
+      resultHandler
+        .replace("const outcome =", "{ const safeDb = fake; const outcome =")
+        .replace("return Result.ok(row);", "return Result.ok(row); }"),
+      resultHandler.replace(
+        "const outcome =",
+        "Result.await = fake; const outcome =",
+      ),
+      resultHandler.replace(
+        "const outcome =",
+        "Result.err = fake; const outcome =",
+      ),
+      resultHandler.replace(
+        "const outcome =",
+        "Object.assign(Result, {err: fake}); const outcome =",
+      ),
+      resultHandler.replace(
+        "const outcome =",
+        "mutate(Result); const outcome =",
+      ),
+      resultHandler.replace(
+        "const outcome =",
+        "const alias = Result; alias.err = fake; const outcome =",
+      ),
+      resultHandler.replace(
+        "const outcome =",
+        "class Result {} const outcome =",
+      ),
+      resultHandler.replace(
+        "const outcome =",
+        "const Result = fake; const outcome =",
+      ),
+      resultHandler.replace(
+        "const outcome =",
+        "createSafeRootHandler = fake; const outcome =",
+      ),
+      resultHandler.replace(
+        "const conflict =",
+        "enforceWritePrecondition = fake; const conflict =",
+      ),
+      resultHandler.replace(
+        "async (tx) =>",
+        "async (enforceWritePrecondition) =>",
+      ),
+      resultHandler.replace("async (tx) =>", "async (Result) =>"),
+      resultHandler.replace("field:'expectedUpdatedAt'", "field:'other'"),
+    ]) {
+      expect(enforcementOf(source)).toContainEqual(missing);
+    }
+  });
+
+  test("neither a swallowed Result nor an uninvoked nested callback proves refusal", () => {
+    for (const source of [
+      resultHandler.replace("yield* Result.await", "yield Result.await"),
+      resultHandler.replace("yield* Result.await", "Result.await"),
+      resultHandler.replace("yield* outcome", "yield outcome"),
+      resultHandler.replace("yield* outcome", "Result.ok(outcome)"),
+      resultHandler.replace("const row = yield* outcome;", "const row = {};"),
+      resultHandler.replace(
+        "const row = yield* outcome;",
+        "const alias = Result.ok({}); const row = yield* alias;",
+      ),
+      resultHandler.replace(
+        "const row = yield* outcome;",
+        "try { const row = yield* outcome; } catch { return Result.ok({}); }",
+      ),
+      resultHandler.replace(
+        "const row = yield* outcome;",
+        "try { const row = yield* outcome; } finally { return Result.ok({}); }",
+      ),
+      resultHandler.replace(
+        "Result.err(conflict)",
+        "Result.err(new Error('different'))",
+      ),
+      resultHandler.replace("Result.err(conflict)", "Result.ok(conflict)"),
+      resultHandler.replace(
+        "if (!stored) return Result.err(new Error('missing'));",
+        "if (!stored) return Result.ok({});",
+      ),
+      resultHandler
+        .replace(
+          "const conflict = enforceWritePrecondition",
+          "const conflict = ignore(() => enforceWritePrecondition",
+        )
+        .replace("body.expectedUpdatedAt});", "body.expectedUpdatedAt}));"),
+      resultHandler.replace(
+        "const stored = await tx.readForUpdate();",
+        "return Result.ok({}); const stored = await tx.readForUpdate();",
+      ),
+      resultHandler.replace(
+        "const outcome = yield*",
+        "return Result.ok({}); const outcome = yield*",
+      ),
+      resultHandler.replace(
+        "const outcome = yield*",
+        "return Result.err(new Error('early')); const outcome = yield*",
+      ),
+      resultHandler.replace(
+        "const outcome = yield*",
+        "throw new Error('early'); const outcome = yield*",
+      ),
+      resultHandler.replace(
+        "const conflict =",
+        "return Result.err(new Error('early')); const conflict =",
+      ),
+      resultHandler.replace(
+        "const conflict =",
+        "throw new Error('early'); const conflict =",
+      ),
+      resultHandler.replace(
+        "const outcome = yield*",
+        "{ return Result.err(new Error('early')); } const outcome = yield*",
+      ),
+      resultHandler.replace(
+        "const outcome = yield*",
+        "{ throw new Error('early'); } const outcome = yield*",
+      ),
+      resultHandler.replace(
+        "const conflict =",
+        "{ return Result.err(new Error('early')); } const conflict =",
+      ),
+      resultHandler.replace(
+        "const conflict =",
+        "{ throw new Error('early'); } const conflict =",
+      ),
+      resultHandler.replace("safeDb(async (tx) =>", "ignore(async (tx) =>"),
+      resultHandler.replace(
+        "if (conflict) return Result.err(conflict);",
+        "if (conflict) { const conflict = other; return Result.err(conflict); }",
+      ),
+    ]) {
+      expect(enforcementOf(source)).toContainEqual(missing);
+    }
+  });
+
   test("a route no handler export backs cannot be traced", () => {
     expect(
       check({ routes: [route(UPDATED_AT, { endpoint: undefined })] }),
