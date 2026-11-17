@@ -99,6 +99,11 @@ export const ACCOUNT_EXPORT_REGISTRY = {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.security,
   },
+  // A retry key of a send or answer the member made: ids only, kept a day.
+  chat_command_receipts: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.noUserContent,
+  },
   chat_limit_reminders: {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.noUserContent,

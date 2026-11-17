@@ -53,6 +53,7 @@ import { BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK } from "@/api/lib/scheduler
 import { REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK } from "@/api/lib/scheduler/tasks/case-law-sitemap-shard-refresh";
 import { FOLD_CASE_LAW_SITEMAP_TOUCHES_TASK } from "@/api/lib/scheduler/tasks/case-law-sitemap-touch-fold";
 import { REFRESH_CASE_LAW_SOURCE_ARRIVALS_TASK } from "@/api/lib/scheduler/tasks/case-law-source-arrivals-refresh";
+import { SWEEP_CHAT_COMMAND_RECEIPTS_TASK } from "@/api/lib/scheduler/tasks/chat-command-receipt-retention";
 import { SEND_CHAT_LIMIT_REMINDERS_TASK } from "@/api/lib/scheduler/tasks/chat-limit-reminders";
 import { SWEEP_CHAT_RUN_LOGS_TASK } from "@/api/lib/scheduler/tasks/chat-run-log-retention";
 import { PURGE_CHAT_SECRETS_TASK } from "@/api/lib/scheduler/tasks/chat-secret-retention";
@@ -751,6 +752,14 @@ export const DECLARED_SCHEDULER_JOBS = [
     enabled:
       isDeploymentFeatureEnabled("FEATURE_ACTION_COST_RECORDS") &&
       env.ACTION_COST_RETENTION_DAYS !== undefined,
+  },
+  {
+    description: "Delete chat command receipts past their retention",
+    id: "chat.sweepCommandReceipts.tenMinute",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 10 * 60 * 1000 },
+    task: SWEEP_CHAT_COMMAND_RECEIPTS_TASK,
+    reads: { budget: "scheduled.chat.sweepCommandReceipts" },
   },
   {
     description: "Delete expired closed chat run logs",

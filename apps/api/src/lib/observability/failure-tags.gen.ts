@@ -62,6 +62,7 @@ export const FAILURE_TAGS = [
   "CatalogSnapshotError",
   "CatalogSnapshotRefreshTimeoutError",
   "ChatAnonInputLimitError",
+  "ChatCommandReplayedError",
   "ChatCompactionError",
   "ChatConfigurationError",
   "ChatContentV3UpgradeError",

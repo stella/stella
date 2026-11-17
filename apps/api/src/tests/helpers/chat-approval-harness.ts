@@ -648,6 +648,8 @@ export const createApprovalHarness = ({
       promptCachingEnabled,
       recordAuditEvent: async () => await Promise.resolve(),
       request: request.request,
+      // The lower-cased request headers the router hands every handler.
+      headers: Object.fromEntries(request.request.headers),
       route: "/v1/chat" satisfies ApiRoutePath,
       safeDb,
       scopedDb,
