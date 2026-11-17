@@ -4,12 +4,14 @@ import { and, eq, gt, notInArray, or, sql } from "drizzle-orm";
 import { DAY_IN_MS } from "@stll/time";
 
 import { rootDb } from "@/api/db/root";
+import type { Transaction } from "@/api/db/root";
 import type { SchedulerPayload, SchedulerSchedule } from "@/api/db/schema";
 import { schedulerJobs } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
 import { CASE_LAW_COVERAGE_REFRESH_INTERVAL_MS } from "@/api/lib/case-law/coverage-refresh-interval";
 import { SOURCE_ARRIVALS_REFRESH_INTERVAL_MS } from "@/api/lib/case-law/source-arrivals-window";
+import type { AggregateIdentities } from "@/api/lib/db/aggregate-lock-entries/identities.gen";
 import type { ScheduledJobReads } from "@/api/lib/db/read-budgets";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { resolveEmailEvents } from "@/api/lib/email/deliverability-config";
@@ -26,6 +28,7 @@ import {
   SCHEDULER_BACKFILL_IDS,
   SCHEDULER_REPAIR_BACKFILL_IDS,
 } from "@/api/lib/scheduler/backfill-config";
+import { reconcileFlowSchedule } from "@/api/lib/scheduler/reconcile-flow-schedule";
 import {
   REGISTERED_SCHEDULER_TASK_NAMES,
   type RegisteredSchedulerTaskName,
@@ -171,7 +174,7 @@ export const ensureSchedulerJob = async (
 
 export const upsertSchedulerJob = async (
   definition: SchedulerJobDefinition,
-  db: SchedulerDb,
+  db: Pick<Transaction, "select" | "insert">,
 ): Promise<void> => {
   const {
     description,
@@ -221,10 +224,14 @@ export const upsertSchedulerJob = async (
     });
 };
 
-/** Drop one job's row, the counterpart of `ensureSchedulerJob`. */
-export const removeSchedulerJob = async (id: string): Promise<void> => {
-  await rootDb.delete(schedulerJobs).where(eq(schedulerJobs.id, id));
-};
+/** Reconcile one committed definition without exposing the scheduler connection. */
+export const reconcileCommittedFlowSchedule = async (
+  identity: AggregateIdentities["definition"],
+): Promise<void> =>
+  await reconcileFlowSchedule(identity, {
+    database: rootDb,
+    upsert: upsertSchedulerJob,
+  });
 
 const ensureOneShotSchedulerJob = async ({
   description,

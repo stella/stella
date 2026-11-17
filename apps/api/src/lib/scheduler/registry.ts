@@ -2,6 +2,7 @@ import { Temporal } from "@stll/time";
 
 import { runWithStatementCeiling } from "@/api/lib/db/statement-ceiling";
 import { createBullMqDispatchTask } from "@/api/lib/scheduler/bullmq";
+import { FLOW_RUN_TASK } from "@/api/lib/scheduler/flow-schedule-identity";
 import {
   SWEEP_ACTION_COSTS_TASK,
   sweepActionCostRecords,
@@ -142,10 +143,7 @@ import {
   REPAIR_FILE_DERIVATIVES_TASK,
   repairFileDerivatives,
 } from "@/api/lib/scheduler/tasks/file-derivative-repair";
-import {
-  FLOW_RUN_TASK,
-  runScheduledFlow,
-} from "@/api/lib/scheduler/tasks/flow-run";
+import { runScheduledFlow } from "@/api/lib/scheduler/tasks/flow-run";
 import {
   RECONCILE_FLOW_RUN_ORPHANS_TASK,
   reconcileFlowRunOrphans,

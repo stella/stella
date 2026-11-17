@@ -100,8 +100,7 @@ const createFlowDefinition = createSafeRootHandler(
     // never throws).
     await syncFlowScheduleTrigger({
       id: flowId,
-      trigger: input.trigger,
-      enabled: input.enabled,
+      organizationId,
     });
 
     return Result.ok({ id: inserted.id });
