@@ -3,6 +3,7 @@ import { describe, expect, expectTypeOf, test } from "bun:test";
 import fc from "fast-check";
 import * as v from "valibot";
 
+import { noDecisionReviewFound } from "@stll/api-contract/case-law-reviews";
 import {
   directoryCourtAliases,
   storedCourtAliases,
@@ -175,7 +176,12 @@ const resolveWith = async (
     admission,
     country,
     identifier,
-    dependencies: { lookup: async () => [...rows], read: readable },
+    dependencies: {
+      lookup: async () => [...rows],
+      read: readable,
+      readReviews: async ({ decisionIds }) =>
+        new Map(decisionIds.map((id) => [id, noDecisionReviewFound()])),
+    },
   });
 
 describe("court constraints hold for every identity country", () => {

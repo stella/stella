@@ -51,10 +51,16 @@ export type AuditActivityCategory = (typeof AUDIT_ACTIVITY_CATEGORIES)[number];
  * What a user's dispatched work started from. `chat_queue`: the server sent
  * a message the user queued, as the user. `chat_turn_handover`: the server
  * continued the user's chat turn after the task running it stopped, as the
- * user.
+ * user. `chat_limit_resume`: the server sent the message of the user's chat
+ * turn a usage limit stopped again, once the limit reset, as the user asked.
  */
 export type UserDispatchSource =
-  "chat" | "chat_queue" | "chat_turn_handover" | "action" | "api";
+  | "chat"
+  | "chat_queue"
+  | "chat_turn_handover"
+  | "chat_limit_resume"
+  | "action"
+  | "api";
 
 export type AuditExecutionContext = {
   performer:

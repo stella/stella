@@ -83,7 +83,7 @@ type ThreadResponse =
 const savedThread = {
   activeSkill: builder,
   activeTurnId: null,
-  newestLocalTurn: null,
+  activeTurnSteering: "not_steerable",
   attachedFiles: { fileCount: 0, files: [] },
   context: {
     estimatedTokens: 0,

@@ -13,7 +13,9 @@ import {
   judgeWriterGap,
   writerGapReport,
 } from "../../../../scripts/migration-rehearsal-writer-gap";
+import { CASE_LAW_FILING_YEAR_FUNCTION_SIGNATURE } from "../lib/case-law/coverage-index";
 import { withGatedTestClients } from "../tests/gated-test-database";
+import { FUNCTION_DEPENDENT_INDEX_REINDEXES } from "./function-dependent-index-reindex";
 import { createUngatedTableGateForTests } from "./online-ddl";
 import type {
   OnlineMigrationConnection,
@@ -363,7 +365,40 @@ const skillBindingNoRowSeed = (constraint: string): NoRowSeed => ({
   },
 });
 
+/**
+ * A filing-year index rebuild changes no row: one decision gives every
+ * dependent index an entry to rebuild beside the snapshot. The migrated
+ * scratch database has already run the rebuild, so the seed clears its
+ * checkpoint to leave it pending.
+ */
+const filingYearReindexSeed = (checkpoint: string): NoRowSeed => ({
+  kind: "no-row-work",
+  tables: ["case_law_decisions"],
+  snapshot: async (client) =>
+    await snapshotRows(client, ["case_law_decisions"]),
+  seed: async (client) => {
+    await client.unsafe(
+      `INSERT INTO case_law_sources (id, adapter_key, name) VALUES ('${ID}', 'cz-regional', 'Source')`,
+    );
+    await client.unsafe(
+      `INSERT INTO case_law_decisions (id, source_id, case_number, court, country, language) VALUES ('${ID_2}', '${ID}', '21 Cdo 1234/2019', 'Court', 'CZE', 'cs')`,
+    );
+    await client.unsafe(
+      "DELETE FROM public.database_backfill_states WHERE name = $1",
+      [checkpoint],
+    );
+  },
+});
+
+const FILING_YEAR_REINDEX_SEEDS = Object.fromEntries(
+  FUNCTION_DEPENDENT_INDEX_REINDEXES.filter(
+    ({ functionSignature }) =>
+      functionSignature === CASE_LAW_FILING_YEAR_FUNCTION_SIGNATURE,
+  ).map(({ name }) => [name, filingYearReindexSeed(name)]),
+);
+
 const SEEDS = {
+  ...FILING_YEAR_REINDEX_SEEDS,
   "chat-content-v3": {
     kind: "row-work",
     assertPending: async (client, id) => {
@@ -1077,6 +1112,11 @@ const SEEDS = {
     "chat_turns",
     "chat_turns_interaction_values_check",
     `INSERT INTO chat_turns (id, organization_id, user_id, thread_id, user_message_id, status, assistant_message_id, interaction_type, interaction_tool_call_id) VALUES ('${ID}', 'org', 'user', '${ID_2}', '${ID_3}', 'awaiting-user', '${ENTITY_ID}', 'approval', 'call')`,
+  ),
+  chat_limit_reminders_on_reset_check: noRowSeed(
+    "chat_limit_reminders",
+    "chat_limit_reminders_on_reset_check",
+    `INSERT INTO chat_limit_reminders (thread_id, turn_id, organization_id, user_id, remind_at, on_reset) VALUES ('${ID}', '${ID_2}', 'org', 'user', now(), 'continue')`,
   ),
   chat_turns_status_values_check: noRowSeed(
     "chat_turns",

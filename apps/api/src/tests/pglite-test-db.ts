@@ -60,6 +60,7 @@ import {
   installPgliteLegalHoldDeleteBackstop,
   installPgliteLegislationExpressionIdentity,
   installPgliteLegislationPayloadRevision,
+  installPgliteMatterTimerPresence,
   installPgliteModelRunBudgets,
   installPgliteOrganizationDeleteOwnerGuard,
   installPgliteOrganizationMemberCapacity,
@@ -431,6 +432,7 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_judges",
       "case_law_decision_judges",
       "case_law_citations",
+      "case_law_decision_reviews",
       "case_law_provision_citations",
       "case_law_statute_citation_memberships",
       "case_law_statute_citation_counts",
@@ -459,6 +461,7 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_judges",
       "case_law_decision_judges",
       "case_law_citations",
+      "case_law_decision_reviews",
       "case_law_provision_citations",
       "case_law_statute_citation_memberships",
       "case_law_statute_citation_counts",
@@ -894,6 +897,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteFlowTransitions(db);
   await installPgliteWorkspaceAccessObjects(db);
   await installPgliteInvoiceObjects(db);
+  await installPgliteMatterTimerPresence(db);
   await db.transaction(async (tx) => {
     await installPgliteEntityFeatureGateMaintenance(tx);
   });

@@ -7,7 +7,7 @@ const fixtureTime = new Date().toISOString();
 export const dockedChatMessagePage = {
   activeSkill: null,
   activeTurnId: null,
-  newestLocalTurn: null,
+  activeTurnSteering: "not_steerable" as const,
   attachedFiles: { fileCount: 0, files: [] },
   forkProvenance: { type: "none" as const },
   messages: [

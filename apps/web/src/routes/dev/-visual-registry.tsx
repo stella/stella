@@ -16,6 +16,13 @@ type VisualLoader = {
 };
 
 const visualLoaders = {
+  "appeal-reviews": {
+    load: async () => {
+      const { AppealReviewsPlayground } =
+        await import("./-components/appeal-reviews-playground");
+      return { default: AppealReviewsPlayground };
+    },
+  },
   "mcp-reconnect": {
     load: async () => {
       const { McpReconnectPlayground } =

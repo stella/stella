@@ -2274,3 +2274,12 @@ export const invoiceLineOwnerReadPolicy = () =>
     to: "public",
     using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.invoice_lines'::regclass)`,
   });
+
+// The timer presence function reads every member's timer under FORCE RLS.
+// Only the table owner gains SELECT; request-role visibility and owner writes stay unchanged.
+export const timeTimerOwnerReadPolicy = () =>
+  p.pgPolicy("time_timers_owner_select", {
+    for: "select",
+    to: "public",
+    using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.time_timers'::regclass)`,
+  });

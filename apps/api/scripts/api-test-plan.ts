@@ -67,6 +67,10 @@ const HEAVY_LOGIC_TEST_BATCH_SIZE = 1;
 const HEAVY_LOGIC_SOURCE_MARKERS = ["@modelcontextprotocol/client"] as const;
 const HEAVY_LOGIC_PATH_MARKERS = [
   "handlers/chat/tools/execute/sandbox/",
+  // Loads the API route graph and builds the whole capability catalog in
+  // process; alone it peaks near the ordinary logic ceiling, and a shared
+  // ten-file batch with it reached 2284 MB on Linux.
+  "scripts/deployment-feature-guard.test.ts",
 ] as const;
 // Hard per-batch peak-RSS budgets. A batch that outgrows its budget fails
 // the run even when every test passes, so memory growth surfaces here as a

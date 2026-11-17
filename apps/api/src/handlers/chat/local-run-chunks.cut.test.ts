@@ -1,6 +1,11 @@
 import { EventType, RUN_CANCEL_REASON } from "@tanstack/ai";
 import { describe, expect, test } from "bun:test";
 
+import {
+  CHAT_TURN_STEERING,
+  CHAT_TURN_STEERING_EVENT,
+} from "@stll/api-contract/chat-send-intent";
+
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import {
   createComputer,
@@ -57,7 +62,12 @@ describe("a cut of a local turn", () => {
       expect((await read.next()).value).toMatchObject({
         type: EventType.RUN_STARTED,
       });
-      // The computer has not picked the run up: the next read waits on it.
+      // Whether the turn takes a message, then that the computer has not
+      // picked the run up: the next read waits on it.
+      expect((await read.next()).value).toMatchObject({
+        type: EventType.CUSTOM,
+        name: CHAT_TURN_STEERING_EVENT,
+      });
       await read.next();
       const waiting = read.next();
       cut.abort(REASON_OF_CUT[kind]);
@@ -84,4 +94,26 @@ describe("a cut of a local turn", () => {
 
     expect(computer.queued.interrupts).toBe(1);
   });
+});
+
+describe("a read of a local turn", () => {
+  for (const steering of Object.values(CHAT_TURN_STEERING)) {
+    test(`tells with its start that the turn is ${steering}, as its harness reports`, async () => {
+      const computer = createComputer();
+      computer.reportSteering(steering);
+      const cut = new AbortController();
+      const read = localSource(computer)(cut.signal)[Symbol.asyncIterator]();
+
+      expect((await read.next()).value).toMatchObject({
+        type: EventType.RUN_STARTED,
+      });
+      expect((await read.next()).value).toMatchObject({
+        type: EventType.CUSTOM,
+        name: CHAT_TURN_STEERING_EVENT,
+        value: { steering },
+      });
+      cut.abort(RUN_CANCEL_REASON);
+      await read.return?.(undefined);
+    });
+  }
 });

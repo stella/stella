@@ -91,6 +91,7 @@ import {
   recordChatThreadNamesOnTx,
 } from "@/api/lib/chat/thread-names";
 import { lockThreadStoredContentTransitionOnTx } from "@/api/lib/chat/thread-stored-content-egress";
+import { takeChatLimitResumeOnTx } from "@/api/lib/db/chat-limit-resume";
 import {
   admitMemberMessageOnTx,
   type MemberMessageAdmission,
@@ -1289,11 +1290,12 @@ const MEMBER_MESSAGE_REFUSAL = {
   { code: string; message: string }
 >;
 
-const queuedMessageNotDue = (): HandlerError<409> =>
+/** What a server-started turn names is no longer the server's to send. */
+const serverStartedTurnNotDue = (): HandlerError<409> =>
   new HandlerError({
     status: 409,
     code: CHAT_QUEUE_ERROR_CODE.notDue,
-    message: "The queued message is not the next one the queue may send",
+    message: "The turn the server would start is no longer due",
   });
 
 /**
@@ -1329,6 +1331,12 @@ const takeTurnSourceOnTx = async ({
       return await takeQueuedChatMessageOnTx({
         id: source.queuedMessageId,
         revision: source.revision,
+        threadId,
+        tx,
+      });
+    case "limit-resume":
+      return await takeChatLimitResumeOnTx({
+        failedTurnId: source.failedTurnId,
         threadId,
         tx,
       });
@@ -1397,7 +1405,7 @@ export const persistAcceptedMessageWithClaim = async ({
           case "taken":
             break;
           case "not-due":
-            return Result.err(queuedMessageNotDue());
+            return Result.err(serverStartedTurnNotDue());
           case "turn-awaiting-member":
           case "queued-ahead":
             return Result.err(
