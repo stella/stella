@@ -1836,7 +1836,7 @@ export const createApprovalHarness = ({
     close: async () =>
       await measure("close", async () => {
         try {
-          await relinquishChatTurnRuns();
+          await relinquishChatTurnRuns({ type: "end" });
           await Promise.all(abandonedReads);
         } finally {
           fetchInstallation.restore();

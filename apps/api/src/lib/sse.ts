@@ -24,6 +24,8 @@ import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { createRedisClient } from "@/api/lib/redis-client";
 import {
+  brandPersistedChatThreadId,
+  brandPersistedChatTurnId,
   brandPersistedDesktopEditSessionId,
   brandPersistedOrganizationId,
   brandPersistedUserId,
@@ -1006,6 +1008,18 @@ const dispatchRedisMessage = (message: string): void => {
     }
     return;
   }
+  if (parsed.scope === "chat-turn-handover") {
+    // This replica's own release already rang its adopter in process.
+    if (parsed.originInstanceId !== INSTANCE_ID) {
+      chatTurnHandoverDeliveryHandler?.({
+        organizationId: brandPersistedOrganizationId(parsed.organizationId),
+        threadId: brandPersistedChatThreadId(parsed.threadId),
+        turnId: brandPersistedChatTurnId(parsed.id),
+        userId: brandPersistedUserId(parsed.userId),
+      });
+    }
+    return;
+  }
   if (parsed.scope === "user-access-revoked") {
     const userId = brandPersistedUserId(parsed.id);
     const organizationId = brandPersistedOrganizationId(parsed.organizationId);
@@ -1312,6 +1326,55 @@ export const announceMcpToolProjectionChange = async (
   change: McpToolProjectionChange,
 ): Promise<void> => {
   await publishMcpToolProjectionAttempt(change, 0);
+};
+
+// ── Chat turn handovers ─────────────────────────────────
+//
+// A stopping replica releases its local chat turns for another to adopt. The
+// adopter registers a handler here so a release on another replica reaches
+// it at once; its sweep finds a release whose announcement was lost.
+
+type ChatTurnHandover = {
+  organizationId: SafeId<"organization">;
+  threadId: SafeId<"chatThread">;
+  turnId: SafeId<"chatTurn">;
+  userId: SafeId<"user">;
+};
+
+let chatTurnHandoverDeliveryHandler: ((turn: ChatTurnHandover) => void) | null =
+  null;
+
+/** Register this replica's adopter for turns released elsewhere. */
+export const registerChatTurnHandoverDelivery = (
+  handler: ((turn: ChatTurnHandover) => void) | null,
+): void => {
+  chatTurnHandoverDeliveryHandler = handler;
+};
+
+const CHAT_TURN_HANDOVER_PUBLISH_FAILURE_SINK = failureSink({
+  event: "sse.chat_turn_handover_publish_failed",
+  expected: [],
+});
+
+/**
+ * Announce a released turn to the other replicas, once and without waiting:
+ * the releasing replica is stopping, and an adopter's sweep finds a turn
+ * whose announcement was lost.
+ */
+export const announceChatTurnHandover = (turn: ChatTurnHandover): void => {
+  detached(async () => {
+    const published = await Result.tryPromise(
+      async () =>
+        await activePublisher().publishChatTurnHandover(turn, {
+          originInstanceId: INSTANCE_ID,
+        }),
+    );
+    if (Result.isError(published)) {
+      observeFailure(published.error, {
+        sink: CHAT_TURN_HANDOVER_PUBLISH_FAILURE_SINK,
+      });
+    }
+  }, "sse.publish-chat-turn-handover");
 };
 
 // ── Desktop-edit session events ─────────────────────────

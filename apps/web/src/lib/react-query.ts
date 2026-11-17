@@ -3,6 +3,7 @@ import {
   defaultShouldDehydrateQuery,
   InfiniteQueryObserver,
   MutationCache,
+  QueryCache,
   QueryClient,
   QueryObserver,
 } from "@tanstack/react-query";
@@ -378,6 +379,13 @@ export const createAppQueryClient = () =>
   new QueryClient({
     // Covers every mutation, also those that show no failure of their own.
     mutationCache: new MutationCache({
+      onError: (error) => {
+        notifySessionExpired(error);
+      },
+    }),
+    // A page that only reads learns of an ended session the same way: each
+    // view shows its own failure, and none of them says to sign in.
+    queryCache: new QueryCache({
       onError: (error) => {
         notifySessionExpired(error);
       },
