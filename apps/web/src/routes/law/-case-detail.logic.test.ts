@@ -522,12 +522,16 @@ describe("secondary decision reads", () => {
   // read can be.
   const hangingFetch = () =>
     spyOn(globalThis, "fetch").mockImplementation(
-      async (_input, init) =>
-        await new Promise<Response>((_resolve, reject) => {
-          init?.signal?.addEventListener("abort", () => {
-            reject(init.signal?.reason);
-          });
-        }),
+      Object.assign(
+        async (_input: RequestInfo | URL, init?: RequestInit) =>
+          await new Promise<Response>((_resolve, reject) => {
+            const signal = init?.signal;
+            signal?.addEventListener("abort", () => {
+              reject(signal.reason);
+            });
+          }),
+        { preconnect: () => undefined },
+      ),
     );
 
   test("a server render reads the decision alone", async () => {
