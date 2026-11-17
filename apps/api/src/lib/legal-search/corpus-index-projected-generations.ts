@@ -3,6 +3,7 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import { corpusIndexGenerations } from "@/api/db/schema";
+import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import {
   CORPUS_INDEX_ACTIVE_GENERATION_STATUSES,
   type CorpusFamily,
@@ -32,7 +33,7 @@ import {
  * a retiring one still holds what it was given, so it takes erasures. Only a
  * retired generation is owed nothing, so only it may be unknown to a writer.
  */
-export const CORPUS_INDEX_PROJECTED_GENERATION_STATUSES = [
+const CORPUS_INDEX_PROJECTED_GENERATION_STATUSES = [
   ...CORPUS_INDEX_ACTIVE_GENERATION_STATUSES,
   "retiring",
 ] as const satisfies readonly CorpusIndexGenerationStatus[];
@@ -101,18 +102,24 @@ export const readProjectedCorpusIndexGenerationsTx = async (
     .limit(compiled.size + 1);
   const unknown = rows.filter(({ generation }) => !compiled.has(generation));
   if (unknown.length > 0) {
-    throw new CorpusIndexGenerationUnknownError({
-      message: `Corpus generation registry lists ${unknown
-        .map(({ generation, status }) => `${family}/${generation} (${status})`)
-        .join(
-          ", ",
-        )}, which this release has no manifest for; its writers would skip it`,
-      family,
-      unknown: unknown.map(({ generation, status }) => ({
-        generation,
-        status,
-      })),
-    });
+    // Rolls the caller's transaction back whole: nothing it wrote before
+    // this read commits without the generation it would have skipped.
+    abortTransaction(
+      new CorpusIndexGenerationUnknownError({
+        message: `Corpus generation registry lists ${unknown
+          .map(
+            ({ generation, status }) => `${family}/${generation} (${status})`,
+          )
+          .join(
+            ", ",
+          )}, which this release has no manifest for; its writers would skip it`,
+        family,
+        unknown: unknown.map(({ generation, status }) => ({
+          generation,
+          status,
+        })),
+      }),
+    );
   }
   return rows.map((row) => ({
     generation: row.generation,

@@ -1974,6 +1974,9 @@ describe("processDecision — corpus storage off", () => {
                     ? [{ adapterKey: ADAPTER_KEYS.SK_COURTS }]
                     : [],
                 ),
+              // The generation registry, read in generation order: no
+              // generation is registered, so nothing is projected.
+              orderBy: () => ({ limit: async () => await Promise.resolve([]) }),
             }),
           }),
         }),
@@ -2085,6 +2088,9 @@ describe("processDecision — the decision's judges", () => {
                     ? [{ adapterKey: ADAPTER_KEYS.SK_COURTS }]
                     : [],
                 ),
+              // The generation registry, read in generation order: no
+              // generation is registered, so nothing is projected.
+              orderBy: () => ({ limit: async () => await Promise.resolve([]) }),
             }),
           }),
         }),
@@ -2233,6 +2239,11 @@ describe("processDecision — fields on an existing row", () => {
                           ? [{ adapterKey: ADAPTER_KEYS.SK_COURTS }]
                           : [],
                       ),
+                    // The generation registry, read in generation order: no
+                    // generation is registered, so nothing is projected.
+                    orderBy: () => ({
+                      limit: async () => await Promise.resolve([]),
+                    }),
                   }),
                 },
         }),
@@ -2391,6 +2402,9 @@ describe("processDecision — source raw upload failure", () => {
                     ? [{ adapterKey: ADAPTER_KEYS.SK_COURTS }]
                     : [],
                 ),
+              // The generation registry, read in generation order: no
+              // generation is registered, so nothing is projected.
+              orderBy: () => ({ limit: async () => await Promise.resolve([]) }),
             }),
           }),
         }),
@@ -2482,6 +2496,9 @@ describe("processDecision — source raw upload failure", () => {
                     ? [{ adapterKey: ADAPTER_KEYS.SK_COURTS }]
                     : [],
                 ),
+              // The generation registry, read in generation order: no
+              // generation is registered, so nothing is projected.
+              orderBy: () => ({ limit: async () => await Promise.resolve([]) }),
             }),
           }),
         }),
