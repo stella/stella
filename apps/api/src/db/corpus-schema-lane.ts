@@ -66,6 +66,15 @@ const KEY_SQL = `hashtext('${CORPUS_SCHEMA_LANE.domain}'), hashtext('${CORPUS_SC
  */
 export const CORPUS_SCHEMA_LANE_TRY_SHARED_XACT_SQL = `SELECT pg_try_advisory_xact_lock_shared(${KEY_SQL}) AS "granted"`;
 
+/**
+ * Whether a `pg_locks` row is this lane held SHARED: the lock a batch holds
+ * for its whole transaction. A two-`int4` advisory key is the row's `classid`
+ * and `objid` (`objsubid` 2), each `hashtext` half cast to `oid`; shared mode
+ * is `ShareLock`. The lane held exclusive (`ExclusiveLock`) does not match.
+ * Reads the row's own columns, unqualified.
+ */
+export const CORPUS_SCHEMA_LANE_SHARED_PG_LOCK_SQL = `(locktype = 'advisory' AND mode = 'ShareLock' AND objsubid = 2 AND classid = hashtext('${CORPUS_SCHEMA_LANE.domain}')::oid AND objid = hashtext('${CORPUS_SCHEMA_LANE.lane}')::oid)`;
+
 /** How long a refused batch sleeps, outside any transaction, before trying again. */
 export const CORPUS_SCHEMA_LANE_RETRY_MS = 250;
 

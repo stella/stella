@@ -39,7 +39,14 @@
  *   one while its content is current, never lead it, and no generation numbers
  *   epochs of its own. So a converged candidate holds current content, and
  *   comparing two generations' applied epochs compares two readings of one
- *   counter (`corpus-index-projection-desired-state.db.test.ts` pins it);
+ *   counter (`corpus-index-projection-desired-state.db.test.ts` pins it).
+ *   No database trigger enforces this in production, on purpose: it would
+ *   read the canonical row of another table on every desired-state write,
+ *   the projection's hottest path, and under concurrent writers it would
+ *   fail a correct write whenever a canonical update commits between the
+ *   writer's read and the trigger's snapshot. Every writer suite installs
+ *   the test guard instead (`tests/helpers/corpus-projection-canonical-epoch-guard.ts`);
+ *   a new desired-state writer must run under it;
  * - whether a decision is erased does not depend on the generation, except
  *   through a jurisdiction-serving pointer (`vacatedFrom`) or a partial
  *   generation's scope. The read refuses both.
@@ -70,7 +77,10 @@ import {
 } from "@/api/db/schema";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { readBounded } from "@/api/lib/db/read-bounded";
-import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
+import {
+  type CorpusFamily,
+  isActiveCorpusIndexGenerationStatus,
+} from "@/api/lib/legal-search/corpus-generation-contract";
 import { readJurisdictionServingGenerationsTx } from "@/api/lib/legal-search/corpus-index-jurisdiction-serving-store";
 import {
   corpusIndexManifestIsPartial,
@@ -223,15 +233,17 @@ const microsecondToken = (instant: Temporal.Instant): string =>
 /**
  * The serving side's "shows": an upsert is wanted, the named copy sits in the
  * index the route wants, and its documents are whole or a delete of them may
- * be in flight.
+ * be in flight. An unknown counts as shown, so the serving side is
+ * conservative by construction, not only because a foreign key keeps every
+ * named revision present.
  */
-const servingShows = sql`(
+const servingShows = sql`coalesce((
   ${servingState.appliedIndexId} = ${servingState.desiredIndexId}
   AND (
     ${CORPUS_INDEX_PROJECTION_SERVING.served({ state: servingState, revision: servingRevision })}
     OR ${CORPUS_INDEX_PROJECTION_SERVING.at_risk({ state: servingState, revision: servingRevision })}
   )
-)`;
+), true)`;
 
 /** The candidate side's "shows": as the serving side, but only a whole copy. */
 const candidateShows = sql`coalesce((
@@ -482,7 +494,7 @@ const refused = (
  * The pair a flip of `candidate` would make: the family's serving generation
  * and the candidate. Refused when the read cannot answer it exactly: no
  * generation serves, the candidate is the serving one, the candidate does not
- * take every change (not building), the candidate is partial, or the family
+ * take every change (not active), the candidate is partial, or the family
  * has a jurisdiction-serving pointer. Erasures depend on the generation in
  * the last two cases.
  */
@@ -541,9 +553,14 @@ const readComparablePairTx = async (
     );
   }
   const candidateRow = rows.find((row) => row.generation === candidate);
-  if (candidateRow?.status !== "building") {
+  // The serving generation was refused above, so an active candidate is a
+  // building one.
+  if (
+    candidateRow === undefined ||
+    !isActiveCorpusIndexGenerationStatus(candidateRow.status)
+  ) {
     return refused(
-      `${family}/${candidate} is not a building generation (${candidateRow?.status ?? "not registered"}); only an active generation takes every change`,
+      `${family}/${candidate} is not an active generation (${candidateRow?.status ?? "not registered"}); only an active generation takes every change`,
       "generation_not_active",
     );
   }

@@ -23,6 +23,10 @@ import {
 } from "@/api/lib/db/aggregate-lock";
 import { transitionBatch } from "@/api/lib/db/transitions";
 import type { CaseLawRankingSignals } from "@/api/lib/legal-search/case-law-ranking-signals";
+import {
+  CORPUS_INDEX_ACTIVE_GENERATION_STATUSES,
+  isActiveCorpusIndexGenerationStatus,
+} from "@/api/lib/legal-search/corpus-generation-contract";
 import { requireRegisteredCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-generation-store";
 import { readCaseLawJurisdictionVacatedTx } from "@/api/lib/legal-search/corpus-index-jurisdiction-serving-store";
 import {
@@ -384,9 +388,9 @@ const hasActiveCorpusProjectionTx = async (
             corpusIndexGenerations.generation,
             projectionGenerationsForFamily(family),
           ),
-          or(
-            eq(corpusIndexGenerations.status, "building"),
-            eq(corpusIndexGenerations.status, "serving"),
+          inArray(
+            corpusIndexGenerations.status,
+            CORPUS_INDEX_ACTIVE_GENERATION_STATUSES,
           ),
         ),
       )
@@ -658,11 +662,10 @@ const projectionManifests = async (
           corpusIndexGenerations.generation,
           projectionGenerationsForFamily(family),
         ),
-        or(
-          eq(corpusIndexGenerations.status, "building"),
-          eq(corpusIndexGenerations.status, "serving"),
-          eq(corpusIndexGenerations.status, "retiring"),
-        ),
+        inArray(corpusIndexGenerations.status, [
+          ...CORPUS_INDEX_ACTIVE_GENERATION_STATUSES,
+          "retiring",
+        ]),
       ),
     )
     .orderBy(asc(corpusIndexGenerations.generation))
@@ -673,7 +676,9 @@ const projectionManifests = async (
   return rows.map((row) => ({
     generation: row.generation,
     manifest: requireRegisteredCorpusIndexManifest(row),
-    accepts: row.status === "retiring" ? "erase-only" : "content",
+    accepts: isActiveCorpusIndexGenerationStatus(row.status)
+      ? "content"
+      : "erase-only",
   }));
 };
 
@@ -758,9 +763,9 @@ export const readActiveCorpusProjectionManifest = async (
       and(
         eq(corpusIndexGenerations.family, family),
         eq(corpusIndexGenerations.generation, generation),
-        or(
-          eq(corpusIndexGenerations.status, "building"),
-          eq(corpusIndexGenerations.status, "serving"),
+        inArray(
+          corpusIndexGenerations.status,
+          CORPUS_INDEX_ACTIVE_GENERATION_STATUSES,
         ),
       ),
     )
@@ -792,9 +797,9 @@ export const lockActiveCorpusProjectionManifestForMutation = async (
       and(
         eq(corpusIndexGenerations.family, family),
         eq(corpusIndexGenerations.generation, generation),
-        or(
-          eq(corpusIndexGenerations.status, "building"),
-          eq(corpusIndexGenerations.status, "serving"),
+        inArray(
+          corpusIndexGenerations.status,
+          CORPUS_INDEX_ACTIVE_GENERATION_STATUSES,
         ),
       ),
     )
@@ -1380,9 +1385,9 @@ export const ensureCorpusProjectionDesiredStateTx = async (
       and(
         eq(corpusIndexGenerations.family, subject.family),
         eq(corpusIndexGenerations.generation, generation),
-        or(
-          eq(corpusIndexGenerations.status, "building"),
-          eq(corpusIndexGenerations.status, "serving"),
+        inArray(
+          corpusIndexGenerations.status,
+          CORPUS_INDEX_ACTIVE_GENERATION_STATUSES,
         ),
       ),
     )

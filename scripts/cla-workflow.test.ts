@@ -45,12 +45,17 @@ const credentialsSource = v.parse(
   ],
 );
 const author = { id: 101, login: "fixture-author", type: "User" };
-const pull = (number = 17, user = author, sha = HEAD) => ({
+const pull = (
+  number = 17,
+  user = author,
+  sha = HEAD,
+  headRepository = "stella/stella",
+) => ({
   number,
   state: "open",
   commits: 1,
   user,
-  head: { sha },
+  head: { sha, ref: "feature", repo: { full_name: headRepository } },
   base: {
     ref: "main",
     sha: BASE,
@@ -131,8 +136,8 @@ type FixtureOptions = {
   groupCompare?: CompareCommit[];
 };
 const fixture = ({
-  event = "pull_request_target",
-  payload = { pull_request: { number: 17 } },
+  event = "issue_comment",
+  payload = { issue: { number: 17, pull_request: {} } },
   pulls = [pull()],
   memberships = {},
   commitsByPull,
@@ -518,11 +523,17 @@ const fixture = ({
           }
           return;
         }
-        if (route.includes("/commits/")) {
-          // GitHub lists commit pulls without the commit count.
+        if (route === "GET /repos/{owner}/{repo}/pulls") {
+          // GitHub filters by head owner and branch, and lists pull requests
+          // without the commit count.
+          expect(params["state"]).toBe("open");
           yield {
             data: pulls
-              .filter(({ head }) => head.sha === params["commit_sha"])
+              .filter(
+                ({ head }) =>
+                  `${head.repo.full_name.split("/")[0] ?? ""}:${head.ref}` ===
+                  params["head"],
+              )
               .map(({ commits: _omitted, ...listed }) => listed),
           };
           return;
@@ -1081,7 +1092,7 @@ describe("contributor signature workflow", () => {
     ).toHaveLength(1);
   });
 
-  for (const event of ["pull_request_target", "merge_group"]) {
+  for (const event of ["issue_comment", "merge_group"]) {
     const eventOptions =
       event === "merge_group"
         ? {
@@ -1217,6 +1228,20 @@ describe("contributor signature workflow", () => {
       event: "pull_request",
       conclusion: "success",
       head_sha: HEAD,
+      head_branch: "feature",
+      head_repository: {
+        full_name: "stella/stella",
+        owner: { login: "stella" },
+      },
+    },
+  };
+  const forkNotification = {
+    workflow_run: {
+      ...notification.workflow_run,
+      head_repository: {
+        full_name: "fixture-fork/stella",
+        owner: { login: "fixture-fork" },
+      },
     },
   };
   const dependabot = {
@@ -1227,7 +1252,11 @@ describe("contributor signature workflow", () => {
   };
   test("an ordinary all-bot PR skips store credentials after a fresh API preflight", async () => {
     const bot = { ...author, login: "release-fixture[bot]", type: "Bot" };
-    const run = fixture({ pulls: [pull(17, bot)] });
+    const run = fixture({
+      event: "workflow_run",
+      payload: notification,
+      pulls: [pull(17, bot)],
+    });
     await run.selectCredentials();
     expect(run.credentials["store_required"]).toBe("false");
     await run.execute();
@@ -1243,6 +1272,8 @@ describe("contributor signature workflow", () => {
   });
   test("a bot preflight API failure cannot produce a check or credentials decision", async () => {
     const run = fixture({
+      event: "workflow_run",
+      payload: notification,
       pulls: [pull(17, dependabot)],
       authorPreflightError: true,
     });
@@ -1255,6 +1286,8 @@ describe("contributor signature workflow", () => {
   });
   test("a bot preflight missing immutable commit object fails before reporting", async () => {
     const run = fixture({
+      event: "workflow_run",
+      payload: notification,
       pulls: [pull(17, dependabot)],
       authorsByCommit: { [HEAD]: { users: [dependabot], oid: OTHER_HEAD } },
     });
@@ -1333,7 +1366,21 @@ describe("contributor signature workflow", () => {
       expect(run.created).toEqual([]);
     },
   );
-  test.each(["repository", "path", "event", "head_sha", "conclusion"])(
+  const untrustedNotificationFields: Record<string, unknown> = {
+    repository: { full_name: "attacker/repo" },
+    path: "attacker",
+    event: "attacker",
+    head_sha: "attacker",
+    conclusion: "attacker",
+    head_branch: "",
+    head_repository: null,
+    // The owner the branch is listed under must own the head repository.
+    head_owner: {
+      full_name: "fixture-fork/stella",
+      owner: { login: "stella" },
+    },
+  };
+  test.each(Object.keys(untrustedNotificationFields))(
     "notification rejects untrusted %s before reporting",
     async (field) => {
       const run = fixture({
@@ -1341,10 +1388,8 @@ describe("contributor signature workflow", () => {
         payload: {
           workflow_run: {
             ...notification.workflow_run,
-            [field]:
-              field === "repository"
-                ? { full_name: "attacker/repo" }
-                : "attacker",
+            [field === "head_owner" ? "head_repository" : field]:
+              untrustedNotificationFields[field],
           },
         },
         pulls: [pull(17, dependabot)],
@@ -1370,6 +1415,66 @@ describe("contributor signature workflow", () => {
     expect(run.created).toEqual([]);
     expect(run.updates).toEqual([]);
     expect(run.writes()).toBe(0);
+  });
+
+  test("a notification for a human pull request verifies it with store credentials", async () => {
+    const run = fixture({ event: "workflow_run", payload: notification });
+    await run.execute();
+    expect(run.credentials).toEqual({
+      store_required: "true",
+      pull_requests: "[17]",
+    });
+    expect(run.errors).toEqual([]);
+    expect(lastOutput(run, "cla").output.title).toBe("CLA_UNSIGNED");
+    expect(lastOutput(run, "cla/pr-17").conclusion).toBe("failure");
+    expect(run.created.map(({ sha }) => sha)).toEqual([HEAD, HEAD]);
+    expect(run.prompts()).toBe(1);
+  });
+
+  test("a fork notification resolves its pull request from the head repository and branch", async () => {
+    const run = fixture({
+      event: "workflow_run",
+      payload: forkNotification,
+      pulls: [pull(17, author, HEAD, "fixture-fork/stella")],
+      signatures: [signature()],
+    });
+    await run.execute();
+    expect(run.credentials["pull_requests"]).toBe("[17]");
+    expect(run.errors).toEqual([]);
+    expect(lastOutput(run, "cla").conclusion).toBe("success");
+    expect(lastOutput(run, "cla/pr-17").conclusion).toBe("success");
+    expect(
+      run.requests.find(
+        ({ route }) => route === "GET /repos/{owner}/{repo}/pulls",
+      )?.params,
+    ).toMatchObject({ head: "fixture-fork:feature", state: "open" });
+  });
+
+  test("a notification never reports on another repository's branch of the same name or head", async () => {
+    const run = fixture({
+      event: "workflow_run",
+      payload: forkNotification,
+      pulls: [pull(17), pull(18, author, HEAD, "fixture-fork/other")],
+    });
+    await run.execute();
+    expect(run.credentials["pull_requests"]).toBe("[]");
+    expect(run.created).toEqual([]);
+    expect(run.updates).toEqual([]);
+  });
+
+  test("every open pull request sharing the notified head is verified", async () => {
+    const second = { ...author, id: 102, login: "second-author" };
+    const run = fixture({
+      event: "workflow_run",
+      payload: notification,
+      pulls: [pull(17), pull(18, second)],
+      signatures: [signature()],
+    });
+    await run.execute();
+    expect(run.credentials["pull_requests"]).toBe("[17,18]");
+    expect(run.errors).toEqual([]);
+    expect(lastOutput(run, "cla/pr-17").conclusion).toBe("success");
+    expect(lastOutput(run, "cla/pr-18").output.title).toBe("CLA_UNSIGNED");
   });
 
   test("members, owners, allowlisted accounts, Bot authors and Dependabot always report success", async () => {
@@ -1872,7 +1977,7 @@ describe("contributor signature workflow", () => {
       false,
     );
     const outsider = fixture({
-      payload: { pull_request: { number: 18 } },
+      payload: { issue: { number: 18, pull_request: {} } },
       pulls: [pull(), pull(18, { ...author, id: 102, login: "second-author" })],
       memberships: { [author.login]: { state: "active", role: "member" } },
       commitsByPull: { 18: [commit()] },
@@ -2200,8 +2305,14 @@ describe("contributor signature workflow", () => {
       `\${{ !cancelled() && steps.credentials.outcome == 'success' }}`,
     );
     expect(workflow.jobs["verify-signatures"]?.if).toContain(
-      "(github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.actor.login == 'dependabot[bot]' && github.event.workflow_run.head_repository.full_name == github.repository && github.event.workflow_run.path == '.github/workflows/cla-notify.yml' && github.event.workflow_run.event == 'pull_request'))",
+      "(github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.repository.full_name == github.repository && github.event.workflow_run.path == '.github/workflows/cla-notify.yml' && github.event.workflow_run.event == 'pull_request'))",
     );
+    expect(Object.keys(workflow.on).toSorted()).toEqual([
+      "issue_comment",
+      "merge_group",
+      "workflow_dispatch",
+      "workflow_run",
+    ]);
     expect(workflow.permissions).toEqual({
       contents: "read",
       statuses: "write",
@@ -2212,5 +2323,34 @@ describe("contributor signature workflow", () => {
     expect(workflow.on).toHaveProperty("workflow_dispatch");
     expect(workflow.on).toHaveProperty("workflow_run");
     expect(source).not.toContain("author_association");
+  });
+
+  test("the notification half runs for every pull request without privileges", () => {
+    const notify = v.parse(
+      v.looseObject({
+        on: v.record(v.string(), v.unknown()),
+        permissions: v.record(v.string(), v.string()),
+        jobs: v.record(
+          v.string(),
+          v.looseObject({
+            steps: v.array(v.looseObject({ run: v.optional(v.string()) })),
+          }),
+        ),
+      }),
+      Bun.YAML.parse(
+        readFileSync(
+          new URL("../.github/workflows/cla-notify.yml", import.meta.url),
+          "utf-8",
+        ),
+      ),
+    );
+    expect(Object.keys(notify.on)).toEqual(["pull_request"]);
+    expect(notify.permissions).toEqual({});
+    expect(Object.values(notify.jobs)).toHaveLength(1);
+    const [job] = Object.values(notify.jobs);
+    expect(job).not.toHaveProperty("if");
+    expect(job?.steps).toEqual([
+      { name: "Request trusted signature verification", run: ":" },
+    ]);
   });
 });

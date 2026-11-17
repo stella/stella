@@ -84,6 +84,11 @@ const DATABASE_PROCESS_ASSUMPTIONS = {
     pools: DATABASE_POOL_DEFAULTS,
     publicPool: "shared",
   },
+  onlinePendingDrain: {
+    maxReplicas: 1,
+    pools: DATABASE_POOL_DEFAULTS,
+    publicPool: "shared",
+  },
   signInReplay: {
     maxReplicas: 1,
     pools: DATABASE_POOL_DEFAULTS,
@@ -187,15 +192,16 @@ const DATABASE_POOLS = [
     file: "src/db/online-index-observer.ts",
     constructor: 1,
     maximum: { type: "fixed", value: 1 },
-    processes: ["migrator"],
+    processes: ["migrator", "onlinePendingDrain"],
     admission: "pooled",
   },
   {
-    // openOnlineRepairConnection: the operator-run chat content v3 backfill.
+    // openOnlineRepairConnection: the operator-run chat content v3 backfill
+    // and the pending online drain, one unit's session at a time.
     file: "src/db/online-index-observer.ts",
     constructor: 2,
     maximum: { type: "fixed", value: 1 },
-    processes: ["chatContentBackfill"],
+    processes: ["chatContentBackfill", "onlinePendingDrain"],
     admission: "pooled",
   },
   {

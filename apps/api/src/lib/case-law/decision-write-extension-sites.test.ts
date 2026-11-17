@@ -45,6 +45,9 @@ const MUTATION_OWNERS = {
   "handlers/case-law/withdraw-document.ts": {
     withdrawCaseLawDecisionDocument: "withdrawCaseLawDecisionDocument",
   },
+  "lib/legal-search/corpus-projectability-write.ts": {
+    writeProjectedCorpusColumnsTx: "writeProjectedCorpusColumnsTx",
+  },
   "lib/legal-search/sk-document-backfill.ts": {
     applyStoredPayload: "applyStoredPayload",
     markDocumentUnavailableOwned: "markDocumentUnavailableOwned",

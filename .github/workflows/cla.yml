@@ -5,17 +5,18 @@ defaults:
     shell: bash
 
 # SECURITY INVARIANT — DO NOT BREAK.
-# pull_request_target executes trusted base-repository workflow code with secrets.
-# Never check out PR head code, build or install it, or interpolate PR data into
-# executable code. This workflow is limited to API calls in pinned actions;
-# head SHAs are data for the Statuses API, never executable input.
+# This workflow runs main's code with secrets and write scopes. It never checks
+# out, builds, installs or runs pull request code, and never interpolates pull
+# request data into executable code; it is limited to API calls in pinned
+# actions. A pull request reaches it through the unprivileged notification
+# workflow (cla-notify.yml), whose workflow_run payload is untrusted data: the
+# pull requests are looked up again through the API by head repository, branch
+# and SHA. Head SHAs are data for the Statuses API, never executable input.
 
 on:
-  pull_request_target: # zizmor: ignore[dangerous-triggers] API-only; no checkout or execution of PR code
-    types: [opened, synchronize, reopened, ready_for_review]
   issue_comment:
     types: [created]
-  workflow_run:
+  workflow_run: # zizmor: ignore[dangerous-triggers] API-only; the notified pull requests are re-read through the API and no PR code runs
     workflows: [Contributor signature notification]
     types: [completed]
   merge_group:
@@ -27,9 +28,11 @@ on:
         type: string
         required: true
 
+# Each run reports on fixed commits, and a status replayed on the same commit
+# carries the same verdict; the notification workflow supersedes per PR.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request_target' && format('pr-{0}', github.event.pull_request.number) || format('run-{0}', github.run_id) }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request_target' }}
+  group: ${{ github.workflow }}-${{ github.run_id }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -40,9 +43,9 @@ permissions:
 
 jobs:
   verify-signatures:
-    # Notification runs for other authors complete with the job skipped; only a
-    # successful dependabot notification requests verification.
-    if: (github.event_name != 'pull_request_target' || github.actor != 'dependabot[bot]') && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.actor.login == 'dependabot[bot]' && github.event.workflow_run.head_repository.full_name == github.repository && github.event.workflow_run.path == '.github/workflows/cla-notify.yml' && github.event.workflow_run.event == 'pull_request')) && (github.event_name != 'issue_comment' || (github.event.issue.pull_request && (github.event.comment.body == 'recheck' || github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA')))
+    # Every pull request, fork ones included, is verified after a successful
+    # notification run; the job reads that run as data and checks out nothing.
+    if: (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.repository.full_name == github.repository && github.event.workflow_run.path == '.github/workflows/cla-notify.yml' && github.event.workflow_run.event == 'pull_request')) && (github.event_name != 'issue_comment' || (github.event.issue.pull_request && (github.event.comment.body == 'recheck' || github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA')))
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -53,32 +56,38 @@ jobs:
           script: |
             const { owner, repo } = context.repo;
             const run = context.payload.workflow_run;
-            if (!["workflow_run", "pull_request_target"].includes(context.eventName)) {
+            if (context.eventName !== "workflow_run") {
               core.setOutput("store_required", "true");
               return;
             }
-            if (context.eventName === "workflow_run" && (run.repository?.full_name !== `${owner}/${repo}` || run.path !== ".github/workflows/cla-notify.yml" ||
-                run.event !== "pull_request" || run.conclusion !== "success" || !/^[0-9a-f]{40}$/u.test(run.head_sha))) {
+            // The notification run is untrusted, and GitHub lists no pull
+            // requests on it for forks. Its pull requests are read again by head
+            // repository and branch; only open ones into this repository at the
+            // notified head count. None means the head moved on and a newer
+            // notification reports; several share one branch and each is verified.
+            const headRepository = run.head_repository?.full_name;
+            const headOwner = run.head_repository?.owner?.login;
+            if (run.repository?.full_name !== `${owner}/${repo}` || run.path !== ".github/workflows/cla-notify.yml" ||
+                run.event !== "pull_request" || run.conclusion !== "success" || !/^[0-9a-f]{40}$/u.test(run.head_sha) ||
+                typeof headRepository !== "string" || typeof headOwner !== "string" || headRepository.split("/")[0] !== headOwner ||
+                typeof run.head_branch !== "string" || !run.head_branch) {
               throw new Error("CLA_UNTRUSTED_NOTIFICATION");
             }
-            const pulls = context.eventName === "workflow_run"
-              ? await github.paginate("GET /repos/{owner}/{repo}/commits/{commit_sha}/pulls", {
-                  owner, repo, commit_sha: run.head_sha, per_page: 100,
-                })
-              : [(await github.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", {
-                  owner, repo, pull_number: context.payload.pull_request.number,
-                })).data];
-            const candidates = pulls.filter((pull) => pull.state === "open" &&
-              (context.eventName !== "workflow_run" || (pull.head.sha === run.head_sha && pull.user.login === "dependabot[bot]")) &&
-              pull.base.repo.full_name === `${owner}/${repo}`);
+            const pulls = await github.paginate("GET /repos/{owner}/{repo}/pulls", {
+              owner, repo, state: "open", head: `${headOwner}:${run.head_branch}`, per_page: 100,
+            });
+            const candidates = pulls.filter((pull) => pull.state === "open" && pull.head?.sha === run.head_sha &&
+              pull.head.repo?.full_name === headRepository && pull.base?.repo?.full_name === `${owner}/${repo}`);
             let storeRequired = false;
             for (const listed of candidates) {
-              // The commit-to-pulls listing omits the commit count; read the full pull request.
-              const pull = context.eventName === "workflow_run"
-                ? (await github.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { owner, repo, pull_number: listed.number })).data
-                : listed;
+              // The pull request listing omits the commit count; read the full pull request.
+              const pull = (await github.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { owner, repo, pull_number: listed.number })).data;
               if (pull.head.sha !== listed.head.sha) throw new Error("CLA_INCOMPLETE_COMMIT_LIST");
-              if (pull.user.type !== "Bot") storeRequired = true;
+              // A person's pull request needs the store; verification reads its commits.
+              if (pull.user.type !== "Bot") {
+                storeRequired = true;
+                continue;
+              }
               const commits = await github.paginate("GET /repos/{owner}/{repo}/pulls/{pull_number}/commits", {
                 owner, repo, pull_number: pull.number, per_page: 100,
               });
@@ -491,9 +500,6 @@ jobs:
             };
             try {
               switch (context.eventName) {
-                case "pull_request_target":
-                  await verifyNumber(context.payload.pull_request.number);
-                  break;
                 case "issue_comment":
                   if (!context.payload.issue.pull_request) break;
                   await verifyNumber(context.payload.issue.number);

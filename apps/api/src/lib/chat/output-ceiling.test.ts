@@ -396,10 +396,7 @@ const compactThread = async (keySource: keyof typeof KEY_SOURCES) => {
     organizationId,
     tenantWorkspaceIds: [],
   });
-  if (Result.isError(result)) {
-    return panic("Compaction failed outright");
-  }
-  return { compacted: result.value, summaryErrors };
+  return { compacted: result, summaryErrors };
 };
 
 describe("compacting a long thread", () => {

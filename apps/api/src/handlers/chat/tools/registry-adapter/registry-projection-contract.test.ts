@@ -11,6 +11,7 @@ import {
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
+import { noDecisionReviewFound } from "@stll/api-contract/case-law-reviews";
 import {
   countedSearchTotal,
   DECISION_SEARCH_MATCHES,
@@ -281,6 +282,8 @@ const buildContext = (tx: unknown): AuthorizedMcpRequestContext => {
         readCaseLawCoverageHandler: readCaseLawCoverageHandlerMock,
         readGatedDecisionWithDocument: readGatedDecisionWithDocumentMock,
         readGatedDecisionCitations: readGatedDecisionCitationsMock,
+        readDecisionReviews: async ({ decisionIds }) =>
+          new Map(decisionIds.map((id) => [id, noDecisionReviewFound()])),
         readGatedDecisionCitationDigest: readGatedDecisionCitationDigestMock,
         searchLegislationHandler: searchLegislationHandlerMock,
         searchServedSoftLaw: searchServedSoftLawMock,
@@ -1796,11 +1799,14 @@ const CONTRACT_CORPUS = {
       buildArgs: () => ({ decision_ids: [uid(54)] }),
       setup: () => {
         readGatedDecisionWithDocumentMock.mockResolvedValue({
+          appealReviews: noDecisionReviewFound(),
           extractionWarnings: [],
           hasDocument: true,
           documentPending: false,
           documentReadFailed: false,
           documentUnavailable: false,
+          textIncompleteReason: null,
+          textWithheldReason: null,
           id: toSafeId<"caseLawDecision">(uid(54)),
           resolution: { type: DECISION_READ_RESOLUTION.DIRECT },
           caseNumber: "22 Cdo 1000/2020",
@@ -1958,14 +1964,24 @@ const CONTRACT_CORPUS = {
       setup: () => {
         readGatedDecisionCitationsMock.mockResolvedValue({
           type: "page",
+          decisionId: toSafeId<"caseLawDecision">(uid(54)),
           page: {
             doctrineAvailability: "available",
             items: [
               {
                 id: toSafeId<"caseLawCitation">(uid(57)),
                 citationText: "22 Cdo 1000/2020",
+                citedPart: "not-stated",
+                polarityEvidence: {
+                  source: null,
+                  ruleId: null,
+                  classifierVersion: null,
+                  excerpt: null,
+                },
                 extractionWarnings: [],
                 textWithheldReason: null,
+                textIncompleteReason: null,
+                evidenceIncompleteReason: null,
                 sectionIndex: 1,
                 doctrine: "unread",
                 treatment: "positive",
@@ -2697,11 +2713,14 @@ describe("decision text in chat projection", () => {
   test("decision read preserves its text through the chat projection", async () => {
     const text = "[23] Žaloba se zamítá. Náklady řízení nese žalobce.";
     readGatedDecisionWithDocumentMock.mockResolvedValue({
+      appealReviews: noDecisionReviewFound(),
       extractionWarnings: [],
       hasDocument: true,
       documentPending: false,
       documentReadFailed: false,
       documentUnavailable: false,
+      textIncompleteReason: null,
+      textWithheldReason: null,
       id: toSafeId<"caseLawDecision">(uid(54)),
       resolution: { type: DECISION_READ_RESOLUTION.DIRECT },
       caseNumber: "22 Cdo 1000/2020",

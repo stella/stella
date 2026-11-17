@@ -21,6 +21,8 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { FieldDiffs } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
+import { TRANSITIONS } from "@/api/lib/db/transition-specs";
+import { transitionBatch } from "@/api/lib/db/transitions";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { reviewGateForTask } from "@/api/lib/flows/review-gate-task";
@@ -28,6 +30,7 @@ import { hasManagementPermission } from "@/api/lib/permission-authorization";
 import { workTask } from "@/api/lib/tasks/work-task";
 import { ensureLegacyWorkObligation } from "@/api/lib/work-obligations/legacy-work-obligation";
 import { lockWorkObligation } from "@/api/lib/work-obligations/lock-work-obligation";
+import type { WORK_OBLIGATION_TRANSITIONS } from "@/api/lib/work-obligations/transitions";
 
 const updateWorkObligationParams = workspaceParams({
   entityId: resourceIdSchema("entity"),
@@ -297,9 +300,13 @@ const updateWorkObligation = createSafeHandler(
         }
 
         const now = new Date();
-        const obligationUpdate: Partial<typeof workObligations.$inferInsert> = {
+        const obligationUpdate: Partial<
+          Omit<typeof workObligations.$inferInsert, "status" | "entityId">
+        > = {
           updatedAt: now,
         };
+        let nextStatus:
+          (typeof WORK_OBLIGATION_TRANSITIONS.cancel.from)[number] | undefined;
         const events: (typeof workObligationEvents.$inferInsert)[] = [];
         const changes: FieldDiffs = {};
 
@@ -315,12 +322,11 @@ const updateWorkObligation = createSafeHandler(
             ? user.id
             : null;
           if (nextOwnerUserId === null) {
-            obligationUpdate.status = WORK_OBLIGATION_STATUS.UNASSIGNED;
+            nextStatus = WORK_OBLIGATION_STATUS.UNASSIGNED;
           } else if (isSelfAssigned) {
-            obligationUpdate.status = WORK_OBLIGATION_STATUS.ACTIVE;
+            nextStatus = WORK_OBLIGATION_STATUS.ACTIVE;
           } else {
-            obligationUpdate.status =
-              WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT;
+            nextStatus = WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT;
           }
           changes["ownerUserId"] = {
             old: existing.ownerUserId,
@@ -481,51 +487,105 @@ const updateWorkObligation = createSafeHandler(
           return { status: "unchanged" as const };
         }
 
-        const updated = await tx
-          .update(workObligations)
-          .set(obligationUpdate)
-          .where(
-            and(
-              eq(workObligations.entityId, params.entityId),
-              eq(workObligations.workspaceId, workspaceId),
-              eq(workObligations.status, existing.status),
-            ),
-          )
-          .returning({ entityId: workObligations.entityId });
+        const move = (() => {
+          switch (nextStatus) {
+            case WORK_OBLIGATION_STATUS.UNASSIGNED:
+              return existing.status === WORK_OBLIGATION_STATUS.UNASSIGNED
+                ? null
+                : ({
+                    from: [existing.status],
+                    to: WORK_OBLIGATION_STATUS.UNASSIGNED,
+                  } as const);
+            case WORK_OBLIGATION_STATUS.ACTIVE:
+              return existing.status === WORK_OBLIGATION_STATUS.ACTIVE
+                ? null
+                : ({
+                    from: [existing.status],
+                    to: WORK_OBLIGATION_STATUS.ACTIVE,
+                  } as const);
+            case WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT:
+              return existing.status ===
+                WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT
+                ? null
+                : ({
+                    from: [existing.status],
+                    to: WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
+                  } as const);
+            case undefined:
+              return null;
+            default:
+              nextStatus satisfies never;
+              return panic("Unknown ownership status");
+          }
+        })();
+        const recordUpdate = async (auditTx: typeof tx) => {
+          if (move === null) {
+            const updated = await auditTx
+              .update(workObligations)
+              .set(obligationUpdate)
+              .where(
+                and(
+                  eq(workObligations.entityId, params.entityId),
+                  eq(workObligations.workspaceId, workspaceId),
+                  eq(workObligations.status, existing.status),
+                ),
+              )
+              .returning({ entityId: workObligations.entityId });
+            if (!updated.at(0)) {
+              return { status: "conflict" as const };
+            }
+          }
+          if (body.type !== undefined || body.workingTargetDate !== undefined) {
+            const entitySet: Partial<typeof entities.$inferInsert> = {
+              updatedAt: now,
+            };
+            if (body.type !== undefined) {
+              entitySet.agendaKind = body.type;
+            }
+            if (body.workingTargetDate !== undefined) {
+              entitySet.dueDate = body.workingTargetDate;
+            }
+            await auditTx
+              .update(entities)
+              .set(entitySet)
+              .where(
+                and(
+                  eq(entities.id, params.entityId),
+                  eq(entities.workspaceId, workspaceId),
+                  workTask(entities),
+                ),
+              );
+          }
+
+          await auditTx.insert(workObligationEvents).values(events);
+          await recordAuditEvent(auditTx, {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.WORK_OBLIGATION,
+            resourceId: params.entityId,
+            changes,
+            ...(reason ? { metadata: { reason } } : {}),
+          });
+          return { status: "updated" as const };
+        };
+        if (move === null) {
+          return await recordUpdate(tx);
+        }
+        const updated = await transitionBatch({
+          tx,
+          spec: TRANSITIONS.workObligations,
+          ids: [params.entityId],
+          options: {
+            ...move,
+            guard: eq(workObligations.workspaceId, workspaceId),
+            set: obligationUpdate,
+          },
+          recordTransitionAuditEvent: async (auditTx) => {
+            await recordUpdate(auditTx);
+          },
+        });
         if (!updated.at(0)) {
           return { status: "conflict" as const };
         }
-
-        if (body.type !== undefined || body.workingTargetDate !== undefined) {
-          const entitySet: Partial<typeof entities.$inferInsert> = {
-            updatedAt: now,
-          };
-          if (body.type !== undefined) {
-            entitySet.agendaKind = body.type;
-          }
-          if (body.workingTargetDate !== undefined) {
-            entitySet.dueDate = body.workingTargetDate;
-          }
-          await tx
-            .update(entities)
-            .set(entitySet)
-            .where(
-              and(
-                eq(entities.id, params.entityId),
-                eq(entities.workspaceId, workspaceId),
-                workTask(entities),
-              ),
-            );
-        }
-
-        await tx.insert(workObligationEvents).values(events);
-        await recordAuditEvent(tx, {
-          action: AUDIT_ACTION.UPDATE,
-          resourceType: AUDIT_RESOURCE_TYPE.WORK_OBLIGATION,
-          resourceId: params.entityId,
-          changes,
-          ...(reason ? { metadata: { reason } } : {}),
-        });
 
         return { status: "updated" as const };
       }),

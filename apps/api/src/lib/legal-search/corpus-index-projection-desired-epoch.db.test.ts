@@ -52,6 +52,10 @@ import {
   synchronizeLockedCaseLawProjectionBatchTx,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { readReservedCorpusProjectionMaterialsTx } from "@/api/lib/legal-search/corpus-index-projection-materials";
+import {
+  CORPUS_PROJECTION_CANONICAL_EPOCH_GUARD_OFF_SETTING,
+  installCorpusProjectionCanonicalEpochGuard,
+} from "@/api/tests/helpers/corpus-projection-canonical-epoch-guard";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -172,6 +176,7 @@ const reset = async (): Promise<void> => {
 // timeout: builds the PGlite schema from every migration.
 beforeAll(async () => {
   client = await createTestPglite();
+  await installCorpusProjectionCanonicalEpochGuard(client);
   db = drizzle({ client });
 }, 120_000);
 
@@ -513,10 +518,17 @@ const applyStep = async (
           family: _family,
           ...columns
         } = plainBefore;
-        await db
-          .update(corpusIndexProjectionStates)
-          .set(columns)
-          .where(eq(corpusIndexProjectionStates.generation, generation));
+        await db.transaction(async (tx) => {
+          // Putting the untouched row back is the fixture's doing, not a
+          // writer's, so the write-time epoch guard stands aside for it.
+          await tx.execute(
+            sql`SELECT set_config(${CORPUS_PROJECTION_CANONICAL_EPOCH_GUARD_OFF_SETTING}, 'off', true)`,
+          );
+          await tx
+            .update(corpusIndexProjectionStates)
+            .set(columns)
+            .where(eq(corpusIndexProjectionStates.generation, generation));
+        });
       }
       return { stamped: false };
     }

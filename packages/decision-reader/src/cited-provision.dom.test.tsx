@@ -127,7 +127,11 @@ const openCard = async (container: HTMLElement) => {
     container.querySelector<HTMLElement>('[data-slot="provision-card"]') ??
     panic("Missing provision card");
   await act(async () => {
-    card.click();
+    (
+      card.querySelector<HTMLButtonElement>(
+        '[data-slot="provision-card-trigger"]',
+      ) ?? panic("Missing provision disclosure")
+    ).click();
   });
   return card;
 };
@@ -194,6 +198,66 @@ describe("a cited provision's wording", () => {
     Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", previousActEnvironment);
     await GlobalRegistrator.unregister();
   });
+  for (const placement of ["inline", "gutter"] as const) {
+    test(`${placement} wording and independent actions do not activate the disclosure`, async () => {
+      let fullRequests = 0;
+      const container = await mount(
+        <CitedProvisionExpansion
+          citations={[citation]}
+          full={{ isPending: false, whole: null }}
+          onToggleFull={() => {
+            fullRequests++;
+          }}
+          placement={placement}
+          showsFull={false}
+          wordings={wordings}
+        />,
+      );
+      const card = await openCard(container);
+      const trigger =
+        card.querySelector<HTMLButtonElement>(
+          '[data-slot="provision-card-trigger"]',
+        ) ?? panic("Missing disclosure");
+      expect(card.hasAttribute("role")).toBe(false);
+      expect(card.hasAttribute("tabindex")).toBe(false);
+      expect(trigger.tagName).toBe("BUTTON");
+      expect(trigger.getAttribute("aria-expanded")).toBe("true");
+      const contentId =
+        trigger.getAttribute("aria-controls") ??
+        panic("Missing disclosure target");
+      expect(card.querySelector(`[id="${contentId}"]`)).not.toBeNull();
+      const paragraph =
+        wordingOf(card).querySelector("p") ?? panic("Missing wording");
+      await act(async () => {
+        paragraph.click();
+      });
+      expect(trigger.getAttribute("aria-expanded")).toBe("true");
+      const fullToggle =
+        [...card.querySelectorAll("button")].find(
+          (button) =>
+            button !== trigger && button.hasAttribute("aria-expanded"),
+        ) ?? panic("Missing full wording action");
+      await act(async () => {
+        fullToggle.click();
+      });
+      expect(fullRequests).toBe(1);
+      expect(trigger.getAttribute("aria-expanded")).toBe("true");
+      for (const action of card.querySelectorAll<HTMLElement>(
+        "[data-peek-action]",
+      )) {
+        expect(trigger.contains(action)).toBe(false);
+      }
+      expect(wordingOf(card).querySelector("p") === paragraph).toBe(true);
+      await act(async () => {
+        trigger.click();
+      });
+      expect(trigger.getAttribute("aria-expanded")).toBe("false");
+      expect(wordingOf(card).querySelector("p")?.textContent).toBe(
+        paragraph.textContent,
+      );
+    });
+  }
+
   test("the hover preview quotes a paragraph and its letters as one unit", async () => {
     const container = await mount(
       <CitedProvisionPeek provision={citation} wordings={wordings} />,

@@ -17,6 +17,10 @@ import {
   type ChatLocalRunSteerRequest,
   type ChatLocalRunSteerSource,
 } from "@stll/api-contract/chat-run-target";
+import {
+  CHAT_TURN_STEERING_EVENT,
+  chatTurnSteeringEventSchema,
+} from "@stll/api-contract/chat-send-intent";
 import { SSE_SILENCE_BOUND_MS } from "@stll/api-contract/sse-heartbeat";
 
 import { SignedOutError } from "@/connection/errors";
@@ -25,6 +29,7 @@ import type { Fetch } from "@/connection/http";
 import type { AccessTokenSource } from "@/connection/session";
 import {
   ApiRequestError,
+  refusalCode,
   requestApi,
   withAccessToken,
 } from "@/state/api-request";
@@ -149,6 +154,12 @@ const chatEventSchema = v.union([
     type: v.literal("CUSTOM"),
     name: v.literal(CHAT_LOCAL_RUN_STEER_EVENT),
     value: chatLocalRunSteerEventSchema,
+  }),
+  // Whether the turn takes a message mid-turn, as the server knows it.
+  v.object({
+    type: v.literal("CUSTOM"),
+    name: v.literal(CHAT_TURN_STEERING_EVENT),
+    value: chatTurnSteeringEventSchema,
   }),
 ]);
 
@@ -384,7 +395,8 @@ export const applyChatEvent = (
         failure: streamedTurnFailure(event.code),
       };
     }
-    // A steer's outcome is the turn's to act on, not part of the answer.
+    // A steer's outcome and the turn's steering are the turn's to act on,
+    // not part of the answer.
     case "CUSTOM": {
       return answer;
     }
@@ -479,14 +491,7 @@ export const chatSendBody = ({
 }) => {
   const forwarded = {
     ...turnScope({ anonymized, matterId, runId, threadId }),
-    message: {
-      id: messageId,
-      role: "user",
-      parts: [
-        ...(text === "" ? [] : [{ type: "text", content: text }]),
-        ...attachmentParts(files),
-      ],
-    },
+    message: userMessage({ files, messageId, text }),
   };
   return {
     threadId,
@@ -499,6 +504,36 @@ export const chatSendBody = ({
     data: forwarded,
   };
 };
+
+/** A message the person wrote, with its files after its text. */
+const userMessage = ({
+  files,
+  messageId,
+  text,
+}: {
+  readonly files: readonly ReadyFile[];
+  readonly messageId: string;
+  readonly text: string;
+}) => ({
+  id: messageId,
+  role: "user",
+  parts: [
+    ...(text === "" ? [] : [{ type: "text", content: text }]),
+    ...attachmentParts(files),
+  ],
+});
+
+/** The thread's matter, and how its text is sent. */
+const sendScope = ({
+  anonymized,
+  matterId,
+}: {
+  readonly anonymized: boolean;
+  readonly matterId: string | undefined;
+}) => ({
+  ...(matterId === undefined ? {} : { workspaceId: matterId }),
+  sendMode: anonymized ? "anonymized" : "rawOverride",
+});
 
 /**
  * What every request about a thread's turn names: the thread, the new run,
@@ -514,11 +549,27 @@ const turnScope = ({
   readonly matterId: string | undefined;
   readonly runId: string;
   readonly threadId: string;
+}) => ({ threadId, runId, ...sendScope({ anonymized, matterId }) });
+
+/**
+ * A message the server keeps queued until the thread is free: what a send
+ * forwards, without its thread and run, under the same message id.
+ */
+export const queuedChatSend = ({
+  anonymized,
+  files = [],
+  matterId,
+  messageId,
+  text,
+}: {
+  readonly anonymized: boolean;
+  readonly files?: readonly ReadyFile[];
+  readonly matterId: string | undefined;
+  readonly messageId: string;
+  readonly text: string;
 }) => ({
-  threadId,
-  runId,
-  ...(matterId === undefined ? {} : { workspaceId: matterId }),
-  sendMode: anonymized ? "anonymized" : "rawOverride",
+  ...sendScope({ anonymized, matterId }),
+  message: userMessage({ files, messageId, text }),
 });
 
 /**
@@ -628,6 +679,8 @@ export type StreamFetch = (
   readonly ok: boolean;
   readonly status: number;
   readonly headers: { get: (name: string) => string | null };
+  /** A refusal's body, which names why. */
+  readonly json: () => Promise<unknown>;
   readonly body: {
     getReader: () => {
       read: () => Promise<{ done: boolean; value?: Uint8Array | undefined }>;
@@ -740,7 +793,6 @@ const readChatStream = async ({
           ...(body === undefined ? {} : { body }),
           signal: controller.signal,
         });
-        clearTimeout(connectTimer);
         // A refusal names the turn too once the server has stored the
         // message, so the thread, not the draft, holds what was sent.
         const turnId = response.headers.get(CHAT_TURN_ID_HEADER);
@@ -748,8 +800,17 @@ const readChatStream = async ({
           onTurn?.(turnId);
         }
         if (!response.ok || response.body === null) {
-          return response.status;
+          // A refusal names why, so a send the server queues instead of
+          // starting can be queued under the same message id.
+          // Its body is read within the connection's deadline: a stalled
+          // one is aborted and the status still answers.
+          const refusal: unknown = response.ok
+            ? undefined
+            : await response.json().catch(() => undefined);
+          clearTimeout(connectTimer);
+          return { status: response.status, code: refusalCode(refusal) };
         }
+        clearTimeout(connectTimer);
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         const parse = createSseParser();
@@ -785,7 +846,7 @@ const readChatStream = async ({
             }
           }
         }
-        return response.status;
+        return { status: response.status, code: undefined };
       },
       catch: (cause) =>
         cause instanceof ApiRequestError
@@ -802,12 +863,13 @@ const readChatStream = async ({
         ? Result.ok({ lastEventId: lastId })
         : Result.err(read.error);
     }
-    const status = read.value;
+    const { status, code } = read.value;
     if (status < 200 || status >= 300) {
       return Result.err(
         new ApiRequestError({
           message: `The request to ${url} responded ${status}`,
           status,
+          code,
         }),
       );
     }

@@ -1862,6 +1862,28 @@ export const installPgliteInvoiceObjects = async (
   }
 };
 
+/** Install current timer presence from its production migration after schema push. */
+export const installPgliteMatterTimerPresence = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261116190212_matter_timer_presence",
+      "migration.sql",
+    ),
+  )
+    .map(executableSql)
+    .filter((statement) =>
+      /^(?:CREATE FUNCTION|REVOKE ALL ON FUNCTION|GRANT EXECUTE ON FUNCTION)/u.test(
+        statement,
+      ),
+    );
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
 /** Install filing-year semantics from the committed function migration. */
 export const installPgliteDecisionDocketFilingYear = async (
   db: PgliteSchemaDb,
@@ -1909,5 +1931,41 @@ export const installPgliteFindingDecisionHistory = async (
       db,
       migrationPath: findingDecisionHistoryMigrationPath(folder),
     });
+  }
+};
+
+const CORPUS_INDEX_ROUTE_SEEDINGS_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261116160000_corpus_index_route_seedings",
+  "migration.sql",
+);
+
+/**
+ * Apply what schema push omits from the seeding tables: forced row security
+ * and the status trigger that deletes a generation's seeding pass when it
+ * leaves or re-enters the active set.
+ */
+export const installPgliteCorpusIndexSeedingLifecycle = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    CORPUS_INDEX_ROUTE_SEEDINGS_MIGRATION_PATH,
+  ).filter((statement) => {
+    const source = executableSql(statement);
+    return (
+      (source.startsWith("ALTER TABLE") &&
+        source.endsWith("FORCE ROW LEVEL SECURITY;")) ||
+      source.startsWith("CREATE FUNCTION") ||
+      source.startsWith("REVOKE ALL ON FUNCTION") ||
+      source.startsWith("CREATE TRIGGER")
+    );
+  });
+  if (statements.length !== 5) {
+    panic(
+      `Corpus index seeding lifecycle migration statements changed: ${statements.length}`,
+    );
+  }
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
   }
 };

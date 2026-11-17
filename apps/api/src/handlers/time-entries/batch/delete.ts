@@ -13,6 +13,8 @@ import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { lockRowsForWrite } from "@/api/lib/db/aggregate-lock";
+import { TRANSITIONS } from "@/api/lib/db/transition-specs";
+import { transitionBatch } from "@/api/lib/db/transitions";
 import { formatTodayInTimeZone } from "@/api/lib/timezone";
 
 const batchDeleteBodySchema = v.object({
@@ -165,19 +167,33 @@ const batchDelete = createSafeHandler(
         const writtenOff =
           locked.ids.length === 0
             ? []
-            : await tx
-                .update(timeEntries)
-                .set({
-                  status: BILLING_STATUS.WRITTEN_OFF,
-                  updatedAt: new Date(),
-                })
-                .where(locked.where(eq(timeEntries.workspaceId, workspaceId)))
-                .returning({ id: timeEntries.id });
+            : await transitionBatch({
+                tx,
+                spec: TRANSITIONS.timeEntries,
+                ids: locked.ids,
+                options: {
+                  from: [BILLING_STATUS.SUBMITTED, BILLING_STATUS.APPROVED],
+                  to: BILLING_STATUS.WRITTEN_OFF,
+                  set: { updatedAt: new Date() },
+                  guard: eq(timeEntries.workspaceId, workspaceId),
+                },
+                recordTransitionAuditEvent: async (auditTx, changed) => {
+                  await recordAuditEvent(
+                    auditTx,
+                    buildBatchDeleteEvents({
+                      deleted,
+                      writtenOff: [...changed],
+                    }),
+                  );
+                },
+              });
 
-        await recordAuditEvent(
-          tx,
-          buildBatchDeleteEvents({ deleted, writtenOff }),
-        );
+        if (writtenOff.length === 0) {
+          await recordAuditEvent(
+            tx,
+            buildBatchDeleteEvents({ deleted, writtenOff: [] }),
+          );
+        }
         await recordBillingCapCrossings(tx, { workspaceId, recordAuditEvent });
 
         return {

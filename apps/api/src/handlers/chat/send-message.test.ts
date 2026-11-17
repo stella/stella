@@ -413,6 +413,7 @@ const createContext = ({
     recordAuditEvent: async () => {},
     request,
     route: "/v1/chat" satisfies ApiRoutePath,
+    headers: {},
     safeDb: observedSafeDb,
     scopedDb,
     set: { headers: {}, status: 200 },
@@ -2312,7 +2313,7 @@ describe("assistant turn settlement", () => {
       failureCode,
       failureRetryable: true,
       status: "failed",
-    });
+    }) as unknown;
 
   test("fails the turn when the generated tool parts do not validate", async () => {
     const { onFinish, turnUpdates } = await startStreamingTurn();

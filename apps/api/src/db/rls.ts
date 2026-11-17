@@ -1903,6 +1903,47 @@ export const chatQueueHoldPolicies = () => [
   }),
 ];
 
+// A receipt names its thread and is seen only with it: the thread's own
+// policy decides the matter and data scope, so the receipt keeps no copy of
+// the thread's workspace that could go stale.
+const commandReceiptScopeCheck = sql`(
+  ${userCheck} AND ${organizationCheck} AND
+  EXISTS (
+    SELECT 1 FROM chat_threads ct
+    WHERE ct.id = chat_command_receipts.thread_id
+      AND ct.organization_id = chat_command_receipts.organization_id
+      AND ct.user_id = chat_command_receipts.user_id
+  )
+)`;
+
+/**
+ * A receipt is written once and never changed; its update policy holds a
+ * changed row to the same scope as every other request-role table.
+ */
+export const chatCommandReceiptPolicies = () => [
+  p.pgPolicy("chat_command_receipt_select", {
+    for: "select",
+    to: stella,
+    using: commandReceiptScopeCheck,
+  }),
+  p.pgPolicy("chat_command_receipt_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: commandReceiptScopeCheck,
+  }),
+  p.pgPolicy("chat_command_receipt_update", {
+    for: "update",
+    to: stella,
+    using: commandReceiptScopeCheck,
+    withCheck: commandReceiptScopeCheck,
+  }),
+  p.pgPolicy("chat_command_receipt_delete", {
+    for: "delete",
+    to: stella,
+    using: commandReceiptScopeCheck,
+  }),
+];
+
 const chatSecretScopeCheck = sql`(
   ${userCheck} AND ${organizationCheck} AND
   EXISTS (
@@ -2243,4 +2284,13 @@ export const invoiceLineOwnerReadPolicy = () =>
     for: "select",
     to: "public",
     using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.invoice_lines'::regclass)`,
+  });
+
+// The timer presence function reads every member's timer under FORCE RLS.
+// Only the table owner gains SELECT; request-role visibility and owner writes stay unchanged.
+export const timeTimerOwnerReadPolicy = () =>
+  p.pgPolicy("time_timers_owner_select", {
+    for: "select",
+    to: "public",
+    using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.time_timers'::regclass)`,
   });

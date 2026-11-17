@@ -74,9 +74,9 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
     match commands.recv_timeout(wait) {
       Ok(Command::Press) if active.is_none() => {
         dictation::clear_failure(app);
-        match begin(app, &mut worker) {
+        let model = dictation::start_recording(app);
+        match begin(app, model, &mut worker) {
           Ok(started) => {
-            dictation::set_phase(app, Phase::Recording);
             // Read once recording runs, so the lookups never delay capture;
             // the context is where the speaker pressed the shortcut.
             let focus = dictation_focus::current(app);
@@ -84,7 +84,10 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
               dictation_context::read(focus.as_ref(), dictation::context_sharing(app));
             active = Some((started, focus, context));
           }
-          Err(failure) => dictation::report_failure(app, failure),
+          Err(failure) => {
+            dictation::report_failure(app, failure);
+            dictation::set_phase(app, Phase::Idle);
+          }
         }
       }
       Ok(Command::Press) => {
@@ -142,10 +145,13 @@ impl Capture {
   }
 }
 
-fn begin(app: &AppHandle, worker: &mut Option<Worker>) -> Result<Capture, Failure> {
+fn begin(
+  app: &AppHandle,
+  model: Option<PathBuf>,
+  worker: &mut Option<Worker>,
+) -> Result<Capture, Failure> {
   // stella AI transcribes without the speech model on this computer.
   let (destination, cloud_model) = dictation::destination(app);
-  let model = dictation::installed_model();
   if destination == Destination::Local && model.is_none() {
     return Err(Failure::ModelMissing);
   }

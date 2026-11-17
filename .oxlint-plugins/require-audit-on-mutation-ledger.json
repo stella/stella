@@ -951,8 +951,7 @@
   {
     "id": "apps/api/src/lib/flows/flow-executor.ts::cancelFlowRun",
     "writes": {
-      "update:flowRunSteps": 1,
-      "update:flowRuns": 1
+      "update:flowRunSteps": 1
     },
     "reason": "Background work state transition; the request that started the work records the audit event."
   },
@@ -1421,13 +1420,6 @@
     "id": "apps/api/src/lib/scheduler/jobs.ts::ensureOneShotSchedulerJob",
     "writes": {
       "insert:schedulerJobs": 1
-    },
-    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
-  },
-  {
-    "id": "apps/api/src/lib/scheduler/jobs.ts::removeSchedulerJob",
-    "writes": {
-      "delete:schedulerJobs": 1
     },
     "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
   },

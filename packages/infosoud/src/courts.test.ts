@@ -4,10 +4,26 @@ import fc from "fast-check";
 import { assertProperty } from "@stll/property-testing";
 
 import {
+  buildCourtMapFromEntries,
   isCourtCode,
   normalizeCourtQuery,
   resolveCourtCode,
 } from "./courts.js";
+
+test("court entries override extras and duplicate codes without moving their first position", () => {
+  const entries = [
+    { kod: "NS", nazev: "Updated court" },
+    { kod: "CUSTOM", nazev: "First name" },
+    { kod: "CUSTOM", nazev: "Last name" },
+  ];
+  const before = structuredClone(entries);
+  const extras = buildCourtMapFromEntries([]);
+  const result = buildCourtMapFromEntries(entries);
+  expect(result["NS"]).toBe("Updated court");
+  expect(result["CUSTOM"]).toBe("Last name");
+  expect(Object.keys(result)).toEqual([...Object.keys(extras), "CUSTOM"]);
+  expect(entries).toEqual(before);
+});
 
 describe("resolveCourtCode", () => {
   const courtMap = {

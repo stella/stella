@@ -85,6 +85,7 @@
     "documentClose": "Zamknij",
     "approvalBrowserNote": "Po zezwoleniu uruchomi się w Twojej przeglądarce na komputerze, przez rozszerzenie stella.",
     "grantFailed": "Nie udało się zapisać zgody. Spróbuj ponownie.",
+    "limitReminderFailed": "Nie udało się zapisać zmiany. Spróbuj ponownie.",
     "elsewhereBrowser": "Ten krok działa w Twojej przeglądarce na komputerze, przez rozszerzenie stella. Otwórz tam tę rozmowę w stelli, aby go dokończyć.",
     "elsewhereSecret": "Ten krok wymaga klucza. Ze względów bezpieczeństwa klucze dodaje się w stelli na komputerze, nie w aplikacji.",
     "elsewhereConnector": "Ten krok łączy aplikację. Ze względów bezpieczeństwa aplikacje łączy się w stelli na komputerze, nie w aplikacji.",
@@ -103,6 +104,8 @@
     "pickFailed": "Nie udało się otworzyć wyboru plików. Spróbuj ponownie.",
     "sendFileRefused": "Nie udało się wysłać pliku, więc wiadomość nie została wysłana. Usuń plik i spróbuj ponownie.",
     "sendFileNotAnonymizable": "Ta rozmowa jest anonimizowana, a stella nie mogła zanonimizować jednego z plików, więc nic nie wysłano. Usuń plik i spróbuj ponownie.",
+    "sendLocalRunNotAnonymizable": "Ta rozmowa jest anonimizowana, a agent programistyczny na Twoim komputerze odczytuje Twoje dokumenty w oryginalnej postaci, więc nic do niego nie wysłano.",
+    "sendWithoutAnonymization": "Wyślij bez anonimizacji",
     "pickTitle": "Wybierz rozmowę",
     "pickDescription": "Wybierz wątek z listy lub rozpocznij nowy przyciskiem +.",
     "runBanner": {
@@ -247,7 +250,15 @@
         "showMore": "Pokaż więcej"
       },
       "sessionNotResumed": "Agent programistyczny na Twoim komputerze nie mógł wznowić pracy tam, gdzie skończył, dlatego kontynuował na podstawie wiadomości z tego czatu.",
-      "steered": "Wysłano podczas pracy agenta"
+      "steered": "Wysłano podczas pracy agenta",
+      "ranOnModel": "Wykonano na modelu {model}",
+      "desktopSettingsSteps": "W stella desktop na swoim komputerze otwórz Ustawienia › Ogólne › Subskrypcje AI.",
+      "errorLimitResetsAt": "Agent programistyczny na Twoim komputerze osiągnął limit użycia. Możesz spróbować ponownie po {time}.",
+      "limitReminderNotify": "Powiadom mnie po odnowieniu",
+      "limitReminderScheduled": "Powiadomimy Cię po {time}.",
+      "limitResumeContinue": "Kontynuuj automatycznie po odnowieniu",
+      "limitResumeScheduled": "Wznowimy automatycznie po {time}.",
+      "limitReminderCancel": "Anuluj"
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# sprawdzone źródło} few {# sprawdzone źródła} many {# sprawdzonych źródeł} other {# sprawdzonego źródła}}",
@@ -295,6 +306,32 @@
       "runFull": "Agent nie przyjmie teraz kolejnych wiadomości.",
       "notTaken": "Agent nie mógł teraz przyjąć twojej wiadomości.",
       "queuedMessageChanged": "Wiadomość się zmieniła lub nie ma jej już w kolejce, więc agent jej nie otrzymał."
+    },
+    "queue": {
+      "notice": "W kolejce: zostanie wysłana po zakończeniu bieżącej odpowiedzi",
+      "prompt": "Wyślij, gdy agent skończy",
+      "sendNow": "Wyślij teraz",
+      "remove": "Anuluj wiadomość w kolejce",
+      "edit": "Edytuj",
+      "moveUp": "Przesuń w górę",
+      "moveDown": "Przesuń w dół",
+      "cancel": "Anuluj",
+      "attachments": "{count, plural, one {# załącznik} few {# załączniki} many {# załączników} other {# załącznika}}",
+      "actions": "Akcje wiadomości w kolejce",
+      "notSent": "Nie udało się wysłać",
+      "pause": "Wstrzymaj kolejkę",
+      "resume": "Wznów kolejkę",
+      "replaceTitle": "Wysłać tę wiadomość teraz?",
+      "replaceDescription": "Ten czat czeka na Twoją odpowiedź. Wysłanie tej wiadomości teraz anuluje pytanie lub zatwierdzenie, na które czeka.",
+      "noLongerQueued": "Tej wiadomości nie ma już w kolejce.",
+      "held": {
+        "turn-failed": "Kolejka wstrzymana: ostatnia odpowiedź nie powiodła się. Wznów, aby wysłać następną wiadomość.",
+        "turn-interrupted": "Kolejka wstrzymana: ostatnia odpowiedź została przerwana. Wznów, aby wysłać następną wiadomość.",
+        "member": "Kolejka wstrzymana.",
+        "send-refused": "Kolejka wstrzymana: nie udało się wysłać pierwszej wiadomości. Edytuj ją lub usuń, a potem wznów.",
+        "usage-limit": "Kolejka wstrzymana: osiągnięto limit użycia. Wznów, gdy zostanie odnowiony.",
+        "computer-away": "Oczekiwanie na Twój komputer: wiadomości z kolejki zostaną wysłane, gdy się połączy."
+      }
     }
   },
   "tasks": {

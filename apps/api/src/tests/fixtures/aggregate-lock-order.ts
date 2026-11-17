@@ -296,6 +296,11 @@ export const aggregateFences = () => {
       id: { id: createSafeId<"chatMessage">(), threadId },
       mode: "update",
     },
+    savedSearch: {
+      aggregate: "savedSearch",
+      id: { id: createSafeId<"savedSearch">(), organizationId, userId },
+      mode: "update",
+    },
   } as const satisfies FenceFixtures;
 };
 

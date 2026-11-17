@@ -56,10 +56,12 @@ const PURE_AUTOFIX = {
   // Renders the versioned transition spec into its existing migration;
   // directory discovery chooses exactly one committed version-one migration.
   "transition-triggers": "apps/api/scripts/generate-transition-triggers.ts",
-  // Static source analysis and pinned formatters render the catalog and CLI
-  // contracts; setup-env supplies static validation defaults, never live data.
-  "capability-catalog": "apps/api/scripts/export-capability-catalog.ts",
-  "cli-registry": "codegen",
+  // Static source analysis and pinned formatters render the coverage table and
+  // CLI contracts; setup-env supplies static validation defaults, never live data.
+  "capability-coverage": "apps/api/scripts/export-capability-catalog.ts",
+  "cli-registry": "codegen:registry",
+  // Projects the committed registry snapshot and the derived route map.
+  "cli-tool-reference": "packages/cli/scripts/generate-tool-reference.ts",
   // Compiler input discovery and pinned bundlers consume repository sources.
   "api-typecheck-projects": "packages/scripts/src/api-typecheck-regenerate.ts",
   "visual-sandbox-bundle": "build:visual-sandbox",
@@ -77,6 +79,9 @@ const PURE_AUTOFIX = {
   "mobile-icons": "scripts/generate-mobile-icons.ts",
   // Reads the installed @stll/folio-fonts catalogue, pinned by the lockfile.
   "mobile-folio-fonts": "scripts/generate-mobile-folio-fonts.ts",
+  // Renders a committed component with the lockfile-pinned React and compiles
+  // its utilities with the pinned Tailwind; reads only committed files.
+  "outcome-page": "packages/ui/scripts/generate-outcome-page.ts",
   // The committed release policy renders package names inside fixed markers.
   "published-package-list": "scripts/check-published-package-lists.ts",
   // Reads glossary data, normalizes Unicode and formats fixed Markdown tables.

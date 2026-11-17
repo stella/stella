@@ -85,6 +85,7 @@
     "documentClose": "Uždaryti",
     "approvalBrowserNote": "Leidus, tai vyks jūsų kompiuterio naršyklėje, per stella plėtinį.",
     "grantFailed": "Leidimo išsaugoti nepavyko. Bandykite dar kartą.",
+    "limitReminderFailed": "Pakeitimo išsaugoti nepavyko. Bandykite dar kartą.",
     "elsewhereBrowser": "Šis žingsnis vyksta jūsų kompiuterio naršyklėje, per stella plėtinį. Norėdami jį užbaigti, atidarykite šį pokalbį ten, stella.",
     "elsewhereSecret": "Šiam žingsniui reikia rakto. Saugumo sumetimais raktai pridedami stella kompiuteryje, ne programėlėje.",
     "elsewhereConnector": "Šis žingsnis prijungia programą. Saugumo sumetimais programos prijungiamos stella kompiuteryje, ne programėlėje.",
@@ -103,6 +104,8 @@
     "pickFailed": "Nepavyko atidaryti failų parinkiklio. Bandykite dar kartą.",
     "sendFileRefused": "Nepavyko išsiųsti failo, todėl žinutė nebuvo išsiųsta. Pašalinkite failą ir bandykite dar kartą.",
     "sendFileNotAnonymizable": "Šis pokalbis anonimizuotas, o stella nepavyko anonimizuoti vieno iš failų, todėl niekas nebuvo išsiųsta. Pašalinkite failą ir bandykite dar kartą.",
+    "sendLocalRunNotAnonymizable": "Šis pokalbis anonimizuotas, o programavimo agentas jūsų kompiuteryje skaito jūsų dokumentus tokius, kokie jie yra, todėl jam niekas nebuvo išsiųsta.",
+    "sendWithoutAnonymization": "Siųsti be anonimizavimo",
     "pickTitle": "Pasirinkite pokalbį",
     "pickDescription": "Pasirinkite giją iš sąrašo arba pradėkite naują mygtuku +.",
     "runBanner": {
@@ -247,7 +250,15 @@
         "showMore": "Rodyti daugiau"
       },
       "sessionNotResumed": "Programavimo agentas jūsų kompiuteryje negalėjo grįžti ten, kur sustojo, todėl tęsė darbą remdamasis šio pokalbio žinutėmis.",
-      "steered": "Išsiųsta agentui dirbant"
+      "steered": "Išsiųsta agentui dirbant",
+      "ranOnModel": "Vykdyta su modeliu {model}",
+      "desktopSettingsSteps": "Savo kompiuteryje programoje stella desktop atidarykite skiltį Nustatymai › Bendra › DI prenumeratos.",
+      "errorLimitResetsAt": "Programavimo agentas jūsų kompiuteryje pasiekė naudojimo limitą. Bandyti dar kartą galėsite po {time}.",
+      "limitReminderNotify": "Pranešti, kai atsinaujins",
+      "limitReminderScheduled": "Pranešime jums po {time}.",
+      "limitResumeContinue": "Tęsti automatiškai, kai atsinaujins",
+      "limitResumeScheduled": "Automatiškai tęsis po {time}.",
+      "limitReminderCancel": "Atšaukti"
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# patikrintas šaltinis} few {# patikrinti šaltiniai} many {# patikrinto šaltinio} other {# patikrintų šaltinių}}",
@@ -295,6 +306,32 @@
       "runFull": "Agentas šiuo metu negali priimti daugiau žinučių.",
       "notTaken": "Agentas šiuo metu negalėjo priimti jūsų žinutės.",
       "queuedMessageChanged": "Žinutė pasikeitė arba jos nebėra eilėje, todėl agentas jos negavo."
+    },
+    "queue": {
+      "notice": "Eilėje: bus išsiųsta, kai baigsis dabartinis atsakymas",
+      "prompt": "Siųsti, kai agentas baigs",
+      "sendNow": "Siųsti dabar",
+      "remove": "Atšaukti eilėje esančią žinutę",
+      "edit": "Redaguoti",
+      "moveUp": "Perkelti aukštyn",
+      "moveDown": "Perkelti žemyn",
+      "cancel": "Atšaukti",
+      "attachments": "{count, plural, one {# priedas} few {# priedai} many {# priedo} other {# priedų}}",
+      "actions": "Eilėje esančios žinutės veiksmai",
+      "notSent": "Nepavyko išsiųsti",
+      "pause": "Pristabdyti eilę",
+      "resume": "Tęsti eilę",
+      "replaceTitle": "Išsiųsti šią žinutę dabar?",
+      "replaceDescription": "Šis pokalbis laukia jūsų atsakymo. Išsiuntus šią žinutę dabar, klausimas ar patvirtinimas, kurio jis laukia, bus atšauktas.",
+      "noLongerQueued": "Šios žinutės eilėje nebėra.",
+      "held": {
+        "turn-failed": "Eilė pristabdyta: paskutinis atsakymas nepavyko. Tęskite, kad išsiųstumėte kitą žinutę.",
+        "turn-interrupted": "Eilė pristabdyta: paskutinis atsakymas buvo nutrauktas. Tęskite, kad išsiųstumėte kitą žinutę.",
+        "member": "Eilė pristabdyta.",
+        "send-refused": "Eilė pristabdyta: pirmosios žinutės išsiųsti nepavyko. Pakeiskite ją arba pašalinkite, tada tęskite.",
+        "usage-limit": "Eilė pristabdyta: pasiekėte naudojimo limitą. Tęskite, kai jis atsinaujins.",
+        "computer-away": "Laukiama jūsų kompiuterio: eilėje esančios žinutės bus išsiųstos, kai jis prisijungs."
+      }
     }
   },
   "tasks": {

@@ -40,6 +40,8 @@ import {
   resourceIdSchema,
   workspaceParams,
 } from "@/api/lib/custom-schema";
+import { TRANSITIONS } from "@/api/lib/db/transition-specs";
+import { transitionBatch } from "@/api/lib/db/transitions";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
 import { PG_ERROR } from "@/api/lib/pg-error";
@@ -318,70 +320,96 @@ const createInvoiceLine = createSafeHandler(
           status: { old: BILLING_STATUS.APPROVED, new: BILLING_STATUS.BILLED },
           invoiceId: { old: null, new: params.invoiceId },
         };
-        if (draft.timeEntryId !== null) {
-          await tx
-            .update(timeEntries)
-            .set(billed)
-            .where(
+        const completeLine = async (): Promise<
+          Result<CreatedLine, HandlerError>
+        > => {
+          if (draft.expenseId !== null) {
+            await tx
+              .update(expenses)
+              .set(billed)
+              .where(
+                and(
+                  eq(expenses.id, draft.expenseId),
+                  eq(expenses.workspaceId, workspaceId),
+                ),
+              );
+            events.push({
+              action: AUDIT_ACTION.UPDATE,
+              resourceType: AUDIT_RESOURCE_TYPE.EXPENSE,
+              resourceId: draft.expenseId,
+              changes: billedChanges,
+            });
+          }
+
+          const scope = { invoiceId: params.invoiceId, workspaceId };
+          // The line and the new totals record their own invoice events.
+          const inserted = await insertInvoiceLines(
+            tx,
+            { ...scope, organizationId: session.activeOrganizationId },
+            [draft],
+            { recordAuditEvent },
+          );
+          if (inserted.isErr()) {
+            return Result.err(inserted.error);
+          }
+          const lineId =
+            inserted.value.at(0)?.id ??
+            panic("Invoice line insert returned no row");
+          const totals = await recalculateInvoiceTotals(
+            tx,
+            scope,
+            now,
+            recordAuditEvent,
+          );
+
+          if (totals.isErr()) {
+            return Result.err(totals.error);
+          }
+
+          await recordAuditEvent(tx, events);
+
+          return Result.ok({ id: lineId, totals: totals.value });
+        };
+        if (draft.timeEntryId === null) {
+          return completeLine();
+        }
+
+        events.push({
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
+          resourceId: draft.timeEntryId,
+          changes: billedChanges,
+        });
+        const completion: { result: Result<CreatedLine, HandlerError> | null } =
+          {
+            result: null,
+          };
+        await transitionBatch({
+          tx,
+          spec: TRANSITIONS.timeEntries,
+          ids: [draft.timeEntryId],
+          options: {
+            from: [BILLING_STATUS.APPROVED],
+            to: BILLING_STATUS.BILLED,
+            guard:
               and(
                 eq(timeEntries.id, draft.timeEntryId),
                 eq(timeEntries.workspaceId, workspaceId),
                 eq(timeEntries.activityGroup, TIME_ENTRY_ACTIVITY_GROUP.CLIENT),
-              ),
-            );
-          events.push({
-            action: AUDIT_ACTION.UPDATE,
-            resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
-            resourceId: draft.timeEntryId,
-            changes: billedChanges,
-          });
-        }
-        if (draft.expenseId !== null) {
-          await tx
-            .update(expenses)
-            .set(billed)
-            .where(
-              and(
-                eq(expenses.id, draft.expenseId),
-                eq(expenses.workspaceId, workspaceId),
-              ),
-            );
-          events.push({
-            action: AUDIT_ACTION.UPDATE,
-            resourceType: AUDIT_RESOURCE_TYPE.EXPENSE,
-            resourceId: draft.expenseId,
-            changes: billedChanges,
-          });
-        }
-
-        const scope = { invoiceId: params.invoiceId, workspaceId };
-        // The line and the new totals record their own invoice events.
-        const inserted = await insertInvoiceLines(
-          tx,
-          { ...scope, organizationId: session.activeOrganizationId },
-          [draft],
-          { recordAuditEvent },
+              ) ?? panic("The invoice entry claim has no guard"),
+            set: { invoiceId: params.invoiceId, updatedAt: now },
+          },
+          recordTransitionAuditEvent: async (_tx, changed) => {
+            if (changed.length !== 1) {
+              panic("The locked invoice entry claim returned no row");
+            }
+            completion.result = await completeLine();
+          },
+        });
+        return (
+          completion.result ??
+          panic("The locked invoice entry claim returned no row")
         );
-        if (inserted.isErr()) {
-          return Result.err(inserted.error);
-        }
-        const lineId =
-          inserted.value.at(0)?.id ??
-          panic("Invoice line insert returned no row");
-        const totals = await recalculateInvoiceTotals(
-          tx,
-          scope,
-          now,
-          recordAuditEvent,
-        );
-
-        if (totals.isErr()) {
-          return Result.err(totals.error);
-        }
-
-        await recordAuditEvent(tx, events);
-
-        return Result.ok({ id: lineId, totals: totals.value });
       },
     );
 

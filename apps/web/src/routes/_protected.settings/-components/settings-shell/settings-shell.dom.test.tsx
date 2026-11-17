@@ -3,6 +3,7 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
+import { MEMBER_SESSION } from "@/lib/account/auth-session.test-fixtures";
 import type { Role } from "@/lib/auth-client";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 
@@ -26,7 +27,7 @@ const { IntlProvider } = await import("use-intl");
 const en = (await import("@/i18n/langs/en.json")).default;
 const ar = (await import("@/i18n/langs/ar.json")).default;
 const { env } = await import("@/env");
-const { roleOptions } = await import("@/lib/auth-queries");
+const { roleOptions, sessionOptions } = await import("@/lib/auth-queries");
 const { supportedLanguages } = await import("@/i18n/i18n-store");
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
@@ -63,6 +64,16 @@ const serve = (role: Role) => {
       const request =
         input instanceof Request ? input : new Request(input, init);
       const path = new URL(request.url).pathname;
+      if (path.endsWith("/auth/get-session")) {
+        return Response.json({
+          session: {
+            ...MEMBER_SESSION.session,
+            userId: user.id,
+            activeOrganizationId: user.activeOrganizationId,
+          },
+          user: { ...MEMBER_SESSION.user, ...user },
+        });
+      }
       if (path.endsWith("/organization/get-active-member-role")) {
         return Response.json({ role });
       }
@@ -90,6 +101,7 @@ const renderShell = async (locale: "en" | "ar", role: Role) => {
     defaultOptions: { queries: { retry: false } },
   });
   clients.push(client);
+  await client.query(sessionOptions);
   await client.query(roleOptions);
   const messages = locale === "en" ? en : ar;
   const rootRoute = router.createRootRoute({

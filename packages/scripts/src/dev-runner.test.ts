@@ -1914,6 +1914,64 @@ describe("loadEnvFile and expandEnvMap", () => {
       C: "nested-value",
     });
   });
+
+  test("duplicate declarations replace values without moving their first key", () => {
+    const rootDir = createTempDir();
+    const envFilePath = path.resolve(rootDir, ".env");
+    writeFileSync(
+      envFilePath,
+      [
+        "export PORT=3000",
+        "NAME='ordinary project' # ignored comment",
+        "PORT=3001",
+        'EQUALS="left=right"',
+        "EMPTY=",
+        "PORT=3002",
+      ].join("\n"),
+    );
+    const parsed = loadEnvFile(envFilePath);
+    expect(parsed).toEqual({
+      PORT: "3002",
+      NAME: "ordinary project",
+      EQUALS: "left=right",
+      EMPTY: "",
+    });
+    expect(Object.keys(parsed)).toEqual(["PORT", "NAME", "EQUALS", "EMPTY"]);
+  });
+
+  test("expansion preserves empty values, original keys and input ownership", () => {
+    const input = {
+      URL: "http://$HOST:$PORT",
+      HOST: "localhost",
+      PORT: "3000",
+      EMPTY: "",
+      COPY: "$EMPTY",
+    };
+    const original = { ...input };
+    const expanded = expandEnvMap(input);
+    expect(expanded).toEqual({
+      URL: "http://localhost:3000",
+      HOST: "localhost",
+      PORT: "3000",
+      EMPTY: "",
+      COPY: "",
+    });
+    expect(Object.keys(expanded)).toEqual(Object.keys(input));
+    expect(input).toEqual(original);
+    expect(expanded === input).toBe(false);
+  });
+
+  test("cyclic references retain the existing ordered unresolved values", () => {
+    expect(expandEnvMap({ SELF: "$SELF" })).toEqual({ SELF: "$SELF" });
+    expect(expandEnvMap({ FIRST: "$SECOND", SECOND: "$FIRST" })).toEqual({
+      FIRST: "$SECOND",
+      SECOND: "$SECOND",
+    });
+    expect(expandEnvMap({ SECOND: "$FIRST", FIRST: "$SECOND" })).toEqual({
+      SECOND: "$FIRST",
+      FIRST: "$FIRST",
+    });
+  });
 });
 
 describe("startup failure reporting", () => {

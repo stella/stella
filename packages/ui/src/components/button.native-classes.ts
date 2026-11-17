@@ -1,6 +1,7 @@
 // The native Button's look as class names, apart from ./button.native.tsx so
 // it can be read without React Native.
 
+import { TOOLBAR_ROW_HEIGHT } from "../inspector/layout-tokens";
 import {
   BUTTON_PLAIN_VARIANT,
   BUTTON_VARIANT_TOKENS,
@@ -37,6 +38,11 @@ const SIZES = {
   // An action inside a line of text: no height, padding or border of its
   // own, so it sits at the size of its label; `slop` reaches the target.
   inline: { box: "items-center gap-1", label: "", slop: 8 },
+  "inspector-row": {
+    box: `${CONTROL} ${TOOLBAR_ROW_HEIGHT} justify-start gap-2 rounded-none px-3`,
+    label: "",
+    slop: 0,
+  },
   lg: { box: `${CONTROL} min-h-12 gap-2 rounded-lg px-5`, label: "", slop: 0 },
   // One row of a list: full width, its content leading and top-aligned (a
   // glyph stays beside a title's first line), as tall as the content plus

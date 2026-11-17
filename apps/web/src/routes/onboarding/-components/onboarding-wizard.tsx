@@ -361,7 +361,19 @@ export const OnboardingWizard = () => {
         // immediately, and since the session now has an
         // `activeOrganizationId`, the guard would redirect away from
         // /onboarding before the wizard ever reaches the apps step.
-        await refreshAuthQueries(queryClient);
+        const refreshed = await Result.tryPromise(
+          async () => await refreshAuthQueries(queryClient),
+        );
+        if (refreshed.isErr()) {
+          analytics.captureError(refreshed.error, {
+            fingerprintKey: "OnboardingWizard.refresh:failure",
+            scope: {
+              type: "handler",
+              handlerId: "OnboardingWizard.refresh:failure",
+            },
+          });
+          notifyUserError(refreshed.error, t("errors.actionFailed"));
+        }
 
         if (finalData.practiceJurisdictions.length > 0) {
           const { error: jurisdictionError } = await api[
@@ -511,6 +523,7 @@ export const OnboardingWizard = () => {
           fingerprintKey: "OnboardingWizard:failure-5",
           scope: { type: "handler", handlerId: "OnboardingWizard:failure-5" },
         });
+        notifyUserError(error, t("errors.actionFailed"));
       }
 
       setIsCreating(false);

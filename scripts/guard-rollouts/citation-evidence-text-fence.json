@@ -1,0 +1,18 @@
+{
+  "id": "citation-evidence-text-fence",
+  "rules": ["citation-evidence-text-fence/citation-evidence-text-fence"],
+  "type": "changed-lines",
+  "expiresAt": "2026-11-17T00:00:00.000Z",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "citation-evidence-text-fence/citation-evidence-text-fence",
+    "apps/api"
+  ]
+}

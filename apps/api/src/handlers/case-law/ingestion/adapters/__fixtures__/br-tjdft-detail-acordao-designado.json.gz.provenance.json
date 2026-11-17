@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "ed6af1f601f5d12ec93c5278f70ea779b673cbf0213ed180ebdb42adae2155ab",
+  "sourceUrl": "https://jurisdf.tjdft.jus.br/api/v1/pesquisa",
+  "capturedAt": "2026-10-25T02:26:32.000Z",
+  "note": "POST body {\"termosAcessorios\":[{\"campo\":\"uuid\",\"valor\":\"1caaaee1-f67a-4eda-8a6f-173e6096f618\"}],\"pagina\":0,\"tamanho\":1,\"espelho\":false,\"inteiroTeor\":false,\"sinonimos\":false,\"retornaInteiroTeor\":true,\"retornaTotalizacao\":false}; an acórdão drafted by a designated rapporteur after the rapporteur was outvoted"
+}

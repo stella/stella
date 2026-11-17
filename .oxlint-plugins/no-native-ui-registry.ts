@@ -225,6 +225,10 @@ export const NO_NATIVE_UI_REGISTRY = {
     nativeRuleId("color-picker"),
     "the native colour input is reported by the colour picker rule",
   ),
+  "highlighted-textarea": owned(
+    nativeRuleId("textarea"),
+    "the textarea rule owns native editing; this component couples its highlighted text layer",
+  ),
   "horizontal-scroller": owned(
     OVERFLOW_RULE,
     "raw overflow scrolling is reported there",
@@ -288,6 +292,10 @@ export const NO_NATIVE_UI_REGISTRY = {
     inputTypes: ["number"],
   }),
   "option-color": notComponent("option colour tokens"),
+  "outcome-screen": noNative(
+    "the screen a finished flow ends on; a hand-built one is " +
+      "no-adhoc-outcome-screen's",
+  ),
   "outline-rail": noNative("document outline navigation built from Button"),
   "overlay-layer": notComponent("overlay stacking tokens"),
   pagination: noNative(

@@ -701,6 +701,7 @@ export const acquireChatRuntime = ({
   };
   const runtime = createChatRuntime({
     activeTurnId: data.activeTurnId,
+    activeTurnSteering: data.activeTurnSteering,
     context,
     initialMessages: data.messages,
     key,

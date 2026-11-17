@@ -81,6 +81,7 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   // Crawl bookkeeping: the app role reads coverage for reporting, only
   // ingestion writes it.
   "case_law_coverage_slices",
+  "case_law_completeness_census",
   // Listed decisions the reconciliation could not ingest. Same shape as the
   // coverage ledger it sits beside: read by the ingestion status rollup,
   // written only by the reconciliation loop.
@@ -124,6 +125,9 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   // Where a replaced decision's anchors went: written by the decision write,
   // read by the public anchor redirect read.
   "case_law_decision_anchor_redirects",
+  // Appeal links between decisions: global legal data read by public
+  // case-law reads, written only by the ingestion pipeline.
+  "case_law_decision_reviews",
   // A directory court's rank: global legal data read by case-law search and
   // citation scoring, written only by its seed migrations and the seed script.
   "case_law_court_directory_ranks",
@@ -144,6 +148,10 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   "corpus_index_jurisdiction_serving",
   // Withdrawal history is read by requests and appended only by ingestion.
   "corpus_index_group_withdrawals",
+  // Seeding facts: request code may read whether a route is seeded; only the
+  // seeding walk and the generation's lifecycle write them.
+  "corpus_index_generation_seeding_passes",
+  "corpus_index_route_seedings",
   // Mutation revisions are appended and pruned only by ingestion triggers;
   // request code may read the current proof watermark.
   "corpus_index_projection_revisions",
@@ -152,6 +160,9 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   // mutates the state machine.
   "corpus_index_projection_states",
   "corpus_index_projection_intents",
+  // Route readiness proofs: request code may read whether a route is proven;
+  // only the projection runner advances or revokes one.
+  "corpus_index_route_proofs",
   // Global reference editions are read by request code and written by ingestion.
   "sanctions_edition_fanouts",
   "sanctions_sources",

@@ -278,6 +278,14 @@
     "scripts/status-write-shapes.test.ts": ["**"],
     "scripts/stylelint.test.ts": ["**"],
     "scripts/suppression-waivers.test.ts": ["**"],
+    "scripts/tanstack-drift.test.ts": [
+      "apps/api/src/tests/helpers/recorded-conversation-suites.ts",
+      "packages/fetch/src/body-reader.ts",
+      "packages/fetch/src/connection-failure.ts",
+      "packages/fetch/src/index.ts",
+      "packages/fetch/src/race-abort.ts",
+      "scripts/tanstack-drift.ts"
+    ],
     "scripts/test-subject-reachability.test.ts": ["**"],
     "scripts/toast-error-census.test.ts": ["**"],
     "scripts/tsdown-declaration-tools.test.ts": ["**"],
@@ -304,6 +312,8 @@
     "scripts/workflow-steps.test.ts": ["**"]
   },
   "noTrackedInputs": {
+    "scripts/borrowed-dependencies.test.ts": "Builds all manifests, workspace sources and dependency links in temporary fixtures; uses only its static import closure.",
+    "scripts/oxlint-rule-ids.test.ts": "Exercises plugin aliases and canonicalization with in-memory rule fixtures; does not invoke the filesystem-backed rule catalog.",
     "scripts/query-perf-baseline.test.ts": "Uses only temporary fixtures and its static import closure."
   }
 }

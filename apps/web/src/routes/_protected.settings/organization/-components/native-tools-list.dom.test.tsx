@@ -16,7 +16,9 @@ const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
 const { stellaToast } = await import("@stll/ui/toast");
-const { roleOptions } = await import("@/lib/auth-queries");
+const { roleOptions, sessionOptions } = await import("@/lib/auth-queries");
+const { MEMBER_SESSION } =
+  await import("@/lib/account/auth-session.test-fixtures");
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
 const { NativeToolsList } = await import("./native-tools-list");
@@ -29,7 +31,22 @@ afterAll(async () => {
   await unregisterDomEnvironment();
 });
 
-const mount = (refuse = false) => {
+const OWNER_SESSION = {
+  ...MEMBER_SESSION,
+  user: {
+    ...MEMBER_SESSION.user,
+    id: "user",
+    email: "owner@example.test",
+    name: "Owner",
+  },
+  session: {
+    ...MEMBER_SESSION.session,
+    userId: "user",
+    activeOrganizationId: "organization-fixture",
+  },
+} satisfies typeof MEMBER_SESSION;
+
+const mount = async (refuse = false) => {
   let enabled = true;
   let reads = 0;
   const writes: unknown[] = [];
@@ -56,13 +73,10 @@ const mount = (refuse = false) => {
       const request = new Request(input, init);
       const path = new URL(request.url).pathname;
       if (path.endsWith("/auth/get-session")) {
-        return Response.json({
-          session: {
-            userId: "user",
-            activeOrganizationId: "organization-fixture",
-          },
-          user: { id: "user", email: "owner@example.test", name: "Owner" },
-        });
+        return Response.json(OWNER_SESSION);
+      }
+      if (path.endsWith("/auth/organization/get-active-member-role")) {
+        return Response.json({ role: "owner" });
       }
       if (path.endsWith("/mcp/connectors")) {
         reads += 1;
@@ -92,7 +106,8 @@ const mount = (refuse = false) => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
-  queryClient.setQueryData(roleOptions.queryKey, "owner");
+  await queryClient.query(sessionOptions);
+  await queryClient.query(roleOptions);
   render(
     <QueryClientProvider client={queryClient}>
       <IntlProvider locale="en" messages={messages} timeZone="UTC">
@@ -117,7 +132,7 @@ const mount = (refuse = false) => {
 };
 
 test("native tools read organization state, send toggle PATCH and refresh authoritative state", async () => {
-  const server = mount();
+  const server = await mount();
   const toggle = await screen.findByRole("switch", { name: "Český registr" });
   expect(toggle.getAttribute("aria-checked")).toBe("true");
   fireEvent.click(toggle);
@@ -131,7 +146,7 @@ test("native tools read organization state, send toggle PATCH and refresh author
 test("native tool refusal keeps its server state and surfaces an error", async () => {
   const errorToast = spyOn(stellaToast, "add");
   try {
-    const server = mount(true);
+    const server = await mount(true);
     const toggle = await screen.findByRole("switch", { name: "Český registr" });
     fireEvent.click(toggle);
     await waitFor(() =>
@@ -151,7 +166,7 @@ test("native tool refusal keeps its server state and surfaces an error", async (
 });
 
 test("native tool inventory filters locally without case or accents and clears search", async () => {
-  const server = mount();
+  const server = await mount();
   await screen.findByRole("switch", { name: "Český registr" });
   const search = screen.getByRole("searchbox", {
     name: messages.common.search,

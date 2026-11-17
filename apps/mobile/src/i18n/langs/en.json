@@ -85,6 +85,7 @@
     "documentClose": "Close",
     "approvalBrowserNote": "Allowed, it runs in your browser on your computer, through the stella extension.",
     "grantFailed": "The approval could not be saved. Try again.",
+    "limitReminderFailed": "The change could not be saved. Try again.",
     "elsewhereBrowser": "This step runs in your browser on your computer, through the stella extension. Open this conversation in stella there to finish it.",
     "elsewhereSecret": "This step needs a key. For safety, keys are added in stella on your computer, not in the app.",
     "elsewhereConnector": "This step connects an app. For safety, apps are connected in stella on your computer, not in the app.",
@@ -103,6 +104,8 @@
     "pickFailed": "The file picker could not be opened. Try again.",
     "sendFileRefused": "A file could not be sent, so the message was not sent. Remove the file and try again.",
     "sendFileNotAnonymizable": "This conversation is anonymized, and stella could not anonymize one of the files, so nothing was sent. Remove the file and try again.",
+    "sendLocalRunNotAnonymizable": "This conversation is anonymized, and the coding agent on your computer reads your documents as they are, so nothing was sent to it.",
+    "sendWithoutAnonymization": "Send without anonymization",
     "pickTitle": "Pick a conversation",
     "pickDescription": "Choose a thread from the list, or start a new one with +.",
     "runBanner": {
@@ -247,7 +250,15 @@
         "showMore": "Show more"
       },
       "sessionNotResumed": "The coding agent on your computer could not pick up where it left off, so it continued from the messages in this chat.",
-      "steered": "Sent while the agent was working"
+      "steered": "Sent while the agent was working",
+      "ranOnModel": "Ran on {model}",
+      "desktopSettingsSteps": "In stella desktop on your computer, open Settings › General › AI subscriptions.",
+      "errorLimitResetsAt": "The coding agent on your computer reached its usage limit. You can try again after {time}.",
+      "limitReminderNotify": "Notify me when it resets",
+      "limitReminderScheduled": "We will notify you after {time}.",
+      "limitResumeContinue": "Continue automatically when it resets",
+      "limitResumeScheduled": "Continues automatically at {time}.",
+      "limitReminderCancel": "Cancel"
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# source checked} other {# sources checked}}",
@@ -295,6 +306,32 @@
       "runFull": "The agent cannot take more messages right now.",
       "notTaken": "The agent could not take your message just now.",
       "queuedMessageChanged": "The message changed or left the queue, so the agent was not handed it."
+    },
+    "queue": {
+      "notice": "Queued: sends when the current response finishes",
+      "prompt": "Send when the agent finishes",
+      "sendNow": "Send now",
+      "remove": "Cancel queued message",
+      "edit": "Edit",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
+      "cancel": "Cancel",
+      "attachments": "{count, plural, one {# attachment} other {# attachments}}",
+      "actions": "Queued message actions",
+      "notSent": "Could not be sent",
+      "pause": "Pause queue",
+      "resume": "Resume queue",
+      "replaceTitle": "Send this message now?",
+      "replaceDescription": "This chat is waiting for your answer. Sending this message now cancels the question or approval it is waiting on.",
+      "noLongerQueued": "That message is no longer queued.",
+      "held": {
+        "turn-failed": "Queue paused: the last response failed. Resume to send the next message.",
+        "turn-interrupted": "Queue paused: the last response was cut off. Resume to send the next message.",
+        "member": "Queue paused.",
+        "send-refused": "Queue paused: the first message could not be sent. Edit or remove it, then resume.",
+        "usage-limit": "Queue paused: your usage limit is reached. Resume once it resets.",
+        "computer-away": "Waiting for your computer: queued messages are sent once it connects."
+      }
     }
   },
   "tasks": {

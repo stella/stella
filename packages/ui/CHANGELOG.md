@@ -1,5 +1,15 @@
 # @stll/ui
 
+## 0.73.0
+
+### Minor Changes
+
+- [#8654](https://github.com/stella/stella/pull/8654) [`501e484`](https://github.com/stella/stella/commit/501e48459f95e38d4594eff47b6daf2040380582) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `MoveToSideIcon`, the side panel with a chevron pointing into it, for sending a view into the side panel, so it no longer draws the same glyph as the panel that shows or hides the side panel.
+
+- [#8672](https://github.com/stella/stella/pull/8672) [`64d8cfd`](https://github.com/stella/stella/commit/64d8cfd04b20823f8f8ceabb9dbd0d79bf76ee66) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add caption appearance to menu and popover triggers and an inspector-row button size with the pane's fixed row rhythm. Caption controls retain their compact visible box while providing a coarse-pointer touch target.
+
+- [#8608](https://github.com/stella/stella/pull/8608) [`c6f510f`](https://github.com/stella/stella/commit/c6f510fb3b4fe3ebcb8a3c761d623dd13cc53c63) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add the composer Button variant and fixed 28px icon-round size to both web and native renderers so chat, search, and assistant surfaces select the shared primary action through Button props.
+
 ## 0.72.0
 
 ### Minor Changes

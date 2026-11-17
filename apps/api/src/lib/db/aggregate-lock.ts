@@ -47,6 +47,7 @@ import {
   chatThreads,
   contacts,
   corpusIndexGenerations,
+  corpusIndexGenerationSeedingPasses,
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
   documentReviewRuns,
@@ -781,7 +782,8 @@ type AuxiliaryRowIdentityOptions = Extract<
       | "correspondence"
       | "desktopMembership"
       | "memory"
-      | "searchProjectionRepair";
+      | "searchProjectionRepair"
+      | "savedSearch";
   }
 >;
 
@@ -789,6 +791,14 @@ const auxiliaryRowResource = (
   options: AuxiliaryRowIdentityOptions,
 ): RowResource => {
   switch (options.aggregate) {
+    case "savedSearch":
+      return {
+        table: "saved_searches",
+        columns: ["id"],
+        values: [options.id.id],
+        scopeColumns: ["organization_id", "user_id"],
+        scopeValues: [options.id.organizationId, options.id.userId],
+      };
     case "correspondence":
       return byIdWithin(
         "correspondence",
@@ -869,6 +879,7 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
     case "desktopMembership":
     case "memory":
     case "searchProjectionRepair":
+    case "savedSearch":
       return auxiliaryRowResource(options);
     case "searchHistory":
       return {
@@ -2657,6 +2668,37 @@ export const lockCaseLawDecisionRows = async ({
   `);
 };
 
+type CaseLawDecisionSnapshotOptions = {
+  tx: Pick<Transaction, "select">;
+  /** The base table, passed in so this owner names no case-law relation itself. */
+  decisions: typeof caseLawDecisions;
+  decisionId: SafeId<"caseLawDecision">;
+  /** The storage slice supplies its document-presence policy without a dependency cycle. */
+  holdsDocument: SQL<boolean>;
+};
+
+/** Lock and read a decision's pre-refresh identity and payload state together. */
+export const lockCaseLawDecisionSnapshot = async ({
+  tx,
+  decisions,
+  decisionId,
+  holdsDocument,
+}: CaseLawDecisionSnapshotOptions) =>
+  await tx
+    .select({
+      citationKey: decisions.citationKey,
+      country: decisions.country,
+      court: decisions.court,
+      docketFamilyKey: decisions.docketFamilyKey,
+      language: decisions.language,
+      decisionDate: decisions.decisionDate,
+      holdsDocument,
+      metadata: decisions.metadata,
+    })
+    .from(decisions)
+    .where(eq(decisions.id, decisionId))
+    .for("update")
+    .limit(1);
 /** Hold every summary endpoint in one ordered batch before checking revisions. */
 export const lockLegislationVersionRows = async (
   tx: Transaction,
@@ -3418,6 +3460,33 @@ export const lockTimerMatterAccessRows = async ({
   }
 };
 
+type LockCaseLawSourceIngestionLeaseOptions = {
+  tx: Transaction;
+  sourceId: SafeId<"caseLawSource">;
+  leaseToken: SafeId<"caseLawSourceIngestionLease">;
+};
+
+/** Fence source-lease takeover until a corpus bookkeeping transaction commits. */
+export const lockCaseLawSourceIngestionLease = async ({
+  tx,
+  sourceId,
+  leaseToken,
+}: LockCaseLawSourceIngestionLeaseOptions) => {
+  const owned = await tx
+    .select({ id: caseLawSources.id })
+    .from(caseLawSources)
+    .where(
+      and(
+        eq(caseLawSources.id, sourceId),
+        eq(caseLawSources.ingestionLeaseToken, leaseToken),
+        sql`${caseLawSources.ingestionLeaseExpiresAt} > now()`,
+      ),
+    )
+    .for("update")
+    .limit(1);
+  return owned.length > 0;
+};
+
 /** Fence snapshot writers before removal discards their inputs. */
 export const lockCaseLawRemovalSnapshots = async (
   tx: ExecuteTransaction,
@@ -4149,6 +4218,54 @@ export const corpusProjectionReservationQueue = (
       skipLocked: true,
     });
 };
+
+type CorpusIndexGenerationKey = { family: CorpusFamily; generation: string };
+
+/**
+ * One generation's registry row, share-locked. Every lifecycle transition
+ * locks the row for update before it changes the status, so the generation
+ * stays in its status until this transaction ends. The seeding walk takes it
+ * first, then its pass (`lockCorpusIndexGenerationSeedingPass`).
+ */
+export const lockCorpusIndexGenerationShared = async (
+  tx: Transaction,
+  { family, generation }: CorpusIndexGenerationKey,
+) =>
+  (
+    await tx
+      .select()
+      .from(corpusIndexGenerations)
+      .where(
+        and(
+          eq(corpusIndexGenerations.family, family),
+          eq(corpusIndexGenerations.generation, generation),
+        ),
+      )
+      .limit(1)
+      .for("share")
+  ).at(0);
+
+/**
+ * One generation's seeding pass, locked for update after the registry row,
+ * so two walkers of one generation never advance the same pass.
+ */
+export const lockCorpusIndexGenerationSeedingPass = async (
+  tx: Transaction,
+  { family, generation }: CorpusIndexGenerationKey,
+) =>
+  (
+    await tx
+      .select()
+      .from(corpusIndexGenerationSeedingPasses)
+      .where(
+        and(
+          eq(corpusIndexGenerationSeedingPasses.family, family),
+          eq(corpusIndexGenerationSeedingPasses.generation, generation),
+        ),
+      )
+      .limit(1)
+      .for("update")
+  ).at(0);
 
 /**
  * State rows precede their revisions in the projection lock order. Settling a

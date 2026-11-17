@@ -99,14 +99,14 @@ const strictifyObjectSchemas = (schema: unknown): unknown => {
     return schema;
   }
 
-  const next: JsonObject = {};
-  for (const [key, value] of Object.entries(schema)) {
-    if (Array.isArray(value)) {
-      next[key] = value.map(strictifyObjectSchemas);
-      continue;
-    }
-    next[key] = strictifyObjectSchemas(value);
-  }
+  const next = Object.fromEntries(
+    Object.entries(schema).map(([key, value]): [string, unknown] => [
+      key,
+      Array.isArray(value)
+        ? value.map(strictifyObjectSchemas)
+        : strictifyObjectSchemas(value),
+    ]),
+  );
 
   // Nullable object schemas can arrive as a type union (e.g.
   // ["object", "null"]) before the provider-safe projection lowers them,

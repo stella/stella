@@ -79,6 +79,7 @@ const startMockProvider = (
 
 describe("ensureFreshCredential", () => {
   let configDir: string;
+  const fixtureNow = 1_700_000_000_000;
 
   beforeEach(async () => {
     configDir = await mkdtemp(
@@ -95,12 +96,13 @@ describe("ensureFreshCredential", () => {
       () => new Response("should not be called", { status: 500 }),
     );
     try {
-      const credential = buildCredential({ expiresAt: Date.now() + 60_000 });
+      const credential = buildCredential({ expiresAt: fixtureNow + 60_000 });
       await seedCredential(configDir, credential);
       const result = await ensureFreshCredential({
         configDir,
         credential,
         metadata: provider.metadata,
+        now: fixtureNow,
       });
 
       expect(result.status).toBe("ok");
@@ -135,9 +137,9 @@ describe("ensureFreshCredential", () => {
     );
 
     try {
-      const credential = buildCredential({ expiresAt: Date.now() - 1000 });
+      const credential = buildCredential({ expiresAt: fixtureNow - 1000 });
       await seedCredential(configDir, credential);
-      const now = Date.now();
+      const now = fixtureNow;
       const result = await ensureFreshCredential({
         configDir,
         credential,
@@ -171,12 +173,13 @@ describe("ensureFreshCredential", () => {
     );
 
     try {
-      const credential = buildCredential({ expiresAt: Date.now() - 1000 });
+      const credential = buildCredential({ expiresAt: fixtureNow - 1000 });
       await seedCredential(configDir, credential);
       const result = await ensureFreshCredential({
         configDir,
         credential,
         metadata: provider.metadata,
+        now: fixtureNow,
       });
 
       expect(result.status).toBe("error");
@@ -195,7 +198,7 @@ describe("ensureFreshCredential", () => {
     );
     try {
       const credential = buildCredential({
-        expiresAt: Date.now() - 1000,
+        expiresAt: fixtureNow - 1000,
         refreshToken: undefined,
       });
       await seedCredential(configDir, credential);
@@ -203,6 +206,7 @@ describe("ensureFreshCredential", () => {
         configDir,
         credential,
         metadata: provider.metadata,
+        now: fixtureNow,
       });
 
       expect(result.status).toBe("error");

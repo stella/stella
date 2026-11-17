@@ -90,15 +90,16 @@ const prepareFolderTreeUpload = async ({
       sha256Hex: await hashActiveUploadFile(placement.file),
     });
   }
+  const uploadsApi = api.uploads({
+    workspaceId: toSafeId<"workspace">(workspaceId),
+  });
 
-  const response = await api
-    .uploads({ workspaceId: toSafeId<"workspace">(workspaceId) })
-    ["entity-create"].tree.post({
-      propertyId: propertyId ? toSafeId<"property">(propertyId) : null,
-      parentId: parentId === null ? null : toSafeId<"entity">(parentId),
-      directories: plan.directories,
-      files,
-    });
+  const response = await uploadsApi["entity-create"].tree.post({
+    propertyId: propertyId ? toSafeId<"property">(propertyId) : null,
+    parentId: parentId === null ? null : toSafeId<"entity">(parentId),
+    directories: plan.directories,
+    files,
+  });
 
   if (response.error) {
     throw toAPIError(response.error);

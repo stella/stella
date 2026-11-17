@@ -65,8 +65,12 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "bilingual_translation_rows.warnings",
   "bilingual_translation_runs.glossary",
   "case_law_analysis_failures.provider_diagnostic",
+  // Citation evidence stores source-text offsets, not member identities.
+  "case_law_citations.polarity_evidence_windows",
   // Global corpus coverage counts and source metadata contain no member identifiers.
   "case_law_coverage_summaries.answer",
+  // Review evidence quotes public court text and its offsets; no member ids.
+  "case_law_decision_reviews.opening_evidence",
   "case_law_decision_supplements.document_ast",
   "case_law_decision_supplements.metadata",
   "case_law_decisions.sections",
@@ -345,6 +349,8 @@ const RETAINED_MEMBER_COLUMNS = {
     "User-owned matter content or preferences; current organization/matter membership gates access.",
   "chat_queued_messages.user_id":
     "User-owned matter content or preferences; current organization/matter membership gates access, and the queue's sender proves the member again before it sends one.",
+  "chat_command_receipts.user_id":
+    "A retry key of the person's own send or answer; it holds no content, current membership gates the send it answers, and it expires within a day.",
   "chat_queue_holds.user_id":
     "Why the person's own queue waits; it holds no content, and the queue's sender proves the member again before it sends anything.",
   "clauses.created_by":

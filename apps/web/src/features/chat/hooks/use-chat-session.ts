@@ -35,7 +35,6 @@ import {
   type ChatMemberSendAction,
   chatSendIntent,
   type ChatThreadSendState,
-  type ChatTurnSteering,
 } from "@stll/api-contract/chat-send-intent";
 import type { ChatToolGrantScope } from "@stll/api-contract/chat-tool-grants";
 import { sleep } from "@stll/concurrency/sleep";
@@ -140,10 +139,10 @@ import {
   isQueueInsteadRefusal,
   messagePartsOf,
   queuedSendNow,
+  queuedSteerOf,
   queueMoveTarget,
   snapshotChatRequestOptions,
   steerableMessageText,
-  steerableQueuedText,
   withQueuedMessageMoved,
   withQueuedMessageRemoved,
 } from "@/features/chat/chat-queue.logic";
@@ -257,11 +256,6 @@ type UseChatSessionOptions = {
   getEditApplyMode?: (() => ChatEditApplyMode) | undefined;
   getContextMatterIds?: (() => readonly string[]) | undefined;
   getSendMode?: (() => ChatSendMode) | undefined;
-  /**
-   * Whether the thread's turns take a message mid-turn (`chatTurnSteering`);
-   * a surface without it has turns that never do, so its sends queue.
-   */
-  getTurnSteering?: (() => ChatTurnSteering) | undefined;
   /** Cursor for the first older page, seeded from the thread fetch. */
   initialOlderCursor: string | null;
   /**
@@ -387,7 +381,6 @@ export const useChatSession = ({
   getContextMatterIds,
   getEditApplyMode,
   getSendMode,
-  getTurnSteering,
   initialOlderCursor,
   onError,
   playbookPane,
@@ -442,6 +435,7 @@ export const useChatSession = ({
     stop: stopState,
     turnAbandoned,
     computerWait,
+    turnSteering,
     turnSentAt,
     turnsStarted,
   } = snapshot;
@@ -909,10 +903,13 @@ export const useChatSession = ({
 
   /** What the thread is doing now, as the send routing reads it. */
   const threadSendState = useCallback((): ChatThreadSendState => {
-    const steering = getTurnSteering?.() ?? CHAT_TURN_STEERING.notSteerable;
     // A wait is read first: a card can show while the request that brought
     // it still ends, and a steer then has to decline it to reach the turn.
-    const { localRunQuestion, messages: shown } = chat.getSnapshot();
+    const {
+      localRunQuestion,
+      messages: shown,
+      turnSteering: steering,
+    } = chat.getSnapshot();
     if (
       openMemberWaitKeys({
         localRunQuestion,
@@ -930,7 +927,7 @@ export const useChatSession = ({
     return current.items.length > 0 && current.hold === null
       ? { type: "working", steering: CHAT_TURN_STEERING.notSteerable }
       : { type: "idle" };
-  }, [chat, getTurnSteering, readQueue, turnRuns]);
+  }, [chat, readQueue, turnRuns]);
 
   /** Put a message the server did not take back into the composer. Falls
    *  back to a notice when this surface shows no composer of the thread. */
@@ -1269,24 +1266,24 @@ export const useChatSession = ({
               const whole = await Result.tryPromise(
                 async () => await readQueuedChatMessage(threadRef.threadId, id),
               );
-              const read = Result.isOk(whole) ? whole.value : null;
-              const text =
-                read === null
-                  ? null
-                  : steerableQueuedText({ item, parts: read.message.parts });
+              // A read of another revision than the queue showed is a
+              // message changed since (switched to anonymized, say): it is
+              // sent next, as it now is.
+              const steer = Result.isOk(whole)
+                ? queuedSteerOf({ item, read: whole.value })
+                : null;
               // Taken, the server removes it from the queue at the revision
               // the turn was handed (one edited since stays queued).
               removedHereRef.current.add(id);
               const steered =
-                text !== null &&
-                read !== null &&
+                steer !== null &&
                 (
                   await chat.steerLocalTurn({
                     inputId: id,
-                    text,
+                    text: steer.text,
                     source: {
                       type: CHAT_LOCAL_RUN_STEER_SOURCE.queued,
-                      revision: read.revision,
+                      revision: steer.revision,
                     },
                   })
                 ).type === "steered";
@@ -2225,29 +2222,29 @@ export const useChatSession = ({
           type: DOCX_MIME,
         });
         const contentSha256Hex = await sha256Hex(draft.buffer);
-        const response = await api
-          .entities({ workspaceId: toSafeId<"workspace">(matterId) })
-          ["upload-generated-document"].post({
-            file,
-            contentSha256Hex,
-            messageId: toSafeId<"chatMessage">(draftMessageId),
-            name: draft.fileName,
-            propertyId: fileProperty.id,
-            ...(draftChatThreadId === null
-              ? {}
-              : {
-                  draftChatThreadId: toSafeId<"chatThread">(draftChatThreadId),
-                }),
-            threadId: toSafeId<"chatThread">(threadRef.threadId),
-            ...(threadRef.scope === "workspace"
-              ? {
-                  threadWorkspaceId: toSafeId<"workspace">(
-                    threadRef.workspaceId,
-                  ),
-                }
-              : {}),
-            toolCallId,
-          });
+        const entitiesApi = api.entities({
+          workspaceId: toSafeId<"workspace">(matterId),
+        });
+
+        const response = await entitiesApi["upload-generated-document"].post({
+          file,
+          contentSha256Hex,
+          messageId: toSafeId<"chatMessage">(draftMessageId),
+          name: draft.fileName,
+          propertyId: fileProperty.id,
+          ...(draftChatThreadId === null
+            ? {}
+            : {
+                draftChatThreadId: toSafeId<"chatThread">(draftChatThreadId),
+              }),
+          threadId: toSafeId<"chatThread">(threadRef.threadId),
+          ...(threadRef.scope === "workspace"
+            ? {
+                threadWorkspaceId: toSafeId<"workspace">(threadRef.workspaceId),
+              }
+            : {}),
+          toolCallId,
+        });
         if (response.error) {
           throw toAPIError(response.error);
         }
@@ -2562,6 +2559,8 @@ export const useChatSession = ({
     stopPending: stopState.status === "pending",
     turnAbandoned,
     computerWait,
+    /** Whether the running turn takes a message mid-turn, as the server says. */
+    turnSteering,
     turnSentAt,
     turnsStarted,
     alwaysApprovedTools,

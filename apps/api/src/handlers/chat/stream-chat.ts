@@ -29,7 +29,7 @@ import {
 } from "@stll/ai-catalog";
 import {
   CHAT_SEND_MODE,
-  createThirdPartyBoundaryRefusalPayload,
+  CHAT_TRANSPORT_ERROR_CODE,
 } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import { CHAT_INPUT_REFUSAL_CODE } from "@stll/api-contract";
@@ -42,11 +42,14 @@ import {
   CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY,
   CHAT_LOCAL_RUN_FILES_NOT_SHARED_METADATA_KEY,
   CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
+  CHAT_LOCAL_RUN_MODEL_METADATA_KEY,
   type ChatLocalRunContext,
   chatLocalRunContextSchema,
   chatLocalRunFilePartsOf,
   chatLocalRunFilesNotSharedSchema,
   chatLocalRunLimitSchema,
+  type ChatLocalRunModel,
+  chatLocalRunModelSchema,
 } from "@stll/api-contract/chat-run-target";
 import {
   desktopRunnerAttachmentPath,
@@ -61,7 +64,10 @@ import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { userFiles } from "@/api/db/schema";
 import type { UsageEventLane } from "@/api/db/schema";
 import type { AnonymizationRefusal } from "@/api/handlers/chat/anonymization-refusal";
-import { refuseAnonymizedCrossing } from "@/api/handlers/chat/anonymization-refusal";
+import {
+  anonymizationRefusalPayload,
+  refuseAnonymizedCrossing,
+} from "@/api/handlers/chat/anonymization-refusal";
 import { NO_ANSWER_QUOTE_CHECKER } from "@/api/handlers/chat/answer-quote-checks";
 import type { AnswerQuoteChecker } from "@/api/handlers/chat/answer-quote-checks";
 import { modelAcceptsDocumentAttachment } from "@/api/handlers/chat/attachment-modality";
@@ -702,6 +708,7 @@ export const streamChat = async ({
   const agentBoundaryError = resolveAgentRunBoundaryError({
     boundary: thirdPartyBoundary,
     runMode,
+    runsOn: localRun === undefined ? "agent_sandbox" : "computer",
   });
   if (agentBoundaryError !== null) {
     return {
@@ -1402,18 +1409,21 @@ const thirdPartyBoundaryRefusalResponse = (
   new ChatTurnFailureResponse({
     cause: error,
     failureCode: error.failureCode,
-    payload: createThirdPartyBoundaryRefusalPayload(error.message),
+    payload: anonymizationRefusalPayload(error),
     status: error.status,
   });
 
 type ResolveAgentRunBoundaryErrorInput = {
   boundary: Pick<ChatThirdPartyBoundary, "type">;
   runMode: ChatRunMode | undefined;
+  /** Where an agent turn runs: the agent sandbox, or the member's computer. */
+  runsOn: "agent_sandbox" | "computer";
 };
 
 export const resolveAgentRunBoundaryError = ({
   boundary,
   runMode,
+  runsOn,
 }: ResolveAgentRunBoundaryErrorInput): AnonymizationRefusal<422> | null => {
   if (
     runMode !== CHAT_RUN_MODE.agent ||
@@ -1422,6 +1432,17 @@ export const resolveAgentRunBoundaryError = ({
     return null;
   }
 
+  if (runsOn === "computer") {
+    return refuseAnonymizedCrossing({
+      message:
+        "A turn on your computer cannot be sent anonymized: the agent there reads your matters as they are. Send it without anonymization, or run it on stella.",
+      offerRawRetry: true,
+      rawRetryCode: CHAT_TRANSPORT_ERROR_CODE.localRunAnonymizedRefusal,
+      reason: "mode_policy",
+      site: "local_run",
+      status: 422,
+    });
+  }
   return refuseAnonymizedCrossing({
     message:
       "Agent sandbox access is not available in anonymized mode because its MCP tools can return raw workspace data.",
@@ -2863,10 +2884,12 @@ type StreamSettlementOptions = Pick<
   deferredRunFinishedChunks: PublicStreamChunk[];
   rawArgumentsByIncompleteToolCallId: Map<string, string>;
   toolCallsWithCompleteInput: Set<string>;
-  getUsage: () => TokenUsage | undefined;
+  /**
+   * What the run reported so far (usage, and for a turn on the member's
+   * computer its context and models), read when the turn settles.
+   */
+  runState: Readonly<PersistenceRunState>;
   getTurnSpend: () => ChatTurnSpend | undefined;
-  /** How full the context of a turn run on the member's computer was. */
-  getLocalRunContext: () => ChatLocalRunContext | undefined;
   announceBeforeFailure: () => StreamChunk[];
   /** Whether the run streamed an answer (see `processServerChatStream`). */
   getProducedAnswer: () => boolean;
@@ -2886,9 +2909,8 @@ const createStreamSettlement = ({
   deferredRunFinishedChunks,
   rawArgumentsByIncompleteToolCallId,
   toolCallsWithCompleteInput,
-  getUsage,
+  runState,
   getTurnSpend,
-  getLocalRunContext,
   getProducedAnswer,
   announceBeforeFailure,
   terminal,
@@ -2977,8 +2999,9 @@ const createStreamSettlement = ({
             producedAnswer: getProducedAnswer(),
             responseMessage,
             turnSpend: getTurnSpend(),
-            usage: getUsage(),
-            localRunContext: getLocalRunContext(),
+            usage: runState.usage,
+            localRunContext: runState.localRunContext,
+            localRunModel: runState.localRunModel,
           })
         : attachTerminalTurnOutcome({
             message: checkpoint,
@@ -3019,6 +3042,8 @@ type PersistenceRunState = {
   usage?: TokenUsage | undefined;
   /** The last run's context report is the one the next turn starts from. */
   localRunContext?: ChatLocalRunContext | undefined;
+  /** The last run's models: a later run of the turn may have been rerouted. */
+  localRunModel?: ChatLocalRunModel | undefined;
 };
 
 type ProcessPersistenceChunkOptions = {
@@ -3400,6 +3425,8 @@ const processPersistenceChunk = ({
     }
     runState.localRunContext =
       localRunContextFromChunk(chunk) ?? runState.localRunContext;
+    runState.localRunModel =
+      localRunModelFromChunk(chunk) ?? runState.localRunModel;
     // TanStack's agent loop can emit continuation events after a model
     // run finishes, notably `approval-requested` for a gated server tool.
     // The client already receives RUN_FINISHED only after the source is
@@ -3732,8 +3759,7 @@ export const processServerChatStream = async function* ({
     deferredRunFinishedChunks,
     rawArgumentsByIncompleteToolCallId,
     toolCallsWithCompleteInput,
-    getUsage: () => runState.usage,
-    getLocalRunContext: () => runState.localRunContext,
+    runState,
     getTurnSpend: () => turnBudget?.spend(),
     getProducedAnswer: () => producedAnswer,
     announceBeforeFailure: clientAssistantOwner.announceBeforeFailure,
@@ -3952,6 +3978,7 @@ type FinishResponseMessageProps = {
   turnSpend: ChatTurnSpend | undefined;
   usage: TokenUsage | undefined;
   localRunContext: ChatLocalRunContext | undefined;
+  localRunModel: ChatLocalRunModel | undefined;
 };
 
 const createTerminalResponseMessage = ({
@@ -3962,6 +3989,7 @@ const createTerminalResponseMessage = ({
   turnSpend,
   usage,
   localRunContext,
+  localRunModel,
 }: FinishResponseMessageProps): PersistableTerminalAssistantMessage => {
   if (outcome.type === "completed" && !producedAnswer) {
     throw new ChatEmptyCompletionError({
@@ -3996,7 +4024,9 @@ const createTerminalResponseMessage = ({
   });
   return attachTerminalTurnOutcome({
     message:
-      turnSpend === undefined && localRunContext === undefined
+      turnSpend === undefined &&
+      localRunContext === undefined &&
+      localRunModel === undefined
         ? persistableMessage
         : {
             ...persistableMessage,
@@ -4004,6 +4034,7 @@ const createTerminalResponseMessage = ({
               ...persistableMessage.metadata,
               ...(turnSpend === undefined ? {} : { turnSpend }),
               ...(localRunContext === undefined ? {} : { localRunContext }),
+              ...(localRunModel === undefined ? {} : { localRunModel }),
             },
           },
     turnOutcome: outcome,
@@ -4020,6 +4051,20 @@ const localRunContextFromChunk = (
   const parsed = v.safeParse(
     chatLocalRunContextSchema,
     chunk.metadata?.[CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY],
+  );
+  return parsed.success ? parsed.output : undefined;
+};
+
+/**
+ * The models a turn run on the member's computer asked for and ran on, as the
+ * local run's own reader checked them (`local-run-chunks.ts`), checked again.
+ */
+const localRunModelFromChunk = (
+  chunk: Extract<PublicStreamChunk, { type: EventType.RUN_FINISHED }>,
+) => {
+  const parsed = v.safeParse(
+    chatLocalRunModelSchema,
+    chunk.metadata?.[CHAT_LOCAL_RUN_MODEL_METADATA_KEY],
   );
   return parsed.success ? parsed.output : undefined;
 };
