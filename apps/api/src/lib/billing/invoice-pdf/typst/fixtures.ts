@@ -1,6 +1,11 @@
 import { cents } from "@stll/money";
 
+import { invoiceAmountDue } from "../../invoice-payment-amounts";
 import type { RenderInvoicePdfOptions } from "../render-helpers";
+
+/** The amount due on an unpaid, uncredited document of this total. */
+export const amountDueOf = (totalAmount: number) =>
+  invoiceAmountDue({ totalAmount, paidAmount: 0, creditedAmount: 0 });
 
 /** Every diacritic the Central European profiles need, in one string. */
 export const CEE_DIACRITICS = "ěščřžýáíéůú ĚŠČŘŽ ľĺŕô ąćęłńóśźż őűŐŰ äöüß";
@@ -75,7 +80,10 @@ export const invoiceFixture = (lineCount: number) =>
         },
       ],
     },
-    settlement: { status: "due", amountMinor: cents(756_250 * lineCount) },
+    settlement: {
+      status: "due",
+      amountMinor: amountDueOf(756_250 * lineCount),
+    },
     originalNumber: null,
   }) satisfies RenderInvoicePdfOptions;
 

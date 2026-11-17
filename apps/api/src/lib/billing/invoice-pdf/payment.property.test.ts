@@ -39,6 +39,7 @@ test("payment sequences keep the QR equal to the nonnegative ledger balance", ()
             status: "sent",
             totalAmount: total,
             paidAmount: paidAmountOf(payments),
+            creditedAmount: 0,
           });
           expect(remaining).toBeGreaterThanOrEqual(0);
           const input = {
@@ -74,7 +75,7 @@ test("payment sequences keep the QR equal to the nonnegative ledger balance", ()
             });
             return;
           }
-          expect(settlement).toEqual({
+          expect(settlement).toEqual<unknown>({
             status: "due",
             amountMinor: cents(remaining),
           });

@@ -12998,6 +12998,10 @@
               },
               "outstandingAmount": {
                 "type": "number"
+              },
+              "settlement": {
+                "type": "object",
+                "additionalProperties": true
               }
             },
             "required": [
@@ -13014,7 +13018,8 @@
               "currency",
               "totalAmount",
               "paidAmount",
-              "outstandingAmount"
+              "outstandingAmount",
+              "settlement"
             ],
             "additionalProperties": false
           }
@@ -13070,6 +13075,20 @@
             },
             "outstandingAmount": {
               "type": "number"
+            },
+            "settlement": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "enum": ["open", "paid", "credited", "overpaid"],
+                  "type": "string"
+                },
+                "refundAmount": {
+                  "type": "number"
+                }
+              },
+              "required": ["kind"],
+              "additionalProperties": false
             },
             "notes": {
               "type": ["string", "null"]
@@ -13176,6 +13195,7 @@
             "totalAmount",
             "paidAmount",
             "outstandingAmount",
+            "settlement",
             "notes",
             "sellerProfileId",
             "buyerName",

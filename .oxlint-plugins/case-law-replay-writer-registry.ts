@@ -257,6 +257,15 @@ export const REPLAY_WRITER_REGISTRY = [
     kind: "pending",
   },
   {
+    file: "apps/api/src/lib/billing/invoice-send-revocation.ts",
+    line: 58,
+    kind: "transition",
+    invariant: {
+      file: "apps/api/src/handlers/invoice-links/invoice-links.integration.test.ts",
+      test: "a revoked link opens nothing, and revoking keeps the first revocation",
+    },
+  },
+  {
     file: "apps/api/src/lib/case-law/provision-state-backfill/backfill.ts",
     line: 152,
     kind: "pending",
@@ -293,47 +302,47 @@ export const REPLAY_WRITER_REGISTRY = [
   },
   {
     file: "apps/api/src/lib/db/transitions.ts",
-    line: 373,
+    line: 377,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/db/transitions.ts",
-    line: 407,
+    line: 411,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/db/transitions.ts",
-    line: 557,
+    line: 561,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/db/transitions.ts",
-    line: 648,
+    line: 652,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/db/transitions.ts",
-    line: 1221,
+    line: 1283,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/db/transitions.ts",
-    line: 1763,
+    line: 1855,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/db/transitions.ts",
-    line: 1837,
+    line: 1929,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/db/transitions.ts",
-    line: 1874,
+    line: 1966,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/db/transitions.ts",
-    line: 1922,
+    line: 2014,
     kind: "pending",
   },
   {

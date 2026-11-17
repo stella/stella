@@ -72,6 +72,7 @@ export default createSafeRootHandler(
             city: body.city ?? null,
             postalCode: body.postalCode ?? null,
             country: body.country ?? null,
+            email: body.email ?? null,
             iban,
             bic: body.bic?.toUpperCase() ?? null,
             accountNumber: body.accountNumber ?? null,

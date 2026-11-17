@@ -271,6 +271,7 @@ describe("payment QR as SVG", () => {
         status: "finalized",
         totalAmount: -1 * fixture.totals.grossAmountMinor,
         paidAmount: 0,
+        creditedAmount: 0,
       }),
     };
     expect(input.totals.grossAmountMinor).toBeLessThan(0);

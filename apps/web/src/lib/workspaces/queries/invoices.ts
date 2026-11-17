@@ -10,6 +10,12 @@ import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
 const getInitialInvoicesPageParam = (): string | undefined => undefined;
 
+type InvoiceSendsQueryScope = {
+  workspaceId: string;
+  invoiceId: string;
+  userId: string;
+};
+
 export const invoicesKeys = {
   all: invoicesQueryRoot,
   infinite: (workspaceId: string, limit: number) => [
@@ -20,6 +26,11 @@ export const invoicesKeys = {
   byId: (workspaceId: string, id: string) => [
     ...invoicesKeys.all(workspaceId),
     id,
+  ],
+  sends: ({ workspaceId, invoiceId, userId }: InvoiceSendsQueryScope) => [
+    ...invoicesKeys.byId(workspaceId, invoiceId),
+    "sends",
+    userId,
   ],
 };
 
@@ -55,6 +66,70 @@ export const invoiceByIdOptions = (workspaceId: string, invoiceId: string) =>
 
         return unwrapApiResponse(response);
       },
+    }),
+    {
+      resources: [RESOURCE_TYPE.INVOICE],
+      scope: { type: "workspace", workspaceId },
+    },
+  );
+
+/**
+ * The emails an invoice was sent with, newest first, with the client's
+ * addresses a new send starts from. Keyed under the invoice, so every
+ * invoice invalidation refreshes it.
+ */
+export const invoiceSendsOptions = ({
+  workspaceId,
+  invoiceId,
+  userId,
+}: InvoiceSendsQueryScope) =>
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: invoicesKeys.sends({ workspaceId, invoiceId, userId }),
+      staleTime: ROUTE_QUERY_STALE_TIME_MS,
+      queryFn: async ({ signal }) => {
+        const response = await api
+          .invoices({ workspaceId })({ invoiceId })
+          .sends.get({ query: {}, fetch: { signal } });
+
+        return unwrapApiResponse(response);
+      },
+    }),
+    {
+      resources: [RESOURCE_TYPE.INVOICE],
+      scope: { type: "workspace", workspaceId },
+    },
+  );
+
+export type InvoiceSends = Awaited<
+  ReturnType<NonNullable<ReturnType<typeof invoiceSendsOptions>["queryFn"]>>
+>;
+
+export const invoiceSendsInfiniteOptions = ({
+  workspaceId,
+  invoiceId,
+  userId,
+}: InvoiceSendsQueryScope) =>
+  resourceQueryOptions(
+    infiniteQueryOptions({
+      queryKey: [
+        ...invoicesKeys.sends({ workspaceId, invoiceId, userId }),
+        "infinite",
+      ],
+      staleTime: ROUTE_QUERY_STALE_TIME_MS,
+      queryFn: async ({ pageParam, signal }) => {
+        const response = await api
+          .invoices({ workspaceId })({ invoiceId })
+          .sends.get({
+            query: pageParam === undefined ? {} : { cursor: pageParam },
+            fetch: { signal },
+          });
+
+        return unwrapApiResponse(response);
+      },
+      initialPageParam: getInitialInvoicesPageParam(),
+      getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+      select: (data) => data.pages.flatMap((page) => page.items),
     }),
     {
       resources: [RESOURCE_TYPE.INVOICE],

@@ -58,6 +58,7 @@ import {
   installPgliteEntityFeatureGateMaintenance,
   installPgliteFindingDecisionHistory,
   installPgliteFlowTransitions,
+  installPgliteInvoiceLinks,
   installPgliteInvoiceObjects,
   installPgliteLegalHoldDeleteBackstop,
   installPgliteLegislationExpressionIdentity,
@@ -397,6 +398,7 @@ export const availableSchemaRelationNames = new Set<string>(
  * is how a REVOKE goes missing from the harness.
  */
 export const ROLE_GRANT_STATEMENTS = [
+  `GRANT UPDATE (${schema.INVOICE_SEND_UPDATE_COLUMNS.map(({ name }) => quoteSqlIdentifier(name)).join(", ")}) ON TABLE "invoice_sends" TO stella`,
   `GRANT SELECT (generation_provenance), UPDATE (generation_provenance), INSERT (generation_provenance) ON chat_threads TO stella`,
   `GRANT SELECT ON TABLE "soft_law_sources", "soft_law_documents", "soft_law_document_versions", "soft_law_document_locators", "soft_law_ingestion_attempts" TO stella_ingestion`,
   `GRANT INSERT, UPDATE ON TABLE "soft_law_documents", "soft_law_document_versions", "soft_law_document_locators", "soft_law_ingestion_attempts" TO stella_ingestion`,
@@ -938,6 +940,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteCaseLawPopulationCounts(db);
   await installPgliteCorpusIndexSeedingLifecycle(db);
   await installPglitePdfSigningTokenScopes(db);
+  await installPgliteInvoiceLinks(db);
   await installPgliteDesktopPresenceRls(db);
   await installPgliteChatTurnRunIdLookup(db);
   await installPgliteOrganizationMemberCapacity(db);

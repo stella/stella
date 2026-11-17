@@ -109,6 +109,7 @@ const REVIEWED_STANDARD_OPERATIONS = [
   "apps/api/src/handlers/files/routes.ts#printPdfEndpoint",
   "apps/api/src/handlers/files/routes.ts#scrubbedDownloadEndpoint",
   "apps/api/src/handlers/files/routes.ts#stampedDownloadEndpoint",
+  "apps/api/src/handlers/invoices/sends/create.ts",
   "apps/api/src/handlers/mcp-connectors/approve-authorization.ts",
   "apps/api/src/handlers/mcp-connectors/connect.ts",
   "apps/api/src/handlers/mcp-connectors/create-connection.ts",
@@ -230,6 +231,7 @@ const REVIEWED_ACCOUNT_CONTROL_OPERATIONS = [
   "apps/api/src/handlers/api-keys/personal/rotate.ts",
   "apps/api/src/handlers/api-keys/revoke.ts",
   "apps/api/src/handlers/api-keys/rotate.ts",
+  "apps/api/src/handlers/invoices/sends/create.ts",
   "apps/api/src/handlers/mcp-connectors/approve-authorization.ts",
   "apps/api/src/handlers/mcp-connectors/connect.ts",
   "apps/api/src/handlers/mcp-connectors/create-connection.ts",
@@ -321,43 +323,60 @@ describe("handler account policy census", () => {
     );
   });
 
-  test("standard operations apply account access before their implementation", async () => {
-    testState.setConfig("DEMO_ACCOUNT_EMAIL", "account@example.test");
-    const definitionSchema = v.object({ handler: v.function() });
-
-    for (const endpoint of (await discoverSafeHandlers()).endpoints) {
-      if (!REVIEWED_STANDARD_OPERATIONS.some((id) => id === endpoint.id)) {
-        continue;
-      }
-      const module = v.parse(
-        v.record(v.string(), v.unknown()),
-        await import(
-          new URL(`../../../../../${endpoint.file}`, import.meta.url).href
-        ),
-      );
-      const { handler } = v.parse(
-        definitionSchema,
-        module[endpoint.exportName ?? "default"],
-      );
+  test.each([
+    {
+      account: "demo",
+      email: "demo@example.test",
+      operations: REVIEWED_STANDARD_OPERATIONS,
+    },
+    {
+      account: "review",
+      email: "review@example.test",
+      operations: REVIEWED_ACCOUNT_CONTROL_OPERATIONS,
+    },
+  ])(
+    "$account operations apply account access before their implementation",
+    async ({ email, operations }) => {
       const context = createTestHandlerContext({
         audit: NO_AUDIT,
         safeDb: NO_DB,
         scopedDb: NO_DB,
-        user: { email: "account@example.test" },
+        user: { email },
       });
-      // Feature-gated operations admit the enrolled caller, so the account
-      // check is what refuses them.
-      const response = await handler({
-        ...context,
-        featureAccessSnapshot: enrolledTimeBillingSnapshot({
-          userId: context.user.id,
-          organizationId: context.session.activeOrganizationId,
-        }),
+      testState.patchConfig({
+        DEMO_ACCOUNT_EMAIL: "demo@example.test",
+        APP_REVIEW_ACCOUNT_EMAIL: "review@example.test",
+        APP_REVIEW_ORGANIZATION_ID: context.session.activeOrganizationId,
       });
-      expect(response, endpoint.id).toMatchObject({
-        code: 403,
-        response: { code: "account_access_unavailable" },
-      });
-    }
-  });
+      const definitionSchema = v.object({ handler: v.function() });
+      for (const endpoint of (await discoverSafeHandlers()).endpoints) {
+        if (!operations.some((id) => id === endpoint.id)) {
+          continue;
+        }
+        const module = v.parse(
+          v.record(v.string(), v.unknown()),
+          await import(
+            new URL(`../../../../../${endpoint.file}`, import.meta.url).href
+          ),
+        );
+        const { handler } = v.parse(
+          definitionSchema,
+          module[endpoint.exportName ?? "default"],
+        );
+        // Feature-gated operations admit the enrolled caller, so the account
+        // check is what refuses them.
+        const response = await handler({
+          ...context,
+          featureAccessSnapshot: enrolledTimeBillingSnapshot({
+            userId: context.user.id,
+            organizationId: context.session.activeOrganizationId,
+          }),
+        });
+        expect(response, endpoint.id).toMatchObject({
+          code: 403,
+          response: { code: "account_access_unavailable" },
+        });
+      }
+    },
+  );
 });

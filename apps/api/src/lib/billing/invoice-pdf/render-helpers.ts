@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 
+import { parseDecimalToken } from "@stll/agent-input/numeric-token";
 import type { InvoiceLanguage, InvoiceStatus } from "@stll/api-contract";
 import {
   buildCzechQrPaymentPayload,
@@ -21,9 +22,16 @@ import type { PayBySquareResult } from "@stll/invoicing/pay-by-square";
 import { formatMoneyCents } from "@stll/money";
 import { parsePlainDate } from "@stll/time";
 
-import type { InvoicePaymentState } from "@/api/lib/billing/invoice-payment-amounts";
+import type {
+  AmountDue,
+  InvoicePaymentState,
+} from "@/api/lib/billing/invoice-payment-amounts";
 
 export type RenderInvoicePdfOptions = {
+  /**
+   * What the document states about payment: the amount still due after
+   * payments and issued credit notes, or that it is settled or asks nothing.
+   */
   settlement: InvoicePaymentState;
   invoice: {
     status: InvoiceStatus;
@@ -86,6 +94,19 @@ export type RenderInvoicePdfOptions = {
   totals: InvoiceTotals;
   originalNumber: string | null;
 };
+
+/**
+ * Whether a document asks its recipient to pay: a credit note never does, and
+ * nothing is asked once the balance is settled. The PDF payment block, its QR
+ * code and the public link summary all decide through here.
+ */
+export const requestsPayment = ({
+  documentType,
+  amountMinor,
+}: {
+  documentType: InvoiceDocumentType;
+  amountMinor: AmountDue;
+}): boolean => documentType !== "credit_note" && amountMinor > 0;
 
 export const buildInvoicePaymentPayload = ({
   invoice,
@@ -207,9 +228,12 @@ export const createInvoiceFormatters = ({
     }
     const canonical =
       kept === 0 ? whole : `${whole}.${decimals.slice(0, kept)}`;
-    const parsed = Number(canonical);
-    return String(parsed) === canonical
-      ? quantityFormat.format(parsed)
+    const parsed = parseDecimalToken(canonical);
+    if (parsed.isErr()) {
+      return panic("Invoice contains an invalid decimal quantity");
+    }
+    return String(parsed.value) === canonical
+      ? quantityFormat.format(parsed.value)
       : canonical;
   };
   return { money, date, vatRate, quantity };

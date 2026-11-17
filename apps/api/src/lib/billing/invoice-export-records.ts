@@ -9,57 +9,72 @@ import type {
   InvoiceTotals,
 } from "@stll/invoicing";
 import type { CentsAmount } from "@stll/money";
-import { Temporal, todayFor } from "@stll/time";
 import type { TimeZoneId } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import { INVOICE_STATUS } from "@/api/db/schema";
-import { INVOICE_DETAIL_RELATIONS } from "@/api/handlers/invoices/invoice-detail";
+import type { InvoiceStatus } from "@/api/db/schema";
+import {
+  INVOICE_DETAIL_RELATIONS,
+  INVOICE_DOCUMENT_COLUMNS,
+  INVOICE_SELLER_COLUMNS,
+} from "@/api/lib/billing/invoice-detail";
 import { readInvoiceDocumentLines } from "@/api/lib/billing/invoice-lines";
+import {
+  INVOICE_CREDITED_AMOUNT_EXTRA,
+  invoiceSettlement,
+  paidAmountOf,
+} from "@/api/lib/billing/invoice-payments";
 import {
   invoiceInMatter,
   invoiceTouchesMatter,
 } from "@/api/lib/billing/invoice-scope";
+import { invoiceSettledOn } from "@/api/lib/billing/invoice-settlement-date";
 import { selectTimekeeperNames } from "@/api/lib/billing/timekeeper-names";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { readOrganizationTimeZone } from "@/api/lib/organization-time-zone";
 
 /**
- * The day an invoice was settled: the date of the latest payment still
- * counted, which is the one that reached its total. An invoice marked paid
+ * The day an invoice was settled by payment: the date of the latest payment
+ * still counted, which is the one that covered what its credit notes leave.
+ * A document its credit notes cover alone has none. An invoice marked paid
  * before payments were recorded carries only the moment it was marked.
  */
 export const exportPaidDate = (
   invoice: {
-    status: string;
+    status: InvoiceStatus;
     paidAt: Date | null;
-    payments: readonly { paidOn: string; voidedAt: Date | null }[];
+    totalAmount: number;
+    creditedAmount: number;
+    payments: readonly {
+      amount: number;
+      paidOn: string;
+      voidedAt: Date | null;
+    }[];
   },
   timeZone: TimeZoneId,
 ): string | null => {
-  if (invoice.status !== INVOICE_STATUS.PAID) {
-    return null;
-  }
-  let settledOn: string | null = null;
+  let latestPaidOn: string | null = null;
   for (const payment of invoice.payments) {
-    // ISO dates order as text.
     if (
       payment.voidedAt === null &&
-      (settledOn === null || payment.paidOn > settledOn)
+      (latestPaidOn === null || payment.paidOn > latestPaidOn)
     ) {
-      settledOn = payment.paidOn;
+      latestPaidOn = payment.paidOn;
     }
   }
-  if (settledOn !== null) {
-    return settledOn;
-  }
-  return invoice.paidAt === null
-    ? null
-    : todayFor(
-        timeZone,
-        Temporal.Instant.fromEpochMilliseconds(invoice.paidAt.getTime()),
-      ).toString();
+  return invoiceSettledOn({
+    settlement: invoiceSettlement({
+      totalAmount: invoice.totalAmount,
+      paidAmount: paidAmountOf(invoice.payments),
+      creditedAmount: invoice.creditedAmount,
+      status: invoice.status,
+    }),
+    paidAt: invoice.paidAt,
+    latestPaidOn,
+    timeZone,
+  });
 };
 
 /**
@@ -163,6 +178,8 @@ export const loadInvoiceExport = async (
     orderBy: { invoiceDate: "asc", invoiceNumber: "asc" },
     // One more than the cap, so an oversized matter is refused, not cut off.
     limit: MAX_EXPORT_INVOICES + 1,
+    columns: INVOICE_DOCUMENT_COLUMNS,
+    extras: INVOICE_CREDITED_AMOUNT_EXTRA,
     with: EXPORT_RELATIONS,
   });
   const matterIds = [
@@ -200,6 +217,7 @@ export const loadInvoiceExport = async (
             id: { in: sellerIds },
             organizationId: { eq: organizationId },
           },
+          columns: INVOICE_SELLER_COLUMNS,
           limit: sellerIds.length,
         });
   const originalIds = [
@@ -226,10 +244,17 @@ export const loadInvoiceExport = async (
     userIds.size === 0
       ? []
       : await selectTimekeeperNames(tx, { organizationId, userIds });
+  const timeZone = await readOrganizationTimeZone(tx, organizationId);
   return {
     matter,
     matters: new Map(matterRows.map((row) => [row.id, row])),
-    invoices,
+    invoices: invoices.map(({ payments, creditedAmount, ...invoice }) => ({
+      ...invoice,
+      paidDate: exportPaidDate(
+        { ...invoice, creditedAmount, payments },
+        timeZone,
+      ),
+    })),
     sellers: new Map(sellers.map((seller) => [seller.id, seller])),
     originals: new Map(
       originals.map((original) => [
@@ -238,12 +263,35 @@ export const loadInvoiceExport = async (
       ]),
     ),
     timekeepers: new Map(timekeepers.map((u) => [u.id, u.name])),
-    timeZone: await readOrganizationTimeZone(tx, organizationId),
+    timeZone,
   };
 };
 
-type LoadedExport = Awaited<ReturnType<typeof loadInvoiceExport>>;
-type LoadedInvoice = LoadedExport["invoices"][number];
+type AuthenticatedExport = Awaited<ReturnType<typeof loadInvoiceExport>>;
+type AuthenticatedInvoice = AuthenticatedExport["invoices"][number];
+type DocumentSourceAmounts = Parameters<typeof readInvoiceDocumentLines>[0];
+type LoadedInvoice = Omit<AuthenticatedInvoice, "timeEntries" | "expenses"> & {
+  timeEntries: readonly (DocumentSourceAmounts["timeEntries"][number] &
+    Pick<
+      AuthenticatedInvoice["timeEntries"][number],
+      "workspaceId" | "dateWorked"
+    > &
+    Partial<
+      Pick<
+        AuthenticatedInvoice["timeEntries"][number],
+        "userId" | "taskCode" | "activityCode"
+      >
+    >)[];
+  expenses: readonly (DocumentSourceAmounts["expenses"][number] &
+    Pick<
+      AuthenticatedInvoice["expenses"][number],
+      "workspaceId" | "dateIncurred" | "category"
+    >)[];
+};
+type LoadedExport = Omit<AuthenticatedExport, "invoices" | "timekeepers"> & {
+  invoices: readonly LoadedInvoice[];
+  timekeepers?: AuthenticatedExport["timekeepers"];
+};
 /** The lines and totals `readInvoiceDocumentLines` computes for a document. */
 type DocumentAmounts = {
   lines: readonly (InvoiceLine & {
@@ -319,7 +367,10 @@ const exportLines = ({
       source: stored?.source ?? sourceOf(entry, expense),
       date: entry?.dateWorked ?? expense?.dateIncurred ?? null,
       timekeeper: entry?.userId
-        ? { id: entry.userId, name: loaded.timekeepers.get(entry.userId) ?? "" }
+        ? {
+            id: entry.userId,
+            name: loaded.timekeepers?.get(entry.userId) ?? "",
+          }
         : null,
       taskCode: entry?.taskCode ?? null,
       activityCode: entry?.activityCode ?? null,
@@ -366,13 +417,18 @@ export const toExportRecords = (
   const { matter } = loaded;
   if (!matter) {
     return Result.err(
-      new HandlerError({ status: 404, message: "Matter not found" }),
+      new HandlerError({
+        status: 404,
+        code: "not_found",
+        message: "Matter not found",
+      }),
     );
   }
   if (selected && loaded.invoices.length !== new Set(selected).size) {
     return Result.err(
       new HandlerError({
         status: 409,
+        code: "invoice_export_not_issued",
         message: "Only issued invoices in this matter can be exported",
         hint: "Drafts and void invoices have no export; finalize the draft first.",
       }),
@@ -382,6 +438,7 @@ export const toExportRecords = (
     return Result.err(
       new HandlerError({
         status: 409,
+        code: "invoice_export_too_many",
         message: `The matter has more than ${MAX_EXPORT_INVOICES} issued invoices to export at once`,
         hint: "Pass invoiceIds to export a selection of invoices at a time.",
       }),
@@ -391,6 +448,7 @@ export const toExportRecords = (
     return Result.err(
       new HandlerError({
         status: 409,
+        code: "invoice_export_empty",
         message: "The matter has no issued invoices to export",
       }),
     );
@@ -406,6 +464,7 @@ export const toExportRecords = (
       return Result.err(
         new HandlerError({
           status: 409,
+          code: "invoice_export_not_issued",
           message: `Invoice ${invoice.id} is not issued`,
         }),
       );
@@ -414,6 +473,7 @@ export const toExportRecords = (
       return Result.err(
         new HandlerError({
           status: 409,
+          code: "invoice_export_home_currency_vat",
           message: `Invoice ${invoice.invoiceNumber} includes VAT stated in the seller's home currency`,
           hint: "This export cannot yet carry the home-currency VAT; use the PDF.",
         }),
@@ -423,6 +483,7 @@ export const toExportRecords = (
       return Result.err(
         new HandlerError({
           status: 409,
+          code: "invoice_export_missing_seller",
           message: `Invoice ${invoice.invoiceNumber} has no seller profile`,
           hint: "Select a seller profile on the invoice; accounting files need the issuing company.",
         }),
@@ -450,7 +511,7 @@ export const toExportRecords = (
       issueDate: invoice.invoiceDate,
       taxableSupplyDate: invoice.taxableSupplyDate,
       dueDate: invoice.dueDate,
-      paidDate: exportPaidDate(invoice, loaded.timeZone),
+      paidDate: invoice.paidDate,
       currency: invoice.currency,
       reference: invoice.reference,
       notes: invoice.notes,

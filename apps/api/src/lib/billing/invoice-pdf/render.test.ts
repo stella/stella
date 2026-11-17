@@ -5,6 +5,7 @@ import { cents, formatMoneyCents } from "@stll/money";
 
 import { buildInvoicePaymentPayload } from "./render-helpers";
 import type { RenderInvoicePdfOptions } from "./render-helpers";
+import { amountDueOf } from "./typst/fixtures";
 import { renderInvoiceWithTypst } from "./typst/render-typst";
 import { openTypstSession } from "./typst/session";
 
@@ -73,7 +74,7 @@ const options = {
     grossAmountMinor: cents(55_555),
     vatBreakdown: [],
   },
-  settlement: { status: "due", amountMinor: cents(55_555) },
+  settlement: { status: "due", amountMinor: amountDueOf(55_555) },
   originalNumber: null,
 } satisfies RenderInvoicePdfOptions;
 

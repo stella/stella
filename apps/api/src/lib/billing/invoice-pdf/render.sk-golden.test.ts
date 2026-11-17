@@ -12,6 +12,7 @@ import {
 import { buildInvoicePaymentPayload } from "./render-helpers";
 import type { RenderInvoicePdfOptions } from "./render-helpers";
 import { buildInvoiceTemplateData } from "./typst/data";
+import { amountDueOf } from "./typst/fixtures";
 import { renderInvoiceWithTypst } from "./typst/render-typst";
 import { openTypstSession } from "./typst/session";
 
@@ -115,7 +116,7 @@ const golden = ({
   },
   settlement: {
     status: "due",
-    amountMinor: cents(line.netAmount + line.vatAmount),
+    amountMinor: amountDueOf(line.netAmount + line.vatAmount),
   },
   originalNumber: null,
 });
@@ -319,6 +320,7 @@ describe("Slovak payment instructions follow settlement", () => {
               voidedAt: voided ? new Date("2026-10-20T00:00:00Z") : null,
             },
           ]),
+          creditedAmount: 0,
         }),
       };
       const data = buildInvoiceTemplateData(input).unwrap();
