@@ -5,25 +5,26 @@ import { panic, Result, TaggedError } from "better-result";
  *
  *   bun run src/scripts/corpus-generation.ts status
  *   bun run src/scripts/corpus-generation.ts register --family case_law --generation case_law_v7 [--apply]
- *   bun run src/scripts/corpus-generation.ts serve --family case_law --generation case_law_v7 [--apply]
+ *   bun run src/scripts/corpus-generation.ts serve --family case_law --generation case_law_v10 [--replacing case_law_v7 --actor <id> --reason <text> --apply]
  *   bun run src/scripts/corpus-generation.ts parity --family case_law --generation case_law_v10 [--exempt-minutes 20] [--coverage-pages 2000] [--coverage-from <entity|start>] [--list]
  *   bun run src/scripts/corpus-generation.ts seed --family case_law --generation case_law_v10 [--pages 1000]
  *
- * `serve` is the primary path; generations are normally registered by the
- * projection coordinator, and `register` covers an environment that has none.
- * Both mutating subcommands report the planned transition and every
- * precondition they checked, and write only under `--apply`, in one
- * transaction that re-checks the registry under the fences canonical writers
- * take, in their order, and records a system audit run. The state machine itself is the generation store's
- * (`corpus-index-generation-store.ts`); this command adds the refusals an
- * operator needs to read, and the launch proof the store cannot check: that
- * the target's indexes exist and hold documents on the search endpoint readers
- * will query, that its projection has converged (no pending, blocked,
- * outstanding or unpublished work), and that a full engine census finds no
- * drift. The proof is taken at one projection revision under the exclusive
- * mutation fence, and the flip applies only while the promotion fence still
- * reads that revision, so no projection change can land between the census
- * and the flip.
+ * `serve` runs the guarded flip (`corpus-index-generation-flip.ts`), the one
+ * owner of the decision: phase 1 reads the engine and walks the parity
+ * coverage with no lock held, phase 2 re-checks everything PostgreSQL holds
+ * under the activation and exclusive projection fences, refusing rather than
+ * waiting, then swaps the pair and writes the receipt. The generation it
+ * replaces stays building, so `serve` with the pair reversed flips back
+ * through the same guard. A dry run (the default) takes the same transaction
+ * and fences and swaps nothing; it holds projection writers back for as long
+ * as its checks under the fence take (seconds), so run it as you would the
+ * flip itself. `serve --apply` takes the decided watermark only: a
+ * `--exempt-minutes` other than the default is for `parity` and dry runs.
+ *
+ * `register` covers an environment with no generation registered; it reports
+ * the planned transition and writes only under `--apply`, in one transaction
+ * that re-checks the registry under the activation fence and records a system
+ * audit run.
  *
  * `parity` only reads: what readers would lose if the family's serving
  * generation were replaced by the named one, decision by decision
@@ -70,46 +71,30 @@ import {
   readCorpusIndexFlipParity,
 } from "@/api/lib/legal-search/corpus-index-flip-parity";
 import {
+  corpusIndexFlipBusyReasonOf,
+  type CorpusIndexFlipEngine,
+  type CorpusIndexFlipOutcome,
+  type CorpusIndexFlipPlan,
+  type CorpusIndexFlipRefusal,
+  type CorpusIndexGenerationFlipRefusedError,
+  prepareCorpusIndexGenerationFlip,
+  runCorpusIndexGenerationFlip,
+} from "@/api/lib/legal-search/corpus-index-generation-flip";
+import {
   lockCorpusIndexGenerationActivationTx,
   registerCorpusIndexGenerationTx,
-  setServingCorpusIndexGenerationTx,
 } from "@/api/lib/legal-search/corpus-index-generation-store";
 import {
-  corpusIndexIdFromManifest,
   type CorpusIndexManifest,
   corpusIndexManifestDigest,
-  corpusIndexManifestIsPartial,
   requireCorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
-import { readCorpusProjectionCensusIndexIdsTx } from "@/api/lib/legal-search/corpus-index-projection-census-store";
-import {
-  type CorpusIndexProjectionConvergenceStatus,
-  readCorpusIndexProjectionConvergenceTx,
-} from "@/api/lib/legal-search/corpus-index-projection-convergence";
-import {
-  lockCorpusIndexProjectionPromotionTx,
-  lockCorpusIndexProjectionRevisionTx,
-  readCorpusIndexProjectionRevisionTx,
-} from "@/api/lib/legal-search/corpus-index-projection-revision";
-import {
-  type CensusEvidence,
-  censusIndexes,
-  type CensusRefusal,
-  checkIndexesHoldDocuments,
-  type CorpusGenerationCensusDriftError,
-  type CorpusGenerationCensusUnreadableError,
-  type CorpusGenerationNotConvergedError,
-  CorpusGenerationProjectionMovedError,
-  type CorpusIndexReader,
-  type IndexRefusal as ProvenIndexRefusal,
-  requireConverged,
-} from "@/api/lib/legal-search/corpus-index-promotion-gates";
+import { CORPUS_INDEX_ROUTE_PROOF_MAX_AGE_HOURS } from "@/api/lib/legal-search/corpus-index-route-proof-contract";
 import {
   advanceCorpusIndexGenerationSeedingTx,
   type CorpusIndexSeedingAdvance,
   readCorpusIndexRouteSeedingsTx,
 } from "@/api/lib/legal-search/corpus-index-route-seeding";
-import { corpusIndexPattern } from "@/api/lib/legal-search/index-naming";
 import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
 /**
@@ -138,8 +123,12 @@ const USAGE = `Usage: bun run src/scripts/corpus-generation.ts <command> [option
 Commands:
   status                 Print every registered generation of every family.
   register               Register a declared generation as building.
-  serve                  Make a registered generation the one its family serves;
-                         the generation serving before it becomes retiring.
+  serve                  Flip the family's serving generation to a building one,
+                         guarded by parity, route proofs, seeding and engine
+                         counts; the one it replaces stays building, so the
+                         same command flips back. A dry run takes the same
+                         fences and holds projection writers back for as long
+                         as its checks under them take (seconds).
   parity                 Report what readers would lose if the generation
                          replaced the one serving its family. Reads only.
   seed                   Walk the generation's seeding pass, giving every
@@ -152,12 +141,25 @@ Options (register, serve, parity, seed):
   --apply                Perform the change. Omitted, the run only reports.
   --dry-run              Report only, the default; contradicts --apply.
 
-Options (parity):
+Options (serve):
+  --replacing <g|none>   The generation the flip replaces, as the operator expects
+                         it; required with --apply.
+  --actor <id>           Who makes the flip, for its receipt; required with --apply.
+  --reason <text>        Why (the go it rests on), for its receipt; required with --apply.
+  --max-proof-age-hours <n>
+                         Oldest route proof accepted, from its pass's start
+                         (default and most ${String(CORPUS_INDEX_ROUTE_PROOF_MAX_AGE_HOURS)}).
+
+Options (serve, parity):
   --exempt-minutes <n>   Serving applies newer than this many minutes are the
-                         candidate's expected lag (default ${String(PARITY_DEFAULT_EXEMPT_MINUTES)}).
+                         candidate's expected lag (default ${String(PARITY_DEFAULT_EXEMPT_MINUTES)}; serve --apply
+                         takes the default only).
   --coverage-pages <n>   Coverage pages of ${String(PARITY_COVERAGE_PAGE)} serving copies to read
-                         (default ${String(PARITY_DEFAULT_COVERAGE_PAGES)}, at most ${String(PARITY_MAX_COVERAGE_PAGES)}); a walk
-                         that does not reach the end leaves the verdict undecided.
+                         (default ${String(PARITY_DEFAULT_COVERAGE_PAGES)} for parity, ${String(PARITY_MAX_COVERAGE_PAGES)} for serve, at most
+                         ${String(PARITY_MAX_COVERAGE_PAGES)}); a walk that does not reach the end leaves
+                         the verdict undecided.
+
+Options (parity):
   --coverage-from <e>    Resume a walk after serving entity e (or "start");
                          a resumed walk never proves the verdict.
   --list                 Also print up to 50 decisions of each kind by id.
@@ -166,6 +168,9 @@ Options (seed):
   --pages <n>            Pages of ${String(SEED_PAGE_LIMIT)} canonical rows to walk (default
                          ${String(SEED_DEFAULT_PAGES)}, at most ${String(SEED_MAX_PAGES)}); the next run resumes.
 
+Exit codes (serve): 0 flipped (or, dry run, every check passed), 3 parity
+regressions, 4 undecided, 10 registry, 11 route proofs, 12 seeding, 13 engine
+evidence, 14 busy (a fence or read timed out; nothing changed), 1 refused.
 Exit codes (parity): 0 no regression, 3 regressions, 4 undecided, 1 refused.
 Exit codes (seed): 0 every route seeded, 5 page budget spent, 6 paused by
 the database-load brake (after 15 minutes of waiting), 7 next row held by a
@@ -194,16 +199,8 @@ class CorpusGenerationUndeclaredError extends TaggedError(
   "CorpusGenerationUndeclaredError",
 )<{ message: string; family: CorpusFamily; generation: string }> {}
 
-class CorpusGenerationNotRegisteredError extends TaggedError(
-  "CorpusGenerationNotRegisteredError",
-)<{ message: string; family: CorpusFamily; generation: string }> {}
-
 class CorpusGenerationRetiringError extends TaggedError(
   "CorpusGenerationRetiringError",
-)<{ message: string; family: CorpusFamily; generation: string }> {}
-
-class CorpusGenerationPartialError extends TaggedError(
-  "CorpusGenerationPartialError",
 )<{ message: string; family: CorpusFamily; generation: string }> {}
 
 class CorpusGenerationRetiredError extends TaggedError(
@@ -229,19 +226,9 @@ export class CorpusGenerationLaneBusyError extends TaggedError(
 )<{ message: string }> {}
 
 type RegistryRefusal =
-  | CorpusGenerationNotRegisteredError
   | CorpusGenerationRetiringError
   | CorpusGenerationRetiredError
-  | CorpusGenerationPartialError
   | CorpusGenerationContractMismatchError;
-
-type IndexRefusal =
-  CorpusGenerationSearchEndpointMissingError | ProvenIndexRefusal;
-
-type LaunchRefusal =
-  | CorpusGenerationNotConvergedError
-  | CorpusGenerationCensusDriftError
-  | CorpusGenerationCensusUnreadableError;
 
 type ParityRefusal =
   CorpusIndexFlipPairRefusedError | CorpusIndexFlipParityReadError;
@@ -250,10 +237,8 @@ type CorpusGenerationRefusal =
   | CorpusGenerationUsageError
   | CorpusGenerationUndeclaredError
   | RegistryRefusal
-  | IndexRefusal
-  | LaunchRefusal
+  | CorpusGenerationSearchEndpointMissingError
   | ParityRefusal
-  | CorpusGenerationProjectionMovedError
   | CorpusGenerationLaneBusyError;
 
 /** A target the code declares, with the manifest it is bound to. */
@@ -265,7 +250,17 @@ type DeclaredTarget = GenerationTarget & {
 type CorpusGenerationCommand =
   | { type: "status" }
   | { type: "register"; target: DeclaredTarget; mode: Mode }
-  | { type: "serve"; target: DeclaredTarget; mode: Mode }
+  | {
+      type: "serve";
+      target: DeclaredTarget;
+      mode: Mode;
+      replacing:
+        { type: "unchecked" } | { type: "named"; generation: string | null };
+      receipt: { actor: string; reason: string } | null;
+      exemptMinutes: number;
+      coveragePages: number;
+      maxProofAgeHours: number;
+    }
   | {
       type: "parity";
       target: DeclaredTarget;
@@ -338,6 +333,125 @@ const seedOptionRefusal = (
     : null;
 };
 
+/** The options `parseArgs` reads, as the command parsers see them. */
+type CommandValues = {
+  family?: string | undefined;
+  generation?: string | undefined;
+  apply?: boolean | undefined;
+  "dry-run"?: boolean | undefined;
+  "exempt-minutes"?: string | undefined;
+  "coverage-pages"?: string | undefined;
+  "coverage-from"?: string | undefined;
+  list?: boolean | undefined;
+  pages?: string | undefined;
+  replacing?: string | undefined;
+  actor?: string | undefined;
+  reason?: string | undefined;
+  "max-proof-age-hours"?: string | undefined;
+};
+
+/** Why the options do not fit the named command, or null when they do. */
+const commandOptionRefusal = (
+  name: (typeof COMMAND_NAMES)[number],
+  values: CommandValues,
+): string | null => {
+  const walkOptions =
+    values["exempt-minutes"] !== undefined ||
+    values["coverage-pages"] !== undefined;
+  const parityOptions =
+    values["coverage-from"] !== undefined || values.list === true;
+  const serveOptions =
+    values.replacing !== undefined ||
+    values.actor !== undefined ||
+    values.reason !== undefined ||
+    values["max-proof-age-hours"] !== undefined;
+  if (name === "status") {
+    return values.family === undefined &&
+      values.generation === undefined &&
+      values.apply !== true &&
+      !walkOptions &&
+      !parityOptions &&
+      !serveOptions
+      ? null
+      : "status takes no options.";
+  }
+  if (name !== "parity" && name !== "serve" && walkOptions) {
+    return "--exempt-minutes and --coverage-pages belong to serve and parity.";
+  }
+  if (name !== "parity" && parityOptions) {
+    return "--coverage-from and --list belong to parity.";
+  }
+  if (name !== "serve" && serveOptions) {
+    return "--replacing, --actor, --reason and --max-proof-age-hours belong to serve.";
+  }
+  if (
+    name === "parity" &&
+    (values.apply === true || values["dry-run"] === true)
+  ) {
+    return "parity only reads; it takes no --apply or --dry-run.";
+  }
+  return seedOptionRefusal(name, values);
+};
+
+const parseServeCommand = (
+  target: DeclaredTarget,
+  mode: Mode,
+  values: CommandValues,
+  {
+    exemptMinutes,
+    coveragePages,
+  }: { exemptMinutes: number; coveragePages: number },
+): Result<CorpusGenerationCommand, CorpusGenerationUsageError> => {
+  const maxProofAgeHours = parseWholeNumber(
+    values["max-proof-age-hours"],
+    CORPUS_INDEX_ROUTE_PROOF_MAX_AGE_HOURS,
+    CORPUS_INDEX_ROUTE_PROOF_MAX_AGE_HOURS,
+  );
+  if (maxProofAgeHours === null || maxProofAgeHours === 0) {
+    return usageError(
+      `--max-proof-age-hours must be a whole number from 1 to ${String(CORPUS_INDEX_ROUTE_PROOF_MAX_AGE_HOURS)}.`,
+    );
+  }
+  const replacing =
+    values.replacing === undefined
+      ? ({ type: "unchecked" } as const)
+      : ({
+          type: "named",
+          generation: values.replacing === "none" ? null : values.replacing,
+        } as const);
+  const receipt =
+    values.actor === undefined || values.reason === undefined
+      ? null
+      : { actor: values.actor, reason: values.reason.trim() };
+  if (mode === MODES.apply && exemptMinutes !== PARITY_DEFAULT_EXEMPT_MINUTES) {
+    return usageError(
+      `serve --apply exempts the decided ${String(PARITY_DEFAULT_EXEMPT_MINUTES)} minutes only; another --exempt-minutes is for parity and dry runs.`,
+    );
+  }
+  if (mode === MODES.apply) {
+    if (replacing.type === "unchecked" || receipt === null) {
+      return usageError(
+        "serve --apply needs --replacing (the generation serving now, or none), --actor and --reason.",
+      );
+    }
+    if (!RECEIPT_ACTOR.test(receipt.actor) || receipt.reason.length === 0) {
+      return usageError(
+        "--actor must be a lowercase id (letters, digits, :._@/-) and --reason must not be empty.",
+      );
+    }
+  }
+  return Result.ok({
+    type: "serve",
+    target,
+    mode,
+    replacing,
+    receipt,
+    exemptMinutes,
+    coveragePages,
+    maxProofAgeHours,
+  });
+};
+
 const parseCorpusGenerationCommand = (
   args: readonly string[],
 ): Result<
@@ -360,6 +474,10 @@ const parseCorpusGenerationCommand = (
           "coverage-from": { type: "string" },
           list: { type: "boolean" },
           pages: { type: "string" },
+          replacing: { type: "string" },
+          actor: { type: "string" },
+          reason: { type: "string" },
+          "max-proof-age-hours": { type: "string" },
         },
       }),
     catch: (cause) =>
@@ -382,29 +500,12 @@ const parseCorpusGenerationCommand = (
   if (values.apply === true && values["dry-run"] === true) {
     return usageError("--apply and --dry-run contradict each other; pass one.");
   }
-  const parityOptions =
-    values["exempt-minutes"] !== undefined ||
-    values["coverage-pages"] !== undefined ||
-    values["coverage-from"] !== undefined ||
-    values.list === true;
+  const optionRefusal = commandOptionRefusal(name, values);
+  if (optionRefusal !== null) {
+    return usageError(optionRefusal);
+  }
   if (name === "status") {
-    return values.family === undefined &&
-      values.generation === undefined &&
-      values.apply !== true &&
-      !parityOptions
-      ? Result.ok({ type: "status" })
-      : usageError("status takes no options.");
-  }
-  if (name !== "parity" && parityOptions) {
-    return usageError(
-      "--exempt-minutes, --coverage-pages, --coverage-from and --list belong to parity.",
-    );
-  }
-  if (
-    name === "parity" &&
-    (values.apply === true || values["dry-run"] === true)
-  ) {
-    return usageError("parity only reads; it takes no --apply or --dry-run.");
+    return Result.ok({ type: "status" });
   }
   const seedRefusal = seedOptionRefusal(name, values);
   if (seedRefusal !== null) {
@@ -422,32 +523,40 @@ const parseCorpusGenerationCommand = (
     return Result.err(target.error);
   }
   const mode = values.apply === true ? MODES.apply : MODES.dryRun;
+  const exemptMinutes = parseWholeNumber(
+    values["exempt-minutes"],
+    PARITY_DEFAULT_EXEMPT_MINUTES,
+    PARITY_MAX_EXEMPT_MINUTES,
+  );
+  if (exemptMinutes === null) {
+    return usageError(
+      `--exempt-minutes must be a whole number from 0 to ${String(PARITY_MAX_EXEMPT_MINUTES)}.`,
+    );
+  }
+  const coveragePages = parseWholeNumber(
+    values["coverage-pages"],
+    PARITY_DEFAULT_COVERAGE_PAGES,
+    PARITY_MAX_COVERAGE_PAGES,
+  );
+  if (coveragePages === null) {
+    return usageError(
+      `--coverage-pages must be a whole number from 0 to ${String(PARITY_MAX_COVERAGE_PAGES)}.`,
+    );
+  }
   switch (name) {
     case "register":
       return Result.ok({ type: "register", target: target.value, mode });
     case "serve":
-      return Result.ok({ type: "serve", target: target.value, mode });
+      // A flip must read every serving state, so it walks as far as allowed
+      // unless told otherwise.
+      return parseServeCommand(target.value, mode, values, {
+        exemptMinutes,
+        coveragePages:
+          values["coverage-pages"] === undefined
+            ? PARITY_MAX_COVERAGE_PAGES
+            : coveragePages,
+      });
     case "parity": {
-      const exemptMinutes = parseWholeNumber(
-        values["exempt-minutes"],
-        PARITY_DEFAULT_EXEMPT_MINUTES,
-        PARITY_MAX_EXEMPT_MINUTES,
-      );
-      if (exemptMinutes === null) {
-        return usageError(
-          `--exempt-minutes must be a whole number from 0 to ${String(PARITY_MAX_EXEMPT_MINUTES)}.`,
-        );
-      }
-      const coveragePages = parseWholeNumber(
-        values["coverage-pages"],
-        PARITY_DEFAULT_COVERAGE_PAGES,
-        PARITY_MAX_COVERAGE_PAGES,
-      );
-      if (coveragePages === null) {
-        return usageError(
-          `--coverage-pages must be a whole number from 0 to ${String(PARITY_MAX_COVERAGE_PAGES)}.`,
-        );
-      }
       const coverageFrom = parseCoverageCursor(values["coverage-from"]);
       if (coverageFrom === "malformed") {
         return usageError("--coverage-from must be an entity id or start.");
@@ -480,6 +589,9 @@ const parseCorpusGenerationCommand = (
 };
 
 const WHOLE_NUMBER = /^\d{1,5}$/u;
+
+/** The receipt's actor shape, as its CHECK constraint states it. */
+const RECEIPT_ACTOR = /^[a-z0-9][a-z0-9:._@/-]{0,127}$/u;
 
 const parseWholeNumber = (
   raw: string | undefined,
@@ -607,107 +719,6 @@ const planRegister = (
   }
 };
 
-type ServePlan =
-  | {
-      type: "promote";
-      target: DeclaredTarget;
-      /** The generation serving now, which becomes retiring; null on a first flip. */
-      demotes: string | null;
-    }
-  | { type: "already_serving"; target: DeclaredTarget };
-
-/** What `serve` would do to the registry as `rows` holds it. */
-const planServe = (
-  rows: readonly GenerationRow[],
-  target: DeclaredTarget,
-): Result<ServePlan, RegistryRefusal> => {
-  const row = rows.find(({ generation }) => generation === target.generation);
-  if (row === undefined) {
-    return Result.err(
-      new CorpusGenerationNotRegisteredError({
-        message: `${target.family}/${target.generation} is not registered; register it and let it build first`,
-        family: target.family,
-        generation: target.generation,
-      }),
-    );
-  }
-  switch (row.status) {
-    case "building":
-    case "serving": {
-      const digest = requireMatchingDigest(row, target);
-      if (digest.isErr()) {
-        return Result.err(digest.error);
-      }
-      // A partial generation holds some jurisdictions only; it is attached
-      // to them by the gated flip, never promoted over the family.
-      if (corpusIndexManifestIsPartial(target.manifest)) {
-        return Result.err(
-          new CorpusGenerationPartialError({
-            message: `${target.family}/${target.generation} is a partial generation and cannot serve the family; flip the jurisdictions it holds instead`,
-            family: target.family,
-            generation: target.generation,
-          }),
-        );
-      }
-      if (row.status === "serving") {
-        return Result.ok({ type: "already_serving", target });
-      }
-      const serving = rows.find(({ status }) => status === "serving");
-      return Result.ok({
-        type: "promote",
-        target,
-        demotes: serving?.generation ?? null,
-      });
-    }
-    case "retiring":
-      return Result.err(
-        new CorpusGenerationRetiringError({
-          message: `${target.family}/${target.generation} is retiring; it must return to building and be reconciled before it can serve`,
-          family: target.family,
-          generation: target.generation,
-        }),
-      );
-    case "retired":
-      return Result.err(
-        new CorpusGenerationRetiredError({
-          message: `${target.family}/${target.generation} is retired and cannot serve again`,
-          family: target.family,
-          generation: target.generation,
-        }),
-      );
-    default:
-      row.status satisfies never;
-      return panic(`Unhandled generation status: ${String(row.status)}`);
-  }
-};
-
-/** The physical index ids the generation must answer from before it serves. */
-const requiredIndexIds = (manifest: CorpusIndexManifest): string[] => {
-  // The generation-wide pattern is what an unscoped search reads; a pattern
-  // matching no index, or only empty ones, is the empty served set.
-  const pattern = corpusIndexPattern(manifest.generation);
-  switch (manifest.route.type) {
-    case "case_law_group":
-      // The groups the generation was created with. A group declared later is
-      // enrolled and gated on its own, so it does not hold back the flip.
-      return [
-        pattern,
-        ...new Set(
-          Object.keys(manifest.route.byJurisdiction).map((jurisdiction) =>
-            corpusIndexIdFromManifest(manifest, jurisdiction),
-          ),
-        ),
-      ];
-    case "jurisdiction":
-      // An open jurisdiction set: the code cannot name each index, only the
-      // generation as a whole.
-      return [pattern];
-    default:
-      manifest.route satisfies never;
-      return panic(`Unhandled route: ${String(manifest.route)}`);
-  }
-};
-
 /** Runs `work` on a database handle: read-only for reports, under the lane for writes. */
 export type WithCorpusDatabase = <T>(
   access: Access,
@@ -775,9 +786,10 @@ type CommandContext = {
   withDatabase: WithCorpusDatabase;
   withSeedingDatabase: WithSeedingDatabase;
   seedingBrake: SeedingBrake;
-  indexClient: (manifest: CorpusIndexManifest) => CorpusIndexReader;
+  indexClient: (manifest: CorpusIndexManifest) => CorpusIndexFlipEngine;
   searchEndpoint: (manifest: CorpusIndexManifest) => string | null;
   write: (line: string) => void;
+  writeError: (line: string) => void;
 };
 
 const describeRow = ({
@@ -946,191 +958,115 @@ const runRegister = async (
   return Result.ok();
 };
 
-const planServeTx = async (
-  tx: Transaction,
-  target: DeclaredTarget,
-  lock: RowLock,
-) => planServe(await readFamilyRowsTx(tx, target.family, lock), target);
+/** Exit codes of `serve`, one per class of refusal, so a wrapper can tell them apart. */
+const SERVE_EXIT = {
+  flipped: 0,
+  parity: 3,
+  undecided: 4,
+  registry: 10,
+  routeProofs: 11,
+  seeding: 12,
+  engine: 13,
+  busy: 14,
+} as const satisfies Record<string, number>;
 
-const transitionLine = (
-  plan: Extract<ServePlan, { type: "promote" }>,
-): string =>
-  plan.demotes === null
-    ? `plan: ${plan.target.generation} building -> serving (first serving generation of ${plan.target.family})`
-    : `plan: ${plan.target.generation} building -> serving; ${plan.demotes} serving -> retiring`;
-
-type LaunchSnapshot = {
-  revision: number;
-  convergence: CorpusIndexProjectionConvergenceStatus;
-};
-
-/**
- * The target's projection revision and convergence, read together. Under
- * --apply the revision is read under the exclusive mutation fence: an
- * unfenced read can miss a writer that drew a lower revision and commits
- * later, and the flip trusts the census only while this number holds.
- */
-const readLaunchSnapshot = async (
-  { withDatabase }: CommandContext,
-  { target, mode }: Extract<CorpusGenerationCommand, { type: "serve" }>,
-): Promise<Result<LaunchSnapshot, CorpusGenerationLaneBusyError>> => {
-  const snapshotTx = async (
-    tx: Transaction,
-    revision: number,
-  ): Promise<LaunchSnapshot> => ({
-    revision,
-    convergence: await readCorpusIndexProjectionConvergenceTx(tx, target),
-  });
-  switch (mode) {
-    case "dry_run":
-      return await withDatabase(
-        ACCESS.read,
-        async (rootDb) =>
-          await rootDb.transaction(
-            async (tx) =>
-              await snapshotTx(
-                tx,
-                await readCorpusIndexProjectionRevisionTx(tx, target),
-              ),
-          ),
-      );
-    case "apply":
-      return await withDatabase(
-        ACCESS.write,
-        async (rootDb) =>
-          await rootDb.transaction(
-            async (tx) =>
-              await snapshotTx(
-                tx,
-                await lockCorpusIndexProjectionRevisionTx(tx, target),
-              ),
-          ),
-      );
+const serveExitCode = ({ class: refusalClass }: CorpusIndexFlipRefusal) => {
+  switch (refusalClass) {
+    case "parity":
+      return SERVE_EXIT.parity;
+    case "undecided":
+      return SERVE_EXIT.undecided;
+    case "registry":
+      return SERVE_EXIT.registry;
+    case "route_proofs":
+      return SERVE_EXIT.routeProofs;
+    case "seeding":
+      return SERVE_EXIT.seeding;
+    case "engine":
+      return SERVE_EXIT.engine;
+    case "busy":
+      return SERVE_EXIT.busy;
     default:
-      mode satisfies never;
-      return panic(`Unhandled mode: ${String(mode)}`);
+      refusalClass satisfies never;
+      return panic(`Unhandled flip refusal class: ${String(refusalClass)}`);
   }
 };
 
-/**
- * The full zero-drift census of the target's indexes, read-only and outside
- * any write transaction (`censusIndexes`).
- */
-const censusGeneration = async (
-  { withDatabase, indexClient }: CommandContext,
-  target: DeclaredTarget,
-): Promise<
-  Result<Result<CensusEvidence, CensusRefusal>, CorpusGenerationLaneBusyError>
-> =>
-  await withDatabase(ACCESS.read, async (rootDb) => {
-    const runInTransaction = async <T>(
-      work: (tx: Transaction) => Promise<T>,
-    ): Promise<T> => await rootDb.transaction(work);
-    const indexIds = await runInTransaction(
-      async (tx) => await readCorpusProjectionCensusIndexIdsTx(tx, target),
-    );
-    return await censusIndexes({
-      runInTransaction,
-      client: indexClient(target.manifest),
-      target,
-      indexIds,
-    });
-  });
+/** What phase 1 found, line by line. */
+const describePlan = (
+  plan: Extract<CorpusIndexFlipPlan, { type: "flip" }>,
+): string[] => [
+  plan.serving === null
+    ? `checked: no generation serves ${plan.request.family}; nothing to compare against`
+    : `checked: ${plan.serving.generation} serves ${plan.request.family}; ${plan.request.candidate} is building`,
+  ...plan.proofs.map(
+    ({ indexId, incarnation, provenPassStartedAtUs, inspected }) =>
+      `checked: ${indexId} proven by a pass started ${Temporal.Instant.fromEpochMilliseconds(Math.floor(Number(provenPassStartedAtUs) / 1000)).toString()} (${String(inspected)} revisions), engine incarnation ${incarnation} still held`,
+  ),
+  ...plan.documents.map(
+    ({ indexId, engine, expected, appliedRevisions }) =>
+      `checked: ${indexId} holds ${String(engine)} documents in total, no fewer than its ${String(appliedRevisions)} applied revisions expect (${String(expected)}); a total, not a per-revision census`,
+  ),
+  ...(plan.walk === null
+    ? []
+    : [
+        `checked: coverage walk read every state of ${plan.walk.pair.serving} (${String(plan.walk.coverage.walked)} in ${String(plan.walk.pages.length)} pages); none that wants an upsert without a state in ${plan.request.candidate}`,
+      ]),
+];
 
-/**
- * Decide the flip under the activation and promotion fences, taken before any
- * registry row lock in the order canonical writers take theirs: source share
- * lock, the shared side of the projection fence, then a key-share lock on the
- * generation row through the projection foreign keys. The census ran before
- * this transaction, so the source fence is held only for the flip itself.
- */
-export const applyServeTx = async (
-  tx: Transaction,
-  target: DeclaredTarget,
-  snapshot: LaunchSnapshot,
-): Promise<
-  Result<ServePlan, RegistryRefusal | CorpusGenerationProjectionMovedError>
-> => {
-  await lockCorpusIndexGenerationActivationTx(tx, target.family);
-  const currentRevision = await lockCorpusIndexProjectionPromotionTx(
-    tx,
-    target,
-  );
-  if (currentRevision !== snapshot.revision) {
-    return Result.err(
-      new CorpusGenerationProjectionMovedError({
-        message: `${target.family}/${target.generation} changed after the census (projection revision ${String(snapshot.revision)} -> ${String(currentRevision)}); run serve again`,
-        provenRevision: snapshot.revision,
-        currentRevision,
-      }),
-    );
+const behindCursorLine = (
+  behind: CorpusIndexFlipParity["behindCursor"],
+): string => {
+  switch (behind.type) {
+    case "read":
+      return `behind the walk's cursor: ${String(behind.pages)} pages counted again, ${String(behind.changedPages)} moved; ${String(behind.reread)} states probed again, ${String(behind.missing)} without a candidate state`;
+    case "not_read":
+      return "behind the walk's cursor: not read (the walk did not reach its end)";
+    case "unprovable":
+      return `behind the walk's cursor: cannot be proven (${behind.reason})`;
+    default:
+      behind satisfies never;
+      return panic("Unhandled behind-cursor reading");
   }
-  // The registry may have moved since the report: decide again under the
-  // row locks, and apply what this decision says.
-  const locked = await planServeTx(tx, target, "update");
-  if (locked.isErr() || locked.value.type === "already_serving") {
-    return locked;
-  }
-  await setServingCorpusIndexGenerationTx(tx, target);
-  await recordSystemAudit(tx, "system:corpus-generation-operator", {
-    subject: createSafeId<"systemScriptRun">(),
-    counts: {
-      registered: 0,
-      promoted: 1,
-      demoted: locked.value.demotes === null ? 0 : 1,
-    },
-  });
-  return locked;
 };
+
+/** What phase 2 decided under the fence, line by line. */
+const describeOutcome = (
+  outcome: Exclude<CorpusIndexFlipOutcome, { type: "already_serving" }>,
+): string[] => {
+  const { evidence } = outcome;
+  return [
+    ...(evidence.parity === null
+      ? []
+      : [
+          `checked under the fence: no regression against ${evidence.from ?? "(none)"}; tail ${evidence.parity.tail.type === "read" ? `${String(evidence.parity.tail.walked)} states read` : evidence.parity.tail.type}; walked ${String(evidence.parity.walked.pending)} pending, ${String(evidence.parity.walked.blocked)} blocked, ${String(evidence.parity.walked.absent)} proven gone, ${String(evidence.parity.walked.atRisk)} with a delete in flight; ${String(evidence.parity.exempt)} exempt as lag younger than ${evidence.parity.watermark} (${String(evidence.parity.exemptMinutes)} minutes)`,
+          `checked under the fence: ${behindCursorLine(evidence.parity.behindCursor)}`,
+        ]),
+    `checked under the fence: ${String(evidence.routeProofs.length)} route proofs current and unchanged since the engine was read`,
+    `checked under the fence: every route of ${evidence.to} seeded (${evidence.seedings.candidate.map(({ indexId, passNumber }) => `${indexId} pass ${String(passNumber)}`).join(", ")})`,
+    ...(evidence.seedings.serving === null
+      ? []
+      : [
+          `checked under the fence: every route of ${evidence.from ?? "(none)"} seeded (${evidence.seedings.serving.map(({ indexId, passNumber }) => `${indexId} pass ${String(passNumber)}`).join(", ")})`,
+        ]),
+    ...(outcome.type === "flipped"
+      ? [
+          `receipt ${outcome.receiptId}, evidence digest ${outcome.evidenceDigest} (computed by PostgreSQL from the stored row), audit run ${outcome.evidence.auditRun ?? "-"}`,
+        ]
+      : []),
+  ];
+};
+
+type FlipAnswer = Awaited<ReturnType<typeof runCorpusIndexGenerationFlip>>;
 
 const runServe = async (
   context: CommandContext,
   command: Extract<CorpusGenerationCommand, { type: "serve" }>,
-): Promise<Result<void, CorpusGenerationRefusal>> => {
+): Promise<Result<number, CorpusGenerationRefusal>> => {
   const { target, mode } = command;
-  const { withDatabase, write } = context;
+  const { withDatabase, write, writeError } = context;
   write(`serve ${target.family}/${target.generation} (${mode})`);
   write(declaredLine(target));
-  const planned = await withDatabase(
-    ACCESS.read,
-    async (rootDb) =>
-      await rootDb.transaction(
-        async (tx) => await planServeTx(tx, target, "none"),
-      ),
-  );
-  if (planned.isErr()) {
-    return Result.err(planned.error);
-  }
-  if (planned.value.isErr()) {
-    return Result.err(planned.value.error);
-  }
-  const plan = planned.value.value;
-  switch (plan.type) {
-    case "already_serving":
-      write(
-        "checked: already serving with the declared manifest; nothing to do",
-      );
-      return Result.ok();
-    case "promote":
-      write("checked: registered as building with the declared manifest");
-      break;
-    default:
-      plan satisfies never;
-      return panic(`Unhandled serve plan: ${String(plan)}`);
-  }
-
-  const snapshot = await readLaunchSnapshot(context, command);
-  if (snapshot.isErr()) {
-    return Result.err(snapshot.error);
-  }
-  const converged = requireConverged(target, snapshot.value.convergence);
-  if (converged.isErr()) {
-    return Result.err(converged.error);
-  }
-  write(
-    `checked: projection converged at revision ${String(snapshot.value.revision)}; nothing pending, blocked, outstanding or unpublished`,
-  );
-
   const endpoint = context.searchEndpoint(target.manifest);
   if (endpoint === null) {
     return Result.err(
@@ -1139,68 +1075,122 @@ const runServe = async (
       }),
     );
   }
-  // Outside any transaction: network reads never hold registry locks.
-  const evidence = await checkIndexesHoldDocuments(
-    target,
-    requiredIndexIds(target.manifest),
-    context.indexClient(target.manifest),
+  const refused = (error: CorpusIndexGenerationFlipRefusedError) => {
+    writeError(
+      `refused (${error.refusal.class}: ${error.refusal.reason}): ${error.message}`,
+    );
+    for (const line of error.details) {
+      writeError(`  ${line}`);
+    }
+    return Result.ok(serveExitCode(error.refusal));
+  };
+  const request = {
+    family: target.family,
+    candidate: target.generation,
+    replacing: command.replacing,
+    exemptMinutes: command.exemptMinutes,
+    coverage: {
+      pageSize: PARITY_COVERAGE_PAGE,
+      pageBudget: command.coveragePages,
+    },
+    maxProofAgeHours: command.maxProofAgeHours,
+  };
+  // Phase 1: no lock held, read-only transactions.
+  const prepared = await withDatabase(
+    ACCESS.read,
+    async (rootDb) =>
+      await prepareCorpusIndexGenerationFlip({
+        runInTransaction: async (work) =>
+          await withAggregateTransaction(rootDb, work),
+        engine: context.indexClient(target.manifest),
+        request,
+      }),
   );
-  if (evidence.isErr()) {
-    return Result.err(evidence.error);
+  if (prepared.isErr()) {
+    return Result.err(prepared.error);
   }
-  for (const { indexId, documents } of evidence.value) {
-    write(
-      `checked: ${indexId} holds ${String(documents)} documents on ${endpoint}`,
+  if (prepared.value.isErr()) {
+    return refused(prepared.value.error);
+  }
+  const plan = prepared.value.value;
+  if (plan.type === "already_serving") {
+    write("checked: already serving with the declared manifest; nothing to do");
+    return Result.ok(SERVE_EXIT.flipped);
+  }
+  for (const line of describePlan(plan)) {
+    write(line);
+  }
+  write(
+    plan.serving === null
+      ? `plan: ${target.generation} building -> serving (first serving generation of ${target.family})`
+      : `plan: ${target.generation} building -> serving; ${plan.serving.generation} serving -> building`,
+  );
+  // Phase 2: one transaction under the fences, on the lane even for a dry
+  // run, which takes the same fences and writes nothing. The lane can run out
+  // of time after the flip's transaction ended; the flip's own answer, kept
+  // here, then still says whether it committed.
+  const settled: { value?: FlipAnswer } = {};
+  const lane = await Result.tryPromise({
+    try: async () =>
+      await withDatabase(ACCESS.write, async (rootDb) => {
+        settled.value = await runCorpusIndexGenerationFlip(
+          async (work) => await withAggregateTransaction(rootDb, work),
+          plan,
+          mode === MODES.apply && command.receipt !== null
+            ? { mode: "apply", ...command.receipt }
+            : { mode: "dry_run" },
+        );
+        return settled.value;
+      }),
+    catch: (cause) => cause,
+  });
+  if (lane.isOk() && lane.value.isErr()) {
+    return Result.err(lane.value.error);
+  }
+  const answer = settled.value;
+  if (answer === undefined) {
+    if (lane.isOk()) {
+      return panic("The flip lane returned without the flip's answer");
+    }
+    const busy = corpusIndexFlipBusyReasonOf(lane.error);
+    if (busy === null) {
+      return panic("The flip lane failed before the flip ran", lane.error);
+    }
+    writeError(
+      `refused (busy: ${busy}): the lane or the database declined the flip its time before it ran; nothing changed, retry`,
+    );
+    return Result.ok(SERVE_EXIT.busy);
+  }
+  if (lane.isErr()) {
+    writeError(
+      "note: the operator lane's time budget ran out after the flip's transaction ended; its outcome below stands",
     );
   }
-  const census = await censusGeneration(context, target);
-  if (census.isErr()) {
-    return Result.err(census.error);
+  if (answer.isErr()) {
+    return refused(answer.error);
   }
-  if (census.value.isErr()) {
-    return Result.err(census.value.error);
-  }
-  const { indexIds, applied, settled } = census.value.value;
-  write(
-    `checked: census found no drift across ${String(indexIds.length)} indexes (${String(applied)} applied revisions present, ${String(settled)} settled revisions absent)`,
-  );
-  write(transitionLine(plan));
-  if (mode === MODES.dryRun) {
-    write(modeLine(mode, ""));
-    return Result.ok();
-  }
-
-  const flipped = await withDatabase(
-    ACCESS.write,
-    async (rootDb) =>
-      await rootDb.transaction(
-        async (tx) => await applyServeTx(tx, target, snapshot.value),
-      ),
-  );
-  if (flipped.isErr()) {
-    return Result.err(flipped.error);
-  }
-  if (flipped.value.isErr()) {
-    return Result.err(flipped.value.error);
-  }
-  const done = flipped.value.value;
-  switch (done.type) {
+  const outcome = answer.value;
+  switch (outcome.type) {
     case "already_serving":
+      write("checked: already serving; nothing to do");
+      return Result.ok(SERVE_EXIT.flipped);
+    case "checked":
+      for (const line of describeOutcome(outcome)) {
+        write(line);
+      }
+      write(modeLine(mode, ""));
+      return Result.ok(SERVE_EXIT.flipped);
+    case "flipped":
+      for (const line of describeOutcome(outcome)) {
+        write(line);
+      }
       write(
-        `Applied: nothing to do; ${target.family}/${target.generation} was made serving meanwhile.`,
+        `Applied: ${target.family}/${target.generation} serves${outcome.evidence.from === null ? "" : `; ${outcome.evidence.from} is building and can serve again through the same guard`}. Receipt ${outcome.receiptId}.`,
       );
-      return Result.ok();
-    case "promote":
-      write(
-        modeLine(
-          mode,
-          `Applied: ${target.family}/${target.generation} serves${done.demotes === null ? "" : `; ${done.demotes} is retiring`}.`,
-        ),
-      );
-      return Result.ok();
+      return Result.ok(SERVE_EXIT.flipped);
     default:
-      done satisfies never;
-      return panic(`Unhandled serve plan: ${String(done)}`);
+      outcome satisfies never;
+      return panic("Unhandled flip outcome");
   }
 };
 
@@ -1253,6 +1243,7 @@ const describeParity = (
   return [
     `checked: compared with ${parity.pair.serving}, which serves ${parity.pair.family}; pending changes younger than ${parity.watermark.toString()} are expected lag`,
     coverageLine,
+    behindCursorLine(parity.behindCursor),
     `checked: unconverged states of the candidate walked: ${String(walked.pending)} pending, ${String(walked.blocked)} blocked, ${String(walked.absent)} proven gone, ${String(walked.atRisk)} with a delete in flight; ${String(regressions.exempt)} exempt as expected lag`,
     regressions.type === "exact"
       ? `not shown or stale (exact): ${String(total)}`
@@ -1515,7 +1506,7 @@ type RunCorpusGenerationOptions = {
   withDatabase?: WithCorpusDatabase;
   withSeedingDatabase?: WithSeedingDatabase;
   seedingBrake?: SeedingBrake;
-  indexClient?: (manifest: CorpusIndexManifest) => CorpusIndexReader;
+  indexClient?: (manifest: CorpusIndexManifest) => CorpusIndexFlipEngine;
   searchEndpoint?: (manifest: CorpusIndexManifest) => string | null;
   write?: (line: string) => void;
   writeError?: (line: string) => void;
@@ -1551,6 +1542,7 @@ export const runCorpusGenerationCommand = async ({
     indexClient,
     searchEndpoint,
     write,
+    writeError,
   };
   const outcome = await (async () => {
     switch (command.value.type) {

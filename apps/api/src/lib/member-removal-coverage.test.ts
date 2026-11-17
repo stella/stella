@@ -60,6 +60,9 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "chat_queued_messages.request",
   "conflict_checks.parties",
   "conflict_checks.results",
+  // Generation and index names, proof and seeding pass identities, document
+  // counts; the actor is its own column.
+  "corpus_index_generation_flips.evidence",
   "agent_skills.metadata",
   "anonymization_blacklist_entries.variants",
   "bilingual_translation_rows.warnings",
