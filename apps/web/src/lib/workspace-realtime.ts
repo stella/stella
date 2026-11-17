@@ -233,6 +233,17 @@ export const RESOURCE_MUTATION_CONTRACTS = {
     // overview included, refresh.
     changedEntity: "entityId",
   },
+  moveEntity: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "PATCH",
+        route: "/entities/:workspaceId/move",
+      },
+    ],
+    resources: [RESOURCE_TYPE.ENTITY],
+    changedEntity: "entityId",
+  },
   renameEntity: {
     writes: [
       {
