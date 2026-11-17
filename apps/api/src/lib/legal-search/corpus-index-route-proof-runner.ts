@@ -125,7 +125,6 @@ export const createCorpusIndexRouteProofGovernor = ({
   return async (_unit, work) => {
     const startedAt = now();
     while (now() >= admitted.until) {
-      // db-await-in-loop: each wait re-reads the database's load
       const decision = await readDecision();
       if (decision === "start") {
         admitted.until = now() + recheckMs;
@@ -141,7 +140,6 @@ export const createCorpusIndexRouteProofGovernor = ({
         // the one exit it has, and the runner catches it by class.
         throw braked;
       }
-      // db-await-in-loop: paced wait before the next load read
       await sleep(Math.min(recheckMs, maxWaitMs - waitedMs));
     }
     return await work();
@@ -577,14 +575,12 @@ const work = async (walk: Walk): Promise<void> => {
       return;
     }
     if (taken.type === "wait") {
-      // db-await-in-loop: paced wait for a route to come due
       await sleep(Math.min(taken.ms, Math.max(budget.endsAt - now(), 0)));
       continue;
     }
     const { report } = taken;
     walk.busy.add(report);
     walk.pages += 1;
-    // db-await-in-loop: one census page per route at a time, governed
     const step = await stepOf(walk, report.route);
     walk.busy.delete(report);
     // db-await-in-loop: a proof's effects are read before the next page
