@@ -4,6 +4,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  renameSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -24,8 +25,19 @@ const unlistedNamespace = JSON.stringify("Stella/Unlisted");
 
 // Ignored build outputs can be replaced by concurrent generators. Git owns the
 // source inventory, including new local files and tracked generated sources.
-const workspaceSources = (directory: string) =>
-  execFileSync(
+const workspaceSources = (directory: string) => {
+  const deleted = new Set(
+    execFileSync(
+      "git",
+      ["ls-files", "--deleted", "-z", "--", "apps", "packages"],
+      {
+        cwd: directory,
+        encoding: "utf-8",
+        maxBuffer: 8 * 1024 * 1024,
+      },
+    ).split("\0"),
+  );
+  return execFileSync(
     "git",
     [
       "ls-files",
@@ -40,7 +52,12 @@ const workspaceSources = (directory: string) =>
     { cwd: directory, encoding: "utf-8", maxBuffer: 8 * 1024 * 1024 },
   )
     .split("\0")
-    .filter((file) => /\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs)$/u.test(file));
+    .filter(
+      (file) =>
+        !deleted.has(file) &&
+        /\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs)$/u.test(file),
+    );
+};
 
 test("namespace source inventory retains authored files without reading ignored build outputs", () => {
   const directory = mkdtempSync(path.join(tmpdir(), "emf-source-inventory-"));
@@ -53,11 +70,18 @@ test("namespace source inventory retains authored files without reading ignored 
     mkdirSync(path.join(directory, "packages/example"), { recursive: true });
     writeFileSync(path.join(directory, ".gitignore"), "apps/api/generated/\n");
     const tracked = "apps/api/generated/tracked.ts";
-    writeFileSync(path.join(directory, tracked), "export {};\n");
-    execFileSync("git", ["add", "--force", "--", tracked], {
+    const deleted = "packages/example/deleted.ts";
+    const renamed = "packages/example/old name\nfile.ts";
+    const renamedTo = "packages/example/renamed source\nfile.ts";
+    for (const file of [tracked, deleted, renamed]) {
+      writeFileSync(path.join(directory, file), "export {};\n");
+    }
+    execFileSync("git", ["add", "--force", "--", tracked, deleted, renamed], {
       cwd: directory,
       maxBuffer: 1024 * 1024,
     });
+    rmSync(path.join(directory, deleted));
+    renameSync(path.join(directory, renamed), path.join(directory, renamedTo));
     const local = "packages/example/new source\nfile.tsx";
     writeFileSync(path.join(directory, local), "export {};\n");
     const output = path.join(directory, "apps/api/generated/transient.ts");
@@ -65,11 +89,11 @@ test("namespace source inventory retains authored files without reading ignored 
     writeFileSync(path.join(directory, "packages/example/data.json"), "{}");
 
     const files = workspaceSources(directory).toSorted();
-    expect(files).toEqual([tracked, local].toSorted());
+    expect(files).toEqual([tracked, local, renamedTo].toSorted());
     rmSync(output);
     expect(
       files.map((file) => readFileSync(path.join(directory, file), "utf-8")),
-    ).toEqual(["export {};\n", "export {};\n"]);
+    ).toEqual(["export {};\n", "export {};\n", "export {};\n"]);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
