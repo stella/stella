@@ -229,6 +229,18 @@ export const RESOURCE_MUTATION_CONTRACTS = {
     ],
     resources: [RESOURCE_TYPE.INVOICE],
   },
+  // A public invoice link's file: the server records the access and the
+  // first view on the invoice's send, which no member session caches.
+  openInvoiceLinkFile: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/public/invoice-links/download",
+      },
+    ],
+    resources: [RESOURCE_TYPE.INVOICE],
+  },
   updateTask: {
     writes: [
       {
@@ -491,7 +503,25 @@ export const RESOURCE_MUTATION_CONTRACTS = {
 } as const;
 
 type ResourceMutationName = keyof typeof RESOURCE_MUTATION_CONTRACTS;
-type PrimaryResourceMutationName = Exclude<ResourceMutationName, "updateUser">;
+
+/**
+ * Writes a public page makes with a link token instead of a member session:
+ * every route they post to is a public one.
+ */
+type PublicTokenResourceMutationName = {
+  [
+    TMutation in ResourceMutationName
+  ]: (typeof RESOURCE_MUTATION_CONTRACTS)[TMutation]["writes"][number] extends {
+    route: `/public/${string}`;
+  }
+    ? TMutation
+    : never;
+}[ResourceMutationName];
+
+type PrimaryResourceMutationName = Exclude<
+  ResourceMutationName,
+  "updateUser" | PublicTokenResourceMutationName
+>;
 
 /**
  * The variable naming the one entity a contract changes, if it names one.
@@ -533,6 +563,8 @@ type OrganizationProjectionMutationScope = {
   organizationId: string | null;
   userId: string | null;
 };
+
+type PublicTokenMutationScope = { type: "public-token" };
 
 type ResourceMutationScope =
   | { type: "organization" }
@@ -648,6 +680,20 @@ export function resourceMutation<TData, TVariables>(
     scope: OrganizationProjectionMutationScope;
   },
 ): (variables: TVariables) => Promise<TData>;
+/**
+ * A write a public page makes with a link token. No member session owns the
+ * page's cache, so nothing a session reads is invalidated; the page's own
+ * token read stays as it was, since reading it again is itself an access.
+ */
+export function resourceMutation<
+  TMutation extends PublicTokenResourceMutationName,
+  TVariables,
+  TData,
+>(
+  options: ResourceMutationOptions<TMutation, TVariables, TData> & {
+    scope: PublicTokenMutationScope;
+  },
+): (variables: TVariables) => Promise<TData>;
 export function resourceMutation<TVariables, TData, TRest extends unknown[]>({
   mutation,
   queryClient,
@@ -657,9 +703,13 @@ export function resourceMutation<TVariables, TData, TRest extends unknown[]>({
   scope?:
     | { type: "workspace" }
     | { type: "organization" }
-    | OrganizationProjectionMutationScope;
+    | OrganizationProjectionMutationScope
+    | PublicTokenMutationScope;
 }): (variables: TVariables, ...rest: TRest) => Promise<TData> {
   return async (variables: TVariables, ...rest: TRest) => {
+    if (scope?.type === "public-token") {
+      return await mutationFn(variables, ...rest);
+    }
     const owner = captureSessionQueryOwner(queryClient);
     const data = await mutationFn(variables, ...rest);
     if (scope?.type === "organization-projection") {

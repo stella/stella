@@ -1,4 +1,9 @@
-import { queryOptions, useMutation, useQuery } from "@tanstack/react-query";
+import {
+  queryOptions,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { createFileRoute, useLocation } from "@tanstack/react-router";
 import { Result } from "better-result";
@@ -26,7 +31,10 @@ import { APIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { pageTitle, pageTitleLiteral } from "@/lib/page-title";
 import { downloadFile } from "@/lib/utils";
-import { resourceQueryOptions } from "@/lib/workspace-realtime";
+import {
+  resourceMutation,
+  resourceQueryOptions,
+} from "@/lib/workspace-realtime";
 import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
 
 import {
@@ -186,14 +194,20 @@ export const InvoiceSummary = ({
   const t = useTranslations("invoiceLink");
   const rootT = useTranslations();
   const format = useFormatter();
+  const queryClient = useQueryClient();
   const download = useMutation({
-    mutationFn: async ({
-      file,
-      fileName,
-    }: {
-      file: InvoiceLinkFile;
-      fileName: string;
-    }) => await downloadInvoiceFile(token, file, fileName),
+    mutationFn: resourceMutation({
+      mutation: "openInvoiceLinkFile",
+      queryClient,
+      scope: { type: "public-token" },
+      mutationFn: async ({
+        file,
+        fileName,
+      }: {
+        file: InvoiceLinkFile;
+        fileName: string;
+      }) => await downloadInvoiceFile(token, file, fileName),
+    }),
     onSuccess: (result) => {
       if (result.isErr()) {
         notifyUserError(result.error, t("downloadFailed"));
