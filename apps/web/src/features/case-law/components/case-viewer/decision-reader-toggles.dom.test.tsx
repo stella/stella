@@ -14,11 +14,16 @@ import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
-import { defaultPresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
-import { PresentationPrefsProvider } from "@/lib/account/presentation-prefs/provider";
-import { createTestPresentationPrefsSync } from "@/lib/account/presentation-prefs/sync.test-fixtures";
-
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
+
+// The provider's module graph reaches DOM-aware UI code, so it loads after
+// the DOM is registered, like the reader components below.
+const { defaultPresentationPrefs } =
+  await import("@/lib/account/presentation-prefs/preferences");
+const { PresentationPrefsProvider } =
+  await import("@/lib/account/presentation-prefs/provider");
+const { createTestPresentationPrefsSync } =
+  await import("@/lib/account/presentation-prefs/sync.test-fixtures");
 
 /**
  * A card whose wording the decision's list did not carry reads it itself.

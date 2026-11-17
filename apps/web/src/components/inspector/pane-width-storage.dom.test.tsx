@@ -85,7 +85,7 @@ test("the member loading frame reserves the saved inspector before tabs mount", 
   writePersistedState(inspectorMinimizedEntry, pendingScope, false).unwrap();
   const sync = createTestPresentationPrefsSync(prefs);
   const frame = (scope: typeof pendingScope) => (
-    <IntlProvider locale="en" messages={en}>
+    <IntlProvider locale="en" messages={en} timeZone="UTC">
       <PresentationPrefsProvider initialPrefs={prefs} sync={sync}>
         <ProtectedPendingSkeleton inspectorScope={scope} />
       </PresentationPrefsProvider>
