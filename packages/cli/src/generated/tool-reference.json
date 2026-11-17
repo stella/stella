@@ -1437,7 +1437,7 @@
   {
     "access": "read",
     "command": ["capability", "flows", "get"],
-    "description": "Read one flow definition: its name, description, steps, trigger, and enabled flag. Use flows.list to browse the organization's flows and flows.runs.get to read a run of one.",
+    "description": "Read one flow definition: its name, description, steps, trigger, and enabled flag, plus updatedAt. Send that updatedAt value as expectedUpdatedAt when replacing the definition with flows.update. Use flows.list to browse the organization's flows and flows.runs.get to read a run of one.",
     "name": "capability:flows.get",
     "title": "flows.get"
   },
@@ -1486,7 +1486,7 @@
   {
     "access": "write",
     "command": ["capability", "flows", "update"],
-    "description": "Replace one flow definition's name, description, steps, trigger, and enabled flag. The whole definition is revalidated and written, so this is not a partial update. The scheduler row is reconciled afterwards, so changing or removing a schedule trigger, or disabling the flow, also stops it from firing.",
+    "description": "Replace one flow definition's name, description, steps, trigger, and enabled flag. The whole definition is revalidated and written, so this is not a partial update. Read flows.get and send its updatedAt as expectedUpdatedAt; stale snapshots return HTTP 409 (version_conflict) without writing. After a conflict, read the current definition and reconcile the intended changes before retrying. The scheduler row is reconciled afterwards, so changing or removing a schedule trigger, or disabling the flow, also stops it from firing.",
     "name": "capability:flows.update",
     "title": "flows.update"
   },
