@@ -113,8 +113,8 @@ const PARAGRAPH =
 const marker = (serial: number) => `znacznik${String(serial)}`;
 
 type CaseLawDecisionsOptions = {
-  manifest: (typeof CORPUS_INDEX_MANIFESTS)["case_law_v10"];
-  jurisdiction: "POL" | "USA";
+  manifest: (typeof CORPUS_INDEX_MANIFESTS)["case_law_v10" | "case_law_v11"];
+  jurisdiction: "POL" | "USA" | "HUN";
   decisions: number;
   /** Paragraphs per decision; about eight make one passage. */
   paragraphs: number;
@@ -205,6 +205,7 @@ const legislationVersions = (versions: number) =>
   });
 
 const V10 = CORPUS_INDEX_MANIFESTS.case_law_v10;
+const V11 = CORPUS_INDEX_MANIFESTS.case_law_v11;
 
 /** The physical configuration of a real generation group, under a fresh id. */
 const groupConfig = (
@@ -768,6 +769,35 @@ describe.skipIf(!runEngineTests)(
             inputFile(
               caseLawDecisions({
                 manifest: V10,
+                jurisdiction: "USA",
+                decisions: 40,
+                paragraphs: 10,
+              }),
+            ),
+          family: "case_law",
+        },
+        {
+          label: "v11's base group, opening passages in splits of their own",
+          config: () => groupConfig(V11, "hun"),
+          file: () =>
+            inputFile(
+              caseLawDecisions({
+                manifest: V11,
+                jurisdiction: "HUN",
+                decisions: 40,
+                paragraphs: 20,
+              }),
+            ),
+          family: "case_law",
+        },
+        {
+          label:
+            "v11's US group, court partition composed with the opening one",
+          config: () => groupConfig(V11, "usa"),
+          file: () =>
+            inputFile(
+              caseLawDecisions({
+                manifest: V11,
                 jurisdiction: "USA",
                 decisions: 40,
                 paragraphs: 10,
