@@ -5,6 +5,7 @@ import path from "node:path";
 import * as v from "valibot";
 
 import { US_COURTS } from "@stll/api-contract/us-courts";
+import { compareCodeUnit } from "@stll/collation";
 import { isPathInside } from "@stll/portable-path";
 import { waitForExternalState } from "@stll/property-testing/external-state";
 import { childExitStatus } from "@stll/scripts/src/child-exit-status";
@@ -441,7 +442,13 @@ const listSplits = async (indexId: string): Promise<Split[]> => {
   if (!response.ok) {
     return panic(`split list ${String(response.status)}`);
   }
-  return v.parse(splitListSchema, await response.json()).splits;
+  // The metastore lists splits in no stated order, so every comparison of two
+  // listings reads them in split id order.
+  return v
+    .parse(splitListSchema, await response.json())
+    .splits.toSorted((left, right) =>
+      compareCodeUnit(left.split_id, right.split_id),
+    );
 };
 
 const splitsOf = async (indexId: string, nodeId: string) =>

@@ -1420,7 +1420,7 @@ test("the comparison twin writes v11's documents, marked with their generation",
   );
 });
 
-test("an opening passage over the ceiling on its own is a budget failure, not a panic", () => {
+test("an opening passage over the ceiling on its own is refused as too large, not a panic", () => {
   // One block the chunker keeps whole, past the 9.5 MiB document ceiling.
   const text = "slovo ".repeat(
     Math.ceil(
@@ -1442,9 +1442,18 @@ test("an opening passage over the ceiling on its own is a budget failure, not a 
   expect(
     Buffer.byteLength(JSON.stringify(v10Opening), "utf-8"),
   ).toBeGreaterThan(CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES);
-  const built = buildCorpusProjectionDocuments({
+  const { documents, decisionTerms } = buildCaseLawProjection({
     ...options,
     manifest: CORPUS_INDEX_MANIFESTS.case_law_v11,
   });
-  expect(built.isErr() ? built.error._tag : "ok").toBe("ChunkBudgetError");
+  expect(decisionTerms.kind).toBe("opening_over_ceiling");
+  expect(documents.some((d) => "decision_terms" in d)).toBe(false);
+  // The append planner refuses it the way it refuses v10's, which blocks the
+  // revision alone.
+  const planned = planCorpusProjectionAppendRequests([
+    { revision: REVISION, documents },
+  ]);
+  expect(planned.isErr() ? planned.error.code : "ok").toBe(
+    "revision_too_large",
+  );
 });

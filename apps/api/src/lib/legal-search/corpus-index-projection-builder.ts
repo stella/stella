@@ -292,6 +292,7 @@ const rankingSignalFields = (
 type CaseLawDecisionTermsOutcome =
   | { kind: "not_mapped" }
   | { kind: "whole"; form: DecisionTermsForm; bytes: number }
+  | { kind: "opening_over_ceiling"; form: DecisionTermsForm; bytes: number }
   | {
       kind: "prefix";
       form: DecisionTermsForm;
@@ -366,13 +367,15 @@ const withDecisionTerms = (
       decisionTerms: { kind: "whole", form, bytes },
     };
   }
-  // An opening passage that cannot fit even without its terms is over a
-  // ceiling no prefix can meet: the same budget failure the chunker raises,
-  // which blocks this revision alone. A panic here would stop the caller.
+  // An opening passage over a ceiling before any terms are added cannot be
+  // helped by a prefix. Its documents go out as they are, and the append
+  // planner refuses the revision as too large, as for every generation, which
+  // blocks this revision alone.
   if (!fits({ ...opening, [field.partialField]: true as const })) {
-    throw new ChunkBudgetError({
-      message: "Case-law opening passage exceeds the projection ceiling",
-    });
+    return {
+      documents,
+      decisionTerms: { kind: "opening_over_ceiling", form, bytes },
+    };
   }
   const marked = {
     ...opening,
