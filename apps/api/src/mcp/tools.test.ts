@@ -41,6 +41,7 @@ import {
   SEARCH_TOTAL_TYPE,
 } from "@stll/api-contract/search";
 import type {
+  CaseLawSearchPaginationOutcome,
   SearchPageReach,
   SearchPaginationOutcome,
 } from "@stll/api-contract/search";
@@ -4516,7 +4517,8 @@ describe("OpenAI-compatible MCP tools", () => {
     // The time-budget outcome is the agent tool's own, wider than the
     // contract's HTTP pagination outcome, so the page reads it as sent.
     type PaginationOutcomeAsSent =
-      SearchPaginationOutcome | typeof SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET;
+      | CaseLawSearchPaginationOutcome
+      | typeof SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET;
     type PartialPage = MergedSearchPage & {
       paginationOutcome: PaginationOutcomeAsSent;
       searches: {

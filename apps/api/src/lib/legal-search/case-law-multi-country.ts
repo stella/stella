@@ -152,7 +152,7 @@ export const corpusCountryQuotas = <TCountry>(
  * unread. Carried explicitly, since an absent entry beside ended ones would
  * read as a finished search.
  */
-export const COUNTRY_FIRST_PAGE_PENDING = "";
+const COUNTRY_FIRST_PAGE_PENDING = "";
 
 /**
  * Four states, as in `search_case_law`: a string continues this country, an

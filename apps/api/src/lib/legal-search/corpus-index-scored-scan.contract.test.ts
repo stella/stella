@@ -1108,7 +1108,10 @@ describe.skipIf(!runEngineTests)(
       expect(shards).toMatchObject({ failed: 0 });
       expect(elasticAnswerHasFailedShards(body)).toBe(false);
       expect(
-        elasticAnswerHasFailedShards({ ...body, _shards: { failed: 1 } }),
+        elasticAnswerHasFailedShards({
+          ...(typeof body === "object" && body !== null ? body : {}),
+          _shards: { failed: 1 },
+        }),
       ).toBe(true);
 
       // Both client reads through the ES endpoint answer under strict mode.
