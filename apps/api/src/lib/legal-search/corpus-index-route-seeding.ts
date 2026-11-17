@@ -329,7 +329,10 @@ const judgeRoutes = (
 export const readCorpusIndexRouteSeedingsTx = async (
   tx: Transaction,
   target: CorpusIndexSeedingTarget,
-): Promise<CorpusIndexRouteSeedings | null> =>
+): Promise<{
+  pass: CorpusIndexSeedingPass | null;
+  routes: CorpusIndexRouteSeeding[];
+} | null> =>
   await readRouteSeedingsTx(tx, target, await lockActiveManifestTx(tx, target));
 
 /**
@@ -341,7 +344,10 @@ export const readCorpusIndexRouteSeedingsUnderFlipFenceTx = async (
   tx: Transaction,
   _fence: CorpusIndexProjectionFlipFence,
   target: CorpusIndexSeedingTarget,
-): Promise<CorpusIndexRouteSeedings | null> => {
+): Promise<{
+  pass: CorpusIndexSeedingPass | null;
+  routes: CorpusIndexRouteSeeding[];
+} | null> => {
   const row = (
     await tx
       .select()
