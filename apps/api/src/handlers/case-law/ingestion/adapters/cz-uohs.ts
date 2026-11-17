@@ -40,7 +40,6 @@ import {
   unreadPublisherError,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import { normalizeDecisionIdentifierValue } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import {
   assemblePdfParagraphs,
   extractPdfBodyAndNotes,
@@ -236,8 +235,9 @@ const FILE_NUMBER_TAIL = /^\/\d{4}(?:\/\p{Lu}+)?/u;
 
 /**
  * The decision's citable identifiers: the file number, then the reference
- * number of this one decision. Both are lookup keys, never display text; the
- * displayed docket is `czUohsFileNumber`.
+ * number of this one decision, each as the office prints it. The pipeline
+ * keys them for lookup (`normalized_value`); a value stays the printed
+ * spelling a reader is shown.
  *
  * The reference number of a joined proceeding lists every joined file and
  * can run past the identifier storage bound. It is a secondary lookup key,
@@ -250,10 +250,7 @@ export const czUohsDecisionIdentifiers = (
   const identifier = (printed: string) =>
     ({
       type: DECISION_IDENTIFIER_TYPES.AUTHORITY_DECISION_NUMBER,
-      value: normalizeDecisionIdentifierValue(
-        DECISION_IDENTIFIER_TYPES.AUTHORITY_DECISION_NUMBER,
-        printed,
-      ),
+      value: printed,
     }) as const;
   const reference = identifier(
     `ÚOHS-${record.číslo_jednací.replace(/^ÚOHS-/u, "")}`,
@@ -906,12 +903,19 @@ const reparseCzUohsStoredRaw = async (
       detail: "the stored record names no document object",
     };
   }
+  const result = await assembleCzUohsDecision({
+    record: parsed.output,
+    read: { type: "stored", documents },
+  });
+  // The row is the publisher document (its IRI), which the envelope proved
+  // above; a file number an earlier release spelled otherwise (a lowercased
+  // lookup key) is that row's older spelling, never another decision.
   return {
     type: "parsed",
-    result: await assembleCzUohsDecision({
-      record: parsed.output,
-      read: { type: "stored", documents },
-    }),
+    result,
+    ...(result.caseNumber === stored.caseNumber
+      ? {}
+      : { legacyCaseNumber: stored.caseNumber }),
   };
 };
 
