@@ -10720,6 +10720,67 @@
         }
       ]
     },
+    "./pane-width": {
+      "type": "module",
+      "file": "./src/inspector/pane-width.d.ts",
+      "exports": [
+        {
+          "name": "INSPECTOR_CONTENT_MIN_WIDTH",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "INSPECTOR_EDITOR_MIN_WIDTH",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "INSPECTOR_PANE_DEFAULT_WIDTH",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "INSPECTOR_PANE_MAX_WIDTH",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "INSPECTOR_PANE_MIN_WIDTH",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "INSPECTOR_RAIL_WIDTH",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "clampInspectorPaneWidth",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "resolveInspectorDockWidth",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "resolveInspectorPaneMaxWidth",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "resolveInspectorPaneWidth",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "shouldForceSidebarCollapsed",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
     "./panel-inset": {
       "type": "module",
       "file": "./src/lib/panel-inset.d.ts",
@@ -12656,7 +12717,7 @@
     "./src/inspector/index.d.ts": "export { Inspector, InspectorActions, InspectorContent, InspectorDescription, InspectorEmptyRow, InspectorHeader, InspectorHeaderText, InspectorProperty, InspectorPropertyLabel, InspectorPropertyList, InspectorPropertyValue, InspectorRail, InspectorRailCell, InspectorRailContent, InspectorRailFooter, InspectorRailIconButton, InspectorRailTab, InspectorSection, InspectorSectionTitle, InspectorTitle, } from \"./chrome\";\nexport { InspectorDock } from \"./dock\";\nexport type { InspectorDockMount } from \"./dock\";\nexport { entityTabGlyph, InspectorEntityTab } from \"./entity-tab\";\nexport type { InspectorEntityTabInactiveIcon } from \"./entity-tab\";\nexport { InspectorFacetBar } from \"./facet-bar\";\nexport { PROPERTY_ROW_GRID, SIDE_RAIL_CONTAINER_CLASS, SIDE_RAIL_ICON_BUTTON_SIZE, SIDE_RAIL_TAB_ICON_SIZE, SIDE_RAIL_WIDTH, TOOLBAR_ROW_HEIGHT, TOOLBAR_ROW_HEIGHT_PX, } from \"./layout-tokens\";\nexport { INSPECTOR_CONTENT_MIN_WIDTH, INSPECTOR_EDITOR_MIN_WIDTH, INSPECTOR_PANE_DEFAULT_WIDTH, INSPECTOR_PANE_MAX_WIDTH, INSPECTOR_PANE_MIN_WIDTH, INSPECTOR_RAIL_WIDTH, resolveInspectorDockWidth, resolveInspectorPaneMaxWidth, resolveInspectorPaneWidth, shouldForceSidebarCollapsed, } from \"./pane-width\";\nexport { INSPECTOR_PANE_KEYBOARD_PAGE_STEP, INSPECTOR_PANE_KEYBOARD_STEP, resolveDragWidth, resolveKeyboardWidth, useInspectorPaneWidth, } from \"./use-pane-width\";\n",
     "./src/inspector/layout-tokens.d.ts": "export declare const TOOLBAR_ROW_HEIGHT: \"h-12\";\nexport declare const TOOLBAR_ROW_HEIGHT_PX: 48;\nexport declare const SIDE_RAIL_WIDTH: \"w-12\";\nexport declare const SIDE_RAIL_CONTAINER_CLASS: \"bg-sidebar flex shrink-0 flex-col border-s border-e w-12\";\nexport declare const SIDE_RAIL_ICON_BUTTON_SIZE: \"size-11\";\nexport declare const SIDE_RAIL_TAB_ICON_SIZE: \"size-3.5\";\nexport declare const PROPERTY_ROW_GRID: \"grid-cols-[8rem_minmax(0,1fr)]\";\n",
     "./src/inspector/pane-width.d.ts": "export declare const INSPECTOR_PANE_DEFAULT_WIDTH = 512;\nexport declare const INSPECTOR_PANE_MIN_WIDTH = 320;\nexport declare const INSPECTOR_PANE_MAX_WIDTH = 1400;\nexport declare const INSPECTOR_CONTENT_MIN_WIDTH = 400;\nexport declare const INSPECTOR_EDITOR_MIN_WIDTH = 560;\nexport declare const INSPECTOR_RAIL_WIDTH = 48;\ntype ForceSidebarCollapsedInput = {\n    expandedSidebarWidth: number;\n    inspectorPaneOpen: boolean;\n    viewportWidth: number;\n};\nexport declare const shouldForceSidebarCollapsed: ({ expandedSidebarWidth, inspectorPaneOpen, viewportWidth, }: ForceSidebarCollapsedInput) => boolean;\ntype InspectorPaneWidthInput = {\n    desiredWidth: number;\n    sidebarWidth: number;\n    viewportWidth: number;\n};\nexport declare const resolveInspectorPaneMaxWidth: ({ sidebarWidth, viewportWidth, }: Omit<InspectorPaneWidthInput, \"desiredWidth\">) => number;\nexport declare const clampInspectorPaneWidth: (width: number) => number;\nexport declare const resolveInspectorPaneWidth: ({ desiredWidth, sidebarWidth, viewportWidth, }: InspectorPaneWidthInput) => number;\nexport declare const resolveInspectorDockWidth: ({ paneWidth, showPaneContent, }: {\n    paneWidth: number;\n    showPaneContent: boolean;\n}) => number;\nexport {};\n",
-    "./src/inspector/use-pane-width.d.ts": "import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from \"react\";\nexport declare const resolveDragWidth: ({ clientX, isRtl, viewportWidth, }: {\n    clientX: number;\n    isRtl: boolean;\n    viewportWidth: number;\n}) => number;\nexport declare const INSPECTOR_PANE_KEYBOARD_STEP = 16;\nexport declare const INSPECTOR_PANE_KEYBOARD_PAGE_STEP = 64;\nexport declare const resolveKeyboardWidth: ({ currentWidth, isRtl, key, }: {\n    currentWidth: number;\n    isRtl: boolean;\n    key: string;\n}) => null | number;\nexport type InspectorPaneWidthPersistence = {\n    read: () => number;\n    write: (width: number) => void;\n};\ntype UseInspectorPaneWidthOptions = {\n    persistence?: InspectorPaneWidthPersistence | undefined;\n    sidebarWidth: number;\n    viewportWidth: number;\n};\ntype UseInspectorPaneWidthResult = {\n    resetWidth: () => void;\n    resizeHandleProps: {\n        \"aria-orientation\": \"vertical\";\n        \"aria-valuemax\": number;\n        \"aria-valuemin\": number;\n        \"aria-valuenow\": number;\n        onKeyDown: (event: ReactKeyboardEvent<HTMLElement>) => void;\n        onLostPointerCapture: (event: ReactPointerEvent<HTMLElement>) => void;\n        onPointerCancel: (event: ReactPointerEvent<HTMLElement>) => void;\n        onPointerDown: (event: ReactPointerEvent<HTMLElement>) => void;\n        onPointerMove: (event: ReactPointerEvent<HTMLElement>) => void;\n        onPointerUp: (event: ReactPointerEvent<HTMLElement>) => void;\n        tabIndex: number;\n    };\n    width: number;\n};\nexport declare const useInspectorPaneWidth: ({ sidebarWidth, persistence, viewportWidth, }: UseInspectorPaneWidthOptions) => UseInspectorPaneWidthResult;\nexport {};\n",
+    "./src/inspector/use-pane-width.d.ts": "import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from \"react\";\nexport declare const resolveDragWidth: ({ clientX, isRtl, viewportWidth, }: {\n    clientX: number;\n    isRtl: boolean;\n    viewportWidth: number;\n}) => number;\nexport declare const INSPECTOR_PANE_KEYBOARD_STEP = 16;\nexport declare const INSPECTOR_PANE_KEYBOARD_PAGE_STEP = 64;\nexport declare const resolveKeyboardWidth: ({ currentWidth, isRtl, key, }: {\n    currentWidth: number;\n    isRtl: boolean;\n    key: string;\n}) => null | number;\ntype UseInspectorPaneWidthOptions = {\n    initialWidth?: number;\n    onWidthChange?: (width: number) => void;\n    sidebarWidth: number;\n    viewportWidth: number;\n};\ntype UseInspectorPaneWidthResult = {\n    resetWidth: () => void;\n    resizeHandleProps: {\n        \"aria-orientation\": \"vertical\";\n        \"aria-valuemax\": number;\n        \"aria-valuemin\": number;\n        \"aria-valuenow\": number;\n        onKeyDown: (event: ReactKeyboardEvent<HTMLElement>) => void;\n        onLostPointerCapture: (event: ReactPointerEvent<HTMLElement>) => void;\n        onPointerCancel: (event: ReactPointerEvent<HTMLElement>) => void;\n        onPointerDown: (event: ReactPointerEvent<HTMLElement>) => void;\n        onPointerMove: (event: ReactPointerEvent<HTMLElement>) => void;\n        onPointerUp: (event: ReactPointerEvent<HTMLElement>) => void;\n        tabIndex: number;\n    };\n    width: number;\n};\nexport declare const useInspectorPaneWidth: ({ sidebarWidth, viewportWidth, initialWidth, onWidthChange, }: UseInspectorPaneWidthOptions) => UseInspectorPaneWidthResult;\nexport {};\n",
     "./src/kanban/band-peek.d.ts": "export declare const KANBAN_BAND_PEEK_DELAY_MS = 400;\nexport declare const KANBAN_BAND_PEEK_LINGER_MS = 150;\nexport type BandPeekScheduler = (callback: () => void, ms: number) => () => void;\nexport type BandPeekControllerOptions = {\n    delayMs?: number;\n    lingerMs?: number;\n    onChange: (peekingBandId: null | string) => void;\n    schedule?: BandPeekScheduler;\n};\nexport type BandPeekController = {\n    bandExpanded: (bandId: string) => void;\n    bandFolded: (bandId: string) => void;\n    dispose: () => void;\n    dragEnded: () => void;\n    openDragEnter: (bandId: string) => void;\n    openDragLeave: (bandId: string) => void;\n    slotDragLeave: (bandId: string) => void;\n    slotDragOver: (bandId: string) => void;\n    slotUnmounted: (bandId: string) => void;\n};\nexport declare const createBandPeekController: ({ onChange, delayMs, lingerMs, schedule, }: BandPeekControllerOptions) => BandPeekController;\n",
     "./src/kanban/card-properties.d.ts": "export type KanbanCardFieldSelection = {\n    isRenderable?: ((fieldId: string) => boolean) | undefined;\n    reservedFieldIds: readonly string[];\n};\nexport declare const selectKanbanCardFieldIds: (visibleFieldIds: readonly string[], { reservedFieldIds, isRenderable }: KanbanCardFieldSelection) => string[];\n",
     "./src/kanban/card-shell.d.ts": "import type { ReactNode, RefObject } from \"react\";\nexport type KanbanCardSelectionModifiers = {\n    meta: boolean;\n    shift: boolean;\n};\nexport type KanbanCardShellProps = {\n    actions?: ReactNode;\n    actionsVisibility?: \"always\" | \"hover\" | undefined;\n    active?: boolean | undefined;\n    appearance?: \"proposal\" | \"standard\" | undefined;\n    bodyRef?: RefObject<HTMLDivElement | null> | undefined;\n    children: ReactNode;\n    className?: string | undefined;\n    dragRef?: RefObject<HTMLDivElement | null> | undefined;\n    onOpen?: (() => void) | undefined;\n    onSelectionClick?: ((modifiers: KanbanCardSelectionModifiers) => void) | undefined;\n    selected?: boolean | undefined;\n    stickyHeader?: Exclude<ReactNode, boolean>;\n};\nexport declare const KanbanCardShell: ({ children, appearance, actions, actionsVisibility, stickyHeader, active, selected, onOpen, onSelectionClick, bodyRef, dragRef, className, }: KanbanCardShellProps) => import(\"react\").JSX.Element;\n",

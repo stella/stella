@@ -26,6 +26,14 @@ export const pushRouterPath = async (page: Page, path: string) => {
     undefined,
     { timeout: 30_000 },
   );
+  // The router patches history before React starts hydrating the server
+  // document; a navigation in between would hydrate against another route.
+  await page.waitForFunction(
+    () =>
+      Object.keys(document.body).some((key) => key.startsWith("__reactFiber$")),
+    undefined,
+    { timeout: 30_000 },
+  );
   await page.evaluate((target) => {
     history.pushState(null, "", target);
   }, path);
