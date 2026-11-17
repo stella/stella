@@ -159,7 +159,7 @@ const customFetchImpl = async (
       ...init,
       headers,
       signal: init?.signal ?? undefined,
-      timeout: { type: "idle", ms: AUTH_REQUEST_TIMEOUT_MS },
+      timeout: { type: "headers", ms: AUTH_REQUEST_TIMEOUT_MS },
     });
   }
   if (method === "GET") {
@@ -180,7 +180,7 @@ const customFetchImpl = async (
   return await fetchWithTimeout(input, {
     ...init,
     signal: init?.signal ?? undefined,
-    timeout: { type: "idle", ms: AUTH_REQUEST_TIMEOUT_MS },
+    timeout: { type: "headers", ms: AUTH_REQUEST_TIMEOUT_MS },
   });
 };
 

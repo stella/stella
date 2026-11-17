@@ -1187,7 +1187,7 @@ describe("public law sitemap", () => {
       'detached(Promise.resolve().then(hydrate), "client.hydration")',
     );
     expect(runtime).not.toContain("initializeI18n");
-    expect(runtime).toContain("reportErrorOnce");
+    expect(runtime).toContain("createRootCaughtErrorHandler(getAnalytics)");
   });
 
   test("app provider preserves browser time zones for app timestamps", async () => {

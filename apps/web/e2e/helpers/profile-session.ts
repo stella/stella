@@ -1,7 +1,10 @@
 import type { APIRequestContext, Page } from "@playwright/test";
 import { request as playwrightRequest } from "@playwright/test";
 import { randomUUID } from "node:crypto";
+import * as v from "valibot";
 
+import { CAPABILITY_REQUEST_HEADER } from "@stll/api-contract/capability-request";
+import { organizationCreateOutputSchema } from "@stll/api-contract/organization-create";
 import type { UiLocale } from "@stll/locales";
 
 import { E2E_API_ORIGIN } from "./api";
@@ -72,18 +75,18 @@ export const createProfileTestSession = async ({
     await signInWithEmailOtp(api, email);
     accountCreated = true;
 
-    const organization = await api.post(
-      `${E2E_API_ORIGIN}/api/auth/organization/create`,
-      {
-        data: {
-          name: `Profile test ${token}`,
-          slug,
-          keepCurrentActiveOrganization: false,
-        },
+    const organization = await api.post(`${E2E_API_ORIGIN}/v1/organizations`, {
+      data: { name: `Profile test ${token}`, slug },
+      headers: {
+        "Idempotency-Key": slug,
+        [CAPABILITY_REQUEST_HEADER]: "organizations.create",
       },
-    );
+    });
     expect(organization.ok(), await organization.text()).toBe(true);
-    organizationId = stringField(objectValue(await organization.json()), "id");
+    organizationId = v.parse(
+      organizationCreateOutputSchema,
+      await organization.json(),
+    ).organizationId;
 
     const activated = await api.post(
       `${E2E_API_ORIGIN}/api/auth/organization/set-active`,
