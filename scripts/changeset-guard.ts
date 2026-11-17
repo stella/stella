@@ -16,7 +16,9 @@
 // generated version pull request. This guard also checks that packages named
 // by added or edited entries have a changed release input: a release-gated
 // file, or a root catalog version the package ships through `catalog:`,
-// changed in the diff or since the package's last published version. A diff
+// changed in the diff or since the package's last published version. The CLI
+// also counts the sources its capability catalog is generated from, since
+// that catalog ships with it but is not committed under packages/cli. A diff
 // that changes such a catalog version must name every package that ships it.
 // CI runs that same relevance check; empty entries remain valid no-release
 // intent.
@@ -358,6 +360,18 @@ export type PublishedChanges = {
 
 type ReleaseEvidence = Omit<PublishedChanges, "reference">;
 
+/**
+ * Release inputs a package ships from outside its own directory: an output
+ * generated from other sources when the package is built.
+ */
+export type DerivedReleaseInputs = {
+  readonly packageName: string;
+  /** Names the sources in notes. */
+  readonly label: string;
+  /** The changed files the shipped output is derived from. */
+  readonly sources: (changedFiles: readonly string[]) => readonly string[];
+};
+
 type ChangesetPackageCheckOptions = {
   readonly changedFiles: readonly string[];
   readonly entries: readonly { file: string; contents: string }[];
@@ -366,12 +380,15 @@ type ChangesetPackageCheckOptions = {
   readonly catalogInputs?: readonly CatalogInput[];
   /** Per named package; null when no published reference resolved. */
   readonly published?: ReadonlyMap<string, PublishedChanges | null>;
+  /** Sources outside a package's directory that count as its inputs. */
+  readonly derivedInputs?: readonly DerivedReleaseInputs[];
 };
 
 type PackageTarget = {
   readonly name: string;
   readonly directory: string;
   readonly isRelease: (file: string) => boolean;
+  readonly derived: readonly DerivedReleaseInputs[];
 };
 
 /** The package's changed release inputs: gated files, then catalog entries. */
@@ -390,34 +407,58 @@ const releaseInputs = (
   ),
 ];
 
+/** Notes naming the derived sources that changed, one per kind. */
+const derivedNotes = (
+  { changedFiles }: Pick<ReleaseEvidence, "changedFiles">,
+  { name, derived }: PackageTarget,
+  since?: string,
+): string[] =>
+  derived.flatMap(({ label, sources }) => {
+    const files = sources(changedFiles);
+    const range = since === undefined ? "" : ` since ${since}`;
+    return files.length > 0
+      ? [`${name}: ${label} changed${range}: ${preview(files)}.`]
+      : [];
+  });
+
 /**
  * Whether a named package has anything to release. The diff decides first;
  * otherwise everything since its last published version counts, which is how
  * a release catches up on inputs that landed without an entry. With no
- * published reference only the diff counts, and the note says so.
+ * published reference only the diff counts, and the note says so. A package
+ * justified only by derived sources gets a note naming them.
  */
 const justifyPackage = (
   diff: ReleaseEvidence,
   since: PublishedChanges | null | undefined,
   target: PackageTarget,
-): { readonly justified: boolean; readonly note?: string } => {
-  const inDiff = releaseInputs(diff, target).length > 0;
+): { readonly justified: boolean; readonly notes: readonly string[] } => {
+  const ownInDiff = releaseInputs(diff, target).length > 0;
+  const diffNotes = ownInDiff ? [] : derivedNotes(diff, target);
+  const inDiff = ownInDiff || diffNotes.length > 0;
   if (since === null) {
     return {
       justified: inDiff,
-      note: `${target.name}: no published version reference resolved; checked this diff only.`,
+      notes: [
+        `${target.name}: no published version reference resolved; checked this diff only.`,
+        ...diffNotes,
+      ],
     };
   }
   if (inDiff || since === undefined) {
-    return { justified: inDiff };
+    return { justified: inDiff, notes: diffNotes };
   }
   const inputs = releaseInputs(since, target);
-  return inputs.length > 0
-    ? {
-        justified: true,
-        note: `${target.name}: changed since ${since.reference}: ${preview(inputs)}.`,
-      }
-    : { justified: false };
+  if (inputs.length > 0) {
+    return {
+      justified: true,
+      notes: [
+        `${target.name}: changed since ${since.reference}: ${preview(inputs)}.`,
+      ],
+    };
+  }
+  const sinceNotes = derivedNotes(since, target, since.reference);
+  return { justified: sinceNotes.length > 0, notes: sinceNotes };
 };
 
 const requireCatalogPackagesNamed = (
@@ -439,8 +480,8 @@ const requireCatalogPackagesNamed = (
 };
 
 /**
- * Path evidence cannot establish semantic impact: comment-only edits count.
- * Returns how packages were justified beyond the diff, for the caller to print.
+ * Path evidence cannot establish semantic impact: comment-only edits count,
+ * and so does any change to a derived source, whatever it derives. Returns how packages were justified beyond the diff, for the caller to print.
  */
 export const checkChangesetPackages = ({
   changedFiles,
@@ -448,6 +489,7 @@ export const checkChangesetPackages = ({
   policy,
   catalogInputs = [],
   published,
+  derivedInputs = [],
 }: ChangesetPackageCheckOptions): readonly string[] => {
   const isRelease = releaseFileMatcher(policy.releasePaths);
   const directories = packageDirectories(policy);
@@ -460,12 +502,19 @@ export const checkChangesetPackages = ({
         directories.get(name) ??
         panic(`${file} names a package outside the release policy: ${name}`);
       named.add(name);
-      const { justified, note } = justifyPackage(
+      const { justified, notes: packageNotes } = justifyPackage(
         { changedFiles, catalogInputs },
         published?.get(name),
-        { name, directory, isRelease },
+        {
+          name,
+          directory,
+          isRelease,
+          derived: derivedInputs.filter(
+            ({ packageName }) => packageName === name,
+          ),
+        },
       );
-      if (note !== undefined) {
+      for (const note of packageNotes) {
         notes.add(note);
       }
       if (!justified) {
@@ -661,10 +710,11 @@ type PublishedReadOptions = {
   readonly policy: ChangesetPolicy;
   readonly manifests: ReadonlyMap<string, string>;
   readonly headRoot: string;
+  readonly derivedInputs: readonly DerivedReleaseInputs[];
 };
 
 const readPackagePublishedChanges = (
-  { policy, manifests, headRoot }: PublishedReadOptions,
+  { policy, manifests, headRoot, derivedInputs }: PublishedReadOptions,
   name: string,
   directory: string,
 ): PublishedChanges | null => {
@@ -681,6 +731,10 @@ const readPackagePublishedChanges = (
   if (reference === null || rootAtReference === null) {
     return null;
   }
+  // Derived sources live outside the package, so read the whole tree for it.
+  const hasDerivedInputs = derivedInputs.some(
+    ({ packageName }) => packageName === name,
+  );
   return {
     reference: reference.reference,
     changedFiles: gitPaths([
@@ -690,8 +744,7 @@ const readPackagePublishedChanges = (
       "-z",
       reference.commit,
       "HEAD",
-      "--",
-      directory,
+      ...(hasDerivedInputs ? [] : ["--", directory]),
     ]),
     catalogInputs: findCatalogInputs({
       policy,
@@ -766,7 +819,20 @@ const parseArgs = (args: readonly string[]) => {
   return { base, check };
 };
 
-const main = (args: readonly string[]): number => {
+/**
+ * Loaded only when the guard runs. The no-install Dependabot runner imports
+ * this module and verifies every source it loads against the pull request's
+ * base; this keeps the often-edited generator manifest out of that set.
+ */
+const loadDerivedInputs = async (): Promise<
+  readonly DerivedReleaseInputs[]
+> => {
+  const { CAPABILITY_CATALOG_RELEASE_INPUTS } =
+    await import("./capability-catalog-sources");
+  return [CAPABILITY_CATALOG_RELEASE_INPUTS];
+};
+
+const main = async (args: readonly string[]): Promise<number> => {
   const { base, check } = parseArgs(args);
   const resolved = resolveBase(base);
   if (resolved === null) {
@@ -785,6 +851,7 @@ const main = (args: readonly string[]): number => {
   }
 
   const policy = loadChangesetPolicy();
+  const derivedInputs = await loadDerivedInputs();
   const diff = readChangesetDiff({ mergeBase, root: REPO_ROOT });
   const entries = gitPaths([
     "diff",
@@ -825,7 +892,11 @@ const main = (args: readonly string[]): number => {
     entries,
     policy,
     catalogInputs,
-    published: readPublishedChanges({ policy, manifests, headRoot }, entries),
+    published: readPublishedChanges(
+      { policy, manifests, headRoot, derivedInputs },
+      entries,
+    ),
+    derivedInputs,
   });
   for (const note of notes) {
     process.stdout.write(`changeset-guard: ${note}\n`);
@@ -844,5 +915,5 @@ const main = (args: readonly string[]): number => {
 };
 
 if (import.meta.main) {
-  process.exit(main(process.argv.slice(2)));
+  process.exit(await main(process.argv.slice(2)));
 }
