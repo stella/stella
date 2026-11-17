@@ -114,7 +114,7 @@ export const entityViewRowsOptions = ({
       scope:
         scope.type === "matter"
           ? { type: "workspace", workspaceId: scope.matterId }
-          : { type: "organization" },
+          : { type: "organization", organizationId, userId },
     },
   );
 };

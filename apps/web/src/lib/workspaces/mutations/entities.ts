@@ -105,18 +105,27 @@ type MoveEntityVars = {
 
 export const useMoveEntity = () => {
   const analytics = useAnalytics();
+  const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ workspaceId, entityId, parentId }: MoveEntityVars) => {
-      const response = await api
-        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .move.patch({
-          entityId: toSafeId<"entity">(entityId),
-          parentId: parentId === null ? null : toSafeId<"entity">(parentId),
-        });
+    mutationFn: resourceMutation({
+      mutation: "moveEntity",
+      queryClient,
+      mutationFn: async ({
+        workspaceId,
+        entityId,
+        parentId,
+      }: MoveEntityVars) => {
+        const response = await api
+          .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+          .move.patch({
+            entityId: toSafeId<"entity">(entityId),
+            parentId: parentId === null ? null : toSafeId<"entity">(parentId),
+          });
 
-      return unwrapApiResponse(response);
-    },
+        return unwrapApiResponse(response);
+      },
+    }),
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "useMoveEntity:failure",
