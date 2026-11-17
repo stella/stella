@@ -39,6 +39,7 @@ import {
 } from "@/api/db/schema";
 import { setSharedTransactionTimeouts } from "@/api/db/shared-pool-timeouts";
 import { createSafeId } from "@/api/lib/branded-types";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import type {
   CorpusFamily,
   CorpusIndexGenerationStatus,
@@ -162,51 +163,58 @@ const recentFlipsTx = async (
   tx: ReadTransaction,
   target: CorpusIndexRetireTarget,
 ) =>
-  await tx
-    .select({
-      from: corpusIndexGenerationFlips.fromGeneration,
-      to: corpusIndexGenerationFlips.toGeneration,
-      flippedAt: corpusIndexGenerationFlips.flippedAt,
-    })
-    .from(corpusIndexGenerationFlips)
-    .where(
-      and(
-        eq(corpusIndexGenerationFlips.family, target.family),
-        or(
-          eq(corpusIndexGenerationFlips.fromGeneration, target.generation),
-          eq(corpusIndexGenerationFlips.toGeneration, target.generation),
+  await readBounded(
+    tx
+      .select({
+        from: corpusIndexGenerationFlips.fromGeneration,
+        to: corpusIndexGenerationFlips.toGeneration,
+        flippedAt: corpusIndexGenerationFlips.flippedAt,
+      })
+      .from(corpusIndexGenerationFlips)
+      .where(
+        and(
+          eq(corpusIndexGenerationFlips.family, target.family),
+          or(
+            eq(corpusIndexGenerationFlips.fromGeneration, target.generation),
+            eq(corpusIndexGenerationFlips.toGeneration, target.generation),
+          ),
+          // Against the database clock, at the column's own precision.
+          sql`${corpusIndexGenerationFlips.flippedAt} > clock_timestamp() - ${sql.raw(
+            `interval '${String(CORPUS_INDEX_RETIRE_KEEP_WINDOW_DAYS)} days'`,
+          )}`,
         ),
-        // Against the database clock, at the column's own precision.
-        sql`${corpusIndexGenerationFlips.flippedAt} > clock_timestamp() - ${sql.raw(
-          `interval '${String(CORPUS_INDEX_RETIRE_KEEP_WINDOW_DAYS)} days'`,
-        )}`,
-      ),
-    )
-    .orderBy(sql`${corpusIndexGenerationFlips.flippedAt} DESC`)
-    .limit(REFUSAL_SAMPLE);
+      )
+      .orderBy(sql`${corpusIndexGenerationFlips.flippedAt} DESC`),
+    REFUSAL_SAMPLE,
+  );
 
 /** Jurisdiction pointers that serve the generation or erase from it. */
 const pointersTx = async (
   tx: ReadTransaction,
   target: CorpusIndexRetireTarget,
 ) =>
-  await tx
-    .select({
-      jurisdiction: corpusIndexJurisdictionServing.jurisdiction,
-      generation: corpusIndexJurisdictionServing.generation,
-      fromGeneration: corpusIndexJurisdictionServing.fromGeneration,
-    })
-    .from(corpusIndexJurisdictionServing)
-    .where(
-      and(
-        eq(corpusIndexJurisdictionServing.family, target.family),
-        or(
-          eq(corpusIndexJurisdictionServing.generation, target.generation),
-          eq(corpusIndexJurisdictionServing.fromGeneration, target.generation),
+  await readBounded(
+    tx
+      .select({
+        jurisdiction: corpusIndexJurisdictionServing.jurisdiction,
+        generation: corpusIndexJurisdictionServing.generation,
+        fromGeneration: corpusIndexJurisdictionServing.fromGeneration,
+      })
+      .from(corpusIndexJurisdictionServing)
+      .where(
+        and(
+          eq(corpusIndexJurisdictionServing.family, target.family),
+          or(
+            eq(corpusIndexJurisdictionServing.generation, target.generation),
+            eq(
+              corpusIndexJurisdictionServing.fromGeneration,
+              target.generation,
+            ),
+          ),
         ),
       ),
-    )
-    .limit(REFUSAL_SAMPLE);
+    REFUSAL_SAMPLE,
+  );
 
 /**
  * Revisions a runner holds a live lease on: a projection worker or an
@@ -216,27 +224,29 @@ const leasedRevisionsTx = async (
   tx: ReadTransaction,
   target: CorpusIndexRetireTarget,
 ) =>
-  await tx
-    .select({
-      indexId: corpusIndexProjectionIntents.indexId,
-      status: corpusIndexProjectionIntents.status,
-      leaseExpiresAt: corpusIndexProjectionIntents.leaseExpiresAt,
-    })
-    .from(corpusIndexProjectionIntents)
-    .where(
-      and(
-        eq(corpusIndexProjectionIntents.family, target.family),
-        eq(corpusIndexProjectionIntents.generation, target.generation),
-        // The statuses that take a lease (the expired-lease index's predicate).
-        inArray(corpusIndexProjectionIntents.status, [
-          "reserved",
-          "append_started",
-          "cleanup_started",
-        ]),
-        sql`${corpusIndexProjectionIntents.leaseExpiresAt} > clock_timestamp()`,
+  await readBounded(
+    tx
+      .select({
+        indexId: corpusIndexProjectionIntents.indexId,
+        status: corpusIndexProjectionIntents.status,
+        leaseExpiresAt: corpusIndexProjectionIntents.leaseExpiresAt,
+      })
+      .from(corpusIndexProjectionIntents)
+      .where(
+        and(
+          eq(corpusIndexProjectionIntents.family, target.family),
+          eq(corpusIndexProjectionIntents.generation, target.generation),
+          // The statuses that take a lease (the expired-lease index's predicate).
+          inArray(corpusIndexProjectionIntents.status, [
+            "reserved",
+            "append_started",
+            "cleanup_started",
+          ]),
+          sql`${corpusIndexProjectionIntents.leaseExpiresAt} > clock_timestamp()`,
+        ),
       ),
-    )
-    .limit(REFUSAL_SAMPLE);
+    REFUSAL_SAMPLE,
+  );
 
 /**
  * Decide the retire from what PostgreSQL holds now. Reads only; the retire
@@ -307,36 +317,42 @@ export const readCorpusIndexRetireTx = async (
       return panic(`Unhandled generation status: ${String(row.status)}`);
   }
   const flips = await recentFlipsTx(tx, target);
-  if (flips.length > 0) {
+  if (flips.type === "overflow" || flips.rows.length > 0) {
     return refuse(
       { class: "flip", reason: "keep_window" },
       `A flip within the last ${String(CORPUS_INDEX_RETIRE_KEEP_WINDOW_DAYS)} days names ${target.family}/${target.generation}; it stays the way back until the keep window ends`,
-      flips.map(
-        ({ from, to, flippedAt }) =>
-          `flip ${from ?? "none"} -> ${to} at ${flippedAt.toISOString()}`,
-      ),
+      flips.type === "overflow"
+        ? [`more than ${String(flips.cap)} flips`]
+        : flips.rows.map(
+            ({ from, to, flippedAt }) =>
+              `flip ${from ?? "none"} -> ${to} at ${flippedAt.toISOString()}`,
+          ),
     );
   }
   const pointers = await pointersTx(tx, target);
-  if (pointers.length > 0) {
+  if (pointers.type === "overflow" || pointers.rows.length > 0) {
     return refuse(
       { class: "pointer", reason: "jurisdiction_serving" },
       `A jurisdiction serving pointer names ${target.family}/${target.generation}`,
-      pointers.map(
-        ({ jurisdiction, generation, fromGeneration }) =>
-          `${jurisdiction}: served by ${generation}, flipped from ${fromGeneration}`,
-      ),
+      pointers.type === "overflow"
+        ? [`more than ${String(pointers.cap)} pointers`]
+        : pointers.rows.map(
+            ({ jurisdiction, generation, fromGeneration }) =>
+              `${jurisdiction}: served by ${generation}, flipped from ${fromGeneration}`,
+          ),
     );
   }
   const leased = await leasedRevisionsTx(tx, target);
-  if (leased.length > 0) {
+  if (leased.type === "overflow" || leased.rows.length > 0) {
     return refuse(
       { class: "in_flight", reason: "leased_revisions" },
       `A runner holds leased revisions of ${target.family}/${target.generation}; stop the runner that writes to it and retry once the leases expire`,
-      leased.map(
-        ({ indexId, status, leaseExpiresAt }) =>
-          `${indexId}: ${status}, lease until ${leaseExpiresAt?.toISOString() ?? "unknown"}`,
-      ),
+      leased.type === "overflow"
+        ? [`more than ${String(leased.cap)} leased revisions`]
+        : leased.rows.map(
+            ({ indexId, status, leaseExpiresAt }) =>
+              `${indexId}: ${status}, lease until ${leaseExpiresAt?.toISOString() ?? "unknown"}`,
+          ),
     );
   }
   return Result.ok({ type: "retire", target });
