@@ -1777,3 +1777,46 @@ if [[ "$1 $2" == 's3 cp' ]]; then cp latest.json "$TEST_ROOT/updater"; fi
       );
     }));
 });
+
+describe("release followers", () => {
+  const FOLLOWERS = {
+    "publish-npm.yml": "release-trigger",
+    "release-desktop.yml": "resolve",
+  } as const;
+  const releaseRun = (conclusion: string) => ({
+    values: {
+      "github.event_name": "workflow_run",
+      "github.repository": "owner/repo",
+      [`${RUN}.head_repository.full_name`]: "owner/repo",
+      [`${RUN}.path`]: ".github/workflows/release.yml",
+      [`${RUN}.event`]: "workflow_dispatch",
+      [`${RUN}.conclusion`]: conclusion,
+    },
+  });
+
+  for (const [file, entry] of Object.entries(FOLLOWERS)) {
+    const workflow: unknown = Bun.YAML.parse(
+      readFileSync(
+        new URL(`../.github/workflows/${file}`, import.meta.url),
+        "utf-8",
+      ),
+    );
+    const jobs =
+      isRecord(workflow) && isRecord(workflow["jobs"]) ? workflow["jobs"] : {};
+    const job = jobs[entry];
+    const condition = isRecord(job) ? conditionOf(job) : "";
+
+    test(`${file} ignores a release run whose jobs all skipped`, () => {
+      expect(condition).not.toBe("");
+      expect(definitelyFalse(condition, releaseRun("skipped"))).toBe(true);
+    });
+
+    test(`${file} follows a completed release run`, () => {
+      for (const conclusion of ["success", "failure"]) {
+        expect(evaluate(condition, releaseRun(conclusion)), conclusion).toBe(
+          true,
+        );
+      }
+    });
+  }
+});
