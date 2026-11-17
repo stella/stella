@@ -563,8 +563,9 @@ test("required checks report on pull requests and merge groups", () => {
     );
     expect(parsed.jobs, check).toHaveProperty(job);
     expect(parsed.on, check).toHaveProperty("merge_group");
+    // The signature check runs on main after its unprivileged notification.
     expect(parsed.on, check).toHaveProperty(
-      check === "cla" ? "pull_request_target" : "pull_request",
+      check === "cla" ? "workflow_run" : "pull_request",
     );
   }
   expect(required.at(2)?.[1]).toContain('name = "cla"');
