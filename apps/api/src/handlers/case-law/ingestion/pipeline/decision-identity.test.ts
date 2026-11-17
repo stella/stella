@@ -73,11 +73,11 @@ test("two publishers' spellings of one court reach the write path as one court",
     }),
   ).unwrap().observed;
   for (const written of [regional, supreme]) {
-    expect(written.court).toBe(PARDUBICE);
+    expect(String(written.court)).toBe(PARDUBICE);
     expect(written.courtId).toBe("KSHKPA");
   }
   // The printed name stays beside the official one.
-  expect(regional.metadata["court"]).toBe(
+  expect(String(regional.metadata["court"])).toBe(
     "Krajský soud v Hradci Králové, pobočka Pardubice",
   );
 });
@@ -86,9 +86,9 @@ test("a printed name the adapter did not keep is kept by the boundary", () => {
   const written = observed(
     decision({ country: "SVK", court: "Okresný súd Žiar n/H" }),
   ).unwrap().observed;
-  expect(written.court).toBe("Okresný súd Žiar nad Hronom");
+  expect(String(written.court)).toBe("Okresný súd Žiar nad Hronom");
   expect(written.courtId).toBe("OSZH");
-  expect(written.metadata["court"]).toBe("Okresný súd Žiar n/H");
+  expect(String(written.metadata["court"])).toBe("Okresný súd Žiar n/H");
 });
 
 test("a printed name the directory cannot place is the decision's rejection", () => {
@@ -110,7 +110,7 @@ test("a jurisdiction identified by name keeps the name it printed and stores no 
   const written = observed(
     decision({ country: "POL", court: "Sąd Najwyższy" }),
   ).unwrap().observed;
-  expect(written.court).toBe("Sąd Najwyższy");
+  expect(String(written.court)).toBe("Sąd Najwyższy");
   expect(written.courtId).toBeUndefined();
 });
 

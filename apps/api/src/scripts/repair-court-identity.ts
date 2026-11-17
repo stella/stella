@@ -206,11 +206,12 @@ const rollback = async (file: string): Promise<void> => {
       // audit: skip — operator revert of a derived court identity
       executedRows(await tx.execute(revertCourtIdentityStatement(write)))
         .length > 0;
-    // db-await-in-loop: one transaction per row, each with its projection lock
-    const written =
+    const revertRow =
       write.from === write.to
-        ? await ingestionDb(revert)
-        : await writeWithProjection(id, revert);
+        ? async () => await ingestionDb(revert)
+        : async () => await writeWithProjection(id, revert);
+    // db-await-in-loop: one transaction per row, each with its projection lock
+    const written = await revertRow();
     if (written) {
       reverted += 1;
     } else {
@@ -343,18 +344,14 @@ const walkSource = async (source: CourtIdentitySource): Promise<Tally> => {
   const tally = newTally();
   let cursor: CourtIdentityCursor | null = null;
   while (remaining() > 0) {
+    const pageStatement = selectCourtIdentityPageStatement({
+      after: cursor,
+      pageSize,
+      sourceId: source.id,
+    });
     // db-await-in-loop: keyset page per iteration; the page is the batch
-    const page = parseCourtIdentityPage(
-      executedRows(
-        await rootDb.execute(
-          selectCourtIdentityPageStatement({
-            after: cursor,
-            pageSize,
-            sourceId: source.id,
-          }),
-        ),
-      ),
-    );
+    const pageRows = await rootDb.execute(pageStatement);
+    const page = parseCourtIdentityPage(executedRows(pageRows));
     if (page.cursor === null) {
       break;
     }

@@ -41,6 +41,7 @@ import {
   fallbackEcliComparisonKey,
 } from "@/api/lib/case-law/fallback-decision-identity";
 import type { DecisionStorageIdentity } from "@/api/lib/case-law/fallback-decision-identity";
+import { toPlainText } from "@/api/lib/case-law/plain-text";
 import { rowHoldsDocumentFor } from "@/api/lib/case-law/stored-payload";
 import type { StoredCorpusValidationError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -126,9 +127,13 @@ export const observeDecision = ({
   const keepsPrinted =
     court.value.court === printed ||
     typeof sanitized.value.metadata["court"] === "string";
+  const official = toPlainText(court.value.court);
+  const officialCourt = Result.isError(official)
+    ? panic(`A directory court name is not plain text: ${court.value.court}`)
+    : official.value;
   const observed: IngestionResult = {
     ...sanitized.value,
-    court: court.value.court,
+    court: officialCourt,
     ...(court.value.courtId === null ? {} : { courtId: court.value.courtId }),
     ...(keepsPrinted
       ? {}
