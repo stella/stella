@@ -1,16 +1,15 @@
 import { Result } from "better-result";
 
+import { classifyFailure, readFailureBrand } from "@stll/errors";
+
 import { LOCAL_RUN_MCP_MODE } from "@/api/handlers/chat/local-run-plan";
 import type { AvailableChatSkill } from "@/api/lib/agent-skills/skills";
-import { captureError } from "@/api/lib/analytics/capture";
 import type { AdmittedMcpSession } from "@/api/lib/auth/oauth-grant-admission";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { AGENT_RUN_DEFAULT_SCOPES } from "@/api/mcp/agent-run-token";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
 import { resolveMcpSessionContext } from "@/api/mcp/context";
-import { McpGatewayLoadError } from "@/api/mcp/errors";
 import { loadServedSkillTools } from "@/api/mcp/gateway/skills";
 
 /** One skill a run on the member's computer can load, as its prompt lists it. */
@@ -75,21 +74,16 @@ export const loadLocalRunSkillTools = async ({
         source: skill.source,
       }));
     },
-    catch: (cause) => {
-      // A gateway load fault is captured where it happened.
-      if (!(cause instanceof McpGatewayLoadError)) {
-        captureError(
+    // A failed read of the member's organization state; a cause that names
+    // its own failure (a lost connection, a deadline) keeps that reason.
+    catch: (cause) =>
+      classifyFailure(
+        new HandlerError({
+          status: 500,
+          message: "Failed to load the skills for a run on a computer",
           cause,
-          handlerErrorContext("chat.loadLocalRunSkillTools.error", {
-            source: "chat-local-run-skills",
-          }),
-        );
-      }
-      return new HandlerError({
-        status: 500,
-        message: "Failed to load the skills for a run on a computer",
-        cause,
-      });
-    },
+        }),
+        readFailureBrand(cause)?.reason ?? "organization_state_unreadable",
+      ),
   });
 };

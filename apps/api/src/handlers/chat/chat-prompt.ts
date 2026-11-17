@@ -622,7 +622,7 @@ const buildLocalRunCoreRuleSections = (
  * share of them: each description is cut to a line, and past the budget the
  * descriptions shorten so every skill keeps its name in the list.
  */
-export const LOCAL_RUN_SKILL_DESCRIPTION_MAX_CHARS = 160;
+const LOCAL_RUN_SKILL_DESCRIPTION_MAX_CHARS = 160;
 export const LOCAL_RUN_SKILL_CATALOG_MAX_CHARS = 16_000;
 /** Below this, a description says too little to be worth its characters. */
 const LOCAL_RUN_SKILL_DESCRIPTION_MIN_CHARS = 24;
@@ -3358,7 +3358,10 @@ const localRunSkillAccess = (
         : `Instructions (first ${String(ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS)} characters; call the stella MCP tool ${toolName} for the rest):`;
     },
     notPreloaded: (slugs) => {
-      const toolNames = slugs.flatMap((slug) => toolOf(slug) ?? []);
+      const toolNames = slugs.flatMap((slug) => {
+        const toolName = toolOf(slug);
+        return toolName === undefined ? [] : [toolName];
+      });
       return {
         line:
           toolNames.length === 0
