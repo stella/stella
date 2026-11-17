@@ -568,7 +568,7 @@ export const ENUM_COLUMNS = {
   usage_events: ["action_type", "lane", "service_tier"],
   usage_lane_counters: ["kind"],
   usage_policies: ["billing_interval", "kind", "price_basis", "visibility"],
-  user: ["reader_answer_language"],
+  user: ["locale", "reader_answer_language"],
   user_professional_use_acceptances: ["source"],
   work_obligation_events: ["entity_feature_gate", "type"],
   work_obligations: ["entity_feature_gate", "source_type", "type"],

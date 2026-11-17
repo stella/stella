@@ -1,3 +1,8 @@
+// The e2e tsconfig is node-only (lib ESNext); the `page.evaluate` /
+// `addInitScript` callbacks below run in the browser, so pull in the DOM
+// lib for their globals (document, localStorage, MutationObserver, ...).
+/// <reference lib="dom" />
+/// <reference lib="dom.iterable" />
 import { chromium } from "@playwright/test";
 import type { Browser, BrowserContext, Locator, Page } from "@playwright/test";
 import { execFile } from "node:child_process";
@@ -16,11 +21,6 @@ import {
 } from "@stll/playwright-tools/marketing-locales";
 import { repoRelativePath } from "@stll/portable-path";
 
-// The e2e tsconfig is node-only (lib ESNext); the `page.evaluate` /
-// `addInitScript` callbacks below run in the browser, so pull in the DOM
-// lib for their globals (document, localStorage, MutationObserver, ...).
-/// <reference lib="dom" />
-/// <reference lib="dom.iterable" />
 import { setPresentationPrefs } from "../helpers/presentation-prefs";
 import {
   anchorMarketingAgentFinalTurn,
@@ -1026,7 +1026,6 @@ const recordCapture = async ({
   });
   try {
     await recordCaptureInContext({ capture, context, theme, views });
-    return;
   } finally {
     // Closing the page never unmounts the editor, so an editor take's lock
     // would outlive it and badge the document in later scenes. Release it
