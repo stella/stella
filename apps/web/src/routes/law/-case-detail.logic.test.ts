@@ -1,6 +1,6 @@
 import { QueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import {
@@ -496,5 +496,88 @@ describe("absorbed supplement redirect", () => {
     const redirected = await redirectFromReasons("p-4");
 
     expect(redirected).toHaveProperty("options.hash", `${ANCHOR_PREFIX}p-4`);
+  });
+});
+
+describe("secondary decision reads", () => {
+  const PARAMS = {
+    country: "cze",
+    court: "synthetic-court",
+    slug: PUBLISHED_DECISION.slug,
+  };
+
+  const seededClient = () => {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(
+      decisionBySlugOptions({
+        country: PUBLIC_COUNTRY,
+        slug: PUBLISHED_DECISION.slug,
+      }).queryKey,
+      PUBLISHED_DECISION,
+    );
+    return queryClient;
+  };
+
+  // A read that never answers until it is cancelled: the slowest a secondary
+  // read can be.
+  const hangingFetch = () =>
+    spyOn(globalThis, "fetch").mockImplementation(
+      async (_input, init) =>
+        await new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => {
+            reject(init.signal?.reason);
+          });
+        }),
+    );
+
+  test("a server render reads the decision alone", async () => {
+    const fetchSpy = hangingFetch();
+    const queryClient = seededClient();
+    try {
+      const decision = await loadPublicCaseLawDecisionRoute({
+        hash: "",
+        params: PARAMS,
+        queryClient,
+        search: {},
+        warmSecondaryReads: false,
+      });
+
+      expect(decision.id).toBe(PUBLISHED_DECISION.id);
+      // Every read a server render starts leaves from the same server, so a
+      // crawled page costs one API read, not the decision plus its panels.
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(queryClient.getQueryCache().getAll()).toHaveLength(1);
+    } finally {
+      fetchSpy.mockRestore();
+      queryClient.clear();
+    }
+  });
+
+  test("a browser load warms the panels without waiting for them", async () => {
+    const fetchSpy = hangingFetch();
+    const queryClient = seededClient();
+    try {
+      const decision = await loadPublicCaseLawDecisionRoute({
+        hash: "",
+        params: PARAMS,
+        queryClient,
+        search: {},
+        warmSecondaryReads: true,
+      });
+
+      expect(decision.id).toBe(PUBLISHED_DECISION.id);
+      const secondary = queryClient
+        .getQueryCache()
+        .getAll()
+        .filter((query) => query.state.data === undefined);
+      expect(secondary.length).toBeGreaterThan(0);
+      expect(
+        secondary.every((query) => query.state.fetchStatus === "fetching"),
+      ).toBe(true);
+    } finally {
+      await queryClient.cancelQueries();
+      fetchSpy.mockRestore();
+      queryClient.clear();
+    }
   });
 });

@@ -1,6 +1,9 @@
 import { createElement } from "react";
 
-import { defineHandlerCallback } from "@tanstack/react-router/ssr/server";
+import {
+  defineHandlerCallback,
+  getSsrStatus,
+} from "@tanstack/react-router/ssr/server";
 import { createStartHandler, StartServer } from "@tanstack/react-start/server";
 import handler, { createServerEntry } from "@tanstack/react-start/server-entry";
 
@@ -13,7 +16,10 @@ import {
 } from "@/lib/api-origins";
 import { SSR_CACHE_CLASS_HEADER } from "@/route-response-policy";
 import { withContentSecurityPolicy } from "@/security/content-security-policy.server";
-import { createSsrErrorReporter } from "@/ssr-error-reporter";
+import {
+  createSsrErrorReporter,
+  createSsrRouteFailureReporter,
+} from "@/ssr-error-reporter";
 import { renderSsrResponse } from "@/ssr-renderer";
 import { isSsrDocumentRequest } from "@/ssr-request";
 import { SSR_STATUS_HEADER, ssrStatusFromHeader } from "@/ssr-response-status";
@@ -38,6 +44,12 @@ const reportSsrError = createSsrErrorReporter({
       fingerprintKey: "server:failure",
       scope: { type: "handler", handlerId: "server:failure" },
     }),
+  writeDiagnostic: (line) => {
+    process.stderr.write(line);
+  },
+});
+
+const reportSsrRouteFailure = createSsrRouteFailureReporter({
   writeDiagnostic: (line) => {
     process.stderr.write(line);
   },
@@ -74,6 +86,12 @@ export default createServerEntry({
                     if (rendered.isErr()) {
                       throw rendered.error;
                     }
+                    // A loader failure renders the error component with a
+                    // 500 instead of throwing, so it is reported here.
+                    reportSsrRouteFailure({
+                      matches: router.state.matches,
+                      status: getSsrStatus(router),
+                    });
                     return rendered.value;
                   }),
                 )(renderRequest),
