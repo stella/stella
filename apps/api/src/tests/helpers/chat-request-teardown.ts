@@ -21,9 +21,12 @@ export type TornDownRequest = {
 };
 
 export const createTornDownRequest = ({
+  headers,
   signal,
   url,
 }: {
+  /** The headers the page sent with the request, if it sent any. */
+  headers?: RequestInit["headers"];
   /** The page's own abort, which reaches the request until it ends. */
   signal: AbortSignal | undefined;
   url: string;
@@ -37,7 +40,10 @@ export const createTornDownRequest = ({
   } else {
     signal?.addEventListener("abort", followPage, { once: true });
   }
-  const served = new Request(url, { signal: lifetime.signal });
+  const served = new Request(url, {
+    ...(headers === undefined ? {} : { headers }),
+    signal: lifetime.signal,
+  });
   const reads: string[] = [];
   let ended = false;
   const request = new Proxy(served, {

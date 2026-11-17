@@ -1,5 +1,6 @@
 import { useForm, useSelector } from "@tanstack/react-form";
 import { useNavigate } from "@tanstack/react-router";
+import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -149,11 +150,18 @@ export const PasswordSignInForm = ({
           return;
         }
 
+        const refreshed = await Result.tryPromise(
+          async () => await invalidateSession.mutateAsync(),
+        );
+        if (refreshed.isErr()) {
+          notifyUserError(refreshed.error, t("errors.actionFailed"));
+          return;
+        }
+
         // An enrolled user's password is correct but the session is still
         // pending a second factor; send them to the same challenge page the
         // email-OTP flow uses instead of treating this as a completed sign-in.
         if (isTwoFactorRedirect(data)) {
-          await invalidateSession.mutateAsync();
           await navigate({
             to: "/auth/two-factor",
             search: { redirectTo },
@@ -161,7 +169,6 @@ export const PasswordSignInForm = ({
           return;
         }
 
-        await invalidateSession.mutateAsync();
         await navigate({
           to: "/auth/organization",
           search: { redirectTo },

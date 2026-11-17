@@ -179,6 +179,10 @@ export const ENUM_COLUMN_ROLES = {
     outcome: ATTRIBUTE,
     source: ATTRIBUTE,
   },
+  // What a limit reminder does when due; the member may switch either way.
+  chat_limit_reminders: {
+    on_reset: ATTRIBUTE,
+  },
   // Why a queue waits; any reason may replace another.
   chat_queue_holds: {
     reason: ATTRIBUTE,
@@ -222,6 +226,9 @@ export const ENUM_COLUMN_ROLES = {
   },
   corpus_index_group_enrollments: {
     contract_version: ATTRIBUTE,
+    family: ATTRIBUTE,
+  },
+  corpus_index_generation_flips: {
     family: ATTRIBUTE,
   },
   corpus_index_generation_seeding_passes: {

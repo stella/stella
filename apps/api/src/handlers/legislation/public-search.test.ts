@@ -16,6 +16,7 @@ import { createHttpApp } from "@/api/http/app";
 import { routes } from "@/api/http/route";
 import { isSafePublicHandler } from "@/api/lib/api-handlers";
 import { toSafeId } from "@/api/lib/branded-types";
+import type { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
   decodeCorpusSearchCursor,
   encodeCorpusSearchCursor,
@@ -28,6 +29,7 @@ import type {
 } from "@/api/lib/legislation-public-read-db";
 import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { serveForTest } from "@/api/tests/helpers/test-server";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const result = {
   items: [],
@@ -70,6 +72,11 @@ const timingTransaction = drizzle(async () => ({
 
 type TimedSearchFailure = "none" | "hydration" | "index" | "ranking_sync";
 
+/** The scan's servable check, which these fakes stand in for. */
+type SelectApplied = Parameters<
+  Parameters<typeof readCorpusIndexSearchPage>[0]["rankCandidates"]
+>[1]["selectAppliedCandidates"];
+
 const runTimedSearch = async (
   stageTool?: string,
   failure: TimedSearchFailure = "none",
@@ -108,17 +115,20 @@ const runTimedSearch = async (
           })),
           {
             excludedGroups: new Set(),
-            scannedProjections: () => new Map(),
+            appliedProjections: () => new Map(),
             selectAppliedCandidates: () => {
               clock += 13;
               rankings += 1;
               if (failure === "ranking_sync" && rankings === 2) {
                 throw new Error("ranking failed synchronously");
               }
-              return timingCandidateIds.map((id, index) => ({
-                id,
-                score: 1 - index / 10,
-              }));
+              // The scan's servable check is faked here: its candidates.
+              return asTestRaw<ReturnType<SelectApplied>>(
+                timingCandidateIds.map((id, index) => ({
+                  id,
+                  score: 1 - index / 10,
+                })),
+              );
             },
           },
         );
@@ -133,17 +143,20 @@ const runTimedSearch = async (
           })),
           {
             excludedGroups: new Set(),
-            scannedProjections: () => new Map(),
+            appliedProjections: () => new Map(),
             selectAppliedCandidates: () => {
               clock += 13;
               rankings += 1;
               if (failure === "ranking_sync" && rankings === 2) {
                 throw new Error("ranking failed synchronously");
               }
-              return timingCandidateIds.map((id, index) => ({
-                id,
-                score: 1 - index / 10,
-              }));
+              // The scan's servable check is faked here: its candidates.
+              return asTestRaw<ReturnType<SelectApplied>>(
+                timingCandidateIds.map((id, index) => ({
+                  id,
+                  score: 1 - index / 10,
+                })),
+              );
             },
           },
         );

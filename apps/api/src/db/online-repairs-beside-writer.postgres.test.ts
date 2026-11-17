@@ -1136,6 +1136,11 @@ const SEEDS = {
     "chat_turns_interaction_values_check",
     `INSERT INTO chat_turns (id, organization_id, user_id, thread_id, user_message_id, status, assistant_message_id, interaction_type, interaction_tool_call_id) VALUES ('${ID}', 'org', 'user', '${ID_2}', '${ID_3}', 'awaiting-user', '${ENTITY_ID}', 'approval', 'call')`,
   ),
+  chat_limit_reminders_on_reset_check: noRowSeed(
+    "chat_limit_reminders",
+    "chat_limit_reminders_on_reset_check",
+    `INSERT INTO chat_limit_reminders (thread_id, turn_id, organization_id, user_id, remind_at, on_reset) VALUES ('${ID}', '${ID_2}', 'org', 'user', now(), 'continue')`,
+  ),
   chat_turns_status_values_check: noRowSeed(
     "chat_turns",
     "chat_turns_status_values_check",

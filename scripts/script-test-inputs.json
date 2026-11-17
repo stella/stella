@@ -69,6 +69,7 @@
     "scripts/check-tracked-cloud-reports.test.ts": ["**"],
     "scripts/check-tracked-symlinks.test.ts": ["**"],
     "scripts/check-workflow-pr-write-token.test.ts": ["**"],
+    "scripts/check-workspace-test-gating.test.ts": ["apps/**", "packages/**"],
     "scripts/child-output-buffer.test.ts": ["**"],
     "scripts/ci-affected-selection.test.ts": ["**"],
     "scripts/ci-api-bootstrap.test.ts": ["**"],
@@ -312,6 +313,7 @@
     "scripts/workflow-steps.test.ts": ["**"]
   },
   "noTrackedInputs": {
+    "scripts/borrowed-dependencies.test.ts": "Builds all manifests, workspace sources and dependency links in temporary fixtures; uses only its static import closure.",
     "scripts/oxlint-rule-ids.test.ts": "Exercises plugin aliases and canonicalization with in-memory rule fixtures; does not invoke the filesystem-backed rule catalog.",
     "scripts/query-perf-baseline.test.ts": "Uses only temporary fixtures and its static import closure."
   }

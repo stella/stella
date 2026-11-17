@@ -193,9 +193,9 @@ test("a member without a readable head fails closed", () => {
   }
 });
 
-test("pull request checks pass without API calls", () => {
+test("the group check refuses any other event without API calls", () => {
   const run = fixture([17], [17]);
-  run.run("pull_request");
+  expect(() => run.run("pull_request")).toThrow("HOLD_INVALID_GROUP");
   expect(run.calls).toEqual([]);
 });
 
@@ -440,8 +440,7 @@ test("the required job runs on PRs and merge groups using only trusted base scri
   const workflow = v.parse(
     v.object({
       on: v.object({
-        pull_request: v.unknown(),
-        pull_request_target: v.object({ types: v.array(v.string()) }),
+        pull_request: v.object({ types: v.array(v.string()) }),
         merge_group: v.object({ types: v.array(v.string()) }),
       }),
       permissions: v.record(v.string(), v.string()),
@@ -470,11 +469,12 @@ test("the required job runs on PRs and merge groups using only trusted base scri
       ),
     ),
   );
-  expect(workflow.on).toHaveProperty("pull_request");
-  expect(workflow.on.pull_request_target.types).toEqual([
+  expect(workflow.on.pull_request.types).toEqual([
+    "opened",
+    "synchronize",
+    "reopened",
     "labeled",
     "unlabeled",
-    "reopened",
   ]);
   expect(workflow.on.merge_group.types).toEqual(["checks_requested"]);
   expect(workflow.permissions).toEqual({
@@ -483,7 +483,9 @@ test("the required job runs on PRs and merge groups using only trusted base scri
   });
   const job = workflow.jobs["merge-group-hold"];
   expect(job?.name).toBe("merge-group-hold");
-  expect(job?.if).toBe("github.event_name != 'pull_request_target'");
+  expect(job?.if).toBe(
+    `github.event_name == 'merge_group' || !contains(fromJSON('["labeled", "unlabeled"]'), github.event.action)`,
+  );
   expect(job?.steps.at(0)?.with?.["ref"]).toBe(
     `\${{ github.event.merge_group.base_ref }}`,
   );
@@ -505,14 +507,14 @@ test("the required job runs on PRs and merge groups using only trusted base scri
   expect(job?.steps.at(4)?.if).toBe("github.event_name == 'merge_group'");
   const dequeue = workflow.jobs["dequeue-held-pull-request"];
   expect(dequeue?.if).toBe(
-    "github.event_name == 'pull_request_target' && github.event.pull_request.base.ref == github.event.repository.default_branch",
+    `github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' && contains(fromJSON('["labeled", "unlabeled", "reopened"]'), github.event.action) && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.base.ref == github.event.repository.default_branch`,
   );
   expect(dequeue?.permissions).toEqual({
     contents: "read",
     "pull-requests": "write",
   });
   expect(dequeue?.steps.at(0)?.with?.["ref"]).toBe(
-    `\${{ github.workflow_sha }}`,
+    `\${{ github.event.repository.default_branch }}`,
   );
   expect(dequeue?.steps.at(0)?.with?.["persist-credentials"]).toBe(false);
   expect(dequeue?.steps.at(0)?.["timeout-minutes"]).toBeGreaterThan(0);

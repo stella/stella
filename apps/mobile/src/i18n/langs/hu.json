@@ -85,6 +85,7 @@
     "documentClose": "Bezárás",
     "approvalBrowserNote": "Engedélyezés után a számítógépe böngészőjében fut, a stella bővítményen keresztül.",
     "grantFailed": "Az engedélyt nem sikerült menteni. Próbálja újra.",
+    "limitReminderFailed": "A módosítást nem sikerült menteni. Próbálja újra.",
     "elsewhereBrowser": "Ez a lépés a számítógépe böngészőjében fut, a stella bővítményen keresztül. A befejezéshez nyissa meg ott ezt a beszélgetést a stellában.",
     "elsewhereSecret": "Ehhez a lépéshez kulcs kell. Biztonsági okból a kulcsokat a számítógépen, a stellában lehet hozzáadni, nem az alkalmazásban.",
     "elsewhereConnector": "Ez a lépés egy alkalmazást kapcsol össze. Biztonsági okból az alkalmazásokat a számítógépen, a stellában lehet összekapcsolni, nem az alkalmazásban.",
@@ -251,7 +252,13 @@
       "sessionNotResumed": "A számítógépén futó kódoló ügynök nem tudta onnan folytatni, ahol abbahagyta, ezért a csevegés üzeneteiből dolgozott tovább.",
       "steered": "Az ügynök munkája közben elküldve",
       "ranOnModel": "Ezen a modellen futott: {model}",
-      "desktopSettingsSteps": "A számítógépén a stella desktopban nyissa meg a Beállítások › Általános › AI-előfizetések részt."
+      "desktopSettingsSteps": "A számítógépén a stella desktopban nyissa meg a Beállítások › Általános › AI-előfizetések részt.",
+      "errorLimitResetsAt": "A számítógépén futó kódoló ügynök elérte a használati korlátját. {time} után újra megpróbálhatja.",
+      "limitReminderNotify": "Értesítsen, amikor visszaáll",
+      "limitReminderScheduled": "{time} után értesítjük.",
+      "limitResumeContinue": "Automatikus folytatás, amikor visszaáll",
+      "limitResumeScheduled": "{time} után automatikusan folytatódik.",
+      "limitReminderCancel": "Mégse"
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# ellenőrzött forrás} other {# ellenőrzött forrás}}",
@@ -324,6 +331,39 @@
         "send-refused": "A sor szüneteltetve: az első üzenetet nem sikerült elküldeni. Szerkessze vagy távolítsa el, majd folytassa.",
         "usage-limit": "A sor szüneteltetve: elérte a használati korlátot. Folytassa, amikor visszaáll.",
         "computer-away": "Várakozás a számítógépére: a sorban álló üzenetek elmennek, amint csatlakozik."
+      }
+    },
+    "edit": {
+      "action": "Szerkesztés",
+      "title": "Üzenet szerkesztése",
+      "input": "Szerkesztett üzenet",
+      "notice": "A küldés lecseréli ezt az üzenetet és az utána következő összes üzenetet.",
+      "cancel": "Mégse",
+      "refused": "Az üzenetet nem sikerült szerkeszteni. A csevegés most a mentett állapotot mutatja; próbálja újra, amikor már nem fut válasz.",
+      "refusedHistoryChanged": "A csevegés megváltozott a szerkesztés küldése közben. Most a mentett állapotot mutatja; küldje el újra a szerkesztést.",
+      "refusedTargetMissing": "Ez az üzenet már nincs a csevegésben, ezért nem szerkeszthető.",
+      "localFiles": {
+        "computer": {
+          "failed": "A visszavonás nem fejeződött be a számítógépén. Előfordulhat, hogy néhány fájl már megváltozott, ezért ellenőrizze a csevegés mappáját.",
+          "folderBusy": "Egy futás használja ezt a mappát a számítógépén. Próbálja újra, ha befejeződött.",
+          "noCheckpoint": "A számítógépén nincs mentett másolat a fájlokról a lépés előtti állapotból, így semmi sem vonódott vissza.",
+          "updateForEarlier": "Frissítse a stella desktopot a korábbi üzenetek módosításainak visszavonásához."
+        },
+        "conversationRestarts": "Az ügynök a csevegés szövegéből kezdi újra, mert az üzenet előtti válasz nem fejeződött be.",
+        "expired": "A számítógépe nem válaszolt időben. Próbálja újra.",
+        "option": "Az üzenet óta történt fájlmódosítások visszavonása is",
+        "optionHint": "Ez a mappában Ön által végzett módosításokat is visszavonja.",
+        "pending": "Fájlmódosítások visszavonása a számítógépén",
+        "refused": {
+          "alreadyUndone": "Ezeket a fájlmódosításokat már visszavonták.",
+          "desktopOffline": "A számítógépe offline. Nyissa meg a stella asztali alkalmazást, és próbálja újra.",
+          "desktopUpdateRequired": "A számítógépén lévő stella asztali alkalmazás túl régi a módosítások visszavonásához. Frissítse, és próbálja újra.",
+          "folderShared": "Az üzenet óta egy másik csevegés is dolgozott ebben a mappában.",
+          "noSavedCopy": "A számítógépe nem őrzött meg másolatot a mappáról az üzenet előtti állapotból: túl nagy volt, túl lassan mentődött, vagy újabb másolatok váltották fel.",
+          "severalFolders": "A későbbi üzenetek másik számítógépen vagy másik mappában futottak.",
+          "threadBusy": "Ez a csevegés még dolgozik. Próbálja újra, ha befejezte."
+        },
+        "restored": "Fájlmódosítások visszavonva"
       }
     }
   },

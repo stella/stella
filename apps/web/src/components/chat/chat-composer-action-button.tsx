@@ -73,7 +73,7 @@ export const ChatComposerActionButton = (
       )}
       aria-busy={mode === "stop" && props.stopping === true ? true : undefined}
       aria-label={label}
-      className={cn(className, !enabled && "opacity-50")}
+      className={className}
       disabled={!enabled}
       onClick={handleClick}
       size="icon-round"

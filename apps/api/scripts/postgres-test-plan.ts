@@ -37,6 +37,7 @@ export const EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS: ReadonlySet<string> =
     "src/lib/lists/sanctions/monitoring-migrations.postgres.test.ts",
     "src/lib/lists/sanctions/monitoring-roles.postgres.test.ts",
     "src/lib/scheduler/tasks/registration-retention.postgres.test.ts",
+    "src/scripts/corpus-generation.postgres.test.ts",
     "src/scripts/eu-completion-tick.postgres.test.ts",
     "src/tests/query-perf/scheduled-run.postgres.test.ts",
   ]);

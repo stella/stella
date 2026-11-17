@@ -1909,23 +1909,24 @@
     "loadEarlierMessagesError": "Nie udało się załadować wcześniejszych wiadomości",
     "loadingEarlierMessages": "Ładowanie wcześniejszych wiadomości…",
     "localFilesUndo": {
-      "action": "Cofnij zmiany w plikach",
       "computer": {
         "failed": "Cofanie zmian nie zakończyło się na Twoim komputerze. Niektóre pliki mogły już zostać zmienione, więc sprawdź folder czatu.",
         "folderBusy": "Ten folder na Twoim komputerze jest używany przez inne uruchomienie. Spróbuj ponownie, gdy się zakończy.",
         "noCheckpoint": "Twój komputer nie ma zapisanej kopii plików sprzed tego kroku, więc nic nie zostało cofnięte.",
-        "notNewest": "Twój komputer ma nowsze zmiany w tym folderze, więc nic nie zostało cofnięte."
+        "updateForEarlier": "Zaktualizuj stella desktop, aby cofać zmiany z wcześniejszych wiadomości."
       },
-      "confirm": "Cofnij zmiany",
-      "confirmDescription": "Pliki, które ten krok zmienił w swoim folderze na Twoim komputerze, wrócą do stanu sprzed tego kroku. Cofnięte zostaną tylko zmiany z tego kroku; zmiany z wcześniejszych kroków pozostaną.",
-      "confirmTitle": "Cofnąć zmiany w plikach z tego kroku?",
+      "conversationRestarts": "Agent zacznie od nowa na podstawie tekstu tego czatu, bo odpowiedź przed tą wiadomością nie została ukończona.",
       "expired": "Twój komputer nie odpowiedział na czas. Spróbuj ponownie.",
+      "option": "Cofnij też zmiany w plikach od tej wiadomości",
+      "optionHint": "Cofa to również zmiany wprowadzone przez Ciebie w folderze.",
       "pending": "Cofanie zmian w plikach na Twoim komputerze",
       "refused": {
+        "alreadyUndone": "Te zmiany w plikach zostały już cofnięte.",
         "desktopOffline": "Twój komputer jest offline. Otwórz aplikację desktopową stella i spróbuj ponownie.",
         "desktopUpdateRequired": "Aplikacja desktopowa stella na Twoim komputerze jest zbyt stara, aby cofać zmiany. Zaktualizuj ją i spróbuj ponownie.",
-        "noCheckpoint": "Ten krok nie ma zapisanej kopii plików, do której można wrócić.",
-        "notNewest": "Cofnąć można tylko zmiany w plikach z najnowszego kroku.",
+        "folderShared": "Od tej wiadomości w tym folderze pracował inny czat.",
+        "noSavedCopy": "Twój komputer nie zachował kopii folderu sprzed tej wiadomości: był za duży lub zapisywał się zbyt wolno albo zastąpiły ją nowsze kopie.",
+        "severalFolders": "Późniejsze wiadomości działały na innym komputerze lub w innym folderze.",
         "threadBusy": "Ten czat jeszcze pracuje. Spróbuj ponownie, gdy skończy."
       },
       "restored": "Zmiany w plikach cofnięte"
@@ -1954,6 +1955,8 @@
       "folderStateUnreadable": "Nie można odczytać",
       "limitReminderNotify": "Powiadom mnie po odnowieniu",
       "limitReminderScheduled": "Powiadomimy Cię po {time}.",
+      "limitResumeContinue": "Kontynuuj automatycznie po odnowieniu",
+      "limitResumeScheduled": "Wznowimy automatycznie po {time}.",
       "permissionAboveLimit": "Twoja organizacja na to nie pozwala",
       "permissionAskDescription": "Sam edytuje pliki w folderze czatu; o wszystko inne pyta.",
       "permissionAutoDescription": "Sam robi to, co uznaje za bezpieczne; o resztę pyta.",

@@ -17,6 +17,8 @@ import {
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { TRANSITIONS } from "@/api/lib/db/transition-specs";
+import { transitionBatch } from "@/api/lib/db/transitions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { formatTodayInTimeZone } from "@/api/lib/timezone";
@@ -208,36 +210,33 @@ export const deleteTimeEntryHandler = async function* ({
       if (runningError) {
         return runningError;
       }
-      const rows = await tx
-        .update(timeEntries)
-        .set({
-          status: BILLING_STATUS.WRITTEN_OFF,
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(timeEntries.id, body.id),
-            eq(timeEntries.workspaceId, workspaceId),
-            eq(timeEntries.status, existing.status),
-          ),
-        )
-        .returning({ id: timeEntries.id });
-
+      const rows = await transitionBatch({
+        tx,
+        spec: TRANSITIONS.timeEntries,
+        ids: [body.id],
+        options: {
+          from: [existing.status],
+          to: BILLING_STATUS.WRITTEN_OFF,
+          set: { updatedAt: new Date() },
+          guard: eq(timeEntries.workspaceId, workspaceId),
+        },
+        recordTransitionAuditEvent: async (auditTx) => {
+          await recordAuditEvent(auditTx, {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
+            resourceId: body.id,
+            changes: {
+              status: {
+                old: existing.status,
+                new: BILLING_STATUS.WRITTEN_OFF,
+              },
+            },
+          });
+        },
+      });
       if (!rows.at(0)) {
         return false;
       }
-
-      await recordAuditEvent(tx, {
-        action: AUDIT_ACTION.UPDATE,
-        resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
-        resourceId: body.id,
-        changes: {
-          status: {
-            old: existing.status,
-            new: BILLING_STATUS.WRITTEN_OFF,
-          },
-        },
-      });
       await recordBillingCapCrossings(tx, { workspaceId, recordAuditEvent });
       return true;
     }),

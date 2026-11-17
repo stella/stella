@@ -245,6 +245,7 @@ const settleRestoredUndo = async (fixture: Fixture, messages: Messages) => {
     .select({ id: chatTurns.id })
     .from(chatTurns)
     .where(eq(chatTurns.threadId, messages.threadId));
+  const turnId = turn?.id ?? panic("the turn was not seeded");
   const desktopId = Bun.randomUUIDv7();
   const deviceJkt = `jkt-${desktopId}`;
   const owner = {
@@ -279,13 +280,14 @@ const settleRestoredUndo = async (fixture: Fixture, messages: Messages) => {
     outcome: "completed",
     leaseExpiresAt: settledAt,
     chatThreadId: messages.threadId,
+    chatTurnId: turnId,
   });
   const restoreId = Bun.randomUUIDv7();
   await fixture.db.insert(desktopRunnerFolderRestores).values({
     ...owner,
     id: restoreId,
     chatThreadId: messages.threadId,
-    chatTurnId: turn?.id ?? panic("the turn was not seeded"),
+    chatTurnId: turnId,
     runId,
     desktopId,
     deviceJkt,
@@ -414,44 +416,6 @@ if (!databaseUrl || !runPostgresTests) {
       });
     });
 
-    test("a chat that runs on the member's computer names its newest turn and the answer it wrote; a cloud chat names none", async () => {
-      await withFixture(async (fixture) => {
-        const messages = await seedMessages(fixture, fixture.workspaceId);
-        await seedTurn({
-          fixture,
-          messages,
-          durationMs: 4000,
-          state: "completed",
-        });
-        expect((await readMessages(fixture, messages)).newestLocalTurn).toBe(
-          null,
-        );
-
-        await fixture.db
-          .update(chatThreads)
-          .set({
-            chatLocalRunTarget: {
-              kind: "local",
-              harness: "codex",
-              model: "gpt-test",
-              approvals: "ask",
-              reasoningEffort: null,
-            },
-          })
-          .where(eq(chatThreads.id, messages.threadId));
-        const [newest] = await fixture.db
-          .select({ id: chatTurns.id })
-          .from(chatTurns)
-          .where(eq(chatTurns.threadId, messages.threadId));
-        expect((await readMessages(fixture, messages)).newestLocalTurn).toEqual(
-          {
-            id: newest?.id ?? panic("the turn was not seeded"),
-            assistantMessageId: messages.assistantMessageId,
-          },
-        );
-      });
-    });
-
     test("an undone turn's answer keeps its marker after a reload and a move to the cloud", async () => {
       await withFixture(async (fixture) => {
         const messages = await seedMessages(fixture, fixture.workspaceId);
@@ -485,8 +449,6 @@ if (!databaseUrl || !runPostgresTests) {
           .set({ chatLocalRunTarget: null })
           .where(eq(chatThreads.id, messages.threadId));
         const cloud = await readMessages(fixture, messages);
-        // A cloud chat offers no new undo, but the old one keeps its marker.
-        expect(cloud.newestLocalTurn).toBe(null);
         expect(answerOf(cloud, messages).metadata?.localFilesUndone).toEqual(
           marker,
         );

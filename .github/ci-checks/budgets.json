@@ -98,6 +98,11 @@
       "p99Seconds": 1,
       "peakRssMiB": 71
     },
+    "Workspace test gating ledger": {
+      "minutes": 30,
+      "samples": 0,
+      "peakRssMiB": 4096
+    },
     "Sparse checkout script dependencies": {
       "minutes": 5,
       "samples": 17,
@@ -201,6 +206,11 @@
       "p99Seconds": 142,
       "peakRssMiB": 2453
     },
+    "Test CLI contract changeset guard over derived catalogs": {
+      "minutes": 30,
+      "samples": 0,
+      "peakRssMiB": 4096
+    },
     "Generated files manifest guard": {
       "minutes": 49,
       "samples": 19,
@@ -237,7 +247,7 @@
       "peakRssMiB": 127
     },
     "Test CLI runtime package parity": {
-      "minutes": 5,
+      "minutes": 10,
       "samples": 19,
       "p95Seconds": 35,
       "p99Seconds": 35,
@@ -335,14 +345,14 @@
       "peakRssMiB": 47
     },
     "Release CLI coupling guard": {
-      "minutes": 5,
+      "minutes": 10,
       "samples": 19,
       "p95Seconds": 0,
       "p99Seconds": 0,
       "peakRssMiB": 48
     },
     "CLI contract changeset guard": {
-      "minutes": 5,
+      "minutes": 10,
       "samples": 19,
       "p95Seconds": 0,
       "p99Seconds": 0,
@@ -639,6 +649,11 @@
       "p95Seconds": 1,
       "p99Seconds": 1,
       "peakRssMiB": 48
+    },
+    "Capability file-transport ledger": {
+      "minutes": 30,
+      "samples": 0,
+      "peakRssMiB": 4096
     },
     "MCP coverage guard": {
       "minutes": 5,

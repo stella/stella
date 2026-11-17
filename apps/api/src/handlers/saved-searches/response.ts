@@ -16,6 +16,9 @@ const UNPROJECTED_SAVED_SEARCH_COLUMNS = [
   "userId",
 ] as const satisfies readonly (keyof SavedSearchRow)[];
 
+export type UnprojectedSavedSearchColumn =
+  (typeof UNPROJECTED_SAVED_SEARCH_COLUMNS)[number];
+
 export const toSavedSearchResponse = (savedSearch: SavedSearchRow) => ({
   id: savedSearch.id,
   name: savedSearch.name,

@@ -1,16 +1,12 @@
 import { panic } from "better-result";
-
-import {
-  CHAT_RUN_TARGET_KIND,
-  type ChatLocalRunReadiness,
-  type ChatRunTarget,
-} from "./chat-run-target";
-import { DESKTOP_RUNNER_HARNESS_STATE } from "./desktop-runner";
+import * as v from "valibot";
 
 /**
- * Whether the thread's turn takes a message mid-turn: `steerable` on a
- * computer whose harness reports `steer`; `not_steerable` for a cloud turn,
- * which takes nothing mid-turn, and for a harness that does not report it.
+ * Whether the thread's running turn takes a message mid-turn, as the server
+ * knows it from the turn's own run: `steerable` while it runs on a computer
+ * whose harness reports `steer`; `not_steerable` for a cloud turn, which
+ * takes nothing mid-turn, for a harness that does not report it, and for a
+ * turn with no run. Clients read it, never derive it.
  */
 export const CHAT_TURN_STEERING = {
   steerable: "steerable",
@@ -19,43 +15,26 @@ export const CHAT_TURN_STEERING = {
 export type ChatTurnSteering =
   (typeof CHAT_TURN_STEERING)[keyof typeof CHAT_TURN_STEERING];
 
+export const chatTurnSteeringSchema = v.picklist([
+  CHAT_TURN_STEERING.steerable,
+  CHAT_TURN_STEERING.notSteerable,
+]);
+
 /**
- * Whether a turn on `target` takes a message mid-turn, from what the
- * member's computers last reported. The API routes a turn to any connected
- * computer with the harness ready (only the folder's computer for a linked
- * folder), so every such report must list `steer`. Readiness not read yet
- * counts as not steerable: the message then waits, and nothing is declined.
+ * The CUSTOM stream event that says whether the turn takes a message
+ * mid-turn (`ChatTurnSteering`), sent once when a read of a turn on the
+ * member's computer starts. A turn that sends none (a cloud turn) takes
+ * nothing mid-turn. A rejoined stream replays it from the run log; a thread
+ * opened later reads it from its page (`activeTurnSteering`).
  */
-export const chatTurnSteering = (
-  target: ChatRunTarget,
-  readiness: ChatLocalRunReadiness | undefined,
-): ChatTurnSteering => {
-  if (
-    target.kind === CHAT_RUN_TARGET_KIND.cloud ||
-    readiness?.status !== "enabled"
-  ) {
-    return CHAT_TURN_STEERING.notSteerable;
-  }
-  const ready = readiness.runners
-    .filter(
-      (runner) =>
-        runner.connected &&
-        (target.folder === undefined ||
-          runner.desktopId === target.folder.desktopId),
-    )
-    .flatMap((runner) =>
-      runner.harnesses.flatMap((report) =>
-        report.id === target.harness &&
-        report.state === DESKTOP_RUNNER_HARNESS_STATE.ready
-          ? [report.capabilities]
-          : [],
-      ),
-    );
-  return ready.length > 0 &&
-    ready.every((capabilities) => capabilities.includes("steer"))
-    ? CHAT_TURN_STEERING.steerable
-    : CHAT_TURN_STEERING.notSteerable;
-};
+export const CHAT_TURN_STEERING_EVENT = "stella.turn.steering";
+
+export const chatTurnSteeringEventSchema = v.strictObject({
+  steering: chatTurnSteeringSchema,
+});
+export type ChatTurnSteeringEvent = v.InferOutput<
+  typeof chatTurnSteeringEventSchema
+>;
 
 /**
  * What a chat thread is doing when the member sends, with whether its turn

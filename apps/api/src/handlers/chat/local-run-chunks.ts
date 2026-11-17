@@ -58,6 +58,12 @@ import {
   type ChatLocalRunSteerInput,
 } from "@stll/api-contract/chat-run-target";
 import {
+  CHAT_TURN_STEERING,
+  CHAT_TURN_STEERING_EVENT,
+  type ChatTurnSteering,
+  type ChatTurnSteeringEvent,
+} from "@stll/api-contract/chat-send-intent";
+import {
   DESKTOP_RUNNER_APPROVAL_DECISIONS,
   DESKTOP_RUNNER_APPROVAL_KINDS,
   DESKTOP_RUNNER_DESKTOP_MESSAGE,
@@ -148,6 +154,7 @@ type LocalRunControl = Pick<
   | "readRun"
   | "readRunInputText"
   | "readRunOutputFile"
+  | "readChatTurnSteering"
   | "recordChatReadSeq"
   | "startRun"
 >;
@@ -1332,6 +1339,8 @@ const createRunReports = (
 type ReadRunOptions = {
   context: LocalRunContext;
   runnerRunId: string;
+  /** The chat turn reading the run, whose steering the read tells. */
+  chatTurnId: SafeId<"chatTurn">;
   afterSeq: number;
   /**
    * The calls the run opened through `afterSeq` (`openedCalls`); the read
@@ -1854,9 +1863,35 @@ const readStartOf = (
         told: null,
       };
 
+const TURN_STEERING_SINK = failureSink({
+  event: "chat.local_run_turn_steering_read_failed",
+  expected: [],
+});
+
+/**
+ * Whether the turn takes a message mid-turn, from its run's harness. A failed
+ * read tells `not_steerable`: a message then waits for the turn's end, and
+ * nothing it shows is declined.
+ */
+const turnSteeringOf = async (
+  context: LocalRunContext,
+  chatTurnId: SafeId<"chatTurn">,
+): Promise<ChatTurnSteering> => {
+  const read = await context.control.readChatTurnSteering({
+    owner: context.owner,
+    chat: { threadId: context.chatThreadId, turnId: chatTurnId },
+  });
+  if (Result.isError(read)) {
+    observeFailure(read.error, { sink: TURN_STEERING_SINK });
+    return CHAT_TURN_STEERING.notSteerable;
+  }
+  return read.value;
+};
+
 async function* readRunChunks({
   context,
   runnerRunId,
+  chatTurnId,
   afterSeq,
   toolCalls,
   chatRunId,
@@ -1871,6 +1906,7 @@ async function* readRunChunks({
   let { started, finished } = initial;
   /** The harness's own run error, held for the outcome `run.finished` names. */
   let { harnessError } = initial;
+  const steering = await turnSteeringOf(context, chatTurnId);
   const start = function* (): Generator<PublicStreamChunk> {
     if (!started) {
       started = true;
@@ -1878,6 +1914,14 @@ async function* readRunChunks({
         type: EventType.RUN_STARTED,
         runId: chatRunId,
         threadId: context.chatThreadId,
+        timestamp: nowMs(),
+      };
+      // Told with the run's start, so every reader of the run (a rejoin
+      // replays the log) knows where Enter sends a message.
+      yield {
+        type: EventType.CUSTOM,
+        name: CHAT_TURN_STEERING_EVENT,
+        value: { steering } satisfies ChatTurnSteeringEvent,
         timestamp: nowMs(),
       };
     }
@@ -2228,6 +2272,7 @@ async function* startLocalRun({
   }
   yield* readRunChunks({
     context,
+    chatTurnId: input.chatTurnId,
     runnerRunId: outcome.runId,
     afterSeq: 0,
     toolCalls: new Map(),
@@ -2442,6 +2487,7 @@ async function* resumeLocalRun({
   }
   yield* readRunChunks({
     context,
+    chatTurnId: input.chatTurnId,
     runnerRunId: run.runId,
     afterSeq: run.chatReadSeq,
     toolCalls: calls.value,
@@ -2498,6 +2544,7 @@ async function* adoptLocalRun({
   }
   yield* readRunChunks({
     context,
+    chatTurnId: input.chatTurnId,
     runnerRunId: run.runId,
     afterSeq: run.chatReadSeq,
     toolCalls: read.value.toolCalls,

@@ -19,14 +19,12 @@ const triggers = (on: unknown): string[] => {
 
 // Release and deploy jobs restore caches from the default branch's scope.
 // pull_request runs save only to their own pull request's scope, but
-// pull_request_target and workflow_run runs save to the default branch's
-// scope: a fork can influence the first, and the second runs release and
-// signing jobs. So none of their jobs may save to or restore from any cache,
-// and a reusable workflow they call must be one reviewed for that.
-const DEFAULT_SCOPE_EVENTS = ["pull_request_target", "workflow_run"];
+// workflow_run runs save to the default branch's scope: a fork pull request
+// can trigger them, and they run release and signing jobs. So none of their
+// jobs may save to or restore from any cache, and a reusable workflow they
+// call must be one reviewed for that.
+const DEFAULT_SCOPE_EVENTS = ["workflow_run"];
 const REVIEWED_REUSABLE_WORKFLOWS: Record<string, string> = {
-  "stella/.github/.github/workflows/pr-lint.yml@0cc2def60afb3e0fac0df9f541baf926f77889fa":
-    "title, label, size and assignee actions only; no cache",
   "stella/.github/.github/workflows/npm-independent-release.yml@0cc2def60afb3e0fac0df9f541baf926f77889fa":
     "checkout, artifact download, setup-node without a cache input, hardened publish action from the pinned release-tooling checkout; no cache",
 };

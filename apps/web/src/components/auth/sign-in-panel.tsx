@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useForm, useSelector } from "@tanstack/react-form";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
+import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -522,7 +523,13 @@ const BootstrapSignUpForm = ({
           return;
         }
 
-        await invalidateSession.mutateAsync();
+        const refreshed = await Result.tryPromise(
+          async () => await invalidateSession.mutateAsync(),
+        );
+        if (refreshed.isErr()) {
+          notifyUserError(refreshed.error, t("errors.actionFailed"));
+          return;
+        }
         await navigate({
           to: "/auth/organization",
           search: { redirectTo },

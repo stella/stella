@@ -85,6 +85,7 @@
     "documentClose": "Schließen",
     "approvalBrowserNote": "Freigegeben läuft es in Ihrem Browser auf Ihrem Computer, über die stella-Erweiterung.",
     "grantFailed": "Die Freigabe konnte nicht gespeichert werden. Versuchen Sie es erneut.",
+    "limitReminderFailed": "Die Änderung konnte nicht gespeichert werden. Versuchen Sie es erneut.",
     "elsewhereBrowser": "Dieser Schritt läuft in Ihrem Browser auf Ihrem Computer, über die stella-Erweiterung. Öffnen Sie diese Unterhaltung dort in stella, um ihn abzuschließen.",
     "elsewhereSecret": "Dieser Schritt braucht einen Schlüssel. Aus Sicherheitsgründen werden Schlüssel in stella auf Ihrem Computer hinzugefügt, nicht in der App.",
     "elsewhereConnector": "Dieser Schritt verbindet eine App. Aus Sicherheitsgründen werden Apps in stella auf Ihrem Computer verbunden, nicht in der App.",
@@ -251,7 +252,13 @@
       "sessionNotResumed": "Der Coding-Agent auf Ihrem Computer konnte nicht dort weitermachen, wo er aufgehört hatte. Er hat daher anhand der Nachrichten in diesem Chat weitergearbeitet.",
       "steered": "Während der Arbeit des Agenten gesendet",
       "ranOnModel": "Ausgeführt mit {model}",
-      "desktopSettingsSteps": "Öffnen Sie in stella desktop auf Ihrem Computer Einstellungen › Allgemein › KI-Abonnements."
+      "desktopSettingsSteps": "Öffnen Sie in stella desktop auf Ihrem Computer Einstellungen › Allgemein › KI-Abonnements.",
+      "errorLimitResetsAt": "Der Coding-Agent auf Ihrem Computer hat sein Nutzungslimit erreicht. Sie können es ab {time} erneut versuchen.",
+      "limitReminderNotify": "Benachrichtigen, sobald es zurückgesetzt ist",
+      "limitReminderScheduled": "Wir benachrichtigen Sie ab {time}.",
+      "limitResumeContinue": "Automatisch fortsetzen, sobald es zurückgesetzt ist",
+      "limitResumeScheduled": "Wird ab {time} automatisch fortgesetzt.",
+      "limitReminderCancel": "Abbrechen"
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# Quelle geprüft} other {# Quellen geprüft}}",
@@ -324,6 +331,39 @@
         "send-refused": "Warteschlange pausiert: Die erste Nachricht konnte nicht gesendet werden. Bearbeiten oder entfernen Sie sie und setzen Sie dann fort.",
         "usage-limit": "Warteschlange pausiert: Ihr Nutzungslimit ist erreicht. Setzen Sie fort, sobald es zurückgesetzt ist.",
         "computer-away": "Warten auf Ihren Computer: Nachrichten in der Warteschlange werden gesendet, sobald er verbunden ist."
+      }
+    },
+    "edit": {
+      "action": "Bearbeiten",
+      "title": "Nachricht bearbeiten",
+      "input": "Bearbeitete Nachricht",
+      "notice": "Beim Senden werden diese Nachricht und alle folgenden Nachrichten ersetzt.",
+      "cancel": "Abbrechen",
+      "refused": "Die Nachricht konnte nicht bearbeitet werden. Der Chat zeigt jetzt den gespeicherten Stand. Versuchen Sie es erneut, sobald keine Antwort mehr läuft.",
+      "refusedHistoryChanged": "Der Chat hat sich geändert, während die Bearbeitung gesendet wurde. Er zeigt jetzt den gespeicherten Stand. Senden Sie die Bearbeitung erneut.",
+      "refusedTargetMissing": "Diese Nachricht ist nicht mehr im Chat und kann daher nicht bearbeitet werden.",
+      "localFiles": {
+        "computer": {
+          "failed": "Das Rückgängigmachen wurde auf Ihrem Computer nicht abgeschlossen. Einige Dateien wurden möglicherweise schon geändert. Prüfen Sie deshalb den Ordner des Chats.",
+          "folderBusy": "Ein Lauf auf Ihrem Computer verwendet diesen Ordner. Versuchen Sie es erneut, wenn er beendet ist.",
+          "noCheckpoint": "Ihr Computer hat keine gespeicherte Kopie der Dateien von vor diesem Schritt, daher wurde nichts rückgängig gemacht.",
+          "updateForEarlier": "Aktualisieren Sie stella desktop, um Änderungen aus früheren Nachrichten rückgängig zu machen."
+        },
+        "conversationRestarts": "Der Agent beginnt neu mit dem Text dieses Chats, weil die Antwort vor dieser Nachricht nicht abgeschlossen wurde.",
+        "expired": "Ihr Computer hat nicht rechtzeitig geantwortet. Versuchen Sie es erneut.",
+        "option": "Auch die Dateiänderungen seit dieser Nachricht rückgängig machen",
+        "optionHint": "Dabei werden auch Änderungen rückgängig gemacht, die Sie selbst im Ordner vorgenommen haben.",
+        "pending": "Dateiänderungen auf Ihrem Computer werden rückgängig gemacht",
+        "refused": {
+          "alreadyUndone": "Diese Dateiänderungen wurden bereits rückgängig gemacht.",
+          "desktopOffline": "Ihr Computer ist offline. Öffnen Sie die stella-Desktop-App und versuchen Sie es erneut.",
+          "desktopUpdateRequired": "Die stella-Desktop-App auf Ihrem Computer ist zu alt, um Änderungen rückgängig zu machen. Aktualisieren Sie sie und versuchen Sie es erneut.",
+          "folderShared": "Seit dieser Nachricht hat ein anderer Chat in diesem Ordner gearbeitet.",
+          "noSavedCopy": "Ihr Computer hat keine Kopie des Ordners von vor dieser Nachricht behalten: Er war zu groß oder zu langsam zu speichern, oder neuere Kopien haben sie ersetzt.",
+          "severalFolders": "Spätere Nachrichten liefen auf einem anderen Computer oder in einem anderen Ordner.",
+          "threadBusy": "Dieser Chat arbeitet noch. Versuchen Sie es erneut, wenn er fertig ist."
+        },
+        "restored": "Dateiänderungen rückgängig gemacht"
       }
     }
   },

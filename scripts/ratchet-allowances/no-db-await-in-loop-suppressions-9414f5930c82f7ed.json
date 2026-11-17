@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/legal-search/corpus-index-generation-flip.ts",
+  "delta": 1,
+  "reason": "Per proven route the flip reads PostgreSQL's applied-document sum and then the engine's exact count, in that order, so inflow can only make the check refuse; the routes are a handful and each read is its own short transaction."
+}

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { readCapabilityCatalog } from "../../../packages/cli/src/capability-catalog-data";
+import { repositoryCapabilityCatalog } from "../src/tests/helpers/repository-capability-catalog";
 import { findUndescribedIds } from "./capability-description-guard";
 import { isRecord } from "./lib/enumerate-safe-handlers";
 
@@ -19,7 +19,7 @@ const readEntries = (
     return typeof description === "string" ? { id, description } : { id };
   });
 
-const entries = readEntries(readCapabilityCatalog());
+const entries = readEntries(repositoryCapabilityCatalog);
 
 describe("committed catalog", () => {
   // The same invariant the CI guard enforces, pinned against the real

@@ -3,12 +3,22 @@ import { afterEach, describe, expect, jest, test } from "bun:test";
 
 import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
 import {
+  CHAT_COMMAND_ERROR_CODE,
+  CHAT_COMMAND_ID_HEADER,
+  CHAT_COMMAND_MAX_RETRIES,
+  chatCommandOutcomeOf,
+} from "@stll/api-contract/chat-command";
+import {
   CHAT_CONTEXT_NOTICE_EVENTS,
   CHAT_CONTEXT_NOTICE_METADATA_KEY,
 } from "@stll/api-contract/chat-context-notice";
 import type { ChatContextNotice } from "@stll/api-contract/chat-context-notice";
 import { CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY } from "@stll/api-contract/chat-local-run-tool";
 import { CHAT_SEND_QUEUES_INSTEAD_CODE } from "@stll/api-contract/chat-queue";
+import {
+  CHAT_TURN_STEERING,
+  CHAT_TURN_STEERING_EVENT,
+} from "@stll/api-contract/chat-send-intent";
 import {
   SSE_HEARTBEAT_FRAME,
   SSE_HEARTBEAT_INTERVAL_MS,
@@ -34,6 +44,7 @@ import {
   joinChatTurn,
   parseChatEvent,
   probeChatTurn,
+  regenerateChatTurn,
   sendChatMessage,
   streamConnectTimeout,
 } from "./chat-stream";
@@ -79,6 +90,7 @@ const THREAD_ID = "00000000-0000-7000-8000-000000000002";
 const MESSAGE_ID = "00000000-0000-7000-8000-000000000001";
 const ANSWER_ID = "00000000-0000-7000-8000-000000000003";
 const TURN_ID = "00000000-0000-7000-8000-000000000004";
+const COMMAND_ID = "00000000-0000-4000-8000-000000000005";
 
 /** The shape of a recorded run: text, a tool, more text, then the end. */
 const RUN_EVENTS = [
@@ -218,6 +230,36 @@ describe("an answer's context notice", () => {
       );
       expect(withdrawn.contextNotice).toBeNull();
     }
+  });
+});
+
+describe("whether the turn takes a message mid-turn", () => {
+  test("is read from the event the server sends with the turn's start, and leaves the answer as it was", () => {
+    const told = parseChatEvent(
+      JSON.stringify({
+        type: "CUSTOM",
+        name: CHAT_TURN_STEERING_EVENT,
+        value: { steering: CHAT_TURN_STEERING.steerable },
+      }),
+    );
+    expect(told).toEqual({
+      type: "CUSTOM",
+      name: CHAT_TURN_STEERING_EVENT,
+      value: { steering: CHAT_TURN_STEERING.steerable },
+    });
+    expect(applyChatEvent(EMPTY_ANSWER, told ?? panic("Not read"))).toBe(
+      EMPTY_ANSWER,
+    );
+    // One it cannot read is not drawn from.
+    expect(
+      parseChatEvent(
+        JSON.stringify({
+          type: "CUSTOM",
+          name: CHAT_TURN_STEERING_EVENT,
+          value: { steering: "sometimes" },
+        }),
+      ),
+    ).toBeUndefined();
   });
 });
 
@@ -765,6 +807,7 @@ describe("sending a message", () => {
     );
     const sent = await sendChatMessage({
       anonymized: false,
+      commandId: COMMAND_ID,
       fetch,
       matterId: undefined,
       messageId: MESSAGE_ID,
@@ -814,6 +857,7 @@ describe("sending a message", () => {
     );
     const sent = await sendChatMessage({
       anonymized: false,
+      commandId: COMMAND_ID,
       fetch,
       matterId: undefined,
       messageId: MESSAGE_ID,
@@ -836,6 +880,7 @@ describe("sending a message", () => {
     const { fetch } = streamingFetch(() => new Response("{}", { status: 409 }));
     const sent = await sendChatMessage({
       anonymized: false,
+      commandId: COMMAND_ID,
       fetch,
       matterId: undefined,
       messageId: MESSAGE_ID,
@@ -867,6 +912,7 @@ describe("sending a message", () => {
     );
     const sent = await sendChatMessage({
       anonymized: false,
+      commandId: COMMAND_ID,
       fetch,
       matterId: undefined,
       messageId: MESSAGE_ID,
@@ -887,6 +933,7 @@ describe("sending a message", () => {
       const { fetch } = streamingFetch(() => response);
       const sent = await sendChatMessage({
         anonymized: false,
+        commandId: COMMAND_ID,
         fetch,
         matterId: undefined,
         messageId: MESSAGE_ID,
@@ -933,6 +980,7 @@ describe("sending a message", () => {
       );
     const sent = await sendChatMessage({
       anonymized: false,
+      commandId: COMMAND_ID,
       fetch,
       matterId: undefined,
       messageId: MESSAGE_ID,
@@ -951,6 +999,119 @@ describe("sending a message", () => {
     expect(sent.isOk() ? sent.value : sent.error).toEqual({
       lastEventId: "4",
     });
+  });
+});
+
+describe("a send whose response is lost", () => {
+  const lostThen = (answer: () => Response, lost = 1) => {
+    let losses = lost;
+    return streamingFetch((call) => {
+      if (call.method === "POST" && losses > 0) {
+        losses -= 1;
+        throw new TypeError("Network request failed");
+      }
+      return answer();
+    });
+  };
+
+  const send = async (fetch: StreamFetch, onTurn = (_turnId: string) => {}) =>
+    await sendChatMessage({
+      anonymized: false,
+      commandId: COMMAND_ID,
+      fetch,
+      matterId: undefined,
+      messageId: MESSAGE_ID,
+      onEvent: () => {},
+      onTurn,
+      runId: "run-1",
+      signal: new AbortController().signal,
+      source: sourceFor(),
+      text: "Hello",
+      threadId: THREAD_ID,
+    });
+
+  test("is sent again at once under the same command id", async () => {
+    const { calls, fetch } = lostThen(
+      () => new Response(streamOf([sse(RUN_EVENTS)])),
+    );
+    const sent = await send(fetch);
+    expect(sent.isOk()).toBe(true);
+    expect(calls.map((call) => call.headers[CHAT_COMMAND_ID_HEADER])).toEqual([
+      COMMAND_ID,
+      COMMAND_ID,
+    ]);
+    expect(calls[1]?.body).toBe(calls[0]?.body ?? "");
+  });
+
+  test(`is sent at most ${String(CHAT_COMMAND_MAX_RETRIES + 1)} times, then fails`, async () => {
+    const { calls, fetch } = lostThen(
+      () => new Response(streamOf([sse(RUN_EVENTS)])),
+      CHAT_COMMAND_MAX_RETRIES + 1,
+    );
+    const sent = await send(fetch);
+    expect(Result.isError(sent) && sent.error.error._tag).toBe(
+      "ApiRequestError",
+    );
+    expect(calls).toHaveLength(CHAT_COMMAND_MAX_RETRIES + 1);
+  });
+
+  test("whose retry is a replay names the first attempt's turn, which the phone follows", async () => {
+    const named: string[] = [];
+    const { fetch } = lostThen(
+      () =>
+        new Response(
+          JSON.stringify({
+            code: CHAT_COMMAND_ERROR_CODE.replayed,
+            message: "The command was accepted earlier; join its turn",
+          }),
+          { headers: { [CHAT_TURN_ID_HEADER]: TURN_ID }, status: 409 },
+        ),
+    );
+    const sent = await send(fetch, (turnId) => {
+      named.push(turnId);
+    });
+    expect(named).toEqual([TURN_ID]);
+    expect(
+      Result.isError(sent) && sent.error.error._tag === "ApiRequestError"
+        ? chatCommandOutcomeOf({
+            code: sent.error.error.code,
+            status: sent.error.error.status ?? 0,
+            turnId: named[0] ?? null,
+          })
+        : undefined,
+    ).toEqual({ type: "replayed", turnId: TURN_ID });
+  });
+
+  test("is not sent again once a refusal arrived", async () => {
+    const { calls, fetch } = streamingFetch(
+      () => new Response("{}", { status: 409 }),
+    );
+    expect(Result.isError(await send(fetch))).toBe(true);
+    expect(calls).toHaveLength(1);
+  });
+
+  test("a regeneration carries no command id", async () => {
+    const { calls, fetch } = streamingFetch(
+      () => new Response(streamOf([sse(RUN_EVENTS)])),
+    );
+    await regenerateChatTurn({
+      anonymized: false,
+      fetch,
+      matterId: undefined,
+      onEvent: () => {},
+      onTurn: () => {},
+      retry: {
+        answerId: ANSWER_ID,
+        messageId: MESSAGE_ID,
+        parts: [],
+        runTarget: undefined,
+      },
+      runId: "run-2",
+      signal: new AbortController().signal,
+      source: sourceFor(),
+      threadId: THREAD_ID,
+    });
+    expect(calls[0]?.headers[CHAT_COMMAND_ID_HEADER]).toBeUndefined();
   });
 });
 
@@ -1204,6 +1365,50 @@ describe("stopping a turn", () => {
         method: "POST",
       },
     ]);
+  });
+});
+
+describe("stopping a turn whose answer is lost", () => {
+  test("asks again for the same turn", async () => {
+    let lost = 2;
+    const urls: string[] = [];
+    const fetch: Fetch = async (url) => {
+      urls.push(url);
+      if (lost > 0) {
+        lost -= 1;
+        throw new TypeError("Network request failed");
+      }
+      return Response.json({ turn: {} }, { status: 202 });
+    };
+    const stopped = await cancelChatTurn({
+      fetch,
+      source: sourceFor(),
+      threadId: THREAD_ID,
+      turnId: TURN_ID,
+    });
+    expect(stopped.isOk()).toBe(true);
+    expect(new Set(urls)).toEqual(
+      new Set([
+        `https://stella.example.com/v1/chat/threads/${THREAD_ID}/turns/${TURN_ID}/cancel`,
+      ]),
+    );
+    expect(urls).toHaveLength(3);
+  });
+
+  test("does not ask again once the server refused", async () => {
+    let asked = 0;
+    const fetch: Fetch = async () => {
+      asked += 1;
+      return new Response("{}", { status: 404 });
+    };
+    const stopped = await cancelChatTurn({
+      fetch,
+      source: sourceFor(),
+      threadId: THREAD_ID,
+      turnId: TURN_ID,
+    });
+    expect(stopped.isErr()).toBe(true);
+    expect(asked).toBe(1);
   });
 });
 

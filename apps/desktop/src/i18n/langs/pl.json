@@ -625,8 +625,12 @@
       "unavailableProvider": "Dostawca AI Twojej organizacji nie oferuje przetwarzania mowy.",
       "unavailable": "Przetwarzanie przez stella AI jest teraz niedostępne.",
       "model": "Model przetwarzania",
+      "chooseModel": "Wybierz model",
       "outsideRegion": "Poza Twoim regionem",
-      "outsideRegionNote": "Ten model przetwarza dźwięk poza regionem Twojej organizacji."
+      "outsideRegionNote": "Ten model przetwarza dźwięk poza regionem Twojej organizacji.",
+      "retainsData": "Przechowuje Twój dźwięk",
+      "retainsDataTitle": "{provider} przechowuje to, co dyktujesz",
+      "retainsDataWarning": "Ten model działa na koncie bez zerowej retencji danych. {provider} przechowuje dźwięk i transkrypcję wszystkiego, co dyktujesz, na własnych warunkach, poza kontrolą stella. Nie dyktuj za jego pomocą informacji poufnych ani danych klientów."
     },
     "language": {
       "title": "Język dyktowania",

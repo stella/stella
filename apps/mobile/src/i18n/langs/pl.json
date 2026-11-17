@@ -85,6 +85,7 @@
     "documentClose": "Zamknij",
     "approvalBrowserNote": "Po zezwoleniu uruchomi się w Twojej przeglądarce na komputerze, przez rozszerzenie stella.",
     "grantFailed": "Nie udało się zapisać zgody. Spróbuj ponownie.",
+    "limitReminderFailed": "Nie udało się zapisać zmiany. Spróbuj ponownie.",
     "elsewhereBrowser": "Ten krok działa w Twojej przeglądarce na komputerze, przez rozszerzenie stella. Otwórz tam tę rozmowę w stelli, aby go dokończyć.",
     "elsewhereSecret": "Ten krok wymaga klucza. Ze względów bezpieczeństwa klucze dodaje się w stelli na komputerze, nie w aplikacji.",
     "elsewhereConnector": "Ten krok łączy aplikację. Ze względów bezpieczeństwa aplikacje łączy się w stelli na komputerze, nie w aplikacji.",
@@ -251,7 +252,13 @@
       "sessionNotResumed": "Agent programistyczny na Twoim komputerze nie mógł wznowić pracy tam, gdzie skończył, dlatego kontynuował na podstawie wiadomości z tego czatu.",
       "steered": "Wysłano podczas pracy agenta",
       "ranOnModel": "Wykonano na modelu {model}",
-      "desktopSettingsSteps": "W stella desktop na swoim komputerze otwórz Ustawienia › Ogólne › Subskrypcje AI."
+      "desktopSettingsSteps": "W stella desktop na swoim komputerze otwórz Ustawienia › Ogólne › Subskrypcje AI.",
+      "errorLimitResetsAt": "Agent programistyczny na Twoim komputerze osiągnął limit użycia. Możesz spróbować ponownie po {time}.",
+      "limitReminderNotify": "Powiadom mnie po odnowieniu",
+      "limitReminderScheduled": "Powiadomimy Cię po {time}.",
+      "limitResumeContinue": "Kontynuuj automatycznie po odnowieniu",
+      "limitResumeScheduled": "Wznowimy automatycznie po {time}.",
+      "limitReminderCancel": "Anuluj"
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# sprawdzone źródło} few {# sprawdzone źródła} many {# sprawdzonych źródeł} other {# sprawdzonego źródła}}",
@@ -324,6 +331,39 @@
         "send-refused": "Kolejka wstrzymana: nie udało się wysłać pierwszej wiadomości. Edytuj ją lub usuń, a potem wznów.",
         "usage-limit": "Kolejka wstrzymana: osiągnięto limit użycia. Wznów, gdy zostanie odnowiony.",
         "computer-away": "Oczekiwanie na Twój komputer: wiadomości z kolejki zostaną wysłane, gdy się połączy."
+      }
+    },
+    "edit": {
+      "action": "Edytuj",
+      "title": "Edytuj wiadomość",
+      "input": "Edytowana wiadomość",
+      "notice": "Wysłanie zastąpi tę wiadomość i wszystkie późniejsze wiadomości.",
+      "cancel": "Anuluj",
+      "refused": "Nie udało się edytować wiadomości. Czat pokazuje teraz zapisany stan; spróbuj ponownie, gdy nie będzie trwała żadna odpowiedź.",
+      "refusedHistoryChanged": "Czat zmienił się podczas wysyłania edycji. Pokazuje teraz zapisany stan; wyślij edycję ponownie.",
+      "refusedTargetMissing": "Tej wiadomości nie ma już w czacie, więc nie można jej edytować.",
+      "localFiles": {
+        "computer": {
+          "failed": "Cofanie zmian nie zakończyło się na Twoim komputerze. Niektóre pliki mogły już zostać zmienione, więc sprawdź folder czatu.",
+          "folderBusy": "Ten folder na Twoim komputerze jest używany przez inne uruchomienie. Spróbuj ponownie, gdy się zakończy.",
+          "noCheckpoint": "Twój komputer nie ma zapisanej kopii plików sprzed tego kroku, więc nic nie zostało cofnięte.",
+          "updateForEarlier": "Zaktualizuj stella desktop, aby cofać zmiany z wcześniejszych wiadomości."
+        },
+        "conversationRestarts": "Agent zacznie od nowa na podstawie tekstu tego czatu, bo odpowiedź przed tą wiadomością nie została ukończona.",
+        "expired": "Twój komputer nie odpowiedział na czas. Spróbuj ponownie.",
+        "option": "Cofnij też zmiany w plikach od tej wiadomości",
+        "optionHint": "Cofa to również zmiany wprowadzone przez Ciebie w folderze.",
+        "pending": "Cofanie zmian w plikach na Twoim komputerze",
+        "refused": {
+          "alreadyUndone": "Te zmiany w plikach zostały już cofnięte.",
+          "desktopOffline": "Twój komputer jest offline. Otwórz aplikację desktopową stella i spróbuj ponownie.",
+          "desktopUpdateRequired": "Aplikacja desktopowa stella na Twoim komputerze jest zbyt stara, aby cofać zmiany. Zaktualizuj ją i spróbuj ponownie.",
+          "folderShared": "Od tej wiadomości w tym folderze pracował inny czat.",
+          "noSavedCopy": "Twój komputer nie zachował kopii folderu sprzed tej wiadomości: był za duży lub zapisywał się zbyt wolno albo zastąpiły ją nowsze kopie.",
+          "severalFolders": "Późniejsze wiadomości działały na innym komputerze lub w innym folderze.",
+          "threadBusy": "Ten czat jeszcze pracuje. Spróbuj ponownie, gdy skończy."
+        },
+        "restored": "Zmiany w plikach cofnięte"
       }
     }
   },

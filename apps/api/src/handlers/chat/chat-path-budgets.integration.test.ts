@@ -99,9 +99,9 @@ const REJOINED_DELTAS = { replayed: 100, snapshotted: 600 } as const;
 
 const CHAT_PATH_BUDGETS = {
   /** The thread page: thread, settings, the newest page, context estimate. */
-  openThread: { measured: { pageBytes: 15_245, statements: 10 } },
+  openThread: { measured: { pageBytes: 15_245, statements: 9 } },
   /** One older page. */
-  olderPage: { measured: { pageBytes: 14_365, statements: 6 } },
+  olderPage: { measured: { pageBytes: 14_365, statements: 5 } },
   /** A send up to its first delivery-log append: the thread and history
    *  reads, the turn's acceptance (which releases a held queue) and claim,
    *  the run's setup. */

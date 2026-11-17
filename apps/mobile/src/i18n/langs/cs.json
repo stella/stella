@@ -85,6 +85,7 @@
     "documentClose": "Zavřít",
     "approvalBrowserNote": "Po povolení se spustí ve vašem prohlížeči na počítači, přes rozšíření stella.",
     "grantFailed": "Schválení se nepodařilo uložit. Zkuste to znovu.",
+    "limitReminderFailed": "Změnu se nepodařilo uložit. Zkuste to znovu.",
     "elsewhereBrowser": "Tento krok běží ve vašem prohlížeči na počítači, přes rozšíření stella. Dokončete ho tam, ve stelle otevřete tuto konverzaci.",
     "elsewhereSecret": "Tento krok potřebuje klíč. Z bezpečnostních důvodů se klíče přidávají ve stelle na počítači, ne v aplikaci.",
     "elsewhereConnector": "Tento krok připojuje aplikaci. Z bezpečnostních důvodů se aplikace připojují ve stelle na počítači, ne v aplikaci.",
@@ -251,7 +252,13 @@
       "sessionNotResumed": "Programovací agent ve vašem počítači nemohl navázat tam, kde skončil, a tak pokračoval podle zpráv v tomto chatu.",
       "steered": "Odesláno během práce agenta",
       "ranOnModel": "Běželo na modelu {model}",
-      "desktopSettingsSteps": "Ve stella desktop ve svém počítači otevřete Nastavení › Obecné › Předplatné AI."
+      "desktopSettingsSteps": "Ve stella desktop ve svém počítači otevřete Nastavení › Obecné › Předplatné AI.",
+      "errorLimitResetsAt": "Programovací agent ve vašem počítači vyčerpal svůj limit využití. Znovu to můžete zkusit po {time}.",
+      "limitReminderNotify": "Upozornit mě, až se obnoví",
+      "limitReminderScheduled": "Upozorníme vás po {time}.",
+      "limitResumeContinue": "Pokračovat automaticky, až se obnoví",
+      "limitResumeScheduled": "Automaticky pokračuje po {time}.",
+      "limitReminderCancel": "Zrušit"
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# prověřený zdroj} few {# prověřené zdroje} other {# prověřených zdrojů} many {# prověřeného zdroje}}",
@@ -324,6 +331,39 @@
         "send-refused": "Fronta je pozastavená: první zprávu se nepodařilo odeslat. Upravte ji nebo odeberte a pak pokračujte.",
         "usage-limit": "Fronta je pozastavená: dosáhli jste limitu využití. Pokračujte, až se obnoví.",
         "computer-away": "Čeká se na váš počítač: zprávy ve frontě se odešlou, jakmile se připojí."
+      }
+    },
+    "edit": {
+      "action": "Upravit",
+      "title": "Upravit zprávu",
+      "input": "Upravená zpráva",
+      "notice": "Odesláním nahradíte tuto zprávu i všechny zprávy po ní.",
+      "cancel": "Zrušit",
+      "refused": "Zprávu se nepodařilo upravit. Chat teď ukazuje uložený stav, zkuste to znovu, až žádná odpověď neběží.",
+      "refusedHistoryChanged": "Chat se během odesílání úpravy změnil. Teď ukazuje uložený stav, odešlete úpravu znovu.",
+      "refusedTargetMissing": "Tato zpráva už v chatu není, takže ji nelze upravit.",
+      "localFiles": {
+        "computer": {
+          "failed": "Vrácení změn se ve vašem počítači nedokončilo. Některé soubory už mohly být změněny, proto zkontrolujte složku chatu.",
+          "folderBusy": "Tuto složku ve vašem počítači právě používá jiný běh. Zkuste to znovu, až skončí.",
+          "noCheckpoint": "Váš počítač nemá uloženou kopii souborů z doby před tímto krokem, takže se nic nevrátilo.",
+          "updateForEarlier": "Aktualizujte stella desktop, abyste mohli vracet změny z dřívějších zpráv."
+        },
+        "conversationRestarts": "Agent začne znovu z textu tohoto chatu, protože odpověď před touto zprávou nebyla dokončena.",
+        "expired": "Váš počítač neodpověděl včas. Zkuste to znovu.",
+        "option": "Vrátit také změny souborů od této zprávy",
+        "optionHint": "Vrátí se i změny, které jste ve složce provedli sami.",
+        "pending": "Vracení změn souborů ve vašem počítači",
+        "refused": {
+          "alreadyUndone": "Tyto změny souborů už byly vráceny.",
+          "desktopOffline": "Váš počítač je offline. Otevřete desktopovou aplikaci stella a zkuste to znovu.",
+          "desktopUpdateRequired": "Desktopová aplikace stella ve vašem počítači je příliš stará na vrácení změn. Aktualizujte ji a zkuste to znovu.",
+          "folderShared": "V této složce od této zprávy pracoval jiný chat.",
+          "noSavedCopy": "Váš počítač neuchoval kopii složky z doby před touto zprávou: byla příliš velká nebo se ukládala příliš pomalu, nebo ji nahradily novější kopie.",
+          "severalFolders": "Pozdější zprávy běžely na jiném počítači nebo v jiné složce.",
+          "threadBusy": "Tento chat ještě pracuje. Zkuste to znovu, až skončí."
+        },
+        "restored": "Změny souborů vráceny"
       }
     }
   },
