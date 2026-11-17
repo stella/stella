@@ -540,7 +540,6 @@
     "apps/api/src/lib/document-review/decision-counts.ts": 1,
     "apps/api/src/lib/legal-search/case-law-raw-census.ts": 1,
     "apps/api/src/lib/legal-search/case-law-raw-layout.ts": 1,
-    "apps/api/src/lib/legal-search/corpus-index-search-facets.ts": 3,
     "apps/api/src/lib/legal-search/parsers/rtf-reader.ts": 1,
     "apps/api/src/lib/legal-search/parsers/validate-ast.ts": 1,
     "apps/api/src/lib/legal-search/raw-source-storage.ts": 2,
