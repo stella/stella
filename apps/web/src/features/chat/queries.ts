@@ -1159,7 +1159,10 @@ export const localRunnersOptions = (activeOrganizationId: string) =>
       staleTime: 30_000,
       queryFn: async ({ signal }) => await fetchChatLocalRunners(signal),
     }),
-    { resources: [RESOURCE_TYPE.USER], scope: { type: "organization" } },
+    {
+      resources: [RESOURCE_TYPE.USER],
+      scope: { type: "organization", organizationId: activeOrganizationId },
+    },
   );
 
 export const groupedChatThreadsOptions = ({
