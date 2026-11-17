@@ -514,6 +514,7 @@ export const FAILURE_TAGS = [
   "Unreachable",
   "UnrecognizedDerivativeStateError",
   "UnrecognizedProviderStopReasonError",
+  "UnregisteredCaseLawSourceError",
   "UnresolvedActCitationError",
   "UnsupportedAnalysisLanguageError",
   "UnsupportedCapabilityRefreshError",

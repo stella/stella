@@ -88,6 +88,7 @@ import { readPgFtsBrowseFacets } from "@/api/lib/legal-search/pg-fts-browse-face
 import {
   createUnrecognizedSourceReporter,
   SOURCE_REPORT_FEATURE,
+  sourceRegistryMembership,
 } from "@/api/lib/legal-search/source-registry-membership";
 import type { LegalBrowseFacets } from "@/api/lib/legal-search/types";
 import { LIMITS } from "@/api/lib/limits";
@@ -691,6 +692,13 @@ export const loadCaseLawCoverage = async ({
   >();
 
   for (const source of admitted) {
+    // A bulk import source (CourtListener) is registered, but as an import:
+    // its manifest has no edition, and the page judges a source's health by
+    // its edition. Until an import's edition is read from its own provenance
+    // it is left off the page, and not reported: it is known, not missing.
+    if (sourceRegistryMembership(source.adapterKey).type === "import") {
+      continue;
+    }
     const manifest = MANIFEST_BY_ADAPTER_KEY.get(source.adapterKey);
     const country = caseLawSourceJurisdiction(source.adapterKey);
     if (manifest === undefined || country === null) {
@@ -1121,7 +1129,9 @@ export const computeCaseLawCoverageAnswer = async (
         });
         return await caseLawDb(
           async (tx) => await readCompletenessCensusQuery(tx, scopes),
-          { isolation: "repeatable-read" },
+          {
+            isolation: "repeatable-read",
+          },
         );
       },
       readYearCompleteness: async (sources) =>
