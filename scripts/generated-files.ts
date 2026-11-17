@@ -961,6 +961,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/files/office-evidence-domain.ts",
     "apps/api/src/lib/flows/flow-types.ts",
     "apps/api/src/lib/hosted-usage-provider/replay-audit.ts",
+    "apps/api/src/lib/json-schema/utf8-byte-length.ts",
     "apps/api/src/lib/kill-switches/registry.ts",
     "apps/api/src/lib/workspaces/legal-holds/errors.ts",
     "apps/api/src/lib/workspaces/legal-holds/refusal.ts",

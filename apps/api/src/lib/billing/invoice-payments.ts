@@ -37,15 +37,10 @@ export {
   amountDueCents,
   invoiceAmountDue,
   invoicePaymentAmounts,
-  invoicePaymentState,
   invoiceSettlement,
   paidAmountOf,
 } from "./invoice-payment-amounts";
-export type {
-  AmountDue,
-  InvoicePaymentState,
-  InvoiceSettlement,
-} from "./invoice-payment-amounts";
+export type { AmountDue, InvoiceSettlement } from "./invoice-payment-amounts";
 
 /**
  * The owner of invoice payments: every payment write, the amount still due,
