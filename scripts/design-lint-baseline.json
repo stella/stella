@@ -419,7 +419,6 @@
     "apps/api/src/handlers/chat/update-thread-model.ts": 1,
     "apps/api/src/handlers/clauses/create.ts": 1,
     "apps/api/src/handlers/clauses/export.ts": 1,
-    "apps/api/src/handlers/clauses/read.ts": 1,
     "apps/api/src/handlers/clauses/update.ts": 1,
     "apps/api/src/handlers/contacts/presign-procuracao.ts": 1,
     "apps/api/src/handlers/dev/routes.ts": 1,
