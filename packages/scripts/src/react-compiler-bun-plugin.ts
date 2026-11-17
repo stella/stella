@@ -1,5 +1,6 @@
 import { panic } from "better-result";
-import { transform } from "oxc-transform-react";
+import { readFileSync } from "node:fs";
+import { transformSync } from "oxc-transform-react";
 
 import {
   REACT_COMPILER_EXCLUDE,
@@ -46,15 +47,18 @@ export const reactCompilerBunPlugin = {
     // A runtime plugin (`Bun.plugin`) must return every module its filter
     // matches, and a dependency returned as source loses Bun's CommonJS
     // interop, so the filter itself leaves dependencies to Bun.
-    builder.onLoad({ filter: SOURCE_FILES }, async ({ path: filename }) => {
-      const source = await Bun.file(filename).text();
+    // Synchronous: an isolated test run reloads the module graph for every
+    // test file, and the synchronous transform keeps that work on the loading
+    // thread instead of a worker pool.
+    builder.onLoad({ filter: SOURCE_FILES }, ({ path: filename }) => {
+      const source = readFileSync(filename, "utf-8");
       if (
         TEST_FILES.test(filename) ||
         REACT_COMPILER_EXCLUDE.some((pattern) => pattern.test(filename))
       ) {
         return { contents: source, loader: loaderOf(filename) };
       }
-      const result = await transform(filename, source, {
+      const result = transformSync(filename, source, {
         reactCompiler: REACT_COMPILER_OPTIONS,
       });
       if (result.fatal) {
