@@ -193,8 +193,9 @@ const intentsOf = async (generation: string) =>
     .from(corpusIndexProjectionIntents)
     .where(eq(corpusIndexProjectionIntents.generation, generation));
 
+/** Each decision's canonical projection epoch, by its id as states name it. */
 const canonicalEpochs = async () =>
-  new Map(
+  new Map<string, bigint>(
     (
       await db
         .select({
@@ -761,6 +762,7 @@ test("a generation's index ids are never another registered generation's", () =>
         );
       },
     ),
+    { numRuns: 200 },
   );
 });
 

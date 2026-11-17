@@ -1870,10 +1870,11 @@ const runRetire = async (
       ...command,
       receipt,
     });
-    if (transition.isErr() || transition.value !== null) {
-      return transition.isErr()
-        ? Result.err(transition.error)
-        : Result.ok(transition.value);
+    if (transition.isErr()) {
+      return Result.err(transition.error);
+    }
+    if (transition.value !== null) {
+      return Result.ok(transition.value);
     }
   }
   // The engine and the history only once the registry says retired: from

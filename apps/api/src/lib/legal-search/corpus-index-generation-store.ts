@@ -175,45 +175,6 @@ const requireActiveGenerationTarget = (
 };
 
 /**
- * Return a retiring generation to the build set before a rollback. Plane must
- * reconcile and prove this generation again before it can become serving.
- */
-export const resumeRetiringCorpusIndexGenerationTx = async (
-  tx: Transaction,
-  target: { family: CorpusFamily; generation: string },
-): Promise<void> => {
-  await lockCorpusIndexGenerationActivationTx(tx, target.family);
-  const rows = await tx
-    .select()
-    .from(corpusIndexGenerations)
-    .where(
-      and(
-        eq(corpusIndexGenerations.family, target.family),
-        eq(corpusIndexGenerations.generation, target.generation),
-      ),
-    )
-    .limit(1)
-    .for("update");
-  const row = rows.at(0);
-  if (row?.status !== "retiring") {
-    return panic(
-      `Corpus generation is not retiring: ${target.family}/${target.generation}`,
-    );
-  }
-  requireActiveGenerationTarget(row, target);
-  await tx
-    .update(corpusIndexGenerations)
-    .set({ status: "building", updatedAt: sql`clock_timestamp()` })
-    .where(
-      and(
-        eq(corpusIndexGenerations.family, target.family),
-        eq(corpusIndexGenerations.generation, target.generation),
-        eq(corpusIndexGenerations.status, "retiring"),
-      ),
-    );
-};
-
-/**
  * Register one immutable final-generation contract before any writer targets
  * it. Replays converge; an existing retired or mismatched binding fails closed.
  */
@@ -523,7 +484,7 @@ export const completeCorpusIndexGenerationRebuildTx = async (
  */
 export const markCorpusIndexGenerationRetiredTx = async (
   tx: Transaction,
-  target: CorpusIndexGenerationTarget,
+  target: { family: CorpusFamily; generation: string },
   receipt: { actor: string; reason: string },
 ): Promise<{ retiredAt: Date }> => {
   const retired = await tx
@@ -580,7 +541,7 @@ export type CorpusIndexRetiredHistoryPage = {
  */
 export const purgeRetiredCorpusIndexGenerationPageTx = async (
   tx: Transaction,
-  target: CorpusIndexGenerationTarget,
+  target: { family: CorpusFamily; generation: string },
   { after, limit }: { after: string | null; limit: number },
 ): Promise<CorpusIndexRetiredHistoryPage> => {
   if (
