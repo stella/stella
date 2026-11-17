@@ -66,6 +66,17 @@ const canonical = {
       return await Promise.resolve(Result.ok(undefined));
     },
   },
+  // A write that replaces a document reads the one it replaces, to record
+  // where its anchors went.
+  readBytes: {
+    readRange: async ({ key, offset, length }) => {
+      const pack = transferred.find(({ packKey }) => packKey === key);
+      if (pack === undefined) {
+        throw new Error(`Pack not found: ${key}`);
+      }
+      return await Promise.resolve(pack.bytes.slice(offset, offset + length));
+    },
+  },
 } satisfies CaseLawCorpusDependencies;
 
 /** Settles into the corpus like canonical, but keeps the row's payload. */
@@ -197,6 +208,10 @@ const citationHeaders = async (decisionId: string): Promise<unknown> =>
  * on the chain returns a wrapped builder, so the hook fires when the whole
  * statement is sent, not when it starts being built.
  */
+/** Narrows a proxied member to a callable that can be bound to its owner. */
+const isCallable = (value: unknown): value is (...args: unknown[]) => unknown =>
+  typeof value === "function";
+
 const runningFirst = <T extends object>(
   target: T,
   before: () => Promise<void>,
@@ -260,7 +275,7 @@ const racingScopedDb = (
               });
             };
           }
-          return typeof value === "function" ? value.bind(object) : value;
+          return isCallable(value) ? value.bind(object) : value;
         },
       });
       return await callback(asTestRaw(racing));

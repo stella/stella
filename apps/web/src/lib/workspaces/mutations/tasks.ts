@@ -2,19 +2,24 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
+import { RESOURCE_MUTATION_ID_HEADER } from "@stll/api-contract";
 import { stellaToast } from "@stll/ui/toast";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { unwrapApiResponse } from "@/lib/errors/api";
+import { readQueryResult } from "@/lib/errors/query-result";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
+import type { IdempotentRequest } from "@/lib/idempotency/use-idempotent-submit";
 import { toSafeId } from "@/lib/safe-id";
+import { resourceMutation } from "@/lib/workspace-realtime";
 import { workspacesKeys } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import { myWorkKeys } from "@/lib/workspaces/queries/my-work";
 import { taskKeys } from "@/lib/workspaces/queries/tasks";
+import { runWorkspaceMutation } from "@/lib/workspaces/workspace-mutation";
 
 /** Create an untitled task and open it in the inspector for naming. */
 export const useCreateTask = () => {
@@ -22,14 +27,38 @@ export const useCreateTask = () => {
   const analytics = useAnalytics();
   const t = useTranslations();
 
+  const createTask = resourceMutation({
+    mutation: "createTask",
+    queryClient,
+    mutationFn: async (
+      { workspaceId }: { workspaceId: string },
+      replayRequest: IdempotentRequest,
+    ) =>
+      readQueryResult(
+        await runWorkspaceMutation({
+          client: queryClient,
+          request: async (mutationId) => {
+            const response = await api
+              .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
+              .put(
+                { name: t("tasks.untitled") },
+                {
+                  headers: {
+                    ...replayRequest.headers,
+                    [RESOURCE_MUTATION_ID_HEADER]: mutationId,
+                  },
+                },
+              );
+            return unwrapApiResponse(response);
+          },
+          queryKeys: [],
+        }),
+      ),
+  });
   return useIdempotentMutation({
-    mutationFn: async (workspaceId: string) => {
-      const response = await api
-        .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .put({ name: t("tasks.untitled") });
-      return unwrapApiResponse(response);
-    },
-    onSuccess: async (data, workspaceId) => {
+    mutationFn: async (workspaceId: string, replayRequest) =>
+      await createTask({ workspaceId }, replayRequest),
+    onSuccess: (data, workspaceId) => {
       stellaToast.add({
         title: t("success.taskCreated"),
         type: "success",
@@ -39,15 +68,6 @@ export const useCreateTask = () => {
         workspaceId,
         isNew: true,
       });
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: entitiesKeys.all(workspaceId),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: workspacesKeys.overview(workspaceId),
-        }),
-        queryClient.invalidateQueries({ queryKey: myWorkKeys.all }),
-      ]);
     },
     onError: (error) => {
       analytics.captureError(error, {

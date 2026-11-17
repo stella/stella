@@ -3,6 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "replacements-case-law-provision-citations-work-subtree-idx",
   revision: 890,
+  lifecycle: "finalized",
   type: "replacements",
   // The subtree ranges, now carrying the cited-by page's grouping keys.
   values: [

@@ -109,11 +109,30 @@ describe("findingFingerprint", () => {
     );
   });
 
-  test("changes when the extracted value changes", () => {
+  test("changes when the text the value was read from changes", () => {
     expect(findingFingerprint(playbookPayload(), "compliant")).not.toBe(
       findingFingerprint(
         playbookPayload({
-          extracted: { value: "New York", text: "governed by English law" },
+          extracted: {
+            value: "England and Wales",
+            text: "governed by Delaware law",
+          },
+        }),
+        "compliant",
+      ),
+    );
+  });
+
+  // A tier-match value is a summary the model writes afresh on every run; the
+  // cited passages it was read from are the evidence.
+  test("ignores a reworded summary over the same passages", () => {
+    expect(findingFingerprint(playbookPayload(), "compliant")).toBe(
+      findingFingerprint(
+        playbookPayload({
+          extracted: {
+            value: "English law governs",
+            text: "governed by English law",
+          },
         }),
         "compliant",
       ),

@@ -1,3 +1,4 @@
+// parser-output-unchanged: adds the decision-type availability vocabulary; only cz-uohs sets it, and it bumps its own version.
 // parser-output-unchanged: the decision-date availability marker is derived only from metadata a source sets; sources that never set it parse as before.
 import { panic } from "better-result";
 
@@ -33,11 +34,45 @@ export const DECISION_TEXT_WITHHELD_REASON = {
 export type DecisionTextWithheldReason =
   (typeof DECISION_TEXT_WITHHELD_REASON)[keyof typeof DECISION_TEXT_WITHHELD_REASON];
 
+// parser-output-unchanged: Decision completion reasons describe read-time availability; parsers do not emit them.
+export const DECISION_TEXT_INCOMPLETE_REASONS = [
+  "gate_failed",
+  "text_changed",
+  "missing_text",
+] as const;
+export type DecisionTextIncompleteReason =
+  (typeof DECISION_TEXT_INCOMPLETE_REASONS)[number];
+
+// parser-output-unchanged: Citation text eligibility reasons describe read-time failures; parsers do not emit them.
+export const CITATION_TEXT_INCOMPLETE_REASONS = [
+  "absent_ast",
+  ...DECISION_TEXT_INCOMPLETE_REASONS,
+] as const;
+export type CitationTextIncompleteReason =
+  (typeof CITATION_TEXT_INCOMPLETE_REASONS)[number];
+
+// parser-output-unchanged: citation evidence availability is read-time metadata.
+export const CITATION_EVIDENCE_INCOMPLETE_REASONS = [
+  "missing_privileges",
+  "missing_evidence",
+] as const;
+export type CitationEvidenceIncompleteReason =
+  (typeof CITATION_EVIDENCE_INCOMPLETE_REASONS)[number];
+export const CITATION_EVIDENCE_INCOMPLETE_REASON = {
+  MISSING_PRIVILEGES: "missing_privileges",
+  MISSING_EVIDENCE: "missing_evidence",
+} as const satisfies Record<
+  Uppercase<CitationEvidenceIncompleteReason>,
+  CitationEvidenceIncompleteReason
+>;
+
 export const TEXT_ABSENCE_REASONS = [
   "not_published",
   "parse_failed",
   "publisher_placeholder",
   "redistribution_withheld",
+  "missing_text",
+  "text_changed",
 ] as const;
 
 export type TextAbsenceReason = (typeof TEXT_ABSENCE_REASONS)[number];
@@ -47,6 +82,8 @@ export const TEXT_ABSENCE_REASON = {
   PARSE_FAILED: "parse_failed",
   PUBLISHER_PLACEHOLDER: "publisher_placeholder",
   REDISTRIBUTION_WITHHELD: "redistribution_withheld",
+  MISSING_TEXT: "missing_text",
+  TEXT_CHANGED: "text_changed",
 } as const satisfies Record<Uppercase<TextAbsenceReason>, TextAbsenceReason>;
 
 export type TextField =
@@ -182,6 +219,20 @@ export const DECISION_DATE_AVAILABILITY_STATUSES = [
 
 export type DecisionDateAvailability = {
   status: (typeof DECISION_DATE_AVAILABILITY_STATUSES)[number];
+};
+
+/**
+ * Whether the source names a decision's type in words. A source that names it
+ * only by a code (an address in a code list) or not at all declares it in
+ * `metadata.decisionTypeAvailability`, so the absence is a typed marker.
+ */
+export const DECISION_TYPE_AVAILABILITY_STATUSES = [
+  "published",
+  "not-published-by-source",
+] as const;
+
+export type DecisionTypeAvailability = {
+  status: (typeof DECISION_TYPE_AVAILABILITY_STATUSES)[number];
 };
 
 /**

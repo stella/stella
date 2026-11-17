@@ -1,0 +1,19 @@
+{
+  "id": "no-local-letter-spacing",
+  "rules": ["no-local-letter-spacing/no-local-letter-spacing"],
+  "type": "changed-lines",
+  "expiresAt": "2026-11-14T00:00:00.000Z",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "no-local-letter-spacing/no-local-letter-spacing",
+    "apps",
+    "packages"
+  ]
+}

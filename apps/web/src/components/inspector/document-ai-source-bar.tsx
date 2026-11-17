@@ -9,6 +9,7 @@ import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronLeftIcon, ChevronRightIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -154,14 +155,16 @@ export const DocumentAiSourceBar = ({
         return panic("bounding-box generation ran without a justification id");
       }
       const result = await Result.tryPromise(async () => {
-        const response = await api
-          .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-          ["bounding-boxes"].post(
-            {
-              justificationId: toSafeId<"justification">(justificationId),
-            },
-            { fetch: { signal } },
-          );
+        const workspaceApi = api.workspaces({
+          workspaceId: toSafeId<"workspace">(workspaceId),
+        });
+
+        const response = await workspaceApi["bounding-boxes"].post(
+          {
+            justificationId: toSafeId<"justification">(justificationId),
+          },
+          { fetch: { signal } },
+        );
         if (response.error) {
           throw toAPIError(response.error);
         }
@@ -435,14 +438,14 @@ export const DocumentAiSourceBar = ({
           onClick={() => setIsAnswerExpanded((expanded) => !expanded)}
           variant="plain"
         >
-          <span className="block truncate">
+          <TruncatedText>
             {propertyName && (
               <span className="text-muted-foreground">{propertyName}: </span>
             )}
             <span className="font-medium">
               {shortAnswer ?? t("workspaces.pdf.evidence")}
             </span>
-          </span>
+          </TruncatedText>
         </Button>
         <Button
           aria-label={t("common.previous")}
@@ -625,10 +628,10 @@ const DocxSourceCitationChip = ({
   tooltip: string | undefined;
 }) => {
   const page = useFolioBlockPage(entityId, fieldId, blockId);
-  // Page resolution races the editor's paginator on first mount —
-  // fall back to an em dash so the chip stays the same width and
-  // the layout doesn't reshuffle when the number lands.
-  const label = page !== null ? `p. ${page}` : "p. —";
+  // Page resolution races the editor's paginator on first mount, so
+  // fall back to an ellipsis while the number is pending; the chip keeps
+  // nearly the same width and the layout doesn't reshuffle when it lands.
+  const label = page !== null ? `p. ${page}` : "p. …";
 
   return (
     <Button

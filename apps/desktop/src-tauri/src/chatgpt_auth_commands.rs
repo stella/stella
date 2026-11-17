@@ -46,9 +46,16 @@ pub struct ChatGptDisconnected {
   revocation_confirmed: bool,
 }
 
+/// Where the token broker records its endpoint, beside the connection.
+const BROKER_RECORD: &str = "codex-token-broker";
+
 /// The token broker, started by the first Codex run that needs it.
-#[derive(Default)]
-pub struct ChatGptTokenBroker(tokio::sync::OnceCell<CodexManagedTokenBroker>);
+pub struct ChatGptTokenBroker {
+  broker: tokio::sync::OnceCell<CodexManagedTokenBroker>,
+  /// The broker's endpoint record: every start listens where the last one
+  /// did, so runs kept through a restart still reach it.
+  record: std::path::PathBuf,
+}
 
 fn auth(
   app: &AppHandle,
@@ -146,10 +153,10 @@ pub fn manage(app: &AppHandle) {
     tracing::warn!("ChatGPT connection has no data directory");
     return;
   };
-  let path = data
+  let subscriptions = data
     .join(crate::config::APP_DATA_DIR_NAME)
-    .join("agent-subscriptions")
-    .join("chatgpt.json");
+    .join("agent-subscriptions");
+  let path = subscriptions.join("chatgpt.json");
   let http = match DesktopHttpClient::new(HttpClientOptions {
     timeout: Some(REQUEST_TIMEOUT),
     redirect: reqwest::redirect::Policy::none(),
@@ -166,6 +173,7 @@ pub fn manage(app: &AppHandle) {
   let opener = app.clone();
   let changed = app.clone();
   let harness = app.clone();
+  let window = app.clone();
   let auth = ChatGptAuth::new(
     ChatGptAuthConfig::openai(),
     Arc::new(FileVault::new(path, KeychainSecrets)),
@@ -177,7 +185,11 @@ pub fn manage(app: &AppHandle) {
         opener.opener().open_url(url, None::<&str>).is_ok()
       }),
       changed: Box::new(move || {
-        let _ = changed.emit(CHANGED_EVENT, ());
+        crate::logging::best_effort(
+          changed.emit(CHANGED_EVENT, ()),
+          "ChatGPT connection change was not announced",
+        );
+        crate::desktop_runner::harness_sign_in_changed();
       }),
       clear_harness_sign_in: Box::new(move || {
         if let Some(installation) = harness.try_state::<HarnessInstallation>()
@@ -186,10 +198,28 @@ pub fn manage(app: &AppHandle) {
           tracing::warn!(kind = ?error.kind(), "managed Codex sign-in state was not removed");
         }
       }),
+      color_scheme: Box::new(move || main_window_scheme(&window)),
     },
   );
   app.manage(auth);
-  app.manage(ChatGptTokenBroker::default());
+  app.manage(ChatGptTokenBroker {
+    broker: tokio::sync::OnceCell::new(),
+    record: subscriptions.join(BROKER_RECORD),
+  });
+}
+
+/// The scheme the main window draws in: the app follows the system's, as the
+/// window reports it. Unknown without the window, so the browser's then decides.
+fn main_window_scheme(app: &AppHandle) -> crate::outcome_page::OutcomeScheme {
+  use crate::outcome_page::OutcomeScheme;
+  match app
+    .get_webview_window("main")
+    .and_then(|window| window.theme().ok())
+  {
+    Some(tauri::Theme::Light) => OutcomeScheme::Light,
+    Some(tauri::Theme::Dark) => OutcomeScheme::Dark,
+    _ => OutcomeScheme::System,
+  }
 }
 
 /// Turning the feature off stops a sign-in in progress; the connection
@@ -198,12 +228,14 @@ pub fn apply_feature_gate(app: &AppHandle, enabled: bool) {
   if !enabled && let Some(auth) = app.try_state::<ChatGptAuth>() {
     auth.cancel();
   }
-  let _ = app.emit(CHANGED_EVENT, ());
+  crate::logging::best_effort(
+    app.emit(CHANGED_EVENT, ()),
+    "ChatGPT connection change was not announced",
+  );
 }
 
 /// What the desktop runner adds to a managed Codex app-server launch to run
 /// it on the user's ChatGPT plan.
-#[allow(dead_code, reason = "the desktop runner's harness host calls this")]
 pub async fn codex_chatgpt_launch(
   app: &AppHandle,
 ) -> Result<CodexChatGptLaunch, CodexLaunchError> {
@@ -219,7 +251,12 @@ pub async fn codex_chatgpt_launch(
   ) else {
     return Err(CodexLaunchError::Broker);
   };
-  crate::codex_managed_token_broker::codex_chatgpt_launch(&auth, &broker.0).await
+  crate::codex_managed_token_broker::codex_chatgpt_launch(
+    &auth,
+    &broker.broker,
+    &broker.record,
+  )
+  .await
 }
 
 #[cfg(test)]

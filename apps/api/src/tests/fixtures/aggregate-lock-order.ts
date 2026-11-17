@@ -59,6 +59,11 @@ export const aggregateFences = () => {
       id: organizationId,
       mode: "update",
     },
+    organizationDataBoxes: {
+      aggregate: "organizationDataBoxes",
+      id: { organizationId },
+    },
+    organizationSettings: { aggregate: "organizationSettings", id: organizationId, mode: "update" },
     organizationObjectIntent: {
       aggregate: "organizationObjectIntent",
       id: organizationId,
@@ -85,6 +90,10 @@ export const aggregateFences = () => {
     caseLawRepublication: {
       aggregate: "caseLawRepublication",
       id: "global",
+    },
+    corpusProjectionOfflineRequest: {
+      aggregate: "corpusProjectionOfflineRequest",
+      id: "0198e331-e578-7000-8000-0000000000b7",
     },
     caseLawSitemapMonth: {
       aggregate: "caseLawSitemapMonth",
@@ -192,6 +201,11 @@ export const aggregateFences = () => {
       id: { id: createSafeId<"entity">(), workspaceId },
       mode: "update",
     },
+    correspondence: {
+      aggregate: "correspondence",
+      id: { id: createSafeId<"correspondence">(), workspaceId },
+      mode: "update",
+    },
     entityVersion: {
       aggregate: "entityVersion",
       id: { id: createSafeId<"entityVersion">(), workspaceId },
@@ -235,6 +249,10 @@ export const aggregateFences = () => {
       aggregate: "billingDraftSettings",
       id: { organizationId },
     },
+    desktopRunnerCapacity: {
+      aggregate: "desktopRunnerCapacity",
+      id: { organizationId, userId: mintAuthProviderId<"user">() },
+    },
     fileComparisonCapacity: {
       aggregate: "fileComparisonCapacity",
       id: { organizationId },
@@ -276,6 +294,11 @@ export const aggregateFences = () => {
     chatMessage: {
       aggregate: "chatMessage",
       id: { id: createSafeId<"chatMessage">(), threadId },
+      mode: "update",
+    },
+    savedSearch: {
+      aggregate: "savedSearch",
+      id: { id: createSafeId<"savedSearch">(), organizationId, userId },
       mode: "update",
     },
   } as const satisfies FenceFixtures;

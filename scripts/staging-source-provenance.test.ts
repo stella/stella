@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { isRepositoryCheckoutAction } from "./ci-job-classification/checkout-actions";
 import { type Context, contextFromNested, evaluate } from "./github-expression";
 
 const evaluateInput = (input: unknown, context: Context) => {
@@ -546,7 +547,7 @@ const assertImageBindings = (workflow: Record<string, unknown>) => {
       .find(
         (step) =>
           typeof step["uses"] === "string" &&
-          step["uses"].startsWith("actions/checkout@") &&
+          isRepositoryCheckoutAction(step["uses"]) &&
           record(step["with"])["ref"] === SOURCE,
       );
     expect(checkout).toBeDefined();
@@ -566,7 +567,7 @@ const assertImageBindings = (workflow: Record<string, unknown>) => {
       .find(
         (step) =>
           typeof step["uses"] === "string" &&
-          step["uses"].startsWith("actions/checkout@") &&
+          isRepositoryCheckoutAction(step["uses"]) &&
           record(step["with"])["path"] === ".workflow-actions",
       );
     if (!trustedCheckout) {

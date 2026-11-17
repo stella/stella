@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { noDecisionReviewFound } from "@stll/api-contract/case-law-reviews";
 import { DECISION_TEXT_WITHHELD_REASON } from "@stll/api-contract/case-law-text-field";
 
 import { GRAPH_TEST_CITATION_TREATMENTS } from "./citation-treatments.test-support";
@@ -25,6 +26,7 @@ const citationPage = ({
 } = {}) =>
   ({
     doctrineAvailability: "unavailable",
+    appealReviews: noDecisionReviewFound(),
     decisionId,
     direction,
     nextCursor: null,
@@ -51,6 +53,10 @@ const citation = ({
   citationId,
   citationText,
   textWithheldReason,
+  textIncompleteReason: null,
+  evidenceIncompleteReason: null,
+  polarityEvidence: null,
+  citedPart: null,
   extractionWarnings: [],
   polarity,
   doctrine: null,

@@ -76,12 +76,7 @@ const SignInScreen = () => {
         }}
       >
         <View className="flex-row items-center justify-between">
-          <View className="flex-row items-center gap-3">
-            <StellaWordmarkLatin height={24} />
-            <View className="border-border rounded-sm border px-1.5 py-0.5">
-              <Text variant="badge">{t("beta")}</Text>
-            </View>
-          </View>
+          <StellaWordmarkLatin height={24} />
           <Pressable
             accessibilityLabel={t("options")}
             accessibilityRole="button"

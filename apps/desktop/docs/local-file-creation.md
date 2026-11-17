@@ -12,13 +12,20 @@ one. On Windows, ancestor handles deny delete sharing and reparse points are
 refused; publication uses a write-through move.
 
 `local_store::token_broker` owns the private channel directory and socket
-permissions, and Windows pipe client options. Its short-lived Unix directory
-is under the platform temporary directory; its socket is 0600 inside a 0700
-directory. Linux binds the socket through a descriptor pinned to the directory
-the broker created; macOS, which has no directory-relative bind, binds the
-checked directory's path. Windows clients retain identification-only security
-quality of service. These channel operations do not use application-data file
-opens.
+permissions, and Windows pipe client options. Its Unix directory is under the
+platform temporary directory; its socket is 0600 inside a 0700 directory. The
+broker records its endpoint in application data, through
+`write_private_atomic`, and every later start listens there again, so a run
+kept through an app restart still reaches it. A recorded directory is reused
+only when it is directly in a temporary directory, this user's, 0700 and not
+a symlink, and its socket only when nothing listens on it; otherwise the start
+takes a fresh endpoint and records that. Linux binds the socket through a
+descriptor pinned to the checked directory; macOS, which has no
+directory-relative bind, binds the checked directory's path. The token helper
+connects only to a socket of its user's in a 0700 directory of its user's.
+Windows clients retain identification-only security quality of service.
+These channel operations do not use application-data file opens, apart from
+the endpoint record.
 
 The approved roots are Stella's platform data, local-data, cache and state
 directories, plus its macOS log directory. The macOS LaunchAgents directory

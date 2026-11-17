@@ -1,4 +1,7 @@
 import { and, eq, isNull } from "drizzle-orm";
+import { EmptyFilter } from "drizzle-orm/relations";
+
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 
 import type { rootDb, Transaction } from "@/api/db/root";
 import type { documentProcessingRuns } from "@/api/db/schema";
@@ -220,7 +223,7 @@ const resolveCurrentExtractedRowsFromDatabase = async (
     where: {
       entityId: { in: entityIds },
       organizationId: { eq: organizationId },
-      workspaceId: workspaceIds ? { in: [...workspaceIds] } : undefined,
+      workspaceId: workspaceIds ? { in: [...workspaceIds] } : EmptyFilter,
     },
     columns: {
       entityId: true,
@@ -267,7 +270,7 @@ const resolveCurrentExtractedRowsFromDatabase = async (
       !entity ||
       !version ||
       version.deletedAt !== null ||
-      entity.workspace?.status === "deleting"
+      entity.workspace?.status === WORKSPACE_STATUS.deleting
     ) {
       return [];
     }
@@ -450,7 +453,7 @@ const currentSourceWhere = (run: DeadlineSourceRun) =>
       ? eq(extractedContent.ocrRunId, run.id)
       : isNull(extractedContent.ocrRunId),
     eq(entities.currentVersionId, run.entityVersionId),
-    eq(workspaces.status, "active"),
+    eq(workspaces.status, WORKSPACE_STATUS.active),
   );
 
 export const loadCurrentDeadlineSource = async (

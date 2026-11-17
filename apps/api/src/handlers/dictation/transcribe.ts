@@ -5,7 +5,9 @@ import {
   defaultTranscriptionModelId,
   isTranscriptionModelId,
   TRANSCRIPTION_MODELS,
+  transcriptionEndpointFor,
 } from "@stll/ai-catalog/transcription";
+import type { TranscriptionEndpoint } from "@stll/ai-catalog/transcription";
 import { AI_FAILURE_CODES } from "@stll/api-contract";
 import {
   MAX_TRANSCRIPTION_AUDIO_SECONDS,
@@ -13,10 +15,12 @@ import {
   TRANSCRIPTION_AUDIO_MEDIA_TYPES,
   TRANSCRIPTION_DURATION_TOLERANCE_MS,
 } from "@stll/api-contract/transcription";
+import { workspaceIsVisible } from "@stll/api-contract/workspace-status";
 import { classifyFailure } from "@stll/errors";
 
 import type { SafeDbError } from "@/api/db/safe-db";
 import { env } from "@/api/env";
+import { transcribeWithElevenLabs } from "@/api/handlers/dictation/elevenlabs-provider";
 import { consumeDictationLimit } from "@/api/handlers/dictation/limits";
 import {
   transcribeAudio,
@@ -24,6 +28,11 @@ import {
 } from "@/api/handlers/dictation/provider";
 import type { TranscriptionResult } from "@/api/handlers/dictation/provider";
 import { dictationBodySchema } from "@/api/handlers/dictation/schema";
+import {
+  readTranscriptionDeployment,
+  transcriptionServed,
+} from "@/api/handlers/dictation/transcription-deployment";
+import type { OrgSettingsForAuth } from "@/api/lib/ai-config-loader";
 import { orgAIConfigStatusError } from "@/api/lib/ai-config-response";
 import {
   ACCOUNT_ACCESS,
@@ -82,10 +91,30 @@ const config = {
   response: safeHandlerResponseSchemas(transcriptionResultSchema),
 } as const satisfies HandlerConfig;
 
-type UsageCaller = Pick<
-  MemberCaller,
-  "safeDb" | "session" | "user" | "recordAuditEvent" | "managedAIResidency"
->;
+/** Who dictates: a signed-in member, or a linked desktop's account. */
+type DictationIdentity = {
+  readonly user: { readonly id: SafeId<"user"> };
+  readonly session: { readonly activeOrganizationId: SafeId<"organization"> };
+};
+
+type UsageCaller = DictationIdentity &
+  Pick<MemberCaller, "safeDb" | "recordAuditEvent"> & {
+    /** The endpoint that served the audio, whose price is billed. */
+    readonly transcriptionEndpoint: TranscriptionEndpoint;
+  };
+
+/** What transcription reads from its caller, whichever credential proved it. */
+export type DictationCaller = Readonly<OrgSettingsForAuth> &
+  DictationIdentity &
+  Pick<MemberCaller, "safeDb" | "recordAuditEvent" | "getWorkspaceAccess"> & {
+    /** A caller that shows members which models leave the region may send
+     *  a model the region does not serve to the global endpoint. Only a
+     *  model named in the request goes there; a default never does. */
+    readonly allowOutsideRegion?: boolean;
+    /** A caller that warns members when a provider keeps the audio may use
+     *  such a model when it names it; a default never is one. */
+    readonly allowRetainingModels?: boolean;
+  };
 type PreflightOptions = {
   caller: UsageCaller;
   isByok: boolean;
@@ -150,15 +179,12 @@ const settleUsage = async ({
   workspaceId,
   isByok,
 }: SettleOptions): Promise<Result<void, SafeDbError | HandlerError<503>>> => {
-  if (
-    !isTranscriptionModelId(result.modelId) ||
-    caller.managedAIResidency === null
-  ) {
+  if (!isTranscriptionModelId(result.modelId)) {
     return Result.err(managedProviderUnavailable("openrouter"));
   }
   const units = transcriptionUsageUnits({
     modelId: result.modelId,
-    residency: caller.managedAIResidency,
+    residency: caller.transcriptionEndpoint,
     durationMs: result.durationMs,
     isByok,
   });
@@ -192,17 +218,21 @@ const settleUsage = async ({
 
 type DictationDependencies = {
   transcribe: typeof transcribeAudio;
+  transcribeElevenLabs: typeof transcribeWithElevenLabs;
+  deployment: typeof readTranscriptionDeployment;
   credential: typeof getManagedOpenRouterCredential;
   limit: typeof consumeDictationLimit;
   preflight: typeof checkUsage;
   settle: typeof settleUsage;
 };
 
-type DictationContext = MemberCaller & {
+type DictationContext = DictationCaller & {
   body: v.InferOutput<typeof dictationBodySchema>;
   request: Request;
   modelAdmission?: ModelDispatchAdmission;
 };
+
+export type { DictationDependencies };
 
 export const executeDictation = async (
   ctx: DictationContext,
@@ -230,7 +260,7 @@ export const executeDictation = async (
             ),
         }),
       );
-      if (access === null || access.status === "deleting") {
+      if (access === null || !workspaceIsVisible(access.status)) {
         return Result.err(
           new HandlerError({
             status: 404,
@@ -240,16 +270,45 @@ export const executeDictation = async (
         );
       }
     }
+    const ownKey = ctx.orgAIConfig?.providers.find(
+      ({ provider }) => provider === "openrouter",
+    )?.apiKey;
+    if (ctx.orgAIConfig !== null && ownKey === undefined) {
+      return Result.err(
+        new HandlerError({
+          status: 403,
+          code: AI_FAILURE_CODES.own_key_required,
+          message:
+            "Transcription is not available with your organization's AI provider.",
+          hint: "Configure an organization OpenRouter key in organization AI settings.",
+        }),
+      );
+    }
+    const deployment = dependencies.deployment();
+    const served = transcriptionServed(deployment, ctx.orgAIConfig, {
+      retainingData: ctx.allowRetainingModels === true,
+    });
     const residency = ctx.managedAIResidency;
     const regionalDefault =
-      residency === null ? undefined : defaultTranscriptionModelId(residency);
+      residency === null
+        ? undefined
+        : defaultTranscriptionModelId(
+            residency,
+            transcriptionServed(deployment, ctx.orgAIConfig, {
+              asDefault: true,
+            }),
+          );
     const modelId =
       residency === null ? undefined : (body.modelId ?? regionalDefault);
-    if (
-      residency === null ||
-      modelId === undefined ||
-      TRANSCRIPTION_MODELS[modelId].residency[residency].status !== "available"
-    ) {
+    const endpoint =
+      residency === null || modelId === undefined
+        ? undefined
+        : transcriptionEndpointFor(modelId, residency, {
+            outsideRegion:
+              ctx.allowOutsideRegion === true && body.modelId !== undefined,
+            served,
+          });
+    if (modelId === undefined || endpoint === undefined) {
       return Result.err(
         classifyFailure(
           new HandlerError({
@@ -275,28 +334,16 @@ export const executeDictation = async (
         userId: user.id,
       }),
     );
-    const ownKey = ctx.orgAIConfig?.providers.find(
-      ({ provider }) => provider === "openrouter",
-    )?.apiKey;
-    if (ctx.orgAIConfig !== null && ownKey === undefined) {
-      return Result.err(
-        new HandlerError({
-          status: 403,
-          code: AI_FAILURE_CODES.own_key_required,
-          message:
-            "Transcription is not available with your organization's AI provider.",
-          hint: "Configure an organization OpenRouter key in organization AI settings.",
-        }),
-      );
-    }
-    const isByok = ownKey !== undefined;
+    // A direct model runs on the deployment's key, never the organization's.
+    const direct = TRANSCRIPTION_MODELS[modelId].route === "elevenlabs";
+    const isByok = !direct && ownKey !== undefined;
     const maximumDurationMs = MAX_TRANSCRIPTION_AUDIO_SECONDS * 1000;
     const usageCaller = {
       safeDb: ctx.safeDb,
       session,
       user,
       recordAuditEvent: ctx.recordAuditEvent,
-      managedAIResidency: residency,
+      transcriptionEndpoint: endpoint,
     };
     yield* Result.await(
       dependencies.preflight({
@@ -304,33 +351,41 @@ export const executeDictation = async (
         isByok,
         required: transcriptionUsageUnits({
           modelId,
-          residency,
+          residency: endpoint,
           durationMs: maximumDurationMs,
           isByok,
         }).unitsConsumed,
       }),
     );
     const admission = configuredModelAdmission(ctx);
-    const credential =
-      ownKey === undefined
-        ? yield* Result.await(dependencies.credential(admission.modelTier))
-        : { apiKey: ownKey };
-    const { transcript: result, admittedDurationMs } = yield* Result.await(
-      dependencies.transcribe({
-        audio: body.file,
-        modelId,
-        language: body.language,
-        vocabulary: body.vocabulary,
-        apiKey: credential.apiKey,
-        residency,
-        scope: {
-          admission,
-          organizationId: session.activeOrganizationId,
-          userId: user.id,
-        },
-        signal: ctx.request.signal,
-      }),
-    );
+    const scope = {
+      admission,
+      organizationId: session.activeOrganizationId,
+      userId: user.id,
+    };
+    const transcribed = direct
+      ? await dependencies.transcribeElevenLabs({
+          audio: body.file,
+          modelId,
+          language: body.language,
+          deployment: deployment.elevenLabs,
+          scope,
+          signal: ctx.request.signal,
+        })
+      : await dependencies.transcribe({
+          audio: body.file,
+          modelId,
+          language: body.language,
+          vocabulary: body.vocabulary,
+          apiKey:
+            ownKey ??
+            (yield* Result.await(dependencies.credential(admission.modelTier)))
+              .apiKey,
+          residency: endpoint,
+          scope,
+          signal: ctx.request.signal,
+        });
+    const { transcript: result, admittedDurationMs } = yield* transcribed;
     const durationMismatch =
       result.durationMs >
       admittedDurationMs + TRANSCRIPTION_DURATION_TOLERANCE_MS;
@@ -353,8 +408,20 @@ export const executeDictation = async (
     return Result.ok(result);
   });
 
+export const DEFAULT_DICTATION_DEPENDENCIES = {
+  transcribe: transcribeAudio,
+  transcribeElevenLabs: transcribeWithElevenLabs,
+  deployment: readTranscriptionDeployment,
+  credential: getManagedOpenRouterCredential,
+  limit: consumeDictationLimit,
+  preflight: checkUsage,
+  settle: settleUsage,
+} satisfies DictationDependencies;
+
 export const createDictationTranscribeEndpoint = ({
   transcribe = transcribeAudio,
+  transcribeElevenLabs = transcribeWithElevenLabs,
+  deployment = readTranscriptionDeployment,
   credential = getManagedOpenRouterCredential,
   limit = consumeDictationLimit,
   preflight = checkUsage,
@@ -364,6 +431,8 @@ export const createDictationTranscribeEndpoint = ({
     const result = yield* Result.await(
       executeDictation(ctx, {
         transcribe,
+        transcribeElevenLabs,
+        deployment,
         credential,
         limit,
         preflight,

@@ -7,7 +7,7 @@ import {
   redirect,
   useLocation,
 } from "@tanstack/react-router";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -28,6 +28,7 @@ import {
 } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
+import { transformUnknownError } from "@/lib/errors/client";
 import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import {
   getOauthHashFragment,
@@ -43,6 +44,10 @@ import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
 import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
 import { loadAuthContext } from "@/routes/-auth-context";
+import {
+  consentCompletion,
+  isConsentAllowDisabled,
+} from "@/routes/-consent-completion.logic";
 import { ConsentSuccess } from "@/routes/-consent-success";
 
 export const Route = createFileRoute("/consent")({
@@ -173,27 +178,26 @@ function ConsentPage() {
     setSubmission({ status: "pending" });
     // The grant binds to the session's active organization when consent is
     // given, so switching here is what decides where the app will work.
-    const outcome = await Result.tryPromise(
-      async () => await authClient.organization.setActive({ organizationId }),
+    const selected = await Result.tryPromise({
+      try: async () =>
+        await authClient.organization.setActive({ organizationId }),
+      catch: transformUnknownError,
+    });
+    // A failed request may still have committed. Always confirm the session.
+    const refreshed = await Result.tryPromise({
+      try: async () => await refreshAuthQueries(queryClient),
+      catch: transformUnknownError,
+    });
+    const outcome = refreshed.andThen(() =>
+      selected.andThen(({ error }) =>
+        error ? Result.err(toAuthClientError(error)) : Result.ok(undefined),
+      ),
     );
-    // On failure the request may still have reached the server, so re-read
-    // the session: the page must show the organization Allow would bind to.
     if (outcome.isErr()) {
-      await refreshAuthQueries(queryClient);
       setSubmission({ status: "error" });
       notifyUserError(outcome.error, t("consent.error"));
       return;
     }
-    if (outcome.value.error) {
-      await refreshAuthQueries(queryClient);
-      setSubmission({ status: "error" });
-      notifyUserError(
-        toAuthClientError(outcome.value.error),
-        t("consent.error"),
-      );
-      return;
-    }
-    await refreshAuthQueries(queryClient);
     setSubmission({ status: "idle" });
   };
 
@@ -231,18 +235,32 @@ function ConsentPage() {
       return;
     }
 
-    if (!accept) {
-      window.location.assign(redirectUrl);
-      return;
+    const completion = consentCompletion({
+      accept,
+      redirectUrl,
+      client: identity,
+      organizationName,
+    });
+    switch (completion.status) {
+      case "redirect":
+        window.location.assign(completion.redirectUrl);
+        return;
+      case "connected":
+        setSubmission(completion);
+        return;
+      default:
+        completion satisfies never;
+        panic("Unhandled consent completion");
     }
-    setSubmission({ status: "connected", redirectUrl });
   };
 
   if (submission.status === "connected") {
     return (
       <ConsentSuccess
         identity={identity}
+        organizationName={organizationName}
         redirectUrl={submission.redirectUrl}
+        scopes={scopes}
       />
     );
   }
@@ -261,7 +279,12 @@ function ConsentPage() {
       }
       decision={
         <ConsentDecisionBar
-          allowDisabled={clientQuery.isError || !clientQuery.data}
+          allowDisabled={isConsentAllowDisabled({
+            clientInfoFailed: clientQuery.isError,
+            clientInfoLoaded:
+              clientQuery.data !== undefined && clientQuery.data !== null,
+            session: sessionView,
+          })}
           hasError={hasError}
           isPending={isPending}
           onDecide={(accept) => {
@@ -311,7 +334,7 @@ function ConsentPage() {
           </p>
           <Link
             className="text-primary text-sm font-medium hover:underline"
-            to="/admin/members"
+            to="/settings/organization/members"
             target="_blank"
             rel="noopener noreferrer"
           >

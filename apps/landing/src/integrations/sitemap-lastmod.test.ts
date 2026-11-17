@@ -46,6 +46,11 @@ describe("sitemapSources", () => {
       "apps/landing/src/content/docs/docs/get-started/cli.md",
       "apps/landing/src/content/docs/docs/get-started/cli.mdx",
     ]);
+    expect(sources("/docs/reference/tools/")).toEqual([
+      "apps/landing/src/content/docs/docs/reference/tools.md",
+      "apps/landing/src/content/docs/docs/reference/tools.mdx",
+      "packages/cli/src/generated/tool-reference.json",
+    ]);
   });
 
   test("blog posts date from their content file, the index from the directory", () => {

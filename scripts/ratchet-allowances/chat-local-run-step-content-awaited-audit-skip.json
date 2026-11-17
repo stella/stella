@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 1,
+  "reason": "Recording which steps a finished run announced it still has to send writes content-free rows on the gateway's owner connection, from the run's own stored events; it is the turn's bookkeeping, audited by the turn the member ran."
+}

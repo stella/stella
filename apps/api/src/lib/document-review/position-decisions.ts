@@ -59,9 +59,12 @@ export const readPositionDecisionOverlay = async ({
 
   // A fix is one of three shapes; two of them name their text `text` and the
   // parameter one names it `replace`. Exactly one is ever present.
-  // The position's passages as the run pinned them; every matter they came
-  // from must be one the transaction's reader can open.
-  const passageWorkspaceIds = sql`(
+  //
+  // Every matter the run's references came from: one grading call can cover
+  // positions from several matters, so any fix in the run can restate any of
+  // them, whatever its own position's standard. The transaction's reader must
+  // be able to open all of them.
+  const runSourceWorkspaceIds = sql`(
     SELECT passage->>'workspaceId'
       FROM ${documentReviewRuns} run,
            jsonb_array_elements(
@@ -71,15 +74,17 @@ export const readPositionDecisionOverlay = async ({
              COALESCE(item->'standard'->'passages', '[]'::jsonb)
            ) AS passage
      WHERE run.id = ${documentReviewFindings.runId}
-       AND item->>'sourceId' = ${documentReviewFindings.positionId}::text
+    UNION ALL
+    SELECT reference->>'workspaceId'
+      FROM ${documentReviewRuns} run,
+           jsonb_array_elements(
+             COALESCE(run.basis->'references', '[]'::jsonb)
+           ) AS reference
+     WHERE run.id = ${documentReviewFindings.runId}
   )`;
-  // sql-perf-allow: bounded by one documentReviewRuns.id and one position per finding
-  const fixReadable = sql`(
-    ${documentReviewFindings.payload}->'finding'->>'standardSource' IS DISTINCT FROM 'reference'
-    OR NOT EXISTS (
-      SELECT 1 FROM ${passageWorkspaceIds} AS source(workspace_id)
-       WHERE source.workspace_id::uuid NOT IN (${authorizedWorkspaceIdSubquery()})
-    )
+  const fixReadable = sql`NOT EXISTS (
+    SELECT 1 FROM ${runSourceWorkspaceIds} AS source(workspace_id)
+     WHERE source.workspace_id::uuid NOT IN (${authorizedWorkspaceIdSubquery()})
   )`;
   const fixText = sql`CASE WHEN ${fixReadable}
     THEN coalesce(

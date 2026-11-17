@@ -27,6 +27,7 @@ import {
   MenuTrigger,
 } from "@stll/ui/menu";
 import { ScrollArea } from "@stll/ui/scroll-area";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -331,9 +332,9 @@ const FolderDragDropRow = ({
                   }
                 >
                   <EntityKindIcon className="size-4 shrink-0" kind="folder" />
-                  <BidiText as="span" className="truncate">
+                  <TruncatedText render={<BidiText as="span" />}>
                     {destination.name}
-                  </BidiText>
+                  </TruncatedText>
                 </MenuItem>
               ))}
         </MenuPopup>
@@ -362,14 +363,12 @@ const FolderSelectionButton = ({
   >
     <span
       className={cn(
-        "hover:bg-accent flex w-full min-w-0 items-center gap-1 rounded px-2 py-1 text-sm",
+        "hover:bg-accent flex w-full min-w-0 items-center gap-1 rounded-sm px-2 py-1 text-sm",
         selected && "bg-accent",
       )}
     >
       <EntityKindIcon className="size-4 shrink-0" kind="folder" />
-      <BidiText as="span" className="truncate">
-        {name}
-      </BidiText>
+      <TruncatedText render={<BidiText as="span" />}>{name}</TruncatedText>
     </span>
   </Button>
 );
@@ -524,7 +523,7 @@ export const MatterTargetPicker = ({
                   >
                     <span
                       className={cn(
-                        "hover:bg-accent flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm",
+                        "hover:bg-accent flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm",
                         isSelected && "bg-accent",
                       )}
                     >
@@ -532,16 +531,19 @@ export const MatterTargetPicker = ({
                         className="size-4 shrink-0"
                         matter={{ id: workspace.id, color: workspace.color }}
                       />
-                      <BidiText as="span" className="min-w-0 flex-1 truncate">
+                      <TruncatedText
+                        className="flex-1"
+                        render={<BidiText as="span" />}
+                      >
                         {workspace.name}
-                      </BidiText>
+                      </TruncatedText>
                       {workspace.client?.displayName !== undefined && (
-                        <BidiText
-                          as="span"
-                          className="text-muted-foreground max-w-32 shrink-0 truncate text-xs"
+                        <TruncatedText
+                          className="text-muted-foreground max-w-32 shrink-0 text-xs"
+                          render={<BidiText as="span" />}
                         >
                           {workspace.client.displayName}
-                        </BidiText>
+                        </TruncatedText>
                       )}
                     </span>
                   </Button>
@@ -872,9 +874,9 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
         }}
         variant="plain"
       >
-        <span className="hover:bg-accent text-muted-foreground flex w-full items-center gap-1 rounded px-2 py-1 text-sm">
+        <span className="hover:bg-accent text-muted-foreground flex w-full items-center gap-1 rounded-sm px-2 py-1 text-sm">
           <FolderPlusIcon className="size-4 shrink-0" />
-          <span className="truncate">{t("workspaces.newFolder")}</span>
+          <TruncatedText>{t("workspaces.newFolder")}</TruncatedText>
         </span>
       </Button>
     ) : null;
@@ -909,7 +911,7 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
           {({ isDropTarget, dragHandle }) => (
             <div
               className={cn(
-                "flex items-center gap-1 rounded",
+                "flex items-center gap-1 rounded-sm",
                 isDropTarget && "bg-primary/8 ring-primary/40 ring-1",
               )}
               style={{ paddingInlineStart: `${depth * 16 + 8}px` }}
@@ -998,7 +1000,7 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
             >
               <span
                 className={cn(
-                  "hover:bg-accent flex w-full items-center gap-1 rounded px-2 py-1 text-sm",
+                  "hover:bg-accent flex w-full items-center gap-1 rounded-sm px-2 py-1 text-sm",
                   selectedExistingParentId === null && "bg-accent",
                   isDropTarget && "bg-primary/8 ring-primary/40 ring-1",
                 )}

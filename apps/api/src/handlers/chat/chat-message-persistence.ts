@@ -2,6 +2,14 @@ import { panic, Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 
 import type { ChatSendMode } from "@stll/anonymize-chat";
+import {
+  type AIErrorKind,
+  CHAT_HISTORY_CHANGED_ERROR_CODE,
+} from "@stll/api-contract";
+import {
+  CHAT_QUEUE_ERROR_CODE,
+  CHAT_SEND_QUEUES_INSTEAD_CODE,
+} from "@stll/api-contract/chat-queue";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
@@ -29,6 +37,7 @@ import type {
   ChatTurnExecution,
   ChatTurnExecutionClaim,
   ChatTurnRefusal,
+  ChatTurnSource,
 } from "@/api/handlers/chat/chat-turn-persistence";
 import {
   ChatTurnDroppedPartsError,
@@ -59,6 +68,8 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
+import type { ChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import {
   expandThreadDataScopeOnTx,
   replaceThreadDataScopeOnTx,
@@ -69,6 +80,13 @@ import {
   recordChatThreadNamesOnTx,
 } from "@/api/lib/chat/thread-names";
 import { lockThreadStoredContentTransitionOnTx } from "@/api/lib/chat/thread-stored-content-egress";
+import { takeChatLimitResumeOnTx } from "@/api/lib/db/chat-limit-resume";
+import {
+  admitMemberMessageOnTx,
+  type MemberMessageAdmission,
+  releaseChatQueueOnTx,
+  takeQueuedChatMessageOnTx,
+} from "@/api/lib/db/chat-queue-gate";
 import { HandlerError, TelemetryError } from "@/api/lib/errors/tagged-errors";
 import { isThreadMemoryEnabled } from "@/api/lib/memory/memory-access";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
@@ -81,6 +99,7 @@ type InsertMessagesProps = {
   dataScopeExpansion?: ChatDataScopeExpansion | undefined;
   threadNames?: ChatThreadNamesWrite | undefined;
   messages: PersistableChatMessage[];
+  pings: ChatRunPings;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
@@ -117,17 +136,19 @@ const NO_TURN_WRITES: ChatTurnWrites = { superseded: undefined };
 
 const applyChatTurnWritesOnTx = async ({
   acceptance,
+  pings,
   settlement,
   tx,
 }: {
   acceptance: ChatTurnAcceptance | undefined;
+  pings: ChatRunPings;
   settlement: ChatTurnSettlement | undefined;
   tx: Transaction;
 }): Promise<ChatTurnWrites> => {
   const accepted =
     acceptance === undefined
       ? undefined
-      : await insertChatTurnAcceptanceOnTx({ acceptance, tx });
+      : await insertChatTurnAcceptanceOnTx({ acceptance, pings, tx });
   if (accepted?.type === "refused") {
     panic("Chat turn acceptance lost its reserved thread slot");
   }
@@ -135,7 +156,7 @@ const applyChatTurnWritesOnTx = async ({
   if (settlement === undefined) {
     return writes;
   }
-  const settled = await settleChatTurnOnTx({ ...settlement, tx });
+  const settled = await settleChatTurnOnTx({ ...settlement, pings, tx });
   switch (settled) {
     case "settled":
       return writes;
@@ -155,13 +176,19 @@ const applyChatTurnWritesOnTx = async ({
 
 const reserveChatTurnAcceptanceOnTx = async ({
   acceptance,
+  pings,
   tx,
 }: {
   acceptance: ChatTurnAcceptance | undefined;
+  pings: ChatRunPings;
   tx: Transaction;
 }): Promise<boolean> =>
   acceptance === undefined ||
-  (await canAcceptChatTurnOnTx({ threadId: acceptance.threadId, tx }));
+  (await canAcceptChatTurnOnTx({
+    pings,
+    threadId: acceptance.threadId,
+    tx,
+  }));
 
 const applyChatDataScopeExpansionOnTx = async ({
   expansion,
@@ -243,6 +270,7 @@ const insertMessages = async ({
   dataScopeExpansion,
   threadNames,
   messages,
+  pings,
   recordAuditEvent,
   safeDb,
   threadId,
@@ -269,6 +297,7 @@ const insertMessages = async ({
     if (
       !(await reserveChatTurnAcceptanceOnTx({
         acceptance: turnAcceptance,
+        pings,
         tx,
       }))
     ) {
@@ -314,6 +343,7 @@ const insertMessages = async ({
     );
     return await applyChatTurnWritesOnTx({
       acceptance: turnAcceptance,
+      pings,
       settlement: turnSettlement,
       tx,
     });
@@ -351,7 +381,9 @@ export type PersistMessageProps = {
 };
 
 export const persistMessage = async (props: PersistMessageProps) => {
-  const result = await runPersistMessage(props);
+  const result = await withChatRunPings(
+    async (pings) => await runPersistMessage({ ...props, pings }),
+  );
   // Refresh the thread's global-search document whenever its messages
   // actually changed. Fire-and-forget: indexing must never block or
   // fail a chat turn.
@@ -787,6 +819,7 @@ export const persistTerminalAssistantTurn = async ({
  */
 export const persistFailedChatTurn = async ({
   code,
+  error = "unknown",
   execution,
   indexThread,
   recordAuditEvent,
@@ -798,6 +831,8 @@ export const persistFailedChatTurn = async ({
   workspaceId,
 }: {
   code: ChatTurnFailureCode;
+  /** What the turn tells the member; a failure nothing explained is unknown. */
+  error?: AIErrorKind | undefined;
   execution: ChatTurnExecution;
   indexThread: PersistMessageProps["indexThread"];
   recordAuditEvent: AuditRecorder;
@@ -808,7 +843,7 @@ export const persistFailedChatTurn = async ({
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
 }) => {
-  const outcome = { type: "failed", error: "unknown" } as const;
+  const outcome = { type: "failed", error } as const;
   return await persistTerminalAssistantTurn({
     execution,
     failure: { code, retryable },
@@ -856,6 +891,7 @@ const runPersistMessage = async ({
   acceptedSendMode = null,
   dataScopeExpansion,
   threadNames,
+  pings,
   recordAuditEvent,
   safeDb,
   threadId,
@@ -866,13 +902,14 @@ const runPersistMessage = async ({
   persistencePlan,
   deleteMessageIds = [],
   dataScopeReplacement,
-}: PersistMessageProps) => {
+}: PersistMessageProps & { pings: ChatRunPings }) => {
   if (persistencePlan.type === "insert") {
     return await insertMessages({
       acceptedSendMode,
       dataScopeExpansion,
       threadNames,
       messages: [persistencePlan.message],
+      pings,
       recordAuditEvent,
       safeDb,
       threadId,
@@ -895,6 +932,7 @@ const runPersistMessage = async ({
       if (
         !(await reserveChatTurnAcceptanceOnTx({
           acceptance: turnAcceptance,
+          pings,
           tx,
         }))
       ) {
@@ -974,6 +1012,7 @@ const runPersistMessage = async ({
       });
       return await applyChatTurnWritesOnTx({
         acceptance: turnAcceptance,
+        pings,
         settlement: turnSettlement,
         tx,
       });
@@ -1014,6 +1053,7 @@ const runPersistMessage = async ({
       if (
         !(await reserveChatTurnAcceptanceOnTx({
           acceptance: turnAcceptance,
+          pings,
           tx,
         }))
       ) {
@@ -1037,6 +1077,7 @@ const runPersistMessage = async ({
       }
       return await applyChatTurnWritesOnTx({
         acceptance: turnAcceptance,
+        pings,
         settlement: turnSettlement,
         tx,
       });
@@ -1064,6 +1105,7 @@ const runPersistMessage = async ({
     if (
       !(await reserveChatTurnAcceptanceOnTx({
         acceptance: turnAcceptance,
+        pings,
         tx,
       }))
     ) {
@@ -1132,6 +1174,7 @@ const runPersistMessage = async ({
     });
     return await applyChatTurnWritesOnTx({
       acceptance: turnAcceptance,
+      pings,
       settlement: turnSettlement,
       tx,
     });
@@ -1159,7 +1202,23 @@ const safeDbOnTransaction = (tx: Transaction): SafeDb =>
     return Result.ok(await operation(tx));
   };
 
+/**
+ * What a member's message does to the thread's history: `append` a new
+ * message, which waits behind a turn waiting on the member and behind
+ * queued messages (`admitMemberMessageOnTx`); or `rewrite` it, an edit or a
+ * regeneration, which replaces the history a waiting turn belongs to.
+ */
+export const CHAT_MEMBER_MESSAGE_PLACEMENT = {
+  append: "append",
+  rewrite: "rewrite",
+} as const;
+
+type ChatMemberMessagePlacement =
+  (typeof CHAT_MEMBER_MESSAGE_PLACEMENT)[keyof typeof CHAT_MEMBER_MESSAGE_PLACEMENT];
+
 type PersistAcceptedMessageWithClaimProps = PersistMessageProps & {
+  /** Where the message goes in the thread; read for a member's own turn. */
+  placement: ChatMemberMessagePlacement;
   /** The history the message's plan read: its persistence plan, deletions,
    *  and the run's model history. */
   plannedOnHistory: ChatHistorySnapshot;
@@ -1181,11 +1240,90 @@ const CHAT_TURN_REFUSAL_MESSAGE = {
   "turn-running": "A chat turn is already running",
 } as const satisfies Record<ChatTurnRefusal, string>;
 
+const CHAT_TURN_REFUSAL_CODE = {
+  "history-changed": CHAT_HISTORY_CHANGED_ERROR_CODE,
+  "turn-running": CHAT_SEND_QUEUES_INSTEAD_CODE.turnRunning,
+} as const satisfies Record<ChatTurnRefusal, string>;
+
 const refuseChatTurn = (refusal: ChatTurnRefusal): HandlerError<409> =>
   new HandlerError({
     status: 409,
+    code: CHAT_TURN_REFUSAL_CODE[refusal],
     message: CHAT_TURN_REFUSAL_MESSAGE[refusal],
   });
+
+/** Why a member's new message was refused for the queue's sake. */
+const MEMBER_MESSAGE_REFUSAL = {
+  "turn-awaiting-member": {
+    code: CHAT_SEND_QUEUES_INSTEAD_CODE.turnAwaitingMember,
+    message:
+      "The chat waits on your answer; queue the message, or send a queued " +
+      "message now to replace what it waits on",
+  },
+  "queued-ahead": {
+    code: CHAT_SEND_QUEUES_INSTEAD_CODE.queuedAhead,
+    message: "Messages are queued ahead of this one; queue it after them",
+  },
+} as const satisfies Record<
+  Exclude<MemberMessageAdmission, "admitted">,
+  { code: string; message: string }
+>;
+
+/** What a server-started turn names is no longer the server's to send. */
+const serverStartedTurnNotDue = (): HandlerError<409> =>
+  new HandlerError({
+    status: 409,
+    code: CHAT_QUEUE_ERROR_CODE.notDue,
+    message: "The turn the server would start is no longer due",
+  });
+
+/**
+ * A member's own turn releases the thread's held queue: it is the member's
+ * next word, so the queue waits behind it instead. A new message of theirs
+ * must first be admitted: it never replaces a turn waiting on them, nor goes
+ * ahead of messages queued before it. A queued message must be the due head
+ * of an open gate, and leaves the queue in this transaction.
+ */
+const takeTurnSourceOnTx = async ({
+  placement,
+  source,
+  threadId,
+  tx,
+}: {
+  placement: ChatMemberMessagePlacement;
+  source: ChatTurnSource;
+  threadId: SafeId<"chatThread">;
+  tx: Transaction;
+}): Promise<
+  "taken" | "not-due" | Exclude<MemberMessageAdmission, "admitted">
+> => {
+  switch (source.type) {
+    case "member": {
+      if (placement === CHAT_MEMBER_MESSAGE_PLACEMENT.rewrite) {
+        await releaseChatQueueOnTx({ threadId, tx });
+        return "taken";
+      }
+      const admission = await admitMemberMessageOnTx({ threadId, tx });
+      return admission === "admitted" ? "taken" : admission;
+    }
+    case "queue":
+      return await takeQueuedChatMessageOnTx({
+        id: source.queuedMessageId,
+        revision: source.revision,
+        threadId,
+        tx,
+      });
+    case "limit-resume":
+      return await takeChatLimitResumeOnTx({
+        failedTurnId: source.failedTurnId,
+        threadId,
+        tx,
+      });
+    default:
+      source satisfies never;
+      return panic("Unhandled chat turn source");
+  }
+};
 
 /**
  * Persist a new user message, create its durable turn, and claim execution
@@ -1194,6 +1332,7 @@ const refuseChatTurn = (refusal: ChatTurnRefusal): HandlerError<409> =>
  * the message was planned on is the thread's history when the lock is taken.
  */
 export const persistAcceptedMessageWithClaim = async ({
+  placement,
   plannedOnHistory,
   refuseTurn = refuseChatTurn,
   safeDb,
@@ -1202,48 +1341,77 @@ export const persistAcceptedMessageWithClaim = async ({
 }: PersistAcceptedMessageWithClaimProps): Promise<
   Result<AcceptedMessageClaim, HandlerError<409> | SafeDbError>
 > => {
-  const result = await safeDb(async (tx) => {
-    const reservation = await reservePlannedChatTurnOnTx({
-      history: plannedOnHistory,
-      threadId: turnAcceptance.threadId,
-      tx,
-    });
-    if (reservation !== "reserved") {
-      return Result.err(refuseTurn(reservation));
-    }
-    const persistenceResult = await runPersistMessage({
-      ...persistenceProps,
-      safeDb: safeDbOnTransaction(tx),
-      turnAcceptance,
-    });
-    if (Result.isError(persistenceResult)) {
-      // Its only refusal is the turn acceptance the reservation above
-      // already holds: a turn that runs.
-      return Result.err(
-        persistenceResult.error instanceof HandlerError
-          ? refuseTurn("turn-running")
-          : persistenceResult.error,
-      );
-    }
+  const result = await withChatRunPings(
+    async (pings) =>
+      await safeDb(async (tx) => {
+        const reservation = await reservePlannedChatTurnOnTx({
+          history: plannedOnHistory,
+          pings,
+          threadId: turnAcceptance.threadId,
+          tx,
+        });
+        if (reservation !== "reserved") {
+          return Result.err(refuseTurn(reservation));
+        }
+        const taken = await takeTurnSourceOnTx({
+          placement,
+          source: turnAcceptance.source,
+          threadId: turnAcceptance.threadId,
+          tx,
+        });
+        switch (taken) {
+          case "taken":
+            break;
+          case "not-due":
+            return Result.err(serverStartedTurnNotDue());
+          case "turn-awaiting-member":
+          case "queued-ahead":
+            return Result.err(
+              new HandlerError({
+                status: 409,
+                ...MEMBER_MESSAGE_REFUSAL[taken],
+              }),
+            );
+          default:
+            taken satisfies never;
+            return panic("Unhandled turn source");
+        }
+        const persistenceResult = await runPersistMessage({
+          ...persistenceProps,
+          pings,
+          safeDb: safeDbOnTransaction(tx),
+          turnAcceptance,
+        });
+        if (Result.isError(persistenceResult)) {
+          // Its only refusal is the turn acceptance the reservation above
+          // already holds: a turn that runs.
+          return Result.err(
+            persistenceResult.error instanceof HandlerError
+              ? refuseTurn("turn-running")
+              : persistenceResult.error,
+          );
+        }
 
-    const execution = await claimChatTurnForExecutionOnTx({
-      acceptedTurnId: turnAcceptance.id,
-      incomingMessageId: turnAcceptance.userMessageId,
-      incomingMessageRole: "user",
-      organizationId: turnAcceptance.organizationId,
-      threadId: turnAcceptance.threadId,
-      tx,
-      userId: turnAcceptance.userId,
-      workspaceId: turnAcceptance.workspaceId,
-    });
-    if (execution === null) {
-      panic("Newly accepted chat turn lost execution ownership");
-    }
-    return Result.ok({
-      execution,
-      superseded: persistenceResult.value.superseded,
-    });
-  });
+        const execution = await claimChatTurnForExecutionOnTx({
+          acceptedTurnId: turnAcceptance.id,
+          incomingMessageId: turnAcceptance.userMessageId,
+          incomingMessageRole: "user",
+          organizationId: turnAcceptance.organizationId,
+          pings,
+          threadId: turnAcceptance.threadId,
+          tx,
+          userId: turnAcceptance.userId,
+          workspaceId: turnAcceptance.workspaceId,
+        });
+        if (execution === null) {
+          panic("Newly accepted chat turn lost execution ownership");
+        }
+        return Result.ok({
+          execution,
+          superseded: persistenceResult.value.superseded,
+        });
+      }),
+  );
   if (Result.isError(result)) {
     return Result.err(result.error);
   }
@@ -1281,9 +1449,10 @@ export const persistClaimedReplayMessage = async ({
   const result = await withClaimedChatTurnExecution({
     claim,
     safeDb,
-    mutate: async ({ tx }) => {
+    mutate: async ({ pings, tx }) => {
       const persistenceResult = await runPersistMessage({
         ...persistenceProps,
+        pings,
         safeDb: safeDbOnTransaction(tx),
       });
       if (Result.isError(persistenceResult)) {

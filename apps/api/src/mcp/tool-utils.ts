@@ -4,6 +4,7 @@ import * as v from "valibot";
 
 import { askForFix, askSentence } from "@stll/agent-input";
 import { resolveLegalCitationLinks } from "@stll/api-contract/legal-citation-links";
+import { workspaceAcceptsWrites } from "@stll/api-contract/workspace-status";
 import { declareFailureClass } from "@stll/errors";
 import {
   closestNames,
@@ -31,6 +32,7 @@ import {
   PUBLIC_READ_TIMEOUT_CODE,
   PUBLIC_READ_TIMEOUT_HINT,
   publicReadTimeoutError,
+  publicReadTimeoutRefusal,
 } from "@/api/lib/legal-search/public-read-timeout";
 import {
   isSearchIndexUnavailable,
@@ -39,6 +41,7 @@ import {
   SEARCH_INDEX_UNAVAILABLE_MESSAGE,
 } from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
+import { findRequestBudgetExpiry } from "@/api/lib/load/request-latency-budget";
 import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import type { StableExceptionKey } from "@/api/lib/observability/exception-fingerprint";
@@ -534,25 +537,40 @@ const CASE_LAW_SEARCH_TIMEOUT_SINK = failureSink({
   expected: [],
 });
 
+/**
+ * Whether a case-law search failure is its time budget running out: a
+ * cancelled statement, a read the request's deadline ended (the corpus
+ * database reports that as the budget's own `TimeoutError`, not a refusal), or
+ * a public-read timeout, thrown or answered. Reads
+ * only; `caseLawSearchTimeoutResult` records and answers the same failures.
+ */
+export const isCaseLawSearchTimeout = (error: unknown): boolean => {
+  const response = isRecord(error) ? error["response"] : undefined;
+  return (
+    getPgErrorCode(error) === PG_ERROR.QUERY_CANCELED ||
+    findRequestBudgetExpiry(error) !== undefined ||
+    resolveHandlerError(error)?.code === PUBLIC_READ_TIMEOUT_CODE ||
+    (isRecord(response) && response["code"] === PUBLIC_READ_TIMEOUT_CODE)
+  );
+};
+
 export const caseLawSearchTimeoutResult = (
   error: unknown,
 ): InternalToolErrorResult | null => {
-  const response = isRecord(error) ? error["response"] : undefined;
-  if (
-    getPgErrorCode(error) !== PG_ERROR.QUERY_CANCELED &&
-    resolveHandlerError(error)?.code !== PUBLIC_READ_TIMEOUT_CODE &&
-    !(isRecord(response) && response["code"] === PUBLIC_READ_TIMEOUT_CODE)
-  ) {
+  if (!isCaseLawSearchTimeout(error)) {
     return null;
   }
-  observeFailure(error, {
+  // Observed as the refusal it stands for, whichever shape it arrived in: a
+  // handler's returned 503 is a status body and a cancelled statement a driver
+  // error, and neither grades as a timeout on its own.
+  observeFailure(publicReadTimeoutRefusal(error), {
     sink: CASE_LAW_SEARCH_TIMEOUT_SINK,
     ctx: { source: "mcp" },
   });
   return structuredErrorResult({
-    code: "upstream_unavailable",
+    code: "public_read_timeout",
     message: "Case-law search exceeded its time budget.",
-    hint: "Retry search_case_law with fewer queries or a narrower court, date range or provision filter. If it still times out, retry shortly.",
+    hint: "Repeat the identical search_case_law call once before changing it. If it times out again, use fewer queries or a narrower court, date range or provision filter.",
     retryable: true,
   });
 };
@@ -901,7 +919,7 @@ export const ensureActiveWorkspace = ({
   if (!resolved) {
     return notFoundResult("Matter not found or not accessible");
   }
-  if (getWorkspaceStatus({ context, workspaceId }) !== "active") {
+  if (!workspaceAcceptsWrites(getWorkspaceStatus({ context, workspaceId }))) {
     return errorResult("Matter is archived; unarchive it first");
   }
   if (context.pinServerValidatedWorkspaceId?.(resolved) === false) {

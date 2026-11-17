@@ -84,7 +84,7 @@ const BYTES_PER_CODE_UNIT = 2;
  * reuses objects (the per-bucket decision count, the year ranges), so two
  * different requests could serialize alike.
  */
-const canonicalJson = (value: unknown): string =>
+export const canonicalCorpusJson = (value: unknown): string =>
   JSON.stringify(value, (_key, nested: unknown) =>
     isRecord(nested)
       ? Object.fromEntries(
@@ -110,7 +110,7 @@ const aggregationKey = ({
   name,
   aggregation,
 }: AggregationKeyInput): string =>
-  canonicalJson({
+  canonicalCorpusJson({
     target,
     // A set: the order it was read in must not split one policy in two.
     scope: {

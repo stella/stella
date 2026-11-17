@@ -46,11 +46,6 @@ import {
 import { getAnalytics } from "@/lib/analytics/provider";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 
-// Spies created in a test stay attached if it fails before restoring them.
-afterEach(() => {
-  mock.restore();
-});
-
 const localArea = () =>
   browserStorage("local") ?? panic("Test requires local browser storage");
 
@@ -135,6 +130,8 @@ class FakeBroadcastChannel {
 }
 
 afterEach(() => {
+  // Spies created in a test stay attached if it fails before restoring them.
+  mock.restore();
   cleanupInspectorBroadcast?.();
   cleanupInspectorBroadcast = null;
   // The next test is a fresh page: this one's pending restore settle ends.

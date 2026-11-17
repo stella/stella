@@ -11,10 +11,11 @@ import {
   test,
 } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import type { TableTreeNode } from "@/components/workspaces/table/types";
 import englishMessages from "@/i18n/langs/en.json";
 import type { WorkspaceView } from "@/lib/types";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 
@@ -90,7 +91,7 @@ const fetchImplementation = Object.assign(
       ) {
         throw new Error("expected a tree upload request body");
       }
-      const file = body.files.at(0);
+      const file: unknown = body.files.at(0);
       if (
         typeof file !== "object" ||
         file === null ||
@@ -357,7 +358,7 @@ const mountFilesView = async () => {
     </ToastProvider>,
   );
   await waitFor(() =>
-    expect(document.querySelectorAll("[data-entity-row]")).toHaveLength(2),
+    expect(document.querySelectorAll("[data-entity-row]").length).toBe(2),
   );
   return { mounted, client };
 };

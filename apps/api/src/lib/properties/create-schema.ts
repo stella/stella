@@ -3,7 +3,7 @@ import * as v from "valibot";
 import {
   currencyCodeSchema,
   propertyContentSchema,
-  propertyContentTypeSchema,
+  scalarPropertyContentTypeSchema,
 } from "@/api/db/schema-validators";
 import type { PropertyContent, PropertyTool } from "@/api/db/schema-validators";
 import { tConditionNode } from "@/api/lib/conditions/contract";
@@ -26,7 +26,7 @@ const selectOptionSchema = v.object({
 
 export const createPropertyBodySchema = v.object({
   name: displayNameSchema(),
-  contentType: propertyContentTypeSchema,
+  contentType: scalarPropertyContentTypeSchema,
   toolType: v.optional(v.picklist(["ai-model", "manual-input"])),
   prompt: v.optional(v.pipe(v.string(), v.maxLength(1000))),
   dependencies: v.optional(
@@ -208,12 +208,16 @@ export const buildPropertyParts = (
       content = { version: 1, type: body.contentType };
       tool = defaultTool();
       break;
-    // Entered by hand, like a file: an amount needs a currency the model
-    // cannot choose, and a person has to resolve to a workspace member.
+    // Entered by hand unless the caller asks for an AI column: an amount
+    // read from a document carries the currency the document states.
     case "money":
       content = { version: 1, type: "money", currency: body.currency ?? null };
-      tool = { version: 1, type: "manual-input" };
+      tool =
+        body.toolType === "ai-model"
+          ? defaultTool()
+          : { version: 1, type: "manual-input" };
       break;
+    // A person has to resolve to a workspace member.
     case "person":
       content = { version: 1, type: "person" };
       tool = { version: 1, type: "manual-input" };

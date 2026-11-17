@@ -1,5 +1,13 @@
 # @stll/fetch
 
+## 0.3.0
+
+### Minor Changes
+
+- [#8055](https://github.com/stella/stella/pull/8055) [`0a79f8c`](https://github.com/stella/stella/commit/0a79f8cb32c2ae337280da83e8859af9d25ae3f4) Thanks [@jan-kubica](https://github.com/jan-kubica)! - A total deadline is now the only limit on a request: `fetchWithTimeout` turns off Bun's idle limit, which cut a response that stayed silent for about five minutes whatever the deadline allowed. A `headers` policy keeps it.
+
+  Breaking for a custom `Fetcher`: `TransportRequestInit.timeout` can now be `false`, and a total deadline passes `false` where it passed the policy. Read the deadline from `signal` or `timeoutMs`.
+
 ## 0.2.0
 
 ### Minor Changes

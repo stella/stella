@@ -1,15 +1,19 @@
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { APIError } from "better-auth/api";
 import { panic, Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { createOpaqueOrganizationSlug } from "@stll/auth-model";
 import { classifyFailure, declareFailureClass } from "@stll/errors";
 
+import { agentRegistration } from "@/api/db/agent-auth-schema";
 import { member, organization, user } from "@/api/db/auth-schema";
 import { databaseRelations } from "@/api/db/database-relations";
-import { organizationCreationRequests as receipts } from "@/api/db/schema";
+import {
+  oauthGrantRevocations,
+  organizationCreationRequests as receipts,
+} from "@/api/db/schema";
 import { markRlsDatabase } from "@/api/db/scoped";
 import type { TransactionOf } from "@/api/db/scoped";
 import { sharedPoolConnectionSettings } from "@/api/db/shared-pool-connection-settings";
@@ -34,6 +38,16 @@ import {
 } from "@/api/lib/db/audit-recording";
 import type { AuditRecorder } from "@/api/lib/db/audit-recording";
 import { runTransactionsInCallerContext } from "@/api/lib/db/caller-async-context";
+import {
+  discardChatLimitResumeOnTx,
+  readDueChatLimitResumesOnTx,
+} from "@/api/lib/db/chat-limit-reminder-system";
+import {
+  holdQueueOfUnavailableMemberOnTx,
+  readDueQueueHeadOnTx,
+  sweepThreadsWithDueQueueOnTx,
+} from "@/api/lib/db/chat-queue-system";
+import { sweepHandedOverChatTurnsOnTx } from "@/api/lib/db/chat-turn-handover-system";
 import { recordLegalResolveAuditInTransaction } from "@/api/lib/db/legal-resolve-audit";
 import type { LegalResolveAudit } from "@/api/lib/db/legal-resolve-audit";
 import { meterSqlClient } from "@/api/lib/db/meter-client";
@@ -93,8 +107,8 @@ import { isLocalDevOpen } from "@/api/runtime-mode";
 // the header gate in index.ts.
 const queryLogger = isLocalDevOpen() ? queryCountLogger : undefined;
 
-// Optional pool recycling. Defaults remain disabled until the Bun SQL runtime
-// retires only idle connections; values are seconds and apply to both pools.
+// Pool recycling in seconds, both pools. Deployed services must set a lifetime:
+// prepared statements stay on a connection until it retires, and Bun waits for running work.
 const poolRecycling = {
   maxLifetime: envBase.DATABASE_POOL_MAX_LIFETIME_S,
   idleTimeout: envBase.DATABASE_POOL_IDLE_TIMEOUT_S,
@@ -237,6 +251,63 @@ export const readOperatorActivitySummary = async (now: number) =>
     readAuditedActivitySummary(tx, now),
   );
 
+/**
+ * The chat queue's sender reads across organizations which queues have a
+ * message due and who queued it, before that member is proved again, and
+ * holds a queue whose member can no longer be proved. Ids and owners only;
+ * the send itself runs on the member's own connection.
+ */
+export const readDueChatQueueHead = async (threadId: SafeId<"chatThread">) =>
+  await withAggregateTransaction(
+    rootDb,
+    async (tx) => await readDueQueueHeadOnTx({ threadId, tx }),
+  );
+export const sweepThreadsWithDueChatQueue = async (limit: number) =>
+  await withAggregateTransaction(
+    rootDb,
+    async (tx) => await sweepThreadsWithDueQueueOnTx({ limit, tx }),
+  );
+export const holdChatQueueOfUnavailableMember = async (
+  options: Omit<Parameters<typeof holdQueueOfUnavailableMemberOnTx>[0], "tx">,
+) =>
+  await withAggregateTransaction(
+    rootDb,
+    async (tx) => await holdQueueOfUnavailableMemberOnTx({ ...options, tx }),
+  );
+
+/**
+ * The limit resumer reads across organizations which requests to continue a
+ * chat after a usage limit are due and whose they are, before that member is
+ * proved again, and drops one whose member can no longer act. Ids, owners
+ * and times only; the resumed turn, or the notification instead, is written
+ * on the member's own connection.
+ */
+export const readDueChatLimitResumes = async (
+  options: Omit<Parameters<typeof readDueChatLimitResumesOnTx>[0], "tx">,
+) =>
+  await withAggregateTransaction(
+    rootDb,
+    async (tx) => await readDueChatLimitResumesOnTx({ ...options, tx }),
+  );
+export const discardChatLimitResume = async (
+  options: Omit<Parameters<typeof discardChatLimitResumeOnTx>[0], "tx">,
+) =>
+  await withAggregateTransaction(
+    rootDb,
+    async (tx) => await discardChatLimitResumeOnTx({ ...options, tx }),
+  );
+
+/**
+ * The handed-over chat turns another task may adopt, across organizations,
+ * before their members are proved again; the adoption runs on the member's
+ * own connection.
+ */
+export const sweepHandedOverChatTurns = async (limit: number) =>
+  await withAggregateTransaction(
+    rootDb,
+    async (tx) => await sweepHandedOverChatTurnsOnTx({ limit, tx }),
+  );
+
 /** Organization-bound OAuth operations never expose the owner connection. */
 export const readServiceOAuthClientBinding = async (clientId: string) =>
   await readOAuthClientBinding(rootDb, clientId);
@@ -283,6 +354,54 @@ export const recordLegalResolveAudit = async (options: LegalResolveAudit) =>
     async (tx) =>
       await recordLegalResolveAuditInTransaction({ ...options, tx }),
   );
+
+type ReadOAuthGrantAdmissionOptions = {
+  clientId: string;
+  organizationId: string;
+  userId: string;
+  grantId: string | undefined;
+  issuedAtCutoff: number;
+  db?: Pick<RootDatabase, "select"> | undefined;
+};
+
+/** Reads only control-plane attribution and revocation for one user grant. */
+export const readOAuthGrantAdmission = async ({
+  clientId,
+  organizationId,
+  userId,
+  grantId,
+  issuedAtCutoff,
+  db = rootDb,
+}: ReadOAuthGrantAdmissionOptions) =>
+  (
+    await db
+      .select({
+        registrationId: agentRegistration.id,
+        revokedAt: oauthGrantRevocations.revokedAt,
+      })
+      .from(sql`(SELECT 1) AS oauth_session`)
+      .leftJoin(
+        agentRegistration,
+        and(
+          eq(agentRegistration.clientId, clientId),
+          eq(agentRegistration.boundUserId, userId),
+          eq(agentRegistration.boundOrganizationId, organizationId),
+          eq(agentRegistration.status, "claimed"),
+        ),
+      )
+      .leftJoin(
+        oauthGrantRevocations,
+        and(
+          eq(oauthGrantRevocations.oauthClientId, clientId),
+          eq(oauthGrantRevocations.userId, userId),
+          eq(oauthGrantRevocations.organizationId, organizationId),
+          grantId === undefined
+            ? sql`${oauthGrantRevocations.revokedAt} >= to_timestamp(${issuedAtCutoff})`
+            : eq(oauthGrantRevocations.grantId, grantId),
+        ),
+      )
+      .limit(1)
+  ).at(0);
 
 // Migrated databases use PostgreSQL's inline UNIQUE name; schema-sync databases
 // use Drizzle's name. Both also have the explicitly named unique index.
@@ -370,7 +489,11 @@ export const changeOrganizationSlug = async ({
           !membership ||
           !isMemberRole(membership.role) ||
           !hasMemberPermission(
-            withCurrentMemberRole(memberRole, membership.role),
+            withCurrentMemberRole({
+              authority: memberRole,
+              role: membership.role,
+              billingAccess: membership.billingAccess,
+            }),
             {
               organization: ["update"],
             },

@@ -783,3 +783,13 @@ describe("case-law adapter nullish optionals", () => {
     expect(plCourtsAdapter.pageTimeoutMs).toBe(280_000);
   });
 });
+
+test("route fixtures work when the current fetch has no native static methods", async () => {
+  const bareFetch = asFetchMock(async () => new Response("unused"));
+  expect(Reflect.deleteProperty(bareFetch, "preconnect")).toBe(true);
+  testFetchState.set(bareFetch);
+  mockFetchWithBodies([{ pattern: "/fixture", body: '{"value":"retained"}' }]);
+  const response = await fetch("https://example.test/fixture");
+  expect(await response.json()).toEqual({ value: "retained" });
+  expect(typeof fetch.preconnect).toBe("function");
+});

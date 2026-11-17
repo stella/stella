@@ -7,10 +7,10 @@ import { hasInlineChildren } from "@stll/legal-ast/inline";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import {
-  extractPlSnLines,
-  parsePlSnDecisionPdf as uncheckedParsePlSnDecisionPdf,
-  PL_PDF_PARAGRAPH_START,
-} from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
+  extractPdfLines,
+  PDF_PARAGRAPH_START,
+} from "@/api/handlers/case-law/ingestion/parsers/pdf-bands";
+import { parsePlSnDecisionPdf as uncheckedParsePlSnDecisionPdf } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
 import { inlinesToPlainText } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
@@ -224,9 +224,9 @@ describe("recognising running docket furniture by page position", () => {
   ])(
     "removes running headers across $pages pages for $docket and retains the same label in sentences",
     async ({ docket, pages }) => {
-      const lines = await extractPlSnLines(
+      const lines = await extractPdfLines(
         await runningHeaderPdf(docket, pages),
-        PL_PDF_PARAGRAPH_START.INDENT,
+        PDF_PARAGRAPH_START.INDENT,
         { supremeCourt: { docket } },
       );
       const texts = lines.flatMap((line) =>

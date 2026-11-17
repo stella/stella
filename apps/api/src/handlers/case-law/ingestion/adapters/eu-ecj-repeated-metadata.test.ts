@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
-import JSZip from "jszip";
 
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
+import { sha256Hex } from "@stll/sha256/bun";
 
 import {
   euEcjAdapter,
@@ -23,15 +23,14 @@ const joined =
   "<DOC><BIB.JUDGMENT><REF.CASE>C-2/26</REF.CASE><AUTHOR>GCEU</AUTHOR><NO.CELEX>62026CJ0002</NO.CELEX></BIB.JUDGMENT></DOC>";
 
 test("every archive member survives stored replay and repeated bibliography stays ordered", async () => {
-  const zip = new JSZip();
-  zip.folder("documents");
-  writeZipEntry(zip, "documents/primary.xml", primary);
-  writeZipEntry(zip, "documents/joined.xml", joined);
+  const zip = new ZipArchive();
+  zip.set("documents/primary.xml", primary);
+  zip.set("documents/joined.xml", joined);
   const asset = new Uint8Array([0, 255, 128, 4]);
-  writeZipEntry(zip, "assets/figure.bin", asset);
-  const formex = await readEcjFormexArchive(
-    await zip.generateAsync({ type: "arraybuffer" }),
-  );
+  zip.set("assets/figure.bin", asset);
+  const originalZip = (await zip.generate({ compression: "store" })).buffer;
+  const originalZipDigest = sha256Hex(new Uint8Array(originalZip));
+  const formex = await readEcjFormexArchive(originalZip);
   expect(ecjFormexDocuments(formex).slice(0, 2)).toEqual([primary, joined]);
   const archive = decodeSourceRawEnvelope(
     formex.slice(FORMEX_ARCHIVE_PREFIX.length),
@@ -56,6 +55,7 @@ test("every archive member survives stored replay and repeated bibliography stay
         document:
           "<html><body><div class='listNotice'><p>Judgment body remains readable.</p></div></body></html>",
         formex,
+        "formex-original-zip": Buffer.from(originalZip).toBase64(),
       }),
     ),
     contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
@@ -91,4 +91,10 @@ test("every archive member survives stored replay and repeated bibliography stay
   ).toBe(true);
   const stored = decodeSourceRawEnvelope(outcome.result.sourceRaw ?? "");
   expect(stored?.["formex"]).toBe(formex);
+  const retainedZip = Buffer.from(
+    stored?.["formex-original-zip"] ?? "",
+    "base64",
+  );
+  expect(retainedZip).toEqual(Buffer.from(originalZip));
+  expect(sha256Hex(retainedZip)).toBe(originalZipDigest);
 });

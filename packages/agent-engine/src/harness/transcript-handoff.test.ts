@@ -3,6 +3,7 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { CHAT_LOCAL_RUN_STEER_TOOL } from "@stll/api-contract/chat-run-target";
 import { assertProperty } from "@stll/property-testing";
 
 import { buildTurnPrompt } from "./transcript-handoff";
@@ -69,12 +70,108 @@ describe("turn prompt from the portable transcript", () => {
     );
   });
 
+  test("a message the member steered an answer with reads as theirs, after what the agent had done", () => {
+    const steered: ModelMessage[] = [
+      user("Summarise the lease."),
+      {
+        role: "assistant",
+        content: "Reading the lease.",
+        toolCalls: [
+          {
+            id: "c1",
+            type: "function",
+            function: { name: "command_execution", arguments: '{"cmd":"ls"}' },
+          },
+          {
+            id: "steer_1",
+            type: "function",
+            function: {
+              name: CHAT_LOCAL_RUN_STEER_TOOL,
+              arguments: JSON.stringify({ text: "Include the annex." }),
+            },
+          },
+        ],
+      },
+      { role: "tool", toolCallId: "c1", content: "lease.docx annex.docx" },
+      {
+        role: "tool",
+        toolCallId: "steer_1",
+        content: '{"status":"delivered"}',
+      },
+      { role: "assistant", content: "The annex extends the term." },
+      user("And the deposit?"),
+    ];
+    const text = prompt(steered, "standalone");
+    expect(text).toContain(
+      [
+        'Assistant: Reading the lease.\n[tool command_execution {"cmd":"ls"}]',
+        "User: Include the annex.",
+        "[tool result lease.docx annex.docx]",
+        "Assistant: The annex extends the term.",
+      ].join("\n\n"),
+    );
+    expect(text).not.toContain(CHAT_LOCAL_RUN_STEER_TOOL);
+    expect(text).not.toContain("delivered");
+  });
+
+  test("a steered message keeps its place among the calls around it", () => {
+    const steered: ModelMessage[] = [
+      user("Summarise the lease."),
+      {
+        role: "assistant",
+        content: "",
+        toolCalls: [
+          {
+            id: "c1",
+            type: "function",
+            function: { name: "command_execution", arguments: '{"cmd":"ls"}' },
+          },
+          {
+            id: "steer_1",
+            type: "function",
+            function: {
+              name: CHAT_LOCAL_RUN_STEER_TOOL,
+              arguments: JSON.stringify({ text: "Only the annex." }),
+            },
+          },
+          {
+            id: "c2",
+            type: "function",
+            function: {
+              name: "command_execution",
+              arguments: '{"cmd":"cat annex.docx"}',
+            },
+          },
+        ],
+      },
+      user("And the deposit?"),
+    ];
+    expect(prompt(steered, "standalone")).toContain(
+      [
+        'Assistant: [tool command_execution {"cmd":"ls"}]',
+        "User: Only the annex.",
+        'Assistant: [tool command_execution {"cmd":"cat annex.docx"}]',
+      ].join("\n\n"),
+    );
+  });
+
   test("a transcript that does not end with user text is refused", () => {
     const refused: ModelMessage[][] = [
       [],
       [{ role: "assistant", content: "hi" }],
       [user("   ")],
       [{ role: "user", content: null }],
+      [
+        {
+          role: "user",
+          content: [
+            {
+              type: "image",
+              source: { type: "url", value: "https://example.test/scan.png" },
+            },
+          ],
+        },
+      ],
     ];
     for (const bad of refused) {
       const built = buildTurnPrompt({ transcript: bad, mode: "standalone" });
@@ -107,6 +204,37 @@ describe("turn prompt from the portable transcript", () => {
         },
       ),
       { numRuns: 40 },
+    );
+  });
+
+  test("the history budget counts separators and the omission marker", () => {
+    // Many short turns: their separators alone would pass the budget.
+    const history = Array.from({ length: 20_000 }, () => user("x"));
+    const text = prompt([...history, user("Final question?")], "standalone");
+    const rendered = text
+      .replace(/^The conversation so far:\n\n/u, "")
+      .replace(/\n\nCurrent request:\nFinal question\?$/u, "");
+    expect(rendered).toStartWith("[earlier messages omitted]\n\n");
+    expect(new TextEncoder().encode(rendered).byteLength).toBeLessThanOrEqual(
+      64 * 1024,
+    );
+  });
+
+  test("truncation keeps a U+FFFD that was in the text and drops a split character", () => {
+    const toolResult = (content: string) =>
+      prompt(
+        [{ role: "tool", toolCallId: "c1", content }, user("Next?")],
+        "standalone",
+      );
+    // U+FFFD is three bytes: the cut falls right after it.
+    const genuine = `${"a".repeat(2045)}�tail`;
+    expect(toolResult(genuine)).toContain(
+      `[tool result ${"a".repeat(2045)}� [truncated]]`,
+    );
+    // "č" is two bytes: the cut falls between them.
+    const split = `${"a".repeat(2047)}čtail`;
+    expect(toolResult(split)).toContain(
+      `[tool result ${"a".repeat(2047)} [truncated]]`,
     );
   });
 });

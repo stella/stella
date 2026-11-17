@@ -8,6 +8,7 @@ import { SIGNED_OUT_QUERY_OWNER } from "@/lib/account/queries";
 import { useOptionalChatAnonymized } from "@/lib/chat-anonymized-store";
 import { chatUnavailableSkillsOptions } from "@/lib/knowledge/queries";
 import {
+  chatCanUseBrowser,
   chatSkillAvailabilityQuery,
   type ChatSkillMenuAvailability,
   chatSkillMenuAvailability,
@@ -85,11 +86,18 @@ export const useComposerSkillAvailability = ({
   userId: string;
 }): ChatSkillMenuAvailability => {
   const anonymized = useOptionalChatAnonymized(chat?.threadRef);
-  const browserExtension = useBrowserExtensionState().status === "connected";
+  const extensionStatus = useBrowserExtensionState().status;
   const query =
     chat === undefined
       ? undefined
-      : chatSkillAvailabilityQuery({ anonymized, browserExtension, chat });
+      : chatSkillAvailabilityQuery({
+          anonymized,
+          browserExtension: chatCanUseBrowser({
+            extensionStatus,
+            runTarget: chat.runTarget,
+          }),
+          chat,
+        });
   const known = query !== null;
   const dataQuery = useQuery({
     ...chatUnavailableSkillsOptions(organizationId, userId, query ?? undefined),

@@ -16,6 +16,7 @@ import {
 } from "@/components/viewer/viewer-recovery.logic";
 import type { ViewerErrorRecovery } from "@/components/viewer/viewer-recovery.logic";
 import { getAnalytics } from "@/lib/analytics/provider";
+import { leaveErrorToBoundary } from "@/lib/analytics/reported-error";
 import { detached } from "@/lib/detached";
 import { ClientTelemetryError } from "@/lib/errors/telemetry";
 import { recoverFromStaleDeploymentLoad } from "@/lib/preload-error-recovery";
@@ -163,6 +164,7 @@ class ViewerErrorBoundary extends Component<
   }
 
   override componentDidCatch(error: Error, _info: ErrorInfo) {
+    leaveErrorToBoundary(error);
     const { state } = this;
     if (state.type !== "caught") {
       return;

@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import {
   currentQueryCounter,
   runWithQueryCounter,
@@ -65,4 +67,33 @@ test("a scheduled flush starts on its own, outside the enqueuing caller's counte
   });
   // No explicit flush: the write happens only if the scheduled flush starts.
   expect(await written.promise).toEqual({ batch: [7], counter: undefined });
+});
+
+test("a throwing failure callback leaves the buffer able to drain later writes", async () => {
+  const written: number[] = [];
+  let failWrites = true;
+  const buffer = createObservationBuffer({
+    capacity: 10,
+    batchSize: 10,
+    write: async (batch: number[]) => {
+      if (failWrites) {
+        throw new TypeError("write refused");
+      }
+      written.push(...batch);
+    },
+    onFailure: () => {
+      throw new TypeError("failure sink refused");
+    },
+    onOverflow: () => {
+      throw new TypeError("unexpected overflow");
+    },
+  });
+  buffer.enqueue(1);
+  expect(await rejectionOf(buffer.flush())).toMatchObject({
+    message: "failure sink refused",
+  });
+  failWrites = false;
+  buffer.enqueue(2);
+  await buffer.flush();
+  expect(written).toEqual([2]);
 });

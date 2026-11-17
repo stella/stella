@@ -5,6 +5,7 @@ import { plugin } from "bun";
 import { afterAll, afterEach, expect, mock, test } from "bun:test";
 
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { Decision } from "@/features/case-law/components/decision-cells";
 import { DEFAULT_DECISION_TABLE_LAYOUT } from "@/features/case-law/decision-column-preferences.logic";
@@ -12,7 +13,6 @@ import type { QuestionColumnSurface } from "@/features/case-law/research/questio
 import { UNSEARCHED_SCOPE } from "@/features/case-law/research/question-columns.logic";
 import de from "@/i18n/langs/de.json";
 import en from "@/i18n/langs/en.json";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law/cases" });
 const originalFetch = globalThis.fetch;
@@ -233,14 +233,18 @@ test("a new answer on the same page keeps only the picks it still shows", async 
   act(() =>
     controls?.showPage(1, decisionOne === undefined ? [] : [decisionOne]),
   );
-  await waitFor(() => expect(view.getByText("1 selected")).not.toBeNull());
+  await waitFor(() =>
+    expect(view.queryByText("1 selected") === null).toBe(false),
+  );
   fireEvent.click(
     view.getByRole("button", { name: "Run AI columns for 1 row" }),
   );
   expect(onRun).toHaveBeenLastCalledWith(["decision-one"]);
 
   act(() => controls?.showPage(1, []));
-  await waitFor(() => expect(view.queryByText("1 selected")).toBeNull());
+  await waitFor(() =>
+    expect(view.queryByText("1 selected") === null).toBe(true),
+  );
   act(() => controls?.showPage(1, decisions));
   expect(view.queryByText("1 selected")).toBeNull();
   expect(view.queryByText("2 selected")).toBeNull();
@@ -261,7 +265,9 @@ test("a step to another page clears the picks even when it shows the same rows",
   );
   expect(view.getByText("1 selected")).not.toBeNull();
   act(() => controls?.showPage(2, decisions));
-  await waitFor(() => expect(view.queryByText("1 selected")).toBeNull());
+  await waitFor(() =>
+    expect(view.queryByText("1 selected") === null).toBe(true),
+  );
 });
 
 test("the header checkbox selects every decision on the page and the toolbar counts them", async () => {
@@ -288,7 +294,7 @@ test.each([
     const view = renderFixture({ locale, messages });
 
     await waitFor(() =>
-      expect(view.getByRole("checkbox", { name })).not.toBeNull(),
+      expect(view.queryByRole("checkbox", { name }) === null).toBe(false),
     );
   },
 );

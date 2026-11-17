@@ -3,6 +3,7 @@ import type { MouseEvent } from "react";
 import { Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { isPlainPrimaryClick } from "@stll/decision-reader/citation-click";
 import { Button } from "@stll/ui/button";
 import { Maximize2Icon } from "@stll/ui/icons";
 
@@ -10,7 +11,6 @@ import type { CaseDecisionViewPayload } from "@/components/inspector/case-decisi
 import {
   CASE_DECISION_PLACEMENT,
   createCaseDecisionViewTab,
-  isPlainPrimaryClick,
 } from "@/components/inspector/case-decision-view";
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import Tooltip from "@/components/tooltip";

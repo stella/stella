@@ -5,7 +5,6 @@ import { Link } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
-import type { REALTIME_EVENT_TYPE } from "@stll/api-contract";
 import {
   NOTIFICATION_ENTITY_TYPE,
   NOTIFICATION_KIND,
@@ -34,12 +33,12 @@ import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { chatThreadRoute } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
-  firstNotificationsPageRefresh,
   notificationsOptions,
   refetchFirstNotificationsPage,
 } from "@/lib/notification-queries";
@@ -48,7 +47,6 @@ import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/acces
 import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import { toSafeId } from "@/lib/safe-id";
 import { useUnreadFaviconDot } from "@/lib/unread-favicon-dot";
-import { useUserEventsSSE } from "@/lib/user-events-sse";
 
 /**
  * Unread awareness for the signed-in person: mentions, task assignments,
@@ -81,19 +79,6 @@ export const NotificationBell = () => {
   const items = data ? data.pages.flatMap((page) => page.items) : [];
 
   useUnreadFaviconDot(unreadCount > 0);
-
-  useUserEventsSSE(organizationId, ({ type: eventType }) => {
-    // The user channel carries a single event kind today; this bind makes a
-    // second kind a compile error here instead of a silently ignored event.
-    eventType satisfies typeof REALTIME_EVENT_TYPE.NEW_NOTIFICATION;
-    return [
-      firstNotificationsPageRefresh({
-        organizationId,
-        queryClient,
-        userId,
-      }),
-    ];
-  });
 
   useExternalSyncEffect(() => {
     if (listError === null) {
@@ -334,27 +319,42 @@ const NotificationRow = ({ notification, onRead }: NotificationRowProps) => {
   );
 };
 
-type NotificationTarget = {
-  entityId: string;
-  entityType: NotificationEntityType;
-  workspaceId: string;
-};
+type NotificationTarget =
+  | {
+      entityId: string;
+      entityType: typeof NOTIFICATION_ENTITY_TYPE.CHAT_THREAD;
+      workspaceId: string | null;
+    }
+  | {
+      entityId: string;
+      entityType: Exclude<
+        NotificationEntityType,
+        typeof NOTIFICATION_ENTITY_TYPE.CHAT_THREAD
+      >;
+      workspaceId: string;
+    };
 
 /**
  * The deep link this row can offer, or `null` when it cannot: an announcement
  * points at nothing, and a pointer whose matter has been deleted keeps its
- * message but loses its workspace. Every target route is
+ * message but loses its workspace. Every matter target route is
  * `/workspaces/$workspaceId/...`, so all three parts are required — a row
  * missing any of them renders as text rather than as a link that dead-ends.
+ * A chat opens by its id alone, inside or outside a matter.
  */
 const notificationTarget = ({
   entityId,
   entityType,
   workspaceId,
-}: Notification): NotificationTarget | null =>
-  entityType === null || entityId === null || workspaceId === null
-    ? null
-    : { entityId, entityType, workspaceId };
+}: Notification): NotificationTarget | null => {
+  if (entityType === null || entityId === null) {
+    return null;
+  }
+  if (entityType === NOTIFICATION_ENTITY_TYPE.CHAT_THREAD) {
+    return { entityId, entityType, workspaceId };
+  }
+  return workspaceId === null ? null : { entityId, entityType, workspaceId };
+};
 
 type NotificationLinkProps = {
   children: ReactNode;
@@ -376,10 +376,29 @@ const NotificationLink = ({
   children,
   className,
   onRead,
-  target: { entityId, entityType, workspaceId },
+  target,
 }: NotificationLinkProps) => {
   const legalListsEnabled = useCallerFeatureEnabled(CALLER_FEATURE.legalLists);
   const openTask = useInspectorTabsStore((state) => state.openTask);
+  if (target.entityType === NOTIFICATION_ENTITY_TYPE.CHAT_THREAD) {
+    return (
+      <PopoverClose
+        render={
+          <Link
+            className={className}
+            onClick={onRead}
+            {...chatThreadRoute({
+              threadId: target.entityId,
+              workspaceId: target.workspaceId,
+            })}
+          />
+        }
+      >
+        {children}
+      </PopoverClose>
+    );
+  }
+  const { entityId, entityType, workspaceId } = target;
   switch (entityType) {
     // Today's only producer is a mention on a list item, and the item's own
     // id addresses no route: Lists is the surface the comment lives on.
@@ -479,6 +498,8 @@ const NOTIFICATION_MESSAGE_KEY = {
   [NOTIFICATION_KIND.FLOW_RUN_FAILED]: "notifications.kind.flowRunFailed",
   [NOTIFICATION_KIND.FLOW_RUN_AWAITING_APPROVAL]:
     "notifications.kind.flowRunAwaitingApproval",
+  [NOTIFICATION_KIND.LOCAL_RUN_LIMIT_RESET]:
+    "notifications.kind.localRunLimitReset",
   [NOTIFICATION_KIND.ANNOUNCEMENT]: "notifications.kind.announcement",
 } as const satisfies Record<NotificationKind, TranslationKey>;
 
@@ -555,6 +576,10 @@ const NotificationMessage = ({
         bdi,
         flowName: parameter(metadata, "flowName"),
       });
+    case NOTIFICATION_KIND.LOCAL_RUN_LIMIT_RESET:
+      return t(
+        NOTIFICATION_MESSAGE_KEY[NOTIFICATION_KIND.LOCAL_RUN_LIMIT_RESET],
+      );
     case NOTIFICATION_KIND.ANNOUNCEMENT:
       return t.rich("notifications.kind.announcement", {
         bdi,

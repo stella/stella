@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 import { SEARCH_PAGE_END } from "@stll/api-contract/search";
 import { readFailureBrand } from "@stll/errors";
 
+import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import {
   corpusIndexBudgetExpiry,
   CorpusIndexError,
@@ -21,7 +22,9 @@ import {
   rankByTermCoverage,
   readTermCoverage,
   relaxedFetchLimit,
+  relaxedTopUpOutcome,
   shouldRelaxCaseLawSearch,
+  termsForCoverage,
 } from "./search-relaxed";
 
 const ELIGIBLE = {
@@ -60,6 +63,60 @@ describe("when a short strict page is topped up", () => {
     expect(
       shouldRelaxCaseLawSearch({ ...ELIGIBLE, body: { strict: false } }),
     ).toBe(true);
+  });
+});
+
+describe("termsForCoverage", () => {
+  test("keeps distinct terms, longest first, within the bound", () => {
+    const terms = [
+      "a",
+      "bbbb",
+      "bbbb",
+      "cc",
+      "ddddd",
+      "eee",
+      "ffffff",
+      "ggggggg",
+      "h",
+    ].map((value) => ({ value }));
+    expect(termsForCoverage(terms).map(({ value }) => value)).toEqual([
+      "ggggggg",
+      "ffffff",
+      "ddddd",
+      "bbbb",
+      "eee",
+      "cc",
+    ]);
+  });
+});
+
+describe("relaxedTopUpOutcome", () => {
+  const failure = new TimeoutError({
+    message: "over",
+    label: "case-law-relaxed-top-up",
+    timeoutMs: 1, // timeout: an error fixture, nothing waits on it
+  });
+
+  test("reads the hits of a finished step", () => {
+    expect(
+      relaxedTopUpOutcome({ status: "complete", value: Result.ok(["hit"]) }),
+    ).toEqual({ type: "read", value: ["hit"] });
+  });
+
+  test.each([
+    { status: "complete", value: Result.err(failure) },
+    {
+      status: "degraded",
+      reason: "budget_exhausted",
+      budgetMs: 1,
+      error: failure,
+    },
+    { status: "failed", error: failure },
+  ] as const)("answers without the top-up when it ended %#", (step) => {
+    expect(relaxedTopUpOutcome(step)).toEqual({
+      type: "skipped",
+      error: failure,
+    });
   });
 });
 

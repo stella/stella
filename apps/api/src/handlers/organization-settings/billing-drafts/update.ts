@@ -38,6 +38,7 @@ import {
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { expectedUpdatedAtSchema } from "@/api/lib/optimistic-concurrency";
 import { projectionPayload } from "@/api/lib/projection-totality";
+import { announceContactSetChanged } from "@/api/lib/resource-realtime";
 import { organizationResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 import { enforceWritePrecondition } from "@/api/lib/write-contract/write-contract";
 
@@ -405,6 +406,9 @@ const updateBillingDraftConfiguration = createSafeRootHandler(
       }),
     );
     if (result.type === "updated") {
+      if (body.timeBillingFormat !== undefined && body.clientId) {
+        announceContactSetChanged(organizationId);
+      }
       return Result.ok(
         projectionPayload(responseSchema, {
           updated: true,

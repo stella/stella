@@ -14,6 +14,7 @@ import {
   observeDecision,
   resolveDecisionIdentityTx,
 } from "@/api/handlers/case-law/ingestion/pipeline/decision-identity";
+import type { ObservedDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision-identity";
 import { planDecisionWrite } from "@/api/handlers/case-law/ingestion/pipeline/decision-plan";
 import {
   acquireSourceRawArtifact,
@@ -58,6 +59,11 @@ import {
 import { detached } from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  UNPERSISTABLE_DECISION_FIELDS,
+  UnpersistableDecisionFieldError,
+} from "@/api/lib/errors/tagged-errors";
+import { fitsDecisionSearchCandidateRow } from "@/api/lib/legal-search/ingestion-normalization";
 import { openRawSourceWriteWindow } from "@/api/lib/legal-search/raw-source-storage";
 import { logger } from "@/api/lib/observability/logger";
 
@@ -102,6 +108,7 @@ const settleRowWriteStatus = async ({
       }
       return null;
     }
+    case DECISION_ROW_WRITE_STATUS.IDENTITY_MOVED:
     case DECISION_ROW_WRITE_STATUS.SUPPLEMENTS_MOVED:
       return RECONCILE_CONTENTION;
     case DECISION_ROW_WRITE_STATUS.WINNER_PENDING:
@@ -140,37 +147,72 @@ const storedInputMatchesDecision = (
     existing.sourceRawS3Key === input.sourceRawS3Key);
 
 /**
+ * A decision without a publisher id whose docket, court and evidence do not
+ * form a storable fallback identity. The same input never forms one, so a
+ * fresh observation is refused into the failure ledger and the cursor moves
+ * on; a stored re-parse is held, since its row already exists.
+ */
+const unresolvedFallbackIdentity = (
+  observation: ObservedDecision,
+  { sourceId, inputProvenance }: ProcessDecisionAttemptOptions,
+): Result<ProcessResult, UnpersistableDecisionFieldError> | null => {
+  if (observation.storageIdentity.type !== "unkeyable") {
+    return null;
+  }
+  logger.warn("case_law.ingestion.fallback_identity_unresolved", {
+    sourceId,
+    identityType: observation.storageIdentity.type,
+  });
+  if (inputProvenance.type === "observation") {
+    // An oversized field is the cause the ledger names, as the write plan
+    // would have named it.
+    return Result.err(
+      fitsDecisionSearchCandidateRow(observation.observed)
+        ? new UnpersistableDecisionFieldError({
+            message: "Decision has no storable fallback identity",
+            field: UNPERSISTABLE_DECISION_FIELDS.FALLBACK_IDENTITY,
+          })
+        : new UnpersistableDecisionFieldError({
+            message: "Decision search candidate exceeds storage byte limits",
+            field: UNPERSISTABLE_DECISION_FIELDS.SEARCH_CANDIDATE_BYTES,
+          }),
+    );
+  }
+  return Result.ok({
+    status: PROCESS_DECISION_STATUS.RETRYABLE,
+    inserted: false,
+    reason: PROCESS_DECISION_RETRY_REASON.FALLBACK_IDENTITY,
+  });
+};
+
+/**
  * One pass over a decision: resolve its identity, settle what an existing
  * row makes of it, store its raw payload, plan and write its row, then queue
  * its corpus mirror. Each phase answers the attempt's outcome, or a
  * contention the caller reconciles by running the attempt again.
  */
-const runDecisionAttempt = async ({
-  metadataUrlSchema,
-  retention,
-  statedEcliIdentity,
-  input,
-  inputProvenance,
-  judges,
-  sourceId,
-  scopedDb,
-  observedAt,
-  observationOrder,
-  refresh,
-  sourceFingerprintVersion,
-  sourceFingerprintFromStoredRaw,
-  corpus,
-  corpusBatch,
-  polarityRules,
-  signal,
-  s3Policy,
-}: ProcessDecisionAttemptOptions): Promise<Result<AttemptStep, unknown>> => {
-  signal?.throwIfAborted();
-  const observed = observeDecision({ input, sourceId, metadataUrlSchema });
-  if (observed.isErr()) {
-    return observed;
-  }
-  const observation = observed.value;
+const runDecisionAttempt = async (
+  {
+    metadataUrlSchema,
+    retention,
+    statedEcliIdentity,
+    inputProvenance,
+    judges,
+    sourceId,
+    scopedDb,
+    observedAt,
+    observationOrder,
+    refresh,
+    sourceFingerprintVersion,
+    sourceFingerprintFromStoredRaw,
+    corpus,
+    corpusBatch,
+    polarityRules,
+    signal,
+    s3Policy,
+  }: ProcessDecisionAttemptOptions,
+  observation: ObservedDecision,
+): Promise<Result<AttemptStep, unknown>> => {
   const proposedDecisionId = createSafeId<"caseLawDecision">();
 
   // Opened before the read below that proves the decision is not erased, so
@@ -188,6 +230,10 @@ const runDecisionAttempt = async ({
         sourceId,
         statedEcliIdentity,
         proposedDecisionId,
+        storedDecisionId:
+          inputProvenance.type === "stored"
+            ? inputProvenance.decisionId
+            : undefined,
       }),
   );
   const { existing, decisionId, composition } = identity;
@@ -288,6 +334,7 @@ const runDecisionAttempt = async ({
         ...(s3Policy === undefined ? {} : { s3Policy }),
         ...identity,
         persistedDecisionDate: observation.persistedDecisionDate,
+        storageIdentity: observation.storageIdentity,
         sourceId,
         decisionId,
         result: plan.preparedResult,
@@ -325,6 +372,11 @@ const runDecisionAttempt = async ({
     return Result.ok(RECONCILE_CONTENTION);
   }
   const { write, writeStatus } = rowWrite.value;
+  if (writeStatus === DECISION_ROW_WRITE_STATUS.IDENTITY_MOVED) {
+    // A new decision lost its fallback identity to another row: what it
+    // wrote under its own id is left for the sweep, as for a lost insert.
+    await abandonRawWrite();
+  }
 
   const settled = await settleRowWriteStatus({
     scopedDb,
@@ -373,7 +425,17 @@ const runDecisionAttempt = async ({
 const processDecisionAttempt = async (
   options: ProcessDecisionAttemptOptions,
 ): Promise<Result<ProcessResult, unknown>> => {
-  const attempted = await runDecisionAttempt(options);
+  options.signal?.throwIfAborted();
+  const observed = observeDecision(options);
+  if (observed.isErr()) {
+    return observed;
+  }
+  const observation = observed.value;
+  const fallbackFailure = unresolvedFallbackIdentity(observation, options);
+  if (fallbackFailure !== null) {
+    return fallbackFailure;
+  }
+  const attempted = await runDecisionAttempt(options, observation);
   if (attempted.isErr()) {
     return attempted;
   }

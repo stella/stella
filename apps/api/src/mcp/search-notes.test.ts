@@ -4,6 +4,7 @@ import {
   AGENT_CASE_LAW_SEARCH_WARNING_PRODUCERS,
   CASE_LAW_SEARCH_WARNING_PRODUCERS,
   caseLawSearchWarnings,
+  DECISION_QUERY_WARNING_PRODUCERS,
 } from "../lib/case-law/search-warnings";
 import { searchNotesForCall } from "./search-notes";
 import { MCP_NOTE_AUDIENCE } from "./tool-note-audience";
@@ -15,7 +16,11 @@ describe("search note audiences", () => {
       ...AGENT_CASE_LAW_SEARCH_WARNING_PRODUCERS,
     };
     expect(Object.keys(MCP_NOTE_AUDIENCE).toSorted()).toEqual(
-      [...Object.keys(producers), "input_read"].toSorted(),
+      [
+        ...Object.keys(producers),
+        ...Object.keys(DECISION_QUERY_WARNING_PRODUCERS),
+        "input_read",
+      ].toSorted(),
     );
     for (const produce of Object.values(producers)) {
       const warning = produce();

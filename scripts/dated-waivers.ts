@@ -42,6 +42,7 @@ import {
   type GuardRollout,
   guardRolloutSource,
 } from "./guard-rollout-policy.ts";
+import { lintCommand } from "./lint-command.ts";
 import { assertOfflineCheckPreload } from "./offline-check-startup";
 import { parseLedger } from "./suppression-waivers";
 
@@ -203,16 +204,7 @@ export const collectWaivers = ({
       id: entry.id,
       kind: "suppression-waiver",
       probe: {
-        command: [
-          "bun",
-          "--bun",
-          "oxlint",
-          "-c",
-          "oxlint.config.ts",
-          "--report-unused-disable-directives-severity=error",
-          "--type-aware",
-          entry.file,
-        ],
+        command: lintCommand({ typeCheck: false }, [entry.file]),
         attempts: TEST_ATTEMPTS,
       },
       expiresAt: entry.expires,

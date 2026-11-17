@@ -103,7 +103,7 @@ describe("external runtime workspace closure", () => {
   // to an empty set — must fail here, not in a production rollout.
   test("reaches folio-core's workspace-linked runtime dependencies", () => {
     expect(runtimeWorkspacePaths).toEqual(
-      expect.arrayContaining(["packages/docx-utils"]),
+      expect.arrayContaining(["packages/template-conditions"]),
     );
   });
 });

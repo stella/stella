@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "58520b22069c604b8c6511e8d6670af4df648d305709b2b3e0ad99b280db2147",
+  "sourceUrl": "https://jurisdf.tjdft.jus.br/api/v1/pesquisa",
+  "capturedAt": "2026-10-25T02:26:21.000Z",
+  "note": "POST body {\"termosAcessorios\":[{\"campo\":\"uuid\",\"valor\":\"e024f28f-a29a-4288-8c75-4b667ec54952\"}],\"pagina\":0,\"tamanho\":1,\"espelho\":false,\"inteiroTeor\":false,\"sinonimos\":false,\"retornaInteiroTeor\":true,\"retornaTotalizacao\":false}; a monocratic decision, which states no judgment date"
+}

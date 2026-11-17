@@ -75,6 +75,33 @@ export const buildWireSnapshot = (
   });
 
 /**
+ * A served snapshot: the SDK wire serialization of `history` (anchors, and a
+ * `tool` row for every tool result part), with each anchor carrying the UI
+ * parts of the message it came from, as served history adds them.
+ */
+export const buildServedSnapshot = (
+  history: readonly UIMessage[],
+): ValidChatFixture<MessagesSnapshotChunk> => {
+  const partsById = new Map(
+    history.map((message) => [message.id, message.parts] as const),
+  );
+  return brand({
+    type: EventType.MESSAGES_SNAPSHOT,
+    messages: uiMessagesToWire([...history], {
+      includeSnapshotStructuredOutput: true,
+    }).map((message) => {
+      const parts =
+        message.role === "assistant" ||
+        message.role === "system" ||
+        message.role === "user"
+          ? partsById.get(message.id)
+          : undefined;
+      return parts === undefined ? message : { ...message, parts };
+    }),
+  });
+};
+
+/**
  * The chunks the real `chat()` engine emits for a scripted model over
  * `messages` and `tools`: its own tool execution, approval interrupts and
  * interrupt snapshots included.

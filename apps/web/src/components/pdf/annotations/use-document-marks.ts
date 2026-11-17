@@ -199,6 +199,8 @@ export const useDocumentMarks = ({
         pageNumber: span.pageNumber,
         pageTextSha256: span.pageTextSha256,
         quote: span.quote,
+        quotePrefix: "",
+        quoteSuffix: "",
         startOffset: span.startOffset,
         style: input.kind === "highlight" ? input.style : null,
         updatedAt: now,

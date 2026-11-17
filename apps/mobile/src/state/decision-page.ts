@@ -1,8 +1,7 @@
-import { Result } from "better-result";
-
 import type { Decision } from "@/state/case-law";
 import { plainTextBlocks, readerBlocks } from "@/state/decision-document";
 import type { ReaderBlock } from "@/state/decision-document";
+import { isWebUrl } from "@/state/links";
 
 /**
  * A decision as the reader's web view draws it, all of it plain data: what
@@ -28,16 +27,6 @@ type DecisionPageLabels = {
   readonly headnote: string;
   readonly textUnavailable: string;
   readonly openSource: string;
-};
-
-/** Whether an address opens in a browser, the only kind the reader follows. */
-export const isWebUrl = (url: string): boolean => {
-  const parsed = Result.try(() => new URL(url.trim()));
-  return (
-    Result.isOk(parsed) &&
-    (parsed.value.protocol === "http:" || parsed.value.protocol === "https:") &&
-    parsed.value.host !== ""
-  );
 };
 
 export const decisionPage = ({

@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 
 import type { ResolvedField } from "./template-discover-types";
 import {
+  buildInitialValues,
   groupFieldsByPrefix,
   readAiFieldErrorPaths,
   readClauseWarnings,
@@ -320,5 +321,21 @@ describe("per-item field visibility", () => {
       "salutation",
     );
     expect(visible({ vip: true }, 0)).toContain("salutation");
+  });
+});
+
+describe("fill-form value snapshots", () => {
+  test("initial values keep scalar defaults and leave repeat indices absent", () => {
+    const fields = [
+      { path: "name", kind: "string", count: 1 },
+      { path: "approved", kind: "boolean", count: 1 },
+      { path: "amount", kind: "string", inputType: "number", count: 1 },
+      { path: "people", kind: "array", count: 1 },
+    ] satisfies ResolvedField[];
+    expect(buildInitialValues(fields)).toEqual({
+      name: "",
+      approved: false,
+      amount: "",
+    });
   });
 });

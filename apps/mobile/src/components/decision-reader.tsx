@@ -19,7 +19,8 @@ import { LoadFailedCard } from "@/components/load-failure";
 import { barGlyph } from "@/components/ui/bar-glyph";
 import type { Load } from "@/state/api-request";
 import type { Decision } from "@/state/case-law";
-import { decisionPage, isWebUrl } from "@/state/decision-page";
+import { decisionPage } from "@/state/decision-page";
+import { isWebUrl } from "@/state/links";
 import { linkShareContent } from "@/state/share-content";
 
 /**
@@ -41,6 +42,7 @@ export const DecisionReader = ({
   webOrigin: string;
 }) => {
   const t = useTranslations("law");
+  const tLink = useTranslations("link");
   const format = useFormatter();
   const scheme = useColorScheme();
   const { fontScale } = useWindowDimensions();
@@ -73,7 +75,7 @@ export const DecisionReader = ({
                 async () => await Linking.openURL(href),
               );
               if (Result.isError(opened)) {
-                Alert.alert(t("openFailed"));
+                Alert.alert(tLink("openFailed"));
               }
             })();
           }

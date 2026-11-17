@@ -3,6 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "indexes-sanctions-contact-marks-retry-idx",
   revision: 730,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     {

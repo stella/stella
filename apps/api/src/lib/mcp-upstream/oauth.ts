@@ -24,7 +24,11 @@ import {
   mcpWellKnownProtectedResourceUrls,
 } from "@/api/lib/mcp-upstream/url-safety";
 import { logger } from "@/api/lib/observability/logger";
-import { validateOutboundFetchTarget } from "@/api/lib/safe-outbound-fetch";
+import {
+  isOutboundTransportFailure,
+  SafeOutboundFetchError,
+  validateOutboundFetchTarget,
+} from "@/api/lib/safe-outbound-fetch";
 import type {
   SafeOutboundFetchBody,
   SafeOutboundHeaders,
@@ -444,7 +448,7 @@ const discoverOAuthMetadataWithinDeadline = async (
     return Result.err(
       new HandlerError({
         status: 502,
-        code: "internal_error",
+        code: "upstream_unavailable",
         message: "MCP server did not expose protected resource metadata",
       }),
     );
@@ -773,6 +777,22 @@ export const buildOAuthClientRegistrationRequest = ({
   ...(requestedScopes.length > 0 ? { scope: requestedScopes.join(" ") } : {}),
 });
 
+/**
+ * A third party's refusal or outage at its OAuth endpoint is its answer, not a
+ * fault here. A successful response that does not parse breaks the endpoint's
+ * contract, and a request this client refused to send or finish (its URL policy,
+ * its size limit) never got that answer, so both stay internal failures that
+ * are reported.
+ */
+const oauthEndpointFailureCode = (
+  cause: unknown,
+): "internal_error" | "upstream_unavailable" =>
+  cause instanceof SyntaxError ||
+  v.isValiError(cause) ||
+  (SafeOutboundFetchError.is(cause) && !isOutboundTransportFailure(cause))
+    ? "internal_error"
+    : "upstream_unavailable";
+
 export const registerOAuthClient = async ({
   metadata,
   permit,
@@ -793,7 +813,7 @@ export const registerOAuthClient = async ({
     return Result.err(
       new HandlerError({
         status: 502,
-        code: "internal_error",
+        code: "upstream_unavailable",
         message:
           "MCP authorization server does not support dynamic registration",
       }),
@@ -822,7 +842,7 @@ export const registerOAuthClient = async ({
     return Result.err(
       new HandlerError({
         status: 502,
-        code: "internal_error",
+        code: oauthEndpointFailureCode(response.error.cause),
         message: "Failed to register stella with MCP authorization server",
         cause: response.error,
       }),
@@ -902,7 +922,7 @@ export const exchangeAuthorizationCode = async ({
     return Result.err(
       new HandlerError({
         status: 502,
-        code: "internal_error",
+        code: oauthEndpointFailureCode(token.error.cause),
         message: "Failed to exchange MCP authorization code",
         cause: token.error,
       }),
@@ -1130,7 +1150,7 @@ const discoverAuthorizationServer = async (
   return Result.err(
     new HandlerError({
       status: 502,
-      code: "internal_error",
+      code: "upstream_unavailable",
       message: "MCP authorization server metadata could not be discovered",
     }),
   );
@@ -1193,21 +1213,4 @@ export const pickRequestedScopes = ({
   }
 
   return arrayOrEmpty(protectedResource.scopes_supported);
-};
-
-export const assertOAuthConnector = ({
-  authType,
-}: {
-  authType: string;
-}): Result<void, HandlerError<400>> => {
-  if (authType === "oauth2") {
-    return Result.ok(undefined);
-  }
-
-  return Result.err(
-    new HandlerError({
-      status: 400,
-      message: "MCP connector does not use OAuth",
-    }),
-  );
 };

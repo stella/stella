@@ -554,9 +554,9 @@ const idsOf = (resolution: ReturnType<typeof resolve>): string[] => {
     case "none":
       return [];
     case "unique":
+    case "incomplete_identifier":
       return [resolution.decision.id];
     case "ambiguous":
-    case "incomplete_identifier":
       return resolution.candidates.map(({ id }) => id).toSorted();
     default: {
       resolution satisfies never;
@@ -1279,4 +1279,24 @@ describe.each(
       expect(idsOf(resolution)).toEqual(["plain"]);
     });
   });
+});
+
+test("Czech five-digit court sheets preserve file identity and the exact target selector", () => {
+  const grammar = DECISION_DOCKET_GRAMMARS.CZE;
+  for (const { bare, sheet } of [
+    { bare: "5 Tdo 1125/2023", sheet: "14274" },
+    { bare: "4 To 17/2023", sheet: "13904" },
+    { bare: "7 T 11/2015", sheet: "13532" },
+  ]) {
+    for (const dash of ["-", "–", "‑"]) {
+      const reference = readDecisionDocketReference(`${bare}${dash}${sheet}`, {
+        grammar,
+      });
+      expect(reference?.family.canonical ?? null).toBe(
+        docketFamilyKeyOf(bare, "CZE"),
+      );
+      expect(reference?.selector).toEqual({ kind: "sheet", value: sheet });
+      expect(reference?.family.filingYear.type).toBe("known");
+    }
+  }
 });

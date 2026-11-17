@@ -14,7 +14,6 @@ import {
   plainTextOf,
   startsDecisionBody,
 } from "@stll/legal-ast/document-ast";
-import { rewriteInlineWhitespace } from "@stll/legal-ast/inline-line";
 
 import {
   type AtCourtTextSection,
@@ -28,7 +27,7 @@ import {
   risTextFidelity,
 } from "@/api/handlers/case-law/ingestion/parsers/at-ris-markup";
 import { ParseXmlError } from "@/api/handlers/case-law/ingestion/parsers/parse-xml-error";
-import { collapseLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
+import { readInlineLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
 
 export type ParseRisDecisionInput = {
   sourceDocumentId: string;
@@ -364,10 +363,7 @@ export const parseRisDecisionXml = (
     if (unit.type === "break") {
       return undefined;
     }
-    const inlines = rewriteInlineWhitespace(
-      unit.inlines,
-      collapseLetterSpacing,
-    );
+    const inlines = readInlineLetterSpacing(unit.inlines);
     return { inlines, text: plainTextOf(inlines) };
   });
   // The court's text is read whole before any role is given: where its

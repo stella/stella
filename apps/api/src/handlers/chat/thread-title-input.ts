@@ -1,6 +1,7 @@
 import type { SafeDb } from "@/api/db/safe-db";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { sourceDecisionIdsIn } from "@/api/lib/case-law/withdrawn-copy-projection";
 import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
 import {
   THREAD_STORED_CONTENT_SEND_MODE,
@@ -40,5 +41,14 @@ export const readThreadTitleInput = async ({
     if (marker !== null) {
       return { type: "withdrawn", marker } as const;
     }
-    return { type: "available", messages } as const;
+    return {
+      type: "available",
+      messages,
+      projection,
+      sources: {
+        decisionIds: sourceDecisionIdsIn([thread, messages]),
+        // Inputs without stored message provenance retain legacy coverage.
+        inputs: [{ type: "legacy" }],
+      },
+    } as const;
   });

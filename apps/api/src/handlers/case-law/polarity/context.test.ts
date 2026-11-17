@@ -14,7 +14,70 @@ describe("the windows around a citation", () => {
     expect(extractContexts(sections, "sp. zn. 3 Tdo 759/2020", 1)).toEqual({
       mentions: [sections[1]?.text ?? ""],
       contexts: [sections[1]?.text ?? ""],
+      evidenceWindows: [
+        {
+          start: (sections[0]?.text.length ?? 0) + 1,
+          end: sections.map((s) => s.text).join("\n").length,
+        },
+      ],
+      contextEvidenceWindows: [
+        {
+          start: (sections[0]?.text.length ?? 0) + 1,
+          end: sections.map((s) => s.text).join("\n").length,
+        },
+      ],
     });
+  });
+
+  test("reads a mention on to the end of its sentence, but keeps contexts at the window", () => {
+    const opening = "Rozsudek sp. zn. 21 Cdo 1/20 ";
+    const middle = "byl v řízení uplatněn jako podklad námitky ".repeat(8);
+    const ending = "a soud jej odmítl.";
+    const after = " Další věta.";
+    const windows = extractContexts(
+      [{ text: `${opening}${middle}${ending}${after}` }],
+      "sp. zn. 21 Cdo 1/20",
+      0,
+    );
+
+    expect(windows?.mentions[0]).toEndWith("a soud jej odmítl.");
+    expect(windows?.contexts[0]).not.toContain("odmítl");
+  });
+
+  test("does not read past a paragraph break or the bound", () => {
+    const opening = "Rozsudek sp. zn. 21 Cdo 1/20 ";
+    const filler = "slovo ".repeat(40);
+    const nextParagraph = "\nNový odstavec a soud jej odmítl.";
+    const broken = extractContexts(
+      [{ text: `${opening}${filler}${nextParagraph}` }],
+      "sp. zn. 21 Cdo 1/20",
+      0,
+    );
+    expect(broken?.mentions[0]).not.toContain("odmítl");
+
+    const unbounded = "slovo ".repeat(400);
+    const capped = extractContexts(
+      [{ text: `${opening}${unbounded}a soud jej odmítl.` }],
+      "sp. zn. 21 Cdo 1/20",
+      0,
+    );
+    expect(capped?.mentions[0]).toBe(capped?.contexts[0]);
+  });
+
+  test("an abbreviation does not end the sentence the window reads on to", () => {
+    const opening = "Rozsudek sp. zn. 21 Cdo 1/20 ";
+    const filler = "slovo ".repeat(35);
+    const windows = extractContexts(
+      [
+        {
+          text: `${opening}${filler}viz sp. zn. II. ÚS 1/20 a soud jej odmítl.`,
+        },
+      ],
+      "sp. zn. 21 Cdo 1/20",
+      0,
+    );
+
+    expect(windows?.mentions[0]).toEndWith("a soud jej odmítl.");
   });
 
   test("is null when the section does not carry the citation", () => {
@@ -63,6 +126,7 @@ describe("the windows around a citation", () => {
     );
 
     expect(windows?.contexts).toHaveLength(1);
+    expect(windows?.contextEvidenceWindows).toHaveLength(1);
     expect(windows?.mentions).toHaveLength(2);
     expect(windows?.mentions[0]).toContain("srov.");
     expect(windows?.mentions[0]).not.toContain("odchyluje");
@@ -101,6 +165,40 @@ describe("the windows around a citation", () => {
     expect(windows).toEqual({
       mentions: [sentence],
       contexts: [sentence],
+      evidenceWindows: [{ start: 0, end: decomposed.length }],
+      contextEvidenceWindows: [{ start: 0, end: decomposed.length }],
     });
+  });
+  test("evidence windows recover each original mention across sections", () => {
+    const sections = [
+      { text: normalizeUnicode("Úvod", "NFD") },
+      {
+        text: normalizeUnicode(
+          `${"Předchozí text. ".repeat(30)}CIT${"Další text. ".repeat(70)}CIT konec.`,
+          "NFD",
+        ),
+      },
+    ];
+    const joined = sections.map((s) => s.text).join("\n");
+    const windows = extractContexts(sections, "CIT", 1);
+    expect(windows?.contexts).toHaveLength(2);
+    const sectionOffset = (sections.at(0)?.text.length ?? 0) + 1;
+    const evidenceWindows = windows?.evidenceWindows ?? [];
+    expect(evidenceWindows).toHaveLength(2);
+    expect(windows?.contextEvidenceWindows).toHaveLength(2);
+    for (const [index, evidenceWindow] of evidenceWindows.entries()) {
+      expect(evidenceWindow.start).toBeGreaterThan(sectionOffset);
+      const originalWindow = joined.slice(
+        evidenceWindow.start,
+        evidenceWindow.end,
+      );
+      expect(normalizeUnicode(originalWindow, "NFC")).toBe(
+        windows?.mentions[index] ?? "missing",
+      );
+      expect(originalWindow.match(/CIT/gu)).toHaveLength(1);
+    }
+    expect(evidenceWindows[1]?.start).toBeGreaterThan(
+      evidenceWindows[0]?.end ?? 0,
+    );
   });
 });

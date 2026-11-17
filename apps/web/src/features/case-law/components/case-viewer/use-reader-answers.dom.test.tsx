@@ -20,7 +20,7 @@ import { Temporal } from "@stll/time";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 const { StrictMode, useRef } = await import("react");
-const { notifyManager, QueryClient, QueryClientProvider } =
+const { defaultScheduler, notifyManager, QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { act, cleanup, fireEvent, render, renderHook, waitFor } =
   await import("@testing-library/react");
@@ -44,9 +44,7 @@ const originalAbortSignalTimeout = AbortSignal.timeout;
 const clients: InstanceType<typeof QueryClient>[] = [];
 afterEach(async () => {
   restoreRealTimers();
-  notifyManager.setScheduler((notify) => {
-    setTimeout(notify, 0);
-  });
+  notifyManager.setScheduler(defaultScheduler);
   Object.defineProperty(AbortSignal, "timeout", {
     configurable: true,
     value: originalAbortSignalTimeout,

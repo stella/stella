@@ -12,6 +12,7 @@ import {
   caseLawDecisions,
   caseLawProvisionExtractionScopes,
   caseLawSitemapChanges,
+  caseLawSources,
   corpusIndexGenerations,
 } from "@/api/db/schema";
 import type { TransactionOf } from "@/api/db/scoped";
@@ -59,8 +60,10 @@ import { withSeededTableMaintenance } from "./seeded-tables";
  *   table written over months.
  */
 const CORPUS_SCENARIO_ROWS = 60_000;
+// Outside the 00c2 coverage-source range and the provision (00c3) and replay
+// (00c4) sources, so no other scenario counts these rows as its own.
 const COMPLETION_SOURCE_ID = toSafeId<"caseLawSource">(
-  "01990000-00c2-7000-8000-000000000001",
+  "01990000-00c6-7000-8000-000000000001",
 );
 const COMPLETION_ROWS = 100_000;
 /**
@@ -531,8 +534,9 @@ export const serveCaseLaw = async (
  * small specialised court to a large court system, so the facet table holds
  * thousands of rows and a source's facets are read the way they are served.
  */
+// Source adapter keys are unique; cz-ns belongs to the provision scenario.
 const FACET_SOURCE_KEYS = [
-  ADAPTER_KEYS.CZ_NS,
+  ADAPTER_KEYS.AT_COURTS,
   ADAPTER_KEYS.CZ_NSS,
   ADAPTER_KEYS.CZ_US,
   ADAPTER_KEYS.SK_COURTS,
@@ -568,8 +572,7 @@ const seedBrowseFacetCounts = async (database: GatedTestDb) => {
   } of FACET_SOURCES) {
     // db-await-in-loop: six fixed sources, each with its own facet rows.
     await database.execute(sql`INSERT INTO case_law_sources (id, adapter_key, name, enabled)
-      VALUES (${sourceId}::uuid, ${adapterKey}, ${`Facet fixture ${String(index + 1)}`}, false)
-      ON CONFLICT (id) DO NOTHING`);
+      VALUES (${sourceId}::uuid, ${adapterKey}, ${`Facet fixture ${String(index + 1)}`}, false)`);
     // db-await-in-loop: the source's facets follow the source row they reference.
     await database.execute(sql`INSERT INTO case_law_browse_facet_counts
       (kind, country, source_id, value, total)
@@ -581,6 +584,54 @@ const seedBrowseFacetCounts = async (database: GatedTestDb) => {
       SELECT 'year', ${country}, ${sourceId}::uuid, (${FACET_FIRST_YEAR - 1}::integer + n)::text, 1 + n % 41
       FROM generate_series(1, ${FACET_YEARS}) n
       ON CONFLICT DO NOTHING`);
+  }
+};
+
+/** The country whose admitted courts the court catalog page reads. */
+export const COURT_CATALOG_COUNTRY = "XCC";
+const COURT_CATALOG_COURTS = 3000;
+const COURT_CATALOG_SOURCE_IDS = [
+  "01990000-00c4-7000-8000-000000000001",
+  "01990000-00c4-7000-8000-000000000002",
+  "01990000-00c4-7000-8000-000000000003",
+] as const;
+
+/**
+ * A country of many courts, each held by every one of three sources, as the
+ * folded population counts hold them: the court catalog reads one page of
+ * them, so the rows past the page are what it must not read.
+ */
+const seedCourtCatalogPopulation = async (database: GatedTestDb) => {
+  for (const [index, sourceId] of COURT_CATALOG_SOURCE_IDS.entries()) {
+    // db-await-in-loop: three fixed sources, each with its own court rows.
+    await database.execute(sql`INSERT INTO case_law_sources (id, adapter_key, name, enabled)
+      VALUES (${sourceId}::uuid, ${`query-perf-court-catalog-${String(index + 1)}`},
+        ${`Court catalog fixture ${String(index + 1)}`}, false)
+      ON CONFLICT (id) DO NOTHING`);
+    // db-await-in-loop: the source's court rows follow the source row they reference.
+    await database.execute(sql`INSERT INTO case_law_population_counts
+      (kind, country, source_id, value, total)
+      SELECT 'court', ${COURT_CATALOG_COUNTRY}, ${sourceId}::uuid,
+        'Catalog court ' || lpad(n::text, 5, '0'), 1 + n % 53
+      FROM generate_series(1, ${COURT_CATALOG_COURTS}) n
+      ON CONFLICT DO NOTHING`);
+  }
+  await database.execute(sql`VACUUM (ANALYZE) case_law_population_counts`);
+};
+
+/**
+ * The coverage refresh reads every source's counts, so a fixture for another
+ * read's budget leaves this measurement's clone before it starts.
+ */
+const removeCourtCatalogPopulation = async (database: GatedTestDb) => {
+  await database.execute(
+    sql`DELETE FROM case_law_population_counts WHERE country = ${COURT_CATALOG_COUNTRY}`,
+  );
+  for (const sourceId of COURT_CATALOG_SOURCE_IDS) {
+    // db-await-in-loop: three fixed sources, after the counts that reference them.
+    await database.execute(
+      sql`DELETE FROM case_law_sources WHERE id = ${sourceId}::uuid`,
+    );
   }
 };
 
@@ -618,7 +669,7 @@ export const seedCorpusReadBudgets = async (database: GatedTestDb) =>
       }
     }
     await database.execute(sql`INSERT INTO case_law_sources (id, adapter_key, name, enabled)
-    VALUES (${COMPLETION_SOURCE_ID}, 'query-perf-completion', 'Completion query fixture', false)`);
+    VALUES (${COMPLETION_SOURCE_ID}, ${ADAPTER_KEYS.EU_ECJ}, 'Completion query fixture', false)`);
     for (const chunk of chunks(COMPLETION_ROWS)) {
       await withoutTriggers(database, async (tx) => {
         await tx.execute(sql`INSERT INTO case_law_decisions
@@ -678,6 +729,7 @@ export const seedCorpusReadBudgets = async (database: GatedTestDb) =>
 
     await rebuildIndexes();
     await seedBrowseFacetCounts(database);
+    await seedCourtCatalogPopulation(database);
     const works = Array.from(
       { length: LEGISLATION_CANDIDATE_COUNT },
       // Spread over the works, as hits for a common term are.
@@ -688,9 +740,31 @@ export const seedCorpusReadBudgets = async (database: GatedTestDb) =>
         `01990000-00a2-7000-8000-${(work * LEGISLATION_VERSIONS_PER_WORK).toString(16).padStart(12, "0")}`,
       ),
     );
+    const quoteSourceId = toSafeId<"caseLawSource">(
+      "01990000-00a3-7000-8000-000000000001",
+    );
+    const quoteDecisionId = toSafeId<"caseLawDecision">(
+      "01990000-00a4-7000-8000-000000000001",
+    );
+    await database.insert(caseLawSources).values({
+      id: quoteSourceId,
+      name: "Quote budget fixture",
+      adapterKey: QUOTE_FIXTURE_ADAPTER_KEY,
+      enabled: false,
+    });
+    await database.insert(caseLawDecisions).values({
+      id: quoteDecisionId,
+      sourceId: quoteSourceId,
+      country: "CZE",
+      court: "Nejvyšší soud",
+      language: "cs",
+      caseNumber: "1 Test 1/2026",
+      fulltext: "Stored decision text.",
+    });
     return {
       candidateIds,
       completionSourceId: COMPLETION_SOURCE_ID,
+      quoteDecisionId,
       replaySourceId: REPLAY_SOURCE_ID,
     };
   });
@@ -707,6 +781,9 @@ type SeedSitemapReadBudgetOptions = {
 
 /** The sitemap fixture's source; any registered adapter serves, its rows are synthetic. */
 const SITEMAP_FIXTURE_ADAPTER_KEY = ADAPTER_KEYS.CZ_REGIONAL;
+
+/** The quote fixture's source; no other fixture uses this adapter. */
+const QUOTE_FIXTURE_ADAPTER_KEY = ADAPTER_KEYS.UK_FCL;
 
 /** One available dirty month beside a growing backlog held by another run. */
 export const seedSitemapReadBudget = async ({
@@ -962,6 +1039,7 @@ export const prepareCoverageRefreshMeasurement = async (
   options: SeedSitemapReadBudgetOptions,
 ) => {
   const { database } = options;
+  await removeCourtCatalogPopulation(database);
   await seedCoverageDecisions(options);
   const found = await readCoverageRefreshState(database);
   await replaceCoverageRefreshState(

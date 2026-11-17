@@ -1,8 +1,13 @@
 import { Result } from "better-result";
 
 import type { ScopedResponse } from "@stll/api-client";
+import { AUTH_SIGN_IN_CODE_UNAVAILABLE_ERROR_CODE } from "@stll/auth-model";
 
-import { toAPIError } from "@/lib/errors/api";
+import {
+  isSessionRefusal,
+  isTypedCodeRefusal,
+  toAPIError,
+} from "@/lib/errors/api";
 import { isAuthClientErrorCode, toAuthClientError } from "@/lib/errors/auth";
 
 type AuthErrorValue = {
@@ -18,20 +23,30 @@ type UserVisibleReporter = (
   routeTemplate: string | undefined,
 ) => void;
 
-// These codes have an explicit inline outcome in the web client, as does every
-// code with a message of its own. Any other server-declared auth code is
-// unexpected and must not disappear into the SDK's console-only error handling.
-const HANDLED_AUTH_CLIENT_CODES: ReadonlySet<string> = new Set([
-  "INVALID_BACKUP_CODE",
-  "INVALID_CODE",
-  "INVALID_OTP",
-]);
-
 export const SOCIAL_LINK_HINT_PATH = "/social-link-hint";
 
 const isSocialLinkHintRequest = (requestUrl: URL | string): boolean =>
   new URL(requestUrl).pathname === `/api/auth${SOCIAL_LINK_HINT_PATH}`;
 
+const PASSWORD_SIGN_IN_PATH = "/api/auth/sign-in/email";
+/** Better Auth's code for a password sign-in it turned down. */
+export const INVALID_SIGN_IN_CODE = "INVALID_EMAIL_OR_PASSWORD";
+
+// The password sign-in form shows its own message for refused credentials.
+const isPasswordSignInRefusal = (
+  error: AuthErrorValue,
+  requestUrl: URL | string,
+): boolean =>
+  error.code === INVALID_SIGN_IN_CODE &&
+  new URL(requestUrl).pathname === PASSWORD_SIGN_IN_PATH;
+
+// The sign-in page answers this code by opening its password form.
+const isSignInCodeUnavailable = (error: AuthErrorValue): boolean =>
+  error.code === AUTH_SIGN_IN_CODE_UNAVAILABLE_ERROR_CODE;
+
+// A refused code, a session that has ended and a code with a message of its own
+// each have an outcome in the web client. Any other server-declared auth code is
+// unexpected and must not disappear into the SDK's console-only error handling.
 export const reportUnhandledAuthClientError = (
   error: AuthErrorValue,
   report: UserVisibleReporter,
@@ -40,8 +55,11 @@ export const reportUnhandledAuthClientError = (
   if (
     error.code === undefined ||
     isAuthClientErrorCode(error.code) ||
-    HANDLED_AUTH_CLIENT_CODES.has(error.code) ||
-    isSocialLinkHintRequest(requestUrl)
+    isTypedCodeRefusal(error) ||
+    isSessionRefusal(error) ||
+    isSocialLinkHintRequest(requestUrl) ||
+    isPasswordSignInRefusal(error, requestUrl) ||
+    isSignInCodeUnavailable(error)
   ) {
     return;
   }
@@ -76,7 +94,8 @@ export const reportUnhandledMeResponse = async (
     typeof value !== "object" ||
     value === null ||
     !("code" in value) ||
-    typeof value.code !== "string"
+    typeof value.code !== "string" ||
+    isSessionRefusal({ code: value.code, status: response.status })
   ) {
     return;
   }

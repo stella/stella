@@ -1,9 +1,10 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import JSZip from "jszip";
 
 import { compareCodeUnit } from "@stll/collation";
+import { ZipArchive } from "@stll/docx-core/zip";
+import { createTestClock } from "@stll/test-kit";
 
 import { ACCOUNT_EXPORT_PROJECTIONS } from "@/api/account-export-projections";
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -13,12 +14,12 @@ import {
 } from "@/api/db/rls";
 import {
   aiMemories,
-  contacts,
   entities,
   legalListClaims,
   legalListVerificationRuns,
   legalReaderAnnotations,
   searchHistoryEntries,
+  searchHistoryOwners,
   workspaceMembers,
   workspaces,
   workspaceViewTemplates,
@@ -47,6 +48,7 @@ import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-a
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
+import { insertOwnerContacts } from "@/api/tests/helpers/owner-contacts";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -57,6 +59,7 @@ describe.skipIf(!enabled)("account export personal data", () => {
       panic("DATABASE_URL required");
     }
     await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const testClock = createTestClock();
       const { db } = openClient();
       const scopedDatabase = markRlsDatabase(db);
       const organizationId = mintAuthProviderId<"organization">();
@@ -108,11 +111,11 @@ describe.skipIf(!enabled)("account export personal data", () => {
           id: organizationId,
           name: "Claim comment organization",
           slug: organizationId,
-          createdAt: new Date(),
+          createdAt: new Date(testClock.now()),
         });
         await recordNewOrganizationAccessState(db, {
           organizationId,
-          now: new Date(),
+          now: new Date(testClock.now()),
         });
         await db.insert(member).values(
           users.map((userId, index) => ({
@@ -120,7 +123,7 @@ describe.skipIf(!enabled)("account export personal data", () => {
             organizationId,
             userId,
             role: "member",
-            createdAt: new Date(),
+            createdAt: new Date(testClock.now()),
           })),
         );
         await db.insert(workspaces).values({
@@ -422,6 +425,8 @@ describe.skipIf(!enabled)("account export personal data", () => {
                   startOffset: 0,
                   endOffset: 5,
                   quote: "Claim",
+                  quotePrefix: "",
+                  quoteSuffix: "",
                   body: comment.body,
                   createdAt: createdAt.toISOString(),
                   updatedAt: updatedAt.toISOString(),
@@ -520,6 +525,7 @@ describe.skipIf(!enabled)("account export personal data", () => {
       panic("DATABASE_URL required");
     }
     await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const testClock = createTestClock();
       const { db } = openClient();
       const scopedDatabase = markRlsDatabase(db);
       const organizations = [
@@ -548,13 +554,13 @@ describe.skipIf(!enabled)("account export personal data", () => {
             id,
             name: "Export organization",
             slug: id,
-            createdAt: new Date(),
+            createdAt: new Date(testClock.now()),
           })),
         );
         for (const organizationId of organizations) {
           await recordNewOrganizationAccessState(db, {
             organizationId,
-            now: new Date(),
+            now: new Date(testClock.now()),
           });
         }
         await db.insert(member).values(
@@ -564,7 +570,7 @@ describe.skipIf(!enabled)("account export personal data", () => {
               organizationId,
               userId: memberUserId,
               role: "member",
-              createdAt: new Date(),
+              createdAt: new Date(testClock.now()),
             })),
           ),
         );
@@ -574,12 +580,14 @@ describe.skipIf(!enabled)("account export personal data", () => {
           name: "Export matter fixture",
           reference: Bun.randomUUIDv7(),
         });
-        await db.insert(contacts).values({
-          organizationId: organizationA,
-          createdBy: userId,
-          type: "person",
-          displayName: "Organization contact fixture",
-        });
+        await insertOwnerContacts(db, [
+          {
+            organizationId: organizationA,
+            createdBy: userId,
+            type: "person",
+            displayName: "Organization contact fixture",
+          },
+        ]);
         const prepared = await Promise.all(
           organizations.map(async (organizationId, index) => {
             const query = queries.at(index);
@@ -587,11 +595,20 @@ describe.skipIf(!enabled)("account export personal data", () => {
               panic("Organization query fixture required");
             }
             return await prepareSearchHistoryRows({ organizationId, userId }, [
-              { entry: { kind: "search", query }, usedAt: new Date() },
+              {
+                entry: { kind: "search", query, country: "CZE" },
+                usedAt: new Date(testClock.now()),
+              },
             ]);
           }),
         );
         const historyRows = prepared.flat();
+        await db
+          .insert(searchHistoryOwners)
+          .values(
+            organizations.map((organizationId) => ({ organizationId, userId })),
+          )
+          .onConflictDoNothing();
         for (const row of historyRows) {
           expect(row.iv.every((byte) => byte === 0)).toBe(false);
           for (const query of queries) {
@@ -648,12 +665,12 @@ describe.skipIf(!enabled)("account export personal data", () => {
           if (bytes === undefined) {
             panic("Archive publication required");
           }
-          return await JSZip.loadAsync(bytes);
+          return await ZipArchive.read(bytes);
         };
         const archive = await archiveFor(userId);
         const historyText = await archive
-          .file("search_history_entries.json")
-          ?.async("string");
+          .entry("search_history_entries.json")
+          ?.text();
         if (historyText === undefined) {
           panic("History archive entry required");
         }
@@ -677,10 +694,8 @@ describe.skipIf(!enabled)("account export personal data", () => {
             },
           ]),
         );
-        expect(await archive.file("ai_memories.json")?.async("string")).toBe(
-          "[]",
-        );
-        expect(Object.keys(archive.files).toSorted()).toEqual(
+        expect(await archive.entry("ai_memories.json")?.text()).toBe("[]");
+        expect(archive.paths().toSorted()).toEqual(
           [
             ...EXPORTED_ACCOUNT_TABLE_NAMES.map((table) => `${table}.json`),
             "manifest.json",
@@ -690,7 +705,7 @@ describe.skipIf(!enabled)("account export personal data", () => {
           ACCOUNT_EXPORT_REGISTRY,
         )) {
           if (disposition.type === "exempt") {
-            expect(archive.file(`${table}.json`)).toBeNull();
+            expect(archive.entry(`${table}.json`)).toBeUndefined();
           }
         }
       } finally {

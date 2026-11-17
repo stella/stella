@@ -379,6 +379,9 @@ class TransferReadInspector {
     ) {
       parent = this.parentOf(parent);
     }
+    if (parent.type === "AssignmentPattern") {
+      return this.textOf(parent.left);
+    }
     if (parent.type === "VariableDeclarator") {
       return this.textOf(parent.id);
     }
@@ -692,6 +695,7 @@ class TransferReadInspector {
     const length = this.unwrap(condition.left);
     if (
       length.type !== "MemberExpression" ||
+      length.computed ||
       this.propertyName(length.property) !== "length" ||
       length.object.type !== "Identifier" ||
       length.object.name !== rowName ||
@@ -887,6 +891,7 @@ class TransferReadInspector {
     const parent = this.parentOf(node);
     return (
       parent.type === "VariableDeclarator" ||
+      parent.type === "AssignmentPattern" ||
       parent.type === "MethodDefinition" ||
       (parent.type === "Property" && parent.method)
     );

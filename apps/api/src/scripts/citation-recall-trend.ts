@@ -17,7 +17,7 @@ import { Temporal } from "@stll/time";
  * billed per byte.
  *
  *   AWS_REGION=eu-central-1 bun src/scripts/citation-recall-trend.ts \
- *     --log-group /stella/utility-worker [--hours 24] [--stream-prefix ingestion/]
+ *     --log-group /stella/plane-worker [--hours 24] [--stream-prefix plane/]
  */
 import { isRecord } from "@/api/lib/type-guards";
 

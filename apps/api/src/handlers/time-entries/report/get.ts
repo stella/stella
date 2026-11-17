@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq, gte, isNull, lte, ne, or, sql } from "drizzle-orm";
+import { and, eq, gte, isNull, lte, or, sql } from "drizzle-orm";
 
 import { BILLING_STATUS, TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import {
@@ -19,6 +19,7 @@ import { canApproveTimeEntries } from "@/api/lib/billing/time-entry-authorizatio
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
+import { visibleWorkspaceSql } from "@/api/lib/workspaces/visible-workspace-sql";
 
 const MAX_REPORT_DAYS = 366;
 const MAX_REPORT_BUCKETS = 20_000;
@@ -87,7 +88,7 @@ const getTimeReport = createSafeRootHandler(
             eq(timeEntries.activityGroup, TIME_ENTRY_ACTIVITY_GROUP.INTERNAL),
             and(
               eq(timeEntries.activityGroup, TIME_ENTRY_ACTIVITY_GROUP.CLIENT),
-              ne(workspaces.status, "deleting"),
+              visibleWorkspaceSql(),
             ),
           ),
           // Team aggregates need approval access, as in the matter time

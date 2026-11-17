@@ -17,13 +17,10 @@ import { timeApprovalsKeys } from "@/lib/workspaces/queries/time-approvals";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
 import {
   approveTimeEntries,
-  batchDeleteTimeEntries,
-  batchUpdateTimeEntries,
   createTimeEntry,
   decideTimeSuggestion,
   deleteTimeEntry,
   returnTimeEntries,
-  splitTimeEntry,
   updateTimeEntry,
 } from "@/lib/workspaces/time-entries-api";
 
@@ -258,80 +255,6 @@ export const useDeleteTimeEntry = () => {
       analytics.captureError(error, {
         fingerprintKey: "useDeleteTimeEntry:failure",
         scope: { type: "handler", handlerId: "useDeleteTimeEntry:failure" },
-      });
-      notifyUserError(error, getTranslator()("errors.actionFailed"));
-    },
-  });
-};
-
-type BatchUpdateVars = {
-  workspaceId: string;
-  ids: string[];
-  action: "approve" | "revert_to_draft" | "mark_billable" | "mark_non_billable";
-};
-
-export const useBatchUpdateTimeEntries = () => {
-  const analytics = useAnalytics();
-
-  return useMutation({
-    mutationFn: async ({ workspaceId, ...body }: BatchUpdateVars) => {
-      await batchUpdateTimeEntries(workspaceId, body);
-    },
-    onError: (error) => {
-      analytics.captureError(error, {
-        fingerprintKey: "useBatchUpdateTimeEntries:failure",
-        scope: {
-          type: "handler",
-          handlerId: "useBatchUpdateTimeEntries:failure",
-        },
-      });
-      notifyUserError(error, getTranslator()("errors.actionFailed"));
-    },
-  });
-};
-
-type BatchDeleteVars = {
-  workspaceId: string;
-  ids: string[];
-};
-
-export const useBatchDeleteTimeEntries = () => {
-  const analytics = useAnalytics();
-
-  return useMutation({
-    mutationFn: async ({ workspaceId, ids }: BatchDeleteVars) => {
-      await batchDeleteTimeEntries(workspaceId, ids);
-    },
-    onError: (error) => {
-      analytics.captureError(error, {
-        fingerprintKey: "useBatchDeleteTimeEntries:failure",
-        scope: {
-          type: "handler",
-          handlerId: "useBatchDeleteTimeEntries:failure",
-        },
-      });
-      notifyUserError(error, getTranslator()("errors.actionFailed"));
-    },
-  });
-};
-
-type SplitTimeEntryVars = {
-  workspaceId: string;
-  id: string;
-  splits: { workItemId: string; percentage: number }[];
-};
-
-export const useSplitTimeEntry = () => {
-  const analytics = useAnalytics();
-
-  return useMutation({
-    mutationFn: async ({ workspaceId, ...body }: SplitTimeEntryVars) => {
-      await splitTimeEntry(workspaceId, body);
-    },
-    onError: (error) => {
-      analytics.captureError(error, {
-        fingerprintKey: "useSplitTimeEntry:failure",
-        scope: { type: "handler", handlerId: "useSplitTimeEntry:failure" },
       });
       notifyUserError(error, getTranslator()("errors.actionFailed"));
     },

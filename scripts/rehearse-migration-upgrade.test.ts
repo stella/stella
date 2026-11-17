@@ -6,8 +6,9 @@ import path from "node:path";
 import * as v from "valibot";
 
 // Base schema, seed and the contending writer before the upgrade starts:
-// measured 5 min 23 s on a hosted runner (10-19), with headroom.
-const SETUP_ALLOWANCE_MINUTES = 18;
+// measured 5 min 23 s on a hosted runner (10-19), with headroom, plus the
+// preparation cap and each API boot's own bound.
+const SETUP_ALLOWANCE_MINUTES = 20;
 // Checkout, install and image pulls before the rehearsal step.
 const JOB_SETUP_ALLOWANCE_MINUTES = 4;
 
@@ -82,7 +83,8 @@ test("real readiness retains service, image and credential ownership", () => {
     Number(
       /--kill-after=5 (\d+) bash -c.*prepare_dependencies/u.exec(script)?.[1],
     ) +
-    2 * Number(/--kill-after=5 (\d+) bash -c.*boot_api/u.exec(script)?.[1]);
+    (script.match(/^boot_until_ready "/gmu)?.length ?? 0) *
+      Number(/--kill-after=5 (\d+) bash -c.*boot_api/u.exec(script)?.[1]);
   expect(setupSeconds / 60).toBe(SETUP_ALLOWANCE_MINUTES);
   const names = workflow.jobs["migration-upgrade-rehearsal"].steps.map(
     ({ name }) => name,
@@ -105,22 +107,23 @@ appendFileSync(path.join(state, "events"), "docker " + args.join(" ") + "\\n");
 const nameIndex = args.indexOf("--name");
 const name = nameIndex >= 0 ? args[nameIndex + 1] : args.at(-1);
 const container = path.join(state, name ?? "none");
+const servedRefuses = process.env.REHEARSAL_TEST_FAILURE === "served-refuses";
 if (args[0] === "compose") {
   if (args.includes("config")) console.log(JSON.stringify({services:{rustfs:{environment:{RUSTFS_ACCESS_KEY:"test-access",RUSTFS_SECRET_KEY:"test-secret"}}}}));
   if (args.includes("up") && process.env.REHEARSAL_TEST_FAILURE === "dependency") process.exit(19);
 } else if (args[0] === "run" && nameIndex >= 0) {
   writeFileSync(container, "running");
 } else if (args[0] === "inspect") {
-  console.log(process.env.REHEARSAL_TEST_FAILURE === "exited" || existsSync(path.join(state,"exited-after-ready")) ? "false" : existsSync(container) ? "true" : "false");
+  console.log(process.env.REHEARSAL_TEST_FAILURE === "exited" || existsSync(path.join(state,"exited-after-ready")) || (servedRefuses && (name ?? "").endsWith("-served")) ? "false" : existsSync(container) ? "true" : "false");
 } else if (args[0] === "logs") {
-  console.log(process.env.REHEARSAL_TEST_FAILURE === "exited" ? "fatal: startup refused by the database" : process.env.REHEARSAL_TEST_FAILURE === "scheduler" ? "server listening" : JSON.stringify({message:"scheduler.started"}));
+  console.log(servedRefuses && (name ?? "").endsWith("-served") ? "Panic: Online repair case_law_population_seed introduced by 0001_base is not complete: checkpoint pending" : process.env.REHEARSAL_TEST_FAILURE === "exited" ? "fatal: startup refused by the database" : process.env.REHEARSAL_TEST_FAILURE === "scheduler" ? "server listening" : JSON.stringify({message:"scheduler.started"}));
 } else if (args[0] === "rm") {
   rmSync(container, {force:true});
 }
 `;
 
 const fakeBun = `#!${process.execPath}
-import { appendFileSync } from "node:fs";
+import { appendFileSync, existsSync, writeFileSync } from "node:fs";
 import path from "node:path";
 const args = process.argv.slice(2);
 appendFileSync(path.join(process.env.REHEARSAL_TEST_STATE, "events"), "bun " + args.join(" ") + "\\n");
@@ -143,11 +146,18 @@ if (args.includes("assert-empty") && process.env.REHEARSAL_TEST_FAILURE === "non
   console.log("0s");
 } else if (args.includes("digest")) {
   console.log("unchanged");
+} else if (args.includes("ledger")) {
+  const marker = path.join(process.env.REHEARSAL_TEST_STATE, "ledger-read");
+  console.log(existsSync(marker) ? "0001_base\\n0002_candidate" : "0001_base");
+  writeFileSync(marker, "");
+} else if (args[0]?.endsWith("migration-rehearsal-startup-refusal.ts")) {
+  const child = Bun.spawnSync([process.execPath, ...args], {stdout:"inherit", stderr:"inherit"});
+  process.exit(child.exitCode ?? 1);
 }
 `;
 
 const fakeTimeout = `#!${process.execPath}
-import { appendFileSync } from "node:fs";
+import { appendFileSync, readFileSync } from "node:fs";
 import path from "node:path";
 const args = process.argv.slice(2);
 appendFileSync(path.join(process.env.REHEARSAL_TEST_STATE, "events"), "timeout " + args.slice(0,3).join(" ") + "\\n");
@@ -157,12 +167,24 @@ if (args[index].startsWith("--kill-after=")) index++;
 const seconds = args[index++];
 const child = Bun.spawn(args.slice(index), {stdin:"inherit", stdout:"inherit", stderr:"inherit"});
 // Shorten only the boot bound in this fake; the production script owns 120s.
+// A deadline case expires once readiness has probed at least once, however
+// slow the runner, so the probe it asserts is never raced by the timer.
 let expired = false;
-const timer = seconds === "120" && ["deadline", "scheduler"].includes(process.env.REHEARSAL_TEST_FAILURE)
-  ? setTimeout(() => { expired = true; child.kill("SIGTERM"); }, 250)
-  : undefined;
+const failure = process.env.REHEARSAL_TEST_FAILURE;
+const events = path.join(process.env.REHEARSAL_TEST_STATE, "events");
+const started = Date.now();
+const expire = () => { expired = true; child.kill("SIGTERM"); };
+const timer = seconds !== "120" || !["deadline", "scheduler"].includes(failure)
+  ? undefined
+  : failure === "scheduler"
+    ? setTimeout(expire, 250)
+    : setInterval(() => {
+        const probed = readFileSync(events, "utf8").includes("curl\\n");
+        if (probed || Date.now() - started > 10_000) expire();
+      }, 50);
 const status = await child.exited;
 clearTimeout(timer);
+clearInterval(timer);
 process.exit(expired ? 124 : status);
 `;
 
@@ -220,7 +242,8 @@ const runFake = async (failure: string, body = script) => {
       output: stdout + stderr,
       events: await readFile(path.join(state, "events"), "utf-8"),
       state: (await readdir(state)).filter(
-        (name) => !["events", "exited-after-ready"].includes(name),
+        (name) =>
+          !["events", "exited-after-ready", "ledger-read"].includes(name),
       ),
       runtime: await readdir(runtime),
     };
@@ -229,12 +252,15 @@ const runFake = async (failure: string, body = script) => {
   }
 };
 
-test("base startup precedes target fixtures and candidate startup follows all migration proofs", async () => {
+test("base startup precedes target fixtures; the promoted and candidate releases boot after all migration proofs", async () => {
   const result = await runFake("");
   expect(result.exitCode, result.output).toBe(0);
   const events = result.events.split("\n");
   const baseBoot = events.findIndex(
     (event) => event.startsWith("docker run -d") && event.includes("-base "),
+  );
+  const servedBoot = events.findIndex(
+    (event) => event.startsWith("docker run -d") && event.includes("-served "),
   );
   const candidateBoot = events.findIndex(
     (event) =>
@@ -249,7 +275,9 @@ test("base startup precedes target fixtures and candidate startup follows all mi
   expect(baseBoot).toBeGreaterThan(-1);
   expect(seed).toBeGreaterThan(baseBoot);
   expect(parity).toBeGreaterThan(seed);
-  expect(candidateBoot).toBeGreaterThan(parity);
+  expect(servedBoot).toBeGreaterThan(parity);
+  expect(events[servedBoot]).toContain("stella-api:v1.2.3");
+  expect(candidateBoot).toBeGreaterThan(servedBoot);
   const version = readFileSync(
     new URL("../VERSION", import.meta.url),
     "utf-8",
@@ -320,3 +348,28 @@ test.each(["scheduler", "deadline"])(
     expect(result.runtime).toEqual([]);
   },
 );
+
+test("a promoted release that refuses the upgraded database names its check and this checkout's migrations", async () => {
+  const result = await runFake("served-refuses");
+  expect(result.exitCode).toBe(1);
+  expect(result.output).toContain(
+    "The promoted release v1.2.3 cannot boot against the database this checkout's upgrade produced",
+  );
+  expect(result.output).toContain("online migration validation");
+  expect(result.output).toContain(
+    "Online repair case_law_population_seed introduced by 0001_base is not complete",
+  );
+  expect(result.output).toContain(
+    "migrations this checkout applied over it: 0002_candidate",
+  );
+  expect(
+    result.events
+      .split("\n")
+      .some(
+        (event) =>
+          event.startsWith("docker run -d") && event.includes("-candidate "),
+      ),
+  ).toBe(false);
+  expect(result.state).toEqual([]);
+  expect(result.runtime).toEqual([]);
+});

@@ -10,7 +10,7 @@ import { conditionHasFormula, conditionNodeSchema } from "@stll/conditions";
 
 import {
   manualInputToolSchema,
-  propertyContentSchema,
+  scalarPropertyContentSchema,
 } from "@/api/db/schema-validators";
 import { tConditionNode } from "@/api/lib/conditions/contract";
 import { displayNameSchema, resourceIdSchema } from "@/api/lib/custom-schema";
@@ -358,7 +358,7 @@ export const tViewTemplatePropertySchema = v.strictObject({
   version: v.literal(1),
   sourceId: v.pipe(v.string(), v.minLength(1)),
   name: displayNameSchema(),
-  content: propertyContentSchema,
+  content: scalarPropertyContentSchema,
   tool: tViewTemplatePropertyToolSchema,
   role: v.optional(v.union([v.literal("document-type-classifier"), v.null()])),
   createIfMissing: v.boolean(),

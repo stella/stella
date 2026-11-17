@@ -29,7 +29,7 @@ export const useWorkspaceKanbanSchema = (
         },
         entityKindLabels: {
           document: t("common.document"),
-          folder: t("search.kinds.folder"),
+          folder: t("common.folder"),
           task: t("search.kinds.task"),
           message: t("search.kinds.message"),
           link: t("search.kinds.link"),

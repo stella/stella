@@ -24,6 +24,8 @@ const createReaderAnnotation = createSafeRootHandler(
       organizationId: session.activeOrganizationId,
       placement: PUBLIC_LAW_ANNOTATION_PLACEMENT,
       recordAuditEvent,
+      // The reader measured the spans; a retry resends them unchanged.
+      replayIdentity: "spans",
       safeDb,
       userId: user.id,
     });

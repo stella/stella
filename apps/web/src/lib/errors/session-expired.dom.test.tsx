@@ -3,9 +3,10 @@ import { useState } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, mock, spyOn, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import englishMessages from "@/i18n/langs/en.json";
 import { MEMBER_SESSION } from "@/lib/account/auth-session.test-fixtures";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({
   url: "http://localhost:3000/contacts?tab=people",
@@ -153,7 +154,7 @@ test("a member's session read clears the notice and saving is left to the person
   });
 
   await waitFor(() => {
-    expect(view.queryByText(englishMessages.auth.signIn)).toBeNull();
+    expect(view.queryByText(englishMessages.auth.signIn) === null).toBe(true);
   });
   expect(requests).toBe(1);
   stopNotice();

@@ -2,7 +2,9 @@ import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
 
 import cancelPdfSigningSessionFromDesktop from "@/api/handlers/entities/pdf-signing-cancel";
 import submitPdfSigningCertificate from "@/api/handlers/entities/pdf-signing-certificate";
-import { createRedeemPdfSigningHandoffEndpoint } from "@/api/handlers/entities/pdf-signing-redeem-handoff";
+import redeemPdfSigningHandoffEndpoint, {
+  createRedeemPdfSigningHandoffEndpoint,
+} from "@/api/handlers/entities/pdf-signing-redeem-handoff";
 import type { RedeemPdfSigningHandoffDependencies } from "@/api/handlers/entities/pdf-signing-redeem-handoff";
 import submitPdfSigningSignature from "@/api/handlers/entities/pdf-signing-signature";
 import { routes } from "@/api/http/route";
@@ -21,7 +23,10 @@ export const createPdfSigningSessionsRoute = (
   routes(
     {
       "/pdf-signing-handoffs/redeem": {
-        POST: createRedeemPdfSigningHandoffEndpoint(dependencies),
+        POST:
+          dependencies === undefined
+            ? redeemPdfSigningHandoffEndpoint
+            : createRedeemPdfSigningHandoffEndpoint(dependencies),
       },
       "/pdf-signing-sessions/:sessionId/certificate": {
         POST: submitPdfSigningCertificate,

@@ -131,7 +131,10 @@ const databaseFailover = createSafePublicHandler(config, async function* () {
   );
 });
 
-const driftedBody = (): { ok: string } => JSON.parse('{"unexpected":true}');
+const driftedBody = (): { ok: string } => {
+  const body: { ok: string } = JSON.parse('{"unexpected":true}');
+  return body;
+};
 
 /**
  * The request scope and receipt id, opened outside the completion stage as
@@ -263,10 +266,10 @@ const CASES: readonly LifecycleCase[] = [
     status: 502,
     body: '{"code":"upstream_unavailable","message":"The registry is not answering right now."}',
     records: [
-      ["request.failed", "ERROR", shadow("transient", "upstream_unavailable")],
+      ["request.failed", "WARN", shadow("transient", "upstream_unavailable")],
       [
         "request.completed",
-        "ERROR",
+        "WARN",
         shadow("transient", "upstream_unavailable"),
       ],
     ],
@@ -281,12 +284,12 @@ const CASES: readonly LifecycleCase[] = [
     records: [
       [
         "request.failed",
-        "ERROR",
+        "WARN",
         shadow("transient", "pg_connection_lifecycle"),
       ],
       [
         "request.completed",
-        "ERROR",
+        "WARN",
         shadow("transient", "pg_connection_lifecycle"),
       ],
     ],
@@ -320,7 +323,7 @@ const CASES: readonly LifecycleCase[] = [
     records: [
       [
         "request.failed",
-        "ERROR",
+        "WARN",
         shadow("transient", "pg_connection_lifecycle"),
       ],
     ],
@@ -393,7 +396,10 @@ const metricRecords = (
   metric: string,
 ): Record<string, unknown>[] =>
   lines
-    .map((line): Record<string, unknown> => JSON.parse(line))
+    .map((line) => {
+      const record: Record<string, unknown> = JSON.parse(line);
+      return record;
+    })
     .filter((record) => metric in record);
 
 describe("the request lifecycle", () => {
@@ -798,7 +804,7 @@ describe("the request lifecycle", () => {
       [
         "request.handler_failed",
         "upstream_unavailable",
-        "log_error_and_capture",
+        "log_warn_and_capture",
         1,
       ],
       ["request.completed", "unobserved_5xx", "log_error_and_capture", 1],

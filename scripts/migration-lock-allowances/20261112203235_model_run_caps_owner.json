@@ -1,0 +1,6 @@
+{
+  "add-column": "Two constant-default columns: run_kind on model_run_budgets (one row per organization) and org_capped on document_review_runs; both are catalog-only changes that rewrite no rows, under 1s lock_timeout and 5s statement_timeout.",
+  "alter-column": "Column defaults on model_run_budgets, one row per organization: the day function's new name and dropping the run_kind backfill default; catalog-only, under 1s lock_timeout.",
+  "add-constraint": "The run_kind check on model_run_budgets scans one row per organization, all holding the value the column was just added with, under 1s lock_timeout and 5s statement_timeout.",
+  "create-trigger": "Row triggers on legal_list_verification_runs, legal_list_generation_runs and document_review_runs replace the list counter triggers dropped in the same transaction; creating them reads no rows and holds the lock briefly under 1s lock_timeout."
+}

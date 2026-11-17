@@ -141,12 +141,8 @@ export const decisionMatchToOpen = <THit>(
   switch (resolution.status) {
     case "unique":
       return { decision: resolution.decision, fileMayHoldOthers: false };
-    case "incomplete_identifier": {
-      const [only, ...rest] = resolution.candidates;
-      return only !== undefined && rest.length === 0
-        ? { decision: only, fileMayHoldOthers: true }
-        : undefined;
-    }
+    case "incomplete_identifier":
+      return { decision: resolution.decision, fileMayHoldOthers: true };
     case "ambiguous":
       return undefined;
     case "none":

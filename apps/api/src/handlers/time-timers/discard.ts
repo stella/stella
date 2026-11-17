@@ -13,6 +13,7 @@ import {
   timerParams,
 } from "@/api/lib/billing/time-timers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { scheduleTimerActivityUpdates } from "@/api/lib/push/timer-activity-queue";
 
 const discardTimer = createSafeRootHandler(
   {
@@ -88,6 +89,9 @@ const discardTimer = createSafeRootHandler(
         return Result.ok({ id: timer.id });
       }),
     );
+    if (outcome.isOk()) {
+      scheduleTimerActivityUpdates([owner]);
+    }
     return outcome;
   },
 );

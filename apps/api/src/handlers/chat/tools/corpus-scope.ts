@@ -287,6 +287,10 @@ export const scopeCorpusRead = async ({
   if (scopes.length === 0) {
     return Result.ok(args);
   }
+  // No chip can name guidance, so a scoped turn reads none of it.
+  if (toolName === "search_guidance" || toolName === "read_guidance") {
+    return Result.err(outOfScopeError(scopes));
+  }
   if (isPublicSourceName(toolName)) {
     return scopeAdmitsPublicSource(scopes, toolName)
       ? Result.ok(args)

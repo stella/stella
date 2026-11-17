@@ -1,7 +1,7 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 GlobalRegistrator.register({ url: "https://app.example.test" });
 const { cleanup, fireEvent, render, screen, waitFor } =
@@ -31,7 +31,7 @@ const ROWS = Array.from({ length: 30 }, (_, index) => `Row ${index}`);
 const scrollingListOf = (row: HTMLElement) => {
   const list = row.closest(".overflow-y-auto");
   if (!(list instanceof HTMLElement)) {
-    throw new Error("Expected the row inside the menu's scrolling list");
+    throw new TypeError("Expected the row inside the menu's scrolling list");
   }
   return list;
 };

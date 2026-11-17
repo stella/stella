@@ -28,6 +28,7 @@ import {
   MCP_SHARED_UI_MODULE_FILES,
 } from "./lib/mcp-reader-ui-guard";
 import { namespaceMembers } from "./lib/namespace-members";
+import { precompiledMessagesPlugin } from "./lib/precompiled-messages";
 
 const checking = Bun.argv.includes("--check");
 const generatedAssets = new Map<string, string>();
@@ -102,10 +103,27 @@ for (const file of [
   }
   readerMessages.set(locale, messages);
 }
+const readerCatalogues = Object.fromEntries(
+  [...readerMessages].map(([locale, messages]) => [
+    locale,
+    Object.fromEntries(messages),
+  ]),
+);
 await writeGenerated(
   path.join(generatedRoot, "reader-messages.json"),
-  `${JSON.stringify(Object.fromEntries([...readerMessages].map(([locale, messages]) => [locale, Object.fromEntries(messages)])), null, 2)}\n`,
+  `${JSON.stringify(readerCatalogues, null, 2)}\n`,
 );
+
+const precompiledMessages = precompiledMessagesPlugin([
+  {
+    file: /[/\\]api-contract[/\\]src[/\\]mcp-app-messages\.json$/u,
+    catalogue: MCP_APP_MESSAGES,
+  },
+  {
+    file: /[/\\]shared[/\\]generated[/\\]reader-messages\.json$/u,
+    catalogue: readerCatalogues,
+  },
+]);
 
 const inlineReaderFonts = {
   name: "inline-reader-fonts",
@@ -184,6 +202,8 @@ const sharedOutputRoot = path.join(appsRoot, "generated");
 const PRODUCTION = { "process.env.NODE_ENV": JSON.stringify("production") };
 // The shared runtime publishes the modules apps import from it here.
 const RUNTIME_MODULES = 'globalThis[Symbol.for("stll.mcp-apps.runtime")]';
+// An app script reads that global once; each shared import indexes this.
+const RUNTIME_MODULES_BINDING = "stllMcpRuntimeModules";
 const SHARED_IMPORT = "stll-mcp-shared:";
 const ENTRY_IMPORT = "stll-mcp-entry:";
 const isStylesheet = (file: string) => file.endsWith(".css");
@@ -390,7 +410,12 @@ const analyseMcpApp = async (directory: McpAppDirectory) => {
   const { outputs, metafile } = await build(`MCP app ${app}`, {
     root: repoRoot,
     metafile: true,
-    plugins: [generatedAssetPlugin, reactCompilerBunPlugin, inlineReaderFonts],
+    plugins: [
+      precompiledMessages,
+      generatedAssetPlugin,
+      reactCompilerBunPlugin,
+      inlineReaderFonts,
+    ],
     entrypoints: [entry],
     minify: true,
     define: PRODUCTION,
@@ -404,6 +429,16 @@ const analyseMcpApp = async (directory: McpAppDirectory) => {
   if (developmentInputs.length > 0) {
     panic(
       `MCP app ${app} includes React development modules: ${developmentInputs.join(", ")}`,
+    );
+  }
+  const messageParserInputs = Object.keys(metafile.inputs).filter((file) =>
+    /[/\\](?:intl-messageformat|@formatjs[/\\]icu-messageformat-parser)[/\\]/u.test(
+      file,
+    ),
+  );
+  if (messageParserInputs.length > 0) {
+    panic(
+      `MCP app ${app} bundles the ICU message parser; format precompiled catalogues instead: ${messageParserInputs.join(", ")}`,
     );
   }
   const apiInputs = Object.keys(metafile.inputs).filter((file) =>
@@ -592,6 +627,7 @@ const scriptBuild = (shared: ReadonlySet<string>) =>
     plugins: [
       entryModulePlugin,
       splitPlugin(shared),
+      precompiledMessages,
       generatedAssetPlugin,
       reactCompilerBunPlugin,
     ],
@@ -722,7 +758,13 @@ const linkAppScript = async (
   { label, code, imports }: Awaited<ReturnType<typeof buildAppScript>>,
   indexes: ReadonlyMap<string, number>,
 ): Promise<string> => {
-  const declarations: string[] = [];
+  if (new RegExp(`\\b${RUNTIME_MODULES_BINDING}\\b`, "u").test(code)) {
+    panic(`${label} already names ${RUNTIME_MODULES_BINDING}`);
+  }
+  const declarations =
+    imports.length === 0
+      ? []
+      : [`const ${RUNTIME_MODULES_BINDING} = ${RUNTIME_MODULES};`];
   let body = "";
   let position = 0;
   for (const { start, end, id, bindings, namespaces } of imports.toSorted(
@@ -730,7 +772,7 @@ const linkAppScript = async (
   )) {
     body += code.slice(position, start);
     position = end;
-    const runtimeModule = `${RUNTIME_MODULES}[${indexes.get(id) ?? panic(`Shared module ${id} is not in the runtime`)}]`;
+    const runtimeModule = `${RUNTIME_MODULES_BINDING}[${indexes.get(id) ?? panic(`Shared module ${id} is not in the runtime`)}]`;
     for (const { local } of namespaces) {
       declarations.push(`const ${local} = ${runtimeModule};`);
     }

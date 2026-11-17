@@ -342,7 +342,7 @@ test("captures use a caller-scoped delta and recover a burst revision gap", asyn
   await openClipboard(page, { language: "en" });
   const capture = async (texts: string[]) =>
     page.evaluate((values): unknown => {
-      const emit: unknown = Reflect.get(
+      const emit: ((texts: string[]) => unknown) | undefined = Reflect.get(
         window,
         "__STELLA_TEST_CAPTURE_CLIPBOARD__",
       );
@@ -588,7 +588,7 @@ for (const {
         const parked = await page.evaluate((source) => {
           let eventTarget: unknown;
           if (source === "native") {
-            const emit: unknown = Reflect.get(
+            const emit: (() => unknown) | undefined = Reflect.get(
               window,
               "__STELLA_TEST_NATIVE_BLUR__",
             );
@@ -1178,6 +1178,45 @@ test("search options narrow clip matches and hand focus back to the field", asyn
   ).toHaveText("item");
 });
 
+test("pressing a search option leaves focus out of the field", async ({
+  page,
+}) => {
+  await openClipboard(page, { language: "en" });
+  await page
+    .getByRole("button", {
+      name: enMessages.clipboard.searchOptions,
+      exact: true,
+    })
+    .click();
+  const option = page.getByRole("menuitemcheckbox", {
+    name: enMessages.clipboard.searchOptionWholeWords,
+  });
+  const search = page.getByRole("searchbox");
+  await expect(option).toBeVisible();
+
+  // The field hides its placeholder while focused, so holding the press is
+  // what would show focus visiting it between the press and the release.
+  await option.hover();
+  await page.mouse.down();
+  await expect(search).not.toBeFocused();
+  await page.mouse.up();
+
+  await expect(option).toHaveAttribute("aria-checked", "true");
+  await expect(search).not.toBeFocused();
+});
+
+test("pressing the search field's shortcut hint focuses the field", async ({
+  page,
+}) => {
+  await openClipboard(page, { language: "en" });
+  const search = page.getByRole("searchbox");
+  await expect(search).not.toBeFocused();
+
+  await page.locator(".clipboard-search kbd").click();
+
+  await expect(search).toBeFocused();
+});
+
 test("inline clip naming uses the full footer width", async ({ page }) => {
   await openClipboard(page, { language: "en" });
   const card = page.locator('[data-clipboard-id="clip-1"]');
@@ -1372,6 +1411,24 @@ test("Escape closes the active overlay before hiding the clipboard", async ({
   await expect
     .poll(async () => await invocationCount(page, "clipboard_hide"))
     .toBe(4);
+});
+
+test("a render while nothing holds focus leaves focus on the body", async ({
+  page,
+}) => {
+  const cards = await openClipboard(page, { language: "en" });
+  const mountedCards = await cards.count();
+
+  await page.getByRole("searchbox").focus();
+  await page.getByRole("searchbox").evaluate((input) => input.blur());
+  await expect(page.locator("body")).toBeFocused();
+  // A wider rail mounts more cards, so the window commits a render that has
+  // nothing to do with focus.
+  await page.setViewportSize({ height: 326, width: 1700 });
+  await expect
+    .poll(async () => await cards.count())
+    .toBeGreaterThan(mountedCards);
+  await expect(page.locator("body")).toBeFocused();
 });
 
 test("Escape closes a footer overlay whose trigger still holds focus", async ({
@@ -1874,7 +1931,7 @@ test("a successful multi-copy cannot carry selection into a reopened clipboard s
     ids: ["clip-1", "clip-3"],
   });
   const session = await page.evaluate(() => {
-    const reopen: unknown = Reflect.get(
+    const reopen: (() => unknown) | undefined = Reflect.get(
       window,
       "__STELLA_TEST_REOPEN_CLIPBOARD__",
     );
@@ -1909,7 +1966,7 @@ test("dismissing and reopening starts a new selection session without a copy", a
   await expect(page.locator("html")).toHaveAttribute("hidden", "");
   expect(
     await page.evaluate(() => {
-      const reopen: unknown = Reflect.get(
+      const reopen: (() => unknown) | undefined = Reflect.get(
         window,
         "__STELLA_TEST_REOPEN_CLIPBOARD__",
       );

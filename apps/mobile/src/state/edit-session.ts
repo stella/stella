@@ -6,7 +6,8 @@ import type { AccessTokenSource } from "@/connection/session";
 import { requestApi } from "@/state/api-request";
 import type { ApiError } from "@/state/api-request";
 import { DOCX_MIME_TYPE } from "@/state/document-file";
-import type { FormFile } from "@/state/form-file";
+import { partOfType } from "@/state/form-part";
+import type { FormPart } from "@/state/form-part";
 
 /**
  * Editing a document, the web's way: opening takes the document's edit lock
@@ -32,6 +33,8 @@ const openedSchema = v.object({
   sessionToken: v.pipe(v.string(), v.minLength(1)),
   downloadUrl: v.pipe(v.string(), v.url()),
   fileName: v.pipe(v.string(), v.minLength(1)),
+  resumedFromCheckpoint: v.boolean(),
+  baseVersionNumber: v.pipe(v.number(), v.integer()),
 });
 
 /** An open edit session; its token changes as checkpoints rotate it. */
@@ -44,6 +47,16 @@ export type EditSession = {
 export type OpenedEditSession = EditSession & {
   /** A short-lived link to the working copy, with any earlier checkpoint. */
   readonly downloadUrl: string;
+  /**
+   * Whether the working copy holds an earlier unfinished edit; otherwise it
+   * is the document's current version.
+   */
+  readonly resumedFromCheckpoint: boolean;
+  /**
+   * The version the lock is on: the session's edits become the version after
+   * it, so they must start from it.
+   */
+  readonly baseVersionNumber: number;
 };
 
 const lockPath = (workspaceId: string, action: "open" | "release") =>
@@ -75,25 +88,21 @@ const checkpointSchema = v.object({
 });
 
 /**
- * Stores the edited file, read from `uri` on the phone. The session the next
- * request must use comes back: the server may rotate its token.
+ * Stores the edited file, on the phone Expo's `File`, as a Word document,
+ * the type the server checks. The session
+ * the next request must use comes back: the server may rotate its token.
  */
 export const checkpointEditSession = async ({
   fetch,
   source,
   session,
-  uri,
+  file,
 }: Caller & {
   readonly session: EditSession;
-  readonly uri: string;
+  readonly file: FormPart;
 }): Promise<Result<EditSession, ApiError>> => {
   const form = new FormData();
-  const file: FormFile = {
-    uri,
-    name: session.fileName,
-    type: DOCX_MIME_TYPE,
-  };
-  form.append("file", file);
+  form.append("file", partOfType(file, DOCX_MIME_TYPE));
   form.append("sessionToken", session.sessionToken);
   const stored = await requestApi({
     fetch,

@@ -13,6 +13,9 @@ import { startFeatureAccessGrantsRefresh } from "@/api/env-feature-access";
 import { computeCaseLawCoverageAnswer } from "@/api/handlers/case-law/decisions/coverage";
 import { reapOwnerlessChatTurnOnTx } from "@/api/handlers/chat/chat-turn-persistence";
 import { relinquishChatTurnRuns } from "@/api/handlers/chat/chat-turn-run";
+import { startChatLimitResumer } from "@/api/handlers/chat/limit-reminder/limit-resume-sender";
+import { startChatQueueSender } from "@/api/handlers/chat/queue/chat-queue-sender";
+import { startChatTurnAdopter } from "@/api/handlers/chat/turns/adopt";
 import { initBuiltinReportTemplates } from "@/api/handlers/reports/builtin-templates";
 import { clearLookupPreviewCache } from "@/api/handlers/templates/lookup-preview-cache";
 import { createHttpApp } from "@/api/http/app";
@@ -24,6 +27,10 @@ import { clientAddressConfigurationWarning } from "@/api/lib/client-ip";
 import { assertConfiguredBetterAuthOAuthPolicy } from "@/api/lib/db/assert-better-auth-oauth-policy";
 import { assertMigrationsApplied } from "@/api/lib/db/assert-migrations-applied";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import {
+  drainDesktopRunnerGateway,
+  startDesktopRunnerGateway,
+} from "@/api/lib/desktop-runner/runtime";
 import { errorTag } from "@/api/lib/errors/utils";
 import {
   openFreshLoginClient,
@@ -255,6 +262,12 @@ const startServer = async (): Promise<void> => {
         openClient: () => openFreshLoginClient(envBase.DATABASE_URL),
       });
 
+  // Before the listener opens, so no runner upgrade finds the gateway absent.
+  await startDesktopRunnerGateway();
+  const stopChatQueueSender = startChatQueueSender();
+  const stopChatLimitResumer = startChatLimitResumer();
+  const stopChatTurnAdopter = startChatTurnAdopter();
+
   const server = Bun.serve({
     port: getApiPort(),
     ...apiApp.serveOptions,
@@ -308,7 +321,13 @@ const startServer = async (): Promise<void> => {
         });
       },
       relinquishChatTurnRuns,
+      stopChatQueueSender,
+      stopChatLimitResumer,
+      stopChatTurnAdopter,
       stopHttp: async () => {
+        // Runner sockets are asked to reconnect elsewhere before the
+        // listener stops waiting on open connections.
+        await drainDesktopRunnerGateway();
         await server.stop();
       },
       // Stop claiming new jobs before draining, so a tick in flight finishes

@@ -9,6 +9,7 @@ import {
   BackfillHeldError,
   createScriptBackfillRuntime,
 } from "@/api/db/backfill-runtime";
+import { CorpusSchemaLaneUnavailableError } from "@/api/db/corpus-schema-lane";
 import type { Transaction } from "@/api/db/root";
 import { caseLawCoverageSummaries } from "@/api/db/schema";
 import { loadGateHealthConfig } from "@/api/env-online-index";
@@ -16,6 +17,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { CASE_LAW_COVERAGE_CURRENT_WITHIN_MS } from "@/api/lib/case-law/coverage-freshness";
 import type { CaseLawCoveragePart } from "@/api/lib/case-law/coverage-parts";
 import { CASE_LAW_COVERAGE_REFRESH_INTERVAL_MS } from "@/api/lib/case-law/coverage-refresh-interval";
+import { caseLawRootHandleUnderCorpusSchemaLane } from "@/api/lib/case-law/maintenance-lane";
 import { readNonRedistributableCaseLawSourceIdsQuery } from "@/api/lib/case-law/non-redistributable-sources";
 import {
   lockCaseLawCoverageSnapshot,
@@ -43,6 +45,11 @@ export const REFRESH_CASE_LAW_COVERAGE_TASK =
 export const CASE_LAW_COVERAGE_REFRESH_STATEMENT_TIMEOUT_MS = 30_000;
 /** Reads not started within the run's budget are left unread, not waited on. */
 const CASE_LAW_COVERAGE_REFRESH_RUN_BUDGET_MS = 60_000;
+/**
+ * How long a refresh transaction keeps trying the corpus schema lane. A run
+ * refused by a schema upgrade is held; the next one reads again.
+ */
+const CASE_LAW_COVERAGE_REFRESH_LANE_WAIT_MS = 5000;
 
 /**
  * The refresh reads the corpus under shared locks and writes only its own
@@ -87,6 +94,8 @@ type CoverageRefreshOptions = {
   createRuntime?: typeof createScriptBackfillRuntime;
   /** Overrides the run's read budget; tests spend it without waiting. */
   readBudget?: () => AbortSignal;
+  /** Test seam: how a refused corpus schema lane try waits before the next. */
+  laneSleep?: (ms: number) => Promise<void>;
   compute: (
     readDb: CoverageRefreshReadDb,
     excludedSourceIds: readonly SafeId<"caseLawSource">[],
@@ -152,6 +161,7 @@ export const createCaseLawCoverageRefreshTask =
   ({
     createRuntime = createScriptBackfillRuntime,
     readBudget,
+    laneSleep,
     compute,
   }: CoverageRefreshOptions): SchedulerTask =>
   async ({ db, logger, runId, signal }) => {
@@ -162,7 +172,14 @@ export const createCaseLawCoverageRefreshTask =
         AbortSignal.timeout(CASE_LAW_COVERAGE_REFRESH_RUN_BUDGET_MS),
     ]);
     const runtime = createRuntime({
-      db,
+      // One transaction reads the corpus for up to the run's budget, so it
+      // holds the corpus schema lane shared (see `db/corpus-schema-lane.ts`):
+      // an upgrade drains it before its DDL instead of queueing behind it.
+      db: caseLawRootHandleUnderCorpusSchemaLane(db, {
+        signal,
+        laneWaitMs: CASE_LAW_COVERAGE_REFRESH_LANE_WAIT_MS,
+        ...(laneSleep === undefined ? {} : { sleep: laneSleep }),
+      }),
       name: SCHEDULER_BACKFILL_IDS.coverage,
       tableName: "case_law_decisions",
       tableContention: BACKFILL_TABLE_CONTENTION.SHARED_READ,
@@ -261,6 +278,10 @@ export const createCaseLawCoverageRefreshTask =
     if (settled.isErr()) {
       if (settled.error instanceof BackfillHeldError) {
         logger.info("scheduler.case_law_coverage_held");
+        return undefined;
+      }
+      if (CorpusSchemaLaneUnavailableError.is(settled.error)) {
+        logger.info("scheduler.case_law_coverage_yielded");
         return undefined;
       }
       return Result.err(

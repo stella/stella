@@ -1,0 +1,121 @@
+Preserve HTTP status/body and malformed JSON failures in provider streams.
+Streams missing a terminal reason fail explicitly; terminal events retain
+providerStopReason. Re-export the adapter SDK finish-reason declaration for
+exhaustive service policy. Upstream now owns request cancellation and latest
+usage propagation; those obsolete hunks are removed. Runtime regression:
+apps/api/src/lib/tanstack-ai-provider-wire.test.ts.
+
+diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
+--- a/dist/esm/adapters/text.js
++++ b/dist/esm/adapters/text.js
+@@ -1,3 +1,4 @@
++import { toRunErrorRawEvent } from "@tanstack/ai/adapter-internals";
+ import { makeMistralStructuredOutputCompatibleWithMap } from "../utils/schema-converter.js";
+ import { convertToolsToProviderFormat } from "../tools/tool-converter.js";
+ import { createMistralClient } from "../client/index.js";
+@@ -150,6 +151,7 @@
+ 			} : chunk;
+ 		} catch (error) {
+ 			const err = error;
++			const rawEvent = toRunErrorRawEvent(err);
+ 			if (!aguiState.hasEmittedRunStarted) {
+ 				aguiState.hasEmittedRunStarted = true;
+ 				yield asChunk({
+@@ -177,6 +179,7 @@
+ 				timestamp,
+ 				message: err.message || "Unknown error",
+ 				code: err.code,
++				...rawEvent !== void 0 && { rawEvent },
+ 				error: {
+ 					message: err.message || "Unknown error",
+ 					code: err.code
+@@ -435,7 +438,8 @@
+ 					hasEmittedRunFinished = true;
+ 					finished = {
+ 						model: chunkModel,
+-						finishReason: computedFinishReason
++						finishReason: computedFinishReason,
++						providerStopReason: finishReason
+ 					};
+ 				}
+ 			}
+@@ -447,7 +451,8 @@
+ 				model: finished.model,
+ 				timestamp,
+ 				...aguiState.usage && { usage: aguiState.usage },
+-				finishReason: finished.finishReason
++				finishReason: finished.finishReason,
++				metadata: { providerStopReason: finished.providerStopReason }
+ 			});
+ 			if (!hasEmittedRunFinished) {
+ 				if (reasoningMessageId !== null && !hasClosedReasoning) {
+@@ -490,14 +495,14 @@
+ 				}
+ 				hasEmittedRunFinished = true;
+ 				yield asChunk({
+-					type: "RUN_FINISHED",
+-					...responseId && { responseId },
++					type: "RUN_ERROR",
+ 					runId: aguiState.runId,
+-					threadId: aguiState.threadId,
+ 					model: lastChunkModel,
+ 					timestamp,
+ 					...aguiState.usage && { usage: aguiState.usage },
+-					finishReason: hasEmittedToolCall ? "tool_calls" : "stop"
++					message: "The provider stream ended before a finish reason.",
++					code: "incomplete-stream",
++					error: { message: "The provider stream ended before a finish reason.", code: "incomplete-stream" }
+ 				});
+ 			}
+ 		} catch (error) {
+@@ -567,7 +572,13 @@
+ 		});
+ 		if (!response.ok) {
+ 			const errorText = await response.text();
+-			throw new Error(`Mistral API error ${response.status}: ${errorText}`);
++			const apiError = new Error(`Mistral API error ${response.status}: ${errorText}`);
++			apiError.status = response.status;
++			try {
++				const body = JSON.parse(errorText);
++				if (body && typeof body === "object" && !Array.isArray(body)) apiError.error = body;
++			} catch {}
++			throw apiError;
+ 		}
+ 		if (!response.body) throw new Error("Mistral API returned a response with no body. This may indicate a proxy or runtime that does not support streaming.");
+ 		const reader = response.body.getReader();
+@@ -589,10 +600,8 @@
+ 					try {
+ 						parsed = JSON.parse(data);
+ 					} catch (e) {
+-						if (e instanceof SyntaxError) {
+-							console.warn(`[mistral] skipped unparseable SSE chunk: ${data.slice(0, 200)}`);
+-							continue;
+-						}
++						// A chunk that does not parse lost part of the answer.
++						if (e instanceof SyntaxError) throw Object.assign(new Error("Mistral stream carried a chunk that is not JSON."), { cause: e });
+ 						throw e;
+ 					}
+ 					if (parsed && typeof parsed === "object" && "error" in parsed && !("choices" in parsed)) {
+diff --git a/dist/esm/index.d.ts b/dist/esm/index.d.ts
+--- a/dist/esm/index.d.ts
++++ b/dist/esm/index.d.ts
+@@ -4,6 +4,7 @@
+  * Mistral provider adapter for TanStack AI.
+  * Provides tree-shakeable adapters for Mistral's Chat Completions API.
+  */
++export type { CompletionResponseStreamChoiceFinishReason } from '@mistralai/mistralai/models/components';
+ export { MistralTextAdapter, createMistralText, mistralText, type MistralTextConfig, type MistralTextProviderOptions, } from './adapters/text.js';
+ export { MistralEmbeddingAdapter, createMistralEmbedding, mistralEmbedding, type MistralEmbeddingConfig, } from './adapters/embedding.js';
+ export type { MistralEmbeddingProviderOptions, MistralEmbedProviderOptions, CodestralEmbedProviderOptions, } from './embedding/embedding-provider-options.js';
+diff --git a/src/index.ts b/src/index.ts
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -4,6 +4,8 @@
+  * Mistral provider adapter for TanStack AI.
+  * Provides tree-shakeable adapters for Mistral's Chat Completions API.
+  */
++
++export type { CompletionResponseStreamChoiceFinishReason } from '@mistralai/mistralai/models/components'
+ 
+ // Text (Chat) adapter
+ export {

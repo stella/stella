@@ -1636,6 +1636,61 @@ describe("branch update", () => {
     expect(String(refusal)).toContain("GraphQL refused");
   });
 
+  test.each([
+    { failures: 1, published: true },
+    { failures: 3, published: false },
+  ])(
+    "GitHub's transient GraphQL failure, $failures times, retries the ref update",
+    async ({ failures, published }) => {
+      const { calls, fetch: answer } = github(null);
+      let remaining = failures;
+      const fetch = async (url: string, init: RequestInit) => {
+        const isMutation =
+          url.endsWith("/graphql") &&
+          typeof init.body === "string" &&
+          init.body.includes("updateRefs(input");
+        if (isMutation && remaining > 0) {
+          remaining -= 1;
+          calls.push({ route: "/graphql", body: null });
+          return new Response(
+            JSON.stringify({
+              errors: [
+                {
+                  message:
+                    "Something went wrong while executing your query. Please include `F00:BAA` when reporting this issue.",
+                },
+              ],
+            }),
+            { status: 200 },
+          );
+        }
+        return await answer(url, init);
+      };
+      const directory = requests();
+      const outcome = await push({
+        requests: directory,
+        repository: "stella/stella",
+        branch: "feat/x",
+        token: "token",
+        api: "https://api.example",
+        fetch,
+        retryDelayMs: 0,
+      })
+        .catch((error: unknown) => error)
+        .finally(() => {
+          rmSync(directory, { recursive: true, force: true });
+        });
+      if (published) {
+        expect(outcome).toBe(commit);
+      } else {
+        expect(String(outcome)).toContain("GraphQL refused");
+      }
+      expect(calls.filter(({ route }) => route === "/graphql").length).toBe(
+        published ? failures + 2 : failures + 1,
+      );
+    },
+  );
+
   test("a large tree is built in batches on top of each other", async () => {
     const { calls, fetch } = github(null);
     const directory = requests();

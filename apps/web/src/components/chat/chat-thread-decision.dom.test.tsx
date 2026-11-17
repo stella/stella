@@ -2,8 +2,9 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import type { ChatHistoryItem } from "@/features/chat/queries";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type { ChatThreadDecision } from "./chat-thread-decision";
 
@@ -55,6 +56,8 @@ const THREAD = {
   createdAt: "2026-05-16T08:00:00.000Z",
   decision: { type: "present" as const, badge: DECISION },
   origin: "original" as const,
+  pinState: "unpinned" as const,
+  readState: "read" as const,
   title: "Liability for damage",
   updatedAt: "2026-05-16T08:00:00.000Z",
   usedAnonymization: false,

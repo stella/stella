@@ -7,6 +7,7 @@ import * as v from "valibot";
 
 import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
 import { assignableRoles } from "@stll/permissions";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import messages from "@/i18n/langs/en.json";
 import type { Role } from "@/lib/auth-client";
@@ -14,10 +15,9 @@ import {
   defaultInviteRole,
   inviteMemberSchema,
 } from "@/lib/organization/role-assignment.logic";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({
-  url: "http://localhost:3000/admin/members",
+  url: "http://localhost:3000/settings/organization/members",
 });
 
 const originalFetch = globalThis.fetch;
@@ -48,7 +48,7 @@ const { IntlProvider } = await import("use-intl");
 const { roleOptions } = await import("@/lib/auth-queries");
 const { InviteMemberDialog } = await import("./invite-member-dialog");
 const { RoleCell } =
-  await import("@/routes/_protected.admin/-components/organization/member-role-cell");
+  await import("@/routes/_protected.settings/organization/-components/organization/member-role-cell");
 
 const clients: InstanceType<typeof QueryClient>[] = [];
 afterEach(async () => {
@@ -139,7 +139,7 @@ const submitInvitation = async () => {
   });
   await waitFor(() => expect(requests).toHaveLength(1));
   expect(requests.at(0)?.path).toBe("/api/auth/organization/invite-member");
-  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  await waitFor(() => expect(screen.queryByRole("dialog") === null).toBe(true));
 };
 
 describe("mounted membership role controls", () => {
@@ -222,7 +222,7 @@ describe("mounted membership role controls", () => {
           role: targetRole,
         });
         await waitFor(() =>
-          expect(screen.queryByRole("alertdialog")).toBeNull(),
+          expect(screen.queryByRole("alertdialog") === null).toBe(true),
         );
       });
     }

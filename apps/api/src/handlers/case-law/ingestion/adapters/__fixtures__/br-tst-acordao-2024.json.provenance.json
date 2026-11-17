@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "f95a0d2cff9d43506f74696b7301a187c24250f8d52873575766a1601c6fe486",
+  "sourceUrl": "https://jurisprudencia-backend2.tst.jus.br/rest/pesquisa-textual/14/1 (POST tipos=[ACORDAO], publicacao 2024-03-15..2024-03-15, ordenacao=data)",
+  "capturedAt": "2026-10-25T02:31:24.000Z",
+  "note": "one modern acórdão whose full text keeps the court's Word paragraph styles (Identificaaao, Ementa, Voto, IstoaPosto, Date, Autoridade, Funaao). Each codCPFSignatario value (a signatory's personal tax id) was replaced by 00000000000 before commit; every other byte is as served."
+}

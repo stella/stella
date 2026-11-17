@@ -13,6 +13,20 @@ const lintWith = (rule: string) => async (source: string) =>
 const lint = lintWith("no-real-time-wait");
 
 describe("no-real-time-wait", () => {
+  test("reports scheduler.wait from the timer promises modules", async () => {
+    expect(
+      await lint(
+        [
+          'import { scheduler } from "node:timers/promises";',
+          'import * as timers from "timers/promises";',
+          "await scheduler.wait(5);",
+          "await timers.scheduler.wait(5);",
+          "await scheduler.yield();",
+        ].join("\n"),
+      ),
+    ).toEqual([3, 4]);
+  });
+
   test("reports Bun, timers/promises and shared-helper sleeps", async () => {
     expect(
       await lint(
@@ -300,6 +314,52 @@ describe("no-unreasoned-timeout", () => {
         ].join("\n"),
       ),
     ).toEqual([4, 5, 6, 7, 8, 9, 10]);
+  });
+
+  test("fixture setup retains the same raised-timeout guard through binding aliases", async () => {
+    expect(
+      await lintTimeouts(
+        [
+          'import { createTestState as createState } from "@stll/test-state";',
+          'import * as fixtures from "@stll/test-state";',
+          "const state = createState({ file: import.meta.path, config: {} });",
+          "const alias = state;",
+          "state.beforeAll(async () => {}, 30_000);",
+          'alias["beforeAll"](async () => {}, budget());',
+          "const setup = state.beforeAll;",
+          "setup(async () => {}, 30_000);",
+          "const { beforeAll: prepare } = alias;",
+          "prepare(async () => {}, 30_000);",
+          'fixtures.createTestState({ file: "other", config: {} }).beforeAll(async () => {}, 30_000);',
+          'const { beforeAll: direct } = createState({ file: "third", config: {} });',
+          "direct(async () => {}, 30_000);",
+        ].join("\n"),
+      ),
+    ).toEqual([5, 6, 8, 10, 11, 13]);
+  });
+
+  test("fixture setup accepts default budgets and reasons without matching lookalike factories", async () => {
+    expect(
+      await lintTimeouts(
+        [
+          'import { createTestState } from "@stll/test-state";',
+          'import { propertyTestTimeout } from "@stll/property-testing";',
+          "const state = createTestState({ file: import.meta.path, config: {} });",
+          "state.beforeAll(async () => {});",
+          "state.beforeAll(async () => {}, 5000);",
+          "state.beforeAll(async () => {}, propertyTestTimeout(30_000));",
+          "// timeout: boots the database fixture",
+          "state.beforeAll(async () => {}, 30_000);",
+          "function check(createTestState) {",
+          "  createTestState({}).beforeAll(async () => {}, 30_000);",
+          "}",
+          "const local = { beforeAll() {} };",
+          "local.beforeAll(async () => {}, 30_000);",
+          "const { setConfig } = state;",
+          'setConfig("some-key", 30_000);',
+        ].join("\n"),
+      ),
+    ).toEqual([]);
   });
 
   test("numeric timeout arguments need no timeout-like text", async () => {

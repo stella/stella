@@ -18,10 +18,16 @@ const CASE_LAW_DECISIONS_SOURCE_CASE_LANG_NULL_IDX =
   "case_law_decisions_source_case_lang_null_idx";
 const CASE_LAW_DECISIONS_SOURCE_DOCUMENT_IDX =
   "case_law_decisions_source_document_idx";
+const CASE_LAW_DECISIONS_SOURCE_FALLBACK_CONTENT_IDX =
+  "case_law_decisions_source_fallback_content_idx";
+const CASE_LAW_DECISIONS_SOURCE_FALLBACK_IDENTITY_IDX =
+  "case_law_decisions_source_fallback_identity_idx";
 const CASE_LAW_INGESTION_FAILURES_SOURCE_RECORD_UIDX =
   "case_law_ingestion_failures_source_record_uidx";
 const CHAT_MESSAGES_ID_THREAD_UIDX = "chat_messages_id_thread_uidx";
+const CHAT_TURNS_ACTIVE_THREAD_V2_UIDX = "chat_turns_active_thread_v2_uidx";
 const CHAT_TURNS_ORG_RUN_ID_UIDX = "chat_turns_org_run_id_uidx";
+const CHAT_TURNS_THREAD_ORDINAL_UIDX = "chat_turns_thread_ordinal_uidx";
 const CONTACTS_ORG_EXTERNAL_UIDX = "contacts_org_external_uidx";
 const CONTACTS_ORG_ID_UNIQUE = "contacts_org_id_unique";
 const CORRESPONDENCE_ORG_EXTERNAL_UIDX = "correspondence_org_external_uidx";
@@ -85,9 +91,13 @@ export const ONLINE_UNIQUE_INDEX_NAMES = {
   CASE_LAW_DECISIONS_SLUG_UIDX,
   CASE_LAW_DECISIONS_SOURCE_CASE_LANG_NULL_IDX,
   CASE_LAW_DECISIONS_SOURCE_DOCUMENT_IDX,
+  CASE_LAW_DECISIONS_SOURCE_FALLBACK_CONTENT_IDX,
+  CASE_LAW_DECISIONS_SOURCE_FALLBACK_IDENTITY_IDX,
   CASE_LAW_INGESTION_FAILURES_SOURCE_RECORD_UIDX,
   CHAT_MESSAGES_ID_THREAD_UIDX,
+  CHAT_TURNS_ACTIVE_THREAD_V2_UIDX,
   CHAT_TURNS_ORG_RUN_ID_UIDX,
+  CHAT_TURNS_THREAD_ORDINAL_UIDX,
   CONTACTS_ORG_EXTERNAL_UIDX,
   CONTACTS_ORG_ID_UNIQUE,
   CORRESPONDENCE_ORG_EXTERNAL_UIDX,
@@ -224,6 +234,41 @@ export const IMPORT_PROVENANCE_UNIQUE_INDEXES = [
   introducedBy: OnlineStepIntroduction;
 })[];
 
+/** A thread's turns by position, unnumbered ones first on a forward scan. */
+export const CHAT_TURN_ORDINAL_UNIQUE_INDEXES = [
+  {
+    introducedBy: "20261114200000_chat_turn_ordinals",
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "chat_turns_thread_ordinal_uidx" ON public."chat_turns" USING btree ("thread_id", "ordinal" NULLS FIRST)',
+    definitionBody:
+      "ON public.chat_turns USING btree (thread_id, ordinal NULLS FIRST)",
+    isUnique: true,
+    name: "chat_turns_thread_ordinal_uidx",
+    tableName: "chat_turns",
+  },
+] as const satisfies readonly (OnlineIndexDeclaration & {
+  introducedBy: OnlineStepIntroduction;
+})[];
+
+/**
+ * A thread's one unsettled turn, `handed-over` included. Replaces
+ * chat_turns_active_thread_uidx, whose predicate predates the status.
+ */
+export const CHAT_TURN_HANDED_OVER_UNIQUE_INDEXES = [
+  {
+    introducedBy: "20261116020100_chat_turns_handed_over",
+    createSql:
+      "CREATE UNIQUE INDEX CONCURRENTLY \"chat_turns_active_thread_v2_uidx\" ON public.\"chat_turns\" USING btree (\"thread_id\") WHERE \"status\" IN ('accepted', 'running', 'awaiting-user', 'handed-over')",
+    definitionBody:
+      "ON public.chat_turns USING btree (thread_id) WHERE (status = ANY (ARRAY['accepted'::text, 'running'::text, 'awaiting-user'::text, 'handed-over'::text]))",
+    isUnique: true,
+    name: "chat_turns_active_thread_v2_uidx",
+    tableName: "chat_turns",
+  },
+] as const satisfies readonly (OnlineIndexDeclaration & {
+  introducedBy: OnlineStepIntroduction;
+})[];
+
 export const LEGISLATION_UNIQUE_INDEXES = [
   {
     introducedBy: "20261019091000_legislation_publisher_identity",
@@ -254,6 +299,33 @@ export const LEGISLATION_UNIQUE_INDEXES = [
     isUnique: true,
     name: "legislation_documents_legacy_current_lang_idx",
     tableName: "legislation_documents",
+  },
+] as const satisfies readonly (OnlineIndexDeclaration & {
+  introducedBy: OnlineStepIntroduction;
+})[];
+
+/** Unique fallback decision identities; the docket-only index they replace
+ *  retires in the contract release. */
+export const FALLBACK_DECISION_UNIQUE_INDEXES = [
+  {
+    introducedBy: "20261115150000_case_law_fallback_identity",
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "case_law_decisions_source_fallback_identity_idx" ON public."case_law_decisions" USING btree ("source_id", "fallback_identity_key") WHERE "source_document_id" IS NULL AND "fallback_identity_key" IS NOT NULL',
+    definitionBody:
+      "ON public.case_law_decisions USING btree (source_id, fallback_identity_key) WHERE ((source_document_id IS NULL) AND (fallback_identity_key IS NOT NULL))",
+    isUnique: true,
+    name: "case_law_decisions_source_fallback_identity_idx",
+    tableName: "case_law_decisions",
+  },
+  {
+    introducedBy: "20261115150000_case_law_fallback_identity",
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "case_law_decisions_source_fallback_content_idx" ON public."case_law_decisions" USING btree ("source_id", "fallback_content_hash") WHERE "source_document_id" IS NULL AND "fallback_content_hash" IS NOT NULL',
+    definitionBody:
+      "ON public.case_law_decisions USING btree (source_id, fallback_content_hash) WHERE ((source_document_id IS NULL) AND (fallback_content_hash IS NOT NULL))",
+    isUnique: true,
+    name: "case_law_decisions_source_fallback_content_idx",
+    tableName: "case_law_decisions",
   },
 ] as const satisfies readonly (OnlineIndexDeclaration & {
   introducedBy: OnlineStepIntroduction;
@@ -452,7 +524,10 @@ export const ONLINE_UNIQUE_INDEX_VALIDATION_DEFINITIONS: readonly (Omit<
   ...EXECUTABLE_ONLINE_UNIQUE_INDEXES,
   ...CLIENT_INVOICE_UNIQUE_INDEXES,
   ...IMPORT_PROVENANCE_UNIQUE_INDEXES,
+  ...CHAT_TURN_ORDINAL_UNIQUE_INDEXES,
+  ...CHAT_TURN_HANDED_OVER_UNIQUE_INDEXES,
   ...LEGISLATION_UNIQUE_INDEXES,
+  ...FALLBACK_DECISION_UNIQUE_INDEXES,
   ...REWRITTEN_MIGRATION_INDEXES.filter(({ isUnique }) => isUnique),
 ];
 

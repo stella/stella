@@ -7,6 +7,7 @@
     ".oxlint-plugins/**",
     "apps/api/scripts/*.test.ts",
     "apps/api/scripts/capability-description-guard.ts",
+    "apps/api/scripts/capability-file-transport-guard.ts",
     "apps/api/scripts/chat-mutation-matrix.test.ts",
     "apps/api/scripts/chat-mutation-matrix.ts",
     "apps/api/scripts/content-delivery-guard.ts",
@@ -73,6 +74,8 @@
     "scripts/check-docker-host-mounts.ts",
     "scripts/check-gh-retry.test.ts",
     "scripts/check-gh-retry.ts",
+    "scripts/check-instruction-enforcement.test.ts",
+    "scripts/check-instruction-enforcement.ts",
     "scripts/check-instruction-references.ts",
     "scripts/check-journeys.test.ts",
     "scripts/check-local-skill-overrides.sh",
@@ -155,6 +158,7 @@
     "scripts/ci-static-checks.ts",
     "scripts/ci-store-save.test.ts",
     "scripts/ci-windows-dry-run-result.test.ts",
+    "scripts/cli-contract-derived.test.ts",
     "scripts/cli-runtime-merge.test.ts",
     "scripts/cli-runtime-pack.test.ts",
     "scripts/code-check-affected.test.ts",
@@ -212,6 +216,8 @@
     "scripts/knip-exports-ratchet.test.ts",
     "scripts/knip-exports-ratchet.ts",
     "scripts/landing-deploy-scope.test.ts",
+    "scripts/lint-command.ts",
+    "scripts/lint.ts",
     "scripts/main-heavy-plan.test.ts",
     "scripts/main-heavy.test.ts",
     "scripts/marketing-reshoot.ts",
@@ -312,8 +318,24 @@
   ],
   "changeScoped": [
     {
+      "path": "scripts/changeset-entry.test.ts",
+      "reason": "Runs under package_checks_required in ci-checks-policy (Published package API reports); every change outside documentation selects that scope."
+    },
+    {
       "path": "scripts/check-publish-reproducibility.sh",
       "reason": "Runs under published_exports_required in ci-checks-generated; package sources, manifests and packing inputs select that scope."
+    },
+    {
+      "path": "scripts/check-tailwind-sources.test.ts",
+      "reason": "Runs as the Tailwind sources root check in ci-checks-rest; its declared inputs in scripts/ci-root-check-inputs.json, which include this script, select it."
+    },
+    {
+      "path": "scripts/check-tailwind-sources.ts",
+      "reason": "Runs as the Tailwind sources root check in ci-checks-rest; its declared inputs in scripts/ci-root-check-inputs.json, which include this script, select it."
+    },
+    {
+      "path": "scripts/fork-contributor-commands.sh",
+      "reason": "Runs as the fork contributor commands root check in ci-checks-rest; its declared inputs in scripts/ci-root-check-inputs.json, which include this script, select it."
     },
     {
       "path": "scripts/generate-main-heavy-infrastructure-steps.ts",
@@ -322,6 +344,26 @@
     {
       "path": "scripts/generate-npm-release-jobs.ts",
       "reason": "Runs under published_exports_required in ci-checks-generated; package manifests, the publishing inventory and generator changes select that scope."
+    },
+    {
+      "path": "scripts/package-api-base.sh",
+      "reason": "Runs under package_checks_required in ci-checks-policy (Published package API reports); every change outside documentation selects that scope."
+    },
+    {
+      "path": "scripts/package-api-compatibility.test.ts",
+      "reason": "Runs under package_checks_required in ci-checks-policy (Published package API reports); every change outside documentation selects that scope."
+    },
+    {
+      "path": "scripts/package-api-export-space.test.ts",
+      "reason": "Runs under package_checks_required in ci-checks-policy (Published package API reports); every change outside documentation selects that scope."
+    },
+    {
+      "path": "scripts/package-api-report.test.ts",
+      "reason": "Runs under package_checks_required in ci-checks-policy (Published package API reports); every change outside documentation selects that scope."
+    },
+    {
+      "path": "scripts/package-api-report.ts",
+      "reason": "Runs under package_checks_required in ci-checks-policy (Published package API reports); every change outside documentation selects that scope."
     }
   ]
 }

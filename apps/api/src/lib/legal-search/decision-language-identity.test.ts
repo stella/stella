@@ -51,7 +51,7 @@ describe("decision language identity", () => {
         decisionLanguageIdentityOf(country) ===
         DECISION_LANGUAGE_IDENTITY.ECLI_OR_DOCKET,
     );
-    // Every declared jurisdiction but the one keyed by document, and an
+    // Every declared jurisdiction but those keyed by document, and an
     // undeclared stored code.
     expect(docketJurisdictions).toEqual([
       "AUT",

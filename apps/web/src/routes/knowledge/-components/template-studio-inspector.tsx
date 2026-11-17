@@ -46,6 +46,7 @@ import { ScrollArea } from "@stll/ui/scroll-area";
 import { SplitButton } from "@stll/ui/split-button";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { FacetBar } from "@/components/inspector/inspector-facet-bar";
@@ -58,10 +59,10 @@ import type {
 import { registerInspectorView } from "@/components/inspector/view-registry";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import {
-  ARRAY_INDEX_KEY_PREFIX,
   TemplateForm,
   useFillToMatterSaveTarget,
 } from "@/components/templates/template-form";
+import { ARRAY_INDEX_KEY_PREFIX } from "@/components/templates/template-form.logic";
 import Tooltip from "@/components/tooltip";
 import { useMountEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -254,7 +255,7 @@ function TemplateStudioInspectorView({
                   content={tag}
                   key={tag}
                   render={
-                    <span className="bg-muted text-muted-foreground text-3xs rounded px-1.5 py-0.5 font-medium">
+                    <span className="bg-muted text-muted-foreground text-3xs rounded-sm px-1.5 py-0.5 font-medium">
                       {languageChipLabel(tag, lang)}
                     </span>
                   }
@@ -601,15 +602,13 @@ const pushFillPreview = (
   clauseTexts?: Record<string, string>,
 ) => {
   cancelLookupPreviews();
-  const preview: Record<string, TemplatePreviewValue> = {};
+  // Linked clause slots seed the preview before entered and derived values.
+  const preview = new Map<string, TemplatePreviewValue>(
+    Object.entries(clauseTexts ?? {}),
+  );
   const fieldByPath = new Map<string, LookupPreviewField>(
     optionalReadonlyArray(fields).map((field) => [field.path, field]),
   );
-  // Linked clause slots preview their resolved text, keyed by slot name to
-  // match the folio plugin's clause-range key.
-  if (clauseTexts) {
-    Object.assign(preview, clauseTexts);
-  }
   for (const [key, value] of Object.entries(values)) {
     if (key.startsWith(ARRAY_INDEX_KEY_PREFIX)) {
       continue;
@@ -625,25 +624,27 @@ const pushFillPreview = (
       values,
     );
     if (previewValue !== null) {
-      preview[path] = previewValue;
+      preview.set(path, previewValue);
     }
   }
   // Formula fields are derived (no form input), so they never appear in the
   // submitted values; render them from the field list directly.
   const availableFields = optionalReadonlyArray(fields);
   for (const field of availableFields) {
-    if (field.formula === undefined || preview[field.path] !== undefined) {
+    if (field.formula === undefined || preview.get(field.path) !== undefined) {
       continue;
     }
     const computed = renderDeterministicFieldValue(field, values);
     if (computed !== null) {
-      preview[field.path] = computed;
+      preview.set(field.path, computed);
     }
   }
   const pending = applyCachedLookupRenderings(preview, availableFields);
   useTemplateStudioStore
     .getState()
-    .actions?.setFillPreview(Object.keys(preview).length > 0 ? preview : null);
+    .actions?.setFillPreview(
+      preview.size > 0 ? Object.fromEntries(preview) : null,
+    );
   if (pending.length > 0) {
     queueLookupPreviews(pending, () =>
       pushFillPreview(values, fields, clauseTexts),
@@ -783,13 +784,13 @@ const cancelLookupPreviews = () => {
  *  formatted spans where the format carries markup) and return the requests
  *  that still need the endpoint. */
 const applyCachedLookupRenderings = (
-  preview: Record<string, TemplatePreviewValue>,
+  preview: Map<string, TemplatePreviewValue>,
   fields: readonly LookupPreviewField[],
 ): LookupPreviewRequest[] => {
   const pending: LookupPreviewRequest[] = [];
   for (const field of fields) {
     const lookup = field.lookup;
-    const raw = preview[field.path];
+    const raw = preview.get(field.path);
     // The entered value is always a plain string (the registry number);
     // anything else is a previous substitution and needs no lookup.
     if (lookup === undefined || typeof raw !== "string") {
@@ -816,7 +817,7 @@ const applyCachedLookupRenderings = (
       if (cached === undefined) {
         pending.push(request);
       } else if (cached !== null) {
-        preview[request.previewPath] = lookupPreviewValue(cached);
+        preview.set(request.previewPath, lookupPreviewValue(cached));
       }
     }
   }
@@ -879,7 +880,7 @@ const InsertExistingFieldItem = ({
   if (formats.length <= 1) {
     return (
       <MenuItem onClick={() => onInsert(field.path)}>
-        <span className="min-w-0 truncate">{label}</span>
+        <TruncatedText>{label}</TruncatedText>
         <code className="text-muted-foreground text-3xs ms-auto ps-3">
           {field.path}
         </code>
@@ -889,7 +890,7 @@ const InsertExistingFieldItem = ({
   return (
     <MenuSub>
       <MenuSubTrigger>
-        <span className="min-w-0 truncate">{label}</span>
+        <TruncatedText>{label}</TruncatedText>
         <code className="text-muted-foreground text-3xs ms-auto ps-3">
           {field.path}
         </code>
@@ -902,11 +903,11 @@ const InsertExistingFieldItem = ({
               onInsert(field.path, index === 0 ? undefined : format.key)
             }
           >
-            <span className="min-w-0 truncate">
+            <TruncatedText>
               {index === 0
                 ? t("templates.studio.insertFormatDefault")
                 : format.key}
-            </span>
+            </TruncatedText>
           </MenuItem>
         ))}
       </MenuSubPopup>
@@ -1141,7 +1142,7 @@ const StudioInsertRow = () => {
                       key={recipe.id}
                       onClick={() => actions.insertRecipe(recipe.definition)}
                     >
-                      <span className="min-w-0 truncate">{recipe.name}</span>
+                      <TruncatedText>{recipe.name}</TruncatedText>
                     </MenuItem>
                   ))}
                 </MenuSubPopup>
@@ -1409,9 +1410,14 @@ export const ClauseDriftPopover = ({
       <PopoverPopup className="w-72" padding="md">
         <ul className="mb-2 flex flex-col gap-1">
           {outdated.map((link) => (
-            <li className="truncate text-sm" dir="auto" key={link.id}>
+            <TruncatedText
+              className="text-sm"
+              dir="auto"
+              key={link.id}
+              render={<li />}
+            >
               {link.clause?.title ?? t("clauses.clauseDeleted")}
-            </li>
+            </TruncatedText>
           ))}
         </ul>
         <Button

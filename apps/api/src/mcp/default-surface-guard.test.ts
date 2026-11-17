@@ -56,7 +56,7 @@ const hasOperationSelector = (definition: McpToolDefinition): boolean => {
   );
 };
 
-export const defaultSurfaceViolations = (
+const defaultSurfaceViolations = (
   definitions: readonly McpToolDefinition[],
 ): string[] => {
   const violations: string[] = [];

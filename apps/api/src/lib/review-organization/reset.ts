@@ -1,6 +1,7 @@
 import { Result, TaggedError } from "better-result";
 import { and, asc, eq } from "drizzle-orm";
 
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 import { declareFingerprintFields } from "@stll/errors";
 
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -30,6 +31,7 @@ import {
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import type { BoundedReadResult } from "@/api/lib/db/read-bounded";
 import {
@@ -67,6 +69,11 @@ import type { SchedulerDb } from "@/api/lib/scheduler/types";
 import type { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { executeAuthorizedWorkspaceDeletion } from "@/api/lib/workspace-deletion";
 import type { WorkspaceDeletionDependencies } from "@/api/lib/workspace-deletion";
+import {
+  lockOrganizationForWholeOrganizationWork,
+  organizationHasActiveHold,
+  settleOrganizationHoldRead,
+} from "@/api/lib/workspaces/legal-holds/holds";
 
 export const REVIEW_RESET_REFUSAL = {
   unconfigured: "unconfigured",
@@ -273,7 +280,7 @@ class ReviewMembershipChangedError extends TaggedError(
  */
 export type MembershipFence = {
   tripped: boolean;
-  assert: (tx: Pick<Transaction, "select">) => Promise<void>;
+  assert: (tx: Transaction) => Promise<void>;
 };
 
 export const createMembershipFence = (
@@ -283,18 +290,24 @@ export const createMembershipFence = (
   const fence: MembershipFence = {
     tripped: false,
     assert: async (tx) => {
+      // The organization row lock also takes the object-intent lifecycle lock
+      // and the exclusive legal-hold fence, and the membership read below
+      // reads the hold state under them: every deletion in the transaction
+      // then answers its hold check without another statement.
       if (!fence.tripped) {
-        await tx
-          .select({ id: organization.id })
-          .from(organization)
-          .where(eq(organization.id, target.organizationId))
-          .for("update");
+        await lockOrganizationForWholeOrganizationWork({
+          tx,
+          organizationId: target.organizationId,
+        });
       }
       const members = fence.tripped
         ? null
         : await readBounded(
             tx
-              .select({ userId: member.userId })
+              .select({
+                userId: member.userId,
+                activeHold: organizationHasActiveHold(target.organizationId),
+              })
               .from(member)
               .where(eq(member.organizationId, target.organizationId))
               .orderBy(asc(member.userId)),
@@ -302,7 +315,7 @@ export const createMembershipFence = (
           );
       const sole =
         members?.type === "complete" ? members.rows.at(0) : undefined;
-      if (sole?.userId !== target.userId) {
+      if (sole === undefined || sole.userId !== target.userId) {
         fence.tripped = true;
         abortTransaction(
           new ReviewMembershipChangedError({
@@ -310,6 +323,14 @@ export const createMembershipFence = (
               "The review organization has members other than the review account",
           }),
         );
+      }
+      const hold = await settleOrganizationHoldRead({
+        tx,
+        organizationId: target.organizationId,
+        activeHold: sole.activeHold,
+      });
+      if (hold.isErr()) {
+        abortTransaction(hold.error);
       }
       await afterCheck?.();
     },
@@ -454,7 +475,7 @@ const deleteMatters = async (scope: ResetScope) => {
     LIMITS.workspacesCount,
   );
   return await deleteEach(scope, "matters", rows, async (matter) => {
-    if (matter.status === "archived") {
+    if (matter.status === WORKSPACE_STATUS.archived) {
       const unarchived = await Result.gen(() =>
         unarchiveWorkspaceHandler({
           safeDb: scope.safeDb,
@@ -494,13 +515,19 @@ const deleteMatters = async (scope: ResetScope) => {
 
 const deleteContacts = async (scope: ResetScope) => {
   const { organizationId } = scope.target;
-  const rows = await readBounded(
-    scope.db
-      .select({ id: contacts.id })
-      .from(contacts)
-      .where(eq(contacts.organizationId, organizationId))
-      .orderBy(asc(contacts.id)),
-    LIMITS.contactsCount,
+  // The owner connection reads contacts inside their organization only.
+  const rows = await withOwnerOrganizationScope(
+    scope.db,
+    organizationId,
+    async (tx) =>
+      await readBounded(
+        tx
+          .select({ id: contacts.id })
+          .from(contacts)
+          .where(eq(contacts.organizationId, organizationId))
+          .orderBy(asc(contacts.id)),
+        LIMITS.contactsCount,
+      ),
   );
   return await deleteEach(
     scope,

@@ -1,7 +1,7 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, mock, spyOn, test } from "bun:test";
 
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 
@@ -179,8 +179,8 @@ test("selecting another version invalidates an expired attempt's retained Retry"
   act(() => confirmPdfSignPlacement(undefined));
   await waitFor(() =>
     expect(
-      screen.queryByRole("button", { name: en.common.retry }),
-    ).not.toBeNull(),
+      screen.queryByRole("button", { name: en.common.retry }) === null,
+    ).toBe(false),
   );
   hook.rerender({ fieldId: otherFieldId });
 

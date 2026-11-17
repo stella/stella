@@ -1,5 +1,9 @@
 import { panic, Result } from "better-result";
+import * as v from "valibot";
 
+import { tryToMinorUnits } from "@stll/money";
+
+import { currencyCodeSchema } from "@/api/db/schema-validators";
 import type {
   AiExtractablePropertyContent,
   FieldContent,
@@ -20,7 +24,11 @@ export type ValidatedAnswer =
   | { type: "single-select"; value: string | null }
   | { type: "multi-select"; value: string[] }
   | { type: "date"; value: string | null }
-  | { type: "int"; value: number | null; currency: string | null };
+  | { type: "int"; value: number | null; currency: string | null }
+  | {
+      type: "money";
+      value: { amountCents: number; currency: string } | null;
+    };
 
 export type ValidatedResult = ValidatedAnswer & {
   justification: AIJustificationOutput;
@@ -34,7 +42,7 @@ type SelectContent = Extract<
 >;
 
 const isStringArray = (value: Answer): value is string[] =>
-  Array.isArray(value) && value.every((v) => typeof v === "string");
+  Array.isArray(value) && value.every((item) => typeof item === "string");
 
 const validateTextResult = (answer: Answer): ValidateResult => {
   if (typeof answer === "string" || answer === null) {
@@ -169,6 +177,62 @@ const validateIntResult = (answer: Answer): ValidateResult => {
   );
 };
 
+type MoneyContent = Extract<AiExtractablePropertyContent, { type: "money" }>;
+
+const storedCurrencyCode = currencyCodeSchema();
+
+/**
+ * A stated amount becomes minor units of the currency the source states; the
+ * column's currency only fills in when the source names none. Converting to
+ * the column's currency would invent an exchange rate, so a mismatch is kept
+ * as stated and shows up as a second currency in the column.
+ */
+const validateMoneyResult = ({
+  answer,
+  content,
+}: {
+  answer: Answer;
+  content: MoneyContent;
+}): ValidateResult => {
+  if (answer === null) {
+    return Result.ok({ type: "money", value: null });
+  }
+  if (Array.isArray(answer) || typeof answer !== "object") {
+    return Result.err(
+      new WorkflowValidationError({ message: "Money answer is invalid" }),
+    );
+  }
+
+  const currency = v.safeParse(
+    storedCurrencyCode,
+    answer.currency ?? content.currency,
+  );
+  if (!currency.success) {
+    return Result.err(
+      new WorkflowValidationError({
+        message: "Money answer has no valid ISO 4217 currency",
+      }),
+    );
+  }
+
+  const amountCents = tryToMinorUnits({
+    amount: answer.amount,
+    currency: currency.output,
+  });
+  if (amountCents === null) {
+    return Result.err(
+      new WorkflowValidationError({
+        message: "Money answer amount is out of range",
+      }),
+    );
+  }
+
+  return Result.ok({
+    type: "money",
+    value: { amountCents, currency: currency.output },
+  });
+};
+
 type ValidateAnswerProps = {
   answer: Answer;
   content: AiExtractablePropertyContent;
@@ -195,7 +259,10 @@ export const validateAnswerForContent = ({
     case "int":
       return validateIntResult(answer);
 
-    // "money", "person" and "file" are not AI-extractable (see
+    case "money":
+      return validateMoneyResult({ answer, content });
+
+    // "person" and "file" are not AI-extractable (see
     // isAiExtractablePropertyContent): they are outside this union, so the
     // default is a bug rather than a missing branch.
     default:
@@ -221,14 +288,36 @@ export const validateAIOutput = ({
     (validated) => ({ ...validated, justification: aiResult.justification }),
   );
 
-// The cell content a validated answer produces. Text and int intentionally
+// The cell content a validated answer produces. Text, int and money intentionally
 // have no "answered: absent" content variant yet, so a null value maps to
 // `null` here rather than a fabricated placeholder; callers must leave the
 // cell unwritten in that case instead of persisting it.
 type ValidatedFieldContent = Extract<
   FieldContent,
-  { type: "text" | "single-select" | "multi-select" | "date" | "int" }
+  { type: "text" | "single-select" | "multi-select" | "date" | "int" | "money" }
 >;
+
+/** Content that states no value: blank text, or an empty select, multi-select
+ *  or date. */
+export const isEmptyFieldContent = (
+  content: ValidatedFieldContent,
+): boolean => {
+  switch (content.type) {
+    case "single-select":
+    case "date":
+      return content.value === null;
+    case "multi-select":
+      return content.value.length === 0;
+    case "text":
+      return content.value.trim().length === 0;
+    case "int":
+    case "money":
+      return false;
+    default:
+      content satisfies never;
+      return panic("Field content type not matched");
+  }
+};
 
 export const fieldContentFromValidated = (
   validated: ValidatedAnswer,
@@ -252,6 +341,15 @@ export const fieldContentFromValidated = (
             type: "int",
             value: validated.value,
             currency: validated.currency,
+          };
+    case "money":
+      return validated.value === null
+        ? null
+        : {
+            version: 1,
+            type: "money",
+            amountCents: validated.value.amountCents,
+            currency: validated.value.currency,
           };
     default: {
       validated satisfies never;

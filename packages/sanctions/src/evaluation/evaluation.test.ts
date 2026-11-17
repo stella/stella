@@ -51,5 +51,13 @@ describe("screening evaluation sample", () => {
     const [row] = evaluate(lists, cases, [DEFAULT_CUTOFF]).rows;
     expect(row?.recall).toBeGreaterThanOrEqual(0.95);
     expect(row?.falsePositiveRate).toBe(0);
+    expect(row?.byCategory).toMatchObject({
+      "common-name": 0,
+      "common-name-with-birth-date": 0,
+    });
+    for (const rate of Object.values(row?.byCategory ?? {})) {
+      expect(rate).toBeGreaterThanOrEqual(0);
+      expect(rate).toBeLessThanOrEqual(1);
+    }
   });
 });

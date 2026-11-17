@@ -11,11 +11,6 @@ import type {
 } from "@stll/legal-ast/document-ast";
 import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 
-// Spies created in a test stay attached if it fails before restoring them.
-afterEach(() => {
-  mock.restore();
-});
-
 GlobalRegistrator.register();
 const { act, cleanup, fireEvent, render, screen, waitFor, within } =
   await import("@testing-library/react");
@@ -43,6 +38,8 @@ const AnalysisProviders = ({ children }: { children: ReactNode }) => (
 );
 
 afterEach(() => {
+  // Spies created in a test stay attached if it fails before restoring them.
+  mock.restore();
   // React work left on a fake clock runs inside act and before cleanup, so
   // later renders in the file never wait behind it.
   act(() => {
@@ -268,6 +265,9 @@ test("reader breadcrumb jumps ancestors and opens Contents at the current provis
   const current = screen.getByRole("button", { name: currentTitle });
   expect(current.getAttribute("aria-current")).toBe("location");
   expect(positioned.mock.contexts.includes(current)).toBe(true);
+  // Focus is what a browser scrolls to last: landing it on the first row
+  // would scroll the list back to its top after the reveal.
+  await waitFor(() => expect(document.activeElement).toBe(current));
   positioned.mockRestore();
   await act(async () => fireEvent.click(current));
   expect(jumps).toEqual(["heading-0", "heading-4"]);

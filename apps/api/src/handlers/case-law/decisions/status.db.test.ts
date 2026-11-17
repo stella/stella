@@ -134,6 +134,18 @@ beforeAll(
         updatedAt: new Date(APEX_UPDATED_AT),
       },
       {
+        // Listing-only: not published, so the breakdown never counts it, and
+        // its later revision is not the court's last change.
+        caseNumber: "apex, listing only",
+        country: "CZE",
+        court: APEX_COURT,
+        createdAt: new Date("2026-01-02T13:00:00.000Z"),
+        language: "cs",
+        metadata: { _stellaPartialObservation: { isListingOnly: true } },
+        sourceId: openSourceId,
+        updatedAt: new Date("2026-02-01T00:00:00.000Z"),
+      },
+      {
         caseNumber: "regional, withheld source",
         country: "CZE",
         court: REGIONAL_COURT,

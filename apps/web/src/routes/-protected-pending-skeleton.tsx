@@ -1,5 +1,6 @@
 import type { ReactElement } from "react";
 
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   HelpCircleIcon,
   NewChatIcon,
@@ -159,7 +160,7 @@ function ProtectedPendingSkeletonContent({
             TOOLBAR_ROW_HEIGHT,
           )}
         >
-          <PanelRightIcon className="size-4" />
+          <DirectionalIcon className="size-4" icon={PanelRightIcon} />
         </div>
         <div className="flex-1" />
         <div

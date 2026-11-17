@@ -1,5 +1,7 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, isNotNull, sql } from "drizzle-orm";
+
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 
 import { member } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -79,7 +81,7 @@ export const archiveWorkspaceHandler = async function* ({
             .from(workspaces),
       });
       const workspace = acquisition.rows.at(0);
-      if (workspace?.status === "active") {
+      if (workspace?.status === WORKSPACE_STATUS.active) {
         const runningOcrRuns = await tx
           .select({ id: documentProcessingRuns.id })
           .from(documentProcessingRuns)
@@ -92,6 +94,18 @@ export const archiveWorkspaceHandler = async function* ({
           .limit(1);
         if (runningOcrRuns.at(0)) {
           return "document_processing_running" as const;
+        }
+
+        const [currentTimers] = await tx
+          .select({
+            running: sql<boolean>`public.stella_matter_has_running_timers(${workspaceId}::uuid)`,
+          })
+          .from(sql`(SELECT 1) timer_presence`);
+        if (
+          (currentTimers ?? panic("Timer presence aggregate returned no row"))
+            .running
+        ) {
+          return "timer_running" as const;
         }
 
         const runningTimers = await tx
@@ -111,9 +125,12 @@ export const archiveWorkspaceHandler = async function* ({
 
       const updated = await tx
         .update(workspaces)
-        .set({ status: "archived" })
+        .set({ status: WORKSPACE_STATUS.archived })
         .where(
-          and(eq(workspaces.id, workspaceId), eq(workspaces.status, "active")),
+          and(
+            eq(workspaces.id, workspaceId),
+            eq(workspaces.status, WORKSPACE_STATUS.active),
+          ),
         )
         .returning({ id: workspaces.id });
 
@@ -130,7 +147,10 @@ export const archiveWorkspaceHandler = async function* ({
           resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,
           resourceId: workspaceId,
           changes: {
-            status: { old: "active", new: "archived" },
+            status: {
+              old: WORKSPACE_STATUS.active,
+              new: WORKSPACE_STATUS.archived,
+            },
           },
         });
       }

@@ -2,8 +2,8 @@ import { panic, Result } from "better-result";
 import { afterAll } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import * as ts from "tsrs/unstable/ast";
-import type { Symbol as CompilerSymbol } from "tsrs/unstable/async";
+import * as ts from "tsrs/ast";
+import type { Symbol as CompilerSymbol } from "tsrs/async";
 
 import type { AIErrorKind } from "@stll/api-contract";
 import { repoRelativePath } from "@stll/portable-path";
@@ -272,6 +272,8 @@ const GENERATION_SEAM_EXPORTS = {
   resolveTanStackTextModel: "none",
   withGenerationDeadline: "none",
   withProviderRetryWait: "none",
+  withProviderStreamRetryWait: "none",
+  withProviderChatRunRetry: "none",
   withRecoveredProviderStatus: "none",
   structuredOutputWireJsonSchema: "none",
   outputTokensWithinModelLimit: "none",

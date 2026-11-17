@@ -1,7 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
-import { unregisterDomEnvironment } from "../../src/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import {
   collectCaptureText,
   findCaptureTextViolations,

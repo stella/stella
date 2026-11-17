@@ -22,7 +22,7 @@ const readBox = async (page: Page) => {
   return await box(page).evaluate((element) => {
     const preview = element.parentElement?.querySelector("canvas");
     if (!(preview instanceof HTMLCanvasElement)) {
-      throw new Error("PDF preview is missing");
+      throw new TypeError("PDF preview is missing");
     }
     const surface = preview.getBoundingClientRect();
     const crop = element.getBoundingClientRect();

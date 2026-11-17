@@ -1,5 +1,10 @@
 import { and, eq, isNull } from "drizzle-orm";
 
+import {
+  workspaceAcceptsWrites,
+  type WorkspaceStatus,
+} from "@stll/api-contract/workspace-status";
+
 import { member, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { workspaces } from "@/api/db/schema";
@@ -16,7 +21,7 @@ import { memberReachesMatterSql } from "@/api/lib/workspaces/authorized-workspac
 type VerificationWorkspaceAccessOptions = {
   organizationRole: string | null;
   reachesMatter: boolean;
-  workspaceStatus: string | null;
+  workspaceStatus: WorkspaceStatus | null;
 };
 
 const canExecuteListVerificationInWorkspace = ({
@@ -24,7 +29,7 @@ const canExecuteListVerificationInWorkspace = ({
   reachesMatter,
   workspaceStatus,
 }: VerificationWorkspaceAccessOptions): boolean =>
-  workspaceStatus === "active" &&
+  workspaceAcceptsWrites(workspaceStatus) &&
   canWriteWorkspaceEntities({ organizationRole, reachesMatter });
 
 type ResolveListVerificationAccessArgs = {

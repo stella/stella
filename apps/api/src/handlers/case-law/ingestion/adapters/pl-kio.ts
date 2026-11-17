@@ -1,5 +1,6 @@
 // parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
+// parser-output-unchanged: Reconciliation exposes the existing listing total for the census; decision parsing and listed identities are unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: shared warning projection changes error telemetry only; parsed decisions are unchanged.
 import { panic, Result } from "better-result";
@@ -616,6 +617,8 @@ type PlKioSourceField = (typeof SOURCE_FIELDS)[number];
 const isSourceField = (value: string): value is PlKioSourceField =>
   SOURCE_FIELDS.some((field) => field === value);
 
+type PlKioPublisherRecord = Readonly<Record<PlKioSourceField, unknown>>;
+
 const PL_KIO_SOURCE_FIELDS = {
   "Organ wydający": {
     disposition: "stored",
@@ -674,7 +677,7 @@ const PL_KIO_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "metadata", key: "keywords" },
   },
-} as const satisfies Record<PlKioSourceField, SourceFieldDisposition>;
+} as const satisfies Record<keyof PlKioPublisherRecord, SourceFieldDisposition>;
 
 /** Response payloads and bounded-read dispositions needed for replay. */
 const RAW_PART = {
@@ -1899,6 +1902,7 @@ const listPlKioSlicePage = async ({
       payload: row,
     })),
     totalPages,
+    publisherCount: listed.value.total,
   };
 };
 

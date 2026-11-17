@@ -25,6 +25,7 @@ import {
   brandPersistedOrganizationId,
   brandPersistedUserId,
 } from "@/api/lib/safe-id-boundaries";
+import { admittedOAuthCredentialForTest } from "@/api/tests/helpers/admitted-oauth-credential";
 import {
   createTestHandlerContext,
   NO_AUDIT,
@@ -295,10 +296,9 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
         },
         body,
         accountAuthority: {
-          credential: {
-            type: "oauth_client",
-            clientId: "organization-create-scope-test",
-          },
+          credential: await admittedOAuthCredentialForTest(
+            "organization-create-scope-test",
+          ),
           grantedScopes: ["stella:read", "stella:write"],
         },
       });
@@ -312,10 +312,9 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
       const admitted = await createOrganization.handler({
         ...context,
         accountAuthority: {
-          credential: {
-            type: "oauth_client",
-            clientId: "organization-create-scope-test",
-          },
+          credential: await admittedOAuthCredentialForTest(
+            "organization-create-scope-test",
+          ),
           grantedScopes: ["stella:organization_create"],
         },
       });

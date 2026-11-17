@@ -15,6 +15,8 @@ import {
 } from "@/lib/search-recents";
 import type { SearchRecentsScope } from "@/lib/search-recents";
 
+const LEGACY_OPENED_AT = "2026-01-01T00:00:00.000Z";
+
 class MemoryStorage implements Storage {
   readonly #items = new Map<string, string>();
 
@@ -149,7 +151,7 @@ describe("search recents", () => {
       JSON.stringify([
         {
           entityId: "entity-1",
-          openedAt: new Date().toISOString(),
+          openedAt: LEGACY_OPENED_AT,
           title: "Legacy.pdf",
           workspaceId: "workspace-1",
           workspaceName: "Matter A",
@@ -172,14 +174,14 @@ describe("search recents", () => {
       JSON.stringify([
         {
           entityId: "",
-          openedAt: new Date().toISOString(),
+          openedAt: LEGACY_OPENED_AT,
           title: "Missing entity.pdf",
           workspaceId: "workspace-1",
           workspaceName: "Matter A",
         },
         {
           entityId: "entity-1",
-          openedAt: new Date().toISOString(),
+          openedAt: LEGACY_OPENED_AT,
           title: "Missing workspace.pdf",
           workspaceId: "",
           workspaceName: "Matter A",
@@ -221,14 +223,14 @@ describe("search recents", () => {
       JSON.stringify([
         {
           entityId: illFormedId,
-          openedAt: new Date().toISOString(),
+          openedAt: LEGACY_OPENED_AT,
           title: "Invalid entity.pdf",
           workspaceId: "workspace-1",
           workspaceName: "Matter A",
         },
         {
           entityId: "entity-1",
-          openedAt: new Date().toISOString(),
+          openedAt: LEGACY_OPENED_AT,
           title: "Invalid workspace.pdf",
           workspaceId: illFormedId,
           workspaceName: "Matter A",

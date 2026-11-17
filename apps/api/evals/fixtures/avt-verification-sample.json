@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "id": "sample",
+  "description": "A small synthetic set: one fictional witness statement whose claims cover every verdict, a scope difference and a silent record. Every name is invented.",
+  "cases": [
+    {
+      "id": "harbour-supply",
+      "title": "Statement of a fictional logistics manager in a supply dispute",
+      "document": {
+        "kind": "paragraphs",
+        "paragraphs": [
+          "1. I am the logistics manager of Kestrel Freight Ltd and I make this statement about the Orlan Mills contract.",
+          "2. The first consignment left our depot on 4 March 2024. It reached the Orlan Mills warehouse two days later.",
+          "3. We never received any complaint about damaged goods before the end of March 2024.",
+          "4. Our team delivered 120 pallets in total in March 2024. In my view our service that month was exemplary.",
+          "5. The invoice for the March deliveries was for EUR 18,400.",
+          "6. I was relieved when the contract was renewed, because I had worked hard on the account.",
+          "7. Orlan Mills paid the March invoice within 30 days of receiving it.",
+          "8. Our on-time delivery rate across all customers was 98 percent in 2024.",
+          "9. Every pallet we sent was packed to the specification Orlan Mills had agreed."
+        ]
+      },
+      "facts": [
+        { "id": "F1", "text": "Depot dispatch log records the first Orlan Mills consignment leaving on 4 March 2024.", "occurredOn": "2024-03-04", "occurredOnPrecision": "day", "evidenceKind": "System log", "medium": "Dispatch log p.2", "confidence": "high", "interpretationNote": null },
+        { "id": "F2", "text": "Orlan Mills goods-in record shows the first consignment received on 6 March 2024.", "occurredOn": "2024-03-06", "occurredOnPrecision": "day", "evidenceKind": "Register", "medium": "Goods-in register p.9", "confidence": "high", "interpretationNote": null },
+        { "id": "F3", "text": "Email from Orlan Mills to Kestrel Freight complaining that 14 pallets arrived with crushed corners.", "occurredOn": "2024-03-21", "occurredOnPrecision": "day", "evidenceKind": "Email", "medium": "Email bundle p.33", "confidence": "high", "interpretationNote": null },
+        { "id": "F4", "text": "Kestrel Freight delivery summary for March 2024 lists 120 pallets delivered to Orlan Mills.", "occurredOn": "2024-03", "occurredOnPrecision": "month", "evidenceKind": "Report", "medium": "Delivery summary p.1", "confidence": "high", "interpretationNote": null },
+        { "id": "F5", "text": "Invoice KF-2024-031 to Orlan Mills for the March deliveries: EUR 18,400.", "occurredOn": "2024-04-02", "occurredOnPrecision": "day", "evidenceKind": "Invoice", "medium": "Invoice KF-2024-031", "confidence": "high", "interpretationNote": null },
+        { "id": "F6", "text": "Kestrel Freight accounts ledger records invoice KF-2024-031 at EUR 21,400.", "occurredOn": "2024-04-02", "occurredOnPrecision": "day", "evidenceKind": "Ledger", "medium": "Accounts ledger p.40", "confidence": "high", "interpretationNote": null },
+        { "id": "F7", "text": "Orlan Mills received invoice KF-2024-031 on 3 April 2024 and paid it on 29 April 2024.", "occurredOn": "2024-04-29", "occurredOnPrecision": "day", "evidenceKind": "Bank record", "medium": "Remittance advice p.1", "confidence": "high", "interpretationNote": null },
+        { "id": "F8", "text": "Kestrel Freight annual report: on-time delivery rate of 98 percent for its Orlan Mills account in 2024.", "occurredOn": "2024", "occurredOnPrecision": "year", "evidenceKind": "Report", "medium": "Annual report p.6", "confidence": "high", "interpretationNote": null },
+        { "id": "F9", "text": "Orlan Mills quality note on the March consignments: packing \"broadly to spec\", strapping on some pallets queried, no finding made.", "occurredOn": "2024-03-28", "occurredOnPrecision": "day", "evidenceKind": "Report", "medium": "Quality note QN-17", "confidence": "medium", "interpretationNote": "Whether the queried strapping breaches the agreed specification is not stated." }
+      ],
+      "claims": [
+        { "id": "c1", "quote": "The first consignment left our depot on 4 March 2024.", "paragraph": 2, "verdict": "supported", "cites": ["F1"], "tags": ["date"], "note": "The dispatch log records the 4 March departure." },
+        { "id": "c2", "quote": "It reached the Orlan Mills warehouse two days later.", "paragraph": 2, "verdict": "supported", "cites": ["F2"], "related": ["F1"], "tags": ["date", "inference"], "note": "4 March plus two days is 6 March, the goods-in date." },
+        { "id": "c3", "quote": "We never received any complaint about damaged goods before the end of March 2024.", "paragraph": 3, "verdict": "contradicted", "cites": ["F3"], "tags": ["negation", "date"], "note": "A damage complaint was emailed on 21 March 2024." },
+        { "id": "c4", "quote": "Our team delivered 120 pallets in total in March 2024.", "paragraph": 4, "verdict": "supported", "cites": ["F4"], "tags": ["numeric"], "note": "The March delivery summary lists 120 pallets." },
+        { "id": "c5", "quote": "In my view our service that month was exemplary.", "paragraph": 4, "verdict": "notverifiable", "tags": ["opinion"], "note": "The author's own evaluation." },
+        { "id": "c6", "quote": "The invoice for the March deliveries was for EUR 18,400.", "paragraph": 5, "verdict": "recordconflict", "conflict": ["F5", "F6"], "tags": ["record-conflict", "numeric"], "note": "The invoice says EUR 18,400; the ledger records the same invoice at EUR 21,400." },
+        { "id": "c7", "quote": "I was relieved when the contract was renewed, because I had worked hard on the account.", "paragraph": 6, "verdict": "nocover", "qualifiers": ["record-silent"], "tags": ["record-silent"], "note": "The author's feelings; the record is not expected to speak to them." },
+        { "id": "c8", "quote": "Orlan Mills paid the March invoice within 30 days of receiving it.", "paragraph": 7, "verdict": "supported", "cites": ["F7"], "tags": ["date", "inference"], "note": "Received 3 April, paid 29 April: 26 days." },
+        { "id": "c9", "quote": "Our on-time delivery rate across all customers was 98 percent in 2024.", "paragraph": 8, "verdict": "nocover", "accepted": ["tension"], "related": ["F8"], "qualifiers": ["scope-mismatch"], "tags": ["scope", "numeric"], "note": "The 98 percent figure is for one customer, not all customers." },
+        { "id": "c10", "quote": "Every pallet we sent was packed to the specification Orlan Mills had agreed.", "paragraph": 9, "verdict": "tension", "cites": ["F9"], "related": ["F3"], "tags": ["negation"], "note": "The quality note finds packing broadly to spec but queries some strapping without a finding: it challenges \"every pallet\" without refuting it." }
+      ]
+    }
+  ]
+}

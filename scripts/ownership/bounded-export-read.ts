@@ -9,6 +9,8 @@ export default {
     "complete rows or an explicit overflow result without a partial set. " +
     "`readBoundedByGroup` supplies a limited lateral builder and refuses any " +
     "group's sentinel before returning the grouped read as complete. " +
+    "`readCappedByGroup` uses the same lateral sentinel to keep each " +
+    "group's first rows and name the groups it cut. " +
     "`readCursorPage` uses the same sentinel and the existing `Page` owner " +
     "to preserve worker continuation without claiming a partial set is complete. " +
     "This owner handles expected export ceilings; `boundedAll` instead " +

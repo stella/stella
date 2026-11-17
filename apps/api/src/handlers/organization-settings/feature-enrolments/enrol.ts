@@ -9,8 +9,8 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { isFeatureDeployed } from "@/api/lib/feature-access/deployment";
 import {
   FEATURE_REGISTRY,
   SELF_SERVE_FEATURE_IDS,
@@ -46,9 +46,7 @@ export const enrolFeatureHandler = async function* ({
   featureId,
   recordAuditEvent,
 }: EnrolFeatureHandlerProps) {
-  if (
-    !isDeploymentFeatureEnabled(FEATURE_REGISTRY[featureId].deploymentFeature)
-  ) {
+  if (!isFeatureDeployed(FEATURE_REGISTRY, featureId)) {
     return Result.err(new HandlerError({ status: 404, message: "Not found" }));
   }
   yield* Result.await(

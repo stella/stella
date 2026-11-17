@@ -2,9 +2,9 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { ENTITY_NAME_MAX_LENGTH } from "@stll/api-contract";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import messages from "@/i18n/langs/en.json" with { type: "json" };
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 const { act, cleanup, fireEvent, render, screen } =

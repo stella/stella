@@ -1,5 +1,6 @@
 mod accessibility_guide;
 mod account;
+mod account_switch;
 mod activity;
 mod activity_calls;
 mod activity_commands;
@@ -16,6 +17,8 @@ mod billing_draft_submit;
 mod bridge;
 mod chatgpt_auth;
 mod chatgpt_auth_commands;
+mod claude_code_auth;
+mod claude_code_auth_commands;
 mod clipboard;
 mod clipboard_commands;
 #[cfg(target_os = "macos")]
@@ -31,17 +34,25 @@ mod config;
 mod deep_link;
 mod desktop_crash;
 mod desktop_crash_native;
+mod desktop_runner;
 mod desktop_telemetry;
 mod device_preference;
 mod device_proof;
 mod diagnostics;
 mod dictation;
-#[cfg(dictation)]
 mod dictation_audio;
+mod dictation_cleanup;
+mod dictation_cloud;
+mod dictation_context;
 #[cfg(dictation)]
 mod dictation_engine;
+mod dictation_focus;
+mod dictation_format;
 #[cfg(dictation)]
 mod dictation_input;
+mod dictation_language;
+mod dictation_live;
+mod dictation_pauses;
 #[cfg(dictation)]
 mod dictation_worker;
 mod document_sessions;
@@ -53,25 +64,33 @@ mod foreground_app;
 mod foreground_app_visual;
 mod handoff;
 mod harness_archive;
+mod harness_auto_install;
 mod harness_commands;
 mod harness_installation;
 mod harness_release;
+mod harness_sidecar;
 mod http_client;
 mod i18n;
 mod idle_time;
 mod keychain;
+mod local_linked_folder_commands;
+mod local_linked_folders;
+mod local_skill_folder_commands;
+mod local_skill_folders;
 mod local_store;
 mod local_window;
 mod logging;
 mod managed_policy;
 mod marker_file;
 mod onboarding;
+mod outcome_page;
 mod pdf_signing;
 mod permissions;
+mod pkcs11_module_setting;
+mod pkcs11_signing;
 mod presence;
 mod registry;
 mod relaunch;
-#[cfg(test)]
 mod runner_protocol;
 mod session_manager;
 mod session_store;
@@ -93,6 +112,7 @@ macro_rules! generate_stella_handler {
   };
 }
 
+use crate::logging::best_effort;
 use clipboard::{ClipboardAppState, ClipboardManager};
 use commands::AppState;
 use session_manager::SessionManager;
@@ -108,6 +128,21 @@ use tokio::sync::Mutex;
 pub fn run_codex_token_helper() -> Option<i32> {
   let args = std::env::args_os().collect::<Vec<_>>();
   codex_managed_token_broker::run_token_helper(&args)
+}
+
+/// Runs the development stand-in computer (`examples/runner_stand_in.rs`)
+/// until it is stopped, and returns its exit code; 2 off Unix, where it
+/// does not run.
+#[cfg(feature = "dev-runner-stand-in")]
+pub fn run_runner_stand_in() -> i32 {
+  #[cfg(unix)]
+  {
+    desktop_runner::stand_in::main()
+  }
+  #[cfg(not(unix))]
+  {
+    2
+  }
 }
 
 /// Runs the speech worker when the process was started as one, and returns
@@ -182,6 +217,7 @@ pub fn run() {
     ))
     .plugin(tauri_plugin_clipboard_manager::init())
     .plugin(tauri_plugin_deep_link::init())
+    .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_global_shortcut::Builder::new().build())
     .plugin(tauri_plugin_notification::init())
     .plugin(tauri_plugin_opener::init())
@@ -203,6 +239,7 @@ pub fn run() {
       managed_policy::current().blocked_features(),
     ))
     .manage::<activity::ActivityAppState>(Arc::clone(&activity_manager))
+    .manage(desktop_runner::DesktopRunnerControl::default())
     .manage(crash_monitor)
     .manage(desktop_telemetry.clone())
     .setup(move |app| {
@@ -269,7 +306,9 @@ pub fn run() {
       if let Some(installation) = harness_installation::HarnessInstallation::open_default() {
         app.manage(installation);
       }
+      harness_commands::manage(&handle);
       chatgpt_auth_commands::manage(&handle);
+      claude_code_auth_commands::manage(&handle);
       activity::start(handle.clone(), Arc::clone(&activity_manager));
       {
         let manager = Arc::clone(&manager);
@@ -290,10 +329,18 @@ pub fn run() {
             }
             feature_gate::DesktopFeature::Dictation => {
               dictation::apply_feature_gate(app, enabled);
+              if enabled {
+                onboarding::feature_enabled(app, feature);
+              }
+            }
+            feature_gate::DesktopFeature::DictationCloud => {
+              dictation::apply_cloud_gate(app);
             }
             feature_gate::DesktopFeature::LocalAgents => {
               harness_commands::apply_feature_gate(app, enabled);
               chatgpt_auth_commands::apply_feature_gate(app, enabled);
+              desktop_runner::apply_feature_gate(app, enabled);
+              claude_code_auth_commands::apply_feature_gate(app, enabled);
             }
           }),
         );
@@ -361,10 +408,13 @@ pub fn run() {
               }
               tray::MenuAction::SetActivityRecording(status) => {
                 if activity::set_recording_from_tray(&handle, status).is_err() {
-                  let _ = handle.notification().builder()
-                    .title(i18n::t("tray.activity"))
-                    .body(i18n::t("activity.errorUpdate"))
-                    .show();
+                  best_effort(
+                    handle.notification().builder()
+                      .title(i18n::t("tray.activity"))
+                      .body(i18n::t("activity.errorUpdate"))
+                      .show(),
+                    "activity recording failure was not notified",
+                  );
                   activity_window::show(&handle);
                 }
               }
@@ -485,6 +535,7 @@ pub fn run() {
       }
 
       presence::start(handle.clone());
+      desktop_runner::watch_state(&handle);
 
       // Check for updates in the background after launch settles.
       updater::schedule_startup_check(handle.clone(), Arc::clone(&manager));
@@ -574,8 +625,11 @@ pub fn run() {
 
 /// The settings window's size. The browser harness reads these lines and
 /// renders the window at this size (`tests/desktop-window-sizes.ts`).
-const SETTINGS_WINDOW_WIDTH: f64 = 480.0;
-const SETTINGS_WINDOW_HEIGHT: f64 = 460.0;
+const SETTINGS_WINDOW_WIDTH: f64 = 600.0;
+const SETTINGS_WINDOW_HEIGHT: f64 = 620.0;
+/// The smallest the settings window can be resized to.
+const SETTINGS_WINDOW_MIN_WIDTH: f64 = 480.0;
+const SETTINGS_WINDOW_MIN_HEIGHT: f64 = 460.0;
 pub(crate) const SETTINGS_WINDOW_LABEL: &str = "main";
 
 /// A Settings window tab native code opens; the ids are `PREFERENCES_TABS`
@@ -600,19 +654,68 @@ impl PreferencesTab {
   }
 }
 
+/// Where on General the Settings window scrolls to for the coding agents:
+/// their whole group, or one agent's card. The ids are `AGENT_SETTINGS_FOCUS`
+/// in `src/mainview/App.tsx`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum AgentSettingsFocus {
+  All,
+  Harness(harness_release::ManagedHarness),
+}
+
+impl AgentSettingsFocus {
+  #[cfg(test)]
+  const ALL: [Self; 3] = [
+    Self::All,
+    Self::Harness(harness_release::ManagedHarness::Codex),
+    Self::Harness(harness_release::ManagedHarness::ClaudeCode),
+  ];
+
+  const fn id(self) -> &'static str {
+    match self {
+      Self::All => "agents",
+      Self::Harness(harness) => harness.id(),
+    }
+  }
+}
+
+/// What the Settings window shows when native code opens it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SettingsView {
+  Tab(PreferencesTab),
+  /// General, scrolled to the coding agents' sign-ins and installs.
+  Agents(AgentSettingsFocus),
+}
+
+impl SettingsView {
+  /// The `activate-tab` event the window reads.
+  fn event_payload(self) -> serde_json::Value {
+    match self {
+      Self::Tab(tab) => serde_json::json!({ "tab": tab.id() }),
+      Self::Agents(focus) => serde_json::json!({
+        "tab": PreferencesTab::General.id(),
+        "focus": focus.id(),
+      }),
+    }
+  }
+}
+
 pub(crate) fn ensure_main_window(handle: &tauri::AppHandle, tab: PreferencesTab) {
+  show_settings(handle, SettingsView::Tab(tab));
+}
+
+pub(crate) fn show_settings(handle: &tauri::AppHandle, view: SettingsView) {
   // Accessory apps must explicitly activate to bring windows to front.
   #[cfg(target_os = "macos")]
-  let _ = handle.show();
+  best_effort(handle.show(), "app could not be shown");
 
-  let tab = tab.id();
+  let payload = view.event_payload();
   if let Some(window) = handle.get_webview_window(SETTINGS_WINDOW_LABEL) {
-    let _ = window.show();
-    let _ = window.set_focus();
-    let _ = handle.emit_to(
-      SETTINGS_WINDOW_LABEL,
-      "activate-tab",
-      serde_json::json!({ "tab": tab }),
+    best_effort(window.show(), "settings window could not be shown");
+    best_effort(window.set_focus(), "settings window could not be focused");
+    best_effort(
+      handle.emit_to(SETTINGS_WINDOW_LABEL, "activate-tab", payload),
+      "settings tab change was not announced",
     );
     return;
   }
@@ -620,7 +723,8 @@ pub(crate) fn ensure_main_window(handle: &tauri::AppHandle, tab: PreferencesTab)
   let builder = crate::app_window::builder(handle, SETTINGS_WINDOW_LABEL, "index.html")
     .title("stella desktop")
     .inner_size(SETTINGS_WINDOW_WIDTH, SETTINGS_WINDOW_HEIGHT)
-    .resizable(false);
+    .min_inner_size(SETTINGS_WINDOW_MIN_WIDTH, SETTINGS_WINDOW_MIN_HEIGHT)
+    .resizable(true);
   let builder = window_placement::centered_on_target_screen(
     handle,
     builder,
@@ -641,15 +745,17 @@ pub(crate) fn ensure_main_window(handle: &tauri::AppHandle, tab: PreferencesTab)
         if matches!(event, tauri::WindowEvent::Destroyed) {
           clipboard_shortcut::resume_after_window_closed(&resume_handle);
         }
+        if matches!(event, tauri::WindowEvent::Focused(true)) {
+          feature_access::refresh_now();
+        }
       });
       // Emit tab activation after a short delay to let the webview load
       let handle = handle.clone();
       tauri::async_runtime::spawn(async move {
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        let _ = handle.emit_to(
-          SETTINGS_WINDOW_LABEL,
-          "activate-tab",
-          serde_json::json!({ "tab": tab }),
+        best_effort(
+          handle.emit_to(SETTINGS_WINDOW_LABEL, "activate-tab", payload),
+          "tab activation was not announced",
         );
       });
     }
@@ -661,17 +767,35 @@ pub(crate) fn ensure_main_window(handle: &tauri::AppHandle, tab: PreferencesTab)
 
 #[cfg(test)]
 mod preferences_tab_tests {
-  use super::PreferencesTab;
+  use super::{AgentSettingsFocus, PreferencesTab};
+
+  /// The ids in one `const NAME = [...]` array literal of `App.tsx`.
+  fn declared(name: &str) -> &'static str {
+    let source = include_str!("../../src/mainview/App.tsx");
+    let (_, declaration) = source
+      .split_once(&format!("const {name} = ["))
+      .expect("App.tsx declares the array");
+    declaration
+      .split_once(']')
+      .expect("the array is one array literal")
+      .0
+  }
+
+  #[test]
+  fn agent_focuses_are_ones_the_settings_window_scrolls_to() {
+    let declaration = declared("AGENT_SETTINGS_FOCUS");
+    for focus in AgentSettingsFocus::ALL {
+      assert!(
+        declaration.contains(&format!("\"{}\"", focus.id())),
+        "{} is not a Settings window agent focus",
+        focus.id()
+      );
+    }
+  }
 
   #[test]
   fn native_tabs_are_tabs_the_settings_window_declares() {
-    let source = include_str!("../../src/mainview/App.tsx");
-    let (_, declaration) = source
-      .split_once("const PREFERENCES_TABS = [")
-      .expect("App.tsx declares PREFERENCES_TABS");
-    let (declaration, _) = declaration
-      .split_once(']')
-      .expect("PREFERENCES_TABS is one array literal");
+    let declaration = declared("PREFERENCES_TABS");
     for tab in PreferencesTab::ALL {
       assert!(
         declaration.contains(&format!("\"{}\"", tab.id())),

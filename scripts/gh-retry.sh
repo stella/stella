@@ -4,6 +4,10 @@ set -euo pipefail
 # GitHub response traces stay in a private directory: they contain credentials
 # and payloads. Only HTTP status/retry metadata may leave that directory.
 # bash 3.2 is required by macOS and Windows release runners.
+#
+# When GH_RETRY_STATUS_FILE is set, a failed command writes that metadata to it
+# as "<HTTP status, 0 without a response> <Retry-After seconds or -1>", so a
+# caller can reconcile a write that is not safe to repeat blindly.
 
 if (($# == 0)); then
   echo 'usage: gh-retry.sh <gh subcommand> [args...]' >&2
@@ -46,6 +50,9 @@ cleanup() {
   trap - EXIT
   stop_owned_jobs
   rm -rf "$scratch"
+}
+report_status() {
+  [[ -z "${GH_RETRY_STATUS_FILE:-}" ]] || printf '%s %s\n' "$1" "$2" > "$GH_RETRY_STATUS_FILE"
 }
 trap cleanup EXIT
 trap 'cleanup; exit 130' INT
@@ -207,6 +214,7 @@ for ((attempt=1; attempt<=4; attempt+=1)); do
   fi
   if [[ -e "$scratch/deadline" ]]; then
     echo "GitHub retry budget exhausted on attempt $attempt/4" >&2
+    report_status 0 -1
     exit 124
   fi
   if ((status == 0)); then
@@ -343,12 +351,14 @@ for ((attempt=1; attempt<=4; attempt+=1)); do
     # Traces are never forwarded: URLs, request bodies and even native error
     # messages can contain credentials. Exit codes and status remain observable.
     [[ "$forward_output" != true ]] || cat "$scratch/output"
+    report_status "$http" "$retry_after"
     exit "$status"
   fi
   delay=$((2 ** (attempt - 1) + RANDOM % 3))
   ((retry_after <= delay)) || delay=$retry_after
   if ((SECONDS - started + delay >= 60)); then
     echo 'GitHub retry budget exhausted' >&2
+    report_status "$http" "$retry_after"
     exit "$status"
   fi
   echo "Retrying GitHub $failure after attempt $attempt/4 in ${delay}s" >&2

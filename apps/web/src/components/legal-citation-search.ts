@@ -75,13 +75,13 @@ export const readLegalCitationSearch = async ({
         case "none":
           return { type: "none" } as const;
         case "unique":
+        case "incomplete_identifier":
           return {
             type: "decisions",
             items: [resolution.decision],
             resolution,
           } as const;
         case "ambiguous":
-        case "incomplete_identifier":
           return {
             type: "decisions",
             items: resolution.candidates,

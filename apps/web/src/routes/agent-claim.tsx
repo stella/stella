@@ -8,6 +8,7 @@ import * as v from "valibot";
 
 import { fetchWithTimeout } from "@stll/fetch";
 import { Button } from "@stll/ui/button";
+import { Form } from "@stll/ui/form";
 import {
   Frame,
   FrameDescription,
@@ -27,6 +28,7 @@ import { pageTitle } from "@/lib/page-title";
 import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
 import { routeSearchSchema } from "@/route-search-params";
+import { AgentClaimConnected } from "@/routes/-agent-claim-connected";
 import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
 import { loadAuthContext } from "@/routes/-auth-context";
 
@@ -118,18 +120,7 @@ function AgentClaimPage() {
   };
 
   if (status === "claimed") {
-    return (
-      <div className="flex flex-1 items-center justify-center">
-        <Frame className="w-full max-w-sm">
-          <FrameHeader>
-            <FrameTitle>{t("agentClaim.connectedTitle")}</FrameTitle>
-            <FrameDescription>
-              {t("agentClaim.connectedDescription")}
-            </FrameDescription>
-          </FrameHeader>
-        </Frame>
-      </div>
-    );
+    return <AgentClaimConnected organizationName={organizationName} />;
   }
 
   return (
@@ -156,8 +147,7 @@ function AgentClaimPage() {
               {t("agentClaim.accessReadSearch")}
             </p>
           </div>
-          <form
-            className="flex flex-col gap-4"
+          <Form
             onSubmit={(event) => {
               event.preventDefault();
               detached(handleApprove(), "agent-claim.approve");
@@ -185,7 +175,7 @@ function AgentClaimPage() {
             >
               {t("agentClaim.approve")}
             </Button>
-          </form>
+          </Form>
         </FramePanel>
       </Frame>
     </div>

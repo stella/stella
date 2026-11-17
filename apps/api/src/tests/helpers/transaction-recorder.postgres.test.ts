@@ -107,7 +107,7 @@ if (!databaseUrl || !runPostgresTests) {
               sql`SELECT * FROM recorder_workspaces w WHERE id IN (SELECT id FROM recorder_entities) FOR UPDATE OF w`,
             ]) {
               trace.events.length = 0;
-              const rows = await tx.execute(statement);
+              const rows = await tx.execute(statement, "objects");
               expect(rows).toHaveLength(1);
               expect(
                 trace.events.map((event) => [
@@ -180,7 +180,10 @@ if (!databaseUrl || !runPostgresTests) {
         const holder = openClient();
         const contender = openClient();
         const pid = (
-          await holder.db.execute(sql`SELECT pg_backend_pid() AS pid`)
+          await holder.db.execute(
+            sql`SELECT pg_backend_pid() AS pid`,
+            "objects",
+          )
         ).at(0)?.["pid"];
         if (typeof pid !== "number") {
           panic("Missing fixture backend pid");

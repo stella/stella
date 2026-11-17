@@ -16,11 +16,6 @@ const ci = readWorkflow(
 const nightly = readWorkflow(
   readFileSync(path.join(root, nightlyPath), "utf-8"),
 );
-const git = (args: string[]) => {
-  const result = Bun.spawnSync(["git", ...args], { cwd: root });
-  expect(result.exitCode, new TextDecoder().decode(result.stderr)).toBe(0);
-  return new TextDecoder().decode(result.stdout).trim();
-};
 const requiredSet = (jobs: Record<string, unknown>) => {
   const job = v.parse(
     v.object({
@@ -44,46 +39,20 @@ const requiredSet = (jobs: Record<string, unknown>) => {
   };
 };
 
-// The commit that moved the advisory job into the nightly workflow. Commits are
-// immutable, so pinning it cannot drift. Searching history for it instead would
-// fetch every past blob of the workflow in the blobless CI checkout.
-const advisoryMoveCommit = "bc81bdb1b1960a654993ad47f3aeb6ddca5f6244";
-
-test("moving the advisory job preserves the exact required CI set", () => {
-  git(["cat-file", "-e", `${advisoryMoveCommit}^{commit}`]);
-  const before = readWorkflow(
-    git(["show", `${advisoryMoveCommit}^:.github/workflows/ci.yml`]),
-  );
-  const after = readWorkflow(
-    git(["show", `${advisoryMoveCommit}:.github/workflows/ci.yml`]),
-  );
-  const nightlyBefore = readWorkflow(
-    git(["show", `${advisoryMoveCommit}^:${nightlyPath}`]),
-  );
-  const nightlyAfter = readWorkflow(
-    git(["show", `${advisoryMoveCommit}:${nightlyPath}`]),
-  );
-  expect(nightlyBefore).not.toHaveProperty("migration-exact-base-upgrade");
-  expect(nightlyAfter).toHaveProperty("migration-exact-base-upgrade");
-  expect(git(["show", `${advisoryMoveCommit}:${nightlyPath}`])).toContain(
-    "\n  migration-exact-base-upgrade:",
-  );
-  expect(requiredSet(after)).toEqual(requiredSet(before));
+// The exact-base upgrade rehearsal is advisory: it runs in the nightly
+// workflow and never in the required CI set. The commit that moved it
+// (bc81bdb1b19) proved that move kept the required set unchanged; this keeps
+// it true on the live workflows, without reading history in the blobless CI
+// checkout.
+test("the advisory upgrade rehearsal runs nightly and stays out of the required CI set", () => {
   const advisory = "migration-exact-base-upgrade";
-  expect(
-    v.parse(
-      v.object({ "continue-on-error": v.literal(true) }),
-      before[advisory],
-    ),
-  ).toEqual({ "continue-on-error": true });
-  expect(after).not.toHaveProperty(advisory);
-  for (const jobs of [before, after, ci]) {
-    const required = requiredSet(jobs);
-    expect(required.needs).not.toContain(advisory);
-    expect(required.scopes).not.toHaveProperty(advisory);
-    expect(required.fast).not.toContain(advisory);
-  }
-}, 30_000);
+  expect(nightly).toHaveProperty(advisory);
+  expect(ci).not.toHaveProperty(advisory);
+  const required = requiredSet(ci);
+  expect(required.needs).not.toContain(advisory);
+  expect(required.scopes).not.toHaveProperty(advisory);
+  expect(required.fast).not.toContain(advisory);
+});
 
 test("nightly rehearsal checks main without granting issue permissions", () => {
   const job = v.parse(

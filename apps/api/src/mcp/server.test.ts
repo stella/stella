@@ -24,6 +24,8 @@ import {
   MCP_APP_RESOURCE_MIME_TYPE,
 } from "@stll/api-contract";
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
+import { createTestClock, waitFor } from "@stll/test-kit";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import {
@@ -88,8 +90,10 @@ import {
 import { mcpToolLatencyBudgetMs } from "@/api/mcp/tool-latency-budgets";
 import type { ToolScope } from "@/api/mcp/tool-types";
 import { createTestDemoActionBudget } from "@/api/tests/helpers/demo-action-budget";
-import { readTestJson } from "@/api/tests/helpers/test-tool-set";
+import { asTestRaw, readTestJson } from "@/api/tests/helpers/test-tool-set";
 import { compileClientWireSchema } from "@/api/tests/helpers/wire-json-schema";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const actionSizePolicyMock = mock((): ReturnType<typeof getActionSizePolicy> =>
   Result.ok(undefined),
@@ -216,6 +220,24 @@ const createModernMcpRequest = ({
     method: "POST",
   });
 
+type McpPhaseRecord = {
+  event?: unknown;
+  auth: number;
+  context: number;
+  server_build: number;
+  tool_projection: number;
+  dispatch: number;
+  total: number;
+};
+
+type ToolErrorPayload = {
+  error?: unknown;
+};
+
+type GatewayToolErrorPayload = {
+  error: { code: string; retryable: boolean };
+};
+
 type UnknownToolErrorEnvelope = {
   error: {
     code: string;
@@ -272,7 +294,10 @@ describe("handleMcpHttpRequest", () => {
       lines.push(line);
     });
     authenticateMcpRequestMock.mockImplementation(async () => {
-      await Bun.sleep(5);
+      let polls = 0;
+      await waitFor(async () => ((polls += 1) >= 2 ? true : undefined), {
+        description: "the authentication phase delay",
+      });
       return Result.ok({
         organizationId: "org_1",
         scopes: ["stella:read"],
@@ -284,7 +309,10 @@ describe("handleMcpHttpRequest", () => {
       userId: "user_1",
     });
     listMcpToolsMock.mockImplementation(async () => {
-      await Bun.sleep(toolProjectionDelayMs);
+      let polls = 0;
+      await waitFor(async () => ((polls += 1) >= 11 ? true : undefined), {
+        description: "the tool projection phase delay",
+      });
       return [];
     });
 
@@ -294,10 +322,13 @@ describe("handleMcpHttpRequest", () => {
 
     expect(response.status).toBe(200);
     const records = lines
-      .map((line) => JSON.parse(line))
+      .map((line) => asTestRaw<McpPhaseRecord>(JSON.parse(line)))
       .filter((record) => record.event === "mcp.request.phases");
     expect(records).toHaveLength(1);
     const record = records.at(0);
+    if (record === undefined) {
+      throw new TypeError("Missing mcp.request.phases record");
+    }
     expect(record).toMatchObject({
       event: "mcp.request.phases",
       method: "tools/list",
@@ -346,7 +377,7 @@ describe("handleMcpHttpRequest", () => {
     expect(response.status).toBe(200);
     expect(
       lines
-        .map((line) => JSON.parse(line))
+        .map((line) => asTestRaw<McpPhaseRecord>(JSON.parse(line)))
         .find((record) => record.event === "mcp.request.phases"),
     ).toMatchObject({ method: "tools/list", path: "modern" });
   });
@@ -379,7 +410,7 @@ describe("handleMcpHttpRequest", () => {
       dependencyTimeoutMs = requestBoundedTimeoutMs(60_000);
       const step = await runBoundedRequestStep(
         async () => await Promise.withResolvers<never>().promise,
-        { label: "slow-dependency", budgetMs: 60_000 },
+        { label: "case-law-admitted-courts", budgetMs: 60_000 },
       );
       endedAfterRequestStartMs = performance.now() - requestStartedAt;
       return { content: [{ type: "text", text: step.status }] };
@@ -445,7 +476,7 @@ describe("handleMcpHttpRequest", () => {
 
       expect(response.status).toBe(200);
       const phaseRecord = lines
-        .map((line) => JSON.parse(line))
+        .map((line) => asTestRaw<McpPhaseRecord>(JSON.parse(line)))
         .find((record) => record.event === "mcp.request.phases");
       expect(phaseRecord).toMatchObject({
         method: "tools/call",
@@ -492,8 +523,11 @@ describe("handleMcpHttpRequest", () => {
   test("native admission refusals keep their canonical recovery contract", async () => {
     const previousEnabled = env.FEATURE_ACTION_ADMISSION;
     const previousContact = env.ACTION_LIMIT_CONTACT_URL;
-    env.FEATURE_ACTION_ADMISSION = true;
-    env.ACTION_LIMIT_CONTACT_URL = "https://example.invalid/contact";
+    testState.setConfig("FEATURE_ACTION_ADMISSION", true);
+    testState.setConfig(
+      "ACTION_LIMIT_CONTACT_URL",
+      "https://example.invalid/contact",
+    );
     try {
       for (const reason of [
         "busy",
@@ -554,7 +588,7 @@ describe("handleMcpHttpRequest", () => {
         const body =
           await readTestJson<McpJsonResponse<CallToolResult>>(response);
         const item = body.result.content.at(0);
-        const payload =
+        const payload: ToolErrorPayload | undefined =
           item?.type === "text" ? JSON.parse(item.text) : undefined;
         const refusal = ACTION_ADMISSION_REFUSALS[refusalError.code];
         const contact =
@@ -575,8 +609,8 @@ describe("handleMcpHttpRequest", () => {
         expect(handleMcpToolCallMock).not.toHaveBeenCalled();
       }
     } finally {
-      env.FEATURE_ACTION_ADMISSION = previousEnabled;
-      env.ACTION_LIMIT_CONTACT_URL = previousContact;
+      testState.setConfig("FEATURE_ACTION_ADMISSION", previousEnabled);
+      testState.setConfig("ACTION_LIMIT_CONTACT_URL", previousContact);
     }
   });
 
@@ -619,7 +653,8 @@ describe("handleMcpHttpRequest", () => {
               leaseMs: 1000,
             },
             redis: {
-              send: async (command, args) => await redis.send(command, args),
+              send: async (command, args) =>
+                (await redis.send(command, args)) as unknown,
             },
           }),
       });
@@ -634,7 +669,8 @@ describe("handleMcpHttpRequest", () => {
       const body =
         await readTestJson<McpJsonResponse<CallToolResult>>(response);
       const item = body.result.content.at(0);
-      const payload = item?.type === "text" ? JSON.parse(item.text) : undefined;
+      const payload: ToolErrorPayload | undefined =
+        item?.type === "text" ? JSON.parse(item.text) : undefined;
       expect(body.result.isError).toBe(true);
       expect(payload?.error).toMatchObject({
         code: "limiter_store_unavailable",
@@ -652,7 +688,7 @@ describe("handleMcpHttpRequest", () => {
       FEATURE_ACTION_ADMISSION: env.FEATURE_ACTION_ADMISSION,
       FEATURE_ACTION_COST_RECORDS: env.FEATURE_ACTION_COST_RECORDS,
     };
-    Object.assign(env, {
+    testState.patchConfig({
       FEATURE_ACTION_ADMISSION: false,
       FEATURE_ACTION_COST_RECORDS: false,
     });
@@ -721,13 +757,14 @@ describe("handleMcpHttpRequest", () => {
       }
       const refused = await callTool();
       const item = refused.result.content.at(0);
-      const payload = item?.type === "text" ? JSON.parse(item.text) : undefined;
+      const payload: ToolErrorPayload | undefined =
+        item?.type === "text" ? JSON.parse(item.text) : undefined;
       expect(refused.result.isError).toBe(true);
       expect(payload?.error).toMatchObject({ code: "action_period_exhausted" });
       expect(handleMcpToolCallMock).toHaveBeenCalledTimes(1);
       expect(demo.count()).toBe(DEMO_ACCOUNT_DAILY_ACTION_BUDGET.max);
     } finally {
-      Object.assign(env, previous);
+      testState.patchConfig(previous);
     }
   });
 
@@ -811,6 +848,7 @@ describe("handleMcpHttpRequest", () => {
           ...options,
           resolveAuthorization: async () =>
             ({
+              billingAccess: false,
               memberId: "member_one",
               email: "limited@example.test",
               role: "owner",
@@ -865,6 +903,7 @@ describe("handleMcpHttpRequest", () => {
           ...options,
           resolveAuthorization: async () =>
             ({
+              billingAccess: false,
               memberId: "member_one",
               email: "limited@example.test",
               role: "owner",
@@ -942,6 +981,7 @@ describe("handleMcpHttpRequest", () => {
           ...options,
           resolveAuthorization: async () =>
             ({
+              billingAccess: false,
               memberId: "member_one",
               email: "limited@example.test",
               role: "owner",
@@ -1445,13 +1485,17 @@ describe("handleMcpHttpRequest", () => {
         "case_law_coverage",
         "read_case_law_decision",
         "read_case_law_citations",
+        "verify_quote",
         "open_case_law_decision",
         "read_case_law_decision_blocks",
         "preview_cited_provision",
+        "list_case_law_courts",
         "search_legislation",
         "read_statute",
         "read_statute_provisions",
         "read_provision_history",
+        "search_guidance",
+        "read_guidance",
         "resolve_case_law_decision",
         "resolve_law_citation",
       ]);
@@ -1534,7 +1578,11 @@ describe("handleMcpHttpRequest", () => {
       firstRead.then(({ done }) =>
         done ? ("ended" as const) : ("open" as const),
       ),
-      Bun.sleep(20).then(() => "open" as const),
+      // A clock advance drains an event-loop turn, so an immediate close
+      // reaches firstRead before the pending-stream observation wins.
+      createTestClock()
+        .advance(0)
+        .then(() => "open" as const),
     ]);
     expect(initialState).toBe("open");
 
@@ -1655,7 +1703,11 @@ describe("handleMcpHttpRequest", () => {
     });
     authenticateMcpRequestMock.mockResolvedValue(
       Result.ok({
-        credential: { clientId: "client_1", type: "oauth_client" },
+        credential: {
+          clientId: "client_1",
+          issuedAt: 1_700_000_000,
+          type: "oauth_client",
+        },
         organizationId: "org_1",
         scopes: ["stella:read"],
         userId: "user_1",
@@ -1724,7 +1776,11 @@ describe("handleMcpHttpRequest", () => {
     });
     authenticateMcpRequestMock.mockResolvedValue(
       Result.ok({
-        credential: { clientId: "client_1", type: "oauth_client" },
+        credential: {
+          clientId: "client_1",
+          issuedAt: 1_700_000_000,
+          type: "oauth_client",
+        },
         organizationId: "org_1",
         scopes: ["stella:read"],
         userId: "user_1",
@@ -1814,10 +1870,11 @@ describe("handleMcpHttpRequest", () => {
     expect(response.status).toBe(200);
     expect(handleMcpToolCallMock).not.toHaveBeenCalled();
     const item = body.result.content.at(0);
-    const parsed = item?.type === "text" ? JSON.parse(item.text) : undefined;
-    expect(parsed.error.code).toBe("internal_error");
-    expect(parsed.error.retryable).toBe(true);
-    expect(parsed.error.code).not.toBe("unknown_tool");
+    const parsed: GatewayToolErrorPayload | undefined =
+      item?.type === "text" ? JSON.parse(item.text) : undefined;
+    expect(parsed?.error.code).toBe("internal_error");
+    expect(parsed?.error.retryable).toBe(true);
+    expect(parsed?.error.code).not.toBe("unknown_tool");
     expect(body.result.isError).toBe(true);
     // The load site already captured the DB failure; the transport must not
     // re-capture the mapped gateway error.
@@ -1972,7 +2029,8 @@ describe("handleMcpHttpRequest", () => {
     );
     const body = await readTestJson<McpJsonResponse<CallToolResult>>(response);
     const item = body.result.content.at(0);
-    const parsed = item?.type === "text" ? JSON.parse(item.text) : undefined;
+    const parsed: ToolErrorPayload | undefined =
+      item?.type === "text" ? JSON.parse(item.text) : undefined;
 
     expect(response.status).toBe(200);
     // The tool remains visible when its primary scope is present, so the
@@ -2016,7 +2074,8 @@ describe("handleMcpHttpRequest", () => {
     );
     const body = await readTestJson<McpJsonResponse<CallToolResult>>(response);
     const item = body.result.content.at(0);
-    const parsed = item?.type === "text" ? JSON.parse(item.text) : undefined;
+    const parsed: ToolErrorPayload | undefined =
+      item?.type === "text" ? JSON.parse(item.text) : undefined;
 
     expect(response.status).toBe(200);
     expect(parsed?.error).toEqual(

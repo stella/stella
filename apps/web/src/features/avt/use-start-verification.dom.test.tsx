@@ -2,14 +2,14 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 import { createTranslator } from "use-intl/core";
 
-import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
+import { MODEL_RUN_CAP_CODES } from "@stll/api-contract/model-run-caps";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { stellaToast } from "@stll/ui/toast";
 
 import arabic from "@/i18n/langs/ar.json";
 import czech from "@/i18n/langs/cs.json";
 import english from "@/i18n/langs/en.json";
 import { getTranslator, setTranslator } from "@/i18n/translator";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 const { QueryClient, QueryClientProvider } =
@@ -89,7 +89,7 @@ for (const { locale, messages } of [
   { locale: "cs", messages: czech },
   { locale: "ar", messages: arabic },
 ]) {
-  for (const code of Object.values(VERIFICATION_RUN_CAP_CODES)) {
+  for (const code of Object.values(MODEL_RUN_CAP_CODES)) {
     test(`${locale}: ${code} shows a localized limit and clears the pending start`, async () => {
       const boundary = answer(() =>
         Response.json(
@@ -101,9 +101,9 @@ for (const { locale, messages } of [
       const { result, opened, invalidation } = mountStart(locale, messages);
       await act(async () => await result.current.start(target));
       const expected =
-        code === VERIFICATION_RUN_CAP_CODES.active
-          ? messages.errors.apiCodes.verificationActiveLimitReached
-          : messages.errors.apiCodes.verificationDailyLimitReached;
+        code === MODEL_RUN_CAP_CODES.active
+          ? messages.errors.apiCodes.runActiveLimitReached
+          : messages.errors.apiCodes.runDailyLimitReached;
       expect(toast).toHaveBeenCalledWith(
         expect.objectContaining({ title: expected, type: "error" }),
       );

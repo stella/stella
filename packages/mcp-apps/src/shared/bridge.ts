@@ -9,9 +9,11 @@ import type {
   McpUiHostContext,
 } from "@modelcontextprotocol/ext-apps";
 import { Result } from "better-result";
+import * as v from "valibot";
 
 import { parseLegalCitationHttpUrl } from "@stll/api-contract/legal-citation-links";
 import { MCP_WEB_HANDOFF_TOOL_NAME } from "@stll/api-contract/mcp-web-handoff";
+import { sleep } from "@stll/concurrency/sleep";
 import { createDetached } from "@stll/errors";
 
 import type { PresentationApp } from "../manifest";
@@ -23,13 +25,14 @@ import {
 } from "./app-error";
 import type { AppFailure } from "./app-error";
 import { appLocale, setAppDocumentLocale } from "./locale";
+import { type AppToolResult, callAppServerTool } from "./server-tool-call";
 import { mountAppViewport } from "./size";
 import { projectAppToolArguments } from "./tool-input";
 
+export type { AppToolResult } from "./server-tool-call";
+
 export const createViewportApp = (name: string) =>
   new App({ name, version: "1.0.0" }, {}, { autoResize: false });
-
-export type AppToolResult = Awaited<ReturnType<App["callServerTool"]>>;
 
 export const parseAppToolPayload = (result: AppToolResult): unknown => {
   if (result.structuredContent !== undefined) {
@@ -93,15 +96,13 @@ export const openPresentationLink = async ({
     .split("&")
     .filter((part) => !new URLSearchParams(part).has("sh"))
     .join("&");
-  const fresh = await Result.tryPromise(async () =>
-    app.callServerTool({
-      name: MCP_WEB_HANDOFF_TOOL_NAME,
-      arguments: { url: parsed.href },
-    }),
-  );
+  const fresh = await callAppServerTool(app, {
+    name: MCP_WEB_HANDOFF_TOOL_NAME,
+    arguments: { url: parsed.href },
+  });
   const payload =
-    Result.isOk(fresh) && fresh.value.isError !== true
-      ? fresh.value.structuredContent
+    fresh.status === "answered" && fresh.result.isError !== true
+      ? fresh.result.structuredContent
       : undefined;
   const freshUrlValue =
     typeof payload === "object" &&
@@ -126,7 +127,8 @@ export const openPresentationLink = async ({
 
 type ResultState<View> =
   | { status: "idle" }
-  | { status: "loading" }
+  /** `continuing`: the server said the work is still running. */
+  | { status: "loading"; phase?: "continuing" }
   | { status: "ready"; view: View }
   | {
       status: "error";
@@ -214,8 +216,93 @@ type PresentationHost = Pick<
   | "onteardown"
 >;
 
+/** How long an app follows a read the server is still working on. */
+const CONTINUATION_FOLLOW_MS = 120_000;
+
+const runningAnswerSchema = v.object({
+  status: v.literal("running"),
+  continuationToken: v.string(),
+  retryAfterMs: v.number(),
+});
+
+const readRunningAnswer = (payload: unknown) => {
+  const parsed = v.safeParse(runningAnswerSchema, payload);
+  return parsed.success ? parsed.output : undefined;
+};
+
+type RunningAnswer = NonNullable<ReturnType<typeof readRunningAnswer>>;
+
+type FollowRunningReadOptions = {
+  app: Pick<App, "callServerTool">;
+  manifest: PresentationApp;
+  first: RunningAnswer;
+  request: { name: ToolName; input: Record<string, unknown> };
+  wait: (ms: number) => Promise<void>;
+  /** False once anything newer replaced the read this is following. */
+  isCurrent: () => boolean;
+  onFailure: (failure: AppFailure) => void;
+  onAnswer: (result: AppToolResult, requestId: string) => void;
+};
+
+/**
+ * Keep asking for a read the server is still working on until it answers,
+ * something newer replaces it, or the follow window ends.
+ */
+const followRunningRead = async ({
+  app,
+  manifest,
+  first,
+  request,
+  wait,
+  isCurrent,
+  onFailure,
+  onAnswer,
+}: FollowRunningReadOptions): Promise<void> => {
+  let running = first;
+  for (
+    let waitedMs = 0;
+    waitedMs < CONTINUATION_FOLLOW_MS;
+    waitedMs += running.retryAfterMs
+  ) {
+    await wait(running.retryAfterMs);
+    if (!isCurrent()) {
+      return;
+    }
+    const polled = await requestPresentationTool({
+      app,
+      manifest,
+      request: {
+        name: request.name,
+        arguments: {
+          ...request.input,
+          continuation_token: running.continuationToken,
+        },
+      },
+    });
+    if (!isCurrent()) {
+      return;
+    }
+    if (polled.status === "error") {
+      onFailure(polled.failure);
+      return;
+    }
+    const still =
+      polled.result.isError === true
+        ? undefined
+        : readRunningAnswer(parseAppToolPayload(polled.result));
+    if (still === undefined) {
+      onAnswer(polled.result, polled.requestId);
+      return;
+    }
+    running = still;
+  }
+  onFailure(appFailure("unavailable", createAppRequestId(), true));
+};
+
 type PresentationBridgeOptions<View> = {
   host?: PresentationHost;
+  /** A wait between polls of a read the server is still working on. */
+  wait?: (ms: number) => Promise<void>;
   title?: (context: McpUiHostContext) => string;
   manifest: PresentationApp;
   parse: (payload: unknown, input: Record<string, unknown>) => View | undefined;
@@ -243,10 +330,11 @@ export const requestPresentationTool = async ({
   // The server normalizes and validates; a refusal returns as a tool error.
   const arguments_ = projectAppToolArguments(request.name, request.arguments);
   onRequest?.(arguments_);
-  const called = await Result.tryPromise(async () =>
-    app.callServerTool({ name: request.name, arguments: arguments_ }),
-  );
-  if (Result.isError(called)) {
+  const called = await callAppServerTool(app, {
+    name: request.name,
+    arguments: arguments_,
+  });
+  if (called.status === "unreachable") {
     return {
       status: "error",
       failure: appFailure("unavailable", requestId, true),
@@ -254,7 +342,7 @@ export const requestPresentationTool = async ({
   }
   return {
     status: "ready",
-    result: called.value,
+    result: called.result,
     requestId,
     arguments: arguments_,
   } as const;
@@ -382,11 +470,19 @@ const bindPresentationListeners = ({
   };
 };
 
+const withRead = <View>(
+  { context }: AppSnapshot<View>,
+  tool: ToolName,
+  input: Record<string, unknown>,
+  result: ResultState<View>,
+): AppSnapshot<View> => ({ context, input, tool, result });
+
 export const createPresentationBridge = <View>({
   manifest,
   parse,
   title,
   host,
+  wait = sleep,
 }: PresentationBridgeOptions<View>) => {
   const app = host ?? createViewportApp(`stella ${manifest.directory}`);
   setAppDocumentLocale(undefined);
@@ -401,19 +497,17 @@ export const createPresentationBridge = <View>({
   let generation = 0;
   let lastCall: ReadCall | undefined;
   let shown: ShownPage<View> = { status: "empty" };
+  const notify = () => {
+    for (const listener of listeners) {
+      listener();
+    }
+  };
   const publish = (result: ResultState<View>) => {
     if (result.status === "ready") {
       shown = shownPage(result.view, snapshot);
     }
-    snapshot = {
-      context: snapshot.context,
-      input: snapshot.input,
-      tool: snapshot.tool,
-      result,
-    };
-    for (const listener of listeners) {
-      listener();
-    }
+    snapshot = withRead(snapshot, snapshot.tool, snapshot.input, result);
+    notify();
   };
   const publishFailure = (failure: AppFailure) => {
     snapshot = failedSnapshot({ snapshot, shown, failure });
@@ -421,10 +515,30 @@ export const createPresentationBridge = <View>({
   };
   const publishUnavailable = () =>
     publishFailure(appFailure("unavailable", createAppRequestId(), true));
+  const detached = createDetached(publishUnavailable);
   const receive = (result: AppToolResult, requestId = createAppRequestId()) => {
     const payload = parseAppToolPayload(result);
     if (result.isError === true) {
       publishFailure(toolAppFailure(payload, requestId));
+      return;
+    }
+    const running = readRunningAnswer(payload);
+    if (running !== undefined) {
+      const currentGeneration = generation;
+      publish({ status: "loading", phase: "continuing" });
+      detached(
+        followRunningRead({
+          app,
+          manifest,
+          first: running,
+          request: { name: snapshot.tool, input: snapshot.input },
+          wait,
+          isCurrent: () => currentGeneration === generation,
+          onFailure: publishFailure,
+          onAnswer: receive,
+        }),
+        "presentationBridge.followRunningRead",
+      );
       return;
     }
     const view = parse(payload, snapshot.input);
@@ -437,23 +551,16 @@ export const createPresentationBridge = <View>({
   const hostContext = (context: McpUiHostContext) => {
     snapshot = mergeHostContextSnapshot({ snapshot, context, manifest });
     applyHostPresentation(snapshot.context, title?.(snapshot.context));
-    for (const listener of listeners) {
-      listener();
-    }
+    notify();
   };
   const toolInput = ({ arguments: input }: AppEventMap["toolinput"]) => {
     shown = { status: "empty" };
     generation += 1;
     lastCall = undefined;
-    snapshot = {
-      context: snapshot.context,
-      tool: snapshot.tool,
-      input: input ?? {},
-      result: { status: "loading" },
-    };
-    for (const listener of listeners) {
-      listener();
-    }
+    snapshot = withRead(snapshot, snapshot.tool, input ?? {}, {
+      status: "loading",
+    });
+    notify();
   };
   const toolResult = (result: AppEventMap["toolresult"]) => {
     hostContext(app.getHostContext() ?? {});
@@ -476,8 +583,7 @@ export const createPresentationBridge = <View>({
       listeners.clear();
     },
   });
-  const reportAppError: NonNullable<typeof app.onerror> = publishUnavailable;
-  Reflect.set(app, "onerror", reportAppError);
+  Reflect.set(app, "onerror", publishUnavailable);
 
   // Paged reads and previews own their request state.
   const requestTool = async (request: ReadCall) =>
@@ -508,14 +614,9 @@ export const createPresentationBridge = <View>({
       app,
       manifest,
       request,
-      onRequest: (arguments_) => {
-        lastCall = { name: request.name, arguments: arguments_ };
-        snapshot = {
-          context: snapshot.context,
-          input: arguments_,
-          tool: request.name,
-          result: snapshot.result,
-        };
+      onRequest: (args) => {
+        lastCall = { name: request.name, arguments: args };
+        snapshot = withRead(snapshot, request.name, args, snapshot.result);
         publish({ status: "loading" });
       },
     });
@@ -531,10 +632,12 @@ export const createPresentationBridge = <View>({
   const openLink = async (
     url: string,
     onError?: (message: string | null) => void,
-  ): Promise<void> => {
-    const fail = onError ?? publishUnavailable;
-    await openPresentationLink({ app, url, fail });
-  };
+  ): Promise<void> =>
+    await openPresentationLink({
+      app,
+      url,
+      fail: onError ?? publishUnavailable,
+    });
   const connect = async (): Promise<void> => {
     applyHostPresentation(snapshot.context, title?.(snapshot.context));
     const connected = await Result.tryPromise(async () => app.connect());
@@ -552,7 +655,7 @@ export const createPresentationBridge = <View>({
     }
   };
   return {
-    detached: createDetached(publishUnavailable),
+    detached,
     connect,
     requestTool,
     requestFullscreen: async (onError?: (message: string | null) => void) =>
@@ -563,11 +666,9 @@ export const createPresentationBridge = <View>({
     call,
     openLink,
     retry: async () => {
-      if (lastCall !== undefined) {
-        await call(lastCall);
-      } else {
-        await call({ name: snapshot.tool, arguments: snapshot.input });
-      }
+      await call(
+        lastCall ?? { name: snapshot.tool, arguments: snapshot.input },
+      );
     },
     subscribe: (listener: () => void) => {
       listeners.add(listener);

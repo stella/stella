@@ -14,6 +14,9 @@ export const createTaskForFeatures = (features: TaskDeploymentFeatures) =>
   createSafeHandler(
     {
       contract: "patch",
+      // A retried create (a lost response, a double submit) replays the
+      // first response instead of writing a second task or fact.
+      idempotency: { type: "replay" },
       description:
         "Create a task in the current matter: name plus optional parent, " +
         "status, priority, due date, assignees, calendar fields for an " +

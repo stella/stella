@@ -242,6 +242,10 @@ pub fn is_panel_presented<R: Runtime>(window: &WebviewWindow<R>) -> bool {
 /// rendering and defeat the parking. Private WebKit setter, hence the
 /// `respondsToSelector` guard; a WebKit without it keeps the default.
 pub fn disable_occlusion_detection<R: Runtime>(window: &WebviewWindow<R>) {
+  #[expect(
+    clippy::let_underscore_must_use,
+    reason = "a webview that is already gone has no occlusion to track"
+  )]
   let _ = window.with_webview(|webview| {
     // SAFETY: `inner` returns a valid WKWebView pointer for the lifetime of
     // the closure, which Tauri runs on the main thread. The selector is only

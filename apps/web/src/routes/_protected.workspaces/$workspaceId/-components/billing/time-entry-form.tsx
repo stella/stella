@@ -5,13 +5,12 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
-import { CURRENCY_CODE_LENGTH } from "@stll/api-contract/currency-code";
-import { tryToMinorUnits } from "@stll/money";
+import { EMPTY_LOCALE_INPUT_TEXT, type LocaleInputText } from "@stll/money";
+import { BILLING_MATTER_READ_PERMISSION } from "@stll/permissions";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { Field, FieldError, FieldLabel } from "@stll/ui/field";
 import { Form } from "@stll/ui/form";
-import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
 import {
   Select,
@@ -24,14 +23,13 @@ import { Textarea } from "@stll/ui/textarea";
 
 import { majorUnitInput } from "@/components/billing/amount-input.logic";
 import { DurationInput } from "@/components/billing/duration-input";
-import {
-  DEFAULT_CURRENCY,
-  formatCurrencyAmount,
-} from "@/components/billing/format-currency";
+import { DEFAULT_CURRENCY } from "@/components/billing/format-currency";
 import { MatterCombobox } from "@/components/billing/matter-combobox";
 import { TimeEntryNarrativeField } from "@/components/billing/time-entry-narrative-field";
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
+import { usePermissions } from "@/hooks/use-permissions";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 import { localISODate } from "@/lib/local-iso-date";
 import type { QueryView } from "@/lib/query-view.logic";
@@ -42,6 +40,7 @@ import { resolvedRateOptions } from "@/lib/workspaces/queries/rates";
 
 import { deriveTimeEntryPricing } from "./time-entry-pricing.logic";
 import type { TimeEntryPricingSelection } from "./time-entry-pricing.logic";
+import { TimeEntryRateFields } from "./time-entry-rate-fields";
 
 export type TimeEntryFormValues = {
   matterId: string;
@@ -60,7 +59,9 @@ export type TimeEntryFormValues = {
 type TimeEntryFormProps = {
   workspaceId: string;
   userId: string;
-  defaultValues?: Partial<TimeEntryFormValues>;
+  defaultValues?: Omit<Partial<TimeEntryFormValues>, "rateAtEntry"> & {
+    rateAtEntry?: number | null;
+  };
   onSubmit: (values: TimeEntryFormValues) => void | Promise<void>;
   onCancel?: () => void;
   submitLabel?: string;
@@ -90,6 +91,7 @@ const timeEntryFormSchema = (
   });
 const initialPricingSelection = (
   entry: TimeEntryFormProps["defaultValues"],
+  locale: string,
 ): TimeEntryPricingSelection =>
   (entry?.rateAtEntry ?? 0) > 0
     ? {
@@ -97,6 +99,7 @@ const initialPricingSelection = (
         draft: majorUnitInput(
           entry?.rateAtEntry ?? 0,
           entry?.currency ?? DEFAULT_CURRENCY,
+          locale,
         ),
         currency: entry?.currency ?? DEFAULT_CURRENCY,
       }
@@ -131,6 +134,7 @@ export const TimeEntryForm = ({
   const t = useTranslations();
   const {
     form,
+    canReadBilling,
     rateOverride,
     beginOverride,
     rateInputValue,
@@ -176,7 +180,7 @@ export const TimeEntryForm = ({
     >
       <QueryViewFeedback view={taskCodesView} />
       <QueryViewFeedback view={activityCodesView} />
-      <QueryViewFeedback view={resolvedView} />
+      {canReadBilling && <QueryViewFeedback view={resolvedView} />}
       <div className="flex flex-col gap-1.5">
         <form.Field name="matterId">
           {(field) => (
@@ -226,15 +230,18 @@ export const TimeEntryForm = ({
         </div>
       </div>
 
-      <TimeEntryRateInput
-        currentCurrency={currentCurrency}
-        currentRate={currentRate}
-        rateOverride={rateOverride}
-        rateInputValue={rateInputValue}
-        onCurrencyChange={setManualCurrency}
-        beginOverride={beginOverride}
-        setRateInputValue={setRateInputValue}
-      />
+      {canReadBilling && (
+        <TimeEntryRateFields
+          currency={currentCurrency}
+          rate={currentRate}
+          override={rateOverride}
+          draft={rateInputValue}
+          invalid={pricingStatus === "invalid"}
+          onCurrencyChange={setManualCurrency}
+          onOverride={beginOverride}
+          onDraftChange={setRateInputValue}
+        />
+      )}
 
       <form.Field name="narrative">
         {(field) => (
@@ -317,80 +324,6 @@ export const TimeEntryForm = ({
   );
 };
 
-const TimeEntryRateInput = ({
-  currentCurrency,
-  currentRate,
-  rateOverride,
-  rateInputValue,
-  onCurrencyChange,
-  beginOverride,
-  setRateInputValue,
-}: {
-  currentCurrency: string;
-  currentRate: number;
-  rateOverride: boolean;
-  rateInputValue: string;
-  onCurrencyChange: (value: string) => void;
-  beginOverride: () => void;
-  setRateInputValue: (value: string) => void;
-}) => {
-  const t = useTranslations();
-  return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex items-center justify-between">
-        <Label>{t("billing.rates.hourlyRate")}</Label>
-        {!rateOverride && (
-          <Button onClick={beginOverride} size="inline" variant="muted">
-            <span className="text-xs underline">
-              {t("billing.rates.override")}
-            </span>
-          </Button>
-        )}
-      </div>
-      {rateOverride ? (
-        <div className="flex gap-2">
-          <Input
-            className="flex-1"
-            dir="ltr"
-            inputMode="decimal"
-            onBlur={() => {
-              // Display only: tidy the draft to the places the currency
-              // counts. The draft stays in major units, and the scaling
-              // that reaches the API waits for submit.
-              const rate = tryToMinorUnits({
-                amount: rateInputValue,
-                currency: currentCurrency,
-              });
-              if (rate === null) {
-                return;
-              }
-              setRateInputValue(majorUnitInput(rate, currentCurrency));
-            }}
-            onChange={(e) => setRateInputValue(e.currentTarget.value)}
-            placeholder="350.00"
-            value={rateInputValue}
-          />
-          <Input
-            className="w-20"
-            dir="ltr"
-            maxLength={CURRENCY_CODE_LENGTH}
-            onChange={(event) =>
-              onCurrencyChange(event.currentTarget.value.toUpperCase())
-            }
-            value={currentCurrency}
-          />
-        </div>
-      ) : (
-        <div className="text-muted-foreground text-sm">
-          {currentRate > 0
-            ? `${formatCurrencyAmount(currentRate, currentCurrency)}${t("billing.rates.perHour")}`
-            : t("billing.rates.noRateFound")}
-        </div>
-      )}
-    </div>
-  );
-};
-
 const TimeEntryCodeSelect = ({
   type,
   codes,
@@ -434,9 +367,11 @@ const useTimeEntryFormState = ({
   contextState = "available",
 }: TimeEntryFormProps) => {
   const t = useTranslations();
+  const locale = useFormattingLocale();
   const queryClient = useQueryClient();
+  const canReadBilling = usePermissions(BILLING_MATTER_READ_PERMISSION);
   const [pricingSelection, setPricingSelection] = useState(() =>
-    initialPricingSelection(defaultValues),
+    initialPricingSelection(defaultValues, locale),
   );
 
   const taskCodesQuery = useQuery(billingCodesOptions(workspaceId, "task"));
@@ -456,15 +391,18 @@ const useTimeEntryFormState = ({
       onSubmit: async ({ value }) => {
         // Read the exact submitted lookup again: validation may outlive a render.
         const pricing = deriveTimeEntryPricing({
-          selection: pricingSelection,
-          lookup: queryClient.getQueryState(
-            resolvedRateOptions({
-              workspaceId,
-              userId,
-              date: value.dateWorked,
-              activityCode: value.activityCode,
-            }).queryKey,
-          ),
+          selection: canReadBilling ? pricingSelection : { type: "hidden" },
+          locale,
+          lookup: canReadBilling
+            ? queryClient.getQueryState(
+                resolvedRateOptions({
+                  workspaceId,
+                  userId,
+                  date: value.dateWorked,
+                  activityCode: value.activityCode,
+                }).queryKey,
+              )
+            : undefined,
         });
         if (pricing.status !== "ready") {
           return;
@@ -482,25 +420,33 @@ const useTimeEntryFormState = ({
 
   const activityCode = useSelector(form.store, (s) => s.values.activityCode);
 
-  const resolvedQuery = useQuery(
-    resolvedRateOptions({
-      workspaceId,
-      userId,
-      date: dateWorked,
-      activityCode,
-    }),
-  );
+  const resolvedOptions = resolvedRateOptions({
+    workspaceId,
+    userId,
+    date: dateWorked,
+    activityCode,
+  });
+  const resolvedQuery = useQuery({
+    ...resolvedOptions,
+    enabled: canReadBilling && (resolvedOptions.enabled ?? true),
+  });
   const resolvedView = queryView(resolvedQuery);
   const pricing = deriveTimeEntryPricing({
-    selection: pricingSelection,
-    lookup: resolvedQuery.isPlaceholderData ? undefined : resolvedQuery,
+    selection: canReadBilling ? pricingSelection : { type: "hidden" },
+    locale,
+    lookup:
+      !canReadBilling || resolvedQuery.isPlaceholderData
+        ? undefined
+        : resolvedQuery,
   });
   const currentRate = pricing.rateAtEntry;
   const currentCurrency = pricing.currency;
   const rateOverride = pricingSelection.type === "manual";
   const rateInputValue =
-    pricingSelection.type === "manual" ? pricingSelection.draft : "";
-  const initialSelection = initialPricingSelection(defaultValues);
+    pricingSelection.type === "manual"
+      ? pricingSelection.draft
+      : EMPTY_LOCALE_INPUT_TEXT;
+  const initialSelection = initialPricingSelection(defaultValues, locale);
   const pricingDirty =
     pricingSelection.type !== initialSelection.type ||
     (pricingSelection.type === "manual" &&
@@ -521,21 +467,24 @@ const useTimeEntryFormState = ({
 
   return {
     form,
+    canReadBilling,
     rateOverride,
     beginOverride: () =>
       setPricingSelection({
         type: "manual",
         currency: currentCurrency,
         draft:
-          currentRate > 0 ? majorUnitInput(currentRate, currentCurrency) : "",
+          currentRate > 0
+            ? majorUnitInput(currentRate, currentCurrency, locale)
+            : EMPTY_LOCALE_INPUT_TEXT,
       }),
     rateInputValue,
-    setRateInputValue: (draft: string) =>
+    setRateInputValue: (draft: LocaleInputText) =>
       setPricingSelection({ type: "manual", currency: currentCurrency, draft }),
     setManualCurrency: (currency: string) =>
       setPricingSelection({ type: "manual", currency, draft: rateInputValue }),
     resetPricing: () =>
-      setPricingSelection(initialPricingSelection(defaultValues)),
+      setPricingSelection(initialPricingSelection(defaultValues, locale)),
     pricingStatus: pricing.status,
     taskCodesView,
     activityCodesView,

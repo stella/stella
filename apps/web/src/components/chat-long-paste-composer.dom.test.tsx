@@ -5,10 +5,10 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import messages from "@/i18n/langs/en.json";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type {
   ChatEditorController,

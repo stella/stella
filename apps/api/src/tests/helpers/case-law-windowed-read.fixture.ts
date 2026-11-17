@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { expect } from "bun:test";
 
+import { noDecisionReviewFound } from "@stll/api-contract/case-law-reviews";
 import { classifiedCitationBlockIds } from "@stll/legal-ast/citation-passage";
 import { isDocumentAst } from "@stll/legal-ast/document-ast";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
@@ -146,6 +147,7 @@ export const caseLawWindowFixture = async (
                 id: decisionId,
                 caseNumberType: "case-number",
                 caseNumber: "1 Test",
+                appealReviews: noDecisionReviewFound(),
                 courtAbbreviation: null,
                 courtTier: "other",
                 court: "Court",

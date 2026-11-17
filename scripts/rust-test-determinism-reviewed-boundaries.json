@@ -3,5 +3,25 @@
     "file": "apps/desktop/src-tauri/tests/local_file_creation_guard.rs",
     "line": "let output = Command::new(\"cargo\")",
     "reason": "real cargo clippy compile-fail check that the disallowed file-creation lint fires; the process boundary is the subject of the test"
+  },
+  {
+    "file": "apps/desktop/src-tauri/src/harness_sidecar/tests.rs",
+    "line": "let deadline = tokio::time::Instant::now() + WAIT; // kit-allow: waits on another process",
+    "reason": "bounds the wait for a condition another process (the stand-in holder) makes true; the process boundary is the subject of the test"
+  },
+  {
+    "file": "apps/desktop/src-tauri/src/harness_sidecar/tests.rs",
+    "line": "assert!(tokio::time::Instant::now() < deadline, \"timed out: {what}\"); // kit-allow: waits on another process",
+    "reason": "checks the bound on a wait for a condition another process (the stand-in holder) makes true"
+  },
+  {
+    "file": "apps/desktop/src-tauri/src/harness_sidecar/tests.rs",
+    "line": "tokio::time::sleep(Duration::from_millis(20)).await; // kit-allow: polls another process",
+    "reason": "polls a condition another process (the stand-in holder) makes true; it signals by files and its socket only"
+  },
+  {
+    "file": "apps/desktop/src-tauri/src/harness_sidecar/tests.rs",
+    "line": "tokio::time::sleep(Duration::from_millis(200)).await; // kit-allow: lets a dropped connection close in a real process",
+    "reason": "gives a real holder process the time to see a dropped supervisor's connection close before the next supervisor connects, as an app restart does"
   }
 ]

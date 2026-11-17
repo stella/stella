@@ -15,14 +15,17 @@ import { REVIEW_COLUMN_GRANTS_BY_RELATION } from "./case-law/review-column-grant
 export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
   caseLawCitationDoctrineReviews: "case_law_citation_doctrine_reviews",
   caseLawCitations: "case_law_citations",
+  caseLawCompletenessCensus: "case_law_completeness_census",
   caseLawWithdrawalStatus: "case_law_withdrawal_status",
   caseLawCorpusTombstones: "case_law_corpus_tombstones",
   caseLawCourtDirectoryRanks: "case_law_court_directory_ranks",
   caseLawCourtWeights: "case_law_court_weights",
   caseLawCoverageSlices: "case_law_coverage_slices",
   caseLawDecisionAliases: "case_law_decision_aliases",
+  caseLawDecisionAnchorRedirects: "case_law_decision_anchor_redirects",
   caseLawDecisionIdentifiers: "case_law_decision_identifiers",
   caseLawDecisionJudges: "case_law_decision_judges",
+  caseLawDecisionReviews: "case_law_decision_reviews",
   publishedCaseLawDecisions: "case_law_published_decisions",
   unredactedCaseLawDecisions: "case_law_unredacted_decisions",
   caseLawDecisionCitationStats: "case_law_decision_citation_stats",
@@ -60,15 +63,14 @@ export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
   legislationSources: "legislation_sources",
   legislationWorkNames: "legislation_work_names",
   legislationWorkIdentifiers: "legislation_work_identifiers",
+  softLawDocuments: "soft_law_documents",
+  softLawDocumentVersions: "soft_law_document_versions",
+  softLawDocumentLocators: "soft_law_document_locators",
   statuteSitemapShards: "statute_sitemap_shards",
 } as const;
 
 export type PublicLawRelation =
   (typeof PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT)[keyof typeof PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT];
-
-export const PUBLIC_CASE_LAW_SCHEMA_IMPORTS = Object.keys(
-  PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT,
-).filter((schemaImport) => schemaImport.startsWith("caseLaw"));
 
 /** How this release relates to a column's grant. */
 export type PublicLawColumnGrant = "required" | "permitted";
@@ -111,7 +113,11 @@ export const LEGISLATION_WORK_IDENTIFIER_COLUMN_GRANTS_BY_RELATION = {
   },
 } as const satisfies PublicLawColumnGrantsByRelation;
 
-/** Expanded before the follow-up release grants the reviewed doctrine capability. */
+/**
+ * The reviewed doctrine capability, granted by
+ * `20261112120000_public_law_reader_citation_doctrine` one release after the
+ * map first permitted it.
+ */
 export const DOCTRINE_COLUMN_GRANTS_BY_RELATION = {
   case_law_citations: {
     citation_key: "permitted",
@@ -122,6 +128,16 @@ export const DOCTRINE_COLUMN_GRANTS_BY_RELATION = {
     citation_key: "permitted",
     doctrinal_treatment: "permitted",
     evidence_quote: "permitted",
+  },
+} as const satisfies PublicLawColumnGrantsByRelation;
+
+export const CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION = {
+  case_law_citations: {
+    polarity_rule_id: "permitted",
+    polarity_source: "permitted",
+    polarity_classifier_version: "permitted",
+    polarity_evidence_windows: "permitted",
+    cited_part: "permitted",
   },
 } as const satisfies PublicLawColumnGrantsByRelation;
 
@@ -322,8 +338,23 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
   ...LEGISLATION_WORK_IDENTIFIER_COLUMN_GRANTS_BY_RELATION,
   case_law_citation_doctrine_reviews:
     DOCTRINE_COLUMN_GRANTS_BY_RELATION.case_law_citation_doctrine_reviews,
+  case_law_decision_reviews: {
+    reviewing_decision_id: "required",
+    reviewed_decision_id: "required",
+    reviewed_case_number: "required",
+    reviewed_citation_key: "required",
+    reviewed_docket_family_key: "required",
+    reviewed_court: "required",
+    reviewed_decision_date: "required",
+    reviewed_sheet_number: "required",
+    outcome: "required",
+    source: "required",
+    evidence_classification: "required",
+    parser_version: "required",
+  },
   case_law_citations: {
     ...DOCTRINE_COLUMN_GRANTS_BY_RELATION.case_law_citations,
+    ...CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION.case_law_citations,
     id: "required",
     citing_decision_id: "required",
     cited_decision_id: "required",
@@ -367,6 +398,12 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     retired_decision_id: "permitted",
     canonical_decision_id: "permitted",
   },
+  // Where an earlier document's anchor went; the redirect read answers from it.
+  case_law_decision_anchor_redirects: {
+    decision_id: "required",
+    from_anchor: "required",
+    to_anchor: "required",
+  },
   case_law_decision_identifiers: {
     decision_id: "required",
     type: "required",
@@ -387,17 +424,17 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
   [CASE_LAW_DECISION_VIEWS[0]]: CASE_LAW_DECISION_VIEW_COLUMN_GRANTS,
   [CASE_LAW_DECISION_VIEWS[1]]: CASE_LAW_DECISION_VIEW_COLUMN_GRANTS,
   case_law_decision_citation_stats: {
-    decision_id: "permitted",
-    direction: "permitted",
-    related_year: "permitted",
-    related_country: "permitted",
-    related_source_id: "permitted",
-    polarity: "permitted",
-    count: "permitted",
+    decision_id: "required",
+    direction: "required",
+    related_year: "required",
+    related_country: "required",
+    related_source_id: "required",
+    polarity: "required",
+    count: "required",
   },
   case_law_decision_citation_stats_state: {
-    decision_id: "permitted",
-    status: "permitted",
+    decision_id: "required",
+    status: "required",
   },
   // The text-search configuration a language's query is parsed with. It is
   // read from the database whose search documents it has to match.
@@ -483,6 +520,11 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     added_last_week: "required",
     counted_at: "required",
   },
+  case_law_completeness_census: Object.fromEntries(
+    Object.keys(
+      CENSUS_COLUMN_GRANTS_BY_RELATION.case_law_completeness_census,
+    ).map((column) => [column, "required"] as const),
+  ),
   legislation_facet_refreshes: {
     singleton: "required",
     refreshed_at: "required",
@@ -623,6 +665,10 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     expression_kind: "required",
     window_disposition: "required",
     window_disposition_basis: "required",
+    // What a consolidation changed against the one before it, served only
+    // while the row's payload revision is the one it was computed from.
+    change_summary: "required",
+    payload_revision: "required",
     fulltext: "required",
     sections: "required",
     document_ast: "required",
@@ -686,6 +732,33 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     source_id: "required",
     identifier: "required",
     eli: "required",
+  },
+  // Guidance as served; raw payloads, identity keys and run state stay with
+  // ingestion, and `soft_law_sources` is not readable at all.
+  soft_law_documents: {
+    id: "required",
+    jurisdiction: "required",
+    authority: "required",
+    kind: "required",
+    title: "required",
+    stated_reference: "required",
+    issued_on: "required",
+    listing_state: "required",
+    validity_state: "required",
+    validity_basis: "required",
+  },
+  soft_law_document_versions: {
+    document_id: "required",
+    metadata: "required",
+    extracted_text: "required",
+    extraction_quality: "required",
+    observed_to: "required",
+  },
+  soft_law_document_locators: {
+    document_id: "required",
+    url: "required",
+    state: "required",
+    last_seen_at: "required",
   },
   // The name lookup a legislation search places named acts first by: the
   // match keys and what they point at, not the names' text.

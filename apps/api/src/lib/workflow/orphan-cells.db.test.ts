@@ -17,6 +17,10 @@ import {
   selectWorkspacesWithPendingCells,
 } from "@/api/lib/workflow/orphan-cells";
 import type { OrphanCellsDatabase } from "@/api/lib/workflow/orphan-cells";
+import {
+  NO_CELL_CLAIM,
+  pendingCellClaim,
+} from "@/api/tests/helpers/cell-claim";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -55,9 +59,7 @@ const setContentType = async (
         type === "pending"
           ? { type: "pending", version: 1 }
           : { type: "text", value: "done", version: 1 },
-      ...(type === "text"
-        ? { ownerRunId: null, attempt: null, aiSettlement: null }
-        : {}),
+      ...(type === "text" ? { ...NO_CELL_CLAIM, aiSettlement: null } : {}),
     })
     .where(inArray(fields.id, [...fieldIds]));
 };
@@ -93,8 +95,7 @@ describe("orphan cell reconciliation", () => {
       .update(fields)
       .set({
         content: { type: "pending", version: 1 },
-        ownerRunId,
-        attempt: 1,
+        ...pendingCellClaim(ownerRunId, 1),
       })
       .where(eq(fields.id, ids.fieldA1));
 
@@ -106,7 +107,14 @@ describe("orphan cell reconciliation", () => {
       }),
     ).toBe(true);
     const [cell] = await testDb
-      .select({ content: fields.content, aiSettlement: fields.aiSettlement })
+      .select({
+        content: fields.content,
+        aiSettlement: fields.aiSettlement,
+        ownerRunId: fields.ownerRunId,
+        ownerBatchId: fields.ownerBatchId,
+        deadlineAt: fields.deadlineAt,
+        attempt: fields.attempt,
+      })
       .from(fields)
       .where(eq(fields.id, ids.fieldA1));
     expect(cell).toEqual({
@@ -116,6 +124,7 @@ describe("orphan cell reconciliation", () => {
         runId: ownerRunId,
         settledAt: expect.any(String),
       },
+      ...NO_CELL_CLAIM,
     });
   });
 
@@ -131,8 +140,7 @@ describe("orphan cell reconciliation", () => {
       .update(fields)
       .set({
         content: { type: "pending", version: 1 },
-        ownerRunId: null,
-        attempt: null,
+        ...NO_CELL_CLAIM,
       })
       .where(eq(fields.id, ids.fieldA1));
 
@@ -168,7 +176,7 @@ describe("orphan cell reconciliation", () => {
     await setContentType([ids.fieldA1, ids.fieldB1], "pending");
     await testDb
       .update(fields)
-      .set({ ownerRunId })
+      .set(pendingCellClaim(ownerRunId))
       .where(eq(fields.id, ids.fieldA1));
     const { calls, database } = recordingDatabase();
 
@@ -180,6 +188,10 @@ describe("orphan cell reconciliation", () => {
         id: fields.id,
         content: fields.content,
         aiSettlement: fields.aiSettlement,
+        ownerRunId: fields.ownerRunId,
+        ownerBatchId: fields.ownerBatchId,
+        deadlineAt: fields.deadlineAt,
+        attempt: fields.attempt,
       })
       .from(fields)
       .where(inArray(fields.id, [ids.fieldA1, ids.fieldB1]));
@@ -195,6 +207,10 @@ describe("orphan cell reconciliation", () => {
       runId: ownerRunId,
       settledAt: expect.any(String),
     });
+    // An errored cell is settled, so it gives up the claim it was errored under.
+    expect(contentTypes.find(({ id }) => id === ids.fieldA1)).toMatchObject(
+      NO_CELL_CLAIM,
+    );
 
     // A second pass finds nothing left to error in that workspace.
     expect(await errorPendingCells(database, ids.wsA1)).toBe(0);

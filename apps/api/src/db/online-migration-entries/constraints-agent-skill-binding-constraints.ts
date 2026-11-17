@@ -4,6 +4,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "constraints-agent-skill-binding-constraints",
   revision: 1260,
+  lifecycle: "finalized",
   type: "constraints",
   values: [...AGENT_SKILL_BINDING_CONSTRAINTS],
 } satisfies OnlineMigrationEntry;

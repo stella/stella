@@ -1,7 +1,7 @@
 import { panic, Result, TaggedError } from "better-result";
 import path from "node:path";
-import { API } from "tsrs/unstable/async";
-import { serverFS } from "tsrs/unstable/fs";
+import { API } from "tsrs/async";
+import { serverFS } from "tsrs/fs";
 import * as v from "valibot";
 
 import { waiverKey } from "./dated-waiver-core";

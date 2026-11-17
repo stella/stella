@@ -98,14 +98,22 @@ export const refreshClipboardEditorName = (
 ): ClipboardEditorNameDraft =>
   draft.type === "edited" ? draft : { type: "unchanged", value: name ?? "" };
 
+/** Whether stella kept this clip from a dictation rather than a copy. */
+export const isClipboardDictation = (item: ClipboardItem) =>
+  item.type === "text" && item.origin === "dictation";
+
 /**
- * What an unnamed clip is called: the page a browser copy came from, else the
- * host a link points to, else its kind.
+ * What an unnamed clip is called: a dictation is labelled as one, else the
+ * page a browser copy came from, else the host a link points to, else its
+ * kind.
  */
 export const clipboardUntitledName = (
   item: ClipboardItem,
-  kindLabels: { image: string; text: string },
+  kindLabels: { dictation: string; image: string; text: string },
 ) => {
+  if (isClipboardDictation(item)) {
+    return kindLabels.dictation;
+  }
   const pageLabel = item.sourceApp?.page
     ? clipboardSourceLabel(item.sourceApp)
     : "";
@@ -153,7 +161,12 @@ export const isClipboardNameInput = (
   dataset: Readonly<Record<string, string | undefined>>,
 ) => Object.hasOwn(dataset, "clipboardNameInput");
 
-export const shouldCopyFromClipboardInput = ({
+/**
+ * Enter in the search field confirms what was typed: it never copies a clip
+ * or closes the window. Copying is a deliberate act on a clip (Enter on a
+ * focused card, a click, or the quick-copy shortcut).
+ */
+export const isClipboardSearchConfirm = ({
   dataset,
   isComposing,
   key,
@@ -244,6 +257,16 @@ export const clipboardControlsKeyAction = ({
 
 export const CLIPBOARD_SEARCH_SCOPES = ["clips", "registry"] as const;
 export type ClipboardSearchScope = (typeof CLIPBOARD_SEARCH_SCOPES)[number];
+
+/**
+ * The clips that copy, quick-copy, delete and ArrowUp act on. Only the clips
+ * scope shows the history rail; every other scope owns the search field's
+ * keys, so a keystroke there can never act on a clip the user cannot see.
+ */
+export const clipboardActionItems = <Item>(
+  scope: ClipboardSearchScope,
+  items: readonly Item[],
+): readonly Item[] => (scope === "clips" ? items : []);
 
 /**
  * Vertical arrows step through the search scopes from wherever focus is; the

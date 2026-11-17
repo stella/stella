@@ -20,6 +20,11 @@ export default {
         reason:
           "Folds local harness chunks and cloud translator chunks for the same turn to prove they persist the same message; it never stores one.",
       },
+      {
+        path: "packages/agent-engine/src/harness/codex/adapter.test.ts",
+        reason:
+          "Folds a Codex app-server turn and the same turn from the cloud translator to prove they persist the same message; it never stores one.",
+      },
     ],
   },
 } as const satisfies OwnershipEntry;

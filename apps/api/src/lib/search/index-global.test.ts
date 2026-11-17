@@ -2,13 +2,14 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import { RESOURCE_TYPE, resourceRef, toResourceName } from "@stll/api-contract";
+import { createTestState } from "@stll/test-state";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { ArtefactProvenanceDecodeError } from "@/api/lib/chat/artefact-provenance";
 import { LIMITS } from "@/api/lib/limits";
 import { CHAT_SEARCH_DISPLAY_METADATA_GENERATION } from "@/api/lib/search/chat-search-generation";
 import { chatThreadScopeSql } from "@/api/lib/search/chat-thread-scope-sql";
 import { contactWorkspaceAccessSql } from "@/api/lib/search/contact-workspace-access-sql";
-import { encodeCursor } from "@/api/lib/search/cursor";
 import { mapEntityHit } from "@/api/lib/search/global-search-mappers";
 import { searchGlobal as searchGlobalWithDatabase } from "@/api/lib/search/index-global";
 import {
@@ -22,6 +23,8 @@ import {
 } from "@/api/tests/helpers/mock-root-db";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
+const testState = createTestState({ file: import.meta.path, config: {} });
+
 const { scopedDb } = createScopedDbMock(rootDbTestDouble);
 type SearchQuery = Parameters<typeof searchGlobalWithDatabase>[0];
 // A browser session's search unless a test passes an access token's scopes.
@@ -29,10 +32,12 @@ const searchGlobal = async (
   query: Omit<SearchQuery, "grantedScopes"> &
     Partial<Pick<SearchQuery, "grantedScopes">>,
 ) =>
-  await searchGlobalWithDatabase(
-    { grantedScopes: undefined, ...query },
-    { scopedDb },
-  );
+  (
+    await searchGlobalWithDatabase(
+      { grantedScopes: undefined, ...query },
+      { scopedDb },
+    )
+  ).unwrap();
 
 // The final SQL LIMIT bounds the source page; chat has earlier candidate limits.
 const sourcePageLimit = (compiled: ReturnType<PgDialect["sqlToQuery"]>) => {
@@ -43,9 +48,9 @@ const sourcePageLimit = (compiled: ReturnType<PgDialect["sqlToQuery"]>) => {
   return compiled.params[Number(parameter) - 1];
 };
 
-process.env["S3_ENDPOINT"] ??= "http://localhost:9000";
-process.env["S3_BUCKET"] ??= "test";
-process.env["S3_REGION"] ??= "us-east-1";
+testState.setEnvIfAbsent("S3_ENDPOINT", "http://localhost:9000");
+testState.setEnvIfAbsent("S3_BUCKET", "test");
+testState.setEnvIfAbsent("S3_REGION", "us-east-1");
 
 const entityResourceName = (entityId: string) =>
   toResourceName(
@@ -59,6 +64,58 @@ describe("global search SQL scope", () => {
   beforeEach(() => {
     clearRootDbMocks();
   });
+
+  test.each([undefined, {}, { version: 2, slots: {} }])(
+    "propagates invalid chat provenance %j before ranking",
+    async (metadata) => {
+      const dialect = new PgDialect();
+      rootDbExecuteMock.mockImplementation(async (query) => {
+        const text = dialect.sqlToQuery(query).sql;
+        return text.includes("t.generation_provenance")
+          ? [
+              {
+                id: "00000000-0000-4000-8000-000000000003",
+                title: "Generated title",
+                title_source: "ai",
+                generation_provenance: metadata,
+                source_messages: [],
+                updated_at: new Date("2026-07-29T08:00:00.000Z"),
+                tier: 0,
+                score: 0,
+              },
+            ]
+          : [];
+      });
+      const result = await searchGlobalWithDatabase(
+        {
+          query: "",
+          organizationId: toSafeId<"organization">("org_1"),
+          userId: toSafeId<"user">("user_1"),
+          accessibleWorkspaceIds: [],
+          selectedWorkspaceIds: [],
+          types: ["chat"],
+          grantedScopes: undefined,
+          editedByUserIds: [],
+          mimeTypes: [],
+          limit: 10,
+        },
+        { scopedDb },
+      );
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error).toBeInstanceOf(ArtefactProvenanceDecodeError);
+      }
+      const reads = rootDbExecuteMock.mock.calls.map(
+        ([query]) => dialect.sqlToQuery(query).sql,
+      );
+      expect(
+        reads.some((text) => text.includes("t.generation_provenance")),
+      ).toBe(true);
+      expect(
+        reads.some((text) => text.includes("FROM jsonb_to_recordset")),
+      ).toBe(false);
+    },
+  );
 
   test("always constrains contact search to accessible workspaces", async () => {
     const dialect = new PgDialect();
@@ -187,8 +244,8 @@ describe("global search SQL scope", () => {
     },
   );
 
-  test("rechecks case-law redistribution on every projected read", async () => {
-    await searchGlobal({
+  test("a case-law-only search reads no case law", async () => {
+    const result = await searchGlobal({
       query: "proportionality",
       organizationId: toSafeId<"organization">("org_1"),
       userId: toSafeId<"user">("user_1"),
@@ -200,16 +257,18 @@ describe("global search SQL scope", () => {
       limit: 10,
     });
 
+    // The palette's case-law section asks the corpus search engine; global
+    // search never ranks the corpus in its own transaction.
     const dialect = new PgDialect();
     const caseLawReads = rootDbExecuteMock.mock.calls
       .map(([query]) => dialect.sqlToQuery(query).sql)
-      .filter((sqlText) => sqlText.includes("case_law_search_documents"));
-    expect(caseLawReads.length).toBeGreaterThan(0);
-    for (const serialized of caseLawReads) {
-      expect(serialized).toContain("case_law_sources");
-      expect(serialized).toContain("allowsRedistribution");
-      expect(serialized).toContain("d.source_id");
-    }
+      .filter((sqlText) => sqlText.includes("case_law_"));
+    expect(caseLawReads).toEqual([]);
+    expect(result.hits).toEqual([]);
+    expect(result.totalCount).toBe(0);
+    expect(result.facets.type.some(({ value }) => value === "case-law")).toBe(
+      false,
+    );
   });
 
   test("maps the last editor avatar for document hits", () => {
@@ -253,10 +312,6 @@ describe("global search SQL scope", () => {
         tableSql: "FROM contact_search_documents csd",
         idSql: "'contact:' || csd.contact_id::text",
       },
-      {
-        tableSql: "FROM case_law_search_documents clsd",
-        idSql: "'case-law:' || clsd.decision_id::text",
-      },
     ] as const;
     const dialect = new PgDialect();
 
@@ -279,7 +334,7 @@ describe("global search SQL scope", () => {
       limit: 3,
     });
 
-    expect(rootDbExecuteMock).toHaveBeenCalledTimes(5);
+    expect(rootDbExecuteMock).toHaveBeenCalledTimes(4);
     const compiledQueries = rootDbExecuteMock.mock.calls.map(([query]) =>
       dialect.sqlToQuery(query),
     );
@@ -317,34 +372,6 @@ describe("global search SQL scope", () => {
     expect(
       chatQuery === undefined ? undefined : sourcePageLimit(chatQuery),
     ).toBe(LIMITS.searchChatCandidateThreadsMax + 1);
-  });
-
-  test("continues legacy offset cursors during a rolling deployment", async () => {
-    const dialect = new PgDialect();
-
-    await searchGlobal({
-      query: "contract",
-      organizationId: toSafeId<"organization">("org_1"),
-      userId: toSafeId<"user">("user_1"),
-      accessibleWorkspaceIds: [toSafeId<"workspace">("ws_1")],
-      selectedWorkspaceIds: [],
-      types: [],
-      editedByUserIds: [],
-      mimeTypes: [],
-      cursor: encodeCursor(25, "global"),
-      limit: 3,
-    });
-
-    expect(rootDbExecuteMock).toHaveBeenCalledTimes(5);
-    for (const [query] of rootDbExecuteMock.mock.calls) {
-      const compiled = dialect.sqlToQuery(query);
-      expect(compiled.sql).not.toContain('COLLATE "C" <');
-      expect(sourcePageLimit(compiled)).toBe(
-        compiled.sql.includes("FROM chat_thread_search_documents cst")
-          ? LIMITS.searchChatCandidateThreadsMax + 1
-          : 29,
-      );
-    }
   });
 
   test("uses updated time as the keyset value for empty-query search", async () => {

@@ -11,6 +11,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { toRootedFilePath } from "tsrs/path";
 
 import { repoRelativePath } from "@stll/portable-path";
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -27,6 +28,10 @@ import {
 import { nativeTypecheckProgramFiles } from "./api-typecheck-inputs";
 import { readTurboTypecheckInputs } from "./turbo-typecheck-inputs";
 import { createProgram } from "./typescript-program";
+
+// The compiler reports configured files as rooted, normalized paths.
+const rootedFile = (directory: string, file: string) =>
+  toRootedFilePath(path.join(directory, file), undefined);
 
 test("declarations follow public type imports without serializing runtime-only route exports", async () => {
   const directory = mkdtempSync(
@@ -738,16 +743,16 @@ test("stable wrappers prepare and restore exact roots and owners without committ
       (await regenerateApiDeclarationSurface(project)).diagnostics,
     ).toEqual([]);
     expect((await readApiTypecheckConfig(project)).fileNames).toEqual([
-      path.join(api, "src/value.ts"),
+      rootedFile(api, "src/value.ts"),
     ]);
     expect(
       (await readApiTypecheckConfig(path.join(api, "tsconfig.tests.json")))
         .fileNames,
-    ).toEqual([path.join(api, "src/value.test.ts")]);
+    ).toEqual([rootedFile(api, "src/value.test.ts")]);
     expect(
       (await readApiTypecheckConfig(path.join(api, "tsconfig.src.json")))
         .fileNames,
-    ).toContain(path.join(api, "src/routes.test.ts"));
+    ).toContain(rootedFile(api, "src/routes.test.ts"));
     write("src/extra.ts", "export type Extra = string;\n");
     write(
       "src/value.ts",
@@ -757,7 +762,7 @@ test("stable wrappers prepare and restore exact roots and owners without committ
       (await regenerateApiDeclarationSurface(project)).diagnostics,
     ).toEqual([]);
     expect((await readApiTypecheckConfig(project)).fileNames).toContain(
-      path.join(api, "src/extra.ts"),
+      rootedFile(api, "src/extra.ts"),
     );
     expect(wrappers.map((file) => readFileSync(file, "utf-8"))).toEqual(before);
     expect(readFileSync(turbo, "utf-8")).toBe(turboSource);
@@ -770,7 +775,7 @@ test("stable wrappers prepare and restore exact roots and owners without committ
     });
     cpSync(cached, output, { recursive: true });
     expect((await readApiTypecheckConfig(project)).fileNames).toContain(
-      path.join(api, "src/extra.ts"),
+      rootedFile(api, "src/extra.ts"),
     );
     const files = nativeTypecheckProgramFiles(
       path.join(api, "tsconfig.tests.json"),

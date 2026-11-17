@@ -202,12 +202,14 @@ const inTx = async <T>(operation: (tx: Transaction) => Promise<T>) =>
 const commitDelete = async (deleteOpstamp: number): Promise<void> => {
   const leases = await inTx(
     async (tx) =>
-      await claimCorpusProjectionCleanupTx(tx, {
-        ...SCOPE,
-        limit: 10,
-        leaseMs: 60_000,
-        newLeaseToken: () => CLEANUP_LEASE_TOKEN,
-      }),
+      (
+        await claimCorpusProjectionCleanupTx(tx, {
+          ...SCOPE,
+          limit: 10,
+          leaseMs: 60_000,
+          newLeaseToken: () => CLEANUP_LEASE_TOKEN,
+        })
+      ).leases,
   );
   expect(leases.map(({ intentId }) => intentId).toSorted()).toEqual([
     ...INTENT_IDS,
@@ -556,12 +558,14 @@ test("revisions at the reissue limit stall instead of re-issuing", async () => {
   expect(await claimSettlement(SUCCESSOR_LEASE_TOKEN)).toEqual([]);
   const cleanup = await inTx(
     async (tx) =>
-      await claimCorpusProjectionCleanupTx(tx, {
-        ...SCOPE,
-        limit: 10,
-        leaseMs: 60_000,
-        newLeaseToken: () => CLEANUP_LEASE_TOKEN,
-      }),
+      (
+        await claimCorpusProjectionCleanupTx(tx, {
+          ...SCOPE,
+          limit: 10,
+          leaseMs: 60_000,
+          newLeaseToken: () => CLEANUP_LEASE_TOKEN,
+        })
+      ).leases,
   );
   expect(cleanup.map(({ intentId }) => intentId)).toEqual([SECOND_INTENT_ID]);
 });
@@ -611,12 +615,14 @@ test("a fourth survivor stalls after exactly three reissues, including replay", 
   expect(
     await inTx(
       async (tx) =>
-        await claimCorpusProjectionCleanupTx(tx, {
-          ...SCOPE,
-          limit: 10,
-          leaseMs: 60_000,
-          newLeaseToken: () => CLEANUP_LEASE_TOKEN,
-        }),
+        (
+          await claimCorpusProjectionCleanupTx(tx, {
+            ...SCOPE,
+            limit: 10,
+            leaseMs: 60_000,
+            newLeaseToken: () => CLEANUP_LEASE_TOKEN,
+          })
+        ).leases,
     ),
   ).toEqual([]);
 });

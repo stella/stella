@@ -17,6 +17,7 @@ import {
   entities,
   entityVersions,
   fields,
+  justifications,
   properties,
   workspaces,
 } from "@/api/db/schema";
@@ -118,6 +119,9 @@ beforeAll(async () => {
 
 const cleanup = async () => {
   await db.delete(auditLogs).where(eq(auditLogs.workspaceId, workspaceId));
+  await db
+    .delete(justifications)
+    .where(eq(justifications.workspaceId, workspaceId));
   await db.delete(fields).where(inArray(fields.propertyId, propertyIds));
   await db
     .delete(cellMetadata)
@@ -483,5 +487,70 @@ describe("writing a field value", () => {
       { action: "create", changes: { content: { old: null, new: zero } } },
       { action: "delete", changes: { content: { old: zero, new: null } } },
     ]);
+  });
+
+  test("keeps the run's value and citations when a person replaces it, across later edits", async () => {
+    const machineFieldId = createSafeId<"field">();
+    const settlement = {
+      type: "value" as const,
+      runId: "run-1",
+      settledAt: "2026-11-04T10:00:00.000Z",
+    };
+    const justificationContent = {
+      version: 1 as const,
+      blocks: [],
+    };
+    await db.insert(fields).values({
+      id: machineFieldId,
+      workspaceId,
+      propertyId: restPropertyId,
+      entityVersionId,
+      content: textContent("Acme Ltd"),
+      aiSettlement: settlement,
+    });
+    await db.insert(justifications).values({
+      id: createSafeId<"justification">(),
+      workspaceId,
+      fieldId: machineFieldId,
+      content: justificationContent,
+    });
+
+    await writeOverRest(restPropertyId, "Acme Holdings Ltd");
+    const first = await cellState(restPropertyId);
+    expect(first.metadata?.override).toEqual({
+      machine: {
+        content: textContent("Acme Ltd"),
+        settlement,
+        justification: {
+          content: justificationContent,
+          boundingBoxes: null,
+          fileFieldIds: [],
+        },
+      },
+      editedBy: userId(),
+      editedAt: expect.any(String),
+      reason: null,
+    });
+    expect(first.metadata?.lockProvenance?.reason).toBe("manual-edit");
+    expect(
+      first.audits.find((row) => row.action === "update")?.metadata,
+    ).toMatchObject({ overridesMachineRunId: "run-1" });
+
+    await writeOverRest(restPropertyId, "Acme Holdings Limited");
+    const second = await cellState(restPropertyId);
+    expect(second.field).toEqual({
+      content: textContent("Acme Holdings Limited"),
+    });
+    expect(second.metadata?.override?.machine.content).toEqual(
+      textContent("Acme Ltd"),
+    );
+  });
+
+  test("a cell no run settled records no override", async () => {
+    await writeOverRest(restPropertyId, "Typed by hand");
+    await writeOverRest(restPropertyId, "Typed again");
+    expect(
+      (await cellState(restPropertyId)).metadata?.override,
+    ).toBeUndefined();
   });
 });

@@ -3,6 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "cutovers-case-law-decisions-updated-id-idx",
   revision: 770,
+  lifecycle: "finalized",
   type: "cutovers",
   values: [
     {

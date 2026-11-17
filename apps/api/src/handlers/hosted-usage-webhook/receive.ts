@@ -52,8 +52,8 @@ import { normalizeProviderEvent } from "@/api/lib/hosted-usage-provider/provider
 import { verifyWebhookSignature } from "@/api/lib/hosted-usage-provider/verify-signature";
 import {
   insertWebhookEventInTx,
+  markWebhookEventIgnoredInTx,
   runWebhookTransaction,
-  updateWebhookEventResultInTx,
 } from "@/api/lib/hosted-usage-provider/webhook-store";
 import type { WebhookTransactionRunner } from "@/api/lib/hosted-usage-provider/webhook-store";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
@@ -315,10 +315,9 @@ export const receiveHostedUsageWebhook = async (
       });
 
       if (dispatched.kind === "ignored") {
-        await updateWebhookEventResultInTx({
+        await markWebhookEventIgnoredInTx({
           tx,
           eventId,
-          result: "ignored",
           errorMessage: renderIgnoredEventReason(
             dispatched.reason,
             dispatched.detail,
@@ -414,10 +413,9 @@ const persistUnknownEventType = async ({
         initialResult: "ignored",
       });
       if (inserted.kind === "fresh") {
-        await updateWebhookEventResultInTx({
+        await markWebhookEventIgnoredInTx({
           tx,
           eventId,
-          result: "ignored",
           errorMessage: "unhandled event type",
         });
       }

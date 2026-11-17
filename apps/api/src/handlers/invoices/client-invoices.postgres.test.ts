@@ -54,6 +54,7 @@ import {
   withInvoiceMatterLocks,
 } from "@/api/lib/db/aggregate-lock";
 import type { AcquiredInvoiceMatterLocks } from "@/api/lib/db/aggregate-lock";
+import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { fingerprintRequest } from "@/api/lib/idempotency/request-receipts";
@@ -79,6 +80,7 @@ import {
 } from "@/api/tests/helpers/handler-context";
 import { deleteMatterBillingRecords } from "@/api/tests/helpers/matter-billing-cleanup";
 import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
+import { insertOwnerContacts } from "@/api/tests/helpers/owner-contacts";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 import { withInterleaving } from "@/api/tests/helpers/transaction-interleaving";
 import { clientInvoicePrefillScalingScenario } from "@/api/tests/read-scaling/client-invoice-prefill";
@@ -222,6 +224,7 @@ if (!databaseUrl || !runPostgres) {
           organizationId: orgId,
           userId,
           role: kind === "owner" || kind === "admin" ? kind : "member",
+          billingAccess: kind === "full" || kind === "partial",
           createdAt: new Date(),
         })),
       );
@@ -232,7 +235,8 @@ if (!databaseUrl || !runPostgres) {
           featureId: "time-billing" as const,
         })),
       );
-      await db.insert(contacts).values(
+      await insertOwnerContacts(
+        db,
         [clientId, otherClientId].map((id) => ({
           id,
           organizationId: orgId,
@@ -455,7 +459,7 @@ if (!databaseUrl || !runPostgres) {
             }),
             session: { activeOrganizationId: organizationId },
             user: { id: userId },
-            memberRole: sessionMemberRole("member"),
+            memberRole: sessionMemberRole("member", true),
             featureAccessSnapshot: enrolledTimeBillingSnapshot({
               organizationId,
               userId,
@@ -554,7 +558,7 @@ if (!databaseUrl || !runPostgres) {
           audit: async (_tx, event) => {
             events.push(event);
           },
-          memberRole: sessionMemberRole("member"),
+          memberRole: sessionMemberRole("member", true),
           session: { activeOrganizationId: scenario.orgId },
           user: { id: scenario.actors.full },
           workspaceId: scenario.firstMatterId,
@@ -758,7 +762,12 @@ if (!databaseUrl || !runPostgres) {
       // A contact cannot disappear while its invoice remains; an organization
       // deletion removes both in one statement, regardless of cascade order.
       await expectSqlState(
-        db.delete(contacts).where(eq(contacts.id, scenario.clientId)),
+        withOwnerOrganizationScope(
+          db,
+          scenario.orgId,
+          async (tx) =>
+            await tx.delete(contacts).where(eq(contacts.id, scenario.clientId)),
+        ),
         "23001",
       );
       await deleteOrganizationsForTest(db, [scenario.orgId]);
@@ -769,10 +778,15 @@ if (!databaseUrl || !runPostgres) {
           .where(eq(organization.id, scenario.orgId)),
       ).toEqual([]);
       expect(
-        await db
-          .select({ id: contacts.id })
-          .from(contacts)
-          .where(eq(contacts.organizationId, scenario.orgId)),
+        await withOwnerOrganizationScope(
+          db,
+          scenario.orgId,
+          async (tx) =>
+            await tx
+              .select({ id: contacts.id })
+              .from(contacts)
+              .where(eq(contacts.organizationId, scenario.orgId)),
+        ),
       ).toEqual([]);
       expect(
         await db
@@ -1334,7 +1348,7 @@ if (!databaseUrl || !runPostgres) {
                 .from(sql`(SELECT 1) quota`),
           );
         expect(await readQuota()).toEqual([{ first: "1", second: "1" }]);
-        const memberRole = sessionMemberRole("member");
+        const memberRole = sessionMemberRole("member", true);
         expect(
           hasMemberPermission(memberRole, { invoice: ["create", "update"] }),
         ).toBe(true);
@@ -1934,7 +1948,7 @@ if (!databaseUrl || !runPostgres) {
           .where(eq(invoiceLines.id, scenario.secondLineId));
       });
       const userId = scenario.actors.full;
-      const memberRole = sessionMemberRole("member");
+      const memberRole = sessionMemberRole("member", true);
       expect(hasMemberPermission(memberRole, { invoice: ["update"] })).toBe(
         true,
       );
@@ -2064,7 +2078,7 @@ if (!databaseUrl || !runPostgres) {
             }),
             scopedDb,
             audit: async () => {},
-            memberRole: sessionMemberRole(role),
+            memberRole: sessionMemberRole(role, true),
             session: { activeOrganizationId: scenario.orgId },
             user: { id: actor },
             workspaceId,
@@ -2190,7 +2204,7 @@ if (!databaseUrl || !runPostgres) {
             organizationId: scenario.orgId,
             userId,
             userEmail: "invoice-reader@example.test",
-            memberRole: sessionMemberRole(actor),
+            memberRole: sessionMemberRole(actor, true),
             featureAccessSnapshot: enrolledTimeBillingSnapshot({
               organizationId: scenario.orgId,
               userId,
@@ -2205,6 +2219,9 @@ if (!databaseUrl || !runPostgres) {
               accessibleWorkspaceIds,
               pinnedIds: [],
             }),
+            workspaceStatusById: new Map(
+              accessibleWorkspaceIds.map((id) => [id, "active" as const]),
+            ),
           }),
         );
       };
@@ -2365,7 +2382,7 @@ if (!databaseUrl || !runPostgres) {
           safeDb,
           scopedDb,
           audit: async () => {},
-          memberRole: sessionMemberRole(actor),
+          memberRole: sessionMemberRole(actor, true),
           session: { activeOrganizationId: scenario.orgId },
           user: { id: userId },
           workspaceId: scenario.firstMatterId,
@@ -2427,7 +2444,7 @@ if (!databaseUrl || !runPostgres) {
                 organizationId: scenario.orgId,
                 userId,
                 userEmail: "invoice-reader@example.test",
-                memberRole: sessionMemberRole(actor),
+                memberRole: sessionMemberRole(actor, true),
                 featureAccessSnapshot: enrolledTimeBillingSnapshot({
                   organizationId: scenario.orgId,
                   userId,
@@ -2438,6 +2455,9 @@ if (!databaseUrl || !runPostgres) {
                   accessibleWorkspaceIds: matterIds,
                   pinnedIds: [],
                 }),
+                workspaceStatusById: new Map(
+                  matterIds.map((id) => [id, "active" as const]),
+                ),
               }),
             ),
           }),
@@ -2525,6 +2545,7 @@ if (!databaseUrl || !runPostgres) {
         const userId = scenario.actors[actor];
         const memberRole = sessionMemberRole(
           actor === "owner" || actor === "admin" ? actor : "member",
+          true,
         );
         const accessibleWorkspaceIds = [scenario.firstMatterId];
         if (actor !== "partial") {
@@ -2553,6 +2574,9 @@ if (!databaseUrl || !runPostgres) {
               accessibleWorkspaceIds,
               pinnedIds: [],
             }),
+            workspaceStatusById: new Map(
+              accessibleWorkspaceIds.map((id) => [id, "active" as const]),
+            ),
           }),
         );
         expect(

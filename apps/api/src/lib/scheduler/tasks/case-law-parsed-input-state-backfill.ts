@@ -10,6 +10,7 @@ import {
 } from "@/api/db/backfill-runtime";
 import { caseLawDecisions, schedulerJobs } from "@/api/db/schema";
 import { readParsedInputStateBackfillEnvironment } from "@/api/env-parsed-input-state-backfill";
+import { retryLockRefusal } from "@/api/lib/case-law/population-seed-batch";
 import { deriveCaseLawParsedInputStateBatch } from "@/api/lib/db/transitions";
 import {
   logSchedulerBackfillStatus,
@@ -82,70 +83,78 @@ export const createCaseLawParsedInputStateBackfill =
     });
     // Set inside the step, so read through the object, not a narrowed local.
     const retirement = { leaseLost: false };
-    const settled = await Result.tryPromise({
-      try: async () => {
-        try {
-          return await runtime.step(async ({ tx, cursor, size }) => {
-            signal.throwIfAborted();
-            const page = await tx
-              .select({ id: caseLawDecisions.id })
-              .from(caseLawDecisions)
-              .where(
-                cursor === null
-                  ? undefined
-                  : gt(caseLawDecisions.id, sql`${cursor}::uuid`),
-              )
-              .orderBy(asc(caseLawDecisions.id))
-              .limit(size);
-            const last = page.at(-1);
-            if (last === undefined) {
-              // Use the scheduler's one-shot retirement mechanism. Persist it
-              // with the final checkpoint so a crash cannot restart the walk.
-              const retired = await tx
-                .update(schedulerJobs)
-                .set({
-                  enabled: false,
-                  payload: sql`coalesce(${schedulerJobs.payload}, '{}'::jsonb) || '{"completed":true}'::jsonb`,
-                })
-                .where(
-                  and(
-                    eq(schedulerJobs.id, job.id),
-                    eq(schedulerJobs.lockedBy, leaseToken),
-                  ),
-                )
-                .returning({ id: schedulerJobs.id });
-              if (retired.length === 0) {
-                // Another runner owns the job now: completion stays unrecorded
-                // and the walk keeps its cursor for the lease holder.
-                retirement.leaseLost = true;
-                return { cursor, done: false, value: 0 };
-              }
-              return { cursor: null, done: true, value: 0 };
-            }
-            // An abort during the page read must not derive one more batch.
-            signal.throwIfAborted();
-            const updated = await deriveCaseLawParsedInputStateBatch({
-              tx,
-              ids: page.map(({ id }) => id),
-              recordTransitionAuditEvent: async (count) => {
-                await recordSystemAudit(
-                  tx,
-                  "system:case-law-parsed-input-state-backfill",
-                  {
-                    subject: runId,
-                    counts: { updatedDecisions: count },
-                  },
-                );
-              },
-            });
-            return { cursor: last.id, done: false, value: updated };
-          });
-        } finally {
-          await runtime.close();
-        }
-      },
-      catch: (cause: unknown) => cause,
-    });
+    const settled = Result.flatten(
+      await Result.tryPromise({
+        try: async () => {
+          try {
+            // A writer holding one row of the page refuses the batch, which rolled
+            // back whole, so taking it again replays nothing.
+            return await retryLockRefusal(
+              async () =>
+                await runtime.step(async ({ tx, cursor, size }) => {
+                  signal.throwIfAborted();
+                  const page = await tx
+                    .select({ id: caseLawDecisions.id })
+                    .from(caseLawDecisions)
+                    .where(
+                      cursor === null
+                        ? undefined
+                        : gt(caseLawDecisions.id, sql`${cursor}::uuid`),
+                    )
+                    .orderBy(asc(caseLawDecisions.id))
+                    .limit(size);
+                  const last = page.at(-1);
+                  if (last === undefined) {
+                    // Use the scheduler's one-shot retirement mechanism. Persist it
+                    // with the final checkpoint so a crash cannot restart the walk.
+                    const retired = await tx
+                      .update(schedulerJobs)
+                      .set({
+                        enabled: false,
+                        payload: sql`coalesce(${schedulerJobs.payload}, '{}'::jsonb) || '{"completed":true}'::jsonb`,
+                      })
+                      .where(
+                        and(
+                          eq(schedulerJobs.id, job.id),
+                          eq(schedulerJobs.lockedBy, leaseToken),
+                        ),
+                      )
+                      .returning({ id: schedulerJobs.id });
+                    if (retired.length === 0) {
+                      // Another runner owns the job now: completion stays unrecorded
+                      // and the walk keeps its cursor for the lease holder.
+                      retirement.leaseLost = true;
+                      return { cursor, done: false, value: 0 };
+                    }
+                    return { cursor: null, done: true, value: 0 };
+                  }
+                  // An abort during the page read must not derive one more batch.
+                  signal.throwIfAborted();
+                  const updated = await deriveCaseLawParsedInputStateBatch({
+                    tx,
+                    ids: page.map(({ id }) => id),
+                    recordTransitionAuditEvent: async (count) => {
+                      await recordSystemAudit(
+                        tx,
+                        "system:case-law-parsed-input-state-backfill",
+                        {
+                          subject: runId,
+                          counts: { updatedDecisions: count },
+                        },
+                      );
+                    },
+                  });
+                  return { cursor: last.id, done: false, value: updated };
+                }),
+              { canRetry: () => !signal.aborted },
+            );
+          } finally {
+            await runtime.close();
+          }
+        },
+        catch: (cause: unknown) => cause,
+      }),
+    );
     if (settled.isErr()) {
       if (settled.error instanceof BackfillHeldError) {
         logger.info(

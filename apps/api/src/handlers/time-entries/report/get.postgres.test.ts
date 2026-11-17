@@ -11,12 +11,7 @@ import {
 } from "@stll/api-contract/time-entry-report";
 
 import { member as authMember, user as authUser } from "@/api/db/auth-schema";
-import {
-  contacts,
-  timeEntries,
-  workspaceMembers,
-  workspaces,
-} from "@/api/db/schema";
+import { timeEntries, workspaceMembers, workspaces } from "@/api/db/schema";
 import { createMembershipSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import { HttpStatusResponse } from "@/api/http/status";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
@@ -29,6 +24,7 @@ import {
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import { insertOwnerContacts } from "@/api/tests/helpers/owner-contacts";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 import {
   seedTimeEntryReportScaling,
@@ -160,12 +156,14 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
               role: "member",
               createdAt: new Date("2020-01-01"),
             });
-            await fixture.db.insert(contacts).values({
-              id: secondClientId,
-              organizationId: fixture.organizationId,
-              type: "person",
-              displayName: "Second report client",
-            });
+            await insertOwnerContacts(fixture.db, [
+              {
+                id: secondClientId,
+                organizationId: fixture.organizationId,
+                type: "person",
+                displayName: "Second report client",
+              },
+            ]);
             await fixture.db.insert(workspaces).values({
               id: secondMatterId,
               organizationId: fixture.organizationId,

@@ -15,6 +15,7 @@ import {
   USER_STOP_OUTCOME,
 } from "@/api/handlers/chat/chat-turn-persistence";
 import { createSafeId } from "@/api/lib/branded-types";
+import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import {
   createChatRunLog,
   createChatRunLogReplay,
@@ -45,7 +46,8 @@ const beforeQuery = <Builder extends object>(
       if (property === "then") {
         return async (...args: unknown[]) => {
           await before();
-          return await Reflect.apply(value, target, args);
+          const result: unknown = await Reflect.apply(value, target, args);
+          return result;
         };
       }
       return (...args: unknown[]) => {
@@ -204,7 +206,7 @@ if (!databaseUrl || !runPostgresTests) {
               new Proxy(tx, {
                 get(target, property) {
                   if (property !== "select") {
-                    return Reflect.get(target, property);
+                    return Reflect.get(target, property) as unknown;
                   }
                   return new Proxy(target.select, {
                     apply(call, thisArg, args) {
@@ -250,14 +252,18 @@ if (!databaseUrl || !runPostgresTests) {
       ]);
       const pending = reader.next();
       expect(
-        await scopedDb(
-          async (tx) =>
-            await settleChatTurnOnTx({
-              assistantMessageId: null,
-              execution,
-              outcome: USER_STOP_OUTCOME,
-              tx,
-            }),
+        await withChatRunPings(
+          async (pings) =>
+            await scopedDb(
+              async (tx) =>
+                await settleChatTurnOnTx({
+                  pings,
+                  assistantMessageId: null,
+                  execution,
+                  outcome: USER_STOP_OUTCOME,
+                  tx,
+                }),
+            ),
         ),
       ).toBe("settled");
       const timing = await readChatTurnTiming({
@@ -361,7 +367,7 @@ if (!databaseUrl || !runPostgresTests) {
       const delivered = (prefix + tail)
         .split("\n")
         .filter((line) => line.startsWith("data: "))
-        .map((line) => JSON.parse(line.slice(6)));
+        .map((line): unknown => JSON.parse(line.slice(6)));
       expect(delivered.slice(1)).toEqual(chunks);
       expect(providerCalls).toBe(1);
       expect(

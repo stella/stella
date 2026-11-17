@@ -124,6 +124,38 @@ test("the restricted review account is configured with both keys or neither", ()
   }
 });
 
+test("the synthetic-monitoring session secret boots only outside production", () => {
+  const secret = "s".repeat(32);
+  for (const deployEnvironment of [
+    undefined,
+    "staging",
+    "development",
+  ] as const) {
+    expect(
+      envApiInvariantViolation({
+        ...environment,
+        DEPLOY_ENVIRONMENT: deployEnvironment,
+        SMOKE_SESSION_SECRET: secret,
+      }),
+    ).toBeNull();
+  }
+  expect(
+    envApiInvariantViolation({
+      ...environment,
+      DEPLOY_ENVIRONMENT: "production",
+    }),
+  ).toBeNull();
+  expect(
+    envApiInvariantViolation({
+      ...environment,
+      DEPLOY_ENVIRONMENT: "production",
+      SMOKE_SESSION_SECRET: secret,
+    }),
+  ).toBe(
+    "SMOKE_SESSION_SECRET is for non-production deployments; unset it when DEPLOY_ENVIRONMENT=production.",
+  );
+});
+
 test("Sign in with Apple boots only fully configured, with a readable key", () => {
   const apple = {
     APPLE_AUTH_CLIENT_ID: "app.example.web",

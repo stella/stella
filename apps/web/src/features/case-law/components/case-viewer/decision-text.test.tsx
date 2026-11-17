@@ -15,7 +15,7 @@ import {
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
-import { editorialSupplementBlocks } from "@stll/decision-reader/decision-text.logic";
+import { editorialSupplementBlocks } from "@stll/decision-reader/reader-text-pieces.logic";
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type {
@@ -466,13 +466,6 @@ describe("a decision opened at a passage", () => {
 const occurrences = (markup: string, text: string): number =>
   markup.split(text).length - 1;
 
-/** The `<details>` tag that opens the section labelled `label`. */
-const disclosureOpening = (markup: string, label: string): string => {
-  const labelAt = markup.indexOf(label);
-  const openingAt = markup.lastIndexOf("<details", labelAt);
-  return markup.slice(openingAt, markup.indexOf(">", openingAt) + 1);
-};
-
 describe("what a decision opens with", () => {
   const headnote = "Publisher headnote sentence.";
 
@@ -541,10 +534,10 @@ describe("what a decision opens with", () => {
     });
 
     expect(
-      disclosureOpening(markup, messages.caseLaw.viewer.legalSentence),
+      sectionAttributes(markup, messages.caseLaw.viewer.legalSentence),
     ).toContain("open");
     expect(
-      disclosureOpening(markup, messages.caseLaw.viewer.abstract),
+      sectionAttributes(markup, messages.caseLaw.viewer.abstract),
     ).not.toContain("open");
   });
 
@@ -590,37 +583,31 @@ describe("what a decision opens with", () => {
   });
 });
 
-/** One section of the top matter: its `<details>` tag and all that follows. */
+/** One top-matter block, identified by the body text it owns. */
 const sectionOf = (markup: string, text: string): string =>
   markup
-    .split("<details")
+    .split('data-slot="headnote-block"')
     .slice(1)
     .find((section) => section.includes(text)) ?? "";
 
-/** The attributes of the `<details>` that opens the section holding `text`. */
-const sectionAttributes = (markup: string, text: string): string => {
-  const section = sectionOf(markup, text);
-  return section.slice(0, section.indexOf(">"));
-};
+/** The canonical disclosure's attributes, outside the source body. */
+const sectionAttributes = (markup: string, text: string): string =>
+  /<div\b[^>]*data-slot="collapsible"[^>]*>/u.exec(
+    sectionOf(markup, text),
+  )?.[0] ?? "";
 
-/** The `<summary>` line of the section whose body contains `text`. */
-const sectionSummary = (markup: string, text: string): string => {
-  const section = sectionOf(markup, text);
-  return section.slice(0, section.indexOf("</summary>"));
-};
+/** The label inside the section's sole toggle, excluding its button tag. */
+const sectionSummary = (markup: string, text: string): string =>
+  /<button\b[^>]*data-slot="collapsible-trigger"[^>]*>([\s\S]*?)<\/button>/u.exec(
+    sectionOf(markup, text),
+  )?.[1] ?? "";
 
-/** The origin mark on the row of the section whose body contains `text`. */
+/** The origin sibling precedes the disclosure instead of nesting in its toggle. */
 const sectionMark = (markup: string, text: string): string => {
-  // The mark precedes the `<details>` inside the section's block.
-  const block =
-    markup
-      .split('data-slot="headnote-block"')
-      .slice(1)
-      .find((candidate) => candidate.includes(text)) ?? "";
+  const block = sectionOf(markup, text);
   const start = block.indexOf('data-slot="headnote-origin"');
-  return start === -1
-    ? ""
-    : block.slice(start, block.indexOf("</span><details", start));
+  const end = block.search(/<div\b[^>]*data-slot="collapsible"[^>]*>/u);
+  return start === -1 || end === -1 ? "" : block.slice(start, end);
 };
 
 // Two authors write the same two sections, and a reader must be able to tell
@@ -654,8 +641,12 @@ describe("a headnote the court wrote and one a model wrote", () => {
   });
 
   test("draws both under one label and one shape", () => {
-    const summaries = [...markup.matchAll(/<summary class="(?<cls>[^"]*)"/gu)]
-      .map((match) => match.groups?.["cls"])
+    const summaries = [
+      ...markup.matchAll(
+        /<button\b[^>]*data-slot="collapsible-trigger"[^>]*>/gu,
+      ),
+    ]
+      .map((match) => /class="([^"]*)"/u.exec(match[0])?.[1])
       .filter((cls) => cls !== undefined);
 
     // The court's two sections and the model's two, all styled alike.
@@ -685,9 +676,9 @@ describe("a headnote the court wrote and one a model wrote", () => {
     expect(court).not.toContain('data-slot="ai-label"');
   });
 
-  // A `<summary>` is the section's toggle; a control inside it would be
+  // The section's button is its toggle; another control inside it would be
   // nested interactive content. The mark shares its row from outside.
-  test("keeps every section's summary free of other controls", () => {
+  test("keeps every section's toggle label free of other controls", () => {
     for (const text of [
       courtHeadnote,
       courtAbstract,

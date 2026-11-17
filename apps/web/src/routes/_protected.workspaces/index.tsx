@@ -11,6 +11,10 @@ import { useTranslations } from "use-intl";
 import * as v from "valibot";
 import { useShallow } from "zustand/shallow";
 
+import {
+  VISIBLE_WORKSPACE_STATUSES,
+  WORKSPACE_STATUS,
+} from "@stll/api-contract/workspace-status";
 import { Button } from "@stll/ui/button";
 import { Frame } from "@stll/ui/frame";
 import {
@@ -33,6 +37,7 @@ import {
   TableHeader,
   TableRow,
 } from "@stll/ui/table";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
@@ -81,7 +86,10 @@ import {
 import { useConfigStore } from "@/stores/config-store";
 
 const searchSchema = routeSearchSchema({
-  status: v.optional(v.picklist(["active", "archived"]), "active"),
+  status: v.optional(
+    v.picklist(VISIBLE_WORKSPACE_STATUSES),
+    WORKSPACE_STATUS.active,
+  ),
   // Client id to scroll into view and flash on arrival (set by the matter
   // breadcrumb's company link). Cleared by the route once consumed.
   focusClient: v.optional(v.string()),
@@ -92,7 +100,7 @@ export const Route = createFileRoute("/_protected/workspaces/")({
   validateSearch: searchSchema,
   // Active is the default view, so `/workspaces` stays the canonical address.
   search: {
-    middlewares: [stripSearchParams({ status: "active" })],
+    middlewares: [stripSearchParams({ status: WORKSPACE_STATUS.active })],
   },
   loaderDeps: ({ search }) => ({ status: search.status }),
   loader: async ({ context, deps }) => {
@@ -314,7 +322,10 @@ const MattersContent = ({
                   </div>
                 );
               }
-              if (workspaces.length === 0 && status === "active") {
+              if (
+                workspaces.length === 0 &&
+                status === WORKSPACE_STATUS.active
+              ) {
                 return (
                   <EmptyScreen
                     className="min-h-full"
@@ -495,7 +506,7 @@ const MattersTableSkeleton = () => {
           <TableRow>
             {columns.map((col) => (
               <TableHead key={col.id}>
-                <span className="truncate">{headerLabel(col.id)}</span>
+                <TruncatedText>{headerLabel(col.id)}</TruncatedText>
               </TableHead>
             ))}
           </TableRow>

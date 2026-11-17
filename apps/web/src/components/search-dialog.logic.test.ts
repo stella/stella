@@ -6,7 +6,6 @@ import {
   resourceRef,
   toResourceName,
 } from "@stll/api-contract";
-import { GLOBAL_SEARCH_RESULT_LIMIT } from "@stll/api-contract/search";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import { formatMimeTypeLabel } from "@/components/search-dialog.shared";
@@ -20,7 +19,6 @@ import { DEFAULT_WORKSPACE_VIEW_ID } from "@/lib/workspaces/view-params.logic";
 
 import {
   canUseAskAIShortcut,
-  caseLawFacetCountMessage,
   createDialogCloseActionQueue,
   getCaseLawHitRoute,
   getChatHitRoute,
@@ -413,15 +411,26 @@ describe("search dialog close actions", () => {
 describe("search facet labels", () => {
   test("retains a controlled selection label after later results omit it", () => {
     const selected = ["user-1"];
+    const current = {};
     const resolved = rememberSelectedFacetLabels(
-      {},
+      current,
       selected,
       new Map([["user-1", "Ada Lovelace"]]),
     );
 
-    expect(rememberSelectedFacetLabels(resolved, selected, new Map())).toEqual({
-      "user-1": "Ada Lovelace",
-    });
+    expect(resolved).not.toBe(current);
+    expect(current).toEqual({});
+    expect(rememberSelectedFacetLabels(resolved, selected, new Map())).toBe(
+      resolved,
+    );
+    expect(
+      rememberSelectedFacetLabels(
+        resolved,
+        selected,
+        new Map([["user-1", "Ada Lovelace"]]),
+      ),
+    ).toBe(resolved);
+    expect(resolved).toEqual({ "user-1": "Ada Lovelace" });
   });
 });
 
@@ -689,25 +698,6 @@ describe("Ask AI keyboard shortcut", () => {
         query: "indemnity",
       }),
     ).toBe(false);
-  });
-});
-
-describe("caseLawFacetCountMessage", () => {
-  test("counts matching decisions below the ceiling", () => {
-    expect(caseLawFacetCountMessage(651)).toEqual({
-      key: "search.caseLawMatchingDecisions",
-      count: 651,
-    });
-  });
-
-  test("shows a count at the ceiling as at least the ceiling", () => {
-    expect(caseLawFacetCountMessage(GLOBAL_SEARCH_RESULT_LIMIT)).toEqual({
-      key: "search.caseLawMatchingDecisionsAtLeast",
-      count: GLOBAL_SEARCH_RESULT_LIMIT,
-    });
-    expect(caseLawFacetCountMessage(GLOBAL_SEARCH_RESULT_LIMIT - 1).key).toBe(
-      "search.caseLawMatchingDecisions",
-    );
   });
 });
 

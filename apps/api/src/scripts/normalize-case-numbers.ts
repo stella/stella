@@ -80,7 +80,7 @@ await runScriptWithErrorOutput(async () => {
   console.info(
     `done, ${normalized.toLocaleString()} rows normalized, ` +
       `${reopened.toLocaleString()} citations reopened. ` +
-      "Re-run backfill-citation-keys.ts to refill citation_key.",
+      "Re-run backfill-citation-keys.ts to refill citation_key and docket_family_key.",
   );
 
   process.exit(0);

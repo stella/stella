@@ -2,8 +2,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
-
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/workspaces" });
 Object.assign(import.meta.env, {
@@ -166,11 +165,8 @@ const renderShell = (queryClient: InstanceType<typeof QueryClient>) =>
     React.createElement(
       QueryClientProvider,
       { client: queryClient },
-      React.createElement(IntlProvider, {
-        locale: "en",
-        messages,
-        timeZone: "UTC",
-        children: React.createElement(
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        {React.createElement(
           AuthenticatedUserProvider,
           {
             user: {
@@ -191,8 +187,8 @@ const renderShell = (queryClient: InstanceType<typeof QueryClient>) =>
             React.createElement(GlobalTimer),
             React.createElement(BetaPage),
           ),
-        ),
-      }),
+        )}
+      </IntlProvider>,
     ),
   );
 

@@ -52,6 +52,8 @@ const assertAccountRequestOwners = (sources: readonly NativeSource[]) => {
     "account.rs",
     "billing_draft_submit.rs",
     "deep_link.rs",
+    "dictation_cleanup.rs",
+    "dictation_cloud.rs",
     "feature_access.rs",
     "handoff.rs",
     "presence.rs",

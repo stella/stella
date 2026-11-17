@@ -187,6 +187,7 @@ export const runReaderAnswerModel = async (
   const streamed = await Result.tryPromise({
     try: async () => {
       for await (const chunk of streamRun({
+        threadId: input.answerId,
         userId: input.admission.userId,
         admission: input.admission,
         model,

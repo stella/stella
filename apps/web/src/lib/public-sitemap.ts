@@ -45,11 +45,22 @@ export const createSitemapUpstreamBusyError = ({
   });
 };
 
-const createSitemapBusyResponse = (error: SitemapUpstreamBusyError): Response =>
-  new Response("Service Unavailable", {
+/**
+ * A busy refusal is a deliberate 503, indistinguishable from a fault in the
+ * load balancer's counts. One line per refusal lets them be told apart; any
+ * other unreadable sitemap logs nothing here and keeps counting as a fault.
+ */
+const createSitemapBusyResponse = (
+  error: SitemapUpstreamBusyError,
+): Response => {
+  process.stdout.write(
+    `${JSON.stringify({ message: "web.sitemap.busy_refusal" })}\n`,
+  );
+  return new Response("Service Unavailable", {
     headers: { "Retry-After": error.retryAfter },
     status: 503,
   });
+};
 
 /**
  * An unreadable sitemap answers a retryable status rather than an empty

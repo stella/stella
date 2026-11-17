@@ -4,7 +4,7 @@ import { panic, Result } from "better-result";
 import type { InferOk } from "better-result";
 import { and, desc, eq, gt } from "drizzle-orm";
 
-import { apikey, member, organization, user } from "@/api/db/auth-schema";
+import { apikey, member, user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import { abortTransaction } from "@/api/db/safe-db";
@@ -19,6 +19,11 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { CredentialIssuanceFence } from "@/api/lib/auth-artifacts";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  lockMemberAccessRow,
+  withAggregateParentBatch,
+  withAggregateTransaction,
+} from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   API_KEY_KIND,
@@ -142,7 +147,7 @@ const mutatePersonalKeys = async <T>(
 ) =>
   Result.tryPromise({
     try: async () =>
-      (options.database ?? rootDb).transaction(async (tx) => {
+      withAggregateTransaction(options.database ?? rootDb, async (tx) => {
         // The account fence ranks before the organization row.
         const fence =
           options.authority.type === "issue"
@@ -156,30 +161,29 @@ const mutatePersonalKeys = async <T>(
         }
         // All mint/rotate/policy changes take this lock next. The active limit and
         // policy decision therefore serialize across processes, including first use.
-        const [org] = await tx
-          .select({ id: organization.id })
-          .from(organization)
-          .where(eq(organization.id, options.organizationId))
-          .for("no key update");
-        if (!org) {
+        const parents = await withAggregateParentBatch({
+          tx,
+          organizationIds: [options.organizationId],
+          mode: "no key update",
+        });
+        if (!parents.organizationIds.has(options.organizationId)) {
           return abortTransaction(keyNotFound());
         }
-        const [membership] = await tx
-          .select({ role: member.role })
-          .from(member)
-          .where(
-            and(
-              eq(member.organizationId, options.organizationId),
-              eq(member.userId, options.userId),
-            ),
-          )
-          .for("update");
+        const membership = await lockMemberAccessRow({
+          tx,
+          organizationId: options.organizationId,
+          userId: options.userId,
+          mode: "update",
+        });
         if (!membership || !isMemberRole(membership.role)) {
           return abortTransaction(keyNotFound());
         }
         return run({
           tx,
-          memberRole: sessionMemberRole(membership.role),
+          memberRole: sessionMemberRole(
+            membership.role,
+            membership.billingAccess,
+          ),
           fence,
         });
       }),

@@ -1,0 +1,6 @@
+{
+  "metric": "e2e-tolerated-browser-errors",
+  "file": "apps/web/e2e/local-run/run-on.spec.ts",
+  "delta": 1,
+  "reason": "The first use of browserErrors.tolerate: the suite test that opens six menus within two seconds (apps/web/e2e/local-run/run-on.spec.ts) trips the dev render-storm canary on some runs, because every open or close of the shared menu component is some fifteen commits. A required declaration would fail the runs where the canary stays quiet. The call is deleted when the menu component commits less."
+}

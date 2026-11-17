@@ -3,6 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "indexes-audit-logs-org-people-created-id-idx",
   revision: 755,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     {

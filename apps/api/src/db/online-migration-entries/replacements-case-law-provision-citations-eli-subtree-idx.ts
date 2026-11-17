@@ -3,6 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "replacements-case-law-provision-citations-eli-subtree-idx",
   revision: 900,
+  lifecycle: "finalized",
   type: "replacements",
   values: [
     {

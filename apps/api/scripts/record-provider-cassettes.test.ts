@@ -1,7 +1,9 @@
 import { EventType } from "@tanstack/ai";
 import type { StreamChunk } from "@tanstack/ai";
 import { panic } from "better-result";
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
+
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import {
@@ -41,6 +43,8 @@ import {
   scenariosToRecord,
   wireCarriesNull,
 } from "./record-provider-cassettes";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const testFetchState = createTestFetch();
 
@@ -262,7 +266,6 @@ test("every recording answers the prompt the recorder sends today", () => {
   ).toEqual([]);
 });
 let upstream: ProviderWireReplay;
-let previousMockAI: typeof env.USE_MOCK_AI;
 
 const recordAndReplay = async (
   provider: ProviderWireProvider,
@@ -324,13 +327,8 @@ describe("a recording replays", () => {
       upstream = replay;
     },
   });
-  beforeAll(() => {
-    previousMockAI = env.USE_MOCK_AI;
-    env.USE_MOCK_AI = false;
-  });
-
-  afterAll(() => {
-    env.USE_MOCK_AI = previousMockAI;
+  testState.beforeAll(() => {
+    testState.setConfig("USE_MOCK_AI", false);
   });
 
   test("stops reading a response at the size limit", async () => {

@@ -19,6 +19,7 @@ import {
   systemAuditRuns,
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
+import { DeleteOrganizationFileError } from "@/api/lib/files/delete-organization-file";
 import { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
 import { runJob } from "@/api/lib/scheduler/runner";
 import type {
@@ -38,6 +39,7 @@ import type {
   RecordingAnalytics,
   RecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
+import { heldSchedulerLease } from "@/api/tests/helpers/scheduler-lease";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -242,12 +244,12 @@ describe("comparison sweep replay and runner capture", () => {
         task: SWEEP_FILE_COMPARISON_UPLOADS_TASK,
         schedule: { type: "interval", everyMs: 300_000 },
         nextRunAt: new Date(),
-        lockedBy: "test-lease",
+        ...heldSchedulerLease("test-lease"),
         payload: { cursor: null },
       })
       .onConflictDoUpdate({
         target: schedulerJobs.id,
-        set: { lockedBy: "test-lease" },
+        set: heldSchedulerLease("test-lease"),
       });
   });
   afterEach(async () => {
@@ -315,10 +317,14 @@ describe("comparison sweep replay and runner capture", () => {
               ) {
                 if (stage === "ledger") {
                   return Result.err(
-                    new OrganizationFileUsageError({
+                    new DeleteOrganizationFileError({
                       message: "Ledger unavailable",
-                      reason: "storage_unavailable",
-                      cause,
+                      stage: "usage_removal",
+                      cause: new OrganizationFileUsageError({
+                        message: "Ledger unavailable",
+                        reason: "storage_unavailable",
+                        cause,
+                      }),
                     }),
                   );
                 }

@@ -8,10 +8,17 @@ import type {
 import { panic } from "better-result";
 
 import type { ReasoningEffort } from "@stll/ai-catalog";
+import { RESOURCE_TYPE } from "@stll/api-contract";
+import type { ChatThreadPinState } from "@stll/api-contract/chat";
 import {
   DOCX_SUGGESTION_SURFACE,
   type DocxSuggestionSurface,
 } from "@stll/api-contract/chat-docx-suggestions";
+import type { ChatRunTarget } from "@stll/api-contract/chat-run-target";
+import {
+  CHAT_TURN_STEERING,
+  type ChatTurnSteering,
+} from "@stll/api-contract/chat-send-intent";
 
 import type { ChatContextUsage } from "@/components/chat/chat-context-meter";
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
@@ -29,6 +36,7 @@ import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 import { invalidateWorkspaceActivity } from "@/lib/workspaces/queries";
 
 import { chatKeys, getChatRuntimeContextKind } from "./chat-query-contract";
@@ -53,11 +61,62 @@ const readChatTimestamp = (value: string): Date =>
   parseDeterministicDate(value) ??
   panic("The chat API returned an invalid timestamp");
 
+type SerializedSubagentPart = Extract<
+  SerializedChatMessage["parts"][number],
+  { type: "subagent" }
+>;
+type SubagentChatPart = Extract<
+  PersistedChatMessage["parts"][number],
+  { type: "subagent" }
+>;
+type SerializedChildMessage =
+  SerializedSubagentPart["subagent"]["messages"][number];
+type ChildMessage = SubagentChatPart["subagent"]["messages"][number];
+
+/** A sub-agent part as the page holds it: each of its child's messages and
+ *  parts read back as a message's own are. */
+const deserializeSubagentPart = (
+  part: SerializedSubagentPart,
+): SubagentChatPart => ({
+  ...part,
+  subagent: {
+    ...part.subagent,
+    messages: part.subagent.messages.map(deserializeChildMessage),
+  },
+});
+
+const deserializeChildMessage = ({
+  createdAt,
+  parts,
+  ...message
+}: SerializedChildMessage): ChildMessage => ({
+  ...message,
+  ...(createdAt === undefined
+    ? {}
+    : { createdAt: readChatTimestamp(createdAt) }),
+  parts: parts.map(deserializeChildPart),
+});
+
+const deserializeChildPart = (
+  part: SerializedChildMessage["parts"][number],
+): ChildMessage["parts"][number] => {
+  if (part.type === "subagent") {
+    return deserializeSubagentPart(part);
+  }
+  if (part.type !== "tool-result") {
+    return part;
+  }
+  const { createdAt, ...rest } = part;
+  return createdAt === undefined
+    ? rest
+    : { ...rest, createdAt: readChatTimestamp(createdAt) };
+};
+
 const deserializeChatPart = (
   part: SerializedChatMessage["parts"][number],
 ): PersistedChatMessage["parts"][number] => {
   if (part.type === "subagent") {
-    return panic("A persisted chat message contains a subagent part");
+    return deserializeSubagentPart(part);
   }
   if (part.type !== "tool-result") {
     return part;
@@ -111,6 +170,8 @@ type ThreadFetch = {
   activeSkill: ActiveSkillChatContext | null;
   /** The thread's turn not yet settled; null when every turn has settled. */
   activeTurnId: SafeId<"chatTurn"> | null;
+  /** Whether that turn takes a message mid-turn, as the server knows it. */
+  activeTurnSteering: ChatTurnSteering;
   attachedFiles: ChatThreadAttachedFiles;
   /** Where this thread's opening history came from. */
   forkProvenance: ForkProvenance;
@@ -133,6 +194,8 @@ type ThreadFetch = {
   model: string | null;
   /** Explicit effort for a manual model; null in Auto/provider-default mode. */
   reasoningEffort: ReasoningEffort | null;
+  /** Where the thread's turns run; absent where only the cloud is offered. */
+  runTarget?: ChatRunTarget | undefined;
   /** Model-context estimate for the next send; null for a missing or empty
    *  thread (nothing to meter yet). */
   context: ChatContextUsage | null;
@@ -181,6 +244,7 @@ const fetchThreadMessages = async (
     return {
       activeSkill: null,
       activeTurnId: null,
+      activeTurnSteering: CHAT_TURN_STEERING.notSteerable,
       attachedFiles: EMPTY_ATTACHED_FILES,
       forkProvenance: { type: "none" },
       messages: [],
@@ -202,6 +266,7 @@ const fetchThreadMessages = async (
   return {
     activeSkill: data.activeSkill,
     activeTurnId: data.activeTurnId,
+    activeTurnSteering: data.activeTurnSteering,
     attachedFiles: data.attachedFiles,
     forkProvenance: data.forkProvenance,
     messages: deserializeChatMessages(data.messages),
@@ -215,6 +280,7 @@ const fetchThreadMessages = async (
     webSearchEnabled: data.webSearchEnabled,
     model: data.model,
     reasoningEffort: data.reasoningEffort,
+    runTarget: data.runTarget,
     context: data.context,
   };
 };
@@ -252,11 +318,13 @@ export const fetchOlderMessages = async ({
 
 const fetchGroupedChatThreads = async ({
   cursor,
+  pinState,
   search,
   signal,
   workspaceId,
 }: {
   cursor?: string | undefined;
+  pinState?: ChatThreadPinState | undefined;
   search?: string | undefined;
   signal?: AbortSignal | undefined;
   workspaceId?: string | undefined;
@@ -266,6 +334,7 @@ const fetchGroupedChatThreads = async ({
     query: {
       limit: CHAT_THREADS_PAGE_SIZE,
       ...(cursor !== undefined && { cursor }),
+      ...(pinState !== undefined && { pinState }),
       ...(search !== undefined && { search }),
       ...(workspaceId !== undefined && {
         workspaceId: toSafeId<"workspace">(workspaceId),
@@ -332,14 +401,16 @@ const fetchFileChatThread = async ({
   fieldId,
   workspaceId,
 }: FileChatThreadKey): Promise<FileChatThreadFetchResult> => {
-  const response = await api.chat
-    .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-    ["file-thread"].get({
-      query: {
-        entityId: toSafeId<"entity">(entityId),
-        fieldId: toSafeId<"field">(fieldId),
-      },
-    });
+  const workspaceApi = api.chat.workspaces({
+    workspaceId: toSafeId<"workspace">(workspaceId),
+  });
+
+  const response = await workspaceApi["file-thread"].get({
+    query: {
+      entityId: toSafeId<"entity">(entityId),
+      fieldId: toSafeId<"field">(fieldId),
+    },
+  });
 
   const data = unwrapApiResponse(response);
 
@@ -470,6 +541,12 @@ export type ChatThreadFetched = {
    */
   activeTurnId: SafeId<"chatTurn"> | null;
   /**
+   * Whether that turn takes a message mid-turn (`ChatTurnSteering`), as the
+   * server knows it; absent for a file thread, whose turns run on stella and
+   * take none.
+   */
+  activeTurnSteering?: ChatTurnSteering | undefined;
+  /**
    * The files the thread attached, for the header's file stack. Read with
    * the page because older messages page in on demand, so the transcript
    * alone cannot list them; refreshed with the page after every turn.
@@ -530,6 +607,12 @@ export type ChatThreadFetched = {
    *  `webSearchEnabled` above. */
   model: string | null;
   reasoningEffort: ReasoningEffort | null;
+  /**
+   * Where the thread's turns run when that is a computer; absent runs them
+   * on stella's own models. Changed with the model, through
+   * PATCH /chat/threads/:id/model.
+   */
+  runTarget?: ChatRunTarget | undefined;
   /**
    * Model-context estimate for the next send, driving the composer
    * meter. Null for a missing or empty thread (nothing to meter yet).
@@ -717,13 +800,15 @@ export const materializeFileChatThread = async ({
   hasDocxEditSurface,
   key,
 }: MaterializeFileChatThreadArgs): Promise<FileChatThreadBinding> => {
-  const response = await api.chat
-    .workspaces({ workspaceId: toSafeId<"workspace">(key.workspaceId) })
-    ["file-thread"].post({
-      entityId: toSafeId<"entity">(key.entityId),
-      fieldId: toSafeId<"field">(key.fieldId),
-      threadId: toSafeId<"chatThread">(draftThreadId),
-    });
+  const workspaceApi = api.chat.workspaces({
+    workspaceId: toSafeId<"workspace">(key.workspaceId),
+  });
+
+  const response = await workspaceApi["file-thread"].post({
+    entityId: toSafeId<"entity">(key.entityId),
+    fieldId: toSafeId<"field">(key.fieldId),
+    threadId: toSafeId<"chatThread">(draftThreadId),
+  });
 
   const data = unwrapApiResponse(response);
   const threadId = toChatThreadId(data.threadId);
@@ -868,6 +953,7 @@ export const chatContextCapabilityFingerprint = (
     getEditApplyMode: context?.getEditApplyMode,
     getSendMode: context?.getSendMode,
     getUserContext: context?.getUserContext,
+    getRunTarget: context?.getRunTarget,
     getDocxSuggestionSurface: context?.getDocxSuggestionSurface,
   } satisfies {
     [Key in ChatContextCapabilityKey]-?: ChatThreadOptionsContext[Key];
@@ -986,14 +1072,16 @@ type ChatThreadSuggestedPromptsFetched = {
 const fetchThreadSuggestedPrompts = async (
   threadRef: ChatThreadRef,
 ): Promise<ChatThreadSuggestedPromptsFetched> => {
-  const response = await api.chat
-    .threads({ threadId: toSafeId<"chatThread">(threadRef.threadId) })
-    ["suggested-prompts"].post(undefined, {
-      query:
-        threadRef.scope === "workspace"
-          ? { workspaceId: toSafeId<"workspace">(threadRef.workspaceId) }
-          : {},
-    });
+  const threadApi = api.chat.threads({
+    threadId: toSafeId<"chatThread">(threadRef.threadId),
+  });
+
+  const response = await threadApi["suggested-prompts"].post(undefined, {
+    query:
+      threadRef.scope === "workspace"
+        ? { workspaceId: toSafeId<"workspace">(threadRef.workspaceId) }
+        : {},
+  });
 
   if (response.error) {
     getAnalytics().captureError(toAPIError(response.error), {
@@ -1054,8 +1142,29 @@ export const modelOptionsOptions = (activeOrganizationId: string) =>
     queryFn: async () => await fetchChatModelOptions(),
   });
 
+const fetchChatLocalRunners = async (signal: AbortSignal) =>
+  unwrapApiResponse(await api.chat["local-runners"].get({ fetch: { signal } }));
+
+/**
+ * The member's computers, what each can run and the folders linked on them.
+ * Read when the Models submenu opens, like the model options, and kept
+ * briefly: a computer signing in or reaching a limit shows on the next open.
+ * The computers report themselves over their own sockets; the member's one
+ * write here, allowing a linked folder, refreshes the read.
+ */
+export const localRunnersOptions = (activeOrganizationId: string) =>
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: chatKeys.localRunners(activeOrganizationId),
+      staleTime: 30_000,
+      queryFn: async ({ signal }) => await fetchChatLocalRunners(signal),
+    }),
+    { resources: [RESOURCE_TYPE.USER], scope: { type: "organization" } },
+  );
+
 export const groupedChatThreadsOptions = ({
   activeOrganizationId,
+  pinState,
   search,
   userId,
   workspaceId,
@@ -1064,6 +1173,7 @@ export const groupedChatThreadsOptions = ({
   return infiniteQueryOptions({
     queryKey: chatKeys.groupedThreads({
       activeOrganizationId,
+      pinState,
       search: normalizedSearch,
       userId,
       workspaceId,
@@ -1073,6 +1183,7 @@ export const groupedChatThreadsOptions = ({
     queryFn: async ({ pageParam, signal }): Promise<GroupedChatThreadsPage> =>
       await fetchGroupedChatThreads({
         cursor: pageParam,
+        pinState,
         search: normalizedSearch,
         signal,
         workspaceId,
@@ -1127,6 +1238,11 @@ export const chatDraftMetaOptions = ({
         webSearchEnabled: data.webSearchEnabled,
         model: data.model,
         reasoningEffort: data.reasoningEffort,
+        // Where the first send runs, as the draft's Run on choice stored it.
+        runTarget: data.runTarget,
+        // A draft the server holds no row for starts from the member's last
+        // Run on choice instead.
+        threadExists: data.threadExists,
         // The draft's cache-stable context floor (system prompt + tools), so
         // the hero meter shows the honest baseline instead of 0% before send.
         context: data.context,
@@ -1306,22 +1422,36 @@ export const invalidateChatThreadAcrossScopes = async ({
 export const applyChatModelChange = ({
   model,
   reasoningEffort,
+  runTarget,
   queryClient,
   queryKey,
   threadId,
 }: {
   model: string | null;
   reasoningEffort: ReasoningEffort | null;
+  /** Absent when the change left where turns run as it was. */
+  runTarget?: ChatRunTarget | undefined;
   queryClient: QueryClient;
   queryKey: DataTag<
     QueryKey,
-    { model: string | null; reasoningEffort: ReasoningEffort | null },
+    {
+      model: string | null;
+      reasoningEffort: ReasoningEffort | null;
+      runTarget?: ChatRunTarget | undefined;
+    },
     Error
   >;
   threadId: ChatThreadId;
 }): void => {
   queryClient.setQueryData(queryKey, (prev) =>
-    prev ? { ...prev, model, reasoningEffort } : prev,
+    prev
+      ? {
+          ...prev,
+          model,
+          reasoningEffort,
+          ...(runTarget === undefined ? {} : { runTarget }),
+        }
+      : prev,
   );
   detached(
     invalidateChatThreadAcrossScopes({ queryClient, threadId }),

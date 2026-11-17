@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { afterAll, expect, test } from "bun:test";
 
+import { noDecisionReviewFound } from "@stll/api-contract/case-law-reviews";
 import type { LegalResolveResponse } from "@stll/api-contract/legal-resolve";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 import { createTestState } from "@stll/test-state";
@@ -89,6 +90,7 @@ const decision = {
   status: "resolved",
   document: {
     kind: "decision",
+    appealReviews: noDecisionReviewFound(),
     decisionId: "fixture-decision",
     identifier: "fixture",
     country: "CZE",
@@ -101,8 +103,7 @@ const decision = {
     readerUrl: "/case/fixture",
     text: {
       status: "readable",
-      blocks: [{ text: "Public decision text" }],
-      extent: { type: "complete" },
+      charCount: 20,
     },
   },
 } as const satisfies LegalResolveResponse;

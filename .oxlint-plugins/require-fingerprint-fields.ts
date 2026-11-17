@@ -15,6 +15,11 @@ import type { AstNode } from "./utils.ts";
 
 const RULE_NAME = "require-fingerprint-fields";
 const DIMENSIONS = new Set(["reason", "phase", "stage"]);
+// The package root and its standalone subpath export the same function.
+const DECLARATION_SOURCES = new Set([
+  "@stll/errors",
+  "@stll/errors/fingerprint-fields",
+]);
 
 const registeredFields = (
   node: AstNode,
@@ -153,7 +158,8 @@ export default eslintCompatPlugin({
                 factoryName = specifier.local.name;
               }
               if (
-                node.source.value === "@stll/errors" &&
+                typeof node.source.value === "string" &&
+                DECLARATION_SOURCES.has(node.source.value) &&
                 isIdentifier(specifier.imported, "declareFingerprintFields")
               ) {
                 declarationName = specifier.local.name;

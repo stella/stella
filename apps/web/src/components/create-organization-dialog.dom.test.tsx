@@ -11,12 +11,12 @@ import {
   ORGANIZATION_EVALUATION_LIMIT_REACHED_CODE,
   ORGANIZATION_NAME_MAX_LENGTH,
 } from "@stll/api-contract/organization-create";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import ar from "@/i18n/langs/ar.json";
 import en from "@/i18n/langs/en.json";
 import type { TranslationKey } from "@/i18n/types";
 import type { WebApiRoutes } from "@/lib/api";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/settings" });
 Object.assign(globalThis, {
@@ -38,13 +38,16 @@ const {
 const { IntlProvider, createTranslator } = await import("use-intl");
 const { Button } = await import("@stll/ui/button");
 const { TooltipProvider } = await import("@stll/ui/tooltip");
-const { drainReactScheduler } = await import("@/lib/react-scheduler-drain");
+const { drainReactScheduler } =
+  await import("@stll/property-testing/dom-environment");
 const { supportedLanguages } = await import("@/i18n/i18n-store");
 const { CreateOrganizationDialog } =
   await import("./create-organization-dialog");
 const { SidebarUserMenu } = await import("./sidebar-user-menu");
 const { SidebarProvider, SidebarMenu } = await import("@stll/ui/sidebar");
-const { roleOptions } = await import("@/lib/auth-queries");
+const { roleOptions, sessionOptions } = await import("@/lib/auth-queries");
+const { MEMBER_SESSION } =
+  await import("@/lib/account/auth-session.test-fixtures");
 const { organizationListOptions } = await import("@/lib/organization/queries");
 
 type CreatedOrganization =
@@ -52,6 +55,16 @@ type CreatedOrganization =
 const ORGANIZATION_ID = "019a0000-0000-7000-8000-000000000601";
 const USER_ID = "019a0000-0000-7000-8000-000000000602";
 const ORIGINAL_ORGANIZATION_ID = "019a0000-0000-7000-8000-000000000603";
+const INITIAL_SESSION = {
+  ...MEMBER_SESSION,
+  user: { ...MEMBER_SESSION.user, id: USER_ID },
+  session: {
+    ...MEMBER_SESSION.session,
+    userId: USER_ID,
+    activeOrganizationId: ORIGINAL_ORGANIZATION_ID,
+  },
+};
+let serverSession = INITIAL_SESSION;
 const CREATED_ORGANIZATION = {
   organizationId: ORGANIZATION_ID,
   name: "New firm",
@@ -140,16 +153,31 @@ globalThis.fetch = Object.assign(
       }
       return Response.json(organization);
     }
+    if (path.endsWith("/get-session")) {
+      return Response.json(serverSession);
+    }
     if (path.endsWith("/organization/set-active")) {
+      let response: Response;
       if (deferredSwitch) {
-        return await deferredSwitch;
+        response = await deferredSwitch;
+      } else if (switchOutcome === "switched") {
+        response = switchedResponse();
+      } else {
+        response = Response.json(
+          { code: "FORBIDDEN", message: "Switch refused" },
+          { status: 403 },
+        );
       }
-      return switchOutcome === "switched"
-        ? switchedResponse()
-        : Response.json(
-            { code: "FORBIDDEN", message: "Switch refused" },
-            { status: 403 },
-          );
+      if (response.ok) {
+        serverSession = {
+          ...serverSession,
+          session: {
+            ...serverSession.session,
+            activeOrganizationId: ORGANIZATION_ID,
+          },
+        };
+      }
+      return response;
     }
     if (path.endsWith("/organization/get-active-member-role")) {
       return Response.json({ role: "owner" });
@@ -174,6 +202,7 @@ afterEach(async () => {
   refusalResponse = undefined;
   unknownFailureResponse = undefined;
   switchOutcome = "switched";
+  serverSession = INITIAL_SESSION;
   deferredCreate = undefined;
   deferredSwitch = undefined;
   document.documentElement.dir = "ltr";
@@ -220,7 +249,8 @@ const renderCreationSurface = async ({
   if (!clients.includes(queryClient)) {
     clients.push(queryClient);
   }
-  queryClient.setQueryData(roleOptions.queryKey, "owner");
+  queryClient.setQueryData(sessionOptions.queryKey, serverSession);
+  await queryClient.query(roleOptions);
   queryClient.setQueryData(organizationListOptions(USER_ID).queryKey, [
     {
       id: ORIGINAL_ORGANIZATION_ID,
@@ -441,7 +471,7 @@ test("closing an edited draft requires confirmation and discards it before reope
     fireEvent.keyDown(dialog, { key: "Escape", code: "Escape" });
     await drainReactScheduler();
   });
-  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  await waitFor(() => expect(screen.queryByRole("dialog") === null).toBe(true));
   await openDialog();
   expect(
     screen
@@ -545,7 +575,7 @@ test("a committed creation with a lost response survives sidebar remount and rep
     );
     await drainReactScheduler();
   });
-  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  await waitFor(() => expect(screen.queryByRole("dialog") === null).toBe(true));
   await act(async () => {
     original.unmount();
     await drainReactScheduler();
@@ -762,7 +792,9 @@ test.each(
     fireEvent.click(
       screen.getByRole("button", { name: original.messages.common.cancel }),
     );
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog") === null).toBe(true),
+    );
     await act(async () => {
       original.unmount();
       await drainReactScheduler();
@@ -832,8 +864,8 @@ test("starting over after an unknown outcome requires confirmation and preserves
     expect(
       screen.queryByRole("dialog", {
         name: messages.organization.startOverTitle,
-      }),
-    ).toBeNull(),
+      }) === null,
+    ).toBe(true),
   );
 
   let input = screen.getByRole("textbox", {
@@ -876,8 +908,8 @@ test("starting over after an unknown outcome requires confirmation and preserves
     expect(
       screen.queryByRole("dialog", {
         name: messages.organization.startOverTitle,
-      }),
-    ).toBeNull(),
+      }) === null,
+    ).toBe(true),
   );
   input = screen.getByRole("textbox", {
     name: messages.common.organizationName,

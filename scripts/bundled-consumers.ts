@@ -246,7 +246,7 @@ export const BUNDLED_CONSUMERS = [
   {
     file: "apps/api/Dockerfile",
     command:
-      'bun build --define __STELLA_RELEASE__=true --minify --keep-names --target bun --splitting --outdir /app/bundles --public-path /app/ --entry-naming "[name].js" --chunk-naming "chunk-[hash].js" apps/api/src/scripts/backfill-case-law-slugs.ts apps/api/scripts/seed-usage-policies.ts apps/api/scripts/replay-provider-events.ts apps/api/src/scripts/better-auth-migration-audit.ts apps/api/src/scripts/better-auth-microsoft-identity-map.ts apps/api/src/scripts/better-auth-17-backfill.ts apps/api/src/scripts/database-census.ts apps/api/src/scripts/better-auth-sign-in-replay.ts apps/api/src/scripts/replay-case-law-source.ts apps/api/src/scripts/review-account.ts apps/api/src/scripts/partner-oauth-client.ts apps/api/src/scripts/replay-tick.ts apps/api/src/scripts/import-cz-us-roster.ts apps/api/src/scripts/eu-completion-tick.ts apps/api/src/scripts/eu-completion-control.ts apps/api/src/scripts/redact-case-law-decision.ts apps/api/src/scripts/case-law-raw-layout.ts apps/api/src/scripts/complete-sk-us-raw.ts apps/api/src/scripts/decision-analysis-candidates.ts apps/api/src/scripts/decision-analysis-input.ts apps/api/src/scripts/decision-analysis-save.ts apps/api/src/scripts/repair-publisher-absent-text.ts apps/api/src/scripts/repair-cz-ns-court.ts apps/api/scripts/classify-citations.ts apps/api/src/scripts/apply-reviewed-citation-labels.ts apps/api/src/scripts/corpus-generation.ts apps/api/src/scripts/corpus-snippet-compare.ts apps/api/src/scripts/image-smoke-model-ingress.ts apps/api/src/scripts/image-smoke.ts',
+      'bun build --define __STELLA_RELEASE__=true --minify --keep-names --target bun --splitting --outdir /app/bundles --public-path /app/ --entry-naming "[name].js" --chunk-naming "chunk-[hash].js" apps/api/src/scripts/backfill-case-law-slugs.ts apps/api/scripts/seed-usage-policies.ts apps/api/scripts/replay-provider-events.ts apps/api/src/scripts/better-auth-migration-audit.ts apps/api/src/scripts/better-auth-microsoft-identity-map.ts apps/api/src/scripts/better-auth-17-backfill.ts apps/api/src/scripts/database-census.ts apps/api/src/scripts/better-auth-sign-in-replay.ts apps/api/src/scripts/replay-case-law-source.ts apps/api/src/scripts/review-account.ts apps/api/src/scripts/partner-oauth-client.ts apps/api/src/scripts/replay-tick.ts apps/api/src/scripts/import-cz-us-roster.ts apps/api/src/scripts/eu-completion-tick.ts apps/api/src/scripts/eu-completion-control.ts apps/api/src/scripts/redact-case-law-decision.ts apps/api/src/scripts/case-law-raw-layout.ts apps/api/src/scripts/complete-sk-us-raw.ts apps/api/src/scripts/decision-analysis-candidates.ts apps/api/src/scripts/decision-analysis-input.ts apps/api/src/scripts/decision-analysis-save.ts apps/api/src/scripts/repair-publisher-absent-text.ts apps/api/src/scripts/repair-cz-ns-court.ts apps/api/scripts/classify-citations.ts apps/api/src/scripts/apply-reviewed-citation-labels.ts apps/api/src/scripts/corpus-generation.ts apps/api/src/scripts/corpus-snippet-compare.ts apps/api/src/scripts/drain-pending-online-units.ts apps/api/src/scripts/image-smoke-model-ingress.ts apps/api/src/scripts/image-smoke.ts',
     bootCheck: {
       type: "docker-run",
       dockerfile: "apps/api/Dockerfile",
@@ -354,6 +354,15 @@ export const BUNDLED_CONSUMERS = [
     },
   },
   {
+    file: "packages/agent-engine/scripts/build-sidecar.ts",
+    command: "Bun.build(entrypoints: [ENTRYPOINT])",
+    bootCheck: {
+      type: "none",
+      reason:
+        "The desktop release compiles the sidecar in Tauri's beforeBuildCommand, outside CI; sidecar.test.ts boots the same entry from source over stdio.",
+    },
+  },
+  {
     file: "apps/api/scripts/build-mcp-country-filter-fixture.ts",
     command:
       'Bun.build(entrypoints: [ path.resolve( import.meta.dirname, "../../../packages/mcp-apps/src/case-law-results/app.html", ), ])',
@@ -410,6 +419,26 @@ export const BUNDLED_CONSUMERS = [
       type: "docker-run",
       dockerfile: "apps/legal-atlas-runner/Dockerfile",
       run: "RUN bun apps/legal-atlas-runner/dist/index.js smoke",
+    },
+  },
+  {
+    file: "apps/legal-atlas-runner/Dockerfile",
+    command:
+      "bun build --define __STELLA_RELEASE__=true --minify --keep-names --target bun --outdir apps/legal-atlas-runner/dist/workers --entry-naming pdf-worker.js apps/api/src/lib/files/pdf-worker.ts",
+    bootCheck: {
+      type: "docker-run",
+      dockerfile: "apps/legal-atlas-runner/Dockerfile",
+      run: 'RUN status=0; printf \'not a pdf\' | bun apps/legal-atlas-runner/dist/workers/pdf-worker.js text-lines >/dev/null 2>&1 || status=$?; [ "$status" -eq 65 ] || { echo "ERROR: pdf worker smoke exited $status, expected 65" >&2; exit 1; }',
+    },
+  },
+  {
+    file: "apps/skill-runner/Dockerfile",
+    command:
+      "bun build apps/skill-runner/src/handler.ts --target=node --format=esm --outfile /app/handler.mjs",
+    bootCheck: {
+      type: "none",
+      reason:
+        "The Lambda image packages a handler export rather than a directly bootable program.",
     },
   },
   {

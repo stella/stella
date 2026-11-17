@@ -27,6 +27,7 @@ const FAILURE_BY_ARCHIVE_REASON = {
   "too-many-entries": "archive-limit-exceeded",
   "entry-too-large": "archive-limit-exceeded",
   "total-too-large": "archive-limit-exceeded",
+  "compression-ratio-exceeded": "archive-limit-exceeded",
 } as const satisfies Record<
   DocxArchiveError["reason"],
   Extract<

@@ -8,6 +8,10 @@ const ACTION = path.resolve(
   "../.github/actions/promote-dispatch/action.yml",
 );
 const HELPER = path.resolve(import.meta.dir, "gh-retry.sh");
+const DISPATCH_HELPER = path.resolve(
+  import.meta.dir,
+  "gh-dispatch-workflow.sh",
+);
 const FAKE_GH = `#!/usr/bin/env python3
 import json,os,pathlib,subprocess,sys
 root=pathlib.Path(os.environ['FAKE_ROOT'])
@@ -23,6 +27,7 @@ endpoint=next((arg for arg in args if arg.startswith('/')), '')
 method=args[args.index('--method')+1] if '--method' in args else 'GET'
 if endpoint.endswith('/access_tokens'):phase='token'
 elif endpoint.endswith('/dispatches'):phase='dispatch'
+elif '/runs?' in endpoint and 'created=' in endpoint:phase='snapshot'
 elif '/runs?' in endpoint:phase='lookup' if (root/'dispatch-count').exists() else 'existing'
 elif endpoint.endswith('/runs/777'):phase='poll'
 elif endpoint=='/installation/token':phase='revoke'
@@ -48,6 +53,7 @@ elif phase=='existing':
  if '--paginate' not in args:pages=pages[:1]
  if '--slurp' in args:payload=pages
  else:payload=pages[0]
+elif phase=='snapshot':payload=[{'workflow_runs':[]}]
 elif phase=='lookup':payload={'workflow_runs':[
  {'id':444,'created_at':'2026-01-01T00:00:00Z','display_title':'Promote v1.2.3 → '+os.environ['TARGET_ENV']},
  {'id':555,'created_at':'2026-10-07T12:00:01Z','display_title':'Promote v1.2.3-rc.1 → '+os.environ['TARGET_ENV']},
@@ -113,6 +119,10 @@ const promotionScenario = async ({
     const actionPath = path.join(directory, ".github/actions/promote-dispatch");
     await Promise.all([mkdir(scripts), mkdir(actionPath, { recursive: true })]);
     await writeFile(path.join(scripts, "gh-retry.sh"), await readFile(HELPER));
+    await writeFile(
+      path.join(scripts, "gh-dispatch-workflow.sh"),
+      await readFile(DISPATCH_HELPER),
+    );
     await Promise.all([
       writeFile(path.join(directory, "gh"), FAKE_GH, { mode: 0o700 }),
       writeFile(path.join(directory, "openssl"), FAKE_OPENSSL, { mode: 0o700 }),

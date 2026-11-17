@@ -158,10 +158,16 @@ property types and not one.
 ## Property types
 
 `money` and `person` are display, filter, sort and calculation types. Neither
-has an inline editor and neither is offered by the property composer, so a
-workspace holds one only if the API put it there. Neither is AI-extractable
-either: an amount needs a currency a model cannot choose and a person has to
+has an inline editor. The property composer offers `money` to members with the
+`table-analysis` beta; `person` is not offered, so a workspace holds one only
+if the API put it there.
+
+`money` is AI-extractable: the model answers a major-unit amount and the ISO
+4217 code the source states, the column's currency fills in when the source
+names none, and the validator scales the amount to the currency's minor units
+(never converting between currencies). A `person` is not, because it has to
 resolve to a workspace member. That exclusion is one predicate,
 `isAiExtractablePropertyContent`, and the batch property's content type is bound
 to it, so the prompt builder, the answer validator and the mock are exhaustive
-by construction.
+by construction. Case-law question columns take the extractable kinds except
+money (`caseLawQuestionContentSchema`).

@@ -4,8 +4,9 @@ Every new guard or lint ships with an autofix or codemod registered in the PR
 Autofix job, or enforces only lines changed against the merge base for its first
 week. Register the dated scope in `scripts/guard-rollouts/<id>.json` so the existing
 dated-waiver inventory and healing checks enforce its seven-day deadline.
-Changed-line rollouts become full checks at expiry. Healing probes request full
-scope and restore `type: "full"` only after the owning check passes.
+An expired rollout stays on changed lines, so its deadline cannot fail a change
+that never touched the guarded line. Healing probes request full scope and
+restore `type: "full"` only after the owning check passes.
 
 `scripts/dated-waivers.ts` derives the dated inventory from each owning registry
 and is the only check that compares an expiry with the clock. Owning checks

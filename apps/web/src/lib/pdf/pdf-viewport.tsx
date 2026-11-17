@@ -9,6 +9,7 @@ import { useShallow } from "zustand/react/shallow";
 
 import { Button } from "@stll/ui/button";
 import { Field, FieldError, FieldLabel } from "@stll/ui/field";
+import { Form } from "@stll/ui/form";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { composeRefs } from "@stll/ui/utils";
 
@@ -338,13 +339,18 @@ const PDFPasswordPrompt = ({
 
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-4 px-4 py-6">
-      <form
+      <Form
         action={() => {
           onSubmit(value);
         }}
-        className="w-full max-w-sm space-y-3"
+        className="max-w-sm"
+        density="snug"
       >
-        <Field invalid={incorrectPassword}>
+        {/* Not `invalid`: inside Form, an invalid Field blocks the next
+            submit (Form focuses it instead), so a wrong password could never
+            be retried. The input carries aria-invalid and the error renders
+            through `match`. */}
+        <Field>
           <FieldLabel htmlFor={id}>
             {t("workspaces.pdf.passwordLabel")}
           </FieldLabel>
@@ -364,7 +370,7 @@ const PDFPasswordPrompt = ({
           )}
         </Field>
         <PDFPasswordSubmitButton label={t("workspaces.pdf.unlock")} />
-      </form>
+      </Form>
     </div>
   );
 };

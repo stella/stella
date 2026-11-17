@@ -100,7 +100,7 @@ const createStoredTemplateMock = async function* ({
     fileName,
     fieldCount: 0,
     sizeBytes: 1,
-    createdAt: new Date(),
+    createdAt: new Date("2026-04-30T09:00:00.000Z"),
   });
 };
 

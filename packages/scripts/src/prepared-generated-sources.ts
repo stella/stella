@@ -1,11 +1,18 @@
 import { panic, Result } from "better-result";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
 
 import { createSha256, sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { ciGeneratedFiles } from "./generated-file-inventory";
+import { CI_GENERATED_DIRECTORIES } from "./generated-files";
 import {
   generatedInputGit,
   generatedInputTreeHash,
@@ -121,7 +128,39 @@ export const requireUnchangedGeneratedInputs = (
   }
 };
 
-export const validatePreparedManifest = (root: string, raw: unknown) => {
+/** A file a generated directory may hold; the pattern admits no path. */
+const isGeneratedDirectoryFile = (file: string) =>
+  CI_GENERATED_DIRECTORIES.some(
+    ({ directory, file: pattern }) =>
+      file.startsWith(`${directory}/`) &&
+      pattern.test(file.slice(directory.length + 1)),
+  );
+
+const preparedDirectoryFiles = (files: readonly string[], directory: string) =>
+  files.filter(
+    (file) =>
+      file.startsWith(`${directory}/`) && isGeneratedDirectoryFile(file),
+  );
+
+/** Every file in a generated directory, as manifest paths, for the producer. */
+export const generatedDirectoryFiles = (root: string) =>
+  CI_GENERATED_DIRECTORIES.flatMap(({ directory, file }) =>
+    readdirSync(path.join(root, directory))
+      .filter((name) => file.test(name))
+      .map((name) => `${directory}/${name}`),
+  ).toSorted();
+
+type ValidatePreparedManifestOptions = {
+  root: string;
+  raw: unknown;
+  generatedRoot?: string;
+};
+
+export const validatePreparedManifest = ({
+  root,
+  raw,
+  generatedRoot = root,
+}: ValidatePreparedManifestOptions) => {
   const manifest = v.parse(preparedManifestSchema, raw);
   const expected = generatedInputIdentity(root);
   if (
@@ -132,9 +171,16 @@ export const validatePreparedManifest = (root: string, raw: unknown) => {
   ) {
     panic("Generated source artifact does not match this source and toolchain");
   }
+  const inventory = new Set(ciGeneratedFiles(root, { generatedRoot }));
+  const names = Object.keys(manifest.files);
   if (
-    Object.keys(manifest.files).length !== ciGeneratedFiles(root).length ||
-    ciGeneratedFiles(root).some((file) => !Object.hasOwn(manifest.files, file))
+    [...inventory].some((file) => !Object.hasOwn(manifest.files, file)) ||
+    names.some(
+      (file) => !inventory.has(file) && !isGeneratedDirectoryFile(file),
+    ) ||
+    CI_GENERATED_DIRECTORIES.some(
+      ({ directory }) => preparedDirectoryFiles(names, directory).length === 0,
+    )
   ) {
     panic("Generated source artifact has an incomplete output inventory");
   }
@@ -145,7 +191,7 @@ export const preparedManifestPath = (root: string) =>
   path.join(root, ".cache/ci-generated-sources/manifest.json");
 
 export const verifyPreparedGeneratedFiles = (root: string, raw: unknown) => {
-  const manifest = validatePreparedManifest(root, raw);
+  const manifest = validatePreparedManifest({ root, raw });
   for (const file of ciGeneratedFiles(root)) {
     if (
       generatedFileHash(readFileSync(path.join(root, file))) !==
@@ -211,23 +257,69 @@ export const hasPreparedGeneratedSources = (root: string) => {
   return true;
 };
 
+/**
+ * Whether this checkout holds the producer's files of a generated directory,
+ * so its generator has nothing to do: false where no prepared sources are
+ * configured. Prepared files that differ from the producer's are a defect,
+ * not a reason to generate again beside the checks that read them.
+ */
+export const hasPreparedGeneratedDirectory = (
+  root: string,
+  directory: (typeof CI_GENERATED_DIRECTORIES)[number]["directory"],
+) => {
+  if (!hasPreparedGeneratedSources(root)) {
+    return false;
+  }
+  const manifest = validatePreparedManifest({
+    root,
+    raw: JSON.parse(readFileSync(preparedManifestPath(root), "utf-8")),
+  });
+  const recorded = preparedDirectoryFiles(
+    Object.keys(manifest.files),
+    directory,
+  );
+  // A missing directory holds none of the recorded files, which fail below.
+  const names = Result.try(() => readdirSync(path.join(root, directory)));
+  const present = (Result.isOk(names) ? names.value : [])
+    .map((name) => `${directory}/${name}`)
+    .filter(isGeneratedDirectoryFile);
+  for (const file of new Set([...recorded, ...present])) {
+    const bytes = Result.try(() => readFileSync(path.join(root, file)));
+    if (
+      !Object.hasOwn(manifest.files, file) ||
+      Result.isError(bytes) ||
+      generatedFileHash(bytes.value) !== manifest.files[file]
+    ) {
+      panic(`Prepared generated source differs: ${file}`);
+    }
+  }
+  return true;
+};
+
 export const restorePreparedGeneratedSources = (
   root: string,
   source: string,
 ) => {
-  const manifest = validatePreparedManifest(
+  const generatedRoot = path.join(source, "files");
+  const manifest = validatePreparedManifest({
     root,
-    JSON.parse(readFileSync(path.join(source, "manifest.json"), "utf-8")),
-  );
+    raw: JSON.parse(readFileSync(path.join(source, "manifest.json"), "utf-8")),
+    generatedRoot,
+  });
   // Validate every byte before writing any output; only the canonical inventory
-  // can name a destination in the checkout.
-  const files = ciGeneratedFiles(root).map((file) => {
+  // and generated-directory file names can name a destination in the checkout.
+  const files = Object.keys(manifest.files).map((file) => {
     const bytes = readFileSync(path.join(source, "files", file));
     if (generatedFileHash(bytes) !== manifest.files[file]) {
       panic(`Generated source artifact differs: ${file}`);
     }
     return { file, bytes };
   });
+  // A restored directory holds exactly the producer's files: an older file left
+  // here would read as a prepared file that differs.
+  for (const { directory } of CI_GENERATED_DIRECTORIES) {
+    rmSync(path.join(root, directory), { recursive: true, force: true });
+  }
   for (const { file, bytes } of files) {
     const destination = path.join(root, file);
     mkdirSync(path.dirname(destination), { recursive: true });

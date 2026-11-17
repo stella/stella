@@ -1,3 +1,4 @@
+import { pdfFillColor } from "@/api/lib/files/pdf-color";
 import { STAMP_BRAND_BLUE } from "@/api/lib/files/pdf-signing/stamp-colors";
 import { pdfNumber } from "@/api/lib/files/pdf-signing/stamp-glyphs";
 
@@ -93,7 +94,7 @@ export const drawStampMark = (box: {
   const bottom = box.y + (box.height - STELLA_MARK_HEIGHT * scale) / 2;
   return [
     "q",
-    `${STAMP_BRAND_BLUE} rg`,
+    pdfFillColor(STAMP_BRAND_BLUE),
     `${pdfNumber(scale)} 0 0 ${pdfNumber(scale)} ${pdfNumber(left)} ${pdfNumber(bottom)} cm`,
     ...STELLA_MARK_PATH,
     "Q",

@@ -1,5 +1,7 @@
 import { Result } from "better-result";
 
+import { workspaceIsVisible } from "@stll/api-contract/workspace-status";
+
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { intersectAccessibleWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import type { ChatRegistryContextDeps } from "@/api/handlers/chat/tools/registry-adapter/mcp-chat-context";
@@ -16,6 +18,7 @@ type CurrentChatExecutionContext = {
   featureAccessSnapshot: FeatureAccessSnapshot;
   pinServerValidatedWorkspaceId: (workspaceId: SafeId<"workspace">) => boolean;
   role: string;
+  billingAccess: boolean;
   safeDb: SafeDb;
   scopedDb: ScopedDb;
   userEmail: string;
@@ -72,8 +75,8 @@ export const resolveCurrentChatRegistryContext = async ({
     );
   }
 
-  const usableWorkspaces = current.accessibleWorkspaces.filter(
-    ({ status }) => status !== "deleting",
+  const usableWorkspaces = current.accessibleWorkspaces.filter(({ status }) =>
+    workspaceIsVisible(status),
   );
   const toolWorkspaceIds = intersectAccessibleWorkspaceIds({
     pinnedIds: contextDeps.toolWorkspaceIds,
@@ -83,7 +86,11 @@ export const resolveCurrentChatRegistryContext = async ({
   return Result.ok({
     ...contextDeps,
     featureAccessSnapshot: current.featureAccessSnapshot,
-    memberRole: withCurrentMemberRole(contextDeps.memberRole, current.role),
+    memberRole: withCurrentMemberRole({
+      authority: contextDeps.memberRole,
+      role: current.role,
+      billingAccess: current.billingAccess,
+    }),
     pinServerValidatedWorkspaceId: current.pinServerValidatedWorkspaceId,
     safeDb: current.safeDb,
     scopedDb: current.scopedDb,

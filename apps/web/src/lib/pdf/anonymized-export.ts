@@ -1,5 +1,7 @@
 import { Result } from "better-result";
 
+import { NEUTRAL_COLORS } from "@stll/brand";
+
 import { ClientOperationError } from "@/lib/errors/client";
 import { hasUnsupportedAnonymizationContent } from "@/lib/pdf/anonymized-export-content.logic";
 import { UnsupportedAnonymizedExportError } from "@/lib/pdf/anonymized-export-errors";
@@ -98,7 +100,8 @@ export const rasterizeAnonymizedPdf = async (
             viewport,
             annotationMode: pdfjs.AnnotationMode.DISABLE,
           }).promise;
-          context.fillStyle = "#000000";
+          // Redaction masks are solid ink.
+          context.fillStyle = NEUTRAL_COLORS.black;
           for (const box of masks.get(pageNumber - 1) ?? NO_MASKS) {
             const rect = toPDFSearchViewportBox(
               {

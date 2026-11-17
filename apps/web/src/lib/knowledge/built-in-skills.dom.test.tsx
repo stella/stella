@@ -4,10 +4,9 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import type { AbstractIntlMessages } from "use-intl";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { listSkillMetadata, readSkillDisplayName } from "@stll/skills";
 import { STARTER_SKILLS } from "@stll/skills/starter-skills";
-
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
 

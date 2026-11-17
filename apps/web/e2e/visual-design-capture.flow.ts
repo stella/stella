@@ -8,12 +8,14 @@ import {
   generatedVisualPageSchema,
   generatedVisualPartSchema,
 } from "@stll/api-contract/generated-visual";
+import { toSafeId } from "@stll/api-contract/safe-id";
 import { VISUAL_PREVIEW_TOOL_NAME } from "@stll/api-contract/visual-preview";
 import { VISUAL_SANDBOX_LIMITS } from "@stll/api-contract/visual-sandbox";
 
 import { PALETTE_STORAGE_KEY, THEME_STORAGE_KEY } from "../src/consts";
 import { installDockedChatHistory } from "./helpers/docked-chat-fixtures";
 import { dockedChatMessagePage } from "./helpers/docked-chat-history";
+import { apiJson, contractJson, respond } from "./helpers/route-mock";
 
 type VisualDesignCaptureContext = {
   page: Page;
@@ -58,25 +60,32 @@ const captureVisualDesign = async ({
   });
   await installDockedChatHistory(page);
   await page.route("**/v1/chat/threads/*/messages*", async (route) => {
-    await route.fulfill({
-      json: {
+    await respond(
+      route,
+      apiJson("v1/chat/threads/:threadId/messages", "get", {
         ...dockedChatMessagePage,
         messages: [
           {
-            id: "019a0000-0000-7000-8000-000000000002",
+            id: toSafeId<"chatMessage">("019a0000-0000-7000-8000-000000000002"),
             role: "assistant",
+            revision: 0,
+            edited: false,
             createdAt: "2026-01-01T00:00:00.000Z",
             parts: [part],
           },
         ],
-      },
-    });
+      }),
+    );
   });
   await page.route(`**/v1/user-files/${fileId}/visual`, async (route) => {
-    await route.fulfill({
-      json: visual,
-      headers: { "cache-control": "private, no-store" },
-    });
+    await respond(
+      route,
+      // The route answers with a raw response; its body's contract is the
+      // generated-visual page schema.
+      contractJson(generatedVisualPageSchema, visual, {
+        "cache-control": "private, no-store",
+      }),
+    );
   });
   await page.addInitScript(
     ({ themeKey, paletteKey }) => {

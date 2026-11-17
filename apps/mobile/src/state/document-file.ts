@@ -38,12 +38,16 @@ const versionsSchema = v.object({
   versions: v.array(
     v.object({
       id: v.string(),
+      versionNumber: v.pipe(v.number(), v.integer()),
       file: v.nullable(versionFileSchema),
     }),
   ),
 });
 
-export type VersionFile = v.InferOutput<typeof versionFileSchema>;
+/** A version's file, and the number of the version it is of. */
+export type VersionFile = v.InferOutput<typeof versionFileSchema> & {
+  readonly versionNumber: number;
+};
 
 /**
  * The file of the document as it stands: the current version's, or, when
@@ -53,14 +57,13 @@ export type VersionFile = v.InferOutput<typeof versionFileSchema>;
 export const currentVersionFile = (
   history: v.InferOutput<typeof versionsSchema>,
 ): VersionFile | null => {
-  const current = history.versions.find(
-    (version) => version.id === history.currentVersionId,
-  );
-  return (
-    current?.file ??
-    history.versions.find((version) => version.file !== null)?.file ??
-    null
-  );
+  const withFile = history.versions.filter((version) => version.file !== null);
+  const shown =
+    withFile.find((version) => version.id === history.currentVersionId) ??
+    withFile.at(0);
+  return shown?.file
+    ? { ...shown.file, versionNumber: shown.versionNumber }
+    : null;
 };
 
 export const versionsPath = (workspaceId: string, entityId: string) =>
@@ -98,6 +101,8 @@ export type DocumentFileError = ApiError | NoFileError;
 export type DocumentFile = {
   /** The document's file column, which an edit names. */
   readonly propertyId: string;
+  /** The version the file is of, which an edit must start from. */
+  readonly versionNumber: number;
   readonly fileName: string;
   readonly mimeType: string;
   readonly url: string;
@@ -110,9 +115,10 @@ export type DocumentFile = {
  */
 const documentFileOf = (
   delivered: v.InferOutput<typeof fileUrlSchema>,
-  propertyId: string,
+  { propertyId, versionNumber }: VersionFile,
 ): DocumentFile => ({
   propertyId,
+  versionNumber,
   fileName: delivered.fileName,
   mimeType: delivered.mimeType,
   url: delivered.presignedUrl,
@@ -168,14 +174,14 @@ export const readDocumentFile = async ({
       });
     const display = await read("display");
     if (Result.isOk(display)) {
-      return Result.ok(documentFileOf(display.value, file.propertyId));
+      return Result.ok(documentFileOf(display.value, file));
     }
     if (!fallsBackToDownload(display.error)) {
       return Result.err(display.error);
     }
     const stored = yield* Result.await(read("download"));
     const original: DocumentFile = {
-      ...documentFileOf(stored, file.propertyId),
+      ...documentFileOf(stored, file),
       viewer: "quick-look",
     };
     return Result.ok(original);

@@ -29,11 +29,16 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { ADAPTER_KEYS, PARSER_VERSIONS } from "@/api/handlers/case-law/consts";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
+import {
+  CASE_LAW_CORPUS_DEPENDENCIES,
+  type CaseLawCorpusDependencies,
+} from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   absentDecisionTextFields,
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
+import { zstdCompress } from "@/api/lib/compression";
 import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import {
@@ -83,6 +88,20 @@ const STORED_KEYS = {
 } as const;
 const STORED_CONTENT_HASH = "stored-content-hash";
 
+// A refresh that replaces the document reads the one it replaces, to record
+// where its anchors went; the stored AST object is served from here.
+const storedAstCorpus = {
+  ...CASE_LAW_CORPUS_DEPENDENCIES,
+  readBytes: {
+    readObject: async ({ key }) => {
+      if (key !== STORED_KEYS.astKey) {
+        throw new TypeError(`Unexpected stored object read: ${key}`);
+      }
+      return await Promise.resolve(zstdCompress(JSON.stringify(storedAst)));
+    },
+  },
+} satisfies CaseLawCorpusDependencies;
+
 if (!databaseUrl || !runPostgresTests) {
   describe.skip("ingestion refresh — stored document", () => {
     test("requires STELLA_RUN_POSTGRES_TESTS=true and DATABASE_URL", () => {
@@ -100,12 +119,19 @@ if (!databaseUrl || !runPostgresTests) {
     const suffix = Bun.randomUUIDv7().slice(0, 8);
 
     /** The row a hydration or a corpus backfill leaves behind. */
+    /**
+     * The publisher's own id: a refresh is found by it. Without one, changed
+     * metadata reads as a sibling decision on the same docket.
+     */
+    const publisherIdOf = (caseNumber: string) => `sk-${caseNumber}`;
+
     const insertHydratedDecision = async (caseNumber: string) => {
       const [row] = await db
         .insert(caseLawDecisions)
         .values({
           sourceId,
           caseNumber,
+          sourceDocumentId: publisherIdOf(caseNumber),
           court: "Okresný súd",
           country: "SVK",
           language: "sk",
@@ -138,6 +164,7 @@ if (!databaseUrl || !runPostgresTests) {
         .values({
           sourceId,
           caseNumber,
+          sourceDocumentId: publisherIdOf(caseNumber),
           court: "Okresný súd",
           country: "SVK",
           language: "sk",
@@ -157,6 +184,7 @@ if (!databaseUrl || !runPostgresTests) {
     const metadataOnlyResult = (caseNumber: string): IngestionResult =>
       plainTextIngestionResult({
         caseNumber,
+        sourceDocumentId: publisherIdOf(caseNumber),
         court: "Okresný súd",
         country: "SVK",
         language: "sk",
@@ -450,6 +478,7 @@ if (!databaseUrl || !runPostgresTests) {
           observationOrder: 1n,
           sourceId,
           scopedDb,
+          corpus: storedAstCorpus,
           observedAt: new Date("2026-07-31T12:00:00.000Z"),
         })
       ).unwrap();

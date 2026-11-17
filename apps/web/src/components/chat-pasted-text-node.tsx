@@ -8,6 +8,7 @@ import { Button } from "@stll/ui/button";
 import { XIcon } from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { Textarea } from "@stll/ui/textarea";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { contentDir } from "@stll/ui/use-content-dir";
 
 import type {
@@ -143,6 +144,7 @@ export const ChatPastedTextNode = (props: NodeViewProps) => {
           aria-label={t("chat.pastedText.expand")}
           className="inline-flex max-w-full cursor-pointer align-middle select-none"
           contentEditable={false}
+          tooltip={chipLabel}
           type="button"
         >
           <ReferenceChip
@@ -159,9 +161,9 @@ export const ChatPastedTextNode = (props: NodeViewProps) => {
         <PopoverPopup className="w-(--available-width) max-w-md" side="top">
           <div className="flex max-h-72 flex-col gap-2 text-xs">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-muted-foreground truncate">
+              <TruncatedText className="text-muted-foreground">
                 {chipLabel}
-              </span>
+              </TruncatedText>
               <Button
                 aria-label={t("common.remove")}
                 className="size-5 p-0"

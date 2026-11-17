@@ -5,9 +5,15 @@ import { PgDialect } from "drizzle-orm/pg-core";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import {
+  CHAT_INPUT_REFUSAL_CODE,
   CHAT_MESSAGE_EMPTY_ERROR_CODE,
   CHAT_TURN_INTENT,
 } from "@stll/api-contract";
+import { CHAT_SEND_QUEUES_INSTEAD_CODE } from "@stll/api-contract/chat-queue";
+import {
+  LEGAL_HOLD_ACTIVE,
+  LEGAL_HOLD_REASON_ISSUE_CODE,
+} from "@stll/api-contract/legal-holds";
 import { roles } from "@stll/permissions";
 import { createTestState } from "@stll/test-state";
 
@@ -15,6 +21,7 @@ import { member } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   chatMessages,
+  chatQueueHolds,
   chatRunLogEntries,
   chatRunLogs,
   chatThreadNames,
@@ -56,6 +63,10 @@ import {
 import type { AdmittedActionIdentity } from "@/api/lib/rate-limit/action-kinds";
 import { getTanStackTextModelInfoForTask } from "@/api/lib/tanstack-ai-models";
 import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
+import {
+  LegalHoldActiveError,
+  LegalHoldRecord,
+} from "@/api/lib/workspaces/legal-holds/errors";
 import { actionAdmissionErrorFor } from "@/api/tests/helpers/action-admission-error";
 import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
 import { testFileKey } from "@/api/tests/helpers/file-key";
@@ -71,22 +82,23 @@ import type {
 } from "./types";
 import type { UploadedChatFile } from "./upload-files";
 
-const testState = createTestState({ file: import.meta.path, config: env });
+/**
+ * Whether a mocked turn lookup is acceptance's check for a live turn (a
+ * running one, or one handed over and not yet adopted), which these threads
+ * never hold.
+ */
+const asksForLiveTurn = (status: unknown): boolean => {
+  if (typeof status !== "object" || status === null) {
+    return false;
+  }
+  const eq: unknown = Reflect.get(status, "eq");
+  const among: unknown = Reflect.get(status, "in");
+  return (
+    eq === "running" || (Array.isArray(among) && among.includes("running"))
+  );
+};
 
-beforeEach(() => {
-  compactMessagesForContextMock.mockClear();
-  loadExternalMcpToolsForUserMock.mockClear();
-  loadWebSearchProvidersForOrgMock.mockClear();
-  rollbackUnpersistedChatSideEffectsMock.mockReset();
-  rollbackUnpersistedChatSideEffectsMock.mockImplementation(
-    rollbackUnpersistedChatSideEffectsDefault,
-  );
-  uploadMessageFilesWithRollbackMock.mockReset();
-  uploadMessageFilesWithRollbackMock.mockImplementation(
-    uploadMessageFilesWithRollbackDefault,
-  );
-  upsertChatThreadSearchDocumentMock.mockClear();
-});
+const testState = createTestState({ file: import.meta.path, config: env });
 
 let webSearchProviderLoadHook: (() => void) | undefined;
 const loadWebSearchProvidersForOrgMock = mock(async () => {
@@ -125,7 +137,7 @@ const uploadMessageFilesWithRollbackDefault = async ({
 }): Promise<
   Result<
     { message: PersistableChatMessage; uploadedFiles: UploadedChatFile[] },
-    never
+    LegalHoldActiveError
   >
 > => Result.ok({ message, uploadedFiles: [] });
 const uploadMessageFilesWithRollbackMock = mock(
@@ -156,6 +168,18 @@ const sendMessage = createSendMessage({
 let analytics: RecordingAnalytics;
 
 beforeEach(() => {
+  compactMessagesForContextMock.mockClear();
+  loadExternalMcpToolsForUserMock.mockClear();
+  loadWebSearchProvidersForOrgMock.mockClear();
+  rollbackUnpersistedChatSideEffectsMock.mockReset();
+  rollbackUnpersistedChatSideEffectsMock.mockImplementation(
+    rollbackUnpersistedChatSideEffectsDefault,
+  );
+  uploadMessageFilesWithRollbackMock.mockReset();
+  uploadMessageFilesWithRollbackMock.mockImplementation(
+    uploadMessageFilesWithRollbackDefault,
+  );
+  upsertChatThreadSearchDocumentMock.mockClear();
   analytics = installRecordingAnalytics();
 });
 
@@ -241,6 +265,16 @@ const selectChatMessages = () => ({
     })),
 });
 
+/**
+ * A turn that fails holds its thread's queue in its settlement; these
+ * threads queue nothing, so the hold's statement is not a run-id lookup.
+ */
+const withoutQueueHolds =
+  (execute: (statement: SQL) => Promise<unknown>) => async (statement: SQL) =>
+    new PgDialect().sqlToQuery(statement).sql.includes("chat_queue_holds")
+      ? { rows: [] }
+      : await execute(statement);
+
 const withThreadNameReads = (select: () => { from: () => unknown }) => () => ({
   from: (table: unknown) => fromSharedReads(table, () => select().from()),
 });
@@ -264,12 +298,20 @@ const withRegistryCredentialQuery = (transaction: unknown): unknown => {
   }
   const query = "query" in transaction ? transaction.query : undefined;
   return {
+    // A member's send releases the thread's queue in its acceptance.
+    delete: (table: unknown) => {
+      if (table !== chatQueueHolds) {
+        throw new Error("Unexpected delete in chat send test");
+      }
+      return { where: async () => await Promise.resolve([]) };
+    },
     execute: async (statement: SQL) => {
-      if (
-        !new PgDialect()
-          .sqlToQuery(statement)
-          .sql.includes("chat_turn_run_id_taken")
-      ) {
+      const text = new PgDialect().sqlToQuery(statement).sql;
+      // A turn that fails holds its thread's queue; these threads have none.
+      if (text.includes("chat_queue_holds")) {
+        return await Promise.resolve({ rows: [] });
+      }
+      if (!text.includes("chat_turn_run_id_taken")) {
         throw new Error("Unexpected SQL execution in chat send test");
       }
       return { rows: [{ taken: false }] };
@@ -373,6 +415,7 @@ const createContext = ({
     route: "/v1/chat" satisfies ApiRoutePath,
     safeDb: observedSafeDb,
     scopedDb,
+    set: { headers: {}, status: 200 },
     session: { activeOrganizationId: organizationId },
     user: { id: userId },
   });
@@ -550,6 +593,7 @@ describe("agent sandbox preflight", () => {
     expect(result).toEqual({
       code: 422,
       response: {
+        code: CHAT_INPUT_REFUSAL_CODE.agentRunsDisabled,
         message: "Agent sandbox runs are not enabled for this deployment.",
       },
     });
@@ -634,6 +678,7 @@ describe("send message disconnect handling", () => {
         return Result.ok("owned");
       });
       const lifecycle = new ChatSendLifecycle({
+        organizationId,
         ownership,
         mode: "raw",
         indexThread: upsertChatThreadSearchDocumentMock,
@@ -687,7 +732,9 @@ describe("send message disconnect handling", () => {
   test("treats every thread mutation as rollback ownership adoption", () => {
     const adoptionUpdate = chatThreads.rollbackToken.onUpdateFn?.();
     if (!(adoptionUpdate instanceof SQL)) {
-      throw new Error("Expected rollback ownership to have a SQL update hook");
+      throw new TypeError(
+        "Expected rollback ownership to have a SQL update hook",
+      );
     }
 
     expect(new PgDialect().sqlToQuery(adoptionUpdate).sql).toBe("null");
@@ -1029,7 +1076,12 @@ describe("send message disconnect handling", () => {
           ? {
               onConflictDoNothing: () => ({
                 returning: async () => [
-                  { id: turnId, cancelRequestedAt: null },
+                  {
+                    id: turnId,
+                    cancelRequestedAt: null,
+                    organizationId,
+                    userId,
+                  },
                 ],
               }),
             }
@@ -1049,7 +1101,9 @@ describe("send message disconnect handling", () => {
           }
           return {
             where: () => ({
-              returning: async () => [{ id: turnId, cancelRequestedAt: null }],
+              returning: async () => [
+                { id: turnId, cancelRequestedAt: null, organizationId, userId },
+              ],
             }),
           };
         }
@@ -1092,12 +1146,8 @@ describe("send message disconnect handling", () => {
               }),
             },
             chatTurns: {
-              findFirst: async ({
-                where,
-              }: {
-                where?: { status?: { eq?: string } };
-              }) =>
-                where?.status?.eq === "running" ? undefined : { id: turnId },
+              findFirst: async ({ where }: { where?: { status?: unknown } }) =>
+                asksForLiveTurn(where?.status) ? undefined : { id: turnId },
             },
             organizationSettings: { findFirst: async () => null },
           },
@@ -1151,7 +1201,9 @@ describe("send message disconnect handling", () => {
         acceptanceTransaction = safeDbTransaction;
         return {
           onConflictDoNothing: () => ({
-            returning: async () => [{ id: turnId, cancelRequestedAt: null }],
+            returning: async () => [
+              { id: turnId, cancelRequestedAt: null, organizationId, userId },
+            ],
           }),
         };
       },
@@ -1170,7 +1222,9 @@ describe("send message disconnect handling", () => {
           }
           return {
             where: () => ({
-              returning: async () => [{ id: turnId, cancelRequestedAt: null }],
+              returning: async () => [
+                { id: turnId, cancelRequestedAt: null, organizationId, userId },
+              ],
             }),
           };
         }
@@ -1206,12 +1260,8 @@ describe("send message disconnect handling", () => {
               }),
             },
             chatTurns: {
-              findFirst: async ({
-                where,
-              }: {
-                where?: { status?: { eq?: string } };
-              }) =>
-                where?.status?.eq === "running" ? undefined : { id: turnId },
+              findFirst: async ({ where }: { where?: { status?: unknown } }) =>
+                asksForLiveTurn(where?.status) ? undefined : { id: turnId },
             },
             organizationSettings: { findFirst: findOrganizationSettings },
           },
@@ -1254,7 +1304,9 @@ describe("send message disconnect handling", () => {
         if (table === chatTurns) {
           return {
             onConflictDoNothing: () => ({
-              returning: async () => [{ id: turnId, cancelRequestedAt: null }],
+              returning: async () => [
+                { id: turnId, cancelRequestedAt: null, organizationId, userId },
+              ],
             }),
           };
         }
@@ -1268,7 +1320,9 @@ describe("send message disconnect handling", () => {
           turnUpdates.push(values);
           return {
             where: () => ({
-              returning: async () => [{ id: turnId, cancelRequestedAt: null }],
+              returning: async () => [
+                { id: turnId, cancelRequestedAt: null, organizationId, userId },
+              ],
             }),
           };
         }
@@ -1298,12 +1352,8 @@ describe("send message disconnect handling", () => {
               }),
             },
             chatTurns: {
-              findFirst: async ({
-                where,
-              }: {
-                where?: { status?: { eq?: string } };
-              }) =>
-                where?.status?.eq === "running" ? undefined : { id: turnId },
+              findFirst: async ({ where }: { where?: { status?: unknown } }) =>
+                asksForLiveTurn(where?.status) ? undefined : { id: turnId },
             },
             organizationSettings: { findFirst: async () => null },
           },
@@ -1365,7 +1415,12 @@ describe("send message disconnect handling", () => {
           ? {
               onConflictDoNothing: () => ({
                 returning: async () => [
-                  { id: turnId, cancelRequestedAt: null },
+                  {
+                    id: turnId,
+                    cancelRequestedAt: null,
+                    organizationId,
+                    userId,
+                  },
                 ],
               }),
             }
@@ -1377,7 +1432,9 @@ describe("send message disconnect handling", () => {
           turnUpdates.push(values);
           return {
             where: () => ({
-              returning: async () => [{ id: turnId, cancelRequestedAt: null }],
+              returning: async () => [
+                { id: turnId, cancelRequestedAt: null, organizationId, userId },
+              ],
             }),
           };
         }
@@ -1397,7 +1454,7 @@ describe("send message disconnect handling", () => {
       createContext({
         contextMatterIds: [],
         transaction: {
-          execute: lookup,
+          execute: withoutQueueHolds(lookup),
           insert: withRunLogInsert(insert),
           query: {
             chatMessages: { findFirst: async () => null },
@@ -1416,12 +1473,8 @@ describe("send message disconnect handling", () => {
               }),
             },
             chatTurns: {
-              findFirst: async ({
-                where,
-              }: {
-                where?: { status?: { eq?: string } };
-              }) =>
-                where?.status?.eq === "running" ? undefined : { id: turnId },
+              findFirst: async ({ where }: { where?: { status?: unknown } }) =>
+                asksForLiveTurn(where?.status) ? undefined : { id: turnId },
             },
             organizationSettings: { findFirst: async () => null },
           },
@@ -1490,7 +1543,12 @@ describe("send message disconnect handling", () => {
               ? {
                   onConflictDoNothing: () => ({
                     returning: async () => [
-                      { id: turnId, cancelRequestedAt: null },
+                      {
+                        id: turnId,
+                        cancelRequestedAt: null,
+                        organizationId,
+                        userId,
+                      },
                     ],
                   }),
                 }
@@ -1512,7 +1570,12 @@ describe("send message disconnect handling", () => {
               return {
                 where: () => ({
                   returning: async () => [
-                    { id: turnId, cancelRequestedAt: null },
+                    {
+                      id: turnId,
+                      cancelRequestedAt: null,
+                      organizationId,
+                      userId,
+                    },
                   ],
                 }),
               };
@@ -1588,7 +1651,7 @@ describe("send message disconnect handling", () => {
           createContext({
             contextMatterIds: [],
             transaction: {
-              execute: lookup,
+              execute: withoutQueueHolds(lookup),
               insert: withRunLogInsert((table) => {
                 const original = insert(table);
                 return {
@@ -1620,11 +1683,9 @@ describe("send message disconnect handling", () => {
                   findFirst: async ({
                     where,
                   }: {
-                    where?: { status?: { eq?: string } };
+                    where?: { status?: unknown };
                   }) =>
-                    where?.status?.eq === "running"
-                      ? undefined
-                      : { id: turnId },
+                    asksForLiveTurn(where?.status) ? undefined : { id: turnId },
                 },
                 organizationSettings: { findFirst: async () => null },
               },
@@ -1681,7 +1742,9 @@ describe("send message disconnect handling", () => {
     const abortController = new AbortController();
     const insertValues = mock(() => ({
       onConflictDoNothing: () => ({
-        returning: async () => [{ id: turnId, cancelRequestedAt: null }],
+        returning: async () => [
+          { id: turnId, cancelRequestedAt: null, organizationId, userId },
+        ],
       }),
     }));
     const updateWhere = mock(async () => {
@@ -1712,20 +1775,8 @@ describe("send message disconnect handling", () => {
             chatMessages: { findFirst: async () => null },
             chatThreadCompactions: { findFirst: async () => null },
             chatTurns: {
-              findFirst: async ({
-                where,
-              }: {
-                where?: { status?: unknown };
-              }) => {
-                const status = where?.status;
-                const queriedStatus =
-                  typeof status === "object" &&
-                  status !== null &&
-                  "eq" in status
-                    ? status.eq
-                    : undefined;
-                return queriedStatus === "running" ? undefined : { id: turnId };
-              },
+              findFirst: async ({ where }: { where?: { status?: unknown } }) =>
+                asksForLiveTurn(where?.status) ? undefined : { id: turnId },
             },
             chatThreads: {
               findFirst: async () => ({
@@ -1752,7 +1803,12 @@ describe("send message disconnect handling", () => {
                 set: () => ({
                   where: () => ({
                     returning: async () => [
-                      { id: turnId, cancelRequestedAt: null },
+                      {
+                        id: turnId,
+                        cancelRequestedAt: null,
+                        organizationId,
+                        userId,
+                      },
                     ],
                   }),
                 }),
@@ -1779,6 +1835,75 @@ describe("send message disconnect handling", () => {
 });
 
 describe("send message turn persistence", () => {
+  test("preserves legal-hold details when attachment rollback is refused", async () => {
+    const holdId = toSafeId<"legalHold">(
+      "00000000-0000-0000-0000-000000000010",
+    );
+    uploadMessageFilesWithRollbackMock.mockImplementationOnce(async () =>
+      Result.err(
+        new LegalHoldActiveError({
+          code: LEGAL_HOLD_ACTIVE,
+          message: "An active legal hold prevents attachment rollback.",
+          holds: [
+            new LegalHoldRecord({
+              id: holdId,
+              placedAt: new Date("2026-01-01T00:00:00Z"),
+              placedBy: "another-member",
+              reason: "Preserve the supplier dispute record",
+              scope: "matter",
+              workspaceId: activeWorkspaceId,
+              entityId: null,
+            }),
+          ],
+        }),
+      ),
+    );
+
+    const result = await sendMessage.handler(
+      createContext({
+        contextMatterIds: [],
+        transaction: {
+          query: {
+            chatThreadCompactions: { findFirst: async () => null },
+            chatThreads: {
+              findFirst: async () => ({
+                chatModel: null,
+                chatReasoningEffort: null,
+                contextMatterIds: [],
+                dataWorkspaceIds: [],
+                id: threadId,
+                messages: [],
+                rollbackToken: null,
+                title: "Existing thread",
+                webSearchEnabled: false,
+                workspaceId: null,
+              }),
+            },
+            organizationSettings: { findFirst: async () => null },
+          },
+          select: selectChatMessages,
+        },
+      }),
+    );
+
+    expect(result).toMatchObject({
+      code: 409,
+      response: {
+        code: LEGAL_HOLD_ACTIVE,
+        // The requesting owner reads the reason; see projection.test.ts for
+        // the members who do not.
+        issues: [
+          { path: holdId, code: "matter" },
+          {
+            path: `${holdId}.reason`,
+            code: LEGAL_HOLD_REASON_ISSUE_CODE,
+            message: "Preserve the supplier dispute record",
+          },
+        ],
+      },
+    });
+  });
+
   test("rolls back an uploaded attachment before rejecting an invalid replay", async () => {
     const uploadedFile = {
       id: toSafeId<"userFile">("00000000-0000-0000-0000-000000000009"),
@@ -1909,7 +2034,10 @@ describe("send message turn persistence", () => {
 
     expect(result).toEqual({
       code: 409,
-      response: { message: "A chat turn is already running" },
+      response: {
+        code: CHAT_SEND_QUEUES_INSTEAD_CODE.turnRunning,
+        message: "A chat turn is already running",
+      },
     });
     expect(compactionCheckpointReads).toBe(HISTORY_WINDOW_CHECKPOINT_READS);
     expect(rollbackUnpersistedChatSideEffectsMock).toHaveBeenCalledWith(
@@ -2023,7 +2151,9 @@ describe("assistant turn settlement", () => {
         if (table === chatTurns) {
           return {
             onConflictDoNothing: () => ({
-              returning: async () => [{ id: turnId, cancelRequestedAt: null }],
+              returning: async () => [
+                { id: turnId, cancelRequestedAt: null, organizationId, userId },
+              ],
             }),
           };
         }
@@ -2045,7 +2175,9 @@ describe("assistant turn settlement", () => {
           turnUpdates.push(values);
           return {
             where: () => ({
-              returning: async () => [{ cancelRequestedAt: null, id: turnId }],
+              returning: async () => [
+                { cancelRequestedAt: null, id: turnId, organizationId, userId },
+              ],
             }),
           };
         }
@@ -2076,12 +2208,8 @@ describe("assistant turn settlement", () => {
             }),
           },
           chatTurns: {
-            findFirst: async ({
-              where,
-            }: {
-              where?: { status?: { eq?: string } };
-            }) =>
-              where?.status?.eq === "running" ? undefined : { id: turnId },
+            findFirst: async ({ where }: { where?: { status?: unknown } }) =>
+              asksForLiveTurn(where?.status) ? undefined : { id: turnId },
           },
           organizationSettings: { findFirst: async () => null },
         },
@@ -2184,7 +2312,7 @@ describe("assistant turn settlement", () => {
       failureCode,
       failureRetryable: true,
       status: "failed",
-    });
+    }) as unknown;
 
   test("fails the turn when the generated tool parts do not validate", async () => {
     const { onFinish, turnUpdates } = await startStreamingTurn();
@@ -2308,14 +2436,17 @@ describe("assistant turn settlement", () => {
     // The fixture reached the fault: the follow-up's write threw.
     expect(followUpFailures).toBe(1);
     // The stored completion stays the turn's outcome.
+    // The stored update holds SQL expressions, which do not serialize; the
+    // status it wrote is the finding.
     const violations = violationsOf(
       CHAT_ORACLE.persistedTurnOutcome,
-      turnUpdates.filter(
-        (update) =>
-          typeof update === "object" &&
-          update !== null &&
-          "status" in update &&
-          update.status === "failed",
+      turnUpdates.flatMap((update) =>
+        typeof update === "object" &&
+        update !== null &&
+        "status" in update &&
+        update.status === "failed"
+          ? [{ status: update.status }]
+          : [],
       ),
     );
     if (violations.length > 0) {

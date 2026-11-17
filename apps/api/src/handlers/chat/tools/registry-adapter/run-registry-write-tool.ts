@@ -28,16 +28,14 @@ import { matterRequiredResult } from "@/api/mcp/matter-requirement";
 import { MATTER_TOOL_HANDLERS } from "@/api/mcp/matter-tools";
 import { READER_ANNOTATION_TOOL_HANDLERS } from "@/api/mcp/reader-annotation-tools";
 import { RESEARCH_ADMIN_TOOL_HANDLERS } from "@/api/mcp/research-admin-tools";
-import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
+import {
+  getStaticMcpToolDefinition,
+  getStaticMcpToolOutputContract,
+} from "@/api/mcp/static-tool-definitions";
 import { STELLA_TOOL_HANDLERS } from "@/api/mcp/stella-tools";
 import { TEMPLATE_TOOL_HANDLERS } from "@/api/mcp/template-tools";
 import { runToolWithRealtime } from "@/api/mcp/tool-realtime";
-import type {
-  AllHandlerOutputsTyped,
-  AssertTrue,
-  HandlerOutputsMatchByName,
-  McpToolHandler,
-} from "@/api/mcp/tool-types";
+import type { McpToolHandler } from "@/api/mcp/tool-types";
 import {
   ACCOUNT_ACCESS_UNAVAILABLE_MESSAGE,
   type AccountOperationCheck,
@@ -48,7 +46,6 @@ import {
 
 import type {
   ChatProjectableToolName,
-  ProjectionDataByName,
   RegistryWriteToolName,
 } from "./ref-field-map";
 import { WRITE_TOOL_REF_FIELD_MAP } from "./ref-field-map";
@@ -63,7 +60,7 @@ import { toRegistryChatToolError } from "./registry-tool-error";
  * keep the map exhaustive even though the orchestrator refuses to project it
  * (the hand-written chat tool serves it instead; see `WRITE_TOOL_REF_FIELD_MAP`).
  */
-const REGISTRY_WRITE_TOOL_HANDLERS = {
+export const REGISTRY_WRITE_TOOL_HANDLERS = {
   save_matter: MATTER_TOOL_HANDLERS.save_matter,
   delete_matter: MATTER_TOOL_HANDLERS.delete_matter,
   save_contact: MATTER_TOOL_HANDLERS.save_contact,
@@ -123,25 +120,6 @@ const isProjectableRegistryWriteToolName = (
   toolName: RegistryWriteToolName,
 ): toolName is ProjectableRegistryWriteToolName =>
   WRITE_TOOL_REF_FIELD_MAP[toolName].chatProjectable;
-
-type RegistryWriteProjectionDataByName = ProjectionDataByName<
-  typeof WRITE_TOOL_REF_FIELD_MAP,
-  ProjectableRegistryWriteToolName
->;
-
-/** Compile-time guard: every chat-projected handler declares typed output. */
-export type RegistryWriteToolOutputContract = AssertTrue<
-  AllHandlerOutputsTyped<
-    typeof REGISTRY_WRITE_TOOL_HANDLERS,
-    ProjectableRegistryWriteToolName
-  > extends true
-    ? HandlerOutputsMatchByName<
-        typeof REGISTRY_WRITE_TOOL_HANDLERS,
-        RegistryWriteProjectionDataByName,
-        ProjectableRegistryWriteToolName
-      >
-    : false
->;
 
 export type RunRegistryWriteToolProps = {
   toolName: RegistryWriteToolName;
@@ -390,6 +368,9 @@ export const runRegistryWriteTool = async (
     toolName,
   });
   const finished = await finalizeToolEgress({
+    outputSchema:
+      getStaticMcpToolOutputContract(toolName)?.outputSchemaSource ??
+      panic("Registry tool output contract missing"),
     context: authorizedContext,
     mode: "default",
     response,

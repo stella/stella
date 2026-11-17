@@ -6,6 +6,7 @@ import {
   NUMBER_SERIES_DOCUMENT_TYPES,
   TIME_ENTRY_ACTIVITY_GROUPS,
 } from "@stll/api-contract";
+import { moneySchema } from "@stll/api-contract/billing-money";
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import type { DoctrineTreatment } from "@stll/api-contract/case-law-doctrine";
 import { extractionWarningsSchema } from "@stll/api-contract/case-law-extraction-warnings";
@@ -35,6 +36,7 @@ import {
   ENTITY_CHECK_UNAVAILABLE_REASONS,
 } from "@stll/business-registries/entity-checks";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import { READER_TEXT_QUOTE_ORPHAN_REASONS } from "@stll/legal-ast/reader-text-quote";
 
 import { TIME_ENTRY_VISIBILITY } from "@/api/lib/billing-constants";
 import {
@@ -42,12 +44,18 @@ import {
   SANCTIONS_COMPANY_REGISTRIES,
 } from "@/api/lib/business-registries/sanctions-check-vocabulary";
 import type { CITATION_TREATMENTS } from "@/api/lib/case-law/citation-vocabulary";
+import {
+  CENSUS_VERDICTS,
+  createPublisherCensusSchema,
+} from "@/api/lib/case-law/completeness-census-contract";
 import { CASE_LAW_COVERAGE_FRESHNESS } from "@/api/lib/case-law/coverage-freshness";
 import {
   DECISION_READ_ABSENCE_STATUSES,
   DECISION_READ_STATUS,
 } from "@/api/lib/case-law/decision-read-vocabulary";
+import { DECISION_QUERY_WARNING_CODES } from "@/api/lib/case-law/search-warnings";
 import { MANAGED_AI_RESIDENCIES } from "@/api/lib/chat/ai-data-policy";
+import { publicReadRunningFields } from "@/api/lib/chat/projection-fields";
 import {
   DOCUMENT_PROCESSING_FAILURE_CODE,
   DOCUMENT_PROCESSING_KIND,
@@ -71,6 +79,7 @@ import {
   caseNumberTypeProjection,
   searchTotalProjection,
 } from "./case-law-result-projections";
+import { DECISION_REVIEWS_PROJECTION } from "./decision-review-projection";
 import { statuteExpressionLabel } from "./legislation-result-projections";
 import {
   chatEntityRef,
@@ -480,6 +489,17 @@ const documentFieldContentProjection = v.variant("type", [
       sourceType: v.exactOptional(v.string()),
     }),
   ),
+  projectionBranch(
+    v.strictObject({
+      version: v.literal(1),
+      type: v.literal("record"),
+      schemaVersion: v.number(),
+      // Typed values (a register entry, a list of proceedings) and their
+      // source provenance, shaped by the column's schema rather than paths
+      // this projection could enumerate.
+      state: unenumeratedJson(),
+    }),
+  ),
 ]);
 
 /**
@@ -841,7 +861,7 @@ export const LIST_CLAUSES_LIST_PROJECTION = v.strictObject({
       }),
     ),
   ),
-  // Opaque `${isoDate}|${clauseId}` cursor.
+  // Opaque `(createdAt, clauseId)` keyset cursor.
   nextCursor: v.nullable(passthroughId()),
 });
 
@@ -1164,7 +1184,7 @@ const timeEntryFieldEntries = (workspace: { from: "inputParam" | "sibling" }) =>
     dateWorked: v.string(),
     durationMinutes: v.number(),
     billedMinutes: v.number(),
-    rateAtEntry: v.number(),
+    rateAtEntry: v.nullable(moneySchema),
     currency: v.string(),
     narrative: v.string(),
     narrativeLanguage: v.nullable(v.string()),
@@ -1220,7 +1240,7 @@ export const LIST_TIME_ENTRIES_PROJECTION = v.union([
  * table matches.
  */
 export const RESOLVE_RATE_PROJECTION = v.strictObject({
-  hourlyRate: v.nullable(v.number()),
+  hourlyRate: v.nullable(moneySchema),
   currency: v.nullable(v.string()),
 });
 
@@ -1258,7 +1278,7 @@ export const LIST_INVOICES_LIST_PROJECTION = v.strictObject({
     v.strictObject({
       id: passthroughId(),
       clientId: v.nullable(passthroughId()),
-      matterShare: v.number(),
+      matterShare: moneySchema,
       invoiceNumber: v.nullable(v.string()),
       documentType: v.picklist(NUMBER_SERIES_DOCUMENT_TYPES),
       originalInvoiceId: v.nullable(passthroughId()),
@@ -1267,9 +1287,9 @@ export const LIST_INVOICES_LIST_PROJECTION = v.strictObject({
       invoiceDate: v.string(),
       dueDate: v.nullable(v.string()),
       currency: v.string(),
-      totalAmount: v.number(),
-      paidAmount: v.number(),
-      outstandingAmount: v.number(),
+      totalAmount: moneySchema,
+      paidAmount: moneySchema,
+      outstandingAmount: moneySchema,
     }),
   ),
   // Opaque `[createdAt, id]` cursor, not UUID-formatted.
@@ -1295,9 +1315,9 @@ export const LIST_INVOICES_DETAIL_PROJECTION = v.strictObject({
     taxableSupplyDate: v.nullable(v.string()),
     dueDate: v.nullable(v.string()),
     currency: v.string(),
-    totalAmount: v.number(),
-    paidAmount: v.number(),
-    outstandingAmount: v.number(),
+    totalAmount: moneySchema,
+    paidAmount: moneySchema,
+    outstandingAmount: moneySchema,
     notes: v.nullable(contentText()),
     sellerProfileId: v.nullable(passthroughId()),
     buyerName: v.nullable(v.string()),
@@ -1324,7 +1344,7 @@ export const LIST_INVOICES_DETAIL_PROJECTION = v.strictObject({
         entityReference: invoiceEntityReferenceProjection(),
         dateWorked: v.string(),
         billedMinutes: v.number(),
-        rateAtEntry: v.number(),
+        rateAtEntry: moneySchema,
         currency: v.string(),
         narrative: v.string(),
         invoiceNarrative: v.nullable(v.string()),
@@ -1345,13 +1365,13 @@ export const LIST_INVOICES_DETAIL_PROJECTION = v.strictObject({
         ),
         entityReference: invoiceEntityReferenceProjection(),
         dateIncurred: v.string(),
-        amount: v.number(),
+        amount: moneySchema,
         currency: v.string(),
         category: v.string(),
         description: v.string(),
         invoiceDescription: v.nullable(v.string()),
         billable: v.boolean(),
-        markup: v.number(),
+        markup: moneySchema,
         entity: v.nullable(invoiceLineEntityProjection()),
       }),
     ),
@@ -1367,19 +1387,19 @@ export const LIST_INVOICES_DETAIL_PROJECTION = v.strictObject({
         recordedDescription: v.nullable(v.string()),
         recordedQuantity: v.nullable(v.string()),
         recordedUnit: v.nullable(v.string()),
-        recordedUnitPrice: v.nullable(v.number()),
-        recordedNetAmount: v.nullable(v.number()),
+        recordedUnitPrice: v.nullable(moneySchema),
+        recordedNetAmount: v.nullable(moneySchema),
         position: v.number(),
         description: v.string(),
         quantity: v.string(),
         unit: v.nullable(v.string()),
-        unitPrice: v.number(),
+        unitPrice: moneySchema,
         vatRateBps: v.number(),
         vatTreatment: v.string(),
         exemptionReason: v.nullable(contentText()),
-        netAmount: v.number(),
-        vatAmount: v.number(),
-        grossAmount: v.number(),
+        netAmount: moneySchema,
+        vatAmount: moneySchema,
+        grossAmount: moneySchema,
         source: v.string(),
         billingPurpose: v.string(),
         timeEntryId: v.nullable(passthroughId()),
@@ -1387,16 +1407,16 @@ export const LIST_INVOICES_DETAIL_PROJECTION = v.strictObject({
       }),
     ),
     totals: v.strictObject({
-      netAmountMinor: v.number(),
-      vatAmountMinor: v.number(),
-      grossAmountMinor: v.number(),
+      netAmountMinor: moneySchema,
+      vatAmountMinor: moneySchema,
+      grossAmountMinor: moneySchema,
       vatBreakdown: v.array(
         v.strictObject({
           vatRateBps: v.number(),
           vatTreatment: v.string(),
-          netAmountMinor: v.number(),
-          vatAmountMinor: v.number(),
-          grossAmountMinor: v.number(),
+          netAmountMinor: moneySchema,
+          vatAmountMinor: moneySchema,
+          grossAmountMinor: moneySchema,
         }),
       ),
     }),
@@ -1453,6 +1473,12 @@ const decisionIdentifiersProjection = v.optional(
   ),
 );
 
+const publisherCensusProjection = v.union(
+  createPublisherCensusSchema((maxBytes) =>
+    v.pipe(v.string(), v.maxLength(maxBytes)),
+  ).options.map((option) => projectionBranch(option)),
+);
+
 /** Coverage keeps grouped court rows explicit when the public data has no names. */
 const CASE_LAW_COVERAGE_COUNTRIES_PROJECTION = projectionBranch(
   v.strictObject({
@@ -1466,6 +1492,7 @@ const CASE_LAW_COVERAGE_COUNTRIES_PROJECTION = projectionBranch(
       v.strictObject({
         country: v.string(),
         availability: v.picklist(["searchable", "in-preparation"]),
+        censusVerdict: v.picklist(CENSUS_VERDICTS),
         decisions: v.number(),
         decisionYearFrom: v.nullable(v.number()),
         decisionYearTo: v.nullable(v.number()),
@@ -1488,6 +1515,7 @@ const CASE_LAW_COVERAGE_COUNTRIES_PROJECTION = projectionBranch(
             decisionYearFrom: v.nullable(v.number()),
             decisionYearTo: v.nullable(v.number()),
             pendingTextCount: v.number(),
+            publisherCensus: publisherCensusProjection,
             knownGaps: v.variant("type", [
               projectionBranch(
                 v.strictObject({
@@ -1688,6 +1716,7 @@ const caseLawCitationSummaryProjection = v.strictObject({
 });
 
 const caseLawDecisionProjection = v.strictObject({
+  appealReviews: v.optional(DECISION_REVIEWS_PROJECTION),
   extractionWarnings: extractionWarningsSchema,
   // The shared link contract: `url` is the reader's page (the publisher's
   // when the app has none) and `source_url` the publisher's, beside it only
@@ -1717,6 +1746,8 @@ const caseLawDecisionProjection = v.strictObject({
   courtAbbreviation: v.optional(v.string()),
   decisionDate: v.optional(v.string()),
   decisionId: passthroughId(),
+  // Set when the entry was read as another language's version of this id.
+  requestedDecisionId: v.optional(passthroughId()),
   decisionType: v.optional(v.string()),
   ecli: v.optional(v.string()),
   identifiers: decisionIdentifiersProjection,
@@ -1800,6 +1831,36 @@ const caseLawDecisionProjection = v.strictObject({
         }),
       ),
       truncated: v.optional(v.literal(true)),
+      resumeAfter: v.optional(
+        v.pipe(
+          v.string(),
+          v.description(
+            "Pass as resume_after with the same query and section to read the next matches.",
+          ),
+        ),
+      ),
+      section: v.optional(
+        v.strictObject({
+          status: v.picklist(["found", "not_found"]),
+          heading: v.optional(v.string()),
+          position: v.optional(v.number()),
+          hitsBefore: v.optional(v.number()),
+          reason: v.optional(
+            v.picklist(["no_assessment_heading", "language_unsupported"]),
+          ),
+        }),
+      ),
+      // Only on an empty answer: which words matched nothing, and the next call.
+      warnings: v.optional(
+        v.array(
+          v.strictObject({
+            code: v.picklist(DECISION_QUERY_WARNING_CODES),
+            audience: v.picklist(["agent", "user"]),
+            message: v.string(),
+            hint: v.string(),
+          }),
+        ),
+      ),
     }),
   ),
   // Why there is no text, when there is none. At most one is present, and
@@ -1928,15 +1989,16 @@ export const SEARCH_LEGISLATION_PROJECTION = v.union([
           resourceName: passthroughId(),
           score: v.number(),
           snippet: v.nullable(contentText()),
-          // The publisher's own document URL, which may embed the publisher's
-          // own UUID — never a Stella tenant id, so it is forwarded unchanged.
-          sourceUrl: v.nullable(publicUrl()),
           status: v.string(),
           title: v.string(),
         }),
       ),
       total: searchTotalProjection,
     }),
+  ),
+  // One query, so nothing has finished until everything has.
+  projectionBranch(
+    v.strictObject({ ...publicReadRunningFields, partial: v.null() }),
   ),
 ]);
 
@@ -1976,9 +2038,6 @@ export const READ_STATUTE_PROJECTION = v.strictObject({
     ),
     outlineTruncated: v.optional(v.boolean()),
     resourceName: passthroughId(),
-    // The publisher's own document URL, which may embed the publisher's own
-    // UUID — never a Stella tenant id, so it is forwarded unchanged.
-    sourceUrl: v.nullable(publicUrl()),
     status: v.string(),
     text: v.nullable(contentText()),
     // Present only where the source permits displaying wording but bars
@@ -2602,6 +2661,28 @@ const readerAnnotationPassageProjection = v.strictObject({
   quote: v.string(),
 });
 
+/**
+ * A listed mark's passage in the document's current text: placed at the
+ * anchor where its quote now is, or orphaned when the text no longer has its
+ * words in one place it can be told by.
+ */
+const listedReaderAnnotationPassageProjection = v.variant("placement", [
+  projectionBranch(
+    v.strictObject({
+      placement: v.literal("placed"),
+      anchor: v.string(),
+      quote: v.string(),
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      placement: v.literal("orphaned"),
+      reason: v.picklist(READER_TEXT_QUOTE_ORPHAN_REASONS),
+      quote: v.string(),
+    }),
+  ),
+]);
+
 /** list_reader_annotations: one entry per mark, its passages grouped. */
 export const LIST_READER_ANNOTATIONS_PROJECTION = v.strictObject({
   annotations: v.array(
@@ -2615,7 +2696,7 @@ export const LIST_READER_ANNOTATIONS_PROJECTION = v.strictObject({
       mine: v.boolean(),
       authorName: v.string(),
       createdAt: v.string(),
-      passages: v.array(readerAnnotationPassageProjection),
+      passages: v.array(listedReaderAnnotationPassageProjection),
     }),
   ),
   nextCursor: v.nullable(v.string()),
@@ -2754,6 +2835,7 @@ export const REMOVE_MATTER_MEMBER_PROJECTION = v.strictObject({
 });
 
 export const UPDATE_ORGANIZATION_SETTINGS_PROJECTION = v.strictObject({
+  aiInstructions: v.optional(v.string()),
   managedAIResidency: v.optional(v.picklist(MANAGED_AI_RESIDENCIES)),
   matterNumberPattern: v.optional(v.string()),
   matterNumberPadding: v.optional(v.number()),
