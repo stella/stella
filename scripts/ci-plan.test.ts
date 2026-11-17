@@ -3650,10 +3650,11 @@ test("required checks retain PR and merge-group coverage", async () => {
     expect(owners).toHaveLength(1);
     const [owner] = owners;
     expect(owner?.on).toHaveProperty("merge_group");
-    expect(
-      Object.hasOwn(owner?.on ?? {}, "pull_request") ||
-        Object.hasOwn(owner?.on ?? {}, "pull_request_target"),
-    ).toBe(true);
+    // The signature check runs on main after its unprivileged pull_request
+    // notification completes.
+    expect(owner?.on).toHaveProperty(
+      job === "verify-signatures" ? "workflow_run" : "pull_request",
+    );
   }
 });
 
