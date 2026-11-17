@@ -392,6 +392,7 @@ const TABLE_CLASSIFICATIONS = {
   organizationFileUsage: FORMAT_SCOPE_EXCLUSION,
   organizationProfessionalUseAcceptances: FORMAT_SCOPE_EXCLUSION,
   organizationSettings: FORMAT_SCOPE_EXCLUSION,
+  outboundActions: FORMAT_SCOPE_EXCLUSION,
   pdfSigningSessions: FORMAT_SCOPE_EXCLUSION,
   pendingUploads: FORMAT_SCOPE_EXCLUSION,
   playbookDefinitionVersions: FORMAT_SCOPE_EXCLUSION,
