@@ -17,7 +17,9 @@ import { panic, Result, TaggedError } from "better-result";
  * replaces stays building, so `serve` with the pair reversed flips back
  * through the same guard. A dry run (the default) takes the same transaction
  * and fences and swaps nothing; it holds projection writers back for as long
- * as its checks under the fence take (seconds).
+ * as its checks under the fence take (seconds), so run it as you would the
+ * flip itself. `serve --apply` takes the decided watermark only: a
+ * `--exempt-minutes` other than the default is for `parity` and dry runs.
  *
  * `register` covers an environment with no generation registered; it reports
  * the planned transition and writes only under `--apply`, in one transaction
@@ -69,6 +71,7 @@ import {
   readCorpusIndexFlipParity,
 } from "@/api/lib/legal-search/corpus-index-flip-parity";
 import {
+  corpusIndexFlipBusyReasonOf,
   type CorpusIndexFlipEngine,
   type CorpusIndexFlipOutcome,
   type CorpusIndexFlipPlan,
@@ -123,7 +126,9 @@ Commands:
   serve                  Flip the family's serving generation to a building one,
                          guarded by parity, route proofs, seeding and engine
                          counts; the one it replaces stays building, so the
-                         same command flips back.
+                         same command flips back. A dry run takes the same
+                         fences and holds projection writers back for as long
+                         as its checks under them take (seconds).
   parity                 Report what readers would lose if the generation
                          replaced the one serving its family. Reads only.
   seed                   Walk the generation's seeding pass, giving every
@@ -147,7 +152,8 @@ Options (serve):
 
 Options (serve, parity):
   --exempt-minutes <n>   Serving applies newer than this many minutes are the
-                         candidate's expected lag (default ${String(PARITY_DEFAULT_EXEMPT_MINUTES)}).
+                         candidate's expected lag (default ${String(PARITY_DEFAULT_EXEMPT_MINUTES)}; serve --apply
+                         takes the default only).
   --coverage-pages <n>   Coverage pages of ${String(PARITY_COVERAGE_PAGE)} serving copies to read
                          (default ${String(PARITY_DEFAULT_COVERAGE_PAGES)} for parity, ${String(PARITY_MAX_COVERAGE_PAGES)} for serve, at most
                          ${String(PARITY_MAX_COVERAGE_PAGES)}); a walk that does not reach the end leaves
@@ -417,6 +423,11 @@ const parseServeCommand = (
     values.actor === undefined || values.reason === undefined
       ? null
       : { actor: values.actor, reason: values.reason.trim() };
+  if (mode === MODES.apply && exemptMinutes !== PARITY_DEFAULT_EXEMPT_MINUTES) {
+    return usageError(
+      `serve --apply exempts the decided ${String(PARITY_DEFAULT_EXEMPT_MINUTES)} minutes only; another --exempt-minutes is for parity and dry runs.`,
+    );
+  }
   if (mode === MODES.apply) {
     if (replacing.type === "unchecked" || receipt === null) {
       return usageError(
@@ -994,14 +1005,30 @@ const describePlan = (
   ),
   ...plan.documents.map(
     ({ indexId, engine, expected, appliedRevisions }) =>
-      `checked: ${indexId} holds ${String(engine)} documents; its ${String(appliedRevisions)} applied revisions expect ${String(expected)}`,
+      `checked: ${indexId} holds ${String(engine)} documents in total, no fewer than its ${String(appliedRevisions)} applied revisions expect (${String(expected)}); a total, not a per-revision census`,
   ),
   ...(plan.walk === null
     ? []
     : [
-        `checked: coverage walk read every state of ${plan.walk.pair.serving} (${String(plan.walk.coverage.walked)}); none without a state in ${plan.request.candidate}`,
+        `checked: coverage walk read every state of ${plan.walk.pair.serving} (${String(plan.walk.coverage.walked)} in ${String(plan.walk.pages.length)} pages); none that wants an upsert without a state in ${plan.request.candidate}`,
       ]),
 ];
+
+const behindCursorLine = (
+  behind: CorpusIndexFlipParity["behindCursor"],
+): string => {
+  switch (behind.type) {
+    case "read":
+      return `behind the walk's cursor: ${String(behind.pages)} pages counted again, ${String(behind.changedPages)} moved; ${String(behind.reread)} states probed again, ${String(behind.missing)} without a candidate state`;
+    case "not_read":
+      return "behind the walk's cursor: not read (the walk did not reach its end)";
+    case "unprovable":
+      return `behind the walk's cursor: cannot be proven (${behind.reason})`;
+    default:
+      behind satisfies never;
+      return panic("Unhandled behind-cursor reading");
+  }
+};
 
 /** What phase 2 decided under the fence, line by line. */
 const describeOutcome = (
@@ -1012,7 +1039,8 @@ const describeOutcome = (
     ...(evidence.parity === null
       ? []
       : [
-          `checked under the fence: no regression against ${evidence.from ?? "(none)"}; tail ${evidence.parity.tail.type === "read" ? `${String(evidence.parity.tail.walked)} states read` : evidence.parity.tail.type}; walked ${String(evidence.parity.walked.pending)} pending, ${String(evidence.parity.walked.blocked)} blocked, ${String(evidence.parity.walked.absent)} proven gone, ${String(evidence.parity.walked.atRisk)} with a delete in flight; ${String(evidence.parity.exempt)} exempt as lag younger than ${evidence.parity.watermark}`,
+          `checked under the fence: no regression against ${evidence.from ?? "(none)"}; tail ${evidence.parity.tail.type === "read" ? `${String(evidence.parity.tail.walked)} states read` : evidence.parity.tail.type}; walked ${String(evidence.parity.walked.pending)} pending, ${String(evidence.parity.walked.blocked)} blocked, ${String(evidence.parity.walked.absent)} proven gone, ${String(evidence.parity.walked.atRisk)} with a delete in flight; ${String(evidence.parity.exempt)} exempt as lag younger than ${evidence.parity.watermark} (${String(evidence.parity.exemptMinutes)} minutes)`,
+          `checked under the fence: ${behindCursorLine(evidence.parity.behindCursor)}`,
         ]),
     `checked under the fence: ${String(evidence.routeProofs.length)} route proofs current and unchanged since the engine was read`,
     `checked under the fence: every route of ${evidence.to} seeded (${evidence.seedings.candidate.map(({ indexId, passNumber }) => `${indexId} pass ${String(passNumber)}`).join(", ")})`,
@@ -1021,9 +1049,15 @@ const describeOutcome = (
       : [
           `checked under the fence: every route of ${evidence.from ?? "(none)"} seeded (${evidence.seedings.serving.map(({ indexId, passNumber }) => `${indexId} pass ${String(passNumber)}`).join(", ")})`,
         ]),
-    `evidence digest: ${outcome.evidenceDigest}`,
+    ...(outcome.type === "flipped"
+      ? [
+          `receipt ${outcome.receiptId}, evidence digest ${outcome.evidenceDigest} (computed by PostgreSQL from the stored row), audit run ${outcome.evidence.auditRun ?? "-"}`,
+        ]
+      : []),
   ];
 };
+
+type FlipAnswer = Awaited<ReturnType<typeof runCorpusIndexGenerationFlip>>;
 
 const runServe = async (
   context: CommandContext,
@@ -1092,25 +1126,50 @@ const runServe = async (
       : `plan: ${target.generation} building -> serving; ${plan.serving.generation} serving -> building`,
   );
   // Phase 2: one transaction under the fences, on the lane even for a dry
-  // run, which takes the same fences and writes nothing.
-  const decided = await withDatabase(
-    ACCESS.write,
-    async (rootDb) =>
-      await runCorpusIndexGenerationFlip(
-        async (work) => await withAggregateTransaction(rootDb, work),
-        plan,
-        mode === MODES.apply && command.receipt !== null
-          ? { mode: "apply", ...command.receipt }
-          : { mode: "dry_run" },
-      ),
-  );
-  if (decided.isErr()) {
-    return Result.err(decided.error);
+  // run, which takes the same fences and writes nothing. The lane can run out
+  // of time after the flip's transaction ended; the flip's own answer, kept
+  // here, then still says whether it committed.
+  const settled: { value?: FlipAnswer } = {};
+  const lane = await Result.tryPromise({
+    try: async () =>
+      await withDatabase(ACCESS.write, async (rootDb) => {
+        settled.value = await runCorpusIndexGenerationFlip(
+          async (work) => await withAggregateTransaction(rootDb, work),
+          plan,
+          mode === MODES.apply && command.receipt !== null
+            ? { mode: "apply", ...command.receipt }
+            : { mode: "dry_run" },
+        );
+        return settled.value;
+      }),
+    catch: (cause) => cause,
+  });
+  if (lane.isOk() && lane.value.isErr()) {
+    return Result.err(lane.value.error);
   }
-  if (decided.value.isErr()) {
-    return refused(decided.value.error);
+  const answer = settled.value;
+  if (answer === undefined) {
+    if (lane.isOk()) {
+      return panic("The flip lane returned without the flip's answer");
+    }
+    const busy = corpusIndexFlipBusyReasonOf(lane.error);
+    if (busy === null) {
+      return panic("The flip lane failed before the flip ran", lane.error);
+    }
+    writeError(
+      `refused (busy: ${busy}): the lane or the database declined the flip its time before it ran; nothing changed, retry`,
+    );
+    return Result.ok(SERVE_EXIT.busy);
   }
-  const outcome = decided.value.value;
+  if (lane.isErr()) {
+    writeError(
+      "note: the operator lane's time budget ran out after the flip's transaction ended; its outcome below stands",
+    );
+  }
+  if (answer.isErr()) {
+    return refused(answer.error);
+  }
+  const outcome = answer.value;
   switch (outcome.type) {
     case "already_serving":
       write("checked: already serving; nothing to do");
@@ -1126,7 +1185,7 @@ const runServe = async (
         write(line);
       }
       write(
-        `Applied: ${target.family}/${target.generation} serves${outcome.evidence.from === null ? "" : `; ${outcome.evidence.from} is building and can serve again through the same guard`}. Receipt ${outcome.receiptId ?? "-"}.`,
+        `Applied: ${target.family}/${target.generation} serves${outcome.evidence.from === null ? "" : `; ${outcome.evidence.from} is building and can serve again through the same guard`}. Receipt ${outcome.receiptId}.`,
       );
       return Result.ok(SERVE_EXIT.flipped);
     default:
@@ -1184,6 +1243,7 @@ const describeParity = (
   return [
     `checked: compared with ${parity.pair.serving}, which serves ${parity.pair.family}; pending changes younger than ${parity.watermark.toString()} are expected lag`,
     coverageLine,
+    behindCursorLine(parity.behindCursor),
     `checked: unconverged states of the candidate walked: ${String(walked.pending)} pending, ${String(walked.blocked)} blocked, ${String(walked.absent)} proven gone, ${String(walked.atRisk)} with a delete in flight; ${String(regressions.exempt)} exempt as expected lag`,
     regressions.type === "exact"
       ? `not shown or stale (exact): ${String(total)}`

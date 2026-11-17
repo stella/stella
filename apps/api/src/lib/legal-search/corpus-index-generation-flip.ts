@@ -10,12 +10,14 @@
  * transactions, to fail fast and to gather what the fence cannot afford:
  * - the pair as the registry holds it (status and update time of each row);
  * - every route proof of the candidate current (`readCorpusIndexRouteProofsTx`);
- * - the engine: every proven index still the incarnation its proof walked,
- *   and holding at least the documents of every revision PostgreSQL records
- *   as applied there (one exact count per index, after the sum is read, so
- *   inflow can only make it refuse, never pass, a loss);
  * - the parity coverage walk over the serving generation's states, the long
- *   part (`walkCorpusIndexFlipCoverage`).
+ *   part (`walkCorpusIndexFlipCoverage`);
+ * - then, last, so the window before the fence is seconds and not the walk's
+ *   length: the route proofs again, and the engine read against them. Every
+ *   proven index must still be the incarnation its proof walked, and hold at
+ *   least as many documents in total as the revisions PostgreSQL records as
+ *   applied there expect (one exact count per index, after the sum is read,
+ *   so inflow can only make it refuse, never pass, a loss).
  *
  * Phase 2 (`commitCorpusIndexGenerationFlipTx`), one transaction with a short
  * `lock_timeout` and `statement_timeout`, so a busy database refuses instead
@@ -25,26 +27,37 @@
  * the fence no projection state, intent or registry row can change, and it
  * re-reads, from PostgreSQL only:
  * - the pair, by identity (any lifecycle transition since phase 1 refuses);
- * - the parity verdict (`decideCorpusIndexFlipParityTx`: the walk's tail and
- *   the regression statement; that module says why the walk holds here);
+ * - the parity verdict (`decideCorpusIndexFlipParityTx`: the walk's tail,
+ *   what changed behind its cursor, and the regression statement; that module
+ *   says why that makes the walk exact);
  * - the route proofs, which must be the very proofs phase 1 checked against
  *   the engine (same incarnation and pass), so an engine read is never taken
  *   under the fence and never trusted for a proof it did not read;
- * - every route of BOTH generations seeded (`readCorpusIndexRouteSeedingsTx`).
+ * - every route of BOTH generations seeded.
  * Then it swaps: candidate building -> serving, the replaced one serving ->
- * building, and writes the receipt and the system audit run with it. A dry
- * run takes the same transaction and the same fences, and swaps nothing.
+ * building, and writes the receipt (whose digest PostgreSQL computes from the
+ * stored row) and the system audit run with it. A dry run takes the same
+ * transaction and the same fences, holding projection writers back for as
+ * long as its reads take, and writes nothing: it takes no row lock, so it is
+ * never even assigned a transaction id.
+ *
+ * Any refusal of the database to give the flip its locks or its time (a lock
+ * or statement timeout, a deadlock, the operator lane's budget) is `busy`:
+ * nothing was written, and a retry when the projection is quieter may pass.
  *
  * What it does not check: the search evaluation (run by hand and attached to
- * the go), and documents in an index that PostgreSQL does not know about
- * (the count check is a lower bound).
+ * the go), and that every revision's documents are in the engine one by one:
+ * the count is a total, which superseded copies not yet cleaned up also add
+ * to, so it catches a loss larger than those leftovers and no other. The
+ * route proof's census (at most `maxProofAgeHours` old) is what reads each
+ * revision.
  */
 import { panic, Result, TaggedError } from "better-result";
 import { eq, sql } from "drizzle-orm";
 
 import { declareFingerprintFields } from "@stll/errors";
-import { sha256Hex } from "@stll/sha256/bun";
 
+import { CorpusSchemaLaneUnavailableError } from "@/api/db/corpus-schema-lane";
 import type { Transaction } from "@/api/db/root";
 import {
   corpusIndexGenerationFlips,
@@ -52,17 +65,20 @@ import {
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
-import { createSafeId } from "@/api/lib/branded-types";
+import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import type { CorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import {
   type CorpusIndexFlipCoverageWalk,
+  type CorpusIndexFlipPairRefusedError,
   type CorpusIndexFlipParity,
+  type CorpusIndexFlipParityReadError,
   decideCorpusIndexFlipParityTx,
   walkCorpusIndexFlipCoverage,
 } from "@/api/lib/legal-search/corpus-index-flip-parity";
+import { corpusIndexGenerationFlipReceiptDigest } from "@/api/lib/legal-search/corpus-index-generation-flip-receipt";
 import {
   lockCorpusIndexGenerationActivationTx,
   setServingCorpusIndexGenerationTx,
@@ -72,13 +88,16 @@ import {
   corpusIndexManifestIsPartial,
   requireCorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
-import { lockCorpusIndexProjectionFlipTx } from "@/api/lib/legal-search/corpus-index-projection-revision";
+import {
+  type CorpusIndexProjectionFlipFence,
+  lockCorpusIndexProjectionFlipTx,
+} from "@/api/lib/legal-search/corpus-index-projection-revision";
 import {
   checkCorpusIndexRouteProofIncarnations,
   type CorpusIndexGenerationRouteProofs,
   readCorpusIndexRouteProofsTx,
 } from "@/api/lib/legal-search/corpus-index-route-proof-store";
-import { readCorpusIndexRouteSeedingsTx } from "@/api/lib/legal-search/corpus-index-route-seeding";
+import { readCorpusIndexRouteSeedingsUnderFlipFenceTx } from "@/api/lib/legal-search/corpus-index-route-seeding";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import type { IngestionTransactionRunner } from "@/api/lib/replay-safe-ingestion";
 import { recordSystemAudit } from "@/api/lib/system-audit/record";
@@ -119,7 +138,14 @@ export type CorpusIndexFlipRefusal =
   | { class: "route_proofs"; reason: "not_current" | "proof_changed" }
   | { class: "seeding"; reason: "candidate_unseeded" | "serving_unseeded" }
   | { class: "engine"; reason: "index_replaced" | "documents_missing" }
-  | { class: "busy"; reason: "lock_unavailable" }
+  | {
+      class: "busy";
+      reason:
+        | "lock_unavailable"
+        | "statement_timeout"
+        | "deadlock_victim"
+        | "lane_budget_spent";
+    }
   | {
       class: "undecided";
       reason: "parity_undecided" | "engine_unreadable" | "read_failed";
@@ -152,6 +178,51 @@ const refuse = (
       reason: refusal.reason,
       details,
     }),
+  );
+
+type BusyReason = Extract<CorpusIndexFlipRefusal, { class: "busy" }>["reason"];
+
+/**
+ * Whether `cause` is the database or the operator lane declining the flip its
+ * locks or its time, and which. Every such failure aborts the transaction it
+ * happened in, so nothing it was part of is written.
+ */
+export const corpusIndexFlipBusyReasonOf = (
+  cause: unknown,
+): BusyReason | null => {
+  if (isPgError(cause, PG_ERROR.LOCK_NOT_AVAILABLE)) {
+    return "lock_unavailable";
+  }
+  if (isPgError(cause, PG_ERROR.QUERY_CANCELED)) {
+    return "statement_timeout";
+  }
+  if (isPgError(cause, PG_ERROR.DEADLOCK_DETECTED)) {
+    return "deadlock_victim";
+  }
+  if (
+    cause instanceof CorpusSchemaLaneUnavailableError ||
+    (cause instanceof DOMException &&
+      (cause.name === "TimeoutError" || cause.name === "AbortError"))
+  ) {
+    return "lane_budget_spent";
+  }
+  return null;
+};
+
+const BUSY_LINES: Record<BusyReason, string> = {
+  lock_unavailable: `a lock was not granted within ${FLIP_LOCK_TIMEOUT}`,
+  statement_timeout: `a statement ran past ${FLIP_STATEMENT_TIMEOUT} or was cancelled`,
+  deadlock_victim: "it was chosen as a deadlock victim",
+  lane_budget_spent: "the operator lane's time budget ran out",
+};
+
+const refuseBusy = (
+  reason: BusyReason,
+  { family, candidate }: { family: CorpusFamily; candidate: string },
+) =>
+  refuse(
+    { class: "busy", reason },
+    `The flip of ${family}/${candidate} did not get its locks or its time (${BUSY_LINES[reason]}); nothing changed, retry when the projection is quieter`,
   );
 
 export type CorpusIndexFlipRequest = {
@@ -404,32 +475,42 @@ const readAppliedDocumentsTx = async (
   };
 };
 
+/** A parity refusal from either phase, as the flip's refusal. */
+const refuseParity = (
+  error: CorpusIndexFlipPairRefusedError | CorpusIndexFlipParityReadError,
+  request: CorpusIndexFlipRequest,
+) => {
+  if (error._tag === "CorpusIndexFlipPairRefusedError") {
+    return refuse(
+      error.reason === "jurisdiction_serving_pointer"
+        ? { class: "registry", reason: "jurisdiction_serving_pointer" }
+        : { class: "registry", reason: "generation_changed" },
+      error.message,
+    );
+  }
+  const busy = corpusIndexFlipBusyReasonOf(error.cause);
+  return busy === null
+    ? refuse({ class: "undecided", reason: "read_failed" }, error.message)
+    : refuseBusy(busy, request);
+};
+
 /**
- * Phase 1: everything that reads the engine or walks long, with no lock
- * held. `runInTransaction` should open read-only transactions.
+ * The engine read against the proofs current now: every proven index still
+ * the incarnation its proof walked, then, per route, PostgreSQL's sum of the
+ * documents its applied revisions expect and the engine's total count, in
+ * that order.
  */
-export const prepareCorpusIndexGenerationFlip = async ({
-  runInTransaction,
-  engine,
-  request,
-}: {
-  runInTransaction: ProjectionTransactionRunner;
-  engine: CorpusIndexFlipEngine;
-  request: CorpusIndexFlipRequest;
-}): Promise<
-  Result<CorpusIndexFlipPlan, CorpusIndexGenerationFlipRefusedError>
+const checkEngine = async (
+  runInTransaction: ProjectionTransactionRunner,
+  engine: CorpusIndexFlipEngine,
+  request: CorpusIndexFlipRequest,
+): Promise<
+  Result<
+    { proofs: readonly CheckedRouteProof[]; documents: RouteDocuments[] },
+    CorpusIndexGenerationFlipRefusedError
+  >
 > => {
   const { family, candidate } = request;
-  const pair = await runInTransaction(
-    async (tx) => await readPairTx(tx, request),
-  );
-  if (pair.isErr()) {
-    return Result.err(pair.error);
-  }
-  if (pair.value.type === "already_serving") {
-    return Result.ok({ type: "already_serving", family, candidate });
-  }
-  const { serving } = pair.value;
   const proofs = await runInTransaction(
     async (tx) => await readCurrentProofsTx(tx, request),
   );
@@ -484,24 +565,29 @@ export const prepareCorpusIndexGenerationFlip = async ({
   if (short.length > 0) {
     return refuse(
       { class: "engine", reason: "documents_missing" },
-      `An index of ${family}/${candidate} holds fewer documents than its applied revisions; prove the route again`,
+      `An index of ${family}/${candidate} holds fewer documents in total than the revisions applied there expect, so some are certainly gone; prove the route again`,
       short.map(
         ({ indexId, expected, engine: counted }) =>
-          `${indexId}: ${String(counted)} documents, applied revisions expect at least ${String(expected)}`,
+          `${indexId}: ${String(counted)} documents in total, applied revisions expect ${String(expected)}`,
       ),
     );
   }
-  if (serving === null) {
-    return Result.ok({
-      type: "flip",
-      request,
-      candidate: pair.value.candidate,
-      serving,
-      proofs: proofs.value.routes,
-      documents,
-      walk: null,
-    });
-  }
+  return Result.ok({ proofs: proofs.value.routes, documents });
+};
+
+/**
+ * The coverage walk over the serving generation, refused when it found a
+ * decision the candidate has no state for, did not reach its end, or listed
+ * more uncovered states than the fenced phase probes again.
+ */
+const walkServing = async (
+  runInTransaction: ProjectionTransactionRunner,
+  request: CorpusIndexFlipRequest,
+  serving: string,
+): Promise<
+  Result<CorpusIndexFlipCoverageWalk, CorpusIndexGenerationFlipRefusedError>
+> => {
+  const { family, candidate } = request;
   const walk = await walkCorpusIndexFlipCoverage({
     runInTransaction,
     family,
@@ -509,70 +595,147 @@ export const prepareCorpusIndexGenerationFlip = async ({
     coverage: { ...request.coverage, resumeFrom: null },
   });
   if (walk.isErr()) {
-    return walk.error._tag === "CorpusIndexFlipPairRefusedError"
-      ? refuse(
-          walk.error.reason === "jurisdiction_serving_pointer"
-            ? { class: "registry", reason: "jurisdiction_serving_pointer" }
-            : { class: "registry", reason: "generation_changed" },
-          walk.error.message,
-        )
-      : refuse(
-          { class: "undecided", reason: "read_failed" },
-          walk.error.message,
-        );
+    return refuseParity(walk.error, request);
   }
-  if (walk.value.coverage.missing > 0) {
+  const { coverage, uncovered } = walk.value;
+  if (coverage.missing > 0) {
     return refuse(
       { class: "parity", reason: "regressions" },
-      `${String(walk.value.coverage.missing)} decisions ${serving.generation} shows have no state in ${candidate}`,
-      walk.value.coverage.sample.map((entityId) => `no state: ${entityId}`),
+      `${String(coverage.missing)} decisions ${serving} shows have no state in ${candidate}`,
+      coverage.sample.map((entityId) => `no state: ${entityId}`),
     );
   }
-  if (walk.value.coverage.type !== "complete") {
+  if (coverage.type !== "complete") {
     return refuse(
       { class: "undecided", reason: "parity_undecided" },
-      `The coverage walk over ${serving.generation} did not reach its end within ${String(request.coverage.pageBudget)} pages; raise the page budget`,
+      `The coverage walk over ${serving} did not reach its end within ${String(request.coverage.pageBudget)} pages; raise the page budget`,
     );
+  }
+  if (uncovered.type === "too_many") {
+    return refuse(
+      { class: "undecided", reason: "parity_undecided" },
+      `${String(uncovered.count)} states of ${serving} have no state in ${candidate} (none wants an upsert now), more than the fenced phase can probe again; seed them in ${candidate} first`,
+    );
+  }
+  return Result.ok(walk.value);
+};
+
+const prepareFlip = async ({
+  runInTransaction,
+  engine,
+  request,
+}: {
+  runInTransaction: ProjectionTransactionRunner;
+  engine: CorpusIndexFlipEngine;
+  request: CorpusIndexFlipRequest;
+}): Promise<
+  Result<CorpusIndexFlipPlan, CorpusIndexGenerationFlipRefusedError>
+> => {
+  const { family, candidate } = request;
+  const pair = await runInTransaction(
+    async (tx) => await readPairTx(tx, request),
+  );
+  if (pair.isErr()) {
+    return Result.err(pair.error);
+  }
+  if (pair.value.type === "already_serving") {
+    return Result.ok({ type: "already_serving", family, candidate });
+  }
+  const { serving } = pair.value;
+  // Fail fast: a route with no current proof refuses before the long walk.
+  const proven = await runInTransaction(
+    async (tx) => await readCurrentProofsTx(tx, request),
+  );
+  if (proven.isErr()) {
+    return Result.err(proven.error);
+  }
+  const walk =
+    serving === null
+      ? Result.ok(null)
+      : await walkServing(runInTransaction, request, serving.generation);
+  if (walk.isErr()) {
+    return Result.err(walk.error);
+  }
+  // Last before the fence: the engine read, against the proofs current now.
+  const checked = await checkEngine(runInTransaction, engine, request);
+  if (checked.isErr()) {
+    return Result.err(checked.error);
   }
   return Result.ok({
     type: "flip",
     request,
     candidate: pair.value.candidate,
     serving,
-    proofs: proofs.value.routes,
-    documents,
+    proofs: checked.value.proofs,
+    documents: checked.value.documents,
     walk: walk.value,
   });
 };
 
-/** What the flip read under its fence, and what it did. */
+/**
+ * Phase 1: everything that reads the engine or walks long, with no lock
+ * held. `runInTransaction` should open read-only transactions.
+ */
+export const prepareCorpusIndexGenerationFlip = async (options: {
+  runInTransaction: ProjectionTransactionRunner;
+  engine: CorpusIndexFlipEngine;
+  request: CorpusIndexFlipRequest;
+}): Promise<
+  Result<CorpusIndexFlipPlan, CorpusIndexGenerationFlipRefusedError>
+> => {
+  const prepared = await Result.tryPromise({
+    try: async () => await prepareFlip(options),
+    catch: (cause) => cause,
+  });
+  if (prepared.isOk()) {
+    return prepared.value;
+  }
+  const busy = corpusIndexFlipBusyReasonOf(prepared.error);
+  return busy === null
+    ? panic("Corpus generation flip preparation failed", prepared.error)
+    : refuseBusy(busy, options.request);
+};
+
+/** What the flip gathered, and what it read under the fence. */
 type CorpusIndexFlipEvidence = {
   family: CorpusFamily;
   from: string | null;
   to: string;
+  /** The pair's registry rows, read in phase 1 and found unchanged under the fence. */
+  registry: { candidate: RegistryIdentity; serving: RegistryIdentity | null };
+  /** Read under the fence, from the walk phase 1 made. */
   parity: {
+    exemptMinutes: number;
     watermark: string;
+    walk: { pages: number; walked: number; last: string | null };
     coverageWalked: number;
     tail: CorpusIndexFlipParity["tail"];
+    behindCursor: CorpusIndexFlipParity["behindCursor"];
     walked: CorpusIndexFlipParity["regressions"]["walked"];
     exempt: number;
   } | null;
+  /** Read in phase 1 against the engine; under the fence every one was unchanged. */
   routeProofs: readonly CheckedRouteProof[];
+  /** Read in phase 1: PostgreSQL's sum, then the engine's total (a lower bound). */
   documents: readonly RouteDocuments[];
+  /** Read under the fence. */
   seedings: {
     candidate: readonly { indexId: string; passNumber: number }[];
     serving: readonly { indexId: string; passNumber: number }[] | null;
   };
+  /** The system audit run recorded with the receipt; null on a dry run. */
+  auditRun: string | null;
 };
 
 export type CorpusIndexFlipOutcome =
   | { type: "already_serving"; family: CorpusFamily; candidate: string }
+  | { type: "checked"; evidence: CorpusIndexFlipEvidence }
   | {
-      type: "checked" | "flipped";
+      type: "flipped";
       evidence: CorpusIndexFlipEvidence;
+      /** As PostgreSQL computed it from the stored receipt row. */
       evidenceDigest: string;
-      /** The receipt row; null on a dry run. */
-      receiptId: string | null;
+      receiptId: SafeId<"corpusIndexGenerationFlip">;
     };
 
 const sameProof = (left: CheckedRouteProof, right: CheckedRouteProof) =>
@@ -583,19 +746,27 @@ const sameProof = (left: CheckedRouteProof, right: CheckedRouteProof) =>
 
 const readSeededTx = async (
   tx: Transaction,
-  family: CorpusFamily,
-  generation: string,
-  reason: "candidate_unseeded" | "serving_unseeded",
+  fence: CorpusIndexProjectionFlipFence,
+  {
+    family,
+    generation,
+    reason,
+  }: {
+    family: CorpusFamily;
+    generation: string;
+    reason: "candidate_unseeded" | "serving_unseeded";
+  },
 ): Promise<
   Result<
     { indexId: string; passNumber: number }[],
     CorpusIndexGenerationFlipRefusedError
   >
 > => {
-  const seedings = await readCorpusIndexRouteSeedingsTx(tx, {
-    family,
-    generation,
-  });
+  const seedings = await readCorpusIndexRouteSeedingsUnderFlipFenceTx(
+    tx,
+    fence,
+    { family, generation },
+  );
   if (seedings === null) {
     return refuse(
       { class: "seeding", reason },
@@ -623,52 +794,78 @@ const readSeededTx = async (
   );
 };
 
-/** SHA-256 of the evidence as stored, in hex. */
-const digestOf = (evidence: CorpusIndexFlipEvidence): string =>
-  sha256Hex(JSON.stringify(evidence));
-
 /**
- * Swap the pair and record it: the receipt, and the system audit run that
- * names the same run.
+ * Swap the pair and record it: the receipt, whose digest PostgreSQL computes
+ * from the row it stores, and the system audit run the evidence names.
  */
 const recordFlipTx = async (
   tx: Transaction,
   {
     evidence,
-    evidenceDigest,
     actor,
     reason,
-  }: {
-    evidence: CorpusIndexFlipEvidence;
-    evidenceDigest: string;
-    actor: string;
-    reason: string;
-  },
-): Promise<string> => {
+  }: { evidence: CorpusIndexFlipEvidence; actor: string; reason: string },
+): Promise<{
+  evidence: CorpusIndexFlipEvidence;
+  receiptId: SafeId<"corpusIndexGenerationFlip">;
+  evidenceDigest: string;
+}> => {
   await setServingCorpusIndexGenerationTx(tx, {
     family: evidence.family,
     generation: evidence.to,
   });
-  const receiptId = createSafeId<"systemScriptRun">();
-  await tx.insert(corpusIndexGenerationFlips).values({
-    id: receiptId,
-    family: evidence.family,
-    fromGeneration: evidence.from,
-    toGeneration: evidence.to,
-    actor,
-    reason,
-    evidence,
-    evidenceDigest,
-  });
+  const auditRun = createSafeId<"systemScriptRun">();
+  const recorded = { ...evidence, auditRun };
+  const receiptId = createSafeId<"corpusIndexGenerationFlip">();
+  const flips = corpusIndexGenerationFlips;
+  // audit: skip - the system audit run below records this flip, and the receipt names it
+  const inserted = executedRows(
+    await tx.execute(sql`
+      WITH receipt AS (
+        SELECT ${evidence.family}::text AS family,
+          ${evidence.from}::varchar AS from_generation,
+          ${evidence.to}::varchar AS to_generation,
+          ${actor}::varchar AS actor,
+          ${reason}::varchar AS reason,
+          ${JSON.stringify(recorded)}::text::jsonb AS evidence,
+          clock_timestamp() AS flipped_at
+      )
+      INSERT INTO ${flips} (
+        ${sql.identifier(flips.id.name)}, ${sql.identifier(flips.family.name)},
+        ${sql.identifier(flips.fromGeneration.name)}, ${sql.identifier(flips.toGeneration.name)},
+        ${sql.identifier(flips.actor.name)}, ${sql.identifier(flips.reason.name)},
+        ${sql.identifier(flips.evidence.name)}, ${sql.identifier(flips.evidenceDigest.name)},
+        ${sql.identifier(flips.flippedAt.name)}
+      )
+      SELECT ${receiptId}::uuid, receipt.family, receipt.from_generation,
+        receipt.to_generation, receipt.actor, receipt.reason, receipt.evidence,
+        ${corpusIndexGenerationFlipReceiptDigest({
+          family: sql`receipt.family`,
+          fromGeneration: sql`receipt.from_generation`,
+          toGeneration: sql`receipt.to_generation`,
+          actor: sql`receipt.actor`,
+          reason: sql`receipt.reason`,
+          flippedAt: sql`receipt.flipped_at`,
+          evidence: sql`receipt.evidence`,
+        })},
+        receipt.flipped_at
+      FROM receipt
+      RETURNING ${sql.identifier(flips.evidenceDigest.name)} AS evidence_digest
+    `),
+  ).at(0);
+  const evidenceDigest =
+    isRecord(inserted) && typeof inserted["evidence_digest"] === "string"
+      ? inserted["evidence_digest"]
+      : panic("The flip receipt insert returned no digest");
   await recordSystemAudit(tx, "system:corpus-generation-operator", {
-    subject: receiptId,
+    subject: auditRun,
     counts: {
       registered: 0,
       promoted: 1,
       demoted: evidence.from === null ? 0 : 1,
     },
   });
-  return receiptId;
+  return { evidence: recorded, receiptId, evidenceDigest };
 };
 
 /** The registry re-read under the fence, by identity. */
@@ -695,10 +892,38 @@ const requireSamePairTx = async (
       );
 };
 
+const verdictRefusal = (decided: CorpusIndexFlipParity, candidate: string) => {
+  const { verdict } = decided;
+  switch (verdict.type) {
+    case "no_regression":
+      return null;
+    case "regressions":
+      return refuse(
+        { class: "parity", reason: "regressions" },
+        `${String(verdict.missing)} decisions have no state in ${candidate} and ${String(verdict.regressions)} are not shown or stale there`,
+        [
+          ...decided.coverage.sample.map((entityId) => `no state: ${entityId}`),
+          ...decided.regressions.sample.map(
+            ({ entityId, route, kind }) =>
+              `${kind}: ${entityId} ${route ?? "(no route)"}`,
+          ),
+        ],
+      );
+    case "undecided":
+      return refuse(
+        { class: "undecided", reason: "parity_undecided" },
+        `The parity of ${candidate} is undecided under the fence (${verdict.reason})`,
+      );
+    default:
+      verdict satisfies never;
+      return panic("Unhandled flip parity verdict");
+  }
+};
+
 /**
  * Phase 2: decide and swap under the fences, refusing rather than waiting.
  * `mode: "dry_run"` takes the same transaction and fences and swaps nothing;
- * the caller's transaction then holds no write.
+ * the caller's transaction then holds no write and no row lock.
  */
 const commitCorpusIndexGenerationFlipTx = async (
   tx: Transaction,
@@ -717,7 +942,7 @@ const commitCorpusIndexGenerationFlipTx = async (
   // then the projection fence. Under both, no projection state, intent or
   // registry row can change until this transaction ends.
   await lockCorpusIndexGenerationActivationTx(tx, family);
-  await lockCorpusIndexProjectionFlipTx(tx);
+  const fence = await lockCorpusIndexProjectionFlipTx(tx);
   const pair = await requireSamePairTx(tx, plan);
   if (pair.isErr()) {
     return Result.err(pair.error);
@@ -727,34 +952,14 @@ const commitCorpusIndexGenerationFlipTx = async (
       ? Result.ok(null)
       : await decideCorpusIndexFlipParityTx(tx, plan.walk, { exemptMinutes });
   if (parity.isErr()) {
-    return parity.error._tag === "CorpusIndexFlipPairRefusedError"
-      ? refuse(
-          parity.error.reason === "jurisdiction_serving_pointer"
-            ? { class: "registry", reason: "jurisdiction_serving_pointer" }
-            : { class: "registry", reason: "generation_changed" },
-          parity.error.message,
-        )
-      : refuse(
-          { class: "undecided", reason: "read_failed" },
-          parity.error.message,
-        );
+    // A read the database cut short leaves this transaction aborted, so the
+    // refusal commits nothing.
+    return refuseParity(parity.error, plan.request);
   }
   const decided = parity.value;
-  if (decided !== null && decided.verdict.type !== "no_regression") {
-    const { verdict } = decided;
-    return verdict.type === "regressions"
-      ? refuse(
-          { class: "parity", reason: "regressions" },
-          `${String(verdict.missing)} decisions have no state in ${candidate} and ${String(verdict.regressions)} are not shown or stale there`,
-          decided.regressions.sample.map(
-            ({ entityId, route, kind }) =>
-              `${kind}: ${entityId} ${route ?? "(no route)"}`,
-          ),
-        )
-      : refuse(
-          { class: "undecided", reason: "parity_undecided" },
-          `The parity of ${candidate} is undecided under the fence (${verdict.reason})`,
-        );
+  const unsafe = decided === null ? null : verdictRefusal(decided, candidate);
+  if (unsafe !== null) {
+    return unsafe;
   }
   const proofs = await readCurrentProofsTx(tx, plan.request);
   if (proofs.isErr()) {
@@ -771,24 +976,22 @@ const commitCorpusIndexGenerationFlipTx = async (
       changed.map(({ indexId }) => `${indexId}: proof changed`),
     );
   }
-  const candidateSeedings = await readSeededTx(
-    tx,
+  const candidateSeedings = await readSeededTx(tx, fence, {
     family,
-    candidate,
-    "candidate_unseeded",
-  );
+    generation: candidate,
+    reason: "candidate_unseeded",
+  });
   if (candidateSeedings.isErr()) {
     return Result.err(candidateSeedings.error);
   }
   const servingSeedings =
     plan.serving === null
       ? Result.ok(null)
-      : await readSeededTx(
-          tx,
+      : await readSeededTx(tx, fence, {
           family,
-          plan.serving.generation,
-          "serving_unseeded",
-        );
+          generation: plan.serving.generation,
+          reason: "serving_unseeded",
+        });
   if (servingSeedings.isErr()) {
     return Result.err(servingSeedings.error);
   }
@@ -796,13 +999,21 @@ const commitCorpusIndexGenerationFlipTx = async (
     family,
     from: plan.serving?.generation ?? null,
     to: candidate,
+    registry: { candidate: plan.candidate, serving: plan.serving },
     parity:
-      decided === null
+      decided === null || plan.walk === null
         ? null
         : {
+            exemptMinutes,
             watermark: decided.watermark.toString(),
+            walk: {
+              pages: plan.walk.pages.length,
+              walked: plan.walk.coverage.walked,
+              last: plan.walk.last,
+            },
             coverageWalked: decided.coverage.walked,
             tail: decided.tail,
+            behindCursor: decided.behindCursor,
             walked: decided.regressions.walked,
             exempt: decided.regressions.exempt,
           },
@@ -812,28 +1023,19 @@ const commitCorpusIndexGenerationFlipTx = async (
       candidate: candidateSeedings.value,
       serving: servingSeedings.value,
     },
+    auditRun: null,
   };
-  const evidenceDigest = digestOf(evidence);
   switch (receipt.mode) {
     case "dry_run":
-      return Result.ok({
-        type: "checked",
+      return Result.ok({ type: "checked", evidence });
+    case "apply": {
+      const recorded = await recordFlipTx(tx, {
         evidence,
-        evidenceDigest,
-        receiptId: null,
+        actor: receipt.actor,
+        reason: receipt.reason,
       });
-    case "apply":
-      return Result.ok({
-        type: "flipped",
-        evidence,
-        evidenceDigest,
-        receiptId: await recordFlipTx(tx, {
-          evidence,
-          evidenceDigest,
-          actor: receipt.actor,
-          reason: receipt.reason,
-        }),
-      });
+      return Result.ok({ type: "flipped", ...recorded });
+    }
     default:
       receipt satisfies never;
       return panic("Unhandled flip mode");
@@ -841,9 +1043,11 @@ const commitCorpusIndexGenerationFlipTx = async (
 };
 
 /**
- * Run phase 2 in its own transaction and turn a lock or statement timeout
- * into a `busy` refusal: the flip never makes writers wait longer than one
- * lock timeout, and never retries on its own.
+ * Run phase 2 in its own transaction and turn the database or the lane
+ * declining its locks or its time into a `busy` refusal: the flip never makes
+ * writers wait longer than one lock timeout, and never retries on its own.
+ * A refusal rolls its transaction back, so it never commits anything, and a
+ * transaction the database aborted (a read it cut short) is never asked to.
  */
 export const runCorpusIndexGenerationFlip = async (
   runInTransaction: ProjectionTransactionRunner,
@@ -852,27 +1056,34 @@ export const runCorpusIndexGenerationFlip = async (
 ): Promise<
   Result<CorpusIndexFlipOutcome, CorpusIndexGenerationFlipRefusedError>
 > => {
+  const refused: { error?: CorpusIndexGenerationFlipRefusedError } = {};
   const ran = await Result.tryPromise({
     try: async () =>
-      await runInTransaction(
-        async (tx) =>
-          await commitCorpusIndexGenerationFlipTx(tx, plan, receipt),
-      ),
+      await runInTransaction(async (tx) => {
+        const outcome = await commitCorpusIndexGenerationFlipTx(
+          tx,
+          plan,
+          receipt,
+        );
+        if (outcome.isErr()) {
+          refused.error = outcome.error;
+          tx.rollback();
+        }
+        return outcome;
+      }),
     catch: (cause) => cause,
   });
+  if (refused.error !== undefined) {
+    return Result.err(refused.error);
+  }
   if (ran.isOk()) {
     return ran.value;
   }
-  const cause = ran.error;
-  if (
-    isPgError(cause, PG_ERROR.LOCK_NOT_AVAILABLE) ||
-    isPgError(cause, PG_ERROR.QUERY_CANCELED) ||
-    isPgError(cause, PG_ERROR.DEADLOCK_DETECTED)
-  ) {
-    return refuse(
-      { class: "busy", reason: "lock_unavailable" },
-      `The flip of ${plan.request.family}/${plan.request.candidate} could not take its fences or finish its reads within ${FLIP_LOCK_TIMEOUT} per lock and ${FLIP_STATEMENT_TIMEOUT} per statement; nothing changed, retry when the projection is quieter`,
-    );
-  }
-  return panic("Corpus generation flip transaction failed", cause);
+  const busy = corpusIndexFlipBusyReasonOf(ran.error);
+  return busy === null
+    ? panic(
+        "Corpus generation flip transaction failed; if it failed while committing, `serve` again reports already_serving when the flip landed",
+        ran.error,
+      )
+    : refuseBusy(busy, plan.request);
 };

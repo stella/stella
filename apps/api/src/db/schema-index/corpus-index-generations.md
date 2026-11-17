@@ -4,116 +4,116 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## corpus_index_generations · `corpusIndexGenerations` · corpus-index-generations.ts:35 · rls
+## corpus_index_generations · `corpusIndexGenerations` · corpus-index-generations.ts:37 · rls
 
 Immutable binding of one corpus generation to the trusted Quickwit cluster that owns it, plus the generation's small serving lifecycle.
 
 ```text
-corpus_index_generations.family           text         not null          corpus-index-generations.ts:38
-corpus_index_generations.generation       varchar      not null          corpus-index-generations.ts:39
-corpus_index_generations.cluster          text         not null          corpus-index-generations.ts:42
-corpus_index_generations.manifest_digest  varchar      not null          corpus-index-generations.ts:43
-corpus_index_generations.status           text         not null          corpus-index-generations.ts:44
-corpus_index_generations.created_at       timestamptz  default,not null  corpus-index-generations.ts:45
-corpus_index_generations.updated_at       timestamptz  default,not null  corpus-index-generations.ts:46
+corpus_index_generations.family           text         not null          corpus-index-generations.ts:40
+corpus_index_generations.generation       varchar      not null          corpus-index-generations.ts:41
+corpus_index_generations.cluster          text         not null          corpus-index-generations.ts:44
+corpus_index_generations.manifest_digest  varchar      not null          corpus-index-generations.ts:45
+corpus_index_generations.status           text         not null          corpus-index-generations.ts:46
+corpus_index_generations.created_at       timestamptz  default,not null  corpus-index-generations.ts:47
+corpus_index_generations.updated_at       timestamptz  default,not null  corpus-index-generations.ts:48
 ```
 
-## corpus_index_projection_revisions · `corpusIndexProjectionRevisions` · corpus-index-generations.ts:94 · rls
+## corpus_index_projection_revisions · `corpusIndexProjectionRevisions` · corpus-index-generations.ts:96 · rls
 
 Sequence-ordered revisions for projection mutations.
 
 ```text
-corpus_index_projection_revisions.family          text         fk,not null         corpus-index-generations.ts:97
-corpus_index_projection_revisions.generation      varchar      fk,not null         corpus-index-generations.ts:98
-corpus_index_projection_revisions.revision        bigint       generated,not null  corpus-index-generations.ts:101
-corpus_index_projection_revisions.transaction_id  bigint       not null            corpus-index-generations.ts:105
-corpus_index_projection_revisions.created_at      timestamptz  default,not null    corpus-index-generations.ts:106
+corpus_index_projection_revisions.family          text         fk,not null         corpus-index-generations.ts:99
+corpus_index_projection_revisions.generation      varchar      fk,not null         corpus-index-generations.ts:100
+corpus_index_projection_revisions.revision        bigint       generated,not null  corpus-index-generations.ts:103
+corpus_index_projection_revisions.transaction_id  bigint       not null            corpus-index-generations.ts:107
+corpus_index_projection_revisions.created_at      timestamptz  default,not null    corpus-index-generations.ts:108
 ```
 
-## corpus_index_group_enrollments · `corpusIndexGroupEnrollments` · corpus-index-generations.ts:162 · rls
+## corpus_index_group_enrollments · `corpusIndexGroupEnrollments` · corpus-index-generations.ts:164 · rls
 
 One index group of a generation bound to the contract its physical index is created under, for a group whose index the manifest cannot vouch for: one under a g…
 
 ```text
-corpus_index_group_enrollments.family               text         fk,not null       corpus-index-generations.ts:165
-corpus_index_group_enrollments.generation           varchar      fk,not null       corpus-index-generations.ts:166
-corpus_index_group_enrollments.index_group          varchar      not null          corpus-index-generations.ts:169
-corpus_index_group_enrollments.physical_index_id    varchar      not null          corpus-index-generations.ts:170
-corpus_index_group_enrollments.contract_version     text         not null          corpus-index-generations.ts:173
-corpus_index_group_enrollments.effective_digest     varchar      not null          corpus-index-generations.ts:176
-corpus_index_group_enrollments.provisioning_status  text         not null          corpus-index-generations.ts:177
-corpus_index_group_enrollments.attested_at          timestamptz  null              corpus-index-generations.ts:182
-corpus_index_group_enrollments.created_at           timestamptz  default,not null  corpus-index-generations.ts:183
-corpus_index_group_enrollments.updated_at           timestamptz  default,not null  corpus-index-generations.ts:184
+corpus_index_group_enrollments.family               text         fk,not null       corpus-index-generations.ts:167
+corpus_index_group_enrollments.generation           varchar      fk,not null       corpus-index-generations.ts:168
+corpus_index_group_enrollments.index_group          varchar      not null          corpus-index-generations.ts:171
+corpus_index_group_enrollments.physical_index_id    varchar      not null          corpus-index-generations.ts:172
+corpus_index_group_enrollments.contract_version     text         not null          corpus-index-generations.ts:175
+corpus_index_group_enrollments.effective_digest     varchar      not null          corpus-index-generations.ts:178
+corpus_index_group_enrollments.provisioning_status  text         not null          corpus-index-generations.ts:179
+corpus_index_group_enrollments.attested_at          timestamptz  null              corpus-index-generations.ts:184
+corpus_index_group_enrollments.created_at           timestamptz  default,not null  corpus-index-generations.ts:185
+corpus_index_group_enrollments.updated_at           timestamptz  default,not null  corpus-index-generations.ts:186
 ```
 
-## corpus_index_group_withdrawals · `corpusIndexGroupWithdrawals` · corpus-index-generations.ts:240 · rls
+## corpus_index_group_withdrawals · `corpusIndexGroupWithdrawals` · corpus-index-generations.ts:242 · rls
 
 Append-only trail of index-group attestation withdrawals: which group, the digest it was attested against, who withdrew it and why, written in the withdrawing…
 
 ```text
-corpus_index_group_withdrawals.id                bigint       generated,not null  corpus-index-generations.ts:243
-corpus_index_group_withdrawals.family            text         not null            corpus-index-generations.ts:246
-corpus_index_group_withdrawals.generation        varchar      not null            corpus-index-generations.ts:247
-corpus_index_group_withdrawals.index_group       varchar      not null            corpus-index-generations.ts:250
-corpus_index_group_withdrawals.effective_digest  varchar      not null            corpus-index-generations.ts:251
-corpus_index_group_withdrawals.actor             varchar      not null            corpus-index-generations.ts:252
-corpus_index_group_withdrawals.reason            varchar      not null            corpus-index-generations.ts:253
-corpus_index_group_withdrawals.withdrawn_at      timestamptz  default,not null    corpus-index-generations.ts:254
+corpus_index_group_withdrawals.id                bigint       generated,not null  corpus-index-generations.ts:245
+corpus_index_group_withdrawals.family            text         not null            corpus-index-generations.ts:248
+corpus_index_group_withdrawals.generation        varchar      not null            corpus-index-generations.ts:249
+corpus_index_group_withdrawals.index_group       varchar      not null            corpus-index-generations.ts:252
+corpus_index_group_withdrawals.effective_digest  varchar      not null            corpus-index-generations.ts:253
+corpus_index_group_withdrawals.actor             varchar      not null            corpus-index-generations.ts:254
+corpus_index_group_withdrawals.reason            varchar      not null            corpus-index-generations.ts:255
+corpus_index_group_withdrawals.withdrawn_at      timestamptz  default,not null    corpus-index-generations.ts:256
 ```
 
-## corpus_index_jurisdiction_serving · `corpusIndexJurisdictionServing` · corpus-index-generations.ts:302 · rls
+## corpus_index_jurisdiction_serving · `corpusIndexJurisdictionServing` · corpus-index-generations.ts:304 · rls
 
 The generation that serves one jurisdiction when it is not the family's serving generation.
 
 ```text
-corpus_index_jurisdiction_serving.family           text         fk,not null       corpus-index-generations.ts:305
-corpus_index_jurisdiction_serving.jurisdiction     varchar      not null          corpus-index-generations.ts:306
-corpus_index_jurisdiction_serving.generation       varchar      fk,not null       corpus-index-generations.ts:307
-corpus_index_jurisdiction_serving.from_generation  varchar      not null          corpus-index-generations.ts:314  The generation the jurisdiction was served by until the flip: the one whose copies are erased, and the only one.
-corpus_index_jurisdiction_serving.flipped_at       timestamptz  default,not null  corpus-index-generations.ts:319
+corpus_index_jurisdiction_serving.family           text         fk,not null       corpus-index-generations.ts:307
+corpus_index_jurisdiction_serving.jurisdiction     varchar      not null          corpus-index-generations.ts:308
+corpus_index_jurisdiction_serving.generation       varchar      fk,not null       corpus-index-generations.ts:309
+corpus_index_jurisdiction_serving.from_generation  varchar      not null          corpus-index-generations.ts:316  The generation the jurisdiction was served by until the flip: the one whose copies are erased, and the only one.
+corpus_index_jurisdiction_serving.flipped_at       timestamptz  default,not null  corpus-index-generations.ts:321
 ```
 
-## corpus_index_route_proofs · `corpusIndexRouteProofs` · corpus-index-generations.ts:376 · rls
+## corpus_index_route_proofs · `corpusIndexRouteProofs` · corpus-index-generations.ts:378 · rls
 
 The readiness proof of one physical index (route) of a generation: the census pass walking it, and the last clean pass.
 
 ```text
-corpus_index_route_proofs.family                    text         fk,not null       corpus-index-generations.ts:379
-corpus_index_route_proofs.generation                varchar      fk,not null       corpus-index-generations.ts:380
-corpus_index_route_proofs.index_id                  varchar      not null          corpus-index-generations.ts:383
-corpus_index_route_proofs.pass_number               bigint       default,not null  corpus-index-generations.ts:392  The pass under way, counted from the route's first: every new pass and every revocation takes the next number, so a page recorded against a pass that has since…
-corpus_index_route_proofs.pass_id                   uuid         default,not null  corpus-index-generations.ts:400  A fresh random id per pass: a page read for one pass never matches another, even one a re-registered generation numbers the same.
-corpus_index_route_proofs.pass_started_at           timestamptz  not null          corpus-index-generations.ts:402  When the pass under way started, on the database clock.
-corpus_index_route_proofs.pass_through              uuid         null              corpus-index-generations.ts:408  The last key the current phase walks, taken when the phase began; null when the phase has nothing to walk.
-corpus_index_route_proofs.pass_expectation          text         not null          corpus-index-generations.ts:410  What the pass under way walks (`CORPUS_INDEX_ROUTE_CENSUS_EXPECTATIONS`).
-corpus_index_route_proofs.pass_cursor               uuid         null              corpus-index-generations.ts:416  Where the pass resumes within its phase; null at the phase's start.
-corpus_index_route_proofs.pass_inspected            bigint       default,not null  corpus-index-generations.ts:418  Revisions the pass under way has found exactly as recorded.
-corpus_index_route_proofs.pass_index_incarnation    varchar      null              corpus-index-generations.ts:427  The engine incarnation of the index (`CorpusIndexIncarnation`) the pass under way read first; null until it reads the engine.
-corpus_index_route_proofs.proven_pass_number        bigint       null              corpus-index-generations.ts:431  The number of the last clean pass; null until one completes.
-corpus_index_route_proofs.proven_pass_started_at    timestamptz  null              corpus-index-generations.ts:433  When the last clean pass started: its oldest observation.
-corpus_index_route_proofs.proven_at                 timestamptz  null              corpus-index-generations.ts:435  When the last clean pass completed.
-corpus_index_route_proofs.proven_inspected          bigint       null              corpus-index-generations.ts:437  Revisions the last clean pass inspected.
-corpus_index_route_proofs.proven_index_incarnation  varchar      null              corpus-index-generations.ts:442  The incarnation the last clean pass started and ended on; a reader that finds another one in the engine holds no proof of this index.
-corpus_index_route_proofs.revoked_at                timestamptz  null              corpus-index-generations.ts:446  When a change voiding the proof last revoked it.
-corpus_index_route_proofs.revoked_pass_number       bigint       null              corpus-index-generations.ts:451  The pass the last revocation started: only a pass numbered this or later proves the route again.
-corpus_index_route_proofs.revoke_reason             text         null              corpus-index-generations.ts:453  Which change it was (`CORPUS_INDEX_ROUTE_PROOF_REVOKE_REASONS`).
-corpus_index_route_proofs.created_at                timestamptz  default,not null  corpus-index-generations.ts:456
-corpus_index_route_proofs.updated_at                timestamptz  default,not null  corpus-index-generations.ts:457
+corpus_index_route_proofs.family                    text         fk,not null       corpus-index-generations.ts:381
+corpus_index_route_proofs.generation                varchar      fk,not null       corpus-index-generations.ts:382
+corpus_index_route_proofs.index_id                  varchar      not null          corpus-index-generations.ts:385
+corpus_index_route_proofs.pass_number               bigint       default,not null  corpus-index-generations.ts:394  The pass under way, counted from the route's first: every new pass and every revocation takes the next number, so a page recorded against a pass that has since…
+corpus_index_route_proofs.pass_id                   uuid         default,not null  corpus-index-generations.ts:402  A fresh random id per pass: a page read for one pass never matches another, even one a re-registered generation numbers the same.
+corpus_index_route_proofs.pass_started_at           timestamptz  not null          corpus-index-generations.ts:404  When the pass under way started, on the database clock.
+corpus_index_route_proofs.pass_through              uuid         null              corpus-index-generations.ts:410  The last key the current phase walks, taken when the phase began; null when the phase has nothing to walk.
+corpus_index_route_proofs.pass_expectation          text         not null          corpus-index-generations.ts:412  What the pass under way walks (`CORPUS_INDEX_ROUTE_CENSUS_EXPECTATIONS`).
+corpus_index_route_proofs.pass_cursor               uuid         null              corpus-index-generations.ts:418  Where the pass resumes within its phase; null at the phase's start.
+corpus_index_route_proofs.pass_inspected            bigint       default,not null  corpus-index-generations.ts:420  Revisions the pass under way has found exactly as recorded.
+corpus_index_route_proofs.pass_index_incarnation    varchar      null              corpus-index-generations.ts:429  The engine incarnation of the index (`CorpusIndexIncarnation`) the pass under way read first; null until it reads the engine.
+corpus_index_route_proofs.proven_pass_number        bigint       null              corpus-index-generations.ts:433  The number of the last clean pass; null until one completes.
+corpus_index_route_proofs.proven_pass_started_at    timestamptz  null              corpus-index-generations.ts:435  When the last clean pass started: its oldest observation.
+corpus_index_route_proofs.proven_at                 timestamptz  null              corpus-index-generations.ts:437  When the last clean pass completed.
+corpus_index_route_proofs.proven_inspected          bigint       null              corpus-index-generations.ts:439  Revisions the last clean pass inspected.
+corpus_index_route_proofs.proven_index_incarnation  varchar      null              corpus-index-generations.ts:444  The incarnation the last clean pass started and ended on; a reader that finds another one in the engine holds no proof of this index.
+corpus_index_route_proofs.revoked_at                timestamptz  null              corpus-index-generations.ts:448  When a change voiding the proof last revoked it.
+corpus_index_route_proofs.revoked_pass_number       bigint       null              corpus-index-generations.ts:453  The pass the last revocation started: only a pass numbered this or later proves the route again.
+corpus_index_route_proofs.revoke_reason             text         null              corpus-index-generations.ts:455  Which change it was (`CORPUS_INDEX_ROUTE_PROOF_REVOKE_REASONS`).
+corpus_index_route_proofs.created_at                timestamptz  default,not null  corpus-index-generations.ts:458
+corpus_index_route_proofs.updated_at                timestamptz  default,not null  corpus-index-generations.ts:459
 ```
 
-## corpus_index_generation_flips · `corpusIndexGenerationFlips` · corpus-index-generations.ts:531 · rls
+## corpus_index_generation_flips · `corpusIndexGenerationFlips` · corpus-index-generations.ts:536 · rls
 
-One row per whole-family serving flip: who made it, when, which pair, and the evidence the guarded flip read (parity verdict under the fence, route proofs, see…
+One row per whole-family serving flip: who made it, when, which pair, and the evidence the guarded flip gathered (the registry identities and the parity verdic…
 
 ```text
-corpus_index_generation_flips.id               uuid         pk,not null       corpus-index-generations.ts:534
-corpus_index_generation_flips.family           text         not null          corpus-index-generations.ts:535
-corpus_index_generation_flips.from_generation  varchar      null              corpus-index-generations.ts:537  The generation that served before; null on a family's first flip.
-corpus_index_generation_flips.to_generation    varchar      not null          corpus-index-generations.ts:540
-corpus_index_generation_flips.actor            varchar      not null          corpus-index-generations.ts:543
-corpus_index_generation_flips.reason           varchar      not null          corpus-index-generations.ts:544
-corpus_index_generation_flips.evidence         jsonb        not null          corpus-index-generations.ts:545
-corpus_index_generation_flips.evidence_digest  varchar      not null          corpus-index-generations.ts:546
-corpus_index_generation_flips.flipped_at       timestamptz  default,not null  corpus-index-generations.ts:547
+corpus_index_generation_flips.id               pUuid        pk,not null       corpus-index-generations.ts:539
+corpus_index_generation_flips.family           text         not null          corpus-index-generations.ts:540
+corpus_index_generation_flips.from_generation  varchar      null              corpus-index-generations.ts:542  The generation that served before; null on a family's first flip.
+corpus_index_generation_flips.to_generation    varchar      not null          corpus-index-generations.ts:545
+corpus_index_generation_flips.actor            varchar      not null          corpus-index-generations.ts:548
+corpus_index_generation_flips.reason           varchar      not null          corpus-index-generations.ts:549
+corpus_index_generation_flips.evidence         jsonb        not null          corpus-index-generations.ts:550
+corpus_index_generation_flips.evidence_digest  varchar      not null          corpus-index-generations.ts:555  SHA-256 (hex) of the row's canonical record: pair, actor, reason, flip instant and evidence (`corpusIndexGenerationFlipReceiptDigest`).
+corpus_index_generation_flips.flipped_at       timestamptz  default,not null  corpus-index-generations.ts:556
 ```

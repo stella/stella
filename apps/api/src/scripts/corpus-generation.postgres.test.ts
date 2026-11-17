@@ -1,18 +1,27 @@
 /**
- * The guarded flip's fenced phase against real PostgreSQL locks: a canonical
- * writer holding its source lock holds back the flip before the flip takes
- * any registry row lock, so the writer's later key-share lock on the
- * generation row (the projection foreign keys take it) cannot close a
- * deadlock cycle; and a writer that holds on past the flip's lock timeout
- * gets the flip refused as busy instead of a flip that waits.
+ * The guarded flip against real PostgreSQL. A whole `serve --apply` through
+ * the operator command's own database door (its read-only session, then the
+ * bounded maintenance lane on its own connection, as the login the API
+ * deploys with: the tables' owner, not a superuser, so the receipt's forced
+ * row security applies): every fenced read, the swap, the receipt INSERT with
+ * its database-computed digest, and the audit run. Then the fenced phase's
+ * locks: a canonical writer holding its source lock holds back the flip
+ * before the flip takes any registry row lock, so the writer's later
+ * key-share lock on the generation row (the projection foreign keys take it)
+ * cannot close a deadlock cycle; and a writer that holds on past the flip's
+ * lock timeout gets the flip refused as busy instead of a flip that waits.
+ *
+ * The suite registers a serving generation, so it runs alone on a fresh
+ * clone (`EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS`).
  */
 
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { waitForExternalState } from "@stll/property-testing/external-state";
 
+import type { Transaction } from "@/api/db/root";
 import {
   caseLawDecisions,
   caseLawSources,
@@ -31,10 +40,17 @@ import {
 import { lockActiveCorpusProjectionSourceTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { lockCorpusIndexProjectionWriterTx } from "@/api/lib/legal-search/corpus-index-projection-revision";
 import { isRecord } from "@/api/lib/type-guards";
+import { runCorpusGenerationCommand } from "@/api/scripts/corpus-generation";
 import {
   type GatedTestDb,
   withGatedTestClients,
 } from "@/api/tests/gated-test-database";
+import {
+  createCorpusFlipFixture,
+  FLIP_V7,
+  FLIP_V10,
+} from "@/api/tests/helpers/corpus-flip-fixture";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -286,6 +302,110 @@ if (!databaseUrl || !runPostgresTests) {
         releaseWriter.resolve(undefined);
         await writer;
         expect(refusalOf(flip)).toBe("busy:lock_unavailable");
+      });
+    });
+
+    test("serve --apply flips on the operator's own connection and role, with a receipt the database can recompute", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db } = openClient();
+        const pair = inArray(corpusIndexGenerations.generation, [
+          FLIP_V7,
+          FLIP_V10,
+        ]);
+        expect(
+          await db
+            .select({ generation: corpusIndexGenerations.generation })
+            .from(corpusIndexGenerations)
+            .where(eq(corpusIndexGenerations.family, "case_law")),
+        ).toEqual([]);
+        // The login every connection of this suite uses, the operator's
+        // included: it owns the receipts and is no superuser, so forced row
+        // security binds it.
+        expect(
+          executedRows(
+            await db.execute(sql`
+              SELECT role.rolsuper AS superuser, role.rolbypassrls AS bypass,
+                flips.relforcerowsecurity AS forced,
+                pg_catalog.pg_get_userbyid(flips.relowner) = current_user AS owner
+              FROM pg_catalog.pg_class flips, pg_catalog.pg_roles role
+              WHERE flips.oid = 'public.corpus_index_generation_flips'::regclass
+                AND role.rolname = current_user
+            `),
+          ),
+        ).toEqual([
+          { superuser: false, bypass: false, forced: true, owner: true },
+        ]);
+        const fixture = createCorpusFlipFixture(
+          async (work) =>
+            await db.transaction(
+              async (tx) => await work(asTestRaw<Transaction>(tx)),
+            ),
+        );
+        // The suite runs alone on a fresh clone and this test runs last, so
+        // the pair it registers and flips is left as it ends.
+        await fixture.readyPair();
+        const out: string[] = [];
+        const err: string[] = [];
+        const code = await runCorpusGenerationCommand({
+          args: [
+            "serve",
+            "--family",
+            "case_law",
+            "--generation",
+            FLIP_V10,
+            "--apply",
+            "--replacing",
+            FLIP_V7,
+            "--actor",
+            "operator:postgres-test",
+            "--reason",
+            "flip under the operator role",
+          ],
+          indexClient: () => fixture.engineClient,
+          searchEndpoint: () => "http://corpus-index.test",
+          write: (line) => {
+            out.push(line);
+          },
+          writeError: (line) => {
+            err.push(line);
+          },
+        });
+        expect({ code, err }).toEqual({ code: 0, err: [] });
+        expect(out.join("\n")).toContain(
+          "Applied: case_law/case_law_v10 serves; case_law_v7 is building",
+        );
+        expect(
+          await db
+            .select({
+              generation: corpusIndexGenerations.generation,
+              status: corpusIndexGenerations.status,
+            })
+            .from(corpusIndexGenerations)
+            .where(pair)
+            .orderBy(corpusIndexGenerations.generation),
+        ).toEqual([
+          { generation: FLIP_V10, status: "serving" },
+          { generation: FLIP_V7, status: "building" },
+        ]);
+        expect(
+          executedRows(
+            await db.execute(sql`
+                SELECT actor, evidence_digest = encode(sha256(convert_to(jsonb_build_object(
+                    'family', family, 'from', from_generation, 'to', to_generation,
+                    'actor', actor, 'reason', reason,
+                    'flippedAtUs', (extract(epoch FROM flipped_at) * 1000000)::bigint,
+                    'evidence', evidence)::text, 'UTF8')), 'hex') AS reproducible,
+                  evidence -> 'parity' -> 'behindCursor' ->> 'type' AS behind_cursor
+                FROM corpus_index_generation_flips
+              `),
+          ),
+        ).toEqual([
+          {
+            actor: "operator:postgres-test",
+            reproducible: true,
+            behind_cursor: "read",
+          },
+        ]);
       });
     });
   });

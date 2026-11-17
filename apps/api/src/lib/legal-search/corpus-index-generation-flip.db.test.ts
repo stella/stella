@@ -2,21 +2,28 @@
  * The guarded generation flip against a real PostgreSQL schema, with route
  * proofs made by the real census pass and seeding by the real walk, and a fake
  * engine that answers the census, the document count and the index
- * incarnation from maps: the flip happens only with every proof, each missing
- * or stale proof refuses with its own reason, a write that lands between the
- * engine phase and the fenced phase is caught, the replaced generation keeps
- * taking every change, and the same guard flips back.
+ * incarnation from maps (`tests/helpers/corpus-flip-fixture.ts`): the flip
+ * happens only with every proof, each missing or stale proof refuses with its
+ * own reason, a write that lands between the walk and the fenced phase is
+ * caught (ahead of the walk's cursor or behind it), the database declining
+ * the flip its locks or its time refuses as busy with nothing written, the
+ * receipt's digest is reproducible from the stored row, a dry run is never
+ * assigned a transaction id, and the replaced generation keeps taking every
+ * change, so the same guard flips back.
  *
  * Not covered here: writers running concurrently with the fenced phase (the
  * embedded database has one connection). The lock order against a canonical
- * writer, and the refusal instead of a wait, run against PostgreSQL in
+ * writer, the refusal instead of a wait, and a whole flip on the operator's
+ * own connection and role run against PostgreSQL in
  * `scripts/corpus-generation.postgres.test.ts`.
  */
-import { panic, Result } from "better-result";
+import { panic } from "better-result";
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { runUnderCorpusSchemaLane } from "@/api/db/corpus-schema-lane";
 import type { Transaction } from "@/api/db/root";
 import {
   caseLawDecisions,
@@ -24,263 +31,100 @@ import {
   corpusIndexGenerationFlips,
   corpusIndexGenerations,
   corpusIndexGenerationSeedingPasses,
-  corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
   corpusIndexRouteProofs,
   systemAuditRuns,
 } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   type CorpusIndexFlipPlan,
   type CorpusIndexFlipRequest,
   prepareCorpusIndexGenerationFlip,
   runCorpusIndexGenerationFlip,
 } from "@/api/lib/legal-search/corpus-index-generation-flip";
-import { registeredCorpusIndexGroups } from "@/api/lib/legal-search/corpus-index-group-contract";
-import {
-  attestCorpusIndexGroupEnrollmentTx,
-  bindCorpusIndexGroupEnrollmentTx,
-} from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
-import {
-  CORPUS_INDEX_MANIFESTS,
-  corpusIndexManifestDigest,
-} from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   lockActiveCorpusProjectionSourceByIdTx,
   synchronizeLockedCaseLawProjectionBatchTx,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
-import { advanceCorpusIndexRouteProof } from "@/api/lib/legal-search/corpus-index-route-proof";
-import { readCorpusIndexRouteProofsTx } from "@/api/lib/legal-search/corpus-index-route-proof-store";
+import { readCorpusIndexRouteSeedingsTx } from "@/api/lib/legal-search/corpus-index-route-seeding";
+import { isPgError } from "@/api/lib/pg-error";
 import {
-  advanceCorpusIndexGenerationSeedingTx,
-  readCorpusIndexRouteSeedingsTx,
-} from "@/api/lib/legal-search/corpus-index-route-seeding";
+  createCorpusFlipFixture,
+  FLIP_V7 as V7,
+  FLIP_V10 as V10,
+  flipEntityId as entityId,
+  type FlipGeneration as Generation,
+  flipRouteOf as routeOf,
+} from "@/api/tests/helpers/corpus-flip-fixture";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
-const V7 = "case_law_v7";
-const V10 = "case_law_v10";
-type Generation = typeof V7 | typeof V10;
-
-const APPLIED_AT = new Date("2026-08-26T00:00:00.000Z");
-const fingerprint = (epoch: number) => String(epoch).padStart(64, "0");
-/** Time-ordered ids, as decision ids are: a larger n is a newer decision. */
-const entityId = (n: number) =>
-  `0198e331-e578-7000-8000-${String(n).padStart(12, "0")}`;
-const revisionId = (generation: Generation, n: number, epoch: number) =>
-  toSafeId<"corpusIndexProjectionIntent">(
-    `0198e331-e578-7000-9${generation === V7 ? "007" : "010"}-${String(n * 10 + epoch).padStart(12, "0")}`,
-  );
-const routeOf = (generation: Generation) => `${generation}_pol`;
-
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
-
-/** What the fake engine holds: projection revision to index and count. */
-let engine: Map<string, { indexId: string; count: number }>;
-/** Documents lost from an index, by index id. */
-let lost: Map<string, number>;
-/** The incarnation of each index id; absent means the index is missing. */
-let incarnations: Map<string, string>;
-
-const PROJECTION_REVISION_TERM = /projection_revision:"(?<revision>[^"]+)"/gu;
-
-const engineClient = {
-  aggregate: async ({ query }: { indexId: string; query: string }) =>
-    Result.ok({
-      projection_revisions: {
-        buckets: [...query.matchAll(PROJECTION_REVISION_TERM)].flatMap(
-          ({ groups }) => {
-            const revision = groups?.["revision"];
-            const count =
-              revision === undefined ? undefined : engine.get(revision)?.count;
-            return count === undefined || count === 0
-              ? []
-              : [{ key: revision, doc_count: count }];
-          },
-        ),
-        doc_count_error_upper_bound: 0,
-        sum_other_doc_count: 0,
-      },
-    }),
-  search: async ({ indexId }: { indexId: string }) =>
-    Result.ok({
-      numHits:
-        [...engine.values()]
-          .filter((held) => held.indexId === indexId)
-          .reduce((total, held) => total + held.count, 0) -
-        (lost.get(indexId) ?? 0),
-      hits: [],
-      snippets: [],
-    }),
-  readIndexIncarnation: async (indexId: string) => {
-    const incarnation = incarnations.get(indexId);
-    return Result.ok(
-      incarnation === undefined
-        ? ({ type: "missing" } as const)
-        : ({ type: "present", incarnation } as const),
-    );
-  },
-};
 
 const runInTransaction = async <T>(
   work: (tx: Transaction) => Promise<T>,
 ): Promise<T> =>
   await db.transaction(async (tx) => await work(asTestRaw<Transaction>(tx)));
 
-const register = async (
-  generation: Generation,
-  status: "building" | "serving",
-) =>
-  await db.insert(corpusIndexGenerations).values({
-    family: "case_law",
-    generation,
-    cluster: "q09",
-    manifestDigest: corpusIndexManifestDigest(
-      CORPUS_INDEX_MANIFESTS[generation],
-    ),
-    status,
-  });
+const fixture = createCorpusFlipFixture(runInTransaction);
+const {
+  engineClient,
+  incarnations,
+  lost,
+  proveRoutes,
+  readyPair,
+  register,
+  attestGroups,
+  seedErased,
+  seedPending,
+  seedRoutes,
+  seedShown,
+} = fixture;
 
-/** Attest every group the generation enrolls on its own. */
-const attestGroups = async (generation: Generation) => {
-  const manifest = CORPUS_INDEX_MANIFESTS[generation];
-  for (const group of registeredCorpusIndexGroups(manifest)) {
-    // db-await-in-loop: one attestation per registered group
+const dialect = new PgDialect();
+
+/**
+ * A transaction runner that shows `onExecute` every statement the flip runs
+ * through `execute`, with its SQL text, before it runs.
+ */
+const observedRunner =
+  (onExecute: (text: string, tx: Transaction) => Promise<void>) =>
+  async <T>(work: (tx: Transaction) => Promise<T>): Promise<T> =>
     await runInTransaction(async (tx) => {
-      await bindCorpusIndexGroupEnrollmentTx(tx, {
-        manifest,
-        indexGroup: group.indexGroup,
+      const observed = new Proxy(tx, {
+        get(target, property) {
+          if (property === "execute") {
+            return async (query: Parameters<Transaction["execute"]>[0]) => {
+              await onExecute(
+                typeof query === "string"
+                  ? query
+                  : dialect.sqlToQuery(query.getSQL()).sql,
+                target,
+              );
+              const executed: Awaited<ReturnType<Transaction["execute"]>> =
+                await target.execute(query);
+              return executed;
+            };
+          }
+          const value: unknown = Reflect.get(target, property, target);
+          const bound: unknown =
+            typeof value === "function" ? value.bind(target) : value;
+          return bound;
+        },
       });
-      await attestCorpusIndexGroupEnrollmentTx(tx, {
-        manifest,
-        indexGroup: group.indexGroup,
-        effectiveDigest: group.effectiveDigest,
-      });
+      return await work(observed);
     });
-  }
-};
 
-/** Prove every route the generation declares through the real census pass. */
-const proveRoutes = async (generation: Generation) => {
-  const read = await runInTransaction(
-    async (tx) =>
-      await readCorpusIndexRouteProofsTx(tx, {
-        family: "case_law",
-        generation,
-      }),
+/** Raise a real PostgreSQL error with `code` on `tx`, aborting it. */
+const raiseOn = async (tx: Transaction, code: string) => {
+  await tx.execute(
+    sql.raw(
+      `DO $$ BEGIN RAISE EXCEPTION 'injected' USING ERRCODE = '${code}'; END $$`,
+    ),
   );
-  if (read.type !== "not_ready" && read.type !== "all_current") {
-    panic(`Unexpected route proofs: ${read.type}`);
-  }
-  for (const { indexId } of read.routes) {
-    if (!incarnations.has(indexId)) {
-      incarnations.set(indexId, `${indexId}:01JFIRST`);
-    }
-    for (let page = 0; ; page += 1) {
-      // db-await-in-loop: each page's cursor is the one the page before recorded
-      const step = await advanceCorpusIndexRouteProof({
-        runInTransaction,
-        client: engineClient,
-        admit: async (_unit, work) => await work(),
-        route: { family: "case_law", generation, indexId },
-        limit: 8,
-      });
-      if (step.isErr() || page > 50) {
-        panic(`Route census failed on ${indexId}`);
-      }
-      if (step.value.type === "proven") {
-        break;
-      }
-    }
-  }
 };
-
-/** Walk the generation's seeding pass to its end. */
-const seedRoutes = async (generation: Generation) => {
-  for (let page = 0; page < 20; page += 1) {
-    // db-await-in-loop: each page resumes from the cursor the page before stored
-    const step = await runInTransaction(
-      async (tx) =>
-        await advanceCorpusIndexGenerationSeedingTx(
-          tx,
-          { family: "case_law", generation },
-          { limit: 100 },
-        ),
-    );
-    if (step.type === "completed" || step.type === "complete") {
-      return;
-    }
-  }
-  panic(`Seeding did not end: ${generation}`);
-};
-
-/** A decision the generation shows at `epoch`, held by the engine. */
-const seedShown = async (generation: Generation, n: number, epoch = 1) => {
-  const revision = revisionId(generation, n, epoch);
-  const indexId = routeOf(generation);
-  await db.insert(corpusIndexProjectionIntents).values({
-    id: revision,
-    family: "case_law",
-    generation,
-    entityId: entityId(n),
-    epoch: BigInt(epoch),
-    fingerprint: fingerprint(epoch),
-    indexId,
-    status: "applied",
-    appendStartedAt: APPLIED_AT,
-    appendCommittedAt: APPLIED_AT,
-    expectedDocumentCount: 3,
-    appliedAt: APPLIED_AT,
-  });
-  await db
-    .insert(corpusIndexProjectionStates)
-    .values({
-      family: "case_law",
-      generation,
-      entityId: entityId(n),
-      desiredAction: "upsert",
-      desiredEpoch: BigInt(epoch),
-      desiredFingerprint: fingerprint(epoch),
-      desiredIndexId: indexId,
-      appliedAction: "upsert",
-      appliedEpoch: BigInt(epoch),
-      appliedRevision: revision,
-      appliedFingerprint: fingerprint(epoch),
-      appliedIndexId: indexId,
-      appliedAt: APPLIED_AT,
-    })
-    .onConflictDoUpdate({
-      target: [
-        corpusIndexProjectionStates.family,
-        corpusIndexProjectionStates.generation,
-        corpusIndexProjectionStates.entityId,
-      ],
-      set: {
-        desiredEpoch: BigInt(epoch),
-        desiredFingerprint: fingerprint(epoch),
-        appliedEpoch: BigInt(epoch),
-        appliedRevision: revision,
-        appliedFingerprint: fingerprint(epoch),
-      },
-    });
-  engine.set(revision, { indexId, count: 3 });
-};
-
-/** The candidate was handed a change it has not applied yet. */
-const seedPending = async (generation: Generation, n: number, epoch: number) =>
-  await db
-    .update(corpusIndexProjectionStates)
-    .set({
-      desiredEpoch: BigInt(epoch),
-      desiredFingerprint: fingerprint(epoch),
-    })
-    .where(
-      and(
-        eq(corpusIndexProjectionStates.generation, generation),
-        eq(corpusIndexProjectionStates.entityId, entityId(n)),
-      ),
-    );
 
 const request = (
   candidate: Generation,
@@ -297,9 +141,12 @@ const request = (
   ...overrides,
 });
 
-const prepare = async (flip: CorpusIndexFlipRequest) =>
+const prepare = async (
+  flip: CorpusIndexFlipRequest,
+  runner: typeof runInTransaction = runInTransaction,
+) =>
   await prepareCorpusIndexGenerationFlip({
-    runInTransaction,
+    runInTransaction: runner,
     engine: engineClient,
     request: flip,
   });
@@ -318,9 +165,10 @@ const requirePlan = (
 const commit = async (
   plan: Extract<CorpusIndexFlipPlan, { type: "flip" }>,
   mode: "dry_run" | "apply" = "apply",
+  runner: typeof runInTransaction = runInTransaction,
 ) =>
   await runCorpusIndexGenerationFlip(
-    runInTransaction,
+    runner,
     plan,
     mode === "apply"
       ? { mode, actor: "operator:test", reason: "flip under test" }
@@ -354,6 +202,7 @@ const statuses = async () =>
 const receipts = async () =>
   await db
     .select({
+      id: corpusIndexGenerationFlips.id,
       fromGeneration: corpusIndexGenerationFlips.fromGeneration,
       toGeneration: corpusIndexGenerationFlips.toGeneration,
       actor: corpusIndexGenerationFlips.actor,
@@ -362,22 +211,11 @@ const receipts = async () =>
     .from(corpusIndexGenerationFlips)
     .orderBy(corpusIndexGenerationFlips.flippedAt);
 
-/** v7 serves, v10 builds; both show decisions 1-3, every route proven and seeded. */
-const readyPair = async () => {
-  await register(V7, "serving");
-  await register(V10, "building");
-  for (const generation of [V7, V10] as const) {
-    for (const n of [1, 2, 3]) {
-      // db-await-in-loop: fixture rows, in order
-      await seedShown(generation, n);
-    }
-    // db-await-in-loop: fixture steps, in order
-    await attestGroups(generation);
-    // db-await-in-loop: fixture steps, in order
-    await proveRoutes(generation);
-    // db-await-in-loop: fixture steps, in order
-    await seedRoutes(generation);
-  }
+/** Nothing moved: the pair as `readyPair` left it, no receipt, no audit run. */
+const expectNothingWritten = async () => {
+  expect(await statuses()).toEqual({ [V7]: "serving", [V10]: "building" });
+  expect(await receipts()).toEqual([]);
+  expect(await db.select().from(systemAuditRuns)).toEqual([]);
 };
 
 // timeout: builds the PGlite schema from every migration.
@@ -396,20 +234,36 @@ beforeEach(async () => {
       'TRUNCATE TABLE "corpus_index_generations", "corpus_index_projection_states", "corpus_index_projection_intents", "corpus_index_generation_flips", "corpus_index_group_enrollments", "system_audit_runs", "case_law_sources" CASCADE',
     ),
   );
-  engine = new Map();
-  lost = new Map();
-  incarnations = new Map();
+  fixture.reset();
 });
 
-test("a dry run checks everything and writes nothing; the flip swaps the pair with a receipt; the same guard flips back", async () => {
+test("a dry run checks everything and is never assigned a transaction id; the flip swaps the pair with a receipt", async () => {
   await readyPair();
   const plan = requirePlan(await prepare(request(V10, V7)));
   expect(plan.walk?.coverage).toMatchObject({ type: "complete", walked: 3 });
 
-  const dry = await commit(plan, "dry_run");
+  // The dry run's transaction, read at its very end: no row was written or
+  // locked, so PostgreSQL never assigned it a transaction id.
+  const assigned: unknown[] = [];
+  const dry = await commit(
+    plan,
+    "dry_run",
+    async (work) =>
+      await runInTransaction(async (tx) => {
+        const result = await work(tx);
+        assigned.push(
+          executedRows(
+            await tx.execute(
+              sql`SELECT pg_current_xact_id_if_assigned()::text AS xid`,
+            ),
+          ).at(0),
+        );
+        return result;
+      }),
+  );
   expect(dry.isOk() && dry.value.type).toBe("checked");
-  expect(await statuses()).toEqual({ [V7]: "serving", [V10]: "building" });
-  expect(await receipts()).toEqual([]);
+  expect(assigned).toEqual([{ xid: null }]);
+  await expectNothingWritten();
 
   const flipped = await commit(plan);
   if (flipped.isErr() || flipped.value.type !== "flipped") {
@@ -419,10 +273,21 @@ test("a dry run checks everything and writes nothing; the flip swaps the pair wi
   expect(flipped.value.evidence).toMatchObject({
     from: V7,
     to: V10,
-    parity: { coverageWalked: 3, tail: { type: "read", walked: 0 } },
+    registry: {
+      candidate: { generation: V10, updatedAtUs: plan.candidate.updatedAtUs },
+      serving: { generation: V7, updatedAtUs: plan.serving?.updatedAtUs },
+    },
+    parity: {
+      exemptMinutes: 0,
+      walk: { pages: 2, walked: 3, last: entityId(3) },
+      coverageWalked: 3,
+      tail: { type: "read", walked: 0 },
+      behindCursor: { type: "read", pages: 2, changedPages: 0, missing: 0 },
+    },
   });
   expect(await receipts()).toEqual([
     {
+      id: flipped.value.receiptId,
       fromGeneration: V7,
       toGeneration: V10,
       actor: "operator:test",
@@ -431,83 +296,64 @@ test("a dry run checks everything and writes nothing; the flip swaps the pair wi
   ]);
   expect(
     await db
-      .select({ counts: systemAuditRuns.counts })
+      .select({
+        subject: systemAuditRuns.subject,
+        counts: systemAuditRuns.counts,
+      })
       .from(systemAuditRuns)
       .where(eq(systemAuditRuns.actor, "system:corpus-generation-operator")),
-  ).toEqual([{ counts: { registered: 0, promoted: 1, demoted: 1 } }]);
+  ).toEqual([
+    {
+      subject: flipped.value.evidence.auditRun ?? panic("no audit run named"),
+      counts: { registered: 0, promoted: 1, demoted: 1 },
+    },
+  ]);
   // A plan is spent: the registry moved, so it cannot flip twice.
   expect(refusalOf(await commit(plan))).toBe("registry:generation_changed");
+});
 
-  // The replaced generation keeps every change: a decision written now gets
-  // a state in both generations, by the ordinary writer.
-  const sourceId = toSafeId<"caseLawSource">(
-    "0198e331-e578-7000-8000-000000000a01",
+test("the receipt's digest is reproducible from the stored row and covers actor, reason and the flip instant", async () => {
+  await readyPair();
+  const flipped = await flip(V10, V7);
+  if (flipped.isErr() || flipped.value.type !== "flipped") {
+    panic(`Expected a flip: ${refusalOf(flipped)}`);
+  }
+  // Recomputed from the row alone, by an expression written out here.
+  const recomputed = executedRows(
+    await db.execute(sql`
+      SELECT evidence_digest,
+        encode(sha256(convert_to(jsonb_build_object(
+          'family', family, 'from', from_generation, 'to', to_generation,
+          'actor', actor, 'reason', reason,
+          'flippedAtUs', (extract(epoch FROM flipped_at) * 1000000)::bigint,
+          'evidence', evidence)::text, 'UTF8')), 'hex') AS recomputed,
+        evidence ->> 'auditRun' AS audit_run
+      FROM corpus_index_generation_flips
+    `),
   );
-  const decisionId = toSafeId<"caseLawDecision">(entityId(9));
-  await runInTransaction(async (tx) => {
-    await tx
-      .insert(caseLawSources)
-      .values({ id: sourceId, adapterKey: "flip-test", name: "Flip test" });
-    await tx.insert(caseLawDecisions).values({
-      id: decisionId,
-      sourceId,
-      caseNumber: "9 As 1/2020",
-      court: "Naczelny Sąd Administracyjny",
-      country: "POL",
-      language: "pl",
-      contentHash: "9".repeat(64),
-    });
-    const lock = await lockActiveCorpusProjectionSourceByIdTx(tx, {
-      family: "case_law",
-      sourceId,
-    });
-    if (lock === null) {
-      panic("expected an active projection lock");
-    }
-    await synchronizeLockedCaseLawProjectionBatchTx(tx, {
-      lock,
-      sourceId,
-      decisionIds: [decisionId],
-    });
-  });
-  expect(
-    (
-      await db
-        .select({ generation: corpusIndexProjectionStates.generation })
-        .from(corpusIndexProjectionStates)
-        .where(eq(corpusIndexProjectionStates.entityId, decisionId))
-        .orderBy(corpusIndexProjectionStates.generation)
-    ).map(({ generation }) => generation),
-  ).toEqual([V10, V7]);
-  // Its seeding and route proofs are kept, so the flip back is guarded alike.
-  expect(
-    await runInTransaction(
-      async (tx) =>
-        await readCorpusIndexRouteSeedingsTx(tx, {
-          family: "case_law",
-          generation: V7,
-        }),
-    ),
-  ).not.toBeNull();
-  // The new decision is shown by neither generation yet, so neither direction
-  // regresses on it; the same guard flips back with nothing lost.
-  const back = await flip(V7, V10);
-  expect(back.isOk() && back.value.type).toBe("flipped");
-  expect(await statuses()).toEqual({ [V7]: "serving", [V10]: "building" });
-  expect(
-    (await receipts()).map(({ fromGeneration, toGeneration }) => [
-      fromGeneration,
-      toGeneration,
-    ]),
-  ).toEqual([
-    [V7, V10],
-    [V10, V7],
+  expect(recomputed).toEqual([
+    {
+      evidence_digest: flipped.value.evidenceDigest,
+      recomputed: flipped.value.evidenceDigest,
+      audit_run: flipped.value.evidence.auditRun,
+    },
   ]);
-  const shown = await db
-    .select({ generation: corpusIndexProjectionStates.generation })
-    .from(corpusIndexProjectionStates)
-    .where(eq(corpusIndexProjectionStates.appliedAction, "upsert"));
-  expect(shown.filter(({ generation }) => generation === V7)).toHaveLength(3);
+  // Every covered column is bound to the digest: changing one breaks it.
+  for (const change of [
+    sql`actor = 'operator:other'`,
+    sql`reason = 'another go'`,
+    sql`flipped_at = flipped_at + interval '1 microsecond'`,
+    sql`evidence = evidence || '{"to": "case_law_v7"}'::jsonb`,
+  ]) {
+    // db-await-in-loop: one rejected update per covered column
+    const updated = await db
+      .execute(sql`UPDATE corpus_index_generation_flips SET ${change}`)
+      .then(
+        () => "updated",
+        (error: unknown) => error,
+      );
+    expect(isPgError(updated, "23514")).toBe(true);
+  }
 });
 
 test("each missing or stale proof refuses with its own reason, and nothing moves", async () => {
@@ -561,12 +407,25 @@ test("each missing or stale proof refuses with its own reason, and nothing moves
     .where(eq(corpusIndexGenerationSeedingPasses.generation, V10));
   expect(refusalOf(await flip(V10, V7))).toBe("seeding:candidate_unseeded");
   await seedRoutes(V10);
-  expect(await statuses()).toEqual({ [V7]: "serving", [V10]: "building" });
-  expect(await receipts()).toEqual([]);
+  await expectNothingWritten();
   expect((await flip(V10, V7)).isOk()).toBe(true);
 });
 
-test("a write that lands between the engine phase and the fence is caught under the fence", async () => {
+test("the engine is read after the coverage walk: an index replaced while the walk runs is refused", async () => {
+  await readyPair();
+  // The walk's first page replaces v10's index, as a rebuild of it would.
+  const replaced = await prepare(
+    request(V10, V7),
+    observedRunner(async (text) => {
+      if (text.includes("AS last_entity_id")) {
+        incarnations.set(routeOf(V10), `${routeOf(V10)}:01JREBUILT`);
+      }
+    }),
+  );
+  expect(refusalOf(replaced)).toBe("engine:index_replaced");
+});
+
+test("a write that lands between the walk and the fence is caught under the fence, ahead of the cursor or behind it", async () => {
   await readyPair();
   // A newer decision v7 shows, with no state in v10, after the walk ended:
   // the tail the fenced phase reads finds it.
@@ -583,6 +442,35 @@ test("a write that lands between the engine phase and the fence is caught under 
   await seedPending(V10, 1, 3);
   expect(refusalOf(await commit(plan))).toBe("parity:regressions");
   await seedShown(V10, 1, 3);
+  await proveRoutes(V10);
+
+  // A decision v7 shows that is created BEHIND the walk's cursor (an older
+  // id, in a page the walk already read) with no state in v10: a writer that
+  // projects the serving generation only. Neither the tail nor the
+  // regression statement reads it; the recount of the walked pages does.
+  plan = requirePlan(await prepare(request(V10, V7)));
+  expect(plan.walk?.last).toBe(entityId(7));
+  await seedShown(V7, 0);
+  const behind = await commit(plan);
+  expect(refusalOf(behind)).toBe("parity:regressions");
+  expect(behind.isErr() && behind.error.details).toContain(
+    `no state: ${entityId(0)}`,
+  );
+  await seedShown(V10, 0);
+  await proveRoutes(V10);
+
+  // A decision v7 wanted erased and v10 never had a state for (so the walk
+  // found nothing missing) that v7 alone comes to show after its page was
+  // read: the walk listed it, and the fenced phase probes it again.
+  await seedErased(V7, 4);
+  plan = requirePlan(await prepare(request(V10, V7)));
+  expect(plan.walk?.uncovered).toEqual({
+    type: "listed",
+    entityIds: [entityId(4)],
+  });
+  await seedShown(V7, 4);
+  expect(refusalOf(await commit(plan))).toBe("parity:regressions");
+  await seedShown(V10, 4);
   await proveRoutes(V10);
 
   // A route proven again after the engine was read: the fence never trusts a
@@ -603,6 +491,189 @@ test("a write that lands between the engine phase and the fence is caught under 
   expect(refusalOf(await commit(plan))).toBe("registry:generation_changed");
   expect(await statuses()).toEqual({ [V7]: "serving", [V10]: "building" });
   expect(await receipts()).toEqual([]);
+});
+
+test("the database declining the flip its locks or its time is busy, never undecided, and writes nothing", async () => {
+  await readyPair();
+  const plan = requirePlan(await prepare(request(V10, V7)));
+  // Each failure raised for real on the fenced transaction, at the
+  // statement named: a lock not granted, a statement timeout, a deadlock.
+  for (const [marker, code, expected] of [
+    [
+      "lock_corpus_projection_mutations_exclusive",
+      "55P03",
+      "busy:lock_unavailable",
+    ],
+    ["AS last_entity_id", "57014", "busy:statement_timeout"],
+    ["counted.states", "57014", "busy:statement_timeout"],
+    ["pending_walk", "57014", "busy:statement_timeout"],
+    ["pending_walk", "40P01", "busy:deadlock_victim"],
+  ] as const) {
+    // db-await-in-loop: one injected failure per run, each on a fresh transaction
+    const outcome = await commit(
+      plan,
+      "apply",
+      observedRunner(async (text, tx) => {
+        if (text.includes(marker)) {
+          await raiseOn(tx, code);
+        }
+      }),
+    );
+    expect(`${marker} ${code}: ${refusalOf(outcome)}`).toBe(
+      `${marker} ${code}: ${expected}`,
+    );
+    await expectNothingWritten();
+  }
+  // A statement timeout in phase 1's walk is busy too.
+  expect(
+    refusalOf(
+      await prepare(
+        request(V10, V7),
+        observedRunner(async (text, tx) => {
+          if (text.includes("AS last_entity_id")) {
+            await raiseOn(tx, "57014");
+          }
+        }),
+      ),
+    ),
+  ).toBe("busy:statement_timeout");
+
+  // The operator lane's budget runs out as the fenced work finishes, before
+  // the commit: the lane aborts the transaction, so nothing is written.
+  const controller = new AbortController();
+  const laneSpent = await commit(
+    plan,
+    "apply",
+    async (work) =>
+      await runUnderCorpusSchemaLane({
+        database: {
+          transaction: async (fn) =>
+            await db.transaction(
+              async (tx) => await fn(asTestRaw<Transaction>(tx)),
+            ),
+        },
+        signal: controller.signal,
+        work: async (tx: Transaction) => {
+          const result = await work(tx);
+          controller.abort(new DOMException("budget spent", "TimeoutError"));
+          controller.signal.throwIfAborted();
+          return result;
+        },
+      }),
+  );
+  expect(refusalOf(laneSpent)).toBe("busy:lane_budget_spent");
+  await expectNothingWritten();
+  expect((await commit(plan)).isOk()).toBe(true);
+});
+
+test("the replaced generation keeps taking every change and the same guard flips back, lag exempt only within the watermark", async () => {
+  await readyPair();
+  expect((await flip(V10, V7)).isOk()).toBe(true);
+  expect(await statuses()).toEqual({ [V7]: "building", [V10]: "serving" });
+
+  // A decision written now gets a state in both generations, by the
+  // ordinary writer.
+  const sourceId = toSafeId<"caseLawSource">(
+    "0198e331-e578-7000-8000-000000000a01",
+  );
+  const decisionId = toSafeId<"caseLawDecision">(entityId(9));
+  await runInTransaction(async (tx) => {
+    await tx
+      .insert(caseLawSources)
+      .values({ id: sourceId, adapterKey: "flip-test", name: "Flip test" });
+    await tx.insert(caseLawDecisions).values({
+      id: decisionId,
+      sourceId,
+      caseNumber: "9 As 1/2020",
+      court: "Naczelny Sąd Administracyjny",
+      country: "POL",
+      language: "pl",
+      contentHash: "9".repeat(64),
+    });
+    const lock = await lockActiveCorpusProjectionSourceByIdTx(tx, {
+      family: "case_law",
+      sourceId,
+    });
+    if (lock === null) {
+      panic("expected an active projection lock");
+    }
+    await synchronizeLockedCaseLawProjectionBatchTx(tx, {
+      lock,
+      sourceId,
+      decisionIds: [decisionId],
+    });
+  });
+  expect(
+    (
+      await db
+        .select({ generation: corpusIndexProjectionStates.generation })
+        .from(corpusIndexProjectionStates)
+        .where(eq(corpusIndexProjectionStates.entityId, decisionId))
+        .orderBy(corpusIndexProjectionStates.generation)
+    ).map(({ generation }) => generation),
+  ).toEqual([V10, V7]);
+  // Its seeding and route proofs are kept, so the flip back is guarded alike.
+  expect(
+    await runInTransaction(
+      async (tx) =>
+        await readCorpusIndexRouteSeedingsTx(tx, {
+          family: "case_law",
+          generation: V7,
+        }),
+    ),
+  ).not.toBeNull();
+
+  // After its demotion, v10 (serving) applies a change to decision 2 that
+  // v7 was handed and has not applied yet: flipping back would serve the
+  // older copy, so the guard refuses.
+  await seedShown(V10, 2, 2);
+  await seedPending(V7, 2, 2);
+  expect(refusalOf(await flip(V7, V10))).toBe("parity:regressions");
+  // v7 applies it: the demoted generation kept taking the change.
+  await seedShown(V7, 2, 2);
+  await proveRoutes(V7);
+
+  // A change v7 was handed just now and has not applied: lag younger than
+  // the watermark. Exempt with the decided 20 minutes, refused with none.
+  await seedShown(V10, 3, 2);
+  await seedPending(V7, 3, 2);
+  const back = requirePlan(
+    await prepare(request(V7, V10, { exemptMinutes: 0 })),
+  );
+  expect(refusalOf(await commit(back))).toBe("parity:regressions");
+  const exempt = requirePlan(
+    await prepare(request(V7, V10, { exemptMinutes: 20 })),
+  );
+  const flippedBack = await commit(exempt);
+  if (flippedBack.isErr() || flippedBack.value.type !== "flipped") {
+    panic(`Expected a flip back: ${refusalOf(flippedBack)}`);
+  }
+  expect(flippedBack.value.evidence.parity).toMatchObject({
+    exemptMinutes: 20,
+    exempt: 1,
+  });
+  expect(await statuses()).toEqual({ [V7]: "serving", [V10]: "building" });
+  expect(
+    (await receipts()).map(({ fromGeneration, toGeneration }) => [
+      fromGeneration,
+      toGeneration,
+    ]),
+  ).toEqual([
+    [V7, V10],
+    [V10, V7],
+  ]);
+  // v7 serves decision 2 at the epoch it applied after its demotion.
+  expect(
+    await db
+      .select({ appliedEpoch: corpusIndexProjectionStates.appliedEpoch })
+      .from(corpusIndexProjectionStates)
+      .where(
+        and(
+          eq(corpusIndexProjectionStates.generation, V7),
+          eq(corpusIndexProjectionStates.entityId, entityId(2)),
+        ),
+      ),
+  ).toEqual([{ appliedEpoch: 2n }]);
 });
 
 test("a family's first flip needs the candidate's proofs and seeding only", async () => {

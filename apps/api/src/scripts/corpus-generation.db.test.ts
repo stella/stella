@@ -37,6 +37,7 @@ import {
   readOnlyHandles,
 } from "@/api/lib/case-law/maintenance-lane";
 import { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
+import type { CorpusIndexFlipEngine } from "@/api/lib/legal-search/corpus-index-generation-flip";
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
@@ -48,6 +49,7 @@ import {
   seedRunExit,
   type WithCorpusDatabase,
 } from "@/api/scripts/corpus-generation";
+import { createCorpusFlipFixture } from "@/api/tests/helpers/corpus-flip-fixture";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -178,6 +180,8 @@ type SeedingLoad = { verdict: "normal" | "stop"; pageSize?: number };
 type RunOptions = {
   args: readonly string[];
   engine?: EngineState;
+  /** An engine for serve that answers the route census fixture's index. */
+  flipEngine?: CorpusIndexFlipEngine;
   database?: WithCorpusDatabase;
   searchEndpoint?: string | null;
   seeding?: SeedingLoad;
@@ -188,6 +192,7 @@ type RunOutcome = { code: number; out: string; err: string };
 const run = async ({
   args,
   engine = engineWith([]),
+  flipEngine,
   database = testDatabase(),
   searchEndpoint = SEARCH_ENDPOINT,
   seeding = { verdict: "normal" },
@@ -211,26 +216,30 @@ const run = async ({
       maxWaitMs: 0,
     },
     searchEndpoint: () => searchEndpoint,
-    indexClient: () => ({
-      readIndexIncarnation: async (indexId) =>
-        Result.ok(
-          engine.documents.has(indexId)
-            ? ({ type: "present", incarnation: `${indexId}:01JFIRST` } as const)
-            : ({ type: "missing" } as const),
-        ),
-      search: async ({ indexId }) => {
-        engine.searched.push(indexId);
-        const documents = engine.documents.get(indexId);
-        return documents === undefined
-          ? Result.err(
-              new CorpusIndexError({
-                message: `index ${indexId} not found`,
-                status: 404,
-              }),
-            )
-          : Result.ok({ numHits: documents, hits: [], snippets: [] });
+    indexClient: () =>
+      flipEngine ?? {
+        readIndexIncarnation: async (indexId) =>
+          Result.ok(
+            engine.documents.has(indexId)
+              ? ({
+                  type: "present",
+                  incarnation: `${indexId}:01JFIRST`,
+                } as const)
+              : ({ type: "missing" } as const),
+          ),
+        search: async ({ indexId }) => {
+          engine.searched.push(indexId);
+          const documents = engine.documents.get(indexId);
+          return documents === undefined
+            ? Result.err(
+                new CorpusIndexError({
+                  message: `index ${indexId} not found`,
+                  status: 404,
+                }),
+              )
+            : Result.ok({ numHits: documents, hits: [], snippets: [] });
+        },
       },
-    }),
     write: (line) => {
       out.push(line);
     },
@@ -402,6 +411,18 @@ describe("corpus generation operator command", () => {
         "--reason",
         " ",
       ],
+      // A flip takes the decided watermark only.
+      [
+        "--apply",
+        "--replacing",
+        "case_law_v7",
+        "--actor",
+        "operator",
+        "--reason",
+        "go",
+        "--exempt-minutes",
+        "1440",
+      ],
     ]) {
       // db-await-in-loop: parsing refuses before any database is opened
       const refused = await run({
@@ -414,6 +435,79 @@ describe("corpus generation operator command", () => {
     }
     expect(await registryRows()).toHaveLength(2);
     expect(await auditCounts()).toEqual([]);
+  });
+
+  test("serve flips through the command: a dry run, then --apply with its receipt, each exit 0", async () => {
+    const fixture = createCorpusFlipFixture(
+      async (work) =>
+        await db.transaction(
+          async (tx) => await work(asTestRaw<Transaction>(tx)),
+        ),
+    );
+    await fixture.readyPair();
+    const serve = async (
+      flags: readonly string[],
+      database: WithCorpusDatabase = testDatabase(),
+    ) =>
+      await run({
+        args: caseLaw("serve", "case_law_v10", ...flags),
+        database,
+        flipEngine: fixture.engineClient,
+      });
+    const dry = await serve([]);
+    expect(dry.err).toBe("");
+    expect(dry.code).toBe(0);
+    expect(dry.out).toContain(
+      "checked under the fence: behind the walk's cursor: 1 pages counted again, 0 moved",
+    );
+    expect(dry.out).toContain("Dry run: nothing written");
+    expect(await statusOf("case_law_v10")).toBe("building");
+
+    const applyFlags = [
+      "--apply",
+      "--replacing",
+      "case_law_v7",
+      "--actor",
+      "operator:test",
+      "--reason",
+      "go for the flip",
+    ];
+    // The lane's budget runs out before the flip runs: busy, nothing written.
+    const spentBefore = await serve(applyFlags, async (access, work) =>
+      access === "write"
+        ? await Promise.reject(new DOMException("budget spent", "TimeoutError"))
+        : await testDatabase()(access, work),
+    );
+    expect(spentBefore.code).toBe(14);
+    expect(spentBefore.err).toContain("refused (busy: lane_budget_spent)");
+    expect(await statusOf("case_law_v10")).toBe("building");
+
+    // It runs out after the flip committed: the flip's own answer stands.
+    const spentAfter = await serve(applyFlags, async (access, work) => {
+      const done = await testDatabase()(access, work);
+      return access === "write"
+        ? await Promise.reject(new DOMException("budget spent", "TimeoutError"))
+        : done;
+    });
+    expect(spentAfter.code).toBe(0);
+    expect(spentAfter.err).toContain(
+      "the operator lane's time budget ran out after the flip's transaction ended",
+    );
+    expect(spentAfter.out).toContain(
+      "Applied: case_law/case_law_v10 serves; case_law_v7 is building",
+    );
+    expect(spentAfter.out).toContain(
+      "computed by PostgreSQL from the stored row",
+    );
+    expect(await statusOf("case_law_v10")).toBe("serving");
+    expect(await statusOf("case_law_v7")).toBe("building");
+    expect(await auditCounts()).toEqual([
+      { registered: 0, promoted: 1, demoted: 1 },
+    ]);
+    const replay = await serve(applyFlags);
+    expect(replay.code).toBe(0);
+    expect(replay.out).toContain("already serving");
+    await fixture.removeCanonical();
   });
 
   test("parity reports, read only, what readers would lose to the candidate", async () => {

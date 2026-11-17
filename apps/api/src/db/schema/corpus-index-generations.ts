@@ -5,6 +5,7 @@ import {
   CORPUS_INDEX_GENERATION_STATUSES,
   QUICKWIT_CLUSTERS,
 } from "@/api/lib/legal-search/corpus-generation-contract";
+import { corpusIndexGenerationFlipReceiptDigest } from "@/api/lib/legal-search/corpus-index-generation-flip-receipt";
 import {
   CORPUS_INDEX_INCARNATION_MAX_LENGTH,
   CORPUS_INDEX_ROUTE_CENSUS_EXPECTATIONS,
@@ -16,6 +17,7 @@ import {
   globalCaseLawPolicies,
   p,
   publicLawReaderPolicies,
+  pUuid,
   sql,
   timestamptz,
 } from "./common";
@@ -522,16 +524,19 @@ const generationFlipsOwnerAccess = sql`current_user = (SELECT pg_catalog.pg_get_
 
 /**
  * One row per whole-family serving flip: who made it, when, which pair, and
- * the evidence the guarded flip read (parity verdict under the fence, route
- * proofs, seeding passes, engine counts), with the evidence's SHA-256 digest.
- * Written in the flip's transaction, so a flip and its receipt commit
- * together; a flip back writes its own row. Append-only. No foreign key: a
- * receipt outlives a generation's rebuild, as the withdrawal trail does.
+ * the evidence the guarded flip gathered (the registry identities and the
+ * parity verdict it read under the fence; the route proofs and engine counts
+ * it read before the fence, which the fence found unchanged; the seeding
+ * passes), with a digest PostgreSQL computes from the row itself
+ * (`corpus-index-generation-flip-receipt.ts`). Written in the flip's
+ * transaction, so a flip and its receipt commit together; a flip back writes
+ * its own row. Append-only. No foreign key: a receipt outlives a generation's
+ * rebuild, as the withdrawal trail does.
  */
 export const corpusIndexGenerationFlips = p.pgTable(
   "corpus_index_generation_flips",
   {
-    id: p.uuid().primaryKey(),
+    id: pUuid<"corpusIndexGenerationFlip">().primaryKey(),
     family: p.text({ enum: CORPUS_FAMILIES }).notNull(),
     /** The generation that served before; null on a family's first flip. */
     fromGeneration: p.varchar("from_generation", {
@@ -543,6 +548,10 @@ export const corpusIndexGenerationFlips = p.pgTable(
     actor: p.varchar({ length: 128 }).notNull(),
     reason: p.varchar({ length: 2048 }).notNull(),
     evidence: p.jsonb().notNull(),
+    /**
+     * SHA-256 (hex) of the row's canonical record: pair, actor, reason, flip
+     * instant and evidence (`corpusIndexGenerationFlipReceiptDigest`).
+     */
     evidenceDigest: p.varchar("evidence_digest", { length: 64 }).notNull(),
     flippedAt: timestamptz("flipped_at").defaultNow().notNull(),
   },
@@ -562,6 +571,18 @@ export const corpusIndexGenerationFlips = p.pgTable(
     p.check(
       "corpus_index_generation_flips_digest_shape",
       sql`${t.evidenceDigest} ~ '^[0-9a-f]{64}$'`,
+    ),
+    p.check(
+      "corpus_index_generation_flips_digest_reproducible",
+      sql`${t.evidenceDigest} = ${corpusIndexGenerationFlipReceiptDigest({
+        family: sql`${t.family}`,
+        fromGeneration: sql`${t.fromGeneration}`,
+        toGeneration: sql`${t.toGeneration}`,
+        actor: sql`${t.actor}`,
+        reason: sql`${t.reason}`,
+        flippedAt: sql`${t.flippedAt}`,
+        evidence: sql`${t.evidence}`,
+      })}`,
     ),
     p.check(
       "corpus_index_generation_flips_pair_distinct",

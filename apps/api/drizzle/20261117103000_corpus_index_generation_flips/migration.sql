@@ -3,9 +3,11 @@ SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 
 -- The receipt of every whole-family serving flip: who made it, when, which
--- pair, and the evidence the guarded flip read (parity verdict, route proofs,
--- seeding passes, engine counts) with its digest. The flip writes it in its
--- own transaction, so a flip and its receipt commit together. Append-only.
+-- pair, and the evidence the guarded flip gathered (registry identities,
+-- parity verdict, route proofs, seeding passes, engine counts), with a digest
+-- the database computes from the row itself, so anyone holding the row can
+-- reproduce it. The flip writes it in its own transaction, so a flip and its
+-- receipt commit together. Append-only.
 -- No foreign key: a receipt outlives a generation's rebuild, which deletes
 -- the registry row it names.
 CREATE TABLE IF NOT EXISTS "corpus_index_generation_flips" (
@@ -26,6 +28,8 @@ CREATE TABLE IF NOT EXISTS "corpus_index_generation_flips" (
     CHECK (length(btrim("reason")) > 0),
   CONSTRAINT "corpus_index_generation_flips_digest_shape"
     CHECK ("evidence_digest" ~ '^[0-9a-f]{64}$'),
+  CONSTRAINT "corpus_index_generation_flips_digest_reproducible"
+    CHECK ("evidence_digest" = encode(sha256(convert_to(jsonb_build_object('family', "family", 'from', "from_generation", 'to', "to_generation", 'actor', "actor", 'reason', "reason", 'flippedAtUs', (extract(epoch FROM "flipped_at") * 1000000)::bigint, 'evidence', "evidence")::text, 'UTF8')), 'hex')),
   CONSTRAINT "corpus_index_generation_flips_pair_distinct"
     CHECK ("from_generation" IS DISTINCT FROM "to_generation")
 );--> statement-breakpoint
