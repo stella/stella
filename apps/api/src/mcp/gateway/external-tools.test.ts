@@ -31,6 +31,10 @@ const dependencies = {
   refreshCachedMcpToolsForConnection: refreshCachedMcpToolsForConnectionMock,
 };
 
+type ToolErrorEnvelope = {
+  error: { code: string; retryable: boolean };
+};
+
 type GatewayConnectionToolRow = {
   allowedTools: string[] | null;
   cachedTools: CachedMcpToolDefinition[] | null;
@@ -193,10 +197,11 @@ describe("external MCP gateway tools", () => {
     });
 
     const item = result.content.at(0);
-    const parsed = item?.type === "text" ? JSON.parse(item.text) : undefined;
-    expect(parsed.error.code).toBe("internal_error");
-    expect(parsed.error.retryable).toBe(true);
-    expect(parsed.error.code).not.toBe("unknown_tool");
+    const parsed: ToolErrorEnvelope | undefined =
+      item?.type === "text" ? JSON.parse(item.text) : undefined;
+    expect(parsed?.error.code).toBe("internal_error");
+    expect(parsed?.error.retryable).toBe(true);
+    expect(parsed?.error.code).not.toBe("unknown_tool");
     expect(result.isError).toBe(true);
   });
 
@@ -239,9 +244,10 @@ describe("external MCP gateway tools", () => {
     });
 
     const item = result.content.at(0);
-    const parsed = item?.type === "text" ? JSON.parse(item.text) : undefined;
-    expect(parsed.error.code).toBe("rate_limited");
-    expect(parsed.error.retryable).toBe(true);
+    const parsed: ToolErrorEnvelope | undefined =
+      item?.type === "text" ? JSON.parse(item.text) : undefined;
+    expect(parsed?.error.code).toBe("rate_limited");
+    expect(parsed?.error.retryable).toBe(true);
     expect(result.isError).toBe(true);
     expect(proxyMcpToolCallMock).not.toHaveBeenCalled();
   });

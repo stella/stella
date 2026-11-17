@@ -41,11 +41,12 @@ import entry39 from "./readerAnnotation";
 import entry40 from "./readerAnswer";
 import entry41 from "./requestReceipt";
 import entry42 from "./sampleCase";
-import entry43 from "./scoutRun";
-import entry44 from "./searchHistory";
-import entry45 from "./searchProjectionRepair";
-import entry46 from "./signal";
-import entry47 from "./signingSession";
+import entry43 from "./savedSearch";
+import entry44 from "./scoutRun";
+import entry45 from "./searchHistory";
+import entry46 from "./searchProjectionRepair";
+import entry47 from "./signal";
+import entry48 from "./signingSession";
 
 export default {
   "accountDeletionRequest": entry0,
@@ -91,9 +92,10 @@ export default {
   "readerAnswer": entry40,
   "requestReceipt": entry41,
   "sampleCase": entry42,
-  "scoutRun": entry43,
-  "searchHistory": entry44,
-  "searchProjectionRepair": entry45,
-  "signal": entry46,
-  "signingSession": entry47,
+  "savedSearch": entry43,
+  "scoutRun": entry44,
+  "searchHistory": entry45,
+  "searchProjectionRepair": entry46,
+  "signal": entry47,
+  "signingSession": entry48,
 } as const;

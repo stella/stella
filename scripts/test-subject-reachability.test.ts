@@ -253,6 +253,49 @@ describe("test subject reachability", () => {
     ]);
   });
 
+  test("dynamic imports reach their actual aliases in tests and invoked wrappers", async () => {
+    const cases = [
+      "test('state', async () => { const { reduceWidgetState } = await import('./widget'); expect(reduceWidgetState()).toBe('real'); });",
+      "const { reduceWidgetState: real } = await import('./widget'); const reduceWidgetState = () => real(); test('state', () => reduceWidgetState());",
+      "const reduce = async () => { const { reduceWidgetState } = await import('./widget'); return reduceWidgetState(); }; test('state', reduce);",
+    ];
+    for (const source of cases) {
+      const input = fixture(source);
+      const options = { repoRoot: input.root, files: input.files };
+      expect(await analyzeTestSubjectReachability(options)).toEqual([]);
+      writeFileSync(
+        path.join(input.root, TEST_FILE),
+        source.replace(/(?:reduceWidgetState|real)\(\)/gu, "'stand-in'"),
+      );
+      expect(await analyzeTestSubjectReachability(options)).toContainEqual({
+        file: TEST_FILE,
+        kind: "no-classified-reachability",
+        attempted: IMPORT_ATTEMPTED,
+      });
+    }
+  });
+
+  test("an imported repository artifact counts only when its value is consumed", async () => {
+    const input = fixture(
+      "import config from './widget.json'; test('config', () => expect(config.mode).toBe('real')); ",
+    );
+    writeFileSync(
+      path.join(input.root, "apps/example/src/widget.json"),
+      '{"mode":"real"}',
+    );
+    const options = { repoRoot: input.root, files: input.files };
+    expect(await analyzeTestSubjectReachability(options)).toEqual([]);
+    writeFileSync(
+      path.join(input.root, TEST_FILE),
+      "import config from './widget.json'; test('config', () => expect('stand-in').toBe('stand-in')); ",
+    );
+    expect(await analyzeTestSubjectReachability(options)).toContainEqual({
+      file: TEST_FILE,
+      kind: "no-classified-reachability",
+      attempted: IMPORT_ATTEMPTED,
+    });
+  });
+
   test("resolves a NodeNext .js import to its TypeScript source", async () => {
     const input = fixture(
       "import { reduceWidgetState } from './widget.js';\ntest('state', () => expect(reduceWidgetState()).toBe('real'));\n",
@@ -325,6 +368,101 @@ describe("test subject reachability", () => {
         attempted: ["source-factory"],
       },
     ]);
+  });
+
+  test("a support registrar must invoke a real subject through its selected export", async () => {
+    const input = fixture(
+      "import { registerCases } from './tests/suite'; registerCases();",
+    );
+    const directory = path.join(input.root, "apps/example/src/tests");
+    mkdirSync(directory, { recursive: true });
+    const support = path.join(directory, "suite.ts");
+    const sources = [
+      {
+        source:
+          "import { reduceWidgetState } from '../widget'; export const registerCases = () => test('case', () => reduceWidgetState());",
+        reached: true,
+      },
+      {
+        source:
+          "import { reduceWidgetState } from '../widget'; export const registerCases = () => { const unused = () => reduceWidgetState(); test('case', () => 'stand-in'); };",
+        reached: false,
+      },
+      {
+        source:
+          "import { reduceWidgetState } from '../widget'; export const unrelated = () => reduceWidgetState(); export const registerCases = () => test('case', () => 'stand-in');",
+        reached: false,
+      },
+      {
+        source:
+          "export const registerCases = () => test('case', () => 'stand-in');",
+        reached: false,
+      },
+    ];
+    for (const { source, reached } of sources) {
+      writeFileSync(support, source);
+      const findings = await analyzeTestSubjectReachability({
+        repoRoot: input.root,
+        files: input.files,
+      });
+      expect(
+        findings.some(({ kind }) => kind === "no-classified-reachability"),
+      ).toBe(!reached);
+    }
+  });
+
+  test("support callbacks must be invoked, directly or by the test runner", async () => {
+    const input = fixture("");
+    const directory = path.join(input.root, "apps/example/src/tests");
+    mkdirSync(directory, { recursive: true });
+    writeFileSync(
+      path.join(directory, "suite.ts"),
+      "import { reduceWidgetState } from '../widget'; export const registerCases = () => test('case', () => reduceWidgetState());",
+    );
+    for (const { body, reached } of [
+      {
+        body: "test('stand-in', () => expect(registerCases).toBeDefined());",
+        reached: false,
+      },
+      { body: "test('real', registerCases);", reached: true },
+      {
+        body: "beforeAll(registerCases); test('real', () => {});",
+        reached: true,
+      },
+      { body: "registerCases();", reached: true },
+    ]) {
+      writeFileSync(
+        path.join(input.root, TEST_FILE),
+        `import { registerCases } from './tests/suite'; ${body}`,
+      );
+      const findings = await analyzeTestSubjectReachability({
+        repoRoot: input.root,
+        files: input.files,
+      });
+      expect(
+        findings.some(({ kind }) => kind === "no-classified-reachability"),
+      ).toBe(!reached);
+    }
+  });
+
+  test("a fixture arbitrary imported from support is not a production subject", async () => {
+    const input = fixture(
+      "import { fixtureValues } from './test-helpers'; test('stand-in', () => expect(fixtureValues).toEqual(['fixture']));",
+    );
+    writeFileSync(
+      path.join(input.root, "apps/example/src/test-helpers.ts"),
+      "export const fixtureValues = ['fixture'];",
+    );
+    expect(
+      await analyzeTestSubjectReachability({
+        repoRoot: input.root,
+        files: input.files,
+      }),
+    ).toContainEqual({
+      file: TEST_FILE,
+      kind: "no-classified-reachability",
+      attempted: REACHABILITY_CATEGORIES,
+    });
   });
 
   test("does not count an imported subject hidden in an uncalled wrapper", async () => {

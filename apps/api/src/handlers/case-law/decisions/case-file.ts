@@ -251,6 +251,8 @@ const UNPROJECTED_CASE_FILE_COLUMNS = [
   "analysis",
   // Parser bookkeeping does not describe a case-file document.
   "parserVersion",
+  // Procedural review extraction version is internal bookkeeping.
+  "reviewExtractionVersion",
   // Raw publisher bytes are not returned in a document list.
   "sourceRaw",
   // Internal object-storage address for publisher bytes.
@@ -263,6 +265,12 @@ const UNPROJECTED_CASE_FILE_COLUMNS = [
   "documentUrl",
   // Publisher ingestion identity; the public link uses id or slug.
   "sourceDocumentId",
+  // Fallback identity and cohort bookkeeping are not public document labels.
+  "fallbackIdentityKey",
+  "fallbackCohortKey",
+  "fallbackContentHash",
+  "fallbackPublicationHash",
+  "fallbackDocumentHash",
   // The file's document labels use the published primary reference.
   "sheetNumber",
   // Document-fetch queue priority is internal bookkeeping.

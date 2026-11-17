@@ -1,6 +1,8 @@
 import { Result, TaggedError } from "better-result";
 import { beforeEach, describe, expect, test } from "bun:test";
 
+import { createTestState } from "@stll/test-state";
+
 import type { ProbeProviderOptions } from "@/api/lib/ai-provider-probe";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type {
@@ -11,14 +13,16 @@ import type {
 } from "@/api/lib/safe-outbound-fetch";
 import { PROVIDER_SETUP_ERROR_FIXTURES } from "@/api/tests/fixtures/provider-setup-errors";
 
-process.env["EMAIL_PROVIDER"] ??= "smtp";
-process.env["GOTENBERG_PASSWORD"] ??= "gotenberg";
-process.env["GOTENBERG_URL"] ??= "http://localhost:3003";
-process.env["GOTENBERG_USERNAME"] ??= "gotenberg";
-process.env["REDIS_URL"] ??= "redis://localhost:6379";
-process.env["SMTP_HOST"] ??= "localhost";
-process.env["SMTP_PORT"] ??= "1025";
-process.env["AZURE_API_VERSION"] = "";
+const testState = createTestState({ file: import.meta.path, config: {} });
+
+testState.setEnvIfAbsent("EMAIL_PROVIDER", "smtp");
+testState.setEnvIfAbsent("GOTENBERG_PASSWORD", "gotenberg");
+testState.setEnvIfAbsent("GOTENBERG_URL", "http://localhost:3003");
+testState.setEnvIfAbsent("GOTENBERG_USERNAME", "gotenberg");
+testState.setEnvIfAbsent("REDIS_URL", "redis://localhost:6379");
+testState.setEnvIfAbsent("SMTP_HOST", "localhost");
+testState.setEnvIfAbsent("SMTP_PORT", "1025");
+testState.setEnv("AZURE_API_VERSION", "");
 
 class MockSafeOutboundFetchError extends TaggedError("SafeOutboundFetchError")<{
   cause?: unknown;

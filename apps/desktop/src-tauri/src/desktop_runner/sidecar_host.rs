@@ -55,11 +55,12 @@ use super::run_folders;
 use crate::harness_sidecar::{
   self, BackgroundTasks, HarnessLaunchSettings, HarnessProbe, HarnessProcess,
   HarnessSidecar, RestoreOutcome, ResumeError, SidecarDelivery, SidecarFolderRestore,
-  SidecarRunOutput, SidecarRunStart, SidecarSettings, SkillFolderRef,
+  SidecarRunOutput, SidecarRunSession, SidecarRunStart, SidecarSettings,
+  SkillFolderRef,
 };
 use crate::local_linked_folders::LinkedFolderRefusal;
 use crate::runner_protocol::{
-  FolderRestore, FolderRestoreOutcome, Harness, HarnessReport,
+  FolderRestore, FolderRestoreOutcome, Harness, HarnessCapability, HarnessReport,
   HarnessUnavailableReason, JsonObject, LinkedFolderReport, MAX_FRAME_BYTES,
   MissingHarness, RejectReason, RunAnswer, RunApproval, RunInput, RunOutcome, RunStart,
   RunTokenRefresh, UnavailableHarness,
@@ -379,6 +380,22 @@ impl HostSettings {
   }
 }
 
+/// The session a start's turn continues. A boundary is a point in the
+/// session the start names, so one without a session is no run to start.
+fn run_session(start: &RunStart) -> Result<SidecarRunSession, RejectReason> {
+  match (&start.harness_session_id, &start.harness_fork_boundary) {
+    (None, None) => Ok(SidecarRunSession::Fresh),
+    (Some(session_id), None) => Ok(SidecarRunSession::Resume {
+      session_id: session_id.clone(),
+    }),
+    (Some(session_id), Some(boundary)) => Ok(SidecarRunSession::Fork {
+      session_id: session_id.clone(),
+      boundary: boundary.clone(),
+    }),
+    (None, Some(_)) => Err(RejectReason::UnknownRun),
+  }
+}
+
 /// Why a run cannot start here, read from its harness's cached report.
 fn refusal(report: Option<&HarnessReport>, start: &RunStart) -> Option<RejectReason> {
   match report {
@@ -402,6 +419,12 @@ fn refusal(report: Option<&HarnessReport>, start: &RunStart) -> Option<RejectRea
         Some(RejectReason::ModelUnavailable)
       } else if !ready.approval_modes.contains(&start.policy.approvals) {
         Some(RejectReason::PolicyUnsupported)
+      } else if start.harness_fork_boundary.is_some()
+        && !ready.capabilities.contains(&HarnessCapability::Fork)
+      {
+        // Resuming the whole session instead would hand the harness turns
+        // the chat no longer holds.
+        Some(RejectReason::HarnessUnsupported)
       } else {
         None
       }
@@ -424,9 +447,11 @@ fn sidecar_output(output: SidecarRunOutput) -> RunOutput {
     SidecarRunOutput::Finished {
       outcome,
       harness_session_id,
+      harness_boundary,
     } => RunOutput::Finished {
       outcome,
       harness_session_id,
+      harness_boundary,
     },
   }
 }
@@ -512,6 +537,7 @@ async fn pump(
         output: SidecarRunOutput::Finished {
           outcome: RunOutcome::Failed,
           harness_session_id: None,
+          harness_boundary: None,
         },
       }
     });
@@ -527,13 +553,19 @@ async fn pump(
         Err(_empty) => break,
       }
     }
-    let batch = batch(
+    let mut batch = batch(
       deliveries,
       limited,
       &run_id,
       model.as_deref(),
       thread_id.as_deref(),
     );
+    // The end goes in a write of its own, after the rest of its batch: the
+    // journal takes an end past the storage limit, so a limit the rest of
+    // the batch reached must still make it `failed`.
+    let end = batch
+      .outputs
+      .pop_if(|(output, _)| matches!(output, RunOutput::Finished { .. }));
     let recorded = journal(&sink, batch.outputs).await;
     if recorded.contains(&Err(EmitError::Full)) && !limited {
       tracing::warn!(target: LOG_TARGET, "a run reached the per-run storage limit; cancelling it");
@@ -541,6 +573,13 @@ async fn pump(
       if sidecar.cancel(&run_id).is_err() {
         tracing::warn!(target: LOG_TARGET, "a run past its storage limit was not cancelled");
       }
+    }
+    if let Some((output, holder_seq)) = end {
+      let output = if limited { cut_short(output) } else { output };
+      if let RunOutput::Finished { outcome, .. } = &output {
+        batch.outcome = Some(*outcome);
+      }
+      let _recorded = journal(&sink, vec![(output, holder_seq)]).await;
     }
     // Journaled, past the limit, or given up by the runner: either way the
     // holder need not keep any of it longer.
@@ -577,19 +616,12 @@ fn batch(
     outcome: None,
   };
   for delivery in deliveries {
-    let output = match delivery.output {
-      SidecarRunOutput::Finished {
-        harness_session_id, ..
-      } if limited => SidecarRunOutput::Finished {
-        outcome: RunOutcome::Failed,
-        harness_session_id,
-      },
-      output => output,
-    };
-    if let SidecarRunOutput::Finished { outcome, .. } = &output {
+    let output = sidecar_output(delivery.output);
+    let output = if limited { cut_short(output) } else { output };
+    if let RunOutput::Finished { outcome, .. } = &output {
       batch.outcome = Some(*outcome);
     }
-    let output = match sidecar_output(output) {
+    let output = match output {
       RunOutput::Event(chunk) if !fits_a_frame(&chunk) => {
         tracing::warn!(target: LOG_TARGET, "a run output exceeded the frame limit; sent an error instead");
         run_error(
@@ -606,6 +638,21 @@ fn batch(
     batch.outputs.push((output, delivery.holder_seq));
   }
   batch
+}
+
+/// A run's end as a run the desktop could not keep whole ends: `failed`,
+/// and never a point a later run continues from. Any other output is kept.
+fn cut_short(output: RunOutput) -> RunOutput {
+  match output {
+    RunOutput::Finished {
+      harness_session_id, ..
+    } => RunOutput::Finished {
+      outcome: RunOutcome::Failed,
+      harness_session_id,
+      harness_boundary: None,
+    },
+    output => output,
+  }
 }
 
 /// Whether a chunk leaves room in a frame for the message around it.
@@ -993,6 +1040,7 @@ impl SidecarHarnessHost {
       let failed = RunOutput::Finished {
         outcome: RunOutcome::Failed,
         harness_session_id: None,
+        harness_boundary: None,
       };
       // Keeps the sender alive while the end is relayed.
       let _entry = entry;
@@ -1110,6 +1158,7 @@ impl HarnessHost for SidecarHarnessHost {
     // Only a UUID names a folder.
     let folder_id = Uuid::parse_str(&start.folder_id)
       .map_err(|_not_uuid| RejectReason::UnknownRun)?;
+    let session = run_session(&start)?;
     let cached = self.shared.cached(start.harness);
     if cached.is_none() && self.shared.harnesses.installed(start.harness).is_some() {
       // Installed, but its first probe has not answered: not missing.
@@ -1206,7 +1255,7 @@ impl HarnessHost for SidecarHarnessHost {
       instructions: start.instructions,
       messages: start.messages,
       attachments: start.attachments,
-      harness_session_id: start.harness_session_id,
+      session,
       policy: start.policy,
       mcp: start.mcp,
     });

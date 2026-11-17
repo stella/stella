@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { deferred } from "@stll/test-kit";
+
 import { createIdleExitCheck } from "@/api/lib/document-processing-idle-exit";
 import type { IdleExitReason } from "@/api/lib/document-processing-idle-exit";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
@@ -114,33 +116,50 @@ describe("createIdleExitCheck", () => {
 
   test("overlapping ticks are skipped, not double-counted", async () => {
     const resolvers: ((value: number) => void)[] = [];
+    let countStarted = deferred();
     const h = harness(
       2,
       async () =>
         await new Promise<number>((resolve) => {
           resolvers.push(resolve);
+          countStarted.resolve();
         }),
     );
+    const awaitCountStarted = async (sample: ReturnType<typeof h.tick>) =>
+      await Promise.race([
+        countStarted.promise,
+        sample.then(() => {
+          throw new Error("Sample completed before its count started");
+        }),
+      ]);
 
-    // A sample settles the reconciliation verdict before it counts, so let
-    // it reach the count before handing one over.
-    const countStarted = async () => await Bun.sleep(0);
+    const samples: ReturnType<typeof h.tick>[] = [];
+    try {
+      const first = h.tick();
+      samples.push(first);
+      // The first sample is still in flight: further ticks must not start
+      // a second count or advance the streak.
+      expect(await h.tick()).toBe("skipped");
+      expect(await h.tick()).toBe("skipped");
+      await awaitCountStarted(first);
+      expect(resolvers).toHaveLength(1);
 
-    const first = h.tick();
-    // The first sample is still in flight: further ticks must not start
-    // a second count or advance the streak.
-    expect(await h.tick()).toBe("skipped");
-    expect(await h.tick()).toBe("skipped");
-    await countStarted();
-    expect(resolvers).toHaveLength(1);
+      resolvers.shift()?.(0);
+      expect(await first).toBe("checked");
 
-    resolvers.shift()?.(0);
-    expect(await first).toBe("checked");
-
-    const second = h.tick();
-    await countStarted();
-    resolvers.shift()?.(0);
-    expect(await second).toBe("exit");
+      countStarted = deferred();
+      const second = h.tick();
+      samples.push(second);
+      await awaitCountStarted(second);
+      expect(resolvers).toHaveLength(1);
+      resolvers.shift()?.(0);
+      expect(await second).toBe("exit");
+    } finally {
+      for (const resolve of resolvers) {
+        resolve(0);
+      }
+      await Promise.all(samples);
+    }
   });
 
   test("an empty queue is not idle while reconciliation has work behind it", async () => {

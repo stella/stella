@@ -122,6 +122,7 @@
         "!$TURBO_ROOT$/apps/**/.turbo/**",
         "!$TURBO_ROOT$/apps/**/*.tsbuildinfo",
         "!$TURBO_ROOT$/packages/**/node_modules/**",
+        "!$TURBO_ROOT$/packages/cli/capabilities/**",
         "!$TURBO_ROOT$/packages/**/.cache/**",
         "!$TURBO_ROOT$/packages/**/dist/**",
         "!$TURBO_ROOT$/packages/**/.env*",
@@ -188,6 +189,7 @@
         "$TURBO_ROOT$/scripts/ownership/*.ts",
         "$TURBO_ROOT$/scripts/ownership-loader.ts",
         "$TURBO_ROOT$/scripts/ownership-types.ts",
+        "$TURBO_ROOT$/scripts/provider-client-modules.ts",
         "$TURBO_ROOT$/scripts/sha256-owners.ts",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
@@ -273,6 +275,7 @@
         "$TURBO_ROOT$/scripts/ownership/*.ts",
         "$TURBO_ROOT$/scripts/ownership-loader.ts",
         "$TURBO_ROOT$/scripts/ownership-types.ts",
+        "$TURBO_ROOT$/scripts/provider-client-modules.ts",
         "$TURBO_ROOT$/scripts/sha256-owners.ts",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
@@ -350,12 +353,12 @@
     // script runs. scripts/landing-deploy-scope.ts reads these inputs to decide
     // whether a push can change the site, so a new outside read belongs here.
     "@stll/landing#build": {
-      "dependsOn": ["^build", "@stll/cli#codegen:runtime"],
+      "dependsOn": ["^build"],
       "inputs": [
         "$TURBO_DEFAULT$",
         ".env*",
         "$TURBO_ROOT$/docs/changelog/**",
-        "$TURBO_ROOT$/packages/cli/**",
+        "$TURBO_ROOT$/packages/cli/src/generated/tool-reference.json",
         "$TURBO_ROOT$/scripts/product-media.ts"
       ],
       "outputs": ["dist/**"]
@@ -457,10 +460,11 @@
     // lint would type-check a program without the generated declarations.
     "@stll/landing#typecheck": {
       "cache": true,
-      "dependsOn": ["transit", "@stll/cli#codegen:runtime"],
+      "dependsOn": ["transit"],
       // `astro check` generates the `astro:content` types.
       "inputs": [
         "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/packages/cli/src/generated/tool-reference.json",
         "$TURBO_ROOT$/.npmrc",
         "$TURBO_ROOT$/bunfig.toml",
         "$TURBO_ROOT$/package.json",
@@ -513,6 +517,7 @@
         "$TURBO_ROOT$/scripts/ownership/*.ts",
         "$TURBO_ROOT$/scripts/ownership-loader.ts",
         "$TURBO_ROOT$/scripts/ownership-types.ts",
+        "$TURBO_ROOT$/scripts/provider-client-modules.ts",
         "$TURBO_ROOT$/scripts/sha256-owners.ts",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
@@ -638,12 +643,11 @@
       "outputs": ["$TURBO_ROOT$/.tailwind-cache/**"]
     },
     "@stll/landing#dev": {
-      "dependsOn": ["@stll/cli#codegen:runtime"],
       "persistent": true,
       "cache": false
     },
     "@stll/landing#lint:fix": {
-      "dependsOn": ["transit", "@stll/cli#codegen:runtime"]
+      "dependsOn": ["transit"]
     },
     "@stll/landing#lint": {
       // Astro check generates the content types consumed by type-aware Oxlint.
@@ -651,6 +655,7 @@
       "dependsOn": ["typecheck", "tailwind-cache"],
       "inputs": [
         "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/packages/cli/src/generated/tool-reference.json",
         "$TURBO_ROOT$/.npmrc",
         "$TURBO_ROOT$/bunfig.toml",
         "$TURBO_ROOT$/oxlint.config.ts",
@@ -663,6 +668,7 @@
         "$TURBO_ROOT$/scripts/ownership/*.ts",
         "$TURBO_ROOT$/scripts/ownership-loader.ts",
         "$TURBO_ROOT$/scripts/ownership-types.ts",
+        "$TURBO_ROOT$/scripts/provider-client-modules.ts",
         "$TURBO_ROOT$/scripts/sha256-owners.ts",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
@@ -737,6 +743,7 @@
         "$TURBO_ROOT$/scripts/ownership/*.ts",
         "$TURBO_ROOT$/scripts/ownership-loader.ts",
         "$TURBO_ROOT$/scripts/ownership-types.ts",
+        "$TURBO_ROOT$/scripts/provider-client-modules.ts",
         "$TURBO_ROOT$/scripts/sha256-owners.ts",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
@@ -808,6 +815,7 @@
         "$TURBO_ROOT$/scripts/ownership/*.ts",
         "$TURBO_ROOT$/scripts/ownership-loader.ts",
         "$TURBO_ROOT$/scripts/ownership-types.ts",
+        "$TURBO_ROOT$/scripts/provider-client-modules.ts",
         "$TURBO_ROOT$/scripts/sha256-owners.ts",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
@@ -886,10 +894,13 @@
       ]
     },
     "@stll/cli#codegen:runtime": {
+      "dependsOn": ["generate:capabilities"],
       "inputs": [
         "package.json",
-        "capabilities/**",
-        "src/codegen.ts",
+        "$TURBO_ROOT$/apps/api/src/**",
+        "$TURBO_ROOT$/apps/api/scripts/**",
+        "$TURBO_ROOT$/packages/**/src/**",
+        "scripts/codegen.ts",
         "src/capability-catalog-data.ts",
         "src/write-generated-file.ts",
         "$TURBO_ROOT$/packages/scripts/src/prepare-cli-runtime.ts",
@@ -910,12 +921,37 @@
         "$TURBO_ROOT$/package.json",
         "$TURBO_ROOT$/bunfig.toml",
         "$TURBO_ROOT$/bun.lock",
-        "$TURBO_ROOT$/patches/**"
+        "$TURBO_ROOT$/patches/**",
+        // The task's own outputs live under the broad source globs above.
+        "!src/generated/route-map.ts",
+        "!src/generated/tool-annotations.ts"
       ],
       "outputs": [
         "src/generated/route-map.ts",
         "src/generated/tool-annotations.ts"
       ]
+    },
+    "generate:capabilities": {},
+    "@stll/cli#generate:capabilities": {
+      // The export reads the MCP app bundles. Building them first keeps a
+      // cache restore of @stll/mcp-apps#build from rewriting the generated
+      // stylesheet while this task's own generation reads it.
+      "dependsOn": ["@stll/mcp-apps#build"],
+      "inputs": [
+        "$TURBO_ROOT$/apps/api/src/**",
+        "$TURBO_ROOT$/apps/api/scripts/export-capability-catalog.ts",
+        "$TURBO_ROOT$/apps/api/scripts/lib/**",
+        "$TURBO_ROOT$/packages/**",
+        "!$TURBO_ROOT$/packages/**/node_modules/**",
+        "!$TURBO_ROOT$/packages/**/.cache/**",
+        "!$TURBO_ROOT$/packages/**/.turbo/**",
+        // Its own shards and the CLI runtime derived from them are outputs,
+        // never inputs.
+        "!capabilities/**",
+        "!src/generated/route-map.ts",
+        "!src/generated/tool-annotations.ts"
+      ],
+      "outputs": ["capabilities/**"]
     },
     "@stll/cli#build": {
       "dependsOn": ["^build", "codegen:runtime"]
@@ -954,6 +990,7 @@
         "$TURBO_ROOT$/scripts/ownership/*.ts",
         "$TURBO_ROOT$/scripts/ownership-loader.ts",
         "$TURBO_ROOT$/scripts/ownership-types.ts",
+        "$TURBO_ROOT$/scripts/provider-client-modules.ts",
         "$TURBO_ROOT$/scripts/sha256-owners.ts",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
@@ -1054,6 +1091,7 @@
         "!**/*.tsbuildinfo",
         "$TURBO_ROOT$/packages/**",
         "!$TURBO_ROOT$/packages/**/node_modules/**",
+        "!$TURBO_ROOT$/packages/cli/capabilities/**",
         "!$TURBO_ROOT$/packages/**/.cache/**",
         "!$TURBO_ROOT$/packages/**/.turbo/**",
         "!$TURBO_ROOT$/packages/**/dist/**",
@@ -1075,11 +1113,11 @@
         "src/mcp/generated/capability-dispatch/**"
       ]
     },
-    // typecheck prepares the derived contracts and bundles first, so its cache
-    // restores them and lint waits for it.
+    // Build alone restores generated artifacts; diagnostic consumers wait for
+    // that restoration before preparing or reading the same files.
     "@stll/mcp-apps#typecheck": {
       "cache": true,
-      "dependsOn": ["transit", "^generate:capability-runtime"],
+      "dependsOn": ["transit", "^generate:capability-runtime", "build"],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.npmrc",
@@ -1099,6 +1137,7 @@
         "$TURBO_ROOT$/apps/web/public/fonts/**",
         "$TURBO_ROOT$/packages/**",
         "!$TURBO_ROOT$/packages/**/node_modules/**",
+        "!$TURBO_ROOT$/packages/cli/capabilities/**",
         "!$TURBO_ROOT$/packages/**/.cache/**",
         "!$TURBO_ROOT$/packages/**/.turbo/**",
         "!$TURBO_ROOT$/packages/**/dist/**",
@@ -1113,21 +1152,7 @@
         "$TURBO_ROOT$/scripts/check-mcp-generated-tracking.ts",
         "$TURBO_ROOT$/bun.lock"
       ],
-      "outputs": [
-        "src/*/generated/app.html.txt",
-        "src/*/generated/app.js.txt",
-        "src/*/generated/app.css.txt",
-        "src/shared/generated/messages.json",
-        "src/shared/generated/schemas.json",
-        "src/shared/generated/reader-messages.json",
-        "src/shared/generated/reader-inputs.json",
-        "src/shared/generated/contracts.js",
-        "src/shared/generated/contracts.d.ts",
-        "src/shared/generated/style.css",
-        "src/generated/runtime.js.txt",
-        "src/generated/runtime.css.txt",
-        "src/generated/bundles.ts"
-      ]
+      "outputs": []
     },
     "@stll/mcp-apps#lint": {
       "dependsOn": ["typecheck"],
@@ -1145,6 +1170,7 @@
         "$TURBO_ROOT$/scripts/ownership/*.ts",
         "$TURBO_ROOT$/scripts/ownership-loader.ts",
         "$TURBO_ROOT$/scripts/ownership-types.ts",
+        "$TURBO_ROOT$/scripts/provider-client-modules.ts",
         "$TURBO_ROOT$/scripts/sha256-owners.ts",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
@@ -1217,6 +1243,10 @@
         "$TURBO_ROOT$/apps/web/public/fonts/**",
         "$TURBO_ROOT$/packages/**",
         "!$TURBO_ROOT$/packages/**/node_modules/**",
+        "!$TURBO_ROOT$/packages/cli/capabilities/**",
+        // The CLI runtime derived after this build never feeds the bundles.
+        "!$TURBO_ROOT$/packages/cli/src/generated/route-map.ts",
+        "!$TURBO_ROOT$/packages/cli/src/generated/tool-annotations.ts",
         "!$TURBO_ROOT$/packages/**/.cache/**",
         "!$TURBO_ROOT$/packages/**/.turbo/**",
         "!$TURBO_ROOT$/packages/**/dist/**",
@@ -1748,6 +1778,7 @@
         "$TURBO_ROOT$/scripts/ownership/*.ts",
         "$TURBO_ROOT$/scripts/ownership-loader.ts",
         "$TURBO_ROOT$/scripts/ownership-types.ts",
+        "$TURBO_ROOT$/scripts/provider-client-modules.ts",
         "$TURBO_ROOT$/scripts/sha256-owners.ts",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
@@ -1844,6 +1875,7 @@
       "inputs": [
         "$TURBO_ROOT$/packages/html/src/email.ts",
         "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/scripts/prepare-mcp-apps.ts",
         "$TURBO_ROOT$/scripts/shared-test-postgres.sh",
         "$TURBO_ROOT$/packages/scripts/src/shared-test-postgres.ts",
         "$TURBO_ROOT$/packages/scripts/src/dev-postgres-lock.ts",
@@ -1855,7 +1887,6 @@
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/apps/web/src/components/chat/**",
         "$TURBO_ROOT$/apps/web/src/features/chat/chat-runtime.ts",
-        "$TURBO_ROOT$/apps/web/src/features/chat/hooks/use-chat-session-send-queue.logic.ts",
         "$TURBO_ROOT$/apps/web/src/i18n/langs/en.json",
         "$TURBO_ROOT$/apps/web/src/fonts.css",
         "$TURBO_ROOT$/apps/web/public/fonts/**",
@@ -1866,14 +1897,23 @@
         "$TURBO_ROOT$/packages/skills/blueprints/**",
         "$TURBO_ROOT$/packages/skills/skills/**",
         "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/scripts/bundled-consumers.ts",
         "$TURBO_ROOT$/scripts/ledger-membership.ts",
+        "$TURBO_ROOT$/scripts/migration-rehearsal-contender.ts",
+        "$TURBO_ROOT$/scripts/migration-rehearsal-writer-gap.ts",
+        "$TURBO_ROOT$/scripts/check-migration-safety.ts",
+        "$TURBO_ROOT$/scripts/outbound-transport-census.ts",
+        "$TURBO_ROOT$/scripts/outbound-transport-ownership.ts",
+        "$TURBO_ROOT$/scripts/ownership.ts",
         "$TURBO_ROOT$/scripts/guard-rollouts.ts",
         "$TURBO_ROOT$/scripts/ownership/**",
         "$TURBO_ROOT$/scripts/parser-output-fixtures.ts",
+        "$TURBO_ROOT$/scripts/plan-output-codec.ts",
         "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json"
       ]
     },
     "@stll/mcp-apps#test": {
+      "dependsOn": ["transit", "build"],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/apps/**",
@@ -1909,7 +1949,6 @@
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/scripts/mutation-query-invalidation-baseline.json",
-        "$TURBO_ROOT$/packages/cli/capabilities/**",
         "$TURBO_ROOT$/packages/ui/src/**",
         "$TURBO_ROOT$/packages/workspace-ui/src/**",
         "$TURBO_ROOT$/.oxlint-plugins/**",
@@ -1920,7 +1959,8 @@
         "$TURBO_ROOT$/apps/landing/public/images/gradients/**",
         "$TURBO_ROOT$/apps/landing/public/robots.txt",
         "$TURBO_ROOT$/apps/mobile/src/ui-theme.gen.ts",
-        "$TURBO_ROOT$/oxlint.config.ts"
+        "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/scripts/network-baseline-scope.ts"
       ]
     },
     // The palette test checks the colours DESIGN.md documents.
@@ -1959,7 +1999,14 @@
         "$TURBO_ROOT$/packages/api-contract/src/chat-local-run-step-content.fixtures.json",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-edit-file-types.ts",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-registry.ts",
-        "$TURBO_ROOT$/packages/api-contract/src/desktop-rpc.gen.ts"
+        "$TURBO_ROOT$/packages/api-contract/src/desktop-rpc.gen.ts",
+        "$TURBO_ROOT$/packages/ui/generated/outcome-page.success.gen.html",
+        "$TURBO_ROOT$/packages/ui/generated/outcome-page.error.gen.html",
+        "$TURBO_ROOT$/packages/ui/generated/outcome-page.details.gen.html",
+        "$TURBO_ROOT$/packages/ui/generated/outcome-page.detail-row.gen.html",
+        "$TURBO_ROOT$/packages/ui/generated/outcome-page.note.gen.html",
+        "$TURBO_ROOT$/packages/ui/generated/outcome-page.control.gen.html",
+        "$TURBO_ROOT$/packages/ui/generated/outcome-page.button-label.gen.html"
       ]
     },
     // Repository-wide tooling guards: these suites walk apps/*, packages/* and
@@ -1978,7 +2025,8 @@
       "dependsOn": ["transit"],
       "inputs": [
         "$TURBO_DEFAULT$",
-        "$TURBO_ROOT$/packages/ui/src/styles/theme.css"
+        "$TURBO_ROOT$/packages/ui/src/styles/theme.css",
+        "$TURBO_ROOT$/scripts/generate-us-courts.ts"
       ]
     },
     "@stll/catalogue#test": {

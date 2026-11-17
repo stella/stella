@@ -322,9 +322,11 @@ const sendMessageCommonProperties = {
    */
   runMode: v.exactOptional(v.literal(CHAT_RUN_MODE.agent)),
   /**
-   * Where this turn runs. Absent or `cloud` keeps stella's own model path;
-   * `local` hands the turn to a harness on one of the member's computers and
-   * is refused, never rerouted, when no computer can take it.
+   * Where this turn runs. Absent runs it where its thread runs (the thread's
+   * stored target; stella's own models for a new thread). `cloud` keeps
+   * stella's own model path; `local` hands the turn to a harness on one of the
+   * member's computers and is refused, never rerouted, when no computer can
+   * take it.
    */
   runTarget: v.exactOptional(chatRunTargetSchema),
   userContext: v.exactOptional(userContextSchema),
@@ -380,6 +382,26 @@ const nativeAssistantContinuationBodySchema = v.strictObject({
   parentRunId: agUiRunIdSchema,
   resume: agUiResumeSchema,
 });
+
+/**
+ * A send as the member queues it: a new user message with everything the send
+ * carries except its thread, its run (minted when it is sent) and the
+ * history changes a queued message never makes (edit, regenerate).
+ */
+export const queuedChatSendSchema = v.strictObject({
+  ...v.omit(noResumeBodySchema, [
+    "threadId",
+    "runId",
+    "truncateAfterMessageId",
+    "turnIntent",
+  ]).entries,
+  message: v.looseObject({
+    ...rawMessageProperties,
+    role: v.literal("user"),
+  }),
+});
+
+export type QueuedChatSend = v.InferOutput<typeof queuedChatSendSchema>;
 
 export const sendMessageBodySchema = v.union([
   noResumeBodySchema,

@@ -826,7 +826,7 @@ describe("buildSendRequestBody", () => {
     });
   });
 
-  test("carries a computer run target and leaves the cloud default unsent", () => {
+  test("names the Run on choice, cloud included, and nothing without one", () => {
     const threadId = toChatThreadId("thread-A");
     const bodyFor = (runTarget: ChatRunTarget | undefined) =>
       buildSendRequestBody({
@@ -844,7 +844,9 @@ describe("buildSendRequestBody", () => {
       reasoningEffort: null,
     };
     expect(bodyFor(local).runTarget).toEqual(local);
-    expect("runTarget" in bodyFor({ kind: "cloud" })).toBe(false);
+    // The server runs a send that names no target where its thread runs, so
+    // a member who picked cloud on a thread that ran on a computer must say so.
+    expect(bodyFor({ kind: "cloud" }).runTarget).toEqual({ kind: "cloud" });
     expect("runTarget" in bodyFor(undefined)).toBe(false);
   });
 

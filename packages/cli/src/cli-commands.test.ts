@@ -9,10 +9,13 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { respondToMcpLifecycle } from "../tests/mcp-test-lifecycle.js";
-import { loadBakedCapabilityCatalog } from "./capability-catalog-load.js";
+import { readCapabilityCatalog } from "./capability-catalog-data.js";
+import { parseCapabilityCatalog } from "./capability-catalog-load.js";
 import { generatedToolAnnotations } from "./generated/tool-annotations.js";
 import { EXIT_CODES } from "./mcp-constants.js";
 import { validateFetchedToolsList } from "./registry-trust.js";
+
+const repositoryCapabilityCatalog = readCapabilityCatalog();
 
 const CLI_ENTRYPOINT = path.join(import.meta.dirname, "cli.ts");
 const FETCH_PRELOAD = path.join(
@@ -27,7 +30,7 @@ const registry = validateFetchedToolsList(
 if (!registry.ok) {
   panic(`Invalid committed command-test registry: ${registry.violation}`);
 }
-const catalog = loadBakedCapabilityCatalog();
+const catalog = parseCapabilityCatalog(repositoryCapabilityCatalog);
 if (catalog === null) {
   panic("Invalid committed command-test capability catalog");
 }
@@ -500,7 +503,8 @@ describe("contact discovery", () => {
     await server.stop();
 
     expect(result.exitCode).toBe(0);
-    expect(JSON.parse(result.stdout).items.at(0)?.id).toBe("contact-1");
+    const output: { items: { id: string }[] } = JSON.parse(result.stdout);
+    expect(output.items.at(0)?.id).toBe("contact-1");
     expect(result.stderr).toBe("");
   });
 });
@@ -674,10 +678,8 @@ describe("list rendering and pagination (S4)", () => {
     });
     await server.stop();
     expect(result.exitCode).toBe(0);
-    expect(JSON.parse(result.stdout).matters).toEqual([
-      { id: "m1" },
-      { id: "m2" },
-    ]);
+    const output: { matters: unknown } = JSON.parse(result.stdout);
+    expect(output.matters).toEqual([{ id: "m1" }, { id: "m2" }]);
     expect(server.requests).toHaveLength(2);
     expect(server.requests.at(1)?.params.arguments?.["cursor"]).toBe("c1");
   });
@@ -713,7 +715,8 @@ describe("list rendering and pagination (S4)", () => {
     });
     await server.stop();
     expect(result.exitCode).toBe(0);
-    expect(JSON.parse(result.stdout).matter).toEqual({
+    const output: { matter: unknown } = JSON.parse(result.stdout);
+    expect(output.matter).toEqual({
       id: "m1",
       name: "Acme",
     });
@@ -966,11 +969,13 @@ describe("windowed text (S4)", () => {
     });
     await server.stop();
     expect(result.exitCode).toBe(0);
-    const printed = JSON.parse(result.stdout);
+    const printed: {
+      items: { status: string; decision?: { text: string } }[];
+    } = JSON.parse(result.stdout);
     expect(
       printed.items.map((item: { status: string }) => item.status),
     ).toEqual(["found", "not_found"]);
-    expect(printed.items.at(0).decision.text).toBe("THE DECISION BODY");
+    expect(printed.items.at(0)?.decision?.text).toBe("THE DECISION BODY");
     expect(printed).not.toHaveProperty("text");
     expect(server.requests).toHaveLength(1);
     expect(server.requests.at(0)?.params.name).toBe("read_case_law_decision");
@@ -2082,7 +2087,8 @@ describe("feedback (S4)", () => {
     expect(result.exitCode).toBe(0);
     expect(server.requests.at(0)?.params.name).toBe("prepare_feedback");
     expect(server.requests.at(0)?.params.arguments).toEqual(report);
-    expect(JSON.parse(result.stdout).report).toEqual(report);
+    const output: { report: unknown } = JSON.parse(result.stdout);
+    expect(output.report).toEqual(report);
   });
 
   test("submit --yes sends the approved report and prints the receipt", async () => {
@@ -2115,7 +2121,8 @@ describe("feedback (S4)", () => {
       approval_token: APPROVAL_TOKEN,
       confirm: true,
     });
-    expect(JSON.parse(result.stdout).receipt).toBe("FB-7K2M-9QXA");
+    const output: { receipt: unknown } = JSON.parse(result.stdout);
+    expect(output.receipt).toBe("FB-7K2M-9QXA");
   });
 });
 

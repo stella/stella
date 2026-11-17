@@ -294,7 +294,8 @@ describe("an assistant turn's budget", () => {
     expect(
       finish.responseMessage.parts.map((part) => {
         if (part.type === "tool-call") {
-          return [part.type, part.id, part.state, part.output];
+          const output: unknown = part.output;
+          return [part.type, part.id, part.state, output];
         }
         if (part.type === "tool-result") {
           return [part.type, part.toolCallId, part.state];

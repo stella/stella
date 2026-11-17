@@ -5,11 +5,9 @@ import {
   parseTimeEntryDeleteResponse,
   parseTimeEntryIdResponse,
   parseTimeEntryListPage,
-  parseTimeEntrySplitResponse,
   parseTimeEntrySuggestionDecision,
   parseTimeEntrySuggestionsResponse,
   parseTimeEntrySummary,
-  parseTimeEntryUpdatedResponse,
   parseTimeReturnBatch,
   type TimeEntry,
   type TimeEntryListPage,
@@ -25,15 +23,12 @@ import type { ApiResponse } from "@/lib/errors/api";
 
 const timeEntryResponseParsers = {
   approve: parseTimeApprovalBatch,
-  batchDelete: parseTimeEntryUpdatedResponse,
-  batchUpdate: parseTimeEntryUpdatedResponse,
   create: parseTimeEntryIdResponse,
   decideSuggestion: parseTimeEntrySuggestionDecision,
   delete: parseTimeEntryDeleteResponse,
   list: parseTimeEntryListPage,
   polishNarrative: parsePolishedTimeEntryNarrativeResponse,
   return: parseTimeReturnBatch,
-  split: parseTimeEntrySplitResponse,
   suggestions: parseTimeEntrySuggestionsResponse,
   summary: parseTimeEntrySummary,
   update: parseTimeEntryIdResponse,
@@ -72,7 +67,7 @@ type TimeEntriesQuery = {
 };
 
 type BrowserTimeEntry = Omit<TimeEntry, "rateAtEntry"> & {
-  rateAtEntry: CentsAmount;
+  rateAtEntry: CentsAmount | null;
 };
 
 type BrowserTimeEntryListPage = Omit<TimeEntryListPage, "items"> & {
@@ -99,10 +94,12 @@ export const fetchTimeEntries = async ({
   );
   return {
     ...page,
-    items: page.items.map((entry) => ({
-      ...entry,
-      rateAtEntry: cents(entry.rateAtEntry),
-    })),
+    items: page.items.map((entry) =>
+      Object.assign(entry, {
+        rateAtEntry:
+          entry.rateAtEntry === null ? null : cents(entry.rateAtEntry),
+      }),
+    ),
   };
 };
 
@@ -185,41 +182,6 @@ export const deleteTimeEntry = async (workspaceId: string, id: string) =>
     await timeEntriesRoute(workspaceId).delete({ id }),
     timeEntryResponseParsers.delete,
   );
-
-type BatchUpdateTimeEntryBody = TimeEntryRoutes["batch"]["post"]["body"];
-
-export const batchUpdateTimeEntries: TimeEntryWrite<
-  BatchUpdateTimeEntryBody,
-  "batchUpdate"
-> = async (workspaceId, body) => {
-  const requestBody: BatchUpdateTimeEntryBody = body;
-  return parseTimeEntryResponse(
-    await timeEntriesRoute(workspaceId).batch.post(requestBody),
-    timeEntryResponseParsers.batchUpdate,
-  );
-};
-
-export const batchDeleteTimeEntries = async (
-  workspaceId: string,
-  ids: string[],
-) =>
-  parseTimeEntryResponse(
-    await timeEntriesRoute(workspaceId).batch.delete({ ids }),
-    timeEntryResponseParsers.batchDelete,
-  );
-
-type SplitTimeEntryBody = TimeEntryRoutes["split"]["post"]["body"];
-
-export const splitTimeEntry: TimeEntryWrite<
-  SplitTimeEntryBody,
-  "split"
-> = async (workspaceId, body) => {
-  const requestBody: SplitTimeEntryBody = body;
-  return parseTimeEntryResponse(
-    await timeEntriesRoute(workspaceId).split.post(requestBody),
-    timeEntryResponseParsers.split,
-  );
-};
 
 export type TimeSuggestionDecisionBody =
   TimeEntryRoutes["suggestions"]["decisions"]["post"]["body"];

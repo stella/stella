@@ -5,8 +5,8 @@ import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
-import { readCapabilityCatalog } from "@stll/cli/capability-catalog-data";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
 import { apiRoutes } from "@/api/api-routes";
 import { env } from "@/api/env";
@@ -82,10 +82,13 @@ import {
   NO_AUDIT,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { repositoryCapabilityCatalog } from "@/api/tests/helpers/repository-capability-catalog";
 import { serveForTest } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
-const capabilityCatalog = parseCatalog(readCapabilityCatalog());
+const testState = createTestState({ file: import.meta.path, config: env });
+
+const capabilityCatalog = parseCatalog(repositoryCapabilityCatalog);
 
 const FLAG = "FEATURE_TIME_BILLING";
 const FEATURE_ID = "time-billing";
@@ -146,6 +149,9 @@ const TIME_BILLING_ROUTES: Readonly<Record<string, readonly RouteEntry[]>> = {
   organizationBillingDraftsRoute: organizationSettingsRoute.filter(({ path }) =>
     path.startsWith("/organization-settings/billing-drafts"),
   ),
+  memberBillingAccessRoute: organizationSettingsRoute.filter(({ path }) =>
+    /^\/organization-settings\/members\/[^/]+\/billing$/u.test(path),
+  ),
   ratesRoute,
   savedTimeNarrativesRoute,
   sellerProfilesRoute,
@@ -192,14 +198,14 @@ const withTimeBilling = async <T>(
   run: () => Promise<T>,
 ): Promise<T> => {
   const previous = env[FLAG];
-  env[FLAG] = enabled;
+  testState.setConfig(FLAG, enabled);
   const restoreRuntimeMode = setRuntimeModeForTesting({
     mode: RUNTIME_MODE.strict,
   });
   try {
     return await run();
   } finally {
-    env[FLAG] = previous;
+    testState.setConfig(FLAG, previous);
     restoreRuntimeMode();
   }
 };
@@ -244,7 +250,7 @@ const describeResponse = async (response: Response) => ({
 /** What another flagged route group answers while its own flag is off. */
 const disabledFlagResponse = async () => {
   const previous = env.FEATURE_LEGAL_LISTS;
-  env.FEATURE_LEGAL_LISTS = false;
+  testState.setConfig("FEATURE_LEGAL_LISTS", false);
   const restoreRuntimeMode = setRuntimeModeForTesting({
     mode: RUNTIME_MODE.strict,
   });
@@ -254,7 +260,7 @@ const disabledFlagResponse = async () => {
       await server.fetch(new Request(`http://localhost/lists/${PATH_ID}`)),
     );
   } finally {
-    env.FEATURE_LEGAL_LISTS = previous;
+    testState.setConfig("FEATURE_LEGAL_LISTS", previous);
     restoreRuntimeMode();
   }
 };
@@ -348,14 +354,16 @@ describe("time billing admission census", () => {
         if (!/createSafe(?:Root)?Handler\(/u.test(source)) {
           continue;
         }
-        const module = await import(`${absolute}/${filename}`);
+        const module: { default?: unknown } = await import(
+          `${absolute}/${filename}`
+        );
         expect(
-          isRecord(module.default) && isRecord(module.default.config),
+          isRecord(module.default) && isRecord(module.default["config"]),
         ).toBe(true);
-        if (!isRecord(module.default) || !isRecord(module.default.config)) {
+        if (!isRecord(module.default) || !isRecord(module.default["config"])) {
           continue;
         }
-        expect(module.default.config.featureAccess).toEqual({
+        expect(module.default["config"]["featureAccess"]).toEqual({
           featureId: FEATURE_ID,
           type: "required",
         });

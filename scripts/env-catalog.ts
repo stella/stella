@@ -499,6 +499,12 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Batch mode: the document-processing worker exits once its queue has stayed empty this many minutes. Unset keeps it long-running.",
   EDGAR_USER_AGENT:
     "Identifying SEC EDGAR contact string. Unset disables the adapter because the SEC requires one.",
+  ELEVENLABS_API_KEY:
+    "ElevenLabs API key for stella AI transcription straight to ElevenLabs (Scribe v3). Requests ask for zero retention unless ELEVENLABS_ZERO_RETENTION is 0. Unset offers no direct ElevenLabs model.",
+  ELEVENLABS_ENVIRONMENT:
+    'ElevenLabs environment the key belongs to: "default" or "us" (US region) or "eu" (EU data residency). Organizations outside it see the model as outside their region.',
+  ELEVENLABS_ZERO_RETENTION:
+    '"1" (default) when the ElevenLabs account has zero retention (an ElevenLabs enterprise feature), so every request asks for it. "0" offers Scribe v3 only to desktops that warn that ElevenLabs keeps the audio and transcript, never as a default and never on the web.',
   EMAIL_PROVIDER:
     'Transactional email transport: "ses" or "smtp". Leave unset when email is not configured.',
   EMAIL_EVENTS_QUEUE_URL:
@@ -981,6 +987,9 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   MICROSOFT_AUTH_TENANT_ID: ENV_CREDENTIAL_KIND.notCredential,
   MICROSOFT_REQUIRE_VERIFIED_EMAIL_CLAIM: ENV_CREDENTIAL_KIND.notCredential,
   MISTRAL_API_KEY: ENV_CREDENTIAL_KIND.credential,
+  ELEVENLABS_API_KEY: ENV_CREDENTIAL_KIND.credential,
+  ELEVENLABS_ENVIRONMENT: ENV_CREDENTIAL_KIND.notCredential,
+  ELEVENLABS_ZERO_RETENTION: ENV_CREDENTIAL_KIND.notCredential,
   ONLINE_INDEX_CLIENT_CHECK_MS: ENV_CREDENTIAL_KIND.notCredential,
   ONLINE_INDEX_IDLE_HOLDER_MS: ENV_CREDENTIAL_KIND.notCredential,
   ONLINE_INDEX_LONG_HOLDER_MS: ENV_CREDENTIAL_KIND.notCredential,
@@ -1411,6 +1420,14 @@ export const MANUAL_SCHEMA_KEYS = new Set([
   // browser host (an unpacked development build has its own), separated by
   // commas. packages/agent-engine/src/sidecar/env.ts reads it.
   "STELLA_BROWSER_EXTENSION_IDS",
+  // Development switch, local only: `1` lets local runs use the stella
+  // browser when no extension is connected; unset is off.
+  // packages/agent-engine/src/sidecar/env.ts reads it.
+  "STELLA_BROWSER_DEV_HOST",
+  // The stella browser's test hooks (its executable, the fixture site's
+  // resolver rules and certificate, a method log) apply only with `1`; the
+  // sidecar build replaces it with "0", so release builds have none.
+  "STELLA_BROWSER_TEST_HOOKS",
   "STELLA_API_KEY",
   "STELLA_DESKTOP_ALLOWED_API_BASE_URLS",
   "STELLA_DESKTOP_ALLOWED_ORIGINS",
@@ -1514,6 +1531,11 @@ export const TOOLING_ENV_KEYS = new Set([
   // API contract's limits and hands it to the crate at compile time.
   "STELLA_EDITABLE_DOCUMENT_MAX_BYTES",
   "APPLE_TEAM_ID",
+  // The release workflow's Developer ID; the desktop's PKCS #11 helper build
+  // signs the helper with it before Tauri bundles the app.
+  "APPLE_SIGNING_IDENTITY",
+  // The ignored SoftHSM2 test of the PKCS #11 helper names the module to load.
+  "SOFTHSM2_MODULE",
   "MOBILE_BUILD_NUMBER",
   "MOBILE_PROFILE_UUID",
   "MOBILE_WIDGETS_PROFILE_UUID",
@@ -1532,9 +1554,17 @@ export const TOOLING_ENV_KEYS = new Set([
   "RUST_LOG",
   // The fixture page the fake harness CLIs' `browse` scenario opens first.
   "FAKE_BROWSER_START",
+  // `read` makes the `browse` scenario only open and read pages, for a
+  // browser that cannot click or type.
+  "FAKE_BROWSER_SCENARIO",
+  // The browser the stella browser's end-to-end leg runs; unset skips it.
+  "STELLA_BROWSER_E2E_EXECUTABLE",
   // The desktop's stand-in harness holder (a re-run of its own test binary)
   // takes its folder, socket and log file from the test that starts it.
   "STAND_IN_DIR",
+  // The pre-push signature check reads the registered signing keys from this
+  // folder instead of the GitHub account (its tests).
+  "SIGNING_KEYS_DIR",
   "STAND_IN_ENDPOINT",
   "FAKE_SIDECAR_LOG",
   // Invocation-local handoff values are removed before test/native entry points run.
@@ -1592,6 +1622,10 @@ export const TOOLING_ENV_KEYS = new Set([
   // The merge group's base revision.
   "BRIDGE_BASE_SHA",
   "MERGE_GROUP_BASE_SHA",
+  // The CLI contract guard compares the base and head generated capability
+  // catalogs.
+  "CLI_CONTRACT_BASE_CATALOG",
+  "CLI_CONTRACT_HEAD_CATALOG",
   // The scan engine drift check builds into a scratch directory and compares it.
   "SCAN_ENGINE_WASM_OUT_DIR",
   // The manual checks workflow passes its inputs and result files to its scripts.
@@ -1943,6 +1977,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_SEED_ORG_ID",
   "STELLA_SEED_USER_ID",
   "STELLA_TEST_LATEST_TAG",
+  // Runner-owned migrated database cloned by isolated PostgreSQL suites.
+  "STELLA_TEST_TEMPLATE_DATABASE",
   "STELLA_TEST_OMIT_ASSET",
   "STELLA_TEST_RELEASE_NUMBERS",
   "STELLA_UPDATE_PLAN_CONTRACTS",

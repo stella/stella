@@ -85,6 +85,7 @@
     "documentClose": "Zavrieť",
     "approvalBrowserNote": "Po povolení sa spustí vo vašom prehliadači na počítači, cez rozšírenie stella.",
     "grantFailed": "Schválenie sa nepodarilo uložiť. Skúste to znova.",
+    "limitReminderFailed": "Zmenu sa nepodarilo uložiť. Skúste to znova.",
     "elsewhereBrowser": "Tento krok beží vo vašom prehliadači na počítači, cez rozšírenie stella. Dokončite ho tam, v stelle otvorte túto konverzáciu.",
     "elsewhereSecret": "Tento krok potrebuje kľúč. Z bezpečnostných dôvodov sa kľúče pridávajú v stelle na počítači, nie v aplikácii.",
     "elsewhereConnector": "Tento krok pripája aplikáciu. Z bezpečnostných dôvodov sa aplikácie pripájajú v stelle na počítači, nie v aplikácii.",
@@ -103,6 +104,8 @@
     "pickFailed": "Výber súborov sa nepodarilo otvoriť. Skúste to znova.",
     "sendFileRefused": "Súbor sa nepodarilo odoslať, takže sa správa neodoslala. Odstráňte súbor a skúste to znova.",
     "sendFileNotAnonymizable": "Táto konverzácia je anonymizovaná a stella nedokázala anonymizovať jeden zo súborov, takže sa nič neodoslalo. Odstráňte súbor a skúste to znova.",
+    "sendLocalRunNotAnonymizable": "Táto konverzácia je anonymizovaná a programovací agent vo vašom počítači číta vaše dokumenty tak, ako sú, preto sa mu nič neodoslalo.",
+    "sendWithoutAnonymization": "Odoslať bez anonymizácie",
     "pickTitle": "Vyberte konverzáciu",
     "pickDescription": "Vyberte vlákno zo zoznamu alebo začnite nové tlačidlom +.",
     "runBanner": {
@@ -246,7 +249,16 @@
         "loadFailed": "Nepodarilo sa načítať.",
         "showMore": "Zobraziť viac"
       },
-      "sessionNotResumed": "Programovací agent vo vašom počítači nemohol nadviazať tam, kde skončil, preto pokračoval podľa správ v tomto chate."
+      "sessionNotResumed": "Programovací agent vo vašom počítači nemohol nadviazať tam, kde skončil, preto pokračoval podľa správ v tomto chate.",
+      "steered": "Odoslané počas práce agenta",
+      "ranOnModel": "Bežalo na modeli {model}",
+      "desktopSettingsSteps": "V stella desktop vo svojom počítači otvorte Nastavenia › Všeobecné › Predplatné AI.",
+      "errorLimitResetsAt": "Programovací agent vo vašom počítači vyčerpal svoj limit využitia. Znova to môžete skúsiť po {time}.",
+      "limitReminderNotify": "Upozorniť ma, keď sa obnoví",
+      "limitReminderScheduled": "Upozorníme vás po {time}.",
+      "limitResumeContinue": "Pokračovať automaticky, keď sa obnoví",
+      "limitResumeScheduled": "Automaticky pokračuje po {time}.",
+      "limitReminderCancel": "Zrušiť"
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# preverený zdroj} few {# preverené zdroje} other {# preverených zdrojov} many {# prevereného zdroja}}",
@@ -285,6 +297,41 @@
       "sendErrorQuotaExhausted": "Kvóta poskytovateľa AI je vyčerpaná. Skúste to o minútu znova alebo sa obráťte na správcu pracovného priestoru.",
       "sendErrorStreamIncomplete": "Odpoveď AI sa prerušila skôr, ako bola dokončená. Skúste to znova.",
       "sendErrorTurnTooLarge": "Táto odpoveď je príliš veľká na to, aby sa dala doručiť celá. Pokračujte novou správou."
+    },
+    "steerPrompt": "Poslať agentovi počas práce",
+    "steerRefused": {
+      "turnNotRunning": "Agent práve nepracuje.",
+      "noRun": "Agent teraz na vašom počítači nebeží.",
+      "cannotSteer": "Tento agent počas práce neprijíma správy.",
+      "runFull": "Agent teraz ďalšie správy neprijme.",
+      "notTaken": "Agent teraz vašu správu nemohol prijať.",
+      "queuedMessageChanged": "Správa sa medzičasom zmenila alebo už nie je v poradí, preto ju agent nedostal."
+    },
+    "queue": {
+      "notice": "V poradí – odošle sa po dokončení aktuálnej odpovede",
+      "prompt": "Odoslať, keď agent skončí",
+      "sendNow": "Odoslať hneď",
+      "remove": "Zrušiť správu v poradí",
+      "edit": "Upraviť",
+      "moveUp": "Posunúť nahor",
+      "moveDown": "Posunúť nadol",
+      "cancel": "Zrušiť",
+      "attachments": "{count, plural, one {# príloha} few {# prílohy} other {# príloh} many {# prílohy}}",
+      "actions": "Akcie správy vo fronte",
+      "notSent": "Nepodarilo sa odoslať",
+      "pause": "Pozastaviť front",
+      "resume": "Obnoviť front",
+      "replaceTitle": "Odoslať túto správu hneď?",
+      "replaceDescription": "Chat čaká na vašu odpoveď. Odoslaním tejto správy teraz zrušíte otázku alebo schválenie, na ktoré čaká.",
+      "noLongerQueued": "Táto správa už vo fronte nie je.",
+      "held": {
+        "turn-failed": "Front je pozastavený: posledná odpoveď zlyhala. Pokračovaním odošlete ďalšiu správu.",
+        "turn-interrupted": "Front je pozastavený: posledná odpoveď bola prerušená. Pokračovaním odošlete ďalšiu správu.",
+        "member": "Front je pozastavený.",
+        "send-refused": "Front je pozastavený: prvú správu sa nepodarilo odoslať. Upravte ju alebo ju odstráňte a potom pokračujte.",
+        "usage-limit": "Front je pozastavený: dosiahli ste limit využitia. Pokračujte, keď sa obnoví.",
+        "computer-away": "Čaká sa na váš počítač: správy vo fronte sa odošlú, keď sa pripojí."
+      }
     }
   },
   "tasks": {

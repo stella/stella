@@ -211,8 +211,16 @@ jobs:
             -f pkcs12 -T /usr/bin/codesign -T /usr/bin/security
           security set-key-partition-list -S apple-tool:,apple: -s \
             -k "$keychain_password" "$keychain" > /dev/null
-          security list-keychains -d user -s "$keychain" \
-            $(security list-keychains -d user | tr -d '"')
+          existing_keychains="$(security list-keychains -d user)"
+          keychains=("$keychain")
+          while read -r existing_keychain; do
+            if [ -n "$existing_keychain" ]; then
+              existing_keychain="${existing_keychain#\"}"
+              existing_keychain="${existing_keychain%\"}"
+              keychains+=("$existing_keychain")
+            fi
+          done <<< "$existing_keychains"
+          security list-keychains -d user -s "${keychains[@]}"
           echo "MOBILE_SIGNING_KEYCHAIN=$keychain" >> "$GITHUB_ENV"
 
       # The archive runs third-party build phases, so its environment carries

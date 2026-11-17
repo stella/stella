@@ -81,6 +81,9 @@
     "pdfSignAppearance": "Signature",
     "pdfSignCertificate": "Certificat de signature",
     "pdfSignDocument": "Document",
+    "pdfSignDownloadDriver": "Télécharger le pilote",
+    "pdfSignDriverMissing": "Une carte dans un lecteur a besoin du pilote {vendor}, qui n’est pas installé. Installez-le pour signer avec cette carte.",
+    "pdfSignDriverNeedsUpdate": "Le pilote {vendor} installé ne fonctionne pas avec le processeur de ce Mac. Installez sa version actuelle pour signer avec cette carte.",
     "pdfSignErrorCode": "Code d’erreur : {code}",
     "pdfSignErrors": {
       "authenticationRequired": "Votre trousseau demande votre autorisation pour ce certificat. Réessayez et autorisez l’accès lorsque cela vous est demandé.",
@@ -118,6 +121,9 @@
       "startAgain": "La signature n’a pas pu se poursuivre. Relancez la signature dans stella.",
       "temporarilyUnavailable": "stella n’a pas pu terminer la signature pour le moment. Réessayez.",
       "tokenNotPresent": "La carte à puce ou le jeton n’est pas connecté. Connectez-le, puis réessayez.",
+      "tokenSigningFailed": "La carte à puce ou le jeton n’a pas signé le document.",
+      "tokenTimeout": "La carte à puce ou le jeton n’a pas répondu à temps. Réessayez.",
+      "tokenUnreadable": "La carte à puce ou le jeton n’a pas pu être lu. Réessayez.",
       "unsupportedAlgorithm": "La clé de ce certificat ne peut pas produire la signature que ce document exige. Choisissez un autre certificat.",
       "wouldBreakSignatures": "Signer ce PDF invaliderait les signatures qu’il contient déjà."
     },
@@ -127,6 +133,13 @@
     "pdfSignMatter": "Dossier",
     "pdfSignNoIdentities": "Aucun certificat de signature n’est disponible dans votre trousseau.",
     "pdfSignNoIdentitiesCertificateStore": "Aucun certificat de signature n’est disponible dans votre magasin de certificats.",
+    "pdfSignOnToken": "Stocké sur : {tokenLabel}",
+    "pdfSignPin": "Code PIN",
+    "pdfSignPinFinalTry": "Un autre code PIN erroné bloquera la carte ou le jeton.",
+    "pdfSignPinLow": "Un code PIN erroné a déjà été saisi. Vérifiez-le attentivement.",
+    "pdfSignPinPad": "Saisissez le code PIN sur le lecteur de cartes pour signer {documentName}.",
+    "pdfSignPinPrompt": "Saisissez le code PIN de votre carte ou de votre jeton pour signer {documentName}.",
+    "pdfSignRescanCards": "Rechercher à nouveau les cartes",
     "pdfSignRetry": "Réessayer",
     "pdfSignServer": "Demandé par",
     "pdfSignSign": "Signer",
@@ -135,6 +148,7 @@
     "pdfSignStampOnPage": "Cachet visible en page {pageNumber}",
     "pdfSignSubtitle": "La clé privée reste dans votre trousseau ; seule la signature quitte cet ordinateur.",
     "pdfSignSubtitleCertificateStore": "La clé privée reste dans votre magasin de certificats ; seule la signature quitte cet ordinateur.",
+    "pdfSignSubtitleToken": "La clé privée reste sur votre carte à puce ou votre jeton ; seule la signature quitte cet ordinateur.",
     "pdfSignTitle": "Signer ce PDF ?",
     "pdfSignUnsupported": "La signature nécessite macOS ou Windows. Ouvrez ce document sur un Mac ou un PC Windows pour le signer.",
     "pdfSignVersion": "Version",
@@ -584,21 +598,21 @@
   },
   "dictation": {
     "title": "Dictée",
-    "description": "Maintenez {shortcut} et parlez. Le texte apparaît dans l'application que vous utilisez. La parole est transcrite sur cet ordinateur et n'est pas conservée. Lorsque la correction par IA est activée, le texte transcrit, et non l’audio, est envoyé via stella au fournisseur d’IA de votre organisation pour corriger les erreurs et la mise en forme ; stella ne le conserve pas.",
+    "description": "Maintenez {shortcut} et parlez. Le texte apparaît dans l'application que vous utilisez. La parole est transcrite sur cet ordinateur et n'est pas conservée.",
     "descriptionCloud": "Maintenez {shortcut} et parlez. Le texte apparaît dans l’application que vous utilisez. La parole est transcrite par stella AI et n’est pas conservée par stella.",
     "cleanup": {
       "title": "Corriger avec l’IA",
-      "description": "La parole est toujours transcrite sur cet ordinateur et l’audio ne le quitte jamais. Lorsque la correction est activée, le texte transcrit est envoyé via stella au fournisseur d’IA de votre organisation pour corriger les erreurs de reconnaissance et appliquer la ponctuation et la mise en forme dictées, comme « nouvelle ligne » ou « gras ». stella ne le conserve pas. La correction reçoit aussi le type d’application dans laquelle vous dictez, comme un e-mail ou une messagerie, pour que le texte s’y prête.",
-      "descriptionCloud": "Lorsque la correction est activée, stella AI corrige aussi les erreurs de reconnaissance du texte transcrit et applique la ponctuation et la mise en forme dictées, comme « nouvelle ligne » ou « gras ». La correction reçoit aussi le type d’application dans laquelle vous dictez, comme un e-mail ou une messagerie, pour que le texte s’y prête."
+      "description": "Corrige les erreurs de reconnaissance et la mise en forme dictée, comme « nouvelle ligne » ou « gras », et adapte le texte à l’application, comme un e-mail. Seul le texte, et non l’audio, est envoyé via stella au fournisseur d’IA de votre organisation ; stella ne le conserve pas.",
+      "descriptionCloud": "stella AI corrige aussi les erreurs de reconnaissance et la mise en forme dictée, comme « nouvelle ligne » ou « gras », et adapte le texte à l’application, comme un e-mail."
     },
     "context": {
       "windowTitle": {
         "title": "Partager le titre de la fenêtre avec la correction par l’IA",
-        "description": "La correction reçoit aussi le titre de la fenêtre dans laquelle vous dictez, pour distinguer par exemple un contrat d’une note interne. Les titres de fenêtre peuvent contenir des noms de clients ou de dossiers. Le titre est envoyé via stella au fournisseur d’IA de votre organisation, et stella ne le conserve pas."
+        "description": "Aide à distinguer un contrat d’une note interne. Les titres de fenêtre peuvent contenir des noms de clients ou de dossiers."
       },
       "textBeforeCursor": {
         "title": "Partager le texte avant le curseur avec la correction par l’IA",
-        "description": "La correction reçoit aussi jusqu’à {limit, number} caractères avant le curseur, pour que la dictée prolonge le texte que vous rédigez. Une partie du document dans lequel vous êtes est ainsi envoyée via stella au fournisseur d’IA de votre organisation, et stella ne la conserve pas."
+        "description": "Jusqu’à {limit, number} caractères du document où vous êtes, pour que la dictée s’accorde avec ce que vous écrivez."
       }
     },
     "keptInHistory": "Chaque dictée est aussi conservée dans l’historique du presse-papiers de cet ordinateur.",
@@ -610,16 +624,25 @@
       "unavailableRegion": "stella AI ne propose pas encore de transcription dans la région de votre organisation.",
       "unavailableProvider": "Le fournisseur d’IA de votre organisation ne propose pas de transcription.",
       "unavailable": "La transcription par stella AI n’est pas disponible pour le moment.",
-      "model": "Modèle de transcription"
+      "model": "Modèle de transcription",
+      "chooseModel": "Choisissez un modèle",
+      "outsideRegion": "Hors de votre région",
+      "outsideRegionNote": "Ce modèle traite l’audio hors de la région de votre organisation.",
+      "retainsData": "Conserve votre audio",
+      "retainsDataTitle": "{provider} conserve ce que vous dictez",
+      "retainsDataWarning": "Ce modèle fonctionne avec un compte sans conservation nulle des données. {provider} stocke l’audio et la transcription de tout ce que vous dictez selon ses propres conditions, hors du contrôle de stella. N’y dictez aucune information confidentielle ni aucune donnée client."
     },
     "language": {
       "title": "Langue de dictée",
-      "description": "La parole est reconnue dans cette langue et la correction y conserve le texte. Automatique utilise les langues de l’affichage et des claviers de cet ordinateur.",
+      "description": "Automatique utilise les langues d’affichage et de clavier de cet ordinateur.",
       "automatic": "Automatique",
       "automaticWith": "Automatique ({languages})",
       "noResults": "Aucune langue trouvée"
     },
     "modelNeeded": "Le modèle vocal s'exécute sur cet ordinateur.",
+    "modelInstalled": "Le modèle vocal ({size} Mo) est sur cet ordinateur.",
+    "removeModel": "Supprimer",
+    "removeFailed": "Le modèle vocal n’a pas pu être supprimé. Réessayez.",
     "download": "Télécharger ({size} Mo)",
     "downloading": "Téléchargement du modèle vocal : {percent} %",
     "downloadFailed": "Le modèle vocal n'a pas pu être téléchargé.",
@@ -702,6 +725,11 @@
     "howDocumentsBody": "Choisissez Ouvrir sur un document dans stella. À l'enregistrement, la modification revient dans stella sous forme de nouvelle version.",
     "howClipboard": "Presse-papiers",
     "howClipboardBody": "Copiez comme d'habitude, puis appuyez sur {shortcut} pour choisir parmi ce que vous avez copié.",
+    "howSigning": "Signer des PDF",
+    "howSigningBodyMac": "Choisissez « Signer avec stella desktop » sur un PDF dans stella. Votre certificat reste dans votre trousseau ou sur votre carte à puce, et le PDF signé revient dans stella sous forme de nouvelle version.",
+    "howSigningBodyPc": "Choisissez « Signer avec stella desktop » sur un PDF dans stella. Votre certificat reste dans votre magasin de certificats ou sur votre carte à puce, et le PDF signé revient dans stella sous forme de nouvelle version.",
+    "howDictation": "Dictée",
+    "howDictationBody": "Maintenez un raccourci et parlez : le texte apparaît dans l’application que vous utilisez. Vous pourrez l’activer à une étape suivante.",
     "howActivity": "Activité",
     "howActivityBody": "Voyez où est passée votre journée et transformez-la en brouillons d'entrées de temps. Désactivée jusqu'à ce que vous la lanciez.",
     "activityTitle": "L'activité, expliquée",
@@ -811,9 +839,12 @@
       "storage": "La connexion n’a pas pu être lue ni enregistrée sur cet ordinateur."
     },
     "callbackConnectedTitle": "ChatGPT est connecté",
-    "callbackConnectedBody": "Vous pouvez fermer cet onglet et revenir à stella.",
+    "callbackConnectedBody": "Les requêtes d’IA dans stella utilisent désormais votre forfait ChatGPT.",
     "callbackNotConnectedTitle": "ChatGPT n’a pas été connecté",
-    "callbackNotConnectedBody": "Revenez à stella pour voir ce qui s’est passé et réessayez.",
+    "callbackNotConnectedBody": "La raison s’affiche dans l’application stella. Pour réessayer, ouvrez {section} › {group} et cliquez sur « {button} ».",
+    "callbackAccount": "Compte",
+    "callbackPlan": "Forfait",
+    "callbackCloseTab": "Vous pouvez fermer cet onglet.",
     "claudeCode": {
       "title": "Claude Code",
       "description": "Utilisez votre abonnement Claude pour les agents locaux dans stella. L’utilisation est décomptée de votre forfait Claude, indépendamment de votre abonnement stella.",
@@ -870,6 +901,18 @@
       "runs_can_write": "Les exécutions locales peuvent écrire dans ce dossier, il ne peut donc pas contenir de compétence.",
       "network_folder": "Ce dossier se trouve sur un partage réseau. Les compétences doivent être sur le disque de cet ordinateur.",
       "path_changed": "Un dossier parent a changé. Retirez ce dossier et ajoutez-le de nouveau."
+    }
+  },
+  "signingDriver": {
+    "title": "Pilote de carte à puce",
+    "description": "Si stella desktop ne trouve pas seul le pilote de votre carte à puce ou de votre jeton, choisissez son module PKCS #11. Il n’est chargé que pour signer des PDF, dans un processus distinct.",
+    "choose": "Choisir le module",
+    "remove": "Retirer",
+    "notice": {
+      "action_failed": "Cela n'a pas fonctionné. Réessayez.",
+      "missing": "Ce fichier n’existe plus.",
+      "needs_update": "Ce module ne fonctionne pas avec le processeur de ce Mac. Installez la version actuelle du pilote.",
+      "not_a_library": "Ce fichier n’est pas un module PKCS #11."
     }
   },
   "localLinkedFolders": {

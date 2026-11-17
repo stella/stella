@@ -7,6 +7,7 @@ import {
 export default {
   id: "indexes-account-provider-account-id-uidx",
   revision: 520,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     onlineUniqueIndexDefinition(

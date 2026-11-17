@@ -37,6 +37,7 @@ import { createApprovalHarness } from "@/api/tests/helpers/chat-approval-harness
 import { installScriptedProvider } from "@/api/tests/helpers/chat-scripted-provider";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
+import { unqueuedSteers } from "@/api/tests/helpers/steered-queue";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -95,7 +96,7 @@ const textTurn = (text: string): HarnessEvent[] => [
   ...(text === ""
     ? []
     : [{ type: "text.completed", messageId: "msg_1", text } as const]),
-  { type: "turn.completed", usage: null },
+  { type: "turn.completed", usage: null, boundary: null },
 ];
 
 const asStored = async (
@@ -166,7 +167,8 @@ const localRunFor = ({
   const runId = Bun.randomUUIDv7();
   const control: LocalRunContext["control"] = asTestRaw({
     pickDesktop: async () => await Promise.resolve(Result.ok(picked)),
-    readChatRunSession: async () => await Promise.resolve(Result.ok(null)),
+    readChatRunSession: async () =>
+      await Promise.resolve(Result.ok({ type: "fresh" })),
     startRun: async ({ instructions }: { instructions: string }) => {
       onStart(instructions);
       return await Promise.resolve(Result.ok({ type: "assigned", runId }));
@@ -205,12 +207,15 @@ const localRunFor = ({
       options: Parameters<typeof readRunOutputFile>[1],
     ) => Result.ok(await readRunOutputFile(testDb, options)),
     recordChatReadSeq: async () => await Promise.resolve(Result.ok(undefined)),
+    readChatTurnSteering: async () =>
+      await Promise.resolve(Result.ok("not_steerable")),
     interruptRun: async () =>
       await Promise.resolve(Result.ok({ type: "queued" })),
   });
   return createLocalChatRun(
     {
       control,
+      steeredQueue: unqueuedSteers,
       runBell: createLocalRunBell(),
       owner: { organizationId: ids.orgA, userId: ids.userA1 },
       chatThreadId: threadId,

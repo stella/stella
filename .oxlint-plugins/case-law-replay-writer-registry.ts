@@ -9,7 +9,7 @@ export type ReplayWriterOwner = {
 export const REPLAY_WRITER_REGISTRY = [
   {
     file: "apps/api/src/db/root.ts",
-    line: 716,
+    line: 787,
     kind: "pending",
   },
   {
@@ -184,7 +184,7 @@ export const REPLAY_WRITER_REGISTRY = [
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/corpus-mirror.ts",
-    line: 85,
+    line: 88,
     kind: "pending",
   },
   {
@@ -199,12 +199,12 @@ export const REPLAY_WRITER_REGISTRY = [
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-identity.ts",
-    line: 474,
+    line: 659,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-identity.ts",
-    line: 735,
+    line: 917,
     kind: "pending",
   },
   {
@@ -214,22 +214,22 @@ export const REPLAY_WRITER_REGISTRY = [
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row-update.ts",
-    line: 482,
+    line: 485,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row.ts",
-    line: 267,
+    line: 383,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row.ts",
-    line: 316,
+    line: 449,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row.ts",
-    line: 334,
+    line: 467,
     kind: "pending",
   },
   {
@@ -392,26 +392,6 @@ export const REPLAY_WRITER_REGISTRY = [
   {
     file: "apps/api/src/lib/legal-search/corpus-index-generation-store.ts",
     line: 407,
-    kind: "pending",
-  },
-  {
-    file: "apps/api/src/lib/legal-search/sk-document-backfill.ts",
-    line: 1131,
-    kind: "pending",
-  },
-  {
-    file: "apps/api/src/lib/legal-search/sk-document-backfill.ts",
-    line: 1309,
-    kind: "pending",
-  },
-  {
-    file: "apps/api/src/lib/legal-search/sk-document-backfill.ts",
-    line: 1422,
-    kind: "pending",
-  },
-  {
-    file: "apps/api/src/lib/legal-search/sk-document-backfill.ts",
-    line: 1502,
     kind: "pending",
   },
 ] as const satisfies readonly ReplayWriterOwner[];

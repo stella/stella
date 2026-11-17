@@ -713,6 +713,14 @@ fn runs_the_harness_cannot_take_are_refused_before_the_holder_sees_them() {
     unlinked["linkedFolderId"] = json!(run_id());
     let mut unoffered_effort = run_start(&run_id(), "gpt-test");
     unoffered_effort["reasoningEffort"] = json!("max");
+    // This harness reports no `fork`: resuming the whole session instead
+    // would hand it turns the chat no longer holds.
+    let mut fork = run_start(&run_id(), "gpt-test");
+    fork["harnessSessionId"] = json!("thread-old");
+    fork["harnessForkBoundary"] = json!("019a5e1c-7f3d-7c2a-9b4e-2f6d8a1c3e5b");
+    let mut sessionless_fork = run_start(&run_id(), "gpt-test");
+    sessionless_fork["harnessForkBoundary"] =
+      json!("019a5e1c-7f3d-7c2a-9b4e-2f6d8a1c3e5b");
     let cases = [
       (run_start(&run_id(), "gpt-unknown"), "model_unavailable"),
       (unoffered_effort, "model_unavailable"),
@@ -721,6 +729,8 @@ fn runs_the_harness_cannot_take_are_refused_before_the_holder_sees_them() {
       (unsandboxed, "policy_unsupported"),
       (offline, "folder_offline"),
       (unlinked, "folder_unlinked"),
+      (fork, "harness_unsupported"),
+      (sessionless_fork, "unknown_run"),
     ];
     for (start, reason) in cases {
       connection.send(start.clone()).await;

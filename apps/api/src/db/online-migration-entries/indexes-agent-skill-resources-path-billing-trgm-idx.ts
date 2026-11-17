@@ -4,6 +4,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "indexes-agent-skill-resources-path-billing-trgm-idx",
   revision: 195,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     {

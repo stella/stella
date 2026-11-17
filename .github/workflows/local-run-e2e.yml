@@ -154,7 +154,7 @@ jobs:
           --path "$RUNNER_TEMP/local-run-stand-in"
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
+        uses: stella/.github/actions/setup-bun-cached@0cc2def60afb3e0fac0df9f541baf926f77889fa
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
@@ -175,12 +175,12 @@ jobs:
           STELLA_VERIFY: prepare
         run: bun scripts/ci-generated-sources.ts prepare
 
+      # No registry secret reaches this job, which runs pull-request code:
+      # images come through the CI image mirror (the workflow token) or
+      # anonymously.
       - name: Start docker stack and API server
         id: e2e-stack
         uses: ./.github/actions/setup-e2e-stack
-        with:
-          dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
-          dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Start web dev server
         if: steps.e2e-stack.outcome == 'success'

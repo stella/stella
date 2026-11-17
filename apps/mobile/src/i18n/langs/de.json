@@ -85,6 +85,7 @@
     "documentClose": "Schließen",
     "approvalBrowserNote": "Freigegeben läuft es in Ihrem Browser auf Ihrem Computer, über die stella-Erweiterung.",
     "grantFailed": "Die Freigabe konnte nicht gespeichert werden. Versuchen Sie es erneut.",
+    "limitReminderFailed": "Die Änderung konnte nicht gespeichert werden. Versuchen Sie es erneut.",
     "elsewhereBrowser": "Dieser Schritt läuft in Ihrem Browser auf Ihrem Computer, über die stella-Erweiterung. Öffnen Sie diese Unterhaltung dort in stella, um ihn abzuschließen.",
     "elsewhereSecret": "Dieser Schritt braucht einen Schlüssel. Aus Sicherheitsgründen werden Schlüssel in stella auf Ihrem Computer hinzugefügt, nicht in der App.",
     "elsewhereConnector": "Dieser Schritt verbindet eine App. Aus Sicherheitsgründen werden Apps in stella auf Ihrem Computer verbunden, nicht in der App.",
@@ -103,6 +104,8 @@
     "pickFailed": "Die Dateiauswahl konnte nicht geöffnet werden. Versuchen Sie es erneut.",
     "sendFileRefused": "Eine Datei konnte nicht gesendet werden, daher wurde die Nachricht nicht gesendet. Entfernen Sie die Datei und versuchen Sie es erneut.",
     "sendFileNotAnonymizable": "Diese Unterhaltung ist anonymisiert, und stella konnte eine der Dateien nicht anonymisieren, daher wurde nichts gesendet. Entfernen Sie die Datei und versuchen Sie es erneut.",
+    "sendLocalRunNotAnonymizable": "Diese Unterhaltung ist anonymisiert, und der Coding-Agent auf Ihrem Computer liest Ihre Dokumente so, wie sie sind, daher wurde ihm nichts gesendet.",
+    "sendWithoutAnonymization": "Ohne Anonymisierung senden",
     "pickTitle": "Unterhaltung wählen",
     "pickDescription": "Wählen Sie einen Verlauf aus der Liste oder beginnen Sie mit + einen neuen.",
     "runBanner": {
@@ -246,7 +249,16 @@
         "loadFailed": "Konnte nicht geladen werden.",
         "showMore": "Mehr anzeigen"
       },
-      "sessionNotResumed": "Der Coding-Agent auf Ihrem Computer konnte nicht dort weitermachen, wo er aufgehört hatte. Er hat daher anhand der Nachrichten in diesem Chat weitergearbeitet."
+      "sessionNotResumed": "Der Coding-Agent auf Ihrem Computer konnte nicht dort weitermachen, wo er aufgehört hatte. Er hat daher anhand der Nachrichten in diesem Chat weitergearbeitet.",
+      "steered": "Während der Arbeit des Agenten gesendet",
+      "ranOnModel": "Ausgeführt mit {model}",
+      "desktopSettingsSteps": "Öffnen Sie in stella desktop auf Ihrem Computer Einstellungen › Allgemein › KI-Abonnements.",
+      "errorLimitResetsAt": "Der Coding-Agent auf Ihrem Computer hat sein Nutzungslimit erreicht. Sie können es ab {time} erneut versuchen.",
+      "limitReminderNotify": "Benachrichtigen, sobald es zurückgesetzt ist",
+      "limitReminderScheduled": "Wir benachrichtigen Sie ab {time}.",
+      "limitResumeContinue": "Automatisch fortsetzen, sobald es zurückgesetzt ist",
+      "limitResumeScheduled": "Wird ab {time} automatisch fortgesetzt.",
+      "limitReminderCancel": "Abbrechen"
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# Quelle geprüft} other {# Quellen geprüft}}",
@@ -285,6 +297,41 @@
       "sendErrorQuotaExhausted": "Das Kontingent des KI-Anbieters ist ausgeschöpft. Versuchen Sie es in einer Minute erneut, oder wenden Sie sich an Ihren Arbeitsbereichs-Admin.",
       "sendErrorStreamIncomplete": "Die Antwort der KI wurde abgebrochen, bevor sie fertig war. Versuchen Sie es erneut.",
       "sendErrorTurnTooLarge": "Diese Antwort ist zu umfangreich geworden, um vollständig übermittelt zu werden. Senden Sie eine neue Nachricht, um fortzufahren."
+    },
+    "steerPrompt": "An den Agenten senden, während er arbeitet",
+    "steerRefused": {
+      "turnNotRunning": "Der Agent arbeitet gerade nicht.",
+      "noRun": "Der Agent läuft gerade nicht auf Ihrem Computer.",
+      "cannotSteer": "Dieser Agent nimmt während der Arbeit keine Nachrichten an.",
+      "runFull": "Der Agent nimmt gerade keine weiteren Nachrichten an.",
+      "notTaken": "Der Agent konnte Ihre Nachricht gerade nicht annehmen.",
+      "queuedMessageChanged": "Die Nachricht wurde inzwischen geändert oder ist nicht mehr in der Warteschlange, daher hat der Agent sie nicht erhalten."
+    },
+    "queue": {
+      "notice": "Eingereiht – wird gesendet, sobald die aktuelle Antwort abgeschlossen ist",
+      "prompt": "Senden, wenn der Agent fertig ist",
+      "sendNow": "Jetzt senden",
+      "remove": "Eingereihte Nachricht abbrechen",
+      "edit": "Bearbeiten",
+      "moveUp": "Nach oben",
+      "moveDown": "Nach unten",
+      "cancel": "Abbrechen",
+      "attachments": "{count, plural, one {# Anhang} other {# Anhänge}}",
+      "actions": "Aktionen für die Nachricht in der Warteschlange",
+      "notSent": "Konnte nicht gesendet werden",
+      "pause": "Warteschlange pausieren",
+      "resume": "Warteschlange fortsetzen",
+      "replaceTitle": "Diese Nachricht jetzt senden?",
+      "replaceDescription": "Dieser Chat wartet auf Ihre Antwort. Wenn Sie diese Nachricht jetzt senden, wird die Frage oder Freigabe, auf die er wartet, abgebrochen.",
+      "noLongerQueued": "Diese Nachricht ist nicht mehr in der Warteschlange.",
+      "held": {
+        "turn-failed": "Warteschlange pausiert: Die letzte Antwort ist fehlgeschlagen. Setzen Sie fort, um die nächste Nachricht zu senden.",
+        "turn-interrupted": "Warteschlange pausiert: Die letzte Antwort wurde abgebrochen. Setzen Sie fort, um die nächste Nachricht zu senden.",
+        "member": "Warteschlange pausiert.",
+        "send-refused": "Warteschlange pausiert: Die erste Nachricht konnte nicht gesendet werden. Bearbeiten oder entfernen Sie sie und setzen Sie dann fort.",
+        "usage-limit": "Warteschlange pausiert: Ihr Nutzungslimit ist erreicht. Setzen Sie fort, sobald es zurückgesetzt ist.",
+        "computer-away": "Warten auf Ihren Computer: Nachrichten in der Warteschlange werden gesendet, sobald er verbunden ist."
+      }
     }
   },
   "tasks": {

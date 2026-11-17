@@ -4,12 +4,15 @@ import { useState } from "react";
 import type * as React from "react";
 
 import { Field as FieldPrimitive } from "@base-ui/react/field";
-import { mergeProps } from "@base-ui/react/merge-props";
 
 import { useContentDir } from "../hooks/use-content-dir";
 import { CONTROL_SIZE } from "../lib/control-size";
 import type { ControlSize } from "../lib/control-size";
 import { cn } from "../lib/utils";
+import {
+  COMPOSER_LARGE_EDITOR_CLASS,
+  COMPOSER_TEXT_CLASS,
+} from "./composer-tokens";
 import { INLINE_FIELD_CLASS_NAME } from "./input-control";
 
 /**
@@ -22,6 +25,8 @@ type TextareaStyle = React.CSSProperties & {
 
 type TextareaProps = React.ComponentProps<"textarea"> & {
   size?: ControlSize | number;
+  /** A borderless editor inside the shared large composer text well. */
+  appearance?: "default" | "composer";
   unstyled?: boolean;
   /**
    * A borderless field in a line of text: it edits text where it is read
@@ -50,7 +55,13 @@ type TextareaProps = React.ComponentProps<"textarea"> & {
 
 const Textarea = ({
   className,
+  id,
+  name,
+  disabled,
+  value,
+  defaultValue,
   size = CONTROL_SIZE.default,
+  appearance = "default",
   unstyled = false,
   inline = false,
   fieldSizing = "content",
@@ -62,16 +73,33 @@ const Textarea = ({
   ...props
 }: TextareaProps) => {
   const controlSize = typeof size === "number" ? CONTROL_SIZE.default : size;
+  const composer = appearance === "composer";
+  const fieldEditorClass = inline
+    ? cn(
+        INLINE_FIELD_CLASS_NAME,
+        "resize-none [--textarea-pb:0px] [--textarea-pt:0px]",
+      )
+    : cn(
+        "w-full rounded-[inherit] px-[calc(--spacing(3)-1px)] outline-none",
+        TEXTAREA_SIZE_CLASS_NAMES[controlSize],
+        fieldSizing === "content" && TEXTAREA_FLOOR_CLASS_NAMES[controlSize],
+      );
+  const editorClass = composer
+    ? cn(
+        "placeholder:text-foreground-placeholder block w-full resize-none bg-transparent outline-none [--textarea-pb:0px] [--textarea-pt:0px]",
+        COMPOSER_TEXT_CLASS,
+        COMPOSER_LARGE_EDITOR_CLASS,
+      )
+    : fieldEditorClass;
   const contentDir = useContentDir({
     dir,
-    value: props.value,
-    defaultValue: props.defaultValue,
+    value,
+    defaultValue,
   });
   const [typedLength, setTypedLength] = useState(() =>
-    textLength(props.defaultValue),
+    textLength(defaultValue),
   );
-  const length =
-    props.value === undefined ? typedLength : textLength(props.value);
+  const length = value === undefined ? typedLength : textLength(value);
   const counted = showCount && props.maxLength !== undefined;
   const handleChange: NonNullable<TextareaProps["onChange"]> = (event) => {
     contentDir.trackValue(event.currentTarget.value);
@@ -85,7 +113,7 @@ const Textarea = ({
   const syncCountOnFormReset = (control: HTMLSpanElement | null) => {
     const textarea = control?.querySelector("textarea");
     const form = textarea?.form;
-    if (!counted || props.value !== undefined || !textarea || !form) {
+    if (!counted || value !== undefined || !textarea || !form) {
       return undefined;
     }
     const handleReset = () => {
@@ -108,36 +136,32 @@ const Textarea = ({
     <span
       className={
         cn(
-          inline && "relative inline-flex w-full",
+          composer && "block w-full",
+          !composer && inline && "relative inline-flex w-full",
           // The count is placed against the field, styled or not.
           counted && "relative",
-          !unstyled &&
+          !composer &&
+            !unstyled &&
             !inline &&
             "border-input bg-background text-foreground ring-ring/24 has-focus-visible:border-ring has-aria-invalid:border-destructive/36 has-focus-visible:has-aria-invalid:border-destructive/64 has-focus-visible:has-aria-invalid:ring-destructive/16 dark:bg-input/32 dark:has-aria-invalid:ring-destructive/24 relative inline-flex w-full rounded-lg border text-base shadow-xs/5 not-dark:bg-clip-padding before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] not-has-disabled:has-not-focus-visible:not-has-aria-invalid:before:shadow-[0_1px_--theme(--color-black/4%)] has-focus-visible:ring-[3px] has-disabled:opacity-64 has-[:disabled,:focus-visible,[aria-invalid]]:shadow-none sm:text-sm dark:not-has-disabled:has-not-focus-visible:not-has-aria-invalid:before:shadow-[0_-1px_--theme(--color-white/6%)]",
           className,
         ) || undefined
       }
+      data-appearance={appearance}
       data-size={size}
       data-slot="textarea-control"
       ref={syncCountOnFormReset}
     >
       <FieldPrimitive.Control
-        render={(defaultProps) => (
+        id={id}
+        name={name}
+        disabled={disabled}
+        value={value}
+        defaultValue={defaultValue}
+        render={
           <textarea
             className={cn(
-              inline
-                ? cn(
-                    INLINE_FIELD_CLASS_NAME,
-                    "resize-none [--textarea-pb:0px] [--textarea-pt:0px]",
-                  )
-                : cn(
-                    "w-full rounded-[inherit] px-[calc(--spacing(3)-1px)] outline-none",
-                    TEXTAREA_SIZE_CLASS_NAMES[controlSize],
-                    // A floor for a field that grows; a fixed field's
-                    // height is its rows'.
-                    fieldSizing === "content" &&
-                      TEXTAREA_FLOOR_CLASS_NAMES[controlSize],
-                  ),
+              editorClass,
               fieldSizing === "content"
                 ? "field-sizing-content"
                 : "field-sizing-fixed resize-none",
@@ -154,11 +178,12 @@ const Textarea = ({
                 "max-h-[calc(var(--textarea-max-rows)*1lh+var(--textarea-pt)+var(--textarea-pb))] min-h-0 max-sm:min-h-0",
             )}
             data-slot="textarea"
-            {...mergeProps(defaultProps, props, { onChange: handleChange })}
+            {...props}
+            onChange={handleChange}
             dir={contentDir.dir}
             style={textareaStyle}
           />
-        )}
+        }
       />
       {counted ? (
         // Readable by assistive technology, so the current count is not

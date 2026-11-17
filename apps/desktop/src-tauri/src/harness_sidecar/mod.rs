@@ -61,7 +61,7 @@ use endpoint::Endpoints;
 pub(crate) use protocol::{
   BackgroundTasks, CHECKPOINT_STORE_SUFFIX, FolderRestore as SidecarFolderRestore,
   HarnessLaunchSettings, HarnessProbe, HarnessProcess, HeldRun, ProbeOutcome,
-  RestoreOutcome, SidecarRunStart, SkillFolderRef,
+  RestoreOutcome, SidecarRunSession, SidecarRunStart, SkillFolderRef,
 };
 use protocol::{
   HolderSecret, HostHello, HostMessage, MAX_HELD_RUNS, MAX_LINE_BYTES, ProbeFailure,
@@ -221,6 +221,7 @@ pub(crate) enum SidecarRunOutput {
   Finished {
     outcome: RunOutcome,
     harness_session_id: Option<String>,
+    harness_boundary: Option<String>,
   },
 }
 
@@ -1560,6 +1561,7 @@ impl Supervisor {
           SidecarRunOutput::Finished {
             outcome: finished.outcome,
             harness_session_id: finished.harness_session_id,
+            harness_boundary: finished.harness_boundary,
           },
         );
       }
@@ -1816,6 +1818,7 @@ fn finish_failed(outputs: mpsc::UnboundedSender<SidecarDelivery>) {
     output: SidecarRunOutput::Finished {
       outcome: RunOutcome::Failed,
       harness_session_id: None,
+      harness_boundary: None,
     },
   });
 }

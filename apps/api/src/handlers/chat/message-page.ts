@@ -7,12 +7,12 @@ import { withScopedTx } from "@/api/db/safe-db";
 import { chatMessages, chatTurns } from "@/api/db/schema";
 import {
   chatMessageFromPersisted,
+  clientVisibleChatPart,
   getChatAttachmentUrl,
   isChatAttachmentPart,
   normalizePersistedChatMessageContent,
 } from "@/api/handlers/chat/chat-message-parts";
 import { ACTIVE_CHAT_TURN_STATUSES } from "@/api/handlers/chat/chat-turn-state";
-import { clientVisibleChatPart } from "@/api/handlers/chat/client-visible-chat-part";
 import type {
   ChatMessageMetadata,
   ChatMessageRole,
@@ -22,7 +22,6 @@ import type {
 } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { WithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-projection";
-import { NEWEST_CHAT_TURN_FIRST } from "@/api/lib/chat/turn-order";
 import { messageTurnTiming } from "@/api/lib/chat/turn-timing";
 import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
 import { LIMITS } from "@/api/lib/limits";
@@ -113,48 +112,6 @@ export type ChatMessagePage = {
   lastActivityAt: string | null;
 };
 
-/** A thread's newest turn and the answer it wrote, if it wrote one yet. */
-export type NewestChatTurn = {
-  id: SafeId<"chatTurn">;
-  assistantMessageId: SafeId<"chatMessage"> | null;
-};
-
-/**
- * The member's newest turn of the thread: the one whose file changes on
- * their computer the page may offer to undo, since only the newest turn can
- * be undone.
- */
-export const readNewestChatTurnOnTx = async ({
-  tx,
-  organizationId,
-  threadId,
-  userId,
-}: {
-  tx: Transaction;
-  organizationId: SafeId<"organization">;
-  threadId: SafeId<"chatThread">;
-  userId: SafeId<"user">;
-}): Promise<NewestChatTurn | null> => {
-  const [turn] = await tx
-    .select({
-      id: chatTurns.id,
-      assistantMessageId: chatTurns.assistantMessageId,
-    })
-    .from(chatTurns)
-    // The thread's turns, newest first (`chat_turns_thread_ordinal_uidx`),
-    // so one index row answers.
-    .where(
-      and(
-        eq(chatTurns.organizationId, organizationId),
-        eq(chatTurns.userId, userId),
-        eq(chatTurns.threadId, threadId),
-      ),
-    )
-    .orderBy(...NEWEST_CHAT_TURN_FIRST)
-    .limit(1);
-  return turn ?? null;
-};
-
 /**
  * Core query, callable directly against an already-open transaction so
  * callers sharing one scoped tx (e.g. get-messages.ts) can run it without
@@ -168,8 +125,24 @@ const loadChatMessagePageOnTx = async ({
 }: LoadChatMessagePageOnTxArgs): Promise<ChatMessagePage> => {
   const pageSize = normalizeTenantPageLimit(LIMITS.chatMessagesPageSizeDefault);
 
+  // The thread's unsettled turn is read in the same statement as its
+  // messages, so both come from one snapshot. Read apart, a turn accepted (its
+  // message and its row commit together) or settled between the two reads
+  // pairs a running turn with a page missing its message, or a page missing
+  // its answer with no running turn.
+  const activeTurnId = tx
+    .select({ id: chatTurns.id })
+    .from(chatTurns)
+    .where(
+      and(
+        eq(chatTurns.threadId, threadId),
+        inArray(chatTurns.status, [...ACTIVE_CHAT_TURN_STATUSES]),
+      ),
+    )
+    .limit(1);
   const rows = await tx
     .select({
+      activeTurnId: sql<SafeId<"chatTurn"> | null>`(${activeTurnId})`,
       id: chatMessages.id,
       role: chatMessages.role,
       content: chatMessages.content,
@@ -205,21 +178,9 @@ const loadChatMessagePageOnTx = async ({
 
   const lastActivityAt = pageAscending.at(-1)?.createdAt.toISOString() ?? null;
 
-  const activeTurn = (
-    await tx
-      .select({ id: chatTurns.id })
-      .from(chatTurns)
-      .where(
-        and(
-          eq(chatTurns.threadId, threadId),
-          inArray(chatTurns.status, [...ACTIVE_CHAT_TURN_STATUSES]),
-        ),
-      )
-      .limit(1)
-  ).at(0);
-
   return {
-    activeTurnId: activeTurn?.id ?? null,
+    // No message, no turn: a turn's row commits with its message.
+    activeTurnId: rows.at(0)?.activeTurnId ?? null,
     messages: await projectPageRowsOnTx({
       rows: pageAscending,
       tx,

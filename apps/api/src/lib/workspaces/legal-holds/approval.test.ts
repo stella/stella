@@ -1,15 +1,14 @@
 import { expect, test } from "bun:test";
 
-import { readCapabilityCatalog } from "@stll/cli/capability-catalog-data";
-
 import {
   loadCapabilityEndpoint,
   parseCatalog,
 } from "@/api/mcp/capability-tools";
 import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
+import { repositoryCapabilityCatalog } from "@/api/tests/helpers/repository-capability-catalog";
 
 test("legal hold approval contracts match the live capability dispatch", async () => {
-  const catalog = parseCatalog(readCapabilityCatalog());
+  const catalog = parseCatalog(repositoryCapabilityCatalog);
   const holds = catalog.filter((entry) => entry.id.includes(".legal-holds."));
   expect(holds.map(({ id }) => id).toSorted()).toEqual([
     "entities.legal-holds.place",

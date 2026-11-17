@@ -46,9 +46,6 @@ import { TEMPLATE_TOOL_HANDLERS } from "@/api/mcp/template-tools";
 import type { RequiresThirdPartyOutbound } from "@/api/mcp/third-party-outbound";
 import { isMcpEgressPlan } from "@/api/mcp/tool-types";
 import type {
-  AllHandlerOutputsTyped,
-  AssertTrue,
-  HandlerOutputsMatchByName,
   InternalToolResult,
   McpToolHandler,
   McpToolResponse,
@@ -64,7 +61,6 @@ import { authorizeMcpToolContext } from "@/api/mcp/write-tool-authority";
 
 import type {
   ChatProjectableToolName,
-  ProjectionDataByName,
   RegistryReadToolName,
 } from "./ref-field-map";
 import { READ_TOOL_REF_FIELD_MAP } from "./ref-field-map";
@@ -77,7 +73,7 @@ import { toRegistryChatToolError } from "./registry-tool-error";
  * construction (a second class-guard beside the ref-field map): a read tool with
  * no handler wired here cannot compile.
  */
-const REGISTRY_READ_TOOL_HANDLERS = {
+export const REGISTRY_READ_TOOL_HANDLERS = {
   fetch: COMPAT_TOOL_HANDLERS.fetch,
   search: COMPAT_TOOL_HANDLERS.search,
   list_matters: STELLA_TOOL_HANDLERS.list_matters,
@@ -160,15 +156,6 @@ export type ThirdPartyOutboundReadToolName = {
     : never;
 }[RegistryReadToolName];
 
-/** Compile-time guard: the derivation sees the reads that need a permit. */
-export type ThirdPartyOutboundReadsDeclared = AssertTrue<
-  "search_boe_legislation" extends ThirdPartyOutboundReadToolName
-    ? "lookup_business_registry" extends ThirdPartyOutboundReadToolName
-      ? true
-      : false
-    : false
->;
-
 export type RegistryReadToolDataByName = TypedHandlerDataByName<
   typeof REGISTRY_READ_TOOL_HANDLERS,
   ProjectableRegistryReadToolName
@@ -179,24 +166,6 @@ const isProjectableRegistryReadToolName = (
 ): toolName is ProjectableRegistryReadToolName =>
   READ_TOOL_REF_FIELD_MAP[toolName].chatProjectable;
 
-type RegistryReadProjectionDataByName = ProjectionDataByName<
-  typeof READ_TOOL_REF_FIELD_MAP,
-  ProjectableRegistryReadToolName
->;
-
-/** Compile-time guard: every chat-projected handler declares typed output. */
-export type RegistryReadToolOutputContract = AssertTrue<
-  AllHandlerOutputsTyped<
-    typeof REGISTRY_READ_TOOL_HANDLERS,
-    ProjectableRegistryReadToolName
-  > extends true
-    ? HandlerOutputsMatchByName<
-        typeof REGISTRY_READ_TOOL_HANDLERS,
-        RegistryReadProjectionDataByName,
-        ProjectableRegistryReadToolName
-      >
-    : false
->;
 export type RunRegistryReadToolProps = {
   toolName: RegistryReadToolName;
   args: Record<string, unknown>;
@@ -507,6 +476,9 @@ export const executeRegistryRead = async ({
     invoke,
   );
   const finished = await finalizeToolEgress({
+    outputSchema:
+      getStaticMcpToolOutputContract(toolName)?.outputSchemaSource ??
+      panic("Registry tool output contract missing"),
     context: authorizedContext,
     mode: "default",
     response,

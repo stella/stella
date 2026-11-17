@@ -14,6 +14,11 @@ import path from "node:path";
 import { parseDocx } from "@stll/folio-core/server";
 import { type DocumentAst, isDocumentAst } from "@stll/legal-ast/document-ast";
 
+import {
+  assembleBrTjdftDecision,
+  readBrTjdftSearch,
+} from "@/api/handlers/case-law/ingestion/adapters/br-tjdft";
+import { buildBrTstDecision } from "@/api/handlers/case-law/ingestion/adapters/br-tst";
 import { parseCzUohsDocumentPdf as uncheckedParseCzUohsDocumentPdf } from "@/api/handlers/case-law/ingestion/adapters/cz-uohs";
 import {
   buildPlDecision,
@@ -127,6 +132,25 @@ const readCzUohs: EvidenceReader = async (fixture) => [
     }),
   },
 ];
+
+/** Every record of a recorded TST search response, built as the crawl builds it. */
+const readBrTst: EvidenceReader = async (fixture) => {
+  const recorded = await jsonOf(fixture);
+  const items = isRecord(recorded) ? recorded["registros"] : undefined;
+  if (!isUnknownArray(items)) {
+    return panic(`${fixture} is not a TST search response`);
+  }
+  return items.flatMap((item, index) => {
+    const record = isRecord(item) ? item["registro"] : undefined;
+    if (!isRecord(record)) {
+      return panic(`${fixture} lists a row with no record`);
+    }
+    const { documentAst } = buildBrTstDecision(record).decision;
+    return isDocumentAst(documentAst)
+      ? [{ id: `${fixture}#${String(index)}`, ast: documentAst }]
+      : panic(`${fixture}#${String(index)} built no document`);
+  });
+};
 
 const readCzNss: EvidenceReader = async (fixture) => [
   {
@@ -414,6 +438,22 @@ const readAtFindok: EvidenceReader = async (fixture) => {
   return [{ id: fixture, ast: parsed.value.documentAst }];
 };
 
+/** A recorded one-record detail answer, assembled as the crawl assembles it. */
+const readBrTjdft: EvidenceReader = async (fixture) => {
+  const raw = await textOf(fixture);
+  const record =
+    readBrTjdftSearch(raw)?.rows.at(0) ??
+    panic(`${fixture}: no TJDFT detail record`);
+  const { documentAst } = assembleBrTjdftDecision({
+    listing: record,
+    detail: { record, raw },
+    detailStatus: undefined,
+  });
+  return isDocumentAst(documentAst)
+    ? [{ id: fixture, ast: documentAst }]
+    : panic(`${fixture}: the TJDFT record parsed to no document`);
+};
+
 /** Every source's reader, or `null` where its declaration names no recording. */
 export const PROCESSED_FIELD_EVIDENCE_READERS = {
   "cz-regional": readCzRegional,
@@ -421,6 +461,7 @@ export const PROCESSED_FIELD_EVIDENCE_READERS = {
   "cz-nss": readCzNss,
   "cz-us": readCzUs,
   "cz-uohs": readCzUohs,
+  "br-tst": readBrTst,
   "sk-courts": null,
   "sk-us": readSkUs,
   "pl-courts": readPlCourts,
@@ -457,5 +498,6 @@ export const PROCESSED_FIELD_EVIDENCE_READERS = {
   "pl-kis": null,
   "pl-uodo": readPlUodo,
   "pl-uokik": null,
+  "br-tjdft": readBrTjdft,
   "us-courtlistener": null,
 } as const satisfies Record<ProcessedFieldSourceKey, EvidenceReader | null>;

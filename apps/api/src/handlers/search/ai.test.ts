@@ -2,14 +2,18 @@ import { Result } from "better-result";
 import { SQL } from "bun";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { DrizzleQueryError } from "drizzle-orm";
+import * as v from "valibot";
 
 import { RESOURCE_TYPE, resourceRef, toResourceName } from "@stll/api-contract";
+import { createTestState } from "@stll/test-state";
 
 import {
   createSearchSummaryChatThread,
   loadMatterSearchContexts,
   refineSearchOutputSchema,
+  searchSummaryChatBodySchema,
   searchSummaryOutputSchema,
+  summarizeSearchBodySchema,
   validateSearchQueryWithPostgres,
 } from "@/api/handlers/search/ai";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -22,17 +26,19 @@ import {
 } from "@/api/tests/helpers/mock-root-db";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
-process.env["REDIS_URL"] ??= "redis://localhost:6379";
-process.env["EMAIL_PROVIDER"] ??= "smtp";
-process.env["SMTP_HOST"] ??= "localhost";
-process.env["SMTP_PORT"] ??= "1025";
-process.env["TRANSACTIONAL_EMAIL_FROM"] ??= "test@example.com";
-process.env["FRONTEND_URL"] ??= "http://localhost:3000";
-process.env["BETTER_AUTH_SECRET"] ??= "x".repeat(32);
-process.env["BETTER_AUTH_URL"] ??= "http://localhost:3001";
-process.env["GOTENBERG_URL"] ??= "http://localhost:3002";
-process.env["GOTENBERG_USERNAME"] ??= "test";
-process.env["GOTENBERG_PASSWORD"] ??= "test";
+const testState = createTestState({ file: import.meta.path, config: {} });
+
+testState.setEnvIfAbsent("REDIS_URL", "redis://localhost:6379");
+testState.setEnvIfAbsent("EMAIL_PROVIDER", "smtp");
+testState.setEnvIfAbsent("SMTP_HOST", "localhost");
+testState.setEnvIfAbsent("SMTP_PORT", "1025");
+testState.setEnvIfAbsent("TRANSACTIONAL_EMAIL_FROM", "test@example.com");
+testState.setEnvIfAbsent("FRONTEND_URL", "http://localhost:3000");
+testState.setEnvIfAbsent("BETTER_AUTH_SECRET", "x".repeat(32));
+testState.setEnvIfAbsent("BETTER_AUTH_URL", "http://localhost:3001");
+testState.setEnvIfAbsent("GOTENBERG_URL", "http://localhost:3002");
+testState.setEnvIfAbsent("GOTENBERG_USERNAME", "test");
+testState.setEnvIfAbsent("GOTENBERG_PASSWORD", "test");
 
 const searchGlobalMock = mock();
 const upsertSearchDocumentMock = mock(async () => undefined);
@@ -65,6 +71,48 @@ const entitySearchIdentity = (entityId: string) => {
     resourceName: toResourceName(resource),
   };
 };
+
+describe.each([
+  { name: "summary", schema: summarizeSearchBodySchema },
+  { name: "summary chat", schema: searchSummaryChatBodySchema },
+])("$name MIME filters", ({ schema }) => {
+  const body = {
+    ...emptySearchSummaryFilters(),
+    query: "motion",
+    title: "Search summary",
+    summary: "Relevant documents.",
+    citations: [],
+  };
+
+  test("accepts 64 MIME filters without changing their order or duplicates", () => {
+    const mimeTypes = Array.from({ length: 64 }, (_, index) =>
+      index % 2 === 0 ? "application/pdf" : "text/plain",
+    );
+    const parsed = v.parse(schema, { ...body, mimeTypes });
+    expect(parsed.mimeTypes).toEqual(mimeTypes);
+  });
+
+  test("rejects 65 MIME filters", () => {
+    const parsed = v.safeParse(schema, {
+      ...body,
+      mimeTypes: Array.from({ length: 65 }, () => "application/pdf"),
+    });
+    expect(parsed.success).toBe(false);
+  });
+
+  test("retains empty-filter and MIME item validation", () => {
+    expect(v.safeParse(schema, body).success).toBe(true);
+    expect(v.safeParse(schema, { ...body, mimeTypes: [""] }).success).toBe(
+      false,
+    );
+    expect(
+      v.safeParse(schema, { ...body, mimeTypes: ["x".repeat(128)] }).success,
+    ).toBe(true);
+    expect(
+      v.safeParse(schema, { ...body, mimeTypes: ["x".repeat(129)] }).success,
+    ).toBe(false);
+  });
+});
 
 describe("search AI output schemas", () => {
   test("convert to JSON Schema for structured model output", async () => {
@@ -214,6 +262,7 @@ describe("search summary chat", () => {
         summary: "Relevant document [1].",
         title: "Search summary",
         types: ["chat", "document"],
+        mimeTypes: ["application/pdf", "text/plain", "application/pdf"],
         workspaceIds: [workspaceId],
       },
       organizationId,
@@ -226,7 +275,12 @@ describe("search summary chat", () => {
     });
 
     const call = searchGlobalMock.mock.calls.at(0)?.[0];
-    expect(call).toMatchObject({ types: ["document"] });
+    expect(call).toMatchObject({
+      types: ["document"],
+      mimeTypes: ["application/pdf", "text/plain", "application/pdf"],
+      selectedWorkspaceIds: [workspaceId],
+      editedByUserIds: [],
+    });
   });
 
   test("stores global summary chat thread for unfiltered summary chats", async () => {
@@ -478,7 +532,8 @@ const extractDataWorkspaceIds = (
     "dataWorkspaceIds" in value &&
     Array.isArray(value.dataWorkspaceIds)
   ) {
-    return value.dataWorkspaceIds;
+    const ids: SafeId<"workspace">[] = value.dataWorkspaceIds;
+    return ids;
   }
   return [];
 };

@@ -111,6 +111,7 @@ const seed = async (db: GatedTestDb): Promise<Fixture> => {
     async (tx) =>
       await recordAcceptedCorpusProjectionAppendsTx(tx, {
         accepted: [{ intentId, leaseToken, documentCount: DOCUMENTS }],
+        delivery: { type: "ingest_api" },
       }),
   );
   expect(recorded).toEqual([{ status: "accepted", intentId }]);

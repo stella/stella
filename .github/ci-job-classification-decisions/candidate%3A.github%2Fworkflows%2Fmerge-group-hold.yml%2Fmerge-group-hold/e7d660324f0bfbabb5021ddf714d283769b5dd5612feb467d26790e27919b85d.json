@@ -1,0 +1,5 @@
+{
+  "kind": "ordinary",
+  "qualifier": "Refuses merge groups containing pull requests labelled hold using read-only GitHub metadata.",
+  "reviewedDigest": "e7d660324f0bfbabb5021ddf714d283769b5dd5612feb467d26790e27919b85d"
+}

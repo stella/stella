@@ -3,12 +3,22 @@ import {
   queryOptions,
   skipToken,
 } from "@tanstack/react-query";
+import { Result } from "better-result";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
 import { PROFESSIONAL_USE_STATUS } from "@stll/api-contract/professional-use";
+import { memberHasPermissions } from "@stll/permissions";
+import type { PermissionInput } from "@stll/permissions";
 
-import { rootKeys } from "@/lib/auth-query-options";
+import {
+  bindAuthQueryOwner,
+  isAuthBootstrapQuery,
+} from "@/lib/account/auth-query-owner";
+import { rootKeys, sessionOptions } from "@/lib/auth-query-options";
 import { STALE_TIME } from "@/lib/consts";
+import type { toAuthClientError } from "@/lib/errors/auth";
+import { readQueryResult } from "@/lib/errors/query-result";
+import { ensureRouteQueryData } from "@/lib/react-query";
 import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
 export { rootKeys, sessionOptions } from "@/lib/auth-query-options";
@@ -24,6 +34,21 @@ export { rootKeys, sessionOptions } from "@/lib/auth-query-options";
  */
 const BOOT_QUERY_RETRY = false;
 
+type AuthClientResult<T> =
+  | { data: T; error: null }
+  | { data: null; error: Parameters<typeof toAuthClientError>[0] };
+
+/** The data of an auth client call, or its error as an `AuthClientError`. */
+export const authClientData = async <T>(
+  result: AuthClientResult<T>,
+): Promise<T> => {
+  if (result.error) {
+    const errors = await import("@/lib/errors/auth");
+    return readQueryResult(Result.err(errors.toAuthClientError(result.error)));
+  }
+  return result.data;
+};
+
 /**
  * Reads the session. `bypassCookieCache` asks the server past its session
  * cookie cache, so a change made in another tab (e.g. the active
@@ -32,37 +57,35 @@ const BOOT_QUERY_RETRY = false;
 export const fetchSession = async ({
   bypassCookieCache = false,
 }: { bypassCookieCache?: boolean } = {}) => {
-  const [{ authClient }, { toAuthClientError }] = await Promise.all([
-    import("@/lib/auth-client"),
-    import("@/lib/errors/auth"),
-  ]);
-  const result = await authClient.getSession(
-    bypassCookieCache ? { query: { disableCookieCache: true } } : undefined,
+  const { authClient } = await import("@/lib/auth-client");
+  return await authClientData(
+    await authClient.getSession(
+      bypassCookieCache ? { query: { disableCookieCache: true } } : undefined,
+    ),
   );
-
-  if (result.error) {
-    throw toAuthClientError(result.error);
-  }
-
-  return result.data;
 };
 
 export const roleOptions = resourceQueryOptions(
   queryOptions({
     retry: BOOT_QUERY_RETRY,
     queryKey: rootKeys.role,
-    queryFn: async () => {
-      const [{ authClient }, { toAuthClientError }] = await Promise.all([
-        import("@/lib/auth-client"),
-        import("@/lib/errors/auth"),
-      ]);
-      const result = await authClient.organization.getActiveMemberRole();
-
-      if (result.error) {
-        throw toAuthClientError(result.error);
-      }
-
-      return result.data.role;
+    queryFn: async ({ client, queryKey, signal }) => {
+      const owner = readQueryResult(
+        bindAuthQueryOwner({
+          queryClient: client,
+          queryKey,
+          signal,
+        }),
+      );
+      const { authClient } = await import("@/lib/auth-client");
+      readQueryResult(owner.assertCurrent());
+      const { role } = await authClientData(
+        await authClient.organization.getActiveMemberRole({
+          fetchOptions: { signal },
+        }),
+      );
+      readQueryResult(owner.accept());
+      return role;
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   }),
@@ -72,17 +95,97 @@ export const roleOptions = resourceQueryOptions(
   },
 );
 
+/** The additional membership grant is read only when role grants do not decide the operation. */
+export const activeMemberOptions = resourceQueryOptions(
+  queryOptions({
+    queryKey: rootKeys.activeMember,
+    retry: BOOT_QUERY_RETRY,
+    queryFn: async ({ client, queryKey, signal }) => {
+      const owner = readQueryResult(
+        bindAuthQueryOwner({
+          queryClient: client,
+          queryKey,
+          signal,
+        }),
+      );
+      const { authClient } = await import("@/lib/auth-client");
+      readQueryResult(owner.assertCurrent());
+      const member = await authClientData(
+        await authClient.organization.getActiveMember({
+          fetchOptions: { signal },
+        }),
+      );
+      readQueryResult(owner.accept());
+      return member;
+    },
+    staleTime: STALE_TIME.FIVE.MINUTES,
+  }),
+  {
+    resources: [RESOURCE_TYPE.USER, RESOURCE_TYPE.ORGANIZATION],
+    scope: { type: "organization" },
+  },
+);
+
+type EnsureMemberPermissionOptions = {
+  queryClient: QueryClient;
+  permissions: PermissionInput;
+};
+export const ensureMemberPermission = async ({
+  queryClient,
+  permissions,
+}: EnsureMemberPermissionOptions) => {
+  const role = await ensureRouteQueryData(queryClient, roleOptions);
+  if (memberHasPermissions({ role, billingAccess: false, permissions })) {
+    return true;
+  }
+  if (!permissions.billing?.includes("read")) {
+    return false;
+  }
+  const member = await ensureRouteQueryData(queryClient, activeMemberOptions);
+  return memberHasPermissions({
+    role: member.role,
+    billingAccess: member.billingAccess,
+    permissions,
+  });
+};
+
 /** Refreshes authentication queries; the host finishes frame cleanup after unmount. */
 export const refreshAuthQueries = async (queryClient: QueryClient) => {
   // Load the reset owner at the call boundary; it reads these query options.
   const { settleAuthTransition } = await import("@/lib/session-cache-guard");
-  await Promise.all([
-    queryClient.refetchQueries({ queryKey: rootKeys.session, type: "all" }),
-    queryClient.refetchQueries({ queryKey: rootKeys.role, type: "all" }),
-  ]);
-  await settleAuthTransition(queryClient);
   const { signalSessionChange } = await import("@/lib/account/session-signal");
-  signalSessionChange();
+  try {
+    const previousSession = queryClient.getQueryData(sessionOptions.queryKey);
+    const hadRole =
+      queryClient.getQueryState(roleOptions.queryKey) !== undefined;
+    await queryClient.cancelQueries({ predicate: isAuthBootstrapQuery });
+    await queryClient.cancelQueries({
+      queryKey: sessionOptions.queryKey,
+      exact: true,
+    });
+    // Authentication transitions are refreshed by this owner and session signals,
+    // independently of domain-resource fan-out.
+    const session = await queryClient.query(
+      resourceQueryOptions(
+        {
+          ...sessionOptions,
+          staleTime: 0,
+        },
+        { type: "independent" },
+      ),
+    );
+    await settleAuthTransition(queryClient);
+    if (
+      hadRole &&
+      session?.session.activeOrganizationId &&
+      previousSession?.user.id === session.user.id
+    ) {
+      await queryClient.query({ ...roleOptions, staleTime: 0 });
+    }
+  } finally {
+    // The preceding auth mutation may have committed even if this read failed.
+    signalSessionChange();
+  }
 };
 
 /**

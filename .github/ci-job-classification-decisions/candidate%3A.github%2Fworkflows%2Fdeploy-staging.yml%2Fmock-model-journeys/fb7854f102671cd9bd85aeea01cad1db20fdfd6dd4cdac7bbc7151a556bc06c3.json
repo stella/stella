@@ -1,0 +1,5 @@
+{
+  "kind": "support",
+  "qualifier": "Runs the candidate commit application journeys against a local stack with a mock model; promotion records staging verification only after it succeeds.",
+  "reviewedDigest": "fb7854f102671cd9bd85aeea01cad1db20fdfd6dd4cdac7bbc7151a556bc06c3"
+}

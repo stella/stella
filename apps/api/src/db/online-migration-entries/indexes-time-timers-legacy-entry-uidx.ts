@@ -7,6 +7,7 @@ import {
 export default {
   id: "indexes-time-timers-legacy-entry-uidx",
   revision: 610,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     onlineUniqueIndexDefinition(

@@ -9,7 +9,6 @@ import {
   COMPOSER_LARGE_ACTION_ROW_CLASS,
   COMPOSER_LARGE_TEXT_WELL_CLASS,
   COMPOSER_LEADING_GROUP_CLASS,
-  COMPOSER_SEND_BUTTON_CLASS,
   COMPOSER_TEXT_CLASS,
 } from "@stll/ui/composer";
 import { AiActionIcon, ArrowUpIcon, InfoIcon } from "@stll/ui/icons";
@@ -140,10 +139,10 @@ export const AssistSection = ({
           </div>
           <Button
             aria-label={t("ask")}
-            className={COMPOSER_SEND_BUTTON_CLASS}
             disabled={typed.length === 0}
             onClick={() => submit("answer")}
-            size="icon-sm"
+            size="icon-round"
+            variant="composer"
           >
             <ArrowUpIcon />
           </Button>

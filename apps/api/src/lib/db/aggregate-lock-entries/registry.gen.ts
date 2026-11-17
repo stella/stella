@@ -50,13 +50,14 @@ import entry48 from "./readerAnswerMessage";
 import entry49 from "./requestReceipt";
 import entry50 from "./run";
 import entry51 from "./sampleCase";
-import entry52 from "./schedulerClaim";
-import entry53 from "./scoutCensus";
-import entry54 from "./searchHistory";
-import entry55 from "./searchProjectionRepair";
-import entry56 from "./signal";
-import entry57 from "./signingSession";
-import entry58 from "./workspace";
+import entry52 from "./savedSearch";
+import entry53 from "./schedulerClaim";
+import entry54 from "./scoutCensus";
+import entry55 from "./searchHistory";
+import entry56 from "./searchProjectionRepair";
+import entry57 from "./signal";
+import entry58 from "./signingSession";
+import entry59 from "./workspace";
 
 export default {
   "account": entry0,
@@ -111,11 +112,12 @@ export default {
   "requestReceipt": entry49,
   "run": entry50,
   "sampleCase": entry51,
-  "schedulerClaim": entry52,
-  "scoutCensus": entry53,
-  "searchHistory": entry54,
-  "searchProjectionRepair": entry55,
-  "signal": entry56,
-  "signingSession": entry57,
-  "workspace": entry58,
+  "savedSearch": entry52,
+  "schedulerClaim": entry53,
+  "scoutCensus": entry54,
+  "searchHistory": entry55,
+  "searchProjectionRepair": entry56,
+  "signal": entry57,
+  "signingSession": entry58,
+  "workspace": entry59,
 } as const;

@@ -12,6 +12,13 @@ import { useTranslations } from "use-intl";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
+import {
+  CHAT_MEMBER_SEND_ACTION,
+  type ChatMemberSendAction,
+  type ChatThreadSendState,
+  type ChatTurnSteering,
+  isChatQueueOffered,
+} from "@stll/api-contract/chat-send-intent";
 import { Button, buttonVariants } from "@stll/ui/button";
 import { NewChatIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
@@ -285,9 +292,8 @@ export const ChatThreadPage = ({
     continuePausedTurn,
     resendLatestMessage,
     sendMessage,
-    queuedMessages,
-    removeQueuedMessage,
-    sendQueuedMessageNow,
+    queueMessage,
+    queue,
     stop,
     stopPending,
     leave,
@@ -295,6 +301,7 @@ export const ChatThreadPage = ({
     reconnecting,
     turnAbandoned,
     computerWait,
+    turnSteering,
     turnSentAt,
     turnsStarted,
     alwaysApprovedTools,
@@ -324,6 +331,7 @@ export const ChatThreadPage = ({
     approvalPendingMessageId,
     localRunQuestion,
     answerLocalRunQuestion,
+    turnAwaitsMember,
   } = useChatSession({
     exceptionScope: { type: "handler", handlerId: "chat-session.thread-page" },
     chat,
@@ -529,7 +537,10 @@ export const ChatThreadPage = ({
   // Stable across stream chunks: the composer takes this as a prop, and a
   // closure over `messages` would re-render it once per chunk.
   const handleSubmit = useLatestCallback(
-    async (draft: ChatInputDraft): Promise<ChatSendOutcome> => {
+    async (
+      action: ChatMemberSendAction,
+      draft: ChatInputDraft,
+    ): Promise<ChatSendOutcome> => {
       const newThreadMessages: string[] = [];
       const handledReserved = runReservedChatCommand(draft.html, {
         new: (args) => {
@@ -666,9 +677,20 @@ export const ChatThreadPage = ({
         notifyUserError(message.error, t("chat.sendErrorMessageEmpty"));
         return CHAT_SEND_KEPT;
       }
-      await sendMessage(message.value);
-      return CHAT_SEND_SENT;
+      const send = {
+        [CHAT_MEMBER_SEND_ACTION.send]: sendMessage,
+        [CHAT_MEMBER_SEND_ACTION.queue]: queueMessage,
+      } satisfies Record<ChatMemberSendAction, typeof sendMessage>;
+      return await send[action](message.value);
     },
+  );
+  const handleSend = useLatestCallback(
+    async (draft: ChatInputDraft) =>
+      await handleSubmit(CHAT_MEMBER_SEND_ACTION.send, draft),
+  );
+  const handleQueue = useLatestCallback(
+    async (draft: ChatInputDraft) =>
+      await handleSubmit(CHAT_MEMBER_SEND_ACTION.queue, draft),
   );
 
   return (
@@ -797,15 +819,10 @@ export const ChatThreadPage = ({
                           onContinuePausedTurn={handleContinuePausedTurn}
                           onResend={resendLatestMessage}
                           onSendWithoutAnonymization={sendWithoutAnonymization}
-                          queuedMessageActions={{
-                            remove: removeQueuedMessage,
-                            sendNow: sendQueuedMessageNow,
-                          }}
-                          queuedMessages={queuedMessages}
+                          queue={queue}
                           stickyUserMessages
                           streamdownComponents={streamdownComponents}
                           computerWait={computerWait}
-                          newestLocalTurn={data.newestLocalTurn}
                           threadRef={threadRef}
                           turnSentAt={turnSentAt}
                           userMessageEdit={userMessageEdit}
@@ -897,8 +914,7 @@ export const ChatThreadPage = ({
                           );
                           return CHAT_SEND_KEPT;
                         }
-                        await sendMessage(message.value);
-                        return CHAT_SEND_SENT;
+                        return await sendMessage(message.value);
                       }),
                       "chat-thread-page.submit",
                     );
@@ -977,7 +993,15 @@ export const ChatThreadPage = ({
                     }}
                     stopping={stopPending}
                     onFocusChange={setComposerFocused}
-                    onSubmit={handleSubmit}
+                    onSubmit={handleSend}
+                    onQueue={handleQueue}
+                    queueOffered={isChatQueueOffered(
+                      composerSendState({
+                        isGenerating,
+                        turnAwaitsMember,
+                        steering: turnSteering,
+                      }),
+                    )}
                   />
                 </div>
               </div>
@@ -991,6 +1015,26 @@ export const ChatThreadPage = ({
       </ChatMattersContext>
     </RenderStormRegion>
   );
+};
+
+/**
+ * What the composer knows of the thread when it offers the queue action: a
+ * turn works or waits on the member, with whether it takes a message
+ * mid-turn, or none does.
+ */
+const composerSendState = ({
+  isGenerating,
+  turnAwaitsMember,
+  steering,
+}: {
+  isGenerating: boolean;
+  turnAwaitsMember: boolean;
+  steering: ChatTurnSteering;
+}): ChatThreadSendState => {
+  if (turnAwaitsMember) {
+    return { type: "waiting_on_member", steering };
+  }
+  return isGenerating ? { type: "working", steering } : { type: "idle" };
 };
 
 const ChatThreadScrollSurface = ({ children }: { children: ReactNode }) => (

@@ -425,7 +425,7 @@ type ChatSendRequestBase = {
   docxEditRepresentation?: "tracked-changes" | "direct";
   editApplyMode?: "manual" | "auto";
   runMode?: ChatRunMode;
-  /** Where the turn runs; absent runs it on stella's own models. */
+  /** Where the turn runs; absent runs it where its thread runs. */
   runTarget?: ChatRunTarget;
   /** AG-UI run correlation minted by TanStack ChatClient. */
   runId: string;

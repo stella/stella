@@ -198,10 +198,6 @@ export const brandValidatedPropertyId = (
 ): SafeId<"property"> | null =>
   isUuid(propertyId) ? toSafeId<"property">(propertyId) : null;
 
-export const brandPersistedPlaybookId = (
-  playbookId: string,
-): SafeId<"playbook"> => toSafeId<"playbook">(playbookId);
-
 export const brandPersistedPlaybookDefinitionId = (
   playbookDefinitionId: string,
 ): SafeId<"playbookDefinition"> =>
@@ -351,11 +347,6 @@ export const brandPersistedSearchHistoryEntryId = (
 export const brandPersistedTemplateLookupFormatId = (
   formatId: string,
 ): SafeId<"templateLookupFormat"> => toSafeId<"templateLookupFormat">(formatId);
-
-export const brandPersistedCaseLawResearchColumnId = (
-  researchColumnId: string,
-): SafeId<"caseLawResearchColumn"> =>
-  toSafeId<"caseLawResearchColumn">(researchColumnId);
 
 export const brandPersistedTimeEntryId = (
   timeEntryId: string,

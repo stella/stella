@@ -126,6 +126,7 @@ const seedAcceptedTurn = async () => {
     workspaceId: ids.wsA1,
   });
   const acceptance = createChatTurnAcceptance({
+    source: { type: "member" },
     organizationId: ids.orgA,
     threadId,
     userId: ids.userA1,
@@ -807,6 +808,7 @@ describe("the thread a stopped turn belongs to", () => {
     expect((await stop({ threadId, turnId })).status).toBe(200);
     // A new message starts the thread's next turn.
     const next = createChatTurnAcceptance({
+      source: { type: "member" },
       organizationId: ids.orgA,
       threadId,
       userId: ids.userA1,

@@ -154,14 +154,17 @@ test("a fresh reader shows connection guidance when its first chat request canno
   const composer = await openFreshReader(page);
   await composer.getByRole("textbox").fill(QUESTION);
   await composer.getByRole("button", { name: "Send message" }).click();
-  await expect(page.locator('[data-slot="docked-chat-thread"]')).toContainText(
-    messages.chat.sendErrorConnectionFailed,
-  );
+  // Not sent: the question is back in the composer, not in the thread, and
+  // the notice says why.
   await expect(
-    page.getByRole("button", { name: "Resend", exact: true }),
+    page.getByText(messages.chat.sendErrorConnectionFailed),
   ).toBeVisible();
+  await expect(composer.getByRole("textbox")).toContainText(QUESTION);
   await expect(
     page.locator('[data-slot="docked-chat-thread"]'),
-  ).not.toContainText(messages.chat.sendError);
+  ).not.toContainText(QUESTION);
+  await expect(
+    page.getByText(messages.chat.sendError, { exact: true }),
+  ).toHaveCount(0);
   expect(sends).toBe(1);
 });

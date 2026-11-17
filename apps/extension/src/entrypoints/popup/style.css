@@ -6,6 +6,8 @@
 }
 
 body {
+  background: var(--background);
+  color: var(--foreground);
   margin: 0;
   width: 360px;
 }
@@ -23,20 +25,12 @@ main {
   min-width: 0;
 }
 
+/* The extension's own icon, the same in both colour schemes. */
 .mark {
-  align-items: center;
-  background: var(--primary);
-  border-radius: 9px;
-  color: var(--primary-foreground);
-  display: flex;
+  display: block;
   flex: 0 0 auto;
   height: 32px;
-  justify-content: center;
   width: 32px;
-}
-
-.mark img {
-  filter: invert(1);
 }
 
 h1 {
@@ -44,19 +38,22 @@ h1 {
   margin: 0;
 }
 
+/* A status is a dot and a label, never framed like a button. */
 .status {
   align-items: center;
-  border: 1px solid var(--secondary);
-  border-radius: 999px;
   color: var(--muted-foreground);
   display: flex;
   font-size: 12px;
   gap: 6px;
   line-height: 1.3;
   margin: 0;
+}
+.status[hidden] {
+  display: none;
+}
+.title-row .status {
   margin-inline-start: auto;
   max-width: 60%;
-  padding: 3px 10px;
 }
 .status-marker {
   background: var(--status-idle);
@@ -74,10 +71,6 @@ h1 {
 }
 .desktop {
   display: flex;
-}
-.desktop .status {
-  margin-inline-start: 0;
-  max-width: none;
 }
 .desktop .status[data-state="connected"] .status-marker {
   background: var(--status-connected);

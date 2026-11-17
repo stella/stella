@@ -362,7 +362,8 @@ const mcpCall = async (
       "content-type": "application/json",
     },
     body: JSON.stringify({ id, jsonrpc: "2.0", method, params }),
-    signal: AbortSignal.timeout(10_000),
+    // A first open starts the stella browser, which takes a while on a busy runner.
+    signal: AbortSignal.timeout(60_000),
   });
   const body: unknown = await response.json();
   return typeof body === "object" && body !== null
@@ -403,17 +404,24 @@ type FakeAgentStep = {
  * The agent's turn: a stella search through the run's stella MCP binding,
  * then the library: open it, search, open the first result, read it, and
  * try the account page, which asks for a sign-in. It answers citing the
- * decision's title and address.
+ * decision's title and address. A run that continues the chat only reads
+ * the page its tab shows.
  */
 const runFakeBrowserAgent = async ({
   browser,
   browserServer,
+  scenario,
   stella,
   stellaServer,
   start,
 }: {
   browser: McpEndpoint;
   browserServer: string;
+  /**
+   * `act` searches by typing and clicking; `read` only opens and reads;
+   * `continue` reads the page the chat's tab shows, as its last run left it.
+   */
+  scenario: "act" | "continue" | "read";
   stella: McpEndpoint;
   stellaServer: string;
   start: string;
@@ -422,6 +430,10 @@ const runFakeBrowserAgent = async ({
   answer: string;
   /** The canaries the decision's page text held, as the agent read it. */
   read: string[];
+  /** The reading scenario's own record of its steps. */
+  notes?: ReadScenarioNotes;
+  /** What the chat's tab showed to a run that continued the chat. */
+  continued?: { title: string | null; text: string };
 }> => {
   const steps: FakeAgentStep[] = [];
   let requestId = 0;
@@ -460,6 +472,37 @@ const runFakeBrowserAgent = async ({
     });
     return text;
   };
+  await call(stellaServer, stella, "search_case_law", { query: FIXTURE_QUERY });
+  if (scenario === "continue") {
+    // The page may still be loading again after the sign-in: the agent
+    // looks a few times, as one told the member signed in would.
+    const look = async () =>
+      v.safeParse(
+        pageSchema,
+        JSON.parse(await call(browserServer, browser, "snapshot", {})),
+      );
+    let shown = await look();
+    for (let tries = 1; !shown.success && tries < 10; tries += 1) {
+      await Bun.sleep(300);
+      shown = await look();
+    }
+    return {
+      answer: "Read the page the chat's tab shows.",
+      continued: shown.success
+        ? { text: shown.output.text, title: shown.output.title }
+        : { text: "", title: null },
+      read: [],
+      steps,
+    };
+  }
+  if (scenario === "read") {
+    const reader = await runFakeBrowserReader({
+      call: async (tool, args) =>
+        await call(browserServer, browser, tool, args),
+      start,
+    });
+    return { ...reader, steps };
+  }
   const page = (text: string) => v.parse(pageSchema, JSON.parse(text));
   const refOf = (
     elements: v.InferOutput<typeof pageSchema>["elements"],
@@ -471,7 +514,6 @@ const runFakeBrowserAgent = async ({
         element.role === role && (name === undefined || element.name === name),
     )?.ref ?? panic(`The page has no ${role} ${name ?? ""}`);
 
-  await call(stellaServer, stella, "search_case_law", { query: FIXTURE_QUERY });
   const home = page(await call(browserServer, browser, "open", { url: start }));
   await call(browserServer, browser, "type", {
     ref: refOf(home.elements, "searchbox"),
@@ -505,6 +547,113 @@ const runFakeBrowserAgent = async ({
     read,
     steps,
     answer: `The notice period runs from delivery, as held in [${decision.title}](${decision.url}).`,
+  };
+};
+
+/** What the reading agent noted of its steps, for the test; no page text. */
+type ReadScenarioNotes = {
+  /** Windows of the decision it read: the first, then by cursor. */
+  windows: number;
+  /** Text matches find counted, and the headings it listed. */
+  matches: number;
+  headings: string[];
+  /** What a click answered on a browser that only reads. */
+  clickRefused: string | null;
+  /** The status the sign-in page answered. */
+  signIn: string | null;
+  /** What the probe page printed about `navigator.webdriver`. */
+  webdriver: string | null;
+};
+
+const windowSchema = v.object({
+  window: v.object({ next: v.optional(v.string()) }),
+});
+
+const foundSchema = v.object({
+  matches: v.optional(v.array(v.object({ cursor: v.string() }))),
+  total: v.optional(v.number()),
+  headings: v.optional(v.array(v.object({ text: v.string() }))),
+});
+
+const refusalSchema = v.object({
+  status: v.string(),
+  refused: v.optional(v.string()),
+});
+
+/**
+ * The agent's turn on a browser that only reads: a stella search, then the
+ * library's results page by its address, the decision read a window at a
+ * time, find and the outline, a click it is refused, the probe page, the
+ * sign-in page it leaves its tab on, and an answer citing the decision.
+ */
+const runFakeBrowserReader = async ({
+  call,
+  start,
+}: {
+  call: (tool: string, args: Record<string, unknown>) => Promise<string>;
+  start: string;
+}): Promise<{ answer: string; read: string[]; notes: ReadScenarioNotes }> => {
+  const page = (text: string) => v.parse(pageSchema, JSON.parse(text));
+  const results = page(
+    await call("open", {
+      url: new URL(`/search?q=${encodeURIComponent(FIXTURE_QUERY)}`, start)
+        .href,
+    }),
+  );
+  const href =
+    results.elements.find(
+      ({ name, role }) => role === "link" && name === DECISION.title,
+    )?.href ?? panic("The results list no decision");
+  const first = page(await call("open", { url: href }));
+  const texts = [first.text];
+  const clicked = v.parse(
+    refusalSchema,
+    JSON.parse(
+      await call("click", {
+        ref: first.elements.at(0)?.ref ?? panic("The decision has no link"),
+      }),
+    ),
+  );
+  let next = v.parse(windowSchema, JSON.parse(await call("snapshot", {})))
+    .window.next;
+  while (next !== undefined && texts.length < 5) {
+    const text = await call("snapshot", { cursor: next });
+    texts.push(page(text).text);
+    next = v.parse(windowSchema, JSON.parse(text)).window.next;
+  }
+  const found = v.parse(
+    foundSchema,
+    JSON.parse(await call("find", { query: FIXTURE_QUERY })),
+  );
+  const match = found.matches?.at(0)?.cursor;
+  if (match !== undefined) {
+    page(await call("snapshot", { cursor: match }));
+  }
+  const outline = v.parse(
+    foundSchema,
+    JSON.parse(await call("find", { headings: true })),
+  );
+  const probe = page(
+    await call("open", { url: new URL("/probe", start).href }),
+  );
+  // Last, so the chat's tab is left on the page the member signs in on.
+  const signIn = v.parse(
+    refusalSchema,
+    JSON.parse(await call("open", { url: new URL("/account", start).href })),
+  );
+  return {
+    answer: `The notice period runs from delivery, as held in [${first.title}](${first.url}).`,
+    notes: {
+      clickRefused: clicked.refused ?? null,
+      headings: (outline.headings ?? []).map(({ text }) => text),
+      matches: found.total ?? 0,
+      signIn: signIn.status,
+      webdriver: /webdriver: (\w+)/u.exec(probe.text)?.[1] ?? null,
+      windows: texts.length,
+    },
+    read: FIXTURE_CANARIES.filter((canary) =>
+      texts.some((text) => text.includes(canary)),
+    ),
   };
 };
 
@@ -574,6 +723,9 @@ export const claudeMcpEndpoints = (
     }),
   );
 
+const browseScenario = (value: string | undefined) =>
+  value === "continue" || value === "read" ? value : "act";
+
 /**
  * The agent's turn against the servers a harness registered, starting at
  * `FAKE_BROWSER_START`.
@@ -593,6 +745,7 @@ export const browseAsAgent = async ({
     browserServer,
     stella: endpoints.get(stellaServer) ?? panic("No stella server registered"),
     stellaServer,
+    scenario: browseScenario(process.env["FAKE_BROWSER_SCENARIO"]),
     start:
       process.env["FAKE_BROWSER_START"] ?? panic("FAKE_BROWSER_START is unset"),
   });

@@ -212,6 +212,8 @@ export const AssistantMessageSchema = v.object({
   parent_tool_use_id: ParentToolUseId,
   /** Set on the synthetic message an API failure produces. */
   error: v.optional(v.string()),
+  /** The message's entry in the session's transcript. */
+  uuid: v.optional(v.string()),
 });
 
 const TextBlockSchema = v.object({

@@ -227,7 +227,7 @@ fn run_start(model: &str) -> SidecarRunStart {
     attachments: Vec::new(),
     skill_folders: Vec::new(),
     tool_path: Vec::new(),
-    harness_session_id: None,
+    session: SidecarRunSession::Fresh,
     policy: RunPolicy {
       network: NetworkPolicy::Open,
       fs: FsPolicy::Workspace,
@@ -302,6 +302,7 @@ fn ended(outcome: RunOutcome) -> SidecarRunOutput {
   SidecarRunOutput::Finished {
     outcome,
     harness_session_id: None,
+    harness_boundary: None,
   }
 }
 
@@ -338,6 +339,7 @@ fn a_run_streams_its_outputs_in_order_and_finishes() {
         SidecarRunOutput::Finished {
           outcome: RunOutcome::Completed,
           harness_session_id: Some("thread-a".to_owned()),
+          harness_boundary: Some("turn-1".to_owned()),
         },
       ]
     );
@@ -1581,12 +1583,15 @@ mod stand_in {
     }
   }
 
+  /// A run's end; a completed one names where its turn ended, as a holder's
+  /// does.
   fn finished(run_id: &str, outcome: &str, session: Option<&str>) -> Value {
     json!({
       "type": "run.finished",
       "runId": run_id,
       "outcome": outcome,
       "harnessSessionId": session,
+      "harnessBoundary": (outcome == "completed").then_some("turn-1"),
     })
   }
 

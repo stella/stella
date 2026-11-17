@@ -293,3 +293,58 @@ test("keeps the attributes of a self-closing element when filling it", () => {
     "<a><b>x</b></a>",
   );
 });
+
+test("matches the XML oracle across generated qualified names and name-prefix siblings", () => {
+  const start = fc.constantFrom("a", "Z", "_", "é", "Δ", "項");
+  const rest = fc.array(
+    fc.constantFrom("a", "Z", "0", "_", "-", ".", "é", "Δ", "項"),
+    { maxLength: 16 },
+  );
+  const name = fc
+    .tuple(start, rest)
+    .map(([first, remaining]) => first + remaining.join(""));
+  const qualifiedName = fc.oneof(
+    name,
+    fc.tuple(name, name).map(([prefix, local]) => `${prefix}:${local}`),
+  );
+  assertProperty(
+    "matches the XML oracle across generated qualified names and name-prefix siblings",
+    fc.property(
+      qualifiedName,
+      fc.integer({ min: 1, max: 24 }),
+      (selected, depth) => {
+        const open = `<${selected} data-value="> keep">`;
+        const close = `</${selected}>`;
+        const sibling = `<${selected}Extra>keep</${selected}Extra>`;
+        const decoration =
+          "<!-- ignored <x/> --><![CDATA[text > keep]]><?note keep?>";
+        const nested = `${open.repeat(depth)}${decoration}<${selected}/>${sibling}text${close.repeat(depth)}`;
+        const wrapper = `${selected}-container`;
+        const xml = `<${wrapper}>${sibling}${nested}${sibling}</${wrapper}>`;
+        const expected = `<${wrapper}>${sibling}${open}updated${close}${sibling}</${wrapper}>`;
+        const actual = replaceXmlElementContent(
+          xml,
+          selected,
+          "updated",
+        ).unwrap();
+        expect(parseXmlWithOracle(actual)).toEqual(
+          parseXmlWithOracle(expected),
+        );
+        expect(actual).toBe(expected);
+      },
+    ),
+  );
+});
+
+test("retains lexical behavior for empty selectors, unusual names and whitespace", () => {
+  for (const [xml, name, expected] of [
+    ["<>text</>", "", "found"],
+    ["<item>text</item>", "", "absent"],
+    ["<item>text</item>", "item extra", "absent"],
+    ["<item!>text</item!>", "item!", "found"],
+    ["<itemExtra>text</itemExtra>", "item", "absent"],
+    ["<item\u00a0data='keep'>text</item>", "item", "found"],
+  ] as const) {
+    expect(firstXmlElement(xml, name).kind).toBe(expected);
+  }
+});

@@ -81,6 +81,9 @@
     "pdfSignAppearance": "Podpis",
     "pdfSignCertificate": "Podpisový certifikát",
     "pdfSignDocument": "Dokument",
+    "pdfSignDownloadDriver": "Stiahnuť ovládač",
+    "pdfSignDriverMissing": "Karta v čítačke potrebuje ovládač {vendor}, ktorý nie je nainštalovaný. Na podpisovanie touto kartou ho nainštalujte.",
+    "pdfSignDriverNeedsUpdate": "Nainštalovaný ovládač {vendor} na procesore tohto Macu nefunguje. Na podpisovanie touto kartou nainštalujte jeho aktuálnu verziu.",
     "pdfSignErrorCode": "Kód chyby: {code}",
     "pdfSignErrors": {
       "authenticationRequired": "Kľúčenka potrebuje váš súhlas s prístupom k certifikátu. Skúste to znova a prístup povoľte.",
@@ -118,6 +121,9 @@
       "startAgain": "Podpisovanie nemohlo pokračovať. Začnite podpisovať znova v stelle.",
       "temporarilyUnavailable": "stella teraz podpísanie nedokončila. Skúste to znova.",
       "tokenNotPresent": "Čipová karta alebo token nie je pripojený. Pripojte ho a skúste to znova.",
+      "tokenSigningFailed": "Čipová karta alebo token dokument nepodpísal.",
+      "tokenTimeout": "Čipová karta alebo token neodpovedal včas. Skúste to znova.",
+      "tokenUnreadable": "Čipovú kartu alebo token sa nepodarilo prečítať. Skúste to znova.",
       "unsupportedAlgorithm": "Kľúčom tohto certifikátu nemožno vytvoriť podpis, ktorý dokument vyžaduje. Vyberte iný certifikát.",
       "wouldBreakSignatures": "Podpísaním tohto PDF by prestali platiť podpisy, ktoré už obsahuje."
     },
@@ -127,6 +133,13 @@
     "pdfSignMatter": "Spis",
     "pdfSignNoIdentities": "V kľúčenke nie je k dispozícii žiadny podpisový certifikát.",
     "pdfSignNoIdentitiesCertificateStore": "V úložisku certifikátov nie je k dispozícii žiadny podpisový certifikát.",
+    "pdfSignOnToken": "Uložené na: {tokenLabel}",
+    "pdfSignPin": "PIN",
+    "pdfSignPinFinalTry": "Ďalší nesprávny PIN kartu alebo token zablokuje.",
+    "pdfSignPinLow": "Už bol zadaný nesprávny PIN. Skontrolujte ho pozorne.",
+    "pdfSignPinPad": "Na podpísanie dokumentu {documentName} zadajte PIN na čítačke kariet.",
+    "pdfSignPinPrompt": "Na podpísanie dokumentu {documentName} zadajte PIN karty alebo tokenu.",
+    "pdfSignRescanCards": "Znova načítať karty",
     "pdfSignRetry": "Skúsiť znova",
     "pdfSignServer": "Žiada",
     "pdfSignSign": "Podpísať",
@@ -135,6 +148,7 @@
     "pdfSignStampOnPage": "Viditeľná pečiatka na strane {pageNumber}",
     "pdfSignSubtitle": "Súkromný kľúč zostáva vo vašej kľúčenke; tento počítač opúšťa len podpis.",
     "pdfSignSubtitleCertificateStore": "Súkromný kľúč zostáva vo vašom úložisku certifikátov; tento počítač opúšťa len podpis.",
+    "pdfSignSubtitleToken": "Súkromný kľúč zostáva na vašej čipovej karte alebo tokene; tento počítač opúšťa len podpis.",
     "pdfSignTitle": "Podpísať toto PDF?",
     "pdfSignUnsupported": "Podpisovanie vyžaduje macOS alebo Windows. Dokument podpíšete na Macu alebo na počítači s Windows.",
     "pdfSignVersion": "Verzia",
@@ -584,21 +598,21 @@
   },
   "dictation": {
     "title": "Diktovanie",
-    "description": "Podržte {shortcut} a hovorte. Text sa zobrazí v aplikácii, ktorú práve používate. Reč sa prevádza na tomto počítači a neukladá sa. So zapnutou úpravou pomocou AI sa prevedený text (nie zvuk) odošle cez stellu poskytovateľovi AI vašej organizácie, ktorý opraví chyby a formátovanie; stella ho neukladá.",
+    "description": "Podržte {shortcut} a hovorte. Text sa zobrazí v aplikácii, ktorú práve používate. Reč sa prevádza na tomto počítači a neukladá sa.",
     "descriptionCloud": "Podržte {shortcut} a hovorte. Text sa zobrazí v aplikácii, ktorú práve používate. Reč prevádza stella AI a stella ju neukladá.",
     "cleanup": {
       "title": "Upraviť pomocou AI",
-      "description": "Reč sa naďalej prevádza na tomto počítači a zvuk ho nikdy neopustí. So zapnutou úpravou sa prevedený text odošle cez stellu poskytovateľovi AI vašej organizácie, ktorý opraví chyby rozpoznávania a použije vyslovenú interpunkciu a formátovanie, napríklad „nový riadok“ alebo „tučne“. stella ho neukladá. Úprava sa dozvie aj druh aplikácie, do ktorej diktujete, napríklad e-mail alebo chat, aby jej text zodpovedal.",
-      "descriptionCloud": "So zapnutou úpravou stella AI tiež opraví chyby rozpoznávania v prevedenom texte a použije vyslovenú interpunkciu a formátovanie, napríklad „nový riadok“ alebo „tučne“. Úprava sa dozvie aj druh aplikácie, do ktorej diktujete, napríklad e-mail alebo chat, aby jej text zodpovedal."
+      "description": "Opraví chyby rozpoznávania a vyslovené formátovanie, napríklad „nový riadok“ alebo „tučne“, a prispôsobí text aplikácii, napríklad e-mailu. Cez stellu sa poskytovateľovi AI vašej organizácie odošle len text, nie zvuk; stella ho neukladá.",
+      "descriptionCloud": "stella AI navyše opraví chyby rozpoznávania a vyslovené formátovanie, napríklad „nový riadok“ alebo „tučne“, a prispôsobí text aplikácii, napríklad e-mailu."
     },
     "context": {
       "windowTitle": {
         "title": "Zdieľať názov okna s úpravou pomocou AI",
-        "description": "Úprava dostane aj názov okna, do ktorého diktujete, aby rozlíšila napríklad zmluvu od internej poznámky. Názvy okien môžu obsahovať mená klientov alebo názvy spisov. Názov sa odošle cez stellu poskytovateľovi AI vašej organizácie a stella ho neukladá."
+        "description": "Pomôže odlíšiť zmluvu od internej poznámky. Názvy okien môžu obsahovať mená klientov alebo vecí."
       },
       "textBeforeCursor": {
         "title": "Zdieľať text pred kurzorom s úpravou pomocou AI",
-        "description": "Úprava dostane aj najviac {limit, number} znakov pred kurzorom, aby diktát nadviazal na text, ktorý píšete. Časť dokumentu, v ktorom práve ste, sa tak odošle cez stellu poskytovateľovi AI vašej organizácie a stella ju neukladá."
+        "description": "Najviac {limit, number} znakov dokumentu, v ktorom ste, aby diktát nadviazal na to, čo píšete."
       }
     },
     "keptInHistory": "Každý diktát sa uloží aj do histórie schránky v tomto počítači.",
@@ -610,16 +624,25 @@
       "unavailableRegion": "stella AI zatiaľ v oblasti vašej organizácie prevod reči neponúka.",
       "unavailableProvider": "Poskytovateľ AI vašej organizácie prevod reči neponúka.",
       "unavailable": "Prevod pomocou stella AI teraz nie je k dispozícii.",
-      "model": "Model prevodu"
+      "model": "Model prevodu",
+      "chooseModel": "Zvoľte model",
+      "outsideRegion": "Mimo vášho regiónu",
+      "outsideRegionNote": "Tento model spracúva zvuk mimo regiónu vašej organizácie.",
+      "retainsData": "Uchováva váš zvuk",
+      "retainsDataTitle": "{provider} si ponecháva, čo diktujete",
+      "retainsDataWarning": "Tento model beží na účte bez nulového uchovávania údajov. {provider} ukladá zvuk aj prepis všetkého, čo nadiktujete, podľa vlastných podmienok a mimo kontroly stella. Nediktujte s ním dôverné ani klientske informácie."
     },
     "language": {
       "title": "Jazyk diktovania",
-      "description": "Reč sa rozpoznáva v tomto jazyku a úprava v ňom text ponechá. Automaticky sa použijú jazyky zobrazenia a klávesníc tohto počítača.",
+      "description": "Automaticky sa použijú jazyky zobrazenia a klávesníc tohto počítača.",
       "automatic": "Automaticky",
       "automaticWith": "Automaticky ({languages})",
       "noResults": "Nenašli sa žiadne jazyky"
     },
     "modelNeeded": "Rečový model beží na tomto počítači.",
+    "modelInstalled": "Model reči ({size} MB) je v tomto počítači.",
+    "removeModel": "Odstrániť",
+    "removeFailed": "Model reči sa nepodarilo odstrániť. Skúste to znova.",
     "download": "Stiahnuť ({size} MB)",
     "downloading": "Sťahovanie rečového modelu: {percent} %",
     "downloadFailed": "Rečový model sa nepodarilo stiahnuť.",
@@ -702,6 +725,11 @@
     "howDocumentsBody": "Pri dokumente v stella zvoľte Otvoriť. Po uložení sa úprava vráti do stella ako nová verzia.",
     "howClipboard": "Schránka",
     "howClipboardBody": "Kopírujte ako zvyčajne a stlačením {shortcut} vyberte zo skopírovaného obsahu.",
+    "howSigning": "Podpisovanie PDF",
+    "howSigningBodyMac": "Pri PDF v stelle zvoľte „Podpísať v stella desktop“. Certifikát zostane vo vašej kľúčenke alebo na čipovej karte a podpísané PDF sa do stelly vráti ako nová verzia.",
+    "howSigningBodyPc": "Pri PDF v stelle zvoľte „Podpísať v stella desktop“. Certifikát zostane v úložisku certifikátov alebo na čipovej karte a podpísané PDF sa do stelly vráti ako nová verzia.",
+    "howDictation": "Diktovanie",
+    "howDictationBody": "Podržte skratku a hovorte, text sa zobrazí v aplikácii, ktorú používate. Zapnúť ho môžete v jednom z ďalších krokov.",
     "howActivity": "Aktivita",
     "howActivityBody": "Pozrite sa, kam sa váš deň podel, a vytvorte z neho koncepty časových záznamov. Vypnuté, kým ju nespustíte.",
     "activityTitle": "Ako funguje Aktivita",
@@ -811,9 +839,12 @@
       "storage": "Pripojenie sa v tomto počítači nepodarilo načítať ani uložiť."
     },
     "callbackConnectedTitle": "ChatGPT je pripojený",
-    "callbackConnectedBody": "Túto kartu môžete zavrieť a vrátiť sa do stelly.",
+    "callbackConnectedBody": "Požiadavky na AI v stelle teraz využívajú váš plán ChatGPT.",
     "callbackNotConnectedTitle": "ChatGPT sa nepripojil",
-    "callbackNotConnectedBody": "Vráťte sa do stelly, zistite, čo sa stalo, a skúste to znova.",
+    "callbackNotConnectedBody": "Dôvod nájdete v aplikácii stella. Ak to chcete skúsiť znova, otvorte {section} › {group} a kliknite na „{button}“.",
+    "callbackAccount": "Účet",
+    "callbackPlan": "Plán",
+    "callbackCloseTab": "Túto kartu môžete zavrieť.",
     "claudeCode": {
       "title": "Claude Code",
       "description": "Používajte svoje predplatné Claude pre lokálnych agentov v stelle. Využitie sa započítava do plánu Claude, oddelene od predplatného stelly.",
@@ -870,6 +901,18 @@
       "runs_can_write": "Do tohto priečinka môžu miestne behy zapisovať, preto v ňom zručnosť byť nemôže.",
       "network_folder": "Tento priečinok je na sieťovom úložisku. Zručnosti musia byť na vlastnom disku tohto počítača.",
       "path_changed": "Niektorý nadradený priečinok sa zmenil. Odstráňte ho a pridajte znova."
+    }
+  },
+  "signingDriver": {
+    "title": "Ovládač čipovej karty",
+    "description": "Ak stella desktop sama nenájde ovládač vašej čipovej karty alebo tokenu, vyberte jeho modul PKCS #11. Načítava sa len na podpisovanie PDF, v samostatnom procese.",
+    "choose": "Vybrať modul",
+    "remove": "Odstrániť",
+    "notice": {
+      "action_failed": "Nepodarilo sa to. Skúste to znova.",
+      "missing": "Tento súbor už neexistuje.",
+      "needs_update": "Tento modul na procesore tohto Macu nefunguje. Nainštalujte aktuálnu verziu ovládača.",
+      "not_a_library": "Tento súbor nie je modul PKCS #11."
     }
   },
   "localLinkedFolders": {

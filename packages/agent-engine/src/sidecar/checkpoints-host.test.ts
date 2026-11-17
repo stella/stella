@@ -169,7 +169,7 @@ const runStart = (at: Place): SidecarRunStart => ({
   skillFolders: [],
   toolPath: [],
   unreadablePaths: [],
-  harnessSessionId: null,
+  session: { type: "fresh" },
   policy: { network: "open", fs: "workspace", approvals: "ask" },
   mcp: {
     serverName: "stella",

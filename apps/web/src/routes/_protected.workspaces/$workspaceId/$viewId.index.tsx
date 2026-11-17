@@ -111,7 +111,13 @@ export const Route = createFileRoute(
       },
       overview: async () => {
         await Promise.all([
-          ensureRouteQueryData(queryClient, overviewOptions(workspaceId)),
+          ensureRouteQueryData(
+            queryClient,
+            overviewOptions({
+              workspaceId,
+              organizationId: context.user.activeOrganizationId,
+            }),
+          ),
           ensureRouteInfiniteQueryData(
             queryClient,
             overviewActivityOptions({

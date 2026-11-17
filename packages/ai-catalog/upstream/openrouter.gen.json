@@ -1051,6 +1051,12 @@
       }
     },
     {
+      "id": "qwen/qwen4-max",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
       "id": "reflection/beam-1.0-501b-a23b",
       "reasoning": {
         "default_effort": "max"
@@ -1208,6 +1214,12 @@
     },
     {
       "id": "z-ai/glm-5.2",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "z-ai/glm-5.2:batch",
       "reasoning": {
         "default_effort": "high"
       }

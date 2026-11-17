@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "09c441abbf2a8aab71510fbcf86ce4d54e64d76375e1e7e60a8e05ce53be3c70",
+  "sourceUrl": "https://eureka.mf.gov.pl/api/public/v1/wyszukiwarka/informacje/?size=1&page=0&sort=ID_INFORMACJI%2Cdesc (POST {\"filter\": {\"KATEGORIA_INFORMACJI\": [8]}, \"columns\": [\"ID_INFORMACJI\", \"KATEGORIA_INFORMACJI\", \"SYG\", \"DT_WYD\", \"TEZA\", \"STATUS_INFORMACJI\", \"DATA_PUBLIKACJI\", \"AUTOR\", \"SLOWA_KLUCZOWE\", \"PRZEPISY\", \"ZAGADNIENIA\", \"INFORMACJA_ZMIENIANA\", \"MIEJ_PUB\", \"INN_ZROD\", \"RODZAJ_DECYZJI\", \"DAT_WAZ_OD\", \"DAT_WAZ_DO\", \"STAN_PRAW\", \"NOMENKLATURA_SCALONA\", \"KLASYFIKACJA_PKWIU\", \"KLASYFIKACJA_PKOB\", \"RODZAJ_WYROBU_AKCYZOWEGO\", \"DATA_REJESTRACJI\", \"KOMENTARZE_BIP\", \"KOM_BIP_OPIS\", \"SADY\", \"DATA_ORZECZENIA\", \"SYGNATURA_ORZECZENIA\", \"DATA_ODP\", \"SYGN_ODP\", \"DATA_INTERP_ZAPYT\", \"NR_INTERP_ZAPYT\", \"DATA_WYSLANIA_NEWSLETTERA\", \"KATEGORIA_TEMAT_NEWS\", \"TYTUL_NEWS\"], \"searchInFullPhrase\": false, \"searchInContent\": false, \"searchInSynonyms\": false, \"warunkiDodatkowe\": []})",
+  "capturedAt": "2026-10-28T18:33:46.744708+00:00",
+  "note": "One publisher record from this category, retained verbatim"
+}

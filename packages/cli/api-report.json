@@ -294,6 +294,7 @@
         "./capabilities/organization-settings.deepl-availability.get.json",
         "./capabilities/organization-settings.document-ocr-availability.get.json",
         "./capabilities/organization-settings.get.json",
+        "./capabilities/organization-settings.members.billing-access.update.json",
         "./capabilities/organization-settings.practice-jurisdictions.update.json",
         "./capabilities/organization-settings.preview.json",
         "./capabilities/organization-settings.sanctions-monitoring.update.json",

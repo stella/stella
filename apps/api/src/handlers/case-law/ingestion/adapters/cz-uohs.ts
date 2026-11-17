@@ -14,7 +14,10 @@ import {
   isCzechInstructionHeading,
   isCzechReasonsHeading,
 } from "@stll/legal-ast/czech-document-roles";
-import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import {
+  DECISION_IDENTIFIER_TYPES,
+  isDecisionIdentifier,
+} from "@stll/legal-ast/decision-identifier";
 import type {
   Block,
   DocumentAst,
@@ -235,6 +238,11 @@ const FILE_NUMBER_TAIL = /^\/\d{4}(?:\/\p{Lu}+)?/u;
  * The decision's citable identifiers: the file number, then the reference
  * number of this one decision. Both are lookup keys, never display text; the
  * displayed docket is `czUohsFileNumber`.
+ *
+ * The reference number of a joined proceeding lists every joined file and
+ * can run past the identifier storage bound. It is a secondary lookup key,
+ * so one the corpus cannot hold is left out rather than truncated; the file
+ * number stays the decision's identity.
  */
 export const czUohsDecisionIdentifiers = (
   record: Pick<CzUohsRecord, "spisová_značka" | "číslo_jednací">,
@@ -247,9 +255,12 @@ export const czUohsDecisionIdentifiers = (
         printed,
       ),
     }) as const;
+  const reference = identifier(
+    `ÚOHS-${record.číslo_jednací.replace(/^ÚOHS-/u, "")}`,
+  );
   return [
     identifier(czUohsFileNumber(record)),
-    identifier(`ÚOHS-${record.číslo_jednací.replace(/^ÚOHS-/u, "")}`),
+    ...(isDecisionIdentifier(reference) ? [reference] : []),
   ] as const;
 };
 

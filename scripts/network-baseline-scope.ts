@@ -250,7 +250,7 @@ const applyNetworkBudgetDeclarations = (
   base: Baseline,
   declarations: unknown[],
 ) => {
-  const baseline = { ...base };
+  const baseline = new Map(Object.entries(base));
   const declared = new Set<string>();
   const notices: string[] = [];
   for (const declaration of declarations) {
@@ -286,13 +286,16 @@ const applyNetworkBudgetDeclarations = (
         `Invalid network budget declaration: ${route} uses depth method ${budget.depthMethod}; declare depth for ${NETWORK_DEPTH_METHOD}`,
       );
     }
-    baseline[route] = raiseRecorded(base[route], {
-      ...budget,
-      depthMethod: NETWORK_DEPTH_METHOD,
-    });
+    baseline.set(
+      route,
+      raiseRecorded(baseline.get(route), {
+        ...budget,
+        depthMethod: NETWORK_DEPTH_METHOD,
+      }),
+    );
     notices.push(`- ${code(route)}: ${code(declaration["reason"])}`);
   }
-  return { baseline, notices };
+  return { baseline: Object.fromEntries(baseline), notices };
 };
 
 export const prepareComparisonBaseline = ({

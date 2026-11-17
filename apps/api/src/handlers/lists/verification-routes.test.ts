@@ -2,6 +2,7 @@ import { Glob } from "bun";
 import { describe, expect, test } from "bun:test";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import { listsRoute } from "@/api/handlers/lists/routes";
@@ -25,6 +26,8 @@ import {
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
 import { serveForTest } from "@/api/tests/helpers/test-server";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const FEATURE_ID = "list-verification";
 const principal = { organizationId: "org_test", userId: "user_test" };
@@ -182,7 +185,7 @@ describe("list verification route admission", () => {
 
   test("the production lists mount hides verification routes and serves shared source creation", async () => {
     const previous = env.FEATURE_LEGAL_LISTS;
-    env.FEATURE_LEGAL_LISTS = true;
+    testState.setConfig("FEATURE_LEGAL_LISTS", true);
     const restoreRuntimeMode = setRuntimeModeForTesting({
       mode: RUNTIME_MODE.strict,
     });
@@ -204,7 +207,7 @@ describe("list verification route admission", () => {
       );
       expect(sibling.status).toBe(401);
     } finally {
-      env.FEATURE_LEGAL_LISTS = previous;
+      testState.setConfig("FEATURE_LEGAL_LISTS", previous);
       restoreRuntimeMode();
     }
   });

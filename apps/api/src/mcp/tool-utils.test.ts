@@ -4,6 +4,7 @@ import * as v from "valibot";
 
 import { assertProperty } from "@stll/property-testing";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
@@ -51,6 +52,8 @@ import type {
   RecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 // FRONTEND_URL is "http://localhost:3000" (no trailing slash) from
 // the test env preload; getAppBaseUrl() strips any trailing slash.
@@ -140,7 +143,6 @@ describe("buildCaseLawDecisionUrl", () => {
 
 describe("buildCaseLawDecisionAppUrl gate", () => {
   let restoreRuntimeMode: () => void = () => undefined;
-  let previousFeaturePublicLaw: boolean;
 
   const input = {
     caseNumber: "1/24",
@@ -152,20 +154,15 @@ describe("buildCaseLawDecisionAppUrl gate", () => {
     slug: "s",
   };
 
-  beforeEach(() => {
-    previousFeaturePublicLaw = env.FEATURE_PUBLIC_LAW;
-  });
-
   afterEach(() => {
     restoreRuntimeMode();
-    env.FEATURE_PUBLIC_LAW = previousFeaturePublicLaw;
   });
 
   test("returns null when public law is disabled outside local development", () => {
     restoreRuntimeMode = setRuntimeModeForTesting({
       mode: RUNTIME_MODE.strict,
     });
-    env.FEATURE_PUBLIC_LAW = false;
+    testState.setConfig("FEATURE_PUBLIC_LAW", false);
 
     expect(buildCaseLawDecisionAppUrl(input)).toBeNull();
   });
@@ -174,7 +171,7 @@ describe("buildCaseLawDecisionAppUrl gate", () => {
     restoreRuntimeMode = setRuntimeModeForTesting({
       mode: RUNTIME_MODE.strict,
     });
-    env.FEATURE_PUBLIC_LAW = true;
+    testState.setConfig("FEATURE_PUBLIC_LAW", true);
 
     expect(buildCaseLawDecisionAppUrl(input)).toBe(
       `${BASE}/law/cze/cases/ns/s`,
@@ -183,7 +180,7 @@ describe("buildCaseLawDecisionAppUrl gate", () => {
 
   test("builds the URL in local development regardless of the feature flag", () => {
     restoreRuntimeMode = setRuntimeModeForTesting({ mode: RUNTIME_MODE.open });
-    env.FEATURE_PUBLIC_LAW = false;
+    testState.setConfig("FEATURE_PUBLIC_LAW", false);
 
     expect(buildCaseLawDecisionAppUrl(input)).toBe(
       `${BASE}/law/cze/cases/ns/s`,
@@ -643,12 +640,14 @@ describe("structuredErrorResult", () => {
   });
 
   test("carries the active request receipt under error.requestId", () => {
-    const parsed = runWithRequestId("req_envelope", () =>
-      JSON.parse(
-        errorText(
-          structuredErrorResult({ code: "not_found", message: "gone" }),
-        ),
-      ),
+    const parsed = runWithRequestId(
+      "req_envelope",
+      () =>
+        JSON.parse(
+          errorText(
+            structuredErrorResult({ code: "not_found", message: "gone" }),
+          ),
+        ) as unknown,
     );
 
     expect(parsed).toEqual({
@@ -704,7 +703,9 @@ describe("validationErrorResult", () => {
     const result = validationErrorResult(parsed.issues);
 
     expect(result.status).toBe("error");
-    const payload = JSON.parse(errorText(result));
+    const payload: {
+      error: { code: unknown; message: unknown; issues: unknown };
+    } = JSON.parse(errorText(result));
     expect(payload.error.code).toBe("validation_error");
     expect(payload.error.message).toBe(parsed.issues.at(0)?.message);
     expect(payload.error.issues).toEqual([

@@ -1543,9 +1543,7 @@ const FileChatOverlayInner = ({
     continuePausedTurn,
     resendLatestMessage,
     sendMessage,
-    queuedMessages,
-    removeQueuedMessage,
-    sendQueuedMessageNow,
+    queue,
     stop,
     stopPending,
     leave,
@@ -1661,8 +1659,7 @@ const FileChatOverlayInner = ({
         notifyUserError(message.error, t("chat.sendErrorMessageEmpty"));
         return CHAT_SEND_KEPT;
       }
-      await sendMessage(message.value);
-      return CHAT_SEND_SENT;
+      return await sendMessage(message.value);
     },
   );
 
@@ -2691,11 +2688,7 @@ const FileChatOverlayInner = ({
               onOpenPlaybook={handleOpenPlaybook}
               onContinuePausedTurn={handleContinuePausedTurn}
               onResend={resendLatestMessage}
-              queuedMessageActions={{
-                remove: removeQueuedMessage,
-                sendNow: sendQueuedMessageNow,
-              }}
-              queuedMessages={queuedMessages}
+              queue={queue}
               scrollContainerRef={threadScrollRef}
               streamdownComponents={streamdownComponents}
               workspaceId={workspaceId}
@@ -2737,8 +2730,7 @@ const FileChatOverlayInner = ({
                       );
                       return CHAT_SEND_KEPT;
                     }
-                    await sendMessage(message.value);
-                    return CHAT_SEND_SENT;
+                    return await sendMessage(message.value);
                   }),
                   "file-chat-overlay.submit",
                 );

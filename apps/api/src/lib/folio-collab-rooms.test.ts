@@ -8,6 +8,7 @@ import { Doc, encodeStateAsUpdate, XmlElement, XmlText } from "yjs";
 import { FOLIO_YJS_ATTR_SCHEMA_VERSION } from "@stll/folio-core/server";
 import { sha256Hex } from "@stll/sha256/node";
 import { createTestClock } from "@stll/test-kit";
+import { createTestState } from "@stll/test-state";
 
 import { folioCollabRooms, workspaces } from "@/api/db/schema";
 import { createMockDatabase } from "@/api/db/sql-client";
@@ -19,6 +20,9 @@ import { createFileKey } from "@/api/lib/file-key";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+const testState = createTestState({ file: import.meta.path, config: env });
+const workerState = testState.forConfig(envDocumentProcessingWorker);
 
 type Row = Record<string, unknown>;
 type QueuedRows = Row[] | (() => Row[]);
@@ -750,34 +754,28 @@ describe("folio collaboration room snapshot generation", () => {
     if (authorized.status !== "authorized") {
       return;
     }
-    const priorFlag = env.FEATURE_FILE_USAGE_LIMITS;
-    const priorWorkerFlag =
-      envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS;
-    env.FEATURE_FILE_USAGE_LIMITS = true;
-    envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = false;
+
+    testState.setConfig("FEATURE_FILE_USAGE_LIMITS", true);
+    workerState.setConfig("FEATURE_FILE_USAGE_LIMITS", false);
     fake.failNext({ method: "PUT", code: "AccessDenied", status: 403 });
-    try {
-      const result = await storeFolioCollabSnapshot({
-        authority: { type: "participant", userId: firstUserId },
-        expectedGeneration: 3,
-        expectedSnapshotRevision: 0,
-        snapshotBytes: new TextEncoder().encode("snapshot"),
-        value: authorized.value,
-      });
-      expect(result).toMatchObject({
-        status: "error",
-        error: { reason: "storage_unavailable" },
-      });
-      expect(
-        fake.requests.filter(({ method }) => method === "DELETE"),
-      ).toHaveLength(1);
-      expect(scopedInsertedRows).toHaveLength(1);
-      expect(scopedDeleteCalls).toBe(0);
-      expect([...fake.objects.keys()]).toEqual([]);
-    } finally {
-      env.FEATURE_FILE_USAGE_LIMITS = priorFlag;
-      envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = priorWorkerFlag;
-    }
+
+    const result = await storeFolioCollabSnapshot({
+      authority: { type: "participant", userId: firstUserId },
+      expectedGeneration: 3,
+      expectedSnapshotRevision: 0,
+      snapshotBytes: new TextEncoder().encode("snapshot"),
+      value: authorized.value,
+    });
+    expect(result).toMatchObject({
+      status: "error",
+      error: { reason: "storage_unavailable" },
+    });
+    expect(
+      fake.requests.filter(({ method }) => method === "DELETE"),
+    ).toHaveLength(1);
+    expect(scopedInsertedRows).toHaveLength(1);
+    expect(scopedDeleteCalls).toBe(0);
+    expect([...fake.objects.keys()]).toEqual([]);
   });
 
   test("accepts a generation-fenced store from the collaboration service", () => {

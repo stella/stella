@@ -55,6 +55,9 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   // Matter ids and a closed legal-basis literal; no member identifiers.
   "account_deletion_requests.erasure_report",
   "chat_message_revisions.edit",
+  // A queued user message and its send options: text, the member's stored
+  // file references, matter, skill and model choices; no member ids.
+  "chat_queued_messages.request",
   "conflict_checks.parties",
   "conflict_checks.results",
   "agent_skills.metadata",
@@ -62,8 +65,12 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "bilingual_translation_rows.warnings",
   "bilingual_translation_runs.glossary",
   "case_law_analysis_failures.provider_diagnostic",
+  // Citation evidence stores source-text offsets, not member identities.
+  "case_law_citations.polarity_evidence_windows",
   // Global corpus coverage counts and source metadata contain no member identifiers.
   "case_law_coverage_summaries.answer",
+  // Review evidence quotes public court text and its offsets; no member ids.
+  "case_law_decision_reviews.opening_evidence",
   "case_law_decision_supplements.document_ast",
   "case_law_decision_supplements.metadata",
   "case_law_decisions.sections",
@@ -342,6 +349,10 @@ const RETAINED_MEMBER_COLUMNS = {
     "User-owned matter content or preferences; current organization/matter membership gates access.",
   "chat_turns.user_id":
     "User-owned matter content or preferences; current organization/matter membership gates access.",
+  "chat_queued_messages.user_id":
+    "User-owned matter content or preferences; current organization/matter membership gates access, and the queue's sender proves the member again before it sends one.",
+  "chat_queue_holds.user_id":
+    "Why the person's own queue waits; it holds no content, and the queue's sender proves the member again before it sends anything.",
   "clauses.created_by":
     "Retained attribution or request history; this column grants no matter membership.",
   "contact_extraction_uploads.user_id":

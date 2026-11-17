@@ -6,6 +6,8 @@ import { panic, Result, TaggedError } from "better-result";
  *   bun run src/scripts/corpus-generation.ts status
  *   bun run src/scripts/corpus-generation.ts register --family case_law --generation case_law_v7 [--apply]
  *   bun run src/scripts/corpus-generation.ts serve --family case_law --generation case_law_v7 [--apply]
+ *   bun run src/scripts/corpus-generation.ts parity --family case_law --generation case_law_v10 [--exempt-minutes 20] [--coverage-pages 2000] [--coverage-from <entity|start>] [--list]
+ *   bun run src/scripts/corpus-generation.ts seed --family case_law --generation case_law_v10 [--pages 1000]
  *
  * `serve` is the primary path; generations are normally registered by the
  * projection coordinator, and `register` covers an environment that has none.
@@ -22,12 +24,24 @@ import { panic, Result, TaggedError } from "better-result";
  * mutation fence, and the flip applies only while the promotion fence still
  * reads that revision, so no projection change can land between the census
  * and the flip.
+ *
+ * `parity` only reads: what readers would lose if the family's serving
+ * generation were replaced by the named one, decision by decision
+ * (`corpus-index-flip-parity.ts`).
+ *
+ * `seed` advances the generation's seeding pass (`corpus-index-route-seeding.ts`)
+ * by bounded pages under the database-load brake, resuming from the cursor
+ * the database stores, and stops when every route is seeded or the page
+ * budget is spent.
  */
 import { eq } from "drizzle-orm";
 import { parseArgs } from "node:util";
 
+import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
+import { Temporal } from "@stll/time";
 
+import { createScriptBackfillRuntime } from "@/api/db/backfill-runtime";
 import type { Transaction } from "@/api/db/root";
 import { corpusIndexGenerations } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -36,6 +50,7 @@ import {
   enterCaseLawMaintenanceLane,
   openCaseLawReadOnlySession,
 } from "@/api/lib/case-law/maintenance-lane";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import {
   CORPUS_FAMILIES,
   type CorpusFamily,
@@ -47,6 +62,13 @@ import {
   getCorpusIndexClient,
   readCorpusIndexSearchBaseUrl,
 } from "@/api/lib/legal-search/corpus-index-client";
+import {
+  type CorpusIndexFlipCoverageCursor,
+  type CorpusIndexFlipPairRefusedError,
+  type CorpusIndexFlipParity,
+  type CorpusIndexFlipParityReadError,
+  readCorpusIndexFlipParity,
+} from "@/api/lib/legal-search/corpus-index-flip-parity";
 import {
   lockCorpusIndexGenerationActivationTx,
   registerCorpusIndexGenerationTx,
@@ -82,8 +104,34 @@ import {
   type IndexRefusal as ProvenIndexRefusal,
   requireConverged,
 } from "@/api/lib/legal-search/corpus-index-promotion-gates";
+import {
+  advanceCorpusIndexGenerationSeedingTx,
+  type CorpusIndexSeedingAdvance,
+  readCorpusIndexRouteSeedingsTx,
+} from "@/api/lib/legal-search/corpus-index-route-seeding";
 import { corpusIndexPattern } from "@/api/lib/legal-search/index-naming";
 import { recordSystemAudit } from "@/api/lib/system-audit/record";
+
+/**
+ * One commit window of the slowest generation (600 s) plus the time its
+ * presence proof takes: a serving apply younger than this is the candidate's
+ * expected lag.
+ */
+const PARITY_DEFAULT_EXEMPT_MINUTES = 20;
+/** The longest exemption an operator may ask for: one day. */
+const PARITY_MAX_EXEMPT_MINUTES = 1440;
+/** Serving copies one coverage transaction reads. */
+const PARITY_COVERAGE_PAGE = 1000;
+/** Coverage pages one run reads by default: two million serving copies. */
+const PARITY_DEFAULT_COVERAGE_PAGES = 2000;
+/** The most coverage pages one run may be asked for. */
+const PARITY_MAX_COVERAGE_PAGES = 20_000;
+/** Canonical ids one seeding page walks: the bootstrap page's bound. */
+const SEED_PAGE_LIMIT = 1000;
+/** Seeding pages one run walks by default: a million canonical rows. */
+const SEED_DEFAULT_PAGES = 1000;
+/** The most seeding pages one run may be asked for. */
+const SEED_MAX_PAGES = 99_999;
 
 const USAGE = `Usage: bun run src/scripts/corpus-generation.ts <command> [options]
 
@@ -92,12 +140,36 @@ Commands:
   register               Register a declared generation as building.
   serve                  Make a registered generation the one its family serves;
                          the generation serving before it becomes retiring.
+  parity                 Report what readers would lose if the generation
+                         replaced the one serving its family. Reads only.
+  seed                   Walk the generation's seeding pass, giving every
+                         canonical row a desired state, until every route
+                         is seeded or the page budget is spent. Resumable.
 
-Options (register, serve):
+Options (register, serve, parity, seed):
   --family <family>      ${CORPUS_FAMILIES.join(" | ")}
   --generation <name>    A generation declared in code, e.g. case_law_v7.
   --apply                Perform the change. Omitted, the run only reports.
   --dry-run              Report only, the default; contradicts --apply.
+
+Options (parity):
+  --exempt-minutes <n>   Serving applies newer than this many minutes are the
+                         candidate's expected lag (default ${String(PARITY_DEFAULT_EXEMPT_MINUTES)}).
+  --coverage-pages <n>   Coverage pages of ${String(PARITY_COVERAGE_PAGE)} serving copies to read
+                         (default ${String(PARITY_DEFAULT_COVERAGE_PAGES)}, at most ${String(PARITY_MAX_COVERAGE_PAGES)}); a walk
+                         that does not reach the end leaves the verdict undecided.
+  --coverage-from <e>    Resume a walk after serving entity e (or "start");
+                         a resumed walk never proves the verdict.
+  --list                 Also print up to 50 decisions of each kind by id.
+
+Options (seed):
+  --pages <n>            Pages of ${String(SEED_PAGE_LIMIT)} canonical rows to walk (default
+                         ${String(SEED_DEFAULT_PAGES)}, at most ${String(SEED_MAX_PAGES)}); the next run resumes.
+
+Exit codes (parity): 0 no regression, 3 regressions, 4 undecided, 1 refused.
+Exit codes (seed): 0 every route seeded, 5 page budget spent, 6 paused by
+the database-load brake (after 15 minutes of waiting), 7 next row held by a
+writer, 8 a route appeared after the pass began, 1 refused.
 `;
 
 /** Rows `status` and the planners read; the registry holds a handful per family. */
@@ -171,12 +243,16 @@ type LaunchRefusal =
   | CorpusGenerationCensusDriftError
   | CorpusGenerationCensusUnreadableError;
 
+type ParityRefusal =
+  CorpusIndexFlipPairRefusedError | CorpusIndexFlipParityReadError;
+
 type CorpusGenerationRefusal =
   | CorpusGenerationUsageError
   | CorpusGenerationUndeclaredError
   | RegistryRefusal
   | IndexRefusal
   | LaunchRefusal
+  | ParityRefusal
   | CorpusGenerationProjectionMovedError
   | CorpusGenerationLaneBusyError;
 
@@ -189,7 +265,16 @@ type DeclaredTarget = GenerationTarget & {
 type CorpusGenerationCommand =
   | { type: "status" }
   | { type: "register"; target: DeclaredTarget; mode: Mode }
-  | { type: "serve"; target: DeclaredTarget; mode: Mode };
+  | { type: "serve"; target: DeclaredTarget; mode: Mode }
+  | {
+      type: "parity";
+      target: DeclaredTarget;
+      exemptMinutes: number;
+      coveragePages: number;
+      coverageFrom: CorpusIndexFlipCoverageCursor | null;
+      listDecisions: boolean;
+    }
+  | { type: "seed"; target: DeclaredTarget; pages: number };
 
 type GenerationRow = Pick<
   typeof corpusIndexGenerations.$inferSelect,
@@ -225,10 +310,33 @@ const declaredTarget = (
   });
 };
 
-const COMMAND_NAMES = ["status", "register", "serve"] as const;
+const COMMAND_NAMES = [
+  "status",
+  "register",
+  "serve",
+  "parity",
+  "seed",
+] as const;
 
 const usageError = (message: string) =>
   Result.err(new CorpusGenerationUsageError({ message }));
+
+/** Why `seed`'s options do not fit the command, or null when they do. */
+const seedOptionRefusal = (
+  name: (typeof COMMAND_NAMES)[number],
+  values: {
+    pages?: string | undefined;
+    apply?: boolean | undefined;
+    "dry-run"?: boolean | undefined;
+  },
+): string | null => {
+  if (name !== "seed") {
+    return values.pages === undefined ? null : "--pages belongs to seed.";
+  }
+  return values.apply === true || values["dry-run"] === true
+    ? "seed writes only desired states a writer owes; it takes no --apply or --dry-run."
+    : null;
+};
 
 const parseCorpusGenerationCommand = (
   args: readonly string[],
@@ -247,6 +355,11 @@ const parseCorpusGenerationCommand = (
           generation: { type: "string" },
           apply: { type: "boolean" },
           "dry-run": { type: "boolean" },
+          "exempt-minutes": { type: "string" },
+          "coverage-pages": { type: "string" },
+          "coverage-from": { type: "string" },
+          list: { type: "boolean" },
+          pages: { type: "string" },
         },
       }),
     catch: (cause) =>
@@ -262,17 +375,40 @@ const parseCorpusGenerationCommand = (
     (candidate) => positionals.length === 1 && positionals.at(0) === candidate,
   );
   if (name === undefined) {
-    return usageError("Name exactly one command: status, register or serve.");
+    return usageError(
+      "Name exactly one command: status, register, serve, parity or seed.",
+    );
   }
   if (values.apply === true && values["dry-run"] === true) {
     return usageError("--apply and --dry-run contradict each other; pass one.");
   }
+  const parityOptions =
+    values["exempt-minutes"] !== undefined ||
+    values["coverage-pages"] !== undefined ||
+    values["coverage-from"] !== undefined ||
+    values.list === true;
   if (name === "status") {
     return values.family === undefined &&
       values.generation === undefined &&
-      values.apply !== true
+      values.apply !== true &&
+      !parityOptions
       ? Result.ok({ type: "status" })
       : usageError("status takes no options.");
+  }
+  if (name !== "parity" && parityOptions) {
+    return usageError(
+      "--exempt-minutes, --coverage-pages, --coverage-from and --list belong to parity.",
+    );
+  }
+  if (
+    name === "parity" &&
+    (values.apply === true || values["dry-run"] === true)
+  ) {
+    return usageError("parity only reads; it takes no --apply or --dry-run.");
+  }
+  const seedRefusal = seedOptionRefusal(name, values);
+  if (seedRefusal !== null) {
+    return usageError(seedRefusal);
   }
   const family = parseCorpusFamily(values.family);
   if (family === null) {
@@ -291,10 +427,90 @@ const parseCorpusGenerationCommand = (
       return Result.ok({ type: "register", target: target.value, mode });
     case "serve":
       return Result.ok({ type: "serve", target: target.value, mode });
+    case "parity": {
+      const exemptMinutes = parseWholeNumber(
+        values["exempt-minutes"],
+        PARITY_DEFAULT_EXEMPT_MINUTES,
+        PARITY_MAX_EXEMPT_MINUTES,
+      );
+      if (exemptMinutes === null) {
+        return usageError(
+          `--exempt-minutes must be a whole number from 0 to ${String(PARITY_MAX_EXEMPT_MINUTES)}.`,
+        );
+      }
+      const coveragePages = parseWholeNumber(
+        values["coverage-pages"],
+        PARITY_DEFAULT_COVERAGE_PAGES,
+        PARITY_MAX_COVERAGE_PAGES,
+      );
+      if (coveragePages === null) {
+        return usageError(
+          `--coverage-pages must be a whole number from 0 to ${String(PARITY_MAX_COVERAGE_PAGES)}.`,
+        );
+      }
+      const coverageFrom = parseCoverageCursor(values["coverage-from"]);
+      if (coverageFrom === "malformed") {
+        return usageError("--coverage-from must be an entity id or start.");
+      }
+      return Result.ok({
+        type: "parity",
+        target: target.value,
+        exemptMinutes,
+        coveragePages,
+        coverageFrom,
+        listDecisions: values.list === true,
+      });
+    }
+    case "seed": {
+      const pages = parseWholeNumber(
+        values.pages,
+        SEED_DEFAULT_PAGES,
+        SEED_MAX_PAGES,
+      );
+      return pages === null || pages === 0
+        ? usageError(
+            `--pages must be a whole number from 1 to ${String(SEED_MAX_PAGES)}.`,
+          )
+        : Result.ok({ type: "seed", target: target.value, pages });
+    }
     default:
       name satisfies never;
       return panic(`Unhandled command: ${String(name)}`);
   }
+};
+
+const WHOLE_NUMBER = /^\d{1,5}$/u;
+
+const parseWholeNumber = (
+  raw: string | undefined,
+  fallback: number,
+  max: number,
+): number | null => {
+  if (raw === undefined) {
+    return fallback;
+  }
+  if (!WHOLE_NUMBER.test(raw)) {
+    return null;
+  }
+  const value = Number(raw);
+  return value <= max ? value : null;
+};
+
+const COVERAGE_CURSOR =
+  /^(?<after>start|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/u;
+
+const parseCoverageCursor = (
+  raw: string | undefined,
+): CorpusIndexFlipCoverageCursor | null | "malformed" => {
+  if (raw === undefined) {
+    return null;
+  }
+  const match = COVERAGE_CURSOR.exec(raw);
+  const after = match?.groups?.["after"];
+  if (after === undefined) {
+    return "malformed";
+  }
+  return { after: after === "start" ? null : after };
 };
 
 type RowLock = "none" | "update";
@@ -529,8 +745,36 @@ const withOperatorDatabase: WithCorpusDatabase = async (access, work) => {
   }
 };
 
+/**
+ * Runs a long seeding run on the root handle, holding the case-law
+ * maintenance lane for the run, as the backfill scripts do.
+ */
+type WithSeedingDatabase = <T>(
+  work: (rootDb: CaseLawRootHandle) => Promise<T>,
+) => Promise<T>;
+
+const withSeedingLane: WithSeedingDatabase = async (work) => {
+  const { rootDb } = await enterCaseLawMaintenanceLane();
+  return await work(rootDb);
+};
+
+/** How the seed command meets the database-load brake. */
+type SeedingBrake = {
+  /** The page runtime; a test replaces its load reading. */
+  createRuntime: typeof createScriptBackfillRuntime;
+  /** How long a run waits on the brake before it stops with `braked`. */
+  maxWaitMs: number;
+};
+
+const SEEDING_BRAKE: SeedingBrake = {
+  createRuntime: createScriptBackfillRuntime,
+  maxWaitMs: 15 * 60_000,
+};
+
 type CommandContext = {
   withDatabase: WithCorpusDatabase;
+  withSeedingDatabase: WithSeedingDatabase;
+  seedingBrake: SeedingBrake;
   indexClient: (manifest: CorpusIndexManifest) => CorpusIndexReader;
   searchEndpoint: (manifest: CorpusIndexManifest) => string | null;
   write: (line: string) => void;
@@ -960,9 +1204,317 @@ const runServe = async (
   }
 };
 
+/** Exit codes of `parity`, so a wrapper can gate on the verdict. */
+const PARITY_EXIT = {
+  noRegression: 0,
+  regressions: 3,
+  undecided: 4,
+} as const;
+
+const describeParity = (
+  parity: CorpusIndexFlipParity,
+  listDecisions: boolean,
+): string[] => {
+  const { coverage, regressions, verdict } = parity;
+  const { walked } = regressions;
+  const counts =
+    regressions.type === "exact"
+      ? regressions.byRoute
+      : regressions.lowerBoundByRoute;
+  const total = counts.reduce((sum, { count }) => sum + count, 0);
+  const coverageLine = (() => {
+    switch (coverage.type) {
+      case "complete":
+        return `checked: every serving state walked (${String(coverage.walked)}); ${String(coverage.missing)} without a candidate state`;
+      case "incomplete":
+        return `not checked in full: ${String(coverage.walked)} serving states walked, ${String(coverage.missing)} without a candidate state; ${
+          coverage.next === null
+            ? "the walk resumed from a cursor, so it proves nothing"
+            : `resume with --coverage-from ${coverage.next.after ?? "start"}`
+        }`;
+      default:
+        coverage satisfies never;
+        return panic("Unhandled flip coverage");
+    }
+  })();
+  const verdictLine = (() => {
+    switch (verdict.type) {
+      case "no_regression":
+        return "verdict: no regression";
+      case "regressions":
+        return `verdict: regressions remain (${String(verdict.missing)} without a candidate state, ${String(verdict.regressions)} not shown or stale)`;
+      case "undecided":
+        return `verdict: undecided (${verdict.reason}); known so far: ${String(verdict.knownMissing)} without a candidate state, ${String(verdict.knownRegressions)} not shown or stale`;
+      default:
+        verdict satisfies never;
+        return panic("Unhandled flip verdict");
+    }
+  })();
+  return [
+    `checked: compared with ${parity.pair.serving}, which serves ${parity.pair.family}; pending changes younger than ${parity.watermark.toString()} are expected lag`,
+    coverageLine,
+    `checked: unconverged states of the candidate walked: ${String(walked.pending)} pending, ${String(walked.blocked)} blocked, ${String(walked.absent)} proven gone, ${String(walked.atRisk)} with a delete in flight; ${String(regressions.exempt)} exempt as expected lag`,
+    regressions.type === "exact"
+      ? `not shown or stale (exact): ${String(total)}`
+      : `not shown or stale (at least; a walk stopped at its cap, so this proves nothing): ${String(total)}`,
+    ...counts.map(
+      ({ route, kind, count }) =>
+        `  ${route ?? "(no route)"} ${kind} ${String(count)}`,
+    ),
+    ...(listDecisions
+      ? [
+          ...coverage.sample.map((entityId) => `  no state: ${entityId}`),
+          ...regressions.sample.map(
+            ({ entityId, route, kind, servingEpoch, candidateEpoch }) =>
+              `  ${kind}: ${entityId} ${route ?? "(no route)"}, serving epoch ${String(servingEpoch)}, candidate epoch ${candidateEpoch === null ? "none" : String(candidateEpoch)}`,
+          ),
+        ]
+      : []),
+    verdictLine,
+  ];
+};
+
+const parityExitCode = ({ verdict }: CorpusIndexFlipParity): number => {
+  switch (verdict.type) {
+    case "no_regression":
+      return PARITY_EXIT.noRegression;
+    case "regressions":
+      return PARITY_EXIT.regressions;
+    case "undecided":
+      return PARITY_EXIT.undecided;
+    default:
+      verdict satisfies never;
+      return panic("Unhandled flip verdict");
+  }
+};
+
+/**
+ * Read-only: the coverage walk and the regression statement, in the order the
+ * library owns, on one read-only session with a short transaction per page.
+ * Resolves with the exit code its verdict maps to.
+ */
+const runParity = async (
+  { withDatabase, write }: CommandContext,
+  {
+    target,
+    exemptMinutes,
+    coveragePages,
+    coverageFrom,
+    listDecisions,
+  }: Extract<CorpusGenerationCommand, { type: "parity" }>,
+): Promise<Result<number, CorpusGenerationRefusal>> => {
+  write(`parity ${target.family}/${target.generation} (read only)`);
+  write(declaredLine(target));
+  const read = await withDatabase(
+    ACCESS.read,
+    async (rootDb) =>
+      await readCorpusIndexFlipParity({
+        runInTransaction: async (work) =>
+          await withAggregateTransaction(rootDb, work),
+        family: target.family,
+        candidate: target.generation,
+        exemptMinutes,
+        coverage: {
+          pageSize: PARITY_COVERAGE_PAGE,
+          pageBudget: coveragePages,
+          resumeFrom: coverageFrom,
+        },
+      }),
+  );
+  if (read.isErr()) {
+    return Result.err(read.error);
+  }
+  if (read.value.isErr()) {
+    return Result.err(read.value.error);
+  }
+  for (const line of describeParity(read.value.value, listDecisions)) {
+    write(line);
+  }
+  return Result.ok(parityExitCode(read.value.value));
+};
+
+/**
+ * Exit codes of `seed`, one per reason a run stops short, so a wrapper can
+ * tell a run to repeat from one to wait or to look at.
+ */
+const SEED_EXIT = {
+  seeded: 0,
+  /** The page budget ran out before the pass did; rerun to resume. */
+  budgetSpent: 5,
+  /** The database-load brake paused the run; rerun later. */
+  braked: 6,
+  /** A writer holds the next row; rerun once it commits. */
+  busy: 7,
+  /** A route appeared after the pass began; rerun to walk a new pass. */
+  routeAppeared: 8,
+} as const;
+
+const CANONICAL_TABLES = {
+  case_law: "case_law_decisions",
+  legislation: "legislation_documents",
+} as const satisfies Record<CorpusFamily, string>;
+
+const describeSeedingPage = (
+  outcome: Exclude<CorpusIndexSeedingAdvance, { type: "inactive" }>,
+  pages: number,
+): string => {
+  const { pass } = outcome;
+  return `pass ${String(pass.number)}: ${outcome.type}; walked ${String(pass.walked)}, seeded ${String(pass.seeded)}, deferred (text not settled) ${String(pass.deferred)}, routes ${String(pass.routes.length)}, pages ${String(pages)}, last ${pass.afterEntityId ?? "-"}`;
+};
+
+/**
+ * The exit code of a seed run, from how its pass ended and the route rows it
+ * left: one code per reason a run stops short.
+ */
+export const seedRunExit = ({
+  target,
+  paused,
+  outcome,
+  seedings,
+  write,
+}: {
+  target: Pick<DeclaredTarget, "family" | "generation">;
+  /** The run stopped waiting on the database-load brake. */
+  paused: boolean;
+  /** The last page's outcome; null when no page ran. */
+  outcome: CorpusIndexSeedingAdvance | null;
+  seedings: Awaited<ReturnType<typeof readCorpusIndexRouteSeedingsTx>>;
+  write: (line: string) => void;
+}): Result<number, CorpusGenerationRefusal> => {
+  if (paused || outcome === null) {
+    write("paused by the database-load brake; rerun to resume");
+    return Result.ok(SEED_EXIT.braked);
+  }
+  switch (outcome.type) {
+    case "inactive":
+      return Result.err(
+        new CorpusGenerationRetiringError({
+          message: `${target.family}/${target.generation} is ${outcome.status ?? "not registered"}; only a building or serving generation is seeded`,
+          family: target.family,
+          generation: target.generation,
+        }),
+      );
+    case "complete":
+    case "completed":
+      // A completed pass covers the routes it captured as it began; a
+      // route that appeared since needs another pass.
+      if (
+        seedings === null ||
+        seedings.routes.some(({ state }) => state === "unseeded")
+      ) {
+        write("a route appeared after the pass began; rerun to walk it");
+        return Result.ok(SEED_EXIT.routeAppeared);
+      }
+      write("every route of the generation is seeded");
+      return Result.ok(SEED_EXIT.seeded);
+    case "busy":
+      write("the next row is held by a writer; rerun to resume");
+      return Result.ok(SEED_EXIT.busy);
+    case "advanced":
+      write("page budget spent; rerun to resume from the stored cursor");
+      return Result.ok(SEED_EXIT.budgetSpent);
+    default:
+      outcome satisfies never;
+      return panic(`Unhandled seeding outcome: ${String(outcome)}`);
+  }
+};
+
+/**
+ * Advance the seeding pass page by page under the database-load brake
+ * (`createScriptBackfillRuntime`). Each page seeds and records its cursor in
+ * one transaction, so an interrupted run resumes where the database says.
+ */
+const runSeed = async (
+  { withSeedingDatabase, seedingBrake, write }: CommandContext,
+  { target, pages }: Extract<CorpusGenerationCommand, { type: "seed" }>,
+): Promise<Result<number, CorpusGenerationRefusal>> => {
+  write(
+    `seed ${target.family}/${target.generation} (at most ${String(pages)} pages)`,
+  );
+  write(declaredLine(target));
+  return await withSeedingDatabase(async (rootDb) => {
+    const runtime = seedingBrake.createRuntime({
+      name: `corpus-seeding:${target.family}:${target.generation}`,
+      tableName: CANONICAL_TABLES[target.family],
+      initialSize: SEED_PAGE_LIMIT,
+      db: rootDb,
+    });
+    let walkedPages = 0;
+    // Written by the batch callback, read after the pass.
+    const progress: { last: CorpusIndexSeedingAdvance | null } = {
+      last: null,
+    };
+    const startedAt = Temporal.Now.instant().epochMilliseconds;
+    const ran: { paused: boolean } = { paused: false };
+    try {
+      const pass = await runBackfillPass({
+        step: async () =>
+          await runtime.step(async ({ tx, size }) => {
+            const outcome = await advanceCorpusIndexGenerationSeedingTx(
+              tx,
+              target,
+              { limit: Math.max(1, Math.min(size, SEED_PAGE_LIMIT)) },
+            );
+            const advanced = outcome.type === "advanced";
+            return {
+              cursor:
+                outcome.type === "inactive" ? null : outcome.pass.afterEntityId,
+              done: !advanced || walkedPages + 1 >= pages,
+              value: outcome,
+            };
+          }),
+        onBatch: ({ value }) => {
+          progress.last = value;
+          if (value.type === "inactive") {
+            return;
+          }
+          walkedPages += 1;
+          const hours =
+            (Temporal.Now.instant().epochMilliseconds - startedAt) / 3_600_000;
+          const rate = hours > 0 ? Math.round(value.pass.walked / hours) : 0;
+          write(
+            `${describeSeedingPage(value, walkedPages)}; ${String(rate)} rows/h this run`,
+          );
+        },
+        sleep: Bun.sleep,
+        // A run that waits on the brake this long stops, so a wrapper sees
+        // `braked` instead of a run that never returns.
+        maxWaitMs: seedingBrake.maxWaitMs,
+      });
+      if (pass.isErr()) {
+        throw pass.error;
+      }
+      ran.paused = pass.value.status === "paused";
+    } finally {
+      await runtime.close();
+    }
+    const outcome = progress.last;
+    const seedings = await withAggregateTransaction(
+      rootDb,
+      async (tx) => await readCorpusIndexRouteSeedingsTx(tx, target),
+    );
+    for (const route of seedings === null ? [] : seedings.routes) {
+      write(
+        route.state === "seeded"
+          ? `  ${route.indexId}: seeded by pass ${String(route.passNumber)} (${route.jurisdictions.join(", ")})`
+          : `  ${route.indexId}: unseeded, ${route.reason} (${route.jurisdictions.join(", ")})`,
+      );
+    }
+    return seedRunExit({
+      target,
+      paused: ran.paused,
+      outcome,
+      seedings,
+      write,
+    });
+  });
+};
+
 type RunCorpusGenerationOptions = {
   args: readonly string[];
   withDatabase?: WithCorpusDatabase;
+  withSeedingDatabase?: WithSeedingDatabase;
+  seedingBrake?: SeedingBrake;
   indexClient?: (manifest: CorpusIndexManifest) => CorpusIndexReader;
   searchEndpoint?: (manifest: CorpusIndexManifest) => string | null;
   write?: (line: string) => void;
@@ -973,6 +1525,8 @@ type RunCorpusGenerationOptions = {
 export const runCorpusGenerationCommand = async ({
   args,
   withDatabase = withOperatorDatabase,
+  withSeedingDatabase = withSeedingLane,
+  seedingBrake = SEEDING_BRAKE,
   indexClient = (manifest) => getCorpusIndexClient(manifest.cluster),
   searchEndpoint = (manifest) => readCorpusIndexSearchBaseUrl(manifest.cluster),
   write = (line) => process.stdout.write(`${line}\n`),
@@ -992,6 +1546,8 @@ export const runCorpusGenerationCommand = async ({
   }
   const context: CommandContext = {
     withDatabase,
+    withSeedingDatabase,
+    seedingBrake,
     indexClient,
     searchEndpoint,
     write,
@@ -1004,6 +1560,10 @@ export const runCorpusGenerationCommand = async ({
         return await runRegister(context, command.value);
       case "serve":
         return await runServe(context, command.value);
+      case "parity":
+        return await runParity(context, command.value);
+      case "seed":
+        return await runSeed(context, command.value);
       default:
         command.value satisfies never;
         return panic(`Unhandled command: ${String(command.value)}`);
@@ -1013,7 +1573,7 @@ export const runCorpusGenerationCommand = async ({
     writeError(`refused (${outcome.error._tag}): ${outcome.error.message}`);
     return 1;
   }
-  return 0;
+  return outcome.value ?? 0;
 };
 
 if (import.meta.main) {
