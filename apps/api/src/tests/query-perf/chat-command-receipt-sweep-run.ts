@@ -54,7 +54,6 @@ const insertReceipts = async (
         threadId: THREAD_ID,
         turnId: TURN_ID,
         userId: USER_ID,
-        workspaceId: null,
       })),
     );
   }
