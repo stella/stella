@@ -625,8 +625,12 @@
       "unavailableProvider": "A szervezete AI-szolgáltatója nem kínál átírást.",
       "unavailable": "A stella AI átírás most nem érhető el.",
       "model": "Átírási modell",
+      "chooseModel": "Válasszon modellt",
       "outsideRegion": "A régióján kívül",
-      "outsideRegionNote": "Ez a modell a szervezete régióján kívül dolgozza fel a hangot."
+      "outsideRegionNote": "Ez a modell a szervezete régióján kívül dolgozza fel a hangot.",
+      "retainsData": "Megőrzi a hangfelvételt",
+      "retainsDataTitle": "A(z) {provider} megőrzi, amit diktál",
+      "retainsDataWarning": "Ez a modell nulla adatmegőrzés nélküli fiókon fut. A(z) {provider} saját feltételei szerint, a stella ellenőrzésén kívül tárolja mindannak a hangját és átiratát, amit diktál. Ne diktáljon vele bizalmas vagy ügyféladatokat."
     },
     "language": {
       "title": "Diktálás nyelve",
@@ -835,9 +839,11 @@
       "storage": "A kapcsolatot nem sikerült beolvasni vagy menteni ezen a számítógépen."
     },
     "callbackConnectedTitle": "A ChatGPT csatlakoztatva",
-    "callbackConnectedBody": "Térjen vissza a stellába. Az MI-kérések mostantól a ChatGPT-csomagját használják.",
+    "callbackConnectedBody": "A stella MI-kérései mostantól a ChatGPT-csomagját használják.",
     "callbackNotConnectedTitle": "A ChatGPT nem csatlakozott",
-    "callbackNotConnectedBody": "Térjen vissza a stellába, nézze meg, mi történt, és próbálja újra.",
+    "callbackNotConnectedBody": "Az okot a stella alkalmazás mutatja. Az újrapróbálkozáshoz nyissa meg az {section} › {group} részt, és kattintson a „{button}” gombra.",
+    "callbackAccount": "Fiók",
+    "callbackPlan": "Csomag",
     "callbackCloseTab": "Ezt a lapot bezárhatja.",
     "claudeCode": {
       "title": "Claude Code",

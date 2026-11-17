@@ -2656,8 +2656,8 @@ const createHarness = ({
     retiredIndexes.filter((name) => indexStates[name] === undefined),
   );
   const backfillStates = new Map<unknown, { cursor: unknown; batch: unknown }>(
-    FUNCTION_DEPENDENT_INDEX_REINDEXES.map(({ name, introducedBy }) => [
-      `${name}:${introducedBy}`,
+    FUNCTION_DEPENDENT_INDEX_REINDEXES.map(({ name }) => [
+      name,
       {
         cursor: null,
         batch: {

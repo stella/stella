@@ -7,6 +7,7 @@ import {
   test,
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 import { user as authUser } from "@/api/db/auth-schema";
 import {
@@ -369,6 +370,18 @@ test("approval updates only the entries it locked and checked, never one moved i
       const watched = new Proxy(tx, {
         get(target, property) {
           const value: unknown = Reflect.get(target, property, target);
+          if (property === "execute") {
+            return async (query: Parameters<typeof tx.execute>[0]) => {
+              const statement =
+                typeof query === "string"
+                  ? query
+                  : new PgDialect().sqlToQuery(query.getSQL()).sql;
+              if (/^\s*UPDATE "time_entries"\s/u.test(statement)) {
+                await moveIn();
+              }
+              return await target.execute(query);
+            };
+          }
           if (property === "update" && typeof value === "function") {
             return (table: unknown) =>
               table === timeEntries

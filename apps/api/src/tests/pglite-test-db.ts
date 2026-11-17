@@ -60,6 +60,7 @@ import {
   installPgliteLegalHoldDeleteBackstop,
   installPgliteLegislationExpressionIdentity,
   installPgliteLegislationPayloadRevision,
+  installPgliteMatterTimerPresence,
   installPgliteModelRunBudgets,
   installPgliteOrganizationDeleteOwnerGuard,
   installPgliteOrganizationMemberCapacity,
@@ -431,6 +432,7 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_judges",
       "case_law_decision_judges",
       "case_law_citations",
+      "case_law_decision_reviews",
       "case_law_provision_citations",
       "case_law_statute_citation_memberships",
       "case_law_statute_citation_counts",
@@ -459,6 +461,7 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_judges",
       "case_law_decision_judges",
       "case_law_citations",
+      "case_law_decision_reviews",
       "case_law_provision_citations",
       "case_law_statute_citation_memberships",
       "case_law_statute_citation_counts",
@@ -651,6 +654,12 @@ export const ROLE_GRANT_STATEMENTS = [
   // The withdrawal trail is append-only: ingestion records, the app reads.
   `
     GRANT SELECT, INSERT ON TABLE "corpus_index_group_withdrawals"
+    TO stella_ingestion
+  `,
+  // Route proofs: the projection runner advances and revokes them; only the
+  // generation's cascade deletes one.
+  `
+    GRANT SELECT, INSERT, UPDATE ON TABLE "corpus_index_route_proofs"
     TO stella_ingestion
   `,
   // Seeding passes: the seeding walk writes them; the transition that takes
@@ -888,6 +897,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteFlowTransitions(db);
   await installPgliteWorkspaceAccessObjects(db);
   await installPgliteInvoiceObjects(db);
+  await installPgliteMatterTimerPresence(db);
   await db.transaction(async (tx) => {
     await installPgliteEntityFeatureGateMaintenance(tx);
   });

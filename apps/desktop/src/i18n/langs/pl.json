@@ -625,8 +625,12 @@
       "unavailableProvider": "Dostawca AI Twojej organizacji nie oferuje przetwarzania mowy.",
       "unavailable": "Przetwarzanie przez stella AI jest teraz niedostępne.",
       "model": "Model przetwarzania",
+      "chooseModel": "Wybierz model",
       "outsideRegion": "Poza Twoim regionem",
-      "outsideRegionNote": "Ten model przetwarza dźwięk poza regionem Twojej organizacji."
+      "outsideRegionNote": "Ten model przetwarza dźwięk poza regionem Twojej organizacji.",
+      "retainsData": "Przechowuje Twój dźwięk",
+      "retainsDataTitle": "{provider} przechowuje to, co dyktujesz",
+      "retainsDataWarning": "Ten model działa na koncie bez zerowej retencji danych. {provider} przechowuje dźwięk i transkrypcję wszystkiego, co dyktujesz, na własnych warunkach, poza kontrolą stella. Nie dyktuj za jego pomocą informacji poufnych ani danych klientów."
     },
     "language": {
       "title": "Język dyktowania",
@@ -835,9 +839,11 @@
       "storage": "Nie udało się odczytać ani zapisać połączenia na tym komputerze."
     },
     "callbackConnectedTitle": "ChatGPT jest połączony",
-    "callbackConnectedBody": "Wróć do stelli. Zapytania do AI korzystają teraz z Twojego planu ChatGPT.",
+    "callbackConnectedBody": "Zapytania do AI w stelli korzystają teraz z Twojego planu ChatGPT.",
     "callbackNotConnectedTitle": "Nie połączono z ChatGPT",
-    "callbackNotConnectedBody": "Wróć do stelli, aby zobaczyć, co się stało, i spróbuj ponownie.",
+    "callbackNotConnectedBody": "Przyczynę pokazuje aplikacja stella. Aby spróbować ponownie, otwórz {section} › {group} i kliknij „{button}”.",
+    "callbackAccount": "Konto",
+    "callbackPlan": "Plan",
     "callbackCloseTab": "Możesz zamknąć tę kartę.",
     "claudeCode": {
       "title": "Claude Code",

@@ -1,5 +1,17 @@
 # @stll/cli
 
+## 6.12.1
+
+### Patch Changes
+
+- [#7365](https://github.com/stella/stella/pull/7365) [`5613d6a`](https://github.com/stella/stella/commit/5613d6aa3e4c87ff5fcf2fb408db801df5d89909) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Require billing visibility for monetary operations and preserve hidden rates as null in time records.
+
+- [#8617](https://github.com/stella/stella/pull/8617) [`3b7aa79`](https://github.com/stella/stella/commit/3b7aa79fba704ac50faaeffd05c02afd13855efc) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Preserve own keys when building command trees, flags, schema examples and output summaries. Read nested input and output fields only from their owning records.
+
+- [#8638](https://github.com/stella/stella/pull/8638) [`1dd60fc`](https://github.com/stella/stella/commit/1dd60fc04d3aa1de8a17d6d7d61a0a8ec1cc33f9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Support idempotent replay when attaching a source to a list item.
+- Updated dependencies []:
+  - @stll/agent-input@0.4.5
+
 ## 6.12.0
 
 ### Minor Changes

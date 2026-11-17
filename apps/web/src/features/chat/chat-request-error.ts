@@ -1,6 +1,10 @@
 import { TaggedError } from "better-result";
 
-import { isThirdPartyBoundaryRefusalError } from "@stll/anonymize-chat";
+import {
+  CHAT_TRANSPORT_ERROR_CODE,
+  isThirdPartyBoundaryRefusalError,
+  parseChatTransportErrorMessage,
+} from "@stll/anonymize-chat";
 import { AI_FAILURE_CODES } from "@stll/api-contract";
 
 import type { TranslationKey } from "@/i18n/types";
@@ -65,6 +69,7 @@ export const normalizeChatStreamError = (error: Error): Error => {
 type ChatErrorTranslationKey =
   | AIFailureTranslationKey
   | "chat.sendErrorAnonymizationBlocked"
+  | "errors.apiCodes.localRunAnonymizedRefusal"
   | "chat.sendError"
   | (typeof CHAT_REQUEST_ERROR_TRANSLATION_KEYS)[ChatRequestError["kind"]];
 
@@ -77,6 +82,12 @@ export const chatErrorTranslationKey = (
   const requestError = findChatRequestError(error);
   if (requestError !== undefined) {
     return CHAT_REQUEST_ERROR_TRANSLATION_KEYS[requestError.kind];
+  }
+  if (
+    parseChatTransportErrorMessage(error.message)?.code ===
+    CHAT_TRANSPORT_ERROR_CODE.localRunAnonymizedRefusal
+  ) {
+    return "errors.apiCodes.localRunAnonymizedRefusal";
   }
   if (isThirdPartyBoundaryRefusalError(error)) {
     return "chat.sendErrorAnonymizationBlocked";

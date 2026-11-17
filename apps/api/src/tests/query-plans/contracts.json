@@ -1051,13 +1051,13 @@
         "index": "corpus_index_projection_intents_identity_uidx"
       },
       {
-        "position": "root/4/0/1/0/0",
+        "position": "root/4/0/1/0",
         "relation": "corpus_index_projection_states",
         "nodeType": "Index Scan",
         "index": "corpus_index_projection_states_pkey"
       },
       {
-        "position": "root/4/1/0/0/0",
+        "position": "root/4/1/0/0",
         "relation": "corpus_index_projection_intents",
         "nodeType": "Index Scan",
         "index": "corpus_index_projection_intents_identity_uidx"

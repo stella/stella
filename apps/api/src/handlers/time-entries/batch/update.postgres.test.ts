@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { and, eq, inArray, or } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 import { createTestClock } from "@stll/test-kit";
 import { Temporal } from "@stll/time";
@@ -257,15 +258,47 @@ if (!databaseUrl || !runPostgres) {
     test("approves only the entries it locked, not one recorded after the lock", async () => {
       await withFixture(databaseUrl, async (fixture) => {
         const events: AuditEvent[] = [];
+        let interceptedWrite = false;
         const race = await withLockThenWriteRace({
           transactions: {
             a: asApprover(fixture),
             b: async (run) => await fixture.actors.b.transaction(run),
           },
-          a: async (tx, pause) =>
-            await batchUpdate.handler(
+          a: async (tx, pause) => {
+            const pauseAtWrite = async () => {
+              interceptedWrite = true;
+              await pause();
+            };
+            const builderWatched = pauseBeforeWrite(
+              tx,
+              timeEntries,
+              pauseAtWrite,
+            );
+            const watched = new Proxy(builderWatched, {
+              get(target, property) {
+                if (property === "execute") {
+                  return async (query: Parameters<typeof tx.execute>[0]) => {
+                    const statement =
+                      typeof query === "string"
+                        ? query
+                        : new PgDialect().sqlToQuery(query.getSQL()).sql;
+                    if (/^\s*UPDATE "time_entries"\s/u.test(statement)) {
+                      await pauseAtWrite();
+                    }
+                    return await target.execute(query);
+                  };
+                }
+                const value: unknown = Reflect.get(target, property, target);
+                if (typeof value !== "function") {
+                  return value;
+                }
+                const bound: unknown = value.bind(target);
+                return bound;
+              },
+            });
+            return await batchUpdate.handler(
               createTestHandlerContext<BatchContext>({
-                safeDb: safeDbIn(pauseBeforeWrite(tx, timeEntries, pause)),
+                safeDb: safeDbIn(watched),
                 scopedDb: NO_DB,
                 audit: async (_tx, event) => {
                   events.push(...(Array.isArray(event) ? event : [event]));
@@ -283,11 +316,13 @@ if (!databaseUrl || !runPostgres) {
                   action: "approve",
                 },
               }),
-            ),
+            );
+          },
           b: recordLateEntry(fixture),
         });
 
         // Tx B's entry was committed before tx A wrote.
+        expect(interceptedWrite).toBe(true);
         expect(race.b).toEqual([{ id: fixture.lateId }]);
         expect(race.a).toEqual({ updated: 1 });
         expect(await statuses(fixture)).toEqual({

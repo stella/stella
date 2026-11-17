@@ -115,6 +115,8 @@ export const METADATA_TEXT_DISPOSITIONS = {
   chairman: INSPECTED,
   challenge: INSPECTED,
   challengedAct: INSPECTED,
+  publisherReviews: INSPECTED,
+  publisherReviewMetadata: INSPECTED,
   challengedAuthority: INSPECTED,
   challengedLegislation: INSPECTED,
   challengedProvisions: INSPECTED,

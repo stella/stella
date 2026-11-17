@@ -625,8 +625,12 @@
       "unavailableProvider": "Teie organisatsiooni tehisintellekti teenusepakkuja ei paku kõne teisendamist.",
       "unavailable": "stella AI teisendamine pole praegu saadaval.",
       "model": "Teisendusmudel",
+      "chooseModel": "Valige mudel",
       "outsideRegion": "Väljaspool teie piirkonda",
-      "outsideRegionNote": "See mudel töötleb heli väljaspool teie organisatsiooni piirkonda."
+      "outsideRegionNote": "See mudel töötleb heli väljaspool teie organisatsiooni piirkonda.",
+      "retainsData": "Säilitab teie heli",
+      "retainsDataTitle": "{provider} säilitab, mida dikteerite",
+      "retainsDataWarning": "See mudel töötab kontol, millel puudub andmete nullsäilitus. {provider} talletab kõige dikteeritu heli ja transkriptsiooni oma tingimustel, väljaspool stella kontrolli. Ärge dikteerige sellega konfidentsiaalset teavet ega kliendiandmeid."
     },
     "language": {
       "title": "Dikteerimise keel",
@@ -835,9 +839,11 @@
       "storage": "Ühendust ei õnnestunud selles arvutis lugeda ega salvestada."
     },
     "callbackConnectedTitle": "ChatGPT on ühendatud",
-    "callbackConnectedBody": "Naaske stellasse. AI-päringud kasutavad nüüd teie ChatGPT paketti.",
+    "callbackConnectedBody": "stella AI-päringud kasutavad nüüd teie ChatGPT paketti.",
     "callbackNotConnectedTitle": "ChatGPT-d ei ühendatud",
-    "callbackNotConnectedBody": "Naaske stellasse, et näha, mis juhtus, ja proovige uuesti.",
+    "callbackNotConnectedBody": "Põhjus on näha stella rakenduses. Uuesti proovimiseks avage {section} › {group} ja klõpsake nuppu „{button}“.",
+    "callbackAccount": "Konto",
+    "callbackPlan": "Pakett",
     "callbackCloseTab": "Võite selle vahekaardi sulgeda.",
     "claudeCode": {
       "title": "Claude Code",

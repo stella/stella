@@ -1,36 +1,73 @@
 import { describe, expect, test } from "bun:test";
 
+import { withFakeTimers } from "@stll/test-kit";
+
+import { nextMacrotask } from "./event-loop";
 import { TimeoutError, withTimeout } from "./with-timeout";
 
 describe("withTimeout", () => {
   test("returns the operation result when it settles before the deadline", async () => {
-    const result = await withTimeout(
-      async () => {
-        await Bun.sleep(5);
-        return "ok";
-      },
-      { label: "fast", timeoutMs: 1000 },
-    );
-
-    expect(result).toBe("ok");
+    await withFakeTimers(async (timers) => {
+      const operation = Promise.withResolvers<string>();
+      const started = Promise.withResolvers<AbortSignal>();
+      let settled = false;
+      const pending = withTimeout(
+        async (signal) => {
+          started.resolve(signal);
+          return await operation.promise;
+        },
+        { label: "fast", timeoutMs: 1000 },
+      ).then((value) => {
+        settled = true;
+        return value;
+      });
+      try {
+        const signal = await started.promise;
+        await timers.advance(999);
+        expect(settled).toBe(false);
+        expect(signal.aborted).toBe(false);
+        expect(timers.pendingTimers()).toBe(1);
+        operation.resolve("ok");
+        expect(await pending).toBe("ok");
+        expect(signal.aborted).toBe(false);
+        expect(timers.pendingTimers()).toBe(0);
+      } finally {
+        operation.resolve("cleanup");
+        await Promise.allSettled([pending]);
+      }
+    });
   });
 
   test("rejects with a TimeoutError when the operation outlives the deadline", async () => {
-    let captured: unknown;
-    try {
-      await withTimeout(
-        async () => {
-          await Bun.sleep(1000);
-          return "never";
+    await withFakeTimers(async (timers) => {
+      const operation = Promise.withResolvers<string>();
+      const started = Promise.withResolvers<AbortSignal>();
+      const pending = withTimeout(
+        async (signal) => {
+          started.resolve(signal);
+          return await operation.promise;
         },
         { label: "wedged-read", timeoutMs: 10 },
+      ).then(
+        () => undefined,
+        (error: unknown) => error,
       );
-    } catch (error) {
-      captured = error;
-    }
-
-    expect(captured).toBeInstanceOf(TimeoutError);
-    expect(captured).toMatchObject({ label: "wedged-read", timeoutMs: 10 });
+      try {
+        const signal = await started.promise;
+        await timers.advance(9);
+        expect(signal.aborted).toBe(false);
+        await timers.advance(1);
+        expect(signal.aborted).toBe(true);
+        const captured = await pending;
+        expect(captured).toBeInstanceOf(TimeoutError);
+        expect(captured).toMatchObject({ label: "wedged-read", timeoutMs: 10 });
+        expect(signal.reason).toBe(captured);
+        expect(timers.pendingTimers()).toBe(0);
+      } finally {
+        operation.resolve("cleanup");
+        await pending;
+      }
+    });
   });
 
   test("an injected timer decides when the deadline fires", async () => {
@@ -81,15 +118,34 @@ describe("withTimeout", () => {
   });
 
   test("timeoutMs 0 disables the deadline", async () => {
-    const result = await withTimeout(
-      async () => {
-        await Bun.sleep(10);
-        return "ok";
-      },
-      { label: "disabled", timeoutMs: 0 },
-    );
-
-    expect(result).toBe("ok");
+    await withFakeTimers(async (timers) => {
+      const operation = Promise.withResolvers<string>();
+      const started = Promise.withResolvers<AbortSignal>();
+      let settled = false;
+      const pending = withTimeout(
+        async (signal) => {
+          started.resolve(signal);
+          return await operation.promise;
+        },
+        { label: "disabled", timeoutMs: 0 },
+      ).then((value) => {
+        settled = true;
+        return value;
+      });
+      try {
+        const signal = await started.promise;
+        expect(timers.pendingTimers()).toBe(0);
+        await timers.advance(10_000);
+        expect(settled).toBe(false);
+        expect(signal.aborted).toBe(false);
+        operation.resolve("ok");
+        expect(await pending).toBe("ok");
+        expect(timers.pendingTimers()).toBe(0);
+      } finally {
+        operation.resolve("cleanup");
+        await Promise.allSettled([pending]);
+      }
+    });
   });
 
   test("a late operation rejection after the timeout does not surface as unhandled", async () => {
@@ -98,29 +154,42 @@ describe("withTimeout", () => {
       rejectedLate = true;
     };
     process.on("unhandledRejection", onUnhandled);
-
     try {
-      let captured: unknown;
-      try {
-        await withTimeout(
-          async () => {
-            // Settles (rejecting) well after the deadline has already won.
-            await Bun.sleep(20);
-            throw new TimeoutError({
-              message: "late connection failure",
-              label: "late-op",
-            });
+      await withFakeTimers(async (timers) => {
+        const operation = Promise.withResolvers<string>();
+        const started = Promise.withResolvers<AbortSignal>();
+        const pending = withTimeout(
+          async (signal) => {
+            started.resolve(signal);
+            return await operation.promise;
           },
           { label: "late-wrapper", timeoutMs: 5 },
+        ).then(
+          () => undefined,
+          (error: unknown) => error,
         );
-      } catch (error) {
-        captured = error;
-      }
-
-      expect(captured).toBeInstanceOf(TimeoutError);
-      expect(captured).toMatchObject({ label: "late-wrapper" });
-
-      await Bun.sleep(40);
+        try {
+          const signal = await started.promise;
+          await timers.advance(5);
+          expect(signal.aborted).toBe(true);
+          const captured = await pending;
+          expect(captured).toBeInstanceOf(TimeoutError);
+          expect(captured).toMatchObject({ label: "late-wrapper" });
+          expect(signal.reason).toBe(captured);
+          operation.reject(
+            new TimeoutError({
+              message: "late connection failure",
+              label: "late-op",
+            }),
+          );
+          expect(timers.pendingTimers()).toBe(0);
+        } finally {
+          operation.resolve("cleanup");
+          await pending;
+        }
+      });
+      // Rejection reporting belongs to a genuine host turn, not fake time.
+      await nextMacrotask();
       expect(rejectedLate).toBe(false);
     } finally {
       process.off("unhandledRejection", onUnhandled);

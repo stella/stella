@@ -625,8 +625,12 @@
       "unavailableProvider": "Jūsų organizacijos DI paslaugų teikėjas nesiūlo kalbos pavertimo tekstu.",
       "unavailable": "Pavertimas naudojant stella AI šiuo metu nepasiekiamas.",
       "model": "Pavertimo modelis",
+      "chooseModel": "Pasirinkite modelį",
       "outsideRegion": "Už jūsų regiono ribų",
-      "outsideRegionNote": "Šis modelis garsą apdoroja už jūsų organizacijos regiono ribų."
+      "outsideRegionNote": "Šis modelis garsą apdoroja už jūsų organizacijos regiono ribų.",
+      "retainsData": "Saugo jūsų garsą",
+      "retainsDataTitle": "{provider} saugo tai, ką diktuojate",
+      "retainsDataWarning": "Šis modelis veikia paskyroje be nulinio duomenų saugojimo. {provider} pagal savo sąlygas, už stella kontrolės ribų, saugo visko, ką padiktuojate, garsą ir nuorašą. Nediktuokite juo konfidencialios informacijos ar klientų duomenų."
     },
     "language": {
       "title": "Diktavimo kalba",
@@ -835,9 +839,11 @@
       "storage": "Šiame kompiuteryje nepavyko nuskaityti ar išsaugoti ryšio."
     },
     "callbackConnectedTitle": "ChatGPT prijungtas",
-    "callbackConnectedBody": "Grįžkite į stellą. DI užklausos dabar naudoja jūsų ChatGPT planą.",
+    "callbackConnectedBody": "DI užklausos stelloje dabar naudoja jūsų ChatGPT planą.",
     "callbackNotConnectedTitle": "ChatGPT neprijungtas",
-    "callbackNotConnectedBody": "Grįžkite į stellą, pažiūrėkite, kas nutiko, ir bandykite dar kartą.",
+    "callbackNotConnectedBody": "Priežastis rodoma stella programėlėje. Norėdami bandyti dar kartą, atidarykite {section} › {group} ir spustelėkite „{button}“.",
+    "callbackAccount": "Paskyra",
+    "callbackPlan": "Planas",
     "callbackCloseTab": "Šį skirtuką galite uždaryti.",
     "claudeCode": {
       "title": "Claude Code",

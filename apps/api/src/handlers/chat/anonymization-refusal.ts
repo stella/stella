@@ -1,4 +1,9 @@
-import { CHAT_TRANSPORT_ERROR_CODE } from "@stll/anonymize-chat";
+import {
+  CHAT_TRANSPORT_ERROR_CODE,
+  type ChatTransportErrorCode,
+  type ChatTransportErrorPayload,
+  isChatTransportErrorCode,
+} from "@stll/anonymize-chat";
 
 import type { ChatTurnFailureCode } from "@/api/handlers/chat/chat-turn-state";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -26,6 +31,8 @@ export type AnonymizationRefusal<
  *
  * `offerRawRetry` sets the transport code that lets the client offer to send
  * without anonymization; leave it off where sending raw cannot help.
+ * `rawRetryCode` names why, for a client to say so; content stella cannot
+ * anonymize unless told otherwise.
  */
 export const refuseAnonymizedCrossing = <
   TStatus extends AnonymizationRefusalStatus,
@@ -33,6 +40,7 @@ export const refuseAnonymizedCrossing = <
   cause,
   message,
   offerRawRetry,
+  rawRetryCode = CHAT_TRANSPORT_ERROR_CODE.thirdPartyBoundaryRefusal,
   reason,
   site,
   status,
@@ -40,6 +48,7 @@ export const refuseAnonymizedCrossing = <
   cause?: unknown;
   message: string;
   offerRawRetry: boolean;
+  rawRetryCode?: ChatTransportErrorCode;
   reason: AnonymizationRefusalReason;
   site: AnonymizationRefusalSite;
   status: TStatus;
@@ -47,9 +56,7 @@ export const refuseAnonymizedCrossing = <
   emitAnonymizationRefusalMetric({ reason, site });
   return Object.assign(
     new HandlerError({
-      ...(offerRawRetry
-        ? { code: CHAT_TRANSPORT_ERROR_CODE.thirdPartyBoundaryRefusal }
-        : {}),
+      ...(offerRawRetry ? { code: rawRetryCode } : {}),
       ...(cause === undefined ? {} : { cause }),
       message,
       status,
@@ -57,3 +64,16 @@ export const refuseAnonymizedCrossing = <
     { failureCode: BOUNDARY_REFUSAL_FAILURE_CODE } as const,
   );
 };
+
+/**
+ * What a chat turn refused at the boundary answers with: the refusal's own
+ * code, so the client can say why, and its message.
+ */
+export const anonymizationRefusalPayload = (
+  error: AnonymizationRefusal,
+): ChatTransportErrorPayload => ({
+  code: isChatTransportErrorCode(error.code)
+    ? error.code
+    : CHAT_TRANSPORT_ERROR_CODE.thirdPartyBoundaryRefusal,
+  message: error.message,
+});

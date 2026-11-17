@@ -62,6 +62,9 @@ struct Contract {
   models_path: String,
   /// Asks for the labeled model list this version shows.
   models_labeled_query: String,
+  /// Asks also for models whose provider keeps the audio, which this
+  /// version shows only with a warning.
+  models_retention_query: String,
   transcribe_path: String,
   max_audio_bytes: usize,
   max_audio_seconds: usize,
@@ -420,11 +423,25 @@ pub fn choose_model(
       replaces_stored: false,
     });
   }
+  // Never falls back to a model whose provider keeps the audio: that one is
+  // used only once picked where its warning shows.
+  let without_warning = |model_id: &str| {
+    offered
+      .models
+      .iter()
+      .any(|model| model.id == model_id && !model.retains_data)
+  };
   offered
     .default_model_id
     .as_deref()
-    .filter(|default| offered.offers(default))
-    .or_else(|| offered.models.first().map(|model| model.id.as_str()))
+    .filter(|default| without_warning(default))
+    .or_else(|| {
+      offered
+        .models
+        .iter()
+        .find(|model| !model.retains_data)
+        .map(|model| model.id.as_str())
+    })
     .map(|model_id| ModelChoice {
       model_id: model_id.to_string(),
       replaces_stored: true,
@@ -550,6 +567,10 @@ pub struct CloudModel {
   /// Whether the model processes audio outside the organization's region.
   #[serde(default)]
   outside_region: bool,
+  /// Whether the provider keeps the audio and transcript; the settings
+  /// window warns where such a model is chosen.
+  #[serde(default)]
+  retains_data: bool,
 }
 
 /// The models stella AI offers this organization, as the API lists them.
@@ -577,7 +598,10 @@ pub async fn models(app: &AppHandle) -> Result<CloudModels, String> {
         account.api_base_url,
         contract().models_path
       ))
-      .query(&[(contract().models_labeled_query.as_str(), "1")]),
+      .query(&[
+        (contract().models_labeled_query.as_str(), "1"),
+        (contract().models_retention_query.as_str(), "1"),
+      ]),
     &account.device_key,
     Some(&account.credential.key),
     None,
@@ -631,6 +655,7 @@ mod tests {
         display_name: id.to_string(),
         provider: None,
         outside_region: false,
+        retains_data: false,
       })
       .to_vec(),
       default_model_id: default.map(ToString::to_string),
@@ -645,7 +670,9 @@ mod tests {
         "models": [
           {"id": "mistralai/voxtral-mini-transcribe", "displayName": "Voxtral Mini Transcribe"},
           {"id": "google/chirp-3", "displayName": "Chirp 3", "provider": "Google",
-           "outsideRegion": true, "pricePerHour": 0.96}
+           "outsideRegion": true, "pricePerHour": 0.96},
+          {"id": "elevenlabs-direct/scribe-v3", "displayName": "Scribe v3",
+           "provider": "ElevenLabs", "outsideRegion": false, "retainsData": true}
         ],
         "defaultModelId": "mistralai/voxtral-mini-transcribe",
         "unavailable": null,
@@ -659,6 +686,9 @@ mod tests {
     assert!(!newer.models[0].outside_region);
     let shown = serde_json::to_value(&newer.models[1]).expect("serializes");
     assert_eq!(shown["outsideRegion"], true);
+    assert_eq!(shown["retainsData"], false);
+    let retaining = serde_json::to_value(&newer.models[2]).expect("serializes");
+    assert_eq!(retaining["retainsData"], true);
   }
 
   #[test]
@@ -895,6 +925,29 @@ mod tests {
       unavailable: Some("region".to_string()),
     };
     assert_eq!(choose_model(Some("retired/model"), &none), None);
+  }
+
+  #[test]
+  fn a_model_that_keeps_audio_is_used_only_once_picked() {
+    let mut offered = models_fixture(None);
+    for model in &mut offered.models {
+      model.retains_data = model.id == "mistralai/voxtral-mini-transcribe";
+    }
+    assert_eq!(
+      choose_model(None, &offered).map(|choice| choice.model_id),
+      Some("openai/whisper-large-v3".to_string())
+    );
+    assert_eq!(
+      choose_model(Some("mistralai/voxtral-mini-transcribe"), &offered),
+      Some(ModelChoice {
+        model_id: "mistralai/voxtral-mini-transcribe".to_string(),
+        replaces_stored: false,
+      })
+    );
+    for model in &mut offered.models {
+      model.retains_data = true;
+    }
+    assert_eq!(choose_model(Some("retired/model"), &offered), None);
   }
 
   #[tokio::test]

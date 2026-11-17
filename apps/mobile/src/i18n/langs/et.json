@@ -85,6 +85,7 @@
     "documentClose": "Sulge",
     "approvalBrowserNote": "Lubamisel töötab see teie arvuti brauseris, stella laienduse kaudu.",
     "grantFailed": "Luba ei õnnestunud salvestada. Proovige uuesti.",
+    "limitReminderFailed": "Muudatust ei õnnestunud salvestada. Proovige uuesti.",
     "elsewhereBrowser": "See samm töötab teie arvuti brauseris, stella laienduse kaudu. Lõpetamiseks avage see vestlus seal stellas.",
     "elsewhereSecret": "See samm vajab võtit. Turvalisuse huvides lisatakse võtmed stellas arvutis, mitte rakenduses.",
     "elsewhereConnector": "See samm ühendab rakenduse. Turvalisuse huvides ühendatakse rakendused stellas arvutis, mitte rakenduses.",
@@ -103,6 +104,8 @@
     "pickFailed": "Failivalijat ei õnnestunud avada. Proovi uuesti.",
     "sendFileRefused": "Üht faili ei saanud saata, seega sõnumit ei saadetud. Eemalda fail ja proovi uuesti.",
     "sendFileNotAnonymizable": "See vestlus on anonüümitud ja stella ei saanud üht faili anonüümida, seega midagi ei saadetud. Eemalda fail ja proovi uuesti.",
+    "sendLocalRunNotAnonymizable": "See vestlus on anonüümitud ja sinu arvutis töötav programmeerimisagent loeb sinu dokumente sellisena, nagu need on, seega talle midagi ei saadetud.",
+    "sendWithoutAnonymization": "Saada anonüümimiseta",
     "pickTitle": "Vali vestlus",
     "pickDescription": "Vali loendist lõim või alusta uut nupuga +.",
     "runBanner": {
@@ -248,7 +251,14 @@
       },
       "sessionNotResumed": "Sinu arvutis töötav programmeerimisagent ei saanud pooleli jäänud kohast edasi minna, seega jätkas ta selle vestluse sõnumite põhjal.",
       "steered": "Saadetud agendi töö ajal",
-      "desktopSettingsSteps": "Ava oma arvutis stella desktopis Seaded › Üldine › AI-tellimused."
+      "ranOnModel": "Töötas mudelil {model}",
+      "desktopSettingsSteps": "Ava oma arvutis stella desktopis Seaded › Üldine › AI-tellimused.",
+      "errorLimitResetsAt": "Sinu arvutis töötav programmeerimisagent jõudis kasutuslimiidini. Uuesti saad proovida alates {time}.",
+      "limitReminderNotify": "Teavita mind, kui limiit lähtestub",
+      "limitReminderScheduled": "Teavitame sind alates {time}.",
+      "limitResumeContinue": "Jätka automaatselt, kui limiit lähtestub",
+      "limitResumeScheduled": "Jätkub automaatselt alates {time}.",
+      "limitReminderCancel": "Tühista"
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# kontrollitud allikas} other {# kontrollitud allikat}}",

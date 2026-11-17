@@ -37,6 +37,8 @@ import {
   parseNssPdf,
   readNssRegistryMetadata,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-nss-documents";
+import { parseCzNssPublisherReviewMetadata } from "@/api/handlers/case-law/ingestion/adapters/cz-nss-review-metadata";
+import type { CzNssPublisherReviewMetadata } from "@/api/handlers/case-law/ingestion/adapters/cz-nss-review-metadata";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import {
   readBodyText,
@@ -54,6 +56,7 @@ import {
   stripHtml,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { czechReporterIdentifiersFromCitationLabel } from "@/api/handlers/case-law/ingestion/citation-extractor";
+import type { CzechAppealReview } from "@/api/handlers/case-law/ingestion/cz-appeal-reviews";
 import { parseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import { czDecisionCourt } from "@/api/lib/case-law/cz-ecli-courts";
@@ -1671,6 +1674,8 @@ type DetailFieldEvidence = {
   values: string[];
 };
 export type CzNssDetailMetadata = CzNssDetailValues & {
+  publisherReviews?: CzechAppealReview[];
+  publisherReviewMetadata?: CzNssPublisherReviewMetadata[];
   detailFieldEvidence?: DetailFieldEvidence[];
   publisherMetadata?: ReturnType<typeof extractNssPublisherMetadata>;
 };
@@ -1774,6 +1779,7 @@ export const parseCzNssDetailMetadata = (html: string): CzNssDetailMetadata => {
     conflictingPrecedents: read("conflictingPrecedents"),
   } satisfies CzNssDetailValues;
   return {
+    ...parseCzNssPublisherReviewMetadata(html),
     ...values,
     publisherMetadata: extractNssPublisherMetadata(html),
     ...(evidence.length === 0 ? {} : { detailFieldEvidence: evidence }),
@@ -1934,6 +1940,8 @@ type RowToResultOptions = {
 const detailMetadataFields = (
   detail: CzNssDetailMetadata,
 ): Record<string, unknown> => ({
+  publisherReviews: detail.publisherReviews,
+  publisherReviewMetadata: detail.publisherReviewMetadata,
   ...detail.publisherMetadata,
   detailFieldEvidence: detail.detailFieldEvidence,
   title: detail.title,

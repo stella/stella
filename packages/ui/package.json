@@ -1,6 +1,6 @@
 {
   "name": "@stll/ui",
-  "version": "0.72.0",
+  "version": "0.73.0",
   "description": "Stella's design system: bidi-aware React primitives built on Base UI, the dockable inspector pane, and the Tailwind v4 theme they are styled with.",
   "keywords": [
     "base-ui",
@@ -83,6 +83,7 @@
     "./form": "./src/components/form.tsx",
     "./frame": "./src/components/frame.tsx",
     "./file-size": "./src/lib/file-size.ts",
+    "./highlighted-textarea": "./src/components/highlighted-textarea.tsx",
     "./hex-color-picker": "./src/components/hex-color-picker.tsx",
     "./icons": "./src/icons.ts",
     "./identity-text": "./src/components/identity-text.tsx",

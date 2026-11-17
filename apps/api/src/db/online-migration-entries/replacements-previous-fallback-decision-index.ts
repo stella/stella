@@ -9,7 +9,7 @@ export default {
   type: "replacements",
   values: [
     {
-      introducedBy: "20261116190000_case_law_fallback_contract",
+      introducedBy: "20261117120000_case_law_fallback_contract",
       // The docket-only index retires once both court/evidence and content
       // replacements validate.
       legacyName: PREVIOUS_FALLBACK_DECISION_INDEX,

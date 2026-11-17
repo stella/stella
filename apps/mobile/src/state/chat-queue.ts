@@ -80,6 +80,9 @@ export const readChatQueue = async ({
     source,
   });
 
+/** A queued message as the queue lists it, at the revision it holds. */
+export type QueuedChatItem = v.InferOutput<typeof queueItemSchema>;
+
 /** Queue `send` under its message's own id; a repeat answers the same item. */
 export const enqueueChatMessage = async ({
   fetch,
@@ -88,14 +91,16 @@ export const enqueueChatMessage = async ({
   threadId,
 }: QueueRequest & {
   readonly send: ReturnType<typeof queuedChatSend>;
-}): Promise<Result<unknown, ApiError>> =>
-  await requestApi({
-    fetch,
-    path: queuePath(threadId),
-    body: { send },
-    schema: v.object({ item: queueItemSchema }),
-    source,
-  });
+}): Promise<Result<QueuedChatItem, ApiError>> =>
+  (
+    await requestApi({
+      fetch,
+      path: queuePath(threadId),
+      body: { send },
+      schema: v.object({ item: queueItemSchema }),
+      source,
+    })
+  ).map(({ item }) => item);
 
 const wholeMessageSchema = v.object({
   message: v.object({ parts: v.array(v.unknown()) }),

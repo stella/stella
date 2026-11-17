@@ -17,6 +17,7 @@ import mcpOAuthCallback from "@/api/handlers/mcp-connectors/oauth-callback";
 import updateMcpConnection from "@/api/handlers/mcp-connectors/update-connection";
 import createSavedSearch from "@/api/handlers/saved-searches/create";
 import deleteSavedSearch from "@/api/handlers/saved-searches/delete";
+import getSavedSearch from "@/api/handlers/saved-searches/get";
 import updateSavedSearch from "@/api/handlers/saved-searches/update";
 import connectSharepoint from "@/api/handlers/sharepoint/connect";
 import disconnectSharepoint from "@/api/handlers/sharepoint/disconnect";
@@ -67,6 +68,7 @@ const MUTATIONS = {
 
 /** The sibling reads: on the baseline grant, and affirmed as reads. */
 const READS = {
+  "saved-searches/get.ts": getSavedSearch,
   "legal-reader/annotations/list.ts": listReaderAnnotations,
   "mcp-connectors/list-connections.ts": listMcpConnections,
   "mcp-connectors/list-connectors.ts": listMcpConnectors,

@@ -1,7 +1,6 @@
 import { panic, Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
-import { readCapabilityCatalog } from "@stll/cli/capability-catalog-data";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 import { createTestState } from "@stll/test-state";
 
@@ -25,6 +24,7 @@ import { listMcpTools } from "@/api/mcp/tools";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
+import { repositoryCapabilityCatalog } from "@/api/tests/helpers/repository-capability-catalog";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -409,7 +409,7 @@ describe("matter membership and organization settings", () => {
         }),
       ),
     ).toContain("validation_error");
-    const entry = readCapabilityCatalog().find(
+    const entry = repositoryCapabilityCatalog.find(
       (candidate) =>
         typeof candidate === "object" &&
         candidate !== null &&

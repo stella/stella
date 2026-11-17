@@ -1,6 +1,7 @@
 import { isTaggedError, panic, TaggedError } from "better-result";
 import * as v from "valibot";
 
+import { CHAT_TRANSPORT_ERROR_CODE } from "@stll/anonymize-chat";
 import {
   API_FILE_SECURITY_REJECTED_ERROR_CODE,
   API_VALIDATION_ERROR_CODE,
@@ -19,6 +20,7 @@ import {
   parseApiErrorValue,
   parseApiValidationIssues,
   PREVIEW_UNAVAILABLE_ERROR_CODE,
+  SAVED_SEARCH_NOT_FOUND_ERROR_CODE,
   SKILL_FROM_CHAT_REFUSAL_CODE,
   SKILL_SOURCE_UNREACHABLE_CODE,
 } from "@stll/api-contract";
@@ -374,6 +376,8 @@ const CODE_ERROR_KEYS = {
     "errors.apiCodes.legalSourceEntityLimitReached",
   legal_source_file_property_missing:
     "errors.apiCodes.legalSourceFilePropertyMissing",
+  [CHAT_TRANSPORT_ERROR_CODE.localRunAnonymizedRefusal]:
+    "errors.apiCodes.localRunAnonymizedRefusal",
   mcp_oauth_binding_invalid: "errors.apiCodes.mcpAuthorizationApprovalRequired",
   mcp_authorization_approval_required:
     "errors.apiCodes.mcpAuthorizationApprovalRequired",
@@ -394,6 +398,7 @@ const CODE_ERROR_KEYS = {
   usage_limit_exceeded: "errors.apiCodes.usageLimitExceeded",
   validation: STATUS_ERROR_KEYS.validation,
   [API_VERSION_CONFLICT_ERROR_CODE]: "errors.apiCodes.versionConflict",
+  [SAVED_SEARCH_NOT_FOUND_ERROR_CODE]: STATUS_ERROR_KEYS.notFound,
 } as const satisfies Record<string, TranslationKey>;
 
 const USAGE_REJECTION_REASON_KEYS = {

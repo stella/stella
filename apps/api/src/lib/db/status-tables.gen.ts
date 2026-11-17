@@ -312,6 +312,7 @@ export const ENUM_COLUMNS = {
   case_law_corpus_tombstones: ["reason"],
   case_law_decision_citation_stats: ["direction", "polarity"],
   case_law_decision_judges: ["role"],
+  case_law_decision_reviews: ["evidence_classification", "outcome", "source"],
   case_law_decisions: ["case_number_type"],
   case_law_polarity_rules: ["kind"],
   case_law_population_counts: ["kind"],
@@ -345,6 +346,7 @@ export const ENUM_COLUMNS = {
   case_law_statute_citation_memberships: ["target_type"],
   cell_metadata: ["entity_feature_gate"],
   chat_content_v3_backfill_receipts: ["outcome", "source"],
+  chat_limit_reminders: ["on_reset"],
   chat_queue_holds: ["reason"],
   chat_secrets: ["decision"],
   chat_threads: ["chat_reasoning_effort"],
@@ -382,6 +384,7 @@ export const ENUM_COLUMNS = {
     "family",
     "last_failure_kind",
   ],
+  corpus_index_route_proofs: ["family", "pass_expectation", "revoke_reason"],
   corpus_index_route_seedings: ["family"],
   correspondence: [
     "channel",

@@ -58,6 +58,40 @@ export const readBoundedByGroup = async <TLimited, TRow>(
   return { type: "complete", rows };
 };
 
+export type CappedGroupReadResult<TRow> = {
+  /** Each group's first `cap` rows, in the order they were read. */
+  rows: TRow[];
+  /** Groups whose sentinel arrived: they held more than `cap` rows. */
+  overflowed: ReadonlySet<PropertyKey>;
+};
+
+/**
+ * A lateral query keeps each group's first `cap` rows and names the groups it
+ * cut, for a summary that shows a truncated group's leading rows and says so
+ * rather than refusing the whole read.
+ */
+export const readCappedByGroup = async <TLimited, TRow>(
+  query: GroupedReadQuery<TLimited>,
+  { cap, readRows, groupKeyOf }: GroupedReadOptions<TLimited, TRow>,
+): Promise<CappedGroupReadResult<TRow>> => {
+  const limited = query.limit(boundedReadLimit(cap));
+  const read = await readRows(limited);
+  const counts = new Map<PropertyKey, number>();
+  const overflowed = new Set<PropertyKey>();
+  const rows: TRow[] = [];
+  for (const row of read) {
+    const key = groupKeyOf(row);
+    const count = (counts.get(key) ?? 0) + 1;
+    counts.set(key, count);
+    if (count > cap) {
+      overflowed.add(key);
+    } else {
+      rows.push(row);
+    }
+  }
+  return { rows, overflowed };
+};
+
 type CursorReadOptions<TRow> = {
   limit: number;
   cursorForItem: (row: TRow) => string;
@@ -88,5 +122,6 @@ export const readCursorPage = async <TRow>(
 export const BOUNDED_READ_EXPORTS = {
   readBounded,
   readBoundedByGroup,
+  readCappedByGroup,
   readCursorPage,
 } as const;

@@ -37,7 +37,6 @@
     "apps/api/src/lib/entity-versions/resolve-docx-edit-author-name.ts::resolveDocxEditAuthorName::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/errors/handler-error-resolution.ts::admissionHandlerError::not-ok-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/errors/handler-error-resolution.ts::archiveHandlerError::not-ok-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
-    "apps/api/src/lib/file-scan/attached-template.ts::scan::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/files/office-evidence.ts::decodeEvidenceRow::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/files/office-evidence.ts::decodeEvidenceRow::result-error-returns-empty#2": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/files/office-evidence.ts::loadOfficeEvidence::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",

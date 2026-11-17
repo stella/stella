@@ -170,6 +170,12 @@ globalThis.fetch = Object.assign(
       return Response.json(sessionBody());
     }
     if (
+      path.endsWith("/api/auth/organization/get-active-member-role") &&
+      (askedAs === "org-a" || askedAs === "org-b")
+    ) {
+      return Response.json({ role: "admin" });
+    }
+    if (
       path === "/v1/me/professional-use" &&
       (askedAs === "org-a" || askedAs === "org-b")
     ) {

@@ -85,6 +85,7 @@
     "documentClose": "Zavřít",
     "approvalBrowserNote": "Po povolení se spustí ve vašem prohlížeči na počítači, přes rozšíření stella.",
     "grantFailed": "Schválení se nepodařilo uložit. Zkuste to znovu.",
+    "limitReminderFailed": "Změnu se nepodařilo uložit. Zkuste to znovu.",
     "elsewhereBrowser": "Tento krok běží ve vašem prohlížeči na počítači, přes rozšíření stella. Dokončete ho tam, ve stelle otevřete tuto konverzaci.",
     "elsewhereSecret": "Tento krok potřebuje klíč. Z bezpečnostních důvodů se klíče přidávají ve stelle na počítači, ne v aplikaci.",
     "elsewhereConnector": "Tento krok připojuje aplikaci. Z bezpečnostních důvodů se aplikace připojují ve stelle na počítači, ne v aplikaci.",
@@ -103,6 +104,8 @@
     "pickFailed": "Výběr souborů se nepodařilo otevřít. Zkuste to znovu.",
     "sendFileRefused": "Soubor se nepodařilo odeslat, takže se zpráva neodeslala. Odeberte soubor a zkuste to znovu.",
     "sendFileNotAnonymizable": "Tato konverzace je anonymizovaná a stella nedokázala anonymizovat jeden ze souborů, takže se nic neodeslalo. Odeberte soubor a zkuste to znovu.",
+    "sendLocalRunNotAnonymizable": "Tato konverzace je anonymizovaná a programovací agent ve vašem počítači čte vaše dokumenty tak, jak jsou, proto se mu nic neodeslalo.",
+    "sendWithoutAnonymization": "Odeslat bez anonymizace",
     "pickTitle": "Vyberte konverzaci",
     "pickDescription": "Vyberte vlákno ze seznamu nebo začněte nové tlačítkem +.",
     "runBanner": {
@@ -248,7 +251,14 @@
       },
       "sessionNotResumed": "Programovací agent ve vašem počítači nemohl navázat tam, kde skončil, a tak pokračoval podle zpráv v tomto chatu.",
       "steered": "Odesláno během práce agenta",
-      "desktopSettingsSteps": "Ve stella desktop ve svém počítači otevřete Nastavení › Obecné › Předplatné AI."
+      "ranOnModel": "Běželo na modelu {model}",
+      "desktopSettingsSteps": "Ve stella desktop ve svém počítači otevřete Nastavení › Obecné › Předplatné AI.",
+      "errorLimitResetsAt": "Programovací agent ve vašem počítači vyčerpal svůj limit využití. Znovu to můžete zkusit po {time}.",
+      "limitReminderNotify": "Upozornit mě, až se obnoví",
+      "limitReminderScheduled": "Upozorníme vás po {time}.",
+      "limitResumeContinue": "Pokračovat automaticky, až se obnoví",
+      "limitResumeScheduled": "Automaticky pokračuje po {time}.",
+      "limitReminderCancel": "Zrušit"
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# prověřený zdroj} few {# prověřené zdroje} other {# prověřených zdrojů} many {# prověřeného zdroje}}",

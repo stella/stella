@@ -85,6 +85,7 @@
     "documentClose": "Bezárás",
     "approvalBrowserNote": "Engedélyezés után a számítógépe böngészőjében fut, a stella bővítményen keresztül.",
     "grantFailed": "Az engedélyt nem sikerült menteni. Próbálja újra.",
+    "limitReminderFailed": "A módosítást nem sikerült menteni. Próbálja újra.",
     "elsewhereBrowser": "Ez a lépés a számítógépe böngészőjében fut, a stella bővítményen keresztül. A befejezéshez nyissa meg ott ezt a beszélgetést a stellában.",
     "elsewhereSecret": "Ehhez a lépéshez kulcs kell. Biztonsági okból a kulcsokat a számítógépen, a stellában lehet hozzáadni, nem az alkalmazásban.",
     "elsewhereConnector": "Ez a lépés egy alkalmazást kapcsol össze. Biztonsági okból az alkalmazásokat a számítógépen, a stellában lehet összekapcsolni, nem az alkalmazásban.",
@@ -103,6 +104,8 @@
     "pickFailed": "A fájlválasztót nem sikerült megnyitni. Próbálja újra.",
     "sendFileRefused": "Egy fájlt nem sikerült elküldeni, ezért az üzenet nem lett elküldve. Távolítsa el a fájlt, és próbálja újra.",
     "sendFileNotAnonymizable": "Ez a beszélgetés anonimizált, és a stella nem tudta anonimizálni az egyik fájlt, ezért semmi sem lett elküldve. Távolítsa el a fájlt, és próbálja újra.",
+    "sendLocalRunNotAnonymizable": "Ez a beszélgetés anonimizált, a számítógépén futó kódoló ügynök pedig a dokumentumait eredeti formájukban olvassa, ezért semmi sem lett elküldve neki.",
+    "sendWithoutAnonymization": "Küldés anonimizálás nélkül",
     "pickTitle": "Válasszon beszélgetést",
     "pickDescription": "Válasszon szálat a listából, vagy kezdjen újat a + gombbal.",
     "runBanner": {
@@ -248,7 +251,14 @@
       },
       "sessionNotResumed": "A számítógépén futó kódoló ügynök nem tudta onnan folytatni, ahol abbahagyta, ezért a csevegés üzeneteiből dolgozott tovább.",
       "steered": "Az ügynök munkája közben elküldve",
-      "desktopSettingsSteps": "A számítógépén a stella desktopban nyissa meg a Beállítások › Általános › AI-előfizetések részt."
+      "ranOnModel": "Ezen a modellen futott: {model}",
+      "desktopSettingsSteps": "A számítógépén a stella desktopban nyissa meg a Beállítások › Általános › AI-előfizetések részt.",
+      "errorLimitResetsAt": "A számítógépén futó kódoló ügynök elérte a használati korlátját. {time} után újra megpróbálhatja.",
+      "limitReminderNotify": "Értesítsen, amikor visszaáll",
+      "limitReminderScheduled": "{time} után értesítjük.",
+      "limitResumeContinue": "Automatikus folytatás, amikor visszaáll",
+      "limitResumeScheduled": "{time} után automatikusan folytatódik.",
+      "limitReminderCancel": "Mégse"
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# ellenőrzött forrás} other {# ellenőrzött forrás}}",

@@ -4,6 +4,8 @@ import { useLatest } from "../hooks/use-latest";
 import { OutcomeScreenView } from "./outcome-screen-view";
 import type { OutcomeScreenViewProps } from "./outcome-screen-view";
 
+export type { OutcomeDetail } from "./outcome-screen-view";
+
 // The one screen a flow ends on: "ChatGPT is connected", "Signed in",
 // "Invitation declined". Every such flow fills this design with its own words
 // (`no-adhoc-outcome-screen` rejects any other). Pages a local loopback server
