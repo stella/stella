@@ -455,6 +455,7 @@ export const ENUM_COLUMNS = {
   usage_provider_webhook_events: ["result"],
   invoice_lines: ["billing_purpose", "source", "vat_treatment"],
   invoice_payments: ["method", "origin"],
+  invoice_sends: ["language"],
   invoices: ["billing_mode", "document_type", "language"],
   justifications: ["entity_feature_gate"],
   legal_graph_edges: [
