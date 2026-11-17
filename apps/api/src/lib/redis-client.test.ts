@@ -488,7 +488,7 @@ describe("createLazyRedisClient", () => {
       {
         connectPolicy: "once",
         connectTimeout: {
-          timeoutMs: 2000,
+          timeoutMs: 2000, // timeout under test
           scheduleTimeout: (fire, delayMs) => {
             const deadline = { fire, delayMs, cancelled: false };
             deadlines.push(deadline);
