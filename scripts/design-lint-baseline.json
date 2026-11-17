@@ -17,7 +17,6 @@
     "apps/web/src/components/catalogue/catalogue-badges.tsx": 17,
     "apps/web/src/components/chat-mention-category.tsx": 1,
     "apps/web/src/components/chat-pasted-text-node.tsx": 1,
-    "apps/web/src/components/chat/chat-composer-action-button.tsx": 1,
     "apps/web/src/components/chat/chat-context-meter.tsx": 1,
     "apps/web/src/components/chat/chat-image-attachment.tsx": 1,
     "apps/web/src/components/chat/chat-matter-picker.tsx": 15,
