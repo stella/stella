@@ -1,3 +1,4 @@
+// parser-output-unchanged: the court id CHECK admits ids on printed-name jurisdictions; no adapter parses differently.
 /**
  * Which jurisdictions identify a decision's court by a directory id, and the
  * table constraint that holds every row to it. Kept apart from the resolver
