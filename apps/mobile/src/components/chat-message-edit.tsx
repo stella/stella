@@ -276,6 +276,11 @@ const ChatMessageEdit = ({
 
 type ChatTurn = ReturnType<typeof useChatTurn>;
 
+/** Under `chat`: what each action a long press offers is called. */
+const MESSAGE_ACTION_KEYS = {
+  edit: "edit.action",
+} as const satisfies Record<MessageAction, string>;
+
 /**
  * Editing the thread's stored messages: what a long press on a message
  * opens, and the edit form of the one being edited (`form`, null while none
@@ -310,19 +315,14 @@ export const useMessageEdit = ({
     readonly session: number;
   } | null>(null);
   const sessions = useRef(0);
-  const openMenu = useMessageActionsMenu((action, entry) => {
-    switch (action) {
-      case "edit":
-        if (turn.canStop) {
-          turn.stop();
-        }
-        sessions.current += 1;
-        setEditing({ entry, session: sessions.current });
-        return;
-      default:
-        action satisfies never;
-        panic("Unhandled message action");
-    }
+  const openMenu = useMessageActionsMenu({
+    edit: (entry) => {
+      if (turn.canStop) {
+        turn.stop();
+      }
+      sessions.current += 1;
+      setEditing({ entry, session: sessions.current });
+    },
   });
   const send = async (
     { entry, session }: NonNullable<typeof editing>,
@@ -389,23 +389,18 @@ export const useMessageEdit = ({
  * none.
  */
 const useMessageActionsMenu = (
-  onAction: (action: MessageAction, entry: ChatEntry) => void,
+  handlers: Record<MessageAction, (entry: ChatEntry) => void>,
 ): ((entry: ChatEntry) => void) => {
   const t = useTranslations("chat");
+  const onAction = (action: MessageAction, entry: ChatEntry) => {
+    handlers[action](entry);
+  };
   return (entry) => {
     const actions = messageActions(entry);
     if (actions.length === 0) {
       return;
     }
-    const label = (action: MessageAction) => {
-      switch (action) {
-        case "edit":
-          return t("edit.action");
-        default:
-          action satisfies never;
-          return panic("Unhandled message action");
-      }
-    };
+    const label = (action: MessageAction) => t(MESSAGE_ACTION_KEYS[action]);
     if (Platform.OS === "ios") {
       ActionSheetIOS.showActionSheetWithOptions(
         {
