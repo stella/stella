@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import {
+  ADAPTER_KEYS,
+  IMPORT_SOURCE_KEYS,
+} from "@/api/lib/legal-search/ingestion-constants";
 import {
   createUnrecognizedSourceReporter,
   SOURCE_REPORT_FEATURE,
@@ -77,5 +80,32 @@ describe("sourceRegistryMembership", () => {
       type: "registered",
       adapterKey: ADAPTER_KEYS.CZ_NS,
     });
+  });
+
+  test("a bulk import source is registered as an import, not unrecognized", () => {
+    expect(sourceRegistryMembership(IMPORT_SOURCE_KEYS.COURTLISTENER)).toEqual({
+      type: "import",
+      importKey: IMPORT_SOURCE_KEYS.COURTLISTENER,
+    });
+  });
+
+  test("an unrecognized key is reported as a classified failure, not a bare Error", () => {
+    const analytics = installRecordingAnalytics();
+    const logs = installRecordingLogger();
+    try {
+      createUnrecognizedSourceReporter(SOURCE_REPORT_FEATURE.coverage)(
+        "unknown-adapter",
+      );
+      // The release health gate flags any `unclassified` fingerprint, so a
+      // bare Error here fails every release whose catalogue holds such a row.
+      const [capture] = analytics.exceptions();
+      expect(capture?.properties["error.class"]).toBe(
+        "UnregisteredCaseLawSourceError",
+      );
+      expect(capture?.properties["failure.reason"]).toBe("tagged_failure");
+    } finally {
+      logs.restore();
+      analytics.restore();
+    }
   });
 });

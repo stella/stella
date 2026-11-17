@@ -732,8 +732,11 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "scripts/schema-introspection.ts",
   ],
   "published-package-list": [
+    "packages/scripts/src/generated-files.ts",
+    "scripts/capability-catalog-sources.ts",
     "scripts/changeset-entry.ts",
     "scripts/changeset-guard.ts",
+    "scripts/generated-files.ts",
   ],
   "schema-index": [
     "packages/collation/src/collation.ts",

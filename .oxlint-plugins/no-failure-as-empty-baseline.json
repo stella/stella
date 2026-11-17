@@ -77,7 +77,6 @@
     "packages/cli/src/registry-cache.ts::readCacheFile::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "packages/cli/src/run-leaf-command.ts::parseInputObject::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "packages/cli/src/run-leaf-command.ts::parseInputObject::result-error-returns-empty#2": "Existing site pending review: return a ReadOutcome or propagate the failure.",
-    "packages/scripts/src/dev-runner.ts::isHealthyApiPort::catch-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
-    "packages/skills/src/streaming.ts::readCappedBytes::promise-catch-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure."
+    "packages/scripts/src/dev-runner.ts::isHealthyApiPort::catch-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure."
   }
 }

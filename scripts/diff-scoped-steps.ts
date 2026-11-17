@@ -254,6 +254,9 @@ export const DIFF_SCOPED_STEPS = {
   "ci.yml:ci-checks-policy#SHA-256 migration ledger": fullTree(
     "Scans the whole ledger; the base only keeps it from growing.",
   ),
+  "ci.yml:ci-checks-policy#Workspace test gating ledger": fullTree(
+    "Scans every workspace test file; the base only keeps the list from growing.",
+  ),
   "ci.yml:ci-checks-policy#Custom lint rule coverage": fullTree(
     "Checks every custom rule; the base is not read.",
   ),

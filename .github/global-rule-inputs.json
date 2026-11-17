@@ -138,6 +138,7 @@
     "scripts/check-workflow-shells.ts",
     "scripts/check-workflow-yaml.test.ts",
     "scripts/check-workflow-yaml.ts",
+    "scripts/check-workspace-test-gating.ts",
     "scripts/check-write-contracts.test.ts",
     "scripts/check-write-contracts.ts",
     "scripts/ci-cancellation-contract.test.ts",

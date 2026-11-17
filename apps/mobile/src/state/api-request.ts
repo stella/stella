@@ -19,6 +19,11 @@ export class ApiRequestError extends TaggedError("ApiRequestError")<{
   detail?: string | undefined;
   /** The refusal's own code, when the server named one. */
   code?: string | undefined;
+  /**
+   * The refusal's body as the server sent it, for a route whose refusal is
+   * an answer with its own shape (a 409 that says why), read by its caller.
+   */
+  refusal?: unknown;
   cause?: unknown;
 }> {}
 
@@ -128,6 +133,7 @@ const requestJson = async <TSchema extends v.GenericSchema>(
           insufficientScope,
           detail: refusalDetail(refusal),
           code: refusalCode(refusal),
+          refusal,
         };
       }
       const json: unknown = await response.json();
@@ -137,6 +143,7 @@ const requestJson = async <TSchema extends v.GenericSchema>(
         insufficientScope: false,
         detail: undefined,
         code: undefined,
+        refusal: undefined,
       };
     },
     catch: (cause) =>
@@ -145,7 +152,8 @@ const requestJson = async <TSchema extends v.GenericSchema>(
   if (Result.isError(answered)) {
     return Result.err(answered.error);
   }
-  const { status, json, insufficientScope, detail, code } = answered.value;
+  const { status, json, insufficientScope, detail, code, refusal } =
+    answered.value;
   if (json === undefined) {
     return Result.err(
       new ApiRequestError({
@@ -154,6 +162,7 @@ const requestJson = async <TSchema extends v.GenericSchema>(
         insufficientScope,
         detail,
         code,
+        refusal,
       }),
     );
   }

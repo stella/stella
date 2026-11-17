@@ -408,7 +408,7 @@ test("a jurisdiction routed to a seeded route after its pass began unseeds the r
   });
 });
 
-test("leaving the active set forgets the seeding, and an inactive generation is never walked", async () => {
+test("a flip keeps the replaced generation seeded; leaving the active set forgets it, and an inactive generation is never walked", async () => {
   await inTx(async (tx) => await insertDecisions(tx, [1, 2]));
   await register("case_law_v5", "serving");
   await register("case_law_v6", "building");
@@ -421,8 +421,21 @@ test("leaving the active set forgets the seeding, and an inactive generation is 
   expect(await advance(v6, 10)).toMatchObject({ type: "advanced" });
   expect(await advance(v6, 10)).toMatchObject({ type: "completed" });
 
-  // v6 serves; v5 retires and stops receiving every change.
+  // v6 serves; v5 stays building, keeps receiving every change, and keeps
+  // its seeding, so a flip back finds it seeded.
   await inTx(async (tx) => await setServingCorpusIndexGenerationTx(tx, v6));
+  expect(await readSeedings(CASE_LAW)).toMatchObject({
+    pass: { number: 1 },
+  });
+  // A rebuild takes v5 out of the active set: it stops receiving changes and
+  // its seeding is forgotten.
+  await inTx(
+    async (tx) =>
+      await beginCorpusIndexGenerationRebuildTx(tx, {
+        family: "case_law",
+        generation: "case_law_v5",
+      }),
+  );
   expect(await readSeedings(CASE_LAW)).toBeNull();
   expect(await advance(CASE_LAW, 10)).toEqual({
     type: "inactive",

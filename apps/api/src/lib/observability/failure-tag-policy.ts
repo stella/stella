@@ -131,8 +131,6 @@ export const TAGGED_FAILURE_REASON = {
   CorpusGenerationIndexUnreadableError: "tagged_failure",
   CorpusGenerationLaneBusyError: "tagged_failure",
   CorpusGenerationNotConvergedError: "tagged_failure",
-  CorpusGenerationNotRegisteredError: "tagged_failure",
-  CorpusGenerationPartialError: "tagged_failure",
   CorpusGenerationProjectionMovedError: "tagged_failure",
   CorpusGenerationRetiredError: "tagged_failure",
   CorpusGenerationRetiringError: "tagged_failure",
@@ -142,6 +140,7 @@ export const TAGGED_FAILURE_REASON = {
   CorpusIndexError: "tagged_failure",
   CorpusIndexFlipPairRefusedError: "tagged_failure",
   CorpusIndexFlipParityReadError: "tagged_failure",
+  CorpusIndexGenerationFlipRefusedError: "tagged_failure",
   // Deploy skew: an older release's writer refused a write it could not make
   // whole. The caller retries; a process of a newer release takes it.
   CorpusIndexGenerationUnknownError: "corpus_generation_unknown",
@@ -528,6 +527,7 @@ export const TAGGED_FAILURE_REASON = {
   Unreachable: "tagged_failure",
   UnrecognizedDerivativeStateError: "tagged_failure",
   UnrecognizedProviderStopReasonError: "tagged_failure",
+  UnregisteredCaseLawSourceError: "tagged_failure",
   UnresolvedActCitationError: "tagged_failure",
   UnsupportedAnalysisLanguageError: "tagged_failure",
   OrgAIConfigReadError: "credentials_token_unreadable",

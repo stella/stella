@@ -57,6 +57,7 @@ import { compareCodeUnit } from "@stll/collation";
 
 import type { Transaction } from "@/api/db/root";
 import {
+  corpusIndexGenerations,
   corpusIndexGenerationSeedingPasses,
   corpusIndexRouteSeedings,
   legislationDocuments,
@@ -78,6 +79,7 @@ import {
   corpusIndexManifestCoversJurisdiction,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { bootstrapCorpusProjectionDesiredStateBatchTx } from "@/api/lib/legal-search/corpus-index-projection-bootstrap";
+import type { CorpusIndexProjectionFlipFence } from "@/api/lib/legal-search/corpus-index-projection-revision";
 import {
   brandPersistedCaseLawDecisionId,
   brandPersistedLegislationDocumentId,
@@ -330,8 +332,53 @@ export const readCorpusIndexRouteSeedingsTx = async (
 ): Promise<{
   pass: CorpusIndexSeedingPass | null;
   routes: CorpusIndexRouteSeeding[];
+} | null> =>
+  await readRouteSeedingsTx(tx, target, await lockActiveManifestTx(tx, target));
+
+/**
+ * As `readCorpusIndexRouteSeedingsTx`, in a transaction holding the exclusive
+ * mutation fence: no status transition can run under it, so the registry row
+ * is read without a row lock, and the read writes nothing at all.
+ */
+export const readCorpusIndexRouteSeedingsUnderFlipFenceTx = async (
+  tx: Transaction,
+  _fence: CorpusIndexProjectionFlipFence,
+  target: CorpusIndexSeedingTarget,
+): Promise<{
+  pass: CorpusIndexSeedingPass | null;
+  routes: CorpusIndexRouteSeeding[];
 } | null> => {
-  const active = await lockActiveManifestTx(tx, target);
+  const row = (
+    await tx
+      .select()
+      .from(corpusIndexGenerations)
+      .where(
+        and(
+          eq(corpusIndexGenerations.family, target.family),
+          eq(corpusIndexGenerations.generation, target.generation),
+        ),
+      )
+      .limit(1)
+  ).at(0);
+  return await readRouteSeedingsTx(
+    tx,
+    target,
+    row === undefined || !isActiveCorpusIndexGenerationStatus(row.status)
+      ? { type: "inactive", status: row?.status ?? null }
+      : { type: "active", manifest: requireRegisteredCorpusIndexManifest(row) },
+  );
+};
+
+type CorpusIndexRouteSeedings = {
+  pass: CorpusIndexSeedingPass | null;
+  routes: CorpusIndexRouteSeeding[];
+};
+
+const readRouteSeedingsTx = async (
+  tx: Transaction,
+  target: CorpusIndexSeedingTarget,
+  active: Awaited<ReturnType<typeof lockActiveManifestTx>>,
+): Promise<CorpusIndexRouteSeedings | null> => {
   if (active.type === "inactive") {
     return null;
   }
