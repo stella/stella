@@ -3058,6 +3058,7 @@ describe("chat turns on a computer", () => {
         instructions: "You are stella.",
         resume: undefined,
         abortSignal: new AbortController().signal,
+        handOverSignal: new AbortController().signal,
       }),
     );
     const start = await desktop.receive("run.start");
@@ -3134,6 +3135,7 @@ describe("chat turns on a computer", () => {
           instructions: "You are stella.",
           resume: undefined,
           abortSignal: new AbortController().signal,
+          handOverSignal: new AbortController().signal,
         }),
       );
       const start = await desktop.receive("run.start");
@@ -3388,6 +3390,7 @@ describe("chat turns on a computer", () => {
           instructions: "You are stella.",
           resume: undefined,
           abortSignal: new AbortController().signal,
+          handOverSignal: new AbortController().signal,
         }),
       );
       const start = await desktop.receive("run.start");
@@ -3441,6 +3444,7 @@ describe("chat turns on a computer", () => {
           instructions: "You are stella.",
           resume: undefined,
           abortSignal: new AbortController().signal,
+          handOverSignal: new AbortController().signal,
         }),
       );
       const start = await desktop.receive("run.start");
@@ -3497,6 +3501,7 @@ describe("chat turns on a computer", () => {
         instructions: "You are stella.",
         resume: undefined,
         abortSignal: new AbortController().signal,
+        handOverSignal: new AbortController().signal,
       }),
     );
     const firstStart = await desktop.receive("run.start");
@@ -3520,6 +3525,7 @@ describe("chat turns on a computer", () => {
         instructions: "You are stella.",
         resume: undefined,
         abortSignal: new AbortController().signal,
+        handOverSignal: new AbortController().signal,
       }),
     );
     const secondStart = await desktop.receive(
@@ -3574,6 +3580,7 @@ describe("chat turns on a computer", () => {
           instructions: "You are stella.",
           resume: undefined,
           abortSignal: new AbortController().signal,
+          handOverSignal: new AbortController().signal,
         }),
       );
       // Each start for the thread is read by the turn that caused it.
@@ -4008,6 +4015,7 @@ describe("chat turns on a computer", () => {
           instructions: "You are stella.",
           resume: undefined,
           abortSignal: new AbortController().signal,
+          handOverSignal: new AbortController().signal,
         }),
       );
       const start = await desktop.receive(
@@ -4305,6 +4313,7 @@ describe("chat turns on a computer", () => {
         instructions: "You are stella.",
         resume: undefined,
         abortSignal: new AbortController().signal,
+        handOverSignal: new AbortController().signal,
       }),
     );
     const start = await desktop.receive("run.start");
@@ -4384,6 +4393,7 @@ describe("chat turns on a computer", () => {
           },
         ],
         abortSignal: new AbortController().signal,
+        handOverSignal: new AbortController().signal,
       }),
     );
     const answer = await desktop.receive("run.approval", ofRun(start.runId));
@@ -4424,6 +4434,7 @@ describe("chat turns on a computer", () => {
           instructions: "You are stella.",
           resume,
           abortSignal: new AbortController().signal,
+          handOverSignal: new AbortController().signal,
         }),
       );
     const pausedTurn = turn("chat-run-split-paused");
@@ -4535,6 +4546,7 @@ describe("chat turns on a computer", () => {
         instructions: "You are stella.",
         resume: undefined,
         abortSignal: new AbortController().signal,
+        handOverSignal: new AbortController().signal,
       }),
     );
     const start = await desktop.receive("run.start");
@@ -4572,6 +4584,7 @@ describe("chat turns on a computer", () => {
         instructions: "",
         resume: [{ interruptId: requestId, status: "resolved", payload: true }],
         abortSignal: new AbortController().signal,
+        handOverSignal: new AbortController().signal,
       }),
     ).done;
     expect(foreign.at(-1)).toMatchObject({
@@ -4604,6 +4617,7 @@ describe("chat turns on a computer", () => {
         instructions: "You are stella.",
         resume: undefined,
         abortSignal: new AbortController().signal,
+        handOverSignal: new AbortController().signal,
       }),
     );
     const start = await desktop.receive("run.start");
@@ -4687,6 +4701,7 @@ describe("chat turns on a computer", () => {
         instructions: "You are stella.",
         resume: [item],
         abortSignal: new AbortController().signal,
+        handOverSignal: new AbortController().signal,
       }),
     );
 
@@ -5002,6 +5017,7 @@ describe("chat turns on a computer", () => {
         instructions: "You are stella.",
         resume: undefined,
         abortSignal: stop.signal,
+        handOverSignal: new AbortController().signal,
       }),
     );
     const start = await desktop.receive("run.start");
@@ -5036,6 +5052,7 @@ describe("chat turns on a computer", () => {
         instructions: "You are stella.",
         resume: undefined,
         abortSignal: new AbortController().signal,
+        handOverSignal: new AbortController().signal,
       }),
     );
     const start = await desktop.receive("run.start");
@@ -5060,6 +5077,7 @@ describe("chat turns on a computer", () => {
         instructions: "You are stella.",
         resume: undefined,
         abortSignal: new AbortController().signal,
+        handOverSignal: new AbortController().signal,
       }),
     );
     const start = await desktop.receive("run.start");
@@ -5103,6 +5121,7 @@ describe("chat turns on a computer", () => {
           instructions: "You are stella.",
           resume: undefined,
           abortSignal: new AbortController().signal,
+          handOverSignal: new AbortController().signal,
         }),
       );
       const start = await desktop.receive("run.start");
@@ -5182,6 +5201,7 @@ describe("chat turns on a computer", () => {
           instructions: "You are stella.",
           resume: undefined,
           abortSignal: new AbortController().signal,
+          handOverSignal: new AbortController().signal,
         }),
       );
       const start = await desktop.receive("run.start");
@@ -5216,6 +5236,7 @@ describe("chat turns on a computer", () => {
         instructions: "You are stella.",
         resume: undefined,
         abortSignal: new AbortController().signal,
+        handOverSignal: new AbortController().signal,
       }),
     ).done;
     const last = chunks.at(-1);
@@ -5308,6 +5329,7 @@ describe("chat turns on a computer", () => {
         instructions: "You are stella.",
         resume: undefined,
         abortSignal: new AbortController().signal,
+        handOverSignal: new AbortController().signal,
       })) {
         chunks.push(chunk);
         if (isComputerEvent(chunk)) {
@@ -5388,6 +5410,7 @@ describe("chat turns on a computer", () => {
         instructions: "You are stella.",
         resume: undefined,
         abortSignal: new AbortController().signal,
+        handOverSignal: new AbortController().signal,
       })) {
         chunks.push(chunk);
         if (isComputerEvent(chunk)) {
@@ -5600,6 +5623,7 @@ describe("chat turns on a computer", () => {
         instructions: "You are stella.",
         resume,
         abortSignal: new AbortController().signal,
+        handOverSignal: new AbortController().signal,
       });
 
     const pausedServed = serveTurn(localTurn(), responseMessageId);
@@ -5810,6 +5834,7 @@ describe("chat turns on a computer", () => {
         instructions: "You are stella.",
         resume: undefined,
         abortSignal: new AbortController().signal,
+        handOverSignal: new AbortController().signal,
       }),
       responseMessageId,
     );
@@ -5938,6 +5963,7 @@ describe("chat turns on a computer", () => {
         instructions: "You are stella.",
         resume: undefined,
         abortSignal: new AbortController().signal,
+        handOverSignal: new AbortController().signal,
       }),
       responseMessageId,
     );
@@ -6178,6 +6204,7 @@ describe("chat turns on a computer", () => {
         instructions: "You are stella.",
         resume: undefined,
         abortSignal: new AbortController().signal,
+        handOverSignal: new AbortController().signal,
       }),
       responseMessageId,
     );
@@ -6358,6 +6385,7 @@ describe("chat turns on a computer", () => {
         instructions: "You are stella.",
         resume: undefined,
         abortSignal: new AbortController().signal,
+        handOverSignal: new AbortController().signal,
       }),
       responseMessageId,
     );
@@ -6797,6 +6825,7 @@ describe("chat turns on a computer", () => {
         instructions: "You are stella.",
         resume: undefined,
         abortSignal: new AbortController().signal,
+        handOverSignal: new AbortController().signal,
       }),
     );
     const start = await desktop.receive("run.start");
@@ -6835,6 +6864,7 @@ describe("chat turns on a computer", () => {
         instructions: "",
         resume: [{ interruptId: requestId, status: "resolved", payload: true }],
         abortSignal: new AbortController().signal,
+        handOverSignal: new AbortController().signal,
       }),
     ).done;
     expect(later.at(-1)).toMatchObject({
@@ -6857,6 +6887,7 @@ describe("chat turns on a computer", () => {
       instructions: "You are stella.",
       resume: undefined,
       abortSignal: new AbortController().signal,
+      handOverSignal: new AbortController().signal,
     });
     const reader = stream[Symbol.asyncIterator]();
     const firstChunk = reader.next();
@@ -6890,6 +6921,7 @@ describe("chat turns on a computer", () => {
       instructions: "You are stella.",
       resume: undefined,
       abortSignal: cut.signal,
+      handOverSignal: new AbortController().signal,
     });
     const reader = stream[Symbol.asyncIterator]();
     const firstChunk = reader.next();
@@ -6925,6 +6957,7 @@ describe("chat turns on a computer", () => {
         instructions: "You are stella.",
         resume: undefined,
         abortSignal: new AbortController().signal,
+        handOverSignal: new AbortController().signal,
       }),
     );
     const start = await desktop.receive("run.start");
@@ -7020,6 +7053,7 @@ describe("chat turns on a computer", () => {
             },
           ],
           abortSignal: new AbortController().signal,
+          handOverSignal: new AbortController().signal,
         },
       ),
     ).done;
@@ -7066,6 +7100,7 @@ describe("chat turns on a computer", () => {
         instructions: "You are stella.",
         resume,
         abortSignal: new AbortController().signal,
+        handOverSignal: new AbortController().signal,
       });
     const pausedServed = serveTurn(localTurn(), responseMessageId);
     const start = await desktop.receive("run.start");

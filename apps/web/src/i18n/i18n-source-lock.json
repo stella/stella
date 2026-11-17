@@ -2391,6 +2391,7 @@
   "common.refresh": "Refresh",
   "common.regenerate": "Regenerate",
   "common.reload": "Reload",
+  "common.reloadDiscardChanges": "Reloading will discard your unsaved changes.",
   "common.removalComplete": "Removal complete",
   "common.remove": "Remove",
   "common.removeMember": "Remove member",

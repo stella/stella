@@ -2896,6 +2896,7 @@
     "refresh": "Refresh",
     "regenerate": "Regenerate",
     "reload": "Reload",
+    "reloadDiscardChanges": "Reloading will discard your unsaved changes.",
     "removalComplete": "Removal complete",
     "remove": "Remove",
     "removeMember": "Remove member",

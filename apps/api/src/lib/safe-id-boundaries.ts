@@ -232,6 +232,10 @@ export const brandPersistedChatThreadId = (
   chatThreadId: string,
 ): SafeId<"chatThread"> => toSafeId<"chatThread">(chatThreadId);
 
+export const brandPersistedChatTurnId = (
+  chatTurnId: string,
+): SafeId<"chatTurn"> => toSafeId<"chatTurn">(chatTurnId);
+
 export const brandPersistedChatThreadCompactionId = (
   chatThreadCompactionId: string,
 ): SafeId<"chatThreadCompaction"> =>

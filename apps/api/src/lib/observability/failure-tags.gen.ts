@@ -275,6 +275,7 @@ export const FAILURE_TAGS = [
   "ImageDerivativeError",
   "ImagePdfError",
   "ImageTranscodeError",
+  "ImportSnapshotError",
   "InboundAddressError",
   "InboundAttachmentAlreadyLinked",
   "InboundDevInputError",

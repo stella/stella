@@ -2896,6 +2896,7 @@
     "refresh": "تحديث",
     "regenerate": "إعادة الإنشاء",
     "reload": "إعادة التحميل",
+    "reloadDiscardChanges": "ستؤدي إعادة التحميل إلى فقدان تغييراتك غير المحفوظة.",
     "removalComplete": "اكتملت الإزالة",
     "remove": "إزالة",
     "removeMember": "إزالة العضو",

@@ -2896,6 +2896,7 @@
     "refresh": "Obnoviť",
     "regenerate": "Vygenerovať znova",
     "reload": "Načítať znova",
+    "reloadDiscardChanges": "Opätovným načítaním zahodíte neuložené zmeny.",
     "removalComplete": "Odstránenie dokončené",
     "remove": "Odstrániť",
     "removeMember": "Odstrániť člena",

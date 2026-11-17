@@ -2896,6 +2896,7 @@
     "refresh": "Atnaujinti",
     "regenerate": "Generuoti iš naujo",
     "reload": "Įkelti iš naujo",
+    "reloadDiscardChanges": "Įkėlus iš naujo, neišsaugoti pakeitimai bus prarasti.",
     "removalComplete": "Pašalinimas baigtas",
     "remove": "Pašalinti",
     "removeMember": "Pašalinti narį",

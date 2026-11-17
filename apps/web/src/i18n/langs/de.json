@@ -2896,6 +2896,7 @@
     "refresh": "Aktualisieren",
     "regenerate": "Neu generieren",
     "reload": "Neu laden",
+    "reloadDiscardChanges": "Beim Neuladen werden Ihre ungespeicherten Änderungen verworfen.",
     "removalComplete": "Entfernung abgeschlossen",
     "remove": "Entfernen",
     "removeMember": "Mitglied entfernen",
