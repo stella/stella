@@ -44,6 +44,13 @@ import {
 import { createTurnAnswerQuoteChecker } from "@/api/handlers/chat/answer-quote-checks";
 import type { TurnBrowserExtension } from "@/api/handlers/chat/browser-extension-capability";
 import {
+  type ChatCommand,
+  chatCommandOf,
+  ChatCommandReplayedError,
+  chatCommandReplayResponse,
+  readChatCommandReceiptOutcome,
+} from "@/api/handlers/chat/chat-command-receipts";
+import {
   chatMessageFromPersisted,
   getAwaitedApprovalToolNames,
   getResumedUserInteraction,
@@ -266,6 +273,7 @@ import type { UploadedChatFile } from "@/api/handlers/chat/upload-files";
 import { attachVerifiedEntityMentionKinds } from "@/api/handlers/chat/verified-mention-kinds";
 import { createVisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
 import { createVisualStore } from "@/api/handlers/visual-sandbox/store";
+import type { ResponseHeaders } from "@/api/http/context";
 import { resolveSkillBindingScope } from "@/api/lib/agent-skills/binding";
 import type { SkillBindingScope } from "@/api/lib/agent-skills/binding";
 import type { ModelOfferedSkills } from "@/api/lib/agent-skills/invocation";
@@ -1301,6 +1309,64 @@ const keepThreadRunTarget = async ({
   });
 };
 
+/**
+ * A member's send or answer under their client's id, after its receipt check:
+ * a retry of one already accepted is refused with its turn, so it is not run
+ * again. Every target takes this path, a cloud and a local turn alike. An
+ * edit or a regeneration carries no command.
+ */
+const receiptedMemberCommand = async ({
+  headers,
+  message,
+  rewritesHistory,
+  safeDb,
+  threadId,
+}: {
+  headers: Readonly<Record<string, string>>;
+  message: { role: string };
+  rewritesHistory: boolean;
+  safeDb: SafeDb;
+  threadId: SafeId<"chatThread">;
+}) =>
+  await Result.gen(async function* () {
+    if (rewritesHistory) {
+      return Result.ok(undefined);
+    }
+    const command = yield* chatCommandOf(
+      headers,
+      message.role === "assistant" ? "answer" : "send",
+    );
+    if (command === undefined) {
+      return Result.ok(undefined);
+    }
+    const receipted = yield* Result.await(
+      readChatCommandReceiptOutcome({ command, safeDb, threadId }),
+    );
+    return receipted === undefined ? Result.ok(command) : Result.err(receipted);
+  });
+
+/** What the receipt of a request's command, if it carries one, says. */
+const commandReceiptOutcome = async ({
+  command,
+  ...scope
+}: {
+  command: ChatCommand | undefined;
+  safeDb: SafeDb;
+  threadId: SafeId<"chatThread">;
+}) =>
+  command === undefined
+    ? Result.ok(undefined)
+    : await readChatCommandReceiptOutcome({ command, ...scope });
+
+/** A send's refusal as answered: a replayed command names its turn. */
+const answeredSendRefusal = <E>(
+  error: E | ChatCommandReplayedError,
+  headers: ResponseHeaders,
+) =>
+  ChatCommandReplayedError.is(error)
+    ? chatCommandReplayResponse(error, headers)
+    : error;
+
 /** The audit source of a turn's events: the member's, or what the server started it from. */
 const chatTurnAuditSource = (
   started: ServerStartedChatTurn | undefined,
@@ -1337,6 +1403,8 @@ type AcceptIncomingTurnOptions = {
   validationThreadState: ThreadValidationState;
   workspaceId: SafeId<"workspace"> | null;
   indexThread: typeof upsertChatThreadSearchDocument;
+  /** The member's command the request carries, its receipt already read. */
+  command: ChatCommand | undefined;
 };
 
 /** Persists the incoming message and establishes the turn's durable owner. */
@@ -1357,6 +1425,7 @@ const acceptIncomingTurn = async ({
   validationThreadState,
   workspaceId,
   indexThread,
+  command,
 }: AcceptIncomingTurnOptions) =>
   await Result.gen(async function* () {
     const parsedMessage = parseMessage({
@@ -1604,6 +1673,7 @@ const acceptIncomingTurn = async ({
       }
       const replayResult = await persistClaimedReplayMessage({
         ...persistenceProps,
+        command,
         claim: {
           acceptedTurnId: null,
           continuationInteraction:
@@ -1652,6 +1722,16 @@ const acceptIncomingTurn = async ({
           workspaceId,
         }),
       );
+      // The message was already stored: when this command's own first
+      // attempt stored it and took the turn, its receipt says so.
+      if (turnExecution === null) {
+        const receipted = yield* Result.await(
+          commandReceiptOutcome({ command, safeDb, threadId: body.threadId }),
+        );
+        if (receipted !== undefined) {
+          return Result.err(receipted);
+        }
+      }
     } else {
       const persistenceResult = await persistAcceptedMessageWithClaim({
         ...persistenceProps,
@@ -1662,6 +1742,7 @@ const acceptIncomingTurn = async ({
         plannedOnHistory,
         ...(isEdit ? { refuseTurn: refuseChatUserMessageEditTurn } : {}),
         turnAcceptance,
+        command,
       });
       if (Result.isError(persistenceResult)) {
         return Result.err(persistenceResult.error);
@@ -2392,6 +2473,7 @@ export const createSendMessage = (
       createAuditRecorder,
       getAccessibleWorkspaces,
       getWorkspaceAccess,
+      headers,
       memberRole,
       orgAIConfig,
       managedAIResidency,
@@ -2632,6 +2714,21 @@ export const createSendMessage = (
                 ? { currentVersionId: activeFileEntity.currentVersionId }
                 : {}),
             };
+      // An accepted command's retry is answered before anything checks the
+      // request against the thread, which the first attempt has changed.
+      const command = yield* Result.await(
+        receiptedMemberCommand({
+          headers,
+          message: requestedBody.message,
+          rewritesHistory: requestedBody.turnIntent !== undefined,
+          safeDb,
+          threadId: requestedBody.threadId,
+        }).then((receipted) =>
+          receipted.mapError((error) =>
+            answeredSendRefusal(error, set.headers),
+          ),
+        ),
+      );
       const validationThreadState = yield* Result.await(
         readThreadValidationState({
           caseLawDb: dependencies.caseLawDb,
@@ -2884,9 +2981,12 @@ export const createSendMessage = (
           validationThreadState,
           workspaceId,
           indexThread: dependencies.indexThread,
+          command,
         });
         if (Result.isError(acceptedTurnResult)) {
-          return Result.err(acceptedTurnResult.error);
+          return Result.err(
+            answeredSendRefusal(acceptedTurnResult.error, set.headers),
+          );
         }
         const {
           dataScopeAfterIncomingMessage,

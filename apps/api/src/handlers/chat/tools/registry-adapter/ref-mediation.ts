@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
 
+import type { SafeId } from "@/api/lib/branded-types";
 import type { DehydratedInput } from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import type { ChatToolError } from "@/api/lib/errors/tagged-errors";
@@ -55,8 +56,8 @@ export const dehydrateRefs = ({
   args: Record<string, unknown>;
   refRegistry: ChatRefRegistry;
 }): Result<DehydratedInput, ChatToolError> => {
-  const resolvedMatterParams: DehydratedInput["resolvedMatterParams"] = {};
-  const resolvedEntityParams: DehydratedInput["resolvedEntityParams"] = {};
+  const resolvedMatterParams = new Map<string, SafeId<"workspace">>();
+  const resolvedEntityParams = new Map<string, SafeId<"workspace">>();
   const dehydratedEntityRefs = new Map<string, string>();
 
   type ResolveLeafArgs = {
@@ -73,14 +74,14 @@ export const dehydrateRefs = ({
     if (kind === "matter") {
       return refRegistry.resolveMatterRefs([raw]).map((resolved) => {
         const workspaceId = takeSingle(resolved);
-        resolvedMatterParams[location] = workspaceId;
+        resolvedMatterParams.set(location, workspaceId);
         return workspaceId;
       });
     }
     if (kind === "entity") {
       return refRegistry.resolveEntityRefTargets([raw]).map((resolved) => {
         const { entityId, workspaceId } = takeSingle(resolved);
-        resolvedEntityParams[location] = workspaceId;
+        resolvedEntityParams.set(location, workspaceId);
         dehydratedEntityRefs.set(entityId, raw);
         return entityId;
       });
@@ -127,8 +128,8 @@ export const dehydrateRefs = ({
 
   return Result.ok({
     args: { ...nextArgs },
-    resolvedMatterParams,
-    resolvedEntityParams,
+    resolvedMatterParams: Object.fromEntries(resolvedMatterParams),
+    resolvedEntityParams: Object.fromEntries(resolvedEntityParams),
     dehydratedEntityRefs,
   });
 };

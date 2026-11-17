@@ -2,7 +2,11 @@ import { useDeferredValue } from "react";
 
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
-import { isEntityPriority, isTaskStatus } from "@stll/api-contract";
+import {
+  isEntityPriority,
+  isTaskStatus,
+  RESOURCE_TYPE,
+} from "@stll/api-contract";
 import { isListItemType } from "@stll/api-contract/entity-options";
 
 import { api } from "@/lib/api";
@@ -17,6 +21,7 @@ import type {
   WorkspaceEntity,
   WorkspaceField,
 } from "@/lib/types";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 import {
   DEFAULT_ENTITY_VIEW_PAGE_SIZE,
   DEFAULT_ENTITY_WINDOW_SIZE,
@@ -505,11 +510,17 @@ const fetchAllWorkspaceFolders = async ({
 // response is paginated so large matters never return one giant
 // organizer payload.
 export const workspaceFoldersOptions = (workspaceId: string) =>
-  queryOptions({
-    queryKey: entitiesKeys.folders(workspaceId),
-    queryFn: async ({ signal }) =>
-      await fetchAllWorkspaceFolders({ signal, workspaceId }),
-  });
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: entitiesKeys.folders(workspaceId),
+      queryFn: async ({ signal }) =>
+        await fetchAllWorkspaceFolders({ signal, workspaceId }),
+    }),
+    {
+      resources: [RESOURCE_TYPE.ENTITY],
+      scope: { type: "workspace", workspaceId },
+    },
+  );
 
 export type WorkspaceFile = {
   entityId: string;

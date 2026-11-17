@@ -4,7 +4,6 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
-import { RESOURCE_TYPE } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
 import { ChevronDownIcon, KeyboardIcon } from "@stll/ui/icons";
 import {
@@ -30,7 +29,6 @@ import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/acces
 import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
-import { resourceQueryOptions } from "@/lib/workspace-realtime";
 import { settingsNavSections } from "@/routes/_protected.settings/-components/settings-shell/settings-nav";
 
 const NAV_ITEM_CLASS = cn(
@@ -50,12 +48,7 @@ export const SettingsShell = ({ children }: SettingsShellProps) => {
   const t = useTranslations();
   const memoryEnabled = useCallerFeatureEnabled(CALLER_FEATURE.aiMemory);
   const timeBilling = useTimeBillingChromeEnabled();
-  const roleQuery = useQuery(
-    resourceQueryOptions(roleOptions, {
-      resources: [RESOURCE_TYPE.USER, RESOURCE_TYPE.ORGANIZATION],
-      scope: { type: "organization" },
-    }),
-  );
+  const roleQuery = useQuery(roleOptions);
   const roleView = queryView(roleQuery);
   useQueryViewError(roleView, "SettingsShell.role:query");
   const role =

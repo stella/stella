@@ -75,6 +75,8 @@ export const TAGGED_FAILURE_REASON = {
   CatalogSnapshotError: "tagged_failure",
   CatalogSnapshotRefreshTimeoutError: "tagged_failure",
   ChatAnonInputLimitError: "tagged_failure",
+  // A retry of a command accepted earlier: answered with its turn, no defect.
+  ChatCommandReplayedError: "conflict",
   ChatCompactionError: "tagged_failure",
   ChatConfigurationError: "tagged_failure",
   ChatContentV3UpgradeError: "tagged_failure",

@@ -45,14 +45,8 @@ const WORKFLOW_RUN_WORKFLOWS = [
 // is wrong. Evaluated with three-valued logic, so `||`, `!=` or a check that
 // only mentions a field cannot pass.
 const RUN = "github.event.workflow_run";
-const SOURCE_CHECKS = [
-  {
-    name: "the triggering run's repository",
-    values: {
-      "github.repository": "owner/repo",
-      [`${RUN}.head_repository.full_name`]: "fork/repo",
-    },
-  },
+const REPOSITORY_CHECK = "the triggering run's repository";
+const FILE_AND_EVENT_CHECKS = [
   {
     name: "the triggering workflow file",
     values: { [`${RUN}.path`]: ".github/workflows/untrusted.yml" },
@@ -62,9 +56,40 @@ const SOURCE_CHECKS = [
     values: { [`${RUN}.event`]: "untrusted_event" },
   },
 ] as const;
+const SOURCE_CHECKS = [
+  {
+    name: REPOSITORY_CHECK,
+    values: {
+      "github.repository": "owner/repo",
+      [`${RUN}.head_repository.full_name`]: "fork/repo",
+    },
+  },
+  ...FILE_AND_EVENT_CHECKS,
+] as const;
+// A fork pull request job accepts runs whose head is a fork, so it checks the
+// repository the run itself ran in instead of the head repository.
+const FORK_PULL_REQUEST_SOURCE_CHECKS = [
+  {
+    name: REPOSITORY_CHECK,
+    values: {
+      "github.repository": "owner/repo",
+      [`${RUN}.repository.full_name`]: "other/repo",
+    },
+  },
+  ...FILE_AND_EVENT_CHECKS,
+] as const;
 
-const failedSourceChecks = (condition: string) =>
-  SOURCE_CHECKS.filter(
+// Jobs that act on fork pull requests by design, keyed `<file>/<job>`: the
+// unprivileged pull_request half of a check notifies them, and they read that
+// run only as data, never checking out or running its code. The guard fails
+// on a stale entry.
+const FORK_PULL_REQUEST_RUN_JOBS: Record<string, string> = {
+  "cla.yml/verify-signatures":
+    "Verifies contributor signatures for every pull request through API calls only, re-reading the pull requests by head repository, branch and SHA.",
+};
+
+const failedSourceChecks = (condition: string, acceptsForks = false) =>
+  (acceptsForks ? FORK_PULL_REQUEST_SOURCE_CHECKS : SOURCE_CHECKS).filter(
     ({ values }) =>
       condition.trim() === "" ||
       !definitelyFalse(condition, {
@@ -126,7 +151,10 @@ const conditionOf = (job: Record<string, unknown>): string =>
   typeof job["if"] === "string" ? job["if"] : "";
 
 /** Why the jobs of a workflow_run workflow could act on an untrusted run. */
-const trustProblems = (workflow: unknown): string[] => {
+const trustProblems = (
+  workflow: unknown,
+  forkJobs: ReadonlySet<string> = new Set(),
+): string[] => {
   if (
     !isRecord(workflow) ||
     !triggers(workflow["on"]).includes("workflow_run")
@@ -145,7 +173,7 @@ const trustProblems = (workflow: unknown): string[] => {
         continue;
       }
       const condition = conditionOf(job);
-      const missing = failedSourceChecks(condition);
+      const missing = failedSourceChecks(condition, forkJobs.has(name));
       if (missing.length === 0) {
         gated.add(name);
         progress = true;
@@ -463,10 +491,55 @@ describe("workflow_run trust", () => {
     expect(workflows.map(({ file }) => file).toSorted()).toEqual([
       ...WORKFLOW_RUN_WORKFLOWS,
     ]);
+    const forkJobsOf = (file: string) =>
+      new Set(
+        Object.keys(FORK_PULL_REQUEST_RUN_JOBS).flatMap((key) =>
+          key.startsWith(`${file}/`) ? [key.slice(file.length + 1)] : [],
+        ),
+      );
     const problems = workflows.flatMap(({ file, workflow }) =>
-      trustProblems(workflow).map((problem) => `${file}: ${problem}`),
+      trustProblems(workflow, forkJobsOf(file)).map(
+        (problem) => `${file}: ${problem}`,
+      ),
     );
     expect(problems).toEqual([]);
+    const jobKeys = new Set(
+      workflows.flatMap(({ file, workflow }) =>
+        isRecord(workflow) && isRecord(workflow["jobs"])
+          ? Object.keys(workflow["jobs"]).map((job) => `${file}/${job}`)
+          : [],
+      ),
+    );
+    expect(
+      Object.keys(FORK_PULL_REQUEST_RUN_JOBS).filter(
+        (key) => !jobKeys.has(key),
+      ),
+    ).toEqual([]);
+  });
+
+  test("a fork pull request job still checks the run's own repository, file and event", () => {
+    const gate = [
+      "github.event.workflow_run.repository.full_name == github.repository",
+      "github.event.workflow_run.path == '.github/workflows/notify.yml'",
+      "github.event.workflow_run.event == 'pull_request'",
+    ];
+    const forkJobs = new Set(["verify"]);
+    const workflowWith = (condition: string) => ({
+      on: ["workflow_run"],
+      jobs: { verify: { if: condition } },
+    });
+    expect(trustProblems(workflowWith(gate.join(" && ")), forkJobs)).toEqual(
+      [],
+    );
+    // Unlisted, a job that accepts fork heads fails the repository check.
+    expect(trustProblems(workflowWith(gate.join(" && ")))).toHaveLength(1);
+    for (const dropped of gate) {
+      const condition = gate.filter((part) => part !== dropped).join(" && ");
+      expect(
+        trustProblems(workflowWith(condition), forkJobs),
+        dropped,
+      ).toHaveLength(1);
+    }
   });
 
   test("high-volume workflow_run entry points filter branches before queuing", () => {

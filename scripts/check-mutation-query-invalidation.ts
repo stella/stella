@@ -49,6 +49,7 @@ const READER_SPREAD_OVERRIDES = new Set([
   "staleTime",
   "gcTime",
   "placeholderData",
+  "initialData",
   "refetchInterval",
   "refetchIntervalInBackground",
   "refetchOnMount",
@@ -534,7 +535,25 @@ const isScopeObject = (object: ts.ObjectLiteralExpression): boolean => {
     return false;
   }
   if (value.text === "organization") {
-    return true;
+    const fields = ["type", "organizationId"];
+    if (objectProperty(object, "userId")) {
+      fields.push("userId");
+    }
+    return (
+      hasExactProperties(object, fields) &&
+      fields
+        .slice(1)
+        .every((field) => isReaderIdentity(objectProperty(object, field)))
+    );
+  }
+  if (value.text === "user") {
+    return (
+      hasExactProperties(object, ["type", "userId"]) &&
+      isReaderIdentity(objectProperty(object, "userId"))
+    );
+  }
+  if (value.text === "current-session") {
+    return hasExactProperties(object, ["type"]);
   }
   if (value.text === "workspace-set") {
     return (
@@ -546,6 +565,24 @@ const isScopeObject = (object: ts.ObjectLiteralExpression): boolean => {
     value.text === "workspace" &&
     hasExactProperty(object, "workspaceId") &&
     objectProperty(object, "workspaceId") !== undefined
+  );
+};
+
+const isReaderIdentity = (expression: ts.Expression | undefined): boolean => {
+  if (expression === undefined) {
+    return false;
+  }
+  const value = unwrap(expression);
+  return (
+    !ts.isNumericLiteral(value) &&
+    !ts.isBigIntLiteral(value) &&
+    ![
+      ts.SyntaxKind.NullKeyword,
+      ts.SyntaxKind.TrueKeyword,
+      ts.SyntaxKind.FalseKeyword,
+    ].includes(value.kind) &&
+    !(ts.isIdentifier(value) && value.text === "undefined") &&
+    (!ts.isStringLiteral(value) || value.text.length > 0)
   );
 };
 
@@ -601,6 +638,13 @@ const isValidHelperConfig = (
 ): boolean => {
   if (!config) {
     return false;
+  }
+  const metadata = unwrap(config);
+  if (ts.isConditionalExpression(metadata)) {
+    return (
+      isValidHelperConfig(module, metadata.whenTrue, names) &&
+      isValidHelperConfig(module, metadata.whenFalse, names)
+    );
   }
   const type = objectProperty(config, "type");
   if (type) {
@@ -992,6 +1036,26 @@ type TaggedSpreadValidationArgs = {
   seen?: Set<Binding>;
 };
 
+/** Prove every override key without granting credit for an untagged source. */
+const isReaderOverrideSpread = (expression: ts.Expression): boolean => {
+  const value = unwrap(expression);
+  if (ts.isConditionalExpression(value)) {
+    return [value.whenTrue, value.whenFalse].every(isReaderOverrideSpread);
+  }
+  return (
+    ts.isObjectLiteralExpression(value) &&
+    value.properties.every((property) => {
+      if (ts.isSpreadAssignment(property)) {
+        return isReaderOverrideSpread(property.expression);
+      }
+      return (
+        !ts.isComputedPropertyName(property.name) &&
+        READER_SPREAD_OVERRIDES.has(propertyName(property.name) ?? "")
+      );
+    })
+  );
+};
+
 const validateTaggedSpreadOverrides = ({
   module,
   expression,
@@ -1026,6 +1090,12 @@ const validateTaggedSpreadOverrides = ({
   for (const property of value.properties) {
     if (ts.isSpreadAssignment(property)) {
       if (tagged) {
+        if (
+          allowedOverrides === READER_SPREAD_OVERRIDES &&
+          isReaderOverrideSpread(property.expression)
+        ) {
+          continue;
+        }
         return "invalid";
       }
       const nested = validateTaggedSpreadOverrides({
@@ -1981,6 +2051,98 @@ const wrapperForwardsReaderOptions = ({
   return readerForwards.length > 0 ? readerForwards.every(Boolean) : undefined;
 };
 
+/** Imports are immutable bindings, but their option objects must remain unchanged. */
+const importedReaderOptionsMutation = (
+  module: ModuleIndex,
+  name: string,
+): boolean => {
+  const binding: Binding = { name, scope: module.source, mutable: false };
+  return hasBindingPropertyMutation(
+    { ...module, bindings: [...module.bindings, binding] },
+    binding,
+  );
+};
+
+const importedReaderOptions = ({
+  module,
+  identifier,
+  reference,
+  modules,
+}: {
+  module: ModuleIndex;
+  identifier: ts.Identifier;
+  reference: ts.Node;
+  modules: ReadonlyMap<string, ModuleIndex>;
+}):
+  | { module: ModuleIndex; expression: ts.Expression; reference: ts.Node }
+  | undefined => {
+  if (localBinding(module, identifier.text, reference)) {
+    return undefined;
+  }
+  const imported = module.imports.get(identifier.text);
+  if (!imported) {
+    return undefined;
+  }
+  const owner = importedModule(module, imported.module, modules);
+  if (!owner) {
+    return undefined;
+  }
+  const statement = owner.source.statements.find(
+    (item) =>
+      ts.isVariableStatement(item) &&
+      ts
+        .getModifiers(item)
+        ?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) &&
+      item.declarationList.declarations.some(
+        (declaration) =>
+          ts.isIdentifier(declaration.name) &&
+          declaration.name.text === imported.imported,
+      ),
+  );
+  if (!statement || !ts.isVariableStatement(statement)) {
+    return undefined;
+  }
+  const declaration = statement.declarationList.declarations.find(
+    (item) =>
+      ts.isIdentifier(item.name) && item.name.text === imported.imported,
+  );
+  if (!declaration || !ts.isIdentifier(declaration.name)) {
+    return undefined;
+  }
+  const resolved = unchangedOptionsBinding({
+    module: owner,
+    identifier: declaration.name,
+    reference: declaration,
+  });
+  // Only an actual canonical construction earns imported-constant ownership.
+  // Re-exports and opaque initializer factories remain unresolved.
+  const initializer = resolved && unwrap(resolved.expression);
+  if (
+    !resolved ||
+    !initializer ||
+    !ts.isCallExpression(initializer) ||
+    !canonicalCall(owner, initializer, READER_HELPER)
+  ) {
+    return undefined;
+  }
+  for (const consumer of modules.values()) {
+    for (const [name, candidate] of consumer.imports) {
+      if (
+        candidate.imported === imported.imported &&
+        importedModule(consumer, candidate.module, modules) === owner &&
+        importedReaderOptionsMutation(consumer, name)
+      ) {
+        return undefined;
+      }
+    }
+  }
+  return {
+    module: owner,
+    expression: resolved.expression,
+    reference: resolved.reference,
+  };
+};
+
 const isTaggedReaderValue = ({
   module,
   expression,
@@ -1997,7 +2159,25 @@ const isTaggedReaderValue = ({
       reference,
     });
     if (!resolved) {
-      return false;
+      const imported = importedReaderOptions({
+        module,
+        identifier: value,
+        reference,
+        modules,
+      });
+      if (!imported) {
+        return false;
+      }
+      const key = `${imported.module.file}:imported-options:${imported.reference.pos}`;
+      return (
+        !seen.has(key) &&
+        isTaggedReaderValue({
+          ...imported,
+          names,
+          modules,
+          seen: new Set(seen).add(key),
+        })
+      );
     }
     const key = `${module.file}:options:${resolved.reference.pos}:${value.text}`;
     if (seen.has(key)) {
@@ -2166,7 +2346,17 @@ const createReaderStates = ({
           seen: new Set(),
         });
     } else {
-      tagged = wrappedReaderCall(module, call, names);
+      tagged =
+        wrappedReaderCall(module, call, names) ||
+        (options !== undefined &&
+          isTaggedReaderValue({
+            module,
+            expression: options,
+            reference: call,
+            names,
+            modules: indexed,
+            seen: new Set(),
+          }));
     }
     return { entry, module, call, tagged };
   });
@@ -2207,6 +2397,15 @@ const namesUnknownContract = (
   config: ts.Expression | undefined,
   contracts: ReadonlySet<string>,
 ): boolean => {
+  if (config !== undefined) {
+    const value = unwrap(config);
+    if (ts.isConditionalExpression(value)) {
+      return (
+        namesUnknownContract(value.whenTrue, contracts) ||
+        namesUnknownContract(value.whenFalse, contracts)
+      );
+    }
+  }
   const kept = config === undefined ? undefined : keptCurrentByNames(config);
   return kept?.some((name) => !contracts.has(name)) === true;
 };
