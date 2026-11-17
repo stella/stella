@@ -366,6 +366,14 @@ const withDecisionTerms = (
       decisionTerms: { kind: "whole", form, bytes },
     };
   }
+  // An opening passage that cannot fit even without its terms is over a
+  // ceiling no prefix can meet: the same budget failure the chunker raises,
+  // which blocks this revision alone. A panic here would stop the caller.
+  if (!fits({ ...opening, [field.partialField]: true as const })) {
+    throw new ChunkBudgetError({
+      message: "Case-law opening passage exceeds the projection ceiling",
+    });
+  }
   const marked = {
     ...opening,
     [field.field]: "",

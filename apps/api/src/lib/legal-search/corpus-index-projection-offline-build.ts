@@ -2317,15 +2317,18 @@ export const buildCorpusProjectionRouteOffline = async <
       publishedSplits: { read: "not_read" },
     };
   }
-  let status: CorpusProjectionOfflineBuildOutcome["status"];
   try {
-    status = await new OfflineRouteBuild(options, plan, hold, progress).run();
+    const status = await new OfflineRouteBuild(
+      options,
+      plan,
+      hold,
+      progress,
+    ).run();
+    // Read under the route lock, so no later run of this route can publish
+    // splits between this run's end and its receipt.
+    const publishedSplits = await readSplitReceipt(options.client, indexId);
+    return { status, progress, publishedSplits };
   } finally {
     await hold.release();
   }
-  return {
-    status,
-    progress,
-    publishedSplits: await readSplitReceipt(options.client, indexId),
-  };
 };

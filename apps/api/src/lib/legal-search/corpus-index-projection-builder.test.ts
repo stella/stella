@@ -1419,3 +1419,32 @@ test("the comparison twin writes v11's documents, marked with their generation",
     })),
   );
 });
+
+test("an opening passage over the ceiling on its own is a budget failure, not a panic", () => {
+  // One block the chunker keeps whole, past the 9.5 MiB document ceiling.
+  const text = "slovo ".repeat(
+    Math.ceil(
+      (CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES + 512 * 1024) / 6,
+    ),
+  );
+  const options = {
+    family: "case_law",
+    input: { ...RANKED_CASE_LAW_INPUT, language: "sl" },
+    payload: { text, ast: null },
+    revision: REVISION,
+  } as const;
+  // The fixture reaches the boundary: v10 builds one opening passage that is
+  // already over the ceiling, which only the append planner would refuse.
+  const [v10Opening] = buildCaseLawProjectionDocuments({
+    ...options,
+    manifest: CORPUS_INDEX_MANIFESTS.case_law_v10,
+  });
+  expect(
+    Buffer.byteLength(JSON.stringify(v10Opening), "utf-8"),
+  ).toBeGreaterThan(CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES);
+  const built = buildCorpusProjectionDocuments({
+    ...options,
+    manifest: CORPUS_INDEX_MANIFESTS.case_law_v11,
+  });
+  expect(built.isErr() ? built.error._tag : "ok").toBe("ChunkBudgetError");
+});
