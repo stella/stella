@@ -59,7 +59,7 @@ export const sourceRegistryMembership = (
  * knows. Typed so the failure grade, the release health gate and error
  * grouping name it instead of folding it into a bare `Error`.
  */
-export class UnregisteredCaseLawSourceError extends TaggedError(
+class UnregisteredCaseLawSourceError extends TaggedError(
   "UnregisteredCaseLawSourceError",
 )<{
   message: string;
