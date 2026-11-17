@@ -1432,14 +1432,13 @@ const hashedId = ({
   order: [aggregate, id],
 });
 /** The second key and lock order of an aggregate one organization identifies. */
-const organizationKeyed = (
-  first: SQL,
-  {
-    aggregate,
-    id,
-  }: { aggregate: AggregateName; id: { organizationId: string } },
-) => ({
-  first,
+const organizationKeyed = ({
+  aggregate,
+  id,
+}: {
+  aggregate: AggregateName;
+  id: { organizationId: string };
+}) => ({
   second: sql`hashtext(${id.organizationId})`,
   order: [aggregate, id.organizationId],
 });
@@ -1448,8 +1447,7 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
     case "organizationObjectIntent":
       return {
         first: sql`${ORGANIZATION_OBJECT_INTENT_LOCK_NAMESPACE}::integer`,
-        second: sql`hashtext(${options.id})`,
-        order: [options.aggregate, options.id],
+        ...hashedId(options),
       };
     case "legislationAmendmentWork":
       return {
@@ -1473,8 +1471,7 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
     case "chatStoredContentEgress":
       return {
         first: sql`${CHAT_STORED_CONTENT_EGRESS_LOCK_NAMESPACE}::integer`,
-        second: sql`hashtext(${options.id})`,
-        order: [options.aggregate, options.id],
+        ...hashedId(options),
       };
     case "desktopBatch":
       return {
@@ -1490,8 +1487,7 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
     case "organizationDataBoxes":
       return {
         first: sql`hashtext('data-box-direction')`,
-        second: sql`hashtext(${options.id.organizationId})`,
-        order: [options.aggregate, options.id.organizationId],
+        ...organizationKeyed(options),
       };
     case "sampleCase":
       return {
@@ -1508,13 +1504,18 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
     case "automatedFlowRunCap":
       return {
         first: sql`${0x0f_10_cc_a9}::integer`,
-        second: sql`hashtext(${options.id})`,
-        order: [options.aggregate, options.id],
+        ...hashedId(options),
       };
     case "invoiceSendCapacity":
-      return organizationKeyed(sql`hashtext('invoice-send-capacity')`, options);
+      return {
+        first: sql`hashtext('invoice-send-capacity')`,
+        ...organizationKeyed(options),
+      };
     case "contactCapacity":
-      return organizationKeyed(sql`hashtext('contact_capacity')`, options);
+      return {
+        first: sql`hashtext('contact_capacity')`,
+        ...organizationKeyed(options),
+      };
     case "chatToolGrants":
       return {
         first: sql`hashtext('chat.tool-grants')`,
@@ -1528,8 +1529,7 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
     case "billingDraftSettings":
       return {
         first: sql`${BILLING_DRAFT_SETTINGS_LOCK_NAMESPACE}::integer`,
-        second: sql`hashtext(${options.id.organizationId})`,
-        order: [options.aggregate, options.id.organizationId],
+        ...organizationKeyed(options),
       };
     case "desktopRunnerCapacity":
       return {
@@ -1544,8 +1544,7 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
     case "fileComparisonCapacity":
       return {
         first: sql`${0x0f_10_cc_b2}::integer`,
-        second: sql`hashtext(${options.id.organizationId})`,
-        order: [options.aggregate, options.id.organizationId],
+        ...organizationKeyed(options),
       };
     case "billingCodeCapacity":
       return {
