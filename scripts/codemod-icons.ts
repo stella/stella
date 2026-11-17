@@ -153,6 +153,9 @@ const uniqueSpecifiers = (specifiers: readonly Specifier[]): Specifier[] => [
 // The glyph a lucide export draws, without its `Icon` suffix or `Lucide`
 // prefix, or null for a non-glyph export (a type, `Icon`, `createLucideIcon`).
 const glyphOf = (name: string): string | null => {
+  if (!Object.hasOwn(lucide, name)) {
+    return null;
+  }
   const value = lucide[name];
   if (value === undefined) {
     return null;
@@ -163,15 +166,24 @@ const glyphOf = (name: string): string | null => {
   } else if (name.startsWith("Lucide") && name.length > "Lucide".length) {
     base = name.slice("Lucide".length);
   }
-  return lucide[`${base}Icon`] === value ? base : null;
+  const iconName = `${base}Icon`;
+  return Object.hasOwn(lucide, iconName) && lucide[iconName] === value
+    ? base
+    : null;
 };
 
 const semanticFor = (glyph: string, file: string): string | null => {
+  if (!Object.hasOwn(SEMANTIC_REWRITES, glyph)) {
+    return null;
+  }
   const rewrite = SEMANTIC_REWRITES[glyph];
   if (rewrite === undefined) {
     return null;
   }
-  const chosen = rewrite.byFile?.[file] ?? rewrite.default;
+  const chosen =
+    (rewrite.byFile && Object.hasOwn(rewrite.byFile, file)
+      ? rewrite.byFile[file]
+      : undefined) ?? rewrite.default;
   if (chosen === null) {
     failures.push(
       `${file}: '${glyph}' has several meanings; add the file to SEMANTIC_REWRITES.${glyph}.byFile in scripts/codemod-icons.ts with the entry it means.`,
@@ -479,15 +491,16 @@ const collectImportedNames = (
       continue;
     }
     const statementType = match.groups["typeKeyword"] !== undefined;
-    for (const specifier of parseSpecifiers(match.groups["list"] ?? "")) {
-      if (semantic.has(specifier.imported)) {
+    for (const { imported, typeOnly } of parseSpecifiers(
+      match.groups["list"] ?? "",
+    )) {
+      if (semantic.has(imported)) {
         continue;
       }
-      const isType =
-        statementType ||
-        specifier.typeOnly ||
-        lucide[specifier.imported] === undefined;
-      (isType ? types : values).add(specifier.imported);
+      const isValue =
+        Object.hasOwn(lucide, imported) && lucide[imported] !== undefined;
+      const isType = statementType || typeOnly || !isValue;
+      (isType ? types : values).add(imported);
     }
   }
 };

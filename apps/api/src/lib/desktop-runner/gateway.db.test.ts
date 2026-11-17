@@ -36,11 +36,16 @@ import {
   CHAT_LOCAL_RUN_FILES_METADATA_KEY,
   CHAT_LOCAL_RUN_FILES_NOT_SHARED_METADATA_KEY,
   CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
+  CHAT_LOCAL_RUN_MODEL_METADATA_KEY,
   CHAT_LOCAL_RUN_STEER_EVENT,
   CHAT_LOCAL_RUN_STEER_TOOL,
   chatLocalRunComputerEventSchema,
   chatLocalRunSteerCallId,
 } from "@stll/api-contract/chat-run-target";
+import {
+  CHAT_TURN_STEERING,
+  CHAT_TURN_STEERING_EVENT,
+} from "@stll/api-contract/chat-send-intent";
 import {
   DESKTOP_RUNNER_APPROVAL_MODES,
   DESKTOP_RUNNER_CHECKPOINT_EVENT,
@@ -101,6 +106,10 @@ import {
   type LocalRunPlan,
 } from "@/api/handlers/chat/local-run-chunks";
 import {
+  createReadLocalFilesUndo,
+  createUndoLocalFiles,
+} from "@/api/handlers/chat/messages/local-files-undo";
+import {
   classifyRunErrorChunk,
   processServerChatStream,
   resumeDismissesAwaited,
@@ -108,10 +117,6 @@ import {
   toChatMessage,
 } from "@/api/handlers/chat/stream-chat";
 import { createChatMessageIdMapper } from "@/api/handlers/chat/stream-message-identity";
-import {
-  createReadLocalFilesUndo,
-  createUndoLocalFiles,
-} from "@/api/handlers/chat/turns/local-files-undo";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import { createResponseSet, type HttpServer } from "@/api/http/context";
 import { status as httpStatus } from "@/api/http/status";
@@ -2980,9 +2985,17 @@ describe("chat turns on a computer", () => {
       isRecord(chunk) ? chunk["value"] : undefined,
     ).status;
 
+  const isSteeringEvent = (chunk: unknown) =>
+    isRecord(chunk) &&
+    chunk["type"] === EventType.CUSTOM &&
+    chunk["name"] === CHAT_TURN_STEERING_EVENT;
+
+  /** Without what a read tells with the run's start: the start, its steering. */
   const withoutRunStarts = (chunks: readonly unknown[]) =>
     chunks.filter(
-      (chunk) => !isRecord(chunk) || chunk["type"] !== EventType.RUN_STARTED,
+      (chunk) =>
+        !isRecord(chunk) ||
+        (chunk["type"] !== EventType.RUN_STARTED && !isSteeringEvent(chunk)),
     );
 
   const toolCallIdsOf = (chunks: readonly unknown[]) =>
@@ -3077,6 +3090,13 @@ describe("chat turns on a computer", () => {
     expect(
       chunks.filter(({ type }) => type === EventType.RUN_STARTED),
     ).toHaveLength(1);
+    // Told once, with the start: this computer's harness reports no `steer`.
+    expect(chunks.filter(isSteeringEvent)).toEqual([
+      expect.objectContaining({
+        value: { steering: CHAT_TURN_STEERING.notSteerable },
+      }),
+    ]);
+    expect(chunks.at(1)).toMatchObject({ name: CHAT_TURN_STEERING_EVENT });
     // The chat is told the run waits for the computer until it has it.
     expect(chunks.filter(isComputerEvent).map(computerStatus)).toEqual([
       "delivering",
@@ -3406,6 +3426,65 @@ describe("chat turns on a computer", () => {
       { usedTokens: 15 },
     ]) {
       expect(await finishedTurn(withReport(forged))).toBeUndefined();
+    }
+  });
+
+  test("a rerouted run's models reach the turn, and ones the desktop made up do not", async () => {
+    const finishedTurn = async (
+      events: HarnessEvent[],
+      rewrite: (chunk: unknown) => unknown = (chunk) => chunk,
+    ): Promise<unknown> => {
+      const chatThreadId = await newThread();
+      const { desktop } = shared();
+      const turn = collect(
+        createLocalChatRun(contextFor(chatThreadId), START_PLAN).stream({
+          chatRunId: Bun.randomUUIDv7(),
+          chatTurnId: turnOf(chatThreadId),
+          messages: [{ role: "user", content: "What does the matter hold?" }],
+          instructions: "You are stella.",
+          resume: undefined,
+          abortSignal: new AbortController().signal,
+        }),
+      );
+      const start = await desktop.receive("run.start");
+      desktop.send({ type: "run.accepted", runId: start.runId });
+      const run = desktopRun(desktop, start.runId);
+      await run.events((await harnessChunks(start.runId, events)).map(rewrite));
+      await run.finish("completed", "codex-session-1");
+      const finish = (await turn.done).findLast(
+        ({ type }) => type === EventType.RUN_FINISHED,
+      );
+      return finish?.metadata?.[CHAT_LOCAL_RUN_MODEL_METADATA_KEY];
+    };
+
+    expect(await finishedTurn(completedTurn)).toEqual({
+      requested: CHAT_MODEL,
+      ran: CHAT_MODEL,
+    });
+    expect(
+      await finishedTurn([
+        { type: "model.rerouted", model: "gpt-rerouted" },
+        ...completedTurn,
+      ]),
+    ).toEqual({ requested: CHAT_MODEL, ran: "gpt-rerouted" });
+    for (const forged of [
+      { requested: CHAT_MODEL, ran: "<b>gpt</b>".repeat(20) },
+      { requested: CHAT_MODEL },
+      { requested: CHAT_MODEL, ran: CHAT_MODEL, note: "extra" },
+    ]) {
+      expect(
+        await finishedTurn(completedTurn, (chunk) =>
+          isRecord(chunk) && chunk["type"] === EventType.RUN_FINISHED
+            ? {
+                ...chunk,
+                metadata: {
+                  ...(isRecord(chunk["metadata"]) ? chunk["metadata"] : {}),
+                  [CHAT_LOCAL_RUN_MODEL_METADATA_KEY]: forged,
+                },
+              }
+            : chunk,
+        ),
+      ).toBeUndefined();
     }
   });
 
@@ -5923,7 +6002,21 @@ describe("chat turns on a computer", () => {
         })
       ).unwrap(),
     ).toEqual({ type: "refused", reason: "no_run" });
+    expect(
+      (
+        await control.readChatTurnSteering({
+          owner: { ...owner, userId: ids.userA2 },
+          chat: steer.chat,
+        })
+      ).unwrap(),
+    ).toBe(CHAT_TURN_STEERING.notSteerable);
     expect(await commandsOf(start.runId, "run.input")).toEqual([]);
+    // The turn's own member reads it as one that takes a message.
+    expect(
+      (
+        await control.readChatTurnSteering({ owner, chat: steer.chat })
+      ).unwrap(),
+    ).toBe(CHAT_TURN_STEERING.steerable);
     expect((await control.steerChatTurn(steer)).unwrap()).toEqual({
       type: "queued",
     });
@@ -7364,7 +7457,7 @@ describe("chat turns on a computer", () => {
   });
 });
 
-describe("undoing a turn's file changes", () => {
+describe("undoing the file changes made since a message", () => {
   type Thread = SafeId<"chatThread">;
   type Turn = SafeId<"chatTurn">;
   const MINUTE_MS = 60_000;
@@ -7523,12 +7616,30 @@ describe("undoing a turn's file changes", () => {
     return { desktopId, desktop };
   };
 
+  /** The member's message a turn asked, which an edit from it names. */
+  const messageOf = async (turnId: Turn) => {
+    const [turn] = await db
+      .select({ messageId: chatTurns.userMessageId })
+      .from(chatTurns)
+      .where(eq(chatTurns.id, turnId));
+    return turn?.messageId ?? panic("the turn asked a message");
+  };
   const request = async (threadId: Thread, turnId: Turn, by = owner) =>
     (
-      await control.requestFolderRestore({ owner: by, threadId, turnId })
+      await control.requestFolderRestore({
+        owner: by,
+        threadId,
+        messageId: await messageOf(turnId),
+      })
     ).unwrap();
   const read = async (threadId: Thread, turnId: Turn, by = owner) =>
-    (await control.readFolderRestore({ owner: by, threadId, turnId })).unwrap();
+    (
+      await control.readFolderRestore({
+        owner: by,
+        threadId,
+        messageId: await messageOf(turnId),
+      })
+    ).unwrap();
   const accepted = async (threadId: Thread, turnId: Turn) => {
     const outcome = await request(threadId, turnId);
     return outcome.type === "accepted"
@@ -7599,7 +7710,8 @@ describe("undoing a turn's file changes", () => {
       threadId,
     });
     expect(await read(threadId, turnId)).toEqual({
-      undoable: true,
+      files: { type: "available" },
+      conversation: { type: "continues" },
       restore: null,
     });
 
@@ -7715,15 +7827,154 @@ describe("undoing a turn's file changes", () => {
     await desktop.close();
   });
 
+  test("asking again for an undo already sent answers that undo while a turn runs or the computer is away", async () => {
+    const { desktopId, desktop } = await connected();
+    const threadId = await newThread();
+    const { turnId } = await finishedTurn(desktop, desktopId, { threadId });
+    const undo = await accepted(threadId, turnId);
+    await desktop.receive("folder.restore");
+    const sent = {
+      restoreId: undo.restoreId,
+      state: "sent" as const,
+      reason: null,
+    };
+
+    const running = await newTurn(threadId);
+    expect(await accepted(threadId, turnId)).toEqual(sent);
+    await db.delete(chatTurns).where(eq(chatTurns.id, running));
+
+    await desktop.close();
+    expect(await accepted(threadId, turnId)).toEqual(sent);
+    expect(
+      await db
+        .select({ id: desktopRunnerFolderRestores.id })
+        .from(desktopRunnerFolderRestores)
+        .where(eq(desktopRunnerFolderRestores.chatThreadId, threadId)),
+    ).toEqual([{ id: undo.restoreId }]);
+  });
+
+  test("a linked folder another chat's earlier run still worked in after the checkpoint is not undone", async () => {
+    const { desktopId, desktop } = await connected();
+    const threadId = await newThread();
+    const folderId = Bun.randomUUIDv7();
+    const [runner] = await db
+      .select({ deviceJkt: desktopRunners.deviceJkt })
+      .from(desktopRunners)
+      .where(eq(desktopRunners.desktopId, desktopId));
+    // Another chat's run in the same linked folder, started before this
+    // chat's turn.
+    const otherRunId = Bun.randomUUIDv7();
+    const before = new Date(clock.now - MINUTE_MS);
+    await db.insert(desktopRunnerRuns).values({
+      runId: otherRunId,
+      userId: ids.userA1,
+      organizationId: ids.orgA,
+      desktopId,
+      deviceJkt: runner?.deviceJkt ?? panic("the computer has a runner row"),
+      harness: "codex",
+      harnessVersion: HARNESS_VERSION,
+      workspaceIds: [],
+      state: "finished",
+      outcome: "completed",
+      leaseExpiresAt: before,
+      chatThreadId: await newThread(),
+      linkedFolderId: folderId,
+      createdAt: before,
+      updatedAt: before,
+    });
+    const { turnId, runId } = await finishedTurn(desktop, desktopId, {
+      threadId,
+    });
+    await db
+      .update(desktopRunnerRuns)
+      .set({ linkedFolderId: folderId })
+      .where(eq(desktopRunnerRuns.runId, runId));
+    // It ended before this chat's run began: undoing loses none of its work.
+    expect((await read(threadId, turnId))?.files).toEqual({
+      type: "available",
+    });
+
+    // It still worked after this chat's run began, so after its checkpoint.
+    await db
+      .update(desktopRunnerRuns)
+      .set({
+        updatedAt: sql`(select r.created_at from desktop_runner_runs r where r.run_id = ${runId}) + interval '1 millisecond'`,
+      })
+      .where(eq(desktopRunnerRuns.runId, otherRunId));
+    expect((await read(threadId, turnId))?.files).toEqual({
+      type: "unavailable",
+      reason: "folder_shared",
+    });
+    expect(await request(threadId, turnId)).toEqual({
+      type: "refused",
+      reason: "folder_shared",
+    });
+    await desktop.close();
+  });
+
+  test("the edit an undo comes with removes the undone answer, and the edited turn is still told", async () => {
+    const { desktopId, desktop } = await connected();
+    const threadId = await newThread();
+    const { turnId } = await finishedTurn(desktop, desktopId, { threadId });
+    const messageId = await messageOf(turnId);
+    const undo = await accepted(threadId, turnId);
+    await desktop.receive("folder.restore");
+    desktop.send({
+      type: "folder.restored",
+      restoreId: undo.restoreId,
+      outcome: "restored",
+    });
+    expect((await settled(threadId, turnId)).state).toBe("restored");
+
+    // The edit removes the answers after the edited message, and with them
+    // the turn the undo was asked from.
+    const [answer] = await db
+      .select({ id: chatTurns.assistantMessageId })
+      .from(chatTurns)
+      .where(eq(chatTurns.id, turnId));
+    await db
+      .delete(chatMessages)
+      .where(eq(chatMessages.id, answer?.id ?? panic("the turn answered")));
+    expect(
+      await db
+        .select({ id: chatTurns.id })
+        .from(chatTurns)
+        .where(eq(chatTurns.id, turnId)),
+    ).toEqual([]);
+
+    // The edited turn asks the same message again; its run is told.
+    const editedTurn = createSafeId<"chatTurn">();
+    clock.now += 1;
+    await db.insert(chatTurns).values({
+      id: editedTurn,
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+      threadId,
+      userMessageId: messageId,
+      status: "running",
+      executionId: Bun.randomUUIDv7(),
+      leaseExpiresAt: new Date(clock.now + DAY_MS),
+    });
+    const told = await startTurnRun(desktop, desktopId, {
+      threadId,
+      turnId: editedTurn,
+    });
+    expect(JSON.stringify(told.messages.at(-1))).toContain(
+      FOLDER_RESTORED_NOTE,
+    );
+    await desktop.close();
+  });
+
   test("a member who left a matter the thread holds data of can neither read nor ask an undo", async () => {
     const { desktopId, desktop } = await connected();
     const threadId = await newThread([ids.wsA2]);
     const { turnId, runId } = await finishedTurn(desktop, desktopId, {
       threadId,
     });
+    const messageId = await messageOf(turnId);
     const handlerContext = (access: "member" | "revoked") =>
       asTestRaw<never>({
-        params: { threadId, turnId },
+        params: { threadId, messageId },
         safeDb: createMembershipSafeDb(db, {
           organizationId: ids.orgA,
           userId: ids.userA1,
@@ -7739,7 +7990,7 @@ describe("undoing a turn's file changes", () => {
         createAuditRecorder: () => async () => await Promise.resolve(),
         memberRole: sessionMemberRole("member"),
         request: new Request("https://example.test/chat"),
-        route: "/chat/threads/:threadId/turns/:turnId/local-files/undo",
+        route: "/chat/threads/:threadId/messages/:messageId/local-files/undo",
         path: "/chat",
         headers: {},
         server: null,
@@ -7779,10 +8030,11 @@ describe("undoing a turn's file changes", () => {
       });
     }
 
-    // With the membership back, the same turn reads as undoable and its undo
-    // reaches the computer.
+    // With the membership back, the same changes read as undoable and the
+    // undo reaches the computer.
     expect(await readUndo.handler(handlerContext("member"))).toEqual({
-      undoable: true,
+      files: { type: "available" },
+      conversation: { type: "continues" },
       undo: null,
     });
     expect(await askUndo.handler(handlerContext("member"))).toMatchObject({
@@ -7815,6 +8067,13 @@ describe("undoing a turn's file changes", () => {
       undefined,
     );
     await desktop.close();
+    // The done undo stays in the read while the computer is away, so an
+    // edit from the message sends only the edit.
+    expect(await read(threadId, turnId)).toEqual({
+      files: { type: "unavailable", reason: "desktop_offline" },
+      conversation: { type: "continues" },
+      restore: { restoreId: undo.restoreId, state: "restored", reason: null },
+    });
   });
 
   test("a refused undo leaves the answer unmarked", async () => {
@@ -7848,7 +8107,12 @@ describe("undoing a turn's file changes", () => {
       now,
       timing: TIMING,
     });
-    const fixture = { control: counted, owner, threadId, turnId };
+    const fixture = {
+      control: counted,
+      owner,
+      threadId,
+      messageId: await messageOf(turnId),
+    };
     const [runner] = await db
       .select({ deviceJkt: desktopRunners.deviceJkt })
       .from(desktopRunners)
@@ -7945,7 +8209,7 @@ describe("undoing a turn's file changes", () => {
     await desktop.close();
   });
 
-  test("only the member's newest finished turn with a checkpoint is undone, and only while its computer is online", async () => {
+  test("an undo restores the first checkpoint from the message on, needs one, and asks only while its computer is online", async () => {
     const { desktopId, desktop } = await connected();
     const threadId = await newThread();
     const older = await finishedTurn(desktop, desktopId, { threadId });
@@ -7953,19 +8217,22 @@ describe("undoing a turn's file changes", () => {
       threadId,
       checkpoint: false,
     });
-    expect(await request(threadId, older.turnId)).toEqual({
-      type: "refused",
-      reason: "not_newest",
-    });
-    // Read as the undo decides: an older turn is not undoable.
-    expect((await read(threadId, older.turnId))?.undoable).toBe(false);
+    const newest = await finishedTurn(desktop, desktopId, { threadId });
+    // From the plain turn on, the first run saved nothing to go back to.
     expect(await request(threadId, plain.turnId)).toEqual({
       type: "refused",
       reason: "no_checkpoint",
     });
-    expect((await read(threadId, plain.turnId))?.undoable).toBe(false);
+    expect((await read(threadId, plain.turnId))?.files).toEqual({
+      type: "unavailable",
+      reason: "no_checkpoint",
+    });
+    // From the older turn on, its checkpoint undoes the later turns too.
+    expect((await read(threadId, older.turnId))?.files).toEqual({
+      type: "available",
+    });
 
-    // The member in another organization sees no turn.
+    // The member in another organization sees no message.
     const outsider = { userId: ids.userA1, organizationId: ids.orgB };
     expect(await request(threadId, plain.turnId, outsider)).toEqual({
       type: "refused",
@@ -7973,11 +8240,10 @@ describe("undoing a turn's file changes", () => {
     });
     expect(await read(threadId, plain.turnId, outsider)).toBeNull();
 
-    const newest = await finishedTurn(desktop, desktopId, { threadId });
     const running = await newTurn(threadId);
-    expect(await request(threadId, newest.turnId)).toEqual({
+    expect(await request(threadId, older.turnId)).toEqual({
       type: "refused",
-      reason: "not_newest",
+      reason: "thread_busy",
     });
     await db.delete(chatTurns).where(eq(chatTurns.id, running));
 
@@ -7992,6 +8258,74 @@ describe("undoing a turn's file changes", () => {
         .from(desktopRunnerFolderRestores)
         .where(eq(desktopRunnerFolderRestores.chatThreadId, threadId)),
     ).toEqual([]);
+  });
+
+  test("an undo from an earlier message marks every answer it undid, and the later changes then read as undone", async () => {
+    const { desktopId, desktop } = await connected();
+    const threadId = await newThread();
+    const earlier = await finishedTurn(desktop, desktopId, { threadId });
+    const later = await finishedTurn(desktop, desktopId, { threadId });
+    const undo = await accepted(threadId, earlier.turnId);
+    expect((await desktop.receive("folder.restore")).runId).toBe(earlier.runId);
+    desktop.send({
+      type: "folder.restored",
+      restoreId: undo.restoreId,
+      outcome: "restored",
+    });
+    await settled(threadId, earlier.turnId);
+    for (const { turnId } of [earlier, later]) {
+      // await-in-loop: one answer read at a time.
+      expect((await storedAnswerMetadata(turnId))?.localFilesUndone).toEqual({
+        at: expect.any(String),
+      });
+    }
+    // The later turn's changes went with the earlier's: its checkpoint would
+    // bring back what the undo took away.
+    expect(await request(threadId, later.turnId)).toEqual({
+      type: "refused",
+      reason: "already_undone",
+    });
+    // Asking again from the earlier message answers the same undo.
+    expect(await request(threadId, earlier.turnId)).toEqual({
+      type: "accepted",
+      restore: { restoreId: undo.restoreId, state: "restored", reason: null },
+    });
+    // A turn after the undo can be undone again.
+    const third = await finishedTurn(desktop, desktopId, { threadId });
+    expect((await read(threadId, third.turnId))?.files).toEqual({
+      type: "available",
+    });
+    await desktop.close();
+  });
+
+  test("an edit after a turn that did not finish says the agent starts over", async () => {
+    const { desktopId, desktop } = await connected();
+    const threadId = await newThread();
+    const done = await finishedTurn(desktop, desktopId, { threadId });
+    const after = await finishedTurn(desktop, desktopId, { threadId });
+    expect((await read(threadId, after.turnId))?.conversation).toEqual({
+      type: "continues",
+    });
+    await db
+      .update(desktopRunnerRuns)
+      .set({ outcome: "interrupted" })
+      .where(eq(desktopRunnerRuns.runId, done.runId));
+    expect((await read(threadId, after.turnId))?.conversation).toEqual({
+      type: "restarts",
+      reason: "previous_not_finished",
+    });
+    await desktop.close();
+  });
+
+  test("a thread that worked in no folder on a computer has no files to undo", async () => {
+    const threadId = await newThread();
+    const turnId = await newTurn(threadId);
+    await completeTurn(threadId, turnId);
+    expect(await read(threadId, turnId)).toEqual({
+      files: { type: "none" },
+      conversation: { type: "continues" },
+      restore: null,
+    });
   });
 
   test("a run still open in the thread refuses an undo", async () => {
@@ -8126,7 +8460,7 @@ describe("undoing a turn's file changes", () => {
       await requestFolderRestore(gatewayDb, {
         owner,
         threadId,
-        turnId,
+        messageId: await messageOf(turnId),
         restoreId: Bun.randomUUIDv7(),
         now: now(),
         seenSince: new Date(clock.now - TIMING.runnerFreshnessMs),

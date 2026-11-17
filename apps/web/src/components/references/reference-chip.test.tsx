@@ -104,6 +104,24 @@ const tagAttr = (name: string): string | null =>
   })[name] ?? null;
 
 describe("a mention chip across a message's life", () => {
+  test("static references remain content inside another control", () => {
+    const queryClient = sessionClient();
+    for (const reference of [
+      { type: "skill", slug: "draft", label: LABEL },
+      { type: "matter", matterId: MATTER_ID, label: LABEL },
+    ] as const) {
+      const html = render(
+        queryClient,
+        <ReferenceChip interactive={false} reference={reference} />,
+      );
+      expect(html).toStartWith("<span");
+      expect(html).not.toContain("<button");
+      expect(html).not.toContain('tabindex="0"');
+      expect(html).not.toContain(" title=");
+      expect(html).toContain(`aria-label="${LABEL}"`);
+    }
+  });
+
   test("looks the same in the composer, just sent, streamed back, and reloaded", () => {
     const queryClient = sessionClient();
     const composerReference = referenceFromMentionAttrs(COMPOSER_ATTRS);

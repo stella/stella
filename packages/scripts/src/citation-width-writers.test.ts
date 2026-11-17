@@ -355,7 +355,7 @@ const boundedPayloadProblems = (members: readonly Writer[]): string[] =>
       expected =
         /WITH v\(id, key(?:, family)?\) AS \(VALUES \$\{values\}\)[\s\S]*SET citation_key = v\.key/u;
     } else if (writer.id.includes(":upsertReviewsStatement:")) {
-      expected = /\$\{checked\.value\}/u;
+      expected = /FROM \$\{labelValues\(labels,\s*domain\)\}/u;
     } else {
       expected =
         /WITH projected AS \(\s*SELECT \* FROM jsonb_to_recordset\(\$\{projected\}::text::jsonb\)[\s\S]*normalized_identifier_value = projected\.normalized_value/u;
@@ -526,7 +526,7 @@ const producerProblems = (input: ReadonlyMap<string, string>): string[] => {
   );
   requireProducer(
     "src/scripts/apply-reviewed-citation-labels-plan.ts",
-    "upsertReviewsStatement",
+    "labelValues",
     [
       /const checked = assertCitationStorageField\(\s*"key",\s*label\.citationKey\s*,?\s*\)/u,
       /if \(checked\.isErr\(\)\) \{\s*throw checked\.error/u,

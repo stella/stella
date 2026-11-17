@@ -7,8 +7,10 @@ defaults:
 # A pull request's own route and budget changes are exempt from its network
 # baseline check, so main needs a fresh recording once one merges. Label
 # requests and merged route changes both dispatch trusted main, never PR source.
+# Fork pull requests get a read-only token and cannot dispatch; the nightly
+# recording covers their merged changes.
 on:
-  pull_request_target: # zizmor: ignore[dangerous-triggers] requests dispatch only trusted main, never PR source
+  pull_request:
     branches: [main]
     types: [labeled, closed]
 
@@ -21,7 +23,8 @@ permissions: {}
 jobs:
   request:
     if: >-
-      github.event_name == 'pull_request_target'
+      github.event_name == 'pull_request'
+      && github.event.pull_request.head.repo.full_name == github.repository
       && ((github.event.action == 'labeled' && github.event.label.name == 'baseline:record')
       || (github.event.action == 'closed' && github.event.pull_request.merged == true))
     runs-on: ubuntu-24.04

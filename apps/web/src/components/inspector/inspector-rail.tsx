@@ -537,7 +537,8 @@ const TaskVerticalTab = ({
   ...props
 }: VerticalTabProps & { tab: Extract<InspectorTab, { type: "task" }> }) => {
   const t = useTranslations();
-  const taskQuery = useQuery(taskTabDetailOptions(tab));
+  const organizationId = useAuthenticatedUser().activeOrganizationId;
+  const taskQuery = useQuery(taskTabDetailOptions(tab, organizationId));
   const taskView = queryView(taskQuery);
   useQueryViewError(taskView, "TaskVerticalTab:query");
   const label =

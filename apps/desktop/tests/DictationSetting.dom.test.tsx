@@ -112,22 +112,25 @@ test("offers AI cleanup, on by default, with a truthful description", async () =
   });
   expect(toggle.getAttribute("aria-checked")).toBe("true");
   const description = getByText(defaultMessages.dictation.cleanup.description);
-  expect(description.textContent).toContain("audio never leaves it");
+  expect(description.textContent).toContain("not the audio");
   expect(description.textContent).toContain(
     "through stella to your organization’s AI provider",
   );
+  expect(description.textContent).toContain("stella does not store it");
   expect(description.textContent).not.toContain("stella AI");
 });
 
-test("the dictation description says where text goes while cleanup is on", async () => {
+test("the dictation description says speech stays on this computer and leaves cleanup to its own row", async () => {
   const { container } = await renderSetting(ENABLED_SNAPSHOT);
 
   const description = container.querySelector("#dictation-description");
   expect(description?.textContent).toContain("transcribed on this computer");
-  expect(description?.textContent).toContain(
-    "the transcribed text, not the audio, is sent through stella to your organization’s AI provider",
-  );
-  expect(description?.textContent).toContain("stella does not store it");
+  expect(description?.textContent).toContain("is not stored");
+  expect(description?.textContent).not.toContain("AI provider");
+  // Where the text goes is said once, on the switch that sends it.
+  expect(
+    container.querySelector("#dictation-cleanup-description")?.textContent,
+  ).toContain("through stella to your organization’s AI provider");
 });
 
 test("turning cleanup off asks the native side and shows its answer", async () => {
@@ -228,8 +231,6 @@ test("says dictations are kept in clipboard history only while it keeps them", a
   expect(off.queryByText(defaultMessages.dictation.keptInHistory)).toBeNull();
 });
 
-const THROUGH_STELLA = "through stella to your organization’s AI provider";
-
 test("offers the context switches under cleanup, off by default, with what they send", async () => {
   const { getByRole, getByText } = await renderSetting(ENABLED_SNAPSHOT);
   const { windowTitle, textBeforeCursor } = defaultMessages.dictation.context;
@@ -238,15 +239,14 @@ test("offers the context switches under cleanup, off by default, with what they 
     const toggle = getByRole("switch", { name: title });
     expect(toggle.getAttribute("aria-checked")).toBe("false");
   }
-  const titleCopy = getByText(windowTitle.description).textContent;
-  expect(titleCopy).toContain("client or matter names");
-  expect(titleCopy).toContain(THROUGH_STELLA);
-  expect(titleCopy).toContain("stella does not store it");
-  const textCopy = getByText(/characters before the cursor/u).textContent;
+  // Each says what it adds; where it goes is said once, by cleanup above.
+  expect(getByText(windowTitle.description).textContent).toContain(
+    "client or matter names",
+  );
+  const textCopy = getByText(
+    /characters of the document you are in/u,
+  ).textContent;
   expect(textCopy).toContain("1,000 characters");
-  expect(textCopy).toContain("part of the document you are in");
-  expect(textCopy).toContain(THROUGH_STELLA);
-  expect(textCopy).toContain("stella does not store it");
 });
 
 test("hides the context switches while cleanup is off", async () => {
@@ -564,8 +564,80 @@ test("a model outside the organization's region is named with its provider and s
   ).toBeTruthy();
 });
 
+test("a model whose provider keeps the audio is labeled and warned about when chosen", async () => {
+  const view = await renderSetting(
+    {
+      ...ENABLED_SNAPSHOT,
+      cloudAvailable: true,
+      cloudModel: "elevenlabs-direct/scribe-v3",
+      destination: "cloud",
+    },
+    (command) =>
+      command === "dictation_get_cloud_models"
+        ? {
+            ...CLOUD_MODELS,
+            models: [
+              ...CLOUD_MODELS.models,
+              {
+                displayName: "Scribe v3",
+                id: "elevenlabs-direct/scribe-v3",
+                outsideRegion: false,
+                provider: "ElevenLabs",
+                retainsData: true,
+              },
+            ],
+          }
+        : undefined,
+  );
+  const { destination } = defaultMessages.dictation;
+  await waitFor(() => {
+    expect(
+      view.getByText(`Scribe v3 · ElevenLabs · ${destination.retainsData}`),
+    ).toBeTruthy();
+  });
+  const warning = view.getByRole("alert");
+  expect(warning.textContent).toContain(
+    destination.retainsDataTitle.replace("{provider}", "ElevenLabs"),
+  );
+  expect(warning.textContent).toContain(
+    destination.retainsDataWarning.replace("{provider}", "ElevenLabs"),
+  );
+});
+
+test("a model whose provider keeps the audio is never shown as the fallback", async () => {
+  const view = await renderSetting(
+    {
+      ...ENABLED_SNAPSHOT,
+      cloudAvailable: true,
+      cloudModel: null,
+      destination: "cloud",
+    },
+    (command) =>
+      command === "dictation_get_cloud_models"
+        ? {
+            defaultModelId: null,
+            models: [
+              {
+                displayName: "Scribe v3",
+                id: "elevenlabs-direct/scribe-v3",
+                outsideRegion: false,
+                provider: "ElevenLabs",
+                retainsData: true,
+              },
+            ],
+            unavailable: null,
+          }
+        : undefined,
+  );
+  const { destination } = defaultMessages.dictation;
+  await waitFor(() => {
+    expect(view.getByText(destination.chooseModel)).toBeTruthy();
+  });
+  expect(view.queryByRole("alert")).toBeNull();
+});
+
 test("a model in the region adds no note", async () => {
-  const { getByText, queryByText } = await renderSetting(
+  const { getByText, queryByRole, queryByText } = await renderSetting(
     { ...ENABLED_SNAPSHOT, cloudAvailable: true, destination: "cloud" },
     (command) =>
       command === "dictation_get_cloud_models" ? CLOUD_MODELS : undefined,
@@ -576,4 +648,52 @@ test("a model in the region adds no note", async () => {
   expect(
     queryByText(defaultMessages.dictation.destination.outsideRegionNote),
   ).toBeNull();
+  expect(queryByRole("alert")).toBeNull();
+});
+
+test("a downloaded speech model can be removed, also while stella AI transcribes", async () => {
+  const commands: string[] = [];
+  const { getByRole } = await renderSetting(
+    { ...ENABLED_SNAPSHOT, destination: "cloud" },
+    (command) => {
+      commands.push(command);
+      return command === "dictation_remove_model"
+        ? {
+            ...ENABLED_SNAPSHOT,
+            destination: "cloud",
+            model: { status: "missing" },
+          }
+        : undefined;
+    },
+  );
+
+  fireEvent.click(
+    getByRole("button", { name: defaultMessages.dictation.removeModel }),
+  );
+
+  await waitFor(() => {
+    expect(commands).toContain("dictation_remove_model");
+  });
+  // Gone, and stella AI needs no download prompt in its place.
+  await waitFor(() => {
+    expect(
+      document.body.textContent.includes(defaultMessages.dictation.removeModel),
+    ).toBe(false);
+  });
+  expect(document.body.textContent).not.toContain(
+    defaultMessages.dictation.modelNeeded,
+  );
+});
+
+test("the model cannot be removed while a dictation runs", async () => {
+  const { getByRole } = await renderSetting({
+    ...ENABLED_SNAPSHOT,
+    phase: "recording",
+  });
+
+  expect(
+    getByRole("button", {
+      name: defaultMessages.dictation.removeModel,
+    }).hasAttribute("disabled"),
+  ).toBe(true);
 });

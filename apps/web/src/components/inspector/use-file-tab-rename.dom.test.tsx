@@ -78,7 +78,7 @@ globalThis.fetch = Object.assign(
       if (typeof requestBody !== "string") {
         throw new TypeError("Expected a JSON string body for entity rename");
       }
-      const body = JSON.parse(requestBody);
+      const body: { name: string } = JSON.parse(requestBody);
       const answer = Promise.withResolvers<Response>();
       requests.push({ name: body.name, answer });
       return await answer.promise;

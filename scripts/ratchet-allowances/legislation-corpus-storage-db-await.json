@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/scripts/backfill-legislation-corpus-storage.ts",
+  "delta": 1,
+  "reason": "The legislation storage backfill writes each document of a page concurrently: each one pays its own object PUTs outside any transaction and records them under its own compare-and-set on that row, so there is no batched form; a page holds at most --page documents (default 4)."
+}

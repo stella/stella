@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -29,6 +29,9 @@ import {
 import { loadOfficeEvidence } from "./office-evidence";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
+
+const isCallable = (value: unknown): value is (...args: unknown[]) => unknown =>
+  typeof value === "function";
 
 describe.skipIf(!enabled)("Office evidence storage boundaries", () => {
   const fixture = activeFileContextFixture({
@@ -121,14 +124,14 @@ describe.skipIf(!enabled)("Office evidence storage boundaries", () => {
                 ([, delay]) => delay === LIMITS.workPoolHeavySidecarDeadlineMs,
               )
               ?.at(0);
-            if (typeof fireDeadline !== "function") {
+            if (!isCallable(fireDeadline)) {
               panic("Office evidence did not acquire its admission deadline");
             }
             fireDeadline();
           }
           hold.release();
         }
-        expect(await loading).toBeNull();
+        expect(Result.unwrap(await loading)).toBeNull();
         expect(await evidence()).toEqual([]);
         expect(
           analytics.exceptions().map(({ properties }) => properties),
@@ -165,12 +168,12 @@ describe.skipIf(!enabled)("Office evidence storage boundaries", () => {
     store.put(envBase.S3_BUCKET, fixture.key, bytes, XLSX_MIME_TYPE);
     const analytics = installRecordingAnalytics();
     try {
-      const first = await loadOfficeEvidence(fixture);
+      const first = Result.unwrap(await loadOfficeEvidence(fixture));
       expect(first?.format).toBe("xlsx");
       expect(first?.blocks.map(({ text }) => text).join("\n")).toContain(
         "Acme s.r.o.",
       );
-      expect(await loadOfficeEvidence(fixture)).toEqual(first);
+      expect(Result.unwrap(await loadOfficeEvidence(fixture))).toEqual(first);
       const rows = await evidence();
       expect(rows).toHaveLength(1);
       expect(rows.at(0)).toMatchObject({

@@ -46,6 +46,7 @@ import type {
 } from "@/api/handlers/case-law/ingestion/pipeline/corpus-mirror";
 import { decisionDocketColumns } from "@/api/handlers/case-law/ingestion/pipeline/decision-docket-columns";
 import type { ExistingDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision-identity";
+import { planDecisionReviews } from "@/api/handlers/case-law/ingestion/pipeline/decision-reviews";
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import { nssPublisherColumns } from "@/api/handlers/case-law/ingestion/pipeline/nss-publisher-columns";
 import { RECONCILE_CONTENTION } from "@/api/handlers/case-law/ingestion/pipeline/types";
@@ -842,6 +843,11 @@ export const planDecisionWrite = async ({
   }
   return Result.ok({
     citations: plannedCitations.value,
+    reviews: planDecisionReviews({
+      country: result.country,
+      sections,
+      metadata: result.metadata,
+    }),
     caseNumberType,
     docketColumns,
     preparedMetadata,

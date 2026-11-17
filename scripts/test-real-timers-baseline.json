@@ -20,7 +20,7 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/scripts/test-db-snapshot-cache.test.ts": {
-    "count": 3,
+    "count": 1,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -209,11 +209,6 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/lib/document-processing-idle-exit.test.ts": {
-    "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/api/src/lib/document-processing-queue.test.ts": {
     "count": 5,
     "owner": "api",
@@ -371,16 +366,6 @@
   },
   "apps/api/src/lib/sse-fanout.db.test.ts": {
     "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/lib/sse-publish-timeout.test.ts": {
-    "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/lib/sse.test.ts": {
-    "count": 7,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -821,11 +806,6 @@
   },
   "packages/concurrency/src/sleep.test.ts": {
     "count": 3,
-    "owner": "concurrency",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "packages/concurrency/src/with-timeout.test.ts": {
-    "count": 5,
     "owner": "concurrency",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },

@@ -46,6 +46,12 @@ export const DESKTOP_RUNNER_PROTOCOL = { current: 2, minimum: 1 } as const;
  */
 export const DESKTOP_RUNNER_FOLDER_RESTORE_PROTOCOL = 2;
 
+/**
+ * How many checkpoints a computer keeps per folder, newest first: the API
+ * counts on it to know, before asking, that an older one is gone.
+ */
+export const DESKTOP_RUNNER_CHECKPOINTS_KEPT = 20;
+
 /** Largest frame either side sends or accepts, in UTF-8 bytes. */
 export const DESKTOP_RUNNER_MAX_FRAME_BYTES = 4 * 1024 * 1024;
 
@@ -259,10 +265,11 @@ export const DESKTOP_RUNNER_SERVER_MESSAGE = {
 
 /**
  * How a folder restore ended on the computer: done, no checkpoint for the
- * run, a newer checkpoint not undone yet, a run using the folder, or a
- * failure that left the folder as it was before the restore. A restore asked
- * again after it was done answers `restored` again without touching the
- * folder.
+ * run, a run using the folder, or a failure that left the folder as it was
+ * before the restore. A restore asked again after it was done, or of a
+ * checkpoint an earlier one's restore undid, answers `restored` without
+ * touching the folder. `not_newest` (a newer checkpoint not undone yet) comes
+ * only from a desktop from before any kept checkpoint could be restored.
  */
 export const DESKTOP_RUNNER_FOLDER_RESTORE_REFUSALS = [
   "no_checkpoint",

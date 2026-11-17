@@ -42,6 +42,7 @@ import {
   CHAT_LOCAL_RUN_FILES_METADATA_KEY,
   CHAT_LOCAL_RUN_FILES_NOT_SHARED_METADATA_KEY,
   CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
+  CHAT_LOCAL_RUN_MODEL_METADATA_KEY,
   CHAT_LOCAL_RUN_QUESTION_TOOL,
   CHAT_LOCAL_RUN_STEER_EVENT,
   CHAT_LOCAL_RUN_STEER_TOOL,
@@ -51,10 +52,17 @@ import {
   type ChatLocalRunHarness,
   type ChatLocalRunLimit,
   chatLocalRunLimitSchema,
+  chatLocalRunModelSchema,
   chatLocalRunSteerCallId,
   type ChatLocalRunSteerEvent,
   type ChatLocalRunSteerInput,
 } from "@stll/api-contract/chat-run-target";
+import {
+  CHAT_TURN_STEERING,
+  CHAT_TURN_STEERING_EVENT,
+  type ChatTurnSteering,
+  type ChatTurnSteeringEvent,
+} from "@stll/api-contract/chat-send-intent";
 import {
   DESKTOP_RUNNER_APPROVAL_DECISIONS,
   DESKTOP_RUNNER_APPROVAL_KINDS,
@@ -146,6 +154,7 @@ type LocalRunControl = Pick<
   | "readRun"
   | "readRunInputText"
   | "readRunOutputFile"
+  | "readChatTurnSteering"
   | "recordChatReadSeq"
   | "startRun"
 >;
@@ -486,25 +495,35 @@ const MESSAGE_METADATA_EVENTS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * A finished run's context report as the chat reads it: under its one key
- * only when it is a valid report. A desktop is not trusted, so anything else
- * under the key is dropped.
+ * A finished run's reports (its context, the models it asked for and ran on)
+ * as the chat reads them: each under its key only when it is valid. A desktop
+ * is not trusted, so anything else under those keys is dropped.
  */
-const withCheckedContext = (
+const withCheckedReports = (
   chunk: Extract<PublicStreamChunk, { type: EventType.RUN_FINISHED }>,
 ) => {
-  if (chunk.metadata?.[CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY] !== undefined) {
-    const { [CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY]: reported, ...metadata } =
-      chunk.metadata;
-    const parsed = v.safeParse(chatLocalRunContextSchema, reported);
-    return {
-      ...chunk,
-      metadata: parsed.success
-        ? { ...metadata, [CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY]: parsed.output }
-        : metadata,
-    };
+  if (chunk.metadata === undefined) {
+    return chunk;
   }
-  return chunk;
+  const {
+    [CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY]: reportedContext,
+    [CHAT_LOCAL_RUN_MODEL_METADATA_KEY]: reportedModel,
+    ...metadata
+  } = chunk.metadata;
+  const context = v.safeParse(chatLocalRunContextSchema, reportedContext);
+  const model = v.safeParse(chatLocalRunModelSchema, reportedModel);
+  return {
+    ...chunk,
+    metadata: {
+      ...metadata,
+      ...(context.success
+        ? { [CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY]: context.output }
+        : {}),
+      ...(model.success
+        ? { [CHAT_LOCAL_RUN_MODEL_METADATA_KEY]: model.output }
+        : {}),
+    },
+  };
 };
 
 /**
@@ -829,7 +848,7 @@ const asChatChunk = (
   }
   if (chunk.type === EventType.RUN_FINISHED) {
     return {
-      ...withCheckedContext(chunk),
+      ...withCheckedReports(chunk),
       runId: chatRunId,
       threadId,
       ...(chunk.outcome?.type === "interrupt"
@@ -1337,6 +1356,8 @@ const createRunReports = (
 type ReadRunOptions = {
   context: LocalRunContext;
   runnerRunId: string;
+  /** The chat turn reading the run, whose steering the read tells. */
+  chatTurnId: SafeId<"chatTurn">;
   afterSeq: number;
   /**
    * The calls the run opened through `afterSeq` (`openedCalls`); the read
@@ -1945,9 +1966,73 @@ async function* releasedRead({
   };
 }
 
+const TURN_STEERING_SINK = failureSink({
+  event: "chat.local_run_turn_steering_read_failed",
+  expected: [],
+});
+
+/**
+ * Whether the turn takes a message mid-turn, from its run's harness. A failed
+ * read tells `not_steerable`: a message then waits for the turn's end, and
+ * nothing it shows is declined.
+ */
+const turnSteeringOf = async (
+  context: LocalRunContext,
+  chatTurnId: SafeId<"chatTurn">,
+): Promise<ChatTurnSteering> => {
+  const read = await context.control.readChatTurnSteering({
+    owner: context.owner,
+    chat: { threadId: context.chatThreadId, turnId: chatTurnId },
+  });
+  if (Result.isError(read)) {
+    observeFailure(read.error, { sink: TURN_STEERING_SINK });
+    return CHAT_TURN_STEERING.notSteerable;
+  }
+  return read.value;
+};
+
+/**
+ * The chat run's start, told at most once by a read, and not at all by one
+ * whose run start the log already holds (`readStartOf`). The turn's steering
+ * is told with it, so every reader of the run (a rejoin replays the log)
+ * knows where Enter sends a message.
+ */
+const runStartOnce = ({
+  chatRunId,
+  started,
+  steering,
+  threadId,
+}: {
+  chatRunId: string;
+  started: boolean;
+  steering: ChatTurnSteering;
+  threadId: SafeId<"chatThread">;
+}) => {
+  let told = started;
+  return function* (): Generator<PublicStreamChunk> {
+    if (told) {
+      return;
+    }
+    told = true;
+    yield {
+      type: EventType.RUN_STARTED,
+      runId: chatRunId,
+      threadId,
+      timestamp: nowMs(),
+    };
+    yield {
+      type: EventType.CUSTOM,
+      name: CHAT_TURN_STEERING_EVENT,
+      value: { steering } satisfies ChatTurnSteeringEvent,
+      timestamp: nowMs(),
+    };
+  };
+};
+
 async function* readRunChunks({
   context,
   runnerRunId,
+  chatTurnId,
   afterSeq,
   toolCalls,
   chatRunId,
@@ -1960,20 +2045,15 @@ async function* readRunChunks({
   const rewrite = rewriteOf(context, runnerRunId, chatRunId);
   let position = afterSeq;
   const initial = readStartOf(context, rewrite, adopted);
-  let { started, finished } = initial;
+  let { finished } = initial;
   /** The harness's own run error, held for the outcome `run.finished` names. */
   let { harnessError } = initial;
-  const start = function* (): Generator<PublicStreamChunk> {
-    if (!started) {
-      started = true;
-      yield {
-        type: EventType.RUN_STARTED,
-        runId: chatRunId,
-        threadId: context.chatThreadId,
-        timestamp: nowMs(),
-      };
-    }
-  };
+  const start = runStartOnce({
+    chatRunId,
+    started: initial.started,
+    steering: await turnSteeringOf(context, chatTurnId),
+    threadId: context.chatThreadId,
+  });
   const computer = computerStatusChunks(start, initial.told);
   const { runApps, runReports } = initial;
   const fail = function* (
@@ -2332,6 +2412,7 @@ async function* startLocalRun({
   }
   yield* readRunChunks({
     context,
+    chatTurnId: input.chatTurnId,
     runnerRunId: outcome.runId,
     afterSeq: 0,
     toolCalls: new Map(),
@@ -2547,6 +2628,7 @@ async function* resumeLocalRun({
   }
   yield* readRunChunks({
     context,
+    chatTurnId: input.chatTurnId,
     runnerRunId: run.runId,
     afterSeq: run.chatReadSeq,
     toolCalls: calls.value,
@@ -2604,6 +2686,7 @@ async function* adoptLocalRun({
   }
   yield* readRunChunks({
     context,
+    chatTurnId: input.chatTurnId,
     runnerRunId: run.runId,
     afterSeq: run.chatReadSeq,
     toolCalls: read.value.toolCalls,

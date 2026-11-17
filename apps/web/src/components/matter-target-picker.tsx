@@ -582,7 +582,6 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
   const t = useTranslations();
   const canCreate = usePermissions({ entity: ["create"] });
   const canMove = usePermissions({ entity: ["update"] });
-  const queryClient = useQueryClient();
   const moveEntity = useMoveEntity();
   const workspaceId = value.workspaceId;
   const {
@@ -637,19 +636,6 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
               parentId: targetParentId,
             },
             {
-              onSuccess: () => {
-                detached(
-                  Promise.all([
-                    queryClient.invalidateQueries({
-                      queryKey: workspaceFoldersOptions(workspaceId).queryKey,
-                    }),
-                    queryClient.invalidateQueries({
-                      queryKey: entitiesKeys.all(workspaceId),
-                    }),
-                  ]),
-                  "matter-target-picker.invalidate-moved-folder",
-                );
-              },
               onError: (error) => {
                 notifyUserError(error, t("errors.actionFailed"));
               },

@@ -34,6 +34,11 @@ type ShutdownApiServicesOptions = {
    */
   stopChatQueueSender: () => void;
   /**
+   * Stops continuing chats after a usage limit reset, for the same reason:
+   * no resumed turn starts on a task that is giving its turns up.
+   */
+  stopChatLimitResumer: () => void;
+  /**
    * Stops adopting handed-over chat turns before this process's turns are
    * relinquished: a stopping task takes none it would give up again.
    */
@@ -51,6 +56,7 @@ export const shutdownApiServices = async ({
   onHttpStopError,
   relinquishChatTurnRuns,
   stopChatQueueSender,
+  stopChatLimitResumer,
   stopChatTurnAdopter,
   stopHttp,
   stopScheduler,
@@ -65,6 +71,7 @@ export const shutdownApiServices = async ({
   stopSse();
   stopScheduler();
   stopChatQueueSender();
+  stopChatLimitResumer();
   stopChatTurnAdopter();
   // A run that could not store its outcome leaves its turn to the reaper:
   // the drain did not end it.

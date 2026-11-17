@@ -1382,7 +1382,7 @@ test.each(
               });
             };
           }
-          return Reflect.get(handle, property);
+          return Reflect.get(handle, property) as unknown;
         },
       });
       return await reviewSanctionsMatch(waitingTransaction, {

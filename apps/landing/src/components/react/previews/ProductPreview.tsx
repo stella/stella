@@ -6,7 +6,6 @@ import { AnonymizationPreview } from "./AnonymizationPreview";
 import { CaseLawReaderPreview } from "./CaseLawReaderPreview";
 import { CliMcpPreview } from "./CliMcpPreview";
 import type { ProductPreviewKey } from "./keys";
-import { RegistryLookupPreview } from "./RegistryLookupPreview";
 import { TemplateEditorPreview } from "./TemplateEditorPreview";
 import { WorkspacePreview } from "./WorkspacePreview";
 
@@ -26,7 +25,6 @@ const PREVIEWS: Record<ProductPreviewKey, ComponentType<PreviewProps>> = {
   ),
   anonymization: AnonymizationPreview,
   "agent-answer": AgentAnswerPreview,
-  "registry-lookup": RegistryLookupPreview,
   "template-editor": TemplateEditorPreview,
   workspace: WorkspacePreview,
 };

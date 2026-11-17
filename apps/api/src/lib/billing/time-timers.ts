@@ -20,6 +20,7 @@ import type {
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
 import { scheduleTimerActivityUpdates } from "@/api/lib/push/timer-activity-queue";
+import { hasCurrentTimerMatterAccess } from "@/api/lib/time-entry-timer-access";
 
 export const timerParams = v.object({ id: resourceIdSchema("timeTimer") });
 export const timerDetails = v.object({
@@ -191,6 +192,23 @@ const changeTimerState = async ({
         code: "timer_original_entry_changed",
         message: "The original timer entry has changed",
         hint: "The entry this timer runs on was submitted or approved. Confirm or discard the timer instead of resuming it.",
+      }),
+    );
+  }
+  if (
+    state === "running" &&
+    timer.workspaceId !== null &&
+    !(await hasCurrentTimerMatterAccess({
+      tx,
+      ...owner,
+      workspaceId: timer.workspaceId,
+    }))
+  ) {
+    return Result.err(
+      new HandlerError({
+        status: 404,
+        code: "timer_matter_inaccessible",
+        message: "Matter not found or not accessible",
       }),
     );
   }

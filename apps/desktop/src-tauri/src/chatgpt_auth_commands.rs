@@ -173,6 +173,7 @@ pub fn manage(app: &AppHandle) {
   let opener = app.clone();
   let changed = app.clone();
   let harness = app.clone();
+  let window = app.clone();
   let auth = ChatGptAuth::new(
     ChatGptAuthConfig::openai(),
     Arc::new(FileVault::new(path, KeychainSecrets)),
@@ -197,6 +198,7 @@ pub fn manage(app: &AppHandle) {
           tracing::warn!(kind = ?error.kind(), "managed Codex sign-in state was not removed");
         }
       }),
+      color_scheme: Box::new(move || main_window_scheme(&window)),
     },
   );
   app.manage(auth);
@@ -204,6 +206,20 @@ pub fn manage(app: &AppHandle) {
     broker: tokio::sync::OnceCell::new(),
     record: subscriptions.join(BROKER_RECORD),
   });
+}
+
+/// The scheme the main window draws in: the app follows the system's, as the
+/// window reports it. Unknown without the window, so the browser's then decides.
+fn main_window_scheme(app: &AppHandle) -> crate::outcome_page::OutcomeScheme {
+  use crate::outcome_page::OutcomeScheme;
+  match app
+    .get_webview_window("main")
+    .and_then(|window| window.theme().ok())
+  {
+    Some(tauri::Theme::Light) => OutcomeScheme::Light,
+    Some(tauri::Theme::Dark) => OutcomeScheme::Dark,
+    _ => OutcomeScheme::System,
+  }
 }
 
 /// Turning the feature off stops a sign-in in progress; the connection

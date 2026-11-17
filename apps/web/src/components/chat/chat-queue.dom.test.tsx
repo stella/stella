@@ -388,14 +388,13 @@ const menuItems = () =>
     item.textContent.trim(),
   );
 
+/** The page's queries, as `openPage` binds them to its container. */
+type QueueView = Awaited<ReturnType<typeof openPage>>["view"];
+
 /** Opens the "…" menu of the queued message with `text` and clicks `label`. */
-const chooseAction = async (
-  view: ReturnType<typeof within>,
-  text: string,
-  label: string,
-) => {
+const chooseAction = async (view: QueueView, text: string, label: string) => {
   const bubble =
-    view.getByText(text).closest('[data-slot="entity-actions"]') ??
+    view.getByText(text).closest<HTMLElement>('[data-slot="entity-actions"]') ??
     panic(`No actions around ${text}`);
   fireEvent.click(
     within(bubble).getByRole("button", { name: messages.chat.queue.actions }),
@@ -410,7 +409,7 @@ const chooseAction = async (
 };
 
 /** The line above the queue that says whether and why it waits. */
-const noticeText = (view: ReturnType<typeof within>) => {
+const noticeText = (view: QueueView) => {
   const control =
     view.queryByRole("button", { name: messages.chat.queue.pause }) ??
     view.getByRole("button", { name: messages.chat.queue.resume });

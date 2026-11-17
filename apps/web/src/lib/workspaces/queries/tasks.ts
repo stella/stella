@@ -15,7 +15,17 @@ const getTaskEndpoint = (workspaceId: string, taskId: string) =>
     taskId: toSafeId<"entity">(taskId),
   });
 
-export const taskDetailOptions = (workspaceId: string, taskId: string) =>
+type TaskDetailOptionsInput = {
+  workspaceId: string;
+  taskId: string;
+  organizationId: string;
+};
+
+export const taskDetailOptions = ({
+  workspaceId,
+  taskId,
+  organizationId,
+}: TaskDetailOptionsInput) =>
   resourceQueryOptions(
     queryOptions({
       queryKey: taskKeys.detail(workspaceId, taskId),
@@ -32,5 +42,6 @@ export const taskDetailOptions = (workspaceId: string, taskId: string) =>
     {
       resources: [RESOURCE_TYPE.ENTITY],
       scope: { type: "workspace", workspaceId },
+      organizationReads: { organizationId, resources: [RESOURCE_TYPE.USER] },
     },
   );

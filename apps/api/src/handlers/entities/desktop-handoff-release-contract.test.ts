@@ -73,7 +73,7 @@ beforeAll(async () => {
               if (key === "execute") {
                 return async (query: SQL) => (await tx.execute(query)).rows;
               }
-              return Reflect.get(target, key, receiver);
+              return Reflect.get(target, key, receiver) as unknown;
             },
           });
           return callback(asTestRaw<Transaction>(bunRowsTx));

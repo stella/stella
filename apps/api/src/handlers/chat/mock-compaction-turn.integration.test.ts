@@ -1,4 +1,3 @@
-import { Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
@@ -137,7 +136,7 @@ test("accepted matter scope is resolved once and filters historical skills befor
       expect(serialized).not.toContain(SKILL_SUMMARY_SECRET);
       expect(serialized).toContain("skill-unavailable");
       expect(serialized).toContain("ORDINARY OUTCOME");
-      return Result.ok({ messages, notice: null });
+      return { messages, notice: null };
     },
   });
   try {

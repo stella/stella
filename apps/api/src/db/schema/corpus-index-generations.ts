@@ -5,12 +5,19 @@ import {
   CORPUS_INDEX_GENERATION_STATUSES,
   QUICKWIT_CLUSTERS,
 } from "@/api/lib/legal-search/corpus-generation-contract";
+import { corpusIndexGenerationFlipReceiptDigest } from "@/api/lib/legal-search/corpus-index-generation-flip-receipt";
+import {
+  CORPUS_INDEX_INCARNATION_MAX_LENGTH,
+  CORPUS_INDEX_ROUTE_CENSUS_EXPECTATIONS,
+  CORPUS_INDEX_ROUTE_PROOF_REVOKE_REASONS,
+} from "@/api/lib/legal-search/corpus-index-route-proof-contract";
 import { CORPUS_INDEX_ID_MAX_LENGTH } from "@/api/lib/legal-search/index-naming";
 
 import {
   globalCaseLawPolicies,
   p,
   publicLawReaderPolicies,
+  pUuid,
   sql,
   timestamptz,
 } from "./common";
@@ -344,5 +351,251 @@ export const corpusIndexJurisdictionServing = p.pgTable(
     }),
     ...globalCaseLawPolicies(),
     ...publicLawReaderPolicies(),
+  ],
+);
+
+const routeProofsOwnerAccess = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.corpus_index_route_proofs'::regclass)`;
+
+/**
+ * The readiness proof of one physical index (route) of a generation: the
+ * census pass walking it, and the last clean pass. A pass is a sweep, not a
+ * snapshot: every revision it walked was found exactly as PostgreSQL records
+ * it at the instant its page was read, somewhere between the pass's start
+ * and its end, on the one engine incarnation of the index the pass started
+ * and ended on. It says nothing of a loss after a page was read, nor of
+ * documents PostgreSQL does not know.
+ *
+ * A pass never restarts when the projection writes, because every move into
+ * applied, settled or withdrawn carries its own exact engine observation
+ * (the branded presence and settlement proofs), so a row entering the walked
+ * sets during the pass, at any key, was checked by its own transition. A
+ * writer that adds rows to those sets without such an observation must
+ * revoke the route. What does revoke it, each in the transaction of its own
+ * change: a census drift repair, the engine reporting another incarnation of
+ * the index, and the group's attestation withdrawn or given anew. A rebuild
+ * deletes the generation's registration, and the cascade deletes its proofs.
+ */
+export const corpusIndexRouteProofs = p.pgTable(
+  "corpus_index_route_proofs",
+  {
+    family: p.text({ enum: CORPUS_FAMILIES }).notNull(),
+    generation: p
+      .varchar({ length: CORPUS_INDEX_GENERATION_MAX_LENGTH })
+      .notNull(),
+    indexId: p
+      .varchar("index_id", { length: CORPUS_INDEX_ID_MAX_LENGTH })
+      .notNull(),
+    /**
+     * The pass under way, counted from the route's first: every new pass and
+     * every revocation takes the next number, so a page recorded against a
+     * pass that has since ended matches nothing, however close the clock
+     * readings are.
+     */
+    passNumber: p
+      .bigint("pass_number", { mode: "number" })
+      .default(1)
+      .notNull(),
+    /**
+     * A fresh random id per pass: a page read for one pass never matches
+     * another, even one a re-registered generation numbers the same.
+     */
+    passId: p.uuid("pass_id").defaultRandom().notNull(),
+    /** When the pass under way started, on the database clock. */
+    passStartedAt: timestamptz("pass_started_at").notNull(),
+    /**
+     * The last key the current phase walks, taken when the phase began; null
+     * when the phase has nothing to walk. What sorts after it arrived later and
+     * was proven by its own transition.
+     */
+    passThrough: p.uuid("pass_through"),
+    /** What the pass under way walks (`CORPUS_INDEX_ROUTE_CENSUS_EXPECTATIONS`). */
+    passExpectation: p
+      .text("pass_expectation", {
+        enum: CORPUS_INDEX_ROUTE_CENSUS_EXPECTATIONS,
+      })
+      .notNull(),
+    /** Where the pass resumes within its phase; null at the phase's start. */
+    passCursor: p.uuid("pass_cursor"),
+    /** Revisions the pass under way has found exactly as recorded. */
+    passInspected: p
+      .bigint("pass_inspected", { mode: "number" })
+      .default(0)
+      .notNull(),
+    /**
+     * The engine incarnation of the index (`CorpusIndexIncarnation`) the pass
+     * under way read first; null until it reads the engine. Every page and
+     * the pass's end must read the same one.
+     */
+    passIndexIncarnation: p.varchar("pass_index_incarnation", {
+      length: CORPUS_INDEX_INCARNATION_MAX_LENGTH,
+    }),
+    /** The number of the last clean pass; null until one completes. */
+    provenPassNumber: p.bigint("proven_pass_number", { mode: "number" }),
+    /** When the last clean pass started: its oldest observation. */
+    provenPassStartedAt: timestamptz("proven_pass_started_at"),
+    /** When the last clean pass completed. */
+    provenAt: timestamptz("proven_at"),
+    /** Revisions the last clean pass inspected. */
+    provenInspected: p.bigint("proven_inspected", { mode: "number" }),
+    /**
+     * The incarnation the last clean pass started and ended on; a reader
+     * that finds another one in the engine holds no proof of this index.
+     */
+    provenIndexIncarnation: p.varchar("proven_index_incarnation", {
+      length: CORPUS_INDEX_INCARNATION_MAX_LENGTH,
+    }),
+    /** When a change voiding the proof last revoked it. */
+    revokedAt: timestamptz("revoked_at"),
+    /**
+     * The pass the last revocation started: only a pass numbered this or
+     * later proves the route again.
+     */
+    revokedPassNumber: p.bigint("revoked_pass_number", { mode: "number" }),
+    /** Which change it was (`CORPUS_INDEX_ROUTE_PROOF_REVOKE_REASONS`). */
+    revokeReason: p.text("revoke_reason", {
+      enum: CORPUS_INDEX_ROUTE_PROOF_REVOKE_REASONS,
+    }),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+    updatedAt: timestamptz("updated_at")
+      .defaultNow()
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    p.primaryKey({
+      name: "corpus_index_route_proofs_pkey",
+      columns: [t.family, t.generation, t.indexId],
+    }),
+    p
+      .foreignKey({
+        name: "corpus_index_route_proofs_generation_fk",
+        columns: [t.family, t.generation],
+        foreignColumns: [
+          corpusIndexGenerations.family,
+          corpusIndexGenerations.generation,
+        ],
+      })
+      .onDelete("cascade"),
+    p.check(
+      "corpus_index_route_proofs_family_values",
+      sql`${t.family} IN (${sqlValues(CORPUS_FAMILIES)})`,
+    ),
+    p.check(
+      "corpus_index_route_proofs_index_shape",
+      sql`${t.indexId} ~ '^[a-z0-9_]+$'`,
+    ),
+    p.check(
+      "corpus_index_route_proofs_expectation_values",
+      sql`${t.passExpectation} IN (${sqlValues(CORPUS_INDEX_ROUTE_CENSUS_EXPECTATIONS)})`,
+    ),
+    p.check(
+      "corpus_index_route_proofs_inspected_nonnegative",
+      sql`${t.passNumber} > 0 AND ${t.passInspected} >= 0 AND (${t.provenInspected} IS NULL OR ${t.provenInspected} >= 0)`,
+    ),
+    p.check(
+      "corpus_index_route_proofs_proven_shape",
+      sql`(${t.provenAt} IS NULL) = (${t.provenPassStartedAt} IS NULL)
+        AND (${t.provenAt} IS NULL) = (${t.provenInspected} IS NULL)
+        AND (${t.provenAt} IS NULL) = (${t.provenPassNumber} IS NULL)
+        AND (${t.provenAt} IS NULL) = (${t.provenIndexIncarnation} IS NULL)
+        AND (${t.provenPassNumber} IS NULL OR ${t.provenPassNumber} < ${t.passNumber})
+        AND (${t.provenAt} IS NULL OR ${t.provenAt} >= ${t.provenPassStartedAt})`,
+    ),
+    p.check(
+      "corpus_index_route_proofs_revoke_shape",
+      sql`(${t.revokedAt} IS NULL) = (${t.revokeReason} IS NULL)
+        AND (${t.revokedAt} IS NULL) = (${t.revokedPassNumber} IS NULL)
+        AND (${t.revokedPassNumber} IS NULL OR ${t.revokedPassNumber} <= ${t.passNumber})
+        AND (${t.revokeReason} IS NULL OR ${t.revokeReason} IN (${sqlValues(CORPUS_INDEX_ROUTE_PROOF_REVOKE_REASONS)}))`,
+    ),
+    // Row security is forced, so the owner-run projection transactions need a
+    // policy too; grants still decide what each other role may do.
+    p.pgPolicy("corpus_index_route_proofs_owner_access", {
+      for: "all",
+      to: "public",
+      using: routeProofsOwnerAccess,
+      withCheck: routeProofsOwnerAccess,
+    }),
+    ...globalCaseLawPolicies(),
+  ],
+);
+
+const generationFlipsOwnerAccess = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.corpus_index_generation_flips'::regclass)`;
+
+/**
+ * One row per whole-family serving flip: who made it, when, which pair, and
+ * the evidence the guarded flip gathered (the registry identities and the
+ * parity verdict it read under the fence; the route proofs and engine counts
+ * it read before the fence, which the fence found unchanged; the seeding
+ * passes), with a digest PostgreSQL computes from the row itself
+ * (`corpus-index-generation-flip-receipt.ts`). Written in the flip's
+ * transaction, so a flip and its receipt commit together; a flip back writes
+ * its own row. Append-only. No foreign key: a receipt outlives a generation's
+ * rebuild, as the withdrawal trail does.
+ */
+export const corpusIndexGenerationFlips = p.pgTable(
+  "corpus_index_generation_flips",
+  {
+    id: pUuid<"corpusIndexGenerationFlip">().primaryKey(),
+    family: p.text({ enum: CORPUS_FAMILIES }).notNull(),
+    /** The generation that served before; null on a family's first flip. */
+    fromGeneration: p.varchar("from_generation", {
+      length: CORPUS_INDEX_GENERATION_MAX_LENGTH,
+    }),
+    toGeneration: p
+      .varchar("to_generation", { length: CORPUS_INDEX_GENERATION_MAX_LENGTH })
+      .notNull(),
+    actor: p.varchar({ length: 128 }).notNull(),
+    reason: p.varchar({ length: 2048 }).notNull(),
+    evidence: p.jsonb().notNull(),
+    /**
+     * SHA-256 (hex) of the row's canonical record: pair, actor, reason, flip
+     * instant and evidence (`corpusIndexGenerationFlipReceiptDigest`).
+     */
+    evidenceDigest: p.varchar("evidence_digest", { length: 64 }).notNull(),
+    flippedAt: timestamptz("flipped_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p.check(
+      "corpus_index_generation_flips_family_values",
+      sql`${t.family} IN (${sqlValues(CORPUS_FAMILIES)})`,
+    ),
+    p.check(
+      "corpus_index_generation_flips_actor_shape",
+      sql`${t.actor} ~ '^[a-z0-9][a-z0-9:._@/-]*$'`,
+    ),
+    p.check(
+      "corpus_index_generation_flips_reason_present",
+      sql`length(btrim(${t.reason})) > 0`,
+    ),
+    p.check(
+      "corpus_index_generation_flips_digest_shape",
+      sql`${t.evidenceDigest} ~ '^[0-9a-f]{64}$'`,
+    ),
+    p.check(
+      "corpus_index_generation_flips_digest_reproducible",
+      sql`${t.evidenceDigest} = ${corpusIndexGenerationFlipReceiptDigest({
+        family: sql`${t.family}`,
+        fromGeneration: sql`${t.fromGeneration}`,
+        toGeneration: sql`${t.toGeneration}`,
+        actor: sql`${t.actor}`,
+        reason: sql`${t.reason}`,
+        flippedAt: sql`${t.flippedAt}`,
+        evidence: sql`${t.evidence}`,
+      })}`,
+    ),
+    p.check(
+      "corpus_index_generation_flips_pair_distinct",
+      sql`${t.fromGeneration} IS DISTINCT FROM ${t.toGeneration}`,
+    ),
+    // Row security is forced, so the owner-run operator transaction needs a
+    // policy too; grants still decide what each other role may do.
+    p.pgPolicy("corpus_index_generation_flips_owner_access", {
+      for: "all",
+      to: "public",
+      using: generationFlipsOwnerAccess,
+      withCheck: generationFlipsOwnerAccess,
+    }),
+    ...globalCaseLawPolicies(),
   ],
 );

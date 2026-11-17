@@ -5,6 +5,7 @@ import {
   type QueryClient,
   type QueryKey,
 } from "@tanstack/react-query";
+import type { updateUser } from "better-auth/api";
 import type { OrganizationCreator } from "better-auth/plugins";
 import { panic, Result } from "better-result";
 
@@ -18,6 +19,11 @@ import {
   type WorkspaceRealtimeEvent,
 } from "@stll/api-contract";
 
+import {
+  captureSessionQueryOwner,
+  hasCurrentAuthQueryOwner,
+  isObservedSessionQueryOwner,
+} from "@/lib/account/auth-query-owner";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import {
@@ -58,14 +64,30 @@ import {
   workspaceJustificationsQueryRoot,
   workspaceWorkflowQueryRoot,
 } from "@/lib/workspaces/queries/workspace.logic";
+import { getRealtimeRefreshScheduler } from "@/lib/workspaces/realtime-refresh";
+import {
+  canInvalidateResourceQuery,
+  canRefreshResourceQuery,
+  isIdentityOwnedResourceQuery,
+  resourceRefreshIdentity,
+} from "@/lib/workspaces/resource-query-identity";
+import type {
+  ResourceQueryOwner,
+  ResourceQueryScopeIdentity,
+  ResourceRefreshContext,
+} from "@/lib/workspaces/resource-query-identity";
 
-type ResourceQueryScopeIdentity =
+type ResourceChangeScopeIdentity =
   { type: "workspace"; workspaceId: string } | { type: "organization" };
 
 type ResourceReads =
   | {
       resources: readonly [ResourceType, ...ResourceType[]];
       scope: ResourceQueryScopeIdentity;
+      organizationReads?: {
+        organizationId: string;
+        resources: readonly [ResourceType, ...ResourceType[]];
+      };
       /**
        * Writes of this client that update the reader's cached data in place
        * (an optimistic write the server's answer confirms), so their commit
@@ -93,6 +115,13 @@ type AuthPluginEndpointWrite<
   route: ReturnType<OrganizationCreator>["endpoints"][TEndpoint]["path"];
 };
 
+type AuthCoreUserUpdateWrite = {
+  type: "auth-core-endpoint";
+  endpoint: "updateUser";
+  method: ReturnType<typeof updateUser>["options"]["method"];
+  route: ReturnType<typeof updateUser>["path"];
+};
+
 declare module "@tanstack/react-query" {
   // oxlint-disable-next-line typescript/consistent-type-definitions -- module augmentation requires an interface for declaration merging
   interface Register {
@@ -113,6 +142,37 @@ export const resourceQueryOptions = <
 });
 
 export const RESOURCE_MUTATION_CONTRACTS = {
+  updateUser: {
+    writes: [
+      {
+        type: "auth-core-endpoint",
+        endpoint: "updateUser",
+        method: "POST",
+        route: "/update-user",
+      } satisfies AuthCoreUserUpdateWrite,
+    ],
+    resources: [RESOURCE_TYPE.USER],
+  },
+  addWorkspaceMember: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "PUT",
+        route: "/workspaces/:workspaceId/members",
+      },
+    ],
+    resources: [RESOURCE_TYPE.WORKSPACE],
+  },
+  removeWorkspaceMember: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "DELETE",
+        route: "/workspaces/:workspaceId/members/:userId",
+      },
+    ],
+    resources: [RESOURCE_TYPE.WORKSPACE],
+  },
   // The member's own reminder for when a chat's usage limit resets.
   changeChatLimitReminder: {
     writes: [
@@ -171,6 +231,17 @@ export const RESOURCE_MUTATION_CONTRACTS = {
     // Any change to a task, its status included. A task is an entity: its own
     // queries and every entity collection, the matter's tasks and its
     // overview included, refresh.
+    changedEntity: "entityId",
+  },
+  moveEntity: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "PATCH",
+        route: "/entities/:workspaceId/move",
+      },
+    ],
+    resources: [RESOURCE_TYPE.ENTITY],
     changedEntity: "entityId",
   },
   renameEntity: {
@@ -410,6 +481,7 @@ export const RESOURCE_MUTATION_CONTRACTS = {
 } as const;
 
 type ResourceMutationName = keyof typeof RESOURCE_MUTATION_CONTRACTS;
+type PrimaryResourceMutationName = Exclude<ResourceMutationName, "updateUser">;
 
 /**
  * The variable naming the one entity a contract changes, if it names one.
@@ -426,12 +498,12 @@ type ChangedEntityVariable<TMutation extends ResourceMutationName> =
     : never;
 
 type OrganizationResourceMutationName = {
-  [TMutation in ResourceMutationName]: [
+  [TMutation in PrimaryResourceMutationName]: [
     ChangedEntityVariable<TMutation>,
   ] extends [never]
     ? TMutation
     : never;
-}[ResourceMutationName];
+}[PrimaryResourceMutationName];
 
 type ResourceMutationOptions<
   TMutation extends ResourceMutationName,
@@ -446,6 +518,12 @@ type ResourceMutationOptions<
   mutationFn: (variables: TVariables, ...rest: TRest) => Promise<TData>;
 };
 
+type OrganizationProjectionMutationScope = {
+  type: "organization-projection";
+  organizationId: string | null;
+  userId: string | null;
+};
+
 type ResourceMutationScope =
   | { type: "organization" }
   | { type: "workspace"; workspaceId: string; changedEntityId?: string };
@@ -454,10 +532,12 @@ const invalidateAfterResourceMutation = async ({
   mutation,
   queryClient,
   scope,
+  owner,
 }: {
   mutation: ResourceMutationName;
   queryClient: QueryClient;
   scope: ResourceMutationScope;
+  owner: ResourceQueryOwner;
 }) => {
   const resources = RESOURCE_MUTATION_CONTRACTS[mutation].resources;
   const invalidations: ResourceQueryInvalidation[] =
@@ -466,9 +546,11 @@ const invalidateAfterResourceMutation = async ({
       resources,
       scope,
       mutation,
-    }).map(({ queryKey }): ResourceQueryInvalidation => ({
+      owner,
+    }).map(({ queryKey, ...context }): ResourceQueryInvalidation => ({
       queryKey,
-      match: "prefix",
+      ...context,
+      match: context.match ?? "prefix",
     }));
   if (scope.type === "workspace") {
     for (const resource of resources) {
@@ -529,7 +611,7 @@ const workspaceMutationScope = (
  * the entity collections, never every cached entity detail.
  */
 export function resourceMutation<
-  TMutation extends ResourceMutationName,
+  TMutation extends PrimaryResourceMutationName,
   TVariables extends { workspaceId: string } & Record<
     ChangedEntityVariable<TMutation>,
     string
@@ -551,16 +633,44 @@ export function resourceMutation<
     scope: { type: "organization" };
   },
 ): (variables: TVariables) => Promise<TData>;
+export function resourceMutation<TData, TVariables>(
+  options: ResourceMutationOptions<"updateUser", TVariables, TData> & {
+    scope: OrganizationProjectionMutationScope;
+  },
+): (variables: TVariables) => Promise<TData>;
 export function resourceMutation<TVariables, TData, TRest extends unknown[]>({
   mutation,
   queryClient,
   mutationFn,
   scope,
 }: ResourceMutationOptions<ResourceMutationName, TVariables, TData, TRest> & {
-  scope?: { type: "workspace" } | { type: "organization" };
+  scope?:
+    | { type: "workspace" }
+    | { type: "organization" }
+    | OrganizationProjectionMutationScope;
 }): (variables: TVariables, ...rest: TRest) => Promise<TData> {
   return async (variables: TVariables, ...rest: TRest) => {
+    const owner = captureSessionQueryOwner(queryClient);
     const data = await mutationFn(variables, ...rest);
+    if (scope?.type === "organization-projection") {
+      if (
+        scope.organizationId !== null &&
+        owner?.userId === scope.userId &&
+        owner.organizationId === scope.organizationId &&
+        isObservedSessionQueryOwner(queryClient, owner)
+      ) {
+        await invalidateResourceQueries(
+          queryClient,
+          organizationResourceQueryActions({
+            queryClient,
+            organizationId: scope.organizationId,
+            resources: RESOURCE_MUTATION_CONTRACTS[mutation].resources,
+            owner,
+          }),
+        );
+      }
+      return data;
+    }
     await invalidateAfterResourceMutation({
       mutation,
       queryClient,
@@ -568,6 +678,7 @@ export function resourceMutation<TVariables, TData, TRest extends unknown[]>({
         scope?.type === "organization"
           ? scope
           : workspaceMutationScope(mutation, variables),
+      owner,
     });
     return data;
   };
@@ -615,10 +726,10 @@ export const WORKSPACE_REALTIME_QUERY_ACTION = {
 } as const;
 
 export type WorkspaceRealtimeQueryAction =
-  | {
+  | ({
       type: typeof WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE;
       queryKey: QueryKey;
-    }
+    } & ResourceRefreshContext)
   | {
       type: typeof WORKSPACE_REALTIME_QUERY_ACTION.REMOVE_PREFIX;
       queryKey: QueryKey;
@@ -816,8 +927,8 @@ const getResourceQueryScopeKeys = (
  */
 type ResourceQueryInvalidation = {
   queryKey: QueryKey;
-  match: "prefix" | "entity-collections";
-};
+  match: "prefix" | "exact" | "entity-collections";
+} & Omit<ResourceRefreshContext, "match">;
 
 /**
  * One known entity changed: its own queries and every entity collection
@@ -915,23 +1026,31 @@ const getResourceSetUpdatedQueryActions = (
 export const coalesceWorkspaceQueryActions = (
   actions: WorkspaceRealtimeQueryAction[],
 ): WorkspaceRealtimeQueryAction[] => {
-  const seen = new Set<string>();
+  const seen = new Map<object, Set<string>>();
   const unique: WorkspaceRealtimeQueryAction[] = [];
   for (const action of actions) {
+    const identity = resourceRefreshIdentity(
+      action.type === "invalidate" ? action : {},
+    );
+    const keys = seen.get(identity) ?? new Set<string>();
     const key = `${action.type}:${hashKey(action.queryKey)}`;
-    if (seen.has(key)) {
+    if (keys.has(key)) {
       continue;
     }
-    seen.add(key);
+    keys.add(key);
+    seen.set(identity, keys);
     unique.push(action);
   }
   return unique.filter(
     (action) =>
       action.type !== WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE ||
+      action.match === "exact" ||
       !unique.some(
         (other) =>
           other !== action &&
           other.type === WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE &&
+          other.match !== "exact" &&
+          resourceRefreshIdentity(action) === resourceRefreshIdentity(other) &&
           partialMatchKey(action.queryKey, other.queryKey),
       ),
   );
@@ -940,10 +1059,11 @@ export const coalesceWorkspaceQueryActions = (
 type RegisteredResourceQueryActionsOptions = {
   queryClient: QueryClient;
   resources: readonly ResourceType[];
-  scope: ResourceQueryScopeIdentity;
+  scope: ResourceChangeScopeIdentity;
   /** This client's committed write, when the change is one; a realtime
    *  event names none. */
   mutation?: ResourceMutationName;
+  owner?: ResourceQueryOwner;
 };
 
 const registeredResourceQueryActions = ({
@@ -951,11 +1071,16 @@ const registeredResourceQueryActions = ({
   resources,
   scope,
   mutation,
-}: RegisteredResourceQueryActionsOptions): WorkspaceRealtimeQueryAction[] =>
+  owner,
+}: RegisteredResourceQueryActionsOptions): Extract<
+  WorkspaceRealtimeQueryAction,
+  { type: "invalidate" }
+>[] =>
   queryClient
     .getQueryCache()
     .findAll({
-      predicate: ({ meta }) => {
+      predicate: (query) => {
+        const { meta } = query;
         const reads = meta?.resourceReads;
         if (
           !reads ||
@@ -967,30 +1092,100 @@ const registeredResourceQueryActions = ({
           return false;
         }
         return (
-          (scope.type === "organization" &&
-            reads.scope.type === "organization") ||
+          (isObservedSessionQueryOwner(queryClient, owner) &&
+            ((reads.scope.type === "organization" &&
+              reads.scope.organizationId === owner.organizationId) ||
+              (reads.scope.type === "user" &&
+                reads.scope.userId === owner.userId) ||
+              (reads.scope.type === "current-session" &&
+                hasCurrentAuthQueryOwner(queryClient, query)))) ||
           (scope.type === "workspace" &&
-            (reads.scope.type === "organization" ||
-              scope.workspaceId === reads.scope.workspaceId))
+            (reads.scope.type === "workspace"
+              ? scope.workspaceId === reads.scope.workspaceId
+              : reads.scope.type === "workspace-set" &&
+                reads.scope.workspaceIds.includes(scope.workspaceId)))
         );
       },
     })
-    .map(({ queryKey }) => ({
-      type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
-      queryKey,
+    .map((query) =>
+      isIdentityOwnedResourceQuery(query)
+        ? {
+            type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
+            queryKey: query.queryKey,
+            match: "exact",
+            query,
+            owner,
+          }
+        : {
+            type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
+            queryKey: query.queryKey,
+          },
+    );
+
+/** Secondary dependencies name their owning organization independently of a
+ * query's workspace. They never inherit the legacy organization-wide match. */
+export const organizationResourceQueryActions = ({
+  queryClient,
+  organizationId,
+  resources,
+  owner,
+}: {
+  queryClient: QueryClient;
+  organizationId: string;
+  resources: readonly ResourceType[];
+  owner?: ResourceQueryOwner;
+}): ({ queryKey: QueryKey; match: "exact" } & ResourceRefreshContext)[] =>
+  queryClient
+    .getQueryCache()
+    .findAll({
+      predicate: (query) => {
+        const { meta } = query;
+        const reads = meta?.resourceReads;
+        if (!reads || "type" in reads) {
+          return false;
+        }
+        const organization = reads.organizationReads;
+        return (
+          isObservedSessionQueryOwner(queryClient, owner) &&
+          owner.organizationId === organizationId &&
+          ((organization?.organizationId === organizationId &&
+            organization.resources.some((resource) =>
+              resources.includes(resource),
+            )) ||
+            (((reads.scope.type === "organization" &&
+              reads.scope.organizationId === organizationId) ||
+              (reads.scope.type === "user" &&
+                reads.scope.userId === owner.userId) ||
+              (reads.scope.type === "current-session" &&
+                hasCurrentAuthQueryOwner(queryClient, query))) &&
+              reads.resources.some((resource) => resources.includes(resource))))
+        );
+      },
+    })
+    .map((query) => ({
+      queryKey: query.queryKey,
+      match: "exact",
+      query,
+      owner,
     }));
 
 const deduplicateInvalidations = (
   invalidations: readonly ResourceQueryInvalidation[],
 ): ResourceQueryInvalidation[] => {
-  const seen = new Set<string>();
+  const seen = new Map<object, Set<string>>();
   const unique: ResourceQueryInvalidation[] = [];
   for (const invalidation of invalidations) {
+    const identity = resourceRefreshIdentity({
+      ...invalidation,
+      match: invalidation.match === "exact" ? "exact" : undefined,
+    });
+    const keys = seen.get(identity) ?? new Set<string>();
     const key = `${invalidation.match}:${hashKey(invalidation.queryKey)}`;
-    if (seen.has(key)) {
+    if (keys.has(key)) {
       continue;
     }
-    seen.add(key);
+    keys.add(key);
+    seen.set(identity, keys);
     unique.push(invalidation);
   }
   return unique;
@@ -1003,6 +1198,7 @@ const invalidationReaches = (
 ): boolean => {
   switch (match) {
     case "prefix":
+    case "exact":
       return true;
     case "entity-collections":
       return isEntityCollectionQueryKey(queryKey);
@@ -1023,10 +1219,16 @@ const invalidateResourceQueries = async (
   const invalidated = await Result.tryPromise(
     async () =>
       await Promise.all(
-        invalidations.map(async ({ queryKey, match }) => {
+        invalidations.map(async ({ queryKey, match, ...context }) => {
           await queryClient.invalidateQueries({
             queryKey,
-            predicate: (query) => invalidationReaches(match, query.queryKey),
+            exact: match === "exact",
+            predicate: (query) =>
+              invalidationReaches(match, query.queryKey) &&
+              canInvalidateResourceQuery(queryClient, query, {
+                ...context,
+                match: match === "exact" ? "exact" : undefined,
+              }),
             refetchType: "none",
           });
         }),
@@ -1042,15 +1244,41 @@ const invalidateResourceQueries = async (
       context: { type: "detached", operation: "resource-query.invalidate" },
     });
   }
+  // Exact identified readers have one final authority/Query gate, including
+  // healthy cancel-and-refetch and deferred recovery. Legacy bulk is unchanged.
+  const identified = invalidations.filter(
+    (action) =>
+      action.match === "exact" &&
+      action.query !== undefined &&
+      isIdentityOwnedResourceQuery(action.query),
+  );
+  const legacy = invalidations.filter((action) => !identified.includes(action));
+  const scheduler = getRealtimeRefreshScheduler(queryClient);
+  detached(
+    Promise.all(
+      identified.map(
+        async ({ queryKey, ...context }) =>
+          await scheduler.invalidateImmediately(queryKey, {
+            ...context,
+            match: "exact",
+          }),
+      ),
+    ),
+    "resource-query.identified-refresh",
+  );
   // Refetch failure must not turn a committed write into a rejected mutation.
   detached(
     queryClient.refetchQueries({
       type: "active",
       predicate: (query) =>
-        invalidations.some(
-          ({ queryKey, match }) =>
-            matchQuery({ queryKey }, query) &&
-            invalidationReaches(match, query.queryKey),
+        legacy.some(
+          ({ queryKey, match, ...context }) =>
+            matchQuery({ queryKey, exact: match === "exact" }, query) &&
+            invalidationReaches(match, query.queryKey) &&
+            canRefreshResourceQuery(queryClient, query, {
+              ...context,
+              match: match === "exact" ? "exact" : undefined,
+            }),
         ),
     }),
     "resource-query.refresh",
@@ -1066,11 +1294,13 @@ const invalidateResourceQueries = async (
 type WorkspaceQueryActionsScope = {
   workspaceId: string;
   queryClient: QueryClient;
+  owner?: ResourceQueryOwner;
 };
 
 export const getWorkspaceReconnectQueryActions = ({
   workspaceId,
   queryClient,
+  owner,
 }: WorkspaceQueryActionsScope): WorkspaceRealtimeQueryAction[] => {
   const actions: WorkspaceRealtimeQueryAction[] = [];
   for (const scope of Object.values(RESOURCE_QUERY_SCOPE)) {
@@ -1086,9 +1316,14 @@ export const getWorkspaceReconnectQueryActions = ({
       queryClient,
       resources: Object.values(RESOURCE_TYPE),
       scope: { type: "workspace", workspaceId },
+      owner,
     }),
   );
-  return coalesceWorkspaceQueryActions(actions);
+  return coalesceWorkspaceQueryActions(
+    actions.map((action) =>
+      action.type === "invalidate" ? { ...action, owner } : action,
+    ),
+  );
 };
 
 /**
@@ -1141,7 +1376,7 @@ const getResourceEventQueryActions = (
 
 export const getWorkspaceRealtimeQueryActions = (
   event: WorkspaceRealtimeEvent,
-  { workspaceId, queryClient }: WorkspaceQueryActionsScope,
+  { workspaceId, queryClient, owner }: WorkspaceQueryActionsScope,
 ): WorkspaceRealtimeQueryAction[] => {
   const actions = getResourceEventQueryActions(event, workspaceId);
   const resources: ResourceType[] = [];
@@ -1163,12 +1398,17 @@ export const getWorkspaceRealtimeQueryActions = (
       event satisfies never;
       return panic(`Unhandled event: ${String(event)}`);
   }
-  return coalesceWorkspaceQueryActions([
-    ...actions,
-    ...registeredResourceQueryActions({
-      queryClient,
-      resources,
-      scope: { type: "workspace", workspaceId },
-    }),
-  ]);
+  return coalesceWorkspaceQueryActions(
+    [
+      ...actions,
+      ...registeredResourceQueryActions({
+        queryClient,
+        resources,
+        scope: { type: "workspace", workspaceId },
+        owner,
+      }),
+    ].map((action) =>
+      action.type === "invalidate" ? { ...action, owner } : action,
+    ),
+  );
 };

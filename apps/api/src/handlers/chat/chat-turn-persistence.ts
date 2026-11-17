@@ -55,6 +55,7 @@ import type {
   PersistableTerminalAssistantMessage,
 } from "@/api/handlers/chat/types";
 import type { AIErrorKind } from "@/api/lib/ai-error";
+import type { ServerStartedChatTurn } from "@/api/lib/auth/member-caller";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
@@ -174,15 +175,11 @@ export const AI_ERROR_FAILURE_CODE = {
  * Who asked for a turn. A member's own request releases a held queue, as
  * typing a message does; a message the server sends from the queue is taken
  * from it in the acceptance transaction, only while the queue's gate is open
- * for it at the revision the sender read.
+ * for it at the revision the sender read; a turn the server sends again after
+ * a usage limit reset takes the member's request for it, only while the
+ * stopped turn is still the thread's latest.
  */
-export type ChatTurnSource =
-  | { type: "member" }
-  | {
-      type: "queue";
-      queuedMessageId: SafeId<"chatMessage">;
-      revision: number;
-    };
+export type ChatTurnSource = { type: "member" } | ServerStartedChatTurn;
 
 export type ChatTurnAcceptance = {
   id: SafeId<"chatTurn">;
