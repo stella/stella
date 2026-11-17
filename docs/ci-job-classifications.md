@@ -9,7 +9,7 @@ A job is privileged when any of these holds:
 - Its effective token permissions contain `write` or are `write-all`, including `id-token: write`. An unset permission is the read-only repository default.
 - It reads a secret other than `secrets.GITHUB_TOKEN`, passes `secrets: inherit`, or uses an app-token action or its output.
 - It declares `environment`.
-- Its workflow runs on a base-branch event: `pull_request_target`, `workflow_run`, `issue_comment`, `pull_request_review`, `pull_request_review_comment` or `discussion_comment`.
+- Its workflow runs on a base-branch event: `workflow_run`, `issue_comment`, `pull_request_review`, `pull_request_review_comment` or `discussion_comment`.
 - `runs-on` selects `self-hosted`, a runner group, or a label that is not GitHub-hosted, including literal matrix values.
 - It checks out or fetches an untrusted event ref.
 - It writes the repository: `contents: write`, an app token that requests it, or the shared signed-commit action, in the job or in an action it reaches.

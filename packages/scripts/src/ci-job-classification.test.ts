@@ -1782,7 +1782,7 @@ for (const [before, after] of [
     "on: {workflow_call: {inputs: {channel: {type: string, default: latest}}}}",
     "on: {workflow_call: {inputs: {channel: {type: string, default: next}}}}",
   ],
-  ["on: pull_request", "on: pull_request_target"],
+  ["on: pull_request", "on: workflow_run"],
   ["future-workflow-key: preview", "future-workflow-key: stable"],
 ] satisfies readonly (readonly [string, string])[]) {
   test(`document configuration changes require classification refresh: ${before}`, () => {
