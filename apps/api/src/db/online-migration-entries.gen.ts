@@ -66,6 +66,7 @@ export { default as indexes_case_law_decisions_search_candidate_published_idx } 
 export { default as indexes_case_law_decisions_sitemap_month_published_idx } from "./online-migration-entries/indexes-case-law-decisions-sitemap-month-published-idx";
 export { default as indexes_case_law_decisions_sitemap_shard_published_idx } from "./online-migration-entries/indexes-case-law-decisions-sitemap-shard-published-idx";
 export { default as indexes_case_law_decisions_source_arrivals_published_idx } from "./online-migration-entries/indexes-case-law-decisions-source-arrivals-published-idx";
+export { default as indexes_case_law_decisions_source_content_changed_idx } from "./online-migration-entries/indexes-case-law-decisions-source-content-changed-idx";
 export { default as indexes_case_law_ingestion_failures_source_record_uidx } from "./online-migration-entries/indexes-case-law-ingestion-failures-source-record-uidx";
 export { default as indexes_case_law_parse_pending_index } from "./online-migration-entries/indexes-case-law-parse-pending-index";
 export { default as indexes_case_law_population_counts_source_kind_idx } from "./online-migration-entries/indexes-case-law-population-counts-source-kind-idx";

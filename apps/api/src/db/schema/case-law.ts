@@ -732,6 +732,21 @@ const publishedLanguageDateIndex = (
     )
     .where(publishedCaseLawDecisionFor(t));
 
+/**
+ * A source's decisions in the order their content changed. A row unchanged
+ * since the column was added holds NULL and is never read through it, so the
+ * index starts small.
+ */
+const sourceContentChangedIndex = (t: {
+  sourceId: PgColumn;
+  contentChangedAt: PgColumn;
+  id: PgColumn;
+}) =>
+  p
+    .index("case_law_decisions_source_content_changed_idx")
+    .on(t.sourceId, t.contentChangedAt, t.id)
+    .where(isNotNull(t.contentChangedAt));
+
 export const caseLawDecisions = p.pgTable(
   "case_law_decisions",
   {
@@ -969,6 +984,14 @@ export const caseLawDecisions = p.pgTable(
       .defaultNow()
       .notNull()
       .$onUpdate(() => new Date()),
+    /**
+     * When the decision's content last changed: stamped by a migration-owned
+     * trigger on insert and on every write that changes a content column
+     * (`case-law-content-changed-at.ts`), whatever the writer; a value a
+     * writer sets is discarded. NULL means unchanged since the column was
+     * added.
+     */
+    contentChangedAt: timestamptz("content_changed_at"),
     /** NSS reporter entry number as published. */
     nssReporterNumber: p.text("nss_reporter_number"),
     /** NSS reporter year as published. */
@@ -1119,6 +1142,7 @@ export const caseLawDecisions = p.pgTable(
       .index("case_law_decisions_source_generation_cursor_idx")
       .on(t.sourceId, t.createdAt, t.id),
     p.index("case_law_decisions_source_id_page_idx").on(t.sourceId, t.id),
+    sourceContentChangedIndex(t),
     p
       .index("case_law_decisions_textless_detail_recheck_idx")
       .on(

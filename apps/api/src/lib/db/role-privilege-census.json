@@ -216,6 +216,8 @@
     "function:public.similarity_dist(text, text):EXECUTE:GRANTOR:census_admin:GRANTABLE:false",
     "function:public.similarity_op(text, text):EXECUTE:EFFECTIVE",
     "function:public.similarity_op(text, text):EXECUTE:GRANTOR:census_admin:GRANTABLE:false",
+    "function:public.stamp_case_law_content_change():EXECUTE:EFFECTIVE",
+    "function:public.stamp_case_law_content_change():EXECUTE:GRANTOR:census_admin:GRANTABLE:false",
     "function:public.stella_entity_display_name(entity_name text, entity_kind text, entity_workspace_id uuid, entity_current_version_id uuid):EXECUTE:EFFECTIVE",
     "function:public.stella_entity_display_name(entity_name text, entity_kind text, entity_workspace_id uuid, entity_current_version_id uuid):EXECUTE:GRANTOR:census_admin:GRANTABLE:false",
     "function:public.stella_model_run_day(instant timestamp with time zone):EXECUTE:EFFECTIVE",
