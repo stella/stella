@@ -31,10 +31,17 @@ import {
   type FeatureAccessSnapshot,
   isFeatureEnabled,
 } from "@/api/lib/feature-access/policy";
-import { getMcpResourceUrl } from "@/api/mcp/constants";
+import { getMcpResourceUrl, type McpMode } from "@/api/mcp/constants";
 
 /** The MCP server name a local run reaches the workspace through. */
 const MCP_SERVER_NAME = "stella";
+
+/**
+ * The MCP surface a local run is handed. The run's prompt lists the skill
+ * tools this surface serves its token (`local-run-skills.ts`), so both read
+ * this one value.
+ */
+export const LOCAL_RUN_MCP_MODE = "default" satisfies McpMode;
 
 export type ResolveChatLocalRunOptions = {
   runTarget: ChatRunTarget | undefined;
@@ -138,7 +145,10 @@ export const resolveChatLocalRun = async ({
     owner: { userId, organizationId },
     chatThreadId,
     workspaceIds,
-    mcp: { serverName: MCP_SERVER_NAME, url: getMcpResourceUrl() },
+    mcp: {
+      serverName: MCP_SERVER_NAME,
+      url: getMcpResourceUrl(LOCAL_RUN_MCP_MODE),
+    },
   };
   if (resumesPausedRun) {
     return Result.ok(
@@ -232,7 +242,10 @@ export const adoptChatLocalRun = async ({
         owner,
         chatThreadId,
         workspaceIds,
-        mcp: { serverName: MCP_SERVER_NAME, url: getMcpResourceUrl() },
+        mcp: {
+          serverName: MCP_SERVER_NAME,
+          url: getMcpResourceUrl(LOCAL_RUN_MCP_MODE),
+        },
       },
       { type: "adopt", harness: run.harness },
     ),
