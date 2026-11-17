@@ -1,4 +1,5 @@
 import { panic, Result } from "better-result";
+import { Queue } from "bullmq";
 import {
   afterAll,
   afterEach,
@@ -41,16 +42,21 @@ import { HttpStatusResponse } from "@/api/http/status";
 import * as auditOwner from "@/api/lib/audit-log";
 import { realtimeAuthorizers } from "@/api/lib/auth";
 import { createSafeId } from "@/api/lib/branded-types";
+import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import * as auditInsertionOwner from "@/api/lib/db/audit-recording";
 import { hashDesktopEditSessionToken } from "@/api/lib/desktop-edit-sessions";
-import { countPendingDocumentProcessingJobs } from "@/api/lib/document-processing-enqueue";
+import * as enqueueOwner from "@/api/lib/document-processing-enqueue";
 import { markdownToStellaDocx } from "@/api/lib/docx-authoring/from-markdown";
 import * as diffOwner from "@/api/lib/entity-versions/compute-version-diff";
 import * as derivativeOwner from "@/api/lib/file-derivative-queue";
 import { createFileKey } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
-import { createRedisClient } from "@/api/lib/redis-client";
+import {
+  createBullMqConnection,
+  createRedisClient,
+} from "@/api/lib/redis-client";
 import { OBJECT_READ_TIMEOUT_MS, S3ObjectBudgetError } from "@/api/lib/s3";
+import { requestNativeExtractionRun } from "@/api/lib/search/process-extraction";
 import { startSse, stopSse } from "@/api/lib/sse";
 import {
   createSseBroadcastPublisher,
@@ -700,6 +706,87 @@ const finalizeWithObservedTails = async (fixture: DesktopCloseFixture) => {
   }
 };
 
+const observeDesktopEnqueues = (fixture: DesktopCloseFixture) => {
+  const enqueue = enqueueOwner.enqueueDocumentProcessingRun;
+  const calls: Parameters<typeof enqueue>[0][] = [];
+  const ownedIds = new Set<Parameters<typeof enqueue>[0]>();
+  const connection = createBullMqConnection({
+    storeClass: "durable-coordination",
+  });
+  const queue = Result.unwrap(
+    Result.try(
+      () =>
+        new Queue<enqueueOwner.DocumentProcessingJobData>(
+          enqueueOwner.DOCUMENT_PROCESSING_QUEUE_NAME,
+          { connection },
+        ),
+    ).mapError((error) => {
+      connection.disconnect();
+      return error;
+    }),
+  );
+  const spy = spyOn(
+    enqueueOwner,
+    "enqueueDocumentProcessingRun",
+  ).mockImplementation(async (runId) => {
+    calls.push(runId);
+    await enqueue(runId);
+  });
+  const assertJob = async (runId: Parameters<typeof enqueue>[0]) => {
+    const job = await queue.getJob(
+      createBullMqJobId(enqueueOwner.DOCUMENT_PROCESSING_QUEUE_NAME, runId),
+    );
+    expect(job?.data).toEqual({ runId });
+    expect(job?.name).toBe(enqueueOwner.DOCUMENT_PROCESSING_OCR_JOB_NAME);
+    expect(await job?.getState()).toBe("waiting");
+  };
+  return {
+    calls,
+    assertJob,
+    own: (runId: Parameters<typeof enqueue>[0]) => ownedIds.add(runId),
+    addUnrelated: async () => {
+      const document = await fixture.f.addDocument({
+        fileName: "Independent.docx",
+        mimeType: DOCX_MIME_TYPE,
+      });
+      const runId = await rootDb.transaction(async (tx) =>
+        requestNativeExtractionRun({ entityId: document.entityId, tx }),
+      );
+      if (!runId) {
+        return panic("Independent desktop fixture requires a native run");
+      }
+      ownedIds.add(runId);
+      await enqueue(runId);
+      await assertJob(runId);
+      return runId;
+    },
+    close: async () => {
+      spy.mockRestore();
+      try {
+        const state = await fixture.read();
+        for (const run of state.native) {
+          ownedIds.add(run.id);
+        }
+        for (const runId of ownedIds) {
+          const job = await queue.getJob(
+            createBullMqJobId(
+              enqueueOwner.DOCUMENT_PROCESSING_QUEUE_NAME,
+              runId,
+            ),
+          );
+          await job?.remove();
+        }
+      } finally {
+        try {
+          await queue.close();
+        } finally {
+          connection.disconnect();
+        }
+      }
+    },
+  };
+};
+
 describe.skipIf(!enabled)("desktop close transition ownership", () => {
   beforeEach(() => setSystemTime(new Date(clock.now())));
   afterEach(() => setSystemTime());
@@ -712,11 +799,12 @@ describe.skipIf(!enabled)("desktop close transition ownership", () => {
   ] as const) {
     test(`${kind} preserves close state, audit and repeat outcome`, async () => {
       const fixture = await prepareDesktopClose(kind);
+      let enqueues: ReturnType<typeof observeDesktopEnqueues> | undefined;
       let publications:
         Awaited<ReturnType<typeof observeDesktopPublications>> | undefined;
       try {
+        enqueues = observeDesktopEnqueues(fixture);
         publications = await observeDesktopPublications(fixture);
-        const pendingBefore = await countPendingDocumentProcessingJobs();
         const result =
           kind === "released"
             ? await fixture.release()
@@ -752,9 +840,12 @@ describe.skipIf(!enabled)("desktop close transition ownership", () => {
             fixture.document.entityVersionId,
           );
           expect(state.native).toHaveLength(1);
-          expect(await countPendingDocumentProcessingJobs()).toBe(
-            pendingBefore + 1,
-          );
+          const runId =
+            state.native.at(0)?.id ??
+            panic("Finalized fixture requires its native run");
+          enqueues.own(runId);
+          expect(enqueues.calls).toEqual([runId]);
+          await enqueues.assertJob(runId);
           expect(state.file?.content).toMatchObject({
             type: "file",
             mimeType: DOCX_MIME_TYPE,
@@ -817,6 +908,12 @@ describe.skipIf(!enabled)("desktop close transition ownership", () => {
             event,
           })),
         ).toEqual(expected);
+        if (kind !== "finalized") {
+          expect(enqueues.calls).toEqual([]);
+        }
+        const unrelatedRunId =
+          kind === "no_checkpoint" ? await enqueues.addUnrelated() : undefined;
+        const beforeDuplicate = [...enqueues.calls];
         const again =
           kind === "released"
             ? await fixture.release()
@@ -843,14 +940,19 @@ describe.skipIf(!enabled)("desktop close transition ownership", () => {
         const repeated = await fixture.read();
         expect(repeated.audits).toEqual(state.audits);
         expect(repeated.versions).toEqual(state.versions);
-        expect(await countPendingDocumentProcessingJobs()).toBe(
-          pendingBefore + (kind === "finalized" ? 1 : 0),
-        );
+        expect(enqueues.calls).toEqual(beforeDuplicate);
+        if (unrelatedRunId) {
+          await enqueues.assertJob(unrelatedRunId);
+        }
       } finally {
         try {
           publications?.close();
         } finally {
-          await fixture.dispose();
+          try {
+            await enqueues?.close();
+          } finally {
+            await fixture.dispose();
+          }
         }
       }
     });
@@ -858,6 +960,7 @@ describe.skipIf(!enabled)("desktop close transition ownership", () => {
 
   test("a failed finalized audit rolls back the real close and its published object", async () => {
     const fixture = await prepareDesktopClose("finalized");
+    let enqueues: ReturnType<typeof observeDesktopEnqueues> | undefined;
     let publications:
       Awaited<ReturnType<typeof observeDesktopPublications>> | undefined;
     const recordGroups = auditInsertionOwner.recordAuditGroups;
@@ -882,8 +985,8 @@ describe.skipIf(!enabled)("desktop close transition ownership", () => {
       }
     });
     try {
+      enqueues = observeDesktopEnqueues(fixture);
       publications = await observeDesktopPublications(fixture);
-      const pendingBefore = await countPendingDocumentProcessingJobs();
       const failure = await rejectionOf(fixture.finalize());
       expect(failure).toBe(originalFailure);
       expect(recorded).toHaveLength(1);
@@ -909,7 +1012,7 @@ describe.skipIf(!enabled)("desktop close transition ownership", () => {
         { id: fixture.document.entityVersionId },
       ]);
       expect(state.native).toEqual([]);
-      expect(await countPendingDocumentProcessingJobs()).toBe(pendingBefore);
+      expect(enqueues.calls).toEqual([]);
       expect(state.audits).toEqual([]);
       expect(state.intents).toEqual([]);
       expect([...fixture.store.objects.keys()].toSorted()).toEqual(
@@ -925,7 +1028,11 @@ describe.skipIf(!enabled)("desktop close transition ownership", () => {
       try {
         publications?.close();
       } finally {
-        await fixture.dispose();
+        try {
+          await enqueues?.close();
+        } finally {
+          await fixture.dispose();
+        }
       }
     }
   });

@@ -213,6 +213,7 @@ test("chat inherits only its organization's instructions and retains granted too
         recordAuditEvent: async () => {},
         request: new Request("http://localhost/v1/chat"),
         route: "/v1/chat" satisfies ApiRoutePath,
+        headers: {},
         safeDb,
         scopedDb,
         set: { headers: {}, status: 200 },

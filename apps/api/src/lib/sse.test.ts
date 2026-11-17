@@ -249,7 +249,12 @@ const publishWorkspaceAccessRevokedMock = async (): Promise<void> => {};
 // connection.
 const testPublisher: SseBroadcastPublisher = {
   ...createSseBroadcastPublisher({
-    createClient: () => ({ publish: async () => 0 }),
+    createClient: () => ({
+      connect: async () => undefined,
+      close: () => undefined,
+      onClose: () => () => undefined,
+      publish: async () => 0,
+    }),
   }),
   publishWorkspaceAccessRevoked: publishWorkspaceAccessRevokedMock,
   publishWorkspaceEvent: publishWorkspaceEventMock,

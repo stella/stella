@@ -5,7 +5,6 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { RESOURCE_TYPE } from "@stll/api-contract";
 import type { OrganizationAIAvailability } from "@stll/api-contract/organization-ai-availability";
 import {
   AI_PROVIDER_CONFIGURATION,
@@ -64,7 +63,6 @@ import {
 } from "@/lib/organization/ai-config-queries";
 import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
-import { resourceQueryOptions } from "@/lib/workspace-realtime";
 import { PROVIDER_SCOPE } from "@/routes/-app-frame-scope";
 
 type AIAvailabilityStatus = "pending" | "available" | "unavailable";
@@ -584,32 +582,24 @@ export const AIKeyRequiredDialog = ({
   const storedProviderValues = config?.configured
     ? config.providers.map(({ provider }) => provider)
     : [];
-  const defaultsQuery = useChromeQuery(
-    resourceQueryOptions(
-      {
-        ...aiDefaultsPreviewOptions({
-          organizationId: activeOrganizationId,
-          providers: providerValues,
-        }),
-        enabled: open && mayConfigure && configQuery.status === "success",
-        ...(config !== undefined &&
-        JSON.stringify(providerValues) === JSON.stringify(storedProviderValues)
-          ? {
-              initialData: {
-                defaultModels: projectDefaultRoleModels(config.defaultModels),
-                providerDefaultModels: projectProviderDefaultRoleModels(
-                  config.providerDefaultModels,
-                ),
-              },
-            }
-          : {}),
-      },
-      {
-        resources: [RESOURCE_TYPE.ORGANIZATION],
-        scope: { type: "organization" },
-      },
-    ),
-  );
+  const defaultsQuery = useChromeQuery({
+    ...aiDefaultsPreviewOptions({
+      organizationId: activeOrganizationId,
+      providers: providerValues,
+    }),
+    enabled: open && mayConfigure && configQuery.status === "success",
+    ...(config !== undefined &&
+    JSON.stringify(providerValues) === JSON.stringify(storedProviderValues)
+      ? {
+          initialData: {
+            defaultModels: projectDefaultRoleModels(config.defaultModels),
+            providerDefaultModels: projectProviderDefaultRoleModels(
+              config.providerDefaultModels,
+            ),
+          },
+        }
+      : {}),
+  });
   const defaultsView = queryView(defaultsQuery);
   useQueryViewError(defaultsView, "AIKeyRequiredDialog:defaults-query");
   const defaultModels =

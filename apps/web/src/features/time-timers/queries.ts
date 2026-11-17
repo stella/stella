@@ -36,6 +36,6 @@ export const timeTimersOptions = (organizationId: string, userId: string) =>
     }),
     {
       resources: [RESOURCE_TYPE.TIME_ENTRY],
-      scope: { type: "organization" },
+      scope: { type: "organization", organizationId, userId },
     },
   );

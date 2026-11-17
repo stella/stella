@@ -6,8 +6,15 @@ import {
   loadCaseLawCoverage,
 } from "@/api/handlers/case-law/decisions/coverage";
 import { createSafeId } from "@/api/lib/branded-types";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import {
+  ADAPTER_KEYS,
+  IMPORT_SOURCE_KEYS,
+} from "@/api/lib/legal-search/ingestion-constants";
 import { LIMITS } from "@/api/lib/limits";
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
 
 test("coverage year bounds cannot read capped facet years", async () => {
   const earliestYear = 1980;
@@ -124,4 +131,57 @@ test("an unread slice ledger leaves every source not reconciled, never failing t
       },
     }),
   ]);
+});
+
+test("a bulk import source is left off the page without an unregistered report", async () => {
+  const analytics = installRecordingAnalytics();
+  const logs = installRecordingLogger();
+  try {
+    const source = (adapterKey: string) => ({
+      id: createSafeId<"caseLawSource">(),
+      adapterKey,
+      enabled: true,
+      lastSyncAt: null,
+      reportedTotal: null,
+      reportedTotalAsOf: null,
+      reportedTotalOrigin: null,
+      storedTotal: null,
+      storedTotalAsOf: null,
+      decisionYearFrom: 1993,
+      decisionYearTo: 2026,
+      pendingTextCount: 0,
+      courts: [],
+      publishedDecisions: 0,
+    });
+    const coverage = await loadCaseLawCoverage({
+      excludedSourceIds: [],
+      onPartialFailure: () => undefined,
+      now: new Date("2026-10-22T00:00:00.000Z"),
+      readSources: async () => [
+        source(ADAPTER_KEYS.CZ_NS),
+        source(IMPORT_SOURCE_KEYS.COURTLISTENER),
+      ],
+      readArrivals: async () => new Map(),
+      readCensus: async () => new Map(),
+      readYearCompleteness: async () => new Map(),
+      readFacets: async (country) =>
+        Result.ok({
+          country: [{ value: country, count: 1 }],
+          court: [],
+          year: [],
+        }),
+      readCourts: async () => [],
+    });
+
+    if (Result.isError(coverage)) {
+      throw coverage.error;
+    }
+    expect(coverage.value.countries.map(({ country }) => country)).toEqual([
+      "CZE",
+    ]);
+    expect(analytics.exceptions()).toHaveLength(0);
+  } finally {
+    logs.restore();
+    analytics.restore();
+  }
 });

@@ -99,6 +99,7 @@ export type SafeIdType =
   | "requestIdempotencyReceipt"
   | "contactRelationship"
   | "corpusIndexProjectionIntent"
+  | "corpusIndexGenerationFlip"
   | "hostedCheckoutClaim"
   | "usageAllocation"
   | "usageLaneCounter"

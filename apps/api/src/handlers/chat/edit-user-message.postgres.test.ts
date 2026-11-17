@@ -272,6 +272,7 @@ const suite = (
       recordAuditEvent: async () => {},
       request: new Request("http://localhost/v1/chat"),
       route: "/v1/chat" satisfies ApiRoutePath,
+      headers: {},
       safeDb: rlsSafeDb(requester),
       scopedDb: asTestRaw<ScopedDb>(
         createScopedDb(

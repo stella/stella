@@ -3,6 +3,10 @@ import type { SQL } from "drizzle-orm";
 
 import { REASONING_EFFORTS } from "@stll/ai-catalog";
 import type { ChatSendRequest } from "@stll/api-contract/chat";
+import {
+  CHAT_COMMAND_TYPES,
+  type ChatCommandType,
+} from "@stll/api-contract/chat-command";
 import type { ChatMessageRevisionEdit } from "@stll/api-contract/chat-message-revisions";
 import { CHAT_QUEUE_HOLD_REASONS } from "@stll/api-contract/chat-queue";
 import type { ChatLocalRunTarget } from "@stll/api-contract/chat-run-target";
@@ -35,6 +39,7 @@ import {
 import {
   aiMemoryPolicies,
   CHAT_COMPACTION_MEMORY_ELIGIBILITIES,
+  chatCommandReceiptPolicies,
   chatMessagePolicies,
   chatMessageRevisionPolicies,
   chatMessageSearchDocumentPolicies,
@@ -1026,6 +1031,63 @@ export const chatQueueHolds = p.pgTable(
       withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_queue_holds'::regclass)`,
     }),
     ...chatQueueHoldPolicies(),
+  ],
+);
+
+/**
+ * That a member's chat command (a send, an answer) was accepted, under the id
+ * the client chose for it, so a retry after a lost response is answered with
+ * the turn the first attempt started or continued instead of acting twice
+ * (`@stll/api-contract/chat-command`). Written in the transaction that accepts
+ * the command; only accepted commands have one. Deleted after a day.
+ */
+export const chatCommandReceipts = p.pgTable(
+  "chat_command_receipts",
+  {
+    /** The id the client minted for the command; its retries send it again. */
+    commandId: p.uuid("command_id").primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    userId: p
+      .text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    threadId: safeUuid<"chatThread">("thread_id")
+      .notNull()
+      .references(() => chatThreads.id, { onDelete: "cascade" }),
+    /**
+     * The turn the command started (a send) or continued (an answer); null
+     * once that turn was removed from the thread (an edit from an earlier
+     * message), when the receipt still answers that the command was taken.
+     */
+    turnId: safeUuid<"chatTurn">("turn_id").references(() => chatTurns.id, {
+      onDelete: "set null",
+    }),
+    /** `send` or `answer` (`CHAT_COMMAND_TYPES`). */
+    commandType: p.text("command_type").$type<ChatCommandType>().notNull(),
+    acceptedAt: timestamptz("accepted_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p.check(
+      "chat_command_receipts_command_type_check",
+      sql`${table.commandType} IN (${sql.join(
+        CHAT_COMMAND_TYPES.map((type) => sql.raw(`'${type}'`)),
+        sql`, `,
+      )})`,
+    ),
+    p.index("chat_command_receipts_accepted_at_idx").on(table.acceptedAt),
+    p.index("chat_command_receipts_thread_id_idx").on(table.threadId),
+    p.index("chat_command_receipts_turn_id_idx").on(table.turnId),
+    // The retention sweep runs on the owner connection, which FORCE holds to
+    // RLS too, so it is admitted by name.
+    p.pgPolicy("chat_command_receipts_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_command_receipts'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_command_receipts'::regclass)`,
+    }),
+    ...chatCommandReceiptPolicies(),
   ],
 );
 

@@ -332,6 +332,39 @@
         "usage-limit": "File d’attente en pause : votre limite d’utilisation est atteinte. Reprenez une fois qu’elle sera réinitialisée.",
         "computer-away": "En attente de votre ordinateur : les messages en file d’attente partent dès qu’il se connecte."
       }
+    },
+    "edit": {
+      "action": "Modifier",
+      "title": "Modifier le message",
+      "input": "Message modifié",
+      "notice": "L’envoi remplace ce message et tous les messages qui le suivent.",
+      "cancel": "Annuler",
+      "refused": "Impossible de modifier ce message. La conversation affiche maintenant ce qui est enregistré ; réessayez lorsqu’aucune réponse n’est en cours.",
+      "refusedHistoryChanged": "La conversation a changé pendant l’envoi de la modification. Elle affiche maintenant ce qui est enregistré ; renvoyez la modification.",
+      "refusedTargetMissing": "Ce message ne figure plus dans la conversation et ne peut donc pas être modifié.",
+      "localFiles": {
+        "computer": {
+          "failed": "L’annulation ne s’est pas terminée sur votre ordinateur. Certains fichiers ont peut-être déjà été modifiés ; vérifiez le dossier de la conversation.",
+          "folderBusy": "Une exécution sur votre ordinateur utilise ce dossier. Réessayez quand elle sera terminée.",
+          "noCheckpoint": "Votre ordinateur n’a pas de copie enregistrée des fichiers d’avant cette étape ; rien n’a été annulé.",
+          "updateForEarlier": "Mettez à jour stella desktop pour annuler les modifications de messages antérieurs."
+        },
+        "conversationRestarts": "L’agent repart du texte de cette conversation, car la réponse précédant ce message n’est pas allée à son terme.",
+        "expired": "Votre ordinateur n’a pas répondu à temps. Réessayez.",
+        "option": "Annuler aussi les modifications de fichiers depuis ce message",
+        "optionHint": "Les modifications que vous avez faites vous-même dans le dossier sont aussi annulées.",
+        "pending": "Annulation des modifications de fichiers sur votre ordinateur",
+        "refused": {
+          "alreadyUndone": "Ces modifications de fichiers ont déjà été annulées.",
+          "desktopOffline": "Votre ordinateur est hors ligne. Ouvrez l’application de bureau stella et réessayez.",
+          "desktopUpdateRequired": "L’application de bureau stella de votre ordinateur est trop ancienne pour annuler des modifications. Mettez-la à jour et réessayez.",
+          "folderShared": "Une autre conversation a travaillé dans ce dossier depuis ce message.",
+          "noSavedCopy": "Votre ordinateur n’a gardé aucune copie du dossier d’avant ce message : il était trop volumineux ou trop lent à enregistrer, ou des copies plus récentes l’ont remplacée.",
+          "severalFolders": "Des messages ultérieurs ont été traités sur un autre ordinateur ou dans un autre dossier.",
+          "threadBusy": "Une réponse est encore en cours dans cette conversation. Réessayez quand elle sera terminée."
+        },
+        "restored": "Modifications de fichiers annulées"
+      }
     }
   },
   "tasks": {

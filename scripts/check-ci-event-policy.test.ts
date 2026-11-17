@@ -5,6 +5,7 @@ import * as v from "valibot";
 
 import {
   checkCiEventPolicies,
+  PULL_REQUEST_TARGET_BANNED,
   WHOLE_CONTEXT_ENV_BUDGET_CASES,
   wholeContextConsumers,
   workflowSchema,
@@ -67,7 +68,6 @@ test("seeded compiler probes require dispatch-only policy in every workflow", ()
       "schedule",
       "push",
       "pull_request",
-      "pull_request_target",
       "merge_group",
       "workflow_call",
       "workflow_run",
@@ -305,6 +305,37 @@ test("new heavy jobs require a policy that excludes every pull request", () => {
       policy: declared,
     }),
   ).toEqual(["fixture.yml/image: queue job can run on pull_request"]);
+});
+
+test("pull_request_target is banned in every workflow with its reason", () => {
+  for (const on of [
+    { pull_request_target: {} },
+    { pull_request_target: { types: ["labeled"] }, pull_request: {} },
+    { pull_request_target: null, merge_group: {} },
+  ]) {
+    const problems = checkCiEventPolicies({
+      workflows: { "fixture.yml": { on, jobs: { job: { if: "false" } } } },
+      policy: { jobs: { "fixture.yml/job": "pr-fast" } },
+    });
+    expect(problems).toContain(`fixture.yml: ${PULL_REQUEST_TARGET_BANNED}`);
+  }
+  expect(PULL_REQUEST_TARGET_BANNED).toContain("GitHub restricts it");
+  expect(PULL_REQUEST_TARGET_BANNED).toContain("workflow_run");
+  expect(
+    checkCiEventPolicies({
+      workflows: {
+        "fixture.yml": { on: { pull_request: {} }, jobs: { job: {} } },
+      },
+      policy: { jobs: { "fixture.yml/job": "pr-fast" } },
+    }),
+  ).toEqual([]);
+  expect(
+    Object.entries(workflows).flatMap(([file, workflow]) =>
+      Object.hasOwn(v.parse(workflowSchema, workflow).on, "pull_request_target")
+        ? [file]
+        : [],
+    ),
+  ).toEqual([]);
 });
 
 test("removed jobs cannot leave an event policy behind", () => {

@@ -2,12 +2,15 @@
  * What blending a case-law candidate needs, read off the engine's own hit
  * when the serving generation stores the ranking signals on every passage
  * (`case-law-ranking-signals.ts`): the row the per-candidate PostgreSQL read
- * used to return, without the read.
+ * returns, without its wide columns.
  *
- * Only blending stands on it. The page a request returns is still read from
- * PostgreSQL, which re-proves for those rows alone everything the index can
- * lag on: still published, no erasure queued, the copy still served, every
- * request filter, and the revision the excerpt is cut from.
+ * The copy the signals are read off is the one PostgreSQL records as applied
+ * (a `ServableCaseLawCopy` from the keyed read), never the copy the scan
+ * happened to reach first: until its deletes settle, the index keeps stale,
+ * withdrawn and never-applied copies beside the applied one, and a ranking
+ * read off one of them would rank, or surface, what readers are not served.
+ * The page a request returns is still read from PostgreSQL, which re-proves
+ * for those rows alone everything that can change between the two reads.
  */
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -17,18 +20,26 @@ import {
   citationAuthorityOfBucket,
   UNCITED_AUTHORITY_BUCKET,
 } from "@/api/lib/legal-search/case-law-ranking-signals";
-import type { ScannedProjection } from "@/api/lib/legal-search/corpus-index-pagination";
+import type { CorpusIndexHit } from "@/api/lib/legal-search/corpus-index-client";
 import type { CorpusProjectionRevision } from "@/api/lib/legal-search/corpus-index-revision-clause";
-import {
-  brandPersistedCaseLawDecisionId,
-  brandValidatedCorpusIndexProjectionIntentId,
-} from "@/api/lib/safe-id-boundaries";
 
 /** The stored fields a ranking read asks the scored transport for. */
 export const CASE_LAW_RANKING_SCAN_FIELDS: readonly string[] = [
   ...CASE_LAW_RANKING_STORED_BASE_FIELDS,
   ...Object.values(CASE_LAW_RANKING_SIGNAL_FIELDS),
 ];
+
+/**
+ * A decision PostgreSQL may serve to this search, and the copy it serves:
+ * published, from a redistributable source, inside the request's filters, and
+ * holding an applied copy in the generation that serves its country with no
+ * erasure queued.
+ */
+export type ServableCaseLawCopy = {
+  id: SafeId<"caseLawDecision">;
+  appliedRevision: CorpusProjectionRevision;
+  appliedGeneration: string;
+};
 
 /** The candidate row, in the shape the database read returns it. */
 export type IndexedCaseLawCandidateRow = {
@@ -63,24 +74,19 @@ const boundedInteger = (
     : null;
 
 /**
- * The candidate row a scanned passage stands for, or null when the hit does
- * not carry a well-formed signal set: such a hit is excluded, as a row the
- * database read did not return is, rather than ranked on a guess.
+ * The candidate row a servable copy stands for, read off the stored fields of
+ * that copy's best scanned passage, or null when the passage does not carry a
+ * well-formed signal set: such a hit is excluded, as a row the database read
+ * did not return is, rather than ranked on a guess.
  *
  * Can recur exactly when the database read says it can: a decision of more
  * than one passage, or one whose language group another published decision
  * shares.
  */
 export const indexedCaseLawCandidateRow = (
-  id: string,
-  projection: ScannedProjection,
-  generation: string,
+  copy: ServableCaseLawCopy,
+  fields: CorpusIndexHit,
 ): IndexedCaseLawCandidateRow | null => {
-  const { fields, revision } = projection;
-  const appliedRevision =
-    revision === null
-      ? null
-      : brandValidatedCorpusIndexProjectionIntentId(revision);
   const bucket = boundedInteger(
     fields[CASE_LAW_RANKING_SIGNAL_FIELDS.citationAuthorityBucket],
     UNCITED_AUTHORITY_BUCKET,
@@ -99,7 +105,6 @@ export const indexedCaseLawCandidateRow = (
     fields[CASE_LAW_RANKING_SIGNAL_FIELDS.languageGroupKey],
   );
   if (
-    appliedRevision === null ||
     bucket === null ||
     passageCount === null ||
     typeof shared !== "boolean" ||
@@ -111,14 +116,14 @@ export const indexedCaseLawCandidateRow = (
     return null;
   }
   return {
-    id: brandPersistedCaseLawDecisionId(id),
+    id: copy.id,
     citationAuthority: citationAuthorityOfBucket(bucket),
     court,
     country,
     courtId,
     languageGroupKey,
-    appliedRevision,
-    appliedGeneration: generation,
+    appliedRevision: copy.appliedRevision,
+    appliedGeneration: copy.appliedGeneration,
     canRecur: passageCount !== 1 || shared,
   };
 };

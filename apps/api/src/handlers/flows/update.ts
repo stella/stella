@@ -102,8 +102,7 @@ const updateFlowDefinition = createSafeRootHandler(
     // the scheduler row (post-commit; never throws).
     await syncFlowScheduleTrigger({
       id: params.flowId,
-      trigger: input.trigger,
-      enabled: input.enabled,
+      organizationId,
     });
 
     return Result.ok({ id: updated.id });

@@ -9,6 +9,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { touchesCatalogSources } from "./capability-catalog-sources";
 import {
   type CatalogDeriver,
   decideCliContractChange,
@@ -16,7 +17,6 @@ import {
   parseCliContractArgs,
   type ProducedCatalogs,
   runCliContractGuard as runGuardInProcess,
-  touchesCatalogSources,
 } from "./check-cli-contract-changeset";
 import { CLI_CONTRACT_SURFACE_PATHS } from "./check-cli-release-coupling";
 
