@@ -27,11 +27,22 @@ const { QueryClient } = await import("@tanstack/react-query");
 const { isRedirect } = await import("@tanstack/react-router");
 const { Result } = await import("better-result");
 const { waitFor } = await import("@testing-library/dom");
-const { roleOptions } = await import("@/lib/auth-queries");
+const { roleOptions, sessionOptions } = await import("@/lib/auth-queries");
+const { MEMBER_SESSION } =
+  await import("@/lib/account/auth-session.test-fixtures");
 const { workspacesNavigationOptions } =
   await import("@/lib/workspaces/queries");
 
 const CALLER = { userId: "unenrolled-owner", organizationId: "org-a" };
+const CALLER_SESSION = {
+  ...MEMBER_SESSION,
+  user: { ...MEMBER_SESSION.user, id: CALLER.userId },
+  session: {
+    ...MEMBER_SESSION.session,
+    userId: CALLER.userId,
+    activeOrganizationId: CALLER.organizationId,
+  },
+};
 
 /** Narrows a route hook to a callable taking the router's context object. */
 const isRouteHook = (
@@ -97,6 +108,7 @@ describe("server enrollment admission across dedicated billing routes", () => {
       const queryClient = new QueryClient({
         defaultOptions: { queries: { retry: false } },
       });
+      queryClient.setQueryData(sessionOptions.queryKey, CALLER_SESSION);
       queryClient.setQueryData(workspacesNavigationOptions(CALLER).queryKey, {
         workspaces: [],
         features: { timeBilling: false },
@@ -165,6 +177,7 @@ describe("organization settings admission request wave", () => {
         const queryClient = new QueryClient({
           defaultOptions: { queries: { retry: false } },
         });
+        queryClient.setQueryData(sessionOptions.queryKey, CALLER_SESSION);
         const roleResponse = Promise.withResolvers<Response>();
         const navigationResponse = Promise.withResolvers<Response>();
         const roleStarted = Promise.withResolvers<undefined>();
@@ -269,6 +282,7 @@ describe("organization settings admission request wave", () => {
       "@/routes/_protected.settings/organization",
     );
     const queryClient = new QueryClient();
+    queryClient.setQueryData(sessionOptions.queryKey, CALLER_SESSION);
     queryClient.setQueryData(roleOptions.queryKey, "owner");
     try {
       await beforeLoad({
