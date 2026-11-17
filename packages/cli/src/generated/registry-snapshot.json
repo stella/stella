@@ -4436,6 +4436,27 @@
           ],
           "type": "string"
         },
+        "coverage": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "enum": ["read", "unavailable"],
+              "type": "string"
+            },
+            "asOf": {
+              "type": "string"
+            },
+            "sources": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          },
+          "required": ["status"],
+          "additionalProperties": false
+        },
         "candidates": {
           "type": "array",
           "items": {
@@ -4789,6 +4810,27 @@
             "court_unrecognized"
           ],
           "type": "string"
+        },
+        "coverage": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "enum": ["read", "unavailable"],
+              "type": "string"
+            },
+            "asOf": {
+              "type": "string"
+            },
+            "sources": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          },
+          "required": ["status"],
+          "additionalProperties": false
         },
         "candidates": {
           "type": "array",
