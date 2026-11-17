@@ -2,7 +2,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 
 export default {
   id: "indexes-invoices-original-credit-idx",
-  revision: 1487,
+  revision: 1489,
   lifecycle: "pending",
   type: "indexes",
   values: [
