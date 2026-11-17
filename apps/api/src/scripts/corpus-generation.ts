@@ -8,6 +8,7 @@ import { panic, Result, TaggedError } from "better-result";
  *   bun run src/scripts/corpus-generation.ts serve --family case_law --generation case_law_v10 [--replacing case_law_v7 --actor <id> --reason <text> --apply]
  *   bun run src/scripts/corpus-generation.ts parity --family case_law --generation case_law_v10 [--exempt-minutes 20] [--coverage-pages 2000] [--coverage-from <entity|start>] [--list]
  *   bun run src/scripts/corpus-generation.ts seed --family case_law --generation case_law_v10 [--pages 1000]
+ *   bun run src/scripts/corpus-generation.ts retire --family case_law --generation case_law_v8 [--actor <id> --reason <text> --apply]
  *
  * `serve` runs the guarded flip (`corpus-index-generation-flip.ts`), the one
  * owner of the decision: phase 1 reads the engine and walks the parity
@@ -34,6 +35,14 @@ import { panic, Result, TaggedError } from "better-result";
  * by bounded pages under the database-load brake, resuming from the cursor
  * the database stores, and stops when every route is seeded or the page
  * budget is spent.
+ *
+ * `retire` retires a generation for good (`corpus-index-generation-retire.ts`):
+ * a dry run (the default) reads the decision, the history the generation
+ * holds and the engine indexes it owns, and changes nothing; `--apply` moves
+ * it to retired in one fenced transaction with its receipt, deletes its
+ * engine indexes, then deletes its projection history page by page under
+ * the database-load brake. Running it again on a retired generation resumes
+ * the cleanup.
  */
 import { eq } from "drizzle-orm";
 import { parseArgs } from "node:util";
@@ -81,7 +90,20 @@ import {
   runCorpusIndexGenerationFlip,
 } from "@/api/lib/legal-search/corpus-index-generation-flip";
 import {
+  corpusIndexBelongsToGeneration,
+  type CorpusIndexGenerationRetireRefusedError,
+  type CorpusIndexRetireDecision,
+  type CorpusIndexRetireEngine,
+  type CorpusIndexRetireRefusal,
+  countCorpusIndexGenerationHistoryTx,
+  deleteRetiredCorpusIndexGenerationIndexes,
+  readCorpusIndexRetireTx,
+  recordCorpusIndexRetireCleanupTx,
+  retireCorpusIndexGeneration,
+} from "@/api/lib/legal-search/corpus-index-generation-retire";
+import {
   lockCorpusIndexGenerationActivationTx,
+  purgeRetiredCorpusIndexGenerationPageTx,
   registerCorpusIndexGenerationTx,
 } from "@/api/lib/legal-search/corpus-index-generation-store";
 import {
@@ -134,18 +156,26 @@ Commands:
   seed                   Walk the generation's seeding pass, giving every
                          canonical row a desired state, until every route
                          is seeded or the page budget is spent. Resumable.
+  retire                 Retire a building generation for good: no writer
+                         projects it again, its engine indexes and its
+                         projection history are deleted. Refused for the
+                         serving generation, one a flip named within the
+                         keep window, one a jurisdiction pointer names and
+                         one a runner holds leases on. Resumable.
 
-Options (register, serve, parity, seed):
+Options (register, serve, parity, seed, retire):
   --family <family>      ${CORPUS_FAMILIES.join(" | ")}
   --generation <name>    A generation declared in code, e.g. case_law_v7.
   --apply                Perform the change. Omitted, the run only reports.
   --dry-run              Report only, the default; contradicts --apply.
 
+Options (serve, retire):
+  --actor <id>           Who makes the change, for its receipt; required with --apply.
+  --reason <text>        Why (the go it rests on), for its receipt; required with --apply.
+
 Options (serve):
   --replacing <g|none>   The generation the flip replaces, as the operator expects
                          it; required with --apply.
-  --actor <id>           Who makes the flip, for its receipt; required with --apply.
-  --reason <text>        Why (the go it rests on), for its receipt; required with --apply.
   --max-proof-age-hours <n>
                          Oldest route proof accepted, from its pass's start
                          (default and most ${String(CORPUS_INDEX_ROUTE_PROOF_MAX_AGE_HOURS)}).
@@ -175,7 +205,18 @@ Exit codes (parity): 0 no regression, 3 regressions, 4 undecided, 1 refused.
 Exit codes (seed): 0 every route seeded, 5 page budget spent, 6 paused by
 the database-load brake (after 15 minutes of waiting), 7 next row held by a
 writer, 8 a route appeared after the pass began, 1 refused.
+Exit codes (retire): 0 retired and cleaned up (or, dry run, nothing refuses
+it), 6 paused by the database-load brake (run it again to resume), 10
+registry, 11 a flip within the keep window, 12 a jurisdiction pointer, 13 a
+runner holds leases, 14 busy (nothing changed), 15 engine, 1 refused.
 `;
+
+/** The retire receipt's reason column holds this many characters. */
+const RETIRE_REASON_MAX_LENGTH = 2048;
+/** Entities one retired-history page deletes at most. */
+const RETIRE_PAGE_LIMIT = 1000;
+/** How often the cleanup prints its progress, in pages. */
+const RETIRE_PROGRESS_EVERY_PAGES = 100;
 
 /** Rows `status` and the planners read; the registry holds a handful per family. */
 const REGISTRY_READ_LIMIT = 200;
@@ -269,7 +310,13 @@ type CorpusGenerationCommand =
       coverageFrom: CorpusIndexFlipCoverageCursor | null;
       listDecisions: boolean;
     }
-  | { type: "seed"; target: DeclaredTarget; pages: number };
+  | { type: "seed"; target: DeclaredTarget; pages: number }
+  | {
+      type: "retire";
+      target: DeclaredTarget;
+      mode: Mode;
+      receipt: { actor: string; reason: string } | null;
+    };
 
 type GenerationRow = Pick<
   typeof corpusIndexGenerations.$inferSelect,
@@ -311,6 +358,7 @@ const COMMAND_NAMES = [
   "serve",
   "parity",
   "seed",
+  "retire",
 ] as const;
 
 const usageError = (message: string) =>
@@ -360,10 +408,11 @@ const commandOptionRefusal = (
     values["coverage-pages"] !== undefined;
   const parityOptions =
     values["coverage-from"] !== undefined || values.list === true;
+  const receiptOptions =
+    values.actor !== undefined || values.reason !== undefined;
   const serveOptions =
+    receiptOptions ||
     values.replacing !== undefined ||
-    values.actor !== undefined ||
-    values.reason !== undefined ||
     values["max-proof-age-hours"] !== undefined;
   if (name === "status") {
     return values.family === undefined &&
@@ -381,8 +430,14 @@ const commandOptionRefusal = (
   if (name !== "parity" && parityOptions) {
     return "--coverage-from and --list belong to parity.";
   }
+  if (name === "retire") {
+    return values.replacing === undefined &&
+      values["max-proof-age-hours"] === undefined
+      ? null
+      : "--replacing and --max-proof-age-hours belong to serve.";
+  }
   if (name !== "serve" && serveOptions) {
-    return "--replacing, --actor, --reason and --max-proof-age-hours belong to serve.";
+    return "--replacing, --actor, --reason and --max-proof-age-hours belong to serve (--actor and --reason also to retire).";
   }
   if (
     name === "parity" &&
@@ -452,6 +507,32 @@ const parseServeCommand = (
   });
 };
 
+const parseRetireCommand = (
+  target: DeclaredTarget,
+  mode: Mode,
+  values: CommandValues,
+): Result<CorpusGenerationCommand, CorpusGenerationUsageError> => {
+  const receipt =
+    values.actor === undefined || values.reason === undefined
+      ? null
+      : { actor: values.actor, reason: values.reason.trim() };
+  if (mode === MODES.apply) {
+    if (receipt === null) {
+      return usageError("retire --apply needs --actor and --reason.");
+    }
+    if (
+      !RECEIPT_ACTOR.test(receipt.actor) ||
+      receipt.reason.length === 0 ||
+      receipt.reason.length > RETIRE_REASON_MAX_LENGTH
+    ) {
+      return usageError(
+        `--actor must be a lowercase id (letters, digits, :._@/-) and --reason must hold 1 to ${String(RETIRE_REASON_MAX_LENGTH)} characters.`,
+      );
+    }
+  }
+  return Result.ok({ type: "retire", target, mode, receipt });
+};
+
 const parseCorpusGenerationCommand = (
   args: readonly string[],
 ): Result<
@@ -494,7 +575,7 @@ const parseCorpusGenerationCommand = (
   );
   if (name === undefined) {
     return usageError(
-      "Name exactly one command: status, register, serve, parity or seed.",
+      "Name exactly one command: status, register, serve, parity, seed or retire.",
     );
   }
   if (values.apply === true && values["dry-run"] === true) {
@@ -570,6 +651,8 @@ const parseCorpusGenerationCommand = (
         listDecisions: values.list === true,
       });
     }
+    case "retire":
+      return parseRetireCommand(target.value, mode, values);
     case "seed": {
       const pages = parseWholeNumber(
         values.pages,
@@ -787,6 +870,7 @@ type CommandContext = {
   withSeedingDatabase: WithSeedingDatabase;
   seedingBrake: SeedingBrake;
   indexClient: (manifest: CorpusIndexManifest) => CorpusIndexFlipEngine;
+  retireEngine: (manifest: CorpusIndexManifest) => CorpusIndexRetireEngine;
   searchEndpoint: (manifest: CorpusIndexManifest) => string | null;
   write: (line: string) => void;
   writeError: (line: string) => void;
@@ -1501,12 +1585,344 @@ const runSeed = async (
   });
 };
 
+/** Exit codes of `retire`, one per class of refusal, so a wrapper can tell them apart. */
+const RETIRE_EXIT = {
+  done: 0,
+  braked: 6,
+  registry: 10,
+  flip: 11,
+  pointer: 12,
+  inFlight: 13,
+  busy: 14,
+  engine: 15,
+} as const;
+
+const retireExitCode = ({ class: refusalClass }: CorpusIndexRetireRefusal) => {
+  switch (refusalClass) {
+    case "registry":
+      return RETIRE_EXIT.registry;
+    case "flip":
+      return RETIRE_EXIT.flip;
+    case "pointer":
+      return RETIRE_EXIT.pointer;
+    case "in_flight":
+      return RETIRE_EXIT.inFlight;
+    case "busy":
+      return RETIRE_EXIT.busy;
+    default:
+      refusalClass satisfies never;
+      return panic(`Unhandled retire refusal: ${String(refusalClass)}`);
+  }
+};
+
+const describeRetired = (
+  decision: Extract<CorpusIndexRetireDecision, { type: "already_retired" }>,
+): string =>
+  decision.receipt === null
+    ? "checked: already retired (before the retire command recorded receipts); its cleanup resumes"
+    : `checked: already retired at ${decision.receipt.retiredAt.toISOString()} by ${decision.receipt.retireActor} (${decision.receipt.retireReason}); its cleanup resumes`;
+
+type RetireCommand = Extract<CorpusGenerationCommand, { type: "retire" }>;
+
+const retireRefused = (
+  { writeError }: CommandContext,
+  error: CorpusIndexGenerationRetireRefusedError,
+) => {
+  writeError(
+    `refused (${error.refusal.class}: ${error.refusal.reason}): ${error.message}`,
+  );
+  for (const line of error.details) {
+    writeError(`  ${line}`);
+  }
+  return Result.ok(retireExitCode(error.refusal));
+};
+
+const readRetireDecision = async (
+  { withDatabase }: CommandContext,
+  target: DeclaredTarget,
+) =>
+  await withDatabase(
+    ACCESS.read,
+    async (rootDb) =>
+      await withAggregateTransaction(
+        rootDb,
+        async (tx) => await readCorpusIndexRetireTx(tx, target),
+      ),
+  );
+
+/** One line saying how much history the generation holds; a failed count says so. */
+const retireHistoryLine = async (
+  { withDatabase }: CommandContext,
+  target: DeclaredTarget,
+  label: string,
+): Promise<string> => {
+  const history = await Result.tryPromise({
+    try: async () =>
+      await withDatabase(
+        ACCESS.read,
+        async (rootDb) =>
+          await withAggregateTransaction(
+            rootDb,
+            async (tx) => await countCorpusIndexGenerationHistoryTx(tx, target),
+          ),
+      ),
+    catch: (cause) => cause,
+  });
+  if (history.isErr()) {
+    return `${label}: unavailable (${history.error instanceof Error ? history.error.message : String(history.error)})`;
+  }
+  if (history.value.isErr()) {
+    return `${label}: unavailable (${history.value.error.message})`;
+  }
+  const { states, intents } = history.value.value;
+  return `${label}: ${String(states)} projection states, ${String(intents)} revisions`;
+};
+
+/** The fenced transition, on the bounded lane; null when it went through. */
+const applyRetireTransition = async (
+  context: CommandContext,
+  {
+    target,
+    receipt,
+  }: RetireCommand & { receipt: { actor: string; reason: string } },
+): Promise<Result<number | null, CorpusGenerationRefusal>> => {
+  const lane = await Result.tryPromise({
+    try: async () =>
+      await context.withDatabase(
+        ACCESS.write,
+        async (rootDb) =>
+          await retireCorpusIndexGeneration(
+            async (work) => await withAggregateTransaction(rootDb, work),
+            target,
+            receipt,
+          ),
+      ),
+    catch: (cause) => cause,
+  });
+  if (lane.isErr()) {
+    const busy = corpusIndexFlipBusyReasonOf(lane.error);
+    if (busy === null) {
+      return panic("The retire lane failed", lane.error);
+    }
+    context.writeError(
+      `refused (busy: ${busy}): the lane or the database declined the retire its time; if it committed, running retire again reports it retired`,
+    );
+    return Result.ok(RETIRE_EXIT.busy);
+  }
+  if (lane.value.isErr()) {
+    return Result.err(lane.value.error);
+  }
+  const retired = lane.value.value;
+  if (retired.isErr()) {
+    return retireRefused(context, retired.error);
+  }
+  context.write(
+    retired.value.type === "retired"
+      ? `Applied: ${target.family}/${target.generation} is retired as of ${retired.value.retiredAt.toISOString()}.`
+      : `checked: ${target.family}/${target.generation} was retired meanwhile.`,
+  );
+  return Result.ok(null);
+};
+
+/**
+ * Delete the projection history of a retired generation page by page under
+ * the database-load brake, then record what the run deleted. The page
+ * runtime keeps the cursor, so a run that stops resumes where it stopped.
+ */
+const purgeRetiredHistory = async (
+  context: CommandContext,
+  target: DeclaredTarget,
+  deletedIndexes: number,
+): Promise<Result<number, CorpusGenerationRefusal>> => {
+  const { withSeedingDatabase, seedingBrake, write, writeError } = context;
+  return await withSeedingDatabase(async (rootDb) => {
+    const runtime = seedingBrake.createRuntime({
+      name: `corpus-retire:${target.family}:${target.generation}`,
+      tableName: "corpus_index_projection_states",
+      initialSize: RETIRE_PAGE_LIMIT,
+      db: rootDb,
+    });
+    const deleted = { pages: 0, states: 0, intents: 0 };
+    const ran: { paused: boolean } = { paused: false };
+    try {
+      const pass = await runBackfillPass({
+        step: async () =>
+          await runtime.step(async ({ tx, size, cursor }) => {
+            const page = await purgeRetiredCorpusIndexGenerationPageTx(
+              tx,
+              target,
+              {
+                after: cursor,
+                limit: Math.max(1, Math.min(size, RETIRE_PAGE_LIMIT)),
+              },
+            );
+            return { cursor: page.last, done: page.last === null, value: page };
+          }),
+        onBatch: ({ value }) => {
+          if (value.last === null) {
+            return;
+          }
+          deleted.pages += 1;
+          deleted.states += value.deletedStates;
+          deleted.intents += value.deletedIntents;
+          if (deleted.pages % RETIRE_PROGRESS_EVERY_PAGES === 0) {
+            write(
+              `  page ${String(deleted.pages)}: ${String(deleted.states)} states, ${String(deleted.intents)} revisions deleted, through ${value.last}`,
+            );
+          }
+        },
+        sleep: Bun.sleep,
+        maxWaitMs: seedingBrake.maxWaitMs,
+      });
+      if (pass.isErr()) {
+        throw pass.error;
+      }
+      ran.paused = pass.value.status === "paused";
+    } finally {
+      await runtime.close();
+      await withAggregateTransaction(
+        rootDb,
+        async (tx) =>
+          await recordCorpusIndexRetireCleanupTx(tx, {
+            indexes: deletedIndexes,
+            states: deleted.states,
+            intents: deleted.intents,
+          }),
+      );
+    }
+    write(
+      `deleted this run: ${String(deleted.states)} projection states, ${String(deleted.intents)} revisions in ${String(deleted.pages)} pages`,
+    );
+    write(await retireHistoryLine(context, target, "left"));
+    if (ran.paused) {
+      writeError(
+        "paused: the database-load brake held the cleanup; run retire again to resume",
+      );
+      return Result.ok(RETIRE_EXIT.braked);
+    }
+    write(
+      `Applied: the projection history of ${target.family}/${target.generation} is gone.`,
+    );
+    return Result.ok(RETIRE_EXIT.done);
+  });
+};
+
+const runRetire = async (
+  context: CommandContext,
+  command: RetireCommand,
+): Promise<Result<number, CorpusGenerationRefusal>> => {
+  const { target, mode, receipt } = command;
+  const { write, writeError } = context;
+  write(`retire ${target.family}/${target.generation} (${mode})`);
+  write(declaredLine(target));
+  if (context.searchEndpoint(target.manifest) === null) {
+    return Result.err(
+      new CorpusGenerationSearchEndpointMissingError({
+        message: `No search endpoint is configured for cluster ${target.manifest.cluster}; the indexes cannot be listed`,
+      }),
+    );
+  }
+  const read = await readRetireDecision(context, target);
+  if (read.isErr()) {
+    return Result.err(read.error);
+  }
+  if (read.value.isErr()) {
+    return retireRefused(context, read.value.error);
+  }
+  const decision = read.value.value;
+  write(
+    decision.type === "already_retired"
+      ? describeRetired(decision)
+      : `plan: ${target.generation} building -> retired; no writer projects it from that commit on`,
+  );
+  write(await retireHistoryLine(context, target, "holds"));
+  const engine = context.retireEngine(target.manifest);
+  const listed = await engine.readPublishedSplitCounts({
+    includes: (indexId) =>
+      corpusIndexBelongsToGeneration(target.generation, indexId),
+    observer: "unobserved",
+  });
+  if (listed.isErr()) {
+    writeError(
+      `refused (engine): the engine did not list the indexes of ${target.generation}: ${listed.error.message}`,
+    );
+    return Result.ok(RETIRE_EXIT.engine);
+  }
+  write(
+    listed.value.length === 0
+      ? "plan: the engine holds no index of this generation"
+      : `plan: delete ${String(listed.value.length)} engine indexes: ${listed.value
+          .map(
+            ({ indexId, publishedSplits }) =>
+              `${indexId} (${String(publishedSplits)} splits)`,
+          )
+          .join(", ")}`,
+  );
+  write(
+    `plan: delete its projection history in pages of at most ${String(RETIRE_PAGE_LIMIT)} decisions, under the database-load brake`,
+  );
+  if (mode === MODES.dryRun || receipt === null) {
+    write(modeLine(MODES.dryRun, ""));
+    return Result.ok(RETIRE_EXIT.done);
+  }
+  if (decision.type === "retire") {
+    const transition = await applyRetireTransition(context, {
+      ...command,
+      receipt,
+    });
+    if (transition.isErr() || transition.value !== null) {
+      return transition.isErr()
+        ? Result.err(transition.error)
+        : Result.ok(transition.value);
+    }
+  }
+  // The engine and the history only once the registry says retired: from
+  // then on nothing serves the generation and no writer may touch it.
+  const again = await readRetireDecision(context, target);
+  if (again.isErr()) {
+    return Result.err(again.error);
+  }
+  if (again.value.isErr() || again.value.value.type !== "already_retired") {
+    return panic(
+      `${target.family}/${target.generation} is not retired after the retire committed`,
+    );
+  }
+  const indexes = await deleteRetiredCorpusIndexGenerationIndexes({
+    engine,
+    target,
+  });
+  const deletedIndexes = indexes.isErr()
+    ? indexes.error.deleted
+    : indexes.value.deleted;
+  for (const indexId of deletedIndexes) {
+    write(`  deleted engine index ${indexId}`);
+  }
+  if (indexes.isOk()) {
+    write(
+      `Applied: the engine holds no index of ${target.generation} (${String(deletedIndexes.length)} deleted).`,
+    );
+  }
+  // The history goes either way: nothing reads it once the generation is
+  // retired, and an engine that is down only delays its own step.
+  const purged = await purgeRetiredHistory(
+    context,
+    target,
+    deletedIndexes.length,
+  );
+  if (indexes.isErr()) {
+    writeError(`refused (engine): ${indexes.error.message}; run retire again`);
+    return purged.isErr() ? purged : Result.ok(RETIRE_EXIT.engine);
+  }
+  return purged;
+};
+
 type RunCorpusGenerationOptions = {
   args: readonly string[];
   withDatabase?: WithCorpusDatabase;
   withSeedingDatabase?: WithSeedingDatabase;
   seedingBrake?: SeedingBrake;
   indexClient?: (manifest: CorpusIndexManifest) => CorpusIndexFlipEngine;
+  retireEngine?: (manifest: CorpusIndexManifest) => CorpusIndexRetireEngine;
   searchEndpoint?: (manifest: CorpusIndexManifest) => string | null;
   write?: (line: string) => void;
   writeError?: (line: string) => void;
@@ -1519,6 +1935,7 @@ export const runCorpusGenerationCommand = async ({
   withSeedingDatabase = withSeedingLane,
   seedingBrake = SEEDING_BRAKE,
   indexClient = (manifest) => getCorpusIndexClient(manifest.cluster),
+  retireEngine = (manifest) => getCorpusIndexClient(manifest.cluster),
   searchEndpoint = (manifest) => readCorpusIndexSearchBaseUrl(manifest.cluster),
   write = (line) => process.stdout.write(`${line}\n`),
   writeError = (line) => process.stderr.write(`${line}\n`),
@@ -1540,6 +1957,7 @@ export const runCorpusGenerationCommand = async ({
     withSeedingDatabase,
     seedingBrake,
     indexClient,
+    retireEngine,
     searchEndpoint,
     write,
     writeError,
@@ -1556,6 +1974,8 @@ export const runCorpusGenerationCommand = async ({
         return await runParity(context, command.value);
       case "seed":
         return await runSeed(context, command.value);
+      case "retire":
+        return await runRetire(context, command.value);
       default:
         command.value satisfies never;
         return panic(`Unhandled command: ${String(command.value)}`);

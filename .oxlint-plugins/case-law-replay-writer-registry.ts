@@ -376,12 +376,7 @@ export const REPLAY_WRITER_REGISTRY = [
   },
   {
     file: "apps/api/src/lib/legal-search/corpus-index-generation-store.ts",
-    line: 202,
-    kind: "pending",
-  },
-  {
-    file: "apps/api/src/lib/legal-search/corpus-index-generation-store.ts",
-    line: 334,
+    line: 204,
     kind: "pending",
   },
   {
@@ -391,7 +386,21 @@ export const REPLAY_WRITER_REGISTRY = [
   },
   {
     file: "apps/api/src/lib/legal-search/corpus-index-generation-store.ts",
-    line: 410,
+    line: 352,
     kind: "pending",
+  },
+  {
+    file: "apps/api/src/lib/legal-search/corpus-index-generation-store.ts",
+    line: 419,
+    kind: "pending",
+  },
+  {
+    file: "apps/api/src/lib/legal-search/corpus-index-generation-store.ts",
+    line: 529,
+    kind: "transition",
+    invariant: {
+      file: "apps/api/src/lib/legal-search/corpus-index-generation-retire.db.test.ts",
+      test: "retire moves a building generation to retired with its receipt, and from that commit no writer projects it",
+    },
   },
 ] as const satisfies readonly ReplayWriterOwner[];
