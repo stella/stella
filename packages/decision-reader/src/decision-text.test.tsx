@@ -174,8 +174,13 @@ test("publisher headings and caption information share one translated disclosure
         const document = new DOMParser().parseFromString(markup, "text/html");
         const disclosures = document.querySelectorAll(".reader-apparatus");
         expect(disclosures).toHaveLength(1);
-        // The court's separate top-matter disclosure is unchanged.
-        expect(document.querySelectorAll("details")).toHaveLength(1);
+        // The court's separate top-matter disclosure remains independent.
+        expect(
+          document.querySelectorAll(
+            '[data-slot="headnote-block"] [data-slot="collapsible"]',
+          ),
+        ).toHaveLength(1);
+        expect(document.querySelectorAll("details")).toHaveLength(0);
         const disclosure = disclosures[0];
         expect(
           disclosure?.querySelector('[data-slot="collapsible-trigger"]')
