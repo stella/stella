@@ -13,13 +13,6 @@
  * the list without the trigger, or to the trigger without the list, fails
  * `case-law-content-changed-at.postgres.test.ts`.
  */
-import type { caseLawDecisions } from "./schema/case-law";
-
-type DecisionColumns = (typeof caseLawDecisions)["_"]["columns"];
-
-/** A column of `case_law_decisions`, by its PostgreSQL name. */
-export type CaseLawDecisionColumnName =
-  DecisionColumns[keyof DecisionColumns]["_"]["name"];
 
 /** How the trigger compares a content column's old and new value. */
 export const CONTENT_COMPARISON = {
@@ -32,9 +25,11 @@ export const CONTENT_COMPARISON = {
 export type ContentComparison =
   (typeof CONTENT_COMPARISON)[keyof typeof CONTENT_COMPARISON];
 
-/** The content columns of a decision; each must be a real column. */
-export type CaseLawContentColumn = Extract<
-  CaseLawDecisionColumnName,
+/**
+ * The content columns of a decision, by PostgreSQL name. The Postgres test
+ * writes each one, so a name that is not a column fails it.
+ */
+export type CaseLawContentColumn =
   | "source_id"
   | "redacted_at"
   | "country"
@@ -43,8 +38,7 @@ export type CaseLawContentColumn = Extract<
   | "decision_type"
   | "ecli"
   | "fulltext"
-  | "metadata"
->;
+  | "metadata";
 
 /**
  * The content columns of a decision, by PostgreSQL name, and how a change to
