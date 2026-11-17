@@ -111,7 +111,7 @@ import {
 import { CORPUS_INDEX_ROUTE_PROOF_MAX_AGE_HOURS } from "@/api/lib/legal-search/corpus-index-route-proof-contract";
 import {
   type CorpusIndexRouteProofRun,
-  createCorpusIndexRouteProofGovernor,
+  createCorpusIndexRouteProofBrake,
   runCorpusIndexRouteProofs,
 } from "@/api/lib/legal-search/corpus-index-route-proof-runner";
 import {
@@ -1802,31 +1802,30 @@ const runProve = async (
   const budgetMs = hours * 3_600_000;
   const now = () => Temporal.Now.instant().epochMilliseconds;
   const endsAt = now() + budgetMs;
-  const run = await withProofDatabase(
-    budgetMs,
-    async (runInTransaction) =>
-      await runCorpusIndexRouteProofs({
-        runInTransaction,
-        clientFor: ({ family, generation }) =>
-          proofClient(requireCorpusIndexManifest(family, generation)),
-        admit: createCorpusIndexRouteProofGovernor({
-          readDecision: async () =>
-            await proofBrake.readDecision(runInTransaction),
-          maxWaitMs: proofBrake.maxWaitMs,
-          recheckMs: PROVE_LOAD_RECHECK_MS,
-          now,
-          sleep: Bun.sleep,
-        }),
-        target,
-        budget: { endsAt, pages: PROVE_MAX_PAGES },
-        untilCurrent,
-        concurrency,
-        fencePatienceMs: PROVE_PATIENCE_MS,
-        now,
-        sleep: Bun.sleep,
-        write,
-      }),
-  );
+  const run = await withProofDatabase(budgetMs, async (runInTransaction) => {
+    const brake = createCorpusIndexRouteProofBrake({
+      readDecision: async () => await proofBrake.readDecision(runInTransaction),
+      maxWaitMs: proofBrake.maxWaitMs,
+      recheckMs: PROVE_LOAD_RECHECK_MS,
+      now,
+      sleep: Bun.sleep,
+    });
+    return await runCorpusIndexRouteProofs({
+      runInTransaction,
+      clientFor: ({ family, generation }) =>
+        proofClient(requireCorpusIndexManifest(family, generation)),
+      admit: brake.admit,
+      pace: brake.pace,
+      target,
+      budget: { endsAt, pages: PROVE_MAX_PAGES },
+      untilCurrent,
+      concurrency,
+      fencePatienceMs: PROVE_PATIENCE_MS,
+      now,
+      sleep: Bun.sleep,
+      write,
+    });
+  });
   if (run.type === "refused") {
     return Result.err(
       new CorpusGenerationRetiringError({

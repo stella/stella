@@ -34,7 +34,7 @@
  * longer lets anyone walk, or whose index is missing or holds documents
  * PostgreSQL does not know, is set aside and named in the report.
  */
-import { panic, Result, TaggedError } from "better-result";
+import { panic, Result } from "better-result";
 import { desc, eq } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
@@ -96,19 +96,23 @@ type CorpusIndexProofGeneration = {
   roles: CorpusIndexProofRole[];
 };
 
-/** The governor gave up waiting for the database to admit work. */
-class CorpusIndexRouteProofBrakedError extends TaggedError(
-  "CorpusIndexRouteProofBrakedError",
-)<{ message: string; waitedMs: number }> {}
+/** Whether the database takes background work now, after waiting for it. */
+type CorpusIndexRouteProofPace =
+  { type: "start" } | { type: "braked"; waitedMs: number };
 
 /**
- * A governor that admits a unit once `readDecision` says the database may
- * take background work, re-reading at most every `recheckMs`, and gives up
- * (`CorpusIndexRouteProofBrakedError`) after waiting `maxWaitMs` in a row.
- * A decision to start is trusted for `recheckMs`, so pages in between pay no
- * load read.
+ * The database-load brake of a proof run, read through `readDecision` at
+ * most every `recheckMs` (a decision to start is trusted that long, so pages
+ * in between pay no load read):
+ *
+ * - `pace`, before each page: waits until the database takes background
+ *   work, or answers `braked` after `maxWaitMs` of waiting, and the run stops;
+ * - `admit`, the governor every unit of a page goes through (the page, its
+ *   repair): waits the same way, but a unit of a page already paced in is
+ *   never abandoned, so after `maxWaitMs` it runs and the next `pace` stops
+ *   the run.
  */
-export const createCorpusIndexRouteProofGovernor = ({
+export const createCorpusIndexRouteProofBrake = ({
   readDecision,
   maxWaitMs,
   recheckMs,
@@ -120,29 +124,33 @@ export const createCorpusIndexRouteProofGovernor = ({
   recheckMs: number;
   now: () => number;
   sleep: (ms: number) => Promise<void>;
-}): CorpusIndexRouteProofAdmission => {
+}): {
+  pace: () => Promise<CorpusIndexRouteProofPace>;
+  admit: CorpusIndexRouteProofAdmission;
+} => {
   const admitted = { until: Number.NEGATIVE_INFINITY };
-  return async (_unit, work) => {
+  const pace = async (): Promise<CorpusIndexRouteProofPace> => {
     const startedAt = now();
     while (now() >= admitted.until) {
       const decision = await readDecision();
       if (decision === "start") {
         admitted.until = now() + recheckMs;
-        break;
+        return { type: "start" };
       }
       const waitedMs = now() - startedAt;
       if (waitedMs >= maxWaitMs) {
-        const braked = new CorpusIndexRouteProofBrakedError({
-          message: `The database-load brake held route proofs for ${String(Math.round(waitedMs / 1000))} s`,
-          waitedMs,
-        });
-        // The admission's contract returns the work's value; giving up is
-        // the one exit it has, and the runner catches it by class.
-        throw braked;
+        return { type: "braked", waitedMs };
       }
       await sleep(Math.min(recheckMs, maxWaitMs - waitedMs));
     }
-    return await work();
+    return { type: "start" };
+  };
+  return {
+    pace,
+    admit: async (_unit, work) => {
+      await pace();
+      return await work();
+    },
   };
 };
 
@@ -174,15 +182,22 @@ const readCorpusIndexProofGenerationsTx = async (
     .where(eq(corpusIndexGenerations.family, family))
     .orderBy(corpusIndexGenerations.generation)
     .limit(ROUTES_MAX);
-  const statusOf = new Map(active.map((row) => [row.generation, row.status]));
-  const requestedStatus = statusOf.get(requested) ?? null;
+  const requestedRow = active.find(
+    ({ generation }) => generation === requested,
+  );
+  if (requestedRow === undefined) {
+    return { type: "refused", generation: requested, status: null };
+  }
   if (
-    requestedStatus === null ||
     !CORPUS_INDEX_ACTIVE_GENERATION_STATUSES.some(
-      (status) => status === requestedStatus,
+      (status) => status === requestedRow.status,
     )
   ) {
-    return { type: "refused", generation: requested, status: requestedStatus };
+    return {
+      type: "refused",
+      generation: requested,
+      status: requestedRow.status,
+    };
   }
   const latestFlip = (
     await tx
@@ -192,27 +207,32 @@ const readCorpusIndexProofGenerationsTx = async (
       .orderBy(desc(corpusIndexGenerationFlips.flippedAt))
       .limit(1)
   ).at(0);
-  const roles = new Map<string, CorpusIndexProofRole[]>([
-    [requested, ["requested"]],
-  ]);
-  const join = (generation: string, role: CorpusIndexProofRole) => {
-    roles.set(generation, [...(roles.get(generation) ?? []), role]);
-  };
-  for (const { generation, status } of active) {
-    if (status === "serving") {
-      join(generation, "serving");
-    }
-  }
   const kept = latestFlip?.from ?? null;
-  if (kept !== null && statusOf.get(kept) === "building") {
-    join(kept, "kept");
-  }
+  const joined: { generation: string; role: CorpusIndexProofRole }[] = [
+    { generation: requested, role: "requested" },
+    ...active.flatMap(
+      ({
+        generation,
+        status,
+      }): { generation: string; role: CorpusIndexProofRole }[] => {
+        if (status === "serving") {
+          return [{ generation, role: "serving" as const }];
+        }
+        return generation === kept && status === "building"
+          ? [{ generation, role: "kept" as const }]
+          : [];
+      },
+    ),
+  ];
+  const names = [...new Set(joined.map(({ generation }) => generation))];
   return {
     type: "resolved",
-    generations: [...roles].map(([generation, generationRoles]) => ({
+    generations: names.map((generation) => ({
       family,
       generation,
-      roles: generationRoles,
+      roles: joined
+        .filter((entry) => entry.generation === generation)
+        .map(({ role }) => role),
     })),
   };
 };
@@ -249,6 +269,8 @@ type CorpusIndexRouteProofRouteReport = {
   repairs: number;
   failures: number;
   setAside: SetAside | null;
+  /** A failed or refused page waits until this instant before the next. */
+  backoffUntil: number;
 };
 
 type CorpusIndexRouteProofStop =
@@ -289,6 +311,8 @@ export type CorpusIndexRouteProofRunOptions = {
   runInTransaction: Runner;
   clientFor: (target: Omit<CorpusIndexRoute, "indexId">) => ProofClient;
   admit: CorpusIndexRouteProofAdmission;
+  /** Waits before each page until the database takes background work. */
+  pace: () => Promise<CorpusIndexRouteProofPace>;
   target: Omit<CorpusIndexRoute, "indexId">;
   /** The run ends at this instant (`now()`), or after this many pages. */
   budget: { endsAt: number; pages: number };
@@ -344,20 +368,23 @@ type Walk = {
   stop: CorpusIndexRouteProofStop | null;
   lockRefusedSince: number | null;
   next: number;
-  backoffUntil: Map<RouteReport, number>;
   busy: Set<RouteReport>;
 };
 
+/** When a route not refused may be walked again (0: now). */
+const dueAt = (report: RouteReport): number =>
+  Math.max(
+    report.backoffUntil,
+    report.setAside === null || report.setAside.type === "refused"
+      ? 0
+      : report.setAside.until,
+  );
+
 const walkable = (walk: Walk, report: RouteReport, at: number): boolean => {
-  const aside = report.setAside;
-  if (aside?.type === "refused") {
+  if (report.setAside?.type === "refused") {
     return false;
   }
-  return (
-    !walk.busy.has(report) &&
-    (aside === null || aside.until <= at) &&
-    (walk.backoffUntil.get(report) ?? 0) <= at
-  );
+  return !walk.busy.has(report) && dueAt(report) <= at;
 };
 
 /** The next route to walk, round robin, or how long to wait for one. */
@@ -380,12 +407,7 @@ const takeRoute = (
   const waits = reports.flatMap((report) =>
     report.setAside?.type === "refused" || walk.busy.has(report)
       ? []
-      : [
-          Math.max(
-            report.setAside?.until ?? 0,
-            walk.backoffUntil.get(report) ?? 0,
-          ) - at,
-        ],
+      : [dueAt(report) - at],
   );
   if (waits.length === 0) {
     return walk.busy.size > 0
@@ -411,9 +433,6 @@ const stepOf = async (walk: Walk, route: CorpusIndexRoute): Promise<Step> => {
     catch: (cause) => cause,
   });
   if (ran.isErr()) {
-    if (ran.error instanceof CorpusIndexRouteProofBrakedError) {
-      return { type: "braked", waitedMs: ran.error.waitedMs };
-    }
     return isLockRefusal(ran.error)
       ? { type: "lock_refused" }
       : { type: "failed", cause: ran.error };
@@ -439,14 +458,9 @@ const recordFailure = (
     walk.stop ??= { type: "failed", route: report.route, failures, cause };
     return;
   }
-  walk.backoffUntil.set(
-    report,
+  report.backoffUntil =
     walk.options.now() +
-      Math.min(
-        FAILURE_BACKOFF_MS * 2 ** (failures - 1),
-        FAILURE_BACKOFF_CAP_MS,
-      ),
-  );
+    Math.min(FAILURE_BACKOFF_MS * 2 ** (failures - 1), FAILURE_BACKOFF_CAP_MS);
 };
 
 /** Record what one page did to its route; true when a proof was made. */
@@ -520,7 +534,7 @@ const applyStep = async (
       walk.stop ??= { type: "lock_unavailable", heldMs };
       return;
     }
-    walk.backoffUntil.set(report, now() + FAILURE_BACKOFF_MS);
+    report.backoffUntil = now() + FAILURE_BACKOFF_MS;
     return;
   }
   walk.lockRefusedSince = null;
@@ -581,7 +595,9 @@ const work = async (walk: Walk): Promise<void> => {
     const { report } = taken;
     walk.busy.add(report);
     walk.pages += 1;
-    const step = await stepOf(walk, report.route);
+    const paced = await walk.options.pace();
+    const step: Step =
+      paced.type === "braked" ? paced : await stepOf(walk, report.route);
     walk.busy.delete(report);
     // db-await-in-loop: a proof's effects are read before the next page
     await applyStep(walk, report, step);
@@ -615,6 +631,7 @@ const routeReports = (
       repairs: 0,
       failures: 0,
       setAside: null,
+      backoffUntil: 0,
     }));
   });
 
@@ -659,7 +676,6 @@ export const runCorpusIndexRouteProofs = async (
     stop: untilCurrentStop(options.untilCurrent, initial),
     lockRefusedSince: null,
     next: 0,
-    backoffUntil: new Map(),
     busy: new Set(),
   };
   if (walk.stop === null && reports.length > 0) {

@@ -107,6 +107,7 @@ const run = async (
     runInTransaction: runnerOf(db),
     clientFor: () => fixture.engineClient,
     admit: async (_unit, work) => await work(),
+    pace: async () => await Promise.resolve({ type: "start" } as const),
     target: { family: "case_law", generation: FLIP_V10 },
     // A run that cannot finish fails the test instead of walking forever.
     budget: { endsAt: clock.now() + 20_000, pages: 500 },
