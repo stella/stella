@@ -580,11 +580,13 @@ describe("chat run log database contract", () => {
         withChatTurnTiming({
           source,
           getPhase: () => phase.status,
+          isReleased: () => false,
           readTiming,
         }),
         createChatTurnTimingDurability({
           log,
           getPhase: () => phase.status,
+          isReleased: () => false,
           getTerminal: () =>
             exit === "error" ? { chunk: terminal, messageId } : undefined,
           readTiming,
@@ -1166,6 +1168,7 @@ describe("chat run log database contract", () => {
       createChatTurnTimingDurability({
         log,
         getPhase: () => "running",
+        isReleased: () => false,
         getTerminal: () => undefined,
         readTiming,
         // What a turn settles as when its stream ends before any outcome.
