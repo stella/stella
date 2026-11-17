@@ -84,7 +84,6 @@ const savedThread = {
   activeSkill: builder,
   activeTurnId: null,
   activeTurnSteering: "not_steerable",
-  newestLocalTurn: null,
   attachedFiles: { fileCount: 0, files: [] },
   context: {
     estimatedTokens: 0,

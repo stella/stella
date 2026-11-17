@@ -1909,23 +1909,24 @@
     "loadEarlierMessagesError": "A korábbi üzenetek betöltése sikertelen",
     "loadingEarlierMessages": "Korábbi üzenetek betöltése…",
     "localFilesUndo": {
-      "action": "Fájlmódosítások visszavonása",
       "computer": {
         "failed": "A visszavonás nem fejeződött be a számítógépén. Előfordulhat, hogy néhány fájl már megváltozott, ezért ellenőrizze a csevegés mappáját.",
         "folderBusy": "Egy futás használja ezt a mappát a számítógépén. Próbálja újra, ha befejeződött.",
         "noCheckpoint": "A számítógépén nincs mentett másolat a fájlokról a lépés előtti állapotból, így semmi sem vonódott vissza.",
-        "notNewest": "A számítógépén újabb módosítások vannak ebben a mappában, így semmi sem vonódott vissza."
+        "updateForEarlier": "Frissítse a stella desktopot a korábbi üzenetek módosításainak visszavonásához."
       },
-      "confirm": "Módosítások visszavonása",
-      "confirmDescription": "Azok a fájlok, amelyeket ez a lépés a mappájában módosított a számítógépén, visszakerülnek a lépés előtti állapotukba. Csak ennek a lépésnek a módosításai vonódnak vissza; a korábbi lépések módosításai megmaradnak.",
-      "confirmTitle": "Visszavonja ennek a lépésnek a fájlmódosításait?",
+      "conversationRestarts": "Az ügynök a csevegés szövegéből kezdi újra, mert az üzenet előtti válasz nem fejeződött be.",
       "expired": "A számítógépe nem válaszolt időben. Próbálja újra.",
+      "option": "Az üzenet óta történt fájlmódosítások visszavonása is",
+      "optionHint": "Ez a mappában Ön által végzett módosításokat is visszavonja.",
       "pending": "Fájlmódosítások visszavonása a számítógépén",
       "refused": {
+        "alreadyUndone": "Ezeket a fájlmódosításokat már visszavonták.",
         "desktopOffline": "A számítógépe offline. Nyissa meg a stella asztali alkalmazást, és próbálja újra.",
         "desktopUpdateRequired": "A számítógépén lévő stella asztali alkalmazás túl régi a módosítások visszavonásához. Frissítse, és próbálja újra.",
-        "noCheckpoint": "Ehhez a lépéshez nincs mentett másolat a fájlokról, amelyhez vissza lehetne térni.",
-        "notNewest": "Csak a legújabb lépés fájlmódosításai vonhatók vissza.",
+        "folderShared": "Az üzenet óta egy másik csevegés is dolgozott ebben a mappában.",
+        "noSavedCopy": "A számítógépe nem őrzött meg másolatot a mappáról az üzenet előtti állapotból: túl nagy volt, túl lassan mentődött, vagy újabb másolatok váltották fel.",
+        "severalFolders": "A későbbi üzenetek másik számítógépen vagy másik mappában futottak.",
         "threadBusy": "Ez a csevegés még dolgozik. Próbálja újra, ha befejezte."
       },
       "restored": "Fájlmódosítások visszavonva"

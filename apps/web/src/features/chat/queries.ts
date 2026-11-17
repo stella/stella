@@ -166,19 +166,8 @@ const EMPTY_ATTACHED_FILES: ChatThreadAttachedFiles = {
   files: [],
 };
 
-/**
- * The member's newest turn of a chat that runs on their computer, and the
- * message that answered it: only this turn's file changes can be undone.
- */
-export type NewestLocalTurn = {
-  id: SafeId<"chatTurn">;
-  assistantMessageId: SafeId<"chatMessage"> | null;
-};
-
 type ThreadFetch = {
   activeSkill: ActiveSkillChatContext | null;
-  /** Absent for a cloud chat. */
-  newestLocalTurn?: NewestLocalTurn | undefined;
   /** The thread's turn not yet settled; null when every turn has settled. */
   activeTurnId: SafeId<"chatTurn"> | null;
   /** Whether that turn takes a message mid-turn, as the server knows it. */
@@ -278,9 +267,6 @@ const fetchThreadMessages = async (
     activeSkill: data.activeSkill,
     activeTurnId: data.activeTurnId,
     activeTurnSteering: data.activeTurnSteering,
-    ...(data.newestLocalTurn === null
-      ? {}
-      : { newestLocalTurn: data.newestLocalTurn }),
     attachedFiles: data.attachedFiles,
     forkProvenance: data.forkProvenance,
     messages: deserializeChatMessages(data.messages),
@@ -549,12 +535,6 @@ export const listChatHistoryItems = (
 
 export type ChatThreadFetched = {
   activeSkill: ActiveSkillChatContext | null;
-  /**
-   * The member's newest turn when the chat runs on their computer, whose
-   * file changes the chat offers to undo; absent for a cloud chat and a
-   * file thread.
-   */
-  newestLocalTurn?: NewestLocalTurn | undefined;
   /**
    * The thread's turn not yet settled when this page was read, which the
    * composer's Stop cancels. Null when every turn has settled.

@@ -8,7 +8,6 @@ export const dockedChatMessagePage = {
   activeSkill: null,
   activeTurnId: null,
   activeTurnSteering: "not_steerable" as const,
-  newestLocalTurn: null,
   attachedFiles: { fileCount: 0, files: [] },
   forkProvenance: { type: "none" as const },
   messages: [

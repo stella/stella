@@ -7,8 +7,11 @@ import {
 } from "./desktop-runner";
 
 /**
- * Undoing the file changes a chat turn made on the member's computer:
- * `GET` and `POST /chat/threads/:threadId/turns/:turnId/local-files/undo`.
+ * Undoing the file changes made on the member's computer since one of their
+ * messages, as part of editing the chat from that message:
+ * `GET` and `POST /chat/threads/:threadId/messages/:messageId/local-files/undo`.
+ * The folder goes back to how it was before the message's turn, which undoes
+ * that turn and every later one.
  */
 
 /**
@@ -26,7 +29,7 @@ export const CHAT_LOCAL_FILES_UNDO_STATES = [
 export type ChatLocalFilesUndoState =
   (typeof CHAT_LOCAL_FILES_UNDO_STATES)[number];
 
-/** States in which a turn's undo counts: a turn has at most one. */
+/** States in which an undo counts: a checkpoint is restored by at most one. */
 export const CHAT_LOCAL_FILES_UNDO_LIVE_STATES = [
   "queued",
   "sent",
@@ -47,21 +50,27 @@ export type ChatLocalFilesUndoComputerRefusal =
   DesktopRunnerFolderRestoreRefusal;
 
 /**
- * Why the API refused to ask for an undo (409): a later turn exists, a turn
- * or run of the thread is still going, the turn's run saved no checkpoint,
- * the run's computer is offline, or it runs a desktop app too old to undo.
+ * Why the file changes since a message cannot be undone (the read's
+ * `unavailable`, the request's 409): a turn or run of the thread is still
+ * going; no saved copy of the folder from before the message's turn is kept;
+ * later turns worked on another computer or in another folder; another chat
+ * worked in the same linked folder since; an earlier undo already took these
+ * changes away; the computer is offline, or runs a desktop app too old to
+ * undo.
  */
 export const CHAT_LOCAL_FILES_UNDO_REFUSALS = [
-  "not_newest",
   "thread_busy",
   "no_checkpoint",
+  "several_folders",
+  "folder_shared",
+  "already_undone",
   "desktop_offline",
   "desktop_update_required",
 ] as const;
 export type ChatLocalFilesUndoRefusal =
   (typeof CHAT_LOCAL_FILES_UNDO_REFUSALS)[number];
 
-/** A turn's undo as the member sees it. */
+/** An undo as the member sees it. */
 export const chatLocalFilesUndoSchema = v.object({
   restoreId: v.pipe(v.string(), v.uuid()),
   state: v.picklist(CHAT_LOCAL_FILES_UNDO_STATES),
@@ -69,9 +78,49 @@ export const chatLocalFilesUndoSchema = v.object({
 });
 export type ChatLocalFilesUndo = v.InferOutput<typeof chatLocalFilesUndoSchema>;
 
-/** `GET`: whether the turn can be undone, and its undo, if one was asked. */
+/**
+ * Whether files changed on a computer since the message can be undone:
+ * `none` when no turn from the message on worked in a folder on a computer
+ * (a cloud chat), so there is nothing to offer.
+ */
+export const chatLocalFilesUndoFilesSchema = v.variant("type", [
+  v.object({ type: v.literal("none") }),
+  v.object({ type: v.literal("available") }),
+  v.object({
+    type: v.literal("unavailable"),
+    reason: v.picklist(CHAT_LOCAL_FILES_UNDO_REFUSALS),
+  }),
+]);
+
+export type ChatLocalFilesUndoFiles = v.InferOutput<
+  typeof chatLocalFilesUndoFilesSchema
+>;
+
+/**
+ * How the agent on the computer goes on after an edit of the message:
+ * `continues` its session as it stood at the answer before the message, or
+ * `restarts` from the chat's text because that answer's turn did not finish
+ * (an interrupted or failed turn is not a point a session continues from).
+ */
+export const chatLocalFilesUndoConversationSchema = v.variant("type", [
+  v.object({ type: v.literal("continues") }),
+  v.object({
+    type: v.literal("restarts"),
+    reason: v.literal("previous_not_finished"),
+  }),
+]);
+
+export type ChatLocalFilesUndoConversation = v.InferOutput<
+  typeof chatLocalFilesUndoConversationSchema
+>;
+
+/**
+ * `GET`: what editing the chat from this message does on the member's
+ * computer, and the undo of its file changes, if one was asked.
+ */
 export const chatLocalFilesUndoReadSchema = v.object({
-  undoable: v.boolean(),
+  files: chatLocalFilesUndoFilesSchema,
+  conversation: chatLocalFilesUndoConversationSchema,
   undo: v.nullable(chatLocalFilesUndoSchema),
 });
 export type ChatLocalFilesUndoRead = v.InferOutput<
@@ -97,9 +146,10 @@ export type ChatLocalFilesUndoAnswer = v.InferOutput<
 
 /**
  * The marker an answer carries once its turn's file changes were undone, as
- * message metadata: written by the server in the same transaction that
- * records the computer's answer, so it stays with the answer after newer
- * turns, a reload or a move to the cloud. A client's metadata never sets it.
+ * message metadata: written by the server, on every answer the restore
+ * undid, in the same transaction that records the computer's answer, so it
+ * stays with the answer after newer turns, a reload or a move to the cloud.
+ * A client's metadata never sets it.
  */
 export const CHAT_LOCAL_FILES_UNDONE_METADATA_KEY = "localFilesUndone";
 

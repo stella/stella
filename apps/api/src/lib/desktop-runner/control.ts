@@ -32,10 +32,10 @@ import { pairAppCall, recordAppCall } from "@/api/lib/desktop-runner/app-calls";
 import type { DesktopRunnerDoorbell } from "@/api/lib/desktop-runner/doorbell";
 import {
   type FolderRestoreView,
-  readTurnFolderRestore,
+  type MessageFolderRestore,
+  readMessageFolderRestore,
   type RequestedFolderRestore,
   requestFolderRestore,
-  type TurnFolderRestore,
 } from "@/api/lib/desktop-runner/folder-restores";
 import {
   type RunAnswerMessage,
@@ -584,10 +584,10 @@ const queue = async (
   return Result.ok({ type: "queued" });
 };
 
-type TurnRestoreOptions = {
+type MessageRestoreOptions = {
   owner: RunOwner;
   threadId: SafeId<"chatThread">;
-  turnId: SafeId<"chatTurn">;
+  messageId: SafeId<"chatMessage">;
 };
 
 export type RequestFolderRestoreOutcome =
@@ -595,13 +595,13 @@ export type RequestFolderRestoreOutcome =
   | Extract<RequestedFolderRestore, { type: "refused" }>;
 
 /**
- * Ask the run's computer to put the chat's folder back as it was before the
- * turn; the restore id is minted here. A repeat answers the turn's restore
- * that is still going or done.
+ * Ask the computer to put the chat's folder back as it was before the
+ * message's turn; the restore id is minted here. A repeat answers the
+ * restore of the same checkpoint that is still going or done.
  */
 const requestRestore = async (
   deps: ControlDeps,
-  options: TurnRestoreOptions,
+  options: MessageRestoreOptions,
 ): Promise<Result<RequestFolderRestoreOutcome, DatabaseError>> => {
   const requested = await Result.tryPromise({
     try: async () =>
@@ -977,16 +977,23 @@ export const createDesktopRunnerControl = ({
         try: async () => await readHandedOverChatRun(db, options),
         catch: toDatabaseError,
       }),
-    /** Undo the file changes of the thread's newest turn on its computer. */
-    requestFolderRestore: async (options: TurnRestoreOptions) =>
+    /** Undo the file changes made on the computer since the message. */
+    requestFolderRestore: async (options: MessageRestoreOptions) =>
       await requestRestore(deps, options),
-    /** Whether the turn can be undone, and its undo; `null` for another's turn. */
+    /**
+     * What an edit from the message does on the computer, and its undo;
+     * `null` for a message that is not the member's.
+     */
     readFolderRestore: async (
-      options: TurnRestoreOptions,
-    ): Promise<Result<TurnFolderRestore | null, DatabaseError>> =>
+      options: MessageRestoreOptions,
+    ): Promise<Result<MessageFolderRestore | null, DatabaseError>> =>
       await Result.tryPromise({
         try: async () =>
-          await readTurnFolderRestore(db, { ...options, now: deps.now() }),
+          await readMessageFolderRestore(db, {
+            ...options,
+            now: deps.now(),
+            seenSince: seenSince(deps),
+          }),
         catch: toDatabaseError,
       }),
     /** Record how far a chat turn read the run; it only moves forward. */

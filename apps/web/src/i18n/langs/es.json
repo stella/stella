@@ -1909,23 +1909,24 @@
     "loadEarlierMessagesError": "No se pudieron cargar los mensajes anteriores",
     "loadingEarlierMessages": "Cargando mensajes anteriores…",
     "localFilesUndo": {
-      "action": "Deshacer cambios en archivos",
       "computer": {
         "failed": "La acción de deshacer no terminó en tu ordenador. Es posible que algunos archivos ya hayan cambiado, así que revisa la carpeta del chat.",
         "folderBusy": "Una ejecución en tu ordenador está usando esta carpeta. Inténtalo de nuevo cuando termine.",
         "noCheckpoint": "Tu ordenador no tiene una copia guardada de los archivos de antes de este paso, así que no se deshizo nada.",
-        "notNewest": "Tu ordenador tiene cambios más recientes en esta carpeta, así que no se deshizo nada."
+        "updateForEarlier": "Actualiza stella desktop para deshacer cambios de mensajes anteriores."
       },
-      "confirm": "Deshacer cambios",
-      "confirmDescription": "Los archivos que este paso cambió en su carpeta de tu ordenador vuelven a como estaban antes del paso. Solo se deshacen los cambios de este paso; los de pasos anteriores se mantienen.",
-      "confirmTitle": "¿Deshacer los cambios en archivos de este paso?",
+      "conversationRestarts": "El agente empieza de nuevo a partir del texto de este chat, porque la respuesta anterior a este mensaje no terminó.",
       "expired": "Tu ordenador no respondió a tiempo. Inténtalo de nuevo.",
+      "option": "Deshacer también los cambios en archivos desde este mensaje",
+      "optionHint": "También se deshacen los cambios que hiciste tú en la carpeta.",
       "pending": "Deshaciendo cambios en archivos de tu ordenador",
       "refused": {
+        "alreadyUndone": "Estos cambios en archivos ya se deshicieron.",
         "desktopOffline": "Tu ordenador está sin conexión. Abre la aplicación de escritorio de stella e inténtalo de nuevo.",
         "desktopUpdateRequired": "La aplicación de escritorio de stella de tu ordenador es demasiado antigua para deshacer cambios. Actualízala e inténtalo de nuevo.",
-        "noCheckpoint": "Este paso no tiene una copia guardada de los archivos a la que volver.",
-        "notNewest": "Solo se pueden deshacer los cambios en archivos del paso más reciente.",
+        "folderShared": "Otro chat ha trabajado en esta carpeta desde este mensaje.",
+        "noSavedCopy": "Tu ordenador no guardó una copia de la carpeta de antes de este mensaje: era demasiado grande o lenta de guardar, o la sustituyeron copias más recientes.",
+        "severalFolders": "Los mensajes posteriores se ejecutaron en otro ordenador o en otra carpeta.",
         "threadBusy": "Este chat todavía está trabajando. Inténtalo de nuevo cuando termine."
       },
       "restored": "Cambios en archivos deshechos"

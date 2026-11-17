@@ -62,7 +62,7 @@ export default {
           "Records the member's OK for turns to work in a folder linked on one of their computers.",
       },
       {
-        path: "apps/api/src/handlers/chat/turns/local-files-undo.ts",
+        path: "apps/api/src/handlers/chat/messages/local-files-undo.ts",
         reason:
           "Asks the turn's computer to undo the turn's file changes and reads where that undo stands.",
       },
