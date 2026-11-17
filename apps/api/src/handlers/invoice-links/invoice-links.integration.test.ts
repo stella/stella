@@ -85,10 +85,7 @@ import {
   INVOICE_SENDS_PER_ORGANIZATION_PER_DAY,
   resolveInvoiceLink,
 } from "@/api/lib/billing/invoice-links";
-import {
-  invoiceAmountDue,
-  paidAmountOf,
-} from "@/api/lib/billing/invoice-payments";
+import { paidAmountOf } from "@/api/lib/billing/invoice-payments";
 import type { InvoicePdfRenderer } from "@/api/lib/billing/invoice-pdf/document";
 import {
   invoiceDocumentRenderOptions,
@@ -109,6 +106,7 @@ import {
 import { cents } from "@/api/lib/money";
 import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { getPgErrorCode } from "@/api/lib/pg-error";
 import { createInvoiceEmailAdmission } from "@/api/lib/rate-limit/invoice-email-admission";
 import {
   createInvoiceLinkTokenAdmission,
@@ -247,22 +245,26 @@ const budgetOf = (max: number) =>
 
 const testClock = createTestClock();
 
+// Link lifetimes run on the database clock; the test clock jumps there.
+const syncTestClockToDatabase = async () => {
+  const databaseTime = v.parse(
+    v.object({ now: v.string() }),
+    executedRows(
+      await testDb.execute(
+        sql`SELECT (extract(epoch FROM pg_catalog.clock_timestamp()) * 1000)::bigint::text AS now`,
+      ),
+    ).at(0),
+  );
+  testClock.setTime(Number(databaseTime.now));
+};
+
 testState.beforeAll(async () => {
   testState.setConfig("FEATURE_INVOICE_LINKS", true);
   testState.setConfig("FEATURE_TIME_BILLING", true);
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
-  // Link lifetimes run on the database clock; the test clock starts there.
-  const databaseTime = v.parse(
-    v.object({ now: v.string() }),
-    executedRows(
-      await testDb.execute(
-        sql`SELECT (extract(epoch FROM now()) * 1000)::bigint::text AS now`,
-      ),
-    ).at(0),
-  );
-  testClock.setTime(Number(databaseTime.now));
+  await syncTestClockToDatabase();
   testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
     "invoice-links": [ids.orgA, ids.orgB].map((organizationId) => ({
       type: "organization",
@@ -2208,22 +2210,27 @@ describe("invoice send row security", () => {
     expect(await readAs(ids.wsA1, ids.userA1)).toHaveLength(1);
     // Another matter's member reaches neither the invoice nor its sends.
     expect(await readAs(ids.wsA2, ids.userA2)).toEqual([]);
-    const deleted = await createScopedDb(
-      testDb,
-      [ids.wsA1],
-      ids.orgA,
-      ids.userA1,
-    )(
-      async (tx) =>
-        await Result.tryPromise(
-          async () =>
+    // The app role holds no DELETE on sends: the statement is refused and
+    // its transaction rolls back.
+    const deleted = await Result.tryPromise(
+      async () =>
+        await createScopedDb(
+          testDb,
+          [ids.wsA1],
+          ids.orgA,
+          ids.userA1,
+        )(
+          async (tx) =>
             await tx
               .delete(invoiceSends)
               .where(eq(invoiceSends.invoiceId, invoiceId))
               .returning({ id: invoiceSends.id }),
         ),
     );
-    expect(deleted.isOk() ? deleted.value : []).toEqual([]);
+    expect(deleted.isErr()).toBe(true);
+    if (deleted.isErr()) {
+      expect(getPgErrorCode(deleted.error)).toBe("42501");
+    }
     expect(await sendRows(invoiceId)).toHaveLength(1);
   });
 });
@@ -2512,6 +2519,8 @@ describe("opening an invoice link", () => {
     "%s refuses delivery and access audit when the link becomes %s after its work",
     async (responseKind, invalidation) => {
       const invoiceId = await seedInvoice({ status: INVOICE_STATUS.SENT });
+      // A link about to expire is measured from the database's current time.
+      await syncTestClockToDatabase();
       const expiresAt = new Date(
         testClock.now() + (invalidation === "expired" ? 2000 : 86_400_000),
       );
@@ -3749,16 +3758,12 @@ describe("public invoice document descriptions", () => {
     }
     const publicLines = invoiceDocumentRenderOptions(
       linked.document,
-      linked.amountDue,
+      linked.ledger,
     ).invoice.lines;
-    const authenticatedLines = invoiceDocumentRenderOptions(
-      authenticated,
-      invoiceAmountDue({
-        totalAmount: authenticated.invoice.totalAmount,
-        paidAmount: paidAmountOf(authenticated.invoice.payments),
-        creditedAmount: authenticated.invoice.creditedAmount,
-      }),
-    ).invoice.lines;
+    const authenticatedLines = invoiceDocumentRenderOptions(authenticated, {
+      paidAmount: paidAmountOf(authenticated.invoice.payments),
+      creditedAmount: authenticated.invoice.creditedAmount,
+    }).invoice.lines;
     expect(authenticatedLines.map(({ description }) => description)).toContain(
       "Legacy invoice work",
     );

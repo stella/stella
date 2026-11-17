@@ -86,7 +86,10 @@ test("issued credit notes reduce what is due, and only payments settle the rest"
       paidAmount,
       creditedAmount,
     });
-  expect(state(0, 400)).toEqual({ status: "due", amountMinor: cents(600) });
+  expect(state(0, 400)).toEqual<unknown>({
+    status: "due",
+    amountMinor: cents(600),
+  });
   expect(state(600, 400)).toEqual({ status: "settled" });
   // A credit note covering the whole invoice leaves nothing due, yet records
   // no money received.

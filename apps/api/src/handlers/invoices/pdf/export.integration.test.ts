@@ -24,11 +24,11 @@ import recordInvoicePayment from "@/api/handlers/invoices/payments/create";
 import voidInvoicePayment from "@/api/handlers/invoices/payments/void";
 import type exportInvoicePdf from "@/api/handlers/invoices/pdf/export";
 import { createInvoicePdfExport } from "@/api/handlers/invoices/pdf/export";
-import type { RenderInvoicePdfOptions } from "@/api/handlers/invoices/pdf/render-helpers";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { assertInvoicePaymentRequest } from "@/api/lib/billing/invoice-pdf/payment.test-helpers";
+import type { RenderInvoicePdfOptions } from "@/api/lib/billing/invoice-pdf/render-helpers";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
@@ -339,7 +339,7 @@ describe("invoice document export", () => {
     );
     await exportPdf();
 
-    expect(settlements).toEqual([
+    expect(settlements).toEqual<unknown>([
       { status: "due", amountMinor: cents(605_000) },
       { status: "due", amountMinor: cents(405_000) },
       { status: "settled" },
@@ -416,7 +416,7 @@ describe("invoice document export", () => {
     await handler.handler(context("own", [], legacyInvoiceId));
     await handler.handler(context("own", [], zeroInvoiceId));
 
-    expect(settlements).toEqual([
+    expect(settlements).toEqual<unknown>([
       { status: "due", amountMinor: cents(121_000) },
       { status: "not_payable" },
     ]);

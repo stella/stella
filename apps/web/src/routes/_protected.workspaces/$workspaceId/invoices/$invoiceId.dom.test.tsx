@@ -2,11 +2,11 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { cents } from "@stll/money";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import { toSafeId } from "@/lib/safe-id";
 import type { InvoiceSends } from "@/lib/workspaces/queries/invoices";
 import type { OrganizationSettings } from "@/queries/organization-settings";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({
   url: "http://localhost:3000/workspaces/matter-1/invoices/invoice-1",
@@ -175,13 +175,18 @@ const mountInvoice = async (
       matterNumberingEnabled: false,
       practiceJurisdictions: [],
       promptCachingEnabled: true,
+      aiInstructions: "",
+      aiInstructionsMaxLength: 3000,
       managedAIResidency: "eu",
       memoryExtractionEnabled: false,
+      localRunMaxApprovalMode: "full_auto",
       timeMinimumUnitMinutes: 1,
       timeEditWindowDays: 30,
       timeLockedThroughMonth: null,
       timeNarrativeRequired: false,
       timeZone: parseTimeZoneId("UTC") ?? panic("UTC fixture must exist"),
+      primaryJurisdictionTimeZone:
+        parseTimeZoneId("UTC") ?? panic("UTC fixture must exist"),
       timeZoneSource: "organization",
     } satisfies OrganizationSettings,
   );

@@ -6,8 +6,7 @@ import { afterAll, expect, setSystemTime, test } from "bun:test";
 import * as v from "valibot";
 
 import { cents } from "@stll/money";
-
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/invoice-link" });
 Object.assign(import.meta.env, { VITE_API_URL: "http://localhost:3001" });
@@ -34,7 +33,7 @@ const invoice = {
   totals: [
     { label: "Net", value: "EUR 100.00" },
     { label: "VAT", value: "EUR 20.00" },
-    { label: "Amount due", value: "EUR 120.00" },
+    { label: "Total", value: "EUR 120.00" },
   ],
   payment: null,
   files: {
@@ -123,9 +122,7 @@ test("the amount-due label and value are emphasised without changing fact order"
     ]),
   ).toEqual(facts.map(({ label, value }) => [label, value]));
   const last = rows.at(-1) ?? panic("Missing amount-due row");
-  expect(last.querySelector("dt .font-semibold")?.textContent).toBe(
-    "Amount due",
-  );
+  expect(last.querySelector("dt .font-semibold")?.textContent).toBe("Total");
   expect(last.querySelector("dd .font-semibold")?.textContent).toBe(
     "EUR 120.00",
   );

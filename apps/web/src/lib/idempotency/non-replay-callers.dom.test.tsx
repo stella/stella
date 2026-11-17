@@ -377,13 +377,18 @@ test("the real invoice send form sends its capability request without an idempot
       matterNumberingEnabled: false,
       practiceJurisdictions: [],
       promptCachingEnabled: true,
+      aiInstructions: "",
+      aiInstructionsMaxLength: 3000,
       managedAIResidency: "eu",
       memoryExtractionEnabled: false,
+      localRunMaxApprovalMode: "full_auto",
       timeMinimumUnitMinutes: 1,
       timeEditWindowDays: 30,
       timeLockedThroughMonth: null,
       timeNarrativeRequired: false,
       timeZone: parseTimeZoneId("UTC") ?? panic("UTC fixture must exist"),
+      primaryJurisdictionTimeZone:
+        parseTimeZoneId("UTC") ?? panic("UTC fixture must exist"),
       timeZoneSource: "organization",
     } satisfies OrganizationSettings,
   );
