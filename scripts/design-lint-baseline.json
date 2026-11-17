@@ -514,8 +514,6 @@
     "apps/api/src/handlers/chat/tools/execute/sandbox/code-mode-driver.ts": 1,
     "apps/api/src/handlers/chat/tools/execute/sandbox/run-sandbox.ts": 1,
     "apps/api/src/handlers/chat/tools/external-mcp-tools-normalization.ts": 1,
-    "apps/api/src/handlers/chat/tools/external-mcp-tools.ts": 2,
-    "apps/api/src/handlers/chat/tools/registry-adapter/ref-mediation.ts": 2,
     "apps/api/src/handlers/chat/tools/registry-write-tools.ts": 1,
     "apps/api/src/handlers/document-reviews/reference-position-normalizer.ts": 1,
     "apps/api/src/handlers/invoices/update.ts": 1,
