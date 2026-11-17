@@ -8,6 +8,7 @@ import { organizationCreateOutputSchema } from "@stll/api-contract/organization-
 import type { UiLocale } from "@stll/locales";
 
 import { E2E_API_ORIGIN } from "./api";
+import { deleteTestOrganization } from "./organization";
 import { signInWithEmailOtp } from "./sign-in";
 import { expect } from "./test";
 
@@ -124,14 +125,7 @@ export const createProfileTestSession = async ({
       cleanup: async () => {
         try {
           if (organizationId !== undefined) {
-            const deletedOrganization = await api.post(
-              `${E2E_API_ORIGIN}/api/auth/organization/delete`,
-              { data: { organizationId } },
-            );
-            expect(
-              deletedOrganization.ok(),
-              await deletedOrganization.text(),
-            ).toBe(true);
+            await deleteTestOrganization(api, organizationId);
           }
           if (accountCreated) {
             await deleteTemporaryUser(api, email);

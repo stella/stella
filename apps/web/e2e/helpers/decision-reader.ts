@@ -26,11 +26,27 @@ export const pushRouterPath = async (page: Page, path: string) => {
     undefined,
     { timeout: 30_000 },
   );
-  // The router patches history before React starts hydrating the server
-  // document; a navigation in between would hydrate against another route.
+  // The router patches history before React hydrates the server document,
+  // and Suspense boundaries hydrate after the shell; a navigation before the
+  // page content is hydrated would hydrate it against another route.
   await page.waitForFunction(
-    () =>
-      Object.keys(document.body).some((key) => key.startsWith("__reactFiber$")),
+    () => {
+      const isHydrated = (element: Element) =>
+        Object.keys(element).some((key) => key.startsWith("__reactFiber$"));
+      const main = document.querySelector("main");
+      if (main === null) {
+        return isHydrated(document.body);
+      }
+      // Editors own the DOM inside their editable roots.
+      return (
+        isHydrated(main) &&
+        [...main.querySelectorAll("*")].every(
+          (element) =>
+            isHydrated(element) ||
+            element.parentElement?.closest("[contenteditable]") !== null,
+        )
+      );
+    },
     undefined,
     { timeout: 30_000 },
   );

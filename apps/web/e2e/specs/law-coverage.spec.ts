@@ -48,8 +48,8 @@ test.beforeAll(() => {
         "../../tests/fixtures/law-coverage.fixture.tsx",
       ),
       "--target=browser",
-      "--minify",
       "--external=@tanstack/react-start/server",
+      "--external=@tanstack/react-start",
       `--define=import.meta.env=${JSON.stringify({
         ...fixtureEnv,
         DEV: false,
@@ -96,7 +96,7 @@ test.beforeEach(async ({ page }) => {
       route,
       staticBody({
         contentType: "text/html",
-        body: '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/coverage-fixture.css"></head><body><script type="importmap">{"imports":{"@tanstack/react-start/server":"/server-boundary.js"}}</script><script type="module" src="/coverage-fixture.js"></script></body></html>',
+        body: '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/coverage-fixture.css"></head><body><script type="importmap">{"imports":{"@tanstack/react-start":"/start-boundary.js","@tanstack/react-start/server":"/server-boundary.js"}}</script><script type="module" src="/coverage-fixture.js"></script></body></html>',
       }),
     ),
   );
@@ -109,6 +109,17 @@ test.beforeEach(async ({ page }) => {
       staticBody({
         contentType: "text/javascript",
         body: "export const getRequestHost = () => location.host; export const getRequestHeader = () => undefined; export const getCookie = () => undefined; export const setCookie = () => { throw new Error('Server cookie writes are unavailable in this fixture'); };",
+      }),
+    ),
+  );
+  // Without the Start compiler, server functions keep their server-only
+  // construction; the fixture runs the browser halves the compiler would keep.
+  await page.route("**/start-boundary.js", async (route) =>
+    respond(
+      route,
+      staticBody({
+        contentType: "text/javascript",
+        body: "export const createIsomorphicFn = () => { let client = () => undefined; const run = (...args) => client(...args); run.server = () => run; run.client = (half) => { client = half; return run; }; return run; }; export const createClientOnlyFn = (fn) => fn; export const createServerOnlyFn = () => () => { throw new Error('Server-only functions are unavailable in this fixture'); }; export const createServerFn = () => { const call = async () => { throw new Error('Server functions are unavailable in this fixture'); }; call.validator = () => call; call.inputValidator = () => call; call.middleware = () => call; call.handler = () => call; return call; };",
       }),
     ),
   );
