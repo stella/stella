@@ -130,6 +130,7 @@ const UNSELECTED_SUMMARY_COLUMNS = [
   "projectionEpoch",
   "createdAt",
   "updatedAt",
+  "contentChangedAt",
 ] as const satisfies readonly (keyof PublishedDecisionRow)[];
 type MissingSummarySourceColumn = UnprojectedColumns<
   PublishedDecisionRow,

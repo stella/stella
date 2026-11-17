@@ -115,6 +115,7 @@ const PARSED_GENERATION_COLUMNS = {
   projectionEpoch: "bookkeeping",
   createdAt: "bookkeeping",
   updatedAt: "bookkeeping",
+  contentChangedAt: "bookkeeping",
 } as const satisfies Record<
   keyof typeof caseLawDecisions.$inferSelect,
   ParsedGenerationColumnDisposition

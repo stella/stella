@@ -337,6 +337,8 @@ const UNPROJECTED_CASE_FILE_COLUMNS = [
   "createdAt",
   // Storage update time is not the document's decision date.
   "updatedAt",
+  // Content change time is a reader's cursor, not the decision's date.
+  "contentChangedAt",
 ] as const satisfies readonly (keyof typeof publishedCaseLawDecisions.$inferSelect)[];
 
 type CaseFilePage = Exclude<
