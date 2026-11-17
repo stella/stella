@@ -355,6 +355,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "GET /v1/reader/annotations": "crud",
   "GET /v1/reader/answers": "crud",
   "GET /v1/saved-searches": "crud",
+  "GET /v1/saved-searches/:savedSearchId": "crud",
   "GET /v1/saved-time-narratives": "crud",
   "GET /v1/search-history": "crud",
   "GET /v1/search-history/import-clock": "crud",

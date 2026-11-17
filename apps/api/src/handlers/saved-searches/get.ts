@@ -5,8 +5,13 @@ import { SAVED_SEARCH_NOT_FOUND_ERROR_CODE } from "@stll/api-contract";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type {
+  UnbackedProjectionKeys,
+  UnprojectedColumns,
+} from "@/api/lib/projection-totality";
 
 import { toSavedSearchResponse } from "./response";
+import type { UnprojectedSavedSearchColumn } from "./response";
 import { savedSearchParamsSchema } from "./schema";
 
 const config = {
@@ -46,3 +51,18 @@ const getSavedSearch = createSafeRootHandler(
 );
 
 export default getSavedSearch;
+
+type SavedSearchRow = Parameters<typeof toSavedSearchResponse>[0];
+type SavedSearchResponse = ReturnType<typeof toSavedSearchResponse>;
+type MissingGetColumn = UnprojectedColumns<
+  SavedSearchRow,
+  SavedSearchResponse,
+  UnprojectedSavedSearchColumn
+>;
+type UnexpectedGetColumn = UnbackedProjectionKeys<
+  SavedSearchRow,
+  SavedSearchResponse,
+  UnprojectedSavedSearchColumn
+>;
+true satisfies MissingGetColumn extends never ? true : never;
+true satisfies UnexpectedGetColumn extends never ? true : never;

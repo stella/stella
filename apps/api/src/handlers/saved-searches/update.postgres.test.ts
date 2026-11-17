@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
@@ -22,19 +23,22 @@ import {
 import { safeDbIn } from "@/api/tests/helpers/lock-then-write-race";
 import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { withInterleaving } from "@/api/tests/helpers/transaction-interleaving";
+import { readScalingViolations } from "@/api/tests/read-scaling/measurement";
+import { savedSearchReadScalingScenario } from "@/api/tests/read-scaling/saved-searches";
 
+import getSavedSearch from "./get";
 import updateSavedSearch from "./update";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgres = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
-describe.skipIf(!runPostgres || !databaseUrl)(
-  "saved-search concurrent editors",
-  () => {
-    test("the waiting writer checks the committed version and records no second audit", async () => {
-      if (!databaseUrl) {
-        return;
-      }
+if (!runPostgres || !databaseUrl) {
+  describe.skip("saved-search concurrent editors", () => {
+    test("requires STELLA_RUN_POSTGRES_TESTS=true and DATABASE_URL", () => {});
+  });
+} else {
+  describe("saved-search concurrent editors", () => {
+    test("concurrent editors preserve the winner and reload stays a bounded point read", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const db = openClient().db;
         const actorA = openClient({ max: 1 }).db;
@@ -161,11 +165,57 @@ describe.skipIf(!runPostgres || !databaseUrl)(
               expect(state.audits).toHaveLength(1);
             },
           });
+          const readContext = createTestHandlerContext<
+            Parameters<typeof getSavedSearch.handler>[0]
+          >({
+            session: { activeOrganizationId: organizationId },
+            user: { id: userId },
+            params: { savedSearchId },
+            safeDb: createSafeDb(
+              markRlsDatabase(actorA),
+              [],
+              organizationId,
+              userId,
+            ),
+            scopedDb: NO_DB,
+            audit,
+          });
+          expect(savedSearchReadScalingScenario.definition).toBe(
+            getSavedSearch,
+          );
+          const small =
+            await savedSearchReadScalingScenario.measure(readContext);
+          const target =
+            (
+              await db
+                .select()
+                .from(savedSearches)
+                .where(eq(savedSearches.id, savedSearchId))
+            ).at(0) ?? panic("Expected the saved-search scaling target");
+          await db.insert(savedSearches).values(
+            Array.from({ length: 200 }, () => ({
+              id: createSafeId<"savedSearch">(),
+              organizationId,
+              userId,
+              name: "Other saved search",
+              criteria: target.criteria,
+              createdAt: target.createdAt,
+              updatedAt: target.updatedAt,
+            })),
+          );
+          const large =
+            await savedSearchReadScalingScenario.measure(readContext);
+          expect(small.statements).toBeGreaterThan(0);
+          expect(small.transactionRoundTrips).toBeGreaterThan(0);
+          expect(large).toEqual(small);
+          expect(large.id).toBe(savedSearchId);
+          expect(large.rows).toBe(1);
+          expect(readScalingViolations({ small, large })).toEqual([]);
         } finally {
           await deleteOrganizationsForTest(db, [organizationId]);
           await db.delete(user).where(eq(user.id, userId));
         }
       });
     });
-  },
-);
+  });
+}
