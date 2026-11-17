@@ -330,6 +330,7 @@ const TABLE_CLASSIFICATIONS = {
   infoSoudTrackedCases: FORMAT_SCOPE_EXCLUSION,
   invoiceLines: "included",
   invoicePayments: "included",
+  invoiceSends: FORMAT_SCOPE_EXCLUSION,
   invoices: "included",
   justifications: FORMAT_SCOPE_EXCLUSION,
   legalGraphEdges: FORMAT_SCOPE_EXCLUSION,
