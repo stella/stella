@@ -148,6 +148,7 @@ export const TAGGED_FAILURE_REASON = {
   CorpusIndexJobDetailBackfillError: "tagged_failure",
   CorpusIndexProjectionSubjectMissingError: "tagged_failure",
   CorpusIndexReadContractError: "tagged_failure",
+  CorpusIndexRouteProofBrakedError: "tagged_failure",
   CorpusMemberDigestMismatchError: "tagged_failure",
   CorpusMemberTombstonedError: "tagged_failure",
   CorpusPackError: "tagged_failure",

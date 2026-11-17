@@ -8,6 +8,7 @@ import { panic, Result, TaggedError } from "better-result";
  *   bun run src/scripts/corpus-generation.ts serve --family case_law --generation case_law_v10 [--replacing case_law_v7 --actor <id> --reason <text> --apply]
  *   bun run src/scripts/corpus-generation.ts parity --family case_law --generation case_law_v10 [--exempt-minutes 20] [--coverage-pages 2000] [--coverage-from <entity|start>] [--list]
  *   bun run src/scripts/corpus-generation.ts seed --family case_law --generation case_law_v10 [--pages 1000]
+ *   bun run src/scripts/corpus-generation.ts prove --family case_law --generation case_law_v10 [--hours 11] [--until-current] [--concurrency 4]
  *
  * `serve` runs the guarded flip (`corpus-index-generation-flip.ts`), the one
  * owner of the decision: phase 1 reads the engine and walks the parity
@@ -34,17 +35,34 @@ import { panic, Result, TaggedError } from "better-result";
  * by bounded pages under the database-load brake, resuming from the cursor
  * the database stores, and stops when every route is seeded or the page
  * budget is spent.
+ *
+ * `prove` keeps the route proofs a flip reads current
+ * (`corpus-index-route-proof-runner.ts`): it walks every route of the named
+ * generation, the serving one and the one the latest flip demoted (while it
+ * is building), one census page at a time under the database-load brake,
+ * until its hours are spent (or, with `--until-current`, until every route is
+ * current). It takes no maintenance lane: it writes route proofs and the
+ * projection's own drift repairs, never canonical rows, and holding the lane
+ * for hours would starve the replay ticks. It never runs inside a flip: each
+ * of its transactions joins the projection mutation fence the flip holds
+ * exclusively. Stop it before a flip all the same: a proof it records while
+ * the flip walks makes the flip refuse (`proof_changed`).
  */
 import { eq } from "drizzle-orm";
 import { parseArgs } from "node:util";
 
 import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
+import { decideStart } from "@stll/db-load-gate/health";
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 import { Temporal } from "@stll/time";
 
-import { createScriptBackfillRuntime } from "@/api/db/backfill-runtime";
+import {
+  createDatabaseLoadVerdictReader,
+  createScriptBackfillRuntime,
+} from "@/api/db/backfill-runtime";
 import type { Transaction } from "@/api/db/root";
 import { corpusIndexGenerations } from "@/api/db/schema";
+import { loadGateHealthConfig } from "@/api/env-online-index";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
   type CaseLawRootHandle,
@@ -60,6 +78,7 @@ import {
   parseCorpusIndexClusterForGeneration,
 } from "@/api/lib/legal-search/corpus-generation-contract";
 import {
+  type CorpusIndexClient,
   getCorpusIndexClient,
   readCorpusIndexSearchBaseUrl,
 } from "@/api/lib/legal-search/corpus-index-client";
@@ -91,10 +110,16 @@ import {
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { CORPUS_INDEX_ROUTE_PROOF_MAX_AGE_HOURS } from "@/api/lib/legal-search/corpus-index-route-proof-contract";
 import {
+  type CorpusIndexRouteProofRun,
+  createCorpusIndexRouteProofGovernor,
+  runCorpusIndexRouteProofs,
+} from "@/api/lib/legal-search/corpus-index-route-proof-runner";
+import {
   advanceCorpusIndexGenerationSeedingTx,
   type CorpusIndexSeedingAdvance,
   readCorpusIndexRouteSeedingsTx,
 } from "@/api/lib/legal-search/corpus-index-route-seeding";
+import type { IngestionTransactionRunner } from "@/api/lib/replay-safe-ingestion";
 import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
 /**
@@ -117,6 +142,26 @@ const SEED_PAGE_LIMIT = 1000;
 const SEED_DEFAULT_PAGES = 1000;
 /** The most seeding pages one run may be asked for. */
 const SEED_MAX_PAGES = 99_999;
+/**
+ * Hours one proof run walks by default, and at most: under the twelve hours
+ * an operator one-off of the API task may run, so the run ends on its own.
+ */
+const PROVE_DEFAULT_HOURS = 11;
+const PROVE_MAX_HOURS = 11;
+/** Routes one proof run walks at once by default, and at most. */
+const PROVE_DEFAULT_CONCURRENCY = 4;
+const PROVE_MAX_CONCURRENCY = 16;
+/** Census pages one proof run reads at most: no run reaches it in its hours. */
+const PROVE_MAX_PAGES = 10_000_000;
+/** How long the proof run waits on locks (a flip's fence) or the brake. */
+const PROVE_PATIENCE_MS = 15 * 60_000;
+/** A load reading that admits work is trusted this long. */
+const PROVE_LOAD_RECHECK_MS = 10_000;
+/** The proof session's statement and lock bounds. */
+const PROVE_STATEMENT_TIMEOUT_MS = 60_000;
+const PROVE_LOCK_TIMEOUT_MS = 10_000;
+/** The session outlives the run's hours by this much, to read its report. */
+const PROVE_SESSION_GRACE_MS = 10 * 60_000;
 
 const USAGE = `Usage: bun run src/scripts/corpus-generation.ts <command> [options]
 
@@ -134,8 +179,13 @@ Commands:
   seed                   Walk the generation's seeding pass, giving every
                          canonical row a desired state, until every route
                          is seeded or the page budget is spent. Resumable.
+  prove                  Keep the route proofs a flip reads current: walk
+                         every route of the generation, the serving one and
+                         the one the latest flip demoted (while building),
+                         page by page, until the hours are spent. Resumable.
+                         Stop it before a flip.
 
-Options (register, serve, parity, seed):
+Options (register, serve, parity, seed, prove):
   --family <family>      ${CORPUS_FAMILIES.join(" | ")}
   --generation <name>    A generation declared in code, e.g. case_law_v7.
   --apply                Perform the change. Omitted, the run only reports.
@@ -168,6 +218,12 @@ Options (seed):
   --pages <n>            Pages of ${String(SEED_PAGE_LIMIT)} canonical rows to walk (default
                          ${String(SEED_DEFAULT_PAGES)}, at most ${String(SEED_MAX_PAGES)}); the next run resumes.
 
+Options (prove):
+  --hours <n>            Hours to walk (default and most ${String(PROVE_MAX_HOURS)}).
+  --until-current        Stop as soon as every route of every proven
+                         generation is current.
+  --concurrency <n>      Routes walked at once (default ${String(PROVE_DEFAULT_CONCURRENCY)}, at most ${String(PROVE_MAX_CONCURRENCY)}).
+
 Exit codes (serve): 0 flipped (or, dry run, every check passed), 3 parity
 regressions, 4 undecided, 10 registry, 11 route proofs, 12 seeding, 13 engine
 evidence, 14 busy (a fence or read timed out; nothing changed), 1 refused.
@@ -175,6 +231,11 @@ Exit codes (parity): 0 no regression, 3 regressions, 4 undecided, 1 refused.
 Exit codes (seed): 0 every route seeded, 5 page budget spent, 6 paused by
 the database-load brake (after 15 minutes of waiting), 7 next row held by a
 writer, 8 a route appeared after the pass began, 1 refused.
+Exit codes (prove): 0 every route of every proven generation current, 5 hours
+spent with a route not current, 6 paused by the database-load brake, 7 locks
+refused past 15 minutes (a flip holds the projection fence), 8 a route set
+aside (not attested, index missing or unknown documents), 9 a route failed
+repeatedly, 1 refused.
 `;
 
 /** Rows `status` and the planners read; the registry holds a handful per family. */
@@ -269,7 +330,14 @@ type CorpusGenerationCommand =
       coverageFrom: CorpusIndexFlipCoverageCursor | null;
       listDecisions: boolean;
     }
-  | { type: "seed"; target: DeclaredTarget; pages: number };
+  | { type: "seed"; target: DeclaredTarget; pages: number }
+  | {
+      type: "prove";
+      target: DeclaredTarget;
+      hours: number;
+      untilCurrent: boolean;
+      concurrency: number;
+    };
 
 type GenerationRow = Pick<
   typeof corpusIndexGenerations.$inferSelect,
@@ -311,6 +379,7 @@ const COMMAND_NAMES = [
   "serve",
   "parity",
   "seed",
+  "prove",
 ] as const;
 
 const usageError = (message: string) =>
@@ -348,6 +417,9 @@ type CommandValues = {
   actor?: string | undefined;
   reason?: string | undefined;
   "max-proof-age-hours"?: string | undefined;
+  hours?: string | undefined;
+  "until-current"?: boolean | undefined;
+  concurrency?: string | undefined;
 };
 
 /** Why the options do not fit the named command, or null when they do. */
@@ -383,6 +455,20 @@ const commandOptionRefusal = (
   }
   if (name !== "serve" && serveOptions) {
     return "--replacing, --actor, --reason and --max-proof-age-hours belong to serve.";
+  }
+  if (
+    name !== "prove" &&
+    (values.hours !== undefined ||
+      values["until-current"] === true ||
+      values.concurrency !== undefined)
+  ) {
+    return "--hours, --until-current and --concurrency belong to prove.";
+  }
+  if (
+    name === "prove" &&
+    (values.apply === true || values["dry-run"] === true)
+  ) {
+    return "prove writes only route proofs and the repairs a census owes; it takes no --apply or --dry-run.";
   }
   if (
     name === "parity" &&
@@ -478,6 +564,9 @@ const parseCorpusGenerationCommand = (
           actor: { type: "string" },
           reason: { type: "string" },
           "max-proof-age-hours": { type: "string" },
+          hours: { type: "string" },
+          "until-current": { type: "boolean" },
+          concurrency: { type: "string" },
         },
       }),
     catch: (cause) =>
@@ -494,7 +583,7 @@ const parseCorpusGenerationCommand = (
   );
   if (name === undefined) {
     return usageError(
-      "Name exactly one command: status, register, serve, parity or seed.",
+      "Name exactly one command: status, register, serve, parity, seed or prove.",
     );
   }
   if (values.apply === true && values["dry-run"] === true) {
@@ -581,6 +670,35 @@ const parseCorpusGenerationCommand = (
             `--pages must be a whole number from 1 to ${String(SEED_MAX_PAGES)}.`,
           )
         : Result.ok({ type: "seed", target: target.value, pages });
+    }
+    case "prove": {
+      const hours = parseWholeNumber(
+        values.hours,
+        PROVE_DEFAULT_HOURS,
+        PROVE_MAX_HOURS,
+      );
+      const concurrency = parseWholeNumber(
+        values.concurrency,
+        PROVE_DEFAULT_CONCURRENCY,
+        PROVE_MAX_CONCURRENCY,
+      );
+      if (hours === null || hours === 0) {
+        return usageError(
+          `--hours must be a whole number from 1 to ${String(PROVE_MAX_HOURS)}.`,
+        );
+      }
+      if (concurrency === null || concurrency === 0) {
+        return usageError(
+          `--concurrency must be a whole number from 1 to ${String(PROVE_MAX_CONCURRENCY)}.`,
+        );
+      }
+      return Result.ok({
+        type: "prove",
+        target: target.value,
+        hours,
+        untilCurrent: values["until-current"] === true,
+        concurrency,
+      });
     }
     default:
       name satisfies never;
@@ -782,10 +900,91 @@ const SEEDING_BRAKE: SeedingBrake = {
   maxWaitMs: 15 * 60_000,
 };
 
+type ProofTransaction = IngestionTransactionRunner<Transaction>;
+
+/**
+ * Runs a proof run on its own session for `budgetMs` (and a grace to read the
+ * report): no maintenance lane (see the header), every transaction under the
+ * shared corpus schema lane, one at a time on the session.
+ */
+type WithProofDatabase = <T>(
+  budgetMs: number,
+  work: (runInTransaction: ProofTransaction) => Promise<T>,
+) => Promise<T>;
+
+const withProofSession: WithProofDatabase = async (budgetMs, work) => {
+  const [{ withLongRunningConnection }, { runUnderCorpusSchemaLane }] =
+    await Promise.all([
+      import("@/api/db/long-running-connection"),
+      import("@/api/db/corpus-schema-lane"),
+    ]);
+  const signal = AbortSignal.timeout(budgetMs + PROVE_SESSION_GRACE_MS);
+  return await withLongRunningConnection(
+    {
+      statementTimeout: PROVE_STATEMENT_TIMEOUT_MS,
+      lockTimeout: PROVE_LOCK_TIMEOUT_MS,
+      signal,
+    },
+    async ({ db }) => {
+      // Routes are walked at once, but one session runs one transaction at
+      // a time: each waits for the one before it.
+      let pending = Promise.resolve();
+      const transaction = async <Value>(
+        fn: (tx: Transaction) => Promise<Value>,
+      ): Promise<Value> => {
+        const current = pending.then(
+          async () =>
+            await runUnderCorpusSchemaLane({
+              database: db,
+              laneWaitMs: PROVE_LOCK_TIMEOUT_MS,
+              signal,
+              work: fn,
+            }),
+        );
+        pending = Result.tryPromise(async () => await current).then(
+          () => undefined,
+        );
+        return await current;
+      };
+      return await work(
+        async (fn) => await withAggregateTransaction({ transaction }, fn),
+      );
+    },
+  );
+};
+
+/** How the proof run meets the database-load brake. */
+type ProofBrake = {
+  /** Whether the database admits background work now. */
+  readDecision: (
+    runInTransaction: ProofTransaction,
+  ) => Promise<"start" | "wait">;
+  /** How long a run waits on the brake before it stops with `braked`. */
+  maxWaitMs: number;
+};
+
+const PROOF_BRAKE: ProofBrake = {
+  readDecision: async (runInTransaction) => {
+    const config = loadGateHealthConfig();
+    const verdict = await createDatabaseLoadVerdictReader({
+      db: { transaction: async (work) => await runInTransaction(work) },
+      tableName: "corpus_index_projection_states",
+      config,
+    })();
+    return decideStart(verdict, "backfill_batch", config).decision;
+  },
+  maxWaitMs: PROVE_PATIENCE_MS,
+};
+
 type CommandContext = {
   withDatabase: WithCorpusDatabase;
   withSeedingDatabase: WithSeedingDatabase;
   seedingBrake: SeedingBrake;
+  withProofDatabase: WithProofDatabase;
+  proofBrake: ProofBrake;
+  proofClient: (
+    manifest: CorpusIndexManifest,
+  ) => Pick<CorpusIndexClient, "aggregate" | "readIndexIncarnation" | "search">;
   indexClient: (manifest: CorpusIndexManifest) => CorpusIndexFlipEngine;
   searchEndpoint: (manifest: CorpusIndexManifest) => string | null;
   write: (line: string) => void;
@@ -1501,11 +1700,163 @@ const runSeed = async (
   });
 };
 
+const PROVE_EXIT = {
+  current: 0,
+  budgetSpent: 5,
+  braked: 6,
+  lockUnavailable: 7,
+  setAside: 8,
+  failed: 9,
+} as const;
+
+/** The exit code a proof run ends with, and the line that says why. */
+const proveRunExit = (
+  run: Extract<CorpusIndexRouteProofRun, { type: "ran" }>,
+): { code: number; line: string } => {
+  if ([...run.proofs.values()].every(({ type }) => type === "all_current")) {
+    return {
+      code: PROVE_EXIT.current,
+      line: "every route of every proven generation is current",
+    };
+  }
+  const { stop } = run;
+  switch (stop.type) {
+    case "all_current":
+    case "budget_spent":
+      return run.routes.some(({ setAside }) => setAside !== null)
+        ? {
+            code: PROVE_EXIT.setAside,
+            line: "a route is set aside (see above); fix it, then rerun",
+          }
+        : {
+            code: PROVE_EXIT.budgetSpent,
+            line: "hours spent with a route not current; rerun to resume from the stored passes",
+          };
+    case "nothing_to_walk":
+      return {
+        code: PROVE_EXIT.setAside,
+        line: "every route is set aside (see above); nothing was left to walk",
+      };
+    case "braked":
+      return {
+        code: PROVE_EXIT.braked,
+        line: "paused by the database-load brake; rerun to resume",
+      };
+    case "lock_unavailable":
+      return {
+        code: PROVE_EXIT.lockUnavailable,
+        line: "locks stayed refused (a flip holds the projection fence); rerun after it",
+      };
+    case "failed":
+      return {
+        code: PROVE_EXIT.failed,
+        line: `${stop.route.generation}/${stop.route.indexId} failed ${String(stop.failures)} times in a row; rerun to resume`,
+      };
+    default:
+      stop satisfies never;
+      return panic(`Unhandled proof run stop: ${String(stop)}`);
+  }
+};
+
+const describeProofs = (
+  run: Extract<CorpusIndexRouteProofRun, { type: "ran" }>,
+): string[] =>
+  [...run.proofs].flatMap(([generation, proofs]) => {
+    switch (proofs.type) {
+      case "all_current":
+        return proofs.routes.map(
+          ({ indexId, inspected }) =>
+            `  ${generation}/${indexId}: current (${String(inspected)} revisions)`,
+        );
+      case "not_ready":
+        return proofs.routes.map(
+          ({ indexId, status }) => `  ${generation}/${indexId}: ${status.type}`,
+        );
+      case "generation_absent":
+      case "open_route_set":
+        return [`  ${generation}: ${proofs.type}`];
+      default:
+        proofs satisfies never;
+        return panic("Unhandled route proofs reading");
+    }
+  });
+
+/**
+ * Walk the route proofs of the generation, the serving one and the kept one
+ * until the hours are spent (`runCorpusIndexRouteProofs`). Every page records
+ * its pass in the database, so a stopped or crashed run resumes there.
+ */
+const runProve = async (
+  { withProofDatabase, proofBrake, proofClient, write }: CommandContext,
+  {
+    target,
+    hours,
+    untilCurrent,
+    concurrency,
+  }: Extract<CorpusGenerationCommand, { type: "prove" }>,
+): Promise<Result<number, CorpusGenerationRefusal>> => {
+  write(
+    `prove ${target.family}/${target.generation} (at most ${String(hours)} h${untilCurrent ? ", until every route is current" : ""})`,
+  );
+  write(declaredLine(target));
+  const budgetMs = hours * 3_600_000;
+  const now = () => Temporal.Now.instant().epochMilliseconds;
+  const endsAt = now() + budgetMs;
+  const run = await withProofDatabase(
+    budgetMs,
+    async (runInTransaction) =>
+      await runCorpusIndexRouteProofs({
+        runInTransaction,
+        clientFor: ({ family, generation }) =>
+          proofClient(requireCorpusIndexManifest(family, generation)),
+        admit: createCorpusIndexRouteProofGovernor({
+          readDecision: async () =>
+            await proofBrake.readDecision(runInTransaction),
+          maxWaitMs: proofBrake.maxWaitMs,
+          recheckMs: PROVE_LOAD_RECHECK_MS,
+          now,
+          sleep: Bun.sleep,
+        }),
+        target,
+        budget: { endsAt, pages: PROVE_MAX_PAGES },
+        untilCurrent,
+        concurrency,
+        fencePatienceMs: PROVE_PATIENCE_MS,
+        now,
+        sleep: Bun.sleep,
+        write,
+      }),
+  );
+  if (run.type === "refused") {
+    return Result.err(
+      new CorpusGenerationRetiringError({
+        message: `${target.family}/${run.generation} is ${run.status ?? "not registered"}; only a building or serving generation is proven`,
+        family: target.family,
+        generation: run.generation,
+      }),
+    );
+  }
+  for (const report of run.routes) {
+    write(
+      `  ${report.route.generation}/${report.route.indexId}: ${String(report.pages)} pages, ${String(report.proofs)} proofs, ${String(report.repairs)} drift repairs this run`,
+    );
+  }
+  for (const line of describeProofs(run)) {
+    write(line);
+  }
+  const exit = proveRunExit(run);
+  write(exit.line);
+  return Result.ok(exit.code);
+};
+
 type RunCorpusGenerationOptions = {
   args: readonly string[];
   withDatabase?: WithCorpusDatabase;
   withSeedingDatabase?: WithSeedingDatabase;
   seedingBrake?: SeedingBrake;
+  withProofDatabase?: WithProofDatabase;
+  proofBrake?: ProofBrake;
+  proofClient?: CommandContext["proofClient"];
   indexClient?: (manifest: CorpusIndexManifest) => CorpusIndexFlipEngine;
   searchEndpoint?: (manifest: CorpusIndexManifest) => string | null;
   write?: (line: string) => void;
@@ -1518,6 +1869,9 @@ export const runCorpusGenerationCommand = async ({
   withDatabase = withOperatorDatabase,
   withSeedingDatabase = withSeedingLane,
   seedingBrake = SEEDING_BRAKE,
+  withProofDatabase = withProofSession,
+  proofBrake = PROOF_BRAKE,
+  proofClient = (manifest) => getCorpusIndexClient(manifest.cluster),
   indexClient = (manifest) => getCorpusIndexClient(manifest.cluster),
   searchEndpoint = (manifest) => readCorpusIndexSearchBaseUrl(manifest.cluster),
   write = (line) => process.stdout.write(`${line}\n`),
@@ -1539,6 +1893,9 @@ export const runCorpusGenerationCommand = async ({
     withDatabase,
     withSeedingDatabase,
     seedingBrake,
+    withProofDatabase,
+    proofBrake,
+    proofClient,
     indexClient,
     searchEndpoint,
     write,
@@ -1556,6 +1913,8 @@ export const runCorpusGenerationCommand = async ({
         return await runParity(context, command.value);
       case "seed":
         return await runSeed(context, command.value);
+      case "prove":
+        return await runProve(context, command.value);
       default:
         command.value satisfies never;
         return panic(`Unhandled command: ${String(command.value)}`);
