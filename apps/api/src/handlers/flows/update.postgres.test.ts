@@ -105,14 +105,12 @@ if (!runPostgres || !databaseUrl) {
           role: "owner",
           createdAt: new Date("2026-01-01T00:00:00.000Z"),
         });
-        await db
-          .insert(flowDefinitions)
-          .values({
-            id,
-            organizationId,
-            ...original,
-            updatedAt: new Date(initialToken),
-          });
+        await db.insert(flowDefinitions).values({
+          id,
+          organizationId,
+          ...original,
+          updatedAt: new Date(initialToken),
+        });
         const audit = createAuditRecorder({
           organizationId,
           workspaceId: null,
